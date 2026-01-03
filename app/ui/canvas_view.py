@@ -171,6 +171,8 @@ class CanvasView(QGraphicsView):
         self.hover_items: list = []
         self.hover_atom_id: int | None = None
         self.hover_bond_id: int | None = None
+        self._selection_info_callback = None
+        self._rotation_selection_ids = None
         self.selection_outline: QGraphicsRectItem | None = None
         self._history: list[dict] = []
         self._redo_stack: list[dict] = []
@@ -195,7 +197,28 @@ class CanvasView(QGraphicsView):
             event.accept()
             return
         if event.key() in (Qt.Key.Key_Backspace, Qt.Key.Key_Delete):
-            self.delete_selected_items()
+            did_delete = False
+            if self.scene().selectedItems():
+                self.delete_selected_items()
+            elif self.hover_atom_id is not None:
+                self.delete_atom(self.hover_atom_id, record=False)
+                did_delete = True
+            elif self.hover_bond_id is not None:
+                bond_id = self.hover_bond_id
+                self._clear_hover_highlight()
+                if bond_id is not None:
+                    self.delete_bond(bond_id, record=False)
+                    did_delete = True
+            else:
+                if self.hover_bond_id is not None and self.hover_atom_id is None:
+                    bond = self.model.bonds[self.hover_bond_id]
+                    if bond is not None:
+                        ring_item = self._ring_for_bond(self.hover_bond_id)
+                        if ring_item is not None:
+                            self.delete_ring(ring_item, record=False)
+                            did_delete = True
+            if did_delete:
+                self._push_history()
             event.accept()
             return
         super().keyPressEvent(event)
@@ -245,11 +268,11 @@ class CanvasView(QGraphicsView):
                 other_items.append(item)
 
         for bond_id in sorted(bond_ids, reverse=True):
-            self.delete_bond(bond_id)
+            self.delete_bond(bond_id, record=False)
         for atom_id in atom_ids:
-            self.delete_atom(atom_id)
+            self.delete_atom(atom_id, record=False)
         for ring_item in ring_items:
-            self.delete_ring(ring_item)
+            self.delete_ring(ring_item, record=False)
         for item in note_items:
             if item in self.selected_notes:
                 self.selected_notes.remove(item)
@@ -347,13 +370,6 @@ class CanvasView(QGraphicsView):
                         "rotation": item.rotation(),
                     }
                 )
-        info = None
-        if self.info_item is not None:
-            info = {
-                "text": self.info_item.toPlainText(),
-                "x": self.info_item.pos().x(),
-                "y": self.info_item.pos().y(),
-            }
         settings = {
             "bond_length_px": self.renderer.style.bond_length_px,
             "arrow_line_width": self.arrow_line_width,
@@ -373,7 +389,6 @@ class CanvasView(QGraphicsView):
             "notes": notes,
             "arrows": arrows,
             "orbitals": orbitals,
-            "info": info,
             "settings": settings,
             "last_smiles_input": self.last_smiles_input,
         }
@@ -475,13 +490,6 @@ class CanvasView(QGraphicsView):
                 group.setRotation(orbital_state.get("rotation", 0.0))
                 self._make_selectable(group)
 
-            info_state = state.get("info")
-            if info_state:
-                self.info_item = QGraphicsTextItem()
-                self.info_item.setDefaultTextColor(QColor("#333333"))
-                self.info_item.setPlainText(info_state.get("text", ""))
-                self.info_item.setPos(info_state.get("x", 0.0), info_state.get("y", 0.0))
-                self.scene().addItem(self.info_item)
         finally:
             self._history_enabled = True
 
@@ -516,7 +524,14 @@ class CanvasView(QGraphicsView):
 
     def item_at_event(self, event):
         pos = self.viewport().mapFromGlobal(QCursor.pos())
-        return self.itemAt(pos)
+        for item in self.items(pos):
+            if item is self.selection_outline:
+                continue
+            kind = item.data(0)
+            if kind in {"note_box", "note_select"}:
+                continue
+            return item
+        return None
 
     def bond_id_from_event(self, event) -> int | None:
         if self.hover_bond_id is not None:
@@ -593,16 +608,13 @@ class CanvasView(QGraphicsView):
         return self._orbital_snap_step
 
     def set_info_alignment(self, alignment: str) -> None:
-        if alignment in {"left", "center", "right"}:
-            self.info_alignment = alignment
-            self.update_info_label()
+        return
 
     def set_info_format(self, fmt: str) -> None:
-        self.info_format = fmt or "{name_block} | {formula_block} | {mw_block}"
-        self.update_info_label()
+        return
 
     def get_info_format(self) -> str:
-        return self.info_format
+        return ""
 
     def set_text_font(self, font: QFont) -> None:
         self.text_font_family = font.family()
@@ -813,71 +825,16 @@ class CanvasView(QGraphicsView):
         self._render_model()
 
     def update_info_label(self, force: bool = False) -> None:
-        if not force and not self.info_auto_enabled:
-            return
-        if not self.model.atoms:
-            if self.info_item is not None:
-                self.scene().removeItem(self.info_item)
-                self.info_item = None
-            return
-
-        text, bounds = self._build_info_text_and_bounds(self.model, self.last_smiles_input)
-        self._place_info_text(text, bounds)
+        return
 
     def insert_info_label(self) -> None:
-        atom_ids, bond_ids = self._selected_ids()
-        if atom_ids or bond_ids:
-            submodel, bounds, _ = self._build_submodel(atom_ids, bond_ids)
-            text, _ = self._build_info_text_and_bounds(submodel, None, bounds_override=bounds)
-            self._place_info_text(text, bounds)
-            return
-        self.update_info_label(force=True)
+        return
 
     def _place_info_text(self, text: str, bounds) -> None:
-        if not text:
-            return
-        if self.info_item is None:
-            self.info_item = QGraphicsTextItem()
-            self.info_item.setDefaultTextColor(QColor("#333333"))
-            self.scene().addItem(self.info_item)
-        self.info_item.setPlainText(text)
-
-        min_x, min_y, max_x, max_y = bounds
-        offset = self.renderer.style.bond_length_px * 0.6
-        rect = self.info_item.boundingRect()
-        if self.info_alignment == "center":
-            x = (min_x + max_x) / 2.0 - rect.width() / 2.0
-        elif self.info_alignment == "right":
-            x = max_x - rect.width()
-        else:
-            x = min_x
-        self.info_item.setPos(x, max_y + offset)
+        return
 
     def _build_info_text_and_bounds(self, model, smiles_hint: str | None, bounds_override=None):
-        formula, mw, canonical = self.rdkit.compute_props(model)
-        name = None
-        if smiles_hint:
-            name = self.rdkit.get_name_from_smiles(smiles_hint)
-        elif canonical:
-            name = self.rdkit.get_name_from_smiles(canonical)
-
-        name_block = f"Name: {name}" if name else ""
-        formula_block = f"Formula: {formula}" if formula else ""
-        mw_block = f"MW: {mw:.2f}" if mw is not None else ""
-        values = {
-            "name": name or "",
-            "formula": formula or "",
-            "mw": f"{mw:.2f}" if mw is not None else "",
-            "name_block": name_block,
-            "formula_block": formula_block,
-            "mw_block": mw_block,
-        }
-        try:
-            text = self.info_format.format_map(values).strip()
-        except Exception:
-            text = " | ".join([block for block in [name_block, formula_block, mw_block] if block])
-        bounds = bounds_override or model.bounds()
-        return text, bounds
+        return "", (0.0, 0.0, 0.0, 0.0)
 
     def _selected_ids(self) -> tuple[set[int], set[int]]:
         atom_ids = set()
@@ -967,6 +924,8 @@ class CanvasView(QGraphicsView):
         self._apply_note_style(item)
 
     def begin_note_edit(self, item: QGraphicsTextItem) -> None:
+        if item not in self.selected_notes:
+            self.select_note(item, additive=False)
         item.setTextInteractionFlags(Qt.TextInteractionFlag.TextEditorInteraction)
         item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsFocusable, True)
         self.setFocus(Qt.FocusReason.MouseFocusReason)
@@ -1080,6 +1039,7 @@ class CanvasView(QGraphicsView):
             if self.selection_outline is not None:
                 self.scene().removeItem(self.selection_outline)
                 self.selection_outline = None
+            self._emit_selection_info()
             return
         if self.selection_outline in items:
             items = [item for item in items if item is not self.selection_outline]
@@ -1109,6 +1069,26 @@ class CanvasView(QGraphicsView):
             pen.setStyle(Qt.PenStyle.DashLine)
             self.selection_outline.setPen(pen)
         self.selection_outline.setRect(rect)
+        self._emit_selection_info()
+
+    def set_selection_info_callback(self, callback) -> None:
+        self._selection_info_callback = callback
+
+    def _emit_selection_info(self) -> None:
+        if not self._selection_info_callback:
+            return
+        if self._rotation_selection_ids is not None:
+            atom_ids, bond_ids = self._rotation_selection_ids
+        else:
+            atom_ids, bond_ids = self._selected_ids()
+        if not atom_ids and not bond_ids:
+            self._selection_info_callback("", "")
+            return
+        submodel, _, _ = self._build_submodel(atom_ids, bond_ids)
+        formula, mw, _ = self.rdkit.compute_props(submodel)
+        formula_text = formula or ""
+        mw_text = f"{mw:.2f}" if mw is not None else ""
+        self._selection_info_callback(formula_text, mw_text)
 
     def _clear_hover_highlight(self) -> None:
         for item in self.hover_items:
@@ -1463,11 +1443,19 @@ class CanvasView(QGraphicsView):
         self.clear_handles()
         self._set_selection_highlight([item])
         data = item.data(2) or {}
+        start = data.get("start")
+        end = data.get("end")
         control = data.get("control")
-        if not isinstance(control, QPointF):
+        if isinstance(start, QPointF) and isinstance(end, QPointF):
+            if not isinstance(control, QPointF):
+                control = self._default_curved_control(start, end)
+            mid = self._curved_midpoint(start, control, end)
+            self._update_curved_control(item, mid)
+            mid = self._curved_midpoint(start, item.data(2).get("control"), end)
+        else:
             rect = item.boundingRect()
-            control = rect.center()
-        self._active_handles = [self._create_handle(control, "curved_control", item)]
+            mid = rect.center()
+        self._active_handles = [self._create_handle(mid, "curved_control", item)]
         self._handle_target = item
 
     def _create_handle(self, pos: QPointF, handle_type: str, target):
@@ -1478,6 +1466,7 @@ class CanvasView(QGraphicsView):
         handle.setData(0, "handle")
         handle.setData(1, handle_type)
         handle.setData(2, target)
+        handle.setZValue(30)
         self.scene().addItem(handle)
         return handle
 
@@ -1524,32 +1513,8 @@ class CanvasView(QGraphicsView):
         double = data.get("double", False)
         if not isinstance(start, QPointF) or not isinstance(end, QPointF):
             return
-        control = pos
-        if self._curved_symmetry:
-            mid = QPointF((start.x() + end.x()) / 2.0, (start.y() + end.y()) / 2.0)
-            dx = end.x() - start.x()
-            dy = end.y() - start.y()
-            length = math.hypot(dx, dy) or 1.0
-            nx = -dy / length
-            ny = dx / length
-            v = QPointF(control.x() - mid.x(), control.y() - mid.y())
-            offset = v.x() * nx + v.y() * ny
-            if self._curved_snap:
-                step = self.renderer.style.bond_length_px * self._curved_snap_step
-                offset = round(offset / step) * step
-            control = QPointF(mid.x() + nx * offset, mid.y() + ny * offset)
-        elif self._curved_snap:
-            dx = end.x() - start.x()
-            dy = end.y() - start.y()
-            length = math.hypot(dx, dy) or 1.0
-            nx = -dy / length
-            ny = dx / length
-            mid = QPointF((start.x() + end.x()) / 2.0, (start.y() + end.y()) / 2.0)
-            v = QPointF(control.x() - mid.x(), control.y() - mid.y())
-            offset = v.x() * nx + v.y() * ny
-            step = self.renderer.style.bond_length_px * self._curved_snap_step
-            offset = round(offset / step) * step
-            control = QPointF(mid.x() + nx * offset, mid.y() + ny * offset)
+        mid = self._clamp_curved_midpoint(start, end, pos)
+        control = self._control_from_midpoint(start, end, mid)
         path = QPainterPath()
         path.moveTo(start)
         path.quadTo(control, end)
@@ -1557,6 +1522,42 @@ class CanvasView(QGraphicsView):
         item.setPath(path)
         data["control"] = control
         item.setData(2, data)
+
+    def _default_curved_control(self, start: QPointF, end: QPointF) -> QPointF:
+        dx = end.x() - start.x()
+        dy = end.y() - start.y()
+        length = math.hypot(dx, dy) or 1.0
+        nx = -dy / length
+        ny = dx / length
+        return QPointF(start.x() + dx * 0.5 + nx * length * 0.3, start.y() + dy * 0.5 + ny * length * 0.3)
+
+    def _curved_midpoint(self, start: QPointF, control: QPointF, end: QPointF) -> QPointF:
+        return QPointF(
+            0.25 * start.x() + 0.5 * control.x() + 0.25 * end.x(),
+            0.25 * start.y() + 0.5 * control.y() + 0.25 * end.y(),
+        )
+
+    def _control_from_midpoint(self, start: QPointF, end: QPointF, mid: QPointF) -> QPointF:
+        return QPointF(
+            2.0 * mid.x() - 0.5 * (start.x() + end.x()),
+            2.0 * mid.y() - 0.5 * (start.y() + end.y()),
+        )
+
+    def _clamp_curved_midpoint(self, start: QPointF, end: QPointF, mid: QPointF) -> QPointF:
+        chord_mid = QPointF((start.x() + end.x()) / 2.0, (start.y() + end.y()) / 2.0)
+        dx = end.x() - start.x()
+        dy = end.y() - start.y()
+        length = math.hypot(dx, dy) or 1.0
+        nx = -dy / length
+        ny = dx / length
+        v = QPointF(mid.x() - chord_mid.x(), mid.y() - chord_mid.y())
+        offset = v.x() * nx + v.y() * ny
+        if self._curved_snap:
+            step = self.renderer.style.bond_length_px * self._curved_snap_step
+            offset = round(offset / step) * step
+        max_offset = length * 0.8
+        offset = max(-max_offset, min(max_offset, offset))
+        return QPointF(chord_mid.x() + nx * offset, chord_mid.y() + ny * offset)
 
     def _set_selection_highlight(self, items: list) -> None:
         self._clear_selection_highlight()
@@ -1693,6 +1694,7 @@ class CanvasView(QGraphicsView):
 
     def begin_selection_3d_rotation(self) -> bool:
         atom_ids, bond_ids = self._selected_ids()
+        self._rotation_selection_ids = (set(atom_ids), set(bond_ids))
         if bond_ids:
             for bond_id in bond_ids:
                 if not (0 <= bond_id < len(self.model.bonds)):
@@ -1850,11 +1852,16 @@ class CanvasView(QGraphicsView):
         self._update_selection_outline()
 
     def end_selection_3d_rotation(self) -> None:
+        selection_ids = self._rotation_selection_ids
         self.rotation_atom_ids = set()
         self.rotation_center_3d = None
         self._rotation_base_coords = {}
         self._rotation_total_angles = None
+        self._rotation_selection_ids = None
         self._push_history()
+        if selection_ids is not None:
+            self._restore_selection_from_ids(*selection_ids)
+        self._emit_selection_info()
 
     def _redraw_bonds_for_atoms(self, atom_ids: set[int]) -> None:
         bond_ids = set()
@@ -1865,6 +1872,17 @@ class CanvasView(QGraphicsView):
                 bond_ids.add(bond_id)
         for bond_id in bond_ids:
             self._redraw_bond(bond_id)
+
+    def _restore_selection_from_ids(self, atom_ids: set[int], bond_ids: set[int]) -> None:
+        self.scene().clearSelection()
+        for atom_id in atom_ids:
+            item = self.atom_items.get(atom_id) or self.atom_dots.get(atom_id)
+            if item is not None:
+                item.setSelected(True)
+        for bond_id in bond_ids:
+            for item in self.bond_items.get(bond_id, []):
+                item.setSelected(True)
+        self._update_selection_outline()
 
     def _expand_connected_atoms(self, atom_ids: set[int]) -> set[int]:
         if not atom_ids:
@@ -2066,25 +2084,124 @@ class CanvasView(QGraphicsView):
         self.update_info_label()
         self._push_history()
 
-    def add_benzene_ring(self, center) -> None:
+    def add_benzene_ring(self, center: QPointF, attach_atom_id: int | None = None, attach_bond_id: int | None = None) -> None:
         radius = self.renderer.style.bond_length_px
         self.last_smiles_input = None
-        points = []
-        for i in range(6):
-            angle = math.radians(60 * i - 30)
-            x = center.x() + radius * math.cos(angle)
-            y = center.y() + radius * math.sin(angle)
-            points.append((x, y))
 
-        atom_ids = []
-        for x, y in points:
-            atom_ids.append(self.model.add_atom("C", x, y))
+        if attach_atom_id is None and attach_bond_id is None:
+            for ring_item in self.ring_items:
+                polygon = ring_item.polygon()
+                if polygon.containsPoint(center, Qt.FillRule.WindingFill):
+                    return
 
+        points: list[QPointF] = []
+        merge: list[tuple[int, float, float]] = []
+
+        if attach_bond_id is not None and 0 <= attach_bond_id < len(self.model.bonds):
+            bond = self.model.bonds[attach_bond_id]
+            if bond is not None:
+                a = self.model.atoms.get(bond.a)
+                b = self.model.atoms.get(bond.b)
+                if a is not None and b is not None:
+                    ax, ay = a.x, a.y
+                    bx, by = b.x, b.y
+                    mid = QPointF((ax + bx) / 2.0, (ay + by) / 2.0)
+                    dx = bx - ax
+                    dy = by - ay
+                    length = math.hypot(dx, dy) or radius
+                    nx = -dy / length
+                    ny = dx / length
+                    apothem = length * math.sqrt(3) / 2.0
+                    center1 = QPointF(mid.x() + nx * apothem, mid.y() + ny * apothem)
+                    center2 = QPointF(mid.x() - nx * apothem, mid.y() - ny * apothem)
+                    use_center = center1
+                    ring_polygon = None
+                    for ring_item in self.ring_items:
+                        ring_atom_ids = ring_item.data(2)
+                        if not isinstance(ring_atom_ids, list):
+                            continue
+                        if bond.a in ring_atom_ids and bond.b in ring_atom_ids:
+                            ring_polygon = ring_item.polygon()
+                            break
+                    if ring_polygon is not None:
+                        c1_in = ring_polygon.containsPoint(center1, Qt.FillRule.WindingFill)
+                        c2_in = ring_polygon.containsPoint(center2, Qt.FillRule.WindingFill)
+                        if c1_in and not c2_in:
+                            use_center = center2
+                        elif c2_in and not c1_in:
+                            use_center = center1
+                        elif c1_in and c2_in:
+                            return
+                    else:
+                        if (center2 - center).manhattanLength() < (center1 - center).manhattanLength():
+                            use_center = center2
+                    center = use_center
+                    theta_mid = math.atan2(mid.y() - center.y(), mid.x() - center.x())
+                    theta0 = theta_mid + math.radians(30)
+                    for i in range(6):
+                        angle = theta0 + math.radians(60 * i)
+                        x = center.x() + radius * math.cos(angle)
+                        y = center.y() + radius * math.sin(angle)
+                        points.append(QPointF(x, y))
+                    merge = [(bond.a, ax, ay), (bond.b, bx, by)]
+
+        if not points and attach_atom_id is not None and attach_atom_id in self.model.atoms:
+            atom = self.model.atoms[attach_atom_id]
+            ax, ay = atom.x, atom.y
+            direction = QPointF(0.0, -1.0)
+            vectors = []
+            for bond in self.model.bonds:
+                if bond is None:
+                    continue
+                if bond.a != attach_atom_id and bond.b != attach_atom_id:
+                    continue
+                other_id = bond.b if bond.a == attach_atom_id else bond.a
+                other = self.model.atoms.get(other_id)
+                if other is None:
+                    continue
+                vx = other.x - ax
+                vy = other.y - ay
+                vlen = math.hypot(vx, vy)
+                if vlen > 0:
+                    vectors.append((vx / vlen, vy / vlen))
+            if vectors:
+                sx = sum(v[0] for v in vectors)
+                sy = sum(v[1] for v in vectors)
+                if math.hypot(sx, sy) > 1e-6:
+                    direction = QPointF(-sx, -sy)
+                else:
+                    direction = QPointF(-vectors[0][1], vectors[0][0])
+            dlen = math.hypot(direction.x(), direction.y()) or 1.0
+            center = QPointF(ax + (direction.x() / dlen) * radius, ay + (direction.y() / dlen) * radius)
+            theta0 = math.atan2(ay - center.y(), ax - center.x())
+            for i in range(6):
+                angle = theta0 + math.radians(60 * i)
+                x = center.x() + radius * math.cos(angle)
+                y = center.y() + radius * math.sin(angle)
+                points.append(QPointF(x, y))
+            merge = [(attach_atom_id, ax, ay)]
+
+        if not points:
+            for i in range(6):
+                angle = math.radians(60 * i - 30)
+                x = center.x() + radius * math.cos(angle)
+                y = center.y() + radius * math.sin(angle)
+                points.append(QPointF(x, y))
+
+        atom_ids: list[int] = []
+        for point in points:
+            atom_ids.append(self._add_atom_with_merge(point, "C", merge))
+
+        bonds_start = len(self.model.bonds)
         for i in range(6):
+            a_id = atom_ids[i]
+            b_id = atom_ids[(i + 1) % 6]
+            if self._bond_exists(a_id, b_id):
+                continue
             order = 2 if i % 2 == 0 else 1
-            self.model.add_bond(atom_ids[i], atom_ids[(i + 1) % 6], order)
+            self.model.add_bond(a_id, b_id, order)
 
-        polygon = QPolygonF([QPointF(x, y) for x, y in points])
+        polygon = QPolygonF(points)
         ring_item = NoSelectPolygonItem(polygon)
         ring_item.setBrush(self.renderer.ring_fill_brush())
         ring_item.setPen(QPen(Qt.PenStyle.NoPen))
@@ -2094,11 +2211,28 @@ class CanvasView(QGraphicsView):
         self.scene().addItem(ring_item)
         self.ring_items.append(ring_item)
 
-        for i in range(6):
-            bond_id = len(self.model.bonds) - 6 + i
+        for bond_id in range(bonds_start, len(self.model.bonds)):
             self._add_bond_graphics(bond_id)
         self.update_info_label()
         self._push_history()
+
+    def _bond_exists(self, a_id: int, b_id: int) -> bool:
+        for bond in self.model.bonds:
+            if bond is None:
+                continue
+            if (bond.a == a_id and bond.b == b_id) or (bond.a == b_id and bond.b == a_id):
+                return True
+        return False
+
+    def _atom_bond_order_sum(self, atom_id: int) -> int:
+        total = 0
+        for bond in self.model.bonds:
+            if bond is None:
+                continue
+            if bond.a == atom_id or bond.b == atom_id:
+                total += max(1, int(bond.order or 1))
+        return total
+
 
     def add_benzene_template(self) -> None:
         center = self.mapToScene(self.viewport().rect().center())
@@ -2617,6 +2751,16 @@ class CanvasView(QGraphicsView):
             item.setBrush(fill)
             self._push_history()
 
+    def apply_ring_fill_color(self, item, color: QColor, alpha: float = 0.25) -> None:
+        if item is None or not color.isValid():
+            return
+        if item.data(0) != "ring":
+            return
+        fill = QColor(color)
+        fill.setAlphaF(max(0.0, min(1.0, float(alpha))))
+        item.setBrush(fill)
+        self._push_history()
+
     def clear_scene(self) -> None:
         self.scene().clear()
         self.hover_items = []
@@ -2716,6 +2860,28 @@ class CanvasView(QGraphicsView):
                 item.setData(2, data)
         self._update_selection_outline()
 
+    def move_atoms(self, atom_ids: set[int], dx: float, dy: float) -> None:
+        if not atom_ids:
+            return
+        for atom_id in atom_ids:
+            self._move_atom(atom_id, dx, dy)
+        self._redraw_bonds_for_atoms(atom_ids)
+        self._move_rings_for_atoms(atom_ids, dx, dy)
+        self._update_selection_outline()
+
+    def _move_rings_for_atoms(self, atom_ids: set[int], dx: float, dy: float) -> None:
+        for ring_item in self.ring_items:
+            ring_atom_ids = ring_item.data(2)
+            if not isinstance(ring_atom_ids, list):
+                continue
+            if not any(atom_id in atom_ids for atom_id in ring_atom_ids):
+                continue
+            polygon = ring_item.polygon()
+            shifted = QPolygonF()
+            for point in polygon:
+                shifted.append(QPointF(point.x() + dx, point.y() + dy))
+            ring_item.setPolygon(shifted)
+
     def _move_atom(self, atom_id: int, dx: float, dy: float) -> None:
         atom = self.model.atoms.get(atom_id)
         if atom is None:
@@ -2752,7 +2918,10 @@ class CanvasView(QGraphicsView):
         dot = self.atom_dots.pop(atom_id, None)
         if dot is not None:
             self.scene().removeItem(dot)
-        bonds_to_remove = [i for i, bond in enumerate(self.model.bonds) if bond.a == atom_id or bond.b == atom_id]
+        bonds_to_remove = [
+            i for i, bond in enumerate(self.model.bonds)
+            if bond is not None and (bond.a == atom_id or bond.b == atom_id)
+        ]
         for bond_id in sorted(bonds_to_remove, reverse=True):
             self.delete_bond(bond_id, record=False)
         self.model.atoms.pop(atom_id, None)
@@ -2770,11 +2939,12 @@ class CanvasView(QGraphicsView):
         if record:
             self._push_history()
 
-    def delete_ring(self, item: QGraphicsPolygonItem) -> None:
+    def delete_ring(self, item: QGraphicsPolygonItem, record: bool = True) -> None:
         if item in self.ring_items:
             self.ring_items.remove(item)
         self.scene().removeItem(item)
-        self._push_history()
+        if record:
+            self._push_history()
 
     def flip_bond_direction(self, bond_id: int) -> None:
         if not (0 <= bond_id < len(self.model.bonds)):
@@ -2854,6 +3024,20 @@ class CanvasView(QGraphicsView):
                     ys.append(atom.y)
                 if xs and ys:
                     return QPointF(sum(xs) / len(xs), sum(ys) / len(ys))
+        return None
+
+    def _ring_for_bond(self, bond_id: int) -> QGraphicsPolygonItem | None:
+        if not (0 <= bond_id < len(self.model.bonds)):
+            return None
+        bond = self.model.bonds[bond_id]
+        if bond is None:
+            return None
+        for ring_item in self.ring_items:
+            ring_atom_ids = ring_item.data(2)
+            if not isinstance(ring_atom_ids, list):
+                continue
+            if bond.a in ring_atom_ids and bond.b in ring_atom_ids:
+                return ring_item
         return None
 
     def _label_rect_for_atom(self, atom_id: int) -> QRectF | None:

@@ -1,3 +1,5 @@
+import math
+
 from PyQt6.QtCore import QPointF, QSize, Qt
 from PyQt6.QtGui import (
     QAction,
@@ -132,12 +134,22 @@ class MainWindow(QMainWindow):
         action_ring = tool_action("Ring", "benzene", "R")
         action_arrow = tool_action("Arrow", "arrow", "A")
         action_orbital = tool_action("Orbital", "orbital", "O")
-        action_note = tool_action("Note", "note", "N")
         action_move = tool_action("Move", "move", "M")
-        action_delete = tool_action("Erase", "delete", "X")
-        action_color = tool_action("Color", "color", "C")
         action_perspective = tool_action("Perspective", "perspective")
-        action_transform = tool_action("Transform", "transform")
+        action_wedge = QAction("Wedge", self)
+        action_wedge.setCheckable(True)
+        action_wedge.setIcon(self._icon_bond_wedge())
+        action_wedge.triggered.connect(
+            lambda: (self._set_tool_with_status("bond", reset_bond_style=False), self._set_bond_style("Wedge"))
+        )
+        tool_group.addAction(action_wedge)
+        action_hash = QAction("Hash", self)
+        action_hash.setCheckable(True)
+        action_hash.setIcon(self._icon_bond_hash())
+        action_hash.triggered.connect(
+            lambda: (self._set_tool_with_status("bond", reset_bond_style=False), self._set_bond_style("Hash"))
+        )
+        tool_group.addAction(action_hash)
 
         action_select.setIcon(self._icon_select())
         action_bond.setIcon(self._icon_bond())
@@ -145,15 +157,15 @@ class MainWindow(QMainWindow):
         action_ring.setIcon(self._icon_ring())
         action_arrow.setIcon(self._icon_arrow())
         action_orbital.setIcon(self._icon_orbital())
-        action_note.setIcon(self._icon_note())
         action_move.setIcon(self._icon_move())
-        action_delete.setIcon(self._icon_erase())
-        action_color.setIcon(self._icon_color())
         action_perspective.setIcon(self._icon_perspective())
-        action_transform.setIcon(self._icon_transform())
 
         left_bar.addAction(action_select)
+        left_bar.addAction(action_move)
+        left_bar.addAction(action_perspective)
         left_bar.addAction(action_bond)
+        left_bar.addAction(action_wedge)
+        left_bar.addAction(action_hash)
         left_bar.addAction(action_text)
         left_bar.addAction(action_ring)
         left_bar.addSeparator()
@@ -224,36 +236,9 @@ class MainWindow(QMainWindow):
 
         left_bar.addWidget(arrow_button)
         left_bar.addWidget(orbital_button)
-        left_bar.addAction(action_note)
-        left_bar.addSeparator()
-        left_bar.addAction(action_move)
-        left_bar.addAction(action_delete)
-        left_bar.addAction(action_color)
-        left_bar.addAction(action_perspective)
-        left_bar.addAction(action_transform)
-
         left_bar.addSeparator()
 
-        bond_style_btn = CornerMenuButton()
-        bond_style_btn.setToolTip("Bond Style")
-        bond_style_btn.setIcon(self._icon_bond())
-        bond_style_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        bond_style_menu = QMenu(bond_style_btn)
-        for label, icon in [
-            ("Single", self._icon_bond()),
-            ("Double", self._icon_bond_double()),
-            ("Triple", self._icon_bond_triple()),
-            ("Wedge", self._icon_bond_wedge()),
-            ("Hash", self._icon_bond_hash()),
-        ]:
-            action = bond_style_menu.addAction(icon, label)
-            action.triggered.connect(lambda checked=False, value=label: self._set_bond_style(value))
-        bond_style_menu.triggered.connect(lambda action: bond_style_btn.setIcon(action.icon()))
-        bond_style_btn.setMenu(bond_style_menu)
-        bond_style_btn.setStyleSheet(
-            "QToolButton::menu-indicator { image: none; width: 0px; }"
-            "QToolButton { padding-right: 2px; }"
-        )
+        left_bar.addSeparator()
 
         bond_len_btn = QToolButton()
         bond_len_btn.setToolTip("Bond Length")
@@ -269,7 +254,6 @@ class MainWindow(QMainWindow):
         flip_v.setIcon(self._icon_flip_v())
         flip_v.clicked.connect(self.canvas.flip_vertical)
 
-        left_bar.addWidget(bond_style_btn)
         left_bar.addWidget(bond_len_btn)
         left_bar.addWidget(flip_h)
         left_bar.addWidget(flip_v)
@@ -318,27 +302,6 @@ class MainWindow(QMainWindow):
             templates_menu.addAction(label, handler)
         templates_button.setMenu(templates_menu)
         panel_bar.addWidget(templates_button)
-        align_combo = QComboBox()
-        align_combo.addItems(["Left", "Center", "Right"])
-        align_combo.setToolTip("Info Alignment")
-        align_combo.currentTextChanged.connect(self._set_info_align)
-
-        insert_info = QToolButton()
-        insert_info.setText("Insert Info")
-        insert_info.clicked.connect(self.canvas.insert_info_label)
-
-        format_input = QLineEdit()
-        format_input.setPlaceholderText("{name_block} | {formula_block} | {mw_block}")
-        format_input.setText(self.canvas.get_info_format())
-        format_input.setFixedWidth(220)
-        format_input.textChanged.connect(self._set_info_format)
-
-        panel_bar.addWidget(align_combo)
-        panel_bar.addWidget(insert_info)
-        panel_bar.addWidget(format_input)
-
-        panel_bar.addSeparator()
-
         atom_input = QLineEdit()
         atom_input.setPlaceholderText("Atom")
         atom_input.setFixedWidth(60)
@@ -346,62 +309,58 @@ class MainWindow(QMainWindow):
         atom_input.setText(self.canvas.get_atom_symbol())
         atom_input.textChanged.connect(self.canvas.set_atom_symbol)
         panel_bar.addWidget(atom_input)
+        color_button = CornerMenuButton()
+        color_button.setIcon(self._icon_color())
+        color_button.setToolTip("Color")
+        color_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        color_button.setStyleSheet("QToolButton::menu-indicator { image: none; }")
+        color_menu = QMenu(color_button)
+        for label, hex_value in self._acs_color_palette():
+            pixmap = QPixmap(16, 16)
+            pixmap.fill(QColor(hex_value))
+            color_action = color_menu.addAction(QIcon(pixmap), label)
+            color_action.triggered.connect(lambda checked=False, c=hex_value: self._apply_color_preset(c))
+        color_button.setMenu(color_menu)
+        panel_bar.addWidget(color_button)
+
+        ring_fill_button = CornerMenuButton()
+        ring_fill_button.setIcon(self._icon_ring())
+        ring_fill_button.setToolTip("Ring Fill")
+        ring_fill_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        ring_fill_button.setStyleSheet("QToolButton::menu-indicator { image: none; }")
+        ring_fill_menu = QMenu(ring_fill_button)
+        for label, hex_value in self._acs_color_palette():
+            pixmap = QPixmap(16, 16)
+            pixmap.fill(QColor(hex_value))
+            fill_action = ring_fill_menu.addAction(QIcon(pixmap), label)
+            fill_action.triggered.connect(lambda checked=False, c=hex_value: self._apply_ring_fill_preset(c))
+        ring_fill_button.setMenu(ring_fill_menu)
+        panel_bar.addWidget(ring_fill_button)
         panel_bar.addSeparator()
 
-        text_size_frame = QFrame()
-        text_size_frame.setObjectName("spinFrame")
-        text_size_layout = QHBoxLayout(text_size_frame)
-        text_size_layout.setContentsMargins(2, 2, 2, 2)
-        text_size_layout.setSpacing(0)
-
-        text_size = QSpinBox()
-        text_size.setMinimum(6)
-        text_size.setMaximum(48)
-        text_size.setValue(self.canvas.get_text_size())
-        text_size.valueChanged.connect(self.canvas.set_text_size)
-        text_size.setToolTip("Text Size")
-        text_size.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
-        text_size.setMinimumWidth(50)
-        text_size.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        text_size_layout.addWidget(text_size)
-
-        text_buttons = QVBoxLayout()
-        text_buttons.setContentsMargins(0, 0, 0, 0)
-        text_buttons.setSpacing(0)
-        text_up = ArrowButton("up")
-        text_up.setObjectName("spinUpButton")
-        text_up.setFixedSize(16, 12)
-        text_down = ArrowButton("down")
-        text_down.setObjectName("spinDownButton")
-        text_down.setFixedSize(16, 12)
-        text_up.clicked.connect(lambda: text_size.setValue(min(48, text_size.value() + 1)))
-        text_down.clicked.connect(lambda: text_size.setValue(max(6, text_size.value() - 1)))
-        text_buttons.addWidget(text_up)
-        text_buttons.addWidget(text_down)
-        text_size_layout.addLayout(text_buttons)
-
-        text_bold = QToolButton()
-        text_bold.setText("B")
-        text_bold.setCheckable(True)
-        text_bold.setChecked(self.canvas.get_text_weight() >= QFont.Weight.Bold)
-        text_bold.setToolTip("Bold")
-        text_bold.toggled.connect(
-            lambda checked: self.canvas.set_text_weight(
-                QFont.Weight.Bold if checked else QFont.Weight.Normal
-            )
-        )
-
-        text_italic = QToolButton()
-        text_italic.setText("I")
-        text_italic.setCheckable(True)
-        text_italic.setToolTip("Italic")
-        text_italic.toggled.connect(self.canvas.set_text_italic)
-
-        panel_bar.addWidget(text_size_frame)
-        panel_bar.addWidget(text_bold)
-        panel_bar.addWidget(text_italic)
+        formula_label = QLabel("Formula")
+        formula_value = QLineEdit()
+        formula_value.setReadOnly(True)
+        formula_value.setFixedWidth(140)
+        formula_value.setPlaceholderText(" ")
+        mw_label = QLabel("MW")
+        mw_value = QLineEdit()
+        mw_value.setReadOnly(True)
+        mw_value.setFixedWidth(100)
+        mw_value.setPlaceholderText(" ")
+        panel_bar.addWidget(formula_label)
+        panel_bar.addWidget(formula_value)
+        panel_bar.addWidget(mw_label)
+        panel_bar.addWidget(mw_value)
+        panel_bar.addSeparator()
 
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, panel_bar)
+
+        def _update_selection_info(formula: str, mw: str) -> None:
+            formula_value.setText(formula)
+            mw_value.setText(mw)
+
+        self.canvas.set_selection_info_callback(_update_selection_info)
 
     def _make_icon(self, painter_fn) -> QIcon:
         pixmap = QPixmap(24, 24)
@@ -415,11 +374,10 @@ class MainWindow(QMainWindow):
     def _icon_select(self) -> QIcon:
         def draw(p):
             pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.4)
+            pen.setWidthF(2.0)
+            pen.setStyle(Qt.PenStyle.DashLine)
             p.setPen(pen)
-            p.drawLine(5, 4, 5, 19)
-            p.drawLine(5, 4, 14, 13)
-            p.drawLine(5, 11, 11, 11)
+            p.drawRect(4, 5, 16, 14)
         return self._make_icon(draw)
 
     def _icon_bond(self) -> QIcon:
@@ -427,32 +385,62 @@ class MainWindow(QMainWindow):
             pen = QPen(Qt.GlobalColor.black)
             pen.setWidthF(1.8)
             p.setPen(pen)
-            p.drawLine(4, 12, 20, 12)
+            p.drawLine(6, 18, 18, 6)
         return self._make_icon(draw)
 
     def _icon_text(self) -> QIcon:
         def draw(p):
-            font = QFont()
+            font = QFont("Arial")
             font.setBold(True)
-            font.setPointSize(10)
+            font.setPointSize(20)
             p.setFont(font)
             p.setPen(QPen(Qt.GlobalColor.black))
-            p.drawText(7, 16, "T")
+            p.drawText(6, 16, "A")
         return self._make_icon(draw)
 
     def _icon_ring(self) -> QIcon:
         def draw(p):
+            p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
             pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.4)
+            pen.setWidthF(1.6)
             p.setPen(pen)
-            polygon = QPolygonF()
-            polygon.append(QPointF(12, 4))
-            polygon.append(QPointF(18, 8))
-            polygon.append(QPointF(18, 16))
-            polygon.append(QPointF(12, 20))
-            polygon.append(QPointF(6, 16))
-            polygon.append(QPointF(6, 8))
-            p.drawPolygon(polygon)
+            center = QPointF(12.0, 12.0)
+            radius = 8.0
+            outer = QPolygonF()
+            for i in range(6):
+                angle = math.radians(60 * i - 90)
+                outer.append(
+                    QPointF(
+                        center.x() + radius * math.cos(angle),
+                        center.y() + radius * math.sin(angle),
+                    )
+                )
+            p.drawPolygon(outer)
+            inner_pen = QPen(Qt.GlobalColor.black)
+            inner_pen.setWidthF(1.6)
+            p.setPen(inner_pen)
+            spacing = 1.6
+            for i in range(0, 6, 2):
+                a = outer[i]
+                b = outer[(i + 1) % 6]
+                dx = b.x() - a.x()
+                dy = b.y() - a.y()
+                length = math.hypot(dx, dy) or 1.0
+                ux = dx / length
+                uy = dy / length
+                nx = -dy / length
+                ny = dx / length
+                mid_x = (a.x() + b.x()) / 2.0
+                mid_y = (a.y() + b.y()) / 2.0
+                to_cx = center.x() - mid_x
+                to_cy = center.y() - mid_y
+                if nx * to_cx + ny * to_cy < 0:
+                    nx = -nx
+                    ny = -ny
+                trim = max(1.2, length * 0.12)
+                p1 = QPointF(a.x() + ux * trim + nx * spacing, a.y() + uy * trim + ny * spacing)
+                p2 = QPointF(b.x() - ux * trim + nx * spacing, b.y() - uy * trim + ny * spacing)
+                p.drawLine(p1, p2)
         return self._make_icon(draw)
 
     def _icon_undo(self) -> QIcon:
@@ -585,16 +573,6 @@ class MainWindow(QMainWindow):
             p.drawEllipse(13, 8, 6, 8)
         return self._make_icon(draw)
 
-    def _icon_note(self) -> QIcon:
-        def draw(p):
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.2)
-            p.setPen(pen)
-            p.drawRect(5, 6, 14, 12)
-            p.drawLine(7, 10, 17, 10)
-            p.drawLine(7, 13, 15, 13)
-        return self._make_icon(draw)
-
     def _icon_move(self) -> QIcon:
         def draw(p):
             pen = QPen(Qt.GlobalColor.black)
@@ -612,16 +590,6 @@ class MainWindow(QMainWindow):
             p.drawLine(20, 12, 18, 14)
         return self._make_icon(draw)
 
-    def _icon_erase(self) -> QIcon:
-        def draw(p):
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.2)
-            p.setPen(pen)
-            p.setBrush(QBrush(Qt.GlobalColor.transparent))
-            p.drawRect(6, 8, 12, 8)
-            p.drawLine(8, 16, 16, 16)
-        return self._make_icon(draw)
-
     def _icon_color(self) -> QIcon:
         def draw(p):
             pen = QPen(Qt.GlobalColor.black)
@@ -630,29 +598,31 @@ class MainWindow(QMainWindow):
             p.drawEllipse(7, 7, 10, 10)
         return self._make_icon(draw)
 
-    def _icon_transform(self) -> QIcon:
-        def draw(p):
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.2)
-            p.setPen(pen)
-            p.drawRect(6, 6, 12, 12)
-            p.drawEllipse(9, 9, 6, 6)
-        return self._make_icon(draw)
-
     def _icon_perspective(self) -> QIcon:
         def draw(p):
             pen = QPen(Qt.GlobalColor.black)
             pen.setWidthF(1.2)
             p.setPen(pen)
-            poly = QPolygonF(
-                [
-                    QPointF(6, 6),
-                    QPointF(18, 8),
-                    QPointF(16, 18),
-                    QPointF(4, 16),
-                ]
+            cx, cy, r = 12.0, 12.0, 8.0
+            start_deg = 40.0
+            span_deg = 280.0
+            end_deg = (start_deg + span_deg) % 360.0
+            p.drawArc(4, 4, 16, 16, int(start_deg * 16), int(span_deg * 16))
+            rad = math.radians(end_deg)
+            end = QPointF(cx + r * math.cos(rad), cy - r * math.sin(rad))
+            tangent = rad + math.pi / 2.0
+            head_len = 3.0
+            head_angle = math.radians(25.0)
+            left = QPointF(
+                end.x() + head_len * math.cos(tangent + math.pi + head_angle),
+                end.y() - head_len * math.sin(tangent + math.pi + head_angle),
             )
-            p.drawPolygon(poly)
+            right = QPointF(
+                end.x() + head_len * math.cos(tangent + math.pi - head_angle),
+                end.y() - head_len * math.sin(tangent + math.pi - head_angle),
+            )
+            p.drawLine(end, left)
+            p.drawLine(end, right)
         return self._make_icon(draw)
 
     def _init_panels(self) -> None:
@@ -909,30 +879,32 @@ class MainWindow(QMainWindow):
             ("18-crown-6", self.canvas.add_crown_18_6),
         ]
 
-    def _build_info_panel(self) -> QWidget:
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
+    def _acs_color_palette(self) -> list[tuple[str, str]]:
+        return [
+            ("Black", "#000000"),
+            ("Gray", "#4a4a4a"),
+            ("Red", "#c00000"),
+            ("Blue", "#1f5eff"),
+            ("Green", "#2e8b57"),
+            ("Purple", "#6a2ea6"),
+            ("Orange", "#c77c00"),
+        ]
 
-        align_label = QLabel("Align")
-        align_combo = QComboBox()
-        align_combo.addItems(["Left", "Center", "Right"])
-        align_combo.currentTextChanged.connect(self._set_info_align)
+    def _apply_color_preset(self, hex_value: str) -> None:
+        color = QColor(hex_value)
+        tool = self.canvas.tools.tools.get("color") if hasattr(self.canvas, "tools") else None
+        if tool is not None:
+            tool._last_color = color.name()
+        self.canvas.set_tool("color")
+        for item in self.canvas.scene().selectedItems():
+            if item.data(0) in {"bond", "atom", "ring"}:
+                self.canvas.apply_color_to_item(item, color)
 
-        insert_btn = QPushButton("Insert Info")
-        insert_btn.clicked.connect(self.canvas.insert_info_label)
-
-        format_label = QLabel("Format")
-        format_input = QLineEdit()
-        format_input.setPlaceholderText("{name_block} | {formula_block} | {mw_block}")
-        format_input.setText(self.canvas.get_info_format())
-        format_input.textChanged.connect(self._set_info_format)
-
-        layout.addWidget(align_label)
-        layout.addWidget(align_combo)
-        layout.addWidget(insert_btn)
-        layout.addWidget(format_label)
-        layout.addWidget(format_input)
-        return widget
+    def _apply_ring_fill_preset(self, hex_value: str) -> None:
+        color = QColor(hex_value)
+        for item in self.canvas.scene().selectedItems():
+            if item.data(0) == "ring":
+                self.canvas.apply_ring_fill_color(item, color)
 
     def _set_bond_style(self, value: str) -> None:
         mapping = {
@@ -945,8 +917,10 @@ class MainWindow(QMainWindow):
         style, order = mapping.get(value, ("single", 1))
         self.canvas.set_bond_style(style, order)
 
-    def _set_tool_with_status(self, tool: str) -> None:
+    def _set_tool_with_status(self, tool: str, reset_bond_style: bool = True) -> None:
         self.canvas.set_tool(tool)
+        if tool == "bond" and reset_bond_style:
+            self._set_bond_style("Single")
         self.statusBar().showMessage(f"Tool: {tool}")
 
     def _set_arrow_type(self, value: str) -> None:
@@ -986,13 +960,6 @@ class MainWindow(QMainWindow):
         width, head = presets.get(value, (1.2, 0.3))
         self.canvas.set_arrow_line_width(width)
         self.canvas.set_arrow_head_scale(head)
-
-    def _set_info_align(self, value: str) -> None:
-        mapping = {"Left": "left", "Center": "center", "Right": "right"}
-        self.canvas.set_info_alignment(mapping.get(value, "left"))
-
-    def _set_info_format(self, value: str) -> None:
-        self.canvas.set_info_format(value)
 
     def _set_text_color(self) -> None:
         color = QColorDialog.getColor(parent=self, title="Text Color")

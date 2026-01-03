@@ -31,9 +31,36 @@ class SelectTool(Tool):
     def __init__(self, canvas) -> None:
         super().__init__("select")
         self.canvas = canvas
+        self._active_handle = None
 
     def activate(self) -> None:
         self.canvas.setDragMode(self.canvas.DragMode.RubberBandDrag)
+
+    def on_mouse_press(self, event) -> bool:
+        if event.button() != Qt.MouseButton.LeftButton:
+            return False
+        item = self.canvas.item_at_event(event)
+        if item is not None and item.data(0) == "handle":
+            self._active_handle = item
+            return True
+        if item is not None and item.data(0) in {"curved_single", "curved_double"}:
+            self.canvas.show_curved_handles(item)
+            return False
+        self.canvas.clear_handles()
+        return False
+
+    def on_mouse_move(self, event) -> bool:
+        if self._active_handle is None:
+            return False
+        self.canvas.update_handle_drag(self._active_handle, self.canvas.scene_pos_from_event(event))
+        return True
+
+    def on_mouse_release(self, event) -> bool:
+        if self._active_handle is None:
+            return False
+        self._active_handle = None
+        self.canvas._push_history()
+        return True
 
 
 class RotateTool(Tool):
@@ -80,6 +107,12 @@ class BondTool(Tool):
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
             return False
+        item = self.canvas.item_at_event(event)
+        if item is not None and item.data(0) == "bond":
+            bond_id = item.data(1)
+            if isinstance(bond_id, int):
+                self.canvas.cycle_bond_style(bond_id)
+                return True
         if self.canvas.hover_bond_id is not None:
             self.canvas.cycle_bond_style(self.canvas.hover_bond_id)
             return True
@@ -291,7 +324,12 @@ class BenzeneTool(Tool):
         if event.button() != Qt.MouseButton.LeftButton:
             return False
         pos = self.canvas.scene_pos_from_event(event)
-        self.canvas.add_benzene_ring(pos)
+        if self.canvas.hover_bond_id is not None:
+            self.canvas.add_benzene_ring(pos, attach_bond_id=self.canvas.hover_bond_id)
+        elif self.canvas.hover_atom_id is not None:
+            self.canvas.add_benzene_ring(pos, attach_atom_id=self.canvas.hover_atom_id)
+        else:
+            self.canvas.add_benzene_ring(pos)
         return True
 
 
@@ -308,18 +346,18 @@ class ColorTool(Tool):
         if event.button() != Qt.MouseButton.LeftButton:
             return False
         item = self.canvas.item_at_event(event)
-        if item is None:
-            return True
-        initial = QColor(self._last_color or self.canvas.renderer.style.atom_color)
-        color = QColorDialog.getColor(
-            initial=initial,
-            parent=self.canvas,
-            title="Pick Color",
-        )
+        targets = []
+        if item is not None:
+            targets = [item]
+        else:
+            targets = [sel for sel in self.canvas.scene().selectedItems() if sel.data(0) in {"bond", "atom", "ring"}]
+            if not targets:
+                return True
+        color = QColor(self._last_color or self.canvas.renderer.style.atom_color)
         if not color.isValid():
             return True
-        self._last_color = color.name()
-        self.canvas.apply_color_to_item(item, color)
+        for target in targets:
+            self.canvas.apply_color_to_item(target, color)
         return True
 
 
@@ -372,6 +410,8 @@ class MoveTool(Tool):
         self._drag_item = None
         self._start_pos = None
         self._moved = False
+        self._drag_selection = False
+        self._selection_atom_ids: set[int] = set()
 
     def activate(self) -> None:
         self.canvas.setDragMode(self.canvas.DragMode.NoDrag)
@@ -380,6 +420,20 @@ class MoveTool(Tool):
         if event.button() != Qt.MouseButton.LeftButton:
             return False
         item = self.canvas.item_at_event(event)
+        selected = self.canvas.scene().selectedItems()
+        if selected:
+            atom_ids, bond_ids = self.canvas._selected_ids()
+            for bond_id in bond_ids:
+                if 0 <= bond_id < len(self.canvas.model.bonds):
+                    bond = self.canvas.model.bonds[bond_id]
+                    if bond is not None:
+                        atom_ids.add(bond.a)
+                        atom_ids.add(bond.b)
+            if atom_ids:
+                self._drag_selection = True
+                self._selection_atom_ids = set(atom_ids)
+                self._start_pos = event.position()
+                return True
         if item is None:
             return True
         kind = item.data(0)
@@ -394,7 +448,6 @@ class MoveTool(Tool):
             "inhibit",
             "dotted",
             "orbital",
-            "note",
         }:
             return True
         self._drag_item = item
@@ -402,10 +455,13 @@ class MoveTool(Tool):
         return True
 
     def on_mouse_move(self, event) -> bool:
-        if self._drag_item is None or self._start_pos is None:
+        if self._start_pos is None:
             return False
         delta = event.position() - self._start_pos
-        self.canvas.move_item(self._drag_item, delta.x(), delta.y())
+        if self._drag_selection and self._selection_atom_ids:
+            self.canvas.move_atoms(self._selection_atom_ids, delta.x(), delta.y())
+        elif self._drag_item is not None:
+            self.canvas.move_item(self._drag_item, delta.x(), delta.y())
         self._start_pos = event.position()
         self._moved = True
         return True
@@ -416,6 +472,8 @@ class MoveTool(Tool):
         self._drag_item = None
         self._start_pos = None
         self._moved = False
+        self._drag_selection = False
+        self._selection_atom_ids = set()
         return True
 
 
@@ -651,12 +709,9 @@ class ToolController:
             "color": ColorTool(canvas),
             "flip": FlipTool(canvas),
             "move": MoveTool(canvas),
-            "delete": DeleteTool(canvas),
             "arrow": ArrowTool(canvas, "auto"),
             "equilibrium": ArrowTool(canvas, "equilibrium"),
             "orbital": OrbitalTool(canvas),
-            "transform": TransformTool(canvas),
-            "note": NoteTool(canvas),
             "perspective": PerspectiveTool(canvas),
         }
         self.active: Optional[Tool] = None

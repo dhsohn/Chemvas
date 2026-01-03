@@ -34,10 +34,12 @@ class RDKitAdapter:
         if self._rdkit is None:
             try:
                 from rdkit import Chem
+                from rdkit import RDLogger
                 from rdkit.Chem import AllChem
             except Exception:
                 self.last_error = "RDKit is not available in this environment."
                 return None, None
+            RDLogger.DisableLog("rdApp.*")
             self._rdkit = (Chem, AllChem)
         return self._rdkit
 
