@@ -2,7 +2,7 @@ from typing import Dict, Optional
 
 import math
 
-from PyQt6.QtCore import QLineF, QPointF, Qt
+from PyQt6.QtCore import QLineF, QPointF, QRectF, Qt
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QColorDialog, QGraphicsLineItem, QInputDialog
 
@@ -32,6 +32,11 @@ class SelectTool(Tool):
         super().__init__("select")
         self.canvas = canvas
         self._active_handle = None
+        self._drag_selection = False
+        self._selection_atom_ids: set[int] = set()
+        self._selection_items: list = []
+        self._start_pos = None
+        self._moved = False
 
     def activate(self) -> None:
         self.canvas.setDragMode(self.canvas.DragMode.RubberBandDrag)
@@ -47,19 +52,104 @@ class SelectTool(Tool):
             self.canvas.show_curved_handles(item)
             return False
         self.canvas.clear_handles()
-        return False
+        selected = self.canvas.scene().selectedItems()
+        if not selected:
+            return False
+        atom_ids, bond_ids = self.canvas._selected_ids()
+        for bond_id in bond_ids:
+            if 0 <= bond_id < len(self.canvas.model.bonds):
+                bond = self.canvas.model.bonds[bond_id]
+                if bond is not None:
+                    atom_ids.add(bond.a)
+                    atom_ids.add(bond.b)
+        selection_items = [
+            sel
+            for sel in selected
+            if sel.data(0) not in {"selection_outline", "note_box", "note_select", "handle"}
+        ]
+        if not atom_ids and not selection_items:
+            return False
+        click_pos = self.canvas.scene_pos_from_event(event)
+        rects = []
+        if atom_ids:
+            for component in self.canvas._connected_components(atom_ids):
+                bounds = self.canvas._bounds_for_atoms(component)
+                if bounds is None:
+                    continue
+                min_x, min_y, max_x, max_y = bounds
+                rects.append(QRectF(min_x, min_y, max_x - min_x, max_y - min_y))
+        for sel in selection_items:
+            kind = sel.data(0)
+            if kind in {"atom", "bond", "ring"}:
+                continue
+            rects.append(sel.sceneBoundingRect())
+        if rects:
+            pad = self.canvas.renderer.style.bond_length_px * 0.1
+            for rect in rects:
+                padded = rect.adjusted(-pad, -pad, pad, pad)
+                if padded.contains(click_pos):
+                    self._drag_selection = True
+                    self._selection_atom_ids = set(atom_ids)
+                    self._selection_items = selection_items
+                    self._start_pos = event.position()
+                    return True
+        clicked_selection = False
+        if item is not None:
+            kind = item.data(0)
+            if kind == "atom":
+                atom_id = item.data(1)
+                clicked_selection = isinstance(atom_id, int) and atom_id in atom_ids
+            elif kind == "bond":
+                bond_id = item.data(1)
+                if isinstance(bond_id, int) and 0 <= bond_id < len(self.canvas.model.bonds):
+                    bond = self.canvas.model.bonds[bond_id]
+                    if bond is not None:
+                        clicked_selection = bond.a in atom_ids or bond.b in atom_ids
+            elif kind == "ring":
+                ring_atom_ids = item.data(2)
+                if isinstance(ring_atom_ids, list):
+                    clicked_selection = any(atom_id in atom_ids for atom_id in ring_atom_ids)
+            elif item.isSelected():
+                clicked_selection = True
+        if not clicked_selection:
+            return False
+        self._drag_selection = True
+        self._selection_atom_ids = set(atom_ids)
+        self._selection_items = selection_items
+        self._start_pos = event.position()
+        return True
 
     def on_mouse_move(self, event) -> bool:
-        if self._active_handle is None:
+        if self._active_handle is not None:
+            self.canvas.update_handle_drag(self._active_handle, self.canvas.scene_pos_from_event(event))
+            return True
+        if self._start_pos is None:
             return False
-        self.canvas.update_handle_drag(self._active_handle, self.canvas.scene_pos_from_event(event))
+        delta = event.position() - self._start_pos
+        if self._drag_selection:
+            if self._selection_atom_ids:
+                self.canvas.move_atoms(self._selection_atom_ids, delta.x(), delta.y())
+            else:
+                for item in self._selection_items:
+                    self.canvas.move_item(item, delta.x(), delta.y())
+        self._start_pos = event.position()
+        self._moved = True
         return True
 
     def on_mouse_release(self, event) -> bool:
-        if self._active_handle is None:
+        if self._active_handle is not None:
+            self._active_handle = None
+            self.canvas._push_history()
+            return True
+        if self._start_pos is None and not self._drag_selection:
             return False
-        self._active_handle = None
-        self.canvas._push_history()
+        if self._moved:
+            self.canvas._push_history()
+        self._drag_selection = False
+        self._selection_atom_ids = set()
+        self._selection_items = []
+        self._start_pos = None
+        self._moved = False
         return True
 
 
@@ -313,9 +403,11 @@ class TextTool(Tool):
         text = text.strip()
         if not text:
             return ""
-        if len(text) == 1:
-            return text.upper()
-        return text[0].upper() + text[1:].lower()
+        if text.isalpha() and len(text) <= 2:
+            if len(text) == 1:
+                return text.upper()
+            return text[0].upper() + text[1:].lower()
+        return text
 
 
 class BenzeneTool(Tool):

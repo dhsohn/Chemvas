@@ -96,6 +96,13 @@ class NoSelectEllipseItem(QGraphicsEllipseItem):
         super().paint(painter, option, widget)
 
 
+class NoSelectTextItem(QGraphicsTextItem):
+    def paint(self, painter, option, widget=None) -> None:
+        option = QStyleOptionGraphicsItem(option)
+        option.state &= ~QStyle.StateFlag.State_Selected
+        super().paint(painter, option, widget)
+
+
 class CanvasView(QGraphicsView):
     def __init__(self) -> None:
         super().__init__()
@@ -904,7 +911,7 @@ class CanvasView(QGraphicsView):
         bounds = self._bounds_for_atoms(selected_atoms)
         return submodel, bounds, id_map
 
-    def _bounds_for_atoms(self, atom_ids: set[int]):
+    def _bounds_for_atoms(self, atom_ids: set[int], include_labels: bool = False):
         xs = []
         ys = []
         for atom_id in atom_ids:
@@ -913,6 +920,17 @@ class CanvasView(QGraphicsView):
                 continue
             xs.append(atom.x)
             ys.append(atom.y)
+            if include_labels:
+                label = self.atom_items.get(atom_id)
+                if label is not None:
+                    rect = label.sceneBoundingRect()
+                    xs.extend([rect.left(), rect.right()])
+                    ys.extend([rect.top(), rect.bottom()])
+                dot = self.atom_dots.get(atom_id)
+                if dot is not None:
+                    rect = dot.sceneBoundingRect()
+                    xs.extend([rect.left(), rect.right()])
+                    ys.extend([rect.top(), rect.bottom()])
         if not xs:
             return self.model.bounds()
         return min(xs), min(ys), max(xs), max(ys)
@@ -1066,8 +1084,15 @@ class CanvasView(QGraphicsView):
                     atom_ids.add(bond.b)
         rects: list[QRectF] = []
         if atom_ids:
+            bonded_atoms: set[int] = set()
+            for bond in self.model.bonds:
+                if bond is None:
+                    continue
+                bonded_atoms.add(bond.a)
+                bonded_atoms.add(bond.b)
             for component in self._connected_components(atom_ids):
-                bounds = self._bounds_for_atoms(component)
+                include_labels = not any(atom_id in bonded_atoms for atom_id in component)
+                bounds = self._bounds_for_atoms(component, include_labels=include_labels)
                 if bounds is None:
                     continue
                 min_x, min_y, max_x, max_y = bounds
@@ -1804,65 +1829,24 @@ class CanvasView(QGraphicsView):
         if not atom_ids:
             return False
         atom_ids = self._expand_connected_atoms(atom_ids)
-        submodel, _, id_map = self._build_submodel(atom_ids, bond_ids)
-        coords_sub = self.rdkit.model_to_3d_coords(submodel)
-        if not coords_sub:
-            message = self.rdkit.last_error or "RDKit 3D coordinates are not available."
-            QMessageBox.warning(self, "3D Rotation", message)
-            return False
-        reverse_map = {new_id: old_id for old_id, new_id in id_map.items()}
-        coords_3d = {}
-        for new_id, coords in coords_sub.items():
-            old_id = reverse_map.get(new_id)
-            if old_id is not None:
-                coords_3d[old_id] = coords
-        if not coords_3d:
-            return False
-        atom_ids = set(coords_3d.keys())
         center_2d = self._center_for_atoms(atom_ids)
         if center_2d is None:
             return False
-        cx3 = cy3 = cz3 = 0.0
-        count = 0
-        for atom_id in atom_ids:
-            if atom_id in coords_3d:
-                x, y, z = coords_3d[atom_id]
-                cx3 += x
-                cy3 += y
-                cz3 += z
-                count += 1
-        if count == 0:
-            return False
-        cx3 /= count
-        cy3 /= count
-        cz3 /= count
         dist_2d = []
-        dist_3d = []
+        self.atom_coords_3d = {}
         for atom_id in atom_ids:
             atom = self.model.atoms.get(atom_id)
-            if atom is None or atom_id not in coords_3d:
+            if atom is None:
                 continue
+            self.atom_coords_3d[atom_id] = (atom.x, atom.y, 0.0)
             dist_2d.append(math.hypot(atom.x - center_2d.x(), atom.y - center_2d.y()))
-            x, y, _ = coords_3d[atom_id]
-            dist_3d.append(math.hypot(x - cx3, y - cy3))
-        scale = 1.0
-        if dist_3d:
-            avg_2d = sum(dist_2d) / len(dist_2d) if dist_2d else 1.0
-            avg_3d = sum(dist_3d) / len(dist_3d)
-            if avg_3d > 1e-6:
-                scale = avg_2d / avg_3d
+        if not self.atom_coords_3d:
+            return False
         self._rotation_avg_dist = sum(dist_2d) / len(dist_2d) if dist_2d else 0.0
-
-        self.atom_coords_3d = {}
-        for atom_id, (x, y, z) in coords_3d.items():
-            sx = (x - cx3) * scale + center_2d.x()
-            sy = (y - cy3) * scale + center_2d.y()
-            sz = (z - cz3) * scale
-            self.atom_coords_3d[atom_id] = (sx, sy, sz)
 
         self._rotation_base_coords = dict(self.atom_coords_3d)
         self._rotation_total_angles = (0.0, 0.0)
-        self.rotation_atom_ids = atom_ids
+        self.rotation_atom_ids = set(self.atom_coords_3d.keys())
         self.rotation_center_3d = (center_2d.x(), center_2d.y(), 0.0)
         return True
 
@@ -1914,6 +1898,9 @@ class CanvasView(QGraphicsView):
             label = self.atom_items.get(atom_id)
             if label is not None:
                 self._position_label(label, atom.x, atom.y)
+            dot = self.atom_dots.get(atom_id)
+            if dot is not None:
+                dot.setPos(atom.x, atom.y)
 
         if getattr(self, "_rotation_avg_dist", 0.0) > 0.0:
             dist_sum = 0.0
@@ -1938,6 +1925,9 @@ class CanvasView(QGraphicsView):
                             label = self.atom_items.get(atom_id)
                             if label is not None:
                                 self._position_label(label, atom.x, atom.y)
+                            dot = self.atom_dots.get(atom_id)
+                            if dot is not None:
+                                dot.setPos(atom.x, atom.y)
 
         self._last_perspective_transform = QTransform()
         self._last_perspective_transform.translate(cx, cy)
@@ -2172,8 +2162,15 @@ class CanvasView(QGraphicsView):
         if start == end:
             return
         self.last_smiles_input = None
-        start_id = self.model.add_atom("C", start.x(), start.y())
-        end_id = self.model.add_atom("C", end.x(), end.y())
+        snap_tol = self.renderer.style.bond_length_px * 0.1
+        start_id = self.model.find_atom_near(start.x(), start.y(), snap_tol)
+        if start_id is None:
+            start_id = self.model.add_atom("C", start.x(), start.y())
+        end_id = self.model.find_atom_near(end.x(), end.y(), snap_tol)
+        if end_id is None:
+            end_id = self.model.add_atom("C", end.x(), end.y())
+        if start_id == end_id:
+            return
         self.model.add_bond(start_id, end_id, self.active_bond_order)
         bond_id = len(self.model.bonds) - 1
         self.model.bonds[bond_id].style = self.active_bond_style
@@ -2743,6 +2740,47 @@ class CanvasView(QGraphicsView):
         merge.append((atom_id, point.x(), point.y()))
         return atom_id
 
+    def _merge_overlapping_atoms(self, atom_id: int) -> None:
+        atom = self.model.atoms.get(atom_id)
+        if atom is None:
+            return
+        tol = max(0.5, self.renderer.style.bond_length_px * 0.05)
+        tol_sq = tol * tol
+        merge_ids = []
+        for other_id, other in self.model.atoms.items():
+            if other_id == atom_id:
+                continue
+            dx = other.x - atom.x
+            dy = other.y - atom.y
+            if dx * dx + dy * dy <= tol_sq:
+                merge_ids.append(other_id)
+        if not merge_ids:
+            return
+        for other_id in merge_ids:
+            label = self.atom_items.pop(other_id, None)
+            if label is not None:
+                self.scene().removeItem(label)
+            dot = self.atom_dots.pop(other_id, None)
+            if dot is not None:
+                self.scene().removeItem(dot)
+        for bond in self.model.bonds:
+            if bond is None:
+                continue
+            if bond.a in merge_ids:
+                bond.a = atom_id
+            if bond.b in merge_ids:
+                bond.b = atom_id
+        for bond_id, bond in enumerate(self.model.bonds):
+            if bond is None:
+                continue
+            if bond.a == bond.b:
+                for item in self.bond_items.get(bond_id, []):
+                    self.scene().removeItem(item)
+                self.bond_items.pop(bond_id, None)
+                self.model.bonds[bond_id] = None
+        for other_id in merge_ids:
+            self.model.atoms.pop(other_id, None)
+
     def _add_linear_chain(self, points: list[QPointF], elements: list[str], bonds: list[int]):
         atom_ids = []
         for point, element in zip(points, elements):
@@ -2786,7 +2824,7 @@ class CanvasView(QGraphicsView):
             return
 
         if existing_item is None:
-            text_item = QGraphicsTextItem()
+            text_item = NoSelectTextItem()
             self.scene().addItem(text_item)
             self.atom_items[atom_id] = text_item
         else:
@@ -2800,6 +2838,7 @@ class CanvasView(QGraphicsView):
         text_item.setPlainText(text)
         self._position_label(text_item, atom.x, atom.y)
         self._remove_carbon_dot(atom_id)
+        self._merge_overlapping_atoms(atom_id)
         self._redraw_connected_bonds(atom_id)
         if record:
             self._push_history()
@@ -2830,7 +2869,7 @@ class CanvasView(QGraphicsView):
     def _position_label(self, item: QGraphicsTextItem, x: float, y: float) -> None:
         rect = item.boundingRect()
         offset = self.renderer.style.atom_label_offset_px
-        item.setPos(x - rect.width() / 2.0 + offset, y - rect.height() / 2.0 - offset)
+        item.setPos(x - rect.center().x() + offset, y - rect.center().y() - offset)
 
     def apply_color_to_item(self, item, color: QColor) -> None:
         if item is None or not color.isValid():
@@ -3126,10 +3165,14 @@ class CanvasView(QGraphicsView):
                 self._redraw_bond(bond_id)
 
     def _redraw_bond(self, bond_id: int) -> None:
+        selected = any(item.isSelected() for item in self.bond_items.get(bond_id, []))
         for item in self.bond_items.get(bond_id, []):
             self.scene().removeItem(item)
         self.bond_items[bond_id] = []
         self._add_bond_graphics(bond_id)
+        if selected:
+            for item in self.bond_items.get(bond_id, []):
+                item.setSelected(True)
 
     def delete_atom(self, atom_id: int, record: bool = True) -> None:
         if not isinstance(atom_id, int):
@@ -3283,10 +3326,7 @@ class CanvasView(QGraphicsView):
             return None
         rect = item.sceneBoundingRect()
         pad = max(0.05, self.renderer.style.bond_line_width * 0.05)
-        size = max(rect.width(), rect.height()) + pad * 2
-        cx = rect.center().x()
-        cy = rect.center().y()
-        return QRectF(cx - size / 2, cy - size / 2, size, size)
+        return rect.adjusted(-pad, -pad, pad, pad)
 
     def _label_cut_radius_for_atom(self, atom_id: int) -> float | None:
         item = self.atom_items.get(atom_id)
@@ -3306,7 +3346,7 @@ class CanvasView(QGraphicsView):
         for corner in corners:
             max_dist = max(max_dist, math.hypot(corner.x() - atom.x, corner.y() - atom.y))
         pad = max(0.02, self.renderer.style.bond_line_width * 0.03)
-        return max_dist * 0.9 + pad
+        return (max_dist + pad) * 0.6
 
     def _line_rect_clip_t(self, p1: QPointF, p2: QPointF, rect: QRectF) -> tuple[float, float] | None:
         dx = p2.x() - p1.x()
@@ -3380,17 +3420,17 @@ class CanvasView(QGraphicsView):
         p2 = QPointF(x2, y2)
         hit_start = False
         hit_end = False
-        for atom_id in (a_id, b_id):
+        for atom_id, is_start in ((a_id, True), (b_id, False)):
             if atom_id is None:
                 continue
             radius = self._label_cut_radius_for_atom(atom_id)
             if radius is None:
                 continue
             t_hit = min(1.0, radius / length)
-            if atom_id == a_id:
+            if is_start:
                 t0 = max(t0, t_hit)
                 hit_start = True
-            if atom_id == b_id:
+            else:
                 t1 = min(t1, 1.0 - t_hit)
                 hit_end = True
         if hit_start or hit_end:
@@ -3399,8 +3439,16 @@ class CanvasView(QGraphicsView):
                 t0 = min(1.0, t0 + gap_t)
             if hit_end:
                 t1 = max(0.0, t1 - gap_t)
-        if t1 - t0 < 0.02:
-            return 0.0, 1.0
+        min_span = 0.02
+        if t1 - t0 < min_span:
+            if hit_start and not hit_end:
+                t0 = max(0.0, t1 - min_span)
+            elif hit_end and not hit_start:
+                t1 = min(1.0, t0 + min_span)
+            else:
+                mid = (t0 + t1) / 2.0
+                t0 = max(0.0, mid - min_span / 2.0)
+                t1 = min(1.0, mid + min_span / 2.0)
         return t0, t1
 
 
