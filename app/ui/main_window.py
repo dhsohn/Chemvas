@@ -318,7 +318,7 @@ class MainWindow(QMainWindow):
         panel_bar.addWidget(color_button)
 
         ring_fill_button = CornerMenuButton()
-        ring_fill_button.setIcon(self._icon_ring())
+        ring_fill_button.setIcon(self._icon_ring_fill())
         ring_fill_button.setToolTip("Ring Fill")
         ring_fill_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         ring_fill_button.setStyleSheet("QToolButton::menu-indicator { image: none; }")
@@ -436,6 +436,27 @@ class MainWindow(QMainWindow):
                 p1 = QPointF(a.x() + ux * trim + nx * spacing, a.y() + uy * trim + ny * spacing)
                 p2 = QPointF(b.x() - ux * trim + nx * spacing, b.y() - uy * trim + ny * spacing)
                 p.drawLine(p1, p2)
+        return self._make_icon(draw)
+
+    def _icon_ring_fill(self) -> QIcon:
+        def draw(p):
+            p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            pen = QPen(Qt.GlobalColor.black)
+            pen.setWidthF(1.6)
+            center = QPointF(12.0, 12.0)
+            radius = 8.0
+            outer = QPolygonF()
+            for i in range(5):
+                angle = math.radians(360 / 5 * i - 90)
+                outer.append(
+                    QPointF(
+                        center.x() + radius * math.cos(angle),
+                        center.y() + radius * math.sin(angle),
+                    )
+                )
+            p.setPen(pen)
+            p.setBrush(QBrush(QColor("#f3ead7")))
+            p.drawPolygon(outer)
         return self._make_icon(draw)
 
     def _icon_undo(self) -> QIcon:
@@ -725,7 +746,19 @@ class MainWindow(QMainWindow):
             pen = QPen(Qt.GlobalColor.black)
             pen.setWidthF(1.2)
             p.setPen(pen)
-            p.drawEllipse(7, 7, 10, 10)
+            p.setBrush(QBrush(QColor("#d8c8a6")))
+            palette = QPainterPath()
+            palette.moveTo(3, 14)
+            palette.cubicTo(3, 6, 12, 5, 20, 7)
+            palette.cubicTo(23, 8, 23, 16, 18, 19)
+            palette.cubicTo(14, 21, 9, 20, 7, 17)
+            palette.cubicTo(11, 18, 12, 16, 11, 14)
+            palette.cubicTo(9, 16, 5, 16, 3, 14)
+            p.drawPath(palette)
+            p.setBrush(QBrush(Qt.GlobalColor.white))
+            p.drawEllipse(7, 10, 3, 3)
+            p.drawEllipse(11, 9, 3, 3)
+            p.drawEllipse(15, 12, 3, 3)
         return self._make_icon(draw)
 
     def _icon_perspective(self) -> QIcon:
@@ -971,10 +1004,11 @@ class MainWindow(QMainWindow):
 
     def _template_entries(self) -> list[tuple[str, callable]]:
         return [
-            ("Benzene", lambda: self.canvas.begin_ring_template_insert(6, style="benzene")),
             ("Cyclopropane", lambda: self.canvas.begin_ring_template_insert(3)),
             ("Cyclobutane", lambda: self.canvas.begin_ring_template_insert(4)),
             ("Cyclopentane", lambda: self.canvas.begin_ring_template_insert(5)),
+            ("Cyclohexane (Chair)", lambda: self.canvas.begin_ring_template_insert(6, style="chair")),
+            ("Cyclohexane (Boat)", lambda: self.canvas.begin_ring_template_insert(6, style="boat")),
         ]
 
     def _acs_color_palette(self) -> list[tuple[str, str]]:
