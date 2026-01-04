@@ -194,6 +194,14 @@ class BondTool(Tool):
     def activate(self) -> None:
         self.canvas.setDragMode(self.canvas.DragMode.NoDrag)
 
+    def deactivate(self) -> None:
+        if self._preview_item is not None:
+            self.canvas.scene().removeItem(self._preview_item)
+            self._preview_item = None
+        self._start_pos = None
+        self._start_atom_id = None
+        self._press_scene_pos = None
+
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
             return False
@@ -215,7 +223,10 @@ class BondTool(Tool):
         self._press_scene_pos = self.canvas.scene_pos_from_event(event)
         self._start_pos = self._snap_to_atom(self._press_scene_pos)
         self._preview_item = QGraphicsLineItem()
-        self._preview_item.setPen(self.canvas.renderer.bond_pen())
+        pen = self.canvas.renderer.bond_pen()
+        pen.setColor(QColor(120, 120, 120, 140))
+        self._preview_item.setPen(pen)
+        self._preview_item.setOpacity(0.5)
         self.canvas.scene().addItem(self._preview_item)
         return True
 
@@ -417,6 +428,10 @@ class BenzeneTool(Tool):
 
     def activate(self) -> None:
         self.canvas.setDragMode(self.canvas.DragMode.NoDrag)
+        self.canvas._clear_benzene_preview()
+
+    def deactivate(self) -> None:
+        self.canvas._clear_benzene_preview()
 
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
@@ -428,6 +443,20 @@ class BenzeneTool(Tool):
             self.canvas.add_benzene_ring(pos, attach_atom_id=self.canvas.hover_atom_id)
         else:
             self.canvas.add_benzene_ring(pos)
+        self.canvas._clear_benzene_preview()
+        return True
+
+    def on_mouse_move(self, event) -> bool:
+        if event.buttons() != Qt.MouseButton.NoButton:
+            return False
+        pos = self.canvas.scene_pos_from_event(event)
+        attach_bond_id = self.canvas.hover_bond_id
+        attach_atom_id = None if attach_bond_id is not None else self.canvas.hover_atom_id
+        self.canvas._render_benzene_preview(
+            pos,
+            attach_atom_id=attach_atom_id,
+            attach_bond_id=attach_bond_id,
+        )
         return True
 
 
