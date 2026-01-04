@@ -111,10 +111,16 @@ class BondTool(Tool):
         if item is not None and item.data(0) == "bond":
             bond_id = item.data(1)
             if isinstance(bond_id, int):
-                self.canvas.cycle_bond_style(bond_id)
+                if self.canvas.active_bond_style in {"wedge", "hash"}:
+                    self.canvas.apply_bond_style(bond_id, self.canvas.active_bond_style, 1)
+                else:
+                    self.canvas.cycle_bond_style(bond_id)
                 return True
         if self.canvas.hover_bond_id is not None:
-            self.canvas.cycle_bond_style(self.canvas.hover_bond_id)
+            if self.canvas.active_bond_style in {"wedge", "hash"}:
+                self.canvas.apply_bond_style(self.canvas.hover_bond_id, self.canvas.active_bond_style, 1)
+            else:
+                self.canvas.cycle_bond_style(self.canvas.hover_bond_id)
             return True
         self._press_scene_pos = self.canvas.scene_pos_from_event(event)
         self._start_pos = self._snap_to_atom(self._press_scene_pos)

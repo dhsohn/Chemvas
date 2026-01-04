@@ -173,7 +173,7 @@ class CanvasView(QGraphicsView):
         self.hover_bond_id: int | None = None
         self._selection_info_callback = None
         self._rotation_selection_ids = None
-        self.selection_outline: QGraphicsRectItem | None = None
+        self.selection_outlines: list[QGraphicsRectItem] = []
         self._history: list[dict] = []
         self._redo_stack: list[dict] = []
         self._history_enabled = True
@@ -525,7 +525,7 @@ class CanvasView(QGraphicsView):
     def item_at_event(self, event):
         pos = self.viewport().mapFromGlobal(QCursor.pos())
         for item in self.items(pos):
-            if item is self.selection_outline:
+            if item.data(0) == "selection_outline":
                 continue
             kind = item.data(0)
             if kind in {"note_box", "note_select"}:
@@ -1036,40 +1036,86 @@ class CanvasView(QGraphicsView):
     def _update_selection_outline(self) -> None:
         items = self.scene().selectedItems()
         if not items:
-            if self.selection_outline is not None:
-                self.scene().removeItem(self.selection_outline)
-                self.selection_outline = None
+            for outline in self.selection_outlines:
+                self.scene().removeItem(outline)
+            self.selection_outlines = []
             self._emit_selection_info()
             return
-        if self.selection_outline in items:
-            items = [item for item in items if item is not self.selection_outline]
-        rect = None
-        for item in items:
-            if item.data(0) in {"handle", "note_box", "note_select"}:
-                continue
-            item_rect = item.sceneBoundingRect()
-            rect = item_rect if rect is None else rect.united(item_rect)
-        if rect is None:
+        items = [
+            item
+            for item in items
+            if item.data(0) not in {"handle", "note_box", "note_select", "selection_outline"}
+        ]
+        if not items:
             return
+        atom_ids, bond_ids = self._selected_ids()
+        for bond_id in bond_ids:
+            if 0 <= bond_id < len(self.model.bonds):
+                bond = self.model.bonds[bond_id]
+                if bond is not None:
+                    atom_ids.add(bond.a)
+                    atom_ids.add(bond.b)
+        rects: list[QRectF] = []
+        if atom_ids:
+            for component in self._connected_components(atom_ids):
+                bounds = self._bounds_for_atoms(component)
+                if bounds is None:
+                    continue
+                min_x, min_y, max_x, max_y = bounds
+                rects.append(QRectF(min_x, min_y, max_x - min_x, max_y - min_y))
+        non_atom_items = [
+            item
+            for item in items
+            if item.data(0) not in {"atom", "bond", "ring"}
+        ]
+        for item in non_atom_items:
+            rects.append(item.sceneBoundingRect())
+
+        for outline in self.selection_outlines:
+            self.scene().removeItem(outline)
+        self.selection_outlines = []
+
         pad = self.renderer.style.bond_length_px * 0.1
-        rect = rect.adjusted(-pad, -pad, pad, pad)
-        if self.selection_outline is None:
-            self.selection_outline = NoSelectRectItem()
-            self.selection_outline.setZValue(20)
+        for rect in rects:
+            rect = rect.adjusted(-pad, -pad, pad, pad)
+            outline = NoSelectRectItem()
+            outline.setData(0, "selection_outline")
+            outline.setZValue(20)
             pen = QPen(QColor("#000000"))
             pen.setWidthF(2.4)
             pen.setStyle(Qt.PenStyle.DashLine)
-            self.selection_outline.setPen(pen)
-            self.selection_outline.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-            self.scene().addItem(self.selection_outline)
-        else:
-            pen = self.selection_outline.pen()
-            pen.setColor(QColor("#000000"))
-            pen.setWidthF(2.4)
-            pen.setStyle(Qt.PenStyle.DashLine)
-            self.selection_outline.setPen(pen)
-        self.selection_outline.setRect(rect)
+            outline.setPen(pen)
+            outline.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+            outline.setRect(rect)
+            self.scene().addItem(outline)
+            self.selection_outlines.append(outline)
         self._emit_selection_info()
+
+    def _connected_components(self, atom_ids: set[int]) -> list[set[int]]:
+        if not atom_ids:
+            return []
+        remaining = set(atom_ids)
+        components = []
+        adjacency: dict[int, set[int]] = {atom_id: set() for atom_id in atom_ids}
+        for bond in self.model.bonds:
+            if bond is None:
+                continue
+            if bond.a in atom_ids and bond.b in atom_ids:
+                adjacency[bond.a].add(bond.b)
+                adjacency[bond.b].add(bond.a)
+        while remaining:
+            start = remaining.pop()
+            stack = [start]
+            comp = {start}
+            while stack:
+                current = stack.pop()
+                for neighbor in adjacency.get(current, ()):
+                    if neighbor in remaining:
+                        remaining.remove(neighbor)
+                        comp.add(neighbor)
+                        stack.append(neighbor)
+            components.append(comp)
+        return components
 
     def set_selection_info_callback(self, callback) -> None:
         self._selection_info_callback = callback
@@ -1133,9 +1179,15 @@ class CanvasView(QGraphicsView):
             self.scene().addItem(circle)
             self.hover_items.append(circle)
             return
+        if self.hover_atom_id is not None:
+            self._clear_hover_highlight()
 
         bond_id = self._find_bond_near(pos, self.renderer.style.bond_length_px * 0.35)
-        if bond_id is None or bond_id == self.hover_bond_id:
+        if bond_id is None:
+            if self.hover_bond_id is not None:
+                self._clear_hover_highlight()
+            return
+        if bond_id == self.hover_bond_id:
             return
         self._clear_hover_highlight()
         self.hover_bond_id = bond_id
@@ -1183,7 +1235,18 @@ class CanvasView(QGraphicsView):
     def add_arrow(self, start: QPointF, end: QPointF, kind: str):
         item = self._build_arrow_item(start, end, kind)
         item.setData(0, kind)
-        item.setData(2, {"start": start, "end": end, "control": None, "double": False})
+        data = item.data(2) or {}
+        if kind in {"curved_single", "curved_double"}:
+            data.update(
+                {
+                    "start": start,
+                    "end": end,
+                    "double": kind == "curved_double",
+                }
+            )
+        else:
+            data = {"start": start, "end": end, "control": None, "double": False}
+        item.setData(2, data)
         self._make_selectable(item)
         self.scene().addItem(item)
         self._push_history()
@@ -1260,7 +1323,11 @@ class CanvasView(QGraphicsView):
         path = QPainterPath()
         path.moveTo(start)
         path.quadTo(control, end)
-        self._add_arrow_head(path, control, end, double=double)
+        if double:
+            self._add_arrow_head(path, control, end, double=False)
+            self._add_arrow_head(path, control, start, double=False)
+        else:
+            self._add_arrow_head(path, control, end, double=False)
         item = NoSelectPathItem(path)
         item.setPen(self._arrow_pen())
         item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
@@ -1316,20 +1383,22 @@ class CanvasView(QGraphicsView):
         head_angle = math.radians(25)
         offsets = [0.0]
         if double:
-            offsets = [-2.5, 2.5]
+            offset_mag = max(1.4, self.arrow_line_width * 1.2)
+            offsets = [-offset_mag, offset_mag]
         for offset in offsets:
             dx = math.cos(angle + math.pi / 2) * offset
             dy = math.sin(angle + math.pi / 2) * offset
+            tip = QPointF(end.x() + dx, end.y() + dy) if double else end
             left = QPointF(
-                end.x() + dx - head_len * math.cos(angle - head_angle),
-                end.y() + dy - head_len * math.sin(angle - head_angle),
+                tip.x() - head_len * math.cos(angle - head_angle),
+                tip.y() - head_len * math.sin(angle - head_angle),
             )
             right = QPointF(
-                end.x() + dx - head_len * math.cos(angle + head_angle),
-                end.y() + dy - head_len * math.sin(angle + head_angle),
+                tip.x() - head_len * math.cos(angle + head_angle),
+                tip.y() - head_len * math.sin(angle + head_angle),
             )
             path.moveTo(left)
-            path.lineTo(end + QPointF(dx, dy))
+            path.lineTo(tip)
             path.lineTo(right)
 
     def add_orbital(self, center: QPointF) -> None:
@@ -1518,10 +1587,15 @@ class CanvasView(QGraphicsView):
         path = QPainterPath()
         path.moveTo(start)
         path.quadTo(control, end)
-        self._add_arrow_head(path, control, end, double=double)
+        if double:
+            self._add_arrow_head(path, control, end, double=False)
+            self._add_arrow_head(path, control, start, double=False)
+        else:
+            self._add_arrow_head(path, control, end, double=False)
         item.setPath(path)
         data["control"] = control
         item.setData(2, data)
+        self._update_selection_outline()
 
     def _default_curved_control(self, start: QPointF, end: QPointF) -> QPointF:
         dx = end.x() - start.x()
@@ -2960,6 +3034,20 @@ class CanvasView(QGraphicsView):
         self.bond_items[bond_id] = []
         self._add_bond_graphics(bond_id)
 
+    def apply_bond_style(self, bond_id: int, style: str, order: int) -> None:
+        if not (0 <= bond_id < len(self.model.bonds)):
+            return
+        bond = self.model.bonds[bond_id]
+        if bond is None:
+            return
+        bond.style = style
+        bond.order = order
+        for item in self.bond_items.get(bond_id, []):
+            self.scene().removeItem(item)
+        self.bond_items[bond_id] = []
+        self._add_bond_graphics(bond_id)
+        self._push_history()
+
     def cycle_bond_style(self, bond_id: int) -> None:
         if not (0 <= bond_id < len(self.model.bonds)):
             return
@@ -3044,9 +3132,58 @@ class CanvasView(QGraphicsView):
         item = self.atom_items.get(atom_id)
         if item is None:
             return None
-        rect = item.mapToScene(item.boundingRect()).boundingRect()
-        pad = max(0.025, self.renderer.style.bond_line_width * 0.03)
-        return rect.adjusted(-pad, -pad, pad, pad)
+        rect = item.sceneBoundingRect()
+        pad = max(0.05, self.renderer.style.bond_line_width * 0.05)
+        size = max(rect.width(), rect.height()) + pad * 2
+        cx = rect.center().x()
+        cy = rect.center().y()
+        return QRectF(cx - size / 2, cy - size / 2, size, size)
+
+    def _label_cut_radius_for_atom(self, atom_id: int) -> float | None:
+        item = self.atom_items.get(atom_id)
+        if item is None:
+            return None
+        rect = item.sceneBoundingRect()
+        atom = self.model.atoms.get(atom_id)
+        if atom is None:
+            return None
+        corners = [
+            rect.topLeft(),
+            rect.topRight(),
+            rect.bottomLeft(),
+            rect.bottomRight(),
+        ]
+        max_dist = 0.0
+        for corner in corners:
+            max_dist = max(max_dist, math.hypot(corner.x() - atom.x, corner.y() - atom.y))
+        pad = max(0.02, self.renderer.style.bond_line_width * 0.03)
+        return max_dist * 0.9 + pad
+
+    def _line_rect_clip_t(self, p1: QPointF, p2: QPointF, rect: QRectF) -> tuple[float, float] | None:
+        dx = p2.x() - p1.x()
+        dy = p2.y() - p1.y()
+        p = [-dx, dx, -dy, dy]
+        q = [
+            p1.x() - rect.left(),
+            rect.right() - p1.x(),
+            p1.y() - rect.top(),
+            rect.bottom() - p1.y(),
+        ]
+        u1 = 0.0
+        u2 = 1.0
+        for pi, qi in zip(p, q):
+            if abs(pi) < 1e-9:
+                if qi < 0:
+                    return None
+                continue
+            t = qi / pi
+            if pi < 0:
+                u1 = max(u1, t)
+            else:
+                u2 = min(u2, t)
+            if u1 > u2:
+                return None
+        return u1, u2
 
     def _segment_intersection_t(self, p1: QPointF, p2: QPointF, q1: QPointF, q2: QPointF) -> float | None:
         r = QPointF(p2.x() - p1.x(), p2.y() - p1.y())
@@ -3094,23 +3231,18 @@ class CanvasView(QGraphicsView):
         p2 = QPointF(x2, y2)
         hit_start = False
         hit_end = False
-        for is_start, atom_id in ((True, a_id), (False, b_id)):
+        for atom_id in (a_id, b_id):
             if atom_id is None:
                 continue
-            rect = self._label_rect_for_atom(atom_id)
-            if rect is None:
+            radius = self._label_cut_radius_for_atom(atom_id)
+            if radius is None:
                 continue
-            hits = self._line_rect_intersections(p1, p2, rect)
-            if not hits:
-                continue
-            inside = rect.contains(p1 if is_start else p2)
-            if is_start:
-                t_hit = max(hits) if inside else min(hits)
+            t_hit = min(1.0, radius / length)
+            if atom_id == a_id:
                 t0 = max(t0, t_hit)
                 hit_start = True
-            else:
-                t_hit = min(hits) if inside else max(hits)
-                t1 = min(t1, t_hit)
+            if atom_id == b_id:
+                t1 = min(t1, 1.0 - t_hit)
                 hit_end = True
         if hit_start or hit_end:
             gap_t = (self.renderer.style.bond_line_width * 0.02) / length
@@ -3121,6 +3253,7 @@ class CanvasView(QGraphicsView):
         if t1 - t0 < 0.02:
             return 0.0, 1.0
         return t0, t1
+
 
     def _draw_ring_double_bond(self, a, b, center: QPointF, a_id: int | None = None, b_id: int | None = None):
         dx = b.x - a.x
@@ -3153,7 +3286,15 @@ class CanvasView(QGraphicsView):
         base_line = NoSelectLineItem(bx1, by1, bx2, by2)
         base_line.setPen(self.renderer.bond_pen())
         inner_length = math.hypot(bx2 - bx1, by2 - by1) or 1.0
-        inner_trim = max(1.5, inner_length * 0.12)
+        has_label = False
+        if a_id is not None and self._label_rect_for_atom(a_id) is not None:
+            has_label = True
+        if b_id is not None and self._label_rect_for_atom(b_id) is not None:
+            has_label = True
+        if has_label:
+            inner_trim = max(0.6, inner_length * 0.08)
+        else:
+            inner_trim = max(1.0, inner_length * 0.12)
         inner_x1 = bx1 + ux * inner_trim + nx * spacing
         inner_y1 = by1 + uy * inner_trim + ny * spacing
         inner_x2 = bx2 - ux * inner_trim + nx * spacing
