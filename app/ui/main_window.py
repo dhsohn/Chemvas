@@ -9,6 +9,7 @@ from PyQt6.QtGui import (
     QFont,
     QIcon,
     QPainter,
+    QPainterPath,
     QPen,
     QPixmap,
     QPolygonF,
@@ -168,7 +169,6 @@ class MainWindow(QMainWindow):
         left_bar.addAction(action_hash)
         left_bar.addAction(action_text)
         left_bar.addAction(action_ring)
-        left_bar.addSeparator()
         arrow_button = CornerMenuButton()
         arrow_button.setDefaultAction(action_arrow)
         arrow_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
@@ -177,16 +177,16 @@ class MainWindow(QMainWindow):
             "QToolButton { padding-right: 2px; }"
         )
         arrow_menu = QMenu(arrow_button)
-        for label in [
-            "Reaction",
-            "Equilibrium",
-            "Resonance",
-            "Curved Single",
-            "Curved Double",
-            "Inhibition",
-            "Dotted",
+        for label, kind in [
+            ("Reaction", "reaction"),
+            ("Equilibrium", "equilibrium"),
+            ("Resonance", "resonance"),
+            ("Curved Single", "curved_single"),
+            ("Curved Double", "curved_double"),
+            ("Inhibition", "inhibit"),
+            ("Dotted", "dotted"),
         ]:
-            action = arrow_menu.addAction(label)
+            action = arrow_menu.addAction(self._icon_arrow_preview(kind), label)
             action.triggered.connect(
                 lambda checked=False, value=label: (
                     self._set_tool_with_status("arrow"),
@@ -215,7 +215,7 @@ class MainWindow(QMainWindow):
         )
         orbital_menu = QMenu(orbital_button)
         for label in ["s", "p", "sp", "sp2", "sp3", "d", "MO bonding", "MO antibonding"]:
-            action = orbital_menu.addAction(label)
+            action = orbital_menu.addAction(self._icon_orbital_preview(label), label)
             action.triggered.connect(
                 lambda checked=False, value=label: (
                     self._set_tool_with_status("orbital"),
@@ -236,9 +236,7 @@ class MainWindow(QMainWindow):
 
         left_bar.addWidget(arrow_button)
         left_bar.addWidget(orbital_button)
-        left_bar.addSeparator()
-
-        left_bar.addSeparator()
+        # separators removed per UI request
 
         bond_len_btn = QToolButton()
         bond_len_btn.setToolTip("Bond Length")
@@ -254,7 +252,6 @@ class MainWindow(QMainWindow):
         flip_v.setIcon(self._icon_flip_v())
         flip_v.clicked.connect(self.canvas.flip_vertical)
 
-        left_bar.addWidget(bond_len_btn)
         left_bar.addWidget(flip_h)
         left_bar.addWidget(flip_v)
 
@@ -283,8 +280,8 @@ class MainWindow(QMainWindow):
         smiles_input.setFixedWidth(180)
         smiles_button = QToolButton()
         smiles_button.setText("Render")
-        smiles_button.clicked.connect(lambda: self.canvas.load_smiles(smiles_input.text()))
-        smiles_input.returnPressed.connect(lambda: self.canvas.load_smiles(smiles_input.text()))
+        smiles_button.clicked.connect(lambda: self.canvas.begin_smiles_insert(smiles_input.text()))
+        smiles_input.returnPressed.connect(lambda: self.canvas.begin_smiles_insert(smiles_input.text()))
 
         panel_bar.addWidget(undo_btn)
         panel_bar.addWidget(redo_btn)
@@ -299,7 +296,7 @@ class MainWindow(QMainWindow):
         templates_button.setStyleSheet("QToolButton::menu-indicator { image: none; }")
         templates_menu = QMenu(templates_button)
         for label, handler in self._template_entries():
-            templates_menu.addAction(label, handler)
+            templates_menu.addAction(self._icon_template_preview(label), label, handler)
         templates_button.setMenu(templates_menu)
         panel_bar.addWidget(templates_button)
         atom_input = QLineEdit()
@@ -336,6 +333,7 @@ class MainWindow(QMainWindow):
             fill_action.triggered.connect(lambda checked=False, c=hex_value: self._apply_ring_fill_preset(c))
         ring_fill_button.setMenu(ring_fill_menu)
         panel_bar.addWidget(ring_fill_button)
+        panel_bar.addWidget(bond_len_btn)
         panel_bar.addSeparator()
 
         formula_label = QLabel("Formula")
@@ -528,6 +526,141 @@ class MainWindow(QMainWindow):
             p.drawLine(5, 12, 19, 12)
             p.drawLine(5, 9, 5, 15)
             p.drawLine(19, 9, 19, 15)
+        return self._make_icon(draw)
+
+    def _icon_arrow_preview(self, kind: str) -> QIcon:
+        def draw(p):
+            pen = QPen(Qt.GlobalColor.black)
+            pen.setWidthF(1.2)
+            if kind == "dotted":
+                pen.setStyle(Qt.PenStyle.DashLine)
+            p.setPen(pen)
+            if kind in {"curved_single", "curved_double"}:
+                path = QPainterPath()
+                path.moveTo(5, 15)
+                path.quadTo(12, 5, 19, 12)
+                p.drawPath(path)
+                self._draw_arrow_head(p, QPointF(12, 6), QPointF(19, 12))
+                if kind == "curved_double":
+                    self._draw_arrow_head(p, QPointF(12, 6), QPointF(5, 15))
+            elif kind == "equilibrium":
+                p.drawLine(4, 9, 18, 9)
+                self._draw_arrow_head(p, QPointF(4, 9), QPointF(18, 9))
+                p.drawLine(18, 15, 4, 15)
+                self._draw_arrow_head(p, QPointF(18, 15), QPointF(4, 15))
+            elif kind == "resonance":
+                p.drawLine(4, 12, 18, 12)
+                self._draw_arrow_head(p, QPointF(4, 12), QPointF(18, 12))
+                self._draw_arrow_head(p, QPointF(18, 12), QPointF(4, 12))
+            elif kind == "inhibit":
+                p.drawLine(4, 12, 18, 12)
+                p.drawLine(18, 8, 18, 16)
+            else:
+                p.drawLine(4, 12, 18, 12)
+                self._draw_arrow_head(p, QPointF(4, 12), QPointF(18, 12))
+        return self._make_icon(draw)
+
+    def _draw_arrow_head(self, painter: QPainter, start: QPointF, end: QPointF) -> None:
+        angle = math.atan2(end.y() - start.y(), end.x() - start.x())
+        head_len = 4.5
+        head_angle = math.radians(25)
+        left = QPointF(
+            end.x() - head_len * math.cos(angle - head_angle),
+            end.y() - head_len * math.sin(angle - head_angle),
+        )
+        right = QPointF(
+            end.x() - head_len * math.cos(angle + head_angle),
+            end.y() - head_len * math.sin(angle + head_angle),
+        )
+        painter.drawLine(left, end)
+        painter.drawLine(right, end)
+
+    def _icon_orbital_preview(self, kind: str) -> QIcon:
+        def draw(p):
+            pen = QPen(Qt.GlobalColor.black)
+            pen.setWidthF(1.2)
+            p.setPen(pen)
+            if kind == "s":
+                p.drawEllipse(7, 7, 10, 10)
+            elif kind == "p":
+                p.drawEllipse(5, 9, 8, 8)
+                p.drawEllipse(11, 7, 8, 8)
+            elif kind == "sp":
+                p.drawEllipse(5, 10, 8, 8)
+                p.drawEllipse(13, 6, 8, 8)
+                p.drawLine(4, 14, 20, 10)
+            elif kind in {"sp2", "sp3"}:
+                p.drawEllipse(6, 6, 6, 6)
+                p.drawEllipse(12, 6, 6, 6)
+                p.drawEllipse(9, 12, 6, 6)
+                if kind == "sp3":
+                    p.drawEllipse(9, 2, 6, 6)
+            elif kind == "d":
+                p.drawEllipse(5, 8, 6, 6)
+                p.drawEllipse(13, 8, 6, 6)
+                p.drawEllipse(9, 4, 6, 6)
+                p.drawEllipse(9, 12, 6, 6)
+            else:
+                p.drawEllipse(7, 7, 10, 10)
+                p.drawLine(12, 7, 12, 17)
+        return self._make_icon(draw)
+
+    def _icon_template_preview(self, label: str) -> QIcon:
+        def draw_ring(p, sides: int):
+            center = QPointF(12.0, 12.0)
+            radius = 8.0
+            poly = QPolygonF()
+            for i in range(sides):
+                angle = math.radians(360 / sides * i - 90)
+                poly.append(
+                    QPointF(
+                        center.x() + radius * math.cos(angle),
+                        center.y() + radius * math.sin(angle),
+                    )
+                )
+            p.drawPolygon(poly)
+
+        def draw(p):
+            pen = QPen(Qt.GlobalColor.black)
+            pen.setWidthF(1.2)
+            p.setPen(pen)
+            lower = label.lower()
+            if "cyclopropane" in lower:
+                draw_ring(p, 3)
+            elif "cyclobutane" in lower:
+                draw_ring(p, 4)
+            elif "cyclopentane" in lower or "furan" in lower or "thiophene" in lower:
+                draw_ring(p, 5)
+            elif "benzene" in lower or "pyridine" in lower or "pyrimidine" in lower:
+                draw_ring(p, 6)
+            elif "naphthalene" in lower or "anthracene" in lower or "phenanthrene" in lower:
+                draw_ring(p, 6)
+                draw_ring(p, 6)
+                p.drawLine(10, 6, 14, 6)
+            elif "crown" in lower:
+                draw_ring(p, 10)
+            elif "chair" in lower:
+                p.drawLine(5, 14, 9, 8)
+                p.drawLine(9, 8, 13, 12)
+                p.drawLine(13, 12, 17, 6)
+                p.drawLine(5, 14, 9, 18)
+                p.drawLine(9, 18, 13, 12)
+                p.drawLine(13, 12, 17, 16)
+            elif label in {"Me", "Et", "t-Bu", "i-Pr"}:
+                p.drawLine(4, 12, 12, 12)
+                p.drawText(13, 15, label)
+            elif label in {"Vinyl", "Allyl"}:
+                p.drawLine(4, 14, 11, 10)
+                p.drawLine(11, 10, 18, 14)
+            elif label in {"Carboxyl", "Carbonyl"}:
+                p.drawLine(4, 12, 12, 12)
+                p.drawLine(12, 12, 18, 8)
+                p.drawText(18, 10, "O")
+            elif label in {"Nitro", "Sulfonyl"}:
+                p.drawLine(4, 12, 12, 12)
+                p.drawText(13, 14, "NO2" if label == "Nitro" else "SO2")
+            else:
+                draw_ring(p, 6)
         return self._make_icon(draw)
 
     def _icon_flip_h(self) -> QIcon:

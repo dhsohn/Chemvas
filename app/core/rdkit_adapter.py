@@ -50,7 +50,10 @@ class RDKitAdapter:
         Chem, AllChem = rdkit
         mol = Chem.MolFromSmiles(smiles)
         if mol is None:
-            self.last_error = "Invalid SMILES string."
+            self.last_error = (
+                "Invalid SMILES string. Example: CC(=O)O (acetic acid), "
+                "c1ccccc1 (benzene), C1CCCCC1 (cyclohexane)."
+            )
             return None
         AllChem.Compute2DCoords(mol)
 

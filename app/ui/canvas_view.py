@@ -174,6 +174,11 @@ class CanvasView(QGraphicsView):
         self._selection_info_callback = None
         self._rotation_selection_ids = None
         self.selection_outlines: list[QGraphicsRectItem] = []
+        self._smiles_insert_active = False
+        self._smiles_preview_model: MoleculeModel | None = None
+        self._smiles_preview_items: list[QGraphicsItem] = []
+        self._smiles_preview_center: QPointF | None = None
+        self._smiles_preview_smiles: str | None = None
         self._history: list[dict] = []
         self._redo_stack: list[dict] = []
         self._history_enabled = True
@@ -188,6 +193,10 @@ class CanvasView(QGraphicsView):
             if focus_item.textInteractionFlags() & Qt.TextInteractionFlag.TextEditorInteraction:
                 super().keyPressEvent(event)
                 return
+        if event.key() == Qt.Key.Key_Escape and self._smiles_insert_active:
+            self._cancel_smiles_insert()
+            event.accept()
+            return
         if event.matches(QKeySequence.StandardKey.Undo):
             self.undo()
             event.accept()
@@ -1170,11 +1179,10 @@ class CanvasView(QGraphicsView):
                 radius * 2.0,
                 radius * 2.0,
             )
-            pen = QPen(QColor("#1f5eff"))
-            pen.setWidthF(1.4)
-            pen.setStyle(Qt.PenStyle.DashLine)
+            pen = QPen(QColor("#9a9a9a"))
+            pen.setWidthF(1.0)
             circle.setPen(pen)
-            circle.setBrush(QColor(0, 0, 0, 0))
+            circle.setBrush(QColor(190, 190, 190, 80))
             circle.setZValue(5)
             self.scene().addItem(circle)
             self.hover_items.append(circle)
@@ -1196,13 +1204,21 @@ class CanvasView(QGraphicsView):
             return
         a = self.model.atoms[bond.a]
         b = self.model.atoms[bond.b]
-        line = NoSelectLineItem(a.x, a.y, b.x, b.y)
-        pen = QPen(QColor("#1f5eff"))
-        pen.setWidthF(2.0)
-        line.setPen(pen)
-        line.setZValue(4)
-        self.scene().addItem(line)
-        self.hover_items.append(line)
+        mid = QPointF((a.x + b.x) / 2.0, (a.y + b.y) / 2.0)
+        radius = self.renderer.style.bond_length_px * 0.22
+        circle = QGraphicsEllipseItem(
+            mid.x() - radius,
+            mid.y() - radius,
+            radius * 2.0,
+            radius * 2.0,
+        )
+        pen = QPen(QColor("#9a9a9a"))
+        pen.setWidthF(1.0)
+        circle.setPen(pen)
+        circle.setBrush(QColor(190, 190, 190, 80))
+        circle.setZValue(4)
+        self.scene().addItem(circle)
+        self.hover_items.append(circle)
 
     def _find_bond_near(self, pos: QPointF, max_dist: float) -> int | None:
         nearest = None
@@ -1662,6 +1678,10 @@ class CanvasView(QGraphicsView):
                     item.setPen(original)
 
     def mousePressEvent(self, event) -> None:
+        if self._smiles_insert_active and event.button() == Qt.MouseButton.LeftButton:
+            self._commit_smiles_insert(self.scene_pos_from_event(event))
+            self._clear_hover_highlight()
+            return
         if self.tools.active and self.tools.active.on_mouse_press(event):
             self._clear_hover_highlight()
             return
@@ -1669,6 +1689,9 @@ class CanvasView(QGraphicsView):
         self._clear_hover_highlight()
 
     def mouseMoveEvent(self, event) -> None:
+        if self._smiles_insert_active:
+            self._render_smiles_preview(self.scene_pos_from_event(event))
+            return
         if event.buttons() == Qt.MouseButton.NoButton:
             self._update_hover_highlight(self.scene_pos_from_event(event))
         if self.tools.active and self.tools.active.on_mouse_move(event):
@@ -2624,8 +2647,8 @@ class CanvasView(QGraphicsView):
         self.model.add_bond(carbonyl_2, o2_id, 2)
         self._add_bond_graphics(len(self.model.bonds) - 2)
         self._add_bond_graphics(len(self.model.bonds) - 1)
-        self.add_or_update_atom_label(o1_id, "O")
-        self.add_or_update_atom_label(o2_id, "O")
+        self.add_or_update_atom_label(o1_id, "O", record=False)
+        self.add_or_update_atom_label(o2_id, "O", record=False)
         self.update_info_label()
         self._push_history()
 
@@ -2707,7 +2730,7 @@ class CanvasView(QGraphicsView):
         for atom_id, element in zip(atom_ids, elements or ["C"] * len(atom_ids)):
             if element != "C":
                 atom = self.model.atoms[atom_id]
-                self.add_or_update_atom_label(atom_id, atom.element)
+                self.add_or_update_atom_label(atom_id, atom.element, record=False)
         return atom_ids
 
     def _add_atom_with_merge(self, point: QPointF, element: str, merge: list) -> int:
@@ -2731,10 +2754,16 @@ class CanvasView(QGraphicsView):
             self._add_bond_graphics(bond_id)
         for atom_id, element in zip(atom_ids, elements):
             if element != "C":
-                self.add_or_update_atom_label(atom_id, element)
+                self.add_or_update_atom_label(atom_id, element, record=False)
         return atom_ids
 
-    def add_or_update_atom_label(self, atom_id: int, text: str, clear_smiles: bool = True) -> None:
+    def add_or_update_atom_label(
+        self,
+        atom_id: int,
+        text: str,
+        clear_smiles: bool = True,
+        record: bool = True,
+    ) -> None:
         text = text.strip()
         atom = self.model.atoms[atom_id]
         if text:
@@ -2752,6 +2781,8 @@ class CanvasView(QGraphicsView):
             if atom.element == "C":
                 self._ensure_carbon_dot(atom_id)
             self._redraw_connected_bonds(atom_id)
+            if record:
+                self._push_history()
             return
 
         if existing_item is None:
@@ -2770,6 +2801,8 @@ class CanvasView(QGraphicsView):
         self._position_label(text_item, atom.x, atom.y)
         self._remove_carbon_dot(atom_id)
         self._redraw_connected_bonds(atom_id)
+        if record:
+            self._push_history()
 
     def _ensure_carbon_dot(self, atom_id: int) -> None:
         if atom_id in self.atom_dots:
@@ -2862,6 +2895,122 @@ class CanvasView(QGraphicsView):
         self._render_model()
         self._push_history()
 
+    def begin_smiles_insert(self, smiles: str) -> None:
+        smiles = smiles.strip()
+        if not smiles:
+            return
+        model = self.rdkit.smiles_to_2d(smiles, scale=self.renderer.style.bond_length_px)
+        if model is None:
+            message = self.rdkit.last_error or "Failed to render SMILES."
+            QMessageBox.warning(self, "SMILES Error", message)
+            return
+        self._smiles_insert_active = True
+        self._smiles_preview_model = model
+        self._smiles_preview_smiles = smiles
+        bounds = model.bounds()
+        center = QPointF((bounds[0] + bounds[2]) / 2.0, (bounds[1] + bounds[3]) / 2.0)
+        self._smiles_preview_center = center
+        self._render_smiles_preview(self.mapToScene(self.viewport().rect().center()))
+
+    def _cancel_smiles_insert(self) -> None:
+        self._smiles_insert_active = False
+        self._smiles_preview_model = None
+        self._smiles_preview_smiles = None
+        self._smiles_preview_center = None
+        self._clear_smiles_preview()
+
+    def _commit_smiles_insert(self, pos: QPointF) -> None:
+        if self._smiles_preview_model is None or self._smiles_preview_center is None:
+            self._cancel_smiles_insert()
+            return
+        model = self._smiles_preview_model
+        dx = pos.x() - self._smiles_preview_center.x()
+        dy = pos.y() - self._smiles_preview_center.y()
+        id_map: dict[int, int] = {}
+        for atom_id, atom in model.atoms.items():
+            new_id = self.model.add_atom(atom.element, atom.x + dx, atom.y + dy)
+            self.model.atoms[new_id].color = atom.color
+            id_map[atom_id] = new_id
+        bonds_start = len(self.model.bonds)
+        for bond in model.bonds:
+            if bond is None:
+                continue
+            a_id = id_map.get(bond.a)
+            b_id = id_map.get(bond.b)
+            if a_id is None or b_id is None:
+                continue
+            self.model.add_bond(a_id, b_id, bond.order)
+            created = self.model.bonds[-1]
+            created.style = bond.style
+            created.color = bond.color
+        for bond_id in range(bonds_start, len(self.model.bonds)):
+            self._add_bond_graphics(bond_id)
+        for old_id, new_id in id_map.items():
+            atom = self.model.atoms[new_id]
+            if atom.element == "C":
+                self._ensure_carbon_dot(new_id)
+            else:
+                self.add_or_update_atom_label(new_id, atom.element, clear_smiles=False, record=False)
+        self.last_smiles_input = self._smiles_preview_smiles
+        self._cancel_smiles_insert()
+        self._push_history()
+
+    def _clear_smiles_preview(self) -> None:
+        for item in self._smiles_preview_items:
+            try:
+                if item.scene() is self.scene():
+                    self.scene().removeItem(item)
+            except RuntimeError:
+                pass
+        self._smiles_preview_items = []
+
+    def _render_smiles_preview(self, pos: QPointF) -> None:
+        if self._smiles_preview_model is None or self._smiles_preview_center is None:
+            return
+        self._clear_smiles_preview()
+        model = self._smiles_preview_model
+        dx = pos.x() - self._smiles_preview_center.x()
+        dy = pos.y() - self._smiles_preview_center.y()
+        preview_color = QColor(120, 120, 120, 140)
+        for bond in model.bonds:
+            if bond is None:
+                continue
+            a = model.atoms.get(bond.a)
+            b = model.atoms.get(bond.b)
+            if a is None or b is None:
+                continue
+            x1 = a.x + dx
+            y1 = a.y + dy
+            x2 = b.x + dx
+            y2 = b.y + dy
+            if bond.order <= 1:
+                line = NoSelectLineItem(x1, y1, x2, y2)
+                line.setPen(self.renderer.bond_pen())
+                items = [line]
+            else:
+                items = self._draw_parallel_bonds(x1, y1, x2, y2, bond.order)
+            for item in items:
+                if hasattr(item, "pen"):
+                    pen = item.pen()
+                    pen.setColor(preview_color)
+                    item.setPen(pen)
+                item.setOpacity(0.5)
+                self.scene().addItem(item)
+                self._smiles_preview_items.append(item)
+        atom_radius = max(0.6, self.renderer.style.bond_line_width * 0.6)
+        for atom in model.atoms.values():
+            dot = QGraphicsEllipseItem(
+                atom.x + dx - atom_radius,
+                atom.y + dy - atom_radius,
+                atom_radius * 2.0,
+                atom_radius * 2.0,
+            )
+            dot.setBrush(preview_color)
+            dot.setPen(QPen(Qt.PenStyle.NoPen))
+            dot.setOpacity(0.5)
+            self.scene().addItem(dot)
+            self._smiles_preview_items.append(dot)
+
     def _render_model(self) -> None:
         for bond_id, bond in enumerate(self.model.bonds):
             if bond is None:
@@ -2872,7 +3021,7 @@ class CanvasView(QGraphicsView):
             if atom.element == "C":
                 self._ensure_carbon_dot(atom_id)
             else:
-                self.add_or_update_atom_label(atom_id, atom.element, clear_smiles=False)
+                self.add_or_update_atom_label(atom_id, atom.element, clear_smiles=False, record=False)
         self.update_info_label()
 
     def move_item(self, item, dx: float, dy: float) -> None:
