@@ -128,6 +128,47 @@ class MainWindow(QMainWindow):
         left_bar.setMovable(False)
         left_bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         left_bar.setIconSize(QSize(20, 20))
+        button_style = (
+            "QToolButton {"
+            " border: 1px solid transparent;"
+            " border-radius: 4px;"
+            " padding: 2px;"
+            "}"
+            "QToolButton:hover {"
+            " background-color: #f0f0f0;"
+            " border-color: #cfcfcf;"
+            "}"
+            "QToolButton:pressed {"
+            " background-color: #e0e0e0;"
+            " border-color: #b0b0b0;"
+            "}"
+            "QToolButton:checked {"
+            " background-color: #e7efff;"
+            " border-color: #90b2ff;"
+            "}"
+        )
+        menu_button_style = (
+            "QToolButton {"
+            " border: 1px solid transparent;"
+            " border-radius: 4px;"
+            " padding: 2px;"
+            " padding-right: 2px;"
+            "}"
+            "QToolButton:hover {"
+            " background-color: #f0f0f0;"
+            " border-color: #cfcfcf;"
+            "}"
+            "QToolButton:pressed {"
+            " background-color: #e0e0e0;"
+            " border-color: #b0b0b0;"
+            "}"
+            "QToolButton:checked {"
+            " background-color: #e7efff;"
+            " border-color: #90b2ff;"
+            "}"
+            "QToolButton::menu-indicator { image: none; width: 0px; }"
+        )
+        left_bar.setStyleSheet(button_style)
 
         action_select = tool_action("Select", "select", "V")
         action_bond = tool_action("Bond", "bond", "B")
@@ -169,10 +210,7 @@ class MainWindow(QMainWindow):
         arrow_button = CornerMenuButton()
         arrow_button.setDefaultAction(action_arrow)
         arrow_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        arrow_button.setStyleSheet(
-            "QToolButton::menu-indicator { image: none; width: 0px; }"
-            "QToolButton { padding-right: 2px; }"
-        )
+        arrow_button.setStyleSheet(menu_button_style)
         arrow_menu = QMenu(arrow_button)
         for label, kind in [
             ("Reaction", "reaction"),
@@ -206,10 +244,7 @@ class MainWindow(QMainWindow):
         orbital_button = CornerMenuButton()
         orbital_button.setDefaultAction(action_orbital)
         orbital_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        orbital_button.setStyleSheet(
-            "QToolButton::menu-indicator { image: none; width: 0px; }"
-            "QToolButton { padding-right: 2px; }"
-        )
+        orbital_button.setStyleSheet(menu_button_style)
         orbital_menu = QMenu(orbital_button)
         for label in ["s", "p", "sp", "sp2", "sp3", "d", "MO bonding", "MO antibonding"]:
             action = orbital_menu.addAction(self._icon_orbital_preview(label), label)
@@ -259,6 +294,7 @@ class MainWindow(QMainWindow):
         panel_bar.setMovable(False)
         panel_bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         panel_bar.setIconSize(QSize(22, 22))
+        panel_bar.setStyleSheet(button_style)
 
         undo_btn = QToolButton()
         undo_btn.setIcon(self._icon_undo())
@@ -277,6 +313,24 @@ class MainWindow(QMainWindow):
         smiles_input.setFixedWidth(180)
         smiles_button = QToolButton()
         smiles_button.setText("Render")
+        smiles_button.setAutoRaise(False)
+        smiles_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        smiles_button.setObjectName("smiles_render_button")
+        smiles_button.setStyleSheet(
+            "QToolButton#smiles_render_button {"
+            " border: 1px solid #bdbdbd;"
+            " border-radius: 4px;"
+            " padding: 3px 8px;"
+            " background-color: #f7f7f7;"
+            "}"
+            "QToolButton#smiles_render_button:hover {"
+            " background-color: #f0f0f0;"
+            "}"
+            "QToolButton#smiles_render_button:pressed {"
+            " background-color: #e1e1e1;"
+            " border-color: #9d9d9d;"
+            "}"
+        )
         smiles_button.clicked.connect(lambda: self.canvas.begin_smiles_insert(smiles_input.text()))
         smiles_input.returnPressed.connect(lambda: self.canvas.begin_smiles_insert(smiles_input.text()))
 
@@ -290,7 +344,7 @@ class MainWindow(QMainWindow):
         templates_button.setIcon(self._icon_templates())
         templates_button.setToolTip("Templates")
         templates_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        templates_button.setStyleSheet("QToolButton::menu-indicator { image: none; }")
+        templates_button.setStyleSheet(menu_button_style)
         templates_menu = QMenu(templates_button)
         for label, handler in self._template_entries():
             templates_menu.addAction(self._icon_template_preview(label), label, handler)
@@ -307,7 +361,7 @@ class MainWindow(QMainWindow):
         color_button.setIcon(self._icon_color())
         color_button.setToolTip("Color")
         color_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        color_button.setStyleSheet("QToolButton::menu-indicator { image: none; }")
+        color_button.setStyleSheet(menu_button_style)
         color_menu = QMenu(color_button)
         for label, hex_value in self._acs_color_palette():
             pixmap = QPixmap(16, 16)
@@ -321,7 +375,7 @@ class MainWindow(QMainWindow):
         ring_fill_button.setIcon(self._icon_ring_fill())
         ring_fill_button.setToolTip("Ring Fill")
         ring_fill_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        ring_fill_button.setStyleSheet("QToolButton::menu-indicator { image: none; }")
+        ring_fill_button.setStyleSheet(menu_button_style)
         ring_fill_menu = QMenu(ring_fill_button)
         for label, hex_value in self._acs_color_palette():
             pixmap = QPixmap(16, 16)
