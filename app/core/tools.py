@@ -211,19 +211,42 @@ class BondTool(Tool):
             if isinstance(bond_id, int):
                 if self.canvas.active_bond_style in {"wedge", "hash"}:
                     self.canvas.apply_bond_style(bond_id, self.canvas.active_bond_style, 1)
+                elif self.canvas.active_bond_style in {"bold", "bold_in", "bold_out"}:
+                    bond = self.canvas.model.bonds[bond_id]
+                    if bond is not None:
+                        if bond.style in {"bold_in", "bold"}:
+                            next_style = "bold_out"
+                        elif bond.style == "bold_out":
+                            next_style = "bold_in"
+                        else:
+                            next_style = "bold_in"
+                        self.canvas.apply_bond_style(bond_id, next_style, bond.order)
                 else:
                     self.canvas.cycle_bond_style(bond_id)
                 return True
         if self.canvas.hover_bond_id is not None:
             if self.canvas.active_bond_style in {"wedge", "hash"}:
                 self.canvas.apply_bond_style(self.canvas.hover_bond_id, self.canvas.active_bond_style, 1)
+            elif self.canvas.active_bond_style in {"bold", "bold_in", "bold_out"}:
+                bond = self.canvas.model.bonds[self.canvas.hover_bond_id]
+                if bond is not None:
+                    if bond.style in {"bold_in", "bold"}:
+                        next_style = "bold_out"
+                    elif bond.style == "bold_out":
+                        next_style = "bold_in"
+                    else:
+                        next_style = "bold_in"
+                    self.canvas.apply_bond_style(self.canvas.hover_bond_id, next_style, bond.order)
             else:
                 self.canvas.cycle_bond_style(self.canvas.hover_bond_id)
             return True
         self._press_scene_pos = self.canvas.scene_pos_from_event(event)
         self._start_pos = self._snap_to_atom(self._press_scene_pos)
         self._preview_item = QGraphicsLineItem()
-        pen = self.canvas.renderer.bond_pen()
+        if self.canvas.active_bond_style in {"bold", "bold_in", "bold_out"}:
+            pen = self.canvas.renderer.bold_bond_pen()
+        else:
+            pen = self.canvas.renderer.bond_pen()
         pen.setColor(QColor(120, 120, 120, 140))
         self._preview_item.setPen(pen)
         self._preview_item.setOpacity(0.5)

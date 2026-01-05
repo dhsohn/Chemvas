@@ -1,6 +1,6 @@
 import math
 
-from PyQt6.QtCore import QPointF, QSize, Qt
+from PyQt6.QtCore import QPointF, QRectF, QSize, Qt
 from PyQt6.QtGui import (
     QAction,
     QActionGroup,
@@ -177,6 +177,13 @@ class MainWindow(QMainWindow):
         action_arrow = tool_action("Arrow", "arrow", "A")
         action_orbital = tool_action("Orbital", "orbital", "O")
         action_perspective = tool_action("Perspective", "perspective")
+        action_bond_bold = QAction("Bold Bond", self)
+        action_bond_bold.setCheckable(True)
+        action_bond_bold.setIcon(self._icon_bond_bold())
+        action_bond_bold.triggered.connect(
+            lambda: (self._set_tool_with_status("bond", reset_bond_style=False), self._set_bond_style("Bold"))
+        )
+        tool_group.addAction(action_bond_bold)
         action_wedge = QAction("Wedge", self)
         action_wedge.setCheckable(True)
         action_wedge.setIcon(self._icon_bond_wedge())
@@ -203,10 +210,21 @@ class MainWindow(QMainWindow):
         left_bar.addAction(action_select)
         left_bar.addAction(action_perspective)
         left_bar.addAction(action_bond)
+        left_bar.addAction(action_bond_bold)
         left_bar.addAction(action_wedge)
         left_bar.addAction(action_hash)
         left_bar.addAction(action_text)
         left_bar.addAction(action_ring)
+        templates_button = CornerMenuButton()
+        templates_button.setIcon(self._icon_templates())
+        templates_button.setToolTip("Templates")
+        templates_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        templates_button.setStyleSheet(menu_button_style)
+        templates_menu = QMenu(templates_button)
+        for label, handler in self._template_entries():
+            templates_menu.addAction(self._icon_template_preview(label), label, handler)
+        templates_button.setMenu(templates_menu)
+        left_bar.addWidget(templates_button)
         arrow_button = CornerMenuButton()
         arrow_button.setDefaultAction(action_arrow)
         arrow_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
@@ -340,16 +358,6 @@ class MainWindow(QMainWindow):
         panel_bar.addWidget(smiles_input)
         panel_bar.addWidget(smiles_button)
         panel_bar.addSeparator()
-        templates_button = CornerMenuButton()
-        templates_button.setIcon(self._icon_templates())
-        templates_button.setToolTip("Templates")
-        templates_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        templates_button.setStyleSheet(menu_button_style)
-        templates_menu = QMenu(templates_button)
-        for label, handler in self._template_entries():
-            templates_menu.addAction(self._icon_template_preview(label), label, handler)
-        templates_button.setMenu(templates_menu)
-        panel_bar.addWidget(templates_button)
         atom_input = QLineEdit()
         atom_input.setPlaceholderText("Atom")
         atom_input.setFixedWidth(60)
@@ -435,6 +443,12 @@ class MainWindow(QMainWindow):
             pen.setWidthF(1.8)
             p.setPen(pen)
             p.drawLine(6, 18, 18, 6)
+        return self._make_icon(draw)
+
+    def _icon_bond_bold(self) -> QIcon:
+        def draw(p):
+            p.setPen(self.canvas.renderer.bold_bond_pen())
+            p.drawLine(5, 18, 19, 6)
         return self._make_icon(draw)
 
     def _icon_text(self) -> QIcon:
@@ -536,12 +550,11 @@ class MainWindow(QMainWindow):
     def _icon_templates(self) -> QIcon:
         def draw(p):
             pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.0)
+            pen.setWidthF(1.4)
             p.setPen(pen)
-            p.drawRect(5, 5, 6, 6)
-            p.drawRect(13, 5, 6, 6)
-            p.drawRect(5, 13, 6, 6)
-            p.drawRect(13, 13, 6, 6)
+            chair = self._chair_icon_points(QRectF(3.0, 6.0, 18.0, 12.0))
+            if not chair.isEmpty():
+                p.drawPolygon(chair)
         return self._make_icon(draw)
 
     def _icon_info(self) -> QIcon:
@@ -712,12 +725,9 @@ class MainWindow(QMainWindow):
             elif "crown" in lower:
                 draw_ring(p, 10)
             elif "chair" in lower:
-                p.drawLine(5, 14, 9, 8)
-                p.drawLine(9, 8, 13, 12)
-                p.drawLine(13, 12, 17, 6)
-                p.drawLine(5, 14, 9, 18)
-                p.drawLine(9, 18, 13, 12)
-                p.drawLine(13, 12, 17, 16)
+                chair = self._chair_icon_points(QRectF(3.0, 6.0, 18.0, 12.0))
+                if not chair.isEmpty():
+                    p.drawPolygon(chair)
             elif label in {"Me", "Et", "t-Bu", "i-Pr"}:
                 p.drawLine(4, 12, 12, 12)
                 p.drawText(13, 15, label)
@@ -734,6 +744,42 @@ class MainWindow(QMainWindow):
             else:
                 draw_ring(p, 6)
         return self._make_icon(draw)
+
+    def _chair_icon_points(self, rect: QRectF) -> QPolygonF:
+        angle_steep = math.radians(-68.0)
+        angle_shallow = math.radians(-25.0)
+        v1 = QPointF(math.cos(angle_steep), math.sin(angle_steep))
+        v2 = QPointF(math.cos(angle_shallow), math.sin(angle_shallow))
+
+        points = [
+            QPointF(0.0, 0.0),
+            QPointF(v1.x(), v1.y()),
+            QPointF(v1.x() + 1.0, v1.y()),
+            QPointF(v1.x() + 1.0 + v2.x(), v1.y() + v2.y()),
+            QPointF(1.0 + v2.x(), v2.y()),
+            QPointF(v2.x(), v2.y()),
+        ]
+        min_x = min(point.x() for point in points)
+        max_x = max(point.x() for point in points)
+        min_y = min(point.y() for point in points)
+        max_y = max(point.y() for point in points)
+        width = max_x - min_x
+        height = max_y - min_y
+        if width <= 1e-6 or height <= 1e-6:
+            return QPolygonF()
+        scale = min(rect.width() / width, rect.height() / height) * 0.92
+        cx = (min_x + max_x) / 2.0
+        cy = (min_y + max_y) / 2.0
+        center = rect.center()
+        poly = QPolygonF()
+        for point in points:
+            poly.append(
+                QPointF(
+                    center.x() + (point.x() - cx) * scale,
+                    center.y() + (point.y() - cy) * scale,
+                )
+            )
+        return poly
 
     def _icon_flip_h(self) -> QIcon:
         def draw(p):
@@ -1097,6 +1143,7 @@ class MainWindow(QMainWindow):
             "Single": ("single", 1),
             "Double": ("double", 2),
             "Triple": ("triple", 3),
+            "Bold": ("bold_in", 1),
             "Wedge": ("wedge", 1),
             "Hash": ("hash", 1),
         }

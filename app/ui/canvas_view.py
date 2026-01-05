@@ -178,6 +178,7 @@ class CanvasView(QGraphicsView):
         self.hover_items: list = []
         self.hover_atom_id: int | None = None
         self.hover_bond_id: int | None = None
+        self._hover_preview_style: str | None = None
         self._selection_info_callback = None
         self._rotation_selection_ids = None
         self.selection_outlines: list[QGraphicsRectItem] = []
@@ -1190,6 +1191,7 @@ class CanvasView(QGraphicsView):
         self.hover_items = []
         self.hover_atom_id = None
         self.hover_bond_id = None
+        self._hover_preview_style = None
 
     def _update_hover_highlight(self, pos: QPointF) -> None:
         if not self.model.atoms:
@@ -1201,7 +1203,8 @@ class CanvasView(QGraphicsView):
             self.renderer.style.bond_length_px * 0.3,
         )
         if atom_id is not None:
-            if atom_id == self.hover_atom_id:
+            preview_style = self._bond_preview_signature()
+            if atom_id == self.hover_atom_id and preview_style == self._hover_preview_style:
                 return
             self._clear_hover_highlight()
             self.hover_atom_id = atom_id
@@ -1221,6 +1224,8 @@ class CanvasView(QGraphicsView):
             circle.setZValue(5)
             self.scene().addItem(circle)
             self.hover_items.append(circle)
+            if preview_style is not None:
+                self._add_bond_tool_hover_preview(atom_id, pos)
             return
         if self.hover_atom_id is not None:
             self._clear_hover_highlight()
@@ -1230,7 +1235,11 @@ class CanvasView(QGraphicsView):
             if self.hover_bond_id is not None:
                 self._clear_hover_highlight()
             return
-        if bond_id == self.hover_bond_id:
+        preview_style = None
+        if self.tools.active is not None and self.tools.active.name == "bond":
+            if self.active_bond_style in {"wedge", "hash"}:
+                preview_style = self.active_bond_style
+        if bond_id == self.hover_bond_id and preview_style == self._hover_preview_style:
             return
         self._clear_hover_highlight()
         self.hover_bond_id = bond_id
@@ -1254,6 +1263,8 @@ class CanvasView(QGraphicsView):
         circle.setZValue(4)
         self.scene().addItem(circle)
         self.hover_items.append(circle)
+        if preview_style:
+            self._add_bond_style_hover_preview(bond)
 
     def _find_bond_near(self, pos: QPointF, max_dist: float) -> int | None:
         nearest = None
@@ -1268,6 +1279,93 @@ class CanvasView(QGraphicsView):
                 nearest = bond_id
                 nearest_dist = dist
         return nearest
+
+    def _add_bond_style_hover_preview(self, bond) -> None:
+        if self.tools.active is None or self.tools.active.name != "bond":
+            return
+        style = self.active_bond_style
+        if style not in {"wedge", "hash"}:
+            return
+        a = self.model.atoms.get(bond.a)
+        b = self.model.atoms.get(bond.b)
+        if a is None or b is None:
+            return
+        self._hover_preview_style = style
+        if style == "wedge":
+            items = self._draw_wedge_bond(a.x, a.y, b.x, b.y, bond.a, bond.b)
+        else:
+            items = self._draw_hash_bond(a.x, a.y, b.x, b.y, bond.a, bond.b)
+        preview_color = QColor(120, 120, 120, 140)
+        for item in items:
+            if hasattr(item, "pen"):
+                pen = item.pen()
+                pen.setColor(preview_color)
+                item.setPen(pen)
+            if hasattr(item, "brush") and item.brush().style() != Qt.BrushStyle.NoBrush:
+                brush = item.brush()
+                brush.setColor(preview_color)
+                item.setBrush(brush)
+            item.setOpacity(0.55)
+            item.setZValue(4.5)
+            self.scene().addItem(item)
+            self.hover_items.append(item)
+
+    def _add_bond_tool_hover_preview(self, atom_id: int, pos: QPointF) -> None:
+        if self.tools.active is None or self.tools.active.name != "bond":
+            return
+        atom = self.model.atoms.get(atom_id)
+        if atom is None:
+            return
+        start = QPointF(atom.x, atom.y)
+        end = self._bond_hover_endpoint(start, pos)
+        style = self.active_bond_style
+        items = []
+        if style == "wedge":
+            items = self._draw_wedge_bond(start.x(), start.y(), end.x(), end.y(), atom_id, None)
+        elif style == "hash":
+            items = self._draw_hash_bond(start.x(), start.y(), end.x(), end.y(), atom_id, None)
+        elif self.active_bond_order >= 2:
+            items = self._draw_parallel_bonds(start.x(), start.y(), end.x(), end.y(), self.active_bond_order, atom_id, None)
+        else:
+            line_item = NoSelectLineItem(start.x(), start.y(), end.x(), end.y())
+            line_item.setPen(self.renderer.bond_pen())
+            items = [line_item]
+        if not items:
+            return
+        self._hover_preview_style = self._bond_preview_signature()
+        preview_color = QColor(120, 120, 120, 140)
+        for item in items:
+            if hasattr(item, "pen"):
+                pen = item.pen()
+                pen.setColor(preview_color)
+                item.setPen(pen)
+            if hasattr(item, "brush") and item.brush().style() != Qt.BrushStyle.NoBrush:
+                brush = item.brush()
+                brush.setColor(preview_color)
+                item.setBrush(brush)
+            item.setOpacity(0.55)
+            item.setZValue(4.5)
+            self.scene().addItem(item)
+            self.hover_items.append(item)
+
+    def _bond_hover_endpoint(self, start: QPointF, pos: QPointF) -> QPointF:
+        dx = pos.x() - start.x()
+        dy = pos.y() - start.y()
+        length = math.hypot(dx, dy)
+        if length <= 1e-6:
+            angle = 0.0
+        else:
+            angle = math.degrees(math.atan2(dy, dx))
+        step = self.snap_angle_step or 30
+        snap_angle = round(angle / step) * step
+        bond_len = self.renderer.style.bond_length_px
+        rad = math.radians(snap_angle)
+        return QPointF(start.x() + math.cos(rad) * bond_len, start.y() + math.sin(rad) * bond_len)
+
+    def _bond_preview_signature(self) -> str | None:
+        if self.tools.active is None or self.tools.active.name != "bond":
+            return None
+        return f"{self.active_bond_style}:{self.active_bond_order}"
 
     @staticmethod
     def _distance_point_to_segment(p: QPointF, a: QPointF, b: QPointF) -> float:
@@ -2757,16 +2855,34 @@ class CanvasView(QGraphicsView):
 
     def _cyclohexane_chair_points(self, center: QPointF) -> list[QPointF]:
         step = self.renderer.style.bond_length_px
-        height = step * 1.0
+        # Angles tuned to match cyclohexane.png chair reference.
+        angle_steep = math.radians(-68.0)
+        angle_shallow = math.radians(-25.0)
+        v1 = QPointF(math.cos(angle_steep), math.sin(angle_steep))
+        v2 = QPointF(math.cos(angle_shallow), math.sin(angle_shallow))
+
         points = [
-            QPointF(center.x() - 1.5 * step, center.y()),
-            QPointF(center.x() - 0.5 * step, center.y() - height),
-            QPointF(center.x() + 0.5 * step, center.y() - height),
-            QPointF(center.x() + 1.5 * step, center.y()),
-            QPointF(center.x() + 0.5 * step, center.y() + height),
-            QPointF(center.x() - 0.5 * step, center.y() + height),
+            QPointF(0.0, 0.0),
+            QPointF(v1.x(), v1.y()),
+            QPointF(v1.x() + 1.0, v1.y()),
+            QPointF(v1.x() + 1.0 + v2.x(), v1.y() + v2.y()),
+            QPointF(1.0 + v2.x(), v2.y()),
+            QPointF(v2.x(), v2.y()),
         ]
-        return self._scale_points_to_bond_length(points, center, step)
+        min_x = min(point.x() for point in points)
+        max_x = max(point.x() for point in points)
+        min_y = min(point.y() for point in points)
+        max_y = max(point.y() for point in points)
+        cx = (min_x + max_x) / 2.0
+        cy = (min_y + max_y) / 2.0
+        shifted = [
+            QPointF(
+                center.x() + (point.x() - cx) * step,
+                center.y() + (point.y() - cy) * step,
+            )
+            for point in points
+        ]
+        return self._scale_points_to_bond_length(shifted, center, step)
 
     def _cyclohexane_boat_points(self, center: QPointF) -> list[QPointF]:
         step = self.renderer.style.bond_length_px
@@ -3755,6 +3871,65 @@ class CanvasView(QGraphicsView):
             items = self._draw_wedge_bond(a.x, a.y, b.x, b.y, bond.a, bond.b)
         elif bond.style == "hash":
             items = self._draw_hash_bond(a.x, a.y, b.x, b.y, bond.a, bond.b)
+        elif bond.style in {"bold", "bold_in", "bold_out"}:
+            bold_outward = bond.style == "bold_out"
+            if bond.order >= 2:
+                handled_outer = False
+                if bond.order == 2:
+                    ring_center = self._ring_center_for_bond(bond)
+                    if ring_center is not None:
+                        outer_style = "bold_outward" if bold_outward else "bold_inward"
+                        items = self._draw_ring_double_bond(
+                            a,
+                            b,
+                            ring_center,
+                            bond.a,
+                            bond.b,
+                            outer_style=outer_style,
+                        )
+                        handled_outer = True
+                    else:
+                        items = self._draw_parallel_bonds(a.x, a.y, b.x, b.y, bond.order, bond.a, bond.b)
+                else:
+                    items = self._draw_parallel_bonds(a.x, a.y, b.x, b.y, bond.order, bond.a, bond.b)
+                if items and not handled_outer:
+                    bold_line = items[0]
+                    if isinstance(bold_line, QGraphicsLineItem):
+                        line = bold_line.line()
+                        nx, ny = self._line_normal(line.x1(), line.y1(), line.x2(), line.y2(), None)
+                        if bold_outward:
+                            nx, ny = -nx, -ny
+                        items[0] = self._one_sided_bond_strip(
+                            line.x1(),
+                            line.y1(),
+                            line.x2(),
+                            line.y2(),
+                            nx,
+                            ny,
+                            self.renderer.style.bond_line_width,
+                            self.renderer.style.bold_bond_width * 1.5,
+                        )
+            else:
+                t0, t1 = self._trim_line_for_labels(bond.a, bond.b, a.x, a.y, b.x, b.y)
+                ring_center = self._ring_center_for_bond(bond)
+                bx1 = a.x + (b.x - a.x) * t0
+                by1 = a.y + (b.y - a.y) * t0
+                bx2 = a.x + (b.x - a.x) * t1
+                by2 = a.y + (b.y - a.y) * t1
+                nx, ny = self._line_normal(bx1, by1, bx2, by2, ring_center)
+                if bold_outward:
+                    nx, ny = -nx, -ny
+                line_item = self._one_sided_bond_strip(
+                    bx1,
+                    by1,
+                    bx2,
+                    by2,
+                    nx,
+                    ny,
+                    self.renderer.style.bond_line_width,
+                    self.renderer.style.bold_bond_width * 1.5,
+                )
+                items = [line_item]
         elif bond.order == 2:
             ring_center = self._ring_center_for_bond(bond)
             if ring_center is not None:
@@ -3940,7 +4115,15 @@ class CanvasView(QGraphicsView):
         return t0, t1
 
 
-    def _draw_ring_double_bond(self, a, b, center: QPointF, a_id: int | None = None, b_id: int | None = None):
+    def _draw_ring_double_bond(
+        self,
+        a,
+        b,
+        center: QPointF,
+        a_id: int | None = None,
+        b_id: int | None = None,
+        outer_style: str = "normal",
+    ):
         dx = b.x - a.x
         dy = b.y - a.y
         length = math.hypot(dx, dy) or 1.0
@@ -3964,13 +4147,26 @@ class CanvasView(QGraphicsView):
         inner_y2 = b.y - uy * trim + ny * spacing
 
         t0, t1 = self._trim_line_for_labels(a_id, b_id, a.x, a.y, b.x, b.y)
-        bx1 = a.x + dx * t0
-        by1 = a.y + dy * t0
-        bx2 = a.x + dx * t1
-        by2 = a.y + dy * t1
-        base_line = NoSelectLineItem(bx1, by1, bx2, by2)
-        base_line.setPen(self.renderer.bond_pen())
-        inner_length = math.hypot(bx2 - bx1, by2 - by1) or 1.0
+        base_bx1 = a.x + dx * t0
+        base_by1 = a.y + dy * t0
+        base_bx2 = a.x + dx * t1
+        base_by2 = a.y + dy * t1
+        if outer_style in {"bold_inward", "bold_outward"}:
+            use_nx, use_ny = (nx, ny) if outer_style == "bold_inward" else (-nx, -ny)
+            outer_item = self._one_sided_bond_strip(
+                base_bx1,
+                base_by1,
+                base_bx2,
+                base_by2,
+                use_nx,
+                use_ny,
+                self.renderer.style.bond_line_width,
+                self.renderer.style.bold_bond_width * 1.5,
+            )
+        else:
+            outer_item = NoSelectLineItem(base_bx1, base_by1, base_bx2, base_by2)
+            outer_item.setPen(self.renderer.bond_pen())
+        inner_length = math.hypot(base_bx2 - base_bx1, base_by2 - base_by1) or 1.0
         has_label = False
         if a_id is not None and self._label_rect_for_atom(a_id) is not None:
             has_label = True
@@ -3980,13 +4176,68 @@ class CanvasView(QGraphicsView):
             inner_trim = max(0.6, inner_length * 0.08)
         else:
             inner_trim = max(1.0, inner_length * 0.12)
-        inner_x1 = bx1 + ux * inner_trim + nx * spacing
-        inner_y1 = by1 + uy * inner_trim + ny * spacing
-        inner_x2 = bx2 - ux * inner_trim + nx * spacing
-        inner_y2 = by2 - uy * inner_trim + ny * spacing
+        inner_x1 = base_bx1 + ux * inner_trim + nx * spacing
+        inner_y1 = base_by1 + uy * inner_trim + ny * spacing
+        inner_x2 = base_bx2 - ux * inner_trim + nx * spacing
+        inner_y2 = base_by2 - uy * inner_trim + ny * spacing
         inner_line = NoSelectLineItem(inner_x1, inner_y1, inner_x2, inner_y2)
         inner_line.setPen(self.renderer.bond_pen())
-        return [base_line, inner_line]
+        return [outer_item, inner_line]
+
+    def _one_sided_bond_strip(
+        self,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        nx: float,
+        ny: float,
+        base_width: float,
+        bold_width: float,
+    ):
+        if bold_width <= base_width + 1e-6:
+            line_item = NoSelectLineItem(x1, y1, x2, y2)
+            line_item.setPen(self.renderer.bond_pen())
+            return line_item
+        half_base = base_width / 2.0
+        inner_offset = half_base + max(0.0, bold_width - base_width)
+        outer_offset = -half_base
+        polygon = QPolygonF(
+            [
+                QPointF(x1 + nx * outer_offset, y1 + ny * outer_offset),
+                QPointF(x2 + nx * outer_offset, y2 + ny * outer_offset),
+                QPointF(x2 + nx * inner_offset, y2 + ny * inner_offset),
+                QPointF(x1 + nx * inner_offset, y1 + ny * inner_offset),
+            ]
+        )
+        item = NoSelectPolygonItem(polygon)
+        item.setPen(QPen(Qt.PenStyle.NoPen))
+        item.setBrush(QBrush(QColor(self.renderer.style.bond_color)))
+        return item
+
+    def _line_normal(
+        self,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        target: QPointF | None = None,
+    ) -> tuple[float, float]:
+        dx = x2 - x1
+        dy = y2 - y1
+        length = math.hypot(dx, dy) or 1.0
+        nx = -dy / length
+        ny = dx / length
+        if target is None:
+            return nx, ny
+        mid_x = (x1 + x2) / 2.0
+        mid_y = (y1 + y2) / 2.0
+        to_tx = target.x() - mid_x
+        to_ty = target.y() - mid_y
+        if nx * to_tx + ny * to_ty < 0:
+            nx = -nx
+            ny = -ny
+        return nx, ny
 
     def _draw_parallel_bonds(
         self,
@@ -4040,7 +4291,7 @@ class CanvasView(QGraphicsView):
         length = math.hypot(dx, dy) or 1.0
         nx = -dy / length
         ny = dx / length
-        half_width = self.renderer.style.wedge_width_px / 2.0
+        half_width = self.renderer.bold_bond_pen().widthF() / 2.0
         p1 = QPointF(x1, y1)
         p2 = QPointF(x2 + nx * half_width, y2 + ny * half_width)
         p3 = QPointF(x2 - nx * half_width, y2 - ny * half_width)
@@ -4065,12 +4316,14 @@ class CanvasView(QGraphicsView):
         nx = -dy / length
         ny = dx / length
         count = max(3, int(length / self.renderer.style.hash_spacing_px))
+        max_size = self.renderer.bold_bond_pen().widthF()
+        max_t = count / (count + 1)
         items = []
         for i in range(count):
             t = (i + 1) / (count + 1)
             cx = x1 + dx * t
             cy = y1 + dy * t
-            size = self.renderer.style.wedge_width_px * (t * 0.5)
+            size = max_size * (t / max_t) if max_t > 0 else max_size
             hx = nx * size / 2.0
             hy = ny * size / 2.0
             line_item = NoSelectLineItem(cx - hx, cy - hy, cx + hx, cy + hy)

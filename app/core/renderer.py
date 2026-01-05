@@ -22,7 +22,7 @@ class Renderer:
 
     def bold_bond_pen(self) -> QPen:
         pen = QPen(QColor(self.style.bond_color))
-        pen.setWidthF(self.style.bold_bond_width)
+        pen.setWidthF(self.style.bold_bond_width * 1.5)
         pen.setCapStyle(Qt.PenCapStyle.SquareCap)
         pen.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
         return pen
