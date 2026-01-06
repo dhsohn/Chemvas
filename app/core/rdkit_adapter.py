@@ -43,6 +43,16 @@ class RDKitAdapter:
             self._rdkit = (Chem, AllChem)
         return self._rdkit
 
+    def is_loaded(self) -> bool:
+        return self._rdkit not in (None, (None, None))
+
+    def is_unavailable(self) -> bool:
+        return self._rdkit == (None, None)
+
+    def preload(self) -> bool:
+        rdkit = self._load_rdkit()
+        return rdkit != (None, None)
+
     def smiles_to_2d(self, smiles: str, scale: float = 40.0) -> Optional[MoleculeModel]:
         rdkit = self._load_rdkit()
         if rdkit == (None, None):

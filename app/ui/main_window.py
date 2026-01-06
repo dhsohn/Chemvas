@@ -1,6 +1,6 @@
 import math
 
-from PyQt6.QtCore import QPointF, QRectF, QSize, Qt
+from PyQt6.QtCore import QPointF, QRectF, QSize, Qt, QTimer
 from PyQt6.QtGui import (
     QAction,
     QActionGroup,
@@ -588,19 +588,44 @@ class MainWindow(QMainWindow):
 
     def _icon_bond_wedge(self) -> QIcon:
         def draw(p):
-            p.setPen(QPen(Qt.GlobalColor.black))
-            p.setBrush(QBrush(Qt.GlobalColor.black))
-            polygon = QPolygonF([QPointF(5, 17), QPointF(19, 12), QPointF(5, 7)])
+            start = QPointF(6, 18)
+            end = QPointF(18, 6)
+            dx = end.x() - start.x()
+            dy = end.y() - start.y()
+            length = math.hypot(dx, dy) or 1.0
+            nx = -dy / length
+            ny = dx / length
+            half_width = self.canvas.renderer.bold_bond_pen().widthF() / 2.0
+            p1 = start
+            p2 = QPointF(end.x() + nx * half_width, end.y() + ny * half_width)
+            p3 = QPointF(end.x() - nx * half_width, end.y() - ny * half_width)
+            polygon = QPolygonF([p1, p2, p3])
+            p.setPen(self.canvas.renderer.bond_pen())
+            p.setBrush(QBrush(QColor(self.canvas.renderer.style.bond_color)))
             p.drawPolygon(polygon)
         return self._make_icon(draw)
 
     def _icon_bond_hash(self) -> QIcon:
         def draw(p):
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.2)
-            p.setPen(pen)
-            for i, x in enumerate(range(6, 19, 3)):
-                p.drawLine(x, 8 + i, x, 16 - i)
+            start = QPointF(6, 18)
+            end = QPointF(18, 6)
+            dx = end.x() - start.x()
+            dy = end.y() - start.y()
+            length = math.hypot(dx, dy) or 1.0
+            nx = -dy / length
+            ny = dx / length
+            count = max(3, int(length / self.canvas.renderer.style.hash_spacing_px))
+            max_size = self.canvas.renderer.bold_bond_pen().widthF()
+            max_t = count / (count + 1)
+            p.setPen(self.canvas.renderer.bond_pen())
+            for i in range(count):
+                t = (i + 1) / (count + 1)
+                cx = start.x() + dx * t
+                cy = start.y() + dy * t
+                size = max_size * (t / max_t) if max_t > 0 else max_size
+                hx = nx * size / 2.0
+                hy = ny * size / 2.0
+                p.drawLine(QPointF(cx - hx, cy - hy), QPointF(cx + hx, cy + hy))
         return self._make_icon(draw)
 
     def _icon_bond_length(self) -> QIcon:
@@ -1127,16 +1152,20 @@ class MainWindow(QMainWindow):
         tool = self.canvas.tools.tools.get("color") if hasattr(self.canvas, "tools") else None
         if tool is not None:
             tool._last_color = color.name()
-        self.canvas.set_tool("color")
-        for item in self.canvas.scene().selectedItems():
-            if item.data(0) in {"bond", "atom", "ring"}:
-                self.canvas.apply_color_to_item(item, color)
+        def apply_color() -> None:
+            self.canvas.set_tool("color")
+            for item in self.canvas.scene().selectedItems():
+                if item.data(0) in {"bond", "atom", "ring"}:
+                    self.canvas.apply_color_to_item(item, color)
+        QTimer.singleShot(0, apply_color)
 
     def _apply_ring_fill_preset(self, hex_value: str) -> None:
         color = QColor(hex_value)
-        for item in self.canvas.scene().selectedItems():
-            if item.data(0) == "ring":
-                self.canvas.apply_ring_fill_color(item, color)
+        def apply_fill() -> None:
+            for item in self.canvas.scene().selectedItems():
+                if item.data(0) == "ring":
+                    self.canvas.apply_ring_fill_color(item, color)
+        QTimer.singleShot(0, apply_fill)
 
     def _set_bond_style(self, value: str) -> None:
         mapping = {

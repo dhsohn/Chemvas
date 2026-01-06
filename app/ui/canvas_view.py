@@ -1,6 +1,7 @@
 import math
+import time
 
-from PyQt6.QtCore import QPointF, QRectF, Qt, QEvent
+from PyQt6.QtCore import QPointF, QRectF, Qt, QEvent, QTimer
 from PyQt6.QtGui import (
     QColor,
     QCursor,
@@ -118,10 +119,16 @@ class CanvasView(QGraphicsView):
         self.setMouseTracking(True)
         self.viewport().setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-
         self.model = MoleculeModel()
         self.renderer = Renderer()
         self.rdkit = RDKitAdapter()
+        self._last_interaction_time = time.monotonic()
+        self._rdkit_warmup_pending = False
+        self._rdkit_idle_threshold = 0.4
+        self._rdkit_idle_timer = QTimer(self)
+        self._rdkit_idle_timer.setInterval(250)
+        self._rdkit_idle_timer.timeout.connect(self._maybe_warm_rdkit)
+        self._rdkit_idle_timer.start()
         self.atom_items: dict[int, QGraphicsTextItem] = {}
         self.atom_dots: dict[int, QGraphicsEllipseItem] = {}
         self.atom_symbol = "C"
@@ -136,8 +143,10 @@ class CanvasView(QGraphicsView):
         self._selection_rotation_step = 0.0
         self._rotation_group = None
         self.atom_coords_3d: dict[int, tuple[float, float, float]] = {}
+        self.atom_plane_normals: dict[int, tuple[float, float, float]] = {}
         self._rotation_base_coords: dict[int, tuple[float, float, float]] = {}
         self._rotation_total_angles: tuple[float, float] | None = None
+        self._rotation_plane_normal: tuple[float, float, float] | None = None
         self.rotation_atom_ids: set[int] = set()
         self.rotation_center_3d: tuple[float, float, float] | None = None
         self.active_arrow_type = "reaction"
@@ -153,6 +162,10 @@ class CanvasView(QGraphicsView):
         self._curved_snap_step = 0.15
         self._selection_color = QColor("#1f5eff")
         self._selection_stroke_delta = 0.6
+        self._suspend_selection_outline = False
+        self._selection_signature = None
+        self._selection_pending_signature = None
+        self._selection_info_cache = ("", "")
         self._orbital_snap_enabled = False
         self._orbital_snap_step = 15
         self.last_smiles_input: str | None = None
@@ -1072,6 +1085,8 @@ class CanvasView(QGraphicsView):
         item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
 
     def _update_selection_outline(self) -> None:
+        if self._suspend_selection_outline:
+            return
         items = self.scene().selectedItems()
         if not items:
             for outline in self.selection_outlines:
@@ -1126,8 +1141,8 @@ class CanvasView(QGraphicsView):
             outline = NoSelectRectItem()
             outline.setData(0, "selection_outline")
             outline.setZValue(20)
-            pen = QPen(QColor("#000000"))
-            pen.setWidthF(2.4)
+            pen = QPen(QColor("#5eb7ff"))
+            pen.setWidthF(1.2)
             pen.setStyle(Qt.PenStyle.DashLine)
             outline.setPen(pen)
             outline.setBrush(QBrush(Qt.BrushStyle.NoBrush))
@@ -1135,6 +1150,15 @@ class CanvasView(QGraphicsView):
             self.scene().addItem(outline)
             self.selection_outlines.append(outline)
         self._emit_selection_info()
+
+    def shift_selection_outlines(self, dx: float, dy: float) -> None:
+        if not self.selection_outlines:
+            return
+        for outline in self.selection_outlines:
+            outline.moveBy(dx, dy)
+
+    def suspend_selection_outline(self, suspend: bool) -> None:
+        self._suspend_selection_outline = bool(suspend)
 
     def _connected_components(self, atom_ids: set[int]) -> list[set[int]]:
         if not atom_ids:
@@ -1165,6 +1189,32 @@ class CanvasView(QGraphicsView):
     def set_selection_info_callback(self, callback) -> None:
         self._selection_info_callback = callback
 
+    def _touch_interaction(self) -> None:
+        self._last_interaction_time = time.monotonic()
+
+    def _maybe_warm_rdkit(self) -> None:
+        if not self._rdkit_warmup_pending:
+            return
+        if self.rdkit.is_unavailable():
+            self._rdkit_warmup_pending = False
+            self._selection_pending_signature = None
+            return
+        if self.rdkit.is_loaded():
+            self._rdkit_warmup_pending = False
+            self._selection_pending_signature = None
+            self._emit_selection_info()
+            return
+        if time.monotonic() - self._last_interaction_time < self._rdkit_idle_threshold:
+            return
+        self.rdkit.preload()
+        self._rdkit_warmup_pending = False
+        self._selection_pending_signature = None
+        self._emit_selection_info()
+
+    @staticmethod
+    def _selection_signature_for(atom_ids: set[int], bond_ids: set[int]) -> tuple[frozenset[int], frozenset[int]]:
+        return frozenset(atom_ids), frozenset(bond_ids)
+
     def _emit_selection_info(self) -> None:
         if not self._selection_info_callback:
             return
@@ -1173,12 +1223,38 @@ class CanvasView(QGraphicsView):
         else:
             atom_ids, bond_ids = self._selected_ids()
         if not atom_ids and not bond_ids:
+            self._selection_signature = None
+            self._selection_pending_signature = None
+            self._selection_info_cache = ("", "")
+            self._rdkit_warmup_pending = False
             self._selection_info_callback("", "")
+            return
+        signature = self._selection_signature_for(atom_ids, bond_ids)
+        if signature == self._selection_signature:
+            formula_text, mw_text = self._selection_info_cache
+            self._selection_info_callback(formula_text, mw_text)
+            return
+        if self.rdkit.is_unavailable():
+            self._selection_signature = None
+            self._selection_pending_signature = None
+            self._selection_info_cache = ("", "")
+            self._rdkit_warmup_pending = False
+            self._selection_info_callback("", "")
+            return
+        if not self.rdkit.is_loaded():
+            if signature != self._selection_pending_signature:
+                self._selection_pending_signature = signature
+                self._selection_info_cache = ("", "")
+                self._selection_info_callback("", "")
+            self._rdkit_warmup_pending = True
             return
         submodel, _, _ = self._build_submodel(atom_ids, bond_ids)
         formula, mw, _ = self.rdkit.compute_props(submodel)
         formula_text = formula or ""
         mw_text = f"{mw:.2f}" if mw is not None else ""
+        self._selection_signature = signature
+        self._selection_pending_signature = None
+        self._selection_info_cache = (formula_text, mw_text)
         self._selection_info_callback(formula_text, mw_text)
 
     def _clear_hover_highlight(self) -> None:
@@ -1195,6 +1271,22 @@ class CanvasView(QGraphicsView):
 
     def _update_hover_highlight(self, pos: QPointF) -> None:
         if not self.model.atoms:
+            if self.tools.active is not None and self.tools.active.name == "bond":
+                preview_style = self._bond_preview_signature()
+                if preview_style is None:
+                    self._clear_hover_highlight()
+                    return
+                start = QPointF(pos.x(), pos.y())
+                bond_len = self.renderer.style.bond_length_px
+                end = QPointF(pos.x() + bond_len, pos.y())
+                preview_key = f"{preview_style}:{round(start.x(), 1)}:{round(start.y(), 1)}"
+                if preview_key == self._hover_preview_style:
+                    return
+                self._clear_hover_highlight()
+                self._hover_preview_style = preview_key
+                items = self._build_bond_preview_items(start, end)
+                self._add_hover_preview_items(items)
+                return
             self._clear_hover_highlight()
             return
         atom_id = self.model.find_atom_near(
@@ -1204,7 +1296,12 @@ class CanvasView(QGraphicsView):
         )
         if atom_id is not None:
             preview_style = self._bond_preview_signature()
-            if atom_id == self.hover_atom_id and preview_style == self._hover_preview_style:
+            preview_key = None
+            if preview_style is not None:
+                atom = self.model.atoms[atom_id]
+                end = self._bond_hover_endpoint(QPointF(atom.x, atom.y), pos)
+                preview_key = f"{preview_style}:{round(end.x(), 1)}:{round(end.y(), 1)}"
+            if atom_id == self.hover_atom_id and preview_key == self._hover_preview_style:
                 return
             self._clear_hover_highlight()
             self.hover_atom_id = atom_id
@@ -1225,6 +1322,7 @@ class CanvasView(QGraphicsView):
             self.scene().addItem(circle)
             self.hover_items.append(circle)
             if preview_style is not None:
+                self._hover_preview_style = preview_key
                 self._add_bond_tool_hover_preview(atom_id, pos)
             return
         if self.hover_atom_id is not None:
@@ -1291,24 +1389,13 @@ class CanvasView(QGraphicsView):
         if a is None or b is None:
             return
         self._hover_preview_style = style
-        if style == "wedge":
-            items = self._draw_wedge_bond(a.x, a.y, b.x, b.y, bond.a, bond.b)
-        else:
-            items = self._draw_hash_bond(a.x, a.y, b.x, b.y, bond.a, bond.b)
-        preview_color = QColor(120, 120, 120, 140)
-        for item in items:
-            if hasattr(item, "pen"):
-                pen = item.pen()
-                pen.setColor(preview_color)
-                item.setPen(pen)
-            if hasattr(item, "brush") and item.brush().style() != Qt.BrushStyle.NoBrush:
-                brush = item.brush()
-                brush.setColor(preview_color)
-                item.setBrush(brush)
-            item.setOpacity(0.55)
-            item.setZValue(4.5)
-            self.scene().addItem(item)
-            self.hover_items.append(item)
+        items = self._build_bond_preview_items(
+            QPointF(a.x, a.y),
+            QPointF(b.x, b.y),
+            bond.a,
+            bond.b,
+        )
+        self._add_hover_preview_items(items)
 
     def _add_bond_tool_hover_preview(self, atom_id: int, pos: QPointF) -> None:
         if self.tools.active is None or self.tools.active.name != "bond":
@@ -1318,21 +1405,38 @@ class CanvasView(QGraphicsView):
             return
         start = QPointF(atom.x, atom.y)
         end = self._bond_hover_endpoint(start, pos)
+        items = self._build_bond_preview_items(start, end, atom_id, None)
+        self._add_hover_preview_items(items)
+
+    def _build_bond_preview_items(
+        self,
+        start: QPointF,
+        end: QPointF,
+        a_id: int | None = None,
+        b_id: int | None = None,
+    ) -> list:
         style = self.active_bond_style
-        items = []
         if style == "wedge":
-            items = self._draw_wedge_bond(start.x(), start.y(), end.x(), end.y(), atom_id, None)
-        elif style == "hash":
-            items = self._draw_hash_bond(start.x(), start.y(), end.x(), end.y(), atom_id, None)
-        elif self.active_bond_order >= 2:
-            items = self._draw_parallel_bonds(start.x(), start.y(), end.x(), end.y(), self.active_bond_order, atom_id, None)
-        else:
-            line_item = NoSelectLineItem(start.x(), start.y(), end.x(), end.y())
-            line_item.setPen(self.renderer.bond_pen())
-            items = [line_item]
+            return self._draw_wedge_bond(start.x(), start.y(), end.x(), end.y(), a_id, b_id)
+        if style == "hash":
+            return self._draw_hash_bond(start.x(), start.y(), end.x(), end.y(), a_id, b_id)
+        if self.active_bond_order >= 2:
+            return self._draw_parallel_bonds(
+                start.x(),
+                start.y(),
+                end.x(),
+                end.y(),
+                self.active_bond_order,
+                a_id,
+                b_id,
+            )
+        line_item = NoSelectLineItem(start.x(), start.y(), end.x(), end.y())
+        line_item.setPen(self.renderer.bond_pen())
+        return [line_item]
+
+    def _add_hover_preview_items(self, items: list) -> None:
         if not items:
             return
-        self._hover_preview_style = self._bond_preview_signature()
         preview_color = QColor(120, 120, 120, 140)
         for item in items:
             if hasattr(item, "pen"):
@@ -1466,6 +1570,8 @@ class CanvasView(QGraphicsView):
         dx = end.x() - start.x()
         dy = end.y() - start.y()
         length = math.hypot(dx, dy) or 1.0
+        ux = dx / length
+        uy = dy / length
         nx = -dy / length
         ny = dx / length
         control = QPointF(start.x() + dx * 0.5 + nx * length * 0.3, start.y() + dy * 0.5 + ny * length * 0.3)
@@ -1487,6 +1593,8 @@ class CanvasView(QGraphicsView):
         dx = end.x() - start.x()
         dy = end.y() - start.y()
         length = math.hypot(dx, dy) or 1.0
+        ux = dx / length
+        uy = dy / length
         nx = -dy / length
         ny = dx / length
         bar = self.renderer.style.bond_length_px * 0.2
@@ -1811,6 +1919,7 @@ class CanvasView(QGraphicsView):
                     item.setPen(original)
 
     def mousePressEvent(self, event) -> None:
+        self._touch_interaction()
         if self._template_insert_active and event.button() == Qt.MouseButton.LeftButton:
             self._commit_template_insert(self.scene_pos_from_event(event))
             self._clear_hover_highlight()
@@ -1826,6 +1935,7 @@ class CanvasView(QGraphicsView):
         self._clear_hover_highlight()
 
     def mouseMoveEvent(self, event) -> None:
+        self._touch_interaction()
         if self._template_insert_active:
             self._render_template_preview(self.scene_pos_from_event(event))
             return
@@ -1839,11 +1949,13 @@ class CanvasView(QGraphicsView):
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event) -> None:
+        self._touch_interaction()
         if self.tools.active and self.tools.active.on_mouse_release(event):
             return
         super().mouseReleaseEvent(event)
 
     def wheelEvent(self, event) -> None:
+        self._touch_interaction()
         self._reset_view_transform()
         delta = event.pixelDelta()
         if delta.isNull():
@@ -1961,6 +2073,7 @@ class CanvasView(QGraphicsView):
 
         self._rotation_base_coords = dict(self.atom_coords_3d)
         self._rotation_total_angles = (0.0, 0.0)
+        self._rotation_plane_normal = (0.0, 0.0, 1.0)
         self.rotation_atom_ids = set(self.atom_coords_3d.keys())
         self.rotation_center_3d = (center_2d.x(), center_2d.y(), 0.0)
         return True
@@ -1977,6 +2090,7 @@ class CanvasView(QGraphicsView):
         total_x += angle_x
         total_y += angle_y
         self._rotation_total_angles = (total_x, total_y)
+        self._rotation_plane_normal = self._plane_normal_from_angles(total_x, total_y)
         cos_y = math.cos(angle_y)
         sin_y = math.sin(angle_y)
         cos_x = math.cos(angle_x)
@@ -2037,6 +2151,14 @@ class CanvasView(QGraphicsView):
                                 continue
                             atom.x = cx + (atom.x - cx) * factor
                             atom.y = cy + (atom.y - cy) * factor
+                            coords = self.atom_coords_3d.get(atom_id)
+                            if coords is not None:
+                                x3, y3, z3 = coords
+                                self.atom_coords_3d[atom_id] = (
+                                    cx + (x3 - cx) * factor,
+                                    cy + (y3 - cy) * factor,
+                                    z3,
+                                )
                             label = self.atom_items.get(atom_id)
                             if label is not None:
                                 self._position_label(label, atom.x, atom.y)
@@ -2055,11 +2177,17 @@ class CanvasView(QGraphicsView):
 
     def end_selection_3d_rotation(self) -> None:
         selection_ids = self._rotation_selection_ids
+        rotated_atoms = set(self.rotation_atom_ids)
+        plane_normal = self._rotation_plane_normal
         self.rotation_atom_ids = set()
         self.rotation_center_3d = None
         self._rotation_base_coords = {}
         self._rotation_total_angles = None
         self._rotation_selection_ids = None
+        self._rotation_plane_normal = None
+        if plane_normal is not None:
+            for atom_id in rotated_atoms:
+                self.atom_plane_normals[atom_id] = plane_normal
         self._push_history()
         if selection_ids is not None:
             self._restore_selection_from_ids(*selection_ids)
@@ -2074,6 +2202,22 @@ class CanvasView(QGraphicsView):
                 bond_ids.add(bond_id)
         for bond_id in bond_ids:
             self._redraw_bond(bond_id)
+
+    def bond_sets_for_atoms(self, atom_ids: set[int]) -> tuple[set[int], set[int]]:
+        internal: set[int] = set()
+        boundary: set[int] = set()
+        if not atom_ids:
+            return internal, boundary
+        for bond_id, bond in enumerate(self.model.bonds):
+            if bond is None:
+                continue
+            a_in = bond.a in atom_ids
+            b_in = bond.b in atom_ids
+            if a_in and b_in:
+                internal.add(bond_id)
+            elif a_in or b_in:
+                boundary.add(bond_id)
+        return internal, boundary
 
     def _restore_selection_from_ids(self, atom_ids: set[int], bond_ids: set[int]) -> None:
         self.scene().clearSelection()
@@ -3270,6 +3414,11 @@ class CanvasView(QGraphicsView):
     def apply_color_to_item(self, item, color: QColor) -> None:
         if item is None or not color.isValid():
             return
+        try:
+            if item.scene() is not self.scene():
+                return
+        except RuntimeError:
+            return
         kind = item.data(0)
         if kind == "bond":
             bond_id = item.data(1)
@@ -3283,9 +3432,18 @@ class CanvasView(QGraphicsView):
                 self._push_history()
         elif kind == "atom":
             atom_id = item.data(1)
-            item.setDefaultTextColor(color)
+            if isinstance(item, QGraphicsTextItem):
+                item.setDefaultTextColor(color)
+            elif isinstance(item, QGraphicsEllipseItem):
+                item.setBrush(color)
             if atom_id in self.model.atoms:
                 self.model.atoms[atom_id].color = color.name()
+                label_item = self.atom_items.get(atom_id)
+                if label_item is not None and label_item is not item:
+                    label_item.setDefaultTextColor(color)
+                dot_item = self.atom_dots.get(atom_id)
+                if dot_item is not None and dot_item is not item:
+                    dot_item.setBrush(color)
                 self._push_history()
         elif kind == "ring":
             fill = QColor(color)
@@ -3309,6 +3467,8 @@ class CanvasView(QGraphicsView):
         self.hover_atom_id = None
         self.hover_bond_id = None
         self.model = MoleculeModel()
+        self.atom_coords_3d = {}
+        self.atom_plane_normals = {}
         self.atom_items = {}
         self.atom_dots = {}
         self.bond_items = {}
@@ -3667,7 +3827,7 @@ class CanvasView(QGraphicsView):
                 self.add_or_update_atom_label(atom_id, atom.element, clear_smiles=False, record=False)
         self.update_info_label()
 
-    def move_item(self, item, dx: float, dy: float) -> None:
+    def move_item(self, item, dx: float, dy: float, update_selection: bool = True) -> None:
         kind = item.data(0)
         if kind == "atom":
             atom_id = item.data(1)
@@ -3724,16 +3884,36 @@ class CanvasView(QGraphicsView):
                 if isinstance(control, QPointF):
                     data["control"] = QPointF(control.x() + dx, control.y() + dy)
                 item.setData(2, data)
-        self._update_selection_outline()
+        if update_selection:
+            self._update_selection_outline()
 
-    def move_atoms(self, atom_ids: set[int], dx: float, dy: float) -> None:
+    def move_atoms(
+        self,
+        atom_ids: set[int],
+        dx: float,
+        dy: float,
+        bond_ids: set[int] | None = None,
+        redraw_bond_ids: set[int] | None = None,
+        update_selection: bool = True,
+    ) -> None:
         if not atom_ids:
             return
         for atom_id in atom_ids:
             self._move_atom(atom_id, dx, dy)
-        self._redraw_bonds_for_atoms(atom_ids)
+        use_bond_sets = bond_ids is not None or redraw_bond_ids is not None
+        if use_bond_sets:
+            if bond_ids:
+                for bond_id in bond_ids:
+                    for item in self.bond_items.get(bond_id, []):
+                        item.moveBy(dx, dy)
+            if redraw_bond_ids:
+                for bond_id in redraw_bond_ids:
+                    self.update_bond_geometry(bond_id)
+        else:
+            self._redraw_bonds_for_atoms(atom_ids)
         self._move_rings_for_atoms(atom_ids, dx, dy)
-        self._update_selection_outline()
+        if update_selection:
+            self._update_selection_outline()
 
     def _move_rings_for_atoms(self, atom_ids: set[int], dx: float, dy: float) -> None:
         for ring_item in self.ring_items:
@@ -3754,12 +3934,344 @@ class CanvasView(QGraphicsView):
             return
         atom.x += dx
         atom.y += dy
+        if atom_id in self.atom_coords_3d:
+            x, y, z = self.atom_coords_3d[atom_id]
+            self.atom_coords_3d[atom_id] = (x + dx, y + dy, z)
         label = self.atom_items.get(atom_id)
         if label is not None:
             label.moveBy(dx, dy)
         dot = self.atom_dots.get(atom_id)
         if dot is not None:
             dot.moveBy(dx, dy)
+
+    def _parallel_bond_segments(
+        self,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        count: int,
+        a_id: int | None = None,
+        b_id: int | None = None,
+    ) -> list[tuple[float, float, float, float]]:
+        dx = x2 - x1
+        dy = y2 - y1
+        length = math.hypot(dx, dy) or 1.0
+        offset_unit = None
+        if a_id is not None and b_id is not None:
+            offset_unit = self._bond_offset_unit_3d(a_id, b_id)
+        if offset_unit is not None:
+            nx, ny = offset_unit[0], offset_unit[1]
+        else:
+            nx = -dy / length
+            ny = dx / length
+        spacing = self.renderer.style.bond_spacing_px
+        if count == 2:
+            offsets = [-spacing / 2, spacing / 2]
+        elif count == 3:
+            offsets = [-spacing, 0.0, spacing]
+        else:
+            offsets = [0.0]
+        t0, t1 = self._trim_line_for_labels(a_id, b_id, x1, y1, x2, y2)
+        base_x1 = x1 + dx * t0
+        base_y1 = y1 + dy * t0
+        base_x2 = x1 + dx * t1
+        base_y2 = y1 + dy * t1
+        segments = []
+        for offset in offsets:
+            ox = nx * offset
+            oy = ny * offset
+            segments.append((base_x1 + ox, base_y1 + oy, base_x2 + ox, base_y2 + oy))
+        return segments
+
+    def _wedge_polygon(
+        self,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        a_id: int | None = None,
+        b_id: int | None = None,
+    ) -> QPolygonF:
+        dx = x2 - x1
+        dy = y2 - y1
+        length = math.hypot(dx, dy) or 1.0
+        t0, t1 = self._trim_line_for_labels(a_id, b_id, x1, y1, x2, y2)
+        x1 = x1 + dx * t0
+        y1 = y1 + dy * t0
+        x2 = x1 + dx * (t1 - t0)
+        y2 = y1 + dy * (t1 - t0)
+        dx = x2 - x1
+        dy = y2 - y1
+        length = math.hypot(dx, dy) or 1.0
+        nx = -dy / length
+        ny = dx / length
+        half_width = self.renderer.bold_bond_pen().widthF() / 2.0
+        p1 = QPointF(x1, y1)
+        p2 = QPointF(x2 + nx * half_width, y2 + ny * half_width)
+        p3 = QPointF(x2 - nx * half_width, y2 - ny * half_width)
+        return QPolygonF([p1, p2, p3])
+
+    def _hash_segments(
+        self,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        count: int,
+        a_id: int | None = None,
+        b_id: int | None = None,
+    ) -> list[tuple[float, float, float, float]]:
+        dx = x2 - x1
+        dy = y2 - y1
+        length = math.hypot(dx, dy) or 1.0
+        t0, t1 = self._trim_line_for_labels(a_id, b_id, x1, y1, x2, y2)
+        x1 = x1 + dx * t0
+        y1 = y1 + dy * t0
+        x2 = x1 + dx * (t1 - t0)
+        y2 = y1 + dy * (t1 - t0)
+        dx = x2 - x1
+        dy = y2 - y1
+        length = math.hypot(dx, dy) or 1.0
+        nx = -dy / length
+        ny = dx / length
+        max_size = self.renderer.bold_bond_pen().widthF()
+        max_t = count / (count + 1) if count > 0 else 1.0
+        segments = []
+        for i in range(count):
+            t = (i + 1) / (count + 1)
+            cx = x1 + dx * t
+            cy = y1 + dy * t
+            size = max_size * (t / max_t) if max_t > 0 else max_size
+            hx = nx * size / 2.0
+            hy = ny * size / 2.0
+            segments.append((cx - hx, cy - hy, cx + hx, cy + hy))
+        return segments
+
+    def _strip_polygon(
+        self,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        nx: float,
+        ny: float,
+        base_width: float,
+        bold_width: float,
+    ) -> QPolygonF:
+        half_base = base_width / 2.0
+        inner_offset = half_base + max(0.0, bold_width - base_width)
+        outer_offset = -half_base
+        return QPolygonF(
+            [
+                QPointF(x1 + nx * outer_offset, y1 + ny * outer_offset),
+                QPointF(x2 + nx * outer_offset, y2 + ny * outer_offset),
+                QPointF(x2 + nx * inner_offset, y2 + ny * inner_offset),
+                QPointF(x1 + nx * inner_offset, y1 + ny * inner_offset),
+            ]
+        )
+
+    def _ring_double_segments(
+        self,
+        a,
+        b,
+        center: QPointF,
+        a_id: int | None = None,
+        b_id: int | None = None,
+        center_3d: tuple[float, float, float] | None = None,
+    ) -> tuple[tuple[float, float, float, float], tuple[float, float, float, float], tuple[float, float]]:
+        dx = b.x - a.x
+        dy = b.y - a.y
+        length = math.hypot(dx, dy) or 1.0
+        ux = dx / length
+        uy = dy / length
+        nx = -dy / length
+        ny = dx / length
+        offset_unit = None
+        if a_id is not None and b_id is not None:
+            offset_unit = self._bond_offset_unit_3d(
+                a_id,
+                b_id,
+                target=center_3d,
+            )
+        if offset_unit is not None:
+            nx, ny = offset_unit[0], offset_unit[1]
+            if center_3d is None:
+                mid_x = (a.x + b.x) / 2.0
+                mid_y = (a.y + b.y) / 2.0
+                to_cx = center.x() - mid_x
+                to_cy = center.y() - mid_y
+                if nx * to_cx + ny * to_cy < 0:
+                    nx = -nx
+                    ny = -ny
+        else:
+            mid_x = (a.x + b.x) / 2.0
+            mid_y = (a.y + b.y) / 2.0
+            to_cx = center.x() - mid_x
+            to_cy = center.y() - mid_y
+            if nx * to_cx + ny * to_cy < 0:
+                nx = -nx
+                ny = -ny
+
+        spacing = self.renderer.style.bond_spacing_px * 1.1
+        t0, t1 = self._trim_line_for_labels(a_id, b_id, a.x, a.y, b.x, b.y)
+        base_bx1 = a.x + dx * t0
+        base_by1 = a.y + dy * t0
+        base_bx2 = a.x + dx * t1
+        base_by2 = a.y + dy * t1
+
+        inner_length = math.hypot(base_bx2 - base_bx1, base_by2 - base_by1) or 1.0
+        has_label = False
+        if a_id is not None and self._label_rect_for_atom(a_id) is not None:
+            has_label = True
+        if b_id is not None and self._label_rect_for_atom(b_id) is not None:
+            has_label = True
+        if has_label:
+            inner_trim = max(0.6, inner_length * 0.08)
+        else:
+            inner_trim = max(1.0, inner_length * 0.12)
+        inner_x1 = base_bx1 + ux * inner_trim + nx * spacing
+        inner_y1 = base_by1 + uy * inner_trim + ny * spacing
+        inner_x2 = base_bx2 - ux * inner_trim + nx * spacing
+        inner_y2 = base_by2 - uy * inner_trim + ny * spacing
+        return (base_bx1, base_by1, base_bx2, base_by2), (inner_x1, inner_y1, inner_x2, inner_y2), (nx, ny)
+
+    def update_bond_geometry(self, bond_id: int) -> None:
+        if not (0 <= bond_id < len(self.model.bonds)):
+            return
+        bond = self.model.bonds[bond_id]
+        if bond is None:
+            return
+        items = self.bond_items.get(bond_id, [])
+        if not items:
+            return
+        a = self.model.atoms.get(bond.a)
+        b = self.model.atoms.get(bond.b)
+        if a is None or b is None:
+            return
+        if bond.style == "wedge":
+            polygon = self._wedge_polygon(a.x, a.y, b.x, b.y, bond.a, bond.b)
+            if isinstance(items[0], QGraphicsPolygonItem):
+                items[0].setPolygon(polygon)
+            return
+        if bond.style == "hash":
+            count = len(items)
+            segments = self._hash_segments(a.x, a.y, b.x, b.y, count, bond.a, bond.b)
+            for item, seg in zip(items, segments):
+                if isinstance(item, QGraphicsLineItem):
+                    item.setLine(*seg)
+            return
+
+        bold_style = bond.style in {"bold", "bold_in", "bold_out"}
+        bold_outward = bond.style == "bold_out"
+        if bold_style:
+            if bond.order >= 2:
+                ring_center = self._ring_center_for_bond(bond) if bond.order == 2 else None
+                if bond.order == 2 and ring_center is not None and len(items) >= 2:
+                    ring_center_3d = self._ring_center_3d_for_bond(bond)
+                    outer_seg, inner_seg, (nx, ny) = self._ring_double_segments(
+                        a, b, ring_center, bond.a, bond.b, center_3d=ring_center_3d
+                    )
+                    use_nx, use_ny = (nx, ny) if not bold_outward else (-nx, -ny)
+                    outer_item = items[0]
+                    if isinstance(outer_item, QGraphicsPolygonItem):
+                        polygon = self._strip_polygon(
+                            *outer_seg,
+                            use_nx,
+                            use_ny,
+                            self.renderer.style.bond_line_width,
+                            self.renderer.style.bold_bond_width * 1.5,
+                        )
+                        outer_item.setPolygon(polygon)
+                    elif isinstance(outer_item, QGraphicsLineItem):
+                        outer_item.setLine(*outer_seg)
+                    inner_item = items[1]
+                    if isinstance(inner_item, QGraphicsLineItem):
+                        inner_item.setLine(*inner_seg)
+                    return
+                segments = self._parallel_bond_segments(
+                    a.x, a.y, b.x, b.y, bond.order, bond.a, bond.b
+                )
+                if not segments:
+                    return
+                if isinstance(items[0], QGraphicsPolygonItem):
+                    x1, y1, x2, y2 = segments[0]
+                    nx, ny = self._line_normal(x1, y1, x2, y2, None)
+                    if bold_outward:
+                        nx, ny = -nx, -ny
+                    polygon = self._strip_polygon(
+                        x1,
+                        y1,
+                        x2,
+                        y2,
+                        nx,
+                        ny,
+                        self.renderer.style.bond_line_width,
+                        self.renderer.style.bold_bond_width * 1.5,
+                    )
+                    items[0].setPolygon(polygon)
+                elif isinstance(items[0], QGraphicsLineItem):
+                    items[0].setLine(*segments[0])
+                for item, seg in zip(items[1:], segments[1:]):
+                    if isinstance(item, QGraphicsLineItem):
+                        item.setLine(*seg)
+                return
+            t0, t1 = self._trim_line_for_labels(bond.a, bond.b, a.x, a.y, b.x, b.y)
+            bx1 = a.x + (b.x - a.x) * t0
+            by1 = a.y + (b.y - a.y) * t0
+            bx2 = a.x + (b.x - a.x) * t1
+            by2 = a.y + (b.y - a.y) * t1
+            ring_center = self._ring_center_for_bond(bond)
+            nx, ny = self._line_normal(bx1, by1, bx2, by2, ring_center)
+            if bold_outward:
+                nx, ny = -nx, -ny
+            if isinstance(items[0], QGraphicsPolygonItem):
+                polygon = self._strip_polygon(
+                    bx1,
+                    by1,
+                    bx2,
+                    by2,
+                    nx,
+                    ny,
+                    self.renderer.style.bond_line_width,
+                    self.renderer.style.bold_bond_width * 1.5,
+                )
+                items[0].setPolygon(polygon)
+            elif isinstance(items[0], QGraphicsLineItem):
+                items[0].setLine(bx1, by1, bx2, by2)
+            return
+
+        if bond.order == 2:
+            ring_center = self._ring_center_for_bond(bond)
+            if ring_center is not None and len(items) >= 2:
+                ring_center_3d = self._ring_center_3d_for_bond(bond)
+                outer_seg, inner_seg, _ = self._ring_double_segments(
+                    a, b, ring_center, bond.a, bond.b, center_3d=ring_center_3d
+                )
+                if isinstance(items[0], QGraphicsLineItem):
+                    items[0].setLine(*outer_seg)
+                if isinstance(items[1], QGraphicsLineItem):
+                    items[1].setLine(*inner_seg)
+                return
+            segments = self._parallel_bond_segments(a.x, a.y, b.x, b.y, bond.order, bond.a, bond.b)
+            for item, seg in zip(items, segments):
+                if isinstance(item, QGraphicsLineItem):
+                    item.setLine(*seg)
+            return
+        if bond.order >= 2:
+            segments = self._parallel_bond_segments(a.x, a.y, b.x, b.y, bond.order, bond.a, bond.b)
+            for item, seg in zip(items, segments):
+                if isinstance(item, QGraphicsLineItem):
+                    item.setLine(*seg)
+            return
+
+        t0, t1 = self._trim_line_for_labels(bond.a, bond.b, a.x, a.y, b.x, b.y)
+        x1 = a.x + (b.x - a.x) * t0
+        y1 = a.y + (b.y - a.y) * t0
+        x2 = a.x + (b.x - a.x) * t1
+        y2 = a.y + (b.y - a.y) * t1
+        if isinstance(items[0], QGraphicsLineItem):
+            items[0].setLine(x1, y1, x2, y2)
 
     def _redraw_connected_bonds(self, atom_id: int) -> None:
         for bond_id, bond in enumerate(self.model.bonds):
@@ -3795,6 +4307,8 @@ class CanvasView(QGraphicsView):
         for bond_id in sorted(bonds_to_remove, reverse=True):
             self.delete_bond(bond_id, record=False)
         self.model.atoms.pop(atom_id, None)
+        self.atom_coords_3d.pop(atom_id, None)
+        self.atom_plane_normals.pop(atom_id, None)
         if record:
             self._push_history()
 
@@ -3878,6 +4392,7 @@ class CanvasView(QGraphicsView):
                 if bond.order == 2:
                     ring_center = self._ring_center_for_bond(bond)
                     if ring_center is not None:
+                        ring_center_3d = self._ring_center_3d_for_bond(bond)
                         outer_style = "bold_outward" if bold_outward else "bold_inward"
                         items = self._draw_ring_double_bond(
                             a,
@@ -3886,6 +4401,7 @@ class CanvasView(QGraphicsView):
                             bond.a,
                             bond.b,
                             outer_style=outer_style,
+                            center_3d=ring_center_3d,
                         )
                         handled_outer = True
                     else:
@@ -3933,7 +4449,15 @@ class CanvasView(QGraphicsView):
         elif bond.order == 2:
             ring_center = self._ring_center_for_bond(bond)
             if ring_center is not None:
-                items = self._draw_ring_double_bond(a, b, ring_center, bond.a, bond.b)
+                ring_center_3d = self._ring_center_3d_for_bond(bond)
+                items = self._draw_ring_double_bond(
+                    a,
+                    b,
+                    ring_center,
+                    bond.a,
+                    bond.b,
+                    center_3d=ring_center_3d,
+                )
             else:
                 items = self._draw_parallel_bonds(a.x, a.y, b.x, b.y, bond.order, bond.a, bond.b)
         elif bond.order >= 2:
@@ -3967,6 +4491,26 @@ class CanvasView(QGraphicsView):
                     ys.append(atom.y)
                 if xs and ys:
                     return QPointF(sum(xs) / len(xs), sum(ys) / len(ys))
+        return None
+
+    def _ring_center_3d_for_bond(self, bond) -> tuple[float, float, float] | None:
+        for ring_item in self.ring_items:
+            ring_atom_ids = ring_item.data(2)
+            if not isinstance(ring_atom_ids, list):
+                continue
+            if bond.a in ring_atom_ids and bond.b in ring_atom_ids:
+                coords = []
+                for atom_id in ring_atom_ids:
+                    coord = self.atom_coords_3d.get(atom_id)
+                    if coord is not None:
+                        coords.append(coord)
+                if len(coords) < 3:
+                    return None
+                sum_x = sum(c[0] for c in coords)
+                sum_y = sum(c[1] for c in coords)
+                sum_z = sum(c[2] for c in coords)
+                count = len(coords)
+                return (sum_x / count, sum_y / count, sum_z / count)
         return None
 
     def _ring_for_bond(self, bond_id: int) -> QGraphicsPolygonItem | None:
@@ -4123,6 +4667,7 @@ class CanvasView(QGraphicsView):
         a_id: int | None = None,
         b_id: int | None = None,
         outer_style: str = "normal",
+        center_3d: tuple[float, float, float] | None = None,
     ):
         dx = b.x - a.x
         dy = b.y - a.y
@@ -4131,13 +4676,31 @@ class CanvasView(QGraphicsView):
         uy = dy / length
         nx = -dy / length
         ny = dx / length
-        mid_x = (a.x + b.x) / 2.0
-        mid_y = (a.y + b.y) / 2.0
-        to_cx = center.x() - mid_x
-        to_cy = center.y() - mid_y
-        if nx * to_cx + ny * to_cy < 0:
-            nx = -nx
-            ny = -ny
+        offset_unit = None
+        if a_id is not None and b_id is not None:
+            offset_unit = self._bond_offset_unit_3d(
+                a_id,
+                b_id,
+                target=center_3d,
+            )
+        if offset_unit is not None:
+            nx, ny = offset_unit[0], offset_unit[1]
+            if center_3d is None:
+                mid_x = (a.x + b.x) / 2.0
+                mid_y = (a.y + b.y) / 2.0
+                to_cx = center.x() - mid_x
+                to_cy = center.y() - mid_y
+                if nx * to_cx + ny * to_cy < 0:
+                    nx = -nx
+                    ny = -ny
+        else:
+            mid_x = (a.x + b.x) / 2.0
+            mid_y = (a.y + b.y) / 2.0
+            to_cx = center.x() - mid_x
+            to_cy = center.y() - mid_y
+            if nx * to_cx + ny * to_cy < 0:
+                nx = -nx
+                ny = -ny
 
         spacing = self.renderer.style.bond_spacing_px * 1.1
         trim = max(1.5, length * 0.12)
@@ -4239,6 +4802,82 @@ class CanvasView(QGraphicsView):
             ny = -ny
         return nx, ny
 
+    @staticmethod
+    def _plane_normal_from_angles(angle_x: float, angle_y: float) -> tuple[float, float, float]:
+        sin_y = math.sin(angle_y)
+        cos_y = math.cos(angle_y)
+        sin_x = math.sin(angle_x)
+        cos_x = math.cos(angle_x)
+        nx = sin_y
+        ny = -cos_y * sin_x
+        nz = cos_y * cos_x
+        length = math.sqrt(nx * nx + ny * ny + nz * nz) or 1.0
+        return nx / length, ny / length, nz / length
+
+    def _plane_normal_for_atoms(self, a_id: int, b_id: int) -> tuple[float, float, float] | None:
+        if a_id in self.rotation_atom_ids and b_id in self.rotation_atom_ids:
+            if self._rotation_plane_normal is not None:
+                return self._rotation_plane_normal
+        normal_a = self.atom_plane_normals.get(a_id)
+        normal_b = self.atom_plane_normals.get(b_id)
+        if normal_a is None or normal_b is None:
+            return None
+        dot = normal_a[0] * normal_b[0] + normal_a[1] * normal_b[1] + normal_a[2] * normal_b[2]
+        if dot < 0.0:
+            normal_b = (-normal_b[0], -normal_b[1], -normal_b[2])
+            dot = -dot
+        if dot < 0.95:
+            return None
+        nx = normal_a[0] + normal_b[0]
+        ny = normal_a[1] + normal_b[1]
+        nz = normal_a[2] + normal_b[2]
+        length = math.sqrt(nx * nx + ny * ny + nz * nz) or 1.0
+        return nx / length, ny / length, nz / length
+
+    def _bond_offset_unit_3d(
+        self,
+        a_id: int,
+        b_id: int,
+        target: tuple[float, float, float] | None = None,
+    ) -> tuple[float, float, float] | None:
+        coords_a = self.atom_coords_3d.get(a_id)
+        coords_b = self.atom_coords_3d.get(b_id)
+        if coords_a is None or coords_b is None:
+            return None
+        plane_normal = self._plane_normal_for_atoms(a_id, b_id)
+        if plane_normal is None:
+            return None
+        vx = coords_b[0] - coords_a[0]
+        vy = coords_b[1] - coords_a[1]
+        vz = coords_b[2] - coords_a[2]
+        vlen = math.sqrt(vx * vx + vy * vy + vz * vz)
+        if vlen < 1e-6:
+            return None
+        vx /= vlen
+        vy /= vlen
+        vz /= vlen
+        ox = plane_normal[1] * vz - plane_normal[2] * vy
+        oy = plane_normal[2] * vx - plane_normal[0] * vz
+        oz = plane_normal[0] * vy - plane_normal[1] * vx
+        olen = math.sqrt(ox * ox + oy * oy + oz * oz)
+        if olen < 1e-6:
+            return None
+        ox /= olen
+        oy /= olen
+        oz /= olen
+        if target is not None:
+            mx = (coords_a[0] + coords_b[0]) * 0.5
+            my = (coords_a[1] + coords_b[1]) * 0.5
+            mz = (coords_a[2] + coords_b[2]) * 0.5
+            tx = target[0] - mx
+            ty = target[1] - my
+            tz = target[2] - mz
+            if ox * tx + oy * ty + oz * tz < 0.0:
+                ox = -ox
+                oy = -oy
+                oz = -oz
+        return ox, oy, oz
+
     def _draw_parallel_bonds(
         self,
         x1: float,
@@ -4252,8 +4891,14 @@ class CanvasView(QGraphicsView):
         dx = x2 - x1
         dy = y2 - y1
         length = math.hypot(dx, dy) or 1.0
-        nx = -dy / length
-        ny = dx / length
+        offset_unit = None
+        if a_id is not None and b_id is not None:
+            offset_unit = self._bond_offset_unit_3d(a_id, b_id)
+        if offset_unit is not None:
+            nx, ny = offset_unit[0], offset_unit[1]
+        else:
+            nx = -dy / length
+            ny = dx / length
         spacing = self.renderer.style.bond_spacing_px
         offsets = []
         if count == 2:
