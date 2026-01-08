@@ -1,4 +1,5 @@
 import math
+import os
 
 from PyQt6.QtCore import QPointF, QRectF, QSize, Qt, QTimer
 from PyQt6.QtGui import (
@@ -23,9 +24,11 @@ from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QFileDialog,
     QLineEdit,
     QMainWindow,
     QMenu,
+    QMessageBox,
     QPushButton,
     QToolButton,
     QScrollArea,
@@ -104,6 +107,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.canvas)
         self.panel_tabs = None
         self.panel_dock = None
+        self._current_file_path = None
 
         self._init_toolbars()
         # Info controls moved to top bar; no dock panels needed.
@@ -198,6 +202,27 @@ class MainWindow(QMainWindow):
             lambda: (self._set_tool_with_status("bond", reset_bond_style=False), self._set_bond_style("Hash"))
         )
         tool_group.addAction(action_hash)
+        action_mark_plus = QAction("Charge +", self)
+        action_mark_plus.setCheckable(True)
+        action_mark_plus.setIcon(self._icon_mark_plus())
+        action_mark_plus.triggered.connect(
+            lambda: (self.canvas.set_mark_kind("plus"), self.statusBar().showMessage("Tool: mark"))
+        )
+        tool_group.addAction(action_mark_plus)
+        action_mark_minus = QAction("Charge -", self)
+        action_mark_minus.setCheckable(True)
+        action_mark_minus.setIcon(self._icon_mark_minus())
+        action_mark_minus.triggered.connect(
+            lambda: (self.canvas.set_mark_kind("minus"), self.statusBar().showMessage("Tool: mark"))
+        )
+        tool_group.addAction(action_mark_minus)
+        action_mark_radical = QAction("Radical", self)
+        action_mark_radical.setCheckable(True)
+        action_mark_radical.setIcon(self._icon_mark_radical())
+        action_mark_radical.triggered.connect(
+            lambda: (self.canvas.set_mark_kind("radical"), self.statusBar().showMessage("Tool: mark"))
+        )
+        tool_group.addAction(action_mark_radical)
 
         action_select.setIcon(self._icon_select())
         action_bond.setIcon(self._icon_bond())
@@ -214,6 +239,9 @@ class MainWindow(QMainWindow):
         left_bar.addAction(action_wedge)
         left_bar.addAction(action_hash)
         left_bar.addAction(action_text)
+        left_bar.addAction(action_mark_plus)
+        left_bar.addAction(action_mark_minus)
+        left_bar.addAction(action_mark_radical)
         left_bar.addAction(action_ring)
         templates_button = CornerMenuButton()
         templates_button.setIcon(self._icon_templates())
@@ -314,6 +342,18 @@ class MainWindow(QMainWindow):
         panel_bar.setIconSize(QSize(22, 22))
         panel_bar.setStyleSheet(button_style)
 
+        save_btn = QToolButton()
+        save_btn.setIcon(self._icon_save())
+        save_btn.setToolTip("Save")
+        save_btn.setShortcut(QKeySequence.StandardKey.Save)
+        save_btn.clicked.connect(self._save_canvas)
+
+        load_btn = QToolButton()
+        load_btn.setIcon(self._icon_open())
+        load_btn.setToolTip("Load")
+        load_btn.setShortcut(QKeySequence.StandardKey.Open)
+        load_btn.clicked.connect(self._load_canvas)
+
         undo_btn = QToolButton()
         undo_btn.setIcon(self._icon_undo())
         undo_btn.setToolTip("Undo")
@@ -352,6 +392,9 @@ class MainWindow(QMainWindow):
         smiles_button.clicked.connect(lambda: self.canvas.begin_smiles_insert(smiles_input.text()))
         smiles_input.returnPressed.connect(lambda: self.canvas.begin_smiles_insert(smiles_input.text()))
 
+        panel_bar.addWidget(save_btn)
+        panel_bar.addWidget(load_btn)
+        panel_bar.addSeparator()
         panel_bar.addWidget(undo_btn)
         panel_bar.addWidget(redo_btn)
         panel_bar.addSeparator()
@@ -447,8 +490,38 @@ class MainWindow(QMainWindow):
 
     def _icon_bond_bold(self) -> QIcon:
         def draw(p):
+            start = QPointF(5, 18)
+            end = QPointF(19, 6)
+            dx = end.x() - start.x()
+            dy = end.y() - start.y()
+            start = QPointF(start.x() + dx * 0.025, start.y() + dy * 0.025)
+            end = QPointF(end.x() - dx * 0.025, end.y() - dy * 0.025)
             p.setPen(self.canvas.renderer.bold_bond_pen())
-            p.drawLine(5, 18, 19, 6)
+            p.drawLine(start, end)
+        return self._make_icon(draw)
+
+    def _icon_mark_plus(self) -> QIcon:
+        def draw(p):
+            pen = QPen(Qt.GlobalColor.black)
+            pen.setWidthF(1.6)
+            p.setPen(pen)
+            p.drawLine(12, 6, 12, 18)
+            p.drawLine(6, 12, 18, 12)
+        return self._make_icon(draw)
+
+    def _icon_mark_minus(self) -> QIcon:
+        def draw(p):
+            pen = QPen(Qt.GlobalColor.black)
+            pen.setWidthF(1.6)
+            p.setPen(pen)
+            p.drawLine(6, 12, 18, 12)
+        return self._make_icon(draw)
+
+    def _icon_mark_radical(self) -> QIcon:
+        def draw(p):
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor("#1f1f1f"))
+            p.drawEllipse(10, 10, 4, 4)
         return self._make_icon(draw)
 
     def _icon_text(self) -> QIcon:
@@ -547,6 +620,27 @@ class MainWindow(QMainWindow):
             p.drawLine(18, 8, 15, 8)
         return self._make_icon(draw)
 
+    def _icon_save(self) -> QIcon:
+        def draw(p):
+            pen = QPen(Qt.GlobalColor.black)
+            pen.setWidthF(1.2)
+            p.setPen(pen)
+            p.drawRect(5, 4, 14, 16)
+            p.drawLine(5, 9, 19, 9)
+            p.drawRect(8, 12, 8, 6)
+        return self._make_icon(draw)
+
+    def _icon_open(self) -> QIcon:
+        def draw(p):
+            pen = QPen(Qt.GlobalColor.black)
+            pen.setWidthF(1.2)
+            p.setPen(pen)
+            p.drawRect(5, 10, 14, 8)
+            p.drawLine(12, 5, 12, 13)
+            p.drawLine(9, 8, 12, 5)
+            p.drawLine(15, 8, 12, 5)
+        return self._make_icon(draw)
+
     def _icon_templates(self) -> QIcon:
         def draw(p):
             pen = QPen(Qt.GlobalColor.black)
@@ -592,10 +686,13 @@ class MainWindow(QMainWindow):
             end = QPointF(18, 6)
             dx = end.x() - start.x()
             dy = end.y() - start.y()
+            start = QPointF(start.x() + dx * 0.1, start.y() + dy * 0.1)
+            dx = end.x() - start.x()
+            dy = end.y() - start.y()
             length = math.hypot(dx, dy) or 1.0
             nx = -dy / length
             ny = dx / length
-            half_width = self.canvas.renderer.bold_bond_pen().widthF() / 2.0
+            half_width = self.canvas.renderer.bold_bond_pen().widthF() * 0.5 * 0.95
             p1 = start
             p2 = QPointF(end.x() + nx * half_width, end.y() + ny * half_width)
             p3 = QPointF(end.x() - nx * half_width, end.y() - ny * half_width)
@@ -616,13 +713,18 @@ class MainWindow(QMainWindow):
             ny = dx / length
             count = max(3, int(length / self.canvas.renderer.style.hash_spacing_px))
             max_size = self.canvas.renderer.bold_bond_pen().widthF()
-            max_t = count / (count + 1)
+            if count <= 1:
+                t_positions = [0.5]
+                t_sizes = [1.0]
+            else:
+                t_positions = [i / (count - 1) for i in range(count)]
+                t_sizes = [(i + 1) / (count + 1) for i in range(count)]
+            max_t = max(t_sizes) if t_sizes else 1.0
             p.setPen(self.canvas.renderer.bond_pen())
-            for i in range(count):
-                t = (i + 1) / (count + 1)
-                cx = start.x() + dx * t
-                cy = start.y() + dy * t
-                size = max_size * (t / max_t) if max_t > 0 else max_size
+            for t_pos, t_size in zip(t_positions, t_sizes):
+                cx = start.x() + dx * t_pos
+                cy = start.y() + dy * t_pos
+                size = max_size * (t_size / max_t) if max_t > 0 else max_size
                 hx = nx * size / 2.0
                 hy = ny * size / 2.0
                 p.drawLine(QPointF(cx - hx, cy - hy), QPointF(cx + hx, cy + hy))
@@ -921,13 +1023,39 @@ class MainWindow(QMainWindow):
         dock.setMaximumWidth(360)
 
         tabs = QTabWidget()
-        tabs.addTab(self._build_info_panel(), "Info")
-        tabs.tabBar().hide()
+        tabs.addTab(self._build_mark_panel(), "Charge")
 
         dock.setWidget(tabs)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
         self.panel_tabs = tabs
         self.panel_dock = dock
+
+    def _build_mark_panel(self) -> QWidget:
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
+
+        title = QLabel("Charges")
+        title.setStyleSheet("font-weight: 600;")
+        layout.addWidget(title)
+
+        for label, kind in (
+            ("+ Charge", "plus"),
+            ("- Charge", "minus"),
+            ("Radical", "radical"),
+        ):
+            button = QPushButton(label)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.clicked.connect(lambda checked=False, k=kind: self.canvas.set_mark_kind(k))
+            layout.addWidget(button)
+
+        hint = QLabel("Click an atom or canvas to place.")
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color: #555555;")
+        layout.addWidget(hint)
+        layout.addStretch(1)
+        return panel
 
     def _show_panel(self, index: int) -> None:
         if self.panel_tabs is None or self.panel_dock is None:
@@ -1133,7 +1261,6 @@ class MainWindow(QMainWindow):
             ("Cyclobutane", lambda: self.canvas.begin_ring_template_insert(4)),
             ("Cyclopentane", lambda: self.canvas.begin_ring_template_insert(5)),
             ("Cyclohexane (Chair)", lambda: self.canvas.begin_ring_template_insert(6, style="chair")),
-            ("Cyclohexane (Boat)", lambda: self.canvas.begin_ring_template_insert(6, style="boat")),
         ]
 
     def _acs_color_palette(self) -> list[tuple[str, str]]:
@@ -1249,6 +1376,44 @@ class MainWindow(QMainWindow):
             self.canvas.apply_text_preset_paper_thin()
         elif value == "Paper Bold":
             self.canvas.apply_text_preset_paper_bold()
+
+    def _save_canvas(self) -> None:
+        path = self._current_file_path
+        if not path:
+            path, _ = QFileDialog.getSaveFileName(
+                self,
+                "Save Drawing",
+                "",
+                "LiteDraw (*.ldraw);;JSON (*.json);;All Files (*)",
+            )
+            if not path:
+                return
+            if not os.path.splitext(path)[1]:
+                path += ".ldraw"
+        try:
+            self.canvas.save_to_file(path)
+        except Exception as exc:
+            QMessageBox.warning(self, "Save Error", f"Failed to save file:\n{exc}")
+            return
+        self._current_file_path = path
+        self.statusBar().showMessage(f"Saved: {path}")
+
+    def _load_canvas(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Load Drawing",
+            "",
+            "LiteDraw (*.ldraw);;JSON (*.json);;All Files (*)",
+        )
+        if not path:
+            return
+        try:
+            self.canvas.load_from_file(path)
+        except Exception as exc:
+            QMessageBox.warning(self, "Load Error", f"Failed to load file:\n{exc}")
+            return
+        self._current_file_path = path
+        self.statusBar().showMessage(f"Loaded: {path}")
 
     def _set_bond_length(self) -> None:
         current = self.canvas.renderer.style.bond_length_px

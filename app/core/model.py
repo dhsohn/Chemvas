@@ -8,6 +8,7 @@ class Atom:
     x: float
     y: float
     color: str = "#000000"
+    explicit_label: bool = False
 
 
 @dataclass

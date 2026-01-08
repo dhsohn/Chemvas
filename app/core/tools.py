@@ -6,8 +6,17 @@ import math
 
 from PyQt6.QtCore import QLineF, QPointF, QRectF, Qt
 from PyQt6.QtGui import QColor
-from PyQt6.QtWidgets import QColorDialog, QGraphicsLineItem, QInputDialog
+from PyQt6.QtWidgets import QColorDialog, QInputDialog
 
+from core.history import (
+    AddAtomsCommand,
+    CompositeCommand,
+    DeleteSceneItemsCommand,
+    MoveAtomsCommand,
+    MoveItemsCommand,
+    SetSmilesInputCommand,
+    UpdateSceneItemCommand,
+)
 
 class Tool:
     def __init__(self, name: str) -> None:
@@ -34,6 +43,8 @@ class SelectTool(Tool):
         super().__init__("select")
         self.canvas = canvas
         self._active_handle = None
+        self._handle_target = None
+        self._handle_before_state = None
         self._drag_selection = False
         self._selection_atom_ids: set[int] = set()
         self._selection_items: list = []
@@ -42,6 +53,7 @@ class SelectTool(Tool):
         self._suspended_outline = False
         self._start_pos = None
         self._moved = False
+        self._total_delta = QPointF(0.0, 0.0)
         self._drag_interval = 1.0 / 60.0
         self._last_drag_time = 0.0
 
@@ -54,6 +66,8 @@ class SelectTool(Tool):
         item = self.canvas.item_at_event(event)
         if item is not None and item.data(0) == "handle":
             self._active_handle = item
+            self._handle_target = item.data(2)
+            self._handle_before_state = self.canvas.scene_item_state(self._handle_target)
             return True
         if item is not None and item.data(0) in {"curved_single", "curved_double"}:
             self.canvas.show_curved_handles(item)
@@ -94,20 +108,22 @@ class SelectTool(Tool):
             pad = self.canvas.renderer.style.bond_length_px * 0.1
             for rect in rects:
                 padded = rect.adjusted(-pad, -pad, pad, pad)
-                if padded.contains(click_pos):
-                    self._drag_selection = True
-                    self._selection_atom_ids = set(atom_ids)
-                    self._selection_items = selection_items
-                    if self._selection_atom_ids:
-                        self._drag_bond_ids, self._drag_boundary_bond_ids = self.canvas.bond_sets_for_atoms(
-                            self._selection_atom_ids
-                        )
-                    else:
-                        self._drag_bond_ids = set()
-                        self._drag_boundary_bond_ids = set()
-                    self._start_pos = event.position()
-                    self._last_drag_time = 0.0
-                    return True
+                if not padded.contains(click_pos):
+                    continue
+                self._drag_selection = True
+                self._selection_atom_ids = set(atom_ids)
+                self._selection_items = selection_items
+                if self._selection_atom_ids:
+                    self._drag_bond_ids, self._drag_boundary_bond_ids = self.canvas.bond_sets_for_atoms(
+                        self._selection_atom_ids
+                    )
+                else:
+                    self._drag_bond_ids = set()
+                    self._drag_boundary_bond_ids = set()
+                self._start_pos = event.position()
+                self._last_drag_time = 0.0
+                self._total_delta = QPointF(0.0, 0.0)
+                return True
         clicked_selection = False
         if item is not None:
             kind = item.data(0)
@@ -140,6 +156,7 @@ class SelectTool(Tool):
             self._drag_boundary_bond_ids = set()
         self._start_pos = event.position()
         self._last_drag_time = 0.0
+        self._total_delta = QPointF(0.0, 0.0)
         return True
 
     def _apply_drag_delta(self, delta: QPointF) -> None:
@@ -161,6 +178,7 @@ class SelectTool(Tool):
             for item in self._selection_items:
                 self.canvas.move_item(item, delta.x(), delta.y(), update_selection=False)
         self.canvas.shift_selection_outlines(delta.x(), delta.y())
+        self._total_delta += delta
         self._moved = True
 
     def on_mouse_move(self, event) -> bool:
@@ -181,8 +199,15 @@ class SelectTool(Tool):
 
     def on_mouse_release(self, event) -> bool:
         if self._active_handle is not None:
+            target = self._handle_target
+            before_state = self._handle_before_state
+            after_state = self.canvas.scene_item_state(target)
             self._active_handle = None
-            self.canvas._push_history()
+            self._handle_target = None
+            self._handle_before_state = None
+            if before_state and after_state and before_state != after_state:
+                command = UpdateSceneItemCommand(target, before_state, after_state)
+                self.canvas._push_command(command)
             return True
         if self._start_pos is None and not self._drag_selection:
             return False
@@ -195,7 +220,22 @@ class SelectTool(Tool):
             self.canvas.suspend_selection_outline(False)
         if self._moved:
             self.canvas._update_selection_outline()
-            self.canvas._push_history()
+            if self._selection_atom_ids:
+                command = MoveAtomsCommand(
+                    atom_ids=set(self._selection_atom_ids),
+                    dx=self._total_delta.x(),
+                    dy=self._total_delta.y(),
+                    bond_ids=set(self._drag_bond_ids) if self._drag_bond_ids else None,
+                    redraw_bond_ids=set(self._drag_boundary_bond_ids) if self._drag_boundary_bond_ids else None,
+                )
+                self.canvas._push_command(command)
+            else:
+                command = MoveItemsCommand(
+                    items=list(self._selection_items),
+                    dx=self._total_delta.x(),
+                    dy=self._total_delta.y(),
+                )
+                self.canvas._push_command(command)
         self._drag_selection = False
         self._selection_atom_ids = set()
         self._selection_items = []
@@ -204,6 +244,7 @@ class SelectTool(Tool):
         self._suspended_outline = False
         self._start_pos = None
         self._moved = False
+        self._total_delta = QPointF(0.0, 0.0)
         return True
 
 
@@ -243,30 +284,98 @@ class BondTool(Tool):
         self._start_pos = None
         self._start_atom_id = None
         self._press_scene_pos = None
-        self._preview_item: QGraphicsLineItem | None = None
+        self._preview_items: list = []
+        self._preview_signature: str | None = None
 
     def activate(self) -> None:
         self.canvas.setDragMode(self.canvas.DragMode.NoDrag)
 
     def deactivate(self) -> None:
-        if self._preview_item is not None:
-            self.canvas.scene().removeItem(self._preview_item)
-            self._preview_item = None
+        self._clear_preview_items()
         self._start_pos = None
         self._start_atom_id = None
         self._press_scene_pos = None
 
+    def _clear_preview_items(self) -> None:
+        if not self._preview_items:
+            self._preview_signature = None
+            return
+        for item in self._preview_items:
+            try:
+                if item.scene() is self.canvas.scene():
+                    self.canvas.scene().removeItem(item)
+            except RuntimeError:
+                pass
+        self._preview_items = []
+        self._preview_signature = None
+
+    def _set_preview_items(self, start: QPointF, end: QPointF) -> None:
+        signature = f"{self.canvas.active_bond_style}:{self.canvas.active_bond_order}"
+        if self._preview_items and self._preview_signature == signature:
+            if self.canvas.update_bond_preview_items(
+                self._preview_items,
+                start,
+                end,
+                self._start_atom_id,
+                None,
+                self.canvas.active_bond_style,
+                self.canvas.active_bond_order,
+            ):
+                return
+        self._clear_preview_items()
+        items = self.canvas._build_bond_preview_items(start, end, self._start_atom_id, None)
+        if not items:
+            return
+        preview_color = QColor(120, 120, 120, 140)
+        for item in items:
+            if hasattr(item, "pen"):
+                pen = item.pen()
+                pen.setColor(preview_color)
+                item.setPen(pen)
+            if hasattr(item, "brush") and item.brush().style() != Qt.BrushStyle.NoBrush:
+                brush = item.brush()
+                brush.setColor(preview_color)
+                item.setBrush(brush)
+            item.setOpacity(0.5)
+            item.setZValue(4.5)
+            self.canvas.scene().addItem(item)
+        self._preview_items = items
+        self._preview_signature = signature
+
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
             return False
-        item = self.canvas.item_at_event(event)
-        if item is not None and item.data(0) == "bond":
-            bond_id = item.data(1)
-            if isinstance(bond_id, int):
+        press_pos = self.canvas.scene_pos_from_event(event)
+        atom_id = self.canvas.find_atom_near(
+            press_pos.x(),
+            press_pos.y(),
+            self.canvas.renderer.style.bond_length_px * 0.35,
+        )
+        if atom_id is None:
+            item = self.canvas.item_at_event(event)
+            if item is not None and item.data(0) == "bond":
+                bond_id = item.data(1)
+                if isinstance(bond_id, int):
+                    if self.canvas.active_bond_style in {"wedge", "hash"}:
+                        self.canvas.apply_bond_style(bond_id, self.canvas.active_bond_style, 1)
+                    elif self.canvas.active_bond_style in {"bold", "bold_in", "bold_out"}:
+                        bond = self.canvas.model.bonds[bond_id]
+                        if bond is not None:
+                            if bond.style in {"bold_in", "bold"}:
+                                next_style = "bold_out"
+                            elif bond.style == "bold_out":
+                                next_style = "bold_in"
+                            else:
+                                next_style = "bold_in"
+                            self.canvas.apply_bond_style(bond_id, next_style, bond.order)
+                    else:
+                        self.canvas.cycle_bond_style(bond_id)
+                    return True
+            if self.canvas.hover_bond_id is not None:
                 if self.canvas.active_bond_style in {"wedge", "hash"}:
-                    self.canvas.apply_bond_style(bond_id, self.canvas.active_bond_style, 1)
+                    self.canvas.apply_bond_style(self.canvas.hover_bond_id, self.canvas.active_bond_style, 1)
                 elif self.canvas.active_bond_style in {"bold", "bold_in", "bold_out"}:
-                    bond = self.canvas.model.bonds[bond_id]
+                    bond = self.canvas.model.bonds[self.canvas.hover_bond_id]
                     if bond is not None:
                         if bond.style in {"bold_in", "bold"}:
                             next_style = "bold_out"
@@ -274,45 +383,21 @@ class BondTool(Tool):
                             next_style = "bold_in"
                         else:
                             next_style = "bold_in"
-                        self.canvas.apply_bond_style(bond_id, next_style, bond.order)
+                        self.canvas.apply_bond_style(self.canvas.hover_bond_id, next_style, bond.order)
                 else:
-                    self.canvas.cycle_bond_style(bond_id)
+                    self.canvas.cycle_bond_style(self.canvas.hover_bond_id)
                 return True
-        if self.canvas.hover_bond_id is not None:
-            if self.canvas.active_bond_style in {"wedge", "hash"}:
-                self.canvas.apply_bond_style(self.canvas.hover_bond_id, self.canvas.active_bond_style, 1)
-            elif self.canvas.active_bond_style in {"bold", "bold_in", "bold_out"}:
-                bond = self.canvas.model.bonds[self.canvas.hover_bond_id]
-                if bond is not None:
-                    if bond.style in {"bold_in", "bold"}:
-                        next_style = "bold_out"
-                    elif bond.style == "bold_out":
-                        next_style = "bold_in"
-                    else:
-                        next_style = "bold_in"
-                    self.canvas.apply_bond_style(self.canvas.hover_bond_id, next_style, bond.order)
-            else:
-                self.canvas.cycle_bond_style(self.canvas.hover_bond_id)
-            return True
-        self._press_scene_pos = self.canvas.scene_pos_from_event(event)
+        self._press_scene_pos = press_pos
         self._start_pos = self._snap_to_atom(self._press_scene_pos)
-        self._preview_item = QGraphicsLineItem()
-        if self.canvas.active_bond_style in {"bold", "bold_in", "bold_out"}:
-            pen = self.canvas.renderer.bold_bond_pen()
-        else:
-            pen = self.canvas.renderer.bond_pen()
-        pen.setColor(QColor(120, 120, 120, 140))
-        self._preview_item.setPen(pen)
-        self._preview_item.setOpacity(0.5)
-        self.canvas.scene().addItem(self._preview_item)
+        self._set_preview_items(self._start_pos, self._start_pos)
         return True
 
     def on_mouse_move(self, event) -> bool:
-        if self._start_pos is None or self._preview_item is None:
+        if self._start_pos is None:
             return False
         current_pos = self._snap_to_atom(self.canvas.scene_pos_from_event(event), ignore_start=True)
         snapped = self._snap_endpoint(self._start_pos, current_pos)
-        self._preview_item.setLine(QLineF(self._start_pos, snapped))
+        self._set_preview_items(self._start_pos, snapped)
         return True
 
     def on_mouse_release(self, event) -> bool:
@@ -326,54 +411,16 @@ class BondTool(Tool):
         else:
             dist = 0.0
         if dist < self.canvas.renderer.style.bond_length_px * 0.1:
-            end_pos = self._default_click_bond_end(self._start_pos)
-        if self._preview_item is not None:
-            self.canvas.scene().removeItem(self._preview_item)
-            self._preview_item = None
+            end_pos = self.canvas._default_bond_endpoint(self._start_pos, self._start_atom_id)
+        self._clear_preview_items()
         self.canvas.add_bond_from_points(self._start_pos, end_pos)
         self._start_pos = None
         self._start_atom_id = None
         self._press_scene_pos = None
         return True
 
-    def _default_click_bond_end(self, start: QPointF) -> QPointF:
-        bond_len = self.canvas.renderer.style.bond_length_px
-        angle = 0.0
-        if self._start_atom_id is not None:
-            atom = self.canvas.model.atoms.get(self._start_atom_id)
-            if atom is not None:
-                connected = [
-                    bond
-                    for bond in self.canvas.model.bonds
-                    if bond is not None and (bond.a == self._start_atom_id or bond.b == self._start_atom_id)
-                ]
-                if connected:
-                    vectors = []
-                    for bond in connected:
-                        other_id = bond.b if bond.a == self._start_atom_id else bond.a
-                        other = self.canvas.model.atoms.get(other_id)
-                        if other is None:
-                            continue
-                        dx = other.x - atom.x
-                        dy = other.y - atom.y
-                        length = math.hypot(dx, dy)
-                        if length == 0:
-                            continue
-                        vectors.append((dx / length, dy / length))
-                    if len(vectors) >= 2:
-                        sx = sum(v[0] for v in vectors)
-                        sy = sum(v[1] for v in vectors)
-                        if math.hypot(sx, sy) > 1e-6:
-                            angle = math.degrees(math.atan2(-sy, -sx))
-                        else:
-                            angle = math.degrees(math.atan2(vectors[0][1], vectors[0][0])) - 90.0
-                    elif vectors:
-                        angle = math.degrees(math.atan2(vectors[0][1], vectors[0][0])) - 120.0
-        rad = math.radians(angle)
-        return QPointF(start.x() + math.cos(rad) * bond_len, start.y() + math.sin(rad) * bond_len)
-
     def _snap_to_atom(self, pos, ignore_start: bool = False):
-        atom_id = self.canvas.model.find_atom_near(
+        atom_id = self.canvas.find_atom_near(
             pos.x(),
             pos.y(),
             self.canvas.renderer.style.bond_length_px * 0.35,
@@ -466,7 +513,7 @@ class TextTool(Tool):
                         atom = self.canvas.model.atoms[atom_id]
                         pos = QPointF(atom.x, atom.y)
         if atom_id is None:
-            atom_id = self.canvas.model.find_atom_near(pos.x(), pos.y(), pick_radius)
+            atom_id = self.canvas.find_atom_near(pos.x(), pos.y(), pick_radius)
         text = self._normalized_symbol(self.canvas.get_atom_symbol())
         if not text:
             initial = self.canvas.model.atoms[atom_id].element if atom_id is not None else ""
@@ -479,11 +526,27 @@ class TextTool(Tool):
             if not ok:
                 return True
             text = self._normalized_symbol(text)
+        created_atom = False
         if atom_id is None:
             if not text:
                 return True
-            atom_id = self.canvas.model.add_atom(text, pos.x(), pos.y())
-        self.canvas.add_or_update_atom_label(atom_id, text)
+            before_smiles_input = self.canvas.last_smiles_input
+            before_next_atom_id = self.canvas.model.next_atom_id
+            atom_id = self.canvas.add_atom(text, pos.x(), pos.y())
+            created_atom = True
+        if created_atom:
+            self.canvas.add_or_update_atom_label(atom_id, text, show_carbon=True, record=False)
+            atom_state = self.canvas._atom_state_dict(atom_id)
+            command = AddAtomsCommand(
+                atom_states={atom_id: atom_state},
+                before_next_atom_id=before_next_atom_id,
+                after_next_atom_id=self.canvas.model.next_atom_id,
+                before_smiles_input=before_smiles_input,
+                after_smiles_input=self.canvas.last_smiles_input,
+            )
+            self.canvas._push_command(command)
+        else:
+            self.canvas.add_or_update_atom_label(atom_id, text, show_carbon=True)
         return True
 
     @staticmethod
@@ -621,6 +684,7 @@ class MoveTool(Tool):
         self._suspended_outline = False
         self._drag_interval = 1.0 / 60.0
         self._last_drag_time = 0.0
+        self._total_delta = QPointF(0.0, 0.0)
 
     def activate(self) -> None:
         self.canvas.setDragMode(self.canvas.DragMode.NoDrag)
@@ -646,6 +710,7 @@ class MoveTool(Tool):
                 )
                 self._start_pos = event.position()
                 self._last_drag_time = 0.0
+                self._total_delta = QPointF(0.0, 0.0)
                 return True
         if item is None:
             return True
@@ -666,6 +731,7 @@ class MoveTool(Tool):
         self._drag_item = item
         self._start_pos = event.position()
         self._last_drag_time = 0.0
+        self._total_delta = QPointF(0.0, 0.0)
         return True
 
     def _apply_drag_delta(self, delta: QPointF) -> None:
@@ -683,9 +749,11 @@ class MoveTool(Tool):
             )
             self.canvas.shift_selection_outlines(delta.x(), delta.y())
             self._moved = True
+            self._total_delta += delta
         elif self._drag_item is not None:
             self.canvas.move_item(self._drag_item, delta.x(), delta.y())
             self._moved = True
+            self._total_delta += delta
 
     def on_mouse_move(self, event) -> bool:
         if self._start_pos is None:
@@ -710,7 +778,22 @@ class MoveTool(Tool):
             self.canvas.suspend_selection_outline(False)
         if self._moved:
             self.canvas._update_selection_outline()
-            self.canvas._push_history()
+            if self._drag_selection and self._selection_atom_ids:
+                command = MoveAtomsCommand(
+                    atom_ids=set(self._selection_atom_ids),
+                    dx=self._total_delta.x(),
+                    dy=self._total_delta.y(),
+                    bond_ids=set(self._drag_bond_ids) if self._drag_bond_ids else None,
+                    redraw_bond_ids=set(self._drag_boundary_bond_ids) if self._drag_boundary_bond_ids else None,
+                )
+                self.canvas._push_command(command)
+            elif self._drag_item is not None:
+                command = MoveItemsCommand(
+                    items=[self._drag_item],
+                    dx=self._total_delta.x(),
+                    dy=self._total_delta.y(),
+                )
+                self.canvas._push_command(command)
         self._drag_item = None
         self._start_pos = None
         self._moved = False
@@ -719,6 +802,7 @@ class MoveTool(Tool):
         self._drag_bond_ids = set()
         self._drag_boundary_bond_ids = set()
         self._suspended_outline = False
+        self._total_delta = QPointF(0.0, 0.0)
         return True
 
 
@@ -728,6 +812,8 @@ class DeleteTool(Tool):
         self.canvas = canvas
         self._erasing = False
         self._changed = False
+        self._commands = []
+        self._before_smiles_input = None
 
     def activate(self) -> None:
         self.canvas.setDragMode(self.canvas.DragMode.NoDrag)
@@ -736,6 +822,8 @@ class DeleteTool(Tool):
         if event.button() != Qt.MouseButton.LeftButton:
             return False
         self._erasing = True
+        self._commands = []
+        self._before_smiles_input = self.canvas.last_smiles_input
         self._erase_at_event(event)
         return True
 
@@ -749,28 +837,51 @@ class DeleteTool(Tool):
 
     def on_mouse_release(self, event) -> bool:
         self._erasing = False
-        if self._changed:
-            self.canvas._push_history()
+        if self._changed and self._commands:
+            self._commands.insert(
+                0,
+                SetSmilesInputCommand(
+                    before_value=self._before_smiles_input,
+                    after_value=self.canvas.last_smiles_input,
+                ),
+            )
+            if len(self._commands) == 1:
+                self.canvas._push_command(self._commands[0])
+            else:
+                self.canvas._push_command(CompositeCommand(self._commands))
         self._changed = False
+        self._commands = []
+        self._before_smiles_input = None
         return True
 
     def _erase_at_event(self, event) -> None:
         item = self.canvas.item_at_event(event)
         if item is None:
             return
+        try:
+            if item.scene() is not self.canvas.scene():
+                return
+        except RuntimeError:
+            return
         kind = item.data(0)
         if kind == "atom":
             atom_id = item.data(1)
             if isinstance(atom_id, int):
-                self.canvas.delete_atom(atom_id, record=False)
+                command = self.canvas.delete_atom(atom_id, record=False)
+                if command is not None:
+                    self._commands.append(command)
                 self._changed = True
         elif kind == "bond":
             bond_id = item.data(1)
             if isinstance(bond_id, int):
-                self.canvas.delete_bond(bond_id, record=False)
+                command = self.canvas.delete_bond(bond_id, record=False)
+                if command is not None:
+                    self._commands.append(command)
                 self._changed = True
         elif kind == "ring":
-            self.canvas.delete_ring(item)
+            command = self.canvas.delete_ring(item, record=False)
+            if command is not None:
+                self._commands.append(command)
             self._changed = True
         elif kind in {
             "arrow",
@@ -783,7 +894,16 @@ class DeleteTool(Tool):
             "orbital",
             "note",
         }:
-            self.canvas.scene().removeItem(item)
+            state = self.canvas.scene_item_state(item)
+            self.canvas.remove_scene_item(item)
+            command = DeleteSceneItemsCommand(item_states=[state], items=[item])
+            self._commands.append(command)
+            self._changed = True
+        else:
+            state = self.canvas.scene_item_state(item)
+            self.canvas.remove_scene_item(item)
+            command = DeleteSceneItemsCommand(item_states=[state], items=[item])
+            self._commands.append(command)
             self._changed = True
 
 
@@ -872,6 +992,30 @@ class TransformTool(Tool):
         return True
 
 
+class MarkTool(Tool):
+    def __init__(self, canvas) -> None:
+        super().__init__("mark")
+        self.canvas = canvas
+
+    def activate(self) -> None:
+        self.canvas.setDragMode(self.canvas.DragMode.NoDrag)
+
+    def on_mouse_press(self, event) -> bool:
+        if event.button() != Qt.MouseButton.LeftButton:
+            return False
+        pos = self.canvas.scene_pos_from_event(event)
+        atom_id = self.canvas.find_atom_near(
+            pos.x(),
+            pos.y(),
+            self.canvas.renderer.style.bond_length_px * 0.35,
+        )
+        if atom_id is not None:
+            self.canvas.add_mark_for_atom(atom_id, pos)
+        else:
+            self.canvas.add_mark(pos)
+        return True
+
+
 class NoteTool(Tool):
     def __init__(self, canvas) -> None:
         super().__init__("note")
@@ -915,6 +1059,7 @@ class PerspectiveTool(Tool):
         super().__init__("perspective")
         self.canvas = canvas
         self._last_pos = None
+        self._rotating = False
 
     def activate(self) -> None:
         self.canvas.setDragMode(self.canvas.DragMode.NoDrag)
@@ -922,15 +1067,17 @@ class PerspectiveTool(Tool):
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
             return False
-        if self.canvas.begin_selection_3d_rotation():
+        axis_hint = self.canvas.bond_id_from_event(event)
+        self._rotating = self.canvas.begin_selection_3d_rotation(axis_hint=axis_hint)
+        if self._rotating:
             self._last_pos = event.globalPosition()
-            return True
-        self._last_pos = None
-        return False
+        else:
+            self._last_pos = None
+        return True
 
     def on_mouse_move(self, event) -> bool:
-        if self._last_pos is None:
-            return False
+        if self._last_pos is None or not self._rotating:
+            return self._rotating
         current = event.globalPosition()
         delta = current - self._last_pos
         self.canvas.update_selection_3d_rotation(delta.x(), delta.y())
@@ -939,7 +1086,9 @@ class PerspectiveTool(Tool):
 
     def on_mouse_release(self, event) -> bool:
         self._last_pos = None
-        self.canvas.end_selection_3d_rotation()
+        if self._rotating:
+            self.canvas.end_selection_3d_rotation()
+        self._rotating = False
         return True
 
 
@@ -950,6 +1099,7 @@ class ToolController:
             "select": SelectTool(canvas),
             "bond": BondTool(canvas),
             "text": TextTool(canvas),
+            "mark": MarkTool(canvas),
             "benzene": BenzeneTool(canvas),
             "color": ColorTool(canvas),
             "flip": FlipTool(canvas),

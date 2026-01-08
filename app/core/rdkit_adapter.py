@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Optional
 
 from core.model import MoleculeModel
@@ -67,12 +68,21 @@ class RDKitAdapter:
             return None
         AllChem.Compute2DCoords(mol)
 
-        model = MoleculeModel()
         conf = mol.GetConformer()
+        bond_lengths = []
+        for bond in mol.GetBonds():
+            a_pos = conf.GetAtomPosition(bond.GetBeginAtomIdx())
+            b_pos = conf.GetAtomPosition(bond.GetEndAtomIdx())
+            dist = math.hypot(a_pos.x - b_pos.x, a_pos.y - b_pos.y)
+            if dist > 0.0:
+                bond_lengths.append(dist)
+        avg_len = sum(bond_lengths) / len(bond_lengths) if bond_lengths else 0.0
+        scale_factor = (scale / avg_len) if avg_len > 0.0 else 1.0
 
+        model = MoleculeModel()
         for atom in mol.GetAtoms():
             pos = conf.GetAtomPosition(atom.GetIdx())
-            model.add_atom(atom.GetSymbol(), pos.x * scale, -pos.y * scale)
+            model.add_atom(atom.GetSymbol(), pos.x * scale_factor, -pos.y * scale_factor)
 
         for bond in mol.GetBonds():
             order = int(bond.GetBondTypeAsDouble())
