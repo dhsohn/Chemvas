@@ -1519,7 +1519,7 @@ class CanvasView(QGraphicsView):
         )
         if existing_bond is not None and (existing_bond.a != bond.a or existing_bond.b != bond.b):
             self._remove_bond_index(bond_id, existing_bond.a, existing_bond.b)
-            self._remove_bond_neighbors(existing_bond.a, existing_bond.b)
+            self._remove_bond_neighbors(existing_bond.a, existing_bond.b, skip_bond_id=bond_id)
         if bond_id < len(self.model.bonds):
             self.model.bonds[bond_id] = bond
         else:
@@ -1540,7 +1540,7 @@ class CanvasView(QGraphicsView):
         self.bond_items.pop(bond_id, None)
         if bond is not None:
             self._remove_bond_index(bond_id, bond.a, bond.b)
-            self._remove_bond_neighbors(bond.a, bond.b)
+            self._remove_bond_neighbors(bond.a, bond.b, skip_bond_id=bond_id)
         self.model.bonds[bond_id] = None
         self._mark_spatial_index_dirty()
 
@@ -1551,7 +1551,7 @@ class CanvasView(QGraphicsView):
             bond = self.model.bonds[bond_id]
             if bond is not None:
                 self._remove_bond_index(bond_id, bond.a, bond.b)
-                self._remove_bond_neighbors(bond.a, bond.b)
+                self._remove_bond_neighbors(bond.a, bond.b, skip_bond_id=bond_id)
             for item in self.bond_items.get(bond_id, []):
                 self.scene().removeItem(item)
             self.bond_items.pop(bond_id, None)
@@ -2483,8 +2483,8 @@ class CanvasView(QGraphicsView):
         self._atom_neighbors.setdefault(b_id, set()).add(a_id)
         self._graph_version += 1
 
-    def _remove_bond_neighbors(self, a_id: int, b_id: int) -> None:
-        if self._bond_id_between(a_id, b_id) is not None:
+    def _remove_bond_neighbors(self, a_id: int, b_id: int, skip_bond_id: int | None = None) -> None:
+        if self._bond_id_between(a_id, b_id, skip_bond_id=skip_bond_id) is not None:
             return
         changed = False
         neighbors_a = self._atom_neighbors.get(a_id)
@@ -4580,13 +4580,15 @@ class CanvasView(QGraphicsView):
             added_scene_items=[ring_item],
         )
 
-    def _bond_id_between(self, a_id: int, b_id: int) -> int | None:
+    def _bond_id_between(self, a_id: int, b_id: int, skip_bond_id: int | None = None) -> int | None:
         if a_id == b_id:
             return None
         bonds_a = self._atom_bond_ids.get(a_id)
         bonds_b = self._atom_bond_ids.get(b_id)
         if bonds_a is None or bonds_b is None:
             for bond_id, bond in enumerate(self.model.bonds):
+                if skip_bond_id is not None and bond_id == skip_bond_id:
+                    continue
                 if bond is None:
                     continue
                 if (bond.a == a_id and bond.b == b_id) or (bond.a == b_id and bond.b == a_id):
@@ -4595,6 +4597,9 @@ class CanvasView(QGraphicsView):
         if not bonds_a or not bonds_b:
             return None
         shared = bonds_a & bonds_b
+        if skip_bond_id is not None and skip_bond_id in shared:
+            shared = set(shared)
+            shared.discard(skip_bond_id)
         if not shared:
             return None
         for bond_id in sorted(shared):
