@@ -69,20 +69,43 @@ class RDKitAdapter:
         AllChem.Compute2DCoords(mol)
 
         conf = mol.GetConformer()
+        pos_by_idx = {}
+        for atom in mol.GetAtoms():
+            pos = conf.GetAtomPosition(atom.GetIdx())
+            pos_by_idx[atom.GetIdx()] = (pos.x, pos.y)
+
         bond_lengths = []
         for bond in mol.GetBonds():
-            a_pos = conf.GetAtomPosition(bond.GetBeginAtomIdx())
-            b_pos = conf.GetAtomPosition(bond.GetEndAtomIdx())
-            dist = math.hypot(a_pos.x - b_pos.x, a_pos.y - b_pos.y)
+            ax, ay = pos_by_idx[bond.GetBeginAtomIdx()]
+            bx, by = pos_by_idx[bond.GetEndAtomIdx()]
+            dist = math.hypot(ax - bx, ay - by)
             if dist > 0.0:
                 bond_lengths.append(dist)
-        avg_len = sum(bond_lengths) / len(bond_lengths) if bond_lengths else 0.0
+        if bond_lengths:
+            avg_len = sum(bond_lengths) / len(bond_lengths)
+        else:
+            nearest = []
+            positions = list(pos_by_idx.values())
+            if len(positions) > 1:
+                for i, (x1, y1) in enumerate(positions):
+                    min_dist = None
+                    for j, (x2, y2) in enumerate(positions):
+                        if i == j:
+                            continue
+                        dist = math.hypot(x1 - x2, y1 - y2)
+                        if dist <= 0.0:
+                            continue
+                        if min_dist is None or dist < min_dist:
+                            min_dist = dist
+                    if min_dist is not None:
+                        nearest.append(min_dist)
+            avg_len = sum(nearest) / len(nearest) if nearest else 0.0
         scale_factor = (scale / avg_len) if avg_len > 0.0 else 1.0
 
         model = MoleculeModel()
         for atom in mol.GetAtoms():
-            pos = conf.GetAtomPosition(atom.GetIdx())
-            model.add_atom(atom.GetSymbol(), pos.x * scale_factor, -pos.y * scale_factor)
+            x, y = pos_by_idx[atom.GetIdx()]
+            model.add_atom(atom.GetSymbol(), x * scale_factor, -y * scale_factor)
 
         for bond in mol.GetBonds():
             order = int(bond.GetBondTypeAsDouble())

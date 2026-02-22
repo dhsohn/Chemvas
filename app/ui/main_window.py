@@ -57,7 +57,7 @@ class ArrowButton(QToolButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor("#1f1f1f"))
+        painter.setBrush(QColor("#2c3e50"))
         rect = self.rect().adjusted(6, 4, -6, -4)
         if rect.width() <= 0 or rect.height() <= 0:
             return
@@ -82,9 +82,9 @@ class CornerMenuButton(QToolButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor("#1f1f1f"))
+        painter.setBrush(QColor("#5a6a7e"))
         rect = self.rect()
-        size = 7
+        size = 6
         right = rect.right() - 2
         bottom = rect.bottom() - 2
         left = right - size
@@ -112,6 +112,13 @@ class MainWindow(QMainWindow):
         self._init_toolbars()
         # Info controls moved to top bar; no dock panels needed.
         self._apply_theme()
+        self.canvas.setFrameStyle(0)
+
+        self._zoom_label = QLabel("100%")
+        self._zoom_label.setFixedWidth(50)
+        self._zoom_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.statusBar().addPermanentWidget(self._zoom_label)
+        self.canvas.set_zoom_callback(self._update_zoom_label)
         self.statusBar().showMessage("Ready")
 
     def _init_toolbars(self) -> None:
@@ -131,44 +138,44 @@ class MainWindow(QMainWindow):
         left_bar.setOrientation(Qt.Orientation.Vertical)
         left_bar.setMovable(False)
         left_bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-        left_bar.setIconSize(QSize(20, 20))
+        left_bar.setIconSize(QSize(26, 26))
         button_style = (
             "QToolButton {"
             " border: 1px solid transparent;"
-            " border-radius: 4px;"
-            " padding: 2px;"
+            " border-radius: 5px;"
+            " padding: 4px;"
             "}"
             "QToolButton:hover {"
-            " background-color: #f0f0f0;"
-            " border-color: #cfcfcf;"
+            " background-color: #e8ecf2;"
+            " border-color: #cdd4e0;"
             "}"
             "QToolButton:pressed {"
-            " background-color: #e0e0e0;"
-            " border-color: #b0b0b0;"
+            " background-color: #d5dbe6;"
+            " border-color: #b8c2d4;"
             "}"
             "QToolButton:checked {"
-            " background-color: #e7efff;"
-            " border-color: #90b2ff;"
+            " background-color: #dce6f7;"
+            " border-color: #7ba3e0;"
             "}"
         )
         menu_button_style = (
             "QToolButton {"
             " border: 1px solid transparent;"
-            " border-radius: 4px;"
-            " padding: 2px;"
-            " padding-right: 2px;"
+            " border-radius: 5px;"
+            " padding: 4px;"
+            " padding-right: 4px;"
             "}"
             "QToolButton:hover {"
-            " background-color: #f0f0f0;"
-            " border-color: #cfcfcf;"
+            " background-color: #e8ecf2;"
+            " border-color: #cdd4e0;"
             "}"
             "QToolButton:pressed {"
-            " background-color: #e0e0e0;"
-            " border-color: #b0b0b0;"
+            " background-color: #d5dbe6;"
+            " border-color: #b8c2d4;"
             "}"
             "QToolButton:checked {"
-            " background-color: #e7efff;"
-            " border-color: #90b2ff;"
+            " background-color: #dce6f7;"
+            " border-color: #7ba3e0;"
             "}"
             "QToolButton::menu-indicator { image: none; width: 0px; }"
         )
@@ -206,42 +213,58 @@ class MainWindow(QMainWindow):
         action_mark_plus.setCheckable(True)
         action_mark_plus.setIcon(self._icon_mark_plus())
         action_mark_plus.triggered.connect(
-            lambda: (self.canvas.set_mark_kind("plus"), self.statusBar().showMessage("Tool: mark"))
+            lambda: (self.canvas.set_mark_kind("plus"), self.statusBar().showMessage("Mark Tool"))
         )
         tool_group.addAction(action_mark_plus)
         action_mark_minus = QAction("Charge -", self)
         action_mark_minus.setCheckable(True)
         action_mark_minus.setIcon(self._icon_mark_minus())
         action_mark_minus.triggered.connect(
-            lambda: (self.canvas.set_mark_kind("minus"), self.statusBar().showMessage("Tool: mark"))
+            lambda: (self.canvas.set_mark_kind("minus"), self.statusBar().showMessage("Mark Tool"))
         )
         tool_group.addAction(action_mark_minus)
         action_mark_radical = QAction("Radical", self)
         action_mark_radical.setCheckable(True)
         action_mark_radical.setIcon(self._icon_mark_radical())
         action_mark_radical.triggered.connect(
-            lambda: (self.canvas.set_mark_kind("radical"), self.statusBar().showMessage("Tool: mark"))
+            lambda: (self.canvas.set_mark_kind("radical"), self.statusBar().showMessage("Mark Tool"))
         )
         tool_group.addAction(action_mark_radical)
 
         action_select.setIcon(self._icon_select())
+        action_select.setToolTip("Select (V)")
         action_bond.setIcon(self._icon_bond())
+        action_bond.setToolTip("Bond (B)")
         action_text.setIcon(self._icon_text())
+        action_text.setToolTip("Atom / Text (T)")
         action_ring.setIcon(self._icon_ring())
+        action_ring.setToolTip("Ring / Benzene (R)")
         action_arrow.setIcon(self._icon_arrow())
+        action_arrow.setToolTip("Arrow (A)")
         action_orbital.setIcon(self._icon_orbital())
+        action_orbital.setToolTip("Orbital (O)")
         action_perspective.setIcon(self._icon_perspective())
+        action_perspective.setToolTip("Perspective Rotation")
+        action_bond_bold.setToolTip("Bold Bond")
+        action_wedge.setToolTip("Wedge Bond")
+        action_hash.setToolTip("Hash Bond")
+        action_mark_plus.setToolTip("Charge +")
+        action_mark_minus.setToolTip("Charge -")
+        action_mark_radical.setToolTip("Radical")
 
         left_bar.addAction(action_select)
         left_bar.addAction(action_perspective)
+        left_bar.addSeparator()
         left_bar.addAction(action_bond)
         left_bar.addAction(action_bond_bold)
         left_bar.addAction(action_wedge)
         left_bar.addAction(action_hash)
+        left_bar.addSeparator()
         left_bar.addAction(action_text)
         left_bar.addAction(action_mark_plus)
         left_bar.addAction(action_mark_minus)
         left_bar.addAction(action_mark_radical)
+        left_bar.addSeparator()
         left_bar.addAction(action_ring)
         templates_button = CornerMenuButton()
         templates_button.setIcon(self._icon_templates())
@@ -314,7 +337,7 @@ class MainWindow(QMainWindow):
 
         left_bar.addWidget(arrow_button)
         left_bar.addWidget(orbital_button)
-        # separators removed per UI request
+        left_bar.addSeparator()
 
         bond_len_btn = QToolButton()
         bond_len_btn.setToolTip("Bond Length")
@@ -339,7 +362,7 @@ class MainWindow(QMainWindow):
         panel_bar = QToolBar("Panels", self)
         panel_bar.setMovable(False)
         panel_bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-        panel_bar.setIconSize(QSize(22, 22))
+        panel_bar.setIconSize(QSize(24, 24))
         panel_bar.setStyleSheet(button_style)
 
         save_btn = QToolButton()
@@ -376,17 +399,19 @@ class MainWindow(QMainWindow):
         smiles_button.setObjectName("smiles_render_button")
         smiles_button.setStyleSheet(
             "QToolButton#smiles_render_button {"
-            " border: 1px solid #bdbdbd;"
-            " border-radius: 4px;"
-            " padding: 3px 8px;"
-            " background-color: #f7f7f7;"
+            " border: 1px solid #cdd4e0;"
+            " border-radius: 5px;"
+            " padding: 3px 10px;"
+            " background-color: #ffffff;"
+            " color: #2c3e50;"
             "}"
             "QToolButton#smiles_render_button:hover {"
-            " background-color: #f0f0f0;"
+            " background-color: #e8ecf2;"
+            " border-color: #b8c2d4;"
             "}"
             "QToolButton#smiles_render_button:pressed {"
-            " background-color: #e1e1e1;"
-            " border-color: #9d9d9d;"
+            " background-color: #d5dbe6;"
+            " border-color: #7ba3e0;"
             "}"
         )
         smiles_button.clicked.connect(lambda: self.canvas.begin_smiles_insert(smiles_input.text()))
@@ -463,7 +488,7 @@ class MainWindow(QMainWindow):
         self.canvas.set_selection_info_callback(_update_selection_info)
 
     def _make_icon(self, painter_fn) -> QIcon:
-        pixmap = QPixmap(24, 24)
+        pixmap = QPixmap(30, 30)
         pixmap.fill(Qt.GlobalColor.transparent)
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -473,25 +498,25 @@ class MainWindow(QMainWindow):
 
     def _icon_select(self) -> QIcon:
         def draw(p):
-            pen = QPen(Qt.GlobalColor.black)
+            pen = QPen(QColor("#5b7fb5"))
             pen.setWidthF(2.0)
             pen.setStyle(Qt.PenStyle.DashLine)
             p.setPen(pen)
-            p.drawRect(4, 5, 16, 14)
+            p.drawRect(5, 6, 20, 18)
         return self._make_icon(draw)
 
     def _icon_bond(self) -> QIcon:
         def draw(p):
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.8)
+            pen = QPen(QColor("#2c3e50"))
+            pen.setWidthF(2.0)
             p.setPen(pen)
-            p.drawLine(6, 18, 18, 6)
+            p.drawLine(7, 23, 23, 7)
         return self._make_icon(draw)
 
     def _icon_bond_bold(self) -> QIcon:
         def draw(p):
-            start = QPointF(5, 18)
-            end = QPointF(19, 6)
+            start = QPointF(6, 23)
+            end = QPointF(24, 7)
             dx = end.x() - start.x()
             dy = end.y() - start.y()
             start = QPointF(start.x() + dx * 0.025, start.y() + dy * 0.025)
@@ -502,46 +527,46 @@ class MainWindow(QMainWindow):
 
     def _icon_mark_plus(self) -> QIcon:
         def draw(p):
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.6)
+            pen = QPen(QColor("#c00000"))
+            pen.setWidthF(2.0)
             p.setPen(pen)
-            p.drawLine(12, 6, 12, 18)
-            p.drawLine(6, 12, 18, 12)
+            p.drawLine(15, 7, 15, 23)
+            p.drawLine(7, 15, 23, 15)
         return self._make_icon(draw)
 
     def _icon_mark_minus(self) -> QIcon:
         def draw(p):
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.6)
+            pen = QPen(QColor("#1f5eff"))
+            pen.setWidthF(2.0)
             p.setPen(pen)
-            p.drawLine(6, 12, 18, 12)
+            p.drawLine(7, 15, 23, 15)
         return self._make_icon(draw)
 
     def _icon_mark_radical(self) -> QIcon:
         def draw(p):
             p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QColor("#1f1f1f"))
-            p.drawEllipse(10, 10, 4, 4)
+            p.setBrush(QColor("#6a2ea6"))
+            p.drawEllipse(12, 12, 6, 6)
         return self._make_icon(draw)
 
     def _icon_text(self) -> QIcon:
         def draw(p):
             font = QFont("Arial")
             font.setBold(True)
-            font.setPointSize(20)
+            font.setPointSize(22)
             p.setFont(font)
-            p.setPen(QPen(Qt.GlobalColor.black))
-            p.drawText(6, 16, "A")
+            p.setPen(QPen(QColor("#2c3e50")))
+            p.drawText(7, 21, "A")
         return self._make_icon(draw)
 
     def _icon_ring(self) -> QIcon:
         def draw(p):
             p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.6)
+            pen = QPen(QColor("#2c3e50"))
+            pen.setWidthF(1.8)
             p.setPen(pen)
-            center = QPointF(12.0, 12.0)
-            radius = 8.0
+            center = QPointF(15.0, 15.0)
+            radius = 10.0
             outer = QPolygonF()
             for i in range(6):
                 angle = math.radians(60 * i - 90)
@@ -552,8 +577,8 @@ class MainWindow(QMainWindow):
                     )
                 )
             p.drawPolygon(outer)
-            inner_pen = QPen(Qt.GlobalColor.black)
-            inner_pen.setWidthF(1.6)
+            inner_pen = QPen(QColor("#2c3e50"))
+            inner_pen.setWidthF(1.8)
             p.setPen(inner_pen)
             spacing = 1.6
             for i in range(0, 6, 2):
@@ -582,10 +607,10 @@ class MainWindow(QMainWindow):
     def _icon_ring_fill(self) -> QIcon:
         def draw(p):
             p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.6)
-            center = QPointF(12.0, 12.0)
-            radius = 8.0
+            pen = QPen(QColor("#2c3e50"))
+            pen.setWidthF(1.8)
+            center = QPointF(15.0, 15.0)
+            radius = 10.0
             outer = QPolygonF()
             for i in range(5):
                 angle = math.radians(360 / 5 * i - 90)
@@ -602,88 +627,88 @@ class MainWindow(QMainWindow):
 
     def _icon_undo(self) -> QIcon:
         def draw(p):
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.4)
+            pen = QPen(QColor("#2c3e50"))
+            pen.setWidthF(1.6)
             p.setPen(pen)
-            p.drawArc(4, 6, 14, 14, 90 * 16, 270 * 16)
-            p.drawLine(6, 8, 4, 12)
-            p.drawLine(6, 8, 9, 8)
+            p.drawArc(5, 8, 18, 18, 90 * 16, 270 * 16)
+            p.drawLine(8, 10, 5, 15)
+            p.drawLine(8, 10, 11, 10)
         return self._make_icon(draw)
 
     def _icon_redo(self) -> QIcon:
         def draw(p):
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.4)
+            pen = QPen(QColor("#2c3e50"))
+            pen.setWidthF(1.6)
             p.setPen(pen)
-            p.drawArc(6, 6, 14, 14, 180 * 16, 270 * 16)
-            p.drawLine(18, 8, 20, 12)
-            p.drawLine(18, 8, 15, 8)
+            p.drawArc(8, 8, 18, 18, 180 * 16, 270 * 16)
+            p.drawLine(23, 10, 25, 15)
+            p.drawLine(23, 10, 19, 10)
         return self._make_icon(draw)
 
     def _icon_save(self) -> QIcon:
         def draw(p):
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.2)
+            pen = QPen(QColor("#2c3e50"))
+            pen.setWidthF(1.4)
             p.setPen(pen)
-            p.drawRect(5, 4, 14, 16)
-            p.drawLine(5, 9, 19, 9)
-            p.drawRect(8, 12, 8, 6)
+            p.drawRect(6, 5, 18, 20)
+            p.drawLine(6, 11, 24, 11)
+            p.drawRect(10, 15, 10, 8)
         return self._make_icon(draw)
 
     def _icon_open(self) -> QIcon:
         def draw(p):
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.2)
+            pen = QPen(QColor("#2c3e50"))
+            pen.setWidthF(1.4)
             p.setPen(pen)
-            p.drawRect(5, 10, 14, 8)
-            p.drawLine(12, 5, 12, 13)
-            p.drawLine(9, 8, 12, 5)
-            p.drawLine(15, 8, 12, 5)
+            p.drawRect(6, 13, 18, 10)
+            p.drawLine(15, 6, 15, 16)
+            p.drawLine(11, 10, 15, 6)
+            p.drawLine(19, 10, 15, 6)
         return self._make_icon(draw)
 
     def _icon_templates(self) -> QIcon:
         def draw(p):
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.4)
+            pen = QPen(QColor("#2c3e50"))
+            pen.setWidthF(1.6)
             p.setPen(pen)
-            chair = self._chair_icon_points(QRectF(3.0, 6.0, 18.0, 12.0))
+            chair = self._chair_icon_points(QRectF(4.0, 7.0, 22.0, 16.0))
             if not chair.isEmpty():
                 p.drawPolygon(chair)
         return self._make_icon(draw)
 
     def _icon_info(self) -> QIcon:
         def draw(p):
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.2)
+            pen = QPen(QColor("#2c3e50"))
+            pen.setWidthF(1.4)
             p.setPen(pen)
-            p.drawEllipse(6, 6, 12, 12)
-            p.drawLine(12, 10, 12, 15)
-            p.drawPoint(12, 8)
+            p.drawEllipse(7, 7, 16, 16)
+            p.drawLine(15, 13, 15, 19)
+            p.drawPoint(15, 10)
         return self._make_icon(draw)
 
     def _icon_bond_double(self) -> QIcon:
         def draw(p):
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.4)
+            pen = QPen(QColor("#2c3e50"))
+            pen.setWidthF(1.6)
             p.setPen(pen)
-            p.drawLine(4, 9, 20, 9)
-            p.drawLine(4, 15, 20, 15)
+            p.drawLine(5, 11, 25, 11)
+            p.drawLine(5, 19, 25, 19)
         return self._make_icon(draw)
 
     def _icon_bond_triple(self) -> QIcon:
         def draw(p):
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.2)
+            pen = QPen(QColor("#2c3e50"))
+            pen.setWidthF(1.4)
             p.setPen(pen)
-            p.drawLine(4, 8, 20, 8)
-            p.drawLine(4, 12, 20, 12)
-            p.drawLine(4, 16, 20, 16)
+            p.drawLine(5, 10, 25, 10)
+            p.drawLine(5, 15, 25, 15)
+            p.drawLine(5, 20, 25, 20)
         return self._make_icon(draw)
 
     def _icon_bond_wedge(self) -> QIcon:
         def draw(p):
-            start = QPointF(6, 18)
-            end = QPointF(18, 6)
+            start = QPointF(7, 23)
+            end = QPointF(23, 7)
             dx = end.x() - start.x()
             dy = end.y() - start.y()
             start = QPointF(start.x() + dx * 0.1, start.y() + dy * 0.1)
@@ -704,8 +729,8 @@ class MainWindow(QMainWindow):
 
     def _icon_bond_hash(self) -> QIcon:
         def draw(p):
-            start = QPointF(6, 18)
-            end = QPointF(18, 6)
+            start = QPointF(7, 23)
+            end = QPointF(23, 7)
             dx = end.x() - start.x()
             dy = end.y() - start.y()
             length = math.hypot(dx, dy) or 1.0
@@ -732,44 +757,44 @@ class MainWindow(QMainWindow):
 
     def _icon_bond_length(self) -> QIcon:
         def draw(p):
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.2)
+            pen = QPen(QColor("#2c3e50"))
+            pen.setWidthF(1.4)
             p.setPen(pen)
-            p.drawLine(5, 12, 19, 12)
-            p.drawLine(5, 9, 5, 15)
-            p.drawLine(19, 9, 19, 15)
+            p.drawLine(6, 15, 24, 15)
+            p.drawLine(6, 11, 6, 19)
+            p.drawLine(24, 11, 24, 19)
         return self._make_icon(draw)
 
     def _icon_arrow_preview(self, kind: str) -> QIcon:
         def draw(p):
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.2)
+            pen = QPen(QColor("#2c3e50"))
+            pen.setWidthF(1.4)
             if kind == "dotted":
                 pen.setStyle(Qt.PenStyle.DashLine)
             p.setPen(pen)
             if kind in {"curved_single", "curved_double"}:
                 path = QPainterPath()
-                path.moveTo(5, 15)
-                path.quadTo(12, 5, 19, 12)
+                path.moveTo(6, 19)
+                path.quadTo(15, 6, 24, 15)
                 p.drawPath(path)
-                self._draw_arrow_head(p, QPointF(12, 6), QPointF(19, 12))
+                self._draw_arrow_head(p, QPointF(15, 8), QPointF(24, 15))
                 if kind == "curved_double":
-                    self._draw_arrow_head(p, QPointF(12, 6), QPointF(5, 15))
+                    self._draw_arrow_head(p, QPointF(15, 8), QPointF(6, 19))
             elif kind == "equilibrium":
-                p.drawLine(4, 9, 18, 9)
-                self._draw_arrow_head(p, QPointF(4, 9), QPointF(18, 9))
-                p.drawLine(18, 15, 4, 15)
-                self._draw_arrow_head(p, QPointF(18, 15), QPointF(4, 15))
+                p.drawLine(5, 11, 23, 11)
+                self._draw_arrow_head(p, QPointF(5, 11), QPointF(23, 11))
+                p.drawLine(23, 19, 5, 19)
+                self._draw_arrow_head(p, QPointF(23, 19), QPointF(5, 19))
             elif kind == "resonance":
-                p.drawLine(4, 12, 18, 12)
-                self._draw_arrow_head(p, QPointF(4, 12), QPointF(18, 12))
-                self._draw_arrow_head(p, QPointF(18, 12), QPointF(4, 12))
+                p.drawLine(5, 15, 23, 15)
+                self._draw_arrow_head(p, QPointF(5, 15), QPointF(23, 15))
+                self._draw_arrow_head(p, QPointF(23, 15), QPointF(5, 15))
             elif kind == "inhibit":
-                p.drawLine(4, 12, 18, 12)
-                p.drawLine(18, 8, 18, 16)
+                p.drawLine(5, 15, 23, 15)
+                p.drawLine(23, 10, 23, 20)
             else:
-                p.drawLine(4, 12, 18, 12)
-                self._draw_arrow_head(p, QPointF(4, 12), QPointF(18, 12))
+                p.drawLine(5, 15, 23, 15)
+                self._draw_arrow_head(p, QPointF(5, 15), QPointF(23, 15))
         return self._make_icon(draw)
 
     def _draw_arrow_head(self, painter: QPainter, start: QPointF, end: QPointF) -> None:
@@ -789,38 +814,38 @@ class MainWindow(QMainWindow):
 
     def _icon_orbital_preview(self, kind: str) -> QIcon:
         def draw(p):
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.2)
+            pen = QPen(QColor("#2c3e50"))
+            pen.setWidthF(1.4)
             p.setPen(pen)
             if kind == "s":
-                p.drawEllipse(7, 7, 10, 10)
+                p.drawEllipse(9, 9, 12, 12)
             elif kind == "p":
-                p.drawEllipse(5, 9, 8, 8)
-                p.drawEllipse(11, 7, 8, 8)
+                p.drawEllipse(6, 11, 10, 10)
+                p.drawEllipse(14, 9, 10, 10)
             elif kind == "sp":
-                p.drawEllipse(5, 10, 8, 8)
-                p.drawEllipse(13, 6, 8, 8)
-                p.drawLine(4, 14, 20, 10)
+                p.drawEllipse(6, 12, 10, 10)
+                p.drawEllipse(16, 8, 10, 10)
+                p.drawLine(5, 18, 25, 12)
             elif kind in {"sp2", "sp3"}:
-                p.drawEllipse(6, 6, 6, 6)
-                p.drawEllipse(12, 6, 6, 6)
-                p.drawEllipse(9, 12, 6, 6)
+                p.drawEllipse(7, 7, 8, 8)
+                p.drawEllipse(15, 7, 8, 8)
+                p.drawEllipse(11, 15, 8, 8)
                 if kind == "sp3":
-                    p.drawEllipse(9, 2, 6, 6)
+                    p.drawEllipse(11, 2, 8, 8)
             elif kind == "d":
-                p.drawEllipse(5, 8, 6, 6)
-                p.drawEllipse(13, 8, 6, 6)
-                p.drawEllipse(9, 4, 6, 6)
-                p.drawEllipse(9, 12, 6, 6)
+                p.drawEllipse(6, 10, 8, 8)
+                p.drawEllipse(16, 10, 8, 8)
+                p.drawEllipse(11, 5, 8, 8)
+                p.drawEllipse(11, 15, 8, 8)
             else:
-                p.drawEllipse(7, 7, 10, 10)
-                p.drawLine(12, 7, 12, 17)
+                p.drawEllipse(9, 9, 12, 12)
+                p.drawLine(15, 9, 15, 21)
         return self._make_icon(draw)
 
     def _icon_template_preview(self, label: str) -> QIcon:
         def draw_ring(p, sides: int):
-            center = QPointF(12.0, 12.0)
-            radius = 8.0
+            center = QPointF(15.0, 15.0)
+            radius = 10.0
             poly = QPolygonF()
             for i in range(sides):
                 angle = math.radians(360 / sides * i - 90)
@@ -833,8 +858,8 @@ class MainWindow(QMainWindow):
             p.drawPolygon(poly)
 
         def draw(p):
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.2)
+            pen = QPen(QColor("#2c3e50"))
+            pen.setWidthF(1.4)
             p.setPen(pen)
             lower = label.lower()
             if "cyclopropane" in lower:
@@ -848,26 +873,26 @@ class MainWindow(QMainWindow):
             elif "naphthalene" in lower or "anthracene" in lower or "phenanthrene" in lower:
                 draw_ring(p, 6)
                 draw_ring(p, 6)
-                p.drawLine(10, 6, 14, 6)
+                p.drawLine(12, 7, 18, 7)
             elif "crown" in lower:
                 draw_ring(p, 10)
             elif "chair" in lower:
-                chair = self._chair_icon_points(QRectF(3.0, 6.0, 18.0, 12.0))
+                chair = self._chair_icon_points(QRectF(4.0, 7.0, 22.0, 16.0))
                 if not chair.isEmpty():
                     p.drawPolygon(chair)
             elif label in {"Me", "Et", "t-Bu", "i-Pr"}:
-                p.drawLine(4, 12, 12, 12)
-                p.drawText(13, 15, label)
+                p.drawLine(5, 15, 15, 15)
+                p.drawText(16, 18, label)
             elif label in {"Vinyl", "Allyl"}:
-                p.drawLine(4, 14, 11, 10)
-                p.drawLine(11, 10, 18, 14)
+                p.drawLine(5, 18, 14, 12)
+                p.drawLine(14, 12, 23, 18)
             elif label in {"Carboxyl", "Carbonyl"}:
-                p.drawLine(4, 12, 12, 12)
-                p.drawLine(12, 12, 18, 8)
-                p.drawText(18, 10, "O")
+                p.drawLine(5, 15, 15, 15)
+                p.drawLine(15, 15, 23, 10)
+                p.drawText(23, 12, "O")
             elif label in {"Nitro", "Sulfonyl"}:
-                p.drawLine(4, 12, 12, 12)
-                p.drawText(13, 14, "NO2" if label == "Nitro" else "SO2")
+                p.drawLine(5, 15, 15, 15)
+                p.drawText(16, 18, "NO2" if label == "Nitro" else "SO2")
             else:
                 draw_ring(p, 6)
         return self._make_icon(draw)
@@ -910,94 +935,94 @@ class MainWindow(QMainWindow):
 
     def _icon_flip_h(self) -> QIcon:
         def draw(p):
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.2)
+            pen = QPen(QColor("#2c3e50"))
+            pen.setWidthF(1.4)
             p.setPen(pen)
-            p.drawLine(12, 4, 12, 20)
-            p.drawLine(6, 7, 10, 7)
-            p.drawLine(6, 17, 10, 17)
-            p.drawLine(14, 7, 18, 7)
-            p.drawLine(14, 17, 18, 17)
+            p.drawLine(15, 5, 15, 25)
+            p.drawLine(7, 9, 13, 9)
+            p.drawLine(7, 21, 13, 21)
+            p.drawLine(17, 9, 23, 9)
+            p.drawLine(17, 21, 23, 21)
         return self._make_icon(draw)
 
     def _icon_flip_v(self) -> QIcon:
         def draw(p):
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.2)
+            pen = QPen(QColor("#2c3e50"))
+            pen.setWidthF(1.4)
             p.setPen(pen)
-            p.drawLine(4, 12, 20, 12)
-            p.drawLine(7, 6, 7, 10)
-            p.drawLine(17, 6, 17, 10)
-            p.drawLine(7, 14, 7, 18)
-            p.drawLine(17, 14, 17, 18)
+            p.drawLine(5, 15, 25, 15)
+            p.drawLine(9, 7, 9, 13)
+            p.drawLine(21, 7, 21, 13)
+            p.drawLine(9, 17, 9, 23)
+            p.drawLine(21, 17, 21, 23)
         return self._make_icon(draw)
 
     def _icon_arrow(self) -> QIcon:
         def draw(p):
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.6)
+            pen = QPen(QColor("#2c3e50"))
+            pen.setWidthF(2.0)
             p.setPen(pen)
-            p.drawLine(4, 12, 18, 12)
-            p.drawLine(18, 12, 14, 9)
-            p.drawLine(18, 12, 14, 15)
+            p.drawLine(5, 15, 23, 15)
+            p.drawLine(23, 15, 18, 11)
+            p.drawLine(23, 15, 18, 19)
         return self._make_icon(draw)
 
     def _icon_orbital(self) -> QIcon:
         def draw(p):
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.2)
+            pen = QPen(QColor("#2c3e50"))
+            pen.setWidthF(1.4)
             p.setPen(pen)
-            p.drawEllipse(5, 8, 6, 8)
-            p.drawEllipse(13, 8, 6, 8)
+            p.drawEllipse(6, 10, 8, 10)
+            p.drawEllipse(16, 10, 8, 10)
         return self._make_icon(draw)
 
     def _icon_move(self) -> QIcon:
         def draw(p):
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.2)
+            pen = QPen(QColor("#2c3e50"))
+            pen.setWidthF(1.4)
             p.setPen(pen)
-            p.drawLine(12, 4, 12, 20)
-            p.drawLine(4, 12, 20, 12)
-            p.drawLine(12, 4, 10, 6)
-            p.drawLine(12, 4, 14, 6)
-            p.drawLine(12, 20, 10, 18)
-            p.drawLine(12, 20, 14, 18)
-            p.drawLine(4, 12, 6, 10)
-            p.drawLine(4, 12, 6, 14)
-            p.drawLine(20, 12, 18, 10)
-            p.drawLine(20, 12, 18, 14)
+            p.drawLine(15, 5, 15, 25)
+            p.drawLine(5, 15, 25, 15)
+            p.drawLine(15, 5, 12, 8)
+            p.drawLine(15, 5, 18, 8)
+            p.drawLine(15, 25, 12, 22)
+            p.drawLine(15, 25, 18, 22)
+            p.drawLine(5, 15, 8, 12)
+            p.drawLine(5, 15, 8, 18)
+            p.drawLine(25, 15, 22, 12)
+            p.drawLine(25, 15, 22, 18)
         return self._make_icon(draw)
 
     def _icon_color(self) -> QIcon:
         def draw(p):
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.2)
+            pen = QPen(QColor("#2c3e50"))
+            pen.setWidthF(1.4)
             p.setPen(pen)
             p.setBrush(QBrush(QColor("#d8c8a6")))
             palette = QPainterPath()
-            palette.moveTo(3, 14)
-            palette.cubicTo(3, 6, 12, 5, 20, 7)
-            palette.cubicTo(23, 8, 23, 16, 18, 19)
-            palette.cubicTo(14, 21, 9, 20, 7, 17)
-            palette.cubicTo(11, 18, 12, 16, 11, 14)
-            palette.cubicTo(9, 16, 5, 16, 3, 14)
+            palette.moveTo(4, 18)
+            palette.cubicTo(4, 8, 15, 6, 25, 9)
+            palette.cubicTo(29, 10, 29, 20, 23, 24)
+            palette.cubicTo(18, 26, 11, 25, 9, 21)
+            palette.cubicTo(14, 23, 15, 20, 14, 18)
+            palette.cubicTo(11, 20, 6, 20, 4, 18)
             p.drawPath(palette)
             p.setBrush(QBrush(Qt.GlobalColor.white))
-            p.drawEllipse(7, 10, 3, 3)
-            p.drawEllipse(11, 9, 3, 3)
-            p.drawEllipse(15, 12, 3, 3)
+            p.drawEllipse(9, 13, 4, 4)
+            p.drawEllipse(14, 11, 4, 4)
+            p.drawEllipse(19, 15, 4, 4)
         return self._make_icon(draw)
 
     def _icon_perspective(self) -> QIcon:
         def draw(p):
-            pen = QPen(Qt.GlobalColor.black)
-            pen.setWidthF(1.2)
+            pen = QPen(QColor("#2c3e50"))
+            pen.setWidthF(1.4)
             p.setPen(pen)
-            cx, cy, r = 12.0, 12.0, 8.0
+            cx, cy, r = 15.0, 15.0, 10.0
             start_deg = 40.0
             span_deg = 280.0
             end_deg = (start_deg + span_deg) % 360.0
-            p.drawArc(4, 4, 16, 16, int(start_deg * 16), int(span_deg * 16))
+            p.drawArc(5, 5, 20, 20, int(start_deg * 16), int(span_deg * 16))
             rad = math.radians(end_deg)
             end = QPointF(cx + r * math.cos(rad), cy - r * math.sin(rad))
             tangent = rad + math.pi / 2.0
@@ -1068,132 +1093,204 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(
             """
             QMainWindow {
-                background: #f3f3f3;
+                background: #eef0f4;
             }
             QToolBar {
-                background: #f6f6f6;
-                border: 1px solid #d6d6d6;
-                spacing: 6px;
+                background: #f8f9fb;
+                border: none;
+                border-bottom: 1px solid #dde1e8;
+                spacing: 4px;
+                padding: 3px;
+            }
+            QToolBar::separator {
+                background: #dde1e8;
+                width: 1px;
+                height: 20px;
+                margin: 4px 6px;
             }
             QToolButton {
                 border: 1px solid transparent;
-                border-radius: 4px;
-                padding: 4px;
-                color: #1f1f1f;
+                border-radius: 5px;
+                padding: 5px;
+                color: #2c3e50;
+            }
+            QToolButton:hover {
+                background: #e8ecf2;
+                border-color: #cdd4e0;
+            }
+            QToolButton:pressed {
+                background: #d5dbe6;
+                border-color: #b8c2d4;
             }
             QToolButton:checked {
-                background: #e3e7ee;
-                border-color: #a9b7cc;
+                background: #dce6f7;
+                border-color: #7ba3e0;
             }
             QLabel, QCheckBox, QGroupBox, QTabBar, QDockWidget, QToolButton {
-                color: #1f1f1f;
+                color: #2c3e50;
             }
             QDockWidget {
-                background: #f7f7f7;
-                border: 1px solid #d6d6d6;
+                background: #f8f9fb;
+                border: 1px solid #dde1e8;
             }
             QTabWidget::pane {
-                border: 1px solid #d6d6d6;
-                background: #f9f9f9;
+                border: 1px solid #dde1e8;
+                background: #f8f9fb;
             }
             QTabBar::tab {
-                background: #ececec;
+                background: #eef0f4;
                 padding: 6px 10px;
-                border: 1px solid #d6d6d6;
+                border: 1px solid #dde1e8;
                 border-bottom: none;
                 margin-right: 2px;
-                color: #1f1f1f;
+                color: #2c3e50;
             }
             QTabBar::tab:selected {
                 background: #ffffff;
             }
             QLineEdit, QComboBox, QSpinBox {
                 background: #ffffff;
-                border: 1px solid #cfcfcf;
+                border: 1px solid #cdd4e0;
+                border-radius: 4px;
                 padding: 3px 6px;
-                color: #1f1f1f;
+                color: #2c3e50;
+            }
+            QLineEdit:focus, QComboBox:focus {
+                border-color: #7ba3e0;
             }
             QSpinBox, QDoubleSpinBox {
-                background: #fffaf7;
-                border: 1px solid #cfcfcf;
+                background: #fdfcfb;
+                border: 1px solid #cdd4e0;
+                border-radius: 4px;
                 padding: 2px 6px;
-                color: #1f1f1f;
+                color: #2c3e50;
             }
             QAbstractSpinBox::up-button, QAbstractSpinBox::down-button {
-                background: #fffaf7;
-                border-left: 1px solid #cfcfcf;
+                background: #fdfcfb;
+                border-left: 1px solid #cdd4e0;
                 width: 14px;
             }
             QFrame#spinFrame {
-                background: #fffaf7;
-                border: 1px solid #cfcfcf;
+                background: #fdfcfb;
+                border: 1px solid #cdd4e0;
                 border-radius: 4px;
             }
             QFrame#spinFrame QDoubleSpinBox {
                 background: transparent;
                 border: none;
                 padding: 2px 6px;
-                color: #1f1f1f;
+                color: #2c3e50;
             }
             QToolButton#spinUpButton {
-                background: #fffaf7;
-                border-left: 1px solid #cfcfcf;
-                border-bottom: 1px solid #cfcfcf;
+                background: #fdfcfb;
+                border-left: 1px solid #cdd4e0;
+                border-bottom: 1px solid #cdd4e0;
             }
             QToolButton#spinDownButton {
-                background: #fffaf7;
-                border-left: 1px solid #cfcfcf;
+                background: #fdfcfb;
+                border-left: 1px solid #cdd4e0;
             }
             QComboBox QAbstractItemView {
                 background: #ffffff;
-                color: #1f1f1f;
-                border: 1px solid #cfcfcf;
-                selection-background-color: #e3e7ee;
-                selection-color: #1f1f1f;
+                color: #2c3e50;
+                border: 1px solid #cdd4e0;
+                selection-background-color: #dce6f7;
+                selection-color: #2c3e50;
             }
             QAbstractItemView {
                 background: #ffffff;
-                color: #1f1f1f;
-                border: 1px solid #cfcfcf;
+                color: #2c3e50;
+                border: 1px solid #cdd4e0;
             }
             QAbstractItemView::item {
                 background: #ffffff;
-                color: #1f1f1f;
+                color: #2c3e50;
             }
             QPushButton {
-                color: #1f1f1f;
+                color: #2c3e50;
+                border: 1px solid #cdd4e0;
+                border-radius: 4px;
+                padding: 4px 12px;
+                background: #ffffff;
+            }
+            QPushButton:hover {
+                background: #e8ecf2;
+                border-color: #b8c2d4;
+            }
+            QPushButton:pressed {
+                background: #d5dbe6;
+            }
+            QMenu {
+                background: #ffffff;
+                border: 1px solid #dde1e8;
+                border-radius: 6px;
+                padding: 4px 0;
+            }
+            QMenu::item {
+                padding: 6px 24px 6px 12px;
+                color: #2c3e50;
+            }
+            QMenu::item:selected {
+                background: #e8ecf2;
+                border-radius: 4px;
+            }
+            QMenu::separator {
+                height: 1px;
+                background: #dde1e8;
+                margin: 4px 8px;
             }
             QDialog, QMessageBox {
-                background: #f9f9f9;
+                background: #f4f5f8;
             }
             QDialog QLabel, QMessageBox QLabel {
-                color: #1f1f1f;
+                color: #2c3e50;
             }
             QDialog QLineEdit, QMessageBox QLineEdit {
                 background: #ffffff;
-                border: 1px solid #cfcfcf;
+                border: 1px solid #cdd4e0;
+                border-radius: 4px;
                 padding: 3px 6px;
-                color: #1f1f1f;
+                color: #2c3e50;
             }
             QDialog QPushButton, QMessageBox QPushButton {
                 background: #ffffff;
-                border: 1px solid #cfcfcf;
-                padding: 4px 10px;
-                color: #1f1f1f;
+                border: 1px solid #cdd4e0;
+                border-radius: 4px;
+                padding: 5px 14px;
+                color: #2c3e50;
+            }
+            QDialog QPushButton:hover, QMessageBox QPushButton:hover {
+                background: #e8ecf2;
             }
             QSlider::groove:horizontal {
                 height: 6px;
-                background: #d9d9d9;
+                background: #d5dbe6;
                 border-radius: 3px;
             }
             QSlider::handle:horizontal {
-                width: 10px;
-                background: #8aa2c8;
-                border-radius: 5px;
+                width: 12px;
+                height: 12px;
+                background: #6b93d6;
+                border-radius: 6px;
                 margin: -4px 0;
+            }
+            QSlider::handle:horizontal:hover {
+                background: #5a82c5;
+            }
+            QStatusBar {
+                background: #f8f9fb;
+                border-top: 1px solid #dde1e8;
+                color: #5a6a7e;
+                padding: 2px 8px;
+            }
+            QStatusBar QLabel {
+                color: #5a6a7e;
             }
             """
         )
+
+    def _update_zoom_label(self, zoom_percent: int) -> None:
+        self._zoom_label.setText(f"{zoom_percent}%")
 
     def _open_arrow_settings(self) -> None:
         dialog = QDialog(self)
@@ -1306,11 +1403,24 @@ class MainWindow(QMainWindow):
         style, order = mapping.get(value, ("single", 1))
         self.canvas.set_bond_style(style, order)
 
+    _tool_display_names = {
+        "select": "Select",
+        "bond": "Bond",
+        "text": "Atom / Text",
+        "benzene": "Ring",
+        "arrow": "Arrow",
+        "orbital": "Orbital",
+        "perspective": "Perspective",
+        "color": "Color",
+        "mark": "Mark",
+    }
+
     def _set_tool_with_status(self, tool: str, reset_bond_style: bool = True) -> None:
         self.canvas.set_tool(tool)
         if tool == "bond" and reset_bond_style:
             self._set_bond_style("Single")
-        self.statusBar().showMessage(f"Tool: {tool}")
+        display = self._tool_display_names.get(tool, tool.capitalize())
+        self.statusBar().showMessage(f"{display} Tool")
 
     def _set_arrow_type(self, value: str) -> None:
         mapping = {
