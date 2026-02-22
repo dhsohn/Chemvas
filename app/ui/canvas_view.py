@@ -138,6 +138,9 @@ class CanvasView(QGraphicsView):
         self._graph_version = 0
         self._selection_component_cache_signature: tuple[frozenset[int], int] | None = None
         self._selection_component_cache: list[set[int]] = []
+        self._rotation_axis_cache: dict[tuple[frozenset[int], frozenset[int], int], tuple[int, set[int]] | None] = {}
+        self._rotation_axis_cache_version = self._graph_version
+        self._bond_cycle_cache: dict[int, tuple[int, bool]] = {}
         self.atom_symbol = "C"
         self.bond_items: dict[int, list] = {}
         self._bond_renderer = BondRenderer(self)
@@ -161,6 +164,8 @@ class CanvasView(QGraphicsView):
         self._rotation_mode: str | None = None
         self._rotation_free_angle_x = 0.0
         self._rotation_free_angle_y = 0.0
+        self._rotation_depth_factor = 0.4
+        self._rotation_base_bond_length: float | None = None
         self.rotation_atom_ids: set[int] = set()
         self.rotation_center_3d: tuple[float, float, float] | None = None
         self._rotation_start_positions: dict[int, tuple[float, float]] = {}
@@ -2019,11 +2024,17 @@ class CanvasView(QGraphicsView):
                 bond_id = item.data(1)
                 if isinstance(bond_id, int):
                     bond_ids.add(bond_id)
-            elif kind == "ring" and hasattr(item, "polygon"):
-                polygon = item.polygon()
-                for atom_id, atom in self.model.atoms.items():
-                    if polygon.containsPoint(QPointF(atom.x, atom.y), Qt.FillRule.WindingFill):
-                        atom_ids.add(atom_id)
+            elif kind == "ring":
+                ring_atom_ids = item.data(2)
+                if isinstance(ring_atom_ids, list):
+                    for atom_id in ring_atom_ids:
+                        if isinstance(atom_id, int) and atom_id in self.model.atoms:
+                            atom_ids.add(atom_id)
+                elif hasattr(item, "polygon"):
+                    polygon = item.polygon()
+                    for atom_id, atom in self.model.atoms.items():
+                        if polygon.containsPoint(QPointF(atom.x, atom.y), Qt.FillRule.WindingFill):
+                            atom_ids.add(atom_id)
         return atom_ids, bond_ids
 
     def _selection_items_for_copy(self) -> list[QGraphicsItem]:
@@ -2578,10 +2589,15 @@ class CanvasView(QGraphicsView):
         return visited
 
     def _bond_in_cycle(self, bond_id: int) -> bool:
+        cached = self._bond_cycle_cache.get(bond_id)
+        if cached is not None and cached[0] == self._graph_version:
+            return cached[1]
         if not (0 <= bond_id < len(self.model.bonds)):
+            self._bond_cycle_cache[bond_id] = (self._graph_version, False)
             return False
         bond = self.model.bonds[bond_id]
         if bond is None:
+            self._bond_cycle_cache[bond_id] = (self._graph_version, False)
             return False
         start = bond.a
         target = bond.b
@@ -2603,9 +2619,11 @@ class CanvasView(QGraphicsView):
                 if neighbor in visited:
                     continue
                 if neighbor == target:
+                    self._bond_cycle_cache[bond_id] = (self._graph_version, True)
                     return True
                 visited.add(neighbor)
                 stack.append(neighbor)
+        self._bond_cycle_cache[bond_id] = (self._graph_version, False)
         return False
 
     def _bond_is_rotatable(self, bond_id: int) -> bool:
@@ -2670,6 +2688,19 @@ class CanvasView(QGraphicsView):
         selected_atom_ids: set[int],
         selected_bond_ids: set[int],
     ) -> tuple[int, set[int]] | None:
+        if self._rotation_axis_cache_version != self._graph_version:
+            self._rotation_axis_cache.clear()
+            self._rotation_axis_cache_version = self._graph_version
+        cache_key = (
+            frozenset(selected_atom_ids),
+            frozenset(selected_bond_ids),
+            self._graph_version,
+        )
+        if cache_key in self._rotation_axis_cache:
+            return self._rotation_axis_cache[cache_key]
+        def _store(axis: tuple[int, set[int]] | None) -> tuple[int, set[int]] | None:
+            self._rotation_axis_cache[cache_key] = axis
+            return axis
         explicit_atoms = set(selected_atom_ids)
         bond_atoms: set[int] = set()
         selected_bonds: set[int] = set()
@@ -2688,14 +2719,14 @@ class CanvasView(QGraphicsView):
             if self._bond_is_rotatable(bond_id):
                 component = self._bond_component_atoms(bond_id)
                 if component is not None and component.issubset(selected_atom_ids):
-                    return bond_id, component
+                    return _store((bond_id, component))
                 rotating = self._rotation_side_for_bond(
                     bond_id,
                     atoms_for_boundary,
                     allow_fallback=True,
                 )
                 if rotating is not None:
-                    return bond_id, rotating
+                    return _store((bond_id, rotating))
         if not explicit_atoms and len(selected_bonds) > 1:
             selected_degree: dict[int, int] = {}
             for bond_id in selected_bonds:
@@ -2728,10 +2759,10 @@ class CanvasView(QGraphicsView):
                         allow_fallback=True,
                     )
                     if rotating is not None:
-                        return bond_id, rotating
-                return None
+                        return _store((bond_id, rotating))
+                return _store(None)
         if not atoms_for_boundary:
-            return None
+            return _store(None)
         boundary = []
         for bond_id, bond in enumerate(self.model.bonds):
             if bond is None:
@@ -2743,17 +2774,17 @@ class CanvasView(QGraphicsView):
         if len(boundary) == 1:
             bond_id = boundary[0]
             if not self._bond_is_rotatable(bond_id):
-                return None
+                return _store(None)
             rotating = self._rotation_side_for_bond(
                 bond_id,
                 atoms_for_boundary,
                 allow_fallback=not explicit_atoms,
             )
             if rotating is not None:
-                return bond_id, rotating
+                return _store((bond_id, rotating))
         atoms_for_axis = set(atoms_for_boundary)
         if not atoms_for_axis:
-            return None
+            return _store(None)
         candidates: list[tuple[int, set[int]]] = []
         for bond_id, bond in enumerate(self.model.bonds):
             if bond is None or not self._bond_is_rotatable(bond_id):
@@ -2767,11 +2798,16 @@ class CanvasView(QGraphicsView):
                 continue
             candidates.append((bond_id, rotating))
         if len(candidates) == 1:
-            return candidates[0]
-        return None
+            axis = candidates[0]
+        else:
+            axis = None
+        return _store(axis)
 
     def set_selection_info_callback(self, callback) -> None:
         self._selection_info_callback = callback
+
+    def set_zoom_callback(self, callback) -> None:
+        self._zoom_callback = callback
 
     def _touch_interaction(self) -> None:
         self._last_interaction_time = time.monotonic()
@@ -3916,6 +3952,11 @@ class CanvasView(QGraphicsView):
                 if atom_id in self.model.atoms
             }
             self.rotation_center_3d = (center.x(), center.y(), 0.0)
+            scale_atom_ids = set(self.rotation_atom_ids)
+            self._rotation_base_bond_length = self._average_bond_length_for_atoms(
+                scale_atom_ids,
+                self._rotation_base_coords,
+            )
             return True
         axis = self._rotatable_axis_from_selection(explicit_atom_ids, set(bond_ids))
         if axis is None and isinstance(axis_hint, int) and self._bond_is_rotatable(axis_hint):
@@ -3967,14 +4008,22 @@ class CanvasView(QGraphicsView):
             if atom_id in self.model.atoms
         }
         self.rotation_center_3d = (axis_center.x(), axis_center.y(), 0.0)
+        scale_atom_ids = set(self.rotation_atom_ids)
+        scale_atom_ids.update((axis_a, axis_b))
+        self._rotation_base_bond_length = self._average_bond_length_for_atoms(
+            scale_atom_ids,
+            self._rotation_base_coords,
+        )
         return True
 
     def update_selection_3d_rotation(self, delta_x: float, delta_y: float) -> None:
         if not self.rotation_atom_ids:
             return
+        sensitivity = 0.005
+        depth_factor = self._rotation_depth_factor
         if self._rotation_mode == "rigid":
-            angle_x = delta_y * 0.01
-            angle_y = delta_x * 0.01
+            angle_x = delta_y * sensitivity
+            angle_y = delta_x * sensitivity
             if abs(angle_x) < 1e-9 and abs(angle_y) < 1e-9:
                 return
             self._rotation_free_angle_x += angle_x
@@ -3987,6 +4036,7 @@ class CanvasView(QGraphicsView):
             sin_y = math.sin(self._rotation_free_angle_y)
             cos_x = math.cos(self._rotation_free_angle_x)
             sin_x = math.sin(self._rotation_free_angle_x)
+            rotated_coords: dict[int, tuple[float, float, float]] = {}
             for atom_id in self.rotation_atom_ids:
                 coords = self._rotation_base_coords.get(atom_id)
                 if coords is None:
@@ -4002,6 +4052,29 @@ class CanvasView(QGraphicsView):
                 x = rx + cx
                 y = ry + cy
                 z = rz2 + cz
+                if depth_factor < 1.0:
+                    base_x, base_y, base_z = coords
+                    x = base_x + (x - base_x) * depth_factor
+                    y = base_y + (y - base_y) * depth_factor
+                    z = base_z + (z - base_z) * depth_factor
+                rotated_coords[atom_id] = (x, y, z)
+            scale = 1.0
+            if self._rotation_base_bond_length:
+                scale_atom_ids = set(self.rotation_atom_ids)
+                current_coords = dict(self._rotation_base_coords)
+                current_coords.update(rotated_coords)
+                current_avg = self._average_bond_length_for_atoms(scale_atom_ids, current_coords)
+                if current_avg:
+                    scale = self._rotation_base_bond_length / current_avg
+            if scale != 1.0:
+                scale = max(0.8, min(1.25, scale))
+            if abs(scale - 1.0) > 1e-3:
+                for atom_id, (x, y, z) in rotated_coords.items():
+                    x = cx + (x - cx) * scale
+                    y = cy + (y - cy) * scale
+                    z = cz + (z - cz) * scale
+                    rotated_coords[atom_id] = (x, y, z)
+            for atom_id, (x, y, z) in rotated_coords.items():
                 self.atom_coords_3d[atom_id] = (x, y, z)
                 atom = self.model.atoms.get(atom_id)
                 if atom is None:
@@ -4030,7 +4103,7 @@ class CanvasView(QGraphicsView):
             return
         if self._rotation_axis_atoms is None:
             return
-        angle_delta = (delta_x + delta_y) * 0.01
+        angle_delta = (delta_x + delta_y) * sensitivity
         if abs(angle_delta) < 1e-9:
             return
         self._rotation_total_angle += angle_delta
@@ -4039,17 +4112,46 @@ class CanvasView(QGraphicsView):
         axis_end = self._rotation_base_coords.get(axis_b)
         if axis_start is None or axis_end is None:
             return
+        rotated_coords = {}
         for atom_id in self.rotation_atom_ids:
             coords = self._rotation_base_coords.get(atom_id)
             if coords is None:
                 continue
             rotated = self._rotate_point_around_axis(coords, axis_start, axis_end, self._rotation_total_angle)
-            self.atom_coords_3d[atom_id] = rotated
+            if depth_factor < 1.0:
+                base_x, base_y, base_z = coords
+                rot_x, rot_y, rot_z = rotated
+                rotated = (
+                    base_x + (rot_x - base_x) * depth_factor,
+                    base_y + (rot_y - base_y) * depth_factor,
+                    base_z + (rot_z - base_z) * depth_factor,
+                )
+            rotated_coords[atom_id] = rotated
+        scale = 1.0
+        if self._rotation_base_bond_length:
+            scale_atom_ids = set(self.rotation_atom_ids)
+            scale_atom_ids.update(self._rotation_axis_atoms)
+            current_coords = dict(self._rotation_base_coords)
+            current_coords.update(rotated_coords)
+            current_avg = self._average_bond_length_for_atoms(scale_atom_ids, current_coords)
+            if current_avg:
+                scale = self._rotation_base_bond_length / current_avg
+        if scale != 1.0:
+            scale = max(0.8, min(1.25, scale))
+        if abs(scale - 1.0) > 1e-3:
+            cx, cy, cz = self.rotation_center_3d or (0.0, 0.0, 0.0)
+            for atom_id, (x, y, z) in rotated_coords.items():
+                x = cx + (x - cx) * scale
+                y = cy + (y - cy) * scale
+                z = cz + (z - cz) * scale
+                rotated_coords[atom_id] = (x, y, z)
+        for atom_id, (x, y, z) in rotated_coords.items():
+            self.atom_coords_3d[atom_id] = (x, y, z)
             atom = self.model.atoms.get(atom_id)
             if atom is None:
                 continue
-            atom.x = rotated[0]
-            atom.y = rotated[1]
+            atom.x = x
+            atom.y = y
             label = self.atom_items.get(atom_id)
             if label is not None:
                 self._position_label(label, atom.x, atom.y)
@@ -4081,6 +4183,7 @@ class CanvasView(QGraphicsView):
         self._rotation_mode = None
         self._rotation_free_angle_x = 0.0
         self._rotation_free_angle_y = 0.0
+        self._rotation_base_bond_length = None
         self._rotation_selection_ids = None
         self._rotation_axis_bond_id = None
         self._rotation_axis_atoms = None
@@ -4112,7 +4215,19 @@ class CanvasView(QGraphicsView):
         boundary: set[int] = set()
         if not atom_ids:
             return internal, boundary
-        for bond_id, bond in enumerate(self.model.bonds):
+        bond_ids: set[int] = set()
+        for atom_id in atom_ids:
+            bond_ids.update(self._atom_bond_ids.get(atom_id, ()))
+        if not bond_ids:
+            for bond_id, bond in enumerate(self.model.bonds):
+                if bond is None:
+                    continue
+                a_in = bond.a in atom_ids
+                b_in = bond.b in atom_ids
+                if a_in or b_in:
+                    bond_ids.add(bond_id)
+        for bond_id in bond_ids:
+            bond = self.model.bonds[bond_id]
             if bond is None:
                 continue
             a_in = bond.a in atom_ids
@@ -4168,8 +4283,48 @@ class CanvasView(QGraphicsView):
                 if atom is None:
                     continue
                 points.append(QPointF(atom.x, atom.y))
-            if len(points) >= 3:
-                ring_item.setPolygon(QPolygonF(points))
+                if len(points) >= 3:
+                    ring_item.setPolygon(QPolygonF(points))
+
+    def _average_bond_length_for_atoms(
+        self,
+        atom_ids: set[int],
+        coords: dict[int, tuple[float, float, float]],
+    ) -> float | None:
+        if not atom_ids:
+            return None
+        bond_ids: set[int] = set()
+        for atom_id in atom_ids:
+            bond_ids.update(self._atom_bond_ids.get(atom_id, ()))
+        if not bond_ids:
+            for bond_id, bond in enumerate(self.model.bonds):
+                if bond is None:
+                    continue
+                if bond.a in atom_ids and bond.b in atom_ids:
+                    bond_ids.add(bond_id)
+        if not bond_ids:
+            return None
+        total = 0.0
+        count = 0
+        for bond_id in bond_ids:
+            bond = self.model.bonds[bond_id]
+            if bond is None:
+                continue
+            if bond.a not in atom_ids or bond.b not in atom_ids:
+                continue
+            a_coords = coords.get(bond.a)
+            b_coords = coords.get(bond.b)
+            if a_coords is None or b_coords is None:
+                continue
+            dx = a_coords[0] - b_coords[0]
+            dy = a_coords[1] - b_coords[1]
+            dist = math.hypot(dx, dy)
+            if dist > 1e-9:
+                total += dist
+                count += 1
+        if count == 0:
+            return None
+        return total / count
 
     @staticmethod
     def _rotate_point_around_axis(
