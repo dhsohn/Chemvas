@@ -116,7 +116,7 @@ class CanvasView(QGraphicsView):
         self.scene().selectionChanged.connect(self._update_selection_outline)
         self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
-        self.setBackgroundBrush(QColor("#ffffff"))
+        self.setBackgroundBrush(QColor("#fdf9f3"))
         self.setSceneRect(QRectF(-2000.0, -2000.0, 4000.0, 4000.0))
         self.setMouseTracking(True)
         self.viewport().setMouseTracking(True)
