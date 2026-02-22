@@ -57,7 +57,7 @@ class ArrowButton(QToolButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor("#2c3e50"))
+        painter.setBrush(QColor("#3d3229"))
         rect = self.rect().adjusted(6, 4, -6, -4)
         if rect.width() <= 0 or rect.height() <= 0:
             return
@@ -82,7 +82,7 @@ class CornerMenuButton(QToolButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor("#5a6a7e"))
+        painter.setBrush(QColor("#8b7d6e"))
         rect = self.rect()
         size = 6
         right = rect.right() - 2
@@ -146,16 +146,16 @@ class MainWindow(QMainWindow):
             " padding: 4px;"
             "}"
             "QToolButton:hover {"
-            " background-color: #e8ecf2;"
-            " border-color: #cdd4e0;"
+            " background-color: #ebe4da;"
+            " border-color: #d4c9bb;"
             "}"
             "QToolButton:pressed {"
-            " background-color: #d5dbe6;"
-            " border-color: #b8c2d4;"
+            " background-color: #ddd3c5;"
+            " border-color: #c4b6a4;"
             "}"
             "QToolButton:checked {"
-            " background-color: #dce6f7;"
-            " border-color: #7ba3e0;"
+            " background-color: #e8ddd0;"
+            " border-color: #b8a48e;"
             "}"
         )
         menu_button_style = (
@@ -166,16 +166,16 @@ class MainWindow(QMainWindow):
             " padding-right: 4px;"
             "}"
             "QToolButton:hover {"
-            " background-color: #e8ecf2;"
-            " border-color: #cdd4e0;"
+            " background-color: #ebe4da;"
+            " border-color: #d4c9bb;"
             "}"
             "QToolButton:pressed {"
-            " background-color: #d5dbe6;"
-            " border-color: #b8c2d4;"
+            " background-color: #ddd3c5;"
+            " border-color: #c4b6a4;"
             "}"
             "QToolButton:checked {"
-            " background-color: #dce6f7;"
-            " border-color: #7ba3e0;"
+            " background-color: #e8ddd0;"
+            " border-color: #b8a48e;"
             "}"
             "QToolButton::menu-indicator { image: none; width: 0px; }"
         )
@@ -399,19 +399,19 @@ class MainWindow(QMainWindow):
         smiles_button.setObjectName("smiles_render_button")
         smiles_button.setStyleSheet(
             "QToolButton#smiles_render_button {"
-            " border: 1px solid #cdd4e0;"
+            " border: 1px solid #d4c9bb;"
             " border-radius: 5px;"
             " padding: 3px 10px;"
-            " background-color: #ffffff;"
-            " color: #2c3e50;"
+            " background-color: #faf8f5;"
+            " color: #3d3229;"
             "}"
             "QToolButton#smiles_render_button:hover {"
-            " background-color: #e8ecf2;"
-            " border-color: #b8c2d4;"
+            " background-color: #ebe4da;"
+            " border-color: #c4b6a4;"
             "}"
             "QToolButton#smiles_render_button:pressed {"
-            " background-color: #d5dbe6;"
-            " border-color: #7ba3e0;"
+            " background-color: #ddd3c5;"
+            " border-color: #b8a48e;"
             "}"
         )
         smiles_button.clicked.connect(lambda: self.canvas.begin_smiles_insert(smiles_input.text()))
@@ -498,7 +498,7 @@ class MainWindow(QMainWindow):
 
     def _icon_select(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#5b7fb5"))
+            pen = QPen(QColor("#8b7355"))
             pen.setWidthF(2.0)
             pen.setStyle(Qt.PenStyle.DashLine)
             p.setPen(pen)
@@ -507,7 +507,7 @@ class MainWindow(QMainWindow):
 
     def _icon_bond(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#2c3e50"))
+            pen = QPen(QColor("#3d3229"))
             pen.setWidthF(2.0)
             p.setPen(pen)
             p.drawLine(7, 23, 23, 7)
@@ -555,14 +555,14 @@ class MainWindow(QMainWindow):
             font.setBold(True)
             font.setPointSize(22)
             p.setFont(font)
-            p.setPen(QPen(QColor("#2c3e50")))
+            p.setPen(QPen(QColor("#3d3229")))
             p.drawText(7, 21, "A")
         return self._make_icon(draw)
 
     def _icon_ring(self) -> QIcon:
         def draw(p):
             p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-            pen = QPen(QColor("#2c3e50"))
+            pen = QPen(QColor("#3d3229"))
             pen.setWidthF(1.8)
             p.setPen(pen)
             center = QPointF(15.0, 15.0)
@@ -577,7 +577,7 @@ class MainWindow(QMainWindow):
                     )
                 )
             p.drawPolygon(outer)
-            inner_pen = QPen(QColor("#2c3e50"))
+            inner_pen = QPen(QColor("#3d3229"))
             inner_pen.setWidthF(1.8)
             p.setPen(inner_pen)
             spacing = 1.6
@@ -607,7 +607,7 @@ class MainWindow(QMainWindow):
     def _icon_ring_fill(self) -> QIcon:
         def draw(p):
             p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-            pen = QPen(QColor("#2c3e50"))
+            pen = QPen(QColor("#3d3229"))
             pen.setWidthF(1.8)
             center = QPointF(15.0, 15.0)
             radius = 10.0
@@ -627,7 +627,7 @@ class MainWindow(QMainWindow):
 
     def _icon_undo(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#2c3e50"))
+            pen = QPen(QColor("#3d3229"))
             pen.setWidthF(1.6)
             p.setPen(pen)
             p.drawArc(5, 8, 18, 18, 90 * 16, 270 * 16)
@@ -637,7 +637,7 @@ class MainWindow(QMainWindow):
 
     def _icon_redo(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#2c3e50"))
+            pen = QPen(QColor("#3d3229"))
             pen.setWidthF(1.6)
             p.setPen(pen)
             p.drawArc(8, 8, 18, 18, 180 * 16, 270 * 16)
@@ -647,7 +647,7 @@ class MainWindow(QMainWindow):
 
     def _icon_save(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#2c3e50"))
+            pen = QPen(QColor("#3d3229"))
             pen.setWidthF(1.4)
             p.setPen(pen)
             p.drawRect(6, 5, 18, 20)
@@ -657,7 +657,7 @@ class MainWindow(QMainWindow):
 
     def _icon_open(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#2c3e50"))
+            pen = QPen(QColor("#3d3229"))
             pen.setWidthF(1.4)
             p.setPen(pen)
             p.drawRect(6, 13, 18, 10)
@@ -668,7 +668,7 @@ class MainWindow(QMainWindow):
 
     def _icon_templates(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#2c3e50"))
+            pen = QPen(QColor("#3d3229"))
             pen.setWidthF(1.6)
             p.setPen(pen)
             chair = self._chair_icon_points(QRectF(4.0, 7.0, 22.0, 16.0))
@@ -678,7 +678,7 @@ class MainWindow(QMainWindow):
 
     def _icon_info(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#2c3e50"))
+            pen = QPen(QColor("#3d3229"))
             pen.setWidthF(1.4)
             p.setPen(pen)
             p.drawEllipse(7, 7, 16, 16)
@@ -688,7 +688,7 @@ class MainWindow(QMainWindow):
 
     def _icon_bond_double(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#2c3e50"))
+            pen = QPen(QColor("#3d3229"))
             pen.setWidthF(1.6)
             p.setPen(pen)
             p.drawLine(5, 11, 25, 11)
@@ -697,7 +697,7 @@ class MainWindow(QMainWindow):
 
     def _icon_bond_triple(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#2c3e50"))
+            pen = QPen(QColor("#3d3229"))
             pen.setWidthF(1.4)
             p.setPen(pen)
             p.drawLine(5, 10, 25, 10)
@@ -757,7 +757,7 @@ class MainWindow(QMainWindow):
 
     def _icon_bond_length(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#2c3e50"))
+            pen = QPen(QColor("#3d3229"))
             pen.setWidthF(1.4)
             p.setPen(pen)
             p.drawLine(6, 15, 24, 15)
@@ -767,7 +767,7 @@ class MainWindow(QMainWindow):
 
     def _icon_arrow_preview(self, kind: str) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#2c3e50"))
+            pen = QPen(QColor("#3d3229"))
             pen.setWidthF(1.4)
             if kind == "dotted":
                 pen.setStyle(Qt.PenStyle.DashLine)
@@ -814,7 +814,7 @@ class MainWindow(QMainWindow):
 
     def _icon_orbital_preview(self, kind: str) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#2c3e50"))
+            pen = QPen(QColor("#3d3229"))
             pen.setWidthF(1.4)
             p.setPen(pen)
             if kind == "s":
@@ -858,7 +858,7 @@ class MainWindow(QMainWindow):
             p.drawPolygon(poly)
 
         def draw(p):
-            pen = QPen(QColor("#2c3e50"))
+            pen = QPen(QColor("#3d3229"))
             pen.setWidthF(1.4)
             p.setPen(pen)
             lower = label.lower()
@@ -935,7 +935,7 @@ class MainWindow(QMainWindow):
 
     def _icon_flip_h(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#2c3e50"))
+            pen = QPen(QColor("#3d3229"))
             pen.setWidthF(1.4)
             p.setPen(pen)
             p.drawLine(15, 5, 15, 25)
@@ -947,7 +947,7 @@ class MainWindow(QMainWindow):
 
     def _icon_flip_v(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#2c3e50"))
+            pen = QPen(QColor("#3d3229"))
             pen.setWidthF(1.4)
             p.setPen(pen)
             p.drawLine(5, 15, 25, 15)
@@ -959,7 +959,7 @@ class MainWindow(QMainWindow):
 
     def _icon_arrow(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#2c3e50"))
+            pen = QPen(QColor("#3d3229"))
             pen.setWidthF(2.0)
             p.setPen(pen)
             p.drawLine(5, 15, 23, 15)
@@ -969,7 +969,7 @@ class MainWindow(QMainWindow):
 
     def _icon_orbital(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#2c3e50"))
+            pen = QPen(QColor("#3d3229"))
             pen.setWidthF(1.4)
             p.setPen(pen)
             p.drawEllipse(6, 10, 8, 10)
@@ -978,7 +978,7 @@ class MainWindow(QMainWindow):
 
     def _icon_move(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#2c3e50"))
+            pen = QPen(QColor("#3d3229"))
             pen.setWidthF(1.4)
             p.setPen(pen)
             p.drawLine(15, 5, 15, 25)
@@ -995,7 +995,7 @@ class MainWindow(QMainWindow):
 
     def _icon_color(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#2c3e50"))
+            pen = QPen(QColor("#3d3229"))
             pen.setWidthF(1.4)
             p.setPen(pen)
             p.setBrush(QBrush(QColor("#d8c8a6")))
@@ -1015,7 +1015,7 @@ class MainWindow(QMainWindow):
 
     def _icon_perspective(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#2c3e50"))
+            pen = QPen(QColor("#3d3229"))
             pen.setWidthF(1.4)
             p.setPen(pen)
             cx, cy, r = 15.0, 15.0, 10.0
@@ -1093,17 +1093,17 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(
             """
             QMainWindow {
-                background: #eef0f4;
+                background: #f0ebe4;
             }
             QToolBar {
-                background: #f8f9fb;
+                background: #f7f3ee;
                 border: none;
-                border-bottom: 1px solid #dde1e8;
+                border-bottom: 1px solid #ddd5ca;
                 spacing: 4px;
                 padding: 3px;
             }
             QToolBar::separator {
-                background: #dde1e8;
+                background: #ddd5ca;
                 width: 1px;
                 height: 20px;
                 margin: 4px 6px;
@@ -1112,179 +1112,179 @@ class MainWindow(QMainWindow):
                 border: 1px solid transparent;
                 border-radius: 5px;
                 padding: 5px;
-                color: #2c3e50;
+                color: #3d3229;
             }
             QToolButton:hover {
-                background: #e8ecf2;
-                border-color: #cdd4e0;
+                background: #ebe4da;
+                border-color: #d4c9bb;
             }
             QToolButton:pressed {
-                background: #d5dbe6;
-                border-color: #b8c2d4;
+                background: #ddd3c5;
+                border-color: #c4b6a4;
             }
             QToolButton:checked {
-                background: #dce6f7;
-                border-color: #7ba3e0;
+                background: #e8ddd0;
+                border-color: #b8a48e;
             }
             QLabel, QCheckBox, QGroupBox, QTabBar, QDockWidget, QToolButton {
-                color: #2c3e50;
+                color: #3d3229;
             }
             QDockWidget {
-                background: #f8f9fb;
-                border: 1px solid #dde1e8;
+                background: #f7f3ee;
+                border: 1px solid #ddd5ca;
             }
             QTabWidget::pane {
-                border: 1px solid #dde1e8;
-                background: #f8f9fb;
+                border: 1px solid #ddd5ca;
+                background: #f7f3ee;
             }
             QTabBar::tab {
-                background: #eef0f4;
+                background: #f0ebe4;
                 padding: 6px 10px;
-                border: 1px solid #dde1e8;
+                border: 1px solid #ddd5ca;
                 border-bottom: none;
                 margin-right: 2px;
-                color: #2c3e50;
+                color: #3d3229;
             }
             QTabBar::tab:selected {
-                background: #ffffff;
+                background: #faf8f5;
             }
             QLineEdit, QComboBox, QSpinBox {
-                background: #ffffff;
-                border: 1px solid #cdd4e0;
+                background: #faf8f5;
+                border: 1px solid #d4c9bb;
                 border-radius: 4px;
                 padding: 3px 6px;
-                color: #2c3e50;
+                color: #3d3229;
             }
             QLineEdit:focus, QComboBox:focus {
-                border-color: #7ba3e0;
+                border-color: #b8a48e;
             }
             QSpinBox, QDoubleSpinBox {
-                background: #fdfcfb;
-                border: 1px solid #cdd4e0;
+                background: #faf8f5;
+                border: 1px solid #d4c9bb;
                 border-radius: 4px;
                 padding: 2px 6px;
-                color: #2c3e50;
+                color: #3d3229;
             }
             QAbstractSpinBox::up-button, QAbstractSpinBox::down-button {
-                background: #fdfcfb;
-                border-left: 1px solid #cdd4e0;
+                background: #f7f3ee;
+                border-left: 1px solid #d4c9bb;
                 width: 14px;
             }
             QFrame#spinFrame {
-                background: #fdfcfb;
-                border: 1px solid #cdd4e0;
+                background: #faf8f5;
+                border: 1px solid #d4c9bb;
                 border-radius: 4px;
             }
             QFrame#spinFrame QDoubleSpinBox {
                 background: transparent;
                 border: none;
                 padding: 2px 6px;
-                color: #2c3e50;
+                color: #3d3229;
             }
             QToolButton#spinUpButton {
-                background: #fdfcfb;
-                border-left: 1px solid #cdd4e0;
-                border-bottom: 1px solid #cdd4e0;
+                background: #f7f3ee;
+                border-left: 1px solid #d4c9bb;
+                border-bottom: 1px solid #d4c9bb;
             }
             QToolButton#spinDownButton {
-                background: #fdfcfb;
-                border-left: 1px solid #cdd4e0;
+                background: #f7f3ee;
+                border-left: 1px solid #d4c9bb;
             }
             QComboBox QAbstractItemView {
-                background: #ffffff;
-                color: #2c3e50;
-                border: 1px solid #cdd4e0;
-                selection-background-color: #dce6f7;
-                selection-color: #2c3e50;
+                background: #faf8f5;
+                color: #3d3229;
+                border: 1px solid #d4c9bb;
+                selection-background-color: #e8ddd0;
+                selection-color: #3d3229;
             }
             QAbstractItemView {
-                background: #ffffff;
-                color: #2c3e50;
-                border: 1px solid #cdd4e0;
+                background: #faf8f5;
+                color: #3d3229;
+                border: 1px solid #d4c9bb;
             }
             QAbstractItemView::item {
-                background: #ffffff;
-                color: #2c3e50;
+                background: #faf8f5;
+                color: #3d3229;
             }
             QPushButton {
-                color: #2c3e50;
-                border: 1px solid #cdd4e0;
+                color: #3d3229;
+                border: 1px solid #d4c9bb;
                 border-radius: 4px;
                 padding: 4px 12px;
-                background: #ffffff;
+                background: #faf8f5;
             }
             QPushButton:hover {
-                background: #e8ecf2;
-                border-color: #b8c2d4;
+                background: #ebe4da;
+                border-color: #c4b6a4;
             }
             QPushButton:pressed {
-                background: #d5dbe6;
+                background: #ddd3c5;
             }
             QMenu {
-                background: #ffffff;
-                border: 1px solid #dde1e8;
+                background: #faf8f5;
+                border: 1px solid #ddd5ca;
                 border-radius: 6px;
                 padding: 4px 0;
             }
             QMenu::item {
                 padding: 6px 24px 6px 12px;
-                color: #2c3e50;
+                color: #3d3229;
             }
             QMenu::item:selected {
-                background: #e8ecf2;
+                background: #ebe4da;
                 border-radius: 4px;
             }
             QMenu::separator {
                 height: 1px;
-                background: #dde1e8;
+                background: #ddd5ca;
                 margin: 4px 8px;
             }
             QDialog, QMessageBox {
-                background: #f4f5f8;
+                background: #f4f0ea;
             }
             QDialog QLabel, QMessageBox QLabel {
-                color: #2c3e50;
+                color: #3d3229;
             }
             QDialog QLineEdit, QMessageBox QLineEdit {
-                background: #ffffff;
-                border: 1px solid #cdd4e0;
+                background: #faf8f5;
+                border: 1px solid #d4c9bb;
                 border-radius: 4px;
                 padding: 3px 6px;
-                color: #2c3e50;
+                color: #3d3229;
             }
             QDialog QPushButton, QMessageBox QPushButton {
-                background: #ffffff;
-                border: 1px solid #cdd4e0;
+                background: #faf8f5;
+                border: 1px solid #d4c9bb;
                 border-radius: 4px;
                 padding: 5px 14px;
-                color: #2c3e50;
+                color: #3d3229;
             }
             QDialog QPushButton:hover, QMessageBox QPushButton:hover {
-                background: #e8ecf2;
+                background: #ebe4da;
             }
             QSlider::groove:horizontal {
                 height: 6px;
-                background: #d5dbe6;
+                background: #ddd3c5;
                 border-radius: 3px;
             }
             QSlider::handle:horizontal {
                 width: 12px;
                 height: 12px;
-                background: #6b93d6;
+                background: #b8a48e;
                 border-radius: 6px;
                 margin: -4px 0;
             }
             QSlider::handle:horizontal:hover {
-                background: #5a82c5;
+                background: #a6917a;
             }
             QStatusBar {
-                background: #f8f9fb;
-                border-top: 1px solid #dde1e8;
-                color: #5a6a7e;
+                background: #f7f3ee;
+                border-top: 1px solid #ddd5ca;
+                color: #7a6e61;
                 padding: 2px 8px;
             }
             QStatusBar QLabel {
-                color: #5a6a7e;
+                color: #7a6e61;
             }
             """
         )
