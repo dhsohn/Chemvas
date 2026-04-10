@@ -7,11 +7,14 @@ from ui.main_window import MainWindow
 
 def main() -> None:
     def _stderr_filter_loop(read_fd: int, write_fd: int) -> None:
+        ignored_substrings = (
+            "TSM AdjustCapsLockLEDForKeyTransitionHandling",
+            "error messaging the mach port for IMKCFRunLoopWakeUpReliable",
+            "qt.qpa.keymapper: Mismatch between Cocoa",
+        )
         with os.fdopen(read_fd, "r", buffering=1) as reader, os.fdopen(write_fd, "w", buffering=1) as writer:
             for line in reader:
-                if "TSM AdjustCapsLockLEDForKeyTransitionHandling" in line:
-                    continue
-                if "error messaging the mach port for IMKCFRunLoopWakeUpReliable" in line:
+                if any(fragment in line for fragment in ignored_substrings):
                     continue
                 writer.write(line)
 
