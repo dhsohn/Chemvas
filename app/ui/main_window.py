@@ -125,12 +125,10 @@ class MainWindow(QMainWindow):
         tool_group = QActionGroup(self)
         tool_group.setExclusive(True)
 
-        def tool_action(label: str, tool: str, shortcut: str | None = None) -> QAction:
+        def tool_action(label: str, tool: str) -> QAction:
             action = QAction(label, self)
             action.setCheckable(True)
             action.triggered.connect(lambda: self._set_tool_with_status(tool))
-            if shortcut:
-                action.setShortcut(shortcut)
             tool_group.addAction(action)
             return action
 
@@ -181,12 +179,12 @@ class MainWindow(QMainWindow):
         )
         left_bar.setStyleSheet(button_style)
 
-        action_select = tool_action("Select", "select", "V")
-        action_bond = tool_action("Bond", "bond", "B")
-        action_text = tool_action("Atom", "text", "T")
-        action_ring = tool_action("Ring", "benzene", "R")
-        action_arrow = tool_action("Arrow", "arrow", "A")
-        action_orbital = tool_action("Orbital", "orbital", "O")
+        action_select = tool_action("Select", "select")
+        action_bond = tool_action("Bond", "bond")
+        action_text = tool_action("Atom", "text")
+        action_ring = tool_action("Ring", "benzene")
+        action_arrow = tool_action("Arrow", "arrow")
+        action_orbital = tool_action("Orbital", "orbital")
         action_perspective = tool_action("Perspective", "perspective")
         action_bond_bold = QAction("Bold Bond", self)
         action_bond_bold.setCheckable(True)
@@ -230,41 +228,53 @@ class MainWindow(QMainWindow):
             lambda: (self.canvas.set_mark_kind("radical"), self.statusBar().showMessage("Mark Tool"))
         )
         tool_group.addAction(action_mark_radical)
+        self._tool_actions = {
+            "select": action_select,
+            "bond": action_bond,
+            "bond_bold": action_bond_bold,
+            "bond_wedge": action_wedge,
+            "bond_hash": action_hash,
+            "text": action_text,
+            "mark_plus": action_mark_plus,
+            "mark_minus": action_mark_minus,
+            "mark_radical": action_mark_radical,
+            "benzene": action_ring,
+            "arrow": action_arrow,
+            "orbital": action_orbital,
+            "perspective": action_perspective,
+        }
 
         action_select.setIcon(self._icon_select())
-        action_select.setToolTip("Select (V)")
+        action_select.setToolTip("Select / Marquee (ChemDraw: Space)")
         action_bond.setIcon(self._icon_bond())
-        action_bond.setToolTip("Bond (B)")
+        action_bond.setToolTip("Bond (ChemDraw: X)")
         action_text.setIcon(self._icon_text())
-        action_text.setToolTip("Atom / Text (T)")
+        action_text.setToolTip("Atom / Text (ChemDraw: T)")
         action_ring.setIcon(self._icon_ring())
-        action_ring.setToolTip("Ring / Benzene (R)")
+        action_ring.setToolTip("Ring / Benzene (ChemDraw: J)")
         action_arrow.setIcon(self._icon_arrow())
-        action_arrow.setToolTip("Arrow (A)")
+        action_arrow.setToolTip("Arrow (ChemDraw: E)")
         action_orbital.setIcon(self._icon_orbital())
-        action_orbital.setToolTip("Orbital (O)")
+        action_orbital.setToolTip("Orbital (ChemDraw: Shift+G)")
         action_perspective.setIcon(self._icon_perspective())
-        action_perspective.setToolTip("Perspective Rotation")
-        action_bond_bold.setToolTip("Bold Bond")
-        action_wedge.setToolTip("Wedge Bond")
-        action_hash.setToolTip("Hash Bond")
-        action_mark_plus.setToolTip("Charge +")
-        action_mark_minus.setToolTip("Charge -")
+        action_perspective.setToolTip("Perspective Rotation (ChemDraw: Alt+D, Shift+drag locks X/Y)")
+        action_bond_bold.setToolTip("Bold Bond (Bond Hotkey: B)")
+        action_wedge.setToolTip("Wedge Bond (Bond Hotkey: W)")
+        action_hash.setToolTip("Hash Bond (Bond Hotkey: Shift+H)")
+        action_mark_plus.setToolTip("Charge + (Atom Hotkey: +)")
+        action_mark_minus.setToolTip("Charge - (Atom Hotkey: -)")
         action_mark_radical.setToolTip("Radical")
 
         left_bar.addAction(action_select)
         left_bar.addAction(action_perspective)
-        left_bar.addSeparator()
         left_bar.addAction(action_bond)
         left_bar.addAction(action_bond_bold)
         left_bar.addAction(action_wedge)
         left_bar.addAction(action_hash)
-        left_bar.addSeparator()
         left_bar.addAction(action_text)
         left_bar.addAction(action_mark_plus)
         left_bar.addAction(action_mark_minus)
         left_bar.addAction(action_mark_radical)
-        left_bar.addSeparator()
         left_bar.addAction(action_ring)
         templates_button = CornerMenuButton()
         templates_button.setIcon(self._icon_templates())
@@ -337,7 +347,6 @@ class MainWindow(QMainWindow):
 
         left_bar.addWidget(arrow_button)
         left_bar.addWidget(orbital_button)
-        left_bar.addSeparator()
 
         bond_len_btn = QToolButton()
         bond_len_btn.setToolTip("Bond Length")
@@ -345,11 +354,11 @@ class MainWindow(QMainWindow):
         bond_len_btn.clicked.connect(self._set_bond_length)
 
         flip_h = QToolButton()
-        flip_h.setToolTip("Flip Horizontal")
+        flip_h.setToolTip("Flip Horizontal (Ctrl+Shift+H)")
         flip_h.setIcon(self._icon_flip_h())
         flip_h.clicked.connect(self.canvas.flip_horizontal)
         flip_v = QToolButton()
-        flip_v.setToolTip("Flip Vertical")
+        flip_v.setToolTip("Flip Vertical (Ctrl+Shift+V)")
         flip_v.setIcon(self._icon_flip_v())
         flip_v.clicked.connect(self.canvas.flip_vertical)
 
@@ -486,6 +495,8 @@ class MainWindow(QMainWindow):
             mw_value.setText(mw)
 
         self.canvas.set_selection_info_callback(_update_selection_info)
+        self.canvas.set_tool_change_callback(self._sync_tool_actions_from_canvas)
+        self._sync_tool_actions_from_canvas()
 
     def _make_icon(self, painter_fn) -> QIcon:
         pixmap = QPixmap(30, 30)
@@ -1414,6 +1425,25 @@ class MainWindow(QMainWindow):
         "color": "Color",
         "mark": "Mark",
     }
+
+    def _sync_tool_actions_from_canvas(self) -> None:
+        active = self.canvas.tools.active.name if self.canvas.tools.active is not None else None
+        action = None
+        if active == "bond":
+            if self.canvas.active_bond_style in {"bold", "bold_in", "bold_out"}:
+                action = self._tool_actions.get("bond_bold")
+            elif self.canvas.active_bond_style == "wedge":
+                action = self._tool_actions.get("bond_wedge")
+            elif self.canvas.active_bond_style == "hash":
+                action = self._tool_actions.get("bond_hash")
+            else:
+                action = self._tool_actions.get("bond")
+        elif active == "mark":
+            action = self._tool_actions.get(f"mark_{self.canvas.mark_kind}")
+        elif active is not None:
+            action = self._tool_actions.get(active)
+        if action is not None:
+            action.setChecked(True)
 
     def _set_tool_with_status(self, tool: str, reset_bond_style: bool = True) -> None:
         self.canvas.set_tool(tool)
