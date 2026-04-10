@@ -1060,32 +1060,59 @@ class PerspectiveTool(Tool):
         self.canvas = canvas
         self._last_pos = None
         self._rotating = False
+        self._axis_lock = None
 
     def activate(self) -> None:
-        self.canvas.setDragMode(self.canvas.DragMode.NoDrag)
+        self.canvas.setDragMode(self.canvas.DragMode.RubberBandDrag)
+
+    def deactivate(self) -> None:
+        self._last_pos = None
+        self._rotating = False
+        self._axis_lock = None
 
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
             return False
+        self.canvas.clear_handles()
+        press_pos = self.canvas.scene_pos_from_event(event)
+        if not self.canvas.selection_hit_test(press_pos):
+            item = self.canvas.item_at_event(event)
+            if item is None or not self.canvas.select_structure_for_item(item):
+                return False
         axis_hint = self.canvas.bond_id_from_event(event)
-        self._rotating = self.canvas.begin_selection_3d_rotation(axis_hint=axis_hint)
+        self._rotating = self.canvas.begin_selection_3d_rotation(axis_hint=axis_hint, press_pos=press_pos)
         if self._rotating:
-            self._last_pos = event.globalPosition()
+            self._last_pos = event.position()
+            self._axis_lock = None
         else:
             self._last_pos = None
-        return True
+        return self._rotating
 
     def on_mouse_move(self, event) -> bool:
         if self._last_pos is None or not self._rotating:
             return self._rotating
-        current = event.globalPosition()
+        current = event.position()
         delta = current - self._last_pos
-        self.canvas.update_selection_3d_rotation(delta.x(), delta.y())
+        delta_x = delta.x()
+        delta_y = delta.y()
+        if self.canvas._rotation_mode == "rigid" and event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+            if self._axis_lock is None:
+                if abs(delta_x) < 1e-9 and abs(delta_y) < 1e-9:
+                    return True
+                self._axis_lock = "x" if abs(delta_x) >= abs(delta_y) else "y"
+            if self._axis_lock == "x":
+                delta_y = 0.0
+            else:
+                delta_x = 0.0
+        else:
+            self._axis_lock = None
+        self.canvas.update_selection_3d_rotation(delta_x, delta_y)
         self._last_pos = current
         return True
 
     def on_mouse_release(self, event) -> bool:
         self._last_pos = None
+        self._axis_lock = None
         if self._rotating:
             self.canvas.end_selection_3d_rotation()
         self._rotating = False
