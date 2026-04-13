@@ -216,10 +216,12 @@ class CanvasView(QGraphicsView):
         self._rotation_mode: str | None = None
         self._rotation_free_angle_x = 0.0
         self._rotation_free_angle_y = 0.0
-        self._rotation_depth_factor = 0.4
+        self._rotation_depth_factor = 1.0
         self._rotation_base_bond_length: float | None = None
         self.rotation_atom_ids: set[int] = set()
         self.rotation_center_3d: tuple[float, float, float] | None = None
+        self._projection_center_3d: tuple[float, float, float] | None = None
+        self._projection_anchor_2d: tuple[float, float] | None = None
         self._rotation_start_positions: dict[int, tuple[float, float]] = {}
         self.active_arrow_type = "reaction"
         self.active_orbital_type = "s"
@@ -260,6 +262,7 @@ class CanvasView(QGraphicsView):
         self.note_items: list[QGraphicsTextItem] = []
         self.mark_items: list[QGraphicsItem] = []
         self.arrow_items: list[QGraphicsPathItem] = []
+        self.ts_bracket_items: list[QGraphicsPathItem] = []
         self.orbital_items: list[QGraphicsItemGroup] = []
         self._marks_by_atom: dict[int, list[QGraphicsItem]] = {}
         self.hover_items: list = []
@@ -400,7 +403,7 @@ class CanvasView(QGraphicsView):
                 self.set_tool("benzene")
                 return True
         if modifiers == Qt.KeyboardModifier.ShiftModifier and event.key() == Qt.Key.Key_G:
-            self.set_tool("orbital")
+            self.set_tool("ts_bracket")
             return True
         if modifiers == Qt.KeyboardModifier.AltModifier and event.key() == Qt.Key.Key_D:
             self.set_tool("perspective")
@@ -771,6 +774,7 @@ class CanvasView(QGraphicsView):
         note_items: list[QGraphicsTextItem] = []
         mark_items: list[QGraphicsItem] = []
         arrow_items: list[QGraphicsItem] = []
+        ts_bracket_items: list[QGraphicsItem] = []
         orbital_items: list[QGraphicsItem] = []
         other_items: list[QGraphicsItem] = []
         for item in items:
@@ -801,6 +805,8 @@ class CanvasView(QGraphicsView):
                 "dotted",
             }:
                 arrow_items.append(item)
+            elif kind == "ts_bracket":
+                ts_bracket_items.append(item)
             elif kind == "orbital":
                 orbital_items.append(item)
             elif kind in {"handle", "note_box", "note_select"}:
@@ -815,6 +821,7 @@ class CanvasView(QGraphicsView):
             and not note_items
             and not mark_items
             and not arrow_items
+            and not ts_bracket_items
             and not orbital_items
             and not other_items
         ):
@@ -889,10 +896,11 @@ class CanvasView(QGraphicsView):
         scene_items.extend(note_items)
         scene_items.extend(mark_items)
         scene_items.extend(arrow_items)
+        scene_items.extend(ts_bracket_items)
         scene_items.extend(orbital_items)
         scene_items.extend(other_items)
         if scene_items:
-            if orbital_items or arrow_items:
+            if ts_bracket_items or orbital_items or arrow_items:
                 self.clear_handles()
             scene_states = [self.scene_item_state(item) for item in scene_items]
             for item in scene_items:
@@ -926,6 +934,7 @@ class CanvasView(QGraphicsView):
         notes = []
         marks = []
         arrows = []
+        ts_brackets = []
         orbitals = []
         for item in self.note_items:
             try:
@@ -990,6 +999,13 @@ class CanvasView(QGraphicsView):
                     "double": bool(double),
                 }
             )
+        for item in self.ts_bracket_items:
+            try:
+                if item.scene() is not self.scene():
+                    continue
+            except RuntimeError:
+                continue
+            ts_brackets.append(self._ts_bracket_state_dict(item))
         for item in self.orbital_items:
             try:
                 if item.scene() is not self.scene():
@@ -1025,6 +1041,7 @@ class CanvasView(QGraphicsView):
             "notes": notes,
             "marks": marks,
             "arrows": arrows,
+            "ts_brackets": ts_brackets,
             "orbitals": orbitals,
             "settings": settings,
             "last_smiles_input": self.last_smiles_input,
@@ -1117,6 +1134,9 @@ class CanvasView(QGraphicsView):
                 control = arrow_state.get("control")
                 if control and arrow_state.get("kind") in {"curved_single", "curved_double"}:
                     self._update_curved_control(item, QPointF(*control))
+
+            for ts_bracket_state in state.get("ts_brackets", []):
+                self._restore_ts_bracket_from_state(ts_bracket_state)
 
             for orbital_state in state.get("orbitals", []):
                 center = orbital_state.get("center")
@@ -1533,6 +1553,31 @@ class CanvasView(QGraphicsView):
             "double": bool(data.get("double", False)),
         }
 
+    def _ts_bracket_state_dict(self, item) -> dict:
+        data = item.data(1) or {}
+        rect = data.get("rect")
+        if not isinstance(rect, QRectF):
+            rect = item.sceneBoundingRect()
+        return {
+            "kind": "ts_bracket",
+            "left": rect.left(),
+            "top": rect.top(),
+            "right": rect.right(),
+            "bottom": rect.bottom(),
+        }
+
+    def _ts_bracket_rect_from_state(self, state: dict) -> QRectF | None:
+        coords = (
+            state.get("left"),
+            state.get("top"),
+            state.get("right"),
+            state.get("bottom"),
+        )
+        if not all(isinstance(value, (int, float)) for value in coords):
+            return None
+        left, top, right, bottom = (float(value) for value in coords)
+        return QRectF(QPointF(left, top), QPointF(right, bottom)).normalized()
+
     def _orbital_state_dict(self, item) -> dict:
         data = item.data(1) or {}
         center = data.get("center")
@@ -1555,6 +1600,8 @@ class CanvasView(QGraphicsView):
             return self._note_state_dict(item)
         if kind == "mark":
             return self._mark_state_dict(item)
+        if kind == "ts_bracket" and isinstance(item, QGraphicsPathItem):
+            return self._ts_bracket_state_dict(item)
         if kind == "orbital" and isinstance(item, QGraphicsItemGroup):
             return self._orbital_state_dict(item)
         if kind in {
@@ -1684,6 +1731,16 @@ class CanvasView(QGraphicsView):
         self.arrow_items.append(item)
         return item
 
+    def _restore_ts_bracket_from_state(self, ts_bracket_state: dict):
+        rect = self._ts_bracket_rect_from_state(ts_bracket_state)
+        if rect is None:
+            return None
+        item = self._build_ts_bracket_item(rect)
+        self._make_selectable(item)
+        self.scene().addItem(item)
+        self.ts_bracket_items.append(item)
+        return item
+
     def _restore_orbital_from_state(self, orbital_state: dict):
         center = orbital_state.get("center")
         if center is None:
@@ -1709,6 +1766,8 @@ class CanvasView(QGraphicsView):
             return self._restore_note_from_state(state)
         if kind == "mark":
             return self._restore_mark_from_state(state)
+        if kind == "ts_bracket":
+            return self._restore_ts_bracket_from_state(state)
         if kind == "orbital":
             return self._restore_orbital_from_state(state)
         if kind in {
@@ -1757,6 +1816,9 @@ class CanvasView(QGraphicsView):
         }:
             if item not in self.arrow_items:
                 self.arrow_items.append(item)
+        elif kind == "ts_bracket":
+            if item not in self.ts_bracket_items:
+                self.ts_bracket_items.append(item)
         elif kind == "orbital":
             if item not in self.orbital_items:
                 self.orbital_items.append(item)
@@ -1790,6 +1852,9 @@ class CanvasView(QGraphicsView):
         }:
             if item in self.arrow_items:
                 self.arrow_items.remove(item)
+        elif kind == "ts_bracket":
+            if item in self.ts_bracket_items:
+                self.ts_bracket_items.remove(item)
         elif kind == "orbital":
             if item in self.orbital_items:
                 self.orbital_items.remove(item)
@@ -1856,6 +1921,15 @@ class CanvasView(QGraphicsView):
                 item.setBrush(fill)
             else:
                 item.setBrush(self.renderer.ring_fill_brush())
+            return
+        if kind == "ts_bracket" and isinstance(item, QGraphicsPathItem):
+            rect = self._ts_bracket_rect_from_state(state)
+            if rect is None:
+                return
+            item.setPath(self._ts_bracket_path(rect))
+            item.setPen(QPen(Qt.PenStyle.NoPen))
+            item.setBrush(QBrush(QColor(self.renderer.style.bond_color)))
+            item.setData(1, {"rect": QRectF(rect)})
             return
         if kind == "orbital" and isinstance(item, QGraphicsItemGroup):
             center = state.get("center")
@@ -2163,6 +2237,18 @@ class CanvasView(QGraphicsView):
         snapshot: SelectionSnapshot,
     ) -> tuple[SelectionRect, ...]:
         rects: list[SelectionRect] = []
+        object_overlay_kinds = {
+            "arrow",
+            "equilibrium",
+            "resonance",
+            "curved_single",
+            "curved_double",
+            "inhibit",
+            "dotted",
+            "ts_bracket",
+            "mark",
+            "orbital",
+        }
         if snapshot.selected_atom_ids:
             for component in self._connected_components(set(snapshot.selected_atom_ids)):
                 bounds = self._bounds_for_atoms(component)
@@ -2172,6 +2258,8 @@ class CanvasView(QGraphicsView):
                 rects.append(SelectionRect(left=min_x, top=min_y, right=max_x, bottom=max_y))
         for item in snapshot.selection_items:
             if item.data(0) in {"atom", "bond", "ring"}:
+                continue
+            if item.data(0) in object_overlay_kinds:
                 continue
             rect = item.sceneBoundingRect()
             rects.append(
@@ -2196,7 +2284,7 @@ class CanvasView(QGraphicsView):
         outline_hit = False
         for outline in self.selection_outlines:
             data = outline.data(2) or {}
-            if data.get("kind") != "component":
+            if data.get("kind") not in {"component", "object"}:
                 continue
             if outline.contains(outline.mapFromScene(pos)):
                 outline_hit = True
@@ -2255,7 +2343,7 @@ class CanvasView(QGraphicsView):
                 atom_ids = self._expand_connected_atoms(
                     {atom_id for atom_id in ring_atom_ids if atom_id in self.model.atoms}
                 )
-        elif kind in {"arrow", "equilibrium", "resonance", "curved_single", "curved_double", "inhibit", "dotted", "orbital", "note", "mark"}:
+        elif kind in {"arrow", "equilibrium", "resonance", "curved_single", "curved_double", "inhibit", "dotted", "ts_bracket", "orbital", "note", "mark"}:
             self.scene().clearSelection()
             item.setSelected(True)
             return True
@@ -2678,7 +2766,7 @@ class CanvasView(QGraphicsView):
         if kind == "note":
             rect = item.sceneBoundingRect()
             return rect if rect.isValid() else None
-        if kind in {"mark", "orbital"}:
+        if kind in {"mark", "ts_bracket", "orbital"}:
             rect = item.sceneBoundingRect()
             return rect if rect.isValid() else None
         state = self.scene_item_state(item)
@@ -2800,6 +2888,19 @@ class CanvasView(QGraphicsView):
                 after_state["center"] = (flipped.x(), flipped.y())
             rotation = float(before_state.get("rotation", 0.0))
             after_state["rotation"] = 180.0 - rotation if horizontal else -rotation
+            return after_state
+        if kind == "ts_bracket":
+            rect = self._ts_bracket_rect_from_state(before_state)
+            if rect is None:
+                return after_state
+            flipped_rect = QRectF(
+                self._flip_point(rect.topLeft(), center, horizontal),
+                self._flip_point(rect.bottomRight(), center, horizontal),
+            ).normalized()
+            after_state["left"] = flipped_rect.left()
+            after_state["top"] = flipped_rect.top()
+            after_state["right"] = flipped_rect.right()
+            after_state["bottom"] = flipped_rect.bottom()
             return after_state
         if kind in {
             "arrow",
@@ -3199,15 +3300,20 @@ class CanvasView(QGraphicsView):
         center = QPointF(atom.x + offset.x(), atom.y + offset.y())
         return self.add_mark(center, kind=kind, atom_id=atom_id, offset=offset, record=record)
 
+    def _mark_selection_radius(self) -> float:
+        return self._atom_pick_radius()
+
     def _build_mark_item(self, kind: str):
+        selection_radius = self._mark_selection_radius()
         if kind == "radical":
             radius = max(1.2, self.renderer.style.bond_line_width * 0.7)
-            item = NoSelectEllipseItem(-radius, -radius, radius * 2.0, radius * 2.0)
+            hit_padding = max(0.0, selection_radius - radius)
+            item = AtomDotItem(-radius, -radius, radius * 2.0, radius * 2.0, hit_padding=hit_padding)
             item.setBrush(QColor(self.renderer.style.atom_color))
             item.setPen(QPen(Qt.PenStyle.NoPen))
             return item
         if kind in {"plus", "minus"}:
-            text_item = NoSelectTextItem()
+            text_item = AtomLabelItem(hit_radius=selection_radius)
             text_item.setFont(self.renderer.atom_font())
             text_item.setDefaultTextColor(QColor(self.renderer.style.atom_color))
             text_item.setPlainText("+" if kind == "plus" else "-")
@@ -3399,14 +3505,22 @@ class CanvasView(QGraphicsView):
                 if bond is not None:
                     atom_ids.add(bond.a)
                     atom_ids.add(bond.b)
-        rects: list[QRectF] = []
-        non_atom_items = [
+        object_items = [
             item
             for item in items
-            if item.data(0) not in {"atom", "bond", "ring"}
+            if item.data(0) in {
+                "arrow",
+                "equilibrium",
+                "resonance",
+                "curved_single",
+                "curved_double",
+                "inhibit",
+                "dotted",
+                "ts_bracket",
+                "mark",
+                "orbital",
+            }
         ]
-        for item in non_atom_items:
-            rects.append(item.sceneBoundingRect())
 
         for outline in self.selection_outlines:
             self.scene().removeItem(outline)
@@ -3415,6 +3529,8 @@ class CanvasView(QGraphicsView):
         atom_pad = self.renderer.style.bond_length_px * 0.06
         atom_fill = QColor(self._selection_color)
         atom_fill.setAlpha(45)
+        object_fill = QColor(self._selection_color)
+        object_fill.setAlpha(45)
         overlay_bond_ids = {
             bond_id
             for bond_id, bond in enumerate(self.model.bonds)
@@ -3434,20 +3550,8 @@ class CanvasView(QGraphicsView):
         if center is not None and self._selection_center_marker_enabled():
             self._add_selection_center_marker(center)
 
-        pad = self.renderer.style.bond_length_px * 0.1
-        for rect in rects:
-            rect = rect.adjusted(-pad, -pad, pad, pad)
-            outline = NoSelectRectItem()
-            outline.setData(0, "selection_outline")
-            outline.setZValue(20)
-            pen = QPen(QColor("#5eb7ff"))
-            pen.setWidthF(1.2)
-            pen.setStyle(Qt.PenStyle.DashLine)
-            outline.setPen(pen)
-            outline.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-            outline.setRect(rect)
-            self.scene().addItem(outline)
-            self.selection_outlines.append(outline)
+        for item in object_items:
+            self._add_selection_object_overlay(item, object_fill)
         self._emit_selection_info()
 
     def shift_selection_outlines(self, dx: float, dy: float) -> None:
@@ -3586,6 +3690,62 @@ class CanvasView(QGraphicsView):
             if not item_path.isEmpty():
                 bond_path.addPath(item_path)
         return bond_path
+
+    def _selection_path_for_object_item(self, item) -> QPainterPath:
+        kind = item.data(0)
+        pad = self.renderer.style.bond_length_px * 0.12
+        if kind == "mark":
+            center = self._mark_center(item)
+            radius = self._mark_selection_radius()
+            path = QPainterPath()
+            path.addEllipse(center, radius, radius)
+            return path
+        if kind in {
+            "arrow",
+            "equilibrium",
+            "resonance",
+            "curved_single",
+            "curved_double",
+            "inhibit",
+            "dotted",
+        } and isinstance(item, QGraphicsPathItem):
+            return self._selection_path_for_bond_item(
+                item,
+                width=max(item.pen().widthF() + pad * 1.5, self._atom_pick_radius() * 0.7),
+            )
+        if isinstance(item, QGraphicsTextItem):
+            rect = item.sceneBoundingRect().adjusted(-pad, -pad, pad, pad)
+            path = QPainterPath()
+            path.addRoundedRect(rect, pad * 0.7, pad * 0.7)
+            return path
+        shape = item.mapToScene(item.shape())
+        if shape.isEmpty():
+            rect = item.sceneBoundingRect().adjusted(-pad, -pad, pad, pad)
+            path = QPainterPath()
+            path.addRoundedRect(rect, pad * 0.7, pad * 0.7)
+            return path
+        stroker = QPainterPathStroker()
+        stroker.setWidth(pad * 2.0)
+        stroker.setCapStyle(Qt.PenCapStyle.RoundCap)
+        stroker.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        overlay = QPainterPath(shape)
+        overlay.addPath(stroker.createStroke(shape))
+        simplified = overlay.simplified()
+        simplified.setFillRule(Qt.FillRule.WindingFill)
+        return simplified
+
+    def _add_selection_object_overlay(self, item, color: QColor) -> None:
+        path = self._selection_path_for_object_item(item)
+        if path.isEmpty():
+            return
+        outline = NoSelectPathItem(path)
+        outline.setData(0, "selection_outline")
+        outline.setData(2, {"kind": "object"})
+        outline.setZValue(19)
+        outline.setPen(QPen(Qt.PenStyle.NoPen))
+        outline.setBrush(QBrush(color))
+        self.scene().addItem(outline)
+        self.selection_outlines.append(outline)
 
     def _add_selection_component_overlay(
         self,
@@ -4123,7 +4283,63 @@ class CanvasView(QGraphicsView):
         self.hover_bond_id = None
         self._hover_preview_style = None
 
+    def _add_atom_hover_indicator(self, atom_id: int) -> None:
+        atom = self.model.atoms.get(atom_id)
+        if atom is None:
+            return
+        radius = self.renderer.style.bond_length_px * 0.25
+        circle = QGraphicsEllipseItem(
+            atom.x - radius,
+            atom.y - radius,
+            radius * 2.0,
+            radius * 2.0,
+        )
+        pen = QPen(QColor("#9a9a9a"))
+        pen.setWidthF(1.0)
+        circle.setPen(pen)
+        circle.setBrush(QColor(190, 190, 190, 80))
+        circle.setZValue(5)
+        self.scene().addItem(circle)
+        self.hover_items.append(circle)
+
+    def _mark_center_for_pointer(self, pos: QPointF, atom_id: int | None = None) -> QPointF:
+        if atom_id is None:
+            return QPointF(pos)
+        atom = self.model.atoms.get(atom_id)
+        if atom is None:
+            return QPointF(pos)
+        offset = self._mark_offset_from_click(atom_id, pos)
+        return QPointF(atom.x + offset.x(), atom.y + offset.y())
+
+    def _add_mark_hover_preview(self, pos: QPointF) -> None:
+        atom_id = self.find_atom_near(
+            pos.x(),
+            pos.y(),
+            self.renderer.style.bond_length_px * 0.35,
+        )
+        center = self._mark_center_for_pointer(pos, atom_id)
+        kind = self.mark_kind
+        scope = f"atom:{atom_id}" if atom_id is not None else "free"
+        preview_key = f"mark:{kind}:{scope}:{round(center.x(), 1)}:{round(center.y(), 1)}"
+        if atom_id == self.hover_atom_id and preview_key == self._hover_preview_style:
+            return
+        if atom_id is None and self.hover_atom_id is None and self.hover_bond_id is None and preview_key == self._hover_preview_style:
+            return
+        self._clear_hover_highlight()
+        if atom_id is not None:
+            self.hover_atom_id = atom_id
+            self._add_atom_hover_indicator(atom_id)
+        item = self._build_mark_item(kind)
+        if item is None:
+            return
+        self._set_mark_center(item, center)
+        self._hover_preview_style = preview_key
+        self._add_hover_preview_items([item])
+
     def _update_hover_highlight(self, pos: QPointF) -> None:
+        if self.tools.active is not None and self.tools.active.name == "mark":
+            self._add_mark_hover_preview(pos)
+            return
         if not self.model.atoms:
             if self.tools.active is not None and self.tools.active.name == "bond":
                 preview_style = self._bond_preview_signature()
@@ -4162,24 +4378,7 @@ class CanvasView(QGraphicsView):
                 return
             self._clear_hover_highlight()
             self.hover_atom_id = atom_id
-            atom = self.model.atoms.get(atom_id)
-            if atom is None:
-                return
-
-            radius = self.renderer.style.bond_length_px * 0.25
-            circle = QGraphicsEllipseItem(
-                atom.x - radius,
-                atom.y - radius,
-                radius * 2.0,
-                radius * 2.0,
-            )
-            pen = QPen(QColor("#9a9a9a"))
-            pen.setWidthF(1.0)
-            circle.setPen(pen)
-            circle.setBrush(QColor(190, 190, 190, 80))
-            circle.setZValue(5)
-            self.scene().addItem(circle)
-            self.hover_items.append(circle)
+            self._add_atom_hover_indicator(atom_id)
             if preview_style is not None and preview_key is not None:
                 self._hover_preview_style = preview_key
                 self._add_bond_tool_hover_preview(atom_id, pos)
@@ -4494,6 +4693,8 @@ class CanvasView(QGraphicsView):
             return
         preview_color = QColor(120, 120, 120, 140)
         for item in items:
+            if isinstance(item, QGraphicsTextItem):
+                item.setDefaultTextColor(preview_color)
             if hasattr(item, "pen"):
                 pen = item.pen()
                 pen.setColor(preview_color)
@@ -4750,6 +4951,84 @@ class CanvasView(QGraphicsView):
             path.moveTo(left)
             path.lineTo(tip)
             path.lineTo(right)
+
+    def _ts_bracket_rect_from_points(self, start: QPointF, end: QPointF) -> QRectF:
+        rect = QRectF(start, end).normalized()
+        min_width = self.renderer.style.bond_length_px * 1.8
+        min_height = self.renderer.style.bond_length_px * 2.4
+        if rect.width() < 4.0 and rect.height() < 4.0:
+            return QRectF(
+                start.x() - min_width / 2.0,
+                start.y() - min_height / 2.0,
+                min_width,
+                min_height,
+            )
+        center = rect.center()
+        width = max(rect.width(), min_width)
+        height = max(rect.height(), min_height)
+        return QRectF(center.x() - width / 2.0, center.y() - height / 2.0, width, height)
+
+    def _ts_bracket_stroke_width(self) -> float:
+        return max(0.8, self.renderer.style.bond_line_width * 0.58)
+
+    def _ts_bracket_path(self, rect: QRectF) -> QPainterPath:
+        rect = QRectF(rect).normalized()
+        hook = min(rect.width() * 0.18, self.renderer.style.bond_length_px * 0.55)
+        hook = max(hook, self.renderer.style.bond_length_px * 0.28)
+        bracket_lines = QPainterPath()
+        bracket_lines.moveTo(rect.left() + hook, rect.top())
+        bracket_lines.lineTo(rect.left(), rect.top())
+        bracket_lines.lineTo(rect.left(), rect.bottom())
+        bracket_lines.lineTo(rect.left() + hook, rect.bottom())
+        bracket_lines.moveTo(rect.right() - hook, rect.top())
+        bracket_lines.lineTo(rect.right(), rect.top())
+        bracket_lines.lineTo(rect.right(), rect.bottom())
+        bracket_lines.lineTo(rect.right() - hook, rect.bottom())
+
+        stroker = QPainterPathStroker()
+        stroker.setWidth(self._ts_bracket_stroke_width())
+        stroker.setCapStyle(Qt.PenCapStyle.FlatCap)
+        stroker.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
+        path = stroker.createStroke(bracket_lines)
+
+        font = QFont(self.renderer.style.font_family)
+        font.setPixelSize(max(10, round(min(rect.height() * 0.22, self.renderer.style.bond_length_px * 0.95))))
+        path.addText(
+            rect.right() + hook * 0.18,
+            rect.top() + font.pixelSize() * 0.18,
+            font,
+            "\u2021",
+        )
+        return path
+
+    def _build_ts_bracket_item(self, rect: QRectF) -> QGraphicsPathItem:
+        normalized = QRectF(rect).normalized()
+        item = NoSelectPathItem(self._ts_bracket_path(normalized))
+        item.setPen(QPen(Qt.PenStyle.NoPen))
+        item.setBrush(QBrush(QColor(self.renderer.style.bond_color)))
+        item.setData(0, "ts_bracket")
+        item.setData(1, {"rect": normalized})
+        return item
+
+    def add_ts_bracket_from_points(self, start: QPointF, end: QPointF):
+        return self.add_ts_bracket(self._ts_bracket_rect_from_points(start, end))
+
+    def add_ts_bracket(self, rect: QRectF):
+        item = self._build_ts_bracket_item(rect)
+        self._make_selectable(item)
+        self.scene().addItem(item)
+        self.ts_bracket_items.append(item)
+        state = self._ts_bracket_state_dict(item)
+        command = AddSceneItemsCommand(item_states=[state], items=[item])
+        self._push_command(command)
+        return item
+
+    def preview_ts_bracket(self, start: QPointF, end: QPointF):
+        item = self._build_ts_bracket_item(self._ts_bracket_rect_from_points(start, end))
+        preview_color = QColor(120, 120, 120, 140)
+        item.setBrush(QBrush(preview_color))
+        self.scene().addItem(item)
+        return item
 
     def add_orbital(self, center: QPointF) -> None:
         items = self._build_orbital_items(center, self.active_orbital_type)
@@ -5262,19 +5541,23 @@ class CanvasView(QGraphicsView):
             axis_b = bond.b
             self._rotation_selection_ids = (set(atom_ids), set(bond_ids))
             self._rotation_base_coords = {}
-            self.atom_coords_3d = {}
             for atom_id in rotate_ids | {axis_a, axis_b}:
-                atom = self.model.atoms.get(atom_id)
-                if atom is None:
+                coords = self._current_atom_coords_3d(atom_id)
+                if coords is None:
                     continue
-                coords = (atom.x, atom.y, 0.0)
-                self.atom_coords_3d[atom_id] = coords
                 self._rotation_base_coords[atom_id] = coords
+            relevant_atom_ids = rotate_ids | {axis_a, axis_b}
+            self._rotation_base_coords = self._flatten_planar_fragments(relevant_atom_ids, self._rotation_base_coords)
+            for atom_id in relevant_atom_ids:
+                coords = self._rotation_base_coords.get(atom_id)
+                if coords is not None:
+                    self.atom_coords_3d[atom_id] = coords
             if not self._rotation_base_coords:
                 return False
-            axis_center = QPointF(
-                (self.model.atoms[axis_a].x + self.model.atoms[axis_b].x) * 0.5,
-                (self.model.atoms[axis_a].y + self.model.atoms[axis_b].y) * 0.5,
+            axis_center = (
+                (self._rotation_base_coords[axis_a][0] + self._rotation_base_coords[axis_b][0]) * 0.5,
+                (self._rotation_base_coords[axis_a][1] + self._rotation_base_coords[axis_b][1]) * 0.5,
+                (self._rotation_base_coords[axis_a][2] + self._rotation_base_coords[axis_b][2]) * 0.5,
             )
             self._rotation_axis_bond_id = bond_id
             self._rotation_axis_atoms = (axis_a, axis_b)
@@ -5288,7 +5571,17 @@ class CanvasView(QGraphicsView):
                 for atom_id in self.rotation_atom_ids
                 if atom_id in self.model.atoms
             }
-            self.rotation_center_3d = (axis_center.x(), axis_center.y(), 0.0)
+            self.rotation_center_3d = axis_center
+            self._projection_center_3d = self.rotation_center_3d
+            atom_a = self.model.atoms.get(axis_a)
+            atom_b = self.model.atoms.get(axis_b)
+            if atom_a is not None and atom_b is not None:
+                self._projection_anchor_2d = (
+                    (atom_a.x + atom_b.x) * 0.5,
+                    (atom_a.y + atom_b.y) * 0.5,
+                )
+            else:
+                self._projection_anchor_2d = (axis_center[0], axis_center[1])
             scale_atom_ids = set(self.rotation_atom_ids)
             scale_atom_ids.update((axis_a, axis_b))
             self._rotation_base_bond_length = self._average_bond_length_for_atoms(
@@ -5296,21 +5589,35 @@ class CanvasView(QGraphicsView):
                 self._rotation_base_coords,
             )
             return True
-        center = self._bounding_box_center_for_atoms(rotation_atom_ids)
-        if center is None:
-            return False
         self._rotation_selection_ids = (set(atom_ids), set(bond_ids))
-        self._rotation_base_coords = {}
-        self.atom_coords_3d = {}
+        screen_center = self._bounding_box_center_for_atoms(rotation_atom_ids)
+        if screen_center is None:
+            return False
+        anchor_2d = (screen_center.x(), screen_center.y())
+        raw_coords: dict[int, tuple[float, float, float]] = {}
         for atom_id in rotation_atom_ids:
+            coords = self._current_atom_coords_3d(atom_id)
+            if coords is None:
+                continue
+            raw_coords[atom_id] = coords
+        if not raw_coords:
+            return False
+        center_z = sum(coords[2] for coords in raw_coords.values()) / len(raw_coords)
+        center = (screen_center.x(), screen_center.y(), center_z)
+        self._rotation_base_coords = {}
+        for atom_id, coords in raw_coords.items():
             atom = self.model.atoms.get(atom_id)
             if atom is None:
                 continue
-            coords = (atom.x, atom.y, 0.0)
+            self._rotation_base_coords[atom_id] = self._unproject_scene_point_3d(
+                QPointF(atom.x, atom.y),
+                coords[2],
+                center_3d=center,
+                anchor_2d=anchor_2d,
+            )
+        self._rotation_base_coords = self._flatten_planar_fragments(rotation_atom_ids, self._rotation_base_coords)
+        for atom_id, coords in self._rotation_base_coords.items():
             self.atom_coords_3d[atom_id] = coords
-            self._rotation_base_coords[atom_id] = coords
-        if not self._rotation_base_coords:
-            return False
         self._rotation_axis_bond_id = None
         self._rotation_axis_atoms = None
         self._rotation_total_angle = 0.0
@@ -5323,7 +5630,9 @@ class CanvasView(QGraphicsView):
             for atom_id in self.rotation_atom_ids
             if atom_id in self.model.atoms
         }
-        self.rotation_center_3d = (center.x(), center.y(), 0.0)
+        self.rotation_center_3d = center
+        self._projection_center_3d = center
+        self._projection_anchor_2d = anchor_2d
         scale_atom_ids = set(self.rotation_atom_ids)
         self._rotation_base_bond_length = self._average_bond_length_for_atoms(
             scale_atom_ids,
@@ -5335,7 +5644,6 @@ class CanvasView(QGraphicsView):
         if not self.rotation_atom_ids:
             return
         sensitivity = 0.005
-        depth_factor = self._rotation_depth_factor
         if self._rotation_mode == "rigid":
             angle_x = delta_y * sensitivity
             angle_y = delta_x * sensitivity
@@ -5367,42 +5675,8 @@ class CanvasView(QGraphicsView):
                 x = rx + cx
                 y = ry + cy
                 z = rz2 + cz
-                if depth_factor < 1.0:
-                    base_x, base_y, base_z = coords
-                    x = base_x + (x - base_x) * depth_factor
-                    y = base_y + (y - base_y) * depth_factor
-                    z = base_z + (z - base_z) * depth_factor
                 rotated_coords[atom_id] = (x, y, z)
-            scale = self._rotation_scale_for_coords(self.rotation_atom_ids, rotated_coords)
-            if abs(scale - 1.0) > 1e-3:
-                for atom_id, (x, y, z) in rotated_coords.items():
-                    x = cx + (x - cx) * scale
-                    y = cy + (y - cy) * scale
-                    z = cz + (z - cz) * scale
-                    rotated_coords[atom_id] = (x, y, z)
-            for atom_id, (x, y, z) in rotated_coords.items():
-                self.atom_coords_3d[atom_id] = (x, y, z)
-                atom = self.model.atoms.get(atom_id)
-                if atom is None:
-                    continue
-                atom.x = x
-                atom.y = y
-                label = self.atom_items.get(atom_id)
-                if label is not None:
-                    self._position_label(label, atom.x, atom.y)
-                dot = self.atom_dots.get(atom_id)
-                if dot is not None:
-                    dot.setPos(atom.x, atom.y)
-                marks = self._marks_by_atom.get(atom_id)
-                if marks:
-                    for mark in list(marks):
-                        data = mark.data(1) or {}
-                        dx = data.get("dx")
-                        dy = data.get("dy")
-                        if isinstance(dx, (int, float)) and isinstance(dy, (int, float)):
-                            self._set_mark_center(mark, QPointF(atom.x + dx, atom.y + dy))
-                        else:
-                            self._set_mark_center(mark, QPointF(atom.x, atom.y))
+            self._apply_projected_atom_positions(self.rotation_atom_ids, rotated_coords)
             self._redraw_bonds_for_atoms(self.rotation_atom_ids)
             self._update_ring_fills_for_atoms(self.rotation_atom_ids)
             self._update_selection_outline()
@@ -5425,50 +5699,8 @@ class CanvasView(QGraphicsView):
             if coords is None:
                 continue
             rotated = self._rotate_point_around_axis(coords, axis_start, axis_end, self._rotation_total_angle)
-            if depth_factor < 1.0:
-                base_x, base_y, base_z = coords
-                rot_x, rot_y, rot_z = rotated
-                rotated = (
-                    base_x + (rot_x - base_x) * depth_factor,
-                    base_y + (rot_y - base_y) * depth_factor,
-                    base_z + (rot_z - base_z) * depth_factor,
-                )
             rotated_coords[atom_id] = rotated
-        scale = self._rotation_scale_for_coords(
-            self.rotation_atom_ids,
-            rotated_coords,
-            extra_atom_ids=self._rotation_axis_atoms,
-        )
-        if abs(scale - 1.0) > 1e-3:
-            cx, cy, cz = self.rotation_center_3d or (0.0, 0.0, 0.0)
-            for atom_id, (x, y, z) in rotated_coords.items():
-                x = cx + (x - cx) * scale
-                y = cy + (y - cy) * scale
-                z = cz + (z - cz) * scale
-                rotated_coords[atom_id] = (x, y, z)
-        for atom_id, (x, y, z) in rotated_coords.items():
-            self.atom_coords_3d[atom_id] = (x, y, z)
-            atom = self.model.atoms.get(atom_id)
-            if atom is None:
-                continue
-            atom.x = x
-            atom.y = y
-            label = self.atom_items.get(atom_id)
-            if label is not None:
-                self._position_label(label, atom.x, atom.y)
-            dot = self.atom_dots.get(atom_id)
-            if dot is not None:
-                dot.setPos(atom.x, atom.y)
-            marks = self._marks_by_atom.get(atom_id)
-            if marks:
-                for mark in list(marks):
-                    data = mark.data(1) or {}
-                    dx = data.get("dx")
-                    dy = data.get("dy")
-                    if isinstance(dx, (int, float)) and isinstance(dy, (int, float)):
-                        self._set_mark_center(mark, QPointF(atom.x + dx, atom.y + dy))
-                    else:
-                        self._set_mark_center(mark, QPointF(atom.x, atom.y))
+        self._apply_projected_atom_positions(self.rotation_atom_ids, rotated_coords)
         self._redraw_bonds_for_atoms(self.rotation_atom_ids)
         self._update_ring_fills_for_atoms(self.rotation_atom_ids)
         self._update_selection_outline()
@@ -5586,6 +5818,241 @@ class CanvasView(QGraphicsView):
                 points.append(QPointF(atom.x, atom.y))
                 if len(points) >= 3:
                     ring_item.setPolygon(QPolygonF(points))
+
+    @staticmethod
+    def _normalize_3d(
+        dx: float,
+        dy: float,
+        dz: float,
+    ) -> tuple[float, float, float] | None:
+        length = math.sqrt(dx * dx + dy * dy + dz * dz)
+        if length <= 1e-9:
+            return None
+        return (dx / length, dy / length, dz / length)
+
+    def _perspective_camera_distance(self) -> float:
+        return max(self.renderer.style.bond_length_px * 8.0, 120.0)
+
+    def _project_point_3d(
+        self,
+        point: tuple[float, float, float],
+        center_3d: tuple[float, float, float] | None = None,
+        anchor_2d: tuple[float, float] | None = None,
+    ) -> tuple[float, float]:
+        if center_3d is None:
+            center_3d = self._projection_center_3d
+        if center_3d is None:
+            return point[0], point[1]
+        if anchor_2d is None:
+            anchor_2d = self._projection_anchor_2d or (center_3d[0], center_3d[1])
+        cx, cy, cz = center_3d
+        anchor_x, anchor_y = anchor_2d
+        focal = self._perspective_camera_distance()
+        dz = max(min(point[2] - cz, focal * 0.7), -focal * 0.8)
+        denom = max(focal - dz, focal * 0.2)
+        scale = focal / denom
+        return (
+            anchor_x + (point[0] - cx) * scale,
+            anchor_y + (point[1] - cy) * scale,
+        )
+
+    def _unproject_scene_point_3d(
+        self,
+        point: QPointF,
+        z: float,
+        center_3d: tuple[float, float, float] | None = None,
+        anchor_2d: tuple[float, float] | None = None,
+    ) -> tuple[float, float, float]:
+        if center_3d is None:
+            center_3d = self._projection_center_3d
+        if center_3d is None:
+            return (point.x(), point.y(), z)
+        if anchor_2d is None:
+            anchor_2d = self._projection_anchor_2d or (center_3d[0], center_3d[1])
+        cx, cy, cz = center_3d
+        anchor_x, anchor_y = anchor_2d
+        focal = self._perspective_camera_distance()
+        dz = max(min(z - cz, focal * 0.7), -focal * 0.8)
+        denom = max(focal - dz, focal * 0.2)
+        scale = focal / denom
+        if abs(scale) <= 1e-9:
+            return (point.x(), point.y(), z)
+        return (
+            cx + (point.x() - anchor_x) / scale,
+            cy + (point.y() - anchor_y) / scale,
+            z,
+        )
+
+    def _current_atom_coords_3d(self, atom_id: int) -> tuple[float, float, float] | None:
+        atom = self.model.atoms.get(atom_id)
+        if atom is None:
+            return None
+        coords = self.atom_coords_3d.get(atom_id)
+        if coords is None:
+            return (atom.x, atom.y, 0.0)
+        proj_x, proj_y = self._project_point_3d(coords)
+        tolerance = max(1.0, self.renderer.style.bond_length_px * 0.15)
+        if math.hypot(proj_x - atom.x, proj_y - atom.y) > tolerance:
+            return (atom.x, atom.y, 0.0)
+        return coords
+
+    def _center_for_coords_3d(
+        self,
+        atom_ids: set[int],
+        coords: dict[int, tuple[float, float, float]],
+    ) -> tuple[float, float, float] | None:
+        if not atom_ids:
+            return None
+        points = [coords[atom_id] for atom_id in atom_ids if atom_id in coords]
+        if not points:
+            return None
+        count = len(points)
+        return (
+            sum(point[0] for point in points) / count,
+            sum(point[1] for point in points) / count,
+            sum(point[2] for point in points) / count,
+        )
+
+    def _atom_in_planar_system(self, atom_id: int) -> bool:
+        for bond_id in self._atom_bond_ids.get(atom_id, ()):
+            if not (0 <= bond_id < len(self.model.bonds)):
+                continue
+            bond = self.model.bonds[bond_id]
+            if bond is None:
+                continue
+            if bond.order > 1 or self._bond_in_cycle(bond_id):
+                return True
+        return False
+
+    def _bond_is_planar_fragment_edge(self, bond_id: int) -> bool:
+        if not (0 <= bond_id < len(self.model.bonds)):
+            return False
+        bond = self.model.bonds[bond_id]
+        if bond is None:
+            return False
+        if bond.order > 1 or self._bond_in_cycle(bond_id):
+            return True
+        return self._atom_in_planar_system(bond.a) and self._atom_in_planar_system(bond.b)
+
+    def _planar_fragment_components(self, atom_ids: set[int]) -> list[set[int]]:
+        adjacency: dict[int, set[int]] = {}
+        for bond_id, bond in enumerate(self.model.bonds):
+            if bond is None:
+                continue
+            if bond.a not in atom_ids or bond.b not in atom_ids:
+                continue
+            if not self._bond_is_planar_fragment_edge(bond_id):
+                continue
+            adjacency.setdefault(bond.a, set()).add(bond.b)
+            adjacency.setdefault(bond.b, set()).add(bond.a)
+        visited: set[int] = set()
+        components: list[set[int]] = []
+        for atom_id in adjacency:
+            if atom_id in visited:
+                continue
+            component: set[int] = set()
+            stack = [atom_id]
+            visited.add(atom_id)
+            while stack:
+                current = stack.pop()
+                component.add(current)
+                for neighbor in adjacency.get(current, ()):
+                    if neighbor in visited:
+                        continue
+                    visited.add(neighbor)
+                    stack.append(neighbor)
+            if len(component) >= 3:
+                components.append(component)
+        return components
+
+    def _fragment_plane_normal(
+        self,
+        atom_ids: set[int],
+        coords: dict[int, tuple[float, float, float]],
+    ) -> tuple[float, float, float] | None:
+        points = [coords[atom_id] for atom_id in atom_ids if atom_id in coords]
+        count = len(points)
+        if count < 3:
+            return None
+        for i in range(count - 2):
+            ax, ay, az = points[i]
+            for j in range(i + 1, count - 1):
+                bx, by, bz = points[j]
+                ab = (bx - ax, by - ay, bz - az)
+                for k in range(j + 1, count):
+                    cx, cy, cz = points[k]
+                    ac = (cx - ax, cy - ay, cz - az)
+                    normal = self._normalize_3d(
+                        ab[1] * ac[2] - ab[2] * ac[1],
+                        ab[2] * ac[0] - ab[0] * ac[2],
+                        ab[0] * ac[1] - ab[1] * ac[0],
+                    )
+                    if normal is not None:
+                        return normal
+        return (0.0, 0.0, 1.0)
+
+    def _flatten_planar_fragments(
+        self,
+        atom_ids: set[int],
+        coords: dict[int, tuple[float, float, float]],
+    ) -> dict[int, tuple[float, float, float]]:
+        if not atom_ids:
+            return dict(coords)
+        flattened = dict(coords)
+        for fragment in self._planar_fragment_components(atom_ids):
+            normal = self._fragment_plane_normal(fragment, flattened)
+            if normal is None:
+                continue
+            centroid = self._center_for_coords_3d(fragment, flattened)
+            if centroid is None:
+                continue
+            cx, cy, cz = centroid
+            nx, ny, nz = normal
+            for atom_id in fragment:
+                point = flattened.get(atom_id)
+                if point is None:
+                    continue
+                px, py, pz = point
+                distance = (px - cx) * nx + (py - cy) * ny + (pz - cz) * nz
+                flattened[atom_id] = (
+                    px - nx * distance,
+                    py - ny * distance,
+                    pz - nz * distance,
+                )
+        return flattened
+
+    def _apply_projected_atom_positions(
+        self,
+        atom_ids: set[int],
+        coords_3d: dict[int, tuple[float, float, float]],
+    ) -> None:
+        for atom_id in atom_ids:
+            point = coords_3d.get(atom_id)
+            if point is None:
+                continue
+            self.atom_coords_3d[atom_id] = point
+            atom = self.model.atoms.get(atom_id)
+            if atom is None:
+                continue
+            proj_x, proj_y = self._project_point_3d(point)
+            atom.x = proj_x
+            atom.y = proj_y
+            label = self.atom_items.get(atom_id)
+            if label is not None:
+                self._position_label(label, atom.x, atom.y)
+            dot = self.atom_dots.get(atom_id)
+            if dot is not None:
+                dot.setPos(atom.x, atom.y)
+            marks = self._marks_by_atom.get(atom_id)
+            if marks:
+                for mark in list(marks):
+                    data = mark.data(1) or {}
+                    dx = data.get("dx")
+                    dy = data.get("dy")
+                    if isinstance(dx, (int, float)) and isinstance(dy, (int, float)):
+                        self._set_mark_center(mark, QPointF(atom.x + dx, atom.y + dy))
+                    else:
+                        self._set_mark_center(mark, QPointF(atom.x, atom.y))
 
     def _average_bond_length_for_atoms(
         self,
@@ -7215,6 +7682,8 @@ class CanvasView(QGraphicsView):
         self.model = MoleculeModel()
         self._mark_spatial_index_dirty()
         self.atom_coords_3d = {}
+        self._projection_center_3d = None
+        self._projection_anchor_2d = None
         self._rotation_axis_bond_id = None
         self._rotation_axis_atoms = None
         self._rotation_total_angle = 0.0
@@ -7233,6 +7702,7 @@ class CanvasView(QGraphicsView):
         self.note_items = []
         self.mark_items = []
         self.arrow_items = []
+        self.ts_bracket_items = []
         self.orbital_items = []
         self._marks_by_atom = {}
         self._smiles_preview_model = None
@@ -7261,6 +7731,7 @@ class CanvasView(QGraphicsView):
         free_mark_items = []
         note_items = list(self.note_items)
         arrow_items = list(self.arrow_items)
+        ts_bracket_items = list(self.ts_bracket_items)
         orbital_items = list(self.orbital_items)
         for item in self.mark_items:
             data = item.data(1) or {}
@@ -7304,6 +7775,7 @@ class CanvasView(QGraphicsView):
         scene_items.extend(free_mark_items)
         scene_items.extend(note_items)
         scene_items.extend(arrow_items)
+        scene_items.extend(ts_bracket_items)
         scene_items.extend(orbital_items)
         if scene_items:
             scene_states = [self.scene_item_state(item) for item in scene_items]
@@ -7835,6 +8307,7 @@ class CanvasView(QGraphicsView):
             "curved_double",
             "inhibit",
             "dotted",
+            "ts_bracket",
             "orbital",
             "note",
         }:
@@ -7844,6 +8317,12 @@ class CanvasView(QGraphicsView):
                 center = data.get("center")
                 if isinstance(center, QPointF):
                     data["center"] = QPointF(center.x() + dx, center.y() + dy)
+                    item.setData(1, data)
+            elif kind == "ts_bracket":
+                data = item.data(1) or {}
+                rect = data.get("rect")
+                if isinstance(rect, QRectF):
+                    data["rect"] = rect.translated(dx, dy)
                     item.setData(1, data)
             else:
                 data = item.data(2) or {}
@@ -8183,7 +8662,7 @@ class CanvasView(QGraphicsView):
             if bond.a in ring_atom_ids and bond.b in ring_atom_ids:
                 coords = []
                 for atom_id in ring_atom_ids:
-                    coord = self.atom_coords_3d.get(atom_id)
+                    coord = self._current_atom_coords_3d(atom_id)
                     if coord is not None:
                         coords.append(coord)
                 if len(coords) < 3:
@@ -8402,12 +8881,12 @@ class CanvasView(QGraphicsView):
         b_id: int,
         target: tuple[float, float, float] | None = None,
     ) -> tuple[float, float] | None:
-        coords_a = self.atom_coords_3d.get(a_id)
-        coords_b = self.atom_coords_3d.get(b_id)
-        if coords_a is None or coords_b is None:
+        atom_a = self.model.atoms.get(a_id)
+        atom_b = self.model.atoms.get(b_id)
+        if atom_a is None or atom_b is None:
             return None
-        ax, ay, _ = coords_a
-        bx, by, _ = coords_b
+        ax, ay = atom_a.x, atom_a.y
+        bx, by = atom_b.x, atom_b.y
         dx = bx - ax
         dy = by - ay
         length = math.hypot(dx, dy)
@@ -8418,8 +8897,9 @@ class CanvasView(QGraphicsView):
         if target is not None:
             mid_x = (ax + bx) * 0.5
             mid_y = (ay + by) * 0.5
-            to_tx = target[0] - mid_x
-            to_ty = target[1] - mid_y
+            target_x, target_y = self._project_point_3d(target)
+            to_tx = target_x - mid_x
+            to_ty = target_y - mid_y
             if nx * to_tx + ny * to_ty < 0:
                 nx = -nx
                 ny = -ny
