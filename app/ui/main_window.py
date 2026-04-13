@@ -1,5 +1,4 @@
 import math
-import os
 
 from PyQt6.QtCore import QPointF, QRectF, QSize, Qt, QTimer
 from PyQt6.QtGui import (
@@ -31,9 +30,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QToolButton,
-    QScrollArea,
     QSlider,
-    QSpinBox,
     QTabWidget,
     QToolBar,
     QVBoxLayout,
@@ -43,6 +40,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.canvas_view import CanvasView
+from ui.main_window_path_logic import resolve_load_path, resolve_save_path
 
 
 class ArrowButton(QToolButton):
@@ -1518,18 +1516,17 @@ class MainWindow(QMainWindow):
             self.canvas.apply_text_preset_paper_bold()
 
     def _save_canvas(self) -> None:
-        path = self._current_file_path
-        if not path:
-            path, _ = QFileDialog.getSaveFileName(
+        path = resolve_save_path(current_path=self._current_file_path)
+        if path is None:
+            dialog_path, _ = QFileDialog.getSaveFileName(
                 self,
                 "Save Drawing",
                 "",
                 "LiteDraw (*.ldraw);;JSON (*.json);;All Files (*)",
             )
-            if not path:
-                return
-            if not os.path.splitext(path)[1]:
-                path += ".ldraw"
+            path = resolve_save_path(dialog_path=dialog_path)
+        if path is None:
+            return
         try:
             self.canvas.save_to_file(path)
         except Exception as exc:
@@ -1539,13 +1536,14 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Saved: {path}")
 
     def _load_canvas(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(
+        dialog_path, _ = QFileDialog.getOpenFileName(
             self,
             "Load Drawing",
             "",
             "LiteDraw (*.ldraw);;JSON (*.json);;All Files (*)",
         )
-        if not path:
+        path = resolve_load_path(dialog_path)
+        if path is None:
             return
         try:
             self.canvas.load_from_file(path)
