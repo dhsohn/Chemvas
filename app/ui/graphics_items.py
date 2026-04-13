@@ -127,6 +127,7 @@ class AtomLabelItem(NoSelectTextItem):
         hit_rect = self._hit_rect()
         if self._hit_radius is not None and self._hit_radius > 0.0:
             path.addEllipse(hit_rect)
+            path.addRect(super().boundingRect())
         else:
             path.addRect(hit_rect)
         return path

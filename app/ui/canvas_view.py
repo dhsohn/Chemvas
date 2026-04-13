@@ -1977,11 +1977,15 @@ class CanvasView(QGraphicsView):
         return self.mapToScene(pos)
 
     def item_at_scene_pos(self, pos: QPointF):
-        view_pos = self.mapFromScene(pos)
         bond_item = None
         ring_item = None
         other_item = None
-        for item in self.items(view_pos):
+        for item in self.scene().items(
+            pos,
+            Qt.ItemSelectionMode.IntersectsItemShape,
+            Qt.SortOrder.DescendingOrder,
+            QTransform(),
+        ):
             if item.data(0) == "selection_outline":
                 continue
             kind = item.data(0)
@@ -2087,14 +2091,21 @@ class CanvasView(QGraphicsView):
 
     def _structure_item_for_hit(self, hit: StructureHit):
         if hit.kind == "atom" and isinstance(hit.id, int):
-            return self.atom_items.get(hit.id) or self.atom_dots.get(hit.id)
+            return self._atom_item_for_id(hit.id)
         if hit.kind == "bond" and isinstance(hit.id, int):
             bond_items = self.bond_items.get(hit.id, [])
             if bond_items:
                 return bond_items[0]
         return None
 
+    def _atom_item_for_id(self, atom_id: int):
+        return self.atom_items.get(atom_id) or self.atom_dots.get(atom_id)
+
     def preferred_structure_hit_at_scene_pos(self, pos: QPointF) -> StructureHit | None:
+        item = self.item_at_scene_pos(pos)
+        item_hit, _, _ = self._structure_hit_from_item(item)
+        if item_hit is not None and item_hit.kind == "atom":
+            return item_hit
         atom_hit = self._nearest_atom_hit(pos)
         bond_hit = self._nearest_bond_hit(pos)
         preferred_hit = choose_preferred_structure_hit(
@@ -2113,7 +2124,6 @@ class CanvasView(QGraphicsView):
             preferred_item = self._structure_item_for_hit(preferred_hit)
             if preferred_item is not None:
                 return preferred_hit
-        item = self.item_at_scene_pos(pos)
         if item is not None and item.data(0) == "ring":
             ring_atom_ids = item.data(2)
             if isinstance(ring_atom_ids, list):
@@ -6973,6 +6983,9 @@ class CanvasView(QGraphicsView):
         before_element = atom.element
         before_explicit_label = atom.explicit_label
         before_smiles_input = self.last_smiles_input
+        previous_atom_item = self._atom_item_for_id(atom_id)
+        was_selected = bool(previous_atom_item is not None and previous_atom_item.isSelected())
+        refresh_hover = self.hover_atom_id == atom_id
         if text:
             atom.element = text
             if clear_smiles:
@@ -6996,6 +7009,12 @@ class CanvasView(QGraphicsView):
             if atom.element == "C":
                 self._ensure_carbon_dot(atom_id)
             self._redraw_connected_bonds(atom_id)
+            self._restore_atom_item_interaction(
+                atom_id,
+                previous_atom_item,
+                was_selected=was_selected,
+                refresh_hover=refresh_hover,
+            )
             if record:
                 self._record_label_change(
                     atom_id,
@@ -7034,6 +7053,12 @@ class CanvasView(QGraphicsView):
         self._remove_carbon_dot(atom_id)
         merge_ids, merge_info = self._merge_overlapping_atoms(atom_id) if allow_merge else ([], {})
         self._redraw_connected_bonds(atom_id)
+        self._restore_atom_item_interaction(
+            atom_id,
+            previous_atom_item,
+            was_selected=was_selected,
+            refresh_hover=refresh_hover,
+        )
         if record:
             self._record_label_change(
                 atom_id,
@@ -7078,6 +7103,20 @@ class CanvasView(QGraphicsView):
         rect = item.boundingRect()
         offset = self.renderer.style.atom_label_offset_px
         item.setPos(x - rect.center().x() + offset, y - rect.center().y() - offset)
+
+    def _restore_atom_item_interaction(
+        self,
+        atom_id: int,
+        previous_item,
+        *,
+        was_selected: bool,
+        refresh_hover: bool,
+    ) -> None:
+        replacement_item = self._atom_item_for_id(atom_id)
+        if was_selected and replacement_item is not None and replacement_item is not previous_item:
+            replacement_item.setSelected(True)
+        if refresh_hover:
+            self._refresh_hover_from_cursor()
 
     def apply_color_to_item(self, item, color: QColor) -> None:
         if item is None or not color.isValid():
