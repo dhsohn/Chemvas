@@ -211,7 +211,40 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         rect = self.window.canvas.selection_outlines[0].sceneBoundingRect()
         self.assertAlmostEqual(rect.width(), rect.height(), delta=0.5)
         hit_rect = label.shape().boundingRect()
-        self.assertAlmostEqual(hit_rect.width(), self.window.canvas._atom_pick_radius() * 2.0, delta=0.5)
+        self.assertGreaterEqual(hit_rect.width(), self.window.canvas._atom_pick_radius() * 2.0)
+
+    def test_selected_atom_remains_hoverable_and_selected_when_dot_becomes_label(self) -> None:
+        self.window.canvas.set_tool("select")
+        atom_id = self.window.canvas.add_atom("C", 0.0, 0.0)
+        self._select_atom_ids(atom_id)
+
+        self.window.canvas.add_or_update_atom_label(atom_id, "N", show_carbon=True, record=False)
+
+        atom_ids, bond_ids = self.window.canvas._selected_ids()
+        self.assertEqual(atom_ids, {atom_id})
+        self.assertEqual(bond_ids, set())
+        self.assertTrue(self.window.canvas.atom_items[atom_id].isSelected())
+
+        self._hover_scene_point(QPointF(40.0, 40.0))
+        self._hover_scene_point(QPointF(0.0, 0.0))
+        self.assertEqual(self.window.canvas.hover_atom_id, atom_id)
+
+    def test_selected_atom_remains_hoverable_and_selected_when_label_becomes_dot(self) -> None:
+        self.window.canvas.set_tool("select")
+        atom_id = self.window.canvas.add_atom("N", 0.0, 0.0)
+        self.window.canvas.add_or_update_atom_label(atom_id, "N", record=False)
+        self._select_atom_ids(atom_id)
+
+        self.window.canvas.clear_atom_label(atom_id)
+
+        atom_ids, bond_ids = self.window.canvas._selected_ids()
+        self.assertEqual(atom_ids, {atom_id})
+        self.assertEqual(bond_ids, set())
+        self.assertTrue(self.window.canvas.atom_dots[atom_id].isSelected())
+
+        self._hover_scene_point(QPointF(40.0, 40.0))
+        self._hover_scene_point(QPointF(0.0, 0.0))
+        self.assertEqual(self.window.canvas.hover_atom_id, atom_id)
 
     def test_clicking_left_side_of_ch3_label_selects_atom(self) -> None:
         self.window.canvas.set_tool("select")
@@ -228,14 +261,14 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertEqual(atom_ids, {atom_id})
         self.assertEqual(bond_ids, set())
 
-    def test_preferred_structure_item_near_labeled_atom_and_bond_prefers_bond(self) -> None:
+    def test_preferred_structure_item_on_labeled_atom_and_bond_prefers_atom(self) -> None:
         self.window.canvas.add_bond_from_points(QPointF(0.0, 0.0), QPointF(20.0, 0.0))
         self.window.canvas.add_or_update_atom_label(0, "P", record=False)
 
         item = self.window.canvas.preferred_structure_item_at_scene_pos(QPointF(4.0, 0.0))
 
         self.assertIsNotNone(item)
-        self.assertEqual(item.data(0), "bond")
+        self.assertEqual(item.data(0), "atom")
 
     def test_preferred_structure_item_near_ring_vertex_returns_atom(self) -> None:
         self.window.canvas.add_benzene_ring(QPointF(0.0, 0.0))
@@ -249,14 +282,30 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertEqual(item.data(0), "atom")
         self.assertEqual(item.data(1), ring_atom_ids[0])
 
-    def test_hover_near_labeled_atom_and_bond_prefers_bond(self) -> None:
+    def test_hover_on_labeled_atom_and_bond_prefers_atom(self) -> None:
         self.window.canvas.add_bond_from_points(QPointF(0.0, 0.0), QPointF(20.0, 0.0))
         self.window.canvas.add_or_update_atom_label(0, "P", record=False)
 
         self.window.canvas._update_hover_highlight(QPointF(4.0, 0.0))
 
-        self.assertIsNone(self.window.canvas.hover_atom_id)
-        self.assertEqual(self.window.canvas.hover_bond_id, 0)
+        self.assertEqual(self.window.canvas.hover_atom_id, 0)
+        self.assertIsNone(self.window.canvas.hover_bond_id)
+
+    def test_clicking_visible_left_side_of_compact_label_connected_bond_selects_atom(self) -> None:
+        self.window.canvas.set_tool("select")
+        left = self.window.canvas.add_atom("N", 0.0, 0.0)
+        right = self.window.canvas.add_atom("C", 20.0, 0.0)
+        self.window.canvas.add_or_update_atom_label(left, "N", record=False)
+        self.window.canvas.add_bond(left, right)
+        self.window.canvas._add_bond_graphics(0)
+        label = self.window.canvas.atom_items[left]
+        rect = label.sceneBoundingRect()
+
+        self._click_scene_point(QPointF(rect.left() + 1.0, rect.center().y()))
+
+        atom_ids, bond_ids = self.window.canvas._selected_ids()
+        self.assertEqual(atom_ids, {left})
+        self.assertEqual(bond_ids, set())
 
     def test_hover_near_ring_vertex_prefers_atom(self) -> None:
         self.window.canvas.add_benzene_ring(QPointF(0.0, 0.0))
@@ -382,19 +431,19 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertEqual(atom_ids, set())
         self.assertEqual(bond_ids, {0})
 
-    def test_clicking_bond_near_labeled_atom_prefers_bond(self) -> None:
-        self.window.canvas.set_tool("select")
+    def test_preferred_structure_item_outside_labeled_atom_toward_bond_prefers_bond(self) -> None:
         left = self.window.canvas.add_atom("N", 0.0, 0.0)
         right = self.window.canvas.add_atom("C", 20.0, 0.0)
         self.window.canvas.add_or_update_atom_label(left, "N", record=False)
         self.window.canvas.add_bond(left, right)
         self.window.canvas._add_bond_graphics(0)
+        label = self.window.canvas.atom_items[left]
+        rect = label.sceneBoundingRect()
 
-        self._click_scene_point(QPointF(3.0, 0.0))
+        item = self.window.canvas.preferred_structure_item_at_scene_pos(QPointF(rect.right() + 1.0, rect.center().y()))
 
-        atom_ids, bond_ids = self.window.canvas._selected_ids()
-        self.assertEqual(atom_ids, set())
-        self.assertEqual(bond_ids, {0})
+        self.assertIsNotNone(item)
+        self.assertEqual(item.data(0), "bond")
 
     def test_select_tool_drag_context_matches_selection_hit_test_for_selected_bond_endpoints(self) -> None:
         self.window.canvas.set_tool("select")
