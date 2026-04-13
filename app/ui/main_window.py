@@ -182,7 +182,7 @@ class MainWindow(QMainWindow):
         action_text = tool_action("Atom", "text")
         action_ring = tool_action("Ring", "benzene")
         action_arrow = tool_action("Arrow", "arrow")
-        action_orbital = tool_action("Orbital", "orbital")
+        action_ts_bracket = tool_action("TS Bracket", "ts_bracket")
         action_perspective = tool_action("Perspective", "perspective")
         action_bond_bold = QAction("Bold Bond", self)
         action_bond_bold.setCheckable(True)
@@ -238,7 +238,7 @@ class MainWindow(QMainWindow):
             "mark_radical": action_mark_radical,
             "benzene": action_ring,
             "arrow": action_arrow,
-            "orbital": action_orbital,
+            "ts_bracket": action_ts_bracket,
             "perspective": action_perspective,
         }
 
@@ -252,8 +252,8 @@ class MainWindow(QMainWindow):
         action_ring.setToolTip("Ring / Benzene (ChemDraw: J)")
         action_arrow.setIcon(self._icon_arrow())
         action_arrow.setToolTip("Arrow (ChemDraw: E)")
-        action_orbital.setIcon(self._icon_orbital())
-        action_orbital.setToolTip("Orbital (ChemDraw: Shift+G)")
+        action_ts_bracket.setIcon(self._icon_ts_bracket())
+        action_ts_bracket.setToolTip("TS Bracket (ChemDraw: Shift+G)")
         action_perspective.setIcon(self._icon_perspective())
         action_perspective.setToolTip("Perspective Rotation (ChemDraw: Alt+D, Shift+drag locks X/Y)")
         action_bond_bold.setToolTip("Bold Bond (Bond Hotkey: B)")
@@ -318,33 +318,8 @@ class MainWindow(QMainWindow):
         arrow_menu.addAction("Settings...").triggered.connect(self._open_arrow_settings)
         arrow_button.setMenu(arrow_menu)
 
-        orbital_button = CornerMenuButton()
-        orbital_button.setDefaultAction(action_orbital)
-        orbital_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        orbital_button.setStyleSheet(menu_button_style)
-        orbital_menu = QMenu(orbital_button)
-        for label in ["s", "p", "sp", "sp2", "sp3", "d", "MO bonding", "MO antibonding"]:
-            action = orbital_menu.addAction(self._icon_orbital_preview(label), label)
-            action.triggered.connect(
-                lambda checked=False, value=label: (
-                    self._set_tool_with_status("orbital"),
-                    self._set_orbital_type(value),
-                )
-            )
-        orbital_menu.addSeparator()
-        phase_action = orbital_menu.addAction("Phase On")
-        phase_action.setCheckable(True)
-        phase_action.setChecked(False)
-        phase_action.toggled.connect(
-            lambda checked: (
-                self._set_tool_with_status("orbital"),
-                self._set_orbital_phase("Phase On" if checked else "Phase Off"),
-            )
-        )
-        orbital_button.setMenu(orbital_menu)
-
         left_bar.addWidget(arrow_button)
-        left_bar.addWidget(orbital_button)
+        left_bar.addAction(action_ts_bracket)
 
         bond_len_btn = QToolButton()
         bond_len_btn.setToolTip("Bond Length")
@@ -976,6 +951,23 @@ class MainWindow(QMainWindow):
             p.drawLine(23, 15, 18, 19)
         return self._make_icon(draw)
 
+    def _icon_ts_bracket(self) -> QIcon:
+        def draw(p):
+            pen = QPen(QColor("#3d3229"))
+            pen.setWidthF(1.0)
+            p.setPen(pen)
+            p.drawLine(8, 7, 5, 7)
+            p.drawLine(5, 7, 5, 23)
+            p.drawLine(5, 23, 8, 23)
+            p.drawLine(22, 7, 25, 7)
+            p.drawLine(25, 7, 25, 23)
+            p.drawLine(25, 23, 22, 23)
+            font = p.font()
+            font.setPixelSize(8)
+            p.setFont(font)
+            p.drawText(QRectF(10.0, 8.0, 12.0, 8.0), Qt.AlignmentFlag.AlignCenter, "TS")
+        return self._make_icon(draw)
+
     def _icon_orbital(self) -> QIcon:
         def draw(p):
             pen = QPen(QColor("#3d3229"))
@@ -1418,6 +1410,7 @@ class MainWindow(QMainWindow):
         "text": "Atom / Text",
         "benzene": "Ring",
         "arrow": "Arrow",
+        "ts_bracket": "TS Bracket",
         "orbital": "Orbital",
         "perspective": "Perspective",
         "color": "Color",

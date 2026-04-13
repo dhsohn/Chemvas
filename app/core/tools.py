@@ -555,14 +555,7 @@ class TextTool(Tool):
 
     @staticmethod
     def _normalized_symbol(text: str) -> str:
-        text = text.strip()
-        if not text:
-            return ""
-        if text.isalpha() and len(text) <= 2:
-            if len(text) == 1:
-                return text.upper()
-            return text[0].upper() + text[1:].lower()
-        return text
+        return text.strip()
 
 
 class BenzeneTool(Tool):
@@ -730,6 +723,7 @@ class MoveTool(Tool):
             "inhibit",
             "dotted",
             "orbital",
+            "ts_bracket",
         }:
             return True
         self._drag_item = item
@@ -896,6 +890,7 @@ class DeleteTool(Tool):
             "inhibit",
             "dotted",
             "orbital",
+            "ts_bracket",
             "note",
         }:
             state = self.canvas.scene_item_state(item)
@@ -947,6 +942,54 @@ class ArrowTool(Tool):
             self._preview_item = None
         arrow_type = self.mode if self.mode != "auto" else self.canvas.active_arrow_type
         self.canvas.add_arrow(self._start_pos, end_pos, arrow_type)
+        self._start_pos = None
+        return True
+
+
+class TSBracketTool(Tool):
+    def __init__(self, canvas) -> None:
+        super().__init__("ts_bracket")
+        self.canvas = canvas
+        self._start_pos = None
+        self._preview_item = None
+
+    def activate(self) -> None:
+        self.canvas.setDragMode(self.canvas.DragMode.NoDrag)
+
+    def deactivate(self) -> None:
+        self._clear_preview()
+        self._start_pos = None
+
+    def _clear_preview(self) -> None:
+        if self._preview_item is None:
+            return
+        try:
+            if self._preview_item.scene() is self.canvas.scene():
+                self.canvas.scene().removeItem(self._preview_item)
+        except RuntimeError:
+            pass
+        self._preview_item = None
+
+    def on_mouse_press(self, event) -> bool:
+        if event.button() != Qt.MouseButton.LeftButton:
+            return False
+        self._start_pos = self.canvas.scene_pos_from_event(event)
+        return True
+
+    def on_mouse_move(self, event) -> bool:
+        if self._start_pos is None:
+            return False
+        current_pos = self.canvas.scene_pos_from_event(event)
+        self._clear_preview()
+        self._preview_item = self.canvas.preview_ts_bracket(self._start_pos, current_pos)
+        return True
+
+    def on_mouse_release(self, event) -> bool:
+        if self._start_pos is None:
+            return False
+        end_pos = self.canvas.scene_pos_from_event(event)
+        self._clear_preview()
+        self.canvas.add_ts_bracket_from_points(self._start_pos, end_pos)
         self._start_pos = None
         return True
 
@@ -1137,6 +1180,7 @@ class ToolController:
             "move": MoveTool(canvas),
             "arrow": ArrowTool(canvas, "auto"),
             "equilibrium": ArrowTool(canvas, "equilibrium"),
+            "ts_bracket": TSBracketTool(canvas),
             "orbital": OrbitalTool(canvas),
             "perspective": PerspectiveTool(canvas),
         }
