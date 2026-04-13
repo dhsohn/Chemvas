@@ -228,6 +228,6 @@ class RDKitAdapter:
         except Exception:
             return None
 
-    def model_to_3d(self, model):
-        # TODO: use RDKit to generate 3D coordinates from a MoleculeModel.
-        raise NotImplementedError
+    def model_to_3d(self, model: MoleculeModel):
+        # Backward-compatible wrapper kept in sync with model_to_3d_coords().
+        return self.model_to_3d_coords(model)
