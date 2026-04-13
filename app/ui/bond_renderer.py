@@ -12,6 +12,17 @@ class BondRenderer:
         self.canvas = canvas
         self._bold_out_length_scale = 1.1
 
+    @staticmethod
+    def _normalize_3d(
+        dx: float,
+        dy: float,
+        dz: float,
+    ) -> tuple[float, float, float] | None:
+        length = math.sqrt(dx * dx + dy * dy + dz * dz)
+        if length <= 1e-9:
+            return None
+        return (dx / length, dy / length, dz / length)
+
     def _scale_segment(
         self,
         x1: float,
@@ -214,6 +225,92 @@ class BondRenderer:
         b_id: int | None = None,
         center_3d: tuple[float, float, float] | None = None,
     ) -> tuple[tuple[float, float, float, float], tuple[float, float, float, float], tuple[float, float]]:
+        if center_3d is not None and a_id is not None and b_id is not None:
+            coords_a = self.canvas._current_atom_coords_3d(a_id)
+            coords_b = self.canvas._current_atom_coords_3d(b_id)
+            if coords_a is not None and coords_b is not None:
+                ax3, ay3, az3 = coords_a
+                bx3, by3, bz3 = coords_b
+                bond_vec3 = (bx3 - ax3, by3 - ay3, bz3 - az3)
+                bond_unit3 = self._normalize_3d(*bond_vec3)
+                if bond_unit3 is not None:
+                    t0, t1 = self.canvas._trim_line_for_labels(a_id, b_id, a.x, a.y, b.x, b.y)
+                    base_a3 = (
+                        ax3 + bond_vec3[0] * t0,
+                        ay3 + bond_vec3[1] * t0,
+                        az3 + bond_vec3[2] * t0,
+                    )
+                    base_b3 = (
+                        ax3 + bond_vec3[0] * t1,
+                        ay3 + bond_vec3[1] * t1,
+                        az3 + bond_vec3[2] * t1,
+                    )
+                    base_mid3 = (
+                        (base_a3[0] + base_b3[0]) * 0.5,
+                        (base_a3[1] + base_b3[1]) * 0.5,
+                        (base_a3[2] + base_b3[2]) * 0.5,
+                    )
+                    inward3 = (
+                        center_3d[0] - base_mid3[0],
+                        center_3d[1] - base_mid3[1],
+                        center_3d[2] - base_mid3[2],
+                    )
+                    dot = (
+                        inward3[0] * bond_unit3[0]
+                        + inward3[1] * bond_unit3[1]
+                        + inward3[2] * bond_unit3[2]
+                    )
+                    inward_perp3 = (
+                        inward3[0] - bond_unit3[0] * dot,
+                        inward3[1] - bond_unit3[1] * dot,
+                        inward3[2] - bond_unit3[2] * dot,
+                    )
+                    inward_unit3 = self._normalize_3d(*inward_perp3)
+                    if inward_unit3 is not None:
+                        outer_a = self.canvas._project_point_3d(base_a3)
+                        outer_b = self.canvas._project_point_3d(base_b3)
+                        base_outer = (outer_a[0], outer_a[1], outer_b[0], outer_b[1])
+                        base_dx = base_outer[2] - base_outer[0]
+                        base_dy = base_outer[3] - base_outer[1]
+                        inner_length = math.hypot(base_dx, base_dy) or 1.0
+                        has_label = False
+                        if self.canvas._label_rect_for_atom(a_id) is not None:
+                            has_label = True
+                        if self.canvas._label_rect_for_atom(b_id) is not None:
+                            has_label = True
+                        if has_label:
+                            inner_trim = max(0.6, inner_length * 0.08)
+                        else:
+                            inner_trim = max(1.0, inner_length * 0.12)
+                        trim_ratio = min(0.45, inner_trim / inner_length)
+                        trimmed_vec3 = (
+                            base_b3[0] - base_a3[0],
+                            base_b3[1] - base_a3[1],
+                            base_b3[2] - base_a3[2],
+                        )
+                        spacing = self.canvas.renderer.style.bond_spacing_px * 1.1
+                        inner_a3 = (
+                            base_a3[0] + trimmed_vec3[0] * trim_ratio + inward_unit3[0] * spacing,
+                            base_a3[1] + trimmed_vec3[1] * trim_ratio + inward_unit3[1] * spacing,
+                            base_a3[2] + trimmed_vec3[2] * trim_ratio + inward_unit3[2] * spacing,
+                        )
+                        inner_b3 = (
+                            base_b3[0] - trimmed_vec3[0] * trim_ratio + inward_unit3[0] * spacing,
+                            base_b3[1] - trimmed_vec3[1] * trim_ratio + inward_unit3[1] * spacing,
+                            base_b3[2] - trimmed_vec3[2] * trim_ratio + inward_unit3[2] * spacing,
+                        )
+                        inner_a = self.canvas._project_point_3d(inner_a3)
+                        inner_b = self.canvas._project_point_3d(inner_b3)
+                        offset_x = ((inner_a[0] + inner_b[0]) - (outer_a[0] + outer_b[0])) * 0.5
+                        offset_y = ((inner_a[1] + inner_b[1]) - (outer_a[1] + outer_b[1])) * 0.5
+                        offset_len = math.hypot(offset_x, offset_y)
+                        if offset_len > 1e-9:
+                            return (
+                                base_outer,
+                                (inner_a[0], inner_a[1], inner_b[0], inner_b[1]),
+                                (offset_x / offset_len, offset_y / offset_len),
+                            )
+
         dx = b.x - a.x
         dy = b.y - a.y
         length = math.hypot(dx, dy) or 1.0
@@ -280,81 +377,27 @@ class BondRenderer:
         outer_style: str = "normal",
         center_3d: tuple[float, float, float] | None = None,
     ):
-        dx = b.x - a.x
-        dy = b.y - a.y
-        length = math.hypot(dx, dy) or 1.0
-        ux = dx / length
-        uy = dy / length
-        nx = -dy / length
-        ny = dx / length
-        offset_unit = None
-        if a_id is not None and b_id is not None:
-            offset_unit = self.canvas._bond_offset_unit_3d(
-                a_id,
-                b_id,
-                target=center_3d,
-            )
-        if offset_unit is not None:
-            nx, ny = offset_unit[0], offset_unit[1]
-            if center_3d is None:
-                mid_x = (a.x + b.x) / 2.0
-                mid_y = (a.y + b.y) / 2.0
-                to_cx = center.x() - mid_x
-                to_cy = center.y() - mid_y
-                if nx * to_cx + ny * to_cy < 0:
-                    nx = -nx
-                    ny = -ny
-        else:
-            mid_x = (a.x + b.x) / 2.0
-            mid_y = (a.y + b.y) / 2.0
-            to_cx = center.x() - mid_x
-            to_cy = center.y() - mid_y
-            if nx * to_cx + ny * to_cy < 0:
-                nx = -nx
-                ny = -ny
-
-        spacing = self.canvas.renderer.style.bond_spacing_px * 1.1
-        trim = max(1.5, length * 0.12)
-        inner_x1 = a.x + ux * trim + nx * spacing
-        inner_y1 = a.y + uy * trim + ny * spacing
-        inner_x2 = b.x - ux * trim + nx * spacing
-        inner_y2 = b.y - uy * trim + ny * spacing
-
-        t0, t1 = self.canvas._trim_line_for_labels(a_id, b_id, a.x, a.y, b.x, b.y)
-        base_bx1 = a.x + dx * t0
-        base_by1 = a.y + dy * t0
-        base_bx2 = a.x + dx * t1
-        base_by2 = a.y + dy * t1
+        outer_seg, inner_seg, (nx, ny) = self.ring_double_segments(
+            a,
+            b,
+            center,
+            a_id,
+            b_id,
+            center_3d=center_3d,
+        )
         if outer_style in {"bold_inward", "bold_outward"}:
             use_nx, use_ny = (nx, ny) if outer_style == "bold_inward" else (-nx, -ny)
             outer_item = self.one_sided_bond_strip(
-                base_bx1,
-                base_by1,
-                base_bx2,
-                base_by2,
+                *outer_seg,
                 use_nx,
                 use_ny,
                 self.canvas.renderer.style.bond_line_width,
                 self.canvas.renderer.style.bold_bond_width * 1.5,
             )
         else:
-            outer_item = NoSelectLineItem(base_bx1, base_by1, base_bx2, base_by2)
+            outer_item = NoSelectLineItem(*outer_seg)
             outer_item.setPen(self.canvas.renderer.bond_pen())
-        inner_length = math.hypot(base_bx2 - base_bx1, base_by2 - base_by1) or 1.0
-        has_label = False
-        if a_id is not None and self.canvas._label_rect_for_atom(a_id) is not None:
-            has_label = True
-        if b_id is not None and self.canvas._label_rect_for_atom(b_id) is not None:
-            has_label = True
-        if has_label:
-            inner_trim = max(0.6, inner_length * 0.08)
-        else:
-            inner_trim = max(1.0, inner_length * 0.12)
-        inner_x1 = base_bx1 + ux * inner_trim + nx * spacing
-        inner_y1 = base_by1 + uy * inner_trim + ny * spacing
-        inner_x2 = base_bx2 - ux * inner_trim + nx * spacing
-        inner_y2 = base_by2 - uy * inner_trim + ny * spacing
-        inner_line = NoSelectLineItem(inner_x1, inner_y1, inner_x2, inner_y2)
+        inner_line = NoSelectLineItem(*inner_seg)
         inner_line.setPen(self.canvas.renderer.bond_pen())
         return [outer_item, inner_line]
 
