@@ -228,6 +228,48 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertEqual(atom_ids, {atom_id})
         self.assertEqual(bond_ids, set())
 
+    def test_preferred_structure_item_near_labeled_atom_and_bond_prefers_bond(self) -> None:
+        self.window.canvas.add_bond_from_points(QPointF(0.0, 0.0), QPointF(20.0, 0.0))
+        self.window.canvas.add_or_update_atom_label(0, "P", record=False)
+
+        item = self.window.canvas.preferred_structure_item_at_scene_pos(QPointF(4.0, 0.0))
+
+        self.assertIsNotNone(item)
+        self.assertEqual(item.data(0), "bond")
+
+    def test_preferred_structure_item_near_ring_vertex_returns_atom(self) -> None:
+        self.window.canvas.add_benzene_ring(QPointF(0.0, 0.0))
+        ring_atom_ids = self.window.canvas.ring_items[0].data(2)
+        self.assertIsInstance(ring_atom_ids, list)
+        atom = self.window.canvas.model.atoms[ring_atom_ids[0]]
+
+        item = self.window.canvas.preferred_structure_item_at_scene_pos(QPointF(atom.x + 1.0, atom.y + 1.0))
+
+        self.assertIsNotNone(item)
+        self.assertEqual(item.data(0), "atom")
+        self.assertEqual(item.data(1), ring_atom_ids[0])
+
+    def test_hover_near_labeled_atom_and_bond_prefers_bond(self) -> None:
+        self.window.canvas.add_bond_from_points(QPointF(0.0, 0.0), QPointF(20.0, 0.0))
+        self.window.canvas.add_or_update_atom_label(0, "P", record=False)
+
+        self.window.canvas._update_hover_highlight(QPointF(4.0, 0.0))
+
+        self.assertIsNone(self.window.canvas.hover_atom_id)
+        self.assertEqual(self.window.canvas.hover_bond_id, 0)
+
+    def test_hover_near_ring_vertex_prefers_atom(self) -> None:
+        self.window.canvas.add_benzene_ring(QPointF(0.0, 0.0))
+        ring_atom_ids = self.window.canvas.ring_items[0].data(2)
+        self.assertIsInstance(ring_atom_ids, list)
+        target_atom_id = ring_atom_ids[0]
+        atom = self.window.canvas.model.atoms[target_atom_id]
+
+        self.window.canvas._update_hover_highlight(QPointF(atom.x + 1.0, atom.y + 1.0))
+
+        self.assertEqual(self.window.canvas.hover_atom_id, target_atom_id)
+        self.assertIsNone(self.window.canvas.hover_bond_id)
+
     def test_benzene_ring_carbons_have_selectable_atom_dots(self) -> None:
         self.window.canvas.set_tool("select")
         self.window.canvas.add_benzene_ring(QPointF(0.0, 0.0))
@@ -238,6 +280,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertIn(first_atom_id, self.window.canvas.atom_dots)
 
         atom = self.window.canvas.model.atoms[first_atom_id]
+        self._hover_scene_point(QPointF(atom.x, atom.y))
         self._click_scene_point(QPointF(atom.x, atom.y))
 
         atom_ids, bond_ids = self.window.canvas._selected_ids()
@@ -352,6 +395,46 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         atom_ids, bond_ids = self.window.canvas._selected_ids()
         self.assertEqual(atom_ids, set())
         self.assertEqual(bond_ids, {0})
+
+    def test_select_tool_drag_context_matches_selection_hit_test_for_selected_bond_endpoints(self) -> None:
+        self.window.canvas.set_tool("select")
+        left = self.window.canvas.add_atom("C", -20.0, 0.0)
+        right = self.window.canvas.add_atom("C", 20.0, 0.0)
+        self.window.canvas.add_bond(left, right)
+        self.window.canvas._add_bond_graphics(0)
+
+        self._select_items(*self.window.canvas.bond_items[0])
+
+        select_tool = self.window.canvas.tools.tools["select"]
+        atom_ids, selection_items = select_tool._selection_drag_context()
+
+        self.assertEqual(atom_ids, {left, right})
+        self.assertTrue(selection_items)
+        self.assertEqual({item.data(1) for item in selection_items}, {0})
+
+        left_atom = self.window.canvas.model.atoms[left]
+        right_atom = self.window.canvas.model.atoms[right]
+        self.assertIsNotNone(left_atom)
+        self.assertIsNotNone(right_atom)
+        self.assertTrue(self.window.canvas.selection_hit_test(QPointF(left_atom.x, left_atom.y)))
+        self.assertTrue(self.window.canvas.selection_hit_test(QPointF(right_atom.x, right_atom.y)))
+
+    def test_select_tool_drag_context_matches_selection_hit_test_for_selected_arrow_rect(self) -> None:
+        self.window.canvas.set_tool("select")
+        arrow = self.window.canvas.add_arrow(QPointF(-40.0, 0.0), QPointF(20.0, 20.0), "arrow")
+
+        self._select_items(arrow)
+
+        select_tool = self.window.canvas.tools.tools["select"]
+        atom_ids, selection_items = select_tool._selection_drag_context()
+
+        self.assertEqual(atom_ids, set())
+        self.assertEqual(selection_items, [arrow])
+
+        rect = arrow.sceneBoundingRect()
+        interior_point = QPointF(rect.left() + 6.0, rect.bottom() - 6.0)
+        self.assertIsNone(self.window.canvas.item_at_scene_pos(interior_point))
+        self.assertTrue(self.window.canvas.selection_hit_test(interior_point))
 
     def test_color_preset_preserves_ring_fill_on_selected_ring(self) -> None:
         self.window.canvas.add_benzene_ring(QPointF(0.0, 0.0))
