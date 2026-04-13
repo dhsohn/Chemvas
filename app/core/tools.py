@@ -60,6 +60,35 @@ class SelectTool(Tool):
     def activate(self) -> None:
         self.canvas.setDragMode(self.canvas.DragMode.RubberBandDrag)
 
+    def _select_structure_item(self, item) -> bool:
+        if item is None:
+            return False
+        kind = item.data(0)
+        self.canvas.scene().clearSelection()
+        if kind == "atom":
+            atom_id = item.data(1)
+            if not isinstance(atom_id, int):
+                return False
+            atom_item = self.canvas.atom_items.get(atom_id) or self.canvas.atom_dots.get(atom_id)
+            if atom_item is None:
+                return False
+            atom_item.setSelected(True)
+            return True
+        if kind == "bond":
+            bond_id = item.data(1)
+            if not isinstance(bond_id, int):
+                return False
+            bond_items = self.canvas.bond_items.get(bond_id, [])
+            if not bond_items:
+                return False
+            for bond_item in bond_items:
+                bond_item.setSelected(True)
+            return True
+        if kind == "ring":
+            item.setSelected(True)
+            return True
+        return False
+
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
             return False
@@ -73,9 +102,16 @@ class SelectTool(Tool):
             self.canvas.show_curved_handles(item)
             return False
         self.canvas.clear_handles()
+        press_pos = self.canvas.scene_pos_from_event(event)
         selected = self.canvas.scene().selectedItems()
         if not selected:
-            return False
+            preferred = self.canvas.preferred_structure_item_at_scene_pos(press_pos)
+            if preferred is None or preferred.data(0) not in {"atom", "bond", "ring"}:
+                return False
+            if not self._select_structure_item(preferred):
+                return False
+            item = preferred
+            selected = self.canvas.scene().selectedItems()
         atom_ids, bond_ids = self.canvas._selected_ids()
         for bond_id in bond_ids:
             if 0 <= bond_id < len(self.canvas.model.bonds):
@@ -90,7 +126,27 @@ class SelectTool(Tool):
         ]
         if not atom_ids and not selection_items:
             return False
-        click_pos = self.canvas.scene_pos_from_event(event)
+        click_pos = press_pos
+        for outline in self.canvas.selection_outlines:
+            data = outline.data(2) or {}
+            if data.get("kind") != "component":
+                continue
+            if not outline.contains(outline.mapFromScene(click_pos)):
+                continue
+            self._drag_selection = True
+            self._selection_atom_ids = set(atom_ids)
+            self._selection_items = selection_items
+            if self._selection_atom_ids:
+                self._drag_bond_ids, self._drag_boundary_bond_ids = self.canvas.bond_sets_for_atoms(
+                    self._selection_atom_ids
+                )
+            else:
+                self._drag_bond_ids = set()
+                self._drag_boundary_bond_ids = set()
+            self._start_pos = event.position()
+            self._last_drag_time = 0.0
+            self._total_delta = QPointF(0.0, 0.0)
+            return True
         rects = []
         if atom_ids:
             for component in self.canvas._connected_components(atom_ids):
@@ -143,7 +199,25 @@ class SelectTool(Tool):
             elif item.isSelected():
                 clicked_selection = True
         if not clicked_selection:
-            return False
+            preferred = self.canvas.preferred_structure_item_at_scene_pos(press_pos)
+            if preferred is None or preferred.data(0) not in {"atom", "bond", "ring"}:
+                return False
+            if not self._select_structure_item(preferred):
+                return False
+            item = preferred
+            selected = self.canvas.scene().selectedItems()
+            atom_ids, bond_ids = self.canvas._selected_ids()
+            for bond_id in bond_ids:
+                if 0 <= bond_id < len(self.canvas.model.bonds):
+                    bond = self.canvas.model.bonds[bond_id]
+                    if bond is not None:
+                        atom_ids.add(bond.a)
+                        atom_ids.add(bond.b)
+            selection_items = [
+                sel
+                for sel in selected
+                if sel.data(0) not in {"selection_outline", "note_box", "note_select", "handle"}
+            ]
         self._drag_selection = True
         self._selection_atom_ids = set(atom_ids)
         self._selection_items = selection_items

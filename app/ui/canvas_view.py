@@ -11,6 +11,7 @@ from PyQt6.QtGui import (
     QImage,
     QPainter,
     QPainterPath,
+    QPainterPathStroker,
     QPen,
     QPolygonF,
     QKeySequence,
@@ -59,6 +60,8 @@ from core.rdkit_adapter import RDKitAdapter
 from core.tools import ToolController
 from ui.bond_renderer import BondRenderer
 from ui.graphics_items import (
+    AtomLabelItem,
+    AtomDotItem,
     NoSelectEllipseItem,
     NoSelectLineItem,
     NoSelectPathItem,
@@ -218,7 +221,7 @@ class CanvasView(QGraphicsView):
         self._selection_info_callback = None
         self._tool_change_callback = None
         self._rotation_selection_ids = None
-        self.selection_outlines: list[QGraphicsRectItem] = []
+        self.selection_outlines: list[QGraphicsItem] = []
         self._smiles_insert_active = False
         self._smiles_preview_model: MoleculeModel | None = None
         self._smiles_preview_items: list[QGraphicsItem] = []
@@ -1211,6 +1214,7 @@ class CanvasView(QGraphicsView):
 
     def set_tool(self, tool_name: str) -> None:
         self.tools.set_active(tool_name)
+        self._update_selection_outline()
         self._notify_tool_change()
 
     def set_mark_kind(self, kind: str) -> None:
@@ -1218,6 +1222,7 @@ class CanvasView(QGraphicsView):
             return
         self.mark_kind = kind
         self.tools.set_active("mark")
+        self._update_selection_outline()
         self._notify_tool_change()
 
     def _record_label_change(
@@ -1465,7 +1470,7 @@ class CanvasView(QGraphicsView):
             label_item.setDefaultTextColor(color_value)
         dot_item = self.atom_dots.get(atom_id)
         if dot_item is not None:
-            dot_item.setBrush(color_value)
+            dot_item.setBrush(self._implicit_carbon_dot_brush())
 
     def set_atom_positions(self, positions: dict[int, tuple[float, float]], update_selection: bool = True) -> None:
         if not positions:
@@ -2009,28 +2014,115 @@ class CanvasView(QGraphicsView):
 
     def item_at_scene_pos(self, pos: QPointF):
         view_pos = self.mapFromScene(pos)
+        bond_item = None
+        ring_item = None
+        other_item = None
         for item in self.items(view_pos):
             if item.data(0) == "selection_outline":
                 continue
             kind = item.data(0)
             if kind in {"note_box", "note_select"}:
                 continue
-            return item
-        return None
+            if kind == "atom":
+                return item
+            if kind == "bond" and bond_item is None:
+                bond_item = item
+                continue
+            if kind == "ring" and ring_item is None:
+                ring_item = item
+                continue
+            if other_item is None:
+                other_item = item
+        if bond_item is None:
+            nearby_bond_id = self._find_bond_near(pos, self._bond_pick_radius())
+            if nearby_bond_id is not None:
+                nearby_items = self.bond_items.get(nearby_bond_id, [])
+                if nearby_items:
+                    return nearby_items[0]
+        return bond_item or ring_item or other_item
 
     def item_at_event(self, event):
         return self.item_at_scene_pos(self.scene_pos_from_event(event))
+
+    def _nearest_atom_hit(self, pos: QPointF) -> tuple[int, float] | None:
+        atom_id = self.find_atom_near(pos.x(), pos.y(), self._atom_pick_radius())
+        if atom_id is None:
+            return None
+        atom = self.model.atoms.get(atom_id)
+        if atom is None:
+            return None
+        return atom_id, math.hypot(atom.x - pos.x(), atom.y - pos.y())
+
+    def _nearest_bond_hit(self, pos: QPointF) -> tuple[int, float] | None:
+        bond_id = self._find_bond_near(pos, self._bond_pick_radius())
+        if bond_id is None or not (0 <= bond_id < len(self.model.bonds)):
+            return None
+        bond = self.model.bonds[bond_id]
+        if bond is None:
+            return None
+        atom_a = self.model.atoms.get(bond.a)
+        atom_b = self.model.atoms.get(bond.b)
+        if atom_a is None or atom_b is None:
+            return None
+        dist = self._distance_point_to_segment(
+            pos,
+            QPointF(atom_a.x, atom_a.y),
+            QPointF(atom_b.x, atom_b.y),
+        )
+        return bond_id, dist
+
+    def preferred_structure_item_at_scene_pos(self, pos: QPointF):
+        atom_hit = self._nearest_atom_hit(pos)
+        bond_hit = self._nearest_bond_hit(pos)
+        atom_item = None
+        bond_item = None
+        atom_score = None
+        bond_score = None
+
+        if atom_hit is not None:
+            atom_id, atom_dist = atom_hit
+            atom_item = self.atom_items.get(atom_id) or self.atom_dots.get(atom_id)
+            atom_radius = max(self._atom_pick_radius(), 1e-6)
+            atom_score = atom_dist / atom_radius
+            if atom_dist <= atom_radius * 0.45 and atom_item is not None:
+                return atom_item
+
+        if bond_hit is not None:
+            bond_id, bond_dist = bond_hit
+            bond_items = self.bond_items.get(bond_id, [])
+            if bond_items:
+                bond_item = bond_items[0]
+                bond_score = bond_dist / max(self._bond_pick_radius(), 1e-6)
+
+        if atom_item is not None and bond_item is not None and atom_score is not None and bond_score is not None:
+            if bond_score <= atom_score * 1.15:
+                return bond_item
+            return atom_item
+        if bond_item is not None:
+            return bond_item
+        if atom_item is not None:
+            return atom_item
+        item = self.item_at_scene_pos(pos)
+        if item is not None and item.data(0) == "ring":
+            return item
+        return item
 
     def bond_id_from_event(self, event) -> int | None:
         if self.hover_bond_id is not None:
             return self.hover_bond_id
         pos = self.scene_pos_from_event(event)
-        return self._find_bond_near(pos, self.renderer.style.bond_length_px * 0.35)
+        return self._find_bond_near(pos, max(self.renderer.style.bond_length_px * 0.35, self._bond_pick_radius()))
 
     def selection_hit_test(self, pos: QPointF) -> bool:
         selected = self.scene().selectedItems()
         if not selected:
             return False
+        for outline in self.selection_outlines:
+            data = outline.data(2) or {}
+            if data.get("kind") != "component":
+                continue
+            if outline.contains(outline.mapFromScene(pos)):
+                return True
         atom_ids, bond_ids = self._selected_ids()
         for bond_id in bond_ids:
             if 0 <= bond_id < len(self.model.bonds):
@@ -2197,6 +2289,8 @@ class CanvasView(QGraphicsView):
         atom_id = self.model.add_atom(element, x, y)
         self._ensure_atom_neighbors(atom_id)
         self._ensure_atom_bond_ids(atom_id)
+        if element.upper() == "C":
+            self._ensure_carbon_dot(atom_id)
         self._mark_spatial_index_dirty()
         return atom_id
 
@@ -2214,16 +2308,19 @@ class CanvasView(QGraphicsView):
         self.active_bond_style = style
         self.active_bond_order = order
         self.tools.set_active("bond")
+        self._update_selection_outline()
         self._notify_tool_change()
 
     def set_arrow_type(self, arrow_type: str) -> None:
         self.active_arrow_type = arrow_type
         self.tools.set_active("arrow")
+        self._update_selection_outline()
         self._notify_tool_change()
 
     def set_orbital_type(self, orbital_type: str) -> None:
         self.active_orbital_type = orbital_type
         self.tools.set_active("orbital")
+        self._update_selection_outline()
         self._notify_tool_change()
 
     def set_orbital_phase_enabled(self, enabled: bool) -> None:
@@ -2408,6 +2505,7 @@ class CanvasView(QGraphicsView):
     def set_snap_angle_step(self, step: int) -> None:
         self.snap_angle_step = step
         self.tools.set_active("bond")
+        self._update_selection_outline()
 
     def set_bond_length(self, length_px: float) -> None:
         old_length = self.renderer.style.bond_length_px
@@ -3227,7 +3325,8 @@ class CanvasView(QGraphicsView):
         ]
         if not items:
             return
-        atom_ids, bond_ids = self._selected_ids()
+        explicit_atom_ids, bond_ids = self._selected_ids()
+        atom_ids = set(explicit_atom_ids)
         for bond_id in bond_ids:
             if 0 <= bond_id < len(self.model.bonds):
                 bond = self.model.bonds[bond_id]
@@ -3235,18 +3334,6 @@ class CanvasView(QGraphicsView):
                     atom_ids.add(bond.a)
                     atom_ids.add(bond.b)
         rects: list[QRectF] = []
-        if atom_ids:
-            component_key = (frozenset(atom_ids), self._graph_version)
-            if component_key != self._selection_component_cache_signature:
-                self._selection_component_cache_signature = component_key
-                self._selection_component_cache = self._connected_components(atom_ids)
-            for component in self._selection_component_cache:
-                include_labels = not any(self._atom_neighbors.get(atom_id) for atom_id in component)
-                bounds = self._bounds_for_atoms(component, include_labels=include_labels)
-                if bounds is None:
-                    continue
-                min_x, min_y, max_x, max_y = bounds
-                rects.append(QRectF(min_x, min_y, max_x - min_x, max_y - min_y))
         non_atom_items = [
             item
             for item in items
@@ -3258,6 +3345,28 @@ class CanvasView(QGraphicsView):
         for outline in self.selection_outlines:
             self.scene().removeItem(outline)
         self.selection_outlines = []
+
+        atom_pad = self.renderer.style.bond_length_px * 0.06
+        atom_fill = QColor(self._selection_color)
+        atom_fill.setAlpha(45)
+        overlay_bond_ids = {
+            bond_id
+            for bond_id, bond in enumerate(self.model.bonds)
+            if bond is not None and bond.a in atom_ids and bond.b in atom_ids
+        }
+        for component in self._connected_components(atom_ids):
+            component_bond_ids = {
+                bond_id
+                for bond_id in overlay_bond_ids
+                if (bond := self.model.bonds[bond_id]) is not None
+                and bond.a in component
+                and bond.b in component
+            }
+            self._add_selection_component_overlay(component, component_bond_ids, atom_fill, atom_pad)
+
+        center = self._selection_center_for_atoms(atom_ids)
+        if center is not None and self._selection_center_marker_enabled():
+            self._add_selection_center_marker(center)
 
         pad = self.renderer.style.bond_length_px * 0.1
         for rect in rects:
@@ -3280,6 +3389,211 @@ class CanvasView(QGraphicsView):
             return
         for outline in self.selection_outlines:
             outline.moveBy(dx, dy)
+
+    def _atom_pick_radius(self) -> float:
+        base_radius = max(0.6, self.renderer.style.bond_line_width * 0.6)
+        return max(base_radius, self.renderer.style.bond_length_px * 0.32)
+
+    def _bond_pick_radius(self) -> float:
+        return self.renderer.style.bond_length_px * 0.528
+
+    @staticmethod
+    def _uses_compact_label_hit_shape(text: str) -> bool:
+        text = text.strip()
+        if len(text) == 1:
+            return text.isalpha() and text.upper() == text
+        if len(text) == 2:
+            return (
+                text[0].isalpha()
+                and text[0].upper() == text[0]
+                and text[1].isalpha()
+                and text[1].lower() == text[1]
+            )
+        return False
+
+    def _selection_indicator_rect_for_atom(self, atom_id: int) -> QRectF | None:
+        atom = self.model.atoms.get(atom_id)
+        if atom is None:
+            return None
+        radius = self._atom_pick_radius()
+        return QRectF(
+            atom.x - radius,
+            atom.y - radius,
+            radius * 2.0,
+            radius * 2.0,
+        )
+
+    @staticmethod
+    def _implicit_carbon_dot_brush() -> QColor:
+        return QColor(0, 0, 0, 0)
+
+    def _selection_bond_overlay_width(self, base_pen: QPen) -> float:
+        return max(
+            base_pen.widthF() + self.renderer.style.bond_spacing_px * 1.05,
+            self._atom_pick_radius() * 0.75,
+        )
+
+    def _selection_line_stroke_path(
+        self,
+        start: QPointF,
+        end: QPointF,
+        width: float,
+    ) -> QPainterPath:
+        bond_path = QPainterPath(start)
+        bond_path.lineTo(end)
+        stroker = QPainterPathStroker()
+        stroker.setWidth(width)
+        stroker.setCapStyle(Qt.PenCapStyle.RoundCap)
+        stroker.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        return stroker.createStroke(bond_path)
+
+    def _selection_path_for_bond_item(self, item, width: float | None = None) -> QPainterPath:
+        if isinstance(item, QGraphicsLineItem):
+            line = item.line()
+            stroke_width = width if width is not None else self._selection_bond_overlay_width(item.pen())
+            return self._selection_line_stroke_path(
+                QPointF(line.x1(), line.y1()),
+                QPointF(line.x2(), line.y2()),
+                stroke_width,
+            )
+        if isinstance(item, QGraphicsPolygonItem):
+            bond_path = QPainterPath()
+            bond_path.addPolygon(item.polygon())
+            return bond_path
+        if isinstance(item, QGraphicsPathItem):
+            stroker = QPainterPathStroker()
+            stroker.setWidth(width if width is not None else self._selection_bond_overlay_width(item.pen()))
+            stroker.setCapStyle(Qt.PenCapStyle.RoundCap)
+            stroker.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+            return stroker.createStroke(item.path())
+        return QPainterPath()
+
+    def _selection_path_for_bond(self, bond_id: int) -> QPainterPath:
+        if not (0 <= bond_id < len(self.model.bonds)):
+            return QPainterPath()
+        bond = self.model.bonds[bond_id]
+        if bond is None:
+            return QPainterPath()
+        items = self.bond_items.get(bond_id, [])
+        if not items:
+            return QPainterPath()
+        ring_center = self._ring_center_for_bond(bond) if bond.order == 2 else None
+        if ring_center is not None:
+            outer_path = self._selection_path_for_bond_item(items[0])
+            if not outer_path.isEmpty():
+                return outer_path
+        line_items = [item for item in items if isinstance(item, QGraphicsLineItem)]
+        if bond.order >= 2 and line_items and len(line_items) == len(items):
+            atom_a = self.model.atoms.get(bond.a)
+            atom_b = self.model.atoms.get(bond.b)
+            if atom_a is not None and atom_b is not None:
+                t0, t1 = self._trim_line_for_labels(bond.a, bond.b, atom_a.x, atom_a.y, atom_b.x, atom_b.y)
+                base_x1 = atom_a.x + (atom_b.x - atom_a.x) * t0
+                base_y1 = atom_a.y + (atom_b.y - atom_a.y) * t0
+                base_x2 = atom_a.x + (atom_b.x - atom_a.x) * t1
+                base_y2 = atom_a.y + (atom_b.y - atom_a.y) * t1
+                dx = base_x2 - base_x1
+                dy = base_y2 - base_y1
+                length = math.hypot(dx, dy)
+                if length > 1e-6:
+                    nx = -dy / length
+                    ny = dx / length
+                    base_mid = QPointF((base_x1 + base_x2) * 0.5, (base_y1 + base_y2) * 0.5)
+                    offsets = []
+                    widths = []
+                    for item in line_items:
+                        line = item.line()
+                        mid = QPointF((line.x1() + line.x2()) * 0.5, (line.y1() + line.y2()) * 0.5)
+                        offsets.append((mid.x() - base_mid.x()) * nx + (mid.y() - base_mid.y()) * ny)
+                        widths.append(self._selection_bond_overlay_width(item.pen()))
+                    axis_shift = (min(offsets) + max(offsets)) * 0.5
+                    overlay_width = max(widths)
+                    return self._selection_line_stroke_path(
+                        QPointF(base_x1 + nx * axis_shift, base_y1 + ny * axis_shift),
+                        QPointF(base_x2 + nx * axis_shift, base_y2 + ny * axis_shift),
+                        overlay_width,
+                    )
+        bond_path = QPainterPath()
+        bond_path.setFillRule(Qt.FillRule.WindingFill)
+        for item in items:
+            item_path = self._selection_path_for_bond_item(item)
+            if not item_path.isEmpty():
+                bond_path.addPath(item_path)
+        return bond_path
+
+    def _add_selection_component_overlay(
+        self,
+        atom_ids: set[int],
+        bond_ids: set[int],
+        color: QColor,
+        atom_pad: float,
+    ) -> None:
+        component_path = QPainterPath()
+        component_path.setFillRule(Qt.FillRule.WindingFill)
+        for atom_id in atom_ids:
+            rect = self._selection_indicator_rect_for_atom(atom_id)
+            if rect is None:
+                continue
+            component_path.addEllipse(
+                rect.adjusted(-atom_pad, -atom_pad, atom_pad, atom_pad)
+            )
+        for bond_id in bond_ids:
+            bond_path = self._selection_path_for_bond(bond_id)
+            if not bond_path.isEmpty():
+                component_path.addPath(bond_path)
+        if component_path.isEmpty():
+            return
+        component_path = component_path.simplified()
+        component_path.setFillRule(Qt.FillRule.WindingFill)
+        outline = NoSelectPathItem(component_path)
+        outline.setData(0, "selection_outline")
+        outline.setData(2, {"kind": "component", "atom_ids": sorted(atom_ids)})
+        outline.setZValue(19)
+        outline.setPen(QPen(Qt.PenStyle.NoPen))
+        outline.setBrush(QBrush(color))
+        self.scene().addItem(outline)
+        self.selection_outlines.append(outline)
+
+    def _selection_center_for_atoms(self, atom_ids: set[int]) -> QPointF | None:
+        if len(atom_ids) < 2:
+            return None
+        return self._bounding_box_center_for_atoms(atom_ids)
+
+    def _selection_center_marker_enabled(self) -> bool:
+        return self.tools.active is not None and self.tools.active.name == "perspective"
+
+    def _add_selection_center_marker(self, center: QPointF) -> None:
+        outer_radius = max(3.5, self.renderer.style.bond_length_px * 0.14)
+        inner_radius = max(1.2, self.renderer.style.bond_length_px * 0.05)
+        outer = NoSelectEllipseItem(
+            center.x() - outer_radius,
+            center.y() - outer_radius,
+            outer_radius * 2.0,
+            outer_radius * 2.0,
+        )
+        outer.setData(0, "selection_outline")
+        outer.setData(2, {"kind": "center"})
+        outer.setZValue(21)
+        pen = QPen(QColor("#ff4dc9"))
+        pen.setWidthF(1.4)
+        outer.setPen(pen)
+        outer.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+        self.scene().addItem(outer)
+        self.selection_outlines.append(outer)
+
+        inner = NoSelectEllipseItem(
+            center.x() - inner_radius,
+            center.y() - inner_radius,
+            inner_radius * 2.0,
+            inner_radius * 2.0,
+        )
+        inner.setData(0, "selection_outline")
+        inner.setData(2, {"kind": "center"})
+        inner.setZValue(21)
+        inner.setPen(QPen(Qt.PenStyle.NoPen))
+        inner.setBrush(QBrush(QColor("#ff4dc9")))
+        self.scene().addItem(inner)
+        self.selection_outlines.append(inner)
 
     def suspend_selection_outline(self, suspend: bool) -> None:
         self._suspend_selection_outline = bool(suspend)
@@ -3766,7 +4080,7 @@ class CanvasView(QGraphicsView):
         atom_id = self.find_atom_near(
             pos.x(),
             pos.y(),
-            self.renderer.style.bond_length_px * 0.3,
+            self.renderer.style.bond_length_px * 0.4,
         )
         if atom_id is not None:
             preview_style = self._bond_preview_signature()
@@ -6795,17 +7109,27 @@ class CanvasView(QGraphicsView):
                 )
             return
 
+        label_hit_padding = self.renderer.style.bond_length_px * 0.12
+        label_hit_radius = self._atom_pick_radius() if self._uses_compact_label_hit_shape(text) else None
+        if existing_item is not None and not isinstance(existing_item, AtomLabelItem):
+            self.scene().removeItem(existing_item)
+            existing_item = None
+            self.atom_items.pop(atom_id, None)
         if existing_item is None:
-            text_item = NoSelectTextItem()
+            text_item = AtomLabelItem(hit_padding=label_hit_padding, hit_radius=label_hit_radius)
             self.scene().addItem(text_item)
             self.atom_items[atom_id] = text_item
         else:
             text_item = existing_item
+            if isinstance(text_item, AtomLabelItem):
+                text_item.set_hit_padding(label_hit_padding)
+                text_item.set_hit_radius(label_hit_radius)
 
         text_item.setFont(self.renderer.atom_font())
         text_item.setDefaultTextColor(QColor(self.renderer.style.atom_color))
         text_item.setData(0, "atom")
         text_item.setData(1, atom_id)
+        text_item.setZValue(3)
         self._make_selectable(text_item)
         text_item.setPlainText(text)
         self._position_label(text_item, atom.x, atom.y)
@@ -6829,8 +7153,15 @@ class CanvasView(QGraphicsView):
         if atom is None:
             return
         radius = max(0.6, self.renderer.style.bond_line_width * 0.6)
-        dot = NoSelectEllipseItem(-radius, -radius, radius * 2.0, radius * 2.0)
-        dot.setBrush(QColor(self.renderer.style.bond_color))
+        pick_radius = self._atom_pick_radius()
+        dot = AtomDotItem(
+            -radius,
+            -radius,
+            radius * 2.0,
+            radius * 2.0,
+            hit_padding=max(0.0, pick_radius - radius),
+        )
+        dot.setBrush(self._implicit_carbon_dot_brush())
         dot.setPen(QPen(Qt.PenStyle.NoPen))
         dot.setZValue(3)
         dot.setData(0, "atom")
@@ -6883,6 +7214,8 @@ class CanvasView(QGraphicsView):
             atom_id = item.data(1)
             if isinstance(item, QGraphicsTextItem):
                 item.setDefaultTextColor(color)
+            elif isinstance(item, AtomDotItem):
+                item.setBrush(self._implicit_carbon_dot_brush())
             elif isinstance(item, QGraphicsEllipseItem):
                 item.setBrush(color)
             if atom_id in self.model.atoms:
@@ -6893,7 +7226,7 @@ class CanvasView(QGraphicsView):
                     label_item.setDefaultTextColor(color)
                 dot_item = self.atom_dots.get(atom_id)
                 if dot_item is not None and dot_item is not item:
-                    dot_item.setBrush(color)
+                    dot_item.setBrush(self._implicit_carbon_dot_brush())
                 after_color = self.model.atoms[atom_id].color
                 if before_color != after_color:
                     command = UpdateAtomColorCommand(

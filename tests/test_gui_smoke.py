@@ -52,6 +52,17 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.app.processEvents()
         QTest.qWait(10)
 
+    def _click_scene_point(self, point: QPointF) -> None:
+        viewport_pos = self.window.canvas.mapFromScene(point)
+        QTest.mouseClick(
+            self.window.canvas.viewport(),
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+            viewport_pos,
+        )
+        self.app.processEvents()
+        QTest.qWait(10)
+
     def _press_key(self, key: int, modifiers=None) -> None:
         if modifiers is None:
             modifiers = Qt.KeyboardModifier.NoModifier
@@ -172,6 +183,175 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self._press_key(Qt.Key.Key_A)
         self.assertEqual(self.window.canvas.tools.active.name, "bond")
         self.assertGreater(len(self.window.canvas.ring_items), ring_count_before)
+
+    def test_clicking_near_carbon_endpoint_prefers_atom_selection_over_bond(self) -> None:
+        self.window.canvas.set_tool("select")
+        self.window.canvas.add_bond_from_points(QPointF(0.0, 0.0), QPointF(20.0, 0.0))
+
+        carbon_dot = self.window.canvas.atom_dots[0]
+        self.assertEqual(carbon_dot.brush().color().alpha(), 0)
+
+        self._click_scene_point(QPointF(3.0, 0.0))
+
+        atom_ids, bond_ids = self.window.canvas._selected_ids()
+        self.assertEqual(atom_ids, {0})
+        self.assertEqual(bond_ids, set())
+        self.assertTrue(self.window.canvas.selection_outlines)
+        max_width = max(item.sceneBoundingRect().width() for item in self.window.canvas.selection_outlines)
+        self.assertGreaterEqual(max_width, self.window.canvas.renderer.style.bond_length_px * 0.5)
+
+    def test_explicit_atom_label_uses_circular_selection_indicator(self) -> None:
+        atom_id = self.window.canvas.add_atom("P", 0.0, 0.0)
+        self.window.canvas.add_or_update_atom_label(atom_id, "P", record=False)
+        label = self.window.canvas.atom_items[atom_id]
+
+        self._select_atom_ids(atom_id)
+
+        self.assertEqual(len(self.window.canvas.selection_outlines), 1)
+        rect = self.window.canvas.selection_outlines[0].sceneBoundingRect()
+        self.assertAlmostEqual(rect.width(), rect.height(), delta=0.5)
+        hit_rect = label.shape().boundingRect()
+        self.assertAlmostEqual(hit_rect.width(), self.window.canvas._atom_pick_radius() * 2.0, delta=0.5)
+
+    def test_clicking_left_side_of_ch3_label_selects_atom(self) -> None:
+        self.window.canvas.set_tool("select")
+        atom_id = self.window.canvas.add_atom("C", 0.0, 0.0)
+        self.window.canvas.add_or_update_atom_label(atom_id, "CH3", show_carbon=True, record=False)
+        label = self.window.canvas.atom_items[atom_id]
+        rect = label.sceneBoundingRect()
+        hit_rect = label.shape().boundingRect()
+        self.assertGreater(hit_rect.width(), self.window.canvas._atom_pick_radius() * 2.0)
+
+        self._click_scene_point(QPointF(rect.left() + 1.0, rect.center().y()))
+
+        atom_ids, bond_ids = self.window.canvas._selected_ids()
+        self.assertEqual(atom_ids, {atom_id})
+        self.assertEqual(bond_ids, set())
+
+    def test_benzene_ring_carbons_have_selectable_atom_dots(self) -> None:
+        self.window.canvas.set_tool("select")
+        self.window.canvas.add_benzene_ring(QPointF(0.0, 0.0))
+        ring_atom_ids = self.window.canvas.ring_items[0].data(2)
+
+        self.assertIsInstance(ring_atom_ids, list)
+        first_atom_id = ring_atom_ids[0]
+        self.assertIn(first_atom_id, self.window.canvas.atom_dots)
+
+        atom = self.window.canvas.model.atoms[first_atom_id]
+        self._click_scene_point(QPointF(atom.x, atom.y))
+
+        atom_ids, bond_ids = self.window.canvas._selected_ids()
+        self.assertEqual(atom_ids, {first_atom_id})
+        self.assertEqual(bond_ids, set())
+
+    def test_multi_atom_selection_adds_component_overlay_without_center_marker(self) -> None:
+        left = self.window.canvas.add_atom("C", -10.0, 0.0)
+        right = self.window.canvas.add_atom("C", 10.0, 0.0)
+        self.window.canvas.add_bond(left, right)
+        self.window.canvas._add_bond_graphics(0)
+
+        self._select_atom_ids(left, right)
+
+        kinds = [item.data(2) or {} for item in self.window.canvas.selection_outlines]
+        self.assertEqual(sum(1 for data in kinds if data.get("kind") == "component"), 1)
+        self.assertEqual(sum(1 for data in kinds if data.get("kind") == "center"), 0)
+        self.assertTrue(all(data.get("kind") == "component" for data in kinds))
+        component_outline = next(
+            item
+            for item in self.window.canvas.selection_outlines
+            if (item.data(2) or {}).get("kind") == "component"
+        )
+        self.assertEqual(component_outline.path().fillRule(), Qt.FillRule.WindingFill)
+        self.assertEqual(component_outline.brush().color().name(), "#1f5eff")
+
+    def test_perspective_tool_toggles_center_marker_for_multi_atom_selection(self) -> None:
+        left = self.window.canvas.add_atom("C", -10.0, 0.0)
+        right = self.window.canvas.add_atom("C", 10.0, 0.0)
+        self.window.canvas.add_bond(left, right)
+        self.window.canvas._add_bond_graphics(0)
+
+        self._select_atom_ids(left, right)
+        self.assertFalse(any((item.data(2) or {}).get("kind") == "center" for item in self.window.canvas.selection_outlines))
+
+        self.window.canvas.set_tool("perspective")
+
+        self.assertEqual(
+            sum(1 for item in self.window.canvas.selection_outlines if (item.data(2) or {}).get("kind") == "center"),
+            2,
+        )
+
+        self.window.canvas.set_tool("select")
+
+        self.assertFalse(any((item.data(2) or {}).get("kind") == "center" for item in self.window.canvas.selection_outlines))
+
+    def test_ring_double_bond_selection_overlay_tracks_outer_bond_line(self) -> None:
+        self.window.canvas.add_benzene_ring(QPointF(0.0, 0.0))
+        ring_atom_ids = self.window.canvas.ring_items[0].data(2)
+
+        self.assertIsInstance(ring_atom_ids, list)
+        self._select_atom_ids(*ring_atom_ids)
+
+        outer_mid = None
+        inner_mid = None
+        overlay_center = None
+        for bond_id, items in self.window.canvas.bond_items.items():
+            if len(items) < 2 or not all(hasattr(item, "line") for item in items):
+                continue
+            first = items[0].line()
+            second = items[1].line()
+            outer_mid = QPointF((first.x1() + first.x2()) * 0.5, (first.y1() + first.y2()) * 0.5)
+            inner_mid = QPointF((second.x1() + second.x2()) * 0.5, (second.y1() + second.y2()) * 0.5)
+            overlay_center = self.window.canvas._selection_path_for_bond(bond_id).boundingRect().center()
+            break
+        self.assertIsNotNone(outer_mid)
+        self.assertIsNotNone(inner_mid)
+        self.assertIsNotNone(overlay_center)
+        outer_distance = (overlay_center - outer_mid).manhattanLength()
+        inner_distance = (overlay_center - inner_mid).manhattanLength()
+        self.assertLess(outer_distance, inner_distance)
+
+    def test_double_bond_selection_path_uses_single_bond_width(self) -> None:
+        single_left = self.window.canvas.add_atom("C", -20.0, 0.0)
+        single_right = self.window.canvas.add_atom("C", 20.0, 0.0)
+        self.window.canvas.add_bond(single_left, single_right)
+        self.window.canvas._add_bond_graphics(0)
+
+        double_left = self.window.canvas.add_atom("C", -20.0, 30.0)
+        double_right = self.window.canvas.add_atom("C", 20.0, 30.0)
+        self.window.canvas.add_bond(double_left, double_right, order=2)
+        self.window.canvas._add_bond_graphics(1)
+
+        single_rect = self.window.canvas._selection_path_for_bond(0).boundingRect()
+        double_rect = self.window.canvas._selection_path_for_bond(1).boundingRect()
+
+        self.assertAlmostEqual(single_rect.height(), double_rect.height(), delta=0.5)
+
+    def test_clicking_near_bond_selects_bond(self) -> None:
+        self.window.canvas.set_tool("select")
+        left = self.window.canvas.add_atom("C", -10.0, 0.0)
+        right = self.window.canvas.add_atom("C", 10.0, 0.0)
+        self.window.canvas.add_bond(left, right)
+        self.window.canvas._add_bond_graphics(0)
+
+        self._click_scene_point(QPointF(0.0, 3.5))
+
+        atom_ids, bond_ids = self.window.canvas._selected_ids()
+        self.assertEqual(atom_ids, set())
+        self.assertEqual(bond_ids, {0})
+
+    def test_clicking_bond_near_labeled_atom_prefers_bond(self) -> None:
+        self.window.canvas.set_tool("select")
+        left = self.window.canvas.add_atom("N", 0.0, 0.0)
+        right = self.window.canvas.add_atom("C", 20.0, 0.0)
+        self.window.canvas.add_or_update_atom_label(left, "N", record=False)
+        self.window.canvas.add_bond(left, right)
+        self.window.canvas._add_bond_graphics(0)
+
+        self._click_scene_point(QPointF(3.0, 0.0))
+
+        atom_ids, bond_ids = self.window.canvas._selected_ids()
+        self.assertEqual(atom_ids, set())
+        self.assertEqual(bond_ids, {0})
 
     def test_color_preset_preserves_ring_fill_on_selected_ring(self) -> None:
         self.window.canvas.add_benzene_ring(QPointF(0.0, 0.0))
