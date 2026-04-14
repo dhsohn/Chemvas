@@ -42,15 +42,28 @@ class DocumentIOTest(unittest.TestCase):
 
     def test_parse_document_accepts_wrapped_payload_and_bare_state(self) -> None:
         state = {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}}
+        workbook_state = {
+            "active_sheet_index": 0,
+            "sheets": [
+                {
+                    "name": "Sheet 1",
+                    "kind": "canvas",
+                    "content": state,
+                }
+            ],
+        }
         payload = {"type": "unexpected", "version": "legacy", "state": state}
+        workbook_payload = {"type": LITEDRAW_FILE_TYPE, "version": 2, "state": workbook_state}
 
         wrapped = parse_document(payload)
         bare = parse_document(state)
+        workbook = parse_document(workbook_payload)
 
         self.assertIs(wrapped.payload, payload)
         self.assertIs(wrapped.state, state)
         self.assertIs(bare.payload, state)
         self.assertIs(bare.state, state)
+        self.assertIs(workbook.state, workbook_state)
 
     def test_parse_document_rejects_invalid_state_like_document_state(self) -> None:
         with self.assertRaises(ValueError):
@@ -80,6 +93,57 @@ class DocumentIOTest(unittest.TestCase):
                 "state": state,
             },
         )
+        self.assertEqual(loaded.payload, written.payload)
+        self.assertEqual(loaded.state, state)
+
+    def test_write_and_read_document_round_trip_workbook_payload(self) -> None:
+        state = {
+            "active_sheet_index": 1,
+            "sheets": [
+                {
+                    "name": "Sheet 1",
+                    "kind": "canvas",
+                    "content": {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}},
+                },
+                {
+                    "name": "Sheet 2",
+                    "kind": "canvas",
+                    "content": {
+                        "model": {
+                            "atoms": {"0": {"element": "O", "x": 0.0, "y": 0.0, "color": "#000000"}},
+                            "bonds": [],
+                            "next_atom_id": 1,
+                        }
+                    },
+                },
+            ],
+            "result_sheets": {
+                "active_index": 0,
+                "sheets": [
+                    {
+                        "title": "Optimization 1",
+                        "content": {
+                            "title": "GFN2-xTB Optimization",
+                            "subtitle": "Reactant input optimized with GFN2-xTB",
+                            "reactant_text": "Sheet 1: 2 atoms",
+                            "product_text": "Opt 1: 2 atoms",
+                            "cue_text": "Compare the structures.",
+                            "notes_text": "TOTAL ENERGY -10.0",
+                            "summary_text": "Optimization complete.",
+                            "metadata": [],
+                            "result_bullets": [],
+                        },
+                    }
+                ],
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "workbook.ldraw"
+
+            written = write_document(path, state, version=2)
+            loaded = read_document(path)
+
         self.assertEqual(loaded.payload, written.payload)
         self.assertEqual(loaded.state, state)
 
