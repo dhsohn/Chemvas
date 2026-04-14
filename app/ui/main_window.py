@@ -1,4 +1,5 @@
 import math
+from pathlib import Path
 
 from PyQt6.QtCore import QPointF, QRectF, QSize, Qt, QTimer
 from PyQt6.QtGui import (
@@ -29,8 +30,10 @@ from PyQt6.QtWidgets import (
     QMenu,
     QMessageBox,
     QPushButton,
+    QSplitter,
     QToolButton,
     QSlider,
+    QTabBar,
     QTabWidget,
     QToolBar,
     QVBoxLayout,
@@ -39,8 +42,11 @@ from PyQt6.QtWidgets import (
     QDoubleSpinBox,
 )
 
+from core.document_io import read_document, write_document
 from ui.canvas_view import CanvasView
 from ui.main_window_path_logic import resolve_load_path, resolve_save_path
+from ui.preview_3d import Preview3D
+from ui.xtb_panel import XTBPanel
 
 
 class ArrowButton(QToolButton):
@@ -95,29 +101,354 @@ class CornerMenuButton(QToolButton):
         painter.drawPolygon(QPolygonF(points))
 
 
+class SheetTabBar(QTabBar):
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setExpanding(False)
+        self.setDrawBase(False)
+        self._add_tab_index = -1
+
+    def set_add_tab_index(self, index: int) -> None:
+        self._add_tab_index = index
+        self.updateGeometry()
+        self.update()
+
+    def tabSizeHint(self, index: int) -> QSize:
+        hint = super().tabSizeHint(index)
+        if index == self._add_tab_index:
+            return QSize(28, hint.height())
+        return hint
+
+
 class MainWindow(QMainWindow):
+    WORKBOOK_FILE_VERSION = 2
+
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("LightDraw")
         self.resize(1100, 760)
 
-        self.canvas = CanvasView()
-        self.setCentralWidget(self.canvas)
-        self.panel_tabs = None
+        self._formula_value = None
+        self._mw_value = None
+        self._atom_input = None
+        self._canvas_name_counter = 0
+        self._result_sheet_counter = 0
+        self._last_canvas_tab_index = 0
+        self._suspend_canvas_tab_reactions = False
+        self._sheet_add_tab = QWidget()
+        self.canvas_tabs = QTabWidget()
+        self.canvas_tabs.setObjectName("canvasTabs")
+        self._sheet_tab_bar = SheetTabBar(self.canvas_tabs)
+        self.canvas_tabs.setTabBar(self._sheet_tab_bar)
+        self.canvas_tabs.setTabPosition(QTabWidget.TabPosition.South)
+        self.canvas_tabs.setDocumentMode(False)
+        self.canvas_tabs.setMovable(True)
+        self.canvas_tabs.setTabsClosable(False)
+        self._sheet_tab_bar.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._sheet_tab_bar.customContextMenuRequested.connect(self._show_canvas_tab_context_menu)
+        self.canvas_tabs.currentChanged.connect(self._on_canvas_tab_changed)
+        self.setCentralWidget(self.canvas_tabs)
+        self.panel_splitter = None
         self.panel_dock = None
+        self.preview_3d = Preview3D()
+        self.xtb_panel = XTBPanel()
         self._current_file_path = None
 
+        self._add_canvas_sheet(name=self._next_canvas_sheet_name(), select=True)
+        self._ensure_add_sheet_tab()
         self._init_toolbars()
-        # Info controls moved to top bar; no dock panels needed.
+        self._init_panels()
         self._apply_theme()
-        self.canvas.setFrameStyle(0)
+        self._bind_active_canvas()
+        self.xtb_panel.set_canvas(self.canvas, sheet_name=self._active_canvas_sheet_name())
+        self.xtb_panel.set_result_canvas_callback(self._open_result_canvas_sheet)
+        self.preview_3d.refresh_from_canvas(self.canvas)
+        self.xtb_panel.refresh_current_selection()
 
         self._zoom_label = QLabel("100%")
         self._zoom_label.setFixedWidth(50)
         self._zoom_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.statusBar().addPermanentWidget(self._zoom_label)
-        self.canvas.set_zoom_callback(self._update_zoom_label)
+        self._update_zoom_label(self._current_zoom_percent())
         self.statusBar().showMessage("Ready")
+
+    @property
+    def canvas(self) -> CanvasView:
+        canvas = self._active_canvas_or_none()
+        if canvas is not None:
+            return canvas
+        raise RuntimeError("No active canvas sheet.")
+
+    def _active_canvas_or_none(self) -> CanvasView | None:
+        widget = self.canvas_tabs.currentWidget()
+        if isinstance(widget, CanvasView):
+            return widget
+        if 0 <= self._last_canvas_tab_index < self.canvas_tabs.count():
+            fallback = self.canvas_tabs.widget(self._last_canvas_tab_index)
+            if isinstance(fallback, CanvasView):
+                return fallback
+        canvases = self._all_canvases()
+        if canvases:
+            return canvases[0]
+        return None
+
+    def _all_canvases(self) -> list[CanvasView]:
+        canvases: list[CanvasView] = []
+        for index in range(self.canvas_tabs.count()):
+            widget = self.canvas_tabs.widget(index)
+            if isinstance(widget, CanvasView):
+                canvases.append(widget)
+        return canvases
+
+    def _next_canvas_sheet_name(self, prefix: str = "Sheet") -> str:
+        self._canvas_name_counter += 1
+        return f"{prefix} {self._canvas_name_counter}"
+
+    def _next_result_canvas_name(self, prefix: str) -> str:
+        self._result_sheet_counter += 1
+        return f"{prefix} {self._result_sheet_counter}"
+
+    def _plus_tab_index(self) -> int:
+        return self.canvas_tabs.indexOf(self._sheet_add_tab)
+
+    def _canvas_sheet_count(self) -> int:
+        return len(self._all_canvases())
+
+    def _active_canvas_sheet_name(self) -> str:
+        index = self.canvas_tabs.currentIndex()
+        if index < 0:
+            return ""
+        if self.canvas_tabs.widget(index) is self._sheet_add_tab and 0 <= self._last_canvas_tab_index < self.canvas_tabs.count():
+            return self.canvas_tabs.tabText(self._last_canvas_tab_index)
+        return self.canvas_tabs.tabText(index)
+
+    def _ensure_add_sheet_tab(self) -> None:
+        plus_index = self._plus_tab_index()
+        if plus_index < 0:
+            self._sheet_add_tab = QWidget()
+            plus_index = self.canvas_tabs.addTab(self._sheet_add_tab, "+")
+        self.canvas_tabs.setTabToolTip(plus_index, "New Canvas Sheet")
+        self._sheet_tab_bar.set_add_tab_index(plus_index)
+
+    def _can_delete_canvas_sheet(self, index: int) -> bool:
+        if index < 0:
+            return False
+        return isinstance(self.canvas_tabs.widget(index), CanvasView) and self._canvas_sheet_count() > 1
+
+    def _show_canvas_tab_context_menu(self, pos) -> None:
+        index = self._sheet_tab_bar.tabAt(pos)
+        if index < 0:
+            return
+        widget = self.canvas_tabs.widget(index)
+        if not isinstance(widget, CanvasView):
+            return
+
+        menu = QMenu(self)
+        delete_action = menu.addAction("Delete Sheet")
+        delete_action.setEnabled(self._can_delete_canvas_sheet(index))
+        chosen_action = menu.exec(self._sheet_tab_bar.mapToGlobal(pos))
+        if chosen_action is delete_action and delete_action.isEnabled():
+            self._delete_canvas_sheet(index)
+
+    def _delete_canvas_sheet(self, index: int) -> None:
+        if not self._can_delete_canvas_sheet(index):
+            return
+
+        widget = self.canvas_tabs.widget(index)
+        previous_state = self._suspend_canvas_tab_reactions
+        self._suspend_canvas_tab_reactions = True
+        self.canvas_tabs.removeTab(index)
+        self._ensure_add_sheet_tab()
+
+        active_index = self.canvas_tabs.currentIndex()
+        if not isinstance(self.canvas_tabs.currentWidget(), CanvasView):
+            active_index = min(index, max(0, self._plus_tab_index() - 1))
+            self.canvas_tabs.setCurrentIndex(active_index)
+        self._last_canvas_tab_index = active_index
+        self._suspend_canvas_tab_reactions = previous_state
+
+        if widget is not None:
+            widget.deleteLater()
+        self._refresh_active_canvas_ui()
+
+    def _create_canvas(self, *, template: CanvasView | None = None) -> CanvasView:
+        canvas = CanvasView()
+        canvas.setFrameStyle(0)
+        if template is not None:
+            canvas.renderer.set_bond_length(template.renderer.style.bond_length_px)
+            canvas.arrow_line_width = template.arrow_line_width
+            canvas.arrow_head_scale = template.arrow_head_scale
+            canvas.orbital_phase_enabled = template.orbital_phase_enabled
+            canvas.text_font_size = template.text_font_size
+            canvas.text_font_weight = template.text_font_weight
+            canvas.text_italic = template.text_italic
+            canvas.mark_kind = template.mark_kind
+        return canvas
+
+    def _add_canvas_sheet(
+        self,
+        *,
+        name: str,
+        state: dict | None = None,
+        select: bool = True,
+        template: CanvasView | None = None,
+    ) -> CanvasView:
+        canvas = self._create_canvas(template=template)
+        plus_index = self._plus_tab_index()
+        if plus_index >= 0:
+            index = self.canvas_tabs.insertTab(plus_index, canvas, name)
+        else:
+            index = self.canvas_tabs.addTab(canvas, name)
+        if state is not None:
+            canvas.restore_state(state)
+        self._ensure_add_sheet_tab()
+        if select:
+            self.canvas_tabs.setCurrentIndex(index)
+        self._bind_active_canvas()
+        return canvas
+
+    def _open_result_canvas_sheet(
+        self,
+        name: str,
+        *,
+        select: bool = True,
+        exact_name: bool = False,
+    ) -> tuple[str | None, CanvasView | None]:
+        if exact_name and name:
+            sheet_name = name
+        else:
+            sheet_name = self._next_canvas_sheet_name(prefix=name or "Result")
+        canvas = self._add_canvas_sheet(
+            name=sheet_name,
+            select=select,
+            template=self._active_canvas_or_none(),
+        )
+        return sheet_name, canvas
+
+    def _bind_active_canvas(self) -> None:
+        active_canvas = self.canvas
+        for canvas in self._all_canvases():
+            if canvas is active_canvas:
+                canvas.set_selection_info_callback(self._handle_selection_info)
+                canvas.set_tool_change_callback(self._sync_tool_actions_from_canvas)
+                canvas.set_zoom_callback(self._update_zoom_label)
+            else:
+                canvas.set_selection_info_callback(None)
+                canvas.set_tool_change_callback(None)
+                canvas.set_zoom_callback(None)
+
+    def _handle_selection_info(self, formula: str, mw: str) -> None:
+        if self._formula_value is not None:
+            self._formula_value.setText(formula)
+        if self._mw_value is not None:
+            self._mw_value.setText(mw)
+        self.preview_3d.refresh_from_canvas(self.canvas)
+        self.xtb_panel.refresh_current_selection()
+
+    def _current_zoom_percent(self) -> int:
+        transform = self.canvas.transform()
+        return max(1, int(round(transform.m11() * 100)))
+
+    def _refresh_active_canvas_ui(self) -> None:
+        self._bind_active_canvas()
+        if self._atom_input is not None:
+            self._atom_input.blockSignals(True)
+            self._atom_input.setText(self.canvas.get_atom_symbol())
+            self._atom_input.blockSignals(False)
+        if self._formula_value is not None:
+            self._formula_value.setText("")
+        if self._mw_value is not None:
+            self._mw_value.setText("")
+        if hasattr(self, "_zoom_label"):
+            self._update_zoom_label(self._current_zoom_percent())
+        self._sync_tool_actions_from_canvas()
+        self.preview_3d.refresh_from_canvas(self.canvas)
+        self.xtb_panel.set_canvas(self.canvas, sheet_name=self._active_canvas_sheet_name())
+        self.xtb_panel.refresh_current_selection()
+
+    def _on_canvas_tab_changed(self, index: int) -> None:
+        if self._suspend_canvas_tab_reactions:
+            return
+        if index < 0:
+            return
+        widget = self.canvas_tabs.widget(index)
+        if widget is self._sheet_add_tab:
+            self._new_canvas_sheet()
+            return
+        if not isinstance(widget, CanvasView):
+            return
+        self._last_canvas_tab_index = index
+        self._refresh_active_canvas_ui()
+
+    def _new_canvas_sheet(self) -> None:
+        self._add_canvas_sheet(
+            name=self._next_canvas_sheet_name(),
+            select=True,
+            template=self._active_canvas_or_none(),
+        )
+
+    def _clear_canvas_sheets(self) -> None:
+        previous_state = self._suspend_canvas_tab_reactions
+        self._suspend_canvas_tab_reactions = True
+        while self.canvas_tabs.count():
+            widget = self.canvas_tabs.widget(0)
+            self.canvas_tabs.removeTab(0)
+            if widget is not None and widget is not self._sheet_add_tab:
+                widget.deleteLater()
+        self._sheet_add_tab = QWidget()
+        self._sheet_tab_bar.set_add_tab_index(-1)
+        self._suspend_canvas_tab_reactions = previous_state
+
+    def _workbook_state(self) -> dict:
+        sheets = []
+        for index, canvas in enumerate(self._all_canvases()):
+            sheets.append(
+                {
+                    "name": self.canvas_tabs.tabText(index) or f"Sheet {index + 1}",
+                    "kind": "canvas",
+                    "content": canvas.snapshot_state(),
+                }
+            )
+        return {
+            "active_sheet_index": max(0, self.canvas_tabs.currentIndex()),
+            "sheets": sheets,
+        }
+
+    def _restore_single_sheet_document(self, state: dict) -> None:
+        self._suspend_canvas_tab_reactions = True
+        self._clear_canvas_sheets()
+        self._add_canvas_sheet(name="Sheet 1", state=state, select=True)
+        self._suspend_canvas_tab_reactions = False
+        self.xtb_panel.clear_captured_structures()
+        self._refresh_active_canvas_ui()
+
+    def _restore_workbook_document(self, state: dict) -> None:
+        self._suspend_canvas_tab_reactions = True
+        self._clear_canvas_sheets()
+        for sheet_state in state.get("sheets", []):
+            if not isinstance(sheet_state, dict):
+                continue
+            if sheet_state.get("kind", "canvas") != "canvas":
+                continue
+            self._add_canvas_sheet(
+                name=str(sheet_state.get("name", self._next_canvas_sheet_name())),
+                state=sheet_state.get("content", {}),
+                select=False,
+            )
+        if self.canvas_tabs.count() == 0:
+            self._add_canvas_sheet(name="Sheet 1", select=True)
+        active_index = int(state.get("active_sheet_index", 0))
+        self.canvas_tabs.setCurrentIndex(max(0, min(active_index, self.canvas_tabs.count() - 1)))
+        self._suspend_canvas_tab_reactions = False
+        self.xtb_panel.restore_state(state.get("result_sheets"))
+        self.xtb_panel.clear_captured_structures()
+        self._refresh_active_canvas_ui()
+
+    def _save_document_state(self, path: str) -> None:
+        if self._canvas_sheet_count() == 1:
+            self.canvas.save_to_file(path)
+            return
+        write_document(path, self._workbook_state(), self.WORKBOOK_FILE_VERSION)
 
     def _init_toolbars(self) -> None:
         tool_group = QActionGroup(self)
@@ -329,11 +660,11 @@ class MainWindow(QMainWindow):
         flip_h = QToolButton()
         flip_h.setToolTip("Flip Horizontal (Ctrl+Shift+H)")
         flip_h.setIcon(self._icon_flip_h())
-        flip_h.clicked.connect(self.canvas.flip_horizontal)
+        flip_h.clicked.connect(lambda: self.canvas.flip_horizontal())
         flip_v = QToolButton()
         flip_v.setToolTip("Flip Vertical (Ctrl+Shift+V)")
         flip_v.setIcon(self._icon_flip_v())
-        flip_v.clicked.connect(self.canvas.flip_vertical)
+        flip_v.clicked.connect(lambda: self.canvas.flip_vertical())
 
         left_bar.addWidget(flip_h)
         left_bar.addWidget(flip_v)
@@ -359,17 +690,27 @@ class MainWindow(QMainWindow):
         load_btn.setShortcut(QKeySequence.StandardKey.Open)
         load_btn.clicked.connect(self._load_canvas)
 
+        export_xyz_btn = QToolButton()
+        export_xyz_btn.setIcon(self._icon_export_xyz())
+        export_xyz_btn.setToolTip("Export 3D XYZ")
+        export_xyz_btn.clicked.connect(self._export_xyz)
+
+        new_sheet_btn = QToolButton()
+        new_sheet_btn.setIcon(self._icon_add_sheet())
+        new_sheet_btn.setToolTip("New Canvas Sheet")
+        new_sheet_btn.clicked.connect(self._new_canvas_sheet)
+
         undo_btn = QToolButton()
         undo_btn.setIcon(self._icon_undo())
         undo_btn.setToolTip("Undo")
         undo_btn.setShortcut(QKeySequence.StandardKey.Undo)
-        undo_btn.clicked.connect(self.canvas.undo)
+        undo_btn.clicked.connect(lambda: self.canvas.undo())
 
         redo_btn = QToolButton()
         redo_btn.setIcon(self._icon_redo())
         redo_btn.setToolTip("Redo")
         redo_btn.setShortcut(QKeySequence.StandardKey.Redo)
-        redo_btn.clicked.connect(self.canvas.redo)
+        redo_btn.clicked.connect(lambda: self.canvas.redo())
 
         smiles_input = QLineEdit()
         smiles_input.setPlaceholderText("SMILES...")
@@ -401,6 +742,8 @@ class MainWindow(QMainWindow):
 
         panel_bar.addWidget(save_btn)
         panel_bar.addWidget(load_btn)
+        panel_bar.addWidget(export_xyz_btn)
+        panel_bar.addWidget(new_sheet_btn)
         panel_bar.addSeparator()
         panel_bar.addWidget(undo_btn)
         panel_bar.addWidget(redo_btn)
@@ -413,7 +756,7 @@ class MainWindow(QMainWindow):
         atom_input.setFixedWidth(60)
         atom_input.setMaxLength(4)
         atom_input.setText(self.canvas.get_atom_symbol())
-        atom_input.textChanged.connect(self.canvas.set_atom_symbol)
+        atom_input.textChanged.connect(lambda text: self.canvas.set_atom_symbol(text))
         panel_bar.addWidget(atom_input)
         color_button = CornerMenuButton()
         color_button.setIcon(self._icon_color())
@@ -462,14 +805,9 @@ class MainWindow(QMainWindow):
         panel_bar.addSeparator()
 
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, panel_bar)
-
-        def _update_selection_info(formula: str, mw: str) -> None:
-            formula_value.setText(formula)
-            mw_value.setText(mw)
-
-        self.canvas.set_selection_info_callback(_update_selection_info)
-        self.canvas.set_tool_change_callback(self._sync_tool_actions_from_canvas)
-        self._sync_tool_actions_from_canvas()
+        self._atom_input = atom_input
+        self._formula_value = formula_value
+        self._mw_value = mw_value
 
     def _make_icon(self, painter_fn) -> QIcon:
         pixmap = QPixmap(30, 30)
@@ -648,6 +986,32 @@ class MainWindow(QMainWindow):
             p.drawLine(15, 6, 15, 16)
             p.drawLine(11, 10, 15, 6)
             p.drawLine(19, 10, 15, 6)
+        return self._make_icon(draw)
+
+    def _icon_export_xyz(self) -> QIcon:
+        def draw(p):
+            pen = QPen(QColor("#3d3229"))
+            pen.setWidthF(1.3)
+            p.setPen(pen)
+            p.drawRect(7, 8, 10, 12)
+            p.drawLine(17, 8, 23, 12)
+            p.drawLine(17, 20, 23, 24)
+            p.drawLine(23, 12, 23, 24)
+            p.drawLine(7, 8, 13, 12)
+            p.drawLine(13, 12, 23, 12)
+            p.drawLine(7, 20, 13, 24)
+            p.drawLine(13, 24, 23, 24)
+        return self._make_icon(draw)
+
+    def _icon_add_sheet(self) -> QIcon:
+        def draw(p):
+            pen = QPen(QColor("#3d3229"))
+            pen.setWidthF(1.4)
+            p.setPen(pen)
+            p.drawRect(6, 7, 18, 16)
+            p.drawLine(15, 10, 15, 20)
+            p.drawLine(10, 15, 20, 15)
+            p.drawLine(9, 25, 21, 25)
         return self._make_icon(draw)
 
     def _icon_templates(self) -> QIcon:
@@ -1043,50 +1407,30 @@ class MainWindow(QMainWindow):
 
     def _init_panels(self) -> None:
         dock = QDockWidget("Panels", self)
-        dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetClosable)
-        dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
-        dock.setMinimumWidth(260)
-        dock.setMaximumWidth(360)
+        dock.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
+        dock.setAllowedAreas(Qt.DockWidgetArea.RightDockWidgetArea)
+        dock.setMinimumWidth(320)
+        dock.setMaximumWidth(420)
+        title_bar = QWidget(dock)
+        title_bar.setFixedHeight(0)
+        dock.setTitleBarWidget(title_bar)
 
-        tabs = QTabWidget()
-        tabs.addTab(self._build_mark_panel(), "Charge")
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        splitter.addWidget(self.preview_3d)
+        splitter.addWidget(self.xtb_panel)
+        splitter.setChildrenCollapsible(False)
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 1)
+        splitter.setSizes([1, 1])
 
-        dock.setWidget(tabs)
+        dock.setWidget(splitter)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
-        self.panel_tabs = tabs
+        self.panel_splitter = splitter
         self.panel_dock = dock
 
-    def _build_mark_panel(self) -> QWidget:
-        panel = QWidget()
-        layout = QVBoxLayout(panel)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(10)
-
-        title = QLabel("Charges")
-        title.setStyleSheet("font-weight: 600;")
-        layout.addWidget(title)
-
-        for label, kind in (
-            ("+ Charge", "plus"),
-            ("- Charge", "minus"),
-            ("Radical", "radical"),
-        ):
-            button = QPushButton(label)
-            button.setCursor(Qt.CursorShape.PointingHandCursor)
-            button.clicked.connect(lambda checked=False, k=kind: self.canvas.set_mark_kind(k))
-            layout.addWidget(button)
-
-        hint = QLabel("Click an atom or canvas to place.")
-        hint.setWordWrap(True)
-        hint.setStyleSheet("color: #555555;")
-        layout.addWidget(hint)
-        layout.addStretch(1)
-        return panel
-
     def _show_panel(self, index: int) -> None:
-        if self.panel_tabs is None or self.panel_dock is None:
+        if self.panel_dock is None:
             return
-        self.panel_tabs.setCurrentIndex(index)
         self.panel_dock.show()
         self.panel_dock.raise_()
 
@@ -1148,6 +1492,130 @@ class MainWindow(QMainWindow):
             }
             QTabBar::tab:selected {
                 background: #faf8f5;
+            }
+            QTabWidget#canvasTabs {
+                background: #f0ebe4;
+            }
+            QTabWidget#canvasTabs::tab-bar {
+                alignment: left;
+                left: 8px;
+            }
+            QTabWidget#canvasTabs::pane {
+                border: 1px solid #ddd5ca;
+                background: #f7f3ee;
+            }
+            QTabWidget#canvasTabs QTabBar {
+                background: #f0ebe4;
+                padding: 3px 6px 0 6px;
+            }
+            QTabWidget#canvasTabs QTabBar::tab {
+                background: transparent;
+                color: #5b5045;
+                border: 1px solid transparent;
+                border-bottom-left-radius: 8px;
+                border-bottom-right-radius: 8px;
+                padding: 4px 12px 5px 12px;
+                margin: 0 2px 0 0;
+            }
+            QTabWidget#canvasTabs QTabBar::tab:last {
+                padding: 4px 8px 5px 8px;
+                min-width: 18px;
+            }
+            QTabWidget#canvasTabs QTabBar::tab:hover:!selected {
+                background: #e7dfd4;
+            }
+            QTabWidget#canvasTabs QTabBar::tab:selected {
+                background: #faf8f5;
+                color: #312a24;
+                border-color: #d8d0c5;
+            }
+            QTabWidget#canvasTabs QTabBar QToolButton {
+                background: transparent;
+                border: none;
+                border-radius: 5px;
+                color: #5b5045;
+                padding: 4px 6px;
+            }
+            QTabWidget#canvasTabs QTabBar QToolButton:hover {
+                background: #e7dfd4;
+            }
+            QTabWidget#canvasTabs QToolButton#sheetAddButton {
+                background: transparent;
+                border: 1px solid transparent;
+                border-bottom-left-radius: 8px;
+                border-bottom-right-radius: 8px;
+                color: #5b5045;
+                font-size: 18px;
+                font-weight: 500;
+                margin: 0 4px 0 0;
+                min-width: 26px;
+                padding: 1px 6px 5px 6px;
+            }
+            QTabWidget#canvasTabs QToolButton#sheetAddButton:hover {
+                background: #e7dfd4;
+                border-color: #ddd5ca;
+            }
+            QTabWidget#canvasTabs QToolButton#sheetAddButton:pressed {
+                background: #ddd3c5;
+            }
+            QScrollBar:horizontal {
+                background: #efe8de;
+                height: 16px;
+                margin: 0 16px 0 16px;
+                border-top: 1px solid #ddd5ca;
+            }
+            QScrollBar::handle:horizontal {
+                background: #f8f4ee;
+                border: 1px solid #cfc3b3;
+                border-radius: 8px;
+                min-width: 36px;
+            }
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+                background: #efe8de;
+                border: none;
+                width: 16px;
+                subcontrol-origin: margin;
+            }
+            QScrollBar::sub-line:horizontal {
+                subcontrol-position: left;
+            }
+            QScrollBar::add-line:horizontal {
+                subcontrol-position: right;
+            }
+            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+                background: #efe8de;
+            }
+            QScrollBar:vertical {
+                background: #efe8de;
+                width: 16px;
+                margin: 16px 0 16px 0;
+                border-left: 1px solid #ddd5ca;
+            }
+            QScrollBar::handle:vertical {
+                background: #f8f4ee;
+                border: 1px solid #cfc3b3;
+                border-radius: 8px;
+                min-height: 36px;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                background: #efe8de;
+                border: none;
+                height: 16px;
+                subcontrol-origin: margin;
+            }
+            QScrollBar::sub-line:vertical {
+                subcontrol-position: top;
+            }
+            QScrollBar::add-line:vertical {
+                subcontrol-position: bottom;
+            }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background: #efe8de;
+            }
+            QAbstractScrollArea::corner {
+                background: #efe8de;
+                border-top: 1px solid #ddd5ca;
+                border-left: 1px solid #ddd5ca;
             }
             QLineEdit, QComboBox, QSpinBox {
                 background: #faf8f5;
@@ -1291,6 +1759,8 @@ class MainWindow(QMainWindow):
         )
 
     def _update_zoom_label(self, zoom_percent: int) -> None:
+        if not hasattr(self, "_zoom_label"):
+            return
         self._zoom_label.setText(f"{zoom_percent}%")
 
     def _open_arrow_settings(self) -> None:
@@ -1418,6 +1888,8 @@ class MainWindow(QMainWindow):
     }
 
     def _sync_tool_actions_from_canvas(self) -> None:
+        if not hasattr(self, "_tool_actions"):
+            return
         active = self.canvas.tools.active.name if self.canvas.tools.active is not None else None
         action = None
         if active == "bond":
@@ -1508,6 +1980,20 @@ class MainWindow(QMainWindow):
         elif value == "Paper Bold":
             self.canvas.apply_text_preset_paper_bold()
 
+    @staticmethod
+    def _normalize_xyz_export_path(dialog_path: str | None) -> str | None:
+        if not dialog_path:
+            return None
+        path = Path(dialog_path)
+        if path.suffix:
+            return str(path)
+        return str(path.with_suffix(".xyz"))
+
+    def _default_xyz_export_path(self) -> str:
+        if self._current_file_path:
+            return str(Path(self._current_file_path).with_suffix(".xyz"))
+        return ""
+
     def _save_canvas(self) -> None:
         path = resolve_save_path(current_path=self._current_file_path)
         if path is None:
@@ -1521,12 +2007,29 @@ class MainWindow(QMainWindow):
         if path is None:
             return
         try:
-            self.canvas.save_to_file(path)
+            self._save_document_state(path)
         except Exception as exc:
             QMessageBox.warning(self, "Save Error", f"Failed to save file:\n{exc}")
             return
         self._current_file_path = path
         self.statusBar().showMessage(f"Saved: {path}")
+
+    def _export_xyz(self) -> None:
+        dialog_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export 3D XYZ",
+            self._default_xyz_export_path(),
+            "XYZ (*.xyz);;All Files (*)",
+        )
+        path = self._normalize_xyz_export_path(dialog_path)
+        if path is None:
+            return
+        try:
+            self.canvas.export_xyz(path)
+        except Exception as exc:
+            QMessageBox.warning(self, "Export Error", f"Failed to export XYZ:\n{exc}")
+            return
+        self.statusBar().showMessage(f"Exported XYZ: {path}")
 
     def _load_canvas(self) -> None:
         dialog_path, _ = QFileDialog.getOpenFileName(
@@ -1539,10 +2042,15 @@ class MainWindow(QMainWindow):
         if path is None:
             return
         try:
-            self.canvas.load_from_file(path)
+            document = read_document(path)
         except Exception as exc:
             QMessageBox.warning(self, "Load Error", f"Failed to load file:\n{exc}")
             return
+        state = document.state
+        if "sheets" in state:
+            self._restore_workbook_document(state)
+        else:
+            self._restore_single_sheet_document(state)
         self._current_file_path = path
         self.statusBar().showMessage(f"Loaded: {path}")
 

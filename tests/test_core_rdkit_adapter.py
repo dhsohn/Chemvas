@@ -1,4 +1,6 @@
+import inspect
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -12,6 +14,11 @@ if str(APP_ROOT) not in sys.path:
 
 from core.model import MoleculeModel
 from core.rdkit_adapter import RDKitAdapter
+
+try:
+    from rdkit import Chem as _RealChem
+except ModuleNotFoundError:
+    _RealChem = None
 
 
 _REAL_IMPORT = __import__
@@ -90,6 +97,119 @@ def _patch_rdkit_import_modules(*, chem=None, all_chem=None):
     return patcher, disabled_logs, chem_module, all_chem_module
 
 
+def _find_xyz_export_method(adapter: RDKitAdapter):
+    priority = [
+        "model_to_xyz_block",
+        "export_xyz_block",
+        "to_xyz_block",
+        "model_to_xyz",
+        "export_xyz",
+        "write_xyz_file",
+        "export_xyz_file",
+        "model_to_xyz_file",
+        "save_xyz",
+        "save_as_xyz",
+    ]
+    seen: set[str] = set()
+    names = [name for name in priority if hasattr(adapter, name)]
+    names.extend(
+        name
+        for name in sorted(dir(adapter))
+        if name not in names
+        and "xyz" in name.lower()
+        and any(token in name.lower() for token in ("export", "save", "write", "block", "model"))
+    )
+    for name in names:
+        if name in seen:
+            continue
+        seen.add(name)
+        method = getattr(adapter, name, None)
+        if callable(method):
+            return method
+    raise AssertionError("Expected RDKitAdapter to expose an XYZ export helper.")
+
+
+def _invoke_xyz_export(method, *, model: MoleculeModel, path: Path | None = None):
+    model_names = {"model", "molecule", "mol", "structure", "document_model"}
+    path_names = {
+        "path",
+        "file_path",
+        "filepath",
+        "filename",
+        "output_path",
+        "output_file",
+        "destination",
+        "target",
+    }
+    positional = []
+    keyword = {}
+    for parameter in inspect.signature(method).parameters.values():
+        lower = parameter.name.lower()
+        value = _MISSING
+        if parameter.kind in (
+            inspect.Parameter.VAR_POSITIONAL,
+            inspect.Parameter.VAR_KEYWORD,
+        ):
+            continue
+        if lower in model_names:
+            value = model
+        elif lower in path_names:
+            if path is None:
+                if parameter.default is inspect._empty:
+                    raise AssertionError(
+                        f"XYZ exporter {method.__name__} requires a path but none was supplied.",
+                    )
+                continue
+            value = str(path)
+        elif lower == "comment":
+            value = "LiteDraw XYZ export"
+        elif parameter.default is not inspect._empty:
+            continue
+        else:
+            raise AssertionError(
+                f"Unsupported required XYZ export parameter {parameter.name!r} on {method.__name__}.",
+            )
+        if parameter.kind is inspect.Parameter.KEYWORD_ONLY:
+            keyword[parameter.name] = value
+        else:
+            positional.append(value)
+    return method(*positional, **keyword)
+
+
+def _read_xyz_text(result, *, path: Path) -> str:
+    if path.exists():
+        return path.read_text(encoding="utf-8")
+    if isinstance(result, Path):
+        return result.read_text(encoding="utf-8")
+    if isinstance(result, str):
+        possible_path = Path(result)
+        if possible_path.exists():
+            return possible_path.read_text(encoding="utf-8")
+        return result
+    raise AssertionError("XYZ exporter must either return text or write to the requested path.")
+
+
+def _parse_xyz_block(xyz_text: str) -> tuple[int, str, list[tuple[str, tuple[float, float, float]]]]:
+    lines = xyz_text.splitlines()
+    if len(lines) < 2:
+        raise AssertionError("XYZ output must include an atom-count header and a comment line.")
+    atom_count = int(lines[0].strip())
+    records = []
+    for line in lines[2:]:
+        if not line.strip():
+            continue
+        parts = line.split()
+        if len(parts) < 4:
+            raise AssertionError(f"Malformed XYZ coordinate line: {line!r}")
+        records.append(
+            (
+                parts[0],
+                (float(parts[1]), float(parts[2]), float(parts[3])),
+            ),
+        )
+    return atom_count, lines[1], records
+
+
 class _FakePosition:
     def __init__(self, x: float, y: float, z: float = 0.0) -> None:
         self.x = x
@@ -162,10 +282,17 @@ class _Fake3DMol:
         self,
         positions: dict[int, tuple[float, float, float]],
         *,
+        atom_symbols: list[str] | None = None,
         conformer_count: int = 1,
     ) -> None:
+        if atom_symbols is None:
+            atom_symbols = ["C"] * len(positions)
+        self._atoms = [_FakeAtom(idx, symbol) for idx, symbol in enumerate(atom_symbols)]
         self._conformer = _FakeConformer(positions)
         self._conformer_count = conformer_count
+
+    def GetAtoms(self):
+        return list(self._atoms)
 
     def GetNumConformers(self) -> int:
         return self._conformer_count
@@ -226,7 +353,7 @@ class _FakeChem:
         return getattr(mol, "canonical_smiles", "unknown")
 
     def Atom(self, symbol: str) -> _FakeRDAtom:
-        if symbol == "Xx":
+        if symbol in {"Xx", "Me", "Et", "Ph", "OMe", "Boc"}:
             raise ValueError("invalid atom")
         return _FakeRDAtom(symbol)
 
@@ -291,6 +418,13 @@ class RDKitAdapterTest(unittest.TestCase):
         model = MoleculeModel()
         a0 = model.add_atom("C", 0.0, 0.0)
         a1 = model.add_atom("O", 1.0, 0.0)
+        model.add_bond(a0, a1, 1)
+        return model
+
+    def _halogen_model(self) -> MoleculeModel:
+        model = MoleculeModel()
+        a0 = model.add_atom("Cl", 0.0, 0.0)
+        a1 = model.add_atom("Br", 1.0, 0.0)
         model.add_bond(a0, a1, 1)
         return model
 
@@ -598,6 +732,130 @@ class RDKitAdapterTest(unittest.TestCase):
 
         self.assertIsNone(coords)
         self.assertEqual(adapter.last_error, "3D coordinate generation failed: no conformer.")
+
+    def test_xyz_export_serializes_atom_count_comment_and_coordinates(self) -> None:
+        chem = _FakeChem(
+            {},
+            add_hs_result=_Fake3DMol(
+                {0: (1.0, 2.0, 3.0), 1: (-4.5, 0.0, 6.25)},
+                atom_symbols=["Cl", "Br"],
+            ),
+        )
+        adapter = RDKitAdapter()
+        adapter._rdkit = (chem, _FakeAllChem3D())
+        model = self._halogen_model()
+        exporter = _find_xyz_export_method(adapter)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            xyz_path = Path(temp_dir) / "structure.xyz"
+            result = _invoke_xyz_export(exporter, model=model, path=xyz_path)
+            xyz_text = _read_xyz_text(result, path=xyz_path)
+
+        atom_count, comment, records = _parse_xyz_block(xyz_text)
+        coords_by_element = {element: coords for element, coords in records}
+
+        self.assertEqual(atom_count, len(records))
+        self.assertEqual(atom_count, 2)
+        self.assertIsInstance(comment, str)
+        self.assertIn("Cl", coords_by_element)
+        self.assertIn("Br", coords_by_element)
+        self.assertEqual(coords_by_element["Cl"], (1.0, 2.0, 3.0))
+        self.assertEqual(coords_by_element["Br"], (-4.5, 0.0, 6.25))
+
+    def test_xyz_export_surfaces_coordinate_generation_failure_without_writing_output(self) -> None:
+        chem = _FakeChem({}, add_hs_error=RuntimeError("bad hydrogens"))
+        adapter = RDKitAdapter()
+        adapter._rdkit = (chem, _FakeAllChem3D())
+        model = self._halogen_model()
+        exporter = _find_xyz_export_method(adapter)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            xyz_path = Path(temp_dir) / "failed.xyz"
+            result = _invoke_xyz_export(exporter, model=model, path=xyz_path)
+
+        self.assertIsNone(result)
+        self.assertFalse(xyz_path.exists())
+        self.assertEqual(adapter.last_error, "3D coordinate generation failed: bad hydrogens")
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for alias expansion tests")
+    def test_model_to_xyz_block_expands_common_alias_labels(self) -> None:
+        adapter = RDKitAdapter()
+        model = MoleculeModel()
+        scaffold = model.add_atom("C", -1.0, 0.0)
+        alias = model.add_atom("Me", 1.0, 0.0)
+        model.add_bond(scaffold, alias, 1)
+
+        xyz_block = adapter.model_to_xyz_block(model)
+
+        self.assertIsNotNone(xyz_block)
+        assert xyz_block is not None
+        atom_count, _, records = _parse_xyz_block(xyz_block)
+        elements = [element for element, _ in records]
+        self.assertEqual(atom_count, len(records))
+        self.assertGreaterEqual(elements.count("C"), 2)
+        self.assertIn("H", elements)
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for stereo tests")
+    def test_conversion_path_maps_wedge_and_hash_to_opposite_chirality(self) -> None:
+        adapter = RDKitAdapter()
+        model = MoleculeModel()
+        center = model.add_atom("C", 0.0, 0.0)
+        fluorine = model.add_atom("F", 1.0, 0.0)
+        chlorine = model.add_atom("Cl", -1.0, 1.0)
+        bromine = model.add_atom("Br", -1.0, -1.0)
+        iodine = model.add_atom("I", 0.0, 1.5)
+        model.add_bond(center, fluorine, 1)
+        model.add_bond(center, chlorine, 1)
+        model.add_bond(center, bromine, 1)
+        model.add_bond(center, iodine, 1)
+
+        wedge_model = model
+        wedge_model.bonds[0].style = "wedge"
+        wedge_mol = adapter._build_conversion_rdkit_mol(wedge_model)
+        self.assertIsNotNone(wedge_mol)
+        wedge_smiles = _RealChem.MolToSmiles(wedge_mol, isomericSmiles=True)
+
+        hash_model = MoleculeModel()
+        center = hash_model.add_atom("C", 0.0, 0.0)
+        fluorine = hash_model.add_atom("F", 1.0, 0.0)
+        chlorine = hash_model.add_atom("Cl", -1.0, 1.0)
+        bromine = hash_model.add_atom("Br", -1.0, -1.0)
+        iodine = hash_model.add_atom("I", 0.0, 1.5)
+        hash_model.add_bond(center, fluorine, 1)
+        hash_model.add_bond(center, chlorine, 1)
+        hash_model.add_bond(center, bromine, 1)
+        hash_model.add_bond(center, iodine, 1)
+        hash_model.bonds[0].style = "hash"
+        hash_mol = adapter._build_conversion_rdkit_mol(hash_model)
+        self.assertIsNotNone(hash_mol)
+        hash_smiles = _RealChem.MolToSmiles(hash_mol, isomericSmiles=True)
+
+        self.assertIn("@", wedge_smiles)
+        self.assertIn("@", hash_smiles)
+        self.assertNotEqual(wedge_smiles, hash_smiles)
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for charge/radical tests")
+    def test_model_to_3d_scene_applies_charge_and_radical_annotations(self) -> None:
+        adapter = RDKitAdapter()
+        charged = MoleculeModel()
+        charged.add_atom("N", 0.0, 0.0)
+        charged_scene = adapter.model_to_3d_scene(
+            charged,
+            atom_annotations={0: {"formal_charge": 1}},
+        )
+        radical = MoleculeModel()
+        radical.add_atom("C", 0.0, 0.0)
+        radical_scene = adapter.model_to_3d_scene(
+            radical,
+            atom_annotations={0: {"radical_electrons": 1}},
+        )
+
+        self.assertIsNotNone(charged_scene)
+        self.assertIsNotNone(radical_scene)
+        assert charged_scene is not None
+        assert radical_scene is not None
+        self.assertGreaterEqual(len(charged_scene.atoms), 5)
+        self.assertGreaterEqual(len(radical_scene.atoms), 4)
 
     def test_get_name_from_smiles_uses_canonical_map(self) -> None:
         fake_mol = _FakeMol(
