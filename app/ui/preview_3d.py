@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 
 from PyQt6.QtCore import QPointF, QRectF, QTimer, Qt
-from PyQt6.QtGui import QColor, QPainter, QPen
+from PyQt6.QtGui import QColor, QFont, QPainter, QPen
 from PyQt6.QtWidgets import QWidget
 
 from core.rdkit_adapter import Molecule3DScene, RDKitAdapter
@@ -193,15 +193,20 @@ class Preview3D(QWidget):
             painter.setBrush(fill)
             painter.drawEllipse(QPointF(px, py), radius, radius)
             if symbol != "C" or radius >= 9.0:
+                painter.save()
                 painter.setPen(QColor("#1f1a16"))
                 font = painter.font()
                 font.setPointSizeF(max(7.0, radius * 0.9))
                 painter.setFont(font)
                 text_rect = QRectF(px - radius, py - radius, radius * 2.0, radius * 2.0)
                 painter.drawText(text_rect, int(Qt.AlignmentFlag.AlignCenter), symbol)
+                painter.restore()
 
+        painter.save()
         painter.setPen(QColor("#8a7a68"))
+        painter.setFont(self._overlay_font())
         painter.drawText(inner.adjusted(10, 10, -10, -10), Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight, "drag: rotate\nwheel: zoom")
+        painter.restore()
 
     def _project_scene(self, scene: Molecule3DScene) -> list[tuple[float, float, float, float]]:
         if not scene.atoms:
@@ -255,3 +260,8 @@ class Preview3D(QWidget):
             "I": QColor("#7a5ca8"),
         }
         return palette.get(symbol, QColor("#d9d1c6"))
+
+    def _overlay_font(self) -> QFont:
+        font = QFont(self.font())
+        font.setPixelSize(12)
+        return font

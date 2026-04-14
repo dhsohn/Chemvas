@@ -28,12 +28,6 @@ if QApplication is not None:
     from core.document_io import read_document, write_document
     from core.model import MoleculeModel
     from core.rdkit_adapter import Molecule3DAtom, Molecule3DBond, Molecule3DScene
-    from core.xtb_adapter import (
-        XTBCRESTResult,
-        XTBComparisonResult,
-        XTBReactionPathResult,
-        XTBRunResult,
-    )
     from ui.main_window import MainWindow
 
 
@@ -61,6 +55,11 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
     def _hover_scene_point(self, point: QPointF) -> None:
         viewport_pos = self.window.canvas.mapFromScene(point)
         QTest.mouseMove(self.window.canvas.viewport(), viewport_pos)
+        self.app.processEvents()
+        if self.window.canvas._template_insert_active:
+            self.window.canvas._render_template_preview(point)
+        if self.window.canvas._smiles_insert_active:
+            self.window.canvas._render_smiles_preview(point)
         self.app.processEvents()
         QTest.qWait(10)
 
@@ -191,7 +190,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         )
         self.assertNotIn("result_sheets", document.state)
 
-    def test_load_canvas_restores_workbook_sheets_and_converts_legacy_result_notes_to_canvas_tabs(self) -> None:
+    def test_load_canvas_restores_workbook_sheets_and_ignores_legacy_result_payloads(self) -> None:
         self.window.canvas.add_bond_from_points(QPointF(-20.0, 0.0), QPointF(20.0, 0.0))
         first_sheet_state = self.window.canvas.snapshot_state()
 
@@ -235,16 +234,11 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             with patch("ui.main_window.QFileDialog.getOpenFileName", return_value=(str(path), "")):
                 self.window._load_canvas()
 
-        self.assertEqual(self.window._canvas_sheet_count(), 3)
+        self.assertEqual(self.window._canvas_sheet_count(), 2)
         self.assertEqual(self.window.canvas_tabs.tabText(0), "Reactant Sheet")
         self.assertEqual(self.window.canvas_tabs.tabText(1), "Product Sheet")
         self.assertEqual(self.window.canvas_tabs.currentIndex(), 1)
         self.assertEqual(len(self.window.canvas.ring_items), 1)
-        legacy_canvas = self.window.canvas_tabs.widget(2)
-        self.assertIsNotNone(legacy_canvas)
-        text = self._canvas_note_text(legacy_canvas)
-        self.assertIn("Reaction Path Analysis", text)
-        self.assertIn("Forward barrier", text)
 
     def test_save_canvas_cancel_keeps_current_path_and_status_message(self) -> None:
         self.window._current_file_path = None
@@ -640,7 +634,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
         self.assertIsNotNone(self.window.preview_3d._scene)
         self.assertIs(self.window.panel_splitter.widget(0), self.window.preview_3d)
-        self.assertIs(self.window.panel_splitter.widget(1), self.window.xtb_panel)
+        self.assertEqual(self.window.panel_splitter.count(), 1)
         self.assertFalse(
             bool(
                 self.window.panel_dock.features()
@@ -648,202 +642,32 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             )
         )
 
-    def test_xtb_panel_captures_selection_and_inserts_optimized_output(self) -> None:
-        left = self.window.canvas.add_atom("C", -20.0, 0.0)
-        right = self.window.canvas.add_atom("O", 20.0, 0.0)
-        self.window.canvas.add_bond(left, right, 2)
-        self.window.canvas._add_bond_graphics(0)
-        self.window.canvas.atom_items[right].setSelected(True)
-        self.window.canvas.atom_dots[left].setSelected(True)
-        self.app.processEvents()
+    def test_preview_panel_hint_font_is_zoom_independent(self) -> None:
+        initial_size = self.window.preview_3d._overlay_font().pixelSize()
 
-        output_model = MoleculeModel()
-        out_a = output_model.add_atom("C", 0.0, 0.0)
-        out_b = output_model.add_atom("O", 40.0, 0.0)
-        output_model.add_bond(out_a, out_b, 2)
-        result = XTBRunResult(
-            mode="opt",
-            total_energy_hartree=-15.4321,
-            homo_lumo_gap_ev=4.321,
-            gradient_norm=0.0001,
-            stdout="",
-            stderr="",
-            command=("xtb", "input.xyz", "--gfn", "2", "--opt"),
-            optimized_xyz="2\nopt\nC 0.0 0.0 0.0\nO 1.2 0.0 0.0\n",
-            canvas_model=output_model,
-        )
+        self.window.preview_3d._zoom = 0.4
+        zoomed_out_size = self.window.preview_3d._overlay_font().pixelSize()
 
-        self.window.xtb_panel.capture_input_from_selection()
-        with (
-            patch.object(self.window.xtb_panel._xtb, "is_available", return_value=True),
-            patch.object(self.window.xtb_panel._xtb, "optimize", return_value=result),
-        ):
-            before_sheet_count = self.window.canvas_tabs.count()
-            self.window.xtb_panel.optimize_input_structure()
-            self.app.processEvents()
+        self.window.preview_3d._zoom = 2.8
+        zoomed_in_size = self.window.preview_3d._overlay_font().pixelSize()
 
-        self.assertGreater(self.window.canvas_tabs.count(), before_sheet_count)
-        self.assertIn("Reactant/Input:", self.window.xtb_panel.input_label.text())
-        self.assertIn("Product/Output:", self.window.xtb_panel.output_label.text())
-        self.assertIn("Opt", self.window.canvas_tabs.tabText(self.window.canvas_tabs.currentIndex()))
-        text = self._canvas_note_text(self.window.canvas)
-        self.assertIn("GFN2-xTB Optimization", text)
-        self.assertIn("Optimization Summary", text)
+        self.assertEqual(initial_size, 12)
+        self.assertEqual(zoomed_out_size, initial_size)
+        self.assertEqual(zoomed_in_size, initial_size)
 
-    def test_xtb_panel_compare_uses_captured_input_and_output(self) -> None:
-        a0 = self.window.canvas.add_atom("C", -40.0, 0.0)
-        a1 = self.window.canvas.add_atom("O", 0.0, 0.0)
-        self.window.canvas.add_bond(a0, a1, 2)
-        self.window.canvas._add_bond_graphics(0)
-        self.window.canvas.atom_dots[a0].setSelected(True)
-        self.window.canvas.atom_items[a1].setSelected(True)
-        self.app.processEvents()
-        self.window.xtb_panel.capture_input_from_selection()
+    def test_arrow_default_preset_matches_legacy_acs_values(self) -> None:
+        self.window.canvas.set_arrow_line_width(4.0)
+        self.window.canvas.set_arrow_head_scale(0.6)
 
-        b0 = self.window.canvas.add_atom("C", 60.0, 0.0)
-        b1 = self.window.canvas.add_atom("O", 100.0, 0.0)
-        self.window.canvas.add_bond(b0, b1, 1)
-        self.window.canvas._add_bond_graphics(1)
-        self.window.canvas.scene().clearSelection()
-        self.window.canvas.atom_dots[b0].setSelected(True)
-        self.window.canvas.atom_items[b1].setSelected(True)
-        self.app.processEvents()
-        self.window.xtb_panel.capture_output_from_selection()
+        self.window._set_arrow_preset("Default")
+        self.assertAlmostEqual(self.window.canvas.get_arrow_line_width(), 1.2)
+        self.assertAlmostEqual(self.window.canvas.get_arrow_head_scale(), 0.3)
 
-        comparison = XTBComparisonResult(
-            input_result=XTBRunResult(
-                mode="sp",
-                total_energy_hartree=-10.0,
-                homo_lumo_gap_ev=4.5,
-                gradient_norm=None,
-                stdout="",
-                stderr="",
-                command=("xtb", "input.xyz", "--gfn", "2", "--sp"),
-            ),
-            output_result=XTBRunResult(
-                mode="sp",
-                total_energy_hartree=-10.25,
-                homo_lumo_gap_ev=4.2,
-                gradient_norm=None,
-                stdout="",
-                stderr="",
-                command=("xtb", "input.xyz", "--gfn", "2", "--sp"),
-            ),
-            delta_energy_kcal_mol=-156.87575,
-        )
-
-        with (
-            patch.object(self.window.xtb_panel._xtb, "is_available", return_value=True),
-            patch.object(self.window.xtb_panel._xtb, "compare_pair_singlepoint", return_value=comparison),
-        ):
-            before_sheet_count = self.window.canvas_tabs.count()
-            self.window.xtb_panel.compare_structures()
-            self.app.processEvents()
-
-        self.assertGreater(self.window.canvas_tabs.count(), before_sheet_count)
-        text = self._canvas_note_text(self.window.canvas)
-        self.assertIn("Pair Single-Point", text)
-        self.assertIn("Delta E", text)
-
-    def test_xtb_panel_crest_search_creates_result_sheet_and_canvas(self) -> None:
-        left = self.window.canvas.add_atom("C", -20.0, 0.0)
-        right = self.window.canvas.add_atom("N", 20.0, 0.0)
-        self.window.canvas.add_bond(left, right, 1)
-        self.window.canvas._add_bond_graphics(0)
-        self.window.canvas.atom_dots[left].setSelected(True)
-        self.window.canvas.atom_items[right].setSelected(True)
-        self.app.processEvents()
-        self.window.xtb_panel.capture_input_from_selection()
-
-        crest_model = MoleculeModel()
-        out_a = crest_model.add_atom("C", 0.0, 0.0)
-        out_b = crest_model.add_atom("N", 40.0, 0.0)
-        crest_model.add_bond(out_a, out_b, 1)
-        result = XTBCRESTResult(
-            mode="crest",
-            total_energy_hartree=-12.3456,
-            homo_lumo_gap_ev=5.678,
-            gradient_norm=0.0002,
-            conformer_count=7,
-            stdout="crest finished",
-            stderr="",
-            command=("crest", "input.xyz", "--gfn2"),
-            conformer_xyz="2\nconf\nC 0.0 0.0 0.0\nN 1.2 0.0 0.0\n",
-            best_xyz="2\nbest\nC 0.0 0.0 0.0\nN 1.2 0.0 0.0\n",
-            canvas_model=crest_model,
-        )
-
-        with (
-            patch.object(self.window.xtb_panel._xtb, "is_crest_available", return_value=True),
-            patch.object(self.window.xtb_panel._xtb, "crest_search", return_value=result),
-        ):
-            before_sheet_count = self.window.canvas_tabs.count()
-            self.window.xtb_panel.run_crest_search()
-            self.app.processEvents()
-
-        self.assertGreater(self.window.canvas_tabs.count(), before_sheet_count)
-        text = self._canvas_note_text(self.window.canvas)
-        self.assertIn("CREST Best Conformer", text)
-        self.assertIn("Conformer Count", text)
-
-    def test_xtb_panel_reaction_path_creates_result_sheet_and_ts_canvas(self) -> None:
-        left = self.window.canvas.add_atom("C", -20.0, 0.0)
-        right = self.window.canvas.add_atom("O", 20.0, 0.0)
-        self.window.canvas.add_bond(left, right, 2)
-        self.window.canvas._add_bond_graphics(0)
-        self.window.canvas.atom_dots[left].setSelected(True)
-        self.window.canvas.atom_items[right].setSelected(True)
-        self.app.processEvents()
-        self.window.xtb_panel.capture_input_from_selection()
-
-        product_left = self.window.canvas.add_atom("C", 60.0, 0.0)
-        product_right = self.window.canvas.add_atom("O", 100.0, 0.0)
-        self.window.canvas.add_bond(product_left, product_right, 1)
-        self.window.canvas._add_bond_graphics(1)
-        self.window.canvas.scene().clearSelection()
-        self.window.canvas.atom_dots[product_left].setSelected(True)
-        self.window.canvas.atom_items[product_right].setSelected(True)
-        self.app.processEvents()
-        self.window.xtb_panel.capture_output_from_selection()
-
-        ts_model = MoleculeModel()
-        ts_a = ts_model.add_atom("C", 0.0, 0.0)
-        ts_b = ts_model.add_atom("O", 35.0, 0.0)
-        ts_model.add_bond(ts_a, ts_b, 1)
-        template_scene = Molecule3DScene(
-            atoms=(
-                Molecule3DAtom("C", 0.0, 0.0, 0.0),
-                Molecule3DAtom("O", 1.2, 0.0, 0.0),
-            ),
-            bonds=(Molecule3DBond(0, 1, 1),),
-        )
-        result = XTBReactionPathResult(
-            mode="path",
-            forward_barrier_kcal_mol=12.5,
-            backward_barrier_kcal_mol=8.2,
-            reaction_energy_kcal_mol=-4.3,
-            stdout="forward barrier (kcal) : 12.5",
-            stderr="",
-            command=("xtb", "start.xyz", "--path", "end.xyz", "--input", "path.inp", "--gfn", "2"),
-            path_xyz="2\npath\nC 0.0 0.0 0.0\nO 1.2 0.0 0.0\n",
-            transition_state_xyz="2\nts\nC 0.0 0.0 0.0\nO 1.2 0.0 0.0\n",
-        )
-
-        with (
-            patch.object(self.window.xtb_panel._xtb, "is_available", return_value=True),
-            patch.object(self.window.xtb_panel._xtb, "reaction_path", return_value=result),
-            patch.object(self.window.xtb_panel._xtb, "_build_scene", return_value=template_scene),
-            patch.object(self.window.xtb_panel._xtb, "_scene_from_xyz", return_value=template_scene),
-            patch.object(self.window.xtb_panel._xtb, "_scene_to_canvas_model", return_value=ts_model),
-        ):
-            before_sheet_count = self.window.canvas_tabs.count()
-            self.window.xtb_panel.run_reaction_path_analysis()
-            self.app.processEvents()
-
-        self.assertGreater(self.window.canvas_tabs.count(), before_sheet_count)
-        text = self._canvas_note_text(self.window.canvas)
-        self.assertIn("Reaction Path Analysis", text)
-        self.assertIn("Forward Barrier", text)
+        self.window.canvas.set_arrow_line_width(4.0)
+        self.window.canvas.set_arrow_head_scale(0.6)
+        self.window._set_arrow_preset("ACS")
+        self.assertAlmostEqual(self.window.canvas.get_arrow_line_width(), 1.2)
+        self.assertAlmostEqual(self.window.canvas.get_arrow_head_scale(), 0.3)
 
 
 if __name__ == "__main__":
