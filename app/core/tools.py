@@ -118,6 +118,10 @@ class SelectTool(Tool):
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
             return False
+        if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+            item = self.canvas.item_at_event(event)
+            if self.canvas.toggle_item_selection(item):
+                return True
         item = self.canvas.item_at_event(event)
         if item is not None and item.data(0) == "handle":
             self._active_handle = item
@@ -1120,6 +1124,10 @@ class PerspectiveTool(Tool):
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
             return False
+        if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+            item = self.canvas.item_at_event(event)
+            if self.canvas.toggle_item_selection(item):
+                return True
         self.canvas.clear_handles()
         press_pos = self.canvas.scene_pos_from_event(event)
         if not self.canvas.selection_hit_test(press_pos):

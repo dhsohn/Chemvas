@@ -4,7 +4,7 @@ import math
 from dataclasses import dataclass
 from typing import Mapping, Optional
 
-from core.model import MoleculeModel
+from core.model import Bond, MoleculeModel
 
 
 @dataclass(frozen=True)
@@ -55,6 +55,7 @@ class RDKitAdapter:
         self._alias_smiles = {
             "Me": "[*:1]C",
             "Et": "[*:1]CC",
+            "OH": "[*:1]O",
             "Ph": "[*:1]c1ccccc1",
             "OMe": "[*:1]OC",
             "Boc": "[*:1]C(=O)OC(C)(C)C",
@@ -157,6 +158,7 @@ class RDKitAdapter:
             return None, None
         Chem, _ = rdkit
         rw = Chem.RWMol()
+        adjacency = self._build_model_adjacency(model)
         atom_map = {}
         invalid_labels: list[str] = []
         for atom_id in sorted(model.atoms):
@@ -168,6 +170,8 @@ class RDKitAdapter:
                     invalid_labels.append(f"{atom.element} (atom {atom_id})")
                     continue
                 rd_atom = Chem.Atom("C")
+            if self._should_disable_implicit_hydrogens(model, atom_id, adjacency):
+                rd_atom.SetNoImplicit(True)
             atom_map[atom_id] = rw.AddAtom(rd_atom)
         if invalid_labels:
             detail = ", ".join(invalid_labels[:5])
@@ -304,6 +308,196 @@ class RDKitAdapter:
         if radical_electrons:
             rd_atom.SetNumRadicalElectrons(radical_electrons)
 
+    @staticmethod
+    def _build_model_adjacency(model: MoleculeModel) -> dict[int, list[int]]:
+        adjacency: dict[int, list[int]] = {atom_id: [] for atom_id in model.atoms}
+        for bond in model.bonds:
+            if bond is None or bond.a == bond.b:
+                continue
+            if bond.a not in model.atoms or bond.b not in model.atoms:
+                continue
+            adjacency.setdefault(bond.a, []).append(bond.b)
+            adjacency.setdefault(bond.b, []).append(bond.a)
+        return adjacency
+
+    @staticmethod
+    def _should_disable_implicit_hydrogens(
+        model: MoleculeModel,
+        atom_id: int,
+        adjacency: Mapping[int, list[int]],
+    ) -> bool:
+        atom = model.atoms.get(atom_id)
+        if atom is None or atom.element.upper() == "C":
+            return False
+        for neighbor_id in adjacency.get(atom_id, []):
+            neighbor = model.atoms.get(neighbor_id)
+            if neighbor is not None and neighbor.element.upper() == "H":
+                return True
+        return False
+
+    @staticmethod
+    def _component_sort_key(model: MoleculeModel, atom_ids: set[int]) -> tuple[float, float, int]:
+        xs = [model.atoms[atom_id].x for atom_id in atom_ids if atom_id in model.atoms]
+        ys = [model.atoms[atom_id].y for atom_id in atom_ids if atom_id in model.atoms]
+        center_x = (min(xs) + max(xs)) * 0.5 if xs else 0.0
+        center_y = (min(ys) + max(ys)) * 0.5 if ys else 0.0
+        return center_x, center_y, min(atom_ids) if atom_ids else -1
+
+    def _model_components(self, model: MoleculeModel) -> list[set[int]]:
+        adjacency = self._build_model_adjacency(model)
+        seen: set[int] = set()
+        components: list[set[int]] = []
+        for start_atom_id in sorted(model.atoms):
+            if start_atom_id in seen:
+                continue
+            component: set[int] = set()
+            stack = [start_atom_id]
+            seen.add(start_atom_id)
+            while stack:
+                current = stack.pop()
+                component.add(current)
+                for neighbor_id in adjacency.get(current, []):
+                    if neighbor_id in seen:
+                        continue
+                    seen.add(neighbor_id)
+                    stack.append(neighbor_id)
+            components.append(component)
+        components.sort(key=lambda atom_ids: self._component_sort_key(model, atom_ids))
+        return components
+
+    def _build_component_model(
+        self,
+        model: MoleculeModel,
+        atom_ids: set[int],
+        atom_annotations: Mapping[int, Mapping[str, int]] | None = None,
+    ) -> tuple[MoleculeModel, dict[int, dict[str, int]]]:
+        component_model = MoleculeModel()
+        id_map: dict[int, int] = {}
+        for old_id in sorted(atom_ids):
+            atom = model.atoms.get(old_id)
+            if atom is None:
+                continue
+            new_id = component_model.add_atom(atom.element, atom.x, atom.y)
+            component_model.atoms[new_id].color = atom.color
+            component_model.atoms[new_id].explicit_label = atom.explicit_label
+            id_map[old_id] = new_id
+        for bond in model.bonds:
+            if bond is None:
+                continue
+            if bond.a not in id_map or bond.b not in id_map:
+                continue
+            component_model.bonds.append(
+                Bond(
+                    a=id_map[bond.a],
+                    b=id_map[bond.b],
+                    order=bond.order,
+                    style=bond.style,
+                    color=bond.color,
+                )
+            )
+        component_annotations: dict[int, dict[str, int]] = {}
+        if atom_annotations:
+            for old_id, new_id in id_map.items():
+                values = atom_annotations.get(old_id)
+                if not values:
+                    continue
+                component_annotations[new_id] = {
+                    key: int(value)
+                    for key, value in values.items()
+                }
+        return component_model, component_annotations
+
+    @staticmethod
+    def _scene_from_embedded_mol(mol_h) -> Molecule3DScene:
+        conf = mol_h.GetConformer()
+        atoms = tuple(
+            Molecule3DAtom(
+                symbol=atom.GetSymbol(),
+                x=conf.GetAtomPosition(atom.GetIdx()).x,
+                y=conf.GetAtomPosition(atom.GetIdx()).y,
+                z=conf.GetAtomPosition(atom.GetIdx()).z,
+            )
+            for atom in mol_h.GetAtoms()
+        )
+        bond_iterable = mol_h.GetBonds() if hasattr(mol_h, "GetBonds") else ()
+        bonds = tuple(
+            Molecule3DBond(
+                a=bond.GetBeginAtomIdx(),
+                b=bond.GetEndAtomIdx(),
+                order=max(1, int(round(bond.GetBondTypeAsDouble()))),
+            )
+            for bond in bond_iterable
+        )
+        return Molecule3DScene(atoms=atoms, bonds=bonds)
+
+    @staticmethod
+    def _scene_bounds(scene: Molecule3DScene) -> tuple[float, float, float, float, float, float]:
+        xs = [atom.x for atom in scene.atoms]
+        ys = [atom.y for atom in scene.atoms]
+        zs = [atom.z for atom in scene.atoms]
+        return min(xs), max(xs), min(ys), max(ys), min(zs), max(zs)
+
+    @staticmethod
+    def _translate_scene(
+        scene: Molecule3DScene,
+        *,
+        dx: float = 0.0,
+        dy: float = 0.0,
+        dz: float = 0.0,
+    ) -> Molecule3DScene:
+        return Molecule3DScene(
+            atoms=tuple(
+                Molecule3DAtom(
+                    symbol=atom.symbol,
+                    x=atom.x + dx,
+                    y=atom.y + dy,
+                    z=atom.z + dz,
+                )
+                for atom in scene.atoms
+            ),
+            bonds=scene.bonds,
+        )
+
+    def _layout_component_scenes(
+        self,
+        component_scenes: list[Molecule3DScene],
+        *,
+        gap: float = 2.5,
+    ) -> Molecule3DScene:
+        if not component_scenes:
+            return Molecule3DScene(atoms=(), bonds=())
+        if len(component_scenes) == 1:
+            return component_scenes[0]
+
+        combined_atoms: list[Molecule3DAtom] = []
+        combined_bonds: list[Molecule3DBond] = []
+        atom_offset = 0
+        cursor_right: float | None = None
+        for scene in component_scenes:
+            min_x, max_x, min_y, max_y, min_z, max_z = self._scene_bounds(scene)
+            centered_scene = self._translate_scene(
+                scene,
+                dx=-((min_x + max_x) * 0.5),
+                dy=-((min_y + max_y) * 0.5),
+                dz=-((min_z + max_z) * 0.5),
+            )
+            centered_min_x, centered_max_x, _, _, _, _ = self._scene_bounds(centered_scene)
+            shift_x = 0.0 if cursor_right is None else cursor_right + gap - centered_min_x
+            shifted_scene = self._translate_scene(centered_scene, dx=shift_x)
+            combined_atoms.extend(shifted_scene.atoms)
+            combined_bonds.extend(
+                Molecule3DBond(
+                    a=bond.a + atom_offset,
+                    b=bond.b + atom_offset,
+                    order=bond.order,
+                )
+                for bond in shifted_scene.bonds
+            )
+            _, shifted_max_x, _, _, _, _ = self._scene_bounds(shifted_scene)
+            cursor_right = shifted_max_x
+            atom_offset += len(shifted_scene.atoms)
+        return Molecule3DScene(atoms=tuple(combined_atoms), bonds=tuple(combined_bonds))
+
     def _build_alias_fragment(
         self,
         label: str,
@@ -421,15 +615,13 @@ class RDKitAdapter:
             return None
         Chem, AllChem = rdkit
         rw = Chem.RWMol()
-        adjacency: dict[int, list[int]] = {atom_id: [] for atom_id in model.atoms}
+        adjacency = self._build_model_adjacency(model)
         valid_bonds: list[tuple[int, object]] = []
         for bond_id, bond in enumerate(model.bonds):
             if bond is None or bond.a == bond.b:
                 continue
             if bond.a not in model.atoms or bond.b not in model.atoms:
                 continue
-            adjacency.setdefault(bond.a, []).append(bond.b)
-            adjacency.setdefault(bond.b, []).append(bond.a)
             valid_bonds.append((bond_id, bond))
 
         atom_map: dict[int, int] = {}
@@ -461,6 +653,8 @@ class RDKitAdapter:
             except Exception:
                 invalid_labels.append(f"{atom.element} (atom {atom_id})")
                 continue
+            if self._should_disable_implicit_hydrogens(model, atom_id, adjacency):
+                rd_atom.SetNoImplicit(True)
             self._apply_atom_annotation(
                 rd_atom,
                 formal_charge=formal_charge,
@@ -563,34 +757,26 @@ class RDKitAdapter:
             self.last_error = "There is no chemical structure to preview."
             return None
         Chem, AllChem = rdkit
-        mol = self._build_conversion_rdkit_mol(model, atom_annotations=atom_annotations)
-        if mol is None:
-            if self.last_error is None:
-                self.last_error = "Failed to build a 3D preview structure."
-            return None
-        mol_h = self._embed_3d_molecule(mol, Chem, AllChem)
-        if mol_h is None:
-            return None
-        conf = mol_h.GetConformer()
-        atoms = tuple(
-            Molecule3DAtom(
-                symbol=atom.GetSymbol(),
-                x=conf.GetAtomPosition(atom.GetIdx()).x,
-                y=conf.GetAtomPosition(atom.GetIdx()).y,
-                z=conf.GetAtomPosition(atom.GetIdx()).z,
+        component_scenes: list[Molecule3DScene] = []
+        for component_atom_ids in self._model_components(model):
+            component_model, component_annotations = self._build_component_model(
+                model,
+                component_atom_ids,
+                atom_annotations=atom_annotations,
             )
-            for atom in mol_h.GetAtoms()
-        )
-        bond_iterable = mol_h.GetBonds() if hasattr(mol_h, "GetBonds") else ()
-        bonds = tuple(
-            Molecule3DBond(
-                a=bond.GetBeginAtomIdx(),
-                b=bond.GetEndAtomIdx(),
-                order=max(1, int(round(bond.GetBondTypeAsDouble()))),
+            mol = self._build_conversion_rdkit_mol(
+                component_model,
+                atom_annotations=component_annotations,
             )
-            for bond in bond_iterable
-        )
-        return Molecule3DScene(atoms=atoms, bonds=bonds)
+            if mol is None:
+                if self.last_error is None:
+                    self.last_error = "Failed to build a 3D preview structure."
+                return None
+            mol_h = self._embed_3d_molecule(mol, Chem, AllChem)
+            if mol_h is None:
+                return None
+            component_scenes.append(self._scene_from_embedded_mol(mol_h))
+        return self._layout_component_scenes(component_scenes)
 
     def model_to_xyz_block(
         self,

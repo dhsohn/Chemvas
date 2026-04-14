@@ -55,14 +55,23 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         viewport_pos = self.window.canvas.mapFromScene(point)
         QTest.mouseMove(self.window.canvas.viewport(), viewport_pos)
         self.app.processEvents()
+        if self.window.canvas._template_insert_active:
+            self.window.canvas._render_template_preview(point)
+        elif self.window.canvas._smiles_insert_active:
+            self.window.canvas._render_smiles_preview(point)
+        else:
+            self.window.canvas._update_hover_highlight(point)
+        self.app.processEvents()
         QTest.qWait(10)
 
-    def _click_scene_point(self, point: QPointF) -> None:
+    def _click_scene_point(self, point: QPointF, modifiers=None) -> None:
+        if modifiers is None:
+            modifiers = Qt.KeyboardModifier.NoModifier
         viewport_pos = self.window.canvas.mapFromScene(point)
         QTest.mouseClick(
             self.window.canvas.viewport(),
             Qt.MouseButton.LeftButton,
-            Qt.KeyboardModifier.NoModifier,
+            modifiers,
             viewport_pos,
         )
         self.app.processEvents()
@@ -166,6 +175,68 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertEqual(self.window.canvas_tabs.count(), 2)
         self.assertEqual(self.window.canvas_tabs.tabText(0), "Sheet 1")
         self.assertEqual(self.window.canvas_tabs.tabText(1), "+")
+
+    def test_shift_click_toggles_atom_selection(self) -> None:
+        atom_a = self.window.canvas.add_atom("C", -40.0, 0.0)
+        atom_b = self.window.canvas.add_atom("O", 40.0, 0.0)
+        self.window.canvas.set_tool("select")
+
+        self._click_scene_point(QPointF(-40.0, 0.0))
+        self.assertEqual(self.window.canvas._selected_ids(), ({atom_a}, set()))
+
+        self._click_scene_point(QPointF(40.0, 0.0), Qt.KeyboardModifier.ShiftModifier)
+        self.assertEqual(self.window.canvas._selected_ids(), ({atom_a, atom_b}, set()))
+
+        self._click_scene_point(QPointF(40.0, 0.0), Qt.KeyboardModifier.ShiftModifier)
+        self.assertEqual(self.window.canvas._selected_ids(), ({atom_a}, set()))
+
+    def test_shift_click_toggles_arrow_selection(self) -> None:
+        arrow_a = self.window.canvas.add_arrow(QPointF(-70.0, -10.0), QPointF(-20.0, -10.0), "arrow")
+        arrow_b = self.window.canvas.add_arrow(QPointF(20.0, -10.0), QPointF(70.0, -10.0), "arrow")
+        self.window.canvas.set_tool("select")
+
+        self._click_scene_point(QPointF(-45.0, -10.0))
+        self.assertTrue(arrow_a.isSelected())
+        self.assertFalse(arrow_b.isSelected())
+
+        self._click_scene_point(QPointF(45.0, -10.0), Qt.KeyboardModifier.ShiftModifier)
+        self.assertTrue(arrow_a.isSelected())
+        self.assertTrue(arrow_b.isSelected())
+
+        self._click_scene_point(QPointF(-45.0, -10.0), Qt.KeyboardModifier.ShiftModifier)
+        self.assertFalse(arrow_a.isSelected())
+        self.assertTrue(arrow_b.isSelected())
+
+    def test_perspective_shift_click_toggles_atom_selection(self) -> None:
+        atom_a = self.window.canvas.add_atom("C", -40.0, 0.0)
+        atom_b = self.window.canvas.add_atom("O", 40.0, 0.0)
+        self.window.canvas.set_tool("perspective")
+
+        self._click_scene_point(QPointF(-40.0, 0.0))
+        self.assertEqual(self.window.canvas._selected_ids(), ({atom_a}, set()))
+
+        self._click_scene_point(QPointF(40.0, 0.0), Qt.KeyboardModifier.ShiftModifier)
+        self.assertEqual(self.window.canvas._selected_ids(), ({atom_a, atom_b}, set()))
+
+        self._click_scene_point(QPointF(40.0, 0.0), Qt.KeyboardModifier.ShiftModifier)
+        self.assertEqual(self.window.canvas._selected_ids(), ({atom_a}, set()))
+
+    def test_perspective_shift_click_toggles_arrow_selection(self) -> None:
+        arrow_a = self.window.canvas.add_arrow(QPointF(-70.0, -10.0), QPointF(-20.0, -10.0), "arrow")
+        arrow_b = self.window.canvas.add_arrow(QPointF(20.0, -10.0), QPointF(70.0, -10.0), "arrow")
+        self.window.canvas.set_tool("perspective")
+
+        self._click_scene_point(QPointF(-45.0, -10.0))
+        self.assertTrue(arrow_a.isSelected())
+        self.assertFalse(arrow_b.isSelected())
+
+        self._click_scene_point(QPointF(45.0, -10.0), Qt.KeyboardModifier.ShiftModifier)
+        self.assertTrue(arrow_a.isSelected())
+        self.assertTrue(arrow_b.isSelected())
+
+        self._click_scene_point(QPointF(-45.0, -10.0), Qt.KeyboardModifier.ShiftModifier)
+        self.assertFalse(arrow_a.isSelected())
+        self.assertTrue(arrow_b.isSelected())
 
     def test_ts_bracket_round_trips_in_snapshot_state(self) -> None:
         self.window.canvas.add_ts_bracket(QRectF(QPointF(10.0, 15.0), QPointF(56.0, 78.0)))
@@ -996,6 +1067,45 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         )
         self.assertLess(max_distance, 1e-3)
         self.window.canvas.end_selection_3d_rotation()
+
+    def test_undo_perspective_rotation_restores_planar_benzene_state(self) -> None:
+        self.window.canvas.add_benzene_ring(QPointF(0.0, 0.0))
+        ring_atom_ids = self.window.canvas.ring_items[0].data(2)
+        self.assertIsInstance(ring_atom_ids, list)
+
+        before_positions = {
+            atom_id: (self.window.canvas.model.atoms[atom_id].x, self.window.canvas.model.atoms[atom_id].y)
+            for atom_id in ring_atom_ids
+        }
+        before_coords = {
+            atom_id: self.window.canvas._current_atom_coords_3d(atom_id)
+            for atom_id in ring_atom_ids
+        }
+
+        self._select_atom_ids(*ring_atom_ids)
+        rotating = self.window.canvas.begin_selection_3d_rotation(
+            press_pos=QPointF(0.0, 20.0),
+        )
+        self.assertTrue(rotating)
+        self.window.canvas.update_selection_3d_rotation(220.0, 160.0)
+        self.window.canvas.end_selection_3d_rotation()
+
+        self.window.canvas.undo()
+
+        for atom_id in ring_atom_ids:
+            atom = self.window.canvas.model.atoms[atom_id]
+            before_x, before_y = before_positions[atom_id]
+            self.assertAlmostEqual(atom.x, before_x)
+            self.assertAlmostEqual(atom.y, before_y)
+            coords = self.window.canvas.atom_coords_3d.get(atom_id)
+            self.assertIsNotNone(coords)
+            assert coords is not None
+            before_coord = before_coords[atom_id]
+            self.assertIsNotNone(before_coord)
+            assert before_coord is not None
+            self.assertAlmostEqual(coords[0], before_coord[0])
+            self.assertAlmostEqual(coords[1], before_coord[1])
+            self.assertAlmostEqual(coords[2], before_coord[2])
 
     def test_perspective_rotation_on_selected_bond_chooses_clicked_side(self) -> None:
         left_id = self.window.canvas.add_atom("C", -80.0, 0.0)

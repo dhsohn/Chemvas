@@ -283,16 +283,21 @@ class _Fake3DMol:
         positions: dict[int, tuple[float, float, float]],
         *,
         atom_symbols: list[str] | None = None,
+        bonds: list[tuple[int, int, float]] | None = None,
         conformer_count: int = 1,
     ) -> None:
         if atom_symbols is None:
             atom_symbols = ["C"] * len(positions)
         self._atoms = [_FakeAtom(idx, symbol) for idx, symbol in enumerate(atom_symbols)]
+        self._bonds = [_FakeBond(a, b, order) for a, b, order in (bonds or [])]
         self._conformer = _FakeConformer(positions)
         self._conformer_count = conformer_count
 
     def GetAtoms(self):
         return list(self._atoms)
+
+    def GetBonds(self):
+        return list(self._bonds)
 
     def GetNumConformers(self) -> int:
         return self._conformer_count
@@ -304,6 +309,18 @@ class _Fake3DMol:
 class _FakeRDAtom:
     def __init__(self, symbol: str) -> None:
         self.symbol = symbol
+        self.no_implicit = False
+        self.formal_charge = 0
+        self.radical_electrons = 0
+
+    def SetNoImplicit(self, value: bool) -> None:
+        self.no_implicit = bool(value)
+
+    def SetFormalCharge(self, value: int) -> None:
+        self.formal_charge = value
+
+    def SetNumRadicalElectrons(self, value: int) -> None:
+        self.radical_electrons = value
 
 
 class _FakeRWMol:
@@ -552,6 +569,21 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertEqual(mol.bonds, [(0, 1, "single")])
         self.assertEqual(len(chem.sanitized_molecules), 1)
 
+    def test_model_to_rdkit_with_map_disables_implicit_hydrogen_completion_for_explicit_hydrogen_on_hetero_atom(self) -> None:
+        adapter = RDKitAdapter()
+        chem = _FakeChem({})
+        adapter._rdkit = (chem, _FakeAllChem())
+        model = MoleculeModel()
+        oxygen = model.add_atom("O", 0.0, 0.0)
+        hydrogen = model.add_atom("H", 1.0, 0.0)
+        model.add_bond(oxygen, hydrogen, 1)
+
+        mol, atom_map = adapter.model_to_rdkit_with_map(model)
+
+        self.assertEqual(atom_map, {0: 0, 1: 1})
+        self.assertTrue(mol.atoms[0].no_implicit)
+        self.assertFalse(mol.atoms[1].no_implicit)
+
     def test_model_to_rdkit_with_map_returns_none_when_rdkit_is_unavailable(self) -> None:
         adapter = RDKitAdapter()
         adapter._rdkit = (None, None)
@@ -733,6 +765,41 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertIsNone(coords)
         self.assertEqual(adapter.last_error, "3D coordinate generation failed: no conformer.")
 
+    def test_model_to_3d_scene_spreads_disconnected_components_apart(self) -> None:
+        adapter = RDKitAdapter()
+        adapter._rdkit = ("Chem", "AllChem")
+        model = MoleculeModel()
+        left_a = model.add_atom("C", -10.0, 0.0)
+        left_b = model.add_atom("C", -8.0, 0.0)
+        model.add_bond(left_a, left_b, 1)
+        right_a = model.add_atom("O", 10.0, 0.0)
+        right_b = model.add_atom("H", 11.0, 0.0)
+        model.add_bond(right_a, right_b, 1)
+
+        left_scene = _Fake3DMol(
+            positions={0: (-0.5, 0.0, 0.0), 1: (0.5, 0.0, 0.0)},
+            atom_symbols=["C", "C"],
+            bonds=[(0, 1, 1.0)],
+        )
+        right_scene = _Fake3DMol(
+            positions={0: (-0.5, 0.0, 0.0), 1: (0.5, 0.0, 0.0)},
+            atom_symbols=["O", "H"],
+            bonds=[(0, 1, 1.0)],
+        )
+
+        with (
+            mock.patch.object(adapter, "_build_conversion_rdkit_mol", side_effect=[object(), object()]),
+            mock.patch.object(adapter, "_embed_3d_molecule", side_effect=[left_scene, right_scene]),
+        ):
+            scene = adapter.model_to_3d_scene(model)
+
+        self.assertIsNotNone(scene)
+        assert scene is not None
+        first_component_max_x = max(atom.x for atom in scene.atoms[:2])
+        second_component_min_x = min(atom.x for atom in scene.atoms[2:])
+        self.assertGreaterEqual(second_component_min_x - first_component_max_x, 2.5)
+        self.assertEqual(len(scene.bonds), 2)
+
     def test_xyz_export_serializes_atom_count_comment_and_coordinates(self) -> None:
         chem = _FakeChem(
             {},
@@ -793,6 +860,40 @@ class RDKitAdapterTest(unittest.TestCase):
         elements = [element for element, _ in records]
         self.assertEqual(atom_count, len(records))
         self.assertGreaterEqual(elements.count("C"), 2)
+        self.assertIn("H", elements)
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for alias expansion tests")
+    def test_model_to_3d_scene_supports_oh_alias_label(self) -> None:
+        adapter = RDKitAdapter()
+        model = MoleculeModel()
+        scaffold = model.add_atom("C", -1.0, 0.0)
+        hydroxyl = model.add_atom("OH", 1.0, 0.0)
+        model.add_bond(scaffold, hydroxyl, 1)
+
+        scene = adapter.model_to_3d_scene(model)
+
+        self.assertIsNotNone(scene)
+        assert scene is not None
+        elements = [atom.symbol for atom in scene.atoms]
+        self.assertIn("O", elements)
+        self.assertIn("H", elements)
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for alias expansion tests")
+    def test_model_to_xyz_block_expands_oh_alias_label(self) -> None:
+        adapter = RDKitAdapter()
+        model = MoleculeModel()
+        scaffold = model.add_atom("C", -1.0, 0.0)
+        hydroxyl = model.add_atom("OH", 1.0, 0.0)
+        model.add_bond(scaffold, hydroxyl, 1)
+
+        xyz_block = adapter.model_to_xyz_block(model)
+
+        self.assertIsNotNone(xyz_block)
+        assert xyz_block is not None
+        atom_count, _, records = _parse_xyz_block(xyz_block)
+        elements = [element for element, _ in records]
+        self.assertEqual(atom_count, len(records))
+        self.assertIn("O", elements)
         self.assertIn("H", elements)
 
     @unittest.skipUnless(_RealChem is not None, "RDKit is required for stereo tests")
@@ -856,6 +957,20 @@ class RDKitAdapterTest(unittest.TestCase):
         assert radical_scene is not None
         self.assertGreaterEqual(len(charged_scene.atoms), 5)
         self.assertGreaterEqual(len(radical_scene.atoms), 4)
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for explicit-hydrogen tests")
+    def test_model_to_3d_scene_keeps_explicit_hydrogen_fragment_uncompleted(self) -> None:
+        adapter = RDKitAdapter()
+        model = MoleculeModel()
+        oxygen = model.add_atom("O", 0.0, 0.0)
+        hydrogen = model.add_atom("H", 1.0, 0.0)
+        model.add_bond(oxygen, hydrogen, 1)
+
+        scene = adapter.model_to_3d_scene(model)
+
+        self.assertIsNotNone(scene)
+        assert scene is not None
+        self.assertEqual(sorted(atom.symbol for atom in scene.atoms), ["H", "O"])
 
     def test_get_name_from_smiles_uses_canonical_map(self) -> None:
         fake_mol = _FakeMol(

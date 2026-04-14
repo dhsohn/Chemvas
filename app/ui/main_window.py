@@ -46,7 +46,6 @@ from core.document_io import read_document, write_document
 from ui.canvas_view import CanvasView
 from ui.main_window_path_logic import resolve_load_path, resolve_save_path
 from ui.preview_3d import Preview3D
-from ui.xtb_panel import XTBPanel
 
 
 class ArrowButton(QToolButton):
@@ -151,7 +150,6 @@ class MainWindow(QMainWindow):
         self.panel_splitter = None
         self.panel_dock = None
         self.preview_3d = Preview3D()
-        self.xtb_panel = XTBPanel()
         self._current_file_path = None
 
         self._add_canvas_sheet(name=self._next_canvas_sheet_name(), select=True)
@@ -160,10 +158,7 @@ class MainWindow(QMainWindow):
         self._init_panels()
         self._apply_theme()
         self._bind_active_canvas()
-        self.xtb_panel.set_canvas(self.canvas, sheet_name=self._active_canvas_sheet_name())
-        self.xtb_panel.set_result_canvas_callback(self._open_result_canvas_sheet)
         self.preview_3d.refresh_from_canvas(self.canvas)
-        self.xtb_panel.refresh_current_selection()
 
         self._zoom_label = QLabel("100%")
         self._zoom_label.setFixedWidth(50)
@@ -343,7 +338,6 @@ class MainWindow(QMainWindow):
         if self._mw_value is not None:
             self._mw_value.setText(mw)
         self.preview_3d.refresh_from_canvas(self.canvas)
-        self.xtb_panel.refresh_current_selection()
 
     def _current_zoom_percent(self) -> int:
         transform = self.canvas.transform()
@@ -363,8 +357,6 @@ class MainWindow(QMainWindow):
             self._update_zoom_label(self._current_zoom_percent())
         self._sync_tool_actions_from_canvas()
         self.preview_3d.refresh_from_canvas(self.canvas)
-        self.xtb_panel.set_canvas(self.canvas, sheet_name=self._active_canvas_sheet_name())
-        self.xtb_panel.refresh_current_selection()
 
     def _on_canvas_tab_changed(self, index: int) -> None:
         if self._suspend_canvas_tab_reactions:
@@ -419,7 +411,6 @@ class MainWindow(QMainWindow):
         self._clear_canvas_sheets()
         self._add_canvas_sheet(name="Sheet 1", state=state, select=True)
         self._suspend_canvas_tab_reactions = False
-        self.xtb_panel.clear_captured_structures()
         self._refresh_active_canvas_ui()
 
     def _restore_workbook_document(self, state: dict) -> None:
@@ -440,8 +431,6 @@ class MainWindow(QMainWindow):
         active_index = int(state.get("active_sheet_index", 0))
         self.canvas_tabs.setCurrentIndex(max(0, min(active_index, self.canvas_tabs.count() - 1)))
         self._suspend_canvas_tab_reactions = False
-        self.xtb_panel.restore_state(state.get("result_sheets"))
-        self.xtb_panel.clear_captured_structures()
         self._refresh_active_canvas_ui()
 
     def _save_document_state(self, path: str) -> None:
@@ -637,7 +626,7 @@ class MainWindow(QMainWindow):
                 )
             )
         preset_menu = arrow_menu.addMenu("Preset")
-        for label in ["ACS", "Bold", "Fine"]:
+        for label in ["Default", "Bold", "Fine"]:
             action = preset_menu.addAction(label)
             action.triggered.connect(
                 lambda checked=False, value=label: (
@@ -1417,11 +1406,9 @@ class MainWindow(QMainWindow):
 
         splitter = QSplitter(Qt.Orientation.Vertical)
         splitter.addWidget(self.preview_3d)
-        splitter.addWidget(self.xtb_panel)
         splitter.setChildrenCollapsible(False)
         splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 1)
-        splitter.setSizes([1, 1])
+        splitter.setSizes([1])
 
         dock.setWidget(splitter)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
@@ -1771,7 +1758,7 @@ class MainWindow(QMainWindow):
 
         preset_label = QLabel("Preset")
         preset_combo = QComboBox()
-        preset_combo.addItems(["ACS", "Bold", "Fine"])
+        preset_combo.addItems(["Default", "Bold", "Fine"])
         preset_combo.currentTextChanged.connect(self._set_arrow_preset)
 
         width_label = QLabel("Width")
@@ -1945,6 +1932,7 @@ class MainWindow(QMainWindow):
 
     def _set_arrow_preset(self, value: str) -> None:
         presets = {
+            "Default": (1.2, 0.3),
             "ACS": (1.2, 0.3),
             "Bold": (2.2, 0.4),
             "Fine": (0.8, 0.25),
