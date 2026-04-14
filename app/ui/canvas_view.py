@@ -1,5 +1,6 @@
 import math
 import time
+from pathlib import Path
 
 from PyQt6.QtCore import QPointF, QRectF, Qt, QEvent, QTimer
 from PyQt6.QtGui import (
@@ -558,11 +559,16 @@ class CanvasView(QGraphicsView):
         return QPointF(atom.x, atom.y)
 
     def _refresh_hover_from_cursor(self) -> None:
-        if self._template_insert_active or self._smiles_insert_active:
+        if not hasattr(self, "tools"):
+            return
+        if getattr(self, "_template_insert_active", False) or getattr(self, "_smiles_insert_active", False):
+            self._clear_hover_highlight()
             return
         viewport_pos = self.viewport().mapFromGlobal(QCursor.pos())
         if self.viewport().rect().contains(viewport_pos):
             self._update_hover_highlight(self.mapToScene(viewport_pos))
+            return
+        self._clear_hover_highlight()
 
     def clear_atom_label(self, atom_id: int) -> None:
         if atom_id not in self.model.atoms:
@@ -1047,6 +1053,9 @@ class CanvasView(QGraphicsView):
             "last_smiles_input": self.last_smiles_input,
         }
 
+    def snapshot_state(self) -> dict:
+        return self._snapshot_state()
+
     def _restore_state(self, state: dict) -> None:
         self._history_enabled = False
         try:
@@ -1158,8 +1167,97 @@ class CanvasView(QGraphicsView):
         finally:
             self._history_enabled = True
 
+    def restore_state(self, state: dict) -> None:
+        self._restore_state(state)
+        self._history = []
+        self._redo_stack = []
+
     def save_to_file(self, path: str) -> None:
         write_document(path, self._snapshot_state(), self.FILE_FORMAT_VERSION)
+
+    def export_xyz(self, path: str) -> None:
+        export_model, atom_annotations = self.build_3d_conversion_payload()
+        xyz_block = self.rdkit.model_to_xyz_block(export_model, atom_annotations=atom_annotations)
+        if xyz_block is None:
+            message = self.rdkit.last_error or "Failed to export 3D XYZ."
+            raise ValueError(message)
+        Path(path).write_text(xyz_block, encoding="utf-8")
+
+    def insert_structure_model(
+        self,
+        model: MoleculeModel,
+        *,
+        center: QPointF | None = None,
+        title: str | None = None,
+    ) -> tuple[set[int], set[int]]:
+        if not model.atoms:
+            return set(), set()
+        before_smiles_input = self.last_smiles_input
+        before_next_atom_id = self.model.next_atom_id
+        before_bond_count = len(self.model.bonds)
+
+        if center is None:
+            center = self.mapToScene(self.viewport().rect().center())
+        left, top, right, bottom = model.bounds()
+        model_center = QPointF((left + right) * 0.5, (top + bottom) * 0.5)
+        dx = center.x() - model_center.x()
+        dy = center.y() - model_center.y()
+
+        atom_id_map: dict[int, int] = {}
+        inserted_atom_ids: set[int] = set()
+        inserted_bond_ids: set[int] = set()
+        for old_id in sorted(model.atoms):
+            atom = model.atoms[old_id]
+            new_id = self.add_atom(atom.element, atom.x + dx, atom.y + dy)
+            self.model.atoms[new_id].color = atom.color
+            self.model.atoms[new_id].explicit_label = atom.explicit_label
+            atom_id_map[old_id] = new_id
+            inserted_atom_ids.add(new_id)
+
+        bonds_start = len(self.model.bonds)
+        for bond in model.bonds:
+            if bond is None:
+                continue
+            a_id = atom_id_map.get(bond.a)
+            b_id = atom_id_map.get(bond.b)
+            if a_id is None or b_id is None:
+                continue
+            new_bond_id = self.add_bond(a_id, b_id, bond.order)
+            created_bond = self.model.bonds[new_bond_id]
+            created_bond.style = bond.style
+            created_bond.color = bond.color
+        for bond_id in range(bonds_start, len(self.model.bonds)):
+            bond = self.model.bonds[bond_id]
+            if bond is None:
+                continue
+            self._add_bond_graphics(bond_id)
+            inserted_bond_ids.add(bond_id)
+
+        for new_id in inserted_atom_ids:
+            atom = self.model.atoms[new_id]
+            if atom.element == "C" and not atom.explicit_label:
+                self._ensure_carbon_dot(new_id)
+            else:
+                self.add_or_update_atom_label(new_id, atom.element, clear_smiles=False, record=False)
+
+        added_scene_items = []
+        if title:
+            inserted_left = min(self.model.atoms[atom_id].x for atom_id in inserted_atom_ids)
+            inserted_top = min(self.model.atoms[atom_id].y for atom_id in inserted_atom_ids)
+            note_pos = QPointF(
+                inserted_left,
+                inserted_top - self.renderer.style.bond_length_px * 1.4,
+            )
+            added_scene_items.append(self.add_text_note(note_pos, title))
+
+        self._record_additions(
+            before_next_atom_id=before_next_atom_id,
+            before_bond_count=before_bond_count,
+            before_smiles_input=before_smiles_input,
+            added_scene_items=added_scene_items,
+        )
+        self._restore_selection_from_ids(inserted_atom_ids, inserted_bond_ids)
+        return inserted_atom_ids, inserted_bond_ids
 
     def load_from_file(self, path: str) -> None:
         document = read_document(path)
@@ -1200,6 +1298,7 @@ class CanvasView(QGraphicsView):
         self.tools.set_active(tool_name)
         self._update_selection_outline()
         self._notify_tool_change()
+        self._refresh_hover_from_cursor()
 
     def set_mark_kind(self, kind: str) -> None:
         if kind not in {"plus", "minus", "radical"}:
@@ -1208,6 +1307,7 @@ class CanvasView(QGraphicsView):
         self.tools.set_active("mark")
         self._update_selection_outline()
         self._notify_tool_change()
+        self._refresh_hover_from_cursor()
 
     def _record_label_change(
         self,
@@ -2464,18 +2564,21 @@ class CanvasView(QGraphicsView):
         self.tools.set_active("bond")
         self._update_selection_outline()
         self._notify_tool_change()
+        self._refresh_hover_from_cursor()
 
     def set_arrow_type(self, arrow_type: str) -> None:
         self.active_arrow_type = arrow_type
         self.tools.set_active("arrow")
         self._update_selection_outline()
         self._notify_tool_change()
+        self._refresh_hover_from_cursor()
 
     def set_orbital_type(self, orbital_type: str) -> None:
         self.active_orbital_type = orbital_type
         self.tools.set_active("orbital")
         self._update_selection_outline()
         self._notify_tool_change()
+        self._refresh_hover_from_cursor()
 
     def set_orbital_phase_enabled(self, enabled: bool) -> None:
         self.orbital_phase_enabled = enabled
@@ -3192,8 +3295,7 @@ class CanvasView(QGraphicsView):
         QApplication.clipboard().setImage(image)
         return True
 
-    def _build_submodel(self, atom_ids: set[int], bond_ids: set[int]):
-        submodel = MoleculeModel()
+    def _expanded_atom_ids_for_structure(self, atom_ids: set[int], bond_ids: set[int]) -> set[int]:
         selected_atoms = set(atom_ids)
         for bond_id in bond_ids:
             if not (0 <= bond_id < len(self.model.bonds)):
@@ -3203,13 +3305,20 @@ class CanvasView(QGraphicsView):
                 continue
             selected_atoms.add(bond.a)
             selected_atoms.add(bond.b)
+        return selected_atoms
+
+    def _build_submodel(self, atom_ids: set[int], bond_ids: set[int]):
+        submodel = MoleculeModel()
+        selected_atoms = self._expanded_atom_ids_for_structure(atom_ids, bond_ids)
 
         id_map = {}
-        for old_id in selected_atoms:
+        for old_id in sorted(selected_atoms):
             atom = self.model.atoms.get(old_id)
             if atom is None:
                 continue
             new_id = submodel.add_atom(atom.element, atom.x, atom.y)
+            submodel.atoms[new_id].color = atom.color
+            submodel.atoms[new_id].explicit_label = atom.explicit_label
             id_map[old_id] = new_id
 
         for bond_id in bond_ids:
@@ -3219,17 +3328,90 @@ class CanvasView(QGraphicsView):
             if bond is None:
                 continue
             if bond.a in id_map and bond.b in id_map:
-                submodel.add_bond(id_map[bond.a], id_map[bond.b], bond.order)
+                submodel.bonds.append(
+                    Bond(
+                        a=id_map[bond.a],
+                        b=id_map[bond.b],
+                        order=bond.order,
+                        style=bond.style,
+                        color=bond.color,
+                    )
+                )
 
         if not bond_ids:
             for bond in self.model.bonds:
                 if bond is None:
                     continue
                 if bond.a in id_map and bond.b in id_map:
-                    submodel.add_bond(id_map[bond.a], id_map[bond.b], bond.order)
+                    submodel.bonds.append(
+                        Bond(
+                            a=id_map[bond.a],
+                            b=id_map[bond.b],
+                            order=bond.order,
+                            style=bond.style,
+                            color=bond.color,
+                        )
+                    )
 
         bounds = self._bounds_for_atoms(selected_atoms)
         return submodel, bounds, id_map
+
+    def _build_atom_annotations(
+        self,
+        atom_ids: set[int],
+        id_map: dict[int, int],
+    ) -> dict[int, dict[str, int]]:
+        annotations: dict[int, dict[str, int]] = {}
+        for old_id in sorted(atom_ids):
+            new_id = id_map.get(old_id)
+            if new_id is None:
+                continue
+            formal_charge = 0
+            radical_electrons = 0
+            for mark in self._marks_by_atom.get(old_id, []):
+                data = mark.data(1) or {}
+                kind = data.get("kind")
+                if kind == "plus":
+                    formal_charge += 1
+                elif kind == "minus":
+                    formal_charge -= 1
+                elif kind == "radical":
+                    radical_electrons += 1
+            if formal_charge or radical_electrons:
+                annotations[new_id] = {}
+                if formal_charge:
+                    annotations[new_id]["formal_charge"] = formal_charge
+                if radical_electrons:
+                    annotations[new_id]["radical_electrons"] = radical_electrons
+        return annotations
+
+    def build_3d_conversion_payload(self) -> tuple[MoleculeModel, dict[int, dict[str, int]]]:
+        atom_ids, bond_ids = self._selected_ids()
+        if atom_ids or bond_ids:
+            export_model, atom_annotations, _ = self.build_structure_payload(atom_ids, bond_ids)
+        else:
+            export_model, atom_annotations, _ = self.build_structure_payload(set(self.model.atoms), set())
+        return export_model, atom_annotations
+
+    def build_selected_structure_payload(self) -> tuple[MoleculeModel, dict[int, dict[str, int]], tuple[float, float, float, float]]:
+        atom_ids, bond_ids = self._selected_ids()
+        if not atom_ids and not bond_ids:
+            raise ValueError("Select a molecular structure on the canvas first.")
+        return self.build_structure_payload(atom_ids, bond_ids)
+
+    def build_structure_payload(
+        self,
+        atom_ids: set[int],
+        bond_ids: set[int],
+    ) -> tuple[MoleculeModel, dict[int, dict[str, int]], tuple[float, float, float, float]]:
+        selected_atom_ids = self._expanded_atom_ids_for_structure(atom_ids, bond_ids)
+        if not selected_atom_ids:
+            raise ValueError("There is no chemical structure to export.")
+        export_model, bounds, id_map = self._build_submodel(atom_ids, bond_ids)
+        if not export_model.atoms:
+            raise ValueError("There is no chemical structure to export.")
+        atom_annotations = self._build_atom_annotations(selected_atom_ids, id_map)
+        return export_model, atom_annotations, bounds
 
     def _bounds_for_atoms(self, atom_ids: set[int], include_labels: bool = False):
         xs = []
@@ -5319,6 +5501,8 @@ class CanvasView(QGraphicsView):
             return
         if event.buttons() == Qt.MouseButton.NoButton:
             self._update_hover_highlight(self.scene_pos_from_event(event))
+        else:
+            self._clear_hover_highlight()
         if self.tools.active and self.tools.active.on_mouse_move(event):
             return
         super().mouseMoveEvent(event)
@@ -5326,8 +5510,17 @@ class CanvasView(QGraphicsView):
     def mouseReleaseEvent(self, event) -> None:
         self._touch_interaction()
         if self.tools.active and self.tools.active.on_mouse_release(event):
+            self._refresh_hover_from_cursor()
             return
         super().mouseReleaseEvent(event)
+        self._refresh_hover_from_cursor()
+
+    def viewportEvent(self, event) -> bool:
+        if event.type() in {QEvent.Type.Leave, QEvent.Type.Hide}:
+            self._clear_hover_highlight()
+        elif event.type() == QEvent.Type.Enter:
+            QTimer.singleShot(0, self._refresh_hover_from_cursor)
+        return super().viewportEvent(event)
 
     def wheelEvent(self, event) -> None:
         self._touch_interaction()
@@ -5431,6 +5624,7 @@ class CanvasView(QGraphicsView):
     def scrollContentsBy(self, dx: int, dy: int) -> None:
         super().scrollContentsBy(dx, dy)
         self._reset_view_transform()
+        self._refresh_hover_from_cursor()
 
     def _reset_view_transform(self) -> None:
         self._base_transform = QTransform()

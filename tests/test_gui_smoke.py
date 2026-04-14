@@ -3,11 +3,12 @@ import os
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtCore import QPointF, QRectF, Qt
+    from PyQt6.QtCore import QPointF, QRectF, Qt, QEvent
     from PyQt6.QtTest import QTest
     from PyQt6.QtWidgets import QGraphicsTextItem, QApplication
 except ModuleNotFoundError:
@@ -16,6 +17,7 @@ except ModuleNotFoundError:
     Qt = None
     QPointF = None
     QRectF = None
+    QEvent = None
     QGraphicsTextItem = None
 
 
@@ -114,6 +116,57 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self._press_key(Qt.Key.Key_Space)
         self.assertEqual(self.window.canvas.tools.active.name, "select")
 
+    def test_sheet_tab_plus_button_creates_new_canvas_sheet(self) -> None:
+        before_count = self.window._canvas_sheet_count()
+        plus_index = self.window.canvas_tabs.count() - 1
+        plus_center = self.window.canvas_tabs.tabBar().tabRect(plus_index).center()
+
+        QTest.mouseClick(
+            self.window.canvas_tabs.tabBar(),
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+            plus_center,
+        )
+        self.app.processEvents()
+        QTest.qWait(10)
+
+        self.assertEqual(self.window._canvas_sheet_count(), before_count + 1)
+        self.assertEqual(self.window.canvas_tabs.currentIndex(), before_count)
+        self.assertEqual(self.window.canvas_tabs.tabText(before_count), f"Sheet {before_count + 1}")
+
+    def test_sheet_tab_context_menu_deletes_target_canvas_sheet(self) -> None:
+        self.window._new_canvas_sheet()
+        target_center = self.window.canvas_tabs.tabBar().tabRect(0).center()
+
+        with patch(
+            "ui.main_window.QMenu.exec",
+            new=lambda menu, *args, **kwargs: menu.actions()[0],
+        ):
+            self.window._show_canvas_tab_context_menu(target_center)
+            self.app.processEvents()
+            QTest.qWait(10)
+
+        self.assertEqual(self.window._canvas_sheet_count(), 1)
+        self.assertEqual(self.window.canvas_tabs.count(), 2)
+        self.assertEqual(self.window.canvas_tabs.tabText(0), "Sheet 2")
+        self.assertEqual(self.window.canvas_tabs.tabText(1), "+")
+
+    def test_sheet_tab_context_menu_keeps_last_canvas_sheet(self) -> None:
+        target_center = self.window.canvas_tabs.tabBar().tabRect(0).center()
+
+        with patch(
+            "ui.main_window.QMenu.exec",
+            new=lambda menu, *args, **kwargs: menu.actions()[0],
+        ):
+            self.window._show_canvas_tab_context_menu(target_center)
+            self.app.processEvents()
+            QTest.qWait(10)
+
+        self.assertEqual(self.window._canvas_sheet_count(), 1)
+        self.assertEqual(self.window.canvas_tabs.count(), 2)
+        self.assertEqual(self.window.canvas_tabs.tabText(0), "Sheet 1")
+        self.assertEqual(self.window.canvas_tabs.tabText(1), "+")
+
     def test_ts_bracket_round_trips_in_snapshot_state(self) -> None:
         self.window.canvas.add_ts_bracket(QRectF(QPointF(10.0, 15.0), QPointF(56.0, 78.0)))
 
@@ -151,6 +204,59 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         committed_center = self.window.canvas._mark_center(committed)
         self.assertAlmostEqual(preview_center.x(), committed_center.x(), places=2)
         self.assertAlmostEqual(preview_center.y(), committed_center.y(), places=2)
+
+    def test_hover_preview_clears_when_cursor_leaves_viewport(self) -> None:
+        atom_id = self.window.canvas.add_atom("C", 0.0, 0.0)
+        viewport_pos = self.window.canvas.mapFromScene(QPointF(0.0, 0.0))
+        global_pos = self.window.canvas.viewport().mapToGlobal(viewport_pos)
+
+        with patch("ui.canvas_view.QCursor.pos", return_value=global_pos):
+            self.window.canvas._refresh_hover_from_cursor()
+            self.assertEqual(self.window.canvas.hover_atom_id, atom_id)
+            self.assertTrue(self.window.canvas.hover_items)
+
+            self.window.canvas.viewportEvent(QEvent(QEvent.Type.Leave))
+            self.app.processEvents()
+            QTest.qWait(10)
+
+        self.assertIsNone(self.window.canvas.hover_atom_id)
+        self.assertIsNone(self.window.canvas.hover_bond_id)
+        self.assertEqual(self.window.canvas.hover_items, [])
+
+    def test_tool_change_refreshes_hover_preview_without_mouse_move(self) -> None:
+        atom_id = self.window.canvas.add_atom("C", 0.0, 0.0)
+        self.window.canvas.set_bond_style("wedge", 1)
+        viewport_pos = self.window.canvas.mapFromScene(QPointF(0.0, 0.0))
+        global_pos = self.window.canvas.viewport().mapToGlobal(viewport_pos)
+
+        with patch("ui.canvas_view.QCursor.pos", return_value=global_pos):
+            self.window.canvas._refresh_hover_from_cursor()
+            self.assertEqual(self.window.canvas.hover_atom_id, atom_id)
+            self.assertGreaterEqual(len(self.window.canvas.hover_items), 2)
+
+            self.window.canvas.set_tool("select")
+            self.app.processEvents()
+            QTest.qWait(10)
+
+        self.assertEqual(self.window.canvas.hover_atom_id, atom_id)
+        self.assertEqual(len(self.window.canvas.hover_items), 1)
+
+    def test_scroll_refresh_clears_stale_hover_preview(self) -> None:
+        atom_id = self.window.canvas.add_atom("C", 0.0, 0.0)
+        viewport_pos = self.window.canvas.mapFromScene(QPointF(0.0, 0.0))
+        global_pos = self.window.canvas.viewport().mapToGlobal(viewport_pos)
+
+        with patch("ui.canvas_view.QCursor.pos", return_value=global_pos):
+            self.window.canvas._refresh_hover_from_cursor()
+            self.assertEqual(self.window.canvas.hover_atom_id, atom_id)
+
+            h_scroll = self.window.canvas.horizontalScrollBar()
+            h_scroll.setValue(h_scroll.value() + 240)
+            self.app.processEvents()
+            QTest.qWait(10)
+
+        self.assertIsNone(self.window.canvas.hover_atom_id)
+        self.assertEqual(self.window.canvas.hover_items, [])
 
     def test_legacy_tool_shortcuts_do_not_switch_active_tool(self) -> None:
         self.window.canvas.set_tool("text")
