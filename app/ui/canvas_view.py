@@ -224,6 +224,8 @@ class CanvasView(QGraphicsView):
         self._projection_center_3d: tuple[float, float, float] | None = None
         self._projection_anchor_2d: tuple[float, float] | None = None
         self._rotation_start_positions: dict[int, tuple[float, float]] = {}
+        self._rotation_start_coords_3d: dict[int, tuple[float, float, float]] = {}
+        self._rotation_coord_atom_ids: set[int] = set()
         self.active_arrow_type = "reaction"
         self.active_orbital_type = "s"
         self.orbital_phase_enabled = False
@@ -1556,8 +1558,13 @@ class CanvasView(QGraphicsView):
         if dot_item is not None:
             dot_item.setBrush(self._implicit_carbon_dot_brush())
 
-    def set_atom_positions(self, positions: dict[int, tuple[float, float]], update_selection: bool = True) -> None:
-        if not positions:
+    def set_atom_positions(
+        self,
+        positions: dict[int, tuple[float, float]],
+        update_selection: bool = True,
+        coords_3d: dict[int, tuple[float, float, float]] | None = None,
+    ) -> None:
+        if not positions and not coords_3d:
             return
         atom_ids = set()
         for atom_id, (x, y) in positions.items():
@@ -1567,7 +1574,9 @@ class CanvasView(QGraphicsView):
             atom.x = x
             atom.y = y
             atom_ids.add(atom_id)
-            if atom_id in self.atom_coords_3d:
+            if coords_3d is not None and atom_id in coords_3d:
+                self.atom_coords_3d[atom_id] = coords_3d[atom_id]
+            elif atom_id in self.atom_coords_3d:
                 _, _, z = self.atom_coords_3d[atom_id]
                 self.atom_coords_3d[atom_id] = (x, y, z)
             label = self.atom_items.get(atom_id)
@@ -1586,6 +1595,13 @@ class CanvasView(QGraphicsView):
                         self._set_mark_center(mark, QPointF(x + dx, y + dy))
                     else:
                         self._set_mark_center(mark, QPointF(x, y))
+        if coords_3d is not None:
+            for atom_id, coord in coords_3d.items():
+                atom = self.model.atoms.get(atom_id)
+                if atom is None:
+                    continue
+                self.atom_coords_3d[atom_id] = coord
+                atom_ids.add(atom_id)
         if atom_ids:
             self._redraw_bonds_for_atoms(atom_ids)
             self._update_ring_fills_for_atoms(atom_ids)
@@ -2147,6 +2163,10 @@ class CanvasView(QGraphicsView):
         self._mark_spatial_index_dirty()
 
     def scene_pos_from_event(self, event) -> QPointF:
+        if hasattr(event, "position"):
+            return self.mapToScene(event.position().toPoint())
+        if hasattr(event, "pos"):
+            return self.mapToScene(event.pos())
         pos = self.viewport().mapFromGlobal(QCursor.pos())
         return self.mapToScene(pos)
 
@@ -2274,6 +2294,52 @@ class CanvasView(QGraphicsView):
 
     def _atom_item_for_id(self, atom_id: int):
         return self.atom_items.get(atom_id) or self.atom_dots.get(atom_id)
+
+    def _selection_targets_for_item(self, item) -> list[QGraphicsItem]:
+        if item is None:
+            return []
+        kind = item.data(0)
+        if kind == "atom":
+            atom_id = item.data(1)
+            if not isinstance(atom_id, int):
+                return []
+            atom_item = self._atom_item_for_id(atom_id)
+            return [atom_item] if atom_item is not None else []
+        if kind == "bond":
+            bond_id = item.data(1)
+            if not isinstance(bond_id, int):
+                return []
+            return [bond_item for bond_item in self.bond_items.get(bond_id, []) if bond_item is not None]
+        if kind in {
+            "ring",
+            "arrow",
+            "equilibrium",
+            "resonance",
+            "curved_single",
+            "curved_double",
+            "inhibit",
+            "dotted",
+            "ts_bracket",
+            "orbital",
+            "mark",
+            "note",
+        }:
+            return [item]
+        return []
+
+    def toggle_item_selection(self, item) -> bool:
+        targets = self._selection_targets_for_item(item)
+        if not targets:
+            return False
+        should_select = not any(target.isSelected() for target in targets)
+        self.scene().blockSignals(True)
+        try:
+            for target in targets:
+                target.setSelected(should_select)
+        finally:
+            self.scene().blockSignals(False)
+        self._update_selection_outline()
+        return True
 
     def preferred_structure_hit_at_scene_pos(self, pos: QPointF) -> StructureHit | None:
         item = self.item_at_scene_pos(pos)
@@ -5520,6 +5586,16 @@ class CanvasView(QGraphicsView):
             self._clear_hover_highlight()
         elif event.type() == QEvent.Type.Enter:
             QTimer.singleShot(0, self._refresh_hover_from_cursor)
+        elif event.type() == QEvent.Type.MouseMove:
+            scene_pos = self.scene_pos_from_event(event)
+            if self._template_insert_active:
+                self._render_template_preview(scene_pos)
+            elif self._smiles_insert_active:
+                self._render_smiles_preview(scene_pos)
+            elif getattr(event, "buttons", lambda: Qt.MouseButton.NoButton)() == Qt.MouseButton.NoButton:
+                self._update_hover_highlight(scene_pos)
+            else:
+                self._clear_hover_highlight()
         return super().viewportEvent(event)
 
     def wheelEvent(self, event) -> None:
@@ -5703,6 +5779,8 @@ class CanvasView(QGraphicsView):
         axis_hint: int | None = None,
         press_pos: QPointF | None = None,
     ) -> bool:
+        self._rotation_start_coords_3d = {}
+        self._rotation_coord_atom_ids = set()
         atom_ids, bond_ids = self._selected_ids()
         explicit_atom_ids = set(atom_ids)
         for item in self.scene().selectedItems():
@@ -5740,7 +5818,9 @@ class CanvasView(QGraphicsView):
                 if coords is None:
                     continue
                 self._rotation_base_coords[atom_id] = coords
+                self._rotation_start_coords_3d[atom_id] = coords
             relevant_atom_ids = rotate_ids | {axis_a, axis_b}
+            self._rotation_coord_atom_ids = set(self._rotation_base_coords)
             self._rotation_base_coords = self._flatten_planar_fragments(relevant_atom_ids, self._rotation_base_coords)
             for atom_id in relevant_atom_ids:
                 coords = self._rotation_base_coords.get(atom_id)
@@ -5796,6 +5876,8 @@ class CanvasView(QGraphicsView):
             raw_coords[atom_id] = coords
         if not raw_coords:
             return False
+        self._rotation_start_coords_3d = dict(raw_coords)
+        self._rotation_coord_atom_ids = set(raw_coords)
         center_z = sum(coords[2] for coords in raw_coords.values()) / len(raw_coords)
         center = (screen_center.x(), screen_center.y(), center_z)
         self._rotation_base_coords = {}
@@ -5903,6 +5985,12 @@ class CanvasView(QGraphicsView):
         selection_ids = self._rotation_selection_ids
         rotated_atoms = set(self.rotation_atom_ids)
         before_positions = dict(self._rotation_start_positions)
+        before_coords_3d = dict(self._rotation_start_coords_3d)
+        after_coords_3d = {
+            atom_id: self.atom_coords_3d[atom_id]
+            for atom_id in self._rotation_coord_atom_ids
+            if atom_id in self.atom_coords_3d
+        }
         self.rotation_atom_ids = set()
         self.rotation_center_3d = None
         self._rotation_base_coords = {}
@@ -5915,15 +6003,21 @@ class CanvasView(QGraphicsView):
         self._rotation_axis_bond_id = None
         self._rotation_axis_atoms = None
         self._rotation_start_positions = {}
+        self._rotation_start_coords_3d = {}
+        self._rotation_coord_atom_ids = set()
         after_positions = {
             atom_id: (self.model.atoms[atom_id].x, self.model.atoms[atom_id].y)
             for atom_id in rotated_atoms
             if atom_id in self.model.atoms
         }
-        if before_positions and after_positions and before_positions != after_positions:
+        positions_changed = bool(before_positions and after_positions and before_positions != after_positions)
+        coords_changed = bool(before_coords_3d and after_coords_3d and before_coords_3d != after_coords_3d)
+        if positions_changed or coords_changed:
             command = SetAtomPositionsCommand(
                 before_positions=before_positions,
                 after_positions=after_positions,
+                before_coords_3d=before_coords_3d or None,
+                after_coords_3d=after_coords_3d or None,
             )
             self._push_command(command)
         if selection_ids is not None:
@@ -7884,6 +7978,9 @@ class CanvasView(QGraphicsView):
         self._rotation_mode = None
         self._rotation_free_angle_x = 0.0
         self._rotation_free_angle_y = 0.0
+        self._rotation_start_positions = {}
+        self._rotation_start_coords_3d = {}
+        self._rotation_coord_atom_ids = set()
         self.atom_items = {}
         self.atom_dots = {}
         self._atom_neighbors = {}

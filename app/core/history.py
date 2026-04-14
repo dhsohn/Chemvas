@@ -83,12 +83,32 @@ class SetAtomPositionsCommand(HistoryCommand):
     before_positions: dict[int, tuple[float, float]]
     after_positions: dict[int, tuple[float, float]]
     update_selection: bool = True
+    before_coords_3d: dict[int, tuple[float, float, float]] | None = None
+    after_coords_3d: dict[int, tuple[float, float, float]] | None = None
+
+    def _apply(
+        self,
+        canvas,
+        positions: dict[int, tuple[float, float]],
+        coords_3d: dict[int, tuple[float, float, float]] | None,
+    ) -> None:
+        if coords_3d is None:
+            canvas.set_atom_positions(positions, update_selection=self.update_selection)
+            return
+        try:
+            canvas.set_atom_positions(
+                positions,
+                update_selection=self.update_selection,
+                coords_3d=coords_3d,
+            )
+        except TypeError:
+            canvas.set_atom_positions(positions, update_selection=self.update_selection)
 
     def undo(self, canvas) -> None:
-        canvas.set_atom_positions(self.before_positions, update_selection=self.update_selection)
+        self._apply(canvas, self.before_positions, self.before_coords_3d)
 
     def redo(self, canvas) -> None:
-        canvas.set_atom_positions(self.after_positions, update_selection=self.update_selection)
+        self._apply(canvas, self.after_positions, self.after_coords_3d)
 
 
 @dataclass
