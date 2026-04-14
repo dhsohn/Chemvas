@@ -25,8 +25,15 @@ if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
 if QApplication is not None:
-    from core.document_io import read_document
+    from core.document_io import read_document, write_document
     from core.model import MoleculeModel
+    from core.rdkit_adapter import Molecule3DAtom, Molecule3DBond, Molecule3DScene
+    from core.xtb_adapter import (
+        XTBCRESTResult,
+        XTBComparisonResult,
+        XTBReactionPathResult,
+        XTBRunResult,
+    )
     from ui.main_window import MainWindow
 
 
@@ -78,6 +85,10 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
     def _template_handler(self, label: str):
         entries = dict(self.window._template_entries())
         return entries[label]
+
+    @staticmethod
+    def _canvas_note_text(canvas) -> str:
+        return "\n".join(item.toPlainText() for item in canvas.note_items)
 
     def test_save_canvas_appends_extension_and_writes_document_payload(self) -> None:
         self.window.canvas.add_benzene_ring(QPointF(0.0, 0.0))
@@ -144,6 +155,97 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertIsNone(self.window.canvas._smiles_preview_center)
         self.assertEqual(self.window.canvas._smiles_preview_items, [])
 
+    def test_save_canvas_writes_workbook_state_for_multiple_canvas_sheets(self) -> None:
+        self.window.canvas.add_bond_from_points(QPointF(-20.0, 0.0), QPointF(20.0, 0.0))
+        first_sheet_state = self.window.canvas.snapshot_state()
+
+        self.window._new_canvas_sheet()
+        self.window.canvas.add_benzene_ring(QPointF(0.0, 0.0))
+        second_sheet_state = self.window.canvas.snapshot_state()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            raw_path = Path(temp_dir) / "workbook"
+            saved_path = Path(f"{raw_path}.ldraw")
+            with patch("ui.main_window.QFileDialog.getSaveFileName", return_value=(str(raw_path), "")):
+                self.window._save_canvas()
+
+            document = read_document(saved_path)
+
+        self.assertEqual(document.state["active_sheet_index"], 1)
+        self.assertEqual(len(document.state["sheets"]), 2)
+        self.assertEqual(
+            len(document.state["sheets"][0]["content"]["model"]["atoms"]),
+            len(first_sheet_state["model"]["atoms"]),
+        )
+        self.assertEqual(
+            len(document.state["sheets"][0]["content"]["model"]["bonds"]),
+            len(first_sheet_state["model"]["bonds"]),
+        )
+        self.assertEqual(
+            len(document.state["sheets"][1]["content"]["ring_fills"]),
+            len(second_sheet_state["ring_fills"]),
+        )
+        self.assertEqual(
+            document.state["sheets"][1]["content"]["model"]["next_atom_id"],
+            second_sheet_state["model"]["next_atom_id"],
+        )
+        self.assertNotIn("result_sheets", document.state)
+
+    def test_load_canvas_restores_workbook_sheets_and_converts_legacy_result_notes_to_canvas_tabs(self) -> None:
+        self.window.canvas.add_bond_from_points(QPointF(-20.0, 0.0), QPointF(20.0, 0.0))
+        first_sheet_state = self.window.canvas.snapshot_state()
+
+        self.window._new_canvas_sheet()
+        self.window.canvas.add_benzene_ring(QPointF(0.0, 0.0))
+        second_sheet_state = self.window.canvas.snapshot_state()
+
+        workbook_state = {
+            "active_sheet_index": 1,
+            "sheets": [
+                {"name": "Reactant Sheet", "kind": "canvas", "content": first_sheet_state},
+                {"name": "Product Sheet", "kind": "canvas", "content": second_sheet_state},
+            ],
+            "result_sheets": {
+                "active_index": 0,
+                "sheets": [
+                    {
+                        "title": "Path 1",
+                        "content": {
+                            "title": "Reaction Path Analysis",
+                            "subtitle": "RMSD push/pull path finder via xtb --path",
+                            "reactant_text": "Reactant Sheet: 2 atoms, 1 bonds, charge +0, radicals 0",
+                            "product_text": "Product Sheet: 6 atoms, 6 bonds, charge +0, radicals 0",
+                            "cue_text": "Inspect the barrier direction.",
+                            "notes_text": "forward barrier (kcal) : 12.5",
+                            "summary_text": "Reaction path analysis complete.",
+                            "metadata": [{"label": "Workflow", "value": "PATH", "emphasis": True}],
+                            "result_bullets": [
+                                {"label": "Forward barrier", "value": "12.5000 kcal/mol", "emphasis": True}
+                            ],
+                        },
+                    }
+                ],
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "workbook.ldraw"
+            write_document(path, workbook_state, version=2)
+
+            with patch("ui.main_window.QFileDialog.getOpenFileName", return_value=(str(path), "")):
+                self.window._load_canvas()
+
+        self.assertEqual(self.window._canvas_sheet_count(), 3)
+        self.assertEqual(self.window.canvas_tabs.tabText(0), "Reactant Sheet")
+        self.assertEqual(self.window.canvas_tabs.tabText(1), "Product Sheet")
+        self.assertEqual(self.window.canvas_tabs.currentIndex(), 1)
+        self.assertEqual(len(self.window.canvas.ring_items), 1)
+        legacy_canvas = self.window.canvas_tabs.widget(2)
+        self.assertIsNotNone(legacy_canvas)
+        text = self._canvas_note_text(legacy_canvas)
+        self.assertIn("Reaction Path Analysis", text)
+        self.assertIn("Forward barrier", text)
+
     def test_save_canvas_cancel_keeps_current_path_and_status_message(self) -> None:
         self.window._current_file_path = None
         self.window.statusBar().showMessage("Idle")
@@ -153,6 +255,52 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
         self.assertIsNone(self.window._current_file_path)
         self.assertEqual(self.window.statusBar().currentMessage(), "Idle")
+
+    def test_export_xyz_appends_extension_and_updates_status_message(self) -> None:
+        self.window._current_file_path = "/tmp/example.ldraw"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            raw_path = Path(temp_dir) / "exported_structure"
+            expected_path = Path(f"{raw_path}.xyz")
+            with (
+                patch("ui.main_window.QFileDialog.getSaveFileName", return_value=(str(raw_path), "")),
+                patch.object(self.window.canvas, "export_xyz") as export_mock,
+            ):
+                self.window._export_xyz()
+
+        export_mock.assert_called_once_with(str(expected_path))
+        self.assertEqual(self.window._current_file_path, "/tmp/example.ldraw")
+        self.assertEqual(self.window.statusBar().currentMessage(), f"Exported XYZ: {expected_path}")
+
+    def test_export_xyz_cancel_keeps_current_path_and_status_message(self) -> None:
+        self.window._current_file_path = "/tmp/original.ldraw"
+        self.window.statusBar().showMessage("Idle")
+
+        with patch("ui.main_window.QFileDialog.getSaveFileName", return_value=("", "")):
+            self.window._export_xyz()
+
+        self.assertEqual(self.window._current_file_path, "/tmp/original.ldraw")
+        self.assertEqual(self.window.statusBar().currentMessage(), "Idle")
+
+    def test_export_xyz_failure_warns_and_preserves_status_message(self) -> None:
+        self.window._current_file_path = "/tmp/original.ldraw"
+        self.window.statusBar().showMessage("Before export")
+
+        with (
+            patch("ui.main_window.QFileDialog.getSaveFileName", return_value=("/tmp/output.xyz", "")),
+            patch.object(self.window.canvas, "export_xyz", side_effect=ValueError("RDKit missing")) as export_mock,
+            patch("ui.main_window.QMessageBox.warning") as warning,
+        ):
+            self.window._export_xyz()
+
+        export_mock.assert_called_once_with("/tmp/output.xyz")
+        warning.assert_called_once_with(
+            self.window,
+            "Export Error",
+            "Failed to export XYZ:\nRDKit missing",
+        )
+        self.assertEqual(self.window._current_file_path, "/tmp/original.ldraw")
+        self.assertEqual(self.window.statusBar().currentMessage(), "Before export")
 
     def test_load_canvas_cancel_keeps_current_path_and_status_message(self) -> None:
         self.window._current_file_path = "/tmp/original.ldraw"
@@ -417,6 +565,285 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertFalse(self.window.canvas._smiles_insert_active)
         self.assertIsNone(self.window.canvas._smiles_preview_model)
         self.assertEqual(self.window.canvas._smiles_preview_items, [])
+
+    def test_canvas_export_xyz_uses_selected_structure_submodel(self) -> None:
+        left = self.window.canvas.add_atom("C", -20.0, 0.0)
+        middle = self.window.canvas.add_atom("C", 0.0, 0.0)
+        right = self.window.canvas.add_atom("O", 20.0, 0.0)
+        self.window.canvas.add_bond(left, middle, 1)
+        self.window.canvas.add_bond(middle, right, 1)
+        self.window.canvas.model.bonds[0].style = "bold_in"
+        self.window.canvas._add_bond_graphics(0)
+        self.window.canvas._add_bond_graphics(1)
+
+        bond_item = self.window.canvas.bond_items[0][0]
+        bond_item.setSelected(True)
+
+        captured = {}
+
+        def _capture_export(model, atom_annotations=None):
+            captured["model"] = model
+            captured["atom_annotations"] = atom_annotations
+            return "2\nLiteDraw XYZ export\nC 0.000000 0.000000 0.000000\nC 1.000000 0.000000 0.000000\n"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            export_path = Path(temp_dir) / "selected.xyz"
+            with patch.object(self.window.canvas.rdkit, "model_to_xyz_block", side_effect=_capture_export):
+                self.window.canvas.export_xyz(str(export_path))
+            xyz_text = export_path.read_text(encoding="utf-8")
+
+        exported_model = captured["model"]
+        self.assertEqual(len(exported_model.atoms), 2)
+        self.assertEqual(len(exported_model.bonds), 1)
+        self.assertEqual(exported_model.bonds[0].style, "bold_in")
+        self.assertEqual(captured["atom_annotations"], {})
+        self.assertIn("LiteDraw XYZ export", xyz_text)
+
+    def test_canvas_export_xyz_passes_charge_and_radical_annotations(self) -> None:
+        atom_id = self.window.canvas.add_atom("C", 0.0, 0.0)
+        self.window.canvas.add_mark_for_atom(atom_id, QPointF(10.0, -10.0), kind="plus", record=False)
+        self.window.canvas.add_mark_for_atom(atom_id, QPointF(12.0, -12.0), kind="radical", record=False)
+
+        captured = {}
+
+        def _capture_export(model, atom_annotations=None):
+            captured["annotations"] = atom_annotations
+            return "1\nLiteDraw XYZ export\nC 0.000000 0.000000 0.000000\n"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            export_path = Path(temp_dir) / "charged.xyz"
+            with patch.object(self.window.canvas.rdkit, "model_to_xyz_block", side_effect=_capture_export):
+                self.window.canvas.export_xyz(str(export_path))
+
+        self.assertEqual(
+            captured["annotations"],
+            {0: {"formal_charge": 1, "radical_electrons": 1}},
+        )
+
+    def test_preview_panel_updates_from_canvas_structure(self) -> None:
+        atom_id = self.window.canvas.add_atom("N", 0.0, 0.0)
+        self.window.canvas.add_mark_for_atom(atom_id, QPointF(10.0, -10.0), kind="plus", record=False)
+
+        scene = Molecule3DScene(
+            atoms=(
+                Molecule3DAtom("N", 0.0, 0.0, 0.0),
+                Molecule3DAtom("H", 0.8, 0.0, 0.4),
+            ),
+            bonds=(Molecule3DBond(0, 1, 1),),
+        )
+
+        with patch.object(self.window.canvas.rdkit, "model_to_3d_scene", return_value=scene):
+            self.window.preview_3d.refresh_from_canvas(self.window.canvas)
+            self.app.processEvents()
+            QTest.qWait(150)
+            self.app.processEvents()
+
+        self.assertIsNotNone(self.window.preview_3d._scene)
+        self.assertIs(self.window.panel_splitter.widget(0), self.window.preview_3d)
+        self.assertIs(self.window.panel_splitter.widget(1), self.window.xtb_panel)
+        self.assertFalse(
+            bool(
+                self.window.panel_dock.features()
+                & self.window.panel_dock.DockWidgetFeature.DockWidgetClosable
+            )
+        )
+
+    def test_xtb_panel_captures_selection_and_inserts_optimized_output(self) -> None:
+        left = self.window.canvas.add_atom("C", -20.0, 0.0)
+        right = self.window.canvas.add_atom("O", 20.0, 0.0)
+        self.window.canvas.add_bond(left, right, 2)
+        self.window.canvas._add_bond_graphics(0)
+        self.window.canvas.atom_items[right].setSelected(True)
+        self.window.canvas.atom_dots[left].setSelected(True)
+        self.app.processEvents()
+
+        output_model = MoleculeModel()
+        out_a = output_model.add_atom("C", 0.0, 0.0)
+        out_b = output_model.add_atom("O", 40.0, 0.0)
+        output_model.add_bond(out_a, out_b, 2)
+        result = XTBRunResult(
+            mode="opt",
+            total_energy_hartree=-15.4321,
+            homo_lumo_gap_ev=4.321,
+            gradient_norm=0.0001,
+            stdout="",
+            stderr="",
+            command=("xtb", "input.xyz", "--gfn", "2", "--opt"),
+            optimized_xyz="2\nopt\nC 0.0 0.0 0.0\nO 1.2 0.0 0.0\n",
+            canvas_model=output_model,
+        )
+
+        self.window.xtb_panel.capture_input_from_selection()
+        with (
+            patch.object(self.window.xtb_panel._xtb, "is_available", return_value=True),
+            patch.object(self.window.xtb_panel._xtb, "optimize", return_value=result),
+        ):
+            before_sheet_count = self.window.canvas_tabs.count()
+            self.window.xtb_panel.optimize_input_structure()
+            self.app.processEvents()
+
+        self.assertGreater(self.window.canvas_tabs.count(), before_sheet_count)
+        self.assertIn("Reactant/Input:", self.window.xtb_panel.input_label.text())
+        self.assertIn("Product/Output:", self.window.xtb_panel.output_label.text())
+        self.assertIn("Opt", self.window.canvas_tabs.tabText(self.window.canvas_tabs.currentIndex()))
+        text = self._canvas_note_text(self.window.canvas)
+        self.assertIn("GFN2-xTB Optimization", text)
+        self.assertIn("Optimization Summary", text)
+
+    def test_xtb_panel_compare_uses_captured_input_and_output(self) -> None:
+        a0 = self.window.canvas.add_atom("C", -40.0, 0.0)
+        a1 = self.window.canvas.add_atom("O", 0.0, 0.0)
+        self.window.canvas.add_bond(a0, a1, 2)
+        self.window.canvas._add_bond_graphics(0)
+        self.window.canvas.atom_dots[a0].setSelected(True)
+        self.window.canvas.atom_items[a1].setSelected(True)
+        self.app.processEvents()
+        self.window.xtb_panel.capture_input_from_selection()
+
+        b0 = self.window.canvas.add_atom("C", 60.0, 0.0)
+        b1 = self.window.canvas.add_atom("O", 100.0, 0.0)
+        self.window.canvas.add_bond(b0, b1, 1)
+        self.window.canvas._add_bond_graphics(1)
+        self.window.canvas.scene().clearSelection()
+        self.window.canvas.atom_dots[b0].setSelected(True)
+        self.window.canvas.atom_items[b1].setSelected(True)
+        self.app.processEvents()
+        self.window.xtb_panel.capture_output_from_selection()
+
+        comparison = XTBComparisonResult(
+            input_result=XTBRunResult(
+                mode="sp",
+                total_energy_hartree=-10.0,
+                homo_lumo_gap_ev=4.5,
+                gradient_norm=None,
+                stdout="",
+                stderr="",
+                command=("xtb", "input.xyz", "--gfn", "2", "--sp"),
+            ),
+            output_result=XTBRunResult(
+                mode="sp",
+                total_energy_hartree=-10.25,
+                homo_lumo_gap_ev=4.2,
+                gradient_norm=None,
+                stdout="",
+                stderr="",
+                command=("xtb", "input.xyz", "--gfn", "2", "--sp"),
+            ),
+            delta_energy_kcal_mol=-156.87575,
+        )
+
+        with (
+            patch.object(self.window.xtb_panel._xtb, "is_available", return_value=True),
+            patch.object(self.window.xtb_panel._xtb, "compare_pair_singlepoint", return_value=comparison),
+        ):
+            before_sheet_count = self.window.canvas_tabs.count()
+            self.window.xtb_panel.compare_structures()
+            self.app.processEvents()
+
+        self.assertGreater(self.window.canvas_tabs.count(), before_sheet_count)
+        text = self._canvas_note_text(self.window.canvas)
+        self.assertIn("Pair Single-Point", text)
+        self.assertIn("Delta E", text)
+
+    def test_xtb_panel_crest_search_creates_result_sheet_and_canvas(self) -> None:
+        left = self.window.canvas.add_atom("C", -20.0, 0.0)
+        right = self.window.canvas.add_atom("N", 20.0, 0.0)
+        self.window.canvas.add_bond(left, right, 1)
+        self.window.canvas._add_bond_graphics(0)
+        self.window.canvas.atom_dots[left].setSelected(True)
+        self.window.canvas.atom_items[right].setSelected(True)
+        self.app.processEvents()
+        self.window.xtb_panel.capture_input_from_selection()
+
+        crest_model = MoleculeModel()
+        out_a = crest_model.add_atom("C", 0.0, 0.0)
+        out_b = crest_model.add_atom("N", 40.0, 0.0)
+        crest_model.add_bond(out_a, out_b, 1)
+        result = XTBCRESTResult(
+            mode="crest",
+            total_energy_hartree=-12.3456,
+            homo_lumo_gap_ev=5.678,
+            gradient_norm=0.0002,
+            conformer_count=7,
+            stdout="crest finished",
+            stderr="",
+            command=("crest", "input.xyz", "--gfn2"),
+            conformer_xyz="2\nconf\nC 0.0 0.0 0.0\nN 1.2 0.0 0.0\n",
+            best_xyz="2\nbest\nC 0.0 0.0 0.0\nN 1.2 0.0 0.0\n",
+            canvas_model=crest_model,
+        )
+
+        with (
+            patch.object(self.window.xtb_panel._xtb, "is_crest_available", return_value=True),
+            patch.object(self.window.xtb_panel._xtb, "crest_search", return_value=result),
+        ):
+            before_sheet_count = self.window.canvas_tabs.count()
+            self.window.xtb_panel.run_crest_search()
+            self.app.processEvents()
+
+        self.assertGreater(self.window.canvas_tabs.count(), before_sheet_count)
+        text = self._canvas_note_text(self.window.canvas)
+        self.assertIn("CREST Best Conformer", text)
+        self.assertIn("Conformer Count", text)
+
+    def test_xtb_panel_reaction_path_creates_result_sheet_and_ts_canvas(self) -> None:
+        left = self.window.canvas.add_atom("C", -20.0, 0.0)
+        right = self.window.canvas.add_atom("O", 20.0, 0.0)
+        self.window.canvas.add_bond(left, right, 2)
+        self.window.canvas._add_bond_graphics(0)
+        self.window.canvas.atom_dots[left].setSelected(True)
+        self.window.canvas.atom_items[right].setSelected(True)
+        self.app.processEvents()
+        self.window.xtb_panel.capture_input_from_selection()
+
+        product_left = self.window.canvas.add_atom("C", 60.0, 0.0)
+        product_right = self.window.canvas.add_atom("O", 100.0, 0.0)
+        self.window.canvas.add_bond(product_left, product_right, 1)
+        self.window.canvas._add_bond_graphics(1)
+        self.window.canvas.scene().clearSelection()
+        self.window.canvas.atom_dots[product_left].setSelected(True)
+        self.window.canvas.atom_items[product_right].setSelected(True)
+        self.app.processEvents()
+        self.window.xtb_panel.capture_output_from_selection()
+
+        ts_model = MoleculeModel()
+        ts_a = ts_model.add_atom("C", 0.0, 0.0)
+        ts_b = ts_model.add_atom("O", 35.0, 0.0)
+        ts_model.add_bond(ts_a, ts_b, 1)
+        template_scene = Molecule3DScene(
+            atoms=(
+                Molecule3DAtom("C", 0.0, 0.0, 0.0),
+                Molecule3DAtom("O", 1.2, 0.0, 0.0),
+            ),
+            bonds=(Molecule3DBond(0, 1, 1),),
+        )
+        result = XTBReactionPathResult(
+            mode="path",
+            forward_barrier_kcal_mol=12.5,
+            backward_barrier_kcal_mol=8.2,
+            reaction_energy_kcal_mol=-4.3,
+            stdout="forward barrier (kcal) : 12.5",
+            stderr="",
+            command=("xtb", "start.xyz", "--path", "end.xyz", "--input", "path.inp", "--gfn", "2"),
+            path_xyz="2\npath\nC 0.0 0.0 0.0\nO 1.2 0.0 0.0\n",
+            transition_state_xyz="2\nts\nC 0.0 0.0 0.0\nO 1.2 0.0 0.0\n",
+        )
+
+        with (
+            patch.object(self.window.xtb_panel._xtb, "is_available", return_value=True),
+            patch.object(self.window.xtb_panel._xtb, "reaction_path", return_value=result),
+            patch.object(self.window.xtb_panel._xtb, "_build_scene", return_value=template_scene),
+            patch.object(self.window.xtb_panel._xtb, "_scene_from_xyz", return_value=template_scene),
+            patch.object(self.window.xtb_panel._xtb, "_scene_to_canvas_model", return_value=ts_model),
+        ):
+            before_sheet_count = self.window.canvas_tabs.count()
+            self.window.xtb_panel.run_reaction_path_analysis()
+            self.app.processEvents()
+
+        self.assertGreater(self.window.canvas_tabs.count(), before_sheet_count)
+        text = self._canvas_note_text(self.window.canvas)
+        self.assertIn("Reaction Path Analysis", text)
+        self.assertIn("Forward Barrier", text)
 
 
 if __name__ == "__main__":

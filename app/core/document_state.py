@@ -121,9 +121,15 @@ def extract_document_state(payload: object) -> dict:
     if not isinstance(payload, dict):
         raise ValueError("Invalid LiteDraw file.")
     state = payload.get("state", payload)
-    if not isinstance(state, dict) or "model" not in state:
+    if not isinstance(state, dict):
         raise ValueError("Invalid LiteDraw file.")
-    return state
+    if "model" in state:
+        return state
+    if "sheets" in state:
+        if not isinstance(state["sheets"], list):
+            raise ValueError("Invalid LiteDraw file.")
+        return state
+    raise ValueError("Invalid LiteDraw file.")
 
 
 def _mapping_value(mapping: object, key: str, default):

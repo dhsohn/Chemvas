@@ -113,6 +113,27 @@ class DocumentStateTest(unittest.TestCase):
         self.assertIs(extract_document_state(payload), state)
         self.assertIs(extract_document_state(state), state)
 
+    def test_extract_document_state_accepts_workbook_state(self) -> None:
+        workbook_state = {
+            "active_sheet_index": 0,
+            "sheets": [
+                {
+                    "name": "Sheet 1",
+                    "kind": "canvas",
+                    "content": {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}},
+                }
+            ],
+            "result_sheets": {"sheets": [], "active_index": 0},
+        }
+        payload = {
+            "type": LITEDRAW_FILE_TYPE,
+            "version": 2,
+            "state": workbook_state,
+        }
+
+        self.assertIs(extract_document_state(payload), workbook_state)
+        self.assertIs(extract_document_state(workbook_state), workbook_state)
+
     def test_extract_document_state_rejects_invalid_payloads(self) -> None:
         with self.assertRaises(ValueError):
             extract_document_state(None)
@@ -120,6 +141,8 @@ class DocumentStateTest(unittest.TestCase):
             extract_document_state({})
         with self.assertRaises(ValueError):
             extract_document_state({"state": []})
+        with self.assertRaises(ValueError):
+            extract_document_state({"state": {"sheets": "not-a-list"}})
 
 
 if __name__ == "__main__":
