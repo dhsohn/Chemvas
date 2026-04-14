@@ -27,6 +27,7 @@ if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
 if QApplication is not None:
+    from core.history import MoveAtomsCommand
     from ui.main_window import MainWindow
 
 
@@ -77,6 +78,31 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.app.processEvents()
         QTest.qWait(10)
 
+    def _drag_scene_point(self, start: QPointF, end: QPointF, modifiers=None) -> None:
+        if modifiers is None:
+            modifiers = Qt.KeyboardModifier.NoModifier
+        start_pos = self.window.canvas.mapFromScene(start)
+        end_pos = self.window.canvas.mapFromScene(end)
+        QTest.mousePress(
+            self.window.canvas.viewport(),
+            Qt.MouseButton.LeftButton,
+            modifiers,
+            start_pos,
+        )
+        self.app.processEvents()
+        QTest.qWait(10)
+        QTest.mouseMove(self.window.canvas.viewport(), end_pos)
+        self.app.processEvents()
+        QTest.qWait(10)
+        QTest.mouseRelease(
+            self.window.canvas.viewport(),
+            Qt.MouseButton.LeftButton,
+            modifiers,
+            end_pos,
+        )
+        self.app.processEvents()
+        QTest.qWait(10)
+
     def _press_key(self, key: int, modifiers=None) -> None:
         if modifiers is None:
             modifiers = Qt.KeyboardModifier.NoModifier
@@ -100,6 +126,18 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             item.setSelected(True)
         self.app.processEvents()
         QTest.qWait(10)
+
+    def _assert_ring_polygon_matches_atoms(self, ring_item) -> None:
+        ring_atom_ids = ring_item.data(2)
+        self.assertIsInstance(ring_atom_ids, list)
+        polygon = ring_item.polygon()
+        self.assertEqual(polygon.count(), len(ring_atom_ids))
+        for atom_id, point in zip(ring_atom_ids, polygon):
+            atom = self.window.canvas.model.atoms.get(atom_id)
+            self.assertIsNotNone(atom)
+            assert atom is not None
+            self.assertAlmostEqual(point.x(), atom.x)
+            self.assertAlmostEqual(point.y(), atom.y)
 
     def test_generic_tool_shortcuts_switch_active_tool(self) -> None:
         self._press_key(Qt.Key.Key_X)
@@ -701,6 +739,28 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
         self.assertAlmostEqual(single_rect.height(), double_rect.height(), delta=0.5)
 
+    def test_selection_path_for_moved_bond_item_uses_scene_coordinates(self) -> None:
+        left = self.window.canvas.add_atom("C", -20.0, 0.0)
+        right = self.window.canvas.add_atom("C", 20.0, 0.0)
+        self.window.canvas.add_bond(left, right)
+        self.window.canvas._add_bond_graphics(0)
+
+        self.window.canvas.move_atoms(
+            {left, right},
+            75.0,
+            35.0,
+            bond_ids={0},
+            redraw_bond_ids=set(),
+            update_selection=False,
+        )
+
+        bond_item = self.window.canvas.bond_items[0][0]
+        path_rect = self.window.canvas._selection_path_for_bond_item(bond_item).boundingRect()
+        bond_rect = bond_item.sceneBoundingRect()
+
+        self.assertAlmostEqual(path_rect.center().x(), bond_rect.center().x(), delta=0.5)
+        self.assertAlmostEqual(path_rect.center().y(), bond_rect.center().y(), delta=0.5)
+
     def test_clicking_near_bond_selects_bond(self) -> None:
         self.window.canvas.set_tool("select")
         left = self.window.canvas.add_atom("C", -10.0, 0.0)
@@ -952,6 +1012,34 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertLess(left_z * right_z, 0.0)
         self.window.canvas.end_selection_3d_rotation()
 
+    def test_select_drag_after_perspective_rebuilds_selection_overlay_at_current_position(self) -> None:
+        self.window.canvas.add_benzene_ring(QPointF(0.0, 0.0))
+        ring_atom_ids = self.window.canvas.ring_items[0].data(2)
+        self.assertIsInstance(ring_atom_ids, list)
+
+        self._select_atom_ids(*ring_atom_ids)
+        self.window.canvas.set_tool("perspective")
+        self._drag_scene_point(QPointF(0.0, 20.0), QPointF(120.0, 100.0))
+
+        old_component = next(
+            item
+            for item in self.window.canvas.selection_outlines
+            if (item.data(2) or {}).get("kind") == "component"
+        )
+        old_center = old_component.sceneBoundingRect().center()
+
+        self.window.canvas.set_tool("select")
+        self._drag_scene_point(QPointF(0.0, 0.0), QPointF(100.0, 60.0))
+
+        components = [
+            item
+            for item in self.window.canvas.selection_outlines
+            if (item.data(2) or {}).get("kind") == "component"
+        ]
+        self.assertEqual(len(components), 1)
+        self.assertFalse(components[0].path().contains(old_center))
+        self.assertFalse(components[0].sceneBoundingRect().contains(old_center))
+
     def test_perspective_rotated_benzene_double_bonds_follow_ring_plane(self) -> None:
         self.window.canvas.add_benzene_ring(QPointF(0.0, 0.0))
         ring_atom_ids = self.window.canvas.ring_items[0].data(2)
@@ -1035,6 +1123,59 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
         self.assertGreaterEqual(checked, 2)
         self.window.canvas.end_selection_3d_rotation()
+
+    def test_move_selected_perspective_benzene_ring_keeps_fused_ring_polygons_and_undo(self) -> None:
+        self.window.canvas.add_benzene_ring(QPointF(0.0, 0.0))
+        self.window.canvas.add_benzene_ring(QPointF(0.0, 0.0), attach_bond_id=0)
+
+        self._select_atom_ids(*sorted(self.window.canvas.model.atoms))
+        rotating = self.window.canvas.begin_selection_3d_rotation(
+            press_pos=QPointF(0.0, 20.0),
+        )
+        self.assertTrue(rotating)
+        self.window.canvas.update_selection_3d_rotation(160.0, 110.0)
+        self.window.canvas.end_selection_3d_rotation()
+
+        before_polygons = [
+            [(point.x(), point.y()) for point in ring_item.polygon()]
+            for ring_item in self.window.canvas.ring_items
+        ]
+
+        selected_ring = self.window.canvas.ring_items[0]
+        self._select_items(selected_ring)
+        atom_ids, _ = self.window.canvas._selected_ids()
+        bond_ids, boundary_bond_ids = self.window.canvas.bond_sets_for_atoms(atom_ids)
+
+        self.window.canvas.move_atoms(
+            atom_ids,
+            40.0,
+            25.0,
+            bond_ids=bond_ids,
+            redraw_bond_ids=boundary_bond_ids,
+            update_selection=False,
+        )
+        self.window.canvas._push_command(
+            MoveAtomsCommand(
+                atom_ids=set(atom_ids),
+                dx=40.0,
+                dy=25.0,
+                bond_ids=set(bond_ids),
+                redraw_bond_ids=set(boundary_bond_ids),
+            )
+        )
+
+        for ring_item in self.window.canvas.ring_items:
+            self._assert_ring_polygon_matches_atoms(ring_item)
+
+        self.window.canvas.undo()
+
+        for ring_item, before_points in zip(self.window.canvas.ring_items, before_polygons):
+            polygon = ring_item.polygon()
+            self.assertEqual(polygon.count(), len(before_points))
+            for point, (before_x, before_y) in zip(polygon, before_points):
+                self.assertAlmostEqual(point.x(), before_x)
+                self.assertAlmostEqual(point.y(), before_y)
+            self._assert_ring_polygon_matches_atoms(ring_item)
 
     def test_perspective_rotation_reflattens_planar_ring_fragments(self) -> None:
         self.window.canvas.add_benzene_ring(QPointF(0.0, 0.0))

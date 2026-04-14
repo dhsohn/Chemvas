@@ -3868,22 +3868,24 @@ class CanvasView(QGraphicsView):
     def _selection_path_for_bond_item(self, item, width: float | None = None) -> QPainterPath:
         if isinstance(item, QGraphicsLineItem):
             line = item.line()
+            start = item.mapToScene(QPointF(line.x1(), line.y1()))
+            end = item.mapToScene(QPointF(line.x2(), line.y2()))
             stroke_width = width if width is not None else self._selection_bond_overlay_width(item.pen())
             return self._selection_line_stroke_path(
-                QPointF(line.x1(), line.y1()),
-                QPointF(line.x2(), line.y2()),
+                start,
+                end,
                 stroke_width,
             )
         if isinstance(item, QGraphicsPolygonItem):
             bond_path = QPainterPath()
-            bond_path.addPolygon(item.polygon())
+            bond_path.addPolygon(item.mapToScene(item.polygon()))
             return bond_path
         if isinstance(item, QGraphicsPathItem):
             stroker = QPainterPathStroker()
             stroker.setWidth(width if width is not None else self._selection_bond_overlay_width(item.pen()))
             stroker.setCapStyle(Qt.PenCapStyle.RoundCap)
             stroker.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-            return stroker.createStroke(item.path())
+            return stroker.createStroke(item.sceneTransform().map(item.path()))
         return QPainterPath()
 
     def _selection_path_for_bond(self, bond_id: int) -> QPainterPath:
@@ -3921,7 +3923,9 @@ class CanvasView(QGraphicsView):
                     widths = []
                     for item in line_items:
                         line = item.line()
-                        mid = QPointF((line.x1() + line.x2()) * 0.5, (line.y1() + line.y2()) * 0.5)
+                        mid = item.mapToScene(
+                            QPointF((line.x1() + line.x2()) * 0.5, (line.y1() + line.y2()) * 0.5)
+                        )
                         offsets.append((mid.x() - base_mid.x()) * nx + (mid.y() - base_mid.y()) * ny)
                         widths.append(self._selection_bond_overlay_width(item.pen()))
                     axis_shift = (min(offsets) + max(offsets)) * 0.5
@@ -8657,18 +8661,21 @@ class CanvasView(QGraphicsView):
         if update_selection:
             self._update_selection_outline()
 
-    def _move_rings_for_atoms(self, atom_ids: set[int], dx: float, dy: float) -> None:
+    def _move_rings_for_atoms(self, atom_ids: set[int], _dx: float, _dy: float) -> None:
         for ring_item in self.ring_items:
             ring_atom_ids = ring_item.data(2)
             if not isinstance(ring_atom_ids, list):
                 continue
             if not any(atom_id in atom_ids for atom_id in ring_atom_ids):
                 continue
-            polygon = ring_item.polygon()
-            shifted = QPolygonF()
-            for point in polygon:
-                shifted.append(QPointF(point.x() + dx, point.y() + dy))
-            ring_item.setPolygon(shifted)
+            points = []
+            for atom_id in ring_atom_ids:
+                atom = self.model.atoms.get(atom_id)
+                if atom is None:
+                    continue
+                points.append(QPointF(atom.x, atom.y))
+            if len(points) >= 3:
+                ring_item.setPolygon(QPolygonF(points))
 
     def _move_atom(self, atom_id: int, dx: float, dy: float) -> None:
         atom = self.model.atoms.get(atom_id)
