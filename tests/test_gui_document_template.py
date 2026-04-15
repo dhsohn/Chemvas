@@ -621,6 +621,55 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertEqual(self.window.canvas._smiles_preview_smiles, "CC")
         self.assertGreater(len(self.window.canvas._smiles_preview_items), 0)
 
+    def test_begin_template_insert_cancels_active_smiles_preview(self) -> None:
+        model = MoleculeModel()
+        left = model.add_atom("C", -10.0, 0.0)
+        right = model.add_atom("C", 10.0, 0.0)
+        model.add_bond(left, right)
+
+        with patch.object(self.window.canvas.rdkit, "smiles_to_2d", return_value=model):
+            self.window.canvas.begin_smiles_insert("CC")
+
+        self.assertTrue(self.window.canvas._smiles_insert_active)
+        smiles_preview_items = list(self.window.canvas._smiles_preview_items)
+
+        self._template_handler("Cyclobutane")()
+
+        self.assertFalse(self.window.canvas._smiles_insert_active)
+        self.assertIsNone(self.window.canvas._smiles_preview_model)
+        self.assertIsNone(self.window.canvas._smiles_preview_smiles)
+        self.assertIsNone(self.window.canvas._smiles_preview_center)
+        self.assertEqual(self.window.canvas._smiles_preview_items, [])
+        self.assertTrue(all(item.scene() is None for item in smiles_preview_items))
+        self.assertTrue(self.window.canvas._template_insert_active)
+        self.assertEqual(self.window.canvas._template_ring_size, 4)
+        self.assertEqual(self.window.canvas._template_ring_style, "regular")
+        self.assertGreater(len(self.window.canvas._template_preview_items), 0)
+        self.assertGreater(len(self.window.canvas._template_preview_lines), 0)
+        self.assertGreater(len(self.window.canvas._template_preview_dots), 0)
+
+    def test_smiles_preview_reuses_existing_preview_items(self) -> None:
+        model = MoleculeModel()
+        left = model.add_atom("C", -10.0, 0.0)
+        right = model.add_atom("C", 10.0, 0.0)
+        model.add_bond(left, right)
+
+        with patch.object(self.window.canvas.rdkit, "smiles_to_2d", return_value=model):
+            self.window.canvas.begin_smiles_insert("CC")
+
+        self.assertTrue(self.window.canvas._smiles_insert_active)
+        self._hover_scene_point(QPointF(-30.0, 0.0))
+        self.assertEqual(len(self.window.canvas._smiles_preview_bond_items[0]), 1)
+        preview_line = self.window.canvas._smiles_preview_bond_items[0][0]
+        preview_rect = self.window.canvas._smiles_preview_atom_items[left].rect()
+        preview_atom = self.window.canvas._smiles_preview_atom_items[left]
+
+        self._hover_scene_point(QPointF(30.0, 20.0))
+
+        self.assertIs(self.window.canvas._smiles_preview_bond_items[0][0], preview_line)
+        self.assertIs(self.window.canvas._smiles_preview_atom_items[left], preview_atom)
+        self.assertNotEqual(self.window.canvas._smiles_preview_atom_items[left].rect(), preview_rect)
+
     def test_clear_scene_resets_active_smiles_insert_state(self) -> None:
         model = MoleculeModel()
         left = model.add_atom("C", -10.0, 0.0)

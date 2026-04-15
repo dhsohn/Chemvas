@@ -92,7 +92,6 @@ from ui.canvas_document_state import (
 from ui.graphics_items import (
     AtomLabelItem,
     AtomDotItem,
-    NoSelectEllipseItem,
     NoSelectLineItem,
     NoSelectPathItem,
     NoSelectPolygonItem,
@@ -124,6 +123,7 @@ from ui.insert_mode_logic import (
     cancel_template_insert as cancel_template_insert_state,
     clear_insert_session,
 )
+from ui.insert_controller import InsertController
 from ui.preview_scene_renderer import (
     apply_smiles_preview_geometry as apply_smiles_preview_geometry_helper,
     apply_template_preview_geometry as apply_template_preview_geometry_helper,
@@ -131,6 +131,7 @@ from ui.preview_scene_renderer import (
     clear_template_preview as clear_template_preview_helper,
     smiles_preview_snapshot as smiles_preview_snapshot_helper,
 )
+from ui.scene_item_controller import SceneItemController
 from ui.scene_item_restore import (
     create_arrow_item_from_state as create_arrow_item_from_state_helper,
     create_mark_item_from_state as create_mark_item_from_state_helper,
@@ -152,16 +153,14 @@ from ui.scene_item_state import (
     ts_bracket_rect_from_state as ts_bracket_rect_from_state_helper,
     ts_bracket_state_dict as ts_bracket_state_dict_helper,
 )
+from ui.scene_ops_controller import SceneOpsController
+from ui.selection_controller import SelectionController
 from ui.selection_hit_logic import (
-    AtomHitCandidate,
-    BondHitCandidate,
     SelectionHitRequest,
     SelectionRect,
     SelectionSnapshot,
     StructureHit,
     build_selection_snapshot,
-    choose_preferred_structure_hit,
-    nearest_ring_atom_id,
     selection_hit_matches,
     structure_hit_is_selected,
 )
@@ -312,6 +311,10 @@ class CanvasView(QGraphicsView):
         self._suspend_selection_outline = False
         self._selection_signature = None
         self._selection_pending_signature = None
+        self._selection_controller = SelectionController(self)
+        self._scene_item_controller = SceneItemController(self)
+        self._scene_ops_controller = SceneOpsController(self)
+        self._insert_controller = InsertController(self)
         self._selection_info_cache = ("", "")
         self._orbital_snap_enabled = False
         self._orbital_snap_step = 15
@@ -850,155 +853,7 @@ class CanvasView(QGraphicsView):
         )
 
     def delete_selected_items(self) -> bool:
-        items = self.scene().selectedItems()
-        if not items:
-            return False
-        atom_ids: set[int] = set()
-        bond_ids: set[int] = set()
-        ring_items: list[QGraphicsPolygonItem] = []
-        note_items: list[QGraphicsTextItem] = []
-        mark_items: list[QGraphicsItem] = []
-        arrow_items: list[QGraphicsItem] = []
-        ts_bracket_items: list[QGraphicsItem] = []
-        orbital_items: list[QGraphicsItem] = []
-        other_items: list[QGraphicsItem] = []
-        for item in items:
-            kind = item.data(0)
-            if kind == "atom":
-                atom_id = item.data(1)
-                if isinstance(atom_id, int):
-                    atom_ids.add(atom_id)
-            elif kind == "bond":
-                bond_id = item.data(1)
-                if isinstance(bond_id, int):
-                    bond_ids.add(bond_id)
-            elif kind == "ring":
-                if isinstance(item, QGraphicsPolygonItem):
-                    ring_items.append(item)
-            elif kind == "note":
-                if isinstance(item, QGraphicsTextItem):
-                    note_items.append(item)
-            elif kind == "mark":
-                mark_items.append(item)
-            elif kind in {
-                "arrow",
-                "equilibrium",
-                "resonance",
-                "curved_single",
-                "curved_double",
-                "inhibit",
-                "dotted",
-            }:
-                arrow_items.append(item)
-            elif kind == "ts_bracket":
-                ts_bracket_items.append(item)
-            elif kind == "orbital":
-                orbital_items.append(item)
-            elif kind in {"handle", "note_box", "note_select"}:
-                continue
-            else:
-                other_items.append(item)
-
-        if (
-            len(bond_ids) == 1
-            and not atom_ids
-            and not ring_items
-            and not note_items
-            and not mark_items
-            and not arrow_items
-            and not ts_bracket_items
-            and not orbital_items
-            and not other_items
-        ):
-            bond_id = next(iter(bond_ids))
-            if 0 <= bond_id < len(self.model.bonds) and self.model.bonds[bond_id] is not None:
-                self.delete_bond(bond_id, record=True)
-                return True
-
-        bonds_to_remove = set(bond_ids)
-        for bond_id, bond in enumerate(self.model.bonds):
-            if bond is None:
-                continue
-            if bond.a in atom_ids or bond.b in atom_ids:
-                bonds_to_remove.add(bond_id)
-
-        filtered_marks = []
-        for item in mark_items:
-            data = item.data(1) or {}
-            atom_id = data.get("atom_id")
-            if isinstance(atom_id, int) and atom_id in atom_ids:
-                continue
-            filtered_marks.append(item)
-        mark_items = filtered_marks
-        mark_states_for_atoms = []
-        for atom_id in atom_ids:
-            marks = self._marks_by_atom.get(atom_id, [])
-            for mark in marks:
-                mark_states_for_atoms.append(self._mark_state_dict(mark))
-
-        before_smiles_input = self.last_smiles_input
-        if bonds_to_remove or atom_ids:
-            self.last_smiles_input = None
-        commands: list[HistoryCommand] = []
-
-        for bond_id in sorted(bonds_to_remove, reverse=True):
-            if not (0 <= bond_id < len(self.model.bonds)):
-                continue
-            bond = self.model.bonds[bond_id]
-            if bond is None:
-                continue
-            bond_state = self._bond_state_dict(bond)
-            self._remove_bond_by_id(bond_id)
-            self._redraw_connected_bonds(bond.a)
-            self._redraw_connected_bonds(bond.b)
-            commands.append(
-                DeleteBondCommand(
-                    bond_id=bond_id,
-                    bond_state=bond_state,
-                    before_smiles_input=before_smiles_input,
-                    after_smiles_input=self.last_smiles_input,
-                )
-            )
-
-        if atom_ids:
-            atom_states = {atom_id: self._atom_state_dict(atom_id) for atom_id in atom_ids}
-            before_next_atom_id = self.model.next_atom_id
-            for atom_id in atom_ids:
-                self._remove_atom_only(atom_id)
-            commands.append(
-                DeleteAtomsCommand(
-                    atom_states=atom_states,
-                    mark_states=mark_states_for_atoms,
-                    before_next_atom_id=before_next_atom_id,
-                    after_next_atom_id=self.model.next_atom_id,
-                    before_smiles_input=before_smiles_input,
-                    after_smiles_input=self.last_smiles_input,
-                )
-            )
-
-        scene_items = []
-        scene_items.extend(ring_items)
-        scene_items.extend(note_items)
-        scene_items.extend(mark_items)
-        scene_items.extend(arrow_items)
-        scene_items.extend(ts_bracket_items)
-        scene_items.extend(orbital_items)
-        scene_items.extend(other_items)
-        if scene_items:
-            if ts_bracket_items or orbital_items or arrow_items:
-                self.clear_handles()
-            scene_states = [self.scene_item_state(item) for item in scene_items]
-            for item in scene_items:
-                self.remove_scene_item(item)
-            commands.append(DeleteSceneItemsCommand(item_states=scene_states, items=scene_items))
-
-        if not commands:
-            return False
-        if len(commands) == 1:
-            self._push_command(commands[0])
-            return True
-        self._push_command(CompositeCommand(commands))
-        return True
+        return self._scene_ops_controller.delete_selected_items()
 
     def _snapshot_state(self) -> dict:
         return snapshot_canvas_document_state(self)
@@ -1498,31 +1353,13 @@ class CanvasView(QGraphicsView):
         return scene_item_state_helper(item, mark_center_getter=self._mark_center)
 
     def _restore_ring_from_state(self, ring_state: dict):
-        item = create_ring_item_from_state_helper(
-            ring_state,
-            ring_fill_brush_getter=self.renderer.ring_fill_brush,
-        )
-        self.restore_scene_item(item)
-        return item
+        return self._scene_item_controller._restore_ring_from_state(ring_state)
 
     def _restore_note_from_state(self, note_state: dict):
-        item = create_note_item_from_state_helper(
-            note_state,
-            note_item_factory=lambda: NoteItem(self),
-            note_style_applier=self._apply_note_style,
-        )
-        self.restore_scene_item(item)
-        return item
+        return self._scene_item_controller._restore_note_from_state(note_state)
 
     def _restore_mark_from_state(self, mark_state: dict):
-        item = create_mark_item_from_state_helper(
-            mark_state,
-            model_atoms=self.model.atoms,
-            build_mark_item=self._build_mark_item,
-            set_mark_center=self._set_mark_center,
-        )
-        self.restore_scene_item(item)
-        return item
+        return self._scene_item_controller._restore_mark_from_state(mark_state)
 
     def _set_curved_arrow_path(
         self,
@@ -1543,171 +1380,31 @@ class CanvasView(QGraphicsView):
         item.setPath(path)
 
     def _restore_arrow_from_state(self, arrow_state: dict):
-        item = create_arrow_item_from_state_helper(
-            arrow_state,
-            build_arrow_item=self._build_arrow_item,
-            set_curved_arrow_path=self._set_curved_arrow_path,
-        )
-        self.restore_scene_item(item)
-        return item
+        return self._scene_item_controller._restore_arrow_from_state(arrow_state)
 
     def _restore_ts_bracket_from_state(self, ts_bracket_state: dict):
-        item = create_ts_bracket_item_from_state_helper(
-            ts_bracket_state,
-            build_ts_bracket_item=self._build_ts_bracket_item,
-        )
-        self.restore_scene_item(item)
-        return item
+        return self._scene_item_controller._restore_ts_bracket_from_state(ts_bracket_state)
 
     def _restore_orbital_from_state(self, orbital_state: dict):
-        group = create_orbital_item_from_state_helper(
-            orbital_state,
-            build_orbital_items=self._build_orbital_items,
-            orbital_base_handle_dist=self.renderer.style.bond_length_px * 0.8,
-        )
-        self.restore_scene_item(group)
-        return group
+        return self._scene_item_controller._restore_orbital_from_state(orbital_state)
 
     def create_scene_item_from_state(self, state: dict):
-        item = create_scene_item_from_state_helper(
-            state,
-            model_atoms=self.model.atoms,
-            note_item_factory=lambda: NoteItem(self),
-            note_style_applier=self._apply_note_style,
-            build_mark_item=self._build_mark_item,
-            set_mark_center=self._set_mark_center,
-            ring_fill_brush_getter=self.renderer.ring_fill_brush,
-            build_arrow_item=self._build_arrow_item,
-            set_curved_arrow_path=self._set_curved_arrow_path,
-            build_ts_bracket_item=self._build_ts_bracket_item,
-            build_orbital_items=self._build_orbital_items,
-            orbital_base_handle_dist=self.renderer.style.bond_length_px * 0.8,
-        )
-        if item is not None:
-            self.restore_scene_item(item)
-            return item
-        return None
+        return self._scene_item_controller.create_scene_item_from_state(state)
 
     def _bond_ids_for_ring_item(self, item) -> set[int]:
-        ring_atom_ids = item.data(2)
-        if not isinstance(ring_atom_ids, list) or len(ring_atom_ids) < 2:
-            return set()
-        bond_ids: set[int] = set()
-        for index, atom_a in enumerate(ring_atom_ids):
-            atom_b = ring_atom_ids[(index + 1) % len(ring_atom_ids)]
-            if not isinstance(atom_a, int) or not isinstance(atom_b, int):
-                continue
-            bond_id = self._bond_id_between(atom_a, atom_b)
-            if bond_id is not None:
-                bond_ids.add(bond_id)
-        return bond_ids
+        return self._scene_item_controller._bond_ids_for_ring_item(item)
 
     def _refresh_bond_geometry_for_ring_item(self, item) -> None:
-        for bond_id in self._bond_ids_for_ring_item(item):
-            self.update_bond_geometry(bond_id)
+        self._scene_item_controller._refresh_bond_geometry_for_ring_item(item)
 
     def restore_scene_item(self, item) -> None:
-        if item is None:
-            return
-        try:
-            if item.scene() is self.scene():
-                return
-        except RuntimeError:
-            return
-        kind = item.data(0)
-        if kind == "ring":
-            if item not in self.ring_items:
-                self.ring_items.append(item)
-        elif kind == "mark":
-            if item not in self.mark_items:
-                self.mark_items.append(item)
-            data = item.data(1) or {}
-            atom_id = data.get("atom_id")
-            if isinstance(atom_id, int):
-                self._marks_by_atom.setdefault(atom_id, []).append(item)
-        elif kind == "note":
-            item.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
-            if item not in self.note_items:
-                self.note_items.append(item)
-        elif kind in {
-            "arrow",
-            "equilibrium",
-            "resonance",
-            "curved_single",
-            "curved_double",
-            "inhibit",
-            "dotted",
-        }:
-            if item not in self.arrow_items:
-                self.arrow_items.append(item)
-        elif kind == "ts_bracket":
-            if item not in self.ts_bracket_items:
-                self.ts_bracket_items.append(item)
-        elif kind == "orbital":
-            if item not in self.orbital_items:
-                self.orbital_items.append(item)
-        self._make_selectable(item)
-        self.scene().addItem(item)
-        if kind == "ring":
-            self._refresh_bond_geometry_for_ring_item(item)
+        self._scene_item_controller.restore_scene_item(item)
 
     def remove_scene_item(self, item) -> None:
-        if item is None:
-            return
-        kind = item.data(0)
-        if kind == "ring":
-            if item in self.ring_items:
-                self.ring_items.remove(item)
-        elif kind == "mark":
-            self._remove_mark_item(item)
-            return
-        elif kind == "note":
-            if item in self.selected_notes:
-                self.selected_notes.remove(item)
-            self._update_note_selection_box(item)
-            if item in self.note_items:
-                self.note_items.remove(item)
-        elif kind in {
-            "arrow",
-            "equilibrium",
-            "resonance",
-            "curved_single",
-            "curved_double",
-            "inhibit",
-            "dotted",
-        }:
-            if item in self.arrow_items:
-                self.arrow_items.remove(item)
-        elif kind == "ts_bracket":
-            if item in self.ts_bracket_items:
-                self.ts_bracket_items.remove(item)
-        elif kind == "orbital":
-            if item in self.orbital_items:
-                self.orbital_items.remove(item)
-        if kind in {"orbital", "curved_single", "curved_double"} and item is self._handle_target:
-            self.clear_handles()
-        try:
-            if item.scene() is self.scene():
-                self.scene().removeItem(item)
-        except RuntimeError:
-            return
-        if kind == "ring":
-            self._refresh_bond_geometry_for_ring_item(item)
+        self._scene_item_controller.remove_scene_item(item)
 
     def apply_scene_item_state(self, item, state: dict) -> None:
-        apply_scene_item_state_helper(
-            item,
-            state,
-            model_atoms=self.model.atoms,
-            note_style_applier=self._apply_note_style,
-            mark_center_setter=self._set_mark_center,
-            ring_fill_brush_getter=self.renderer.ring_fill_brush,
-            ts_bracket_path_builder=self._ts_bracket_path,
-            bond_color=self.renderer.style.bond_color,
-            build_arrow_item=self._build_arrow_item,
-            set_curved_arrow_path=self._set_curved_arrow_path,
-            orbital_base_handle_dist=self.renderer.style.bond_length_px * 0.8,
-        )
+        self._scene_item_controller.apply_scene_item_state(item, state)
 
     def _record_bond_update(
         self,
@@ -1884,136 +1581,25 @@ class CanvasView(QGraphicsView):
         return bond_id, dist
 
     def _structure_hit_from_item(self, item) -> tuple[StructureHit | None, tuple[int, int] | None, list[int] | None]:
-        if item is None:
-            return None, None, None
-        kind = item.data(0)
-        if kind == "atom":
-            atom_id = item.data(1)
-            if isinstance(atom_id, int):
-                return StructureHit(kind="atom", id=atom_id), None, None
-            return None, None, None
-        if kind == "bond":
-            bond_id = item.data(1)
-            if isinstance(bond_id, int) and 0 <= bond_id < len(self.model.bonds):
-                bond = self.model.bonds[bond_id]
-                if bond is not None:
-                    return StructureHit(kind="bond", id=bond_id), (bond.a, bond.b), None
-            return None, None, None
-        if kind == "ring":
-            ring_atom_ids = item.data(2)
-            if isinstance(ring_atom_ids, list):
-                return StructureHit(kind="ring"), None, ring_atom_ids
-            return StructureHit(kind="ring"), None, None
-        return StructureHit(kind="other"), None, None
+        return self._selection_controller._structure_hit_from_item(item)
 
     def _structure_item_for_hit(self, hit: StructureHit):
-        if hit.kind == "atom" and isinstance(hit.id, int):
-            return self._atom_item_for_id(hit.id)
-        if hit.kind == "bond" and isinstance(hit.id, int):
-            bond_items = self.bond_items.get(hit.id, [])
-            if bond_items:
-                return bond_items[0]
-        return None
+        return self._selection_controller._structure_item_for_hit(hit)
 
     def _atom_item_for_id(self, atom_id: int):
         return self.atom_items.get(atom_id) or self.atom_dots.get(atom_id)
 
     def _selection_targets_for_item(self, item) -> list[QGraphicsItem]:
-        if item is None:
-            return []
-        kind = item.data(0)
-        if kind == "atom":
-            atom_id = item.data(1)
-            if not isinstance(atom_id, int):
-                return []
-            atom_item = self._atom_item_for_id(atom_id)
-            return [atom_item] if atom_item is not None else []
-        if kind == "bond":
-            bond_id = item.data(1)
-            if not isinstance(bond_id, int):
-                return []
-            return [bond_item for bond_item in self.bond_items.get(bond_id, []) if bond_item is not None]
-        if kind in {
-            "ring",
-            "arrow",
-            "equilibrium",
-            "resonance",
-            "curved_single",
-            "curved_double",
-            "inhibit",
-            "dotted",
-            "ts_bracket",
-            "orbital",
-            "mark",
-            "note",
-        }:
-            return [item]
-        return []
+        return self._selection_controller._selection_targets_for_item(item)
 
     def toggle_item_selection(self, item) -> bool:
-        targets = self._selection_targets_for_item(item)
-        if not targets:
-            return False
-        should_select = not any(target.isSelected() for target in targets)
-        self.scene().blockSignals(True)
-        try:
-            for target in targets:
-                target.setSelected(should_select)
-        finally:
-            self.scene().blockSignals(False)
-        self._update_selection_outline()
-        return True
+        return self._selection_controller.toggle_item_selection(item)
 
     def preferred_structure_hit_at_scene_pos(self, pos: QPointF) -> StructureHit | None:
-        item = self.item_at_scene_pos(pos)
-        item_hit, _, _ = self._structure_hit_from_item(item)
-        if item_hit is not None and item_hit.kind == "atom":
-            return item_hit
-        atom_hit = self._nearest_atom_hit(pos)
-        bond_hit = self._nearest_bond_hit(pos)
-        preferred_hit = choose_preferred_structure_hit(
-            AtomHitCandidate(
-                atom_id=atom_hit[0],
-                distance=atom_hit[1],
-                has_visible_label=self._atom_has_visible_label(atom_hit[0]),
-            )
-            if atom_hit is not None
-            else None,
-            BondHitCandidate(bond_id=bond_hit[0], distance=bond_hit[1]) if bond_hit is not None else None,
-            atom_pick_radius=self._atom_pick_radius(),
-            bond_pick_radius=self._bond_pick_radius(),
-        )
-        if preferred_hit is not None:
-            preferred_item = self._structure_item_for_hit(preferred_hit)
-            if preferred_item is not None:
-                return preferred_hit
-        if item is not None and item.data(0) == "ring":
-            ring_atom_ids = item.data(2)
-            if isinstance(ring_atom_ids, list):
-                nearest_atom_id = nearest_ring_atom_id(
-                    [
-                        (atom_id, math.hypot(atom.x - pos.x(), atom.y - pos.y()))
-                        for atom_id in ring_atom_ids
-                        for atom in [self.model.atoms.get(atom_id)]
-                        if atom is not None
-                    ],
-                    max_distance=self.renderer.style.bond_length_px * 0.4,
-                )
-                if nearest_atom_id is not None:
-                    ring_atom_item = self.atom_items.get(nearest_atom_id) or self.atom_dots.get(nearest_atom_id)
-                    if ring_atom_item is not None:
-                        return StructureHit(kind="atom", id=nearest_atom_id)
-            return StructureHit(kind="ring")
-        fallback_hit, _, _ = self._structure_hit_from_item(item)
-        return fallback_hit
+        return self._selection_controller.preferred_structure_hit_at_scene_pos(pos)
 
     def preferred_structure_item_at_scene_pos(self, pos: QPointF):
-        hit = self.preferred_structure_hit_at_scene_pos(pos)
-        if hit is None:
-            return None
-        if hit.kind in {"atom", "bond"}:
-            return self._structure_item_for_hit(hit)
-        return self.item_at_scene_pos(pos)
+        return self._selection_controller.preferred_structure_item_at_scene_pos(pos)
 
     def bond_id_from_event(self, event) -> int | None:
         if self.hover_bond_id is not None:
@@ -2025,75 +1611,14 @@ class CanvasView(QGraphicsView):
         self,
         snapshot: SelectionSnapshot,
     ) -> tuple[SelectionRect, ...]:
-        rects: list[SelectionRect] = []
-        object_overlay_kinds = {
-            "arrow",
-            "equilibrium",
-            "resonance",
-            "curved_single",
-            "curved_double",
-            "inhibit",
-            "dotted",
-            "ts_bracket",
-            "mark",
-            "orbital",
-        }
-        if snapshot.selected_atom_ids:
-            for component in self._connected_components(set(snapshot.selected_atom_ids)):
-                bounds = self._bounds_for_atoms(component)
-                if bounds is None:
-                    continue
-                min_x, min_y, max_x, max_y = bounds
-                rects.append(SelectionRect(left=min_x, top=min_y, right=max_x, bottom=max_y))
-        for item in snapshot.selection_items:
-            if item.data(0) in {"atom", "bond", "ring"}:
-                continue
-            if item.data(0) in object_overlay_kinds:
-                continue
-            rect = item.sceneBoundingRect()
-            rects.append(
-                SelectionRect(
-                    left=rect.left(),
-                    top=rect.top(),
-                    right=rect.right(),
-                    bottom=rect.bottom(),
-                )
-            )
-        return tuple(rects)
+        return self._selection_controller._selection_rects_for_snapshot(snapshot)
 
     def selection_hit_test(
         self,
         pos: QPointF,
         snapshot: SelectionSnapshot | None = None,
     ) -> bool:
-        if snapshot is None:
-            snapshot = self._selection_snapshot()
-        if snapshot is None:
-            return False
-        outline_hit = False
-        for outline in self.selection_outlines:
-            data = outline.data(2) or {}
-            if data.get("kind") not in {"component", "object"}:
-                continue
-            if outline.contains(outline.mapFromScene(pos)):
-                outline_hit = True
-                break
-        item = self.item_at_scene_pos(pos)
-        hit, bond_atom_ids, ring_atom_ids = self._structure_hit_from_item(item)
-        return selection_hit_matches(
-            SelectionHitRequest(
-                point=(pos.x(), pos.y()),
-                outline_hit=outline_hit,
-                rects=self._selection_rects_for_snapshot(snapshot),
-                pad=self.renderer.style.bond_length_px * 0.1,
-                hit=hit,
-                selected_atom_ids=snapshot.selected_atom_ids,
-                selected_bond_ids=snapshot.selected_bond_ids,
-                bond_atom_ids=bond_atom_ids,
-                ring_atom_ids=tuple(ring_atom_ids or ()),
-                item_is_selected=bool(item is not None and item.isSelected()),
-            )
-        )
+        return self._selection_controller.selection_hit_test(pos, snapshot=snapshot)
 
     def structure_item_is_selected(
         self,
@@ -2554,63 +2079,10 @@ class CanvasView(QGraphicsView):
         return QRectF(QPointF(min_x, min_y), QPointF(max_x, max_y))
 
     def _flip_bounds_for_item(self, item) -> QRectF | None:
-        kind = item.data(0)
-        if kind == "note":
-            rect = item.sceneBoundingRect()
-            return rect if rect.isValid() else None
-        if kind in {"mark", "ts_bracket", "orbital"}:
-            rect = item.sceneBoundingRect()
-            return rect if rect.isValid() else None
-        state = self.scene_item_state(item)
-        if not state:
-            return None
-        if kind == "ring":
-            points = [QPointF(x, y) for x, y in state.get("points", [])]
-            return self._bounds_from_points(points)
-        if kind in {
-            "arrow",
-            "equilibrium",
-            "resonance",
-            "curved_single",
-            "curved_double",
-            "inhibit",
-            "dotted",
-        }:
-            points = []
-            start = state.get("start")
-            end = state.get("end")
-            control = state.get("control")
-            if start is not None:
-                points.append(QPointF(*start))
-            if end is not None:
-                points.append(QPointF(*end))
-            if control is not None:
-                points.append(QPointF(*control))
-            return self._bounds_from_points(points)
-        rect = item.sceneBoundingRect()
-        return rect if rect.isValid() else None
+        return self._scene_ops_controller._flip_bounds_for_item(item)
 
     def _flip_center_for_selection(self, atom_ids: set[int], items: list[QGraphicsItem]) -> QPointF | None:
-        xs = []
-        ys = []
-        for atom_id in atom_ids:
-            atom = self.model.atoms.get(atom_id)
-            if atom is None:
-                continue
-            xs.append(atom.x)
-            ys.append(atom.y)
-        for item in items:
-            kind = item.data(0)
-            if kind in {"atom", "bond"}:
-                continue
-            bounds = self._flip_bounds_for_item(item)
-            if bounds is None:
-                continue
-            xs.extend([bounds.left(), bounds.right()])
-            ys.extend([bounds.top(), bounds.bottom()])
-        if not xs or not ys:
-            return None
-        return QPointF((min(xs) + max(xs)) / 2.0, (min(ys) + max(ys)) / 2.0)
+        return self._scene_ops_controller._flip_center_for_selection(atom_ids, items)
 
     def _flip_scene_item_state(
         self,
@@ -2620,235 +2092,22 @@ class CanvasView(QGraphicsView):
         horizontal: bool,
         transformed_atom_positions: dict[int, tuple[float, float]],
     ) -> dict:
-        if not before_state:
-            return {}
-        kind = before_state.get("kind")
-        after_state = dict(before_state)
-        if kind == "ring":
-            after_state["points"] = [
-                (flipped.x(), flipped.y())
-                for flipped in (
-                    self._flip_point(QPointF(x, y), center, horizontal)
-                    for x, y in before_state.get("points", [])
-                )
-            ]
-            return after_state
-        if kind == "note":
-            rect = item.sceneBoundingRect()
-            if rect.isValid():
-                if horizontal:
-                    after_state["x"] = center.x() - (rect.right() - center.x())
-                    after_state["y"] = before_state.get("y", 0.0)
-                else:
-                    after_state["x"] = before_state.get("x", 0.0)
-                    after_state["y"] = center.y() - (rect.bottom() - center.y())
-            else:
-                flipped = self._flip_point(
-                    QPointF(before_state.get("x", 0.0), before_state.get("y", 0.0)),
-                    center,
-                    horizontal,
-                )
-                after_state["x"] = flipped.x()
-                after_state["y"] = flipped.y()
-            return after_state
-        if kind == "mark":
-            flipped = self._flip_point(
-                QPointF(before_state.get("x", 0.0), before_state.get("y", 0.0)),
-                center,
-                horizontal,
-            )
-            after_state["x"] = flipped.x()
-            after_state["y"] = flipped.y()
-            atom_id = before_state.get("atom_id")
-            if isinstance(atom_id, int):
-                atom_x = atom_y = None
-                if atom_id in transformed_atom_positions:
-                    atom_x, atom_y = transformed_atom_positions[atom_id]
-                else:
-                    atom = self.model.atoms.get(atom_id)
-                    if atom is not None:
-                        atom_x = atom.x
-                        atom_y = atom.y
-                if atom_x is not None and atom_y is not None:
-                    after_state["dx"] = flipped.x() - atom_x
-                    after_state["dy"] = flipped.y() - atom_y
-            return after_state
-        if kind == "orbital":
-            center_state = before_state.get("center")
-            if center_state is not None:
-                flipped = self._flip_point(QPointF(*center_state), center, horizontal)
-                after_state["center"] = (flipped.x(), flipped.y())
-            rotation = float(before_state.get("rotation", 0.0))
-            after_state["rotation"] = 180.0 - rotation if horizontal else -rotation
-            return after_state
-        if kind == "ts_bracket":
-            rect = self._ts_bracket_rect_from_state(before_state)
-            if rect is None:
-                return after_state
-            flipped_rect = QRectF(
-                self._flip_point(rect.topLeft(), center, horizontal),
-                self._flip_point(rect.bottomRight(), center, horizontal),
-            ).normalized()
-            after_state["left"] = flipped_rect.left()
-            after_state["top"] = flipped_rect.top()
-            after_state["right"] = flipped_rect.right()
-            after_state["bottom"] = flipped_rect.bottom()
-            return after_state
-        if kind in {
-            "arrow",
-            "equilibrium",
-            "resonance",
-            "curved_single",
-            "curved_double",
-            "inhibit",
-            "dotted",
-        }:
-            for key in ("start", "end", "control"):
-                point = before_state.get(key)
-                if point is None:
-                    continue
-                flipped = self._flip_point(QPointF(*point), center, horizontal)
-                after_state[key] = (flipped.x(), flipped.y())
-            return after_state
-        return {}
+        return self._scene_ops_controller._flip_scene_item_state(
+            item,
+            before_state,
+            center,
+            horizontal,
+            transformed_atom_positions,
+        )
 
     def _selected_atom_components_for_transform(self, atom_ids: set[int]) -> list[set[int]]:
-        if not atom_ids:
-            return []
-        component_key = (frozenset(atom_ids), self._graph_version)
-        if component_key != self._selection_component_cache_signature:
-            self._selection_component_cache_signature = component_key
-            self._selection_component_cache = self._connected_components(atom_ids)
-        return [set(component) for component in self._selection_component_cache]
+        return self._scene_ops_controller._selected_atom_components_for_transform(atom_ids)
 
     def _center_for_flip_group(self, atom_ids: set[int], items: list[QGraphicsItem]) -> QPointF | None:
-        if atom_ids:
-            return self._bounding_box_center_for_atoms(atom_ids)
-        return self._flip_center_for_selection(set(), items)
+        return self._scene_ops_controller._center_for_flip_group(atom_ids, items)
 
     def _flip_selected_items(self, horizontal: bool) -> None:
-        items = self._selected_items_for_transform()
-        atom_ids = self._selected_atom_ids_for_transform()
-        if not atom_ids and not items:
-            return
-
-        commands: list[HistoryCommand] = []
-        atom_components = self._selected_atom_components_for_transform(atom_ids)
-        component_by_atom = {
-            atom_id: index
-            for index, component in enumerate(atom_components)
-            for atom_id in component
-        }
-        group_items: list[list[QGraphicsItem]] = [[] for _ in atom_components]
-        group_seen: list[set[QGraphicsItem]] = [set() for _ in atom_components]
-        standalone_items: list[QGraphicsItem] = []
-        standalone_seen: set[QGraphicsItem] = set()
-
-        def assign_to_component(index: int, item: QGraphicsItem) -> None:
-            if item in group_seen[index]:
-                return
-            group_seen[index].add(item)
-            group_items[index].append(item)
-
-        def assign_standalone(item: QGraphicsItem) -> None:
-            if item in standalone_seen:
-                return
-            standalone_seen.add(item)
-            standalone_items.append(item)
-
-        for index, component in enumerate(atom_components):
-            for atom_id in component:
-                for mark in self._marks_by_atom.get(atom_id, []):
-                    assign_to_component(index, mark)
-
-        for item in items:
-            kind = item.data(0)
-            if kind in {"atom", "bond"}:
-                continue
-            if kind == "ring":
-                ring_atom_ids = item.data(2)
-                if isinstance(ring_atom_ids, list):
-                    for atom_id in ring_atom_ids:
-                        component_index = component_by_atom.get(atom_id)
-                        if component_index is not None:
-                            assign_to_component(component_index, item)
-                            break
-                    else:
-                        assign_standalone(item)
-                    continue
-            if kind == "mark":
-                data = item.data(1) or {}
-                atom_id = data.get("atom_id")
-                component_index = component_by_atom.get(atom_id) if isinstance(atom_id, int) else None
-                if component_index is not None:
-                    assign_to_component(component_index, item)
-                else:
-                    assign_standalone(item)
-                continue
-            assign_standalone(item)
-
-        for component, component_items in zip(atom_components, group_items):
-            center = self._center_for_flip_group(component, component_items)
-            if center is None:
-                continue
-            before_positions = {}
-            after_positions = {}
-            transformed_atom_positions: dict[int, tuple[float, float]] = {}
-            before_item_states = [(item, self.scene_item_state(item)) for item in component_items]
-            for atom_id in component:
-                atom = self.model.atoms.get(atom_id)
-                if atom is None:
-                    continue
-                before_positions[atom_id] = (atom.x, atom.y)
-                flipped = self._flip_point(QPointF(atom.x, atom.y), center, horizontal)
-                after_positions[atom_id] = (flipped.x(), flipped.y())
-                transformed_atom_positions[atom_id] = (flipped.x(), flipped.y())
-            if before_positions and before_positions != after_positions:
-                self.set_atom_positions(after_positions, update_selection=False)
-                commands.append(
-                    SetAtomPositionsCommand(
-                        before_positions=before_positions,
-                        after_positions=after_positions,
-                        update_selection=True,
-                    )
-                )
-            for item, before_state in before_item_states:
-                after_state = self._flip_scene_item_state(
-                    item,
-                    before_state,
-                    center,
-                    horizontal,
-                    transformed_atom_positions,
-                )
-                if not before_state or not after_state or before_state == after_state:
-                    continue
-                self.apply_scene_item_state(item, after_state)
-                commands.append(UpdateSceneItemCommand(item, before_state, after_state))
-
-        for item in standalone_items:
-            center = self._center_for_flip_group(set(), [item])
-            if center is None:
-                continue
-            before_state = self.scene_item_state(item)
-            after_state = self._flip_scene_item_state(
-                item,
-                before_state,
-                center,
-                horizontal,
-                {},
-            )
-            if not before_state or not after_state or before_state == after_state:
-                continue
-            self.apply_scene_item_state(item, after_state)
-            commands.append(UpdateSceneItemCommand(item, before_state, after_state))
-
-        if not commands:
-            return
-        self._update_selection_outline()
-        if len(commands) == 1:
-            self._push_command(commands[0])
-            return
-        self._push_command(CompositeCommand(commands))
+        self._scene_ops_controller.flip_selected_items(horizontal)
 
     def flip_horizontal(self) -> None:
         self._flip_selected_items(horizontal=True)
@@ -2952,93 +2211,7 @@ class CanvasView(QGraphicsView):
         return items
 
     def _selection_payload_for_clipboard(self) -> dict | None:
-        selected_items = self._selected_items_for_transform()
-        explicit_atom_ids, bond_ids = self._selected_ids()
-        atom_ids = set(explicit_atom_ids)
-        for bond_id in bond_ids:
-            if not (0 <= bond_id < len(self.model.bonds)):
-                continue
-            bond = self.model.bonds[bond_id]
-            if bond is None:
-                continue
-            atom_ids.add(bond.a)
-            atom_ids.add(bond.b)
-
-        atoms: list[dict] = []
-        for atom_id in sorted(atom_ids):
-            atom_state = self._atom_state_dict(atom_id)
-            if not atom_state:
-                continue
-            atoms.append({"id": atom_id, **atom_state})
-
-        bonds: list[dict] = []
-        if atom_ids:
-            for bond in self.model.bonds:
-                if bond is None or bond.a not in atom_ids or bond.b not in atom_ids:
-                    continue
-                bonds.append(self._bond_state_dict(bond))
-
-        rings: list[dict] = []
-        for ring_item in self.ring_items:
-            try:
-                if ring_item.scene() is not self.scene():
-                    continue
-            except RuntimeError:
-                continue
-            ring_atom_ids = ring_item.data(2)
-            if not isinstance(ring_atom_ids, list) or not ring_atom_ids:
-                continue
-            if not all(isinstance(atom_id, int) and atom_id in atom_ids for atom_id in ring_atom_ids):
-                continue
-            ring_state = self.scene_item_state(ring_item)
-            if ring_state:
-                rings.append(ring_state)
-
-        marks: list[dict] = []
-        seen_mark_items = set()
-        for atom_id in sorted(atom_ids):
-            for mark_item in list(self._marks_by_atom.get(atom_id, [])):
-                try:
-                    if mark_item.scene() is not self.scene():
-                        continue
-                except RuntimeError:
-                    continue
-                if mark_item in seen_mark_items:
-                    continue
-                mark_state = self.scene_item_state(mark_item)
-                if not mark_state:
-                    continue
-                seen_mark_items.add(mark_item)
-                marks.append(mark_state)
-        for item in selected_items:
-            if item.data(0) != "mark" or item in seen_mark_items:
-                continue
-            mark_state = self.scene_item_state(item)
-            if not mark_state:
-                continue
-            seen_mark_items.add(item)
-            marks.append(mark_state)
-
-        scene_item_states: list[dict] = []
-        for item in selected_items:
-            kind = item.data(0)
-            if kind in {"atom", "bond", "ring", "mark"}:
-                continue
-            state = self.scene_item_state(item)
-            if state:
-                scene_item_states.append(state)
-
-        if not atoms and not marks and not rings and not scene_item_states:
-            return None
-        return {
-            "format": "lightdraw-selection",
-            "version": self.CLIPBOARD_SELECTION_VERSION,
-            "atoms": atoms,
-            "bonds": bonds,
-            "rings": rings,
-            "marks": marks,
-            "scene_items": scene_item_states,
-        }
+        return self._scene_ops_controller._selection_payload_for_clipboard()
 
     @staticmethod
     def _translated_point_value(value, dx: float, dy: float):
@@ -3120,219 +2293,20 @@ class CanvasView(QGraphicsView):
         return magnitude, magnitude
 
     def _clipboard_selection_payload(self) -> tuple[dict | None, str | None]:
-        payload_candidates: list[str] = []
-        mime_data = QApplication.clipboard().mimeData()
-        if mime_data is not None and mime_data.hasFormat(self.CLIPBOARD_SELECTION_MIME):
-            try:
-                payload_candidates.append(bytes(mime_data.data(self.CLIPBOARD_SELECTION_MIME)).decode("utf-8"))
-            except UnicodeDecodeError:
-                pass
-        if (
-            self._clipboard_selection_payload_json
-            and mime_data is not None
-            and mime_data.hasImage()
-            and not mime_data.hasText()
-            and self._clipboard_selection_payload_json not in payload_candidates
-        ):
-            payload_candidates.append(self._clipboard_selection_payload_json)
-        for payload_json in payload_candidates:
-            try:
-                payload = json.loads(payload_json)
-            except json.JSONDecodeError:
-                continue
-            if not isinstance(payload, dict):
-                continue
-            if payload.get("format") != "lightdraw-selection":
-                continue
-            if payload.get("version") != self.CLIPBOARD_SELECTION_VERSION:
-                continue
-            return payload, payload_json
-        return None, None
+        return self._scene_ops_controller._clipboard_selection_payload()
 
     def _select_pasted_content(self, atom_ids: set[int], scene_items: list[QGraphicsItem]) -> None:
-        self.scene().blockSignals(True)
-        try:
-            self.scene().clearSelection()
-        finally:
-            self.scene().blockSignals(False)
-        self.clear_note_selection()
-        for atom_id in atom_ids:
-            atom_item = self._atom_item_for_id(atom_id)
-            if atom_item is not None:
-                atom_item.setSelected(True)
-        for item in scene_items:
-            if item is None:
-                continue
-            if item.data(0) == "note" and isinstance(item, QGraphicsTextItem):
-                self.select_note(item, additive=True)
-            item.setSelected(True)
-        self._update_selection_outline()
+        self._scene_ops_controller._select_pasted_content(atom_ids, scene_items)
 
     @staticmethod
     def _copy_bounds_for_items(items: list[QGraphicsItem]) -> QRectF | None:
-        bounds = None
-        for item in items:
-            rect = item.sceneBoundingRect()
-            if not rect.isValid():
-                continue
-            bounds = rect if bounds is None else bounds.united(rect)
-        return bounds
+        return SceneOpsController._copy_bounds_for_items(items)
 
     def copy_selection_to_clipboard(self) -> bool:
-        items = self._selection_items_for_copy()
-        if not items:
-            return False
-        payload = self._selection_payload_for_clipboard()
-        bounds = self._copy_bounds_for_items(items)
-        if bounds is None or bounds.width() <= 0 or bounds.height() <= 0:
-            return False
-        pad = max(2.0, self.renderer.style.bond_line_width * 2.0)
-        source = bounds.adjusted(-pad, -pad, pad, pad)
-        items_set = set(items)
-        hidden: list[QGraphicsItem] = []
-        for item in self.scene().items(source):
-            if item in items_set:
-                continue
-            if not item.isVisible():
-                continue
-            item.setVisible(False)
-            hidden.append(item)
-        try:
-            scale = 1.0
-            if hasattr(self, "devicePixelRatioF"):
-                scale = max(1.0, float(self.devicePixelRatioF()))
-            width = max(1, int(math.ceil(source.width() * scale)))
-            height = max(1, int(math.ceil(source.height() * scale)))
-            image = QImage(width, height, QImage.Format.Format_ARGB32_Premultiplied)
-            image.setDevicePixelRatio(scale)
-            image.fill(Qt.GlobalColor.transparent)
-            painter = QPainter(image)
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-            painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
-            self.scene().render(painter, QRectF(0, 0, source.width(), source.height()), source)
-            painter.end()
-        finally:
-            for item in hidden:
-                item.setVisible(True)
-        mime_data = QMimeData()
-        mime_data.setImageData(image)
-        if payload is not None:
-            payload_json = json.dumps(payload, separators=(",", ":"), sort_keys=True)
-            mime_data.setData(self.CLIPBOARD_SELECTION_MIME, payload_json.encode("utf-8"))
-            self._clipboard_selection_payload_json = payload_json
-            self._clipboard_paste_source_json = payload_json
-            self._clipboard_paste_count = 0
-        else:
-            self._clipboard_selection_payload_json = None
-            self._clipboard_paste_source_json = None
-            self._clipboard_paste_count = 0
-        QApplication.clipboard().setMimeData(mime_data)
-        return True
+        return self._scene_ops_controller.copy_selection_to_clipboard()
 
     def paste_selection_from_clipboard(self) -> bool:
-        payload, payload_json = self._clipboard_selection_payload()
-        if payload is None or payload_json is None:
-            return False
-        if payload_json == self._clipboard_paste_source_json:
-            self._clipboard_paste_count += 1
-        else:
-            self._clipboard_paste_source_json = payload_json
-            self._clipboard_paste_count = 1
-        dx, dy = self._clipboard_paste_offset(
-            self._clipboard_paste_count,
-            self.renderer.style.bond_length_px,
-        )
-
-        atoms = payload.get("atoms", [])
-        bonds = payload.get("bonds", [])
-        rings = payload.get("rings", [])
-        marks = payload.get("marks", [])
-        scene_items = payload.get("scene_items", [])
-        if not any((atoms, bonds, rings, marks, scene_items)):
-            return False
-
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        before_smiles_input = self.last_smiles_input
-        atom_id_map: dict[int, int] = {}
-        new_atom_ids: set[int] = set()
-        added_scene_items: list[QGraphicsItem] = []
-
-        for atom_state in atoms:
-            if not isinstance(atom_state, dict):
-                continue
-            atom_id = atom_state.get("id")
-            x = atom_state.get("x")
-            y = atom_state.get("y")
-            if not isinstance(atom_id, int) or not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
-                continue
-            element = str(atom_state.get("element", "C"))
-            new_atom_id = self.add_atom(element, float(x) + dx, float(y) + dy)
-            atom_id_map[atom_id] = new_atom_id
-            new_atom_ids.add(new_atom_id)
-            color = atom_state.get("color")
-            if isinstance(color, str):
-                self.apply_atom_color(new_atom_id, color)
-            if element.upper() == "C" and bool(atom_state.get("explicit_label", False)):
-                self.add_or_update_atom_label(
-                    new_atom_id,
-                    element,
-                    clear_smiles=False,
-                    record=False,
-                    allow_merge=False,
-                    show_carbon=True,
-                )
-
-        for bond_state in bonds:
-            if not isinstance(bond_state, dict):
-                continue
-            atom_a = bond_state.get("a")
-            atom_b = bond_state.get("b")
-            if not isinstance(atom_a, int) or not isinstance(atom_b, int):
-                continue
-            if atom_a not in atom_id_map or atom_b not in atom_id_map:
-                continue
-            new_bond_id = self.add_bond(
-                atom_id_map[atom_a],
-                atom_id_map[atom_b],
-                int(bond_state.get("order", 1)),
-            )
-            self._restore_bond_from_state(
-                new_bond_id,
-                {
-                    "a": atom_id_map[atom_a],
-                    "b": atom_id_map[atom_b],
-                    "order": int(bond_state.get("order", 1)),
-                    "style": bond_state.get("style", "single"),
-                    "color": bond_state.get("color", "#000000"),
-                },
-            )
-
-        for state_group in (rings, marks, scene_items):
-            for state in state_group:
-                translated_state = self._translated_scene_item_state(
-                    state,
-                    dx=dx,
-                    dy=dy,
-                    atom_id_map=atom_id_map,
-                )
-                if not translated_state:
-                    continue
-                item = self.create_scene_item_from_state(translated_state)
-                if item is not None:
-                    added_scene_items.append(item)
-
-        if not atom_id_map and not added_scene_items:
-            return False
-
-        self._select_pasted_content(new_atom_ids, added_scene_items)
-        self._record_additions(
-            before_next_atom_id,
-            before_bond_count,
-            before_smiles_input,
-            added_scene_items=added_scene_items,
-        )
-        return True
+        return self._scene_ops_controller.paste_selection_from_clipboard()
 
     def _expanded_atom_ids_for_structure(self, atom_ids: set[int], bond_ids: set[int]) -> set[int]:
         return expand_atom_ids_for_structure_state(self.model, atom_ids, bond_ids)
@@ -3420,8 +2394,11 @@ class CanvasView(QGraphicsView):
             return self.model.bounds()
         return min(xs), min(ys), max(xs), max(ys)
 
+    def _new_note_item(self) -> QGraphicsTextItem:
+        return NoteItem(self)
+
     def add_text_note(self, pos: QPointF, text: str) -> QGraphicsTextItem:
-        item = NoteItem(self)
+        item = self._new_note_item()
         item.setPlainText(text)
         item._last_text = text
         item.setData(0, "note")
@@ -3654,84 +2631,10 @@ class CanvasView(QGraphicsView):
         item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
 
     def _update_selection_outline(self) -> None:
-        if self._suspend_selection_outline:
-            return
-        items = self.scene().selectedItems()
-        if not items:
-            for outline in self.selection_outlines:
-                self.scene().removeItem(outline)
-            self.selection_outlines = []
-            self._emit_selection_info()
-            return
-        items = [
-            item
-            for item in items
-            if item.data(0) not in {"handle", "note_box", "note_select", "selection_outline"}
-        ]
-        if not items:
-            return
-        explicit_atom_ids, bond_ids = self._selected_ids()
-        atom_ids = set(explicit_atom_ids)
-        for bond_id in bond_ids:
-            if 0 <= bond_id < len(self.model.bonds):
-                bond = self.model.bonds[bond_id]
-                if bond is not None:
-                    atom_ids.add(bond.a)
-                    atom_ids.add(bond.b)
-        object_items = [
-            item
-            for item in items
-            if item.data(0) in {
-                "arrow",
-                "equilibrium",
-                "resonance",
-                "curved_single",
-                "curved_double",
-                "inhibit",
-                "dotted",
-                "ts_bracket",
-                "mark",
-                "orbital",
-            }
-        ]
-
-        for outline in self.selection_outlines:
-            self.scene().removeItem(outline)
-        self.selection_outlines = []
-
-        atom_pad = self.renderer.style.bond_length_px * 0.06
-        atom_fill = QColor(self._selection_color)
-        atom_fill.setAlpha(45)
-        object_fill = QColor(self._selection_color)
-        object_fill.setAlpha(45)
-        overlay_bond_ids = {
-            bond_id
-            for bond_id, bond in enumerate(self.model.bonds)
-            if bond is not None and bond.a in atom_ids and bond.b in atom_ids
-        }
-        for component in self._connected_components(atom_ids):
-            component_bond_ids = {
-                bond_id
-                for bond_id in overlay_bond_ids
-                if (bond := self.model.bonds[bond_id]) is not None
-                and bond.a in component
-                and bond.b in component
-            }
-            self._add_selection_component_overlay(component, component_bond_ids, atom_fill, atom_pad)
-
-        center = self._selection_center_for_atoms(atom_ids)
-        if center is not None and self._selection_center_marker_enabled():
-            self._add_selection_center_marker(center)
-
-        for item in object_items:
-            self._add_selection_object_overlay(item, object_fill)
-        self._emit_selection_info()
+        self._selection_controller.update_selection_outline()
 
     def shift_selection_outlines(self, dx: float, dy: float) -> None:
-        if not self.selection_outlines:
-            return
-        for outline in self.selection_outlines:
-            outline.moveBy(dx, dy)
+        self._selection_controller.shift_selection_outlines(dx, dy)
 
     def _atom_pick_radius(self) -> float:
         base_radius = max(0.6, self.renderer.style.bond_line_width * 0.6)
@@ -3782,147 +2685,19 @@ class CanvasView(QGraphicsView):
         end: QPointF,
         width: float,
     ) -> QPainterPath:
-        bond_path = QPainterPath(start)
-        bond_path.lineTo(end)
-        stroker = QPainterPathStroker()
-        stroker.setWidth(width)
-        stroker.setCapStyle(Qt.PenCapStyle.RoundCap)
-        stroker.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-        return stroker.createStroke(bond_path)
+        return self._selection_controller._selection_line_stroke_path(start, end, width)
 
     def _selection_path_for_bond_item(self, item, width: float | None = None) -> QPainterPath:
-        if isinstance(item, QGraphicsLineItem):
-            line = item.line()
-            start = item.mapToScene(QPointF(line.x1(), line.y1()))
-            end = item.mapToScene(QPointF(line.x2(), line.y2()))
-            stroke_width = width if width is not None else self._selection_bond_overlay_width(item.pen())
-            return self._selection_line_stroke_path(
-                start,
-                end,
-                stroke_width,
-            )
-        if isinstance(item, QGraphicsPolygonItem):
-            bond_path = QPainterPath()
-            bond_path.addPolygon(item.mapToScene(item.polygon()))
-            return bond_path
-        if isinstance(item, QGraphicsPathItem):
-            stroker = QPainterPathStroker()
-            stroker.setWidth(width if width is not None else self._selection_bond_overlay_width(item.pen()))
-            stroker.setCapStyle(Qt.PenCapStyle.RoundCap)
-            stroker.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-            return stroker.createStroke(item.sceneTransform().map(item.path()))
-        return QPainterPath()
+        return self._selection_controller._selection_path_for_bond_item(item, width=width)
 
     def _selection_path_for_bond(self, bond_id: int) -> QPainterPath:
-        if not (0 <= bond_id < len(self.model.bonds)):
-            return QPainterPath()
-        bond = self.model.bonds[bond_id]
-        if bond is None:
-            return QPainterPath()
-        items = self.bond_items.get(bond_id, [])
-        if not items:
-            return QPainterPath()
-        ring_center = self._ring_center_for_bond(bond) if bond.order == 2 else None
-        if ring_center is not None:
-            outer_path = self._selection_path_for_bond_item(items[0])
-            if not outer_path.isEmpty():
-                return outer_path
-        line_items = [item for item in items if isinstance(item, QGraphicsLineItem)]
-        if bond.order >= 2 and line_items and len(line_items) == len(items):
-            atom_a = self.model.atoms.get(bond.a)
-            atom_b = self.model.atoms.get(bond.b)
-            if atom_a is not None and atom_b is not None:
-                t0, t1 = self._trim_line_for_labels(bond.a, bond.b, atom_a.x, atom_a.y, atom_b.x, atom_b.y)
-                base_x1 = atom_a.x + (atom_b.x - atom_a.x) * t0
-                base_y1 = atom_a.y + (atom_b.y - atom_a.y) * t0
-                base_x2 = atom_a.x + (atom_b.x - atom_a.x) * t1
-                base_y2 = atom_a.y + (atom_b.y - atom_a.y) * t1
-                dx = base_x2 - base_x1
-                dy = base_y2 - base_y1
-                length = math.hypot(dx, dy)
-                if length > 1e-6:
-                    nx = -dy / length
-                    ny = dx / length
-                    base_mid = QPointF((base_x1 + base_x2) * 0.5, (base_y1 + base_y2) * 0.5)
-                    offsets = []
-                    widths = []
-                    for item in line_items:
-                        line = item.line()
-                        mid = item.mapToScene(
-                            QPointF((line.x1() + line.x2()) * 0.5, (line.y1() + line.y2()) * 0.5)
-                        )
-                        offsets.append((mid.x() - base_mid.x()) * nx + (mid.y() - base_mid.y()) * ny)
-                        widths.append(self._selection_bond_overlay_width(item.pen()))
-                    axis_shift = (min(offsets) + max(offsets)) * 0.5
-                    overlay_width = max(widths)
-                    return self._selection_line_stroke_path(
-                        QPointF(base_x1 + nx * axis_shift, base_y1 + ny * axis_shift),
-                        QPointF(base_x2 + nx * axis_shift, base_y2 + ny * axis_shift),
-                        overlay_width,
-                    )
-        bond_path = QPainterPath()
-        bond_path.setFillRule(Qt.FillRule.WindingFill)
-        for item in items:
-            item_path = self._selection_path_for_bond_item(item)
-            if not item_path.isEmpty():
-                bond_path.addPath(item_path)
-        return bond_path
+        return self._selection_controller._selection_path_for_bond(bond_id)
 
     def _selection_path_for_object_item(self, item) -> QPainterPath:
-        kind = item.data(0)
-        pad = self.renderer.style.bond_length_px * 0.12
-        if kind == "mark":
-            center = self._mark_center(item)
-            radius = self._mark_selection_radius()
-            path = QPainterPath()
-            path.addEllipse(center, radius, radius)
-            return path
-        if kind in {
-            "arrow",
-            "equilibrium",
-            "resonance",
-            "curved_single",
-            "curved_double",
-            "inhibit",
-            "dotted",
-        } and isinstance(item, QGraphicsPathItem):
-            return self._selection_path_for_bond_item(
-                item,
-                width=max(item.pen().widthF() + pad * 1.5, self._atom_pick_radius() * 0.7),
-            )
-        if isinstance(item, QGraphicsTextItem):
-            rect = item.sceneBoundingRect().adjusted(-pad, -pad, pad, pad)
-            path = QPainterPath()
-            path.addRoundedRect(rect, pad * 0.7, pad * 0.7)
-            return path
-        shape = item.mapToScene(item.shape())
-        if shape.isEmpty():
-            rect = item.sceneBoundingRect().adjusted(-pad, -pad, pad, pad)
-            path = QPainterPath()
-            path.addRoundedRect(rect, pad * 0.7, pad * 0.7)
-            return path
-        stroker = QPainterPathStroker()
-        stroker.setWidth(pad * 2.0)
-        stroker.setCapStyle(Qt.PenCapStyle.RoundCap)
-        stroker.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-        overlay = QPainterPath(shape)
-        overlay.addPath(stroker.createStroke(shape))
-        simplified = overlay.simplified()
-        simplified.setFillRule(Qt.FillRule.WindingFill)
-        return simplified
+        return self._selection_controller._selection_path_for_object_item(item)
 
     def _add_selection_object_overlay(self, item, color: QColor) -> None:
-        path = self._selection_path_for_object_item(item)
-        if path.isEmpty():
-            return
-        outline = NoSelectPathItem(path)
-        outline.setData(0, "selection_outline")
-        outline.setData(2, {"kind": "object"})
-        outline.setZValue(19)
-        outline.setPen(QPen(Qt.PenStyle.NoPen))
-        outline.setBrush(QBrush(color))
-        self.scene().addItem(outline)
-        self.selection_outlines.append(outline)
+        self._selection_controller._add_selection_object_overlay(item, color)
 
     def _add_selection_component_overlay(
         self,
@@ -3931,72 +2706,16 @@ class CanvasView(QGraphicsView):
         color: QColor,
         atom_pad: float,
     ) -> None:
-        component_path = QPainterPath()
-        component_path.setFillRule(Qt.FillRule.WindingFill)
-        for atom_id in atom_ids:
-            rect = self._selection_indicator_rect_for_atom(atom_id)
-            if rect is None:
-                continue
-            component_path.addEllipse(
-                rect.adjusted(-atom_pad, -atom_pad, atom_pad, atom_pad)
-            )
-        for bond_id in bond_ids:
-            bond_path = self._selection_path_for_bond(bond_id)
-            if not bond_path.isEmpty():
-                component_path.addPath(bond_path)
-        if component_path.isEmpty():
-            return
-        component_path = component_path.simplified()
-        component_path.setFillRule(Qt.FillRule.WindingFill)
-        outline = NoSelectPathItem(component_path)
-        outline.setData(0, "selection_outline")
-        outline.setData(2, {"kind": "component", "atom_ids": sorted(atom_ids)})
-        outline.setZValue(19)
-        outline.setPen(QPen(Qt.PenStyle.NoPen))
-        outline.setBrush(QBrush(color))
-        self.scene().addItem(outline)
-        self.selection_outlines.append(outline)
+        self._selection_controller._add_selection_component_overlay(atom_ids, bond_ids, color, atom_pad)
 
     def _selection_center_for_atoms(self, atom_ids: set[int]) -> QPointF | None:
-        if len(atom_ids) < 2:
-            return None
-        return self._bounding_box_center_for_atoms(atom_ids)
+        return self._selection_controller._selection_center_for_atoms(atom_ids)
 
     def _selection_center_marker_enabled(self) -> bool:
-        return self.tools.active is not None and self.tools.active.name == "perspective"
+        return self._selection_controller._selection_center_marker_enabled()
 
     def _add_selection_center_marker(self, center: QPointF) -> None:
-        outer_radius = max(3.5, self.renderer.style.bond_length_px * 0.14)
-        inner_radius = max(1.2, self.renderer.style.bond_length_px * 0.05)
-        outer = NoSelectEllipseItem(
-            center.x() - outer_radius,
-            center.y() - outer_radius,
-            outer_radius * 2.0,
-            outer_radius * 2.0,
-        )
-        outer.setData(0, "selection_outline")
-        outer.setData(2, {"kind": "center"})
-        outer.setZValue(21)
-        pen = QPen(QColor("#ff4dc9"))
-        pen.setWidthF(1.4)
-        outer.setPen(pen)
-        outer.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        self.scene().addItem(outer)
-        self.selection_outlines.append(outer)
-
-        inner = NoSelectEllipseItem(
-            center.x() - inner_radius,
-            center.y() - inner_radius,
-            inner_radius * 2.0,
-            inner_radius * 2.0,
-        )
-        inner.setData(0, "selection_outline")
-        inner.setData(2, {"kind": "center"})
-        inner.setZValue(21)
-        inner.setPen(QPen(Qt.PenStyle.NoPen))
-        inner.setBrush(QBrush(QColor("#ff4dc9")))
-        self.scene().addItem(inner)
-        self.selection_outlines.append(inner)
+        self._selection_controller._add_selection_center_marker(center)
 
     def suspend_selection_outline(self, suspend: bool) -> None:
         self._suspend_selection_outline = bool(suspend)
@@ -6687,41 +5406,13 @@ class CanvasView(QGraphicsView):
         )
 
     def _insert_session_state(self) -> InsertSessionState:
-        smiles_center = None
-        if self._smiles_preview_center is not None:
-            smiles_center = (self._smiles_preview_center.x(), self._smiles_preview_center.y())
-        return InsertSessionState(
-            template_active=self._template_insert_active,
-            template_ring_size=self._template_ring_size,
-            template_ring_style=self._template_ring_style,
-            smiles_active=self._smiles_insert_active,
-            smiles_text=self._smiles_preview_smiles,
-            smiles_center=smiles_center,
-        )
+        return self._insert_controller._insert_session_state()
 
     def _apply_insert_session_state(self, state: InsertSessionState) -> None:
-        template_was_active = self._template_insert_active
-        smiles_was_active = self._smiles_insert_active
-        self._template_insert_active = state.template_active
-        self._template_ring_size = state.template_ring_size
-        self._template_ring_style = state.template_ring_style
-        self._smiles_insert_active = state.smiles_active
-        self._smiles_preview_smiles = state.smiles_text
-        self._smiles_preview_center = None if state.smiles_center is None else QPointF(*state.smiles_center)
-        if template_was_active and not state.template_active:
-            self._clear_template_preview()
-        if smiles_was_active and not state.smiles_active:
-            self._clear_smiles_preview()
+        self._insert_controller._apply_insert_session_state(state)
 
     def begin_ring_template_insert(self, ring_size: int, style: str = "regular") -> None:
-        next_state = begin_template_insert_state(self._insert_session_state(), ring_size, style)
-        if next_state is None:
-            return
-        if self._smiles_insert_active:
-            self._cancel_smiles_insert()
-        self._clear_benzene_preview()
-        self._apply_insert_session_state(next_state)
-        self._render_template_preview(self.mapToScene(self.viewport().rect().center()))
+        self._insert_controller.begin_ring_template_insert(ring_size, style)
 
     def add_naphthalene(self) -> None:
         before_smiles_input = self.last_smiles_input
@@ -7763,241 +6454,34 @@ class CanvasView(QGraphicsView):
         self._apply_insert_session_state(clear_insert_session())
 
     def load_smiles(self, smiles: str) -> None:
-        smiles = smiles.strip()
-        if not smiles:
-            return
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        atom_states = {atom_id: self._atom_state_dict(atom_id) for atom_id in self.model.atoms}
-        bond_states = {
-            bond_id: self._bond_state_dict(bond)
-            for bond_id, bond in enumerate(self.model.bonds)
-            if bond is not None
-        }
-        mark_states_for_atoms = []
-        for atom_id in atom_states:
-            for mark in self._marks_by_atom.get(atom_id, []):
-                mark_states_for_atoms.append(self._mark_state_dict(mark))
-        ring_items = list(self.ring_items)
-        free_mark_items = []
-        note_items = list(self.note_items)
-        arrow_items = list(self.arrow_items)
-        ts_bracket_items = list(self.ts_bracket_items)
-        orbital_items = list(self.orbital_items)
-        for item in self.mark_items:
-            data = item.data(1) or {}
-            atom_id = data.get("atom_id")
-            if not isinstance(atom_id, int) or atom_id not in atom_states:
-                free_mark_items.append(item)
-        model = self.rdkit.smiles_to_2d(smiles, scale=self.renderer.style.bond_length_px)
-        if model is None:
-            message = self.rdkit.last_error or "Failed to render SMILES."
-            QMessageBox.warning(self, "SMILES Error", message)
-            return
-        self.clear_scene()
-        after_clear_next_atom_id = self.model.next_atom_id
-        self.model = model
-        self._rebuild_bond_adjacency()
-        self.last_smiles_input = smiles
-        self._render_model()
-        commands: list[HistoryCommand] = []
-        for bond_id, bond_state in bond_states.items():
-            commands.append(
-                DeleteBondCommand(
-                    bond_id=bond_id,
-                    bond_state=bond_state,
-                    before_smiles_input=before_smiles_input,
-                    after_smiles_input=smiles,
-                )
-            )
-        if atom_states:
-            commands.append(
-                DeleteAtomsCommand(
-                    atom_states=atom_states,
-                    mark_states=mark_states_for_atoms,
-                    before_next_atom_id=before_next_atom_id,
-                    after_next_atom_id=after_clear_next_atom_id,
-                    before_smiles_input=before_smiles_input,
-                    after_smiles_input=smiles,
-                )
-            )
-        scene_items = []
-        scene_items.extend(ring_items)
-        scene_items.extend(free_mark_items)
-        scene_items.extend(note_items)
-        scene_items.extend(arrow_items)
-        scene_items.extend(ts_bracket_items)
-        scene_items.extend(orbital_items)
-        if scene_items:
-            scene_states = [self.scene_item_state(item) for item in scene_items]
-            commands.append(DeleteSceneItemsCommand(item_states=scene_states, items=scene_items))
-        new_atom_states = {atom_id: self._atom_state_dict(atom_id) for atom_id in self.model.atoms}
-        if new_atom_states:
-            commands.append(
-                AddAtomsCommand(
-                    atom_states=new_atom_states,
-                    before_next_atom_id=after_clear_next_atom_id,
-                    after_next_atom_id=self.model.next_atom_id,
-                    before_smiles_input=before_smiles_input,
-                    after_smiles_input=smiles,
-                )
-            )
-        for bond_id, bond in enumerate(self.model.bonds):
-            if bond is None:
-                continue
-            commands.append(
-                AddBondCommand(
-                    bond_id=bond_id,
-                    bond_state=self._bond_state_dict(bond),
-                    previous_bond_count=bond_id,
-                    before_smiles_input=before_smiles_input,
-                    after_smiles_input=smiles,
-                )
-            )
-        if commands:
-            if len(commands) == 1:
-                self._push_command(commands[0])
-            else:
-                self._push_command(CompositeCommand(commands))
+        self._insert_controller.load_smiles(smiles)
 
     def begin_smiles_insert(self, smiles: str) -> None:
-        if self._template_insert_active:
-            self._cancel_template_insert()
-        self._clear_benzene_preview()
-        smiles = smiles.strip()
-        if not smiles:
-            return
-        model = self.rdkit.smiles_to_2d(smiles, scale=self.renderer.style.bond_length_px)
-        if model is None:
-            message = self.rdkit.last_error or "Failed to render SMILES."
-            QMessageBox.warning(self, "SMILES Error", message)
-            return
-        self._smiles_preview_model = model
-        center_xy = smiles_preview_center(model)
-        if center_xy is None:
-            self._smiles_preview_model = None
-            return
-        next_state = begin_smiles_insert_state(
-            self._insert_session_state(),
-            smiles,
-            center_xy,
-        )
-        if next_state is None:
-            self._smiles_preview_model = None
-            return
-        self._apply_insert_session_state(next_state)
-        self._render_smiles_preview(self.mapToScene(self.viewport().rect().center()))
+        self._insert_controller.begin_smiles_insert(smiles)
 
     def _cancel_smiles_insert(self) -> None:
-        self._smiles_preview_model = None
-        next_state = cancel_smiles_insert_state(self._insert_session_state())
-        self._apply_insert_session_state(next_state)
+        self._insert_controller._cancel_smiles_insert()
 
     def _commit_smiles_insert(self, pos: QPointF) -> None:
-        plan = plan_smiles_commit(
-            self._smiles_preview_model,
-            None if self._smiles_preview_center is None else (self._smiles_preview_center.x(), self._smiles_preview_center.y()),
-            (pos.x(), pos.y()),
-        )
-        if plan is None:
-            self._cancel_smiles_insert()
-            return
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        id_map: dict[int, int] = {}
-        for atom_plan in plan.atoms:
-            new_id = self.add_atom(atom_plan.element, atom_plan.x, atom_plan.y)
-            self.model.atoms[new_id].color = atom_plan.color
-            self.model.atoms[new_id].explicit_label = atom_plan.explicit_label
-            id_map[atom_plan.source_atom_id] = new_id
-        bonds_start = len(self.model.bonds)
-        for bond_plan in plan.bonds:
-            a_id = id_map.get(bond_plan.source_a)
-            b_id = id_map.get(bond_plan.source_b)
-            if a_id is None or b_id is None:
-                self._cancel_smiles_insert()
-                return
-            self.add_bond(a_id, b_id, bond_plan.order)
-            created = self.model.bonds[-1]
-            created.style = bond_plan.style
-            created.color = bond_plan.color
-        for new_bond_id in range(bonds_start, len(self.model.bonds)):
-            self._add_bond_graphics(new_bond_id)
-        for new_id in id_map.values():
-            atom = self.model.atoms[new_id]
-            if atom.element == "C" and not atom.explicit_label:
-                self._ensure_carbon_dot(new_id)
-            else:
-                self.add_or_update_atom_label(new_id, atom.element, clear_smiles=False, record=False)
-        self.last_smiles_input = self._smiles_preview_smiles
-        self._cancel_smiles_insert()
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        self._insert_controller._commit_smiles_insert(pos)
 
     def _clear_smiles_preview(self) -> None:
-        (
-            self._smiles_preview_items,
-            self._smiles_preview_bond_items,
-            self._smiles_preview_atom_items,
-        ) = clear_smiles_preview_helper(self.scene(), self._smiles_preview_items)
+        self._insert_controller._clear_smiles_preview()
 
     def _smiles_preview_snapshot(self):
-        return smiles_preview_snapshot_helper(
-            self._smiles_preview_bond_items,
-            self._smiles_preview_atom_items,
-        )
+        return self._insert_controller._smiles_preview_snapshot()
 
     def _render_smiles_preview(self, pos: QPointF) -> None:
-        atom_radius = max(0.6, self.renderer.style.bond_line_width * 0.6)
-        preview_plan = plan_smiles_preview_update(
-            self._smiles_preview_model,
-            None if self._smiles_preview_center is None else (self._smiles_preview_center.x(), self._smiles_preview_center.y()),
-            (pos.x(), pos.y()),
-            atom_radius,
-            self._smiles_preview_snapshot(),
-            SmilesPreviewResolvers(parallel_bond_segments=self._parallel_bond_segments),
-        )
-        if preview_plan.action == "clear" or preview_plan.geometry is None:
-            self._clear_smiles_preview()
-            return
-        (
-            self._smiles_preview_items,
-            self._smiles_preview_bond_items,
-            self._smiles_preview_atom_items,
-        ) = apply_smiles_preview_geometry_helper(
-            self.scene(),
-            preview_plan.geometry,
-            base_pen=self.renderer.bond_pen(),
-            existing_items=self._smiles_preview_items,
-            existing_bond_items=self._smiles_preview_bond_items,
-            existing_atom_items=self._smiles_preview_atom_items,
-            action=preview_plan.action,
-        )
+        self._insert_controller._render_smiles_preview(pos)
 
     def _cancel_template_insert(self) -> None:
-        next_state = cancel_template_insert_state(self._insert_session_state())
-        self._apply_insert_session_state(next_state)
+        self._insert_controller._cancel_template_insert()
 
     def _template_insert_request(self, pos: QPointF) -> TemplateInsertRequest | None:
-        return build_template_insert_request(
-            self._insert_session_state(),
-            cursor_pos=(pos.x(), pos.y()),
-            bond_id=self._find_bond_near(pos, self.renderer.style.bond_length_px * 0.35),
-        )
+        return self._insert_controller._template_insert_request(pos)
 
     def _template_point_resolvers(self) -> TemplatePointResolvers:
-        return TemplatePointResolvers(
-            regular_ring_radius=self._regular_ring_radius,
-            ring_points=self._resolve_ring_points_for_template,
-            regular_ring_points_for_bond=self._resolve_regular_ring_points_for_template_bond,
-            chair_points=self._resolve_chair_points_for_template,
-            boat_points=self._resolve_boat_points_for_template,
-            template_points_for_bond=self._resolve_template_points_for_template_bond,
-        )
+        return self._insert_controller._template_point_resolvers()
 
     def _resolve_ring_points_for_template(
         self,
@@ -8005,8 +6489,7 @@ class CanvasView(QGraphicsView):
         n: int,
         radius: float | None,
     ) -> list[tuple[float, float]]:
-        points = self._ring_points(QPointF(*center), n, radius=radius)
-        return [(point.x(), point.y()) for point in points]
+        return self._insert_controller._resolve_ring_points_for_template(center, n, radius)
 
     def _resolve_regular_ring_points_for_template_bond(
         self,
@@ -8014,18 +6497,13 @@ class CanvasView(QGraphicsView):
         bond_id: int,
         center: tuple[float, float],
     ) -> list[tuple[float, float]] | None:
-        result = self._regular_ring_points_for_bond(n, bond_id, QPointF(*center))
-        if result is None:
-            return None
-        return [(point.x(), point.y()) for point in result[0]]
+        return self._insert_controller._resolve_regular_ring_points_for_template_bond(n, bond_id, center)
 
     def _resolve_chair_points_for_template(self, center: tuple[float, float]) -> list[tuple[float, float]]:
-        points = self._cyclohexane_chair_points(QPointF(*center))
-        return [(point.x(), point.y()) for point in points]
+        return self._insert_controller._resolve_chair_points_for_template(center)
 
     def _resolve_boat_points_for_template(self, center: tuple[float, float]) -> list[tuple[float, float]]:
-        points = self._cyclohexane_boat_points(QPointF(*center))
-        return [(point.x(), point.y()) for point in points]
+        return self._insert_controller._resolve_boat_points_for_template(center)
 
     def _resolve_template_points_for_template_bond(
         self,
@@ -8033,136 +6511,25 @@ class CanvasView(QGraphicsView):
         bond_id: int,
         center: tuple[float, float],
     ) -> list[tuple[float, float]] | None:
-        result = self._template_points_for_bond(
-            [QPointF(x, y) for x, y in points_local],
-            bond_id,
-            QPointF(*center),
-        )
-        if result is None:
-            return None
-        return [(point.x(), point.y()) for point in result[0]]
+        return self._insert_controller._resolve_template_points_for_template_bond(points_local, bond_id, center)
 
     def _template_points_from_pairs(
         self,
         points: list[tuple[float, float]] | None,
     ) -> list[QPointF] | None:
-        if points is None:
-            return None
-        return [QPointF(x, y) for x, y in points]
+        return InsertController._template_points_from_pairs(points)
 
     def _bond_merge_seed(self, bond_id: int | None) -> list[tuple[int, float, float]]:
-        if bond_id is None or not (0 <= bond_id < len(self.model.bonds)):
-            return []
-        bond = self.model.bonds[bond_id]
-        if bond is None:
-            return []
-        atom_a = self.model.atoms.get(bond.a)
-        atom_b = self.model.atoms.get(bond.b)
-        if atom_a is None or atom_b is None:
-            return []
-        return [(bond.a, atom_a.x, atom_a.y), (bond.b, atom_b.x, atom_b.y)]
+        return self._insert_controller._bond_merge_seed(bond_id)
 
     def _commit_template_insert(self, pos: QPointF) -> None:
-        request = self._template_insert_request(pos)
-        if request is None:
-            self._cancel_template_insert()
-            return
-        plan = plan_template_commit(request)
-        if plan is None:
-            self._cancel_template_insert()
-            return
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-
-        if plan.generator == "benzene":
-            if request.bond_id is not None:
-                self.add_benzene_ring(pos, attach_bond_id=request.bond_id, before_smiles_input=before_smiles_input)
-            else:
-                self.add_benzene_ring(pos, before_smiles_input=before_smiles_input)
-            self._cancel_template_insert()
-            return
-
-        resolution = resolve_template_insert(request, plan, self._template_point_resolvers())
-        if resolution is None:
-            self._cancel_template_insert()
-            return
-        points = self._template_points_from_pairs(resolution.points)
-        if points is None:
-            self._cancel_template_insert()
-            return
-
-        if plan.generator in {"bond_regular_ring", "bond_template_shape"}:
-            merge = self._bond_merge_seed(plan.bond_id)
-            atom_ids = []
-            for point in points:
-                atom_ids.append(self._add_atom_with_merge(point, "C", merge))
-            bonds_start = len(self.model.bonds)
-            for i in range(len(atom_ids)):
-                a_id = atom_ids[i]
-                b_id = atom_ids[(i + 1) % len(atom_ids)]
-                if self._bond_exists(a_id, b_id):
-                    continue
-                self.add_bond(a_id, b_id)
-            for new_bond_id in range(bonds_start, len(self.model.bonds)):
-                self._add_bond_graphics(new_bond_id)
-        else:
-            self._add_ring_from_points(points)
-        self._cancel_template_insert()
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        self._insert_controller._commit_template_insert(pos)
 
     def _clear_template_preview(self) -> None:
-        (
-            self._template_preview_items,
-            self._template_preview_lines,
-            self._template_preview_dots,
-        ) = clear_template_preview_helper(self.scene(), self._template_preview_items)
+        self._insert_controller._clear_template_preview()
 
     def _render_template_preview(self, pos: QPointF) -> None:
-        request = self._template_insert_request(pos)
-        if request is None:
-            self._clear_template_preview()
-            return
-        plan = plan_template_preview(request)
-        if plan is None:
-            self._clear_template_preview()
-            return
-        resolution = resolve_template_insert(request, plan, self._template_point_resolvers())
-        if resolution is None:
-            self._clear_template_preview()
-            return
-        points = self._template_points_from_pairs(resolution.points)
-        if points is None:
-            self._clear_template_preview()
-            return
-        atom_radius = max(0.6, self.renderer.style.bond_line_width * 0.6)
-        preview_plan = plan_template_preview_update(
-            [(point.x(), point.y()) for point in points],
-            atom_radius,
-            len(self._template_preview_lines),
-            len(self._template_preview_dots),
-        )
-        if preview_plan.action == "clear" or preview_plan.geometry is None:
-            self._clear_template_preview()
-            return
-        (
-            self._template_preview_items,
-            self._template_preview_lines,
-            self._template_preview_dots,
-        ) = apply_template_preview_geometry_helper(
-            self.scene(),
-            preview_plan.geometry,
-            base_pen=self.renderer.bond_pen(),
-            existing_items=self._template_preview_items,
-            existing_lines=self._template_preview_lines,
-            existing_dots=self._template_preview_dots,
-            action=preview_plan.action,
-        )
+        self._insert_controller._render_template_preview(pos)
 
     def _clear_benzene_preview(self) -> None:
         self._benzene_preview_items = clear_benzene_preview_helper(self.scene(), self._benzene_preview_items)

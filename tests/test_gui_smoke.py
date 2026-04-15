@@ -810,6 +810,33 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertEqual(component_outline.path().fillRule(), Qt.FillRule.WindingFill)
         self.assertEqual(component_outline.brush().color().name(), "#1f5eff")
 
+    def test_disconnected_atom_selection_adds_multiple_component_overlays(self) -> None:
+        left = self.window.canvas.add_atom("C", -40.0, 0.0)
+        right = self.window.canvas.add_atom("C", 40.0, 0.0)
+
+        self._select_atom_ids(left, right)
+
+        component_outlines = [
+            item
+            for item in self.window.canvas.selection_outlines
+            if (item.data(2) or {}).get("kind") == "component"
+        ]
+        self.assertEqual(len(component_outlines), 2)
+        self.assertFalse(any((item.data(2) or {}).get("kind") == "center" for item in self.window.canvas.selection_outlines))
+
+    def test_clearing_selection_removes_selection_outlines(self) -> None:
+        left = self.window.canvas.add_atom("C", -10.0, 0.0)
+        right = self.window.canvas.add_atom("C", 10.0, 0.0)
+        self.window.canvas.add_bond(left, right)
+        self.window.canvas._add_bond_graphics(0)
+
+        self._select_atom_ids(left, right)
+        self.assertTrue(self.window.canvas.selection_outlines)
+
+        self.window.canvas.scene().clearSelection()
+
+        self.assertEqual(self.window.canvas.selection_outlines, [])
+
     def test_arrow_selection_uses_filled_object_overlay(self) -> None:
         arrow = self.window.canvas.add_arrow(QPointF(-40.0, 0.0), QPointF(20.0, 20.0), "arrow")
 
@@ -881,6 +908,21 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.window.canvas.set_tool("select")
 
         self.assertFalse(any((item.data(2) or {}).get("kind") == "center" for item in self.window.canvas.selection_outlines))
+
+    def test_selection_hit_test_ignores_center_marker_for_disconnected_selection(self) -> None:
+        left = self.window.canvas.add_atom("C", -50.0, 0.0)
+        right = self.window.canvas.add_atom("C", 50.0, 0.0)
+
+        self._select_atom_ids(left, right)
+        self.window.canvas.set_tool("perspective")
+
+        center_markers = [
+            item
+            for item in self.window.canvas.selection_outlines
+            if (item.data(2) or {}).get("kind") == "center"
+        ]
+        self.assertEqual(len(center_markers), 2)
+        self.assertFalse(self.window.canvas.selection_hit_test(QPointF(0.0, 0.0)))
 
     def test_ring_double_bond_selection_overlay_tracks_outer_bond_line(self) -> None:
         self.window.canvas.add_benzene_ring(QPointF(0.0, 0.0))
@@ -1190,6 +1232,61 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.window.canvas.redo()
         self.assertEqual(len(self.window.canvas.ring_items), 2)
         self._assert_ring_double_bonds_face_inward(self.window.canvas.ring_items[-1])
+
+    def test_delete_selected_items_atom_bound_mark_and_arrow_undo_restores_everything(self) -> None:
+        atom_a = self.window.canvas.add_atom("C", -20.0, 0.0)
+        atom_b = self.window.canvas.add_atom("O", 20.0, 0.0)
+        bond_id = self.window.canvas.add_bond(atom_a, atom_b)
+        self.window.canvas._add_bond_graphics(bond_id)
+        mark = self.window.canvas.add_mark_for_atom(atom_a, QPointF(-12.0, -8.0), kind="minus", record=False)
+        arrow = self.window.canvas.add_arrow(QPointF(40.0, -5.0), QPointF(90.0, 15.0), "arrow")
+        atom_item = self.window.canvas.atom_items.get(atom_a) or self.window.canvas.atom_dots.get(atom_a)
+        self.assertIsNotNone(atom_item)
+        self.assertIsNotNone(mark)
+        original_mark_state = self.window.canvas.scene_item_state(mark)
+
+        self._select_items(atom_item, mark, arrow)
+
+        self.assertTrue(self.window.canvas.delete_selected_items())
+        self.assertNotIn(atom_a, self.window.canvas.model.atoms)
+        self.assertEqual(sum(1 for bond in self.window.canvas.model.bonds if bond is not None), 0)
+        self.assertEqual(len(self.window.canvas.arrow_items), 0)
+        self.assertEqual(len(self.window.canvas.mark_items), 0)
+        self.assertFalse(self.window.canvas._marks_by_atom.get(atom_a))
+
+        self.window.canvas.undo()
+
+        self.assertIn(atom_a, self.window.canvas.model.atoms)
+        self.assertIn(atom_b, self.window.canvas.model.atoms)
+        self.assertEqual(sum(1 for bond in self.window.canvas.model.bonds if bond is not None), 1)
+        self.assertEqual(len(self.window.canvas.arrow_items), 1)
+        self.assertIn(arrow, self.window.canvas.arrow_items)
+        restored_marks = self.window.canvas._marks_by_atom.get(atom_a, [])
+        self.assertEqual(len(restored_marks), 1)
+        self.assertEqual(self.window.canvas.scene_item_state(restored_marks[0]), original_mark_state)
+        self.assertIn(restored_marks[0], self.window.canvas.mark_items)
+
+    def test_delete_selected_items_single_bond_preserves_atoms_and_undo_restores_bond(self) -> None:
+        left = self.window.canvas.add_atom("C", -20.0, 0.0)
+        right = self.window.canvas.add_atom("O", 20.0, 0.0)
+        bond_id = self.window.canvas.add_bond(left, right)
+        self.window.canvas._add_bond_graphics(bond_id)
+        bond_item = self.window.canvas.bond_items[bond_id][0]
+
+        self._select_items(bond_item)
+
+        self.assertTrue(self.window.canvas.delete_selected_items())
+        self.assertEqual(set(self.window.canvas.model.atoms), {left, right})
+        self.assertIsNone(self.window.canvas.model.bonds[bond_id])
+        self.assertFalse(self.window.canvas.bond_items.get(bond_id))
+
+        self.window.canvas.undo()
+
+        restored_bond = self.window.canvas.model.bonds[bond_id]
+        self.assertIsNotNone(restored_bond)
+        assert restored_bond is not None
+        self.assertEqual((restored_bond.a, restored_bond.b), (left, right))
+        self.assertTrue(self.window.canvas.bond_items.get(bond_id))
 
     def test_color_preset_preserves_ring_fill_on_selected_ring(self) -> None:
         self.window.canvas.add_benzene_ring(QPointF(0.0, 0.0))
