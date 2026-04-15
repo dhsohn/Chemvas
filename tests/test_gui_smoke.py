@@ -350,6 +350,121 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertEqual(self.window.canvas.hover_atom_id, atom_id)
         self.assertEqual(len(self.window.canvas.hover_items), 1)
 
+    def test_benzene_tool_hover_preview_clears_on_tool_change_and_deactivate(self) -> None:
+        hover_pos = QPointF(24.0, 18.0)
+
+        self.window.canvas.set_tool("benzene")
+        self._hover_scene_point(hover_pos)
+
+        self.assertEqual(self.window.canvas.tools.active.name, "benzene")
+        self.assertTrue(self.window.canvas._benzene_preview_items)
+        self.assertTrue(
+            all(item.scene() is self.window.canvas.scene() for item in self.window.canvas._benzene_preview_items)
+        )
+
+        self.window.canvas.set_tool("select")
+        self.app.processEvents()
+        QTest.qWait(10)
+
+        self.assertEqual(self.window.canvas.tools.active.name, "select")
+        self.assertEqual(self.window.canvas._benzene_preview_items, [])
+
+        self.window.canvas.set_tool("benzene")
+        self._hover_scene_point(QPointF(-12.0, 33.0))
+        self.assertTrue(self.window.canvas._benzene_preview_items)
+
+        self.window.canvas.tools.active.deactivate()
+        self.app.processEvents()
+        QTest.qWait(10)
+
+        self.assertEqual(self.window.canvas._benzene_preview_items, [])
+
+    def test_bond_tool_drag_preview_clears_on_tool_change_and_deactivate(self) -> None:
+        canvas = self.window.canvas
+        canvas.add_atom("C", 0.0, 0.0)
+
+        canvas.set_tool("bond")
+        bond_tool = canvas.tools.active
+        self.assertEqual(bond_tool.name, "bond")
+        self.assertEqual(bond_tool._preview_items, [])
+
+        start = QPointF(0.0, 0.0)
+        end = QPointF(52.0, 24.0)
+        start_pos = canvas.mapFromScene(start)
+        end_pos = canvas.mapFromScene(end)
+
+        QTest.mousePress(
+            canvas.viewport(),
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+            start_pos,
+        )
+        self.app.processEvents()
+        QTest.qWait(10)
+        QTest.mouseMove(canvas.viewport(), end_pos)
+        self.app.processEvents()
+        QTest.qWait(10)
+
+        self.assertTrue(bond_tool._preview_items)
+        self.assertTrue(all(item.scene() is canvas.scene() for item in bond_tool._preview_items))
+
+        canvas.set_tool("select")
+        self.app.processEvents()
+        QTest.qWait(10)
+
+        self.assertEqual(canvas.tools.active.name, "select")
+        self.assertEqual(bond_tool._preview_items, [])
+
+        QTest.mouseRelease(
+            canvas.viewport(),
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+            end_pos,
+        )
+        self.app.processEvents()
+        QTest.qWait(10)
+
+        canvas.set_tool("bond")
+        bond_tool = canvas.tools.active
+        self.assertEqual(bond_tool._preview_items, [])
+
+        restart = QPointF(-24.0, 0.0)
+        finish = QPointF(36.0, -28.0)
+        restart_pos = canvas.mapFromScene(restart)
+        finish_pos = canvas.mapFromScene(finish)
+
+        QTest.mousePress(
+            canvas.viewport(),
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+            restart_pos,
+        )
+        self.app.processEvents()
+        QTest.qWait(10)
+        QTest.mouseMove(canvas.viewport(), finish_pos)
+        self.app.processEvents()
+        QTest.qWait(10)
+
+        self.assertTrue(bond_tool._preview_items)
+        self.assertTrue(all(item.scene() is canvas.scene() for item in bond_tool._preview_items))
+
+        bond_tool.deactivate()
+        self.app.processEvents()
+        QTest.qWait(10)
+
+        self.assertEqual(bond_tool._preview_items, [])
+
+        QTest.mouseRelease(
+            canvas.viewport(),
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+            finish_pos,
+        )
+        self.app.processEvents()
+        QTest.qWait(10)
+
+        canvas.set_tool("select")
+
     def test_scroll_refresh_clears_stale_hover_preview(self) -> None:
         atom_id = self.window.canvas.add_atom("C", 0.0, 0.0)
         viewport_pos = self.window.canvas.mapFromScene(QPointF(0.0, 0.0))
