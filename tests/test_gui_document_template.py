@@ -706,6 +706,50 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             {0: {"formal_charge": 1, "radical_electrons": 1}},
         )
 
+    def test_build_3d_conversion_payload_ignores_scene_only_items_in_mixed_selection(self) -> None:
+        left = self.window.canvas.add_atom("C", -20.0, 0.0)
+        middle = self.window.canvas.add_atom("C", 0.0, 0.0)
+        right = self.window.canvas.add_atom("O", 20.0, 0.0)
+        self.window.canvas.add_bond(left, middle, 1)
+        self.window.canvas.add_bond(middle, right, 1)
+        self.window.canvas._add_bond_graphics(0)
+        self.window.canvas._add_bond_graphics(1)
+        arrow = self.window.canvas.add_arrow(QPointF(-40.0, -20.0), QPointF(40.0, -20.0), "reaction")
+        ts_bracket = self.window.canvas.add_ts_bracket_from_points(QPointF(-8.0, -28.0), QPointF(8.0, 28.0))
+        note = self.window.canvas.add_text_note(QPointF(55.0, 10.0), "Scheme")
+
+        self.window.canvas.scene().clearSelection()
+        self.window.canvas.bond_items[0][0].setSelected(True)
+        arrow.setSelected(True)
+        ts_bracket.setSelected(True)
+        note.setSelected(True)
+        self.app.processEvents()
+        QTest.qWait(10)
+
+        export_model, atom_annotations = self.window.canvas.build_3d_conversion_payload()
+
+        self.assertEqual(len(export_model.atoms), 2)
+        self.assertEqual(len(export_model.bonds), 1)
+        self.assertEqual(atom_annotations, {})
+
+    def test_build_3d_conversion_payload_uses_atom_bound_mark_selection(self) -> None:
+        left = self.window.canvas.add_atom("N", -20.0, 0.0)
+        self.window.canvas.add_atom("O", 20.0, 0.0)
+        mark = self.window.canvas.add_mark_for_atom(left, QPointF(-12.0, -10.0), kind="plus", record=False)
+        arrow = self.window.canvas.add_arrow(QPointF(-40.0, -20.0), QPointF(40.0, -20.0), "reaction")
+
+        self.window.canvas.scene().clearSelection()
+        mark.setSelected(True)
+        arrow.setSelected(True)
+        self.app.processEvents()
+        QTest.qWait(10)
+
+        export_model, atom_annotations = self.window.canvas.build_3d_conversion_payload()
+
+        self.assertEqual(len(export_model.atoms), 1)
+        self.assertEqual(len(export_model.bonds), 0)
+        self.assertEqual(atom_annotations, {0: {"formal_charge": 1}})
+
     def test_preview_panel_updates_from_canvas_structure(self) -> None:
         atom_id = self.window.canvas.add_atom("N", 0.0, 0.0)
         self.window.canvas.add_mark_for_atom(atom_id, QPointF(10.0, -10.0), kind="plus", record=False)
@@ -733,6 +777,44 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
                 & self.window.panel_dock.DockWidgetFeature.DockWidgetClosable
             )
         )
+
+    def test_preview_panel_uses_selected_structure_when_scene_only_items_are_also_selected(self) -> None:
+        left = self.window.canvas.add_atom("C", -20.0, 0.0)
+        middle = self.window.canvas.add_atom("C", 0.0, 0.0)
+        right = self.window.canvas.add_atom("O", 20.0, 0.0)
+        self.window.canvas.add_bond(left, middle, 1)
+        self.window.canvas.add_bond(middle, right, 1)
+        self.window.canvas._add_bond_graphics(0)
+        self.window.canvas._add_bond_graphics(1)
+        arrow = self.window.canvas.add_arrow(QPointF(-40.0, -20.0), QPointF(40.0, -20.0), "reaction")
+        ts_bracket = self.window.canvas.add_ts_bracket_from_points(QPointF(-8.0, -28.0), QPointF(8.0, 28.0))
+        note = self.window.canvas.add_text_note(QPointF(55.0, 10.0), "Scheme")
+
+        self.window.canvas.scene().clearSelection()
+        self.window.canvas.bond_items[0][0].setSelected(True)
+        arrow.setSelected(True)
+        ts_bracket.setSelected(True)
+        note.setSelected(True)
+        self.app.processEvents()
+        QTest.qWait(10)
+
+        scene = Molecule3DScene(
+            atoms=(
+                Molecule3DAtom("C", 0.0, 0.0, 0.0),
+                Molecule3DAtom("C", 1.0, 0.0, 0.0),
+            ),
+            bonds=(Molecule3DBond(0, 1, 1),),
+        )
+
+        with patch.object(self.window.preview_3d._rdkit, "model_to_3d_scene", return_value=scene) as mocked:
+            self.window.preview_3d.refresh_from_canvas(self.window.canvas)
+            self.app.processEvents()
+            QTest.qWait(150)
+            self.app.processEvents()
+
+        called_model = mocked.call_args.args[0]
+        self.assertEqual(len(called_model.atoms), 2)
+        self.assertEqual(len(called_model.bonds), 1)
 
     def test_preview_panel_hint_font_is_zoom_independent(self) -> None:
         initial_size = self.window.preview_3d._overlay_font().pixelSize()
