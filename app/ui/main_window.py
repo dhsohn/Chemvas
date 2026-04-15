@@ -838,7 +838,7 @@ class MainWindow(QMainWindow):
 
     def _icon_mark_plus(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#c00000"))
+            pen = QPen(QColor("#3d3229"))
             pen.setWidthF(2.0)
             p.setPen(pen)
             p.drawLine(15, 7, 15, 23)
@@ -847,7 +847,7 @@ class MainWindow(QMainWindow):
 
     def _icon_mark_minus(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#1f5eff"))
+            pen = QPen(QColor("#3d3229"))
             pen.setWidthF(2.0)
             p.setPen(pen)
             p.drawLine(7, 15, 23, 15)
@@ -856,7 +856,7 @@ class MainWindow(QMainWindow):
     def _icon_mark_radical(self) -> QIcon:
         def draw(p):
             p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QColor("#6a2ea6"))
+            p.setBrush(QColor("#3d3229"))
             p.drawEllipse(12, 12, 6, 6)
         return self._make_icon(draw)
 
