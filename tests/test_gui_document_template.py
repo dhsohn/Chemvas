@@ -751,7 +751,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
         with (
             patch.object(self.window.canvas.rdkit, "smiles_to_2d", return_value=None),
-            patch("ui.canvas_view.QMessageBox.warning") as warning,
+            patch("ui.insert_controller.QMessageBox.warning") as warning,
         ):
             self.window.canvas.begin_smiles_insert("not-a-smiles")
 
