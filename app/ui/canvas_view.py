@@ -1,8 +1,9 @@
+import json
 import math
 import time
 from pathlib import Path
 
-from PyQt6.QtCore import QPointF, QRectF, Qt, QEvent, QTimer
+from PyQt6.QtCore import QPointF, QRectF, Qt, QEvent, QMimeData, QTimer
 from PyQt6.QtGui import (
     QColor,
     QCursor,
@@ -140,6 +141,7 @@ from ui.scene_item_restore import (
     create_ts_bracket_item_from_state as create_ts_bracket_item_from_state_helper,
 )
 from ui.scene_item_state import (
+    ARROW_KINDS,
     apply_scene_item_state as apply_scene_item_state_helper,
     arrow_state_dict as arrow_state_dict_helper,
     mark_state_dict as mark_state_dict_helper,
@@ -225,6 +227,8 @@ class NoteItem(QGraphicsTextItem):
 
 class CanvasView(QGraphicsView):
     FILE_FORMAT_VERSION = 1
+    CLIPBOARD_SELECTION_MIME = "application/x-lightdraw-selection+json"
+    CLIPBOARD_SELECTION_VERSION = 1
 
     def __init__(self) -> None:
         super().__init__()
@@ -360,6 +364,9 @@ class CanvasView(QGraphicsView):
         self._redo_stack: list[HistoryCommand] = []
         self._history_enabled = True
         self._history_limit = 100
+        self._clipboard_selection_payload_json: str | None = None
+        self._clipboard_paste_source_json: str | None = None
+        self._clipboard_paste_count = 0
         self.tools = ToolController(self)
         self.tools.set_active("bond")
 
@@ -389,6 +396,10 @@ class CanvasView(QGraphicsView):
             return
         if event.matches(QKeySequence.StandardKey.Copy):
             if self.copy_selection_to_clipboard():
+                event.accept()
+                return
+        if event.matches(QKeySequence.StandardKey.Paste):
+            if self.paste_selection_from_clipboard():
                 event.accept()
                 return
         if event.key() in (Qt.Key.Key_Backspace, Qt.Key.Key_Delete):
@@ -1577,6 +1588,24 @@ class CanvasView(QGraphicsView):
             return item
         return None
 
+    def _bond_ids_for_ring_item(self, item) -> set[int]:
+        ring_atom_ids = item.data(2)
+        if not isinstance(ring_atom_ids, list) or len(ring_atom_ids) < 2:
+            return set()
+        bond_ids: set[int] = set()
+        for index, atom_a in enumerate(ring_atom_ids):
+            atom_b = ring_atom_ids[(index + 1) % len(ring_atom_ids)]
+            if not isinstance(atom_a, int) or not isinstance(atom_b, int):
+                continue
+            bond_id = self._bond_id_between(atom_a, atom_b)
+            if bond_id is not None:
+                bond_ids.add(bond_id)
+        return bond_ids
+
+    def _refresh_bond_geometry_for_ring_item(self, item) -> None:
+        for bond_id in self._bond_ids_for_ring_item(item):
+            self.update_bond_geometry(bond_id)
+
     def restore_scene_item(self, item) -> None:
         if item is None:
             return
@@ -1619,6 +1648,8 @@ class CanvasView(QGraphicsView):
                 self.orbital_items.append(item)
         self._make_selectable(item)
         self.scene().addItem(item)
+        if kind == "ring":
+            self._refresh_bond_geometry_for_ring_item(item)
 
     def remove_scene_item(self, item) -> None:
         if item is None:
@@ -1660,6 +1691,8 @@ class CanvasView(QGraphicsView):
                 self.scene().removeItem(item)
         except RuntimeError:
             return
+        if kind == "ring":
+            self._refresh_bond_geometry_for_ring_item(item)
 
     def apply_scene_item_state(self, item, state: dict) -> None:
         apply_scene_item_state_helper(
@@ -2481,8 +2514,8 @@ class CanvasView(QGraphicsView):
             for item in self.scene().selectedItems()
             if item.data(0) not in excluded_kinds
         ]
-        if not selected and self.selected_notes:
-            selected = [note for note in self.selected_notes if note.scene() is self.scene()]
+        if self.selected_notes:
+            selected.extend(note for note in self.selected_notes if note.scene() is self.scene())
         items: list[QGraphicsItem] = []
         seen = set()
         for item in selected:
@@ -2886,8 +2919,8 @@ class CanvasView(QGraphicsView):
             for item in self.scene().selectedItems()
             if item.data(0) not in excluded_kinds
         ]
-        if not selected and self.selected_notes:
-            selected = [note for note in self.selected_notes if note.scene() is self.scene()]
+        if self.selected_notes:
+            selected.extend(note for note in self.selected_notes if note.scene() is self.scene())
         if not selected:
             return []
         items: list[QGraphicsItem] = []
@@ -2918,6 +2951,223 @@ class CanvasView(QGraphicsView):
             add_with_children(item)
         return items
 
+    def _selection_payload_for_clipboard(self) -> dict | None:
+        selected_items = self._selected_items_for_transform()
+        explicit_atom_ids, bond_ids = self._selected_ids()
+        atom_ids = set(explicit_atom_ids)
+        for bond_id in bond_ids:
+            if not (0 <= bond_id < len(self.model.bonds)):
+                continue
+            bond = self.model.bonds[bond_id]
+            if bond is None:
+                continue
+            atom_ids.add(bond.a)
+            atom_ids.add(bond.b)
+
+        atoms: list[dict] = []
+        for atom_id in sorted(atom_ids):
+            atom_state = self._atom_state_dict(atom_id)
+            if not atom_state:
+                continue
+            atoms.append({"id": atom_id, **atom_state})
+
+        bonds: list[dict] = []
+        if atom_ids:
+            for bond in self.model.bonds:
+                if bond is None or bond.a not in atom_ids or bond.b not in atom_ids:
+                    continue
+                bonds.append(self._bond_state_dict(bond))
+
+        rings: list[dict] = []
+        for ring_item in self.ring_items:
+            try:
+                if ring_item.scene() is not self.scene():
+                    continue
+            except RuntimeError:
+                continue
+            ring_atom_ids = ring_item.data(2)
+            if not isinstance(ring_atom_ids, list) or not ring_atom_ids:
+                continue
+            if not all(isinstance(atom_id, int) and atom_id in atom_ids for atom_id in ring_atom_ids):
+                continue
+            ring_state = self.scene_item_state(ring_item)
+            if ring_state:
+                rings.append(ring_state)
+
+        marks: list[dict] = []
+        seen_mark_items = set()
+        for atom_id in sorted(atom_ids):
+            for mark_item in list(self._marks_by_atom.get(atom_id, [])):
+                try:
+                    if mark_item.scene() is not self.scene():
+                        continue
+                except RuntimeError:
+                    continue
+                if mark_item in seen_mark_items:
+                    continue
+                mark_state = self.scene_item_state(mark_item)
+                if not mark_state:
+                    continue
+                seen_mark_items.add(mark_item)
+                marks.append(mark_state)
+        for item in selected_items:
+            if item.data(0) != "mark" or item in seen_mark_items:
+                continue
+            mark_state = self.scene_item_state(item)
+            if not mark_state:
+                continue
+            seen_mark_items.add(item)
+            marks.append(mark_state)
+
+        scene_item_states: list[dict] = []
+        for item in selected_items:
+            kind = item.data(0)
+            if kind in {"atom", "bond", "ring", "mark"}:
+                continue
+            state = self.scene_item_state(item)
+            if state:
+                scene_item_states.append(state)
+
+        if not atoms and not marks and not rings and not scene_item_states:
+            return None
+        return {
+            "format": "lightdraw-selection",
+            "version": self.CLIPBOARD_SELECTION_VERSION,
+            "atoms": atoms,
+            "bonds": bonds,
+            "rings": rings,
+            "marks": marks,
+            "scene_items": scene_item_states,
+        }
+
+    @staticmethod
+    def _translated_point_value(value, dx: float, dy: float):
+        if (
+            isinstance(value, (list, tuple))
+            and len(value) == 2
+            and isinstance(value[0], (int, float))
+            and isinstance(value[1], (int, float))
+        ):
+            return (float(value[0]) + dx, float(value[1]) + dy)
+        return value
+
+    def _translated_scene_item_state(
+        self,
+        state: dict,
+        *,
+        dx: float,
+        dy: float,
+        atom_id_map: dict[int, int],
+    ) -> dict | None:
+        if not isinstance(state, dict):
+            return None
+        translated = dict(state)
+        kind = translated.get("kind")
+        if kind == "ring":
+            ring_atom_ids = translated.get("atom_ids")
+            if not isinstance(ring_atom_ids, list) or not ring_atom_ids:
+                return None
+            mapped_atom_ids: list[int] = []
+            for atom_id in ring_atom_ids:
+                if not isinstance(atom_id, int) or atom_id not in atom_id_map:
+                    return None
+                mapped_atom_ids.append(atom_id_map[atom_id])
+            points = translated.get("points", [])
+            translated_points = []
+            for point in points:
+                translated_point = self._translated_point_value(point, dx, dy)
+                if translated_point is None or translated_point is point:
+                    continue
+                translated_points.append(translated_point)
+            translated["atom_ids"] = mapped_atom_ids
+            translated["points"] = translated_points
+            return translated
+        if kind == "mark":
+            atom_id = translated.get("atom_id")
+            translated["atom_id"] = atom_id_map.get(atom_id) if isinstance(atom_id, int) else None
+            if isinstance(translated.get("x"), (int, float)):
+                translated["x"] = float(translated["x"]) + dx
+            if isinstance(translated.get("y"), (int, float)):
+                translated["y"] = float(translated["y"]) + dy
+            return translated
+        if kind == "note":
+            if isinstance(translated.get("x"), (int, float)):
+                translated["x"] = float(translated["x"]) + dx
+            if isinstance(translated.get("y"), (int, float)):
+                translated["y"] = float(translated["y"]) + dy
+            return translated
+        if kind in ARROW_KINDS:
+            translated["start"] = self._translated_point_value(translated.get("start"), dx, dy)
+            translated["end"] = self._translated_point_value(translated.get("end"), dx, dy)
+            translated["control"] = self._translated_point_value(translated.get("control"), dx, dy)
+            return translated
+        if kind == "ts_bracket":
+            for key in ("left", "right"):
+                if isinstance(translated.get(key), (int, float)):
+                    translated[key] = float(translated[key]) + dx
+            for key in ("top", "bottom"):
+                if isinstance(translated.get(key), (int, float)):
+                    translated[key] = float(translated[key]) + dy
+            return translated
+        if kind == "orbital":
+            translated["center"] = self._translated_point_value(translated.get("center"), dx, dy)
+            return translated
+        return translated
+
+    @staticmethod
+    def _clipboard_paste_offset(step: int, bond_length_px: float) -> tuple[float, float]:
+        magnitude = max(18.0, bond_length_px * 0.35) * max(1, step)
+        return magnitude, magnitude
+
+    def _clipboard_selection_payload(self) -> tuple[dict | None, str | None]:
+        payload_candidates: list[str] = []
+        mime_data = QApplication.clipboard().mimeData()
+        if mime_data is not None and mime_data.hasFormat(self.CLIPBOARD_SELECTION_MIME):
+            try:
+                payload_candidates.append(bytes(mime_data.data(self.CLIPBOARD_SELECTION_MIME)).decode("utf-8"))
+            except UnicodeDecodeError:
+                pass
+        if (
+            self._clipboard_selection_payload_json
+            and mime_data is not None
+            and mime_data.hasImage()
+            and not mime_data.hasText()
+            and self._clipboard_selection_payload_json not in payload_candidates
+        ):
+            payload_candidates.append(self._clipboard_selection_payload_json)
+        for payload_json in payload_candidates:
+            try:
+                payload = json.loads(payload_json)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(payload, dict):
+                continue
+            if payload.get("format") != "lightdraw-selection":
+                continue
+            if payload.get("version") != self.CLIPBOARD_SELECTION_VERSION:
+                continue
+            return payload, payload_json
+        return None, None
+
+    def _select_pasted_content(self, atom_ids: set[int], scene_items: list[QGraphicsItem]) -> None:
+        self.scene().blockSignals(True)
+        try:
+            self.scene().clearSelection()
+        finally:
+            self.scene().blockSignals(False)
+        self.clear_note_selection()
+        for atom_id in atom_ids:
+            atom_item = self._atom_item_for_id(atom_id)
+            if atom_item is not None:
+                atom_item.setSelected(True)
+        for item in scene_items:
+            if item is None:
+                continue
+            if item.data(0) == "note" and isinstance(item, QGraphicsTextItem):
+                self.select_note(item, additive=True)
+            item.setSelected(True)
+        self._update_selection_outline()
+
     @staticmethod
     def _copy_bounds_for_items(items: list[QGraphicsItem]) -> QRectF | None:
         bounds = None
@@ -2932,6 +3182,7 @@ class CanvasView(QGraphicsView):
         items = self._selection_items_for_copy()
         if not items:
             return False
+        payload = self._selection_payload_for_clipboard()
         bounds = self._copy_bounds_for_items(items)
         if bounds is None or bounds.width() <= 0 or bounds.height() <= 0:
             return False
@@ -2963,7 +3214,124 @@ class CanvasView(QGraphicsView):
         finally:
             for item in hidden:
                 item.setVisible(True)
-        QApplication.clipboard().setImage(image)
+        mime_data = QMimeData()
+        mime_data.setImageData(image)
+        if payload is not None:
+            payload_json = json.dumps(payload, separators=(",", ":"), sort_keys=True)
+            mime_data.setData(self.CLIPBOARD_SELECTION_MIME, payload_json.encode("utf-8"))
+            self._clipboard_selection_payload_json = payload_json
+            self._clipboard_paste_source_json = payload_json
+            self._clipboard_paste_count = 0
+        else:
+            self._clipboard_selection_payload_json = None
+            self._clipboard_paste_source_json = None
+            self._clipboard_paste_count = 0
+        QApplication.clipboard().setMimeData(mime_data)
+        return True
+
+    def paste_selection_from_clipboard(self) -> bool:
+        payload, payload_json = self._clipboard_selection_payload()
+        if payload is None or payload_json is None:
+            return False
+        if payload_json == self._clipboard_paste_source_json:
+            self._clipboard_paste_count += 1
+        else:
+            self._clipboard_paste_source_json = payload_json
+            self._clipboard_paste_count = 1
+        dx, dy = self._clipboard_paste_offset(
+            self._clipboard_paste_count,
+            self.renderer.style.bond_length_px,
+        )
+
+        atoms = payload.get("atoms", [])
+        bonds = payload.get("bonds", [])
+        rings = payload.get("rings", [])
+        marks = payload.get("marks", [])
+        scene_items = payload.get("scene_items", [])
+        if not any((atoms, bonds, rings, marks, scene_items)):
+            return False
+
+        before_next_atom_id = self.model.next_atom_id
+        before_bond_count = len(self.model.bonds)
+        before_smiles_input = self.last_smiles_input
+        atom_id_map: dict[int, int] = {}
+        new_atom_ids: set[int] = set()
+        added_scene_items: list[QGraphicsItem] = []
+
+        for atom_state in atoms:
+            if not isinstance(atom_state, dict):
+                continue
+            atom_id = atom_state.get("id")
+            x = atom_state.get("x")
+            y = atom_state.get("y")
+            if not isinstance(atom_id, int) or not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+                continue
+            element = str(atom_state.get("element", "C"))
+            new_atom_id = self.add_atom(element, float(x) + dx, float(y) + dy)
+            atom_id_map[atom_id] = new_atom_id
+            new_atom_ids.add(new_atom_id)
+            color = atom_state.get("color")
+            if isinstance(color, str):
+                self.apply_atom_color(new_atom_id, color)
+            if element.upper() == "C" and bool(atom_state.get("explicit_label", False)):
+                self.add_or_update_atom_label(
+                    new_atom_id,
+                    element,
+                    clear_smiles=False,
+                    record=False,
+                    allow_merge=False,
+                    show_carbon=True,
+                )
+
+        for bond_state in bonds:
+            if not isinstance(bond_state, dict):
+                continue
+            atom_a = bond_state.get("a")
+            atom_b = bond_state.get("b")
+            if not isinstance(atom_a, int) or not isinstance(atom_b, int):
+                continue
+            if atom_a not in atom_id_map or atom_b not in atom_id_map:
+                continue
+            new_bond_id = self.add_bond(
+                atom_id_map[atom_a],
+                atom_id_map[atom_b],
+                int(bond_state.get("order", 1)),
+            )
+            self._restore_bond_from_state(
+                new_bond_id,
+                {
+                    "a": atom_id_map[atom_a],
+                    "b": atom_id_map[atom_b],
+                    "order": int(bond_state.get("order", 1)),
+                    "style": bond_state.get("style", "single"),
+                    "color": bond_state.get("color", "#000000"),
+                },
+            )
+
+        for state_group in (rings, marks, scene_items):
+            for state in state_group:
+                translated_state = self._translated_scene_item_state(
+                    state,
+                    dx=dx,
+                    dy=dy,
+                    atom_id_map=atom_id_map,
+                )
+                if not translated_state:
+                    continue
+                item = self.create_scene_item_from_state(translated_state)
+                if item is not None:
+                    added_scene_items.append(item)
+
+        if not atom_id_map and not added_scene_items:
+            return False
+
+        self._select_pasted_content(new_atom_ids, added_scene_items)
+        self._record_additions(
+            before_next_atom_id,
+            before_bond_count,
+            before_smiles_input,
+            added_scene_items=added_scene_items,
+        )
         return True
 
     def _expanded_atom_ids_for_structure(self, atom_ids: set[int], bond_ids: set[int]) -> set[int]:
