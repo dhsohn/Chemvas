@@ -3825,33 +3825,48 @@ class CanvasView(QGraphicsView):
             return None
         comp_a = self._component_without_bond(bond.a, bond_id)
         comp_b = self._component_without_bond(bond.b, bond_id)
-        effective_selected = set(selected_atom_ids) - {bond.a, bond.b}
+        component = comp_a | comp_b
+        selected_in_component = set(selected_atom_ids) & component
+        is_partial_selection = 0 < len(selected_in_component) < len(component)
+        effective_selected = selected_in_component - {bond.a, bond.b}
         selected_in_a = effective_selected & comp_a
         selected_in_b = effective_selected & comp_b
+        overlap_a = selected_in_component & comp_a
+        overlap_b = selected_in_component & comp_b
         atom_a = self.model.atoms.get(bond.a)
         atom_b = self.model.atoms.get(bond.b)
         dist_a = None
         dist_b = None
+        if is_partial_selection:
+            if selected_in_a and not selected_in_b:
+                return comp_a
+            if selected_in_b and not selected_in_a:
+                return comp_b
+            if overlap_a and not overlap_b:
+                return comp_a
+            if overlap_b and not overlap_a:
+                return comp_b
+            coverage_a = len(overlap_a) / max(1, len(comp_a))
+            coverage_b = len(overlap_b) / max(1, len(comp_b))
+            if abs(coverage_a - coverage_b) > 1e-9:
+                return comp_a if coverage_a > coverage_b else comp_b
+            if len(selected_in_a) != len(selected_in_b):
+                return comp_a if len(selected_in_a) > len(selected_in_b) else comp_b
+            if len(overlap_a) != len(overlap_b):
+                return comp_a if len(overlap_a) > len(overlap_b) else comp_b
+        elif not selected_in_a and not selected_in_b:
+            a_selected = bond.a in selected_atom_ids
+            b_selected = bond.b in selected_atom_ids
+            if a_selected ^ b_selected:
+                return comp_a if a_selected else comp_b
         if press_pos is not None and atom_a is not None and atom_b is not None:
             dist_a = math.hypot(press_pos.x() - atom_a.x, press_pos.y() - atom_a.y)
             dist_b = math.hypot(press_pos.x() - atom_b.x, press_pos.y() - atom_b.y)
             tol = self.renderer.style.bond_length_px * 0.05
             if abs(dist_a - dist_b) > tol:
                 return comp_a if dist_a < dist_b else comp_b
-        if selected_in_a and not selected_in_b:
-            return comp_a
-        if selected_in_b and not selected_in_a:
-            return comp_b
-        if not selected_in_a and not selected_in_b:
-            a_selected = bond.a in selected_atom_ids
-            b_selected = bond.b in selected_atom_ids
-            if a_selected ^ b_selected:
-                return comp_a if a_selected else comp_b
         if not allow_fallback:
             return None
-        component = comp_a | comp_b
-        selected_in_component = selected_atom_ids & component
-        is_partial_selection = 0 < len(selected_in_component) < len(component)
         if is_partial_selection:
             count_a = len(selected_in_a)
             count_b = len(selected_in_b)

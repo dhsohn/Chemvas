@@ -13,6 +13,15 @@ class BondRenderer:
         self._bold_out_length_scale = 1.1
 
     @staticmethod
+    def _reset_item_origin(item) -> None:
+        if item is None:
+            return
+        pos = item.pos()
+        if abs(pos.x()) <= 1e-6 and abs(pos.y()) <= 1e-6:
+            return
+        item.setPos(0.0, 0.0)
+
+    @staticmethod
     def _normalize_3d(
         dx: float,
         dy: float,
@@ -520,6 +529,8 @@ class BondRenderer:
         items = self.canvas.bond_items.get(bond_id, [])
         if not items:
             return
+        for item in items:
+            self._reset_item_origin(item)
         a = self.canvas.model.atoms.get(bond.a)
         b = self.canvas.model.atoms.get(bond.b)
         if a is None or b is None:
