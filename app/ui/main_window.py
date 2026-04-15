@@ -361,6 +361,7 @@ class MainWindow(QMainWindow):
 
     def _bind_active_canvas(self) -> None:
         active_canvas = self.canvas
+        self.preview_3d._rdkit = active_canvas.rdkit
         for canvas in self._all_canvases():
             if canvas is active_canvas:
                 canvas.set_selection_info_callback(self._handle_selection_info)

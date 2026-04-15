@@ -86,6 +86,25 @@ class MainWindowWorkbookTabsTest(unittest.TestCase):
         )
         self.assertEqual(self.window.canvas_tabs.indexOf(self.window._sheet_add_tab), self.window.canvas_tabs.count() - 1)
 
+    def test_preview_panel_tracks_active_canvas_rdkit_adapter(self) -> None:
+        first_canvas = self.window.canvas
+
+        self.assertIs(self.window.preview_3d._rdkit, first_canvas.rdkit)
+
+        self.window._new_canvas_sheet()
+        self.app.processEvents()
+        QTest.qWait(10)
+
+        second_canvas = self.window.canvas
+        self.assertIsNot(first_canvas, second_canvas)
+        self.assertIs(self.window.preview_3d._rdkit, second_canvas.rdkit)
+
+        self.window.canvas_tabs.setCurrentIndex(0)
+        self.app.processEvents()
+        QTest.qWait(10)
+
+        self.assertIs(self.window.preview_3d._rdkit, first_canvas.rdkit)
+
     def test_save_workbook_ignores_reordered_plus_tab(self) -> None:
         state = self._build_reordered_workbook_state()
 
