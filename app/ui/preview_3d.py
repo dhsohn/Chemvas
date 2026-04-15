@@ -34,9 +34,7 @@ class Preview3D(QWidget):
         try:
             model, atom_annotations = canvas.build_3d_conversion_payload()
         except Exception as exc:
-            self._scene = None
-            self._message = str(exc)
-            self._safe_update()
+            self.clear_preview(str(exc))
             return
         self.set_structure(model, atom_annotations)
 
@@ -52,6 +50,7 @@ class Preview3D(QWidget):
         self._update_timer.start()
 
     def clear_preview(self, message: str = "3D preview unavailable") -> None:
+        self._update_timer.stop()
         self._pending_model = None
         self._pending_annotations = None
         self._current_signature = None
@@ -102,9 +101,7 @@ class Preview3D(QWidget):
             atom_annotations=self._pending_annotations,
         )
         if scene is None:
-            self._scene = None
-            self._message = self._rdkit.last_error or "Failed to build 3D preview."
-            self._safe_update()
+            self.clear_preview(self._rdkit.last_error or "Failed to build 3D preview.")
             return
         self._scene = scene
         self._message = ""

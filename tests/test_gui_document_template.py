@@ -342,6 +342,65 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertIsNone(self.window._current_file_path)
         self.assertEqual(self.window.statusBar().currentMessage(), "Idle")
 
+    def test_save_canvas_reuses_current_path_without_opening_dialog(self) -> None:
+        self.window._current_file_path = "/tmp/existing.ldraw"
+
+        with (
+            patch.object(self.window.canvas, "save_to_file") as save_mock,
+            patch("ui.main_window.QFileDialog.getSaveFileName") as dialog_mock,
+        ):
+            self.window._save_canvas()
+
+        save_mock.assert_called_once_with("/tmp/existing.ldraw")
+        dialog_mock.assert_not_called()
+        self.assertEqual(self.window._current_file_path, "/tmp/existing.ldraw")
+        self.assertEqual(self.window.statusBar().currentMessage(), "Saved: /tmp/existing.ldraw")
+
+    def test_save_canvas_as_updates_current_path_and_status_message(self) -> None:
+        self.window.canvas.add_bond_from_points(QPointF(-20.0, 0.0), QPointF(20.0, 0.0))
+        self.window._current_file_path = "/tmp/original.ldraw"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            raw_path = Path(temp_dir) / "renamed"
+            saved_path = Path(f"{raw_path}.ldraw")
+            with patch("ui.main_window.QFileDialog.getSaveFileName", return_value=(str(raw_path), "")):
+                self.window._save_canvas_as()
+
+            self.assertTrue(saved_path.exists())
+
+        self.assertEqual(self.window._current_file_path, str(saved_path))
+        self.assertEqual(self.window.statusBar().currentMessage(), f"Saved: {saved_path}")
+
+    def test_save_canvas_as_cancel_keeps_current_path_and_status_message(self) -> None:
+        self.window._current_file_path = "/tmp/original.ldraw"
+        self.window.statusBar().showMessage("Idle")
+
+        with patch("ui.main_window.QFileDialog.getSaveFileName", return_value=("", "")):
+            self.window._save_canvas_as()
+
+        self.assertEqual(self.window._current_file_path, "/tmp/original.ldraw")
+        self.assertEqual(self.window.statusBar().currentMessage(), "Idle")
+
+    def test_save_canvas_as_failure_warns_and_preserves_current_path(self) -> None:
+        self.window._current_file_path = "/tmp/original.ldraw"
+        self.window.statusBar().showMessage("Before save as")
+
+        with (
+            patch("ui.main_window.QFileDialog.getSaveFileName", return_value=("/tmp/renamed.ldraw", "")),
+            patch.object(self.window.canvas, "save_to_file", side_effect=OSError("disk full")) as save_mock,
+            patch("ui.main_window.QMessageBox.warning") as warning,
+        ):
+            self.window._save_canvas_as()
+
+        save_mock.assert_called_once_with("/tmp/renamed.ldraw")
+        warning.assert_called_once_with(
+            self.window,
+            "Save Error",
+            "Failed to save file:\ndisk full",
+        )
+        self.assertEqual(self.window._current_file_path, "/tmp/original.ldraw")
+        self.assertEqual(self.window.statusBar().currentMessage(), "Before save as")
+
     def test_export_xyz_appends_extension_and_updates_status_message(self) -> None:
         self.window._current_file_path = "/tmp/example.ldraw"
 
