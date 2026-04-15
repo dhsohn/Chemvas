@@ -43,6 +43,25 @@ class Tool:
         return False
 
 
+def _independent_selection_items(selection_items: list, atom_ids: set[int]) -> list:
+    items: list = []
+    seen = set()
+    for item in selection_items:
+        if item is None or item in seen:
+            continue
+        seen.add(item)
+        kind = item.data(0)
+        if kind in {"atom", "bond", "ring"}:
+            continue
+        if kind == "mark":
+            data = item.data(1) or {}
+            atom_id = data.get("atom_id")
+            if isinstance(atom_id, int) and atom_id in atom_ids:
+                continue
+        items.append(item)
+    return items
+
+
 class SelectTool(Tool):
     def __init__(self, canvas) -> None:
         super().__init__("select")
@@ -77,7 +96,7 @@ class SelectTool(Tool):
             return False
         self._drag_selection = True
         self._selection_atom_ids = set(atom_ids)
-        self._selection_items = selection_items
+        self._selection_items = _independent_selection_items(selection_items, self._selection_atom_ids)
         if self._selection_atom_ids:
             self._drag_bond_ids, self._drag_boundary_bond_ids = self.canvas.bond_sets_for_atoms(
                 self._selection_atom_ids
@@ -186,12 +205,37 @@ class SelectTool(Tool):
                 redraw_bond_ids=self._drag_boundary_bond_ids,
                 update_selection=False,
             )
-        else:
-            for item in self._selection_items:
-                self.canvas.move_item(item, delta.x(), delta.y(), update_selection=False)
+        for item in self._selection_items:
+            self.canvas.move_item(item, delta.x(), delta.y(), update_selection=False)
         self.canvas.shift_selection_outlines(delta.x(), delta.y())
         self._total_delta += delta
         self._moved = True
+
+    def _build_move_command(self):
+        commands = []
+        if self._selection_atom_ids:
+            commands.append(
+                MoveAtomsCommand(
+                    atom_ids=set(self._selection_atom_ids),
+                    dx=self._total_delta.x(),
+                    dy=self._total_delta.y(),
+                    bond_ids=set(self._drag_bond_ids) if self._drag_bond_ids else None,
+                    redraw_bond_ids=set(self._drag_boundary_bond_ids) if self._drag_boundary_bond_ids else None,
+                )
+            )
+        if self._selection_items:
+            commands.append(
+                MoveItemsCommand(
+                    items=list(self._selection_items),
+                    dx=self._total_delta.x(),
+                    dy=self._total_delta.y(),
+                )
+            )
+        if not commands:
+            return None
+        if len(commands) == 1:
+            return commands[0]
+        return CompositeCommand(commands)
 
     def on_mouse_move(self, event) -> bool:
         if self._active_handle is not None:
@@ -232,21 +276,8 @@ class SelectTool(Tool):
             self.canvas.suspend_selection_outline(False)
         if self._moved:
             self.canvas._update_selection_outline()
-            if self._selection_atom_ids:
-                command = MoveAtomsCommand(
-                    atom_ids=set(self._selection_atom_ids),
-                    dx=self._total_delta.x(),
-                    dy=self._total_delta.y(),
-                    bond_ids=set(self._drag_bond_ids) if self._drag_bond_ids else None,
-                    redraw_bond_ids=set(self._drag_boundary_bond_ids) if self._drag_boundary_bond_ids else None,
-                )
-                self.canvas._push_command(command)
-            else:
-                command = MoveItemsCommand(
-                    items=list(self._selection_items),
-                    dx=self._total_delta.x(),
-                    dy=self._total_delta.y(),
-                )
+            command = self._build_move_command()
+            if command is not None:
                 self.canvas._push_command(command)
         self._drag_selection = False
         self._selection_atom_ids = set()
@@ -665,6 +696,7 @@ class MoveTool(Tool):
         self._moved = False
         self._drag_selection = False
         self._selection_atom_ids: set[int] = set()
+        self._selection_items: list = []
         self._drag_bond_ids: set[int] = set()
         self._drag_boundary_bond_ids: set[int] = set()
         self._suspended_outline = False
@@ -679,7 +711,7 @@ class MoveTool(Tool):
         if event.button() != Qt.MouseButton.LeftButton:
             return False
         item = self.canvas.item_at_event(event)
-        selected = self.canvas.scene().selectedItems()
+        selected = self.canvas._selected_items_for_transform()
         if selected:
             atom_ids, bond_ids = self.canvas._selected_ids()
             for bond_id in bond_ids:
@@ -688,9 +720,11 @@ class MoveTool(Tool):
                     if bond is not None:
                         atom_ids.add(bond.a)
                         atom_ids.add(bond.b)
-            if atom_ids:
+            selection_items = _independent_selection_items(selected, atom_ids)
+            if atom_ids or selection_items:
                 self._drag_selection = True
                 self._selection_atom_ids = set(atom_ids)
+                self._selection_items = selection_items
                 self._drag_bond_ids, self._drag_boundary_bond_ids = self.canvas.bond_sets_for_atoms(
                     self._selection_atom_ids
                 )
@@ -722,18 +756,21 @@ class MoveTool(Tool):
         return True
 
     def _apply_drag_delta(self, delta: QPointF) -> None:
-        if self._drag_selection and self._selection_atom_ids:
+        if self._drag_selection:
             if not self._suspended_outline:
                 self.canvas.suspend_selection_outline(True)
                 self._suspended_outline = True
-            self.canvas.move_atoms(
-                self._selection_atom_ids,
-                delta.x(),
-                delta.y(),
-                bond_ids=self._drag_bond_ids,
-                redraw_bond_ids=self._drag_boundary_bond_ids,
-                update_selection=False,
-            )
+            if self._selection_atom_ids:
+                self.canvas.move_atoms(
+                    self._selection_atom_ids,
+                    delta.x(),
+                    delta.y(),
+                    bond_ids=self._drag_bond_ids,
+                    redraw_bond_ids=self._drag_boundary_bond_ids,
+                    update_selection=False,
+                )
+            for item in self._selection_items:
+                self.canvas.move_item(item, delta.x(), delta.y(), update_selection=False)
             self.canvas.shift_selection_outlines(delta.x(), delta.y())
             self._moved = True
             self._total_delta += delta
@@ -741,6 +778,32 @@ class MoveTool(Tool):
             self.canvas.move_item(self._drag_item, delta.x(), delta.y())
             self._moved = True
             self._total_delta += delta
+
+    def _build_move_command(self):
+        commands = []
+        if self._selection_atom_ids:
+            commands.append(
+                MoveAtomsCommand(
+                    atom_ids=set(self._selection_atom_ids),
+                    dx=self._total_delta.x(),
+                    dy=self._total_delta.y(),
+                    bond_ids=set(self._drag_bond_ids) if self._drag_bond_ids else None,
+                    redraw_bond_ids=set(self._drag_boundary_bond_ids) if self._drag_boundary_bond_ids else None,
+                )
+            )
+        if self._selection_items:
+            commands.append(
+                MoveItemsCommand(
+                    items=list(self._selection_items),
+                    dx=self._total_delta.x(),
+                    dy=self._total_delta.y(),
+                )
+            )
+        if not commands:
+            return None
+        if len(commands) == 1:
+            return commands[0]
+        return CompositeCommand(commands)
 
     def on_mouse_move(self, event) -> bool:
         if self._start_pos is None:
@@ -765,15 +828,10 @@ class MoveTool(Tool):
             self.canvas.suspend_selection_outline(False)
         if self._moved:
             self.canvas._update_selection_outline()
-            if self._drag_selection and self._selection_atom_ids:
-                command = MoveAtomsCommand(
-                    atom_ids=set(self._selection_atom_ids),
-                    dx=self._total_delta.x(),
-                    dy=self._total_delta.y(),
-                    bond_ids=set(self._drag_bond_ids) if self._drag_bond_ids else None,
-                    redraw_bond_ids=set(self._drag_boundary_bond_ids) if self._drag_boundary_bond_ids else None,
-                )
-                self.canvas._push_command(command)
+            if self._drag_selection:
+                command = self._build_move_command()
+                if command is not None:
+                    self.canvas._push_command(command)
             elif self._drag_item is not None:
                 command = MoveItemsCommand(
                     items=[self._drag_item],
@@ -786,6 +844,7 @@ class MoveTool(Tool):
         self._moved = False
         self._drag_selection = False
         self._selection_atom_ids = set()
+        self._selection_items = []
         self._drag_bond_ids = set()
         self._drag_boundary_bond_ids = set()
         self._suspended_outline = False
