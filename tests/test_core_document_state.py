@@ -10,6 +10,8 @@ if str(APP_ROOT) not in sys.path:
 
 from core.document_state import (
     LITEDRAW_FILE_TYPE,
+    SINGLE_SHEET_FILE_VERSION,
+    WORKBOOK_FILE_VERSION,
     atom_to_state,
     bond_to_state,
     build_document_payload,
@@ -95,6 +97,39 @@ class DocumentStateTest(unittest.TestCase):
         self.assertEqual(model.bonds[0].style, "triple")
         self.assertIsNone(model.bonds[1])
 
+    def test_deserialize_model_state_clamps_missing_next_atom_id(self) -> None:
+        model = deserialize_model_state(
+            {
+                "atoms": {
+                    "3": {"element": "C", "x": 1.0, "y": 2.0, "color": "#000000"},
+                    "7": {"element": "O", "x": -1.0, "y": 0.5, "color": "#ff0000"},
+                },
+                "bonds": [],
+            }
+        )
+
+        self.assertEqual(model.next_atom_id, 8)
+        self.assertEqual(model.add_atom("N", 0.0, 0.0), 8)
+        self.assertIn(7, model.atoms)
+        self.assertIn(8, model.atoms)
+
+    def test_deserialize_model_state_clamps_too_small_next_atom_id(self) -> None:
+        model = deserialize_model_state(
+            {
+                "atoms": {
+                    "3": {"element": "C", "x": 1.0, "y": 2.0, "color": "#000000"},
+                    "7": {"element": "O", "x": -1.0, "y": 0.5, "color": "#ff0000"},
+                },
+                "bonds": [],
+                "next_atom_id": 4,
+            }
+        )
+
+        self.assertEqual(model.next_atom_id, 8)
+        self.assertEqual(model.add_atom("N", 0.0, 0.0), 8)
+        self.assertIn(7, model.atoms)
+        self.assertIn(8, model.atoms)
+
     def test_settings_and_payload_helpers_round_trip(self) -> None:
         settings = serialize_settings(
             bond_length_px=18.0,
@@ -106,10 +141,10 @@ class DocumentStateTest(unittest.TestCase):
             text_italic=False,
         )
         state = {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}, "settings": settings}
-        payload = build_document_payload(state, version=4)
+        payload = build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
 
         self.assertEqual(payload["type"], LITEDRAW_FILE_TYPE)
-        self.assertEqual(payload["version"], 4)
+        self.assertEqual(payload["version"], SINGLE_SHEET_FILE_VERSION)
         self.assertIs(extract_document_state(payload), state)
         self.assertIs(extract_document_state(state), state)
 
@@ -127,12 +162,23 @@ class DocumentStateTest(unittest.TestCase):
         }
         payload = {
             "type": LITEDRAW_FILE_TYPE,
-            "version": 2,
+            "version": WORKBOOK_FILE_VERSION,
             "state": workbook_state,
         }
 
         self.assertIs(extract_document_state(payload), workbook_state)
         self.assertIs(extract_document_state(workbook_state), workbook_state)
+
+    def test_build_document_payload_rejects_unsupported_or_mismatched_versions(self) -> None:
+        single_sheet_state = {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}}
+        workbook_state = {"active_sheet_index": 0, "sheets": []}
+
+        with self.assertRaises(ValueError):
+            build_document_payload(single_sheet_state, version=3)
+        with self.assertRaises(ValueError):
+            build_document_payload(workbook_state, version=SINGLE_SHEET_FILE_VERSION)
+        with self.assertRaises(ValueError):
+            build_document_payload(single_sheet_state, version=WORKBOOK_FILE_VERSION)
 
     def test_extract_document_state_rejects_invalid_payloads(self) -> None:
         with self.assertRaises(ValueError):
@@ -143,6 +189,37 @@ class DocumentStateTest(unittest.TestCase):
             extract_document_state({"state": []})
         with self.assertRaises(ValueError):
             extract_document_state({"state": {"sheets": "not-a-list"}})
+        with self.assertRaises(ValueError):
+            extract_document_state(
+                {
+                    "type": "unexpected",
+                    "version": SINGLE_SHEET_FILE_VERSION,
+                    "state": {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}},
+                }
+            )
+        with self.assertRaises(ValueError):
+            extract_document_state(
+                {
+                    "type": LITEDRAW_FILE_TYPE,
+                    "version": "1",
+                    "state": {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}},
+                }
+            )
+        with self.assertRaises(ValueError):
+            extract_document_state(
+                {
+                    "type": LITEDRAW_FILE_TYPE,
+                    "version": SINGLE_SHEET_FILE_VERSION,
+                    "state": {"active_sheet_index": 0, "sheets": []},
+                }
+            )
+        with self.assertRaises(ValueError):
+            extract_document_state(
+                {
+                    "model": {"atoms": {}, "bonds": [], "next_atom_id": 0},
+                    "version": SINGLE_SHEET_FILE_VERSION,
+                }
+            )
 
 
 if __name__ == "__main__":
