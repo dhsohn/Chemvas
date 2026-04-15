@@ -1,7 +1,10 @@
 import os
-import sys
+import types
 import unittest
+import sys
+from contextlib import contextmanager
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -55,6 +58,64 @@ class MainStderrFilterTest(unittest.TestCase):
         )
 
         self.assertIn("qt.qpa.keymapper: Mismatch between Cocoa should remain visible", output)
+
+    def test_should_filter_stderr_uses_current_platform_by_default(self) -> None:
+        with mock.patch.object(app_main.sys, "platform", "darwin"):
+            self.assertTrue(app_main._should_filter_stderr())
+        with mock.patch.object(app_main.sys, "platform", "linux"):
+            self.assertFalse(app_main._should_filter_stderr())
+
+    def test_main_constructs_window_and_executes_application(self) -> None:
+        events: list[tuple[str, object]] = []
+
+        class FakeApplication:
+            instances: list["FakeApplication"] = []
+
+            def __init__(self, args) -> None:
+                self.args = args
+                self.exec_called = False
+                FakeApplication.instances.append(self)
+
+            def exec(self) -> None:
+                self.exec_called = True
+                events.append(("exec", self.args))
+
+        class FakeMainWindow:
+            instances: list["FakeMainWindow"] = []
+
+            def __init__(self) -> None:
+                self.shown = False
+                FakeMainWindow.instances.append(self)
+
+            def show(self) -> None:
+                self.shown = True
+                events.append(("show", None))
+
+        qt_widgets_module = types.ModuleType("PyQt6.QtWidgets")
+        qt_widgets_module.QApplication = FakeApplication
+        main_window_module = types.ModuleType("ui.main_window")
+        main_window_module.MainWindow = FakeMainWindow
+
+        @contextmanager
+        def fake_filtered_stderr(*args, **kwargs):
+            events.append(("enter", kwargs))
+            yield
+            events.append(("exit", None))
+
+        with mock.patch.dict(
+            sys.modules,
+            {
+                "PyQt6.QtWidgets": qt_widgets_module,
+                "ui.main_window": main_window_module,
+            },
+        ):
+            with mock.patch.object(app_main, "_filtered_stderr", fake_filtered_stderr):
+                app_main.main()
+
+        self.assertEqual(FakeApplication.instances[0].args, [])
+        self.assertTrue(FakeApplication.instances[0].exec_called)
+        self.assertTrue(FakeMainWindow.instances[0].shown)
+        self.assertEqual([event[0] for event in events], ["enter", "show", "exec", "exit"])
 
 
 if __name__ == "__main__":
