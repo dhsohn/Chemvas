@@ -325,6 +325,31 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertAlmostEqual(preview_center.x(), committed_center.x(), places=2)
         self.assertAlmostEqual(preview_center.y(), committed_center.y(), places=2)
 
+    def test_atom_marks_use_fractional_label_clearance(self) -> None:
+        atom_id = self.window.canvas.add_atom("Cl", 0.0, 0.0)
+        atom = self.window.canvas.model.atoms[atom_id]
+        base = self.window.canvas.renderer.style.bond_length_px * 0.2
+
+        plus = self.window.canvas.add_mark_for_atom(atom_id, QPointF(0.0, 0.0), kind="plus", record=False)
+        radical = self.window.canvas.add_mark_for_atom(atom_id, QPointF(0.0, 0.0), kind="radical", record=False)
+
+        self.assertIsNotNone(plus)
+        self.assertIsNotNone(radical)
+        for kind, mark in (("plus", plus), ("radical", radical)):
+            direction = self.window.canvas._mark_center(mark)
+            dx = direction.x() - atom.x
+            dy = direction.y() - atom.y
+            distance = math.hypot(dx, dy)
+            full_clearance = self.window.canvas._mark_target_distance_for_atom(
+                atom_id,
+                dx / distance,
+                dy / distance,
+                kind,
+            )
+            expected = base + (full_clearance - base) * 0.25
+            self.assertGreater(distance, base)
+            self.assertAlmostEqual(distance, expected, places=2)
+
     def test_hover_preview_clears_when_cursor_leaves_viewport(self) -> None:
         atom_id = self.window.canvas.add_atom("C", 0.0, 0.0)
         viewport_pos = self.window.canvas.mapFromScene(QPointF(0.0, 0.0))

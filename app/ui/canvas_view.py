@@ -7,6 +7,7 @@ from PyQt6.QtGui import (
     QColor,
     QCursor,
     QFont,
+    QFontMetricsF,
     QBrush,
     QImage,
     QPainter,
@@ -2863,6 +2864,21 @@ class CanvasView(QGraphicsView):
                             atom_ids.add(atom_id)
         return atom_ids, bond_ids
 
+    def _selected_chemical_ids(self) -> tuple[set[int], set[int]]:
+        atom_ids, bond_ids = self._selected_ids()
+        if atom_ids or bond_ids:
+            return atom_ids, bond_ids
+        # Scene-only items such as arrows, notes, and TS brackets should not
+        # suppress a real atom-bound annotation selection from the 3D/export path.
+        for item in self.scene().selectedItems():
+            if item.data(0) != "mark":
+                continue
+            data = item.data(1) or {}
+            atom_id = data.get("atom_id")
+            if isinstance(atom_id, int) and atom_id in self.model.atoms:
+                atom_ids.add(atom_id)
+        return atom_ids, bond_ids
+
     def _selection_items_for_copy(self) -> list[QGraphicsItem]:
         excluded_kinds = {"handle", "note_select", "selection_outline"}
         selected = [
@@ -2984,7 +3000,7 @@ class CanvasView(QGraphicsView):
         return mark_kinds_by_atom
 
     def build_3d_conversion_payload(self) -> tuple[MoleculeModel, dict[int, dict[str, int]]]:
-        atom_ids, bond_ids = self._selected_ids()
+        atom_ids, bond_ids = self._selected_chemical_ids()
         return build_3d_conversion_payload_state(
             self.model,
             atom_ids,
@@ -2994,7 +3010,7 @@ class CanvasView(QGraphicsView):
         )
 
     def build_selected_structure_payload(self) -> tuple[MoleculeModel, dict[int, dict[str, int]], tuple[float, float, float, float]]:
-        atom_ids, bond_ids = self._selected_ids()
+        atom_ids, bond_ids = self._selected_chemical_ids()
         if not atom_ids and not bond_ids:
             raise ValueError("Select a molecular structure on the canvas first.")
         return self.build_structure_payload(atom_ids, bond_ids)
@@ -3077,7 +3093,8 @@ class CanvasView(QGraphicsView):
         atom = self.model.atoms.get(atom_id)
         if atom is None:
             return None
-        offset = self._mark_offset_from_click(atom_id, click_pos)
+        kind = kind or self.mark_kind
+        offset = self._mark_offset_from_click(atom_id, click_pos, kind=kind)
         center = QPointF(atom.x + offset.x(), atom.y + offset.y())
         return self.add_mark(center, kind=kind, atom_id=atom_id, offset=offset, record=record)
 
@@ -3101,18 +3118,25 @@ class CanvasView(QGraphicsView):
             return text_item
         return None
 
-    def _mark_offset_from_click(self, atom_id: int, click_pos: QPointF) -> QPointF:
+    def _mark_offset_from_click(self, atom_id: int, click_pos: QPointF, kind: str | None = None) -> QPointF:
         atom = self.model.atoms.get(atom_id)
         if atom is None:
             return QPointF(0.0, 0.0)
         dx = click_pos.x() - atom.x
         dy = click_pos.y() - atom.y
         length = math.hypot(dx, dy)
-        target = self.renderer.style.bond_length_px * 0.2
         if length <= 1e-6:
-            return QPointF(target, -target)
-        scale = target / length
-        return QPointF(dx * scale, dy * scale)
+            dx = 1.0
+            dy = -1.0
+            length = math.hypot(dx, dy)
+        direction_x = dx / length
+        direction_y = dy / length
+        target = self.renderer.style.bond_length_px * 0.2
+        mark_kind = kind or self.mark_kind
+        label_target = self._mark_target_distance_for_atom(atom_id, direction_x, direction_y, mark_kind)
+        if label_target > target:
+            target += (label_target - target) * 0.25
+        return QPointF(direction_x * target, direction_y * target)
 
     def _mark_center(self, item) -> QPointF:
         if isinstance(item, QGraphicsTextItem):
@@ -4035,7 +4059,7 @@ class CanvasView(QGraphicsView):
         if self._rotation_selection_ids is not None:
             atom_ids, bond_ids = self._rotation_selection_ids
         else:
-            atom_ids, bond_ids = self._selected_ids()
+            atom_ids, bond_ids = self._selected_chemical_ids()
         if not atom_ids and not bond_ids:
             self._selection_signature = None
             self._selection_pending_signature = None
@@ -4086,13 +4110,18 @@ class CanvasView(QGraphicsView):
         self.scene().addItem(circle)
         self.hover_items.append(circle)
 
-    def _mark_center_for_pointer(self, pos: QPointF, atom_id: int | None = None) -> QPointF:
+    def _mark_center_for_pointer(
+        self,
+        pos: QPointF,
+        atom_id: int | None = None,
+        kind: str | None = None,
+    ) -> QPointF:
         if atom_id is None:
             return QPointF(pos)
         atom = self.model.atoms.get(atom_id)
         if atom is None:
             return QPointF(pos)
-        offset = self._mark_offset_from_click(atom_id, pos)
+        offset = self._mark_offset_from_click(atom_id, pos, kind=kind)
         return QPointF(atom.x + offset.x(), atom.y + offset.y())
 
     def _add_mark_hover_preview(self, pos: QPointF) -> None:
@@ -4101,8 +4130,8 @@ class CanvasView(QGraphicsView):
             pos.y(),
             self.renderer.style.bond_length_px * 0.35,
         )
-        center = self._mark_center_for_pointer(pos, atom_id)
         kind = self.mark_kind
+        center = self._mark_center_for_pointer(pos, atom_id, kind=kind)
         scope = f"atom:{atom_id}" if atom_id is not None else "free"
         preview_key = f"mark:{kind}:{scope}:{round(center.x(), 1)}:{round(center.y(), 1)}"
         if atom_id == self.hover_atom_id and preview_key == self._hover_preview_style:
@@ -8264,6 +8293,17 @@ class CanvasView(QGraphicsView):
         pad = max(0.05, self.renderer.style.bond_line_width * 0.05)
         return rect.adjusted(-pad, -pad, pad, pad)
 
+    def _visible_text_rect(self, item: QGraphicsTextItem) -> QRectF:
+        return item.mapRectToScene(QGraphicsTextItem.boundingRect(item))
+
+    def _visible_label_rect_for_atom(self, atom_id: int) -> QRectF | None:
+        item = self.atom_items.get(atom_id)
+        if item is None:
+            return None
+        rect = self._visible_text_rect(item)
+        pad = max(0.05, self.renderer.style.bond_line_width * 0.05)
+        return rect.adjusted(-pad, -pad, pad, pad)
+
     def _label_cut_radius_for_atom(self, atom_id: int) -> float | None:
         item = self.atom_items.get(atom_id)
         if item is None:
@@ -8322,6 +8362,61 @@ class CanvasView(QGraphicsView):
         if 0.0 <= t <= 1.0 and 0.0 <= u <= 1.0:
             return t
         return None
+
+    def _ray_rect_exit_distance(self, origin: QPointF, direction: QPointF, rect: QRectF) -> float | None:
+        t_min = float("-inf")
+        t_max = float("inf")
+        for origin_value, direction_value, min_value, max_value in (
+            (origin.x(), direction.x(), rect.left(), rect.right()),
+            (origin.y(), direction.y(), rect.top(), rect.bottom()),
+        ):
+            if abs(direction_value) < 1e-8:
+                if origin_value < min_value or origin_value > max_value:
+                    return None
+                continue
+            t1 = (min_value - origin_value) / direction_value
+            t2 = (max_value - origin_value) / direction_value
+            t_near = min(t1, t2)
+            t_far = max(t1, t2)
+            t_min = max(t_min, t_near)
+            t_max = min(t_max, t_far)
+            if t_min > t_max:
+                return None
+        if t_max < 0.0:
+            return None
+        return max(0.0, t_max)
+
+    def _mark_clearance_for_kind(self, kind: str) -> float:
+        gap = max(0.6, self.renderer.style.bond_length_px * 0.05)
+        if kind == "radical":
+            radius = max(1.2, self.renderer.style.bond_line_width * 0.7)
+            return radius + gap
+        if kind in {"plus", "minus"}:
+            metrics = QFontMetricsF(self.renderer.atom_font())
+            rect = metrics.boundingRect("+" if kind == "plus" else "-")
+            half_diagonal = math.hypot(rect.width(), rect.height()) * 0.5
+            return max(half_diagonal, metrics.height() * 0.35) + gap
+        return gap
+
+    def _mark_target_distance_for_atom(
+        self,
+        atom_id: int,
+        direction_x: float,
+        direction_y: float,
+        kind: str,
+    ) -> float:
+        atom = self.model.atoms.get(atom_id)
+        label_rect = self._visible_label_rect_for_atom(atom_id)
+        if atom is None or label_rect is None:
+            return 0.0
+        clearance = self._mark_clearance_for_kind(kind)
+        expanded_rect = label_rect.adjusted(-clearance, -clearance, clearance, clearance)
+        distance = self._ray_rect_exit_distance(
+            QPointF(atom.x, atom.y),
+            QPointF(direction_x, direction_y),
+            expanded_rect,
+        )
+        return 0.0 if distance is None else distance
 
     def _line_rect_intersections(self, p1: QPointF, p2: QPointF, rect: QRectF) -> list[float]:
         tl = rect.topLeft()
