@@ -139,6 +139,17 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             self.assertAlmostEqual(point.x(), atom.x)
             self.assertAlmostEqual(point.y(), atom.y)
 
+    def _bond_scene_segments(self, bond_id: int) -> list[tuple[float, float, float, float]]:
+        segments = []
+        for item in self.window.canvas.bond_items.get(bond_id, []):
+            if not hasattr(item, "line"):
+                continue
+            line = item.line()
+            p1 = item.mapToScene(line.p1())
+            p2 = item.mapToScene(line.p2())
+            segments.append((p1.x(), p1.y(), p2.x(), p2.y()))
+        return segments
+
     def test_generic_tool_shortcuts_switch_active_tool(self) -> None:
         self._press_key(Qt.Key.Key_X)
         self.assertEqual(self.window.canvas.tools.active.name, "bond")
@@ -876,6 +887,69 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertAlmostEqual(path_rect.center().x(), bond_rect.center().x(), delta=0.5)
         self.assertAlmostEqual(path_rect.center().y(), bond_rect.center().y(), delta=0.5)
 
+    def test_dragging_double_bond_endpoint_after_fragment_move_keeps_geometry_and_undo(self) -> None:
+        left = self.window.canvas.add_atom("P", 0.0, 0.0)
+        right = self.window.canvas.add_atom("O", 40.0, 0.0)
+        bond_id = self.window.canvas.add_bond(left, right, order=2)
+        self.window.canvas._add_bond_graphics(bond_id)
+
+        self.window.canvas.move_atoms(
+            {left, right},
+            100.0,
+            50.0,
+            bond_ids={bond_id},
+            redraw_bond_ids=set(),
+            update_selection=False,
+        )
+        before_segments = self._bond_scene_segments(bond_id)
+        self.assertEqual(len(before_segments), 2)
+        self.assertTrue(
+            any(
+                abs(item.pos().x()) > 1e-6 or abs(item.pos().y()) > 1e-6
+                for item in self.window.canvas.bond_items[bond_id]
+            )
+        )
+
+        self.window.canvas.move_atoms(
+            {right},
+            20.0,
+            30.0,
+            bond_ids=set(),
+            redraw_bond_ids={bond_id},
+            update_selection=False,
+        )
+        self.window.canvas._push_command(
+            MoveAtomsCommand(
+                atom_ids={right},
+                dx=20.0,
+                dy=30.0,
+                bond_ids=set(),
+                redraw_bond_ids={bond_id},
+            )
+        )
+
+        moved_atom_left = self.window.canvas.model.atoms[left]
+        moved_atom_right = self.window.canvas.model.atoms[right]
+        bond_mid_x = (moved_atom_left.x + moved_atom_right.x) * 0.5
+        bond_mid_y = (moved_atom_left.y + moved_atom_right.y) * 0.5
+        after_segments = self._bond_scene_segments(bond_id)
+        self.assertEqual(len(after_segments), 2)
+        for item in self.window.canvas.bond_items[bond_id]:
+            self.assertAlmostEqual(item.pos().x(), 0.0, delta=1e-6)
+            self.assertAlmostEqual(item.pos().y(), 0.0, delta=1e-6)
+        for x1, y1, x2, y2 in after_segments:
+            self.assertLess(math.hypot(((x1 + x2) * 0.5) - bond_mid_x, ((y1 + y2) * 0.5) - bond_mid_y), 8.0)
+
+        self.window.canvas.undo()
+
+        undone_segments = self._bond_scene_segments(bond_id)
+        self.assertEqual(len(undone_segments), len(before_segments))
+        for (ax1, ay1, ax2, ay2), (bx1, by1, bx2, by2) in zip(undone_segments, before_segments):
+            self.assertAlmostEqual(ax1, bx1, delta=0.01)
+            self.assertAlmostEqual(ay1, by1, delta=0.01)
+            self.assertAlmostEqual(ax2, bx2, delta=0.01)
+            self.assertAlmostEqual(ay2, by2, delta=0.01)
+
     def test_clicking_near_bond_selects_bond(self) -> None:
         self.window.canvas.set_tool("select")
         left = self.window.canvas.add_atom("C", -10.0, 0.0)
@@ -1079,6 +1153,59 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertTrue(rotating)
         self.assertEqual(self.window.canvas._rotation_mode, "rigid")
         self.assertEqual(self.window.canvas.rotation_atom_ids, {center_id, right_id})
+        self.window.canvas.end_selection_3d_rotation()
+
+    def test_perspective_tool_press_on_selected_atom_keeps_partial_selection_rigid(self) -> None:
+        left_id = self.window.canvas.add_atom("C", -80.0, 0.0)
+        center_id = self.window.canvas.add_atom("C", 0.0, 0.0)
+        right_id = self.window.canvas.add_atom("C", 80.0, 0.0)
+        self.window.canvas.add_bond(left_id, center_id)
+        self.window.canvas.add_bond(center_id, right_id)
+        self.window.canvas._render_model()
+
+        self._select_atom_ids(center_id, right_id)
+        self.window.canvas.set_tool("perspective")
+
+        viewport_pos = self.window.canvas.mapFromScene(QPointF(80.0, 0.0))
+        QTest.mousePress(
+            self.window.canvas.viewport(),
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+            viewport_pos,
+        )
+        self.app.processEvents()
+        QTest.qWait(10)
+
+        self.assertEqual(self.window.canvas._rotation_mode, "rigid")
+        self.assertEqual(self.window.canvas.rotation_atom_ids, {center_id, right_id})
+
+        QTest.mouseRelease(
+            self.window.canvas.viewport(),
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+            viewport_pos,
+        )
+        self.app.processEvents()
+        QTest.qWait(10)
+
+    def test_perspective_rotation_on_partial_selection_prefers_selected_side_for_axis_hint(self) -> None:
+        left_id = self.window.canvas.add_atom("C", -80.0, 0.0)
+        center_id = self.window.canvas.add_atom("C", 0.0, 0.0)
+        right_id = self.window.canvas.add_atom("C", 80.0, 0.0)
+        self.window.canvas.add_bond(left_id, center_id)
+        bond_id = self.window.canvas.add_bond(center_id, right_id)
+        self.window.canvas._render_model()
+
+        self._select_atom_ids(center_id, right_id)
+
+        rotating = self.window.canvas.begin_selection_3d_rotation(
+            axis_hint=bond_id,
+            press_pos=QPointF(0.0, 0.0),
+        )
+
+        self.assertTrue(rotating)
+        self.assertEqual(self.window.canvas._rotation_mode, "bond")
+        self.assertEqual(self.window.canvas.rotation_atom_ids, {right_id})
         self.window.canvas.end_selection_3d_rotation()
 
     def test_perspective_rigid_rotation_uses_bounding_box_center(self) -> None:
