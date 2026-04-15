@@ -1,16 +1,14 @@
-import json
 import math
 import time
 from pathlib import Path
 
-from PyQt6.QtCore import QPointF, QRectF, Qt, QEvent, QMimeData, QTimer
+from PyQt6.QtCore import QPointF, QRectF, Qt, QEvent, QTimer
 from PyQt6.QtGui import (
     QColor,
     QCursor,
     QFont,
     QFontMetricsF,
     QBrush,
-    QImage,
     QPainter,
     QPainterPath,
     QPainterPathStroker,
@@ -33,9 +31,7 @@ from PyQt6.QtWidgets import (
     QGraphicsScene,
     QGraphicsTextItem,
     QGraphicsView,
-    QApplication,
     QInputDialog,
-    QMessageBox,
 )
 
 from core.history import (
@@ -116,34 +112,15 @@ from ui.handle_interaction_logic import (
 )
 from ui.insert_mode_logic import (
     InsertSessionState,
-    begin_smiles_insert as begin_smiles_insert_state,
-    begin_template_insert as begin_template_insert_state,
-    build_template_insert_request,
-    cancel_smiles_insert as cancel_smiles_insert_state,
-    cancel_template_insert as cancel_template_insert_state,
     clear_insert_session,
 )
 from ui.insert_controller import InsertController
-from ui.preview_scene_renderer import (
-    apply_smiles_preview_geometry as apply_smiles_preview_geometry_helper,
-    apply_template_preview_geometry as apply_template_preview_geometry_helper,
-    clear_smiles_preview as clear_smiles_preview_helper,
-    clear_template_preview as clear_template_preview_helper,
-    smiles_preview_snapshot as smiles_preview_snapshot_helper,
-)
 from ui.scene_item_controller import SceneItemController
 from ui.scene_item_restore import (
-    create_arrow_item_from_state as create_arrow_item_from_state_helper,
-    create_mark_item_from_state as create_mark_item_from_state_helper,
-    create_note_item_from_state as create_note_item_from_state_helper,
     create_orbital_item_from_state as create_orbital_item_from_state_helper,
-    create_ring_item_from_state as create_ring_item_from_state_helper,
-    create_scene_item_from_state as create_scene_item_from_state_helper,
-    create_ts_bracket_item_from_state as create_ts_bracket_item_from_state_helper,
 )
 from ui.scene_item_state import (
     ARROW_KINDS,
-    apply_scene_item_state as apply_scene_item_state_helper,
     arrow_state_dict as arrow_state_dict_helper,
     mark_state_dict as mark_state_dict_helper,
     note_state_dict as note_state_dict_helper,
@@ -156,19 +133,11 @@ from ui.scene_item_state import (
 from ui.scene_ops_controller import SceneOpsController
 from ui.selection_controller import SelectionController
 from ui.selection_hit_logic import (
-    SelectionHitRequest,
     SelectionRect,
     SelectionSnapshot,
     StructureHit,
     build_selection_snapshot,
-    selection_hit_matches,
     structure_hit_is_selected,
-)
-from ui.smiles_insert_logic import (
-    SmilesPreviewResolvers,
-    plan_smiles_commit,
-    plan_smiles_preview_update,
-    smiles_preview_center,
 )
 from ui.structure_payload_logic import (
     build_3d_conversion_payload as build_3d_conversion_payload_state,
@@ -180,11 +149,7 @@ from ui.structure_payload_logic import (
 from ui.template_insert_logic import (
     TemplateInsertRequest,
     TemplatePointResolvers,
-    plan_template_commit,
-    plan_template_preview,
-    resolve_template_insert,
 )
-from ui.template_preview_logic import plan_template_preview_update
 
 
 class NoteItem(QGraphicsTextItem):
