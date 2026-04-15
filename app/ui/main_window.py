@@ -44,7 +44,7 @@ from PyQt6.QtWidgets import (
 
 from core.document_io import read_document, write_document
 from ui.canvas_view import CanvasView
-from ui.main_window_path_logic import resolve_load_path, resolve_save_path
+from ui.main_window_path_logic import resolve_load_path, resolve_save_as_path, resolve_save_path
 from ui.preview_3d import Preview3D
 
 
@@ -134,6 +134,7 @@ class MainWindow(QMainWindow):
         self._result_sheet_counter = 0
         self._last_canvas_tab_index = 0
         self._suspend_canvas_tab_reactions = False
+        self._repositioning_add_tab = False
         self._sheet_add_tab = QWidget()
         self.canvas_tabs = QTabWidget()
         self.canvas_tabs.setObjectName("canvasTabs")
@@ -145,6 +146,7 @@ class MainWindow(QMainWindow):
         self.canvas_tabs.setTabsClosable(False)
         self._sheet_tab_bar.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._sheet_tab_bar.customContextMenuRequested.connect(self._show_canvas_tab_context_menu)
+        self._sheet_tab_bar.tabMoved.connect(self._on_canvas_tab_moved)
         self.canvas_tabs.currentChanged.connect(self._on_canvas_tab_changed)
         self.setCentralWidget(self.canvas_tabs)
         self.panel_splitter = None
@@ -187,13 +189,31 @@ class MainWindow(QMainWindow):
             return canvases[0]
         return None
 
-    def _all_canvases(self) -> list[CanvasView]:
-        canvases: list[CanvasView] = []
+    def _canvas_tab_entries(self) -> list[tuple[int, CanvasView]]:
+        entries: list[tuple[int, CanvasView]] = []
         for index in range(self.canvas_tabs.count()):
             widget = self.canvas_tabs.widget(index)
             if isinstance(widget, CanvasView):
-                canvases.append(widget)
-        return canvases
+                entries.append((index, widget))
+        return entries
+
+    def _all_canvases(self) -> list[CanvasView]:
+        return [canvas for _, canvas in self._canvas_tab_entries()]
+
+    def _active_canvas_tab_index(self) -> int:
+        active_canvas = self._active_canvas_or_none()
+        if active_canvas is None:
+            return -1
+        return self.canvas_tabs.indexOf(active_canvas)
+
+    def _active_canvas_sheet_index(self) -> int:
+        active_canvas = self._active_canvas_or_none()
+        if active_canvas is None:
+            return 0
+        for sheet_index, (_, canvas) in enumerate(self._canvas_tab_entries()):
+            if canvas is active_canvas:
+                return sheet_index
+        return 0
 
     def _next_canvas_sheet_name(self, prefix: str = "Sheet") -> str:
         self._canvas_name_counter += 1
@@ -210,11 +230,9 @@ class MainWindow(QMainWindow):
         return len(self._all_canvases())
 
     def _active_canvas_sheet_name(self) -> str:
-        index = self.canvas_tabs.currentIndex()
+        index = self._active_canvas_tab_index()
         if index < 0:
             return ""
-        if self.canvas_tabs.widget(index) is self._sheet_add_tab and 0 <= self._last_canvas_tab_index < self.canvas_tabs.count():
-            return self.canvas_tabs.tabText(self._last_canvas_tab_index)
         return self.canvas_tabs.tabText(index)
 
     def _ensure_add_sheet_tab(self) -> None:
@@ -222,8 +240,29 @@ class MainWindow(QMainWindow):
         if plus_index < 0:
             self._sheet_add_tab = QWidget()
             plus_index = self.canvas_tabs.addTab(self._sheet_add_tab, "+")
+        self._keep_add_tab_last()
+        plus_index = self._plus_tab_index()
         self.canvas_tabs.setTabToolTip(plus_index, "New Canvas Sheet")
         self._sheet_tab_bar.set_add_tab_index(plus_index)
+
+    def _keep_add_tab_last(self) -> None:
+        if self._repositioning_add_tab:
+            return
+        plus_index = self._plus_tab_index()
+        last_index = self.canvas_tabs.count() - 1
+        if plus_index < 0 or plus_index == last_index:
+            return
+        self._repositioning_add_tab = True
+        try:
+            self._sheet_tab_bar.moveTab(plus_index, last_index)
+        finally:
+            self._repositioning_add_tab = False
+        self._sheet_tab_bar.set_add_tab_index(self._plus_tab_index())
+
+    def _on_canvas_tab_moved(self, from_index: int, to_index: int) -> None:
+        if self._repositioning_add_tab:
+            return
+        self._keep_add_tab_last()
 
     def _can_delete_canvas_sheet(self, index: int) -> bool:
         if index < 0:
@@ -393,16 +432,16 @@ class MainWindow(QMainWindow):
 
     def _workbook_state(self) -> dict:
         sheets = []
-        for index, canvas in enumerate(self._all_canvases()):
+        for sheet_index, (tab_index, canvas) in enumerate(self._canvas_tab_entries()):
             sheets.append(
                 {
-                    "name": self.canvas_tabs.tabText(index) or f"Sheet {index + 1}",
+                    "name": self.canvas_tabs.tabText(tab_index) or f"Sheet {sheet_index + 1}",
                     "kind": "canvas",
                     "content": canvas.snapshot_state(),
                 }
             )
         return {
-            "active_sheet_index": max(0, self.canvas_tabs.currentIndex()),
+            "active_sheet_index": self._active_canvas_sheet_index(),
             "sheets": sheets,
         }
 
@@ -410,6 +449,7 @@ class MainWindow(QMainWindow):
         self._suspend_canvas_tab_reactions = True
         self._clear_canvas_sheets()
         self._add_canvas_sheet(name="Sheet 1", state=state, select=True)
+        self._last_canvas_tab_index = self._active_canvas_tab_index()
         self._suspend_canvas_tab_reactions = False
         self._refresh_active_canvas_ui()
 
@@ -426,10 +466,14 @@ class MainWindow(QMainWindow):
                 state=sheet_state.get("content", {}),
                 select=False,
             )
-        if self.canvas_tabs.count() == 0:
+        if self._canvas_sheet_count() == 0:
             self._add_canvas_sheet(name="Sheet 1", select=True)
-        active_index = int(state.get("active_sheet_index", 0))
-        self.canvas_tabs.setCurrentIndex(max(0, min(active_index, self.canvas_tabs.count() - 1)))
+        canvas_entries = self._canvas_tab_entries()
+        active_sheet_index = int(state.get("active_sheet_index", 0))
+        active_sheet_index = max(0, min(active_sheet_index, len(canvas_entries) - 1))
+        active_tab_index = canvas_entries[active_sheet_index][0]
+        self.canvas_tabs.setCurrentIndex(active_tab_index)
+        self._last_canvas_tab_index = active_tab_index
         self._suspend_canvas_tab_reactions = False
         self._refresh_active_canvas_ui()
 
@@ -479,7 +523,7 @@ class MainWindow(QMainWindow):
             " border: 1px solid transparent;"
             " border-radius: 5px;"
             " padding: 4px;"
-            " padding-right: 4px;"
+            " padding-right: 8px;"
             "}"
             "QToolButton:hover {"
             " background-color: #ebe4da;"
@@ -493,7 +537,17 @@ class MainWindow(QMainWindow):
             " background-color: #e8ddd0;"
             " border-color: #b8a48e;"
             "}"
-            "QToolButton::menu-indicator { image: none; width: 0px; }"
+            "QToolButton::menu-button {"
+            " subcontrol-origin: padding;"
+            " subcontrol-position: top right;"
+            " width: 14px;"
+            " border: none;"
+            " background: transparent;"
+            "}"
+            "QToolButton::menu-button:hover { background: transparent; }"
+            "QToolButton::menu-button:pressed { background: transparent; }"
+            "QToolButton::menu-indicator { image: none; width: 0px; height: 0px; }"
+            "QToolButton::menu-arrow { image: none; width: 0px; height: 0px; border: none; background: transparent; }"
         )
         left_bar.setStyleSheet(button_style)
 
@@ -667,11 +721,26 @@ class MainWindow(QMainWindow):
         panel_bar.setIconSize(QSize(24, 24))
         panel_bar.setStyleSheet(button_style)
 
-        save_btn = QToolButton()
-        save_btn.setIcon(self._icon_save())
-        save_btn.setToolTip("Save")
-        save_btn.setShortcut(QKeySequence.StandardKey.Save)
-        save_btn.clicked.connect(self._save_canvas)
+        save_action = QAction("Save", self)
+        save_action.setIcon(self._icon_save())
+        save_action.setToolTip("Save")
+        save_action.setShortcut(QKeySequence.StandardKey.Save)
+        save_action.triggered.connect(self._save_canvas)
+        self.addAction(save_action)
+
+        save_as_action = QAction("Save As...", self)
+        save_as_action.setToolTip("Save As")
+        save_as_action.setShortcut(QKeySequence.StandardKey.SaveAs)
+        save_as_action.triggered.connect(self._save_canvas_as)
+        self.addAction(save_as_action)
+
+        save_btn = CornerMenuButton()
+        save_btn.setDefaultAction(save_action)
+        save_btn.setStyleSheet(menu_button_style)
+        save_menu = QMenu(save_btn)
+        save_menu.addAction(save_as_action)
+        save_btn.setMenu(save_menu)
+        save_btn.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
 
         load_btn = QToolButton()
         load_btn.setIcon(self._icon_open())
@@ -1982,25 +2051,37 @@ class MainWindow(QMainWindow):
             return str(Path(self._current_file_path).with_suffix(".xyz"))
         return ""
 
-    def _save_canvas(self) -> None:
-        path = resolve_save_path(current_path=self._current_file_path)
-        if path is None:
-            dialog_path, _ = QFileDialog.getSaveFileName(
-                self,
-                "Save Drawing",
-                "",
-                "LiteDraw (*.ldraw);;JSON (*.json);;All Files (*)",
-            )
-            path = resolve_save_path(dialog_path=dialog_path)
-        if path is None:
-            return
+    def _default_save_dialog_path(self) -> str:
+        return self._current_file_path or ""
+
+    def _save_canvas_to_path(self, path: str) -> bool:
         try:
             self._save_document_state(path)
         except Exception as exc:
             QMessageBox.warning(self, "Save Error", f"Failed to save file:\n{exc}")
-            return
+            return False
         self._current_file_path = path
         self.statusBar().showMessage(f"Saved: {path}")
+        return True
+
+    def _save_canvas(self) -> None:
+        path = resolve_save_path(current_path=self._current_file_path)
+        if path is None:
+            self._save_canvas_as()
+            return
+        self._save_canvas_to_path(path)
+
+    def _save_canvas_as(self) -> None:
+        dialog_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Drawing As",
+            self._default_save_dialog_path(),
+            "LiteDraw (*.ldraw);;JSON (*.json);;All Files (*)",
+        )
+        path = resolve_save_as_path(dialog_path)
+        if path is None:
+            return
+        self._save_canvas_to_path(path)
 
     def _export_xyz(self) -> None:
         dialog_path, _ = QFileDialog.getSaveFileName(
