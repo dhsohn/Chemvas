@@ -22,7 +22,7 @@ if str(APP_ROOT) not in sys.path:
 if QApplication is not None:
     import core.tools as tools_module
     from core.model import Atom, Bond
-    from core.tools import BondTool, RotateTool, SelectTool, _independent_selection_items
+    from core.tools import BondTool, MoveTool, RotateTool, SelectTool, _independent_selection_items
     from core.history import CompositeCommand, MoveAtomsCommand, MoveItemsCommand, UpdateSceneItemCommand
 
 
@@ -236,6 +236,28 @@ class _FakeBondCanvas:
         self.added_bonds.append((QPointF(start), QPointF(end)))
 
 
+class _FakeMoveCanvas(_FakeSelectCanvas):
+    DragMode = SimpleNamespace(NoDrag="none")
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.selected_items_for_transform = []
+        self.selected_atom_ids = set()
+        self.selected_bond_ids = set()
+        self.model = SimpleNamespace(
+            bonds=[
+                Bond(1, 2, 1),
+                Bond(2, 3, 1),
+            ]
+        )
+
+    def _selected_items_for_transform(self):
+        return list(self.selected_items_for_transform)
+
+    def _selected_ids(self):
+        return set(self.selected_atom_ids), set(self.selected_bond_ids)
+
+
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for tools tests")
 class ToolsUnitTest(unittest.TestCase):
     @classmethod
@@ -422,6 +444,50 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertEqual(canvas.rotations, [1.5])
         self.assertFalse(tool.on_mouse_release(_FakeEvent()))
         self.assertFalse(tool.on_mouse_move(_FakeEvent(QPointF(8.0, 1.0))))
+
+    def test_move_tool_selection_drag_builds_composite_move_command(self) -> None:
+        canvas = _FakeMoveCanvas()
+        tool = MoveTool(canvas)
+        tool.activate()
+
+        selected_note = _FakeItem("note")
+        canvas.selected_items_for_transform = [selected_note]
+        canvas.selected_atom_ids = {1}
+        canvas.selected_bond_ids = {1}
+
+        press_event = _FakeEvent(QPointF(10.0, 20.0))
+        self.assertTrue(tool.on_mouse_press(press_event))
+        self.assertEqual(canvas.drag_mode, canvas.DragMode.NoDrag)
+        self.assertTrue(tool._drag_selection)
+        self.assertEqual(tool._selection_atom_ids, {1, 2, 3})
+
+        tool._apply_drag_delta(QPointF(6.0, -4.0))
+        self.assertEqual(canvas.suspend_calls, [True])
+        self.assertEqual(canvas.moved_atoms[0][:3], ({1, 2, 3}, 6.0, -4.0))
+        self.assertEqual(canvas.moved_items[0][1:3], (6.0, -4.0))
+
+        self.assertTrue(tool.on_mouse_release(_FakeEvent(QPointF(16.0, 16.0))))
+        self.assertEqual(canvas.suspend_calls[-1], False)
+        self.assertIsInstance(canvas.pushed_commands[-1], CompositeCommand)
+        self.assertFalse(tool._drag_selection)
+        self.assertIsNone(tool._drag_item)
+
+    def test_move_tool_item_drag_pushes_move_items_command(self) -> None:
+        canvas = _FakeMoveCanvas()
+        tool = MoveTool(canvas)
+        moved_item = _FakeItem("arrow")
+        canvas.item = moved_item
+
+        self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
+        self.assertIs(tool._drag_item, moved_item)
+
+        tool._apply_drag_delta(QPointF(5.0, 3.0))
+        self.assertEqual(canvas.moved_items[0], (moved_item, 5.0, 3.0, True))
+
+        self.assertTrue(tool.on_mouse_release(_FakeEvent(QPointF(6.0, 4.0))))
+        self.assertIsInstance(canvas.pushed_commands[-1], MoveItemsCommand)
+        self.assertEqual(canvas.updated_outline, 1)
+        self.assertIsNone(tool._drag_item)
 
     def test_bond_tool_preview_management_and_snap_helpers(self) -> None:
         canvas = _FakeBondCanvas()
