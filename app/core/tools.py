@@ -17,6 +17,10 @@ from core.history import (
     SetSmilesInputCommand,
     UpdateSceneItemCommand,
 )
+from ui.bond_preview_renderer import (
+    add_bond_preview_items as add_bond_preview_items_helper,
+    clear_bond_preview_items as clear_bond_preview_items_helper,
+)
 from ui.selection_press_logic import SelectionPressContext, plan_selection_press
 
 class Tool:
@@ -308,13 +312,7 @@ class BondTool(Tool):
         if not self._preview_items:
             self._preview_signature = None
             return
-        for item in self._preview_items:
-            try:
-                if item.scene() is self.canvas.scene():
-                    self.canvas.scene().removeItem(item)
-            except RuntimeError:
-                pass
-        self._preview_items = []
+        self._preview_items = clear_bond_preview_items_helper(self.canvas.scene(), self._preview_items)
         self._preview_signature = None
 
     def _set_preview_items(self, start: QPointF, end: QPointF) -> None:
@@ -334,20 +332,7 @@ class BondTool(Tool):
         items = self.canvas._build_bond_preview_items(start, end, self._start_atom_id, None)
         if not items:
             return
-        preview_color = QColor(120, 120, 120, 140)
-        for item in items:
-            if hasattr(item, "pen"):
-                pen = item.pen()
-                pen.setColor(preview_color)
-                item.setPen(pen)
-            if hasattr(item, "brush") and item.brush().style() != Qt.BrushStyle.NoBrush:
-                brush = item.brush()
-                brush.setColor(preview_color)
-                item.setBrush(brush)
-            item.setOpacity(0.5)
-            item.setZValue(4.5)
-            self.canvas.scene().addItem(item)
-        self._preview_items = items
+        self._preview_items = add_bond_preview_items_helper(self.canvas.scene(), items)
         self._preview_signature = signature
 
     def on_mouse_press(self, event) -> bool:
