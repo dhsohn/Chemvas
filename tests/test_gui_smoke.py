@@ -150,6 +150,40 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             segments.append((p1.x(), p1.y(), p2.x(), p2.y()))
         return segments
 
+    def _assert_ring_double_bonds_face_inward(self, ring_item) -> None:
+        ring_atom_ids = ring_item.data(2)
+        self.assertIsInstance(ring_atom_ids, list)
+        assert isinstance(ring_atom_ids, list)
+        center_x = sum(self.window.canvas.model.atoms[atom_id].x for atom_id in ring_atom_ids) / len(ring_atom_ids)
+        center_y = sum(self.window.canvas.model.atoms[atom_id].y for atom_id in ring_atom_ids) / len(ring_atom_ids)
+
+        checked = 0
+        for index, atom_a in enumerate(ring_atom_ids):
+            atom_b = ring_atom_ids[(index + 1) % len(ring_atom_ids)]
+            bond_id = self.window.canvas._bond_id_between(atom_a, atom_b)
+            self.assertIsNotNone(bond_id)
+            assert bond_id is not None
+            bond = self.window.canvas.model.bonds[bond_id]
+            self.assertIsNotNone(bond)
+            assert bond is not None
+            if bond.order != 2:
+                continue
+            segments = self._bond_scene_segments(bond_id)
+            self.assertEqual(len(segments), 2)
+            outer = segments[0]
+            inner = segments[1]
+            outer_mid = ((outer[0] + outer[2]) * 0.5, (outer[1] + outer[3]) * 0.5)
+            inner_mid = ((inner[0] + inner[2]) * 0.5, (inner[1] + inner[3]) * 0.5)
+            outer_dist = math.hypot(outer_mid[0] - center_x, outer_mid[1] - center_y)
+            inner_dist = math.hypot(inner_mid[0] - center_x, inner_mid[1] - center_y)
+            outer_len = math.hypot(outer[2] - outer[0], outer[3] - outer[1])
+            inner_len = math.hypot(inner[2] - inner[0], inner[3] - inner[1])
+            self.assertLess(inner_dist, outer_dist - 0.1)
+            self.assertLess(inner_len, outer_len - 0.1)
+            checked += 1
+
+        self.assertGreaterEqual(checked, 3)
+
     def test_generic_tool_shortcuts_switch_active_tool(self) -> None:
         self._press_key(Qt.Key.Key_X)
         self.assertEqual(self.window.canvas.tools.active.name, "bond")
@@ -1049,6 +1083,113 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertIsNotNone(end)
         near_path_point = QPointF((start.x() + end.x()) * 0.5, (start.y() + end.y()) * 0.5)
         self.assertTrue(self.window.canvas.selection_hit_test(near_path_point))
+
+    def test_select_tool_drag_moves_mixed_structure_and_arrow_selection(self) -> None:
+        self.window.canvas.set_tool("select")
+        atom_id = self.window.canvas.add_atom("C", 0.0, 0.0)
+        atom_item = self.window.canvas.atom_items.get(atom_id) or self.window.canvas.atom_dots.get(atom_id)
+        self.assertIsNotNone(atom_item)
+        arrow = self.window.canvas.add_arrow(QPointF(30.0, -10.0), QPointF(70.0, 10.0), "arrow")
+
+        self._select_items(atom_item, arrow)
+
+        atom_before = self.window.canvas.model.atoms[atom_id]
+        self.assertIsNotNone(atom_before)
+        atom_before_x = atom_before.x
+        atom_before_y = atom_before.y
+        arrow_before = dict(arrow.data(2) or {})
+
+        self._drag_scene_point(QPointF(atom_before_x, atom_before_y), QPointF(atom_before_x + 24.0, atom_before_y + 12.0))
+
+        atom_after = self.window.canvas.model.atoms[atom_id]
+        self.assertAlmostEqual(atom_after.x, atom_before_x + 24.0, places=3)
+        self.assertAlmostEqual(atom_after.y, atom_before_y + 12.0, places=3)
+
+        moved_arrow = arrow.data(2) or {}
+        self.assertAlmostEqual(moved_arrow["start"].x(), arrow_before["start"].x() + 24.0, places=3)
+        self.assertAlmostEqual(moved_arrow["start"].y(), arrow_before["start"].y() + 12.0, places=3)
+        self.assertAlmostEqual(moved_arrow["end"].x(), arrow_before["end"].x() + 24.0, places=3)
+        self.assertAlmostEqual(moved_arrow["end"].y(), arrow_before["end"].y() + 12.0, places=3)
+
+        self.window.canvas.undo()
+
+        atom_undone = self.window.canvas.model.atoms[atom_id]
+        self.assertAlmostEqual(atom_undone.x, atom_before_x, places=3)
+        self.assertAlmostEqual(atom_undone.y, atom_before_y, places=3)
+        undone_arrow = arrow.data(2) or {}
+        self.assertAlmostEqual(undone_arrow["start"].x(), arrow_before["start"].x(), places=3)
+        self.assertAlmostEqual(undone_arrow["start"].y(), arrow_before["start"].y(), places=3)
+        self.assertAlmostEqual(undone_arrow["end"].x(), arrow_before["end"].x(), places=3)
+        self.assertAlmostEqual(undone_arrow["end"].y(), arrow_before["end"].y(), places=3)
+
+    def test_copy_paste_duplicates_molecule_and_arrow_selection(self) -> None:
+        left = self.window.canvas.add_atom("C", -20.0, 0.0)
+        right = self.window.canvas.add_atom("O", 20.0, 0.0)
+        self.window.canvas.add_bond(left, right)
+        self.window.canvas._add_bond_graphics(0)
+        arrow = self.window.canvas.add_arrow(QPointF(40.0, -5.0), QPointF(90.0, 15.0), "arrow")
+
+        self._select_items(*self.window.canvas.bond_items[0], arrow)
+
+        self.assertTrue(self.window.canvas.copy_selection_to_clipboard())
+        self.assertTrue(self.window.canvas.paste_selection_from_clipboard())
+
+        self.assertEqual(len(self.window.canvas.model.atoms), 4)
+        self.assertEqual(sum(1 for bond in self.window.canvas.model.bonds if bond is not None), 2)
+        self.assertEqual(len(self.window.canvas.arrow_items), 2)
+
+        paste_dx = paste_dy = max(18.0, self.window.canvas.renderer.style.bond_length_px * 0.35)
+        new_atom_ids = sorted(atom_id for atom_id in self.window.canvas.model.atoms if atom_id not in {left, right})
+        self.assertEqual(len(new_atom_ids), 2)
+
+        original_positions = sorted(
+            [
+                (self.window.canvas.model.atoms[left].x, self.window.canvas.model.atoms[left].y),
+                (self.window.canvas.model.atoms[right].x, self.window.canvas.model.atoms[right].y),
+            ]
+        )
+        pasted_positions = sorted(
+            [
+                (self.window.canvas.model.atoms[new_atom_ids[0]].x, self.window.canvas.model.atoms[new_atom_ids[0]].y),
+                (self.window.canvas.model.atoms[new_atom_ids[1]].x, self.window.canvas.model.atoms[new_atom_ids[1]].y),
+            ]
+        )
+        for (orig_x, orig_y), (pasted_x, pasted_y) in zip(original_positions, pasted_positions):
+            self.assertAlmostEqual(pasted_x, orig_x + paste_dx, places=3)
+            self.assertAlmostEqual(pasted_y, orig_y + paste_dy, places=3)
+
+        pasted_arrow = self.window.canvas.arrow_items[-1]
+        pasted_arrow_data = pasted_arrow.data(2) or {}
+        original_arrow_data = arrow.data(2) or {}
+        self.assertAlmostEqual(pasted_arrow_data["start"].x(), original_arrow_data["start"].x() + paste_dx, places=3)
+        self.assertAlmostEqual(pasted_arrow_data["start"].y(), original_arrow_data["start"].y() + paste_dy, places=3)
+        self.assertAlmostEqual(pasted_arrow_data["end"].x(), original_arrow_data["end"].x() + paste_dx, places=3)
+        self.assertAlmostEqual(pasted_arrow_data["end"].y(), original_arrow_data["end"].y() + paste_dy, places=3)
+
+        self.window.canvas.undo()
+
+        self.assertEqual(len(self.window.canvas.model.atoms), 2)
+        self.assertEqual(sum(1 for bond in self.window.canvas.model.bonds if bond is not None), 1)
+        self.assertEqual(len(self.window.canvas.arrow_items), 1)
+
+    def test_copy_paste_benzene_preserves_inner_double_bond_orientation(self) -> None:
+        self.window.canvas.add_benzene_ring(QPointF(0.0, 0.0))
+        original_ring = self.window.canvas.ring_items[0]
+        self._assert_ring_double_bonds_face_inward(original_ring)
+
+        self._select_items(original_ring)
+        self.assertTrue(self.window.canvas.copy_selection_to_clipboard())
+        self.assertTrue(self.window.canvas.paste_selection_from_clipboard())
+
+        pasted_ring = self.window.canvas.ring_items[-1]
+        self._assert_ring_double_bonds_face_inward(pasted_ring)
+
+        self.window.canvas.undo()
+        self.assertEqual(len(self.window.canvas.ring_items), 1)
+
+        self.window.canvas.redo()
+        self.assertEqual(len(self.window.canvas.ring_items), 2)
+        self._assert_ring_double_bonds_face_inward(self.window.canvas.ring_items[-1])
 
     def test_color_preset_preserves_ring_fill_on_selected_ring(self) -> None:
         self.window.canvas.add_benzene_ring(QPointF(0.0, 0.0))
