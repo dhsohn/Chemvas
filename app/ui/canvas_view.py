@@ -54,7 +54,7 @@ from core.history import (
     UpdateBondCommand,
 )
 from core.document_io import read_document, write_document
-from core.document_state import deserialize_model_state, serialize_model_state, serialize_settings
+from core.document_state import deserialize_model_state
 from core.model import Atom, Bond, MoleculeModel
 from core.renderer import Renderer
 from core.rdkit_adapter import RDKitAdapter
@@ -69,7 +69,24 @@ from core.template_geometry import (
     scale_points_to_bond_length,
 )
 from core.tools import ToolController
+from ui.bond_preview_renderer import (
+    BondPreviewBuildResolvers,
+    BondPreviewConfig,
+    BondPreviewUpdateResolvers,
+    build_bond_preview_items as build_bond_preview_items_helper,
+    update_bond_preview_items as update_bond_preview_items_helper,
+)
 from ui.bond_renderer import BondRenderer
+from ui.benzene_preview_renderer import (
+    clear_benzene_preview as clear_benzene_preview_helper,
+    rebuild_benzene_preview as rebuild_benzene_preview_helper,
+)
+from ui.canvas_document_state import (
+    apply_document_settings,
+    restore_document_post_model_items,
+    restore_document_pre_model_items,
+    snapshot_canvas_document_state,
+)
 from ui.graphics_items import (
     AtomLabelItem,
     AtomDotItem,
@@ -78,7 +95,23 @@ from ui.graphics_items import (
     NoSelectPathItem,
     NoSelectPolygonItem,
     NoSelectRectItem,
-    NoSelectTextItem,
+)
+from ui.hover_scene_renderer import (
+    add_hover_preview_items as add_hover_preview_items_helper,
+    build_atom_hover_indicator as build_atom_hover_indicator_helper,
+    build_bond_hover_indicator as build_bond_hover_indicator_helper,
+    clear_hover_items as clear_hover_items_helper,
+)
+from ui.handle_interaction_logic import (
+    clamp_curved_midpoint as clamp_curved_midpoint_helper,
+    clear_handle_items as clear_handle_items_helper,
+    control_from_midpoint as control_from_midpoint_helper,
+    create_handle_item as create_handle_item_helper,
+    curved_midpoint as curved_midpoint_helper,
+    default_curved_control as default_curved_control_helper,
+    orbital_handle_positions as orbital_handle_positions_helper,
+    orbital_rotation_angle as orbital_rotation_angle_helper,
+    orbital_scale_factor as orbital_scale_factor_helper,
 )
 from ui.insert_mode_logic import (
     InsertSessionState,
@@ -88,6 +121,33 @@ from ui.insert_mode_logic import (
     cancel_smiles_insert as cancel_smiles_insert_state,
     cancel_template_insert as cancel_template_insert_state,
     clear_insert_session,
+)
+from ui.preview_scene_renderer import (
+    apply_smiles_preview_geometry as apply_smiles_preview_geometry_helper,
+    apply_template_preview_geometry as apply_template_preview_geometry_helper,
+    clear_smiles_preview as clear_smiles_preview_helper,
+    clear_template_preview as clear_template_preview_helper,
+    smiles_preview_snapshot as smiles_preview_snapshot_helper,
+)
+from ui.scene_item_restore import (
+    create_arrow_item_from_state as create_arrow_item_from_state_helper,
+    create_mark_item_from_state as create_mark_item_from_state_helper,
+    create_note_item_from_state as create_note_item_from_state_helper,
+    create_orbital_item_from_state as create_orbital_item_from_state_helper,
+    create_ring_item_from_state as create_ring_item_from_state_helper,
+    create_scene_item_from_state as create_scene_item_from_state_helper,
+    create_ts_bracket_item_from_state as create_ts_bracket_item_from_state_helper,
+)
+from ui.scene_item_state import (
+    apply_scene_item_state as apply_scene_item_state_helper,
+    arrow_state_dict as arrow_state_dict_helper,
+    mark_state_dict as mark_state_dict_helper,
+    note_state_dict as note_state_dict_helper,
+    orbital_state_dict as orbital_state_dict_helper,
+    ring_state_dict as ring_state_dict_helper,
+    scene_item_state as scene_item_state_helper,
+    ts_bracket_rect_from_state as ts_bracket_rect_from_state_helper,
+    ts_bracket_state_dict as ts_bracket_state_dict_helper,
 )
 from ui.selection_hit_logic import (
     AtomHitCandidate,
@@ -103,12 +163,17 @@ from ui.selection_hit_logic import (
     structure_hit_is_selected,
 )
 from ui.smiles_insert_logic import (
-    SmilesPreviewGeometry,
     SmilesPreviewResolvers,
-    build_smiles_preview_snapshot,
     plan_smiles_commit,
     plan_smiles_preview_update,
     smiles_preview_center,
+)
+from ui.structure_payload_logic import (
+    build_3d_conversion_payload as build_3d_conversion_payload_state,
+    build_atom_annotations as build_atom_annotations_state,
+    build_structure_payload as build_structure_payload_state,
+    build_submodel as build_submodel_state,
+    expand_atom_ids_for_structure as expand_atom_ids_for_structure_state,
 )
 from ui.template_insert_logic import (
     TemplateInsertRequest,
@@ -924,136 +989,7 @@ class CanvasView(QGraphicsView):
         return True
 
     def _snapshot_state(self) -> dict:
-        ring_fills = []
-        for ring_item in self.ring_items:
-            polygon = ring_item.polygon()
-            points = [(point.x(), point.y()) for point in polygon]
-            brush = ring_item.brush()
-            color = brush.color().name() if brush.style() != Qt.BrushStyle.NoBrush else None
-            alpha = brush.color().alphaF() if brush.style() != Qt.BrushStyle.NoBrush else 0.0
-            ring_fills.append(
-                {
-                    "points": points,
-                    "atom_ids": ring_item.data(2),
-                    "color": color,
-                    "alpha": alpha,
-                }
-            )
-        notes = []
-        marks = []
-        arrows = []
-        ts_brackets = []
-        orbitals = []
-        for item in self.note_items:
-            try:
-                if item.scene() is not self.scene():
-                    continue
-            except RuntimeError:
-                continue
-            notes.append(
-                {
-                    "text": item.toPlainText(),
-                    "x": item.pos().x(),
-                    "y": item.pos().y(),
-                }
-            )
-        for item in self.mark_items:
-            try:
-                if item.scene() is not self.scene():
-                    continue
-            except RuntimeError:
-                continue
-            data = item.data(1) or {}
-            center = self._mark_center(item)
-            marks.append(
-                {
-                    "kind": data.get("kind"),
-                    "text": data.get("text"),
-                    "atom_id": data.get("atom_id"),
-                    "dx": data.get("dx"),
-                    "dy": data.get("dy"),
-                    "x": center.x(),
-                    "y": center.y(),
-                }
-            )
-        for item in self.arrow_items:
-            try:
-                if item.scene() is not self.scene():
-                    continue
-            except RuntimeError:
-                continue
-            kind = item.data(0)
-            if kind not in {
-                "arrow",
-                "equilibrium",
-                "resonance",
-                "curved_single",
-                "curved_double",
-                "inhibit",
-                "dotted",
-            }:
-                continue
-            data = item.data(2) or {}
-            start = data.get("start")
-            end = data.get("end")
-            control = data.get("control")
-            double = data.get("double", False)
-            arrows.append(
-                {
-                    "kind": kind,
-                    "start": (start.x(), start.y()) if isinstance(start, QPointF) else None,
-                    "end": (end.x(), end.y()) if isinstance(end, QPointF) else None,
-                    "control": (control.x(), control.y()) if isinstance(control, QPointF) else None,
-                    "double": bool(double),
-                }
-            )
-        for item in self.ts_bracket_items:
-            try:
-                if item.scene() is not self.scene():
-                    continue
-            except RuntimeError:
-                continue
-            ts_brackets.append(self._ts_bracket_state_dict(item))
-        for item in self.orbital_items:
-            try:
-                if item.scene() is not self.scene():
-                    continue
-            except RuntimeError:
-                continue
-            data = item.data(1) or {}
-            center = data.get("center")
-            meta = item.data(2) or {}
-            orbitals.append(
-                {
-                    "kind": meta.get("kind", "s"),
-                    "center": (center.x(), center.y()) if isinstance(center, QPointF) else None,
-                    "scale": item.scale(),
-                    "rotation": item.rotation(),
-                }
-            )
-        settings = serialize_settings(
-            bond_length_px=self.renderer.style.bond_length_px,
-            arrow_line_width=self.arrow_line_width,
-            arrow_head_scale=self.arrow_head_scale,
-            orbital_phase_enabled=self.orbital_phase_enabled,
-            text_font_size=self.text_font_size,
-            text_font_weight=self.text_font_weight,
-            text_italic=self.text_italic,
-        )
-        return {
-            "model": serialize_model_state(
-                self.model,
-                explicit_label_atom_ids=self.atom_items.keys(),
-            ),
-            "ring_fills": ring_fills,
-            "notes": notes,
-            "marks": marks,
-            "arrows": arrows,
-            "ts_brackets": ts_brackets,
-            "orbitals": orbitals,
-            "settings": settings,
-            "last_smiles_input": self.last_smiles_input,
-        }
+        return snapshot_canvas_document_state(self)
 
     def snapshot_state(self) -> dict:
         return self._snapshot_state()
@@ -1062,109 +998,14 @@ class CanvasView(QGraphicsView):
         self._history_enabled = False
         try:
             self.clear_scene()
-            settings = state.get("settings", {})
-            bond_length = settings.get("bond_length_px", self.renderer.style.bond_length_px)
-            self.renderer.set_bond_length(bond_length)
-            self.arrow_line_width = settings.get("arrow_line_width", self.arrow_line_width)
-            self.arrow_head_scale = settings.get("arrow_head_scale", self.arrow_head_scale)
-            self.orbital_phase_enabled = settings.get("orbital_phase_enabled", self.orbital_phase_enabled)
-            self.text_font_size = settings.get("text_font_size", self.text_font_size)
-            self.text_font_weight = settings.get("text_font_weight", self.text_font_weight)
-            self.text_italic = settings.get("text_italic", self.text_italic)
-            self.last_smiles_input = state.get("last_smiles_input")
+            apply_document_settings(self, state)
 
             self.model = deserialize_model_state(state.get("model", {}))
             self._rebuild_bond_adjacency()
-
-            for ring_state in state.get("ring_fills", []):
-                points = [QPointF(x, y) for x, y in ring_state.get("points", [])]
-                if len(points) < 3:
-                    continue
-                ring_item = NoSelectPolygonItem(QPolygonF(points))
-                color = ring_state.get("color")
-                alpha = ring_state.get("alpha", 0.0)
-                if color:
-                    fill = QColor(color)
-                    fill.setAlphaF(alpha)
-                    ring_item.setBrush(QBrush(fill))
-                else:
-                    ring_item.setBrush(self.renderer.ring_fill_brush())
-                ring_item.setPen(QPen(Qt.PenStyle.NoPen))
-                ring_item.setData(0, "ring")
-                ring_item.setData(2, ring_state.get("atom_ids"))
-                self._make_selectable(ring_item)
-                self.scene().addItem(ring_item)
-                self.ring_items.append(ring_item)
+            restore_document_pre_model_items(self, state)
 
             self._render_model()
-
-            for note_state in state.get("notes", []):
-                item = self.add_text_note(QPointF(note_state["x"], note_state["y"]), note_state["text"])
-                item.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
-
-            for mark_state in state.get("marks", []):
-                kind = mark_state.get("kind", "plus")
-                atom_id = mark_state.get("atom_id")
-                offset = None
-                center = None
-                if isinstance(atom_id, int) and atom_id in self.model.atoms:
-                    atom = self.model.atoms[atom_id]
-                    dx = mark_state.get("dx")
-                    dy = mark_state.get("dy")
-                    if isinstance(dx, (int, float)) and isinstance(dy, (int, float)):
-                        offset = QPointF(float(dx), float(dy))
-                        center = QPointF(atom.x + offset.x(), atom.y + offset.y())
-                    else:
-                        x = mark_state.get("x")
-                        y = mark_state.get("y")
-                        if isinstance(x, (int, float)) and isinstance(y, (int, float)):
-                            center = QPointF(float(x), float(y))
-                            offset = QPointF(center.x() - atom.x, center.y() - atom.y)
-                else:
-                    x = mark_state.get("x")
-                    y = mark_state.get("y")
-                    if isinstance(x, (int, float)) and isinstance(y, (int, float)):
-                        center = QPointF(float(x), float(y))
-                        atom_id = None
-                if center is None:
-                    continue
-                self.add_mark(
-                    center,
-                    kind=kind,
-                    atom_id=atom_id if isinstance(atom_id, int) else None,
-                    offset=offset,
-                    record=False,
-                )
-
-            for arrow_state in state.get("arrows", []):
-                start = arrow_state.get("start")
-                end = arrow_state.get("end")
-                if start is None or end is None:
-                    continue
-                item = self.add_arrow(QPointF(*start), QPointF(*end), arrow_state.get("kind", "arrow"))
-                control = arrow_state.get("control")
-                if control and arrow_state.get("kind") in {"curved_single", "curved_double"}:
-                    self._update_curved_control(item, QPointF(*control))
-
-            for ts_bracket_state in state.get("ts_brackets", []):
-                self._restore_ts_bracket_from_state(ts_bracket_state)
-
-            for orbital_state in state.get("orbitals", []):
-                center = orbital_state.get("center")
-                if center is None:
-                    continue
-                kind = orbital_state.get("kind", "s")
-                items = self._build_orbital_items(QPointF(*center), kind)
-                group = self.scene().createItemGroup(items)
-                group.setData(0, "orbital")
-                group.setData(1, {"center": QPointF(*center), "base_handle_dist": self.renderer.style.bond_length_px * 0.8})
-                group.setData(2, {"kind": kind})
-                group.setTransformOriginPoint(QPointF(*center))
-                group.setScale(orbital_state.get("scale", 1.0))
-                group.setRotation(orbital_state.get("rotation", 0.0))
-                self._make_selectable(group)
-                self.orbital_items.append(group)
-
+            restore_document_post_model_items(self, state)
             self._mark_spatial_index_dirty()
         finally:
             self._history_enabled = True
@@ -1621,189 +1462,54 @@ class CanvasView(QGraphicsView):
             ring_item.setPolygon(polygon)
 
     def _ring_state_dict(self, ring_item: QGraphicsPolygonItem) -> dict:
-        polygon = ring_item.polygon()
-        points = [(point.x(), point.y()) for point in polygon]
-        brush = ring_item.brush()
-        color = brush.color().name() if brush.style() != Qt.BrushStyle.NoBrush else None
-        alpha = brush.color().alphaF() if brush.style() != Qt.BrushStyle.NoBrush else 0.0
-        return {
-            "kind": "ring",
-            "points": points,
-            "atom_ids": ring_item.data(2),
-            "color": color,
-            "alpha": alpha,
-        }
+        return ring_state_dict_helper(ring_item)
 
     def _note_state_dict(self, item: QGraphicsTextItem) -> dict:
-        return {
-            "kind": "note",
-            "text": item.toPlainText(),
-            "x": item.pos().x(),
-            "y": item.pos().y(),
-        }
+        return note_state_dict_helper(item)
 
     def _mark_state_dict(self, item) -> dict:
-        data = item.data(1) or {}
-        center = self._mark_center(item)
-        return {
-            "kind": "mark",
-            "mark_kind": data.get("kind"),
-            "text": data.get("text"),
-            "atom_id": data.get("atom_id"),
-            "dx": data.get("dx"),
-            "dy": data.get("dy"),
-            "x": center.x(),
-            "y": center.y(),
-        }
+        return mark_state_dict_helper(item, mark_center_getter=self._mark_center)
 
     def _arrow_state_dict(self, item) -> dict:
-        data = item.data(2) or {}
-        start = data.get("start")
-        end = data.get("end")
-        control = data.get("control")
-        return {
-            "kind": item.data(0),
-            "start": (start.x(), start.y()) if isinstance(start, QPointF) else None,
-            "end": (end.x(), end.y()) if isinstance(end, QPointF) else None,
-            "control": (control.x(), control.y()) if isinstance(control, QPointF) else None,
-            "double": bool(data.get("double", False)),
-        }
+        return arrow_state_dict_helper(item)
 
     def _ts_bracket_state_dict(self, item) -> dict:
-        data = item.data(1) or {}
-        rect = data.get("rect")
-        if not isinstance(rect, QRectF):
-            rect = item.sceneBoundingRect()
-        return {
-            "kind": "ts_bracket",
-            "left": rect.left(),
-            "top": rect.top(),
-            "right": rect.right(),
-            "bottom": rect.bottom(),
-        }
+        return ts_bracket_state_dict_helper(item)
 
     def _ts_bracket_rect_from_state(self, state: dict) -> QRectF | None:
-        coords = (
-            state.get("left"),
-            state.get("top"),
-            state.get("right"),
-            state.get("bottom"),
-        )
-        if not all(isinstance(value, (int, float)) for value in coords):
-            return None
-        left, top, right, bottom = (float(value) for value in coords)
-        return QRectF(QPointF(left, top), QPointF(right, bottom)).normalized()
+        return ts_bracket_rect_from_state_helper(state)
 
     def _orbital_state_dict(self, item) -> dict:
-        data = item.data(1) or {}
-        center = data.get("center")
-        meta = item.data(2) or {}
-        return {
-            "kind": "orbital",
-            "orbital_kind": meta.get("kind", "s"),
-            "center": (center.x(), center.y()) if isinstance(center, QPointF) else None,
-            "scale": item.scale(),
-            "rotation": item.rotation(),
-        }
+        return orbital_state_dict_helper(item)
 
     def scene_item_state(self, item) -> dict:
-        if item is None:
-            return {}
-        kind = item.data(0)
-        if kind == "ring" and isinstance(item, QGraphicsPolygonItem):
-            return self._ring_state_dict(item)
-        if kind == "note" and isinstance(item, QGraphicsTextItem):
-            return self._note_state_dict(item)
-        if kind == "mark":
-            return self._mark_state_dict(item)
-        if kind == "ts_bracket" and isinstance(item, QGraphicsPathItem):
-            return self._ts_bracket_state_dict(item)
-        if kind == "orbital" and isinstance(item, QGraphicsItemGroup):
-            return self._orbital_state_dict(item)
-        if kind in {
-            "arrow",
-            "equilibrium",
-            "resonance",
-            "curved_single",
-            "curved_double",
-            "inhibit",
-            "dotted",
-        } and isinstance(item, QGraphicsPathItem):
-            return self._arrow_state_dict(item)
-        return {}
+        return scene_item_state_helper(item, mark_center_getter=self._mark_center)
 
     def _restore_ring_from_state(self, ring_state: dict):
-        points = [QPointF(x, y) for x, y in ring_state.get("points", [])]
-        if len(points) < 3:
-            return None
-        ring_item = NoSelectPolygonItem(QPolygonF(points))
-        color = ring_state.get("color")
-        alpha = ring_state.get("alpha", 0.0)
-        if color:
-            fill = QColor(color)
-            fill.setAlphaF(alpha)
-            ring_item.setBrush(QBrush(fill))
-        else:
-            ring_item.setBrush(self.renderer.ring_fill_brush())
-        ring_item.setPen(QPen(Qt.PenStyle.NoPen))
-        ring_item.setData(0, "ring")
-        ring_item.setData(2, ring_state.get("atom_ids"))
-        self._make_selectable(ring_item)
-        self.scene().addItem(ring_item)
-        self.ring_items.append(ring_item)
-        return ring_item
+        item = create_ring_item_from_state_helper(
+            ring_state,
+            ring_fill_brush_getter=self.renderer.ring_fill_brush,
+        )
+        self.restore_scene_item(item)
+        return item
 
     def _restore_note_from_state(self, note_state: dict):
-        item = NoteItem(self)
-        item.setPlainText(note_state.get("text", ""))
-        item._last_text = item.toPlainText()
-        item.setData(0, "note")
-        item.setPos(QPointF(note_state.get("x", 0.0), note_state.get("y", 0.0)))
-        self.scene().addItem(item)
-        self.note_items.append(item)
-        self._make_selectable(item)
-        self._apply_note_style(item)
-        item.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
+        item = create_note_item_from_state_helper(
+            note_state,
+            note_item_factory=lambda: NoteItem(self),
+            note_style_applier=self._apply_note_style,
+        )
+        self.restore_scene_item(item)
         return item
 
     def _restore_mark_from_state(self, mark_state: dict):
-        kind = mark_state.get("mark_kind", "plus")
-        atom_id = mark_state.get("atom_id")
-        dx = mark_state.get("dx")
-        dy = mark_state.get("dy")
-        center = None
-        offset = None
-        if isinstance(atom_id, int) and atom_id in self.model.atoms:
-            atom = self.model.atoms[atom_id]
-            if isinstance(dx, (int, float)) and isinstance(dy, (int, float)):
-                offset = QPointF(float(dx), float(dy))
-                center = QPointF(atom.x + offset.x(), atom.y + offset.y())
-        if center is None:
-            x = mark_state.get("x")
-            y = mark_state.get("y")
-            if isinstance(x, (int, float)) and isinstance(y, (int, float)):
-                center = QPointF(float(x), float(y))
-        if center is None:
-            return None
-        item = self._build_mark_item(kind)
-        if item is None:
-            return None
-        data = {"kind": kind, "atom_id": atom_id}
-        if offset is not None:
-            data["dx"] = offset.x()
-            data["dy"] = offset.y()
-        text = mark_state.get("text")
-        if text is not None and isinstance(item, QGraphicsTextItem):
-            item.setPlainText(text)
-            data["text"] = text
-        item.setData(0, "mark")
-        item.setData(1, data)
-        self._make_selectable(item)
-        self.scene().addItem(item)
-        self.mark_items.append(item)
-        if isinstance(atom_id, int):
-            self._marks_by_atom.setdefault(atom_id, []).append(item)
-        self._set_mark_center(item, center)
+        item = create_mark_item_from_state_helper(
+            mark_state,
+            model_atoms=self.model.atoms,
+            build_mark_item=self._build_mark_item,
+            set_mark_center=self._set_mark_center,
+        )
+        self.restore_scene_item(item)
         return item
 
     def _set_curved_arrow_path(
@@ -1825,77 +1531,49 @@ class CanvasView(QGraphicsView):
         item.setPath(path)
 
     def _restore_arrow_from_state(self, arrow_state: dict):
-        kind = arrow_state.get("kind", "arrow")
-        start = arrow_state.get("start")
-        end = arrow_state.get("end")
-        if start is None or end is None:
-            return None
-        start_pt = QPointF(*start)
-        end_pt = QPointF(*end)
-        item = self._build_arrow_item(start_pt, end_pt, kind)
-        item.setData(0, kind)
-        control = arrow_state.get("control")
-        double = bool(arrow_state.get("double", False))
-        data = {"start": start_pt, "end": end_pt, "control": None, "double": double}
-        if kind in {"curved_single", "curved_double"} and control is not None:
-            control_pt = QPointF(*control)
-            self._set_curved_arrow_path(item, start_pt, end_pt, control_pt, double)
-            data["control"] = control_pt
-        item.setData(2, data)
-        self._make_selectable(item)
-        self.scene().addItem(item)
-        self.arrow_items.append(item)
+        item = create_arrow_item_from_state_helper(
+            arrow_state,
+            build_arrow_item=self._build_arrow_item,
+            set_curved_arrow_path=self._set_curved_arrow_path,
+        )
+        self.restore_scene_item(item)
         return item
 
     def _restore_ts_bracket_from_state(self, ts_bracket_state: dict):
-        rect = self._ts_bracket_rect_from_state(ts_bracket_state)
-        if rect is None:
-            return None
-        item = self._build_ts_bracket_item(rect)
-        self._make_selectable(item)
-        self.scene().addItem(item)
-        self.ts_bracket_items.append(item)
+        item = create_ts_bracket_item_from_state_helper(
+            ts_bracket_state,
+            build_ts_bracket_item=self._build_ts_bracket_item,
+        )
+        self.restore_scene_item(item)
         return item
 
     def _restore_orbital_from_state(self, orbital_state: dict):
-        center = orbital_state.get("center")
-        if center is None:
-            return None
-        kind = orbital_state.get("orbital_kind", "s")
-        items = self._build_orbital_items(QPointF(*center), kind)
-        group = self.scene().createItemGroup(items)
-        group.setData(0, "orbital")
-        group.setData(1, {"center": QPointF(*center), "base_handle_dist": self.renderer.style.bond_length_px * 0.8})
-        group.setData(2, {"kind": kind})
-        group.setTransformOriginPoint(QPointF(*center))
-        group.setScale(orbital_state.get("scale", 1.0))
-        group.setRotation(orbital_state.get("rotation", 0.0))
-        self._make_selectable(group)
-        self.orbital_items.append(group)
+        group = create_orbital_item_from_state_helper(
+            orbital_state,
+            build_orbital_items=self._build_orbital_items,
+            orbital_base_handle_dist=self.renderer.style.bond_length_px * 0.8,
+        )
+        self.restore_scene_item(group)
         return group
 
     def create_scene_item_from_state(self, state: dict):
-        kind = state.get("kind")
-        if kind == "ring":
-            return self._restore_ring_from_state(state)
-        if kind == "note":
-            return self._restore_note_from_state(state)
-        if kind == "mark":
-            return self._restore_mark_from_state(state)
-        if kind == "ts_bracket":
-            return self._restore_ts_bracket_from_state(state)
-        if kind == "orbital":
-            return self._restore_orbital_from_state(state)
-        if kind in {
-            "arrow",
-            "equilibrium",
-            "resonance",
-            "curved_single",
-            "curved_double",
-            "inhibit",
-            "dotted",
-        }:
-            return self._restore_arrow_from_state(state)
+        item = create_scene_item_from_state_helper(
+            state,
+            model_atoms=self.model.atoms,
+            note_item_factory=lambda: NoteItem(self),
+            note_style_applier=self._apply_note_style,
+            build_mark_item=self._build_mark_item,
+            set_mark_center=self._set_mark_center,
+            ring_fill_brush_getter=self.renderer.ring_fill_brush,
+            build_arrow_item=self._build_arrow_item,
+            set_curved_arrow_path=self._set_curved_arrow_path,
+            build_ts_bracket_item=self._build_ts_bracket_item,
+            build_orbital_items=self._build_orbital_items,
+            orbital_base_handle_dist=self.renderer.style.bond_length_px * 0.8,
+        )
+        if item is not None:
+            self.restore_scene_item(item)
+            return item
         return None
 
     def restore_scene_item(self, item) -> None:
@@ -1983,108 +1661,19 @@ class CanvasView(QGraphicsView):
             return
 
     def apply_scene_item_state(self, item, state: dict) -> None:
-        if item is None or not state:
-            return
-        kind = state.get("kind")
-        if kind == "note" and isinstance(item, QGraphicsTextItem):
-            item.setPlainText(state.get("text", ""))
-            item._last_text = item.toPlainText()
-            item.setPos(QPointF(state.get("x", 0.0), state.get("y", 0.0)))
-            self._apply_note_style(item)
-            item.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
-            return
-        if kind == "mark":
-            if isinstance(item, QGraphicsTextItem):
-                text = state.get("text")
-                if text is not None:
-                    item.setPlainText(text)
-            data = item.data(1) or {}
-            data.update(
-                {
-                    "kind": state.get("mark_kind", data.get("kind")),
-                    "atom_id": state.get("atom_id"),
-                    "dx": state.get("dx"),
-                    "dy": state.get("dy"),
-                    "text": state.get("text"),
-                }
-            )
-            item.setData(1, data)
-            center = None
-            atom_id = state.get("atom_id")
-            dx = state.get("dx")
-            dy = state.get("dy")
-            if isinstance(atom_id, int) and atom_id in self.model.atoms:
-                atom = self.model.atoms[atom_id]
-                if isinstance(dx, (int, float)) and isinstance(dy, (int, float)):
-                    center = QPointF(atom.x + dx, atom.y + dy)
-            if center is None:
-                x = state.get("x")
-                y = state.get("y")
-                if isinstance(x, (int, float)) and isinstance(y, (int, float)):
-                    center = QPointF(float(x), float(y))
-            if center is not None:
-                self._set_mark_center(item, center)
-            return
-        if kind == "ring" and isinstance(item, QGraphicsPolygonItem):
-            points = [QPointF(x, y) for x, y in state.get("points", [])]
-            if len(points) >= 3:
-                item.setPolygon(QPolygonF(points))
-            color = state.get("color")
-            alpha = state.get("alpha", 0.0)
-            if color:
-                fill = QColor(color)
-                fill.setAlphaF(alpha)
-                item.setBrush(fill)
-            else:
-                item.setBrush(self.renderer.ring_fill_brush())
-            return
-        if kind == "ts_bracket" and isinstance(item, QGraphicsPathItem):
-            rect = self._ts_bracket_rect_from_state(state)
-            if rect is None:
-                return
-            item.setPath(self._ts_bracket_path(rect))
-            item.setPen(QPen(Qt.PenStyle.NoPen))
-            item.setBrush(QBrush(QColor(self.renderer.style.bond_color)))
-            item.setData(1, {"rect": QRectF(rect)})
-            return
-        if kind == "orbital" and isinstance(item, QGraphicsItemGroup):
-            center = state.get("center")
-            if center is not None:
-                item.setData(1, {"center": QPointF(*center), "base_handle_dist": self.renderer.style.bond_length_px * 0.8})
-                item.setTransformOriginPoint(QPointF(*center))
-            item.setScale(state.get("scale", item.scale()))
-            item.setRotation(state.get("rotation", item.rotation()))
-            return
-        if kind in {
-            "arrow",
-            "equilibrium",
-            "resonance",
-            "curved_single",
-            "curved_double",
-            "inhibit",
-            "dotted",
-        } and isinstance(item, QGraphicsPathItem):
-            start = state.get("start")
-            end = state.get("end")
-            if start is None or end is None:
-                return
-            start_pt = QPointF(*start)
-            end_pt = QPointF(*end)
-            control = state.get("control")
-            double = bool(state.get("double", False))
-            if kind in {"curved_single", "curved_double"} and control is not None:
-                control_pt = QPointF(*control)
-                self._set_curved_arrow_path(item, start_pt, end_pt, control_pt, double)
-                data = {"start": start_pt, "end": end_pt, "control": control_pt, "double": double}
-            else:
-                rebuilt = self._build_arrow_item(start_pt, end_pt, kind)
-                item.setPath(rebuilt.path())
-                item.setPen(rebuilt.pen())
-                item.setBrush(rebuilt.brush())
-                data = {"start": start_pt, "end": end_pt, "control": None, "double": double}
-            item.setData(0, kind)
-            item.setData(2, data)
-            return
+        apply_scene_item_state_helper(
+            item,
+            state,
+            model_atoms=self.model.atoms,
+            note_style_applier=self._apply_note_style,
+            mark_center_setter=self._set_mark_center,
+            ring_fill_brush_getter=self.renderer.ring_fill_brush,
+            ts_bracket_path_builder=self._ts_bracket_path,
+            bond_color=self.renderer.style.bond_color,
+            build_arrow_item=self._build_arrow_item,
+            set_curved_arrow_path=self._set_curved_arrow_path,
+            orbital_base_handle_dist=self.renderer.style.bond_length_px * 0.8,
+        )
 
     def _record_bond_update(
         self,
@@ -3362,102 +2951,47 @@ class CanvasView(QGraphicsView):
         return True
 
     def _expanded_atom_ids_for_structure(self, atom_ids: set[int], bond_ids: set[int]) -> set[int]:
-        selected_atoms = set(atom_ids)
-        for bond_id in bond_ids:
-            if not (0 <= bond_id < len(self.model.bonds)):
-                continue
-            bond = self.model.bonds[bond_id]
-            if bond is None:
-                continue
-            selected_atoms.add(bond.a)
-            selected_atoms.add(bond.b)
-        return selected_atoms
+        return expand_atom_ids_for_structure_state(self.model, atom_ids, bond_ids)
 
     def _build_submodel(self, atom_ids: set[int], bond_ids: set[int]):
-        submodel = MoleculeModel()
-        selected_atoms = self._expanded_atom_ids_for_structure(atom_ids, bond_ids)
-
-        id_map = {}
-        for old_id in sorted(selected_atoms):
-            atom = self.model.atoms.get(old_id)
-            if atom is None:
-                continue
-            new_id = submodel.add_atom(atom.element, atom.x, atom.y)
-            submodel.atoms[new_id].color = atom.color
-            submodel.atoms[new_id].explicit_label = atom.explicit_label
-            id_map[old_id] = new_id
-
-        for bond_id in bond_ids:
-            if not (0 <= bond_id < len(self.model.bonds)):
-                continue
-            bond = self.model.bonds[bond_id]
-            if bond is None:
-                continue
-            if bond.a in id_map and bond.b in id_map:
-                submodel.bonds.append(
-                    Bond(
-                        a=id_map[bond.a],
-                        b=id_map[bond.b],
-                        order=bond.order,
-                        style=bond.style,
-                        color=bond.color,
-                    )
-                )
-
-        if not bond_ids:
-            for bond in self.model.bonds:
-                if bond is None:
-                    continue
-                if bond.a in id_map and bond.b in id_map:
-                    submodel.bonds.append(
-                        Bond(
-                            a=id_map[bond.a],
-                            b=id_map[bond.b],
-                            order=bond.order,
-                            style=bond.style,
-                            color=bond.color,
-                        )
-                    )
-
-        bounds = self._bounds_for_atoms(selected_atoms)
-        return submodel, bounds, id_map
+        return build_submodel_state(
+            self.model,
+            atom_ids,
+            bond_ids,
+            bounds_getter=self._bounds_for_atoms,
+        )
 
     def _build_atom_annotations(
         self,
         atom_ids: set[int],
         id_map: dict[int, int],
     ) -> dict[int, dict[str, int]]:
-        annotations: dict[int, dict[str, int]] = {}
-        for old_id in sorted(atom_ids):
-            new_id = id_map.get(old_id)
-            if new_id is None:
-                continue
-            formal_charge = 0
-            radical_electrons = 0
-            for mark in self._marks_by_atom.get(old_id, []):
-                data = mark.data(1) or {}
+        return build_atom_annotations_state(atom_ids, id_map, self._mark_kinds_by_atom())
+
+    def _mark_kinds_by_atom(self) -> dict[int, list[str]]:
+        mark_kinds_by_atom: dict[int, list[str]] = {}
+        for atom_id, marks in self._marks_by_atom.items():
+            kinds: list[str] = []
+            for mark in marks:
+                data = mark.data(1)
+                if not isinstance(data, dict):
+                    continue
                 kind = data.get("kind")
-                if kind == "plus":
-                    formal_charge += 1
-                elif kind == "minus":
-                    formal_charge -= 1
-                elif kind == "radical":
-                    radical_electrons += 1
-            if formal_charge or radical_electrons:
-                annotations[new_id] = {}
-                if formal_charge:
-                    annotations[new_id]["formal_charge"] = formal_charge
-                if radical_electrons:
-                    annotations[new_id]["radical_electrons"] = radical_electrons
-        return annotations
+                if isinstance(kind, str):
+                    kinds.append(kind)
+            if kinds:
+                mark_kinds_by_atom[atom_id] = kinds
+        return mark_kinds_by_atom
 
     def build_3d_conversion_payload(self) -> tuple[MoleculeModel, dict[int, dict[str, int]]]:
         atom_ids, bond_ids = self._selected_ids()
-        if atom_ids or bond_ids:
-            export_model, atom_annotations, _ = self.build_structure_payload(atom_ids, bond_ids)
-        else:
-            export_model, atom_annotations, _ = self.build_structure_payload(set(self.model.atoms), set())
-        return export_model, atom_annotations
+        return build_3d_conversion_payload_state(
+            self.model,
+            atom_ids,
+            bond_ids,
+            self._mark_kinds_by_atom(),
+            bounds_getter=self._bounds_for_atoms,
+        )
 
     def build_selected_structure_payload(self) -> tuple[MoleculeModel, dict[int, dict[str, int]], tuple[float, float, float, float]]:
         atom_ids, bond_ids = self._selected_ids()
@@ -3470,14 +3004,13 @@ class CanvasView(QGraphicsView):
         atom_ids: set[int],
         bond_ids: set[int],
     ) -> tuple[MoleculeModel, dict[int, dict[str, int]], tuple[float, float, float, float]]:
-        selected_atom_ids = self._expanded_atom_ids_for_structure(atom_ids, bond_ids)
-        if not selected_atom_ids:
-            raise ValueError("There is no chemical structure to export.")
-        export_model, bounds, id_map = self._build_submodel(atom_ids, bond_ids)
-        if not export_model.atoms:
-            raise ValueError("There is no chemical structure to export.")
-        atom_annotations = self._build_atom_annotations(selected_atom_ids, id_map)
-        return export_model, atom_annotations, bounds
+        return build_structure_payload_state(
+            self.model,
+            atom_ids,
+            bond_ids,
+            self._mark_kinds_by_atom(),
+            bounds_getter=self._bounds_for_atoms,
+        )
 
     def _bounds_for_atoms(self, atom_ids: set[int], include_labels: bool = False):
         xs = []
@@ -4292,33 +3825,48 @@ class CanvasView(QGraphicsView):
             return None
         comp_a = self._component_without_bond(bond.a, bond_id)
         comp_b = self._component_without_bond(bond.b, bond_id)
-        effective_selected = set(selected_atom_ids) - {bond.a, bond.b}
+        component = comp_a | comp_b
+        selected_in_component = set(selected_atom_ids) & component
+        is_partial_selection = 0 < len(selected_in_component) < len(component)
+        effective_selected = selected_in_component - {bond.a, bond.b}
         selected_in_a = effective_selected & comp_a
         selected_in_b = effective_selected & comp_b
+        overlap_a = selected_in_component & comp_a
+        overlap_b = selected_in_component & comp_b
         atom_a = self.model.atoms.get(bond.a)
         atom_b = self.model.atoms.get(bond.b)
         dist_a = None
         dist_b = None
+        if is_partial_selection:
+            if selected_in_a and not selected_in_b:
+                return comp_a
+            if selected_in_b and not selected_in_a:
+                return comp_b
+            if overlap_a and not overlap_b:
+                return comp_a
+            if overlap_b and not overlap_a:
+                return comp_b
+            coverage_a = len(overlap_a) / max(1, len(comp_a))
+            coverage_b = len(overlap_b) / max(1, len(comp_b))
+            if abs(coverage_a - coverage_b) > 1e-9:
+                return comp_a if coverage_a > coverage_b else comp_b
+            if len(selected_in_a) != len(selected_in_b):
+                return comp_a if len(selected_in_a) > len(selected_in_b) else comp_b
+            if len(overlap_a) != len(overlap_b):
+                return comp_a if len(overlap_a) > len(overlap_b) else comp_b
+        elif not selected_in_a and not selected_in_b:
+            a_selected = bond.a in selected_atom_ids
+            b_selected = bond.b in selected_atom_ids
+            if a_selected ^ b_selected:
+                return comp_a if a_selected else comp_b
         if press_pos is not None and atom_a is not None and atom_b is not None:
             dist_a = math.hypot(press_pos.x() - atom_a.x, press_pos.y() - atom_a.y)
             dist_b = math.hypot(press_pos.x() - atom_b.x, press_pos.y() - atom_b.y)
             tol = self.renderer.style.bond_length_px * 0.05
             if abs(dist_a - dist_b) > tol:
                 return comp_a if dist_a < dist_b else comp_b
-        if selected_in_a and not selected_in_b:
-            return comp_a
-        if selected_in_b and not selected_in_a:
-            return comp_b
-        if not selected_in_a and not selected_in_b:
-            a_selected = bond.a in selected_atom_ids
-            b_selected = bond.b in selected_atom_ids
-            if a_selected ^ b_selected:
-                return comp_a if a_selected else comp_b
         if not allow_fallback:
             return None
-        component = comp_a | comp_b
-        selected_in_component = selected_atom_ids & component
-        is_partial_selection = 0 < len(selected_in_component) < len(component)
         if is_partial_selection:
             count_a = len(selected_in_a)
             count_b = len(selected_in_b)
@@ -4524,13 +4072,7 @@ class CanvasView(QGraphicsView):
         self._selection_info_callback(formula_text, mw_text)
 
     def _clear_hover_highlight(self) -> None:
-        for item in self.hover_items:
-            try:
-                if item.scene() is self.scene():
-                    self.scene().removeItem(item)
-            except RuntimeError:
-                pass
-        self.hover_items = []
+        self.hover_items = clear_hover_items_helper(self.scene(), self.hover_items)
         self.hover_atom_id = None
         self.hover_bond_id = None
         self._hover_preview_style = None
@@ -4540,17 +4082,7 @@ class CanvasView(QGraphicsView):
         if atom is None:
             return
         radius = self.renderer.style.bond_length_px * 0.25
-        circle = QGraphicsEllipseItem(
-            atom.x - radius,
-            atom.y - radius,
-            radius * 2.0,
-            radius * 2.0,
-        )
-        pen = QPen(QColor("#9a9a9a"))
-        pen.setWidthF(1.0)
-        circle.setPen(pen)
-        circle.setBrush(QColor(190, 190, 190, 80))
-        circle.setZValue(5)
+        circle = build_atom_hover_indicator_helper(QPointF(atom.x, atom.y), radius)
         self.scene().addItem(circle)
         self.hover_items.append(circle)
 
@@ -4652,19 +4184,12 @@ class CanvasView(QGraphicsView):
             return
         a = self.model.atoms[bond.a]
         b = self.model.atoms[bond.b]
-        mid = QPointF((a.x + b.x) / 2.0, (a.y + b.y) / 2.0)
         radius = self.renderer.style.bond_length_px * 0.22
-        circle = QGraphicsEllipseItem(
-            mid.x() - radius,
-            mid.y() - radius,
-            radius * 2.0,
-            radius * 2.0,
+        circle = build_bond_hover_indicator_helper(
+            QPointF(a.x, a.y),
+            QPointF(b.x, b.y),
+            radius,
         )
-        pen = QPen(QColor("#9a9a9a"))
-        pen.setWidthF(1.0)
-        circle.setPen(pen)
-        circle.setBrush(QColor(190, 190, 190, 80))
-        circle.setZValue(4)
         self.scene().addItem(circle)
         self.hover_items.append(circle)
         if preview_style:
@@ -4737,6 +4262,40 @@ class CanvasView(QGraphicsView):
         items = self._build_bond_preview_items(start, end, atom_id, None)
         self._add_hover_preview_items(items)
 
+    def _bond_preview_config(
+        self,
+        *,
+        style: str | None = None,
+        order: int | None = None,
+    ) -> BondPreviewConfig:
+        return BondPreviewConfig(
+            style=style or self.active_bond_style,
+            order=self.active_bond_order if order is None else order,
+            bond_length_px=self.renderer.style.bond_length_px,
+            bond_line_width=self.renderer.style.bond_line_width,
+            bold_bond_width=self.renderer.style.bold_bond_width,
+            hash_spacing_px=self.renderer.style.hash_spacing_px,
+        )
+
+    def _bond_preview_build_resolvers(self) -> BondPreviewBuildResolvers:
+        return BondPreviewBuildResolvers(
+            draw_wedge_bond=self._draw_wedge_bond,
+            draw_hash_bond=self._draw_hash_bond,
+            draw_parallel_bonds=self._draw_parallel_bonds,
+            line_normal=self._line_normal,
+            one_sided_bond_strip=self._one_sided_bond_strip,
+            bond_pen=self.renderer.bond_pen,
+        )
+
+    def _bond_preview_update_resolvers(self) -> BondPreviewUpdateResolvers:
+        return BondPreviewUpdateResolvers(
+            wedge_polygon=self._wedge_polygon,
+            hash_segments=self._hash_segments,
+            parallel_bond_segments=self._parallel_bond_segments,
+            line_normal=self._line_normal,
+            strip_polygon=self._strip_polygon,
+        )
+
     def _build_bond_preview_items(
         self,
         start: QPointF,
@@ -4744,85 +4303,14 @@ class CanvasView(QGraphicsView):
         a_id: int | None = None,
         b_id: int | None = None,
     ) -> list:
-        style = self.active_bond_style
-        if style == "wedge":
-            return self._draw_wedge_bond(start.x(), start.y(), end.x(), end.y(), a_id, b_id)
-        if style == "hash":
-            return self._draw_hash_bond(start.x(), start.y(), end.x(), end.y(), a_id, b_id)
-        if style in {"bold", "bold_in", "bold_out"}:
-            bold_outward = style == "bold_out"
-            if self.active_bond_order >= 2:
-                items = self._draw_parallel_bonds(
-                    start.x(),
-                    start.y(),
-                    end.x(),
-                    end.y(),
-                    self.active_bond_order,
-                    a_id,
-                    b_id,
-                )
-                if items and isinstance(items[0], QGraphicsLineItem):
-                    line = items[0].line()
-                    nx, ny = self._line_normal(line.x1(), line.y1(), line.x2(), line.y2(), None)
-                    if bold_outward:
-                        nx, ny = -nx, -ny
-                    items[0] = self._one_sided_bond_strip(
-                        line.x1(),
-                        line.y1(),
-                        line.x2(),
-                        line.y2(),
-                        nx,
-                        ny,
-                        self.renderer.style.bond_line_width,
-                        self.renderer.style.bold_bond_width * 1.5,
-                    )
-                return items
-            bx1 = start.x()
-            by1 = start.y()
-            bx2 = end.x()
-            by2 = end.y()
-            dx = bx2 - bx1
-            dy = by2 - by1
-            length = math.hypot(dx, dy) or 1.0
-            pad = self.renderer.style.bond_length_px * 0.1
-            factor = pad / length
-            bx1 = bx1 - dx * factor
-            by1 = by1 - dy * factor
-            bx2 = bx2 + dx * factor
-            by2 = by2 + dy * factor
-            dx = bx2 - bx1
-            dy = by2 - by1
-            bx1 = bx1 + dx * 0.025
-            by1 = by1 + dy * 0.025
-            bx2 = bx2 - dx * 0.025
-            by2 = by2 - dy * 0.025
-            nx, ny = self._line_normal(bx1, by1, bx2, by2, None)
-            if bold_outward:
-                nx, ny = -nx, -ny
-            line_item = self._one_sided_bond_strip(
-                bx1,
-                by1,
-                bx2,
-                by2,
-                nx,
-                ny,
-                self.renderer.style.bond_line_width,
-                self.renderer.style.bold_bond_width * 1.5,
-            )
-            return [line_item]
-        if self.active_bond_order >= 2:
-            return self._draw_parallel_bonds(
-                start.x(),
-                start.y(),
-                end.x(),
-                end.y(),
-                self.active_bond_order,
-                a_id,
-                b_id,
-            )
-        line_item = NoSelectLineItem(start.x(), start.y(), end.x(), end.y())
-        line_item.setPen(self.renderer.bond_pen())
-        return [line_item]
+        return build_bond_preview_items_helper(
+            start,
+            end,
+            config=self._bond_preview_config(),
+            a_id=a_id,
+            b_id=b_id,
+            resolvers=self._bond_preview_build_resolvers(),
+        )
 
     def update_bond_preview_items(
         self,
@@ -4834,131 +4322,20 @@ class CanvasView(QGraphicsView):
         style: str | None = None,
         order: int | None = None,
     ) -> bool:
-        if not items:
-            return False
-        style = style or self.active_bond_style
-        order = order if order is not None else self.active_bond_order
-        if style == "wedge":
-            if len(items) != 1 or not isinstance(items[0], QGraphicsPolygonItem):
-                return False
-            items[0].setPolygon(self._wedge_polygon(start.x(), start.y(), end.x(), end.y(), a_id, b_id))
-            return True
-        if style == "hash":
-            length = math.hypot(end.x() - start.x(), end.y() - start.y()) or 1.0
-            count = max(3, int(length / self.renderer.style.hash_spacing_px))
-            segments = self._hash_segments(start.x(), start.y(), end.x(), end.y(), count, a_id, b_id)
-            if len(items) != len(segments):
-                return False
-            for item, seg in zip(items, segments):
-                if not isinstance(item, QGraphicsLineItem):
-                    return False
-                item.setLine(*seg)
-            return True
-        if style in {"bold", "bold_in", "bold_out"}:
-            bold_outward = style == "bold_out"
-            if order >= 2:
-                segments = self._parallel_bond_segments(start.x(), start.y(), end.x(), end.y(), order, a_id, b_id)
-                if not segments or len(items) != len(segments):
-                    return False
-                x1, y1, x2, y2 = segments[0]
-                nx, ny = self._line_normal(x1, y1, x2, y2, None)
-                if bold_outward:
-                    nx, ny = -nx, -ny
-                first = items[0]
-                if isinstance(first, QGraphicsPolygonItem):
-                    polygon = self._strip_polygon(
-                        x1,
-                        y1,
-                        x2,
-                        y2,
-                        nx,
-                        ny,
-                        self.renderer.style.bond_line_width,
-                        self.renderer.style.bold_bond_width * 1.5,
-                    )
-                    first.setPolygon(polygon)
-                elif isinstance(first, QGraphicsLineItem):
-                    first.setLine(x1, y1, x2, y2)
-                else:
-                    return False
-                for item, seg in zip(items[1:], segments[1:]):
-                    if not isinstance(item, QGraphicsLineItem):
-                        return False
-                    item.setLine(*seg)
-                return True
-            bx1 = start.x()
-            by1 = start.y()
-            bx2 = end.x()
-            by2 = end.y()
-            dx = bx2 - bx1
-            dy = by2 - by1
-            length = math.hypot(dx, dy) or 1.0
-            pad = self.renderer.style.bond_length_px * 0.1
-            factor = pad / length
-            bx1 = bx1 - dx * factor
-            by1 = by1 - dy * factor
-            bx2 = bx2 + dx * factor
-            by2 = by2 + dy * factor
-            dx = bx2 - bx1
-            dy = by2 - by1
-            bx1 = bx1 + dx * 0.025
-            by1 = by1 + dy * 0.025
-            bx2 = bx2 - dx * 0.025
-            by2 = by2 - dy * 0.025
-            nx, ny = self._line_normal(bx1, by1, bx2, by2, None)
-            if bold_outward:
-                nx, ny = -nx, -ny
-            first = items[0]
-            if isinstance(first, QGraphicsPolygonItem):
-                polygon = self._strip_polygon(
-                    bx1,
-                    by1,
-                    bx2,
-                    by2,
-                    nx,
-                    ny,
-                    self.renderer.style.bond_line_width,
-                    self.renderer.style.bold_bond_width * 1.5,
-                )
-                first.setPolygon(polygon)
-            elif isinstance(first, QGraphicsLineItem):
-                first.setLine(bx1, by1, bx2, by2)
-            else:
-                return False
-            return True
-        if order >= 2:
-            segments = self._parallel_bond_segments(start.x(), start.y(), end.x(), end.y(), order, a_id, b_id)
-            if len(items) != len(segments):
-                return False
-            for item, seg in zip(items, segments):
-                if not isinstance(item, QGraphicsLineItem):
-                    return False
-                item.setLine(*seg)
-            return True
-        if len(items) != 1 or not isinstance(items[0], QGraphicsLineItem):
-            return False
-        items[0].setLine(start.x(), start.y(), end.x(), end.y())
-        return True
+        return update_bond_preview_items_helper(
+            items,
+            start,
+            end,
+            config=self._bond_preview_config(style=style, order=order),
+            a_id=a_id,
+            b_id=b_id,
+            resolvers=self._bond_preview_update_resolvers(),
+        )
 
     def _add_hover_preview_items(self, items: list) -> None:
         if not items:
             return
-        preview_color = QColor(120, 120, 120, 140)
-        for item in items:
-            if isinstance(item, QGraphicsTextItem):
-                item.setDefaultTextColor(preview_color)
-            if hasattr(item, "pen"):
-                pen = item.pen()
-                pen.setColor(preview_color)
-                item.setPen(pen)
-            if hasattr(item, "brush") and item.brush().style() != Qt.BrushStyle.NoBrush:
-                brush = item.brush()
-                brush.setColor(preview_color)
-                item.setBrush(brush)
-            item.setOpacity(0.55)
-            item.setZValue(4.5)
-            self.scene().addItem(item)
-            self.hover_items.append(item)
+        self.hover_items.extend(add_hover_preview_items_helper(self.scene(), items))
 
     def _default_bond_endpoint(self, start: QPointF, start_atom_id: int | None) -> QPointF:
         bond_len = self.renderer.style.bond_length_px
@@ -5283,14 +4660,20 @@ class CanvasView(QGraphicsView):
         return item
 
     def add_orbital(self, center: QPointF) -> None:
-        items = self._build_orbital_items(center, self.active_orbital_type)
-        group = self.scene().createItemGroup(items)
-        group.setData(0, "orbital")
-        group.setData(1, {"center": QPointF(center), "base_handle_dist": self.renderer.style.bond_length_px * 0.8})
-        group.setData(2, {"kind": self.active_orbital_type})
-        group.setTransformOriginPoint(center)
-        self._make_selectable(group)
-        self.orbital_items.append(group)
+        group = create_orbital_item_from_state_helper(
+            {
+                "kind": "orbital",
+                "orbital_kind": self.active_orbital_type,
+                "center": (center.x(), center.y()),
+                "scale": 1.0,
+                "rotation": 0.0,
+            },
+            build_orbital_items=self._build_orbital_items,
+            orbital_base_handle_dist=self.renderer.style.bond_length_px * 0.8,
+        )
+        if group is None:
+            return
+        self.restore_scene_item(group)
         state = self._orbital_state_dict(group)
         command = AddSceneItemsCommand(item_states=[state], items=[group])
         self._push_command(command)
@@ -5369,9 +4752,7 @@ class CanvasView(QGraphicsView):
         return items
 
     def clear_handles(self) -> None:
-        for handle in self._active_handles:
-            self.scene().removeItem(handle)
-        self._active_handles = []
+        self._active_handles = clear_handle_items_helper(self.scene(), self._active_handles)
         self._handle_target = None
         self._clear_selection_highlight()
 
@@ -5384,8 +4765,7 @@ class CanvasView(QGraphicsView):
         if not isinstance(center, QPointF):
             rect = item.boundingRect()
             center = rect.center()
-        scale_pos = QPointF(center.x() + base_dist, center.y())
-        rotate_pos = QPointF(center.x(), center.y() - base_dist)
+        scale_pos, rotate_pos = orbital_handle_positions_helper(center, float(base_dist))
         self._active_handles = [
             self._create_handle(scale_pos, "orbital_scale", item),
             self._create_handle(rotate_pos, "orbital_rotate", item),
@@ -5412,14 +4792,7 @@ class CanvasView(QGraphicsView):
         self._handle_target = item
 
     def _create_handle(self, pos: QPointF, handle_type: str, target):
-        radius = 5
-        handle = QGraphicsEllipseItem(pos.x() - radius, pos.y() - radius, radius * 2, radius * 2)
-        handle.setBrush(QColor("#ffffff"))
-        handle.setPen(QColor("#333333"))
-        handle.setData(0, "handle")
-        handle.setData(1, handle_type)
-        handle.setData(2, target)
-        handle.setZValue(30)
+        handle = create_handle_item_helper(pos, handle_type, target)
         self.scene().addItem(handle)
         return handle
 
@@ -5444,8 +4817,7 @@ class CanvasView(QGraphicsView):
         base_dist = data.get("base_handle_dist", self.renderer.style.bond_length_px * 0.8)
         if not isinstance(center, QPointF):
             center = item.boundingRect().center()
-        dist = math.hypot(pos.x() - center.x(), pos.y() - center.y())
-        scale = max(0.2, dist / base_dist)
+        scale = orbital_scale_factor_helper(center, pos, float(base_dist))
         item.setScale(scale)
 
     def _update_orbital_rotate(self, item, pos: QPointF) -> None:
@@ -5453,10 +4825,12 @@ class CanvasView(QGraphicsView):
         center = data.get("center")
         if not isinstance(center, QPointF):
             center = item.boundingRect().center()
-        angle = math.degrees(math.atan2(pos.y() - center.y(), pos.x() - center.x()))
-        if self._orbital_snap_enabled:
-            step = self._orbital_snap_step or 15
-            angle = round(angle / step) * step
+        angle = orbital_rotation_angle_helper(
+            center,
+            pos,
+            snap_enabled=self._orbital_snap_enabled,
+            snap_step=self._orbital_snap_step,
+        )
         item.setRotation(angle)
 
     def _update_curved_control(self, item, pos: QPointF) -> None:
@@ -5482,40 +4856,25 @@ class CanvasView(QGraphicsView):
         self._update_selection_outline()
 
     def _default_curved_control(self, start: QPointF, end: QPointF) -> QPointF:
-        dx = end.x() - start.x()
-        dy = end.y() - start.y()
-        length = math.hypot(dx, dy) or 1.0
-        nx = -dy / length
-        ny = dx / length
-        return QPointF(start.x() + dx * 0.5 + nx * length * 0.3, start.y() + dy * 0.5 + ny * length * 0.3)
+        return default_curved_control_helper(start, end)
 
     def _curved_midpoint(self, start: QPointF, control: QPointF, end: QPointF) -> QPointF:
-        return QPointF(
-            0.25 * start.x() + 0.5 * control.x() + 0.25 * end.x(),
-            0.25 * start.y() + 0.5 * control.y() + 0.25 * end.y(),
-        )
+        return curved_midpoint_helper(start, control, end)
 
     def _control_from_midpoint(self, start: QPointF, end: QPointF, mid: QPointF) -> QPointF:
-        return QPointF(
-            2.0 * mid.x() - 0.5 * (start.x() + end.x()),
-            2.0 * mid.y() - 0.5 * (start.y() + end.y()),
-        )
+        return control_from_midpoint_helper(start, end, mid)
 
     def _clamp_curved_midpoint(self, start: QPointF, end: QPointF, mid: QPointF) -> QPointF:
-        chord_mid = QPointF((start.x() + end.x()) / 2.0, (start.y() + end.y()) / 2.0)
-        dx = end.x() - start.x()
-        dy = end.y() - start.y()
-        length = math.hypot(dx, dy) or 1.0
-        nx = -dy / length
-        ny = dx / length
-        v = QPointF(mid.x() - chord_mid.x(), mid.y() - chord_mid.y())
-        offset = v.x() * nx + v.y() * ny
+        snap_distance = None
         if self._curved_snap:
-            step = self.renderer.style.bond_length_px * self._curved_snap_step
-            offset = round(offset / step) * step
-        max_offset = length * 0.8
-        offset = max(-max_offset, min(max_offset, offset))
-        return QPointF(chord_mid.x() + nx * offset, chord_mid.y() + ny * offset)
+            snap_distance = self.renderer.style.bond_length_px * self._curved_snap_step
+        return clamp_curved_midpoint_helper(
+            start,
+            end,
+            mid,
+            snap_enabled=self._curved_snap,
+            snap_distance=snap_distance,
+        )
 
     def _set_selection_highlight(self, items: list) -> None:
         self._clear_selection_highlight()
@@ -8183,46 +7542,17 @@ class CanvasView(QGraphicsView):
         )
 
     def _clear_smiles_preview(self) -> None:
-        for item in self._smiles_preview_items:
-            try:
-                if item.scene() is self.scene():
-                    self.scene().removeItem(item)
-            except RuntimeError:
-                pass
-        self._smiles_preview_items = []
-        self._smiles_preview_bond_items = {}
-        self._smiles_preview_atom_items = {}
+        (
+            self._smiles_preview_items,
+            self._smiles_preview_bond_items,
+            self._smiles_preview_atom_items,
+        ) = clear_smiles_preview_helper(self.scene(), self._smiles_preview_items)
 
     def _smiles_preview_snapshot(self):
-        return build_smiles_preview_snapshot(
-            {bond_id: len(items) for bond_id, items in self._smiles_preview_bond_items.items()},
-            self._smiles_preview_atom_items.keys(),
+        return smiles_preview_snapshot_helper(
+            self._smiles_preview_bond_items,
+            self._smiles_preview_atom_items,
         )
-
-    def _rebuild_smiles_preview_from_geometry(self, geometry: SmilesPreviewGeometry) -> None:
-        self._clear_smiles_preview()
-        preview_color = QColor(120, 120, 120, 140)
-        for bond_id, segments in geometry.bond_segments.items():
-            items = []
-            for segment in segments:
-                line = NoSelectLineItem(*segment)
-                line.setPen(self.renderer.bond_pen())
-                pen = line.pen()
-                pen.setColor(preview_color)
-                line.setPen(pen)
-                line.setOpacity(0.5)
-                self.scene().addItem(line)
-                self._smiles_preview_items.append(line)
-                items.append(line)
-            self._smiles_preview_bond_items[bond_id] = items
-        for atom_id, rect in geometry.atom_rects.items():
-            dot = QGraphicsEllipseItem(*rect)
-            dot.setBrush(preview_color)
-            dot.setPen(QPen(Qt.PenStyle.NoPen))
-            dot.setOpacity(0.5)
-            self.scene().addItem(dot)
-            self._smiles_preview_items.append(dot)
-            self._smiles_preview_atom_items[atom_id] = dot
 
     def _render_smiles_preview(self, pos: QPointF) -> None:
         atom_radius = max(0.6, self.renderer.style.bond_line_width * 0.6)
@@ -8237,26 +7567,19 @@ class CanvasView(QGraphicsView):
         if preview_plan.action == "clear" or preview_plan.geometry is None:
             self._clear_smiles_preview()
             return
-        geometry = preview_plan.geometry
-        if preview_plan.action == "rebuild":
-            self._rebuild_smiles_preview_from_geometry(geometry)
-            return
-        for bond_id, segments in geometry.bond_segments.items():
-            items = self._smiles_preview_bond_items.get(bond_id)
-            if not items or len(items) != len(segments):
-                self._rebuild_smiles_preview_from_geometry(geometry)
-                return
-            for item, segment in zip(items, segments):
-                if not isinstance(item, QGraphicsLineItem):
-                    self._rebuild_smiles_preview_from_geometry(geometry)
-                    return
-                item.setLine(*segment)
-        for atom_id, rect in geometry.atom_rects.items():
-            dot = self._smiles_preview_atom_items.get(atom_id)
-            if dot is None:
-                self._rebuild_smiles_preview_from_geometry(geometry)
-                return
-            dot.setRect(*rect)
+        (
+            self._smiles_preview_items,
+            self._smiles_preview_bond_items,
+            self._smiles_preview_atom_items,
+        ) = apply_smiles_preview_geometry_helper(
+            self.scene(),
+            preview_plan.geometry,
+            base_pen=self.renderer.bond_pen(),
+            existing_items=self._smiles_preview_items,
+            existing_bond_items=self._smiles_preview_bond_items,
+            existing_atom_items=self._smiles_preview_atom_items,
+            action=preview_plan.action,
+        )
 
     def _cancel_template_insert(self) -> None:
         next_state = cancel_template_insert_state(self._insert_session_state())
@@ -8397,15 +7720,11 @@ class CanvasView(QGraphicsView):
         )
 
     def _clear_template_preview(self) -> None:
-        for item in self._template_preview_items:
-            try:
-                if item.scene() is self.scene():
-                    self.scene().removeItem(item)
-            except RuntimeError:
-                pass
-        self._template_preview_items = []
-        self._template_preview_lines = []
-        self._template_preview_dots = []
+        (
+            self._template_preview_items,
+            self._template_preview_lines,
+            self._template_preview_dots,
+        ) = clear_template_preview_helper(self.scene(), self._template_preview_items)
 
     def _render_template_preview(self, pos: QPointF) -> None:
         request = self._template_insert_request(pos)
@@ -8434,42 +7753,37 @@ class CanvasView(QGraphicsView):
         if preview_plan.action == "clear" or preview_plan.geometry is None:
             self._clear_template_preview()
             return
-        geometry = preview_plan.geometry
-        if preview_plan.action == "rebuild":
-            self._clear_template_preview()
-            preview_color = QColor(120, 120, 120, 140)
-            for x1, y1, x2, y2 in geometry.line_segments:
-                line = NoSelectLineItem(x1, y1, x2, y2)
-                line.setPen(self.renderer.bond_pen())
-                pen = line.pen()
-                pen.setColor(preview_color)
-                line.setPen(pen)
-                line.setOpacity(0.5)
-                self.scene().addItem(line)
-                self._template_preview_lines.append(line)
-                self._template_preview_items.append(line)
-            for x, y, width, height in geometry.dot_rects:
-                dot = QGraphicsEllipseItem(x, y, width, height)
-                dot.setBrush(preview_color)
-                dot.setPen(QPen(Qt.PenStyle.NoPen))
-                dot.setOpacity(0.5)
-                self.scene().addItem(dot)
-                self._template_preview_dots.append(dot)
-                self._template_preview_items.append(dot)
-            return
-        for line, segment in zip(self._template_preview_lines, geometry.line_segments):
-            line.setLine(*segment)
-        for dot, rect in zip(self._template_preview_dots, geometry.dot_rects):
-            dot.setRect(*rect)
+        (
+            self._template_preview_items,
+            self._template_preview_lines,
+            self._template_preview_dots,
+        ) = apply_template_preview_geometry_helper(
+            self.scene(),
+            preview_plan.geometry,
+            base_pen=self.renderer.bond_pen(),
+            existing_items=self._template_preview_items,
+            existing_lines=self._template_preview_lines,
+            existing_dots=self._template_preview_dots,
+            action=preview_plan.action,
+        )
 
     def _clear_benzene_preview(self) -> None:
-        for item in self._benzene_preview_items:
-            try:
-                if item.scene() is self.scene():
-                    self.scene().removeItem(item)
-            except RuntimeError:
-                pass
-        self._benzene_preview_items = []
+        self._benzene_preview_items = clear_benzene_preview_helper(self.scene(), self._benzene_preview_items)
+
+    def _create_benzene_preview_inner_bond_item(
+        self,
+        start: QPointF,
+        end: QPointF,
+        center: QPointF,
+    ):
+        items = self._draw_ring_double_bond(
+            Atom("C", start.x(), start.y()),
+            Atom("C", end.x(), end.y()),
+            center,
+        )
+        if len(items) < 2:
+            return None
+        return items[1]
 
     def _render_benzene_preview(
         self,
@@ -8482,57 +7796,13 @@ class CanvasView(QGraphicsView):
         if result is None:
             return
         points, _ = result
-        center = QPointF(
-            sum(point.x() for point in points) / len(points),
-            sum(point.y() for point in points) / len(points),
+        self._benzene_preview_items = rebuild_benzene_preview_helper(
+            self.scene(),
+            points,
+            base_pen=self.renderer.bond_pen(),
+            atom_radius=max(0.6, self.renderer.style.bond_line_width * 0.6),
+            create_inner_bond_item=self._create_benzene_preview_inner_bond_item,
         )
-        preview_color = QColor(120, 120, 120, 140)
-        for i in range(len(points)):
-            p1 = points[i]
-            p2 = points[(i + 1) % len(points)]
-            line = NoSelectLineItem(p1.x(), p1.y(), p2.x(), p2.y())
-            line.setPen(self.renderer.bond_pen())
-            pen = line.pen()
-            pen.setColor(preview_color)
-            line.setPen(pen)
-            line.setOpacity(0.5)
-            self.scene().addItem(line)
-            self._benzene_preview_items.append(line)
-        for i in range(0, len(points), 2):
-            p1 = points[i]
-            p2 = points[(i + 1) % len(points)]
-            items = self._draw_ring_double_bond(
-                Atom("C", p1.x(), p1.y()),
-                Atom("C", p2.x(), p2.y()),
-                center,
-            )
-            if len(items) < 2:
-                continue
-            inner_line = items[1]
-            if hasattr(inner_line, "pen"):
-                pen = inner_line.pen()
-                pen.setColor(preview_color)
-                inner_line.setPen(pen)
-            if hasattr(inner_line, "brush") and inner_line.brush().style() != Qt.BrushStyle.NoBrush:
-                brush = inner_line.brush()
-                brush.setColor(preview_color)
-                inner_line.setBrush(brush)
-            inner_line.setOpacity(0.5)
-            self.scene().addItem(inner_line)
-            self._benzene_preview_items.append(inner_line)
-        atom_radius = max(0.6, self.renderer.style.bond_line_width * 0.6)
-        for point in points:
-            dot = QGraphicsEllipseItem(
-                point.x() - atom_radius,
-                point.y() - atom_radius,
-                atom_radius * 2.0,
-                atom_radius * 2.0,
-            )
-            dot.setBrush(preview_color)
-            dot.setPen(QPen(Qt.PenStyle.NoPen))
-            dot.setOpacity(0.5)
-            self.scene().addItem(dot)
-            self._benzene_preview_items.append(dot)
 
     def _render_model(self) -> None:
         for bond_id, bond in enumerate(self.model.bonds):

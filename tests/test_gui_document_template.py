@@ -154,6 +154,98 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertIsNone(self.window.canvas._smiles_preview_center)
         self.assertEqual(self.window.canvas._smiles_preview_items, [])
 
+    def test_snapshot_restore_reapplies_saved_settings_before_recreating_items(self) -> None:
+        saved_weight = 77
+        self.window.canvas.set_bond_length(28.0)
+        self.window.canvas.set_arrow_line_width(3.6)
+        self.window.canvas.set_arrow_head_scale(0.55)
+        self.window.canvas.set_orbital_phase_enabled(True)
+        self.window.canvas.set_text_size(18)
+        self.window.canvas.set_text_weight(saved_weight)
+        self.window.canvas.set_text_italic(True)
+        self.window.canvas.add_text_note(QPointF(30.0, 15.0), "Styled")
+        self.window.canvas.add_arrow(QPointF(-40.0, 0.0), QPointF(40.0, 0.0), "arrow")
+
+        state = self.window.canvas.snapshot_state()
+
+        self.window.canvas.set_bond_length(16.0)
+        self.window.canvas.set_arrow_line_width(1.1)
+        self.window.canvas.set_arrow_head_scale(0.2)
+        self.window.canvas.set_orbital_phase_enabled(False)
+        self.window.canvas.set_text_size(10)
+        self.window.canvas.set_text_weight(24)
+        self.window.canvas.set_text_italic(False)
+        self.window.canvas.clear_scene()
+
+        self.window.canvas.restore_state(state)
+
+        self.assertAlmostEqual(self.window.canvas.renderer.style.bond_length_px, 28.0)
+        self.assertAlmostEqual(self.window.canvas.get_arrow_line_width(), 3.6)
+        self.assertAlmostEqual(self.window.canvas.get_arrow_head_scale(), 0.55)
+        self.assertTrue(self.window.canvas.orbital_phase_enabled)
+        self.assertEqual(len(self.window.canvas.note_items), 1)
+        restored_font = self.window.canvas.note_items[0].font()
+        self.assertEqual(restored_font.pointSize(), 18)
+        self.assertEqual(restored_font.weight(), saved_weight)
+        self.assertTrue(restored_font.italic())
+        self.assertEqual(len(self.window.canvas.arrow_items), 1)
+        self.assertAlmostEqual(self.window.canvas.arrow_items[0].pen().widthF(), 3.6)
+
+    def test_snapshot_restore_preserves_atom_bound_mark_offsets(self) -> None:
+        atom_id = self.window.canvas.add_atom("C", 12.0, -8.0)
+        self.window.canvas.add_mark_for_atom(atom_id, QPointF(42.0, -20.0), kind="minus", record=False)
+
+        state = self.window.canvas.snapshot_state()
+        self.assertEqual(len(state["marks"]), 1)
+        saved_mark = state["marks"][0]
+
+        self.window.canvas.clear_scene()
+        self.window.canvas.restore_state(state)
+
+        self.assertIn(atom_id, self.window.canvas._marks_by_atom)
+        self.assertEqual(len(self.window.canvas._marks_by_atom[atom_id]), 1)
+        restored_mark = self.window.canvas._marks_by_atom[atom_id][0]
+        restored_data = restored_mark.data(1) or {}
+        self.assertEqual(restored_data.get("kind"), "minus")
+        self.assertEqual(restored_data.get("atom_id"), atom_id)
+        self.assertAlmostEqual(restored_data.get("dx"), saved_mark["dx"])
+        self.assertAlmostEqual(restored_data.get("dy"), saved_mark["dy"])
+        restored_center = self.window.canvas._mark_center(restored_mark)
+        self.assertAlmostEqual(restored_center.x(), saved_mark["x"])
+        self.assertAlmostEqual(restored_center.y(), saved_mark["y"])
+
+    def test_snapshot_restore_rebuilds_orbital_metadata_from_restored_settings(self) -> None:
+        self.window.canvas.set_bond_length(28.0)
+        self.window.canvas.set_orbital_phase_enabled(True)
+        self.window.canvas.active_orbital_type = "p"
+        self.window.canvas.add_orbital(QPointF(18.0, -12.0))
+        orbital = self.window.canvas.orbital_items[0]
+        orbital.setScale(1.35)
+        orbital.setRotation(22.0)
+
+        state = self.window.canvas.snapshot_state()
+
+        self.window.canvas.set_bond_length(16.0)
+        self.window.canvas.set_orbital_phase_enabled(False)
+        self.window.canvas.clear_scene()
+
+        self.window.canvas.restore_state(state)
+
+        self.assertEqual(len(self.window.canvas.orbital_items), 1)
+        restored = self.window.canvas.orbital_items[0]
+        data = restored.data(1) or {}
+        center = data.get("center")
+        meta = restored.data(2) or {}
+        self.assertTrue(self.window.canvas.orbital_phase_enabled)
+        self.assertEqual(meta.get("kind"), "p")
+        self.assertAlmostEqual(self.window.canvas.renderer.style.bond_length_px, 28.0)
+        self.assertAlmostEqual(data.get("base_handle_dist"), 22.4)
+        self.assertAlmostEqual(center.x(), 18.0)
+        self.assertAlmostEqual(center.y(), -12.0)
+        self.assertAlmostEqual(restored.scale(), 1.35)
+        self.assertAlmostEqual(restored.rotation(), 22.0)
+        self.assertIs(restored.scene(), self.window.canvas.scene())
+
     def test_save_canvas_writes_workbook_state_for_multiple_canvas_sheets(self) -> None:
         self.window.canvas.add_bond_from_points(QPointF(-20.0, 0.0), QPointF(20.0, 0.0))
         first_sheet_state = self.window.canvas.snapshot_state()
