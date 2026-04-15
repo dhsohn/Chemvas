@@ -6,6 +6,9 @@ from core.model import Atom, Bond, MoleculeModel
 
 
 LITEDRAW_FILE_TYPE = "litedraw"
+SINGLE_SHEET_FILE_VERSION = 1
+WORKBOOK_FILE_VERSION = 2
+SUPPORTED_FILE_VERSIONS = frozenset((SINGLE_SHEET_FILE_VERSION, WORKBOOK_FILE_VERSION))
 
 
 def atom_to_state(atom: Atom, explicit_label: bool) -> dict:
@@ -84,7 +87,9 @@ def deserialize_model_state(model_state: Mapping[str, object]) -> MoleculeModel:
                 )
             )
     model.bonds = bonds
-    model.next_atom_id = int(model_state.get("next_atom_id", len(model.atoms)))
+    minimum_next_atom_id = max(model.atoms, default=-1) + 1
+    parsed_next_atom_id = int(model_state.get("next_atom_id", minimum_next_atom_id))
+    model.next_atom_id = max(parsed_next_atom_id, minimum_next_atom_id)
     return model
 
 
@@ -110,6 +115,7 @@ def serialize_settings(
 
 
 def build_document_payload(state: dict, version: int) -> dict:
+    _validate_document_state(state, version)
     return {
         "type": LITEDRAW_FILE_TYPE,
         "version": version,
@@ -120,16 +126,51 @@ def build_document_payload(state: dict, version: int) -> dict:
 def extract_document_state(payload: object) -> dict:
     if not isinstance(payload, dict):
         raise ValueError("Invalid LiteDraw file.")
-    state = payload.get("state", payload)
+    if any(key in payload for key in ("type", "version", "state")):
+        return _extract_wrapped_document_state(payload)
+    _validate_bare_document_state(payload)
+    return payload
+
+
+def _extract_wrapped_document_state(payload: Mapping[str, object]) -> dict:
+    if payload.get("type") != LITEDRAW_FILE_TYPE:
+        raise ValueError("Invalid LiteDraw file.")
+    version = payload.get("version")
+    if type(version) is not int or version not in SUPPORTED_FILE_VERSIONS:
+        raise ValueError("Invalid LiteDraw file.")
+    state = payload.get("state")
     if not isinstance(state, dict):
         raise ValueError("Invalid LiteDraw file.")
-    if "model" in state:
-        return state
-    if "sheets" in state:
-        if not isinstance(state["sheets"], list):
-            raise ValueError("Invalid LiteDraw file.")
-        return state
-    raise ValueError("Invalid LiteDraw file.")
+    _validate_document_state(state, version)
+    return state
+
+
+def _validate_bare_document_state(state: Mapping[str, object]) -> None:
+    if _state_kind(state) is None:
+        raise ValueError("Invalid LiteDraw file.")
+
+
+def _validate_document_state(state: Mapping[str, object], version: int) -> None:
+    if type(version) is not int or version not in SUPPORTED_FILE_VERSIONS:
+        raise ValueError("Invalid LiteDraw file.")
+    state_kind = _state_kind(state)
+    expected_kind = (
+        "single_sheet"
+        if version == SINGLE_SHEET_FILE_VERSION
+        else "workbook"
+    )
+    if state_kind != expected_kind:
+        raise ValueError("Invalid LiteDraw file.")
+
+
+def _state_kind(state: Mapping[str, object]) -> str | None:
+    model_state = state.get("model")
+    if isinstance(model_state, Mapping):
+        return "single_sheet"
+    sheets_state = state.get("sheets")
+    if isinstance(sheets_state, list):
+        return "workbook"
+    return None
 
 
 def _mapping_value(mapping: object, key: str, default):

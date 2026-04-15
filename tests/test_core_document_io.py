@@ -17,7 +17,11 @@ from core.document_io import (
     read_document,
     write_document,
 )
-from core.document_state import LITEDRAW_FILE_TYPE
+from core.document_state import (
+    LITEDRAW_FILE_TYPE,
+    SINGLE_SHEET_FILE_VERSION,
+    WORKBOOK_FILE_VERSION,
+)
 
 
 class DocumentIOTest(unittest.TestCase):
@@ -27,14 +31,14 @@ class DocumentIOTest(unittest.TestCase):
             "last_smiles_input": "CCO",
         }
 
-        document = create_document(state, version=4)
+        document = create_document(state, version=SINGLE_SHEET_FILE_VERSION)
 
         self.assertIsInstance(document, LiteDrawDocument)
         self.assertEqual(
             document.payload,
             {
                 "type": LITEDRAW_FILE_TYPE,
-                "version": 4,
+                "version": SINGLE_SHEET_FILE_VERSION,
                 "state": state,
             },
         )
@@ -52,8 +56,16 @@ class DocumentIOTest(unittest.TestCase):
                 }
             ],
         }
-        payload = {"type": "unexpected", "version": "legacy", "state": state}
-        workbook_payload = {"type": LITEDRAW_FILE_TYPE, "version": 2, "state": workbook_state}
+        payload = {
+            "type": LITEDRAW_FILE_TYPE,
+            "version": SINGLE_SHEET_FILE_VERSION,
+            "state": state,
+        }
+        workbook_payload = {
+            "type": LITEDRAW_FILE_TYPE,
+            "version": WORKBOOK_FILE_VERSION,
+            "state": workbook_state,
+        }
 
         wrapped = parse_document(payload)
         bare = parse_document(state)
@@ -71,7 +83,44 @@ class DocumentIOTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             parse_document({})
         with self.assertRaises(ValueError):
-            parse_document({"type": LITEDRAW_FILE_TYPE, "version": 1, "state": {}})
+            parse_document({"type": LITEDRAW_FILE_TYPE, "version": SINGLE_SHEET_FILE_VERSION, "state": {}})
+        with self.assertRaises(ValueError):
+            parse_document(
+                {
+                    "type": "unexpected",
+                    "version": SINGLE_SHEET_FILE_VERSION,
+                    "state": {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}},
+                }
+            )
+        with self.assertRaises(ValueError):
+            parse_document(
+                {
+                    "type": LITEDRAW_FILE_TYPE,
+                    "version": 3,
+                    "state": {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}},
+                }
+            )
+        with self.assertRaises(ValueError):
+            parse_document(
+                {
+                    "type": LITEDRAW_FILE_TYPE,
+                    "version": SINGLE_SHEET_FILE_VERSION,
+                    "state": {"active_sheet_index": 0, "sheets": []},
+                }
+            )
+        with self.assertRaises(ValueError):
+            parse_document(
+                {
+                    "model": {"atoms": {}, "bonds": [], "next_atom_id": 0},
+                    "version": SINGLE_SHEET_FILE_VERSION,
+                }
+            )
+
+    def test_create_document_rejects_unsupported_or_mismatched_versions(self) -> None:
+        with self.assertRaises(ValueError):
+            create_document({"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}}, version=9)
+        with self.assertRaises(ValueError):
+            create_document({"active_sheet_index": 0, "sheets": []}, version=SINGLE_SHEET_FILE_VERSION)
 
     def test_write_and_read_document_round_trip_wrapped_payload(self) -> None:
         state = {
@@ -82,14 +131,14 @@ class DocumentIOTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "sample.litedraw"
 
-            written = write_document(path, state, version=7)
+            written = write_document(path, state, version=SINGLE_SHEET_FILE_VERSION)
             loaded = read_document(path)
 
         self.assertEqual(
             written.payload,
             {
                 "type": LITEDRAW_FILE_TYPE,
-                "version": 7,
+                "version": SINGLE_SHEET_FILE_VERSION,
                 "state": state,
             },
         )
@@ -141,7 +190,7 @@ class DocumentIOTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "workbook.ldraw"
 
-            written = write_document(path, state, version=2)
+            written = write_document(path, state, version=WORKBOOK_FILE_VERSION)
             loaded = read_document(path)
 
         self.assertEqual(loaded.payload, written.payload)
