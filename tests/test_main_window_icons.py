@@ -1,0 +1,132 @@
+import math
+import os
+import sys
+import unittest
+from pathlib import Path
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+try:
+    from PyQt6.QtCore import QPointF, QRectF, Qt
+    from PyQt6.QtGui import QColor, QPainter, QPen, QPixmap
+    from PyQt6.QtWidgets import QApplication
+except ModuleNotFoundError:
+    QApplication = None
+    QPointF = None
+    QRectF = None
+    Qt = None
+    QColor = None
+    QPainter = None
+    QPen = None
+    QPixmap = None
+
+
+ROOT = Path(__file__).resolve().parents[1]
+APP_ROOT = ROOT / "app"
+if str(APP_ROOT) not in sys.path:
+    sys.path.insert(0, str(APP_ROOT))
+
+if QApplication is not None:
+    from ui.main_window import MainWindow
+
+
+def _opaque_bounds(image) -> tuple[int, int, int, int] | None:
+    xs: list[int] = []
+    ys: list[int] = []
+    for y in range(image.height()):
+        for x in range(image.width()):
+            if image.pixelColor(x, y).alpha() > 0:
+                xs.append(x)
+                ys.append(y)
+    if not xs or not ys:
+        return None
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def _render_chair_bounds(window: "MainWindow", rect) -> tuple[int, int, int, int] | None:
+    pixmap = QPixmap(26, 26)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    pen = QPen(QColor("#3d3229"))
+    pen.setWidthF(1.6)
+    painter.setPen(pen)
+    chair = window._chair_icon_points(rect)
+    if not chair.isEmpty():
+        painter.drawPolygon(chair)
+    painter.end()
+    return _opaque_bounds(pixmap.toImage())
+
+
+@unittest.skipUnless(QApplication is not None, "PyQt6 is required for main window icon tests")
+class MainWindowIconGeometryTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.app = QApplication.instance() or QApplication([])
+        cls.app.setQuitOnLastWindowClosed(False)
+
+    def setUp(self) -> None:
+        self.window = MainWindow()
+
+    def tearDown(self) -> None:
+        self.window.close()
+        self.app.processEvents()
+
+    def test_ring_icon_inner_bond_matches_canvas_spacing_and_orientation(self) -> None:
+        center = QPointF(15.0, 15.0)
+        outer = self.window._benzene_icon_polygon(center, 10.0)
+        base_segments = self.window._benzene_icon_inner_segments(outer, center)
+        inner_segments = self.window._benzene_icon_inner_segments(outer, center, spacing_scale=0.92)
+
+        self.assertEqual(len(base_segments), 3)
+        self.assertEqual(len(inner_segments), 3)
+
+        base_start, base_end = base_segments[0]
+        start, end = inner_segments[0]
+        self.assertAlmostEqual(start.x(), end.x(), places=2)
+        self.assertGreater(start.y(), outer[0].y())
+        self.assertLess(end.y(), outer[1].y())
+
+        outer_mid_x = (outer[0].x() + outer[1].x()) / 2.0
+        base_inner_mid_x = (base_start.x() + base_end.x()) / 2.0
+        inner_mid_x = (start.x() + end.x()) / 2.0
+        icon_bond_length = math.hypot(outer[1].x() - outer[0].x(), outer[1].y() - outer[0].y())
+        expected_base_spacing = icon_bond_length * (
+            self.window.canvas.renderer.style.bond_spacing_px * 1.1
+            / self.window.canvas.renderer.style.bond_length_px
+        )
+
+        self.assertAlmostEqual(outer_mid_x - base_inner_mid_x, expected_base_spacing, places=2)
+        self.assertGreater(outer_mid_x - inner_mid_x, outer_mid_x - base_inner_mid_x)
+        self.assertGreater(inner_mid_x, center.x())
+
+    def test_ring_icon_fills_toolbar_icon_size_more_like_canvas_preview(self) -> None:
+        pixmap = self.window._icon_ring().pixmap(26, 26)
+        image = pixmap.toImage()
+        bounds = _opaque_bounds(image)
+        self.assertIsNotNone(bounds)
+        min_x, min_y, max_x, max_y = bounds
+        self.assertGreaterEqual(max_x - min_x + 1, 22)
+        self.assertGreaterEqual(max_y - min_y + 1, 24)
+
+    def test_chair_template_icons_use_larger_geometry(self) -> None:
+        old_bounds = _render_chair_bounds(self.window, QRectF(4.0, 7.0, 22.0, 16.0))
+        toolbar_bounds = _opaque_bounds(self.window._icon_templates().pixmap(26, 26).toImage())
+        preview_bounds = _opaque_bounds(
+            self.window._icon_template_preview("Cyclohexane (Chair)").pixmap(26, 26).toImage()
+        )
+
+        self.assertIsNotNone(old_bounds)
+        self.assertIsNotNone(toolbar_bounds)
+        self.assertIsNotNone(preview_bounds)
+
+        old_min_x, old_min_y, old_max_x, old_max_y = old_bounds
+        toolbar_min_x, toolbar_min_y, toolbar_max_x, toolbar_max_y = toolbar_bounds
+        preview_min_x, preview_min_y, preview_max_x, preview_max_y = preview_bounds
+
+        self.assertGreater(toolbar_max_x - toolbar_min_x + 1, old_max_x - old_min_x + 1)
+        self.assertGreater(preview_max_x - preview_min_x + 1, old_max_x - old_min_x + 1)
+        self.assertLessEqual(toolbar_min_x, old_min_x)
+        self.assertLessEqual(preview_min_x, old_min_x)
+        self.assertLessEqual(toolbar_min_y, old_min_y)
+        self.assertLessEqual(preview_min_y, old_min_y)

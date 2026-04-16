@@ -43,6 +43,7 @@ from PyQt6.QtWidgets import (
 )
 
 from core.document_io import read_document, write_document
+from core.model import Atom
 from ui.canvas_view import CanvasView
 from ui.main_window_path_logic import resolve_load_path, resolve_save_as_path, resolve_save_path
 from ui.preview_3d import Preview3D
@@ -844,8 +845,8 @@ class MainWindow(QMainWindow):
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, panel_bar)
         self._atom_input = atom_input
 
-    def _make_icon(self, painter_fn) -> QIcon:
-        pixmap = QPixmap(30, 30)
+    def _make_icon(self, painter_fn, size: int = 30) -> QIcon:
+        pixmap = QPixmap(size, size)
         pixmap.fill(Qt.GlobalColor.transparent)
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -916,50 +917,91 @@ class MainWindow(QMainWindow):
             p.drawText(7, 21, "A")
         return self._make_icon(draw)
 
+    def _benzene_icon_polygon(self, center: QPointF, radius: float) -> QPolygonF:
+        polygon = QPolygonF()
+        for i in range(6):
+            angle = math.radians(60 * i - 30)
+            polygon.append(
+                QPointF(
+                    center.x() + radius * math.cos(angle),
+                    center.y() + radius * math.sin(angle),
+                )
+            )
+        return polygon
+
+    def _benzene_icon_inner_segments(
+        self,
+        polygon: QPolygonF,
+        center: QPointF,
+        *,
+        spacing_scale: float = 1.0,
+    ) -> list[tuple[QPointF, QPointF]]:
+        if polygon.count() < 2:
+            return []
+        first = polygon[0]
+        second = polygon[1]
+        icon_bond_length = math.hypot(second.x() - first.x(), second.y() - first.y())
+        if icon_bond_length <= 1e-6:
+            return []
+        canvas_bond_length = max(1.0, float(self.canvas.renderer.style.bond_length_px))
+        scale = canvas_bond_length / icon_bond_length
+        scaled_center = QPointF(center.x() * scale, center.y() * scale)
+        segments: list[tuple[QPointF, QPointF]] = []
+        for index in range(0, polygon.count(), 2):
+            start = polygon[index]
+            end = polygon[(index + 1) % polygon.count()]
+            _, inner_seg, _ = self.canvas._ring_double_segments(
+                Atom("C", start.x() * scale, start.y() * scale),
+                Atom("C", end.x() * scale, end.y() * scale),
+                scaled_center,
+            )
+            start_point = QPointF(inner_seg[0] / scale, inner_seg[1] / scale)
+            end_point = QPointF(inner_seg[2] / scale, inner_seg[3] / scale)
+            if abs(spacing_scale - 1.0) > 1e-6:
+                midpoint = QPointF(
+                    (start_point.x() + end_point.x()) / 2.0,
+                    (start_point.y() + end_point.y()) / 2.0,
+                )
+                center_dx = midpoint.x() - center.x()
+                center_dy = midpoint.y() - center.y()
+                adjusted_midpoint = QPointF(
+                    center.x() + center_dx * spacing_scale,
+                    center.y() + center_dy * spacing_scale,
+                )
+                start_point = QPointF(
+                    adjusted_midpoint.x() + (start_point.x() - midpoint.x()),
+                    adjusted_midpoint.y() + (start_point.y() - midpoint.y()),
+                )
+                end_point = QPointF(
+                    adjusted_midpoint.x() + (end_point.x() - midpoint.x()),
+                    adjusted_midpoint.y() + (end_point.y() - midpoint.y()),
+                )
+            segments.append(
+                (
+                    start_point,
+                    end_point,
+                )
+            )
+        return segments
+
     def _icon_ring(self) -> QIcon:
+        icon_size = 26
+        center = QPointF(icon_size / 2.0, icon_size / 2.0)
+        radius = 11.2
+
         def draw(p):
             p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
             pen = QPen(QColor("#3d3229"))
             pen.setWidthF(1.8)
             p.setPen(pen)
-            center = QPointF(15.0, 15.0)
-            radius = 10.0
-            outer = QPolygonF()
-            for i in range(6):
-                angle = math.radians(60 * i - 90)
-                outer.append(
-                    QPointF(
-                        center.x() + radius * math.cos(angle),
-                        center.y() + radius * math.sin(angle),
-                    )
-                )
+            outer = self._benzene_icon_polygon(center, radius)
             p.drawPolygon(outer)
             inner_pen = QPen(QColor("#3d3229"))
             inner_pen.setWidthF(1.8)
             p.setPen(inner_pen)
-            spacing = 1.6
-            for i in range(0, 6, 2):
-                a = outer[i]
-                b = outer[(i + 1) % 6]
-                dx = b.x() - a.x()
-                dy = b.y() - a.y()
-                length = math.hypot(dx, dy) or 1.0
-                ux = dx / length
-                uy = dy / length
-                nx = -dy / length
-                ny = dx / length
-                mid_x = (a.x() + b.x()) / 2.0
-                mid_y = (a.y() + b.y()) / 2.0
-                to_cx = center.x() - mid_x
-                to_cy = center.y() - mid_y
-                if nx * to_cx + ny * to_cy < 0:
-                    nx = -nx
-                    ny = -ny
-                trim = max(1.2, length * 0.12)
-                p1 = QPointF(a.x() + ux * trim + nx * spacing, a.y() + uy * trim + ny * spacing)
-                p2 = QPointF(b.x() - ux * trim + nx * spacing, b.y() - uy * trim + ny * spacing)
-                p.drawLine(p1, p2)
-        return self._make_icon(draw)
+            for start, end in self._benzene_icon_inner_segments(outer, center, spacing_scale=0.92):
+                p.drawLine(start, end)
+        return self._make_icon(draw, size=icon_size)
 
     def _icon_ring_fill(self) -> QIcon:
         def draw(p):
@@ -1054,7 +1096,7 @@ class MainWindow(QMainWindow):
             pen = QPen(QColor("#3d3229"))
             pen.setWidthF(1.6)
             p.setPen(pen)
-            chair = self._chair_icon_points(QRectF(4.0, 7.0, 22.0, 16.0))
+            chair = self._chair_icon_points(self._chair_icon_rect())
             if not chair.isEmpty():
                 p.drawPolygon(chair)
         return self._make_icon(draw)
@@ -1268,7 +1310,7 @@ class MainWindow(QMainWindow):
             elif "crown" in lower:
                 draw_ring(p, 10)
             elif "chair" in lower:
-                chair = self._chair_icon_points(QRectF(4.0, 7.0, 22.0, 16.0))
+                chair = self._chair_icon_points(self._chair_icon_rect())
                 if not chair.isEmpty():
                     p.drawPolygon(chair)
             elif label in {"Me", "Et", "t-Bu", "i-Pr"}:
@@ -1287,6 +1329,10 @@ class MainWindow(QMainWindow):
             else:
                 draw_ring(p, 6)
         return self._make_icon(draw)
+
+    @staticmethod
+    def _chair_icon_rect() -> QRectF:
+        return QRectF(2.0, 5.5, 26.0, 19.0)
 
     def _chair_icon_points(self, rect: QRectF) -> QPolygonF:
         angle_steep = math.radians(-68.0)
