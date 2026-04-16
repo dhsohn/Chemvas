@@ -16,14 +16,21 @@ class Renderer:
     def bond_pen(self) -> QPen:
         pen = QPen(QColor(self.style.bond_color))
         pen.setWidthF(self.style.bond_line_width)
-        pen.setCapStyle(Qt.PenCapStyle.SquareCap)
+        pen.setCapStyle(Qt.PenCapStyle.FlatCap)
         pen.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
+        return pen
+
+    def dotted_bond_pen(self) -> QPen:
+        pen = self.bond_pen()
+        pen.setStyle(Qt.PenStyle.DotLine)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
         return pen
 
     def bold_bond_pen(self) -> QPen:
         pen = QPen(QColor(self.style.bond_color))
         pen.setWidthF(self.style.bold_bond_width * 1.5)
-        pen.setCapStyle(Qt.PenCapStyle.SquareCap)
+        pen.setCapStyle(Qt.PenCapStyle.FlatCap)
         pen.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
         return pen
 

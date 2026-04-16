@@ -1,22 +1,113 @@
 import math
 
 from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import QColor, QBrush, QPen, QPolygonF
-from PyQt6.QtWidgets import QGraphicsLineItem, QGraphicsPolygonItem
+from PyQt6.QtGui import QColor, QBrush, QPainterPath, QPen, QPolygonF
+from PyQt6.QtWidgets import QGraphicsLineItem, QGraphicsPathItem, QGraphicsPolygonItem
 
 from ui.bond_style_logic import (
     DOUBLE_STYLE_DEFAULT,
     DOUBLE_STYLE_OUTER,
+    base_plain_double_style_for_dotted_variant,
     is_plain_double_bond_style,
+    is_dotted_double_bond_style,
     normalized_plain_double_style,
 )
-from ui.graphics_items import NoSelectLineItem, NoSelectPolygonItem
+from ui.graphics_items import NoSelectLineItem, NoSelectPathItem, NoSelectPolygonItem
 
 
 class BondRenderer:
     def __init__(self, canvas) -> None:
         self.canvas = canvas
         self._bold_out_length_scale = 1.1
+
+    def _line_item(
+        self,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        *,
+        dotted: bool = False,
+    ) -> NoSelectLineItem:
+        item = NoSelectLineItem(x1, y1, x2, y2)
+        pen = self.canvas.renderer.dotted_bond_pen() if dotted else self.canvas.renderer.bond_pen()
+        item.setPen(pen)
+        return item
+
+    def _dotted_dot_radius(self) -> float:
+        return max(0.8, self.canvas.renderer.style.bond_line_width * 0.58)
+
+    def _dotted_target_spacing(self) -> float:
+        radius = self._dotted_dot_radius()
+        return max(self.canvas.renderer.style.hash_spacing_px * 0.95, radius * 4.0)
+
+    def _junction_trim_for_atom(self, atom_id: int | None, other_id: int | None) -> float:
+        if atom_id is None:
+            return 0.0
+        bond_ids = set(getattr(self.canvas, "_atom_bond_ids", {}).get(atom_id, ()))
+        if other_id is not None:
+            for bond_id in list(bond_ids):
+                if not (0 <= bond_id < len(self.canvas.model.bonds)):
+                    continue
+                bond = self.canvas.model.bonds[bond_id]
+                if bond is None:
+                    continue
+                if {bond.a, bond.b} == {atom_id, other_id}:
+                    bond_ids.discard(bond_id)
+        if not bond_ids:
+            return 0.0
+        return max(self.canvas.renderer.style.hash_spacing_px * 0.4, self._dotted_dot_radius() * 1.75)
+
+    def dotted_bond_path(
+        self,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        a_id: int | None = None,
+        b_id: int | None = None,
+    ) -> QPainterPath:
+        path = QPainterPath()
+        dx = x2 - x1
+        dy = y2 - y1
+        length = math.hypot(dx, dy)
+        if length <= 1e-6:
+            radius = self._dotted_dot_radius()
+            path.addEllipse(QPointF(x1, y1), radius, radius)
+            return path
+
+        ux = dx / length
+        uy = dy / length
+        start_trim = self._junction_trim_for_atom(a_id, b_id)
+        end_trim = self._junction_trim_for_atom(b_id, a_id)
+        trim_total = start_trim + end_trim
+        if trim_total >= length * 0.8:
+            scale = (length * 0.8) / trim_total if trim_total > 1e-6 else 0.0
+            start_trim *= scale
+            end_trim *= scale
+
+        start_x = x1 + ux * start_trim
+        start_y = y1 + uy * start_trim
+        end_x = x2 - ux * end_trim
+        end_y = y2 - uy * end_trim
+        usable_dx = end_x - start_x
+        usable_dy = end_y - start_y
+        usable_length = math.hypot(usable_dx, usable_dy)
+
+        radius = self._dotted_dot_radius()
+        if usable_length <= 1e-6:
+            path.addEllipse(QPointF((x1 + x2) * 0.5, (y1 + y2) * 0.5), radius, radius)
+            return path
+
+        target_spacing = self._dotted_target_spacing()
+        count = max(1, int(usable_length / target_spacing))
+        step = usable_length / count
+        for index in range(count):
+            distance = step * (index + 0.5)
+            cx = start_x + ux * distance
+            cy = start_y + uy * distance
+            path.addEllipse(QPointF(cx, cy), radius, radius)
+        return path
 
     @staticmethod
     def _reset_item_origin(item) -> None:
@@ -668,10 +759,76 @@ class BondRenderer:
         for offset in offsets:
             ox = nx * offset
             oy = ny * offset
-            line_item = NoSelectLineItem(base_x1 + ox, base_y1 + oy, base_x2 + ox, base_y2 + oy)
-            line_item.setPen(self.canvas.renderer.bond_pen())
-            items.append(line_item)
+            items.append(self._line_item(base_x1 + ox, base_y1 + oy, base_x2 + ox, base_y2 + oy))
         return items
+
+    def draw_dotted_bond(
+        self,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        a_id: int | None = None,
+        b_id: int | None = None,
+    ):
+        t0, t1 = self.canvas._trim_line_for_labels(a_id, b_id, x1, y1, x2, y2)
+        start_x = x1 + (x2 - x1) * t0
+        start_y = y1 + (y2 - y1) * t0
+        end_x = x1 + (x2 - x1) * t1
+        end_y = y1 + (y2 - y1) * t1
+        item = NoSelectPathItem(self.dotted_bond_path(start_x, start_y, end_x, end_y, a_id, b_id))
+        item.setPen(QPen(Qt.PenStyle.NoPen))
+        item.setBrush(QBrush(QColor(self.canvas.renderer.style.bond_color)))
+        return [item]
+
+    def draw_dotted_double_bond(
+        self,
+        a,
+        b,
+        *,
+        style: str,
+        a_id: int | None = None,
+        b_id: int | None = None,
+        ring_center: QPointF | None = None,
+        center_3d: tuple[float, float, float] | None = None,
+    ):
+        base_style = base_plain_double_style_for_dotted_variant(style, 2)
+        if ring_center is not None:
+            outer_seg, inner_seg, _ = self.ring_double_segments(
+                a,
+                b,
+                ring_center,
+                a_id,
+                b_id,
+                center_3d=center_3d,
+                style=base_style,
+            )
+        else:
+            outer_seg, inner_seg, _ = self.plain_double_segments(
+                a.x,
+                a.y,
+                b.x,
+                b.y,
+                style=base_style,
+                a_id=a_id,
+                b_id=b_id,
+            )
+        dotted_outer = base_style == DOUBLE_STYLE_OUTER
+        outer_item = (
+            NoSelectPathItem(self.dotted_bond_path(*outer_seg, a_id, b_id))
+            if dotted_outer
+            else self._line_item(*outer_seg)
+        )
+        inner_item = (
+            NoSelectPathItem(self.dotted_bond_path(*inner_seg, a_id, b_id))
+            if not dotted_outer
+            else self._line_item(*inner_seg)
+        )
+        for item in (outer_item, inner_item):
+            if isinstance(item, QGraphicsPathItem):
+                item.setPen(QPen(Qt.PenStyle.NoPen))
+                item.setBrush(QBrush(QColor(self.canvas.renderer.style.bond_color)))
+        return [outer_item, inner_item]
 
     def draw_wedge_bond(
         self,
@@ -704,9 +861,7 @@ class BondRenderer:
         segments = self.hash_segments(x1, y1, x2, y2, count, a_id, b_id)
         items = []
         for seg in segments:
-            line_item = NoSelectLineItem(*seg)
-            line_item.setPen(self.canvas.renderer.bond_pen())
-            items.append(line_item)
+            items.append(self._line_item(*seg))
         return items
 
     def update_bond_geometry(self, bond_id: int) -> None:
@@ -735,6 +890,52 @@ class BondRenderer:
             for item, seg in zip(items, segments):
                 if isinstance(item, QGraphicsLineItem):
                     item.setLine(*seg)
+            return
+        if bond.style == "dotted":
+            t0, t1 = self.canvas._trim_line_for_labels(bond.a, bond.b, a.x, a.y, b.x, b.y)
+            start_x = a.x + (b.x - a.x) * t0
+            start_y = a.y + (b.y - a.y) * t0
+            end_x = a.x + (b.x - a.x) * t1
+            end_y = a.y + (b.y - a.y) * t1
+            if len(items) == 1 and isinstance(items[0], QGraphicsPathItem):
+                items[0].setPath(self.dotted_bond_path(start_x, start_y, end_x, end_y, bond.a, bond.b))
+            return
+        if is_dotted_double_bond_style(bond.style, bond.order):
+            base_style = base_plain_double_style_for_dotted_variant(bond.style, bond.order)
+            ring_center = self.canvas._ring_center_for_bond(bond)
+            if ring_center is not None and len(items) >= 2:
+                ring_center_3d = self.canvas._ring_center_3d_for_bond(bond)
+                outer_seg, inner_seg, _ = self.ring_double_segments(
+                    a,
+                    b,
+                    ring_center,
+                    bond.a,
+                    bond.b,
+                    center_3d=ring_center_3d,
+                    style=base_style,
+                )
+            else:
+                outer_seg, inner_seg, _ = self.plain_double_segments(
+                    a.x,
+                    a.y,
+                    b.x,
+                    b.y,
+                    style=base_style,
+                    a_id=bond.a,
+                    b_id=bond.b,
+                )
+            if len(items) >= 2:
+                outer_dotted = base_style == DOUBLE_STYLE_OUTER
+                if outer_dotted:
+                    if isinstance(items[0], QGraphicsPathItem):
+                        items[0].setPath(self.dotted_bond_path(*outer_seg, bond.a, bond.b))
+                    if isinstance(items[1], QGraphicsLineItem):
+                        items[1].setLine(*inner_seg)
+                else:
+                    if isinstance(items[0], QGraphicsLineItem):
+                        items[0].setLine(*outer_seg)
+                    if isinstance(items[1], QGraphicsPathItem):
+                        items[1].setPath(self.dotted_bond_path(*inner_seg, bond.a, bond.b))
             return
 
         bold_style = bond.style in {"bold", "bold_in", "bold_out"}
@@ -882,6 +1083,20 @@ class BondRenderer:
             items = self.draw_wedge_bond(a.x, a.y, b.x, b.y, bond.a, bond.b)
         elif bond.style == "hash":
             items = self.draw_hash_bond(a.x, a.y, b.x, b.y, bond.a, bond.b)
+        elif bond.style == "dotted":
+            items = self.draw_dotted_bond(a.x, a.y, b.x, b.y, bond.a, bond.b)
+        elif is_dotted_double_bond_style(bond.style, bond.order):
+            ring_center = self.canvas._ring_center_for_bond(bond)
+            ring_center_3d = self.canvas._ring_center_3d_for_bond(bond) if ring_center is not None else None
+            items = self.draw_dotted_double_bond(
+                a,
+                b,
+                style=bond.style,
+                a_id=bond.a,
+                b_id=bond.b,
+                ring_center=ring_center,
+                center_3d=ring_center_3d,
+            )
         elif bond.style in {"bold", "bold_in", "bold_out"}:
             bold_outward = bond.style == "bold_out"
             if bond.order >= 2:
@@ -975,10 +1190,8 @@ class BondRenderer:
                     a_id=bond.a,
                     b_id=bond.b,
                 )
-                outer_item = NoSelectLineItem(*outer_seg)
-                outer_item.setPen(self.canvas.renderer.bond_pen())
-                inner_item = NoSelectLineItem(*inner_seg)
-                inner_item.setPen(self.canvas.renderer.bond_pen())
+                outer_item = self._line_item(*outer_seg)
+                inner_item = self._line_item(*inner_seg)
                 items = [outer_item, inner_item]
         elif bond.order >= 2:
             items = self.draw_parallel_bonds(a.x, a.y, b.x, b.y, bond.order, bond.a, bond.b)
@@ -988,14 +1201,7 @@ class BondRenderer:
             y1 = a.y + (b.y - a.y) * t0
             x2 = a.x + (b.x - a.x) * t1
             y2 = a.y + (b.y - a.y) * t1
-            line_item = NoSelectLineItem(
-                x1,
-                y1,
-                x2,
-                y2,
-            )
-            line_item.setPen(self.canvas.renderer.bond_pen())
-            items = [line_item]
+            items = [self._line_item(x1, y1, x2, y2)]
 
         for item in items:
             item.setData(0, "bond")

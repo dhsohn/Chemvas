@@ -10,6 +10,7 @@ from PyQt6.QtGui import QColor, QPen, QPolygonF
 from PyQt6.QtWidgets import (
     QGraphicsItem,
     QGraphicsLineItem,
+    QGraphicsPathItem,
     QGraphicsPolygonItem,
     QGraphicsScene,
     QGraphicsTextItem,
@@ -21,7 +22,7 @@ from ui.bond_style_logic import (
     PLAIN_DOUBLE_STYLES,
     normalized_plain_double_style,
 )
-from ui.graphics_items import NoSelectLineItem
+from ui.graphics_items import NoSelectLineItem, NoSelectPathItem
 
 
 LineSegment = tuple[float, float, float, float]
@@ -41,16 +42,19 @@ class BondPreviewConfig:
 class BondPreviewBuildResolvers:
     draw_wedge_bond: Callable[[float, float, float, float, int | None, int | None], list]
     draw_hash_bond: Callable[[float, float, float, float, int | None, int | None], list]
+    draw_dotted_bond: Callable[[float, float, float, float, int | None, int | None], list]
     draw_parallel_bonds: Callable[[float, float, float, float, int, int | None, int | None], list]
     line_normal: Callable[[float, float, float, float, QPointF | None], tuple[float, float]]
     one_sided_bond_strip: Callable[[float, float, float, float, float, float, float, float], Any]
     bond_pen: Callable[[], QPen]
+    dotted_bond_pen: Callable[[], QPen]
 
 
 @dataclass(frozen=True)
 class BondPreviewUpdateResolvers:
     wedge_polygon: Callable[[float, float, float, float, int | None, int | None], QPolygonF]
     hash_segments: Callable[[float, float, float, float, int, int | None, int | None], Sequence[LineSegment]]
+    dotted_bond_path: Callable[[float, float, float, float, int | None, int | None], Any]
     parallel_bond_segments: Callable[[float, float, float, float, int, int | None, int | None], Sequence[LineSegment]]
     line_normal: Callable[[float, float, float, float, QPointF | None], tuple[float, float]]
     strip_polygon: Callable[[float, float, float, float, float, float, float, float], QPolygonF]
@@ -113,6 +117,8 @@ def build_bond_preview_items(
         return resolvers.draw_wedge_bond(start.x(), start.y(), end.x(), end.y(), a_id, b_id)
     if style == "hash":
         return resolvers.draw_hash_bond(start.x(), start.y(), end.x(), end.y(), a_id, b_id)
+    if style == "dotted":
+        return resolvers.draw_dotted_bond(start.x(), start.y(), end.x(), end.y(), a_id, b_id)
     if style in {"bold", "bold_in", "bold_out"}:
         bold_outward = style == "bold_out"
         if order >= 2:
@@ -191,6 +197,11 @@ def update_bond_preview_items(
             if not isinstance(item, QGraphicsLineItem):
                 return False
             item.setLine(*seg)
+        return True
+    if style == "dotted":
+        if len(items) != 1 or not isinstance(items[0], QGraphicsPathItem):
+            return False
+        items[0].setPath(resolvers.dotted_bond_path(start.x(), start.y(), end.x(), end.y(), a_id, b_id))
         return True
     if style in {"bold", "bold_in", "bold_out"}:
         bold_outward = style == "bold_out"

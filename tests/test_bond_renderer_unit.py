@@ -8,11 +8,18 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtCore import QPointF
+    from PyQt6.QtCore import QPointF, Qt
     from PyQt6.QtGui import QColor, QPen, QPolygonF
-    from PyQt6.QtWidgets import QApplication, QGraphicsLineItem, QGraphicsPolygonItem, QGraphicsScene
+    from PyQt6.QtWidgets import (
+        QApplication,
+        QGraphicsLineItem,
+        QGraphicsPathItem,
+        QGraphicsPolygonItem,
+        QGraphicsScene,
+    )
 except ModuleNotFoundError:
     QApplication = None
+    Qt = None
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,7 +30,7 @@ if str(APP_ROOT) not in sys.path:
 if QApplication is not None:
     from core.model import Atom, Bond
     from ui.bond_renderer import BondRenderer
-    from ui.graphics_items import NoSelectLineItem, NoSelectPolygonItem
+    from ui.graphics_items import NoSelectLineItem, NoSelectPathItem, NoSelectPolygonItem
 
 
 class _FakeStyle:
@@ -47,6 +54,11 @@ class _FakeRenderer:
     def bold_bond_pen(self) -> QPen:
         pen = QPen(QColor(self.style.bond_color))
         pen.setWidthF(self.style.bold_bond_width)
+        return pen
+
+    def dotted_bond_pen(self) -> QPen:
+        pen = self.bond_pen()
+        pen.setStyle(Qt.PenStyle.DotLine)
         return pen
 
 
@@ -270,6 +282,7 @@ class BondRendererUnitTest(unittest.TestCase):
         polygon_item = self.renderer.one_sided_bond_strip(0.0, 0.0, 10.0, 0.0, 0.0, 1.0, 1.0, 3.0)
         self.canvas._offset_unit = None
         parallel = self.renderer.draw_parallel_bonds(0.0, 0.0, 10.0, 0.0, 3, 0, 1)
+        dotted = self.renderer.draw_dotted_bond(0.0, 0.0, 10.0, 0.0, 0, 1)
         wedge = self.renderer.draw_wedge_bond(0.0, 0.0, 10.0, 0.0, 0, 1)
         hashed = self.renderer.draw_hash_bond(0.0, 0.0, 10.0, 0.0, 0, 1)
 
@@ -278,10 +291,27 @@ class BondRendererUnitTest(unittest.TestCase):
         self.assertEqual(polygon_item.brush().color().name(), "#224466")
         self.assertEqual(len(parallel), 3)
         self.assertTrue(all(isinstance(item, NoSelectLineItem) for item in parallel))
+        self.assertEqual(len(dotted), 1)
+        self.assertIsInstance(dotted[0], NoSelectPathItem)
+        self.assertFalse(dotted[0].path().isEmpty())
+        self.assertEqual(dotted[0].pen().style(), Qt.PenStyle.NoPen)
         self.assertEqual(len(wedge), 1)
         self.assertIsInstance(wedge[0], NoSelectPolygonItem)
         self.assertGreaterEqual(len(hashed), 3)
         self.assertTrue(all(isinstance(item, NoSelectLineItem) for item in hashed))
+
+    def test_draw_dotted_double_bond_dots_only_short_variant_segment(self) -> None:
+        items = self.renderer.draw_dotted_double_bond(
+            self.canvas.model.atoms[0],
+            self.canvas.model.atoms[1],
+            style="dotted_double",
+            a_id=0,
+            b_id=1,
+        )
+
+        self.assertEqual(len(items), 2)
+        self.assertIsInstance(items[0], NoSelectLineItem)
+        self.assertIsInstance(items[1], NoSelectPathItem)
 
     def test_draw_ring_double_bond_switches_outer_style(self) -> None:
         with mock.patch.object(
@@ -329,6 +359,12 @@ class BondRendererUnitTest(unittest.TestCase):
         self.canvas.bond_items[0] = hashed
         self.renderer.update_bond_geometry(0)
         self.assertNotEqual(hashed[0].line().length(), 0.0)
+
+        dotted = QGraphicsPathItem()
+        self._set_bond(Bond(0, 1, 1, style="dotted"))
+        self.canvas.bond_items[0] = [dotted]
+        self.renderer.update_bond_geometry(0)
+        self.assertFalse(dotted.path().isEmpty())
 
         single = QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)
         single.setPos(2.0, 3.0)
@@ -396,16 +432,27 @@ class BondRendererUnitTest(unittest.TestCase):
         self.renderer.add_bond_graphics(0)
         self.assertEqual(self.canvas.bond_items, {})
 
-    def test_add_bond_graphics_covers_wedge_hash_and_single_paths(self) -> None:
-        for style in ("wedge", "hash", "single"):
+    def test_add_bond_graphics_covers_wedge_hash_single_and_dotted_paths(self) -> None:
+        for style in ("wedge", "hash", "single", "dotted"):
             self.canvas._scene.clear()
             self._set_bond(Bond(0, 1, 1, style=style, color="#AA5500"))
             self.renderer.add_bond_graphics(0)
             items = self.canvas.bond_items[0]
             self.assertTrue(items)
             self.assertTrue(all(item.data(0) == "bond" and item.data(1) == 0 for item in items))
+            if style == "dotted":
+                self.assertIsInstance(items[0], NoSelectPathItem)
         self.assertTrue(self.canvas.selectable_items)
         self.assertTrue(self.canvas.colored_items)
+
+    def test_add_bond_graphics_covers_dotted_double_paths(self) -> None:
+        self._set_bond(Bond(0, 1, 2, style="dotted_double"))
+        self.renderer.add_bond_graphics(0)
+        items = self.canvas.bond_items[0]
+
+        self.assertEqual(len(items), 2)
+        self.assertIsInstance(items[0], NoSelectLineItem)
+        self.assertIsInstance(items[1], NoSelectPathItem)
 
     def test_add_bond_graphics_covers_bold_paths(self) -> None:
         self.canvas._ring_center = QPointF(5.0, 5.0)

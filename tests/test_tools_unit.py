@@ -552,6 +552,12 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
         self.assertEqual(canvas.cycle_calls[-1], 0)
 
+        canvas.model.bonds[0] = Bond(1, 2, 2, style="double")
+        canvas.active_bond_style = "dotted"
+        self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
+        self.assertEqual(canvas.bond_style_calls[-1], (0, "dotted_double", 2))
+
+        canvas.model.bonds[0] = Bond(1, 2, 2, style="bold_in")
         canvas.item = None
         canvas.hover_bond_id = 0
         canvas.active_bond_style = "bold"

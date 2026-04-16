@@ -10,7 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 try:
     from PyQt6.QtCore import QPointF, QRectF, Qt, QEvent
     from PyQt6.QtTest import QTest
-    from PyQt6.QtWidgets import QGraphicsTextItem, QApplication
+    from PyQt6.QtWidgets import QApplication, QGraphicsPathItem, QGraphicsTextItem
 except ModuleNotFoundError:
     QApplication = None
     QTest = None
@@ -18,6 +18,7 @@ except ModuleNotFoundError:
     QPointF = None
     QRectF = None
     QEvent = None
+    QGraphicsPathItem = None
     QGraphicsTextItem = None
 
 
@@ -675,6 +676,30 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         bond = self.window.canvas.model.bonds[bond_id]
         self.assertEqual((bond.style, bond.order), ("triple", 3))
         self.assertEqual(len([entry for entry in self.window.canvas.model.bonds if entry is not None]), 1)
+
+    def test_dotted_bond_tool_draws_new_bond_and_converts_plain_double_short_segment(self) -> None:
+        self.window.canvas.set_bond_style("dotted", 1)
+        self._drag_scene_point(QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
+
+        bond_id = next(i for i, bond in enumerate(self.window.canvas.model.bonds) if bond is not None)
+        bond = self.window.canvas.model.bonds[bond_id]
+        self.assertEqual((bond.style, bond.order), ("dotted", 1))
+        self.assertIsInstance(self.window.canvas.bond_items[bond_id][0], QGraphicsPathItem)
+        atom_a = self.window.canvas.model.atoms[bond.a]
+        atom_b = self.window.canvas.model.atoms[bond.b]
+        midpoint = QPointF((atom_a.x + atom_b.x) / 2.0, (atom_a.y + atom_b.y) / 2.0)
+
+        self.window.canvas.apply_bond_style(bond_id, "double", 2)
+        self.window.canvas.set_bond_style("dotted", 1)
+        self._hover_scene_point(midpoint)
+        self.assertEqual(self.window.canvas.hover_bond_id, bond_id)
+        self._click_scene_point(midpoint)
+
+        bond = self.window.canvas.model.bonds[bond_id]
+        self.assertEqual((bond.style, bond.order), ("dotted_double", 2))
+        bond_items = self.window.canvas.bond_items[bond_id]
+        self.assertEqual(sum(isinstance(item, QGraphicsPathItem) for item in bond_items), 1)
+        self.assertEqual(sum(not isinstance(item, QGraphicsPathItem) for item in bond_items), 1)
 
     def test_clicking_near_carbon_endpoint_prefers_atom_selection_over_bond(self) -> None:
         self.window.canvas.set_tool("select")
