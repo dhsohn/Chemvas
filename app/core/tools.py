@@ -474,6 +474,15 @@ class BondTool(Tool):
         return QPointF(atom.x, atom.y)
 
     def _snap_endpoint(self, start, end):
+        atom_id = self.canvas.find_atom_near(
+            end.x(),
+            end.y(),
+            self.canvas.renderer.style.bond_length_px * 0.35,
+        )
+        if atom_id is not None and atom_id != self._start_atom_id:
+            atom = self.canvas.model.atoms.get(atom_id)
+            if atom is not None:
+                return QPointF(atom.x, atom.y)
         dx = end.x() - start.x()
         dy = end.y() - start.y()
         length = math.hypot(dx, dy)
