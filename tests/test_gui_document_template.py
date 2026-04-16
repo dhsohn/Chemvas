@@ -870,13 +870,18 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             bonds=(Molecule3DBond(0, 1, 1),),
         )
 
-        with patch.object(self.window.canvas.rdkit, "model_to_3d_scene", return_value=scene):
+        with (
+            patch.object(self.window.canvas.rdkit, "compute_props", return_value=("NH4", 18.04, "[NH4+]")),
+            patch.object(self.window.canvas.rdkit, "model_to_3d_scene", return_value=scene),
+        ):
             self.window.preview_3d.refresh_from_canvas(self.window.canvas)
             self.app.processEvents()
             QTest.qWait(150)
             self.app.processEvents()
 
         self.assertIsNotNone(self.window.preview_3d._scene)
+        self.assertEqual(self.window.preview_3d._formula_text, "NH4")
+        self.assertEqual(self.window.preview_3d._mw_text, "18.04")
         self.assertIs(self.window.panel_splitter.widget(0), self.window.preview_3d)
         self.assertEqual(self.window.panel_splitter.count(), 1)
         self.assertFalse(
