@@ -584,6 +584,43 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertTrue(mol.atoms[0].no_implicit)
         self.assertFalse(mol.atoms[1].no_implicit)
 
+    def test_build_conversion_rdkit_mol_disables_implicit_hydrogen_completion_for_unannotated_hetero_atom(self) -> None:
+        adapter = RDKitAdapter()
+        chem = _FakeChem({})
+        adapter._rdkit = (chem, _FakeAllChem())
+        model = MoleculeModel()
+        carbon = model.add_atom("C", 0.0, 0.0)
+        oxygen = model.add_atom("O", 1.0, 0.0)
+        model.add_bond(carbon, oxygen, 1)
+
+        mol = adapter._build_conversion_rdkit_mol(model)
+
+        self.assertIsNotNone(mol)
+        self.assertFalse(mol.atoms[0].no_implicit)
+        self.assertTrue(mol.atoms[1].no_implicit)
+
+    def test_build_conversion_rdkit_mol_keeps_implicit_hydrogen_completion_for_annotated_hetero_atom(self) -> None:
+        adapter = RDKitAdapter()
+        chem = _FakeChem({})
+        adapter._rdkit = (chem, _FakeAllChem())
+        model = MoleculeModel()
+        charged_nitrogen = model.add_atom("N", 0.0, 0.0)
+        radical_oxygen = model.add_atom("O", 2.0, 0.0)
+
+        mol = adapter._build_conversion_rdkit_mol(
+            model,
+            atom_annotations={
+                charged_nitrogen: {"formal_charge": 1},
+                radical_oxygen: {"radical_electrons": 1},
+            },
+        )
+
+        self.assertIsNotNone(mol)
+        self.assertFalse(mol.atoms[0].no_implicit)
+        self.assertFalse(mol.atoms[1].no_implicit)
+        self.assertEqual(mol.atoms[0].formal_charge, 1)
+        self.assertEqual(mol.atoms[1].radical_electrons, 1)
+
     def test_model_to_rdkit_with_map_returns_none_when_rdkit_is_unavailable(self) -> None:
         adapter = RDKitAdapter()
         adapter._rdkit = (None, None)
@@ -971,6 +1008,42 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertIsNotNone(scene)
         assert scene is not None
         self.assertEqual(sorted(atom.symbol for atom in scene.atoms), ["H", "O"])
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for implicit-hydrogen tests")
+    def test_model_to_3d_scene_does_not_complete_unannotated_terminal_hetero_atom(self) -> None:
+        adapter = RDKitAdapter()
+        model = MoleculeModel()
+        carbon = model.add_atom("C", 0.0, 0.0)
+        oxygen = model.add_atom("O", 1.0, 0.0)
+        model.add_bond(carbon, oxygen, 1)
+
+        scene = adapter.model_to_3d_scene(model)
+
+        self.assertIsNotNone(scene)
+        assert scene is not None
+        elements = [atom.symbol for atom in scene.atoms]
+        self.assertEqual(elements.count("C"), 1)
+        self.assertEqual(elements.count("O"), 1)
+        self.assertEqual(elements.count("H"), 3)
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for implicit-hydrogen tests")
+    def test_model_to_xyz_block_does_not_complete_unannotated_terminal_hetero_atom(self) -> None:
+        adapter = RDKitAdapter()
+        model = MoleculeModel()
+        carbon = model.add_atom("C", 0.0, 0.0)
+        oxygen = model.add_atom("O", 1.0, 0.0)
+        model.add_bond(carbon, oxygen, 1)
+
+        xyz_block = adapter.model_to_xyz_block(model)
+
+        self.assertIsNotNone(xyz_block)
+        assert xyz_block is not None
+        atom_count, _, records = _parse_xyz_block(xyz_block)
+        elements = [element for element, _ in records]
+        self.assertEqual(atom_count, len(records))
+        self.assertEqual(elements.count("C"), 1)
+        self.assertEqual(elements.count("O"), 1)
+        self.assertEqual(elements.count("H"), 3)
 
     def test_get_name_from_smiles_uses_canonical_map(self) -> None:
         fake_mol = _FakeMol(

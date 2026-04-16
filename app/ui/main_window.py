@@ -754,11 +754,6 @@ class MainWindow(QMainWindow):
         export_xyz_btn.setToolTip("Export 3D XYZ")
         export_xyz_btn.clicked.connect(self._export_xyz)
 
-        new_sheet_btn = QToolButton()
-        new_sheet_btn.setIcon(self._icon_add_sheet())
-        new_sheet_btn.setToolTip("New Canvas Sheet")
-        new_sheet_btn.clicked.connect(self._new_canvas_sheet)
-
         undo_btn = QToolButton()
         undo_btn.setIcon(self._icon_undo())
         undo_btn.setToolTip("Undo")
@@ -802,7 +797,6 @@ class MainWindow(QMainWindow):
         panel_bar.addWidget(save_btn)
         panel_bar.addWidget(load_btn)
         panel_bar.addWidget(export_xyz_btn)
-        panel_bar.addWidget(new_sheet_btn)
         panel_bar.addSeparator()
         panel_bar.addWidget(undo_btn)
         panel_bar.addWidget(redo_btn)

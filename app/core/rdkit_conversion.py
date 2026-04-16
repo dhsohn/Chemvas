@@ -185,6 +185,26 @@ class RDKitConversionHelper:
         return False
 
     @staticmethod
+    def _should_disable_conversion_implicit_hydrogens(
+        model: MoleculeModel,
+        atom_id: int,
+        adjacency: Mapping[int, list[int]],
+        *,
+        formal_charge: int = 0,
+        radical_electrons: int = 0,
+    ) -> bool:
+        atom = model.atoms.get(atom_id)
+        if atom is None or atom.element.upper() == "C":
+            return False
+        for neighbor_id in adjacency.get(atom_id, []):
+            neighbor = model.atoms.get(neighbor_id)
+            if neighbor is not None and neighbor.element.upper() == "H":
+                return True
+        if formal_charge or radical_electrons:
+            return False
+        return True
+
+    @staticmethod
     def _component_sort_key(model: MoleculeModel, atom_ids: set[int]) -> tuple[float, float, int]:
         xs = [model.atoms[atom_id].x for atom_id in atom_ids if atom_id in model.atoms]
         ys = [model.atoms[atom_id].y for atom_id in atom_ids if atom_id in model.atoms]
@@ -495,7 +515,13 @@ class RDKitConversionHelper:
             except Exception:
                 invalid_labels.append(f"{atom.element} (atom {atom_id})")
                 continue
-            if self._should_disable_implicit_hydrogens(model, atom_id, adjacency):
+            if self._should_disable_conversion_implicit_hydrogens(
+                model,
+                atom_id,
+                adjacency,
+                formal_charge=formal_charge,
+                radical_electrons=radical_electrons,
+            ):
                 rd_atom.SetNoImplicit(True)
             self._apply_atom_annotation(
                 rd_atom,
