@@ -41,8 +41,6 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
     def setUp(self) -> None:
         self.window = MainWindow()
         self.window.show()
-        self.window.raise_()
-        self.window.activateWindow()
         self.window.canvas.setFocus()
         self.app.processEvents()
         QTest.qWait(20)

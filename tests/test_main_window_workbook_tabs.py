@@ -36,8 +36,6 @@ class MainWindowWorkbookTabsTest(unittest.TestCase):
     def setUp(self) -> None:
         self.window = MainWindow()
         self.window.show()
-        self.window.raise_()
-        self.window.activateWindow()
         self.window.canvas.setFocus()
         self.app.processEvents()
         QTest.qWait(20)
@@ -120,8 +118,6 @@ class MainWindowWorkbookTabsTest(unittest.TestCase):
         restored_window = MainWindow()
         try:
             restored_window.show()
-            restored_window.raise_()
-            restored_window.activateWindow()
             self.app.processEvents()
             QTest.qWait(20)
 
