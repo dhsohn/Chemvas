@@ -43,6 +43,9 @@ class SequencedAdapter:
         self.calls = []
         self.last_error = None
 
+    def compute_props(self, model):
+        return None, None, None
+
     def model_to_3d_scene(self, model, atom_annotations=None):
         self.calls.append((model, atom_annotations))
         scene, error = self._responses.pop(0)
@@ -110,12 +113,16 @@ class Preview3DRecoveryTest(unittest.TestCase):
 
         self.assertEqual(len(adapter.calls), 1)
         self.assertEqual(preview._scene, scene)
+        self.assertEqual(preview._formula_text, "")
+        self.assertEqual(preview._mw_text, "")
 
         preview.refresh_from_canvas(canvas)
 
         self.assertIsNone(preview._scene)
         self.assertEqual(preview._message, "No structure selected")
         self.assertIsNone(preview._current_signature)
+        self.assertEqual(preview._formula_text, "")
+        self.assertEqual(preview._mw_text, "")
 
         preview.refresh_from_canvas(canvas)
         self._wait_for_rebuild()

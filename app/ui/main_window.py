@@ -127,8 +127,6 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("LightDraw")
         self.resize(1100, 760)
 
-        self._formula_value = None
-        self._mw_value = None
         self._atom_input = None
         self._canvas_name_counter = 0
         self._result_sheet_counter = 0
@@ -372,11 +370,7 @@ class MainWindow(QMainWindow):
                 canvas.set_tool_change_callback(None)
                 canvas.set_zoom_callback(None)
 
-    def _handle_selection_info(self, formula: str, mw: str) -> None:
-        if self._formula_value is not None:
-            self._formula_value.setText(formula)
-        if self._mw_value is not None:
-            self._mw_value.setText(mw)
+    def _handle_selection_info(self, _formula: str, _mw: str) -> None:
         self.preview_3d.refresh_from_canvas(self.canvas)
 
     def _current_zoom_percent(self) -> int:
@@ -389,10 +383,6 @@ class MainWindow(QMainWindow):
             self._atom_input.blockSignals(True)
             self._atom_input.setText(self.canvas.get_atom_symbol())
             self._atom_input.blockSignals(False)
-        if self._formula_value is not None:
-            self._formula_value.setText("")
-        if self._mw_value is not None:
-            self._mw_value.setText("")
         if hasattr(self, "_zoom_label"):
             self._update_zoom_label(self._current_zoom_percent())
         self._sync_tool_actions_from_canvas()
@@ -841,26 +831,8 @@ class MainWindow(QMainWindow):
         panel_bar.addWidget(bond_len_btn)
         panel_bar.addSeparator()
 
-        formula_label = QLabel("Formula")
-        formula_value = QLineEdit()
-        formula_value.setReadOnly(True)
-        formula_value.setFixedWidth(140)
-        formula_value.setPlaceholderText(" ")
-        mw_label = QLabel("MW")
-        mw_value = QLineEdit()
-        mw_value.setReadOnly(True)
-        mw_value.setFixedWidth(100)
-        mw_value.setPlaceholderText(" ")
-        panel_bar.addWidget(formula_label)
-        panel_bar.addWidget(formula_value)
-        panel_bar.addWidget(mw_label)
-        panel_bar.addWidget(mw_value)
-        panel_bar.addSeparator()
-
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, panel_bar)
         self._atom_input = atom_input
-        self._formula_value = formula_value
-        self._mw_value = mw_value
 
     def _make_icon(self, painter_fn) -> QIcon:
         pixmap = QPixmap(30, 30)

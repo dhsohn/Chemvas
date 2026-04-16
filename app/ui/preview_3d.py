@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 
 from PyQt6.QtCore import QPointF, QRectF, QTimer, Qt
-from PyQt6.QtGui import QColor, QFont, QPainter, QPen
+from PyQt6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPen
 from PyQt6.QtWidgets import QWidget
 
 from core.rdkit_adapter import Molecule3DScene, RDKitAdapter
@@ -19,6 +19,8 @@ class Preview3D(QWidget):
         self._current_signature = None
         self._scene: Molecule3DScene | None = None
         self._message = "3D preview unavailable"
+        self._formula_text = ""
+        self._mw_text = ""
         self._rotation_x = math.radians(-18.0)
         self._rotation_y = math.radians(22.0)
         self._zoom = 1.0
@@ -36,6 +38,8 @@ class Preview3D(QWidget):
         except Exception as exc:
             self.clear_preview(str(exc))
             return
+        formula, mw, _ = self._rdkit.compute_props(model)
+        self.set_info(formula or "", "" if mw is None else f"{mw:.2f}")
         self.set_structure(model, atom_annotations)
 
     def set_structure(self, model, atom_annotations=None) -> None:
@@ -56,6 +60,15 @@ class Preview3D(QWidget):
         self._current_signature = None
         self._scene = None
         self._message = message
+        self._formula_text = ""
+        self._mw_text = ""
+        self._safe_update()
+
+    def set_info(self, formula: str, mw: str) -> None:
+        if formula == self._formula_text and mw == self._mw_text:
+            return
+        self._formula_text = formula
+        self._mw_text = mw
         self._safe_update()
 
     def _payload_signature(self, model, atom_annotations) -> tuple:
@@ -162,7 +175,8 @@ class Preview3D(QWidget):
             painter.drawText(inner, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, self._message)
             return
 
-        projected_atoms = self._project_scene(self._scene)
+        info_lines = self._info_lines()
+        projected_atoms = self._project_scene(self._scene, footer_height=self._footer_height(info_lines))
         if not projected_atoms:
             painter.setPen(QColor("#6f6457"))
             painter.drawText(inner, Qt.AlignmentFlag.AlignCenter, self._message or "3D preview unavailable")
@@ -205,7 +219,23 @@ class Preview3D(QWidget):
         painter.drawText(inner.adjusted(10, 10, -10, -10), Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight, "drag: rotate\nwheel: zoom")
         painter.restore()
 
-    def _project_scene(self, scene: Molecule3DScene) -> list[tuple[float, float, float, float]]:
+        if info_lines:
+            painter.save()
+            painter.setPen(QColor("#6f6457"))
+            painter.setFont(self._overlay_font())
+            painter.drawText(
+                inner.adjusted(10, 10, -10, -10),
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom,
+                "\n".join(info_lines),
+            )
+            painter.restore()
+
+    def _project_scene(
+        self,
+        scene: Molecule3DScene,
+        *,
+        footer_height: float = 0.0,
+    ) -> list[tuple[float, float, float, float]]:
         if not scene.atoms:
             return []
         cx = sum(atom.x for atom in scene.atoms) / len(scene.atoms)
@@ -229,10 +259,13 @@ class Preview3D(QWidget):
             rotated.append((x1, y1, z2))
             max_extent = max(max_extent, math.sqrt(x1 * x1 + y1 * y1 + z2 * z2))
 
-        available = min(self.width(), self.height()) - 36.0
+        content_rect = QRectF(self.rect()).adjusted(18.0, 18.0, -18.0, -18.0)
+        if footer_height > 0.0:
+            content_rect.setBottom(max(content_rect.top() + 40.0, content_rect.bottom() - footer_height))
+        available = max(40.0, min(content_rect.width(), content_rect.height()))
         scale = (available * 0.36 * self._zoom) / max_extent
-        center_x = self.width() * 0.5
-        center_y = self.height() * 0.53
+        center_x = content_rect.center().x()
+        center_y = content_rect.top() + content_rect.height() * 0.55
         projected = []
         for atom, (x, y, z) in zip(scene.atoms, rotated):
             depth = 7.0 / max(1.5, 7.0 - z)
@@ -262,3 +295,17 @@ class Preview3D(QWidget):
         font = QFont(self.font())
         font.setPixelSize(12)
         return font
+
+    def _info_lines(self) -> list[str]:
+        lines: list[str] = []
+        if self._formula_text:
+            lines.append(f"Formula: {self._formula_text}")
+        if self._mw_text:
+            lines.append(f"MW: {self._mw_text}")
+        return lines
+
+    def _footer_height(self, lines: list[str]) -> float:
+        if not lines:
+            return 0.0
+        metrics = QFontMetricsF(self._overlay_font())
+        return metrics.lineSpacing() * len(lines) + 12.0
