@@ -4,6 +4,12 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor, QBrush, QPen, QPolygonF
 from PyQt6.QtWidgets import QGraphicsLineItem, QGraphicsPolygonItem
 
+from ui.bond_style_logic import (
+    DOUBLE_STYLE_DEFAULT,
+    DOUBLE_STYLE_OUTER,
+    is_plain_double_bond_style,
+    normalized_plain_double_style,
+)
 from ui.graphics_items import NoSelectLineItem, NoSelectPolygonItem
 
 
@@ -150,6 +156,145 @@ class BondRenderer:
             segments.append((base_x1 + ox, base_y1 + oy, base_x2 + ox, base_y2 + oy))
         return segments
 
+    @staticmethod
+    def _offset_segment(
+        segment: tuple[float, float, float, float],
+        nx: float,
+        ny: float,
+        offset: float,
+    ) -> tuple[float, float, float, float]:
+        x1, y1, x2, y2 = segment
+        ox = nx * offset
+        oy = ny * offset
+        return (x1 + ox, y1 + oy, x2 + ox, y2 + oy)
+
+    @staticmethod
+    def _trim_segment(
+        segment: tuple[float, float, float, float],
+        trim: float,
+    ) -> tuple[float, float, float, float]:
+        if trim <= 1e-6:
+            return segment
+        x1, y1, x2, y2 = segment
+        dx = x2 - x1
+        dy = y2 - y1
+        length = math.hypot(dx, dy) or 1.0
+        ratio = min(0.45, trim / length)
+        return (
+            x1 + dx * ratio,
+            y1 + dy * ratio,
+            x2 - dx * ratio,
+            y2 - dy * ratio,
+        )
+
+    def _double_short_trim(
+        self,
+        length: float,
+        *,
+        has_label: bool,
+    ) -> float:
+        if has_label:
+            return max(0.6, length * 0.08)
+        return max(1.0, length * 0.12)
+
+    def _plain_double_offsets(self) -> tuple[float, float]:
+        side_offset = self.canvas.renderer.style.bond_spacing_px * 1.1
+        return side_offset, side_offset * 0.5
+
+    def _double_neighbor_target(
+        self,
+        a_id: int | None,
+        b_id: int | None,
+    ) -> QPointF | None:
+        if a_id is None or b_id is None:
+            return None
+        points: list[tuple[float, float]] = []
+        atom_bond_ids = getattr(self.canvas, "_atom_bond_ids", {})
+        candidate_bond_ids = set(atom_bond_ids.get(a_id, ())) | set(atom_bond_ids.get(b_id, ()))
+        for bond_id in candidate_bond_ids:
+            if not (0 <= bond_id < len(self.canvas.model.bonds)):
+                continue
+            bond = self.canvas.model.bonds[bond_id]
+            if bond is None:
+                continue
+            if bond.a == a_id and bond.b != b_id:
+                other = self.canvas.model.atoms.get(bond.b)
+            elif bond.b == a_id and bond.a != b_id:
+                other = self.canvas.model.atoms.get(bond.a)
+            elif bond.a == b_id and bond.b != a_id:
+                other = self.canvas.model.atoms.get(bond.b)
+            elif bond.b == b_id and bond.a != a_id:
+                other = self.canvas.model.atoms.get(bond.a)
+            else:
+                other = None
+            if other is None:
+                continue
+            points.append((other.x, other.y))
+        if not points:
+            return None
+        return QPointF(
+            sum(point[0] for point in points) / len(points),
+            sum(point[1] for point in points) / len(points),
+        )
+
+    def _plain_double_normal(
+        self,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        a_id: int | None = None,
+        b_id: int | None = None,
+    ) -> tuple[float, float]:
+        target = self._double_neighbor_target(a_id, b_id)
+        if target is not None:
+            return self.canvas._line_normal(x1, y1, x2, y2, target)
+        if a_id is not None and b_id is not None:
+            offset_unit = self.canvas._bond_offset_unit_3d(a_id, b_id)
+            if offset_unit is not None:
+                return offset_unit[0], offset_unit[1]
+        return self.canvas._line_normal(x1, y1, x2, y2, None)
+
+    def plain_double_segments(
+        self,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        *,
+        style: str,
+        a_id: int | None = None,
+        b_id: int | None = None,
+    ) -> tuple[tuple[float, float, float, float], tuple[float, float, float, float], tuple[float, float]]:
+        dx = x2 - x1
+        dy = y2 - y1
+        t0, t1 = self.canvas._trim_line_for_labels(a_id, b_id, x1, y1, x2, y2)
+        base_segment = (
+            x1 + dx * t0,
+            y1 + dy * t0,
+            x1 + dx * t1,
+            y1 + dy * t1,
+        )
+        inner_nx, inner_ny = self._plain_double_normal(*base_segment, a_id, b_id)
+        side_offset, center_offset = self._plain_double_offsets()
+        outer_full_seg = self._offset_segment(base_segment, inner_nx, inner_ny, -side_offset)
+        inner_full_seg = self._offset_segment(base_segment, inner_nx, inner_ny, side_offset)
+        outer_center_seg = self._offset_segment(base_segment, inner_nx, inner_ny, -center_offset)
+        inner_center_seg = self._offset_segment(base_segment, inner_nx, inner_ny, center_offset)
+        base_length = math.hypot(base_segment[2] - base_segment[0], base_segment[3] - base_segment[1]) or 1.0
+        has_label = False
+        if a_id is not None and self.canvas._label_rect_for_atom(a_id) is not None:
+            has_label = True
+        if b_id is not None and self.canvas._label_rect_for_atom(b_id) is not None:
+            has_label = True
+        trim = self._double_short_trim(base_length, has_label=has_label)
+        variant = normalized_plain_double_style(style, 2)
+        if variant == DOUBLE_STYLE_DEFAULT:
+            return base_segment, self._trim_segment(inner_full_seg, trim), (inner_nx, inner_ny)
+        if variant == DOUBLE_STYLE_OUTER:
+            return base_segment, self._trim_segment(outer_full_seg, trim), (inner_nx, inner_ny)
+        return outer_center_seg, inner_center_seg, (inner_nx, inner_ny)
+
     def wedge_polygon(
         self,
         x1: float,
@@ -233,6 +378,7 @@ class BondRenderer:
         a_id: int | None = None,
         b_id: int | None = None,
         center_3d: tuple[float, float, float] | None = None,
+        style: str = DOUBLE_STYLE_DEFAULT,
     ) -> tuple[tuple[float, float, float, float], tuple[float, float, float, float], tuple[float, float]]:
         if center_3d is not None and a_id is not None and b_id is not None:
             coords_a = self.canvas._current_atom_coords_3d(a_id)
@@ -287,17 +433,20 @@ class BondRenderer:
                             has_label = True
                         if self.canvas._label_rect_for_atom(b_id) is not None:
                             has_label = True
-                        if has_label:
-                            inner_trim = max(0.6, inner_length * 0.08)
-                        else:
-                            inner_trim = max(1.0, inner_length * 0.12)
+                        inner_trim = self._double_short_trim(inner_length, has_label=has_label)
                         trim_ratio = min(0.45, inner_trim / inner_length)
-                        trimmed_vec3 = (
-                            base_b3[0] - base_a3[0],
-                            base_b3[1] - base_a3[1],
-                            base_b3[2] - base_a3[2],
-                        )
+                        trimmed_vec3 = (base_b3[0] - base_a3[0], base_b3[1] - base_a3[1], base_b3[2] - base_a3[2])
                         spacing = self.canvas.renderer.style.bond_spacing_px * 1.1
+                        inner_full_a3 = (
+                            base_a3[0] + inward_unit3[0] * spacing,
+                            base_a3[1] + inward_unit3[1] * spacing,
+                            base_a3[2] + inward_unit3[2] * spacing,
+                        )
+                        inner_full_b3 = (
+                            base_b3[0] + inward_unit3[0] * spacing,
+                            base_b3[1] + inward_unit3[1] * spacing,
+                            base_b3[2] + inward_unit3[2] * spacing,
+                        )
                         inner_a3 = (
                             base_a3[0] + trimmed_vec3[0] * trim_ratio + inward_unit3[0] * spacing,
                             base_a3[1] + trimmed_vec3[1] * trim_ratio + inward_unit3[1] * spacing,
@@ -308,15 +457,42 @@ class BondRenderer:
                             base_b3[1] - trimmed_vec3[1] * trim_ratio + inward_unit3[1] * spacing,
                             base_b3[2] - trimmed_vec3[2] * trim_ratio + inward_unit3[2] * spacing,
                         )
+                        outer_a3 = (
+                            base_a3[0] + trimmed_vec3[0] * trim_ratio,
+                            base_a3[1] + trimmed_vec3[1] * trim_ratio,
+                            base_a3[2] + trimmed_vec3[2] * trim_ratio,
+                        )
+                        outer_b3 = (
+                            base_b3[0] - trimmed_vec3[0] * trim_ratio,
+                            base_b3[1] - trimmed_vec3[1] * trim_ratio,
+                            base_b3[2] - trimmed_vec3[2] * trim_ratio,
+                        )
+                        inner_full_a = self.canvas._project_point_3d(inner_full_a3)
+                        inner_full_b = self.canvas._project_point_3d(inner_full_b3)
                         inner_a = self.canvas._project_point_3d(inner_a3)
                         inner_b = self.canvas._project_point_3d(inner_b3)
                         offset_x = ((inner_a[0] + inner_b[0]) - (outer_a[0] + outer_b[0])) * 0.5
                         offset_y = ((inner_a[1] + inner_b[1]) - (outer_a[1] + outer_b[1])) * 0.5
                         offset_len = math.hypot(offset_x, offset_y)
                         if offset_len > 1e-9:
+                            variant = normalized_plain_double_style(style, 2)
+                            outer_seg = base_outer
+                            inner_seg = (inner_a[0], inner_a[1], inner_b[0], inner_b[1])
+                            if variant == "double_center":
+                                inner_seg = (inner_full_a[0], inner_full_a[1], inner_full_b[0], inner_full_b[1])
+                            elif variant == DOUBLE_STYLE_OUTER:
+                                outer_trim_a = self.canvas._project_point_3d(outer_a3)
+                                outer_trim_b = self.canvas._project_point_3d(outer_b3)
+                                outer_seg = (
+                                    outer_trim_a[0],
+                                    outer_trim_a[1],
+                                    outer_trim_b[0],
+                                    outer_trim_b[1],
+                                )
+                                inner_seg = (inner_full_a[0], inner_full_a[1], inner_full_b[0], inner_full_b[1])
                             return (
-                                base_outer,
-                                (inner_a[0], inner_a[1], inner_b[0], inner_b[1]),
+                                outer_seg,
+                                inner_seg,
                                 (offset_x / offset_len, offset_y / offset_len),
                             )
 
@@ -366,15 +542,26 @@ class BondRenderer:
             has_label = True
         if b_id is not None and self.canvas._label_rect_for_atom(b_id) is not None:
             has_label = True
-        if has_label:
-            inner_trim = max(0.6, inner_length * 0.08)
-        else:
-            inner_trim = max(1.0, inner_length * 0.12)
-        inner_x1 = base_bx1 + ux * inner_trim + nx * spacing
-        inner_y1 = base_by1 + uy * inner_trim + ny * spacing
-        inner_x2 = base_bx2 - ux * inner_trim + nx * spacing
-        inner_y2 = base_by2 - uy * inner_trim + ny * spacing
-        return (base_bx1, base_by1, base_bx2, base_by2), (inner_x1, inner_y1, inner_x2, inner_y2), (nx, ny)
+        inner_trim = self._double_short_trim(inner_length, has_label=has_label)
+        inner_full_seg = (
+            base_bx1 + nx * spacing,
+            base_by1 + ny * spacing,
+            base_bx2 + nx * spacing,
+            base_by2 + ny * spacing,
+        )
+        inner_short_seg = (
+            base_bx1 + ux * inner_trim + nx * spacing,
+            base_by1 + uy * inner_trim + ny * spacing,
+            base_bx2 - ux * inner_trim + nx * spacing,
+            base_by2 - uy * inner_trim + ny * spacing,
+        )
+        outer_seg = (base_bx1, base_by1, base_bx2, base_by2)
+        variant = normalized_plain_double_style(style, 2)
+        if variant == "double_center":
+            return outer_seg, inner_full_seg, (nx, ny)
+        if variant == DOUBLE_STYLE_OUTER:
+            return self._trim_segment(outer_seg, inner_trim), inner_full_seg, (nx, ny)
+        return outer_seg, inner_short_seg, (nx, ny)
 
     def draw_ring_double_bond(
         self,
@@ -385,6 +572,7 @@ class BondRenderer:
         b_id: int | None = None,
         outer_style: str = "normal",
         center_3d: tuple[float, float, float] | None = None,
+        style: str = DOUBLE_STYLE_DEFAULT,
     ):
         outer_seg, inner_seg, (nx, ny) = self.ring_double_segments(
             a,
@@ -393,6 +581,7 @@ class BondRenderer:
             a_id,
             b_id,
             center_3d=center_3d,
+            style=style,
         )
         if outer_style in {"bold_inward", "bold_outward"}:
             use_nx, use_ny = (nx, ny) if outer_style == "bold_inward" else (-nx, -ny)
@@ -634,22 +823,37 @@ class BondRenderer:
                 items[0].setLine(bx1, by1, bx2, by2)
             return
 
-        if bond.order == 2:
+        if is_plain_double_bond_style(bond.style, bond.order):
+            variant = normalized_plain_double_style(bond.style, bond.order)
             ring_center = self.canvas._ring_center_for_bond(bond)
             if ring_center is not None and len(items) >= 2:
                 ring_center_3d = self.canvas._ring_center_3d_for_bond(bond)
                 outer_seg, inner_seg, _ = self.ring_double_segments(
-                    a, b, ring_center, bond.a, bond.b, center_3d=ring_center_3d
+                    a,
+                    b,
+                    ring_center,
+                    bond.a,
+                    bond.b,
+                    center_3d=ring_center_3d,
+                    style=variant,
                 )
                 if isinstance(items[0], QGraphicsLineItem):
                     items[0].setLine(*outer_seg)
                 if isinstance(items[1], QGraphicsLineItem):
                     items[1].setLine(*inner_seg)
                 return
-            segments = self.parallel_bond_segments(a.x, a.y, b.x, b.y, bond.order, bond.a, bond.b)
-            for item, seg in zip(items, segments):
-                if isinstance(item, QGraphicsLineItem):
-                    item.setLine(*seg)
+            outer_seg, inner_seg, _ = self.plain_double_segments(
+                a.x,
+                a.y,
+                b.x,
+                b.y,
+                style=variant,
+                a_id=bond.a,
+                b_id=bond.b,
+            )
+            if len(items) >= 2 and isinstance(items[0], QGraphicsLineItem) and isinstance(items[1], QGraphicsLineItem):
+                items[0].setLine(*outer_seg)
+                items[1].setLine(*inner_seg)
             return
         if bond.order >= 2:
             segments = self.parallel_bond_segments(a.x, a.y, b.x, b.y, bond.order, bond.a, bond.b)
@@ -747,7 +951,8 @@ class BondRenderer:
                     self.canvas.renderer.style.bold_bond_width * 1.5,
                 )
                 items = [line_item]
-        elif bond.order == 2:
+        elif is_plain_double_bond_style(bond.style, bond.order):
+            variant = normalized_plain_double_style(bond.style, bond.order)
             ring_center = self.canvas._ring_center_for_bond(bond)
             if ring_center is not None:
                 ring_center_3d = self.canvas._ring_center_3d_for_bond(bond)
@@ -758,9 +963,23 @@ class BondRenderer:
                     bond.a,
                     bond.b,
                     center_3d=ring_center_3d,
+                    style=variant,
                 )
             else:
-                items = self.draw_parallel_bonds(a.x, a.y, b.x, b.y, bond.order, bond.a, bond.b)
+                outer_seg, inner_seg, _ = self.plain_double_segments(
+                    a.x,
+                    a.y,
+                    b.x,
+                    b.y,
+                    style=variant,
+                    a_id=bond.a,
+                    b_id=bond.b,
+                )
+                outer_item = NoSelectLineItem(*outer_seg)
+                outer_item.setPen(self.canvas.renderer.bond_pen())
+                inner_item = NoSelectLineItem(*inner_seg)
+                inner_item.setPen(self.canvas.renderer.bond_pen())
+                items = [outer_item, inner_item]
         elif bond.order >= 2:
             items = self.draw_parallel_bonds(a.x, a.y, b.x, b.y, bond.order, bond.a, bond.b)
         else:

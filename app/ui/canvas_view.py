@@ -74,6 +74,11 @@ from ui.bond_preview_renderer import (
     build_bond_preview_items as build_bond_preview_items_helper,
     update_bond_preview_items as update_bond_preview_items_helper,
 )
+from ui.bond_style_logic import (
+    STANDARD_BOND_STYLES,
+    cycle_plain_bond_style,
+    style_for_existing_bond_overlay,
+)
 from ui.bond_renderer import BondRenderer
 from ui.benzene_preview_renderer import (
     clear_benzene_preview as clear_benzene_preview_helper,
@@ -5110,8 +5115,14 @@ class CanvasView(QGraphicsView):
             if bond is None:
                 return None
             before_state = self._bond_state_dict(bond)
-            bond.style = style
-            bond.order = order
+            next_style, next_order = style_for_existing_bond_overlay(
+                bond.style,
+                bond.order,
+                style,
+                order,
+            )
+            bond.style = next_style
+            bond.order = next_order
             self._redraw_bond(existing_bond_id)
             self._redraw_connected_bonds(bond.a, skip_bond_id=existing_bond_id)
             self._redraw_connected_bonds(bond.b, skip_bond_id=existing_bond_id)
@@ -6105,7 +6116,7 @@ class CanvasView(QGraphicsView):
 
         def bond_rank(bond: Bond, bond_id: int) -> tuple[int, int, int]:
             order = int(bond.order or 1)
-            special_style = 1 if bond.style not in {"single", "double", "triple"} else 0
+            special_style = 1 if bond.style not in STANDARD_BOND_STYLES else 0
             return (order, special_style, -bond_id)
 
         pair_keep: dict[tuple[int, int], int] = {}
@@ -6934,10 +6945,9 @@ class CanvasView(QGraphicsView):
             return
         before_smiles_input = self.last_smiles_input
         before_state = self._bond_state_dict(bond)
-        cycle = ["single", "double", "triple"]
-        next_style = cycle[(cycle.index(bond.style) + 1) % len(cycle)] if bond.style in cycle else "single"
+        next_style, next_order = cycle_plain_bond_style(bond.style, bond.order)
         bond.style = next_style
-        bond.order = {"single": 1, "double": 2, "triple": 3}[next_style]
+        bond.order = next_order
         for item in self.bond_items.get(bond_id, []):
             self.scene().removeItem(item)
         self.bond_items[bond_id] = []

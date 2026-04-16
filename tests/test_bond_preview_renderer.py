@@ -277,6 +277,44 @@ class BondPreviewRendererTest(unittest.TestCase):
         self.assertIs(items, expected)
         draw_parallel.assert_called_once_with(-1.0, 0.0, 9.0, 0.0, 2, 5, 6)
 
+    def test_build_plain_double_preview_keeps_long_line_on_single_axis(self) -> None:
+        def _parallel_items(*_args):
+            return [
+                QGraphicsLineItem(0.0, -2.0, 10.0, -2.0),
+                QGraphicsLineItem(0.0, 2.0, 10.0, 2.0),
+            ]
+
+        resolvers = BondPreviewBuildResolvers(
+            draw_wedge_bond=mock.Mock(),
+            draw_hash_bond=mock.Mock(),
+            draw_parallel_bonds=mock.Mock(side_effect=_parallel_items),
+            line_normal=mock.Mock(),
+            one_sided_bond_strip=mock.Mock(),
+            bond_pen=mock.Mock(),
+        )
+
+        default_items = build_bond_preview_items(
+            QPointF(0.0, 0.0),
+            QPointF(10.0, 0.0),
+            config=_config(style="double", order=2),
+            a_id=None,
+            b_id=None,
+            resolvers=resolvers,
+        )
+        outer_items = build_bond_preview_items(
+            QPointF(0.0, 0.0),
+            QPointF(10.0, 0.0),
+            config=_config(style="double_outer", order=2),
+            a_id=None,
+            b_id=None,
+            resolvers=resolvers,
+        )
+
+        self.assertEqual((default_items[0].line().y1(), default_items[0].line().y2()), (0.0, 0.0))
+        self.assertEqual((default_items[1].line().y1(), default_items[1].line().y2()), (4.4, 4.4))
+        self.assertEqual((outer_items[0].line().y1(), outer_items[0].line().y2()), (0.0, 0.0))
+        self.assertEqual((outer_items[1].line().y1(), outer_items[1].line().y2()), (-4.4, -4.4))
+
     def test_update_returns_false_for_empty_items(self) -> None:
         updated = update_bond_preview_items(
             [],
@@ -478,6 +516,30 @@ class BondPreviewRendererTest(unittest.TestCase):
 
         self.assertTrue(updated)
         self.assertEqual((items[1].line().x1(), items[1].line().y1(), items[1].line().x2(), items[1].line().y2()), (0.0, 1.0, 10.0, 1.0))
+
+    def test_update_plain_double_preview_keeps_long_line_on_single_axis(self) -> None:
+        items = [QGraphicsLineItem(0.0, 0.0, 1.0, 0.0), QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)]
+        resolvers = BondPreviewUpdateResolvers(
+            wedge_polygon=lambda *args: QPolygonF([QPointF()]),
+            hash_segments=lambda *args: ((0.0, 0.0, 1.0, 0.0),),
+            parallel_bond_segments=lambda *args: ((0.0, -2.0, 10.0, -2.0), (0.0, 2.0, 10.0, 2.0)),
+            line_normal=lambda *args: (0.0, 1.0),
+            strip_polygon=lambda *args: QPolygonF([QPointF()]),
+        )
+
+        updated = update_bond_preview_items(
+            items,
+            QPointF(0.0, 0.0),
+            QPointF(10.0, 0.0),
+            config=_config(style="double", order=2),
+            a_id=None,
+            b_id=None,
+            resolvers=resolvers,
+        )
+
+        self.assertTrue(updated)
+        self.assertEqual((items[0].line().y1(), items[0].line().y2()), (0.0, 0.0))
+        self.assertEqual((items[1].line().y1(), items[1].line().y2()), (4.4, 4.4))
 
     def test_update_parallel_nonbold_preview_returns_false_for_non_line_item(self) -> None:
         updated = update_bond_preview_items(

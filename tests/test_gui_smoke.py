@@ -638,6 +638,44 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertEqual(self.window.canvas.tools.active.name, "bond")
         self.assertGreater(len(self.window.canvas.ring_items), ring_count_before)
 
+    def test_clicking_bond_cycles_double_variants_before_returning_to_single(self) -> None:
+        self.window.canvas.add_bond_from_points(QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
+        bond_id = next(i for i, bond in enumerate(self.window.canvas.model.bonds) if bond is not None)
+        midpoint = QPointF(0.0, 0.0)
+
+        self.window.canvas.set_bond_style("single", 1)
+        self._click_scene_point(midpoint)
+        bond = self.window.canvas.model.bonds[bond_id]
+        self.assertEqual((bond.style, bond.order), ("double", 2))
+
+        self._click_scene_point(midpoint)
+        bond = self.window.canvas.model.bonds[bond_id]
+        self.assertEqual((bond.style, bond.order), ("double_center", 2))
+
+        self._click_scene_point(midpoint)
+        bond = self.window.canvas.model.bonds[bond_id]
+        self.assertEqual((bond.style, bond.order), ("double_outer", 2))
+
+        self._click_scene_point(midpoint)
+        bond = self.window.canvas.model.bonds[bond_id]
+        self.assertEqual((bond.style, bond.order), ("single", 1))
+
+    def test_drawing_single_bond_over_existing_double_upgrades_it_to_triple(self) -> None:
+        self.window.canvas.add_bond_from_points(QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
+        bond_id = next(i for i, bond in enumerate(self.window.canvas.model.bonds) if bond is not None)
+        self.window.canvas.apply_bond_style(bond_id, "double", 2)
+        bond = self.window.canvas.model.bonds[bond_id]
+        self.assertEqual((bond.style, bond.order), ("double", 2))
+
+        atom_a = self.window.canvas.model.atoms[bond.a]
+        atom_b = self.window.canvas.model.atoms[bond.b]
+        self.window.canvas.set_bond_style("single", 1)
+        self._drag_scene_point(QPointF(atom_a.x, atom_a.y), QPointF(atom_b.x, atom_b.y))
+
+        bond = self.window.canvas.model.bonds[bond_id]
+        self.assertEqual((bond.style, bond.order), ("triple", 3))
+        self.assertEqual(len([entry for entry in self.window.canvas.model.bonds if entry is not None]), 1)
+
     def test_clicking_near_carbon_endpoint_prefers_atom_selection_over_bond(self) -> None:
         self.window.canvas.set_tool("select")
         self.window.canvas.add_bond_from_points(QPointF(0.0, 0.0), QPointF(20.0, 0.0))

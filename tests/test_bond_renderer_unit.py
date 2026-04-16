@@ -69,6 +69,7 @@ class _FakeCanvas:
         self._ring_center = None
         self._ring_center_3d = None
         self._normal = (0.0, 1.0)
+        self._atom_bond_ids: dict[int, set[int]] = {}
         self._scene = QGraphicsScene()
         self.selectable_items: list = []
         self.colored_items: list[tuple[object, QColor]] = []
@@ -173,6 +174,43 @@ class BondRendererUnitTest(unittest.TestCase):
             [(point.x(), point.y()) for point in polygon],
             [(0.0, -0.5), (10.0, -0.5), (10.0, 2.5), (0.0, 2.5)],
         )
+
+    def test_plain_double_segments_switch_which_side_is_shortened(self) -> None:
+        outer_default, inner_default, normal = self.renderer.plain_double_segments(
+            0.0,
+            0.0,
+            10.0,
+            0.0,
+            style="double",
+            a_id=0,
+            b_id=1,
+        )
+        outer_center, inner_center, _ = self.renderer.plain_double_segments(
+            0.0,
+            0.0,
+            10.0,
+            0.0,
+            style="double_center",
+            a_id=0,
+            b_id=1,
+        )
+        outer_outer, inner_outer, _ = self.renderer.plain_double_segments(
+            0.0,
+            0.0,
+            10.0,
+            0.0,
+            style="double_outer",
+            a_id=0,
+            b_id=1,
+        )
+
+        self.assertEqual(normal, (0.0, 1.0))
+        self.assertEqual(outer_default, (0.0, 0.0, 10.0, 0.0))
+        self.assertEqual(inner_default, (1.2, 4.4, 8.8, 4.4))
+        self.assertEqual(outer_center, (0.0, -2.2, 10.0, -2.2))
+        self.assertEqual(inner_center, (0.0, 2.2, 10.0, 2.2))
+        self.assertEqual(outer_outer, (0.0, 0.0, 10.0, 0.0))
+        self.assertEqual(inner_outer, (1.2, -4.4, 8.8, -4.4))
 
     def test_ring_double_segments_prefers_3d_projection_when_available(self) -> None:
         self.canvas._coords_3d = {
