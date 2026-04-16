@@ -68,6 +68,8 @@ class _FakeCanvas:
         self.model = SimpleNamespace(next_atom_id=0)
         self._scene_obj = object()
         self.renderer = _FakeRenderer(self)
+        self._projection_center_3d = "before-center"
+        self._projection_anchor_2d = "before-anchor"
 
     def scene(self):
         return self._scene_obj
@@ -205,6 +207,28 @@ class HistoryCommandTest(unittest.TestCase):
         self.assertIn(("set_atom_positions", {1: (2.0, 3.0)}, False), canvas.calls)
         self.assertIn(("set_ring_polygons", ["ring"], [[(0.0, 0.0)]]), canvas.calls)
         self.assertIn(("set_ring_polygons", ["ring"], [[(1.0, 1.0)]]), canvas.calls)
+
+    def test_set_atom_positions_command_restores_projection_state(self) -> None:
+        canvas = _FakeCanvas()
+        command = SetAtomPositionsCommand(
+            {1: (0.0, 0.0)},
+            {1: (2.0, 3.0)},
+            before_coords_3d={1: (0.0, 0.0, 0.0)},
+            after_coords_3d={1: (2.0, 3.0, 4.0)},
+            restore_projection_state=True,
+            before_projection_center_3d=None,
+            after_projection_center_3d=(5.0, 6.0, 7.0),
+            before_projection_anchor_2d=None,
+            after_projection_anchor_2d=(8.0, 9.0),
+        )
+
+        command.redo(canvas)
+        self.assertEqual(canvas._projection_center_3d, (5.0, 6.0, 7.0))
+        self.assertEqual(canvas._projection_anchor_2d, (8.0, 9.0))
+
+        command.undo(canvas)
+        self.assertIsNone(canvas._projection_center_3d)
+        self.assertIsNone(canvas._projection_anchor_2d)
 
     def test_update_commands_apply_length_color_scene_state_and_smiles(self) -> None:
         canvas = _FakeCanvas()

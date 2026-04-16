@@ -257,6 +257,8 @@ class CanvasView(QGraphicsView):
         self.rotation_center_3d: tuple[float, float, float] | None = None
         self._projection_center_3d: tuple[float, float, float] | None = None
         self._projection_anchor_2d: tuple[float, float] | None = None
+        self._rotation_start_projection_center_3d: tuple[float, float, float] | None = None
+        self._rotation_start_projection_anchor_2d: tuple[float, float] | None = None
         self._rotation_start_positions: dict[int, tuple[float, float]] = {}
         self._rotation_start_coords_3d: dict[int, tuple[float, float, float]] = {}
         self._rotation_coord_atom_ids: set[int] = set()
@@ -4223,6 +4225,8 @@ class CanvasView(QGraphicsView):
         axis_hint: int | None = None,
         press_pos: QPointF | None = None,
     ) -> bool:
+        start_projection_center_3d = self._projection_center_3d
+        start_projection_anchor_2d = self._projection_anchor_2d
         self._rotation_start_coords_3d = {}
         self._rotation_coord_atom_ids = set()
         atom_ids, bond_ids = self._selected_ids()
@@ -4300,6 +4304,8 @@ class CanvasView(QGraphicsView):
                 )
             else:
                 self._projection_anchor_2d = (axis_center[0], axis_center[1])
+            self._rotation_start_projection_center_3d = start_projection_center_3d
+            self._rotation_start_projection_anchor_2d = start_projection_anchor_2d
             scale_atom_ids = set(self.rotation_atom_ids)
             scale_atom_ids.update((axis_a, axis_b))
             self._rotation_base_bond_length = self._average_bond_length_for_atoms(
@@ -4353,6 +4359,8 @@ class CanvasView(QGraphicsView):
         self.rotation_center_3d = center
         self._projection_center_3d = center
         self._projection_anchor_2d = anchor_2d
+        self._rotation_start_projection_center_3d = start_projection_center_3d
+        self._rotation_start_projection_anchor_2d = start_projection_anchor_2d
         scale_atom_ids = set(self.rotation_atom_ids)
         self._rotation_base_bond_length = self._average_bond_length_for_atoms(
             scale_atom_ids,
@@ -4430,11 +4438,15 @@ class CanvasView(QGraphicsView):
         rotated_atoms = set(self.rotation_atom_ids)
         before_positions = dict(self._rotation_start_positions)
         before_coords_3d = dict(self._rotation_start_coords_3d)
+        before_projection_center_3d = self._rotation_start_projection_center_3d
+        before_projection_anchor_2d = self._rotation_start_projection_anchor_2d
         after_coords_3d = {
             atom_id: self.atom_coords_3d[atom_id]
             for atom_id in self._rotation_coord_atom_ids
             if atom_id in self.atom_coords_3d
         }
+        after_projection_center_3d = self._projection_center_3d
+        after_projection_anchor_2d = self._projection_anchor_2d
         self.rotation_atom_ids = set()
         self.rotation_center_3d = None
         self._rotation_base_coords = {}
@@ -4448,6 +4460,8 @@ class CanvasView(QGraphicsView):
         self._rotation_axis_atoms = None
         self._rotation_start_positions = {}
         self._rotation_start_coords_3d = {}
+        self._rotation_start_projection_center_3d = None
+        self._rotation_start_projection_anchor_2d = None
         self._rotation_coord_atom_ids = set()
         after_positions = {
             atom_id: (self.model.atoms[atom_id].x, self.model.atoms[atom_id].y)
@@ -4462,6 +4476,11 @@ class CanvasView(QGraphicsView):
                 after_positions=after_positions,
                 before_coords_3d=before_coords_3d or None,
                 after_coords_3d=after_coords_3d or None,
+                restore_projection_state=True,
+                before_projection_center_3d=before_projection_center_3d,
+                after_projection_center_3d=after_projection_center_3d,
+                before_projection_anchor_2d=before_projection_anchor_2d,
+                after_projection_anchor_2d=after_projection_anchor_2d,
             )
             self._push_command(command)
         if selection_ids is not None:
@@ -6388,6 +6407,8 @@ class CanvasView(QGraphicsView):
         self.atom_coords_3d = {}
         self._projection_center_3d = None
         self._projection_anchor_2d = None
+        self._rotation_start_projection_center_3d = None
+        self._rotation_start_projection_anchor_2d = None
         self._rotation_axis_bond_id = None
         self._rotation_axis_atoms = None
         self._rotation_total_angle = 0.0
