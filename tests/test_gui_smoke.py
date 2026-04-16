@@ -1738,6 +1738,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
         self.window.canvas.undo()
 
+        self.assertIsNone(self.window.canvas._projection_center_3d)
+        self.assertIsNone(self.window.canvas._projection_anchor_2d)
+
         for atom_id in ring_atom_ids:
             atom = self.window.canvas.model.atoms[atom_id]
             before_x, before_y = before_positions[atom_id]
@@ -1752,6 +1755,77 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             self.assertAlmostEqual(coords[0], before_coord[0])
             self.assertAlmostEqual(coords[1], before_coord[1])
             self.assertAlmostEqual(coords[2], before_coord[2])
+
+    def test_undo_second_perspective_rotation_restores_previous_projection_for_multi_ring_molecule(self) -> None:
+        ring_centers = [QPointF(-120.0, 0.0), QPointF(120.0, -100.0), QPointF(120.0, 100.0)]
+        for center in ring_centers:
+            self.window.canvas.add_benzene_ring(center)
+        ring_items = list(self.window.canvas.ring_items)
+
+        p_id = self.window.canvas.add_atom("P", 0.0, 0.0)
+        for ring_item in ring_items:
+            ring_atom_ids = ring_item.data(2)
+            self.assertIsInstance(ring_atom_ids, list)
+            assert isinstance(ring_atom_ids, list)
+            attach_atom_id = min(
+                ring_atom_ids,
+                key=lambda atom_id: math.hypot(
+                    self.window.canvas.model.atoms[atom_id].x,
+                    self.window.canvas.model.atoms[atom_id].y,
+                ),
+            )
+            self.window.canvas.add_bond(p_id, attach_atom_id, 1)
+        self.window.canvas._render_model()
+
+        self._select_atom_ids(*sorted(self.window.canvas.model.atoms))
+
+        rotating = self.window.canvas.begin_selection_3d_rotation(
+            press_pos=QPointF(0.0, 20.0),
+        )
+        self.assertTrue(rotating)
+        self.window.canvas.update_selection_3d_rotation(240.0, 120.0)
+        self.window.canvas.end_selection_3d_rotation()
+
+        before_projection_center = self.window.canvas._projection_center_3d
+        before_projection_anchor = self.window.canvas._projection_anchor_2d
+        self.assertIsNotNone(before_projection_center)
+        self.assertIsNotNone(before_projection_anchor)
+
+        tracked_segments: dict[int, list[tuple[float, float, float, float]]] = {}
+        for ring_item in ring_items:
+            self._assert_ring_double_bonds_face_inward(ring_item)
+            ring_atom_ids = ring_item.data(2)
+            assert isinstance(ring_atom_ids, list)
+            for index, atom_a in enumerate(ring_atom_ids):
+                atom_b = ring_atom_ids[(index + 1) % len(ring_atom_ids)]
+                bond_id = self.window.canvas._bond_id_between(atom_a, atom_b)
+                self.assertIsNotNone(bond_id)
+                assert bond_id is not None
+                bond = self.window.canvas.model.bonds[bond_id]
+                self.assertIsNotNone(bond)
+                assert bond is not None
+                if bond.order == 2:
+                    tracked_segments[bond_id] = self._bond_scene_segments(bond_id)
+
+        rotating = self.window.canvas.begin_selection_3d_rotation(
+            press_pos=QPointF(0.0, 20.0),
+        )
+        self.assertTrue(rotating)
+        self.window.canvas.update_selection_3d_rotation(-200.0, 180.0)
+        self.window.canvas.end_selection_3d_rotation()
+
+        self.window.canvas.undo()
+
+        self.assertEqual(self.window.canvas._projection_center_3d, before_projection_center)
+        self.assertEqual(self.window.canvas._projection_anchor_2d, before_projection_anchor)
+        for ring_item in ring_items:
+            self._assert_ring_double_bonds_face_inward(ring_item)
+        for bond_id, before_segments in tracked_segments.items():
+            after_segments = self._bond_scene_segments(bond_id)
+            self.assertEqual(len(after_segments), len(before_segments))
+            for after_segment, before_segment in zip(after_segments, before_segments):
+                for after_value, before_value in zip(after_segment, before_segment):
+                    self.assertAlmostEqual(after_value, before_value)
 
     def test_perspective_rotation_on_selected_bond_chooses_clicked_side(self) -> None:
         left_id = self.window.canvas.add_atom("C", -80.0, 0.0)

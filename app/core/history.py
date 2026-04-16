@@ -85,13 +85,25 @@ class SetAtomPositionsCommand(HistoryCommand):
     update_selection: bool = True
     before_coords_3d: dict[int, tuple[float, float, float]] | None = None
     after_coords_3d: dict[int, tuple[float, float, float]] | None = None
+    restore_projection_state: bool = False
+    before_projection_center_3d: tuple[float, float, float] | None = None
+    after_projection_center_3d: tuple[float, float, float] | None = None
+    before_projection_anchor_2d: tuple[float, float] | None = None
+    after_projection_anchor_2d: tuple[float, float] | None = None
 
     def _apply(
         self,
         canvas,
         positions: dict[int, tuple[float, float]],
         coords_3d: dict[int, tuple[float, float, float]] | None,
+        projection_center_3d: tuple[float, float, float] | None,
+        projection_anchor_2d: tuple[float, float] | None,
     ) -> None:
+        if self.restore_projection_state:
+            if hasattr(canvas, "_projection_center_3d"):
+                canvas._projection_center_3d = projection_center_3d
+            if hasattr(canvas, "_projection_anchor_2d"):
+                canvas._projection_anchor_2d = projection_anchor_2d
         if coords_3d is None:
             canvas.set_atom_positions(positions, update_selection=self.update_selection)
             return
@@ -105,10 +117,22 @@ class SetAtomPositionsCommand(HistoryCommand):
             canvas.set_atom_positions(positions, update_selection=self.update_selection)
 
     def undo(self, canvas) -> None:
-        self._apply(canvas, self.before_positions, self.before_coords_3d)
+        self._apply(
+            canvas,
+            self.before_positions,
+            self.before_coords_3d,
+            self.before_projection_center_3d,
+            self.before_projection_anchor_2d,
+        )
 
     def redo(self, canvas) -> None:
-        self._apply(canvas, self.after_positions, self.after_coords_3d)
+        self._apply(
+            canvas,
+            self.after_positions,
+            self.after_coords_3d,
+            self.after_projection_center_3d,
+            self.after_projection_anchor_2d,
+        )
 
 
 @dataclass
