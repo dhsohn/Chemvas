@@ -22,7 +22,7 @@ from ui.bond_style_logic import (
     PLAIN_DOUBLE_STYLES,
     normalized_plain_double_style,
 )
-from ui.graphics_items import NoSelectLineItem, NoSelectPathItem
+from ui.graphics_items import NoSelectLineItem
 
 
 LineSegment = tuple[float, float, float, float]
