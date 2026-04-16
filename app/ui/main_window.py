@@ -570,6 +570,13 @@ class MainWindow(QMainWindow):
             lambda: (self._set_tool_with_status("bond", reset_bond_style=False), self._set_bond_style("Hash"))
         )
         tool_group.addAction(action_hash)
+        action_dotted = QAction("Dotted Bond", self)
+        action_dotted.setCheckable(True)
+        action_dotted.setIcon(self._icon_bond_dotted())
+        action_dotted.triggered.connect(
+            lambda: (self._set_tool_with_status("bond", reset_bond_style=False), self._set_bond_style("Dotted"))
+        )
+        tool_group.addAction(action_dotted)
         action_mark_plus = QAction("Charge +", self)
         action_mark_plus.setCheckable(True)
         action_mark_plus.setIcon(self._icon_mark_plus())
@@ -597,6 +604,7 @@ class MainWindow(QMainWindow):
             "bond_bold": action_bond_bold,
             "bond_wedge": action_wedge,
             "bond_hash": action_hash,
+            "bond_dotted": action_dotted,
             "text": action_text,
             "mark_plus": action_mark_plus,
             "mark_minus": action_mark_minus,
@@ -624,6 +632,7 @@ class MainWindow(QMainWindow):
         action_bond_bold.setToolTip("Bold Bond (Bond Hotkey: B)")
         action_wedge.setToolTip("Wedge Bond (Bond Hotkey: W)")
         action_hash.setToolTip("Hash Bond (Bond Hotkey: Shift+H)")
+        action_dotted.setToolTip("Dotted Bond")
         action_mark_plus.setToolTip("Charge + (Atom Hotkey: +)")
         action_mark_minus.setToolTip("Charge - (Atom Hotkey: -)")
         action_mark_radical.setToolTip("Radical")
@@ -634,6 +643,7 @@ class MainWindow(QMainWindow):
         left_bar.addAction(action_bond_bold)
         left_bar.addAction(action_wedge)
         left_bar.addAction(action_hash)
+        left_bar.addAction(action_dotted)
         left_bar.addAction(action_text)
         left_bar.addAction(action_mark_plus)
         left_bar.addAction(action_mark_minus)
@@ -1126,6 +1136,14 @@ class MainWindow(QMainWindow):
                 hx = nx * size / 2.0
                 hy = ny * size / 2.0
                 p.drawLine(QPointF(cx - hx, cy - hy), QPointF(cx + hx, cy + hy))
+        return self._make_icon(draw)
+
+    def _icon_bond_dotted(self) -> QIcon:
+        def draw(p):
+            pen = self.canvas.renderer.dotted_bond_pen()
+            pen.setColor(QColor("#3d3229"))
+            p.setPen(pen)
+            p.drawLine(5, 15, 25, 15)
         return self._make_icon(draw)
 
     def _icon_bond_length(self) -> QIcon:
@@ -1893,6 +1911,7 @@ class MainWindow(QMainWindow):
             "Bold": ("bold_in", 1),
             "Wedge": ("wedge", 1),
             "Hash": ("hash", 1),
+            "Dotted": ("dotted", 1),
         }
         style, order = mapping.get(value, ("single", 1))
         self.canvas.set_bond_style(style, order)
@@ -1922,6 +1941,8 @@ class MainWindow(QMainWindow):
                 action = self._tool_actions.get("bond_wedge")
             elif self.canvas.active_bond_style == "hash":
                 action = self._tool_actions.get("bond_hash")
+            elif self.canvas.active_bond_style == "dotted":
+                action = self._tool_actions.get("bond_dotted")
             else:
                 action = self._tool_actions.get("bond")
         elif active == "mark":

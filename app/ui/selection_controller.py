@@ -370,11 +370,14 @@ class SelectionController:
             bond_path.addPolygon(item.mapToScene(item.polygon()))
             return bond_path
         if isinstance(item, QGraphicsPathItem):
+            mapped_path = item.sceneTransform().map(item.path())
+            if item.pen().style() == Qt.PenStyle.NoPen and item.brush().style() != Qt.BrushStyle.NoBrush:
+                return mapped_path
             stroker = QPainterPathStroker()
             stroker.setWidth(width if width is not None else self.canvas._selection_bond_overlay_width(item.pen()))
             stroker.setCapStyle(Qt.PenCapStyle.RoundCap)
             stroker.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-            return stroker.createStroke(item.sceneTransform().map(item.path()))
+            return stroker.createStroke(mapped_path)
         return QPainterPath()
 
     def _selection_path_for_bond(self, bond_id: int) -> QPainterPath:

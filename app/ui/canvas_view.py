@@ -3369,16 +3369,19 @@ class CanvasView(QGraphicsView):
         return BondPreviewBuildResolvers(
             draw_wedge_bond=self._draw_wedge_bond,
             draw_hash_bond=self._draw_hash_bond,
+            draw_dotted_bond=self._draw_dotted_bond,
             draw_parallel_bonds=self._draw_parallel_bonds,
             line_normal=self._line_normal,
             one_sided_bond_strip=self._one_sided_bond_strip,
             bond_pen=self.renderer.bond_pen,
+            dotted_bond_pen=self.renderer.dotted_bond_pen,
         )
 
     def _bond_preview_update_resolvers(self) -> BondPreviewUpdateResolvers:
         return BondPreviewUpdateResolvers(
             wedge_polygon=self._wedge_polygon,
             hash_segments=self._hash_segments,
+            dotted_bond_path=self._dotted_bond_path,
             parallel_bond_segments=self._parallel_bond_segments,
             line_normal=self._line_normal,
             strip_polygon=self._strip_polygon,
@@ -7332,6 +7335,28 @@ class CanvasView(QGraphicsView):
         b_id: int | None = None,
     ):
         return self._bond_renderer.draw_hash_bond(x1, y1, x2, y2, a_id, b_id)
+
+    def _draw_dotted_bond(
+        self,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        a_id: int | None = None,
+        b_id: int | None = None,
+    ):
+        return self._bond_renderer.draw_dotted_bond(x1, y1, x2, y2, a_id, b_id)
+
+    def _dotted_bond_path(
+        self,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        a_id: int | None = None,
+        b_id: int | None = None,
+    ):
+        return self._bond_renderer.dotted_bond_path(x1, y1, x2, y2, a_id, b_id)
 
     def _apply_color_to_bond_item(self, item, color: QColor) -> None:
         if hasattr(item, "setPen"):

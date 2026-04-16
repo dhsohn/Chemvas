@@ -19,6 +19,7 @@ from ui.bond_preview_renderer import (
     add_bond_preview_items as add_bond_preview_items_helper,
     clear_bond_preview_items as clear_bond_preview_items_helper,
 )
+from ui.bond_style_logic import style_for_existing_bond_overlay
 from ui.selection_press_logic import SelectionPressContext, plan_selection_press
 
 
@@ -368,6 +369,36 @@ class BondTool(Tool):
         self._preview_items = add_bond_preview_items_helper(self.canvas.scene(), items)
         self._preview_signature = signature
 
+    def _apply_active_style_to_bond(self, bond_id: int) -> bool:
+        if not (0 <= bond_id < len(self.canvas.model.bonds)):
+            return False
+        bond = self.canvas.model.bonds[bond_id]
+        if bond is None:
+            return False
+        if self.canvas.active_bond_style in {"wedge", "hash"}:
+            self.canvas.apply_bond_style(bond_id, self.canvas.active_bond_style, 1)
+            return True
+        if self.canvas.active_bond_style in {"bold", "bold_in", "bold_out"}:
+            if bond.style in {"bold_in", "bold"}:
+                next_style = "bold_out"
+            elif bond.style == "bold_out":
+                next_style = "bold_in"
+            else:
+                next_style = "bold_in"
+            self.canvas.apply_bond_style(bond_id, next_style, bond.order)
+            return True
+        if self.canvas.active_bond_style == "dotted":
+            next_style, next_order = style_for_existing_bond_overlay(
+                bond.style,
+                bond.order,
+                "dotted",
+                1,
+            )
+            self.canvas.apply_bond_style(bond_id, next_style, next_order)
+            return True
+        self.canvas.cycle_bond_style(bond_id)
+        return True
+
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
             return False
@@ -379,40 +410,21 @@ class BondTool(Tool):
         )
         if atom_id is None:
             item = self.canvas.item_at_event(event)
+            if item is None and hasattr(self.canvas, "preferred_structure_item_at_scene_pos"):
+                item = self.canvas.preferred_structure_item_at_scene_pos(press_pos)
             if item is not None and item.data(0) == "bond":
                 bond_id = item.data(1)
                 if isinstance(bond_id, int):
-                    if self.canvas.active_bond_style in {"wedge", "hash"}:
-                        self.canvas.apply_bond_style(bond_id, self.canvas.active_bond_style, 1)
-                    elif self.canvas.active_bond_style in {"bold", "bold_in", "bold_out"}:
-                        bond = self.canvas.model.bonds[bond_id]
-                        if bond is not None:
-                            if bond.style in {"bold_in", "bold"}:
-                                next_style = "bold_out"
-                            elif bond.style == "bold_out":
-                                next_style = "bold_in"
-                            else:
-                                next_style = "bold_in"
-                            self.canvas.apply_bond_style(bond_id, next_style, bond.order)
-                    else:
-                        self.canvas.cycle_bond_style(bond_id)
-                    return True
+                    return self._apply_active_style_to_bond(bond_id)
+            if hasattr(self.canvas, "_find_bond_near"):
+                bond_id = self.canvas._find_bond_near(
+                    press_pos,
+                    self.canvas.renderer.style.bond_length_px * 0.35,
+                )
+                if isinstance(bond_id, int):
+                    return self._apply_active_style_to_bond(bond_id)
             if self.canvas.hover_bond_id is not None:
-                if self.canvas.active_bond_style in {"wedge", "hash"}:
-                    self.canvas.apply_bond_style(self.canvas.hover_bond_id, self.canvas.active_bond_style, 1)
-                elif self.canvas.active_bond_style in {"bold", "bold_in", "bold_out"}:
-                    bond = self.canvas.model.bonds[self.canvas.hover_bond_id]
-                    if bond is not None:
-                        if bond.style in {"bold_in", "bold"}:
-                            next_style = "bold_out"
-                        elif bond.style == "bold_out":
-                            next_style = "bold_in"
-                        else:
-                            next_style = "bold_in"
-                        self.canvas.apply_bond_style(self.canvas.hover_bond_id, next_style, bond.order)
-                else:
-                    self.canvas.cycle_bond_style(self.canvas.hover_bond_id)
-                return True
+                return self._apply_active_style_to_bond(self.canvas.hover_bond_id)
         self._press_scene_pos = press_pos
         self._start_pos = self._snap_to_atom(self._press_scene_pos)
         self._set_preview_items(self._start_pos, self._start_pos)
