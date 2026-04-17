@@ -17,6 +17,7 @@ from core.history import (
     SetAtomPositionsCommand,
     UpdateSceneItemCommand,
 )
+from ui.bond_style_logic import cycle_plain_bond_style
 from ui.scene_item_state import ARROW_KINDS
 
 if TYPE_CHECKING:
@@ -26,6 +27,93 @@ if TYPE_CHECKING:
 class SceneOpsController:
     def __init__(self, canvas: CanvasView) -> None:
         self.canvas = canvas
+
+    def _rebuild_bond_graphics(self, bond_id: int, *, redraw_connected: bool) -> None:
+        bond = self.canvas.model.bonds[bond_id]
+        if bond is None:
+            return
+        for item in self.canvas.bond_items.get(bond_id, []):
+            self.canvas.scene().removeItem(item)
+        self.canvas.bond_items[bond_id] = []
+        self.canvas._add_bond_graphics(bond_id)
+        if redraw_connected:
+            self.canvas._redraw_connected_bonds(bond.a, skip_bond_id=bond_id)
+            self.canvas._redraw_connected_bonds(bond.b, skip_bond_id=bond_id)
+
+    def delete_atom(self, atom_id: int, record: bool = True) -> HistoryCommand | None:
+        if not isinstance(atom_id, int):
+            return None
+        bonds_to_remove = [
+            i for i, bond in enumerate(self.canvas.model.bonds)
+            if bond is not None and (bond.a == atom_id or bond.b == atom_id)
+        ]
+        before_smiles_input = self.canvas.last_smiles_input
+        self.canvas.last_smiles_input = None
+        mark_states = [self.canvas._mark_state_dict(mark) for mark in self.canvas._marks_by_atom.get(atom_id, [])]
+        atom_state = self.canvas._atom_state_dict(atom_id)
+        commands: list[HistoryCommand] = []
+        for bond_id in sorted(bonds_to_remove, reverse=True):
+            bond = self.canvas.model.bonds[bond_id]
+            if bond is None:
+                continue
+            bond_state = self.canvas._bond_state_dict(bond)
+            self.canvas._remove_bond_by_id(bond_id)
+            self.canvas._redraw_connected_bonds(bond.a)
+            self.canvas._redraw_connected_bonds(bond.b)
+            commands.append(
+                DeleteBondCommand(
+                    bond_id=bond_id,
+                    bond_state=bond_state,
+                    before_smiles_input=before_smiles_input,
+                    after_smiles_input=self.canvas.last_smiles_input,
+                )
+            )
+        before_next_atom_id = self.canvas.model.next_atom_id
+        self.canvas._remove_atom_only(atom_id)
+        commands.append(
+            DeleteAtomsCommand(
+                atom_states={atom_id: atom_state},
+                mark_states=mark_states,
+                before_next_atom_id=before_next_atom_id,
+                after_next_atom_id=self.canvas.model.next_atom_id,
+                before_smiles_input=before_smiles_input,
+                after_smiles_input=self.canvas.last_smiles_input,
+            )
+        )
+        command: HistoryCommand = commands[0] if len(commands) == 1 else CompositeCommand(commands)
+        if record:
+            self.canvas._push_command(command)
+        return command
+
+    def delete_bond(self, bond_id: int, record: bool = True) -> HistoryCommand | None:
+        if not (0 <= bond_id < len(self.canvas.model.bonds)):
+            return None
+        bond = self.canvas.model.bonds[bond_id]
+        if bond is None:
+            return None
+        before_smiles_input = self.canvas.last_smiles_input
+        bond_state = self.canvas._bond_state_dict(bond)
+        self.canvas.last_smiles_input = None
+        self.canvas._remove_bond_by_id(bond_id)
+        self.canvas._redraw_connected_bonds(bond.a)
+        self.canvas._redraw_connected_bonds(bond.b)
+        command = DeleteBondCommand(
+            bond_id=bond_id,
+            bond_state=bond_state,
+            before_smiles_input=before_smiles_input,
+            after_smiles_input=self.canvas.last_smiles_input,
+        )
+        if record:
+            self.canvas._push_command(command)
+        return command
+
+    def delete_ring(self, item: QGraphicsPolygonItem, record: bool = True) -> HistoryCommand | None:
+        state = self.canvas._ring_state_dict(item)
+        command = DeleteSceneItemsCommand(item_states=[state], items=[item])
+        self.canvas.remove_scene_item(item)
+        if record:
+            self.canvas._push_command(command)
+        return command
 
     def delete_selected_items(self) -> bool:
         items = self.canvas.scene().selectedItems()
@@ -82,7 +170,7 @@ class SceneOpsController:
         ):
             bond_id = next(iter(bond_ids))
             if 0 <= bond_id < len(self.canvas.model.bonds) and self.canvas.model.bonds[bond_id] is not None:
-                self.canvas.delete_bond(bond_id, record=True)
+                self.delete_bond(bond_id, record=True)
                 return True
 
         bonds_to_remove = set(bond_ids)
@@ -169,6 +257,68 @@ class SceneOpsController:
             return True
         self.canvas._push_command(CompositeCommand(commands))
         return True
+
+    def flip_bond_direction(self, bond_id: int) -> None:
+        if not (0 <= bond_id < len(self.canvas.model.bonds)):
+            return
+        bond = self.canvas.model.bonds[bond_id]
+        if bond is None:
+            return
+        if bond.style not in {"wedge", "hash"}:
+            return
+        before_smiles_input = self.canvas.last_smiles_input
+        before_state = self.canvas._bond_state_dict(bond)
+        bond.a, bond.b = bond.b, bond.a
+        self._rebuild_bond_graphics(bond_id, redraw_connected=True)
+        after_state = self.canvas._bond_state_dict(bond)
+        self.canvas._record_bond_update(
+            bond_id,
+            before_state,
+            after_state,
+            before_smiles_input,
+            self.canvas.last_smiles_input,
+        )
+
+    def apply_bond_style(self, bond_id: int, style: str, order: int) -> None:
+        if not (0 <= bond_id < len(self.canvas.model.bonds)):
+            return
+        bond = self.canvas.model.bonds[bond_id]
+        if bond is None:
+            return
+        before_smiles_input = self.canvas.last_smiles_input
+        before_state = self.canvas._bond_state_dict(bond)
+        bond.style = style
+        bond.order = order
+        self._rebuild_bond_graphics(bond_id, redraw_connected=True)
+        after_state = self.canvas._bond_state_dict(bond)
+        self.canvas._record_bond_update(
+            bond_id,
+            before_state,
+            after_state,
+            before_smiles_input,
+            self.canvas.last_smiles_input,
+        )
+
+    def cycle_bond_style(self, bond_id: int) -> None:
+        if not (0 <= bond_id < len(self.canvas.model.bonds)):
+            return
+        bond = self.canvas.model.bonds[bond_id]
+        if bond is None:
+            return
+        before_smiles_input = self.canvas.last_smiles_input
+        before_state = self.canvas._bond_state_dict(bond)
+        next_style, next_order = cycle_plain_bond_style(bond.style, bond.order)
+        bond.style = next_style
+        bond.order = next_order
+        self._rebuild_bond_graphics(bond_id, redraw_connected=False)
+        after_state = self.canvas._bond_state_dict(bond)
+        self.canvas._record_bond_update(
+            bond_id,
+            before_state,
+            after_state,
+            before_smiles_input,
+            self.canvas.last_smiles_input,
+        )
 
     def _flip_bounds_for_item(self, item) -> QRectF | None:
         kind = item.data(0)

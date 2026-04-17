@@ -10,10 +10,11 @@ from PyQt6.QtWidgets import (
     QGraphicsLineItem,
     QGraphicsPathItem,
     QGraphicsPolygonItem,
+    QGraphicsRectItem,
     QGraphicsTextItem,
 )
 
-from ui.graphics_items import NoSelectEllipseItem, NoSelectPathItem
+from ui.graphics_items import NoSelectEllipseItem, NoSelectPathItem, NoSelectRectItem
 from ui.selection_hit_logic import (
     AtomHitCandidate,
     BondHitCandidate,
@@ -193,6 +194,110 @@ class SelectionController:
         if hit.kind in {"atom", "bond"}:
             return self._structure_item_for_hit(hit)
         return self.canvas.item_at_scene_pos(pos)
+
+    def select_structure_for_item(self, item) -> bool:
+        if item is None:
+            return False
+        kind = item.data(0)
+        atom_ids: set[int] = set()
+        if kind == "atom":
+            atom_id = item.data(1)
+            if isinstance(atom_id, int) and atom_id in self.canvas.model.atoms:
+                atom_ids = self.canvas._expand_connected_atoms({atom_id})
+        elif kind == "bond":
+            bond_id = item.data(1)
+            if isinstance(bond_id, int) and 0 <= bond_id < len(self.canvas.model.bonds):
+                bond = self.canvas.model.bonds[bond_id]
+                if bond is not None:
+                    atom_ids = self.canvas._expand_connected_atoms({bond.a, bond.b})
+        elif kind == "ring":
+            ring_atom_ids = item.data(2)
+            if isinstance(ring_atom_ids, list):
+                atom_ids = self.canvas._expand_connected_atoms(
+                    {atom_id for atom_id in ring_atom_ids if atom_id in self.canvas.model.atoms}
+                )
+        elif kind in {
+            "arrow",
+            "equilibrium",
+            "resonance",
+            "curved_single",
+            "curved_double",
+            "inhibit",
+            "dotted",
+            "ts_bracket",
+            "orbital",
+            "note",
+            "mark",
+        }:
+            self.canvas.scene().clearSelection()
+            item.setSelected(True)
+            return True
+        if not atom_ids:
+            return False
+        self.canvas.scene().clearSelection()
+        for atom_id in atom_ids:
+            atom_item = self.canvas.atom_items.get(atom_id) or self.canvas.atom_dots.get(atom_id)
+            if atom_item is not None:
+                atom_item.setSelected(True)
+        for bond_id, bond in enumerate(self.canvas.model.bonds):
+            if bond is None:
+                continue
+            if bond.a not in atom_ids or bond.b not in atom_ids:
+                continue
+            for bond_item in self.canvas.bond_items.get(bond_id, []):
+                bond_item.setSelected(True)
+        for ring_item in self.canvas.ring_items:
+            ring_atom_ids = ring_item.data(2)
+            if isinstance(ring_atom_ids, list) and all(atom_id in atom_ids for atom_id in ring_atom_ids):
+                ring_item.setSelected(True)
+        self.canvas._update_selection_outline()
+        return True
+
+    def select_note(self, item: QGraphicsTextItem, additive: bool = False) -> None:
+        if not additive:
+            self.canvas.clear_note_selection()
+        if item not in self.canvas.selected_notes:
+            self.canvas.selected_notes.append(item)
+        self.canvas._update_note_selection_box(item)
+
+    def toggle_note_selection(self, item: QGraphicsTextItem) -> None:
+        if item in self.canvas.selected_notes:
+            self.canvas.selected_notes.remove(item)
+        else:
+            self.canvas.selected_notes.append(item)
+        self.canvas._update_note_selection_box(item)
+
+    def clear_note_selection(self) -> None:
+        notes = list(self.canvas.selected_notes)
+        self.canvas.selected_notes = []
+        for note in notes:
+            self.canvas._update_note_selection_box(note)
+
+    def update_note_selection_box(self, item: QGraphicsTextItem) -> None:
+        sel = item.data(21)
+        rect = item.boundingRect().adjusted(
+            -self.canvas.note_padding,
+            -self.canvas.note_padding,
+            self.canvas.note_padding,
+            self.canvas.note_padding,
+        )
+        selected = item in self.canvas.selected_notes
+        if not selected:
+            if isinstance(sel, QGraphicsRectItem):
+                sel.setVisible(False)
+            return
+        if not isinstance(sel, QGraphicsRectItem):
+            sel = NoSelectRectItem(item)
+            sel.setData(0, "note_select")
+            sel.setZValue(1)
+            item.setData(21, sel)
+        sel.setVisible(True)
+        sel.setRect(rect)
+        pen = QPen(self.canvas._selection_color)
+        pen.setWidthF(self.canvas._selection_stroke_delta)
+        pen.setStyle(Qt.PenStyle.DashLine)
+        sel.setPen(pen)
+        sel.setBrush(QBrush(Qt.BrushStyle.NoBrush))
 
     def _selection_rects_for_snapshot(
         self,

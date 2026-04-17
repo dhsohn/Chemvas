@@ -1,0 +1,213 @@
+import sys
+import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
+
+from PyQt6.QtCore import QPointF
+
+
+ROOT = Path(__file__).resolve().parents[1]
+APP_ROOT = ROOT / "app"
+if str(APP_ROOT) not in sys.path:
+    sys.path.insert(0, str(APP_ROOT))
+
+from core.model import Atom, Bond, MoleculeModel
+from ui.structure_insert_service import StructureInsertService
+
+
+def _point_tuple(point: QPointF) -> tuple[float, float]:
+    return (point.x(), point.y())
+
+
+class _FakeRect:
+    def __init__(self, center: QPointF) -> None:
+        self._center = center
+
+    def center(self) -> QPointF:
+        return self._center
+
+
+class _FakeViewport:
+    def __init__(self, center: QPointF) -> None:
+        self._center = center
+
+    def rect(self) -> _FakeRect:
+        return _FakeRect(self._center)
+
+
+class _FakeCanvas:
+    def __init__(self) -> None:
+        self.model = MoleculeModel()
+        self.last_smiles_input = "before"
+        self.renderer = SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0))
+        self._viewport_center = QPointF(60.0, 40.0)
+
+        self._record_additions = Mock()
+        self._restore_selection_from_ids = Mock()
+
+        self.add_bond_graphics_calls: list[int] = []
+        self.ensure_carbon_dot_calls: list[int] = []
+        self.atom_label_calls: list[tuple[int, str, bool, bool]] = []
+        self.add_text_note_calls: list[tuple[QPointF, str]] = []
+
+    def viewport(self) -> _FakeViewport:
+        return _FakeViewport(self._viewport_center)
+
+    def mapToScene(self, point: QPointF) -> QPointF:
+        return QPointF(point.x(), point.y())
+
+    def add_atom(self, element: str, x: float, y: float) -> int:
+        return self.model.add_atom(element, x, y)
+
+    def add_bond(self, a_id: int, b_id: int, order: int = 1) -> int:
+        self.model.add_bond(a_id, b_id, order)
+        return len(self.model.bonds) - 1
+
+    def _add_bond_graphics(self, bond_id: int) -> None:
+        self.add_bond_graphics_calls.append(bond_id)
+
+    def _ensure_carbon_dot(self, atom_id: int) -> None:
+        self.ensure_carbon_dot_calls.append(atom_id)
+
+    def add_or_update_atom_label(
+        self,
+        atom_id: int,
+        text: str,
+        *,
+        clear_smiles: bool = True,
+        record: bool = True,
+    ) -> None:
+        self.atom_label_calls.append((atom_id, text, clear_smiles, record))
+
+    def add_text_note(self, pos: QPointF, text: str):
+        self.add_text_note_calls.append((QPointF(pos.x(), pos.y()), text))
+        return {"kind": "note", "text": text, "pos": _point_tuple(pos)}
+
+
+class StructureInsertServiceTest(unittest.TestCase):
+    def test_insert_structure_model_is_no_op_for_empty_model(self) -> None:
+        canvas = _FakeCanvas()
+        service = StructureInsertService(canvas)
+
+        inserted_atom_ids, inserted_bond_ids = service.insert_structure_model(MoleculeModel())
+
+        self.assertEqual(inserted_atom_ids, set())
+        self.assertEqual(inserted_bond_ids, set())
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertEqual(canvas.model.bonds, [])
+        canvas._record_additions.assert_not_called()
+        canvas._restore_selection_from_ids.assert_not_called()
+
+    def test_insert_structure_model_recenters_atoms_and_adds_bond_graphics(self) -> None:
+        canvas = _FakeCanvas()
+        existing_atom_id = canvas.model.add_atom("N", -20.0, -10.0)
+        canvas.model.atoms[existing_atom_id].explicit_label = True
+        canvas.model.add_bond(existing_atom_id, existing_atom_id, 1)
+        service = StructureInsertService(canvas)
+        model = MoleculeModel(
+            atoms={
+                5: Atom("C", 10.0, 10.0, color="#112233", explicit_label=False),
+                9: Atom("O", 14.0, 10.0, color="#445566", explicit_label=True),
+            },
+            bonds=[Bond(5, 9, order=2, style="double", color="#778899")],
+        )
+
+        inserted_atom_ids, inserted_bond_ids = service.insert_structure_model(
+            model,
+            center=QPointF(40.0, 30.0),
+        )
+
+        self.assertEqual(inserted_atom_ids, {1, 2})
+        self.assertEqual(inserted_bond_ids, {1})
+        self.assertEqual((canvas.model.atoms[1].x, canvas.model.atoms[1].y), (38.0, 30.0))
+        self.assertEqual((canvas.model.atoms[2].x, canvas.model.atoms[2].y), (42.0, 30.0))
+        self.assertEqual(canvas.model.atoms[1].color, "#112233")
+        self.assertFalse(canvas.model.atoms[1].explicit_label)
+        self.assertEqual(canvas.model.atoms[2].color, "#445566")
+        self.assertTrue(canvas.model.atoms[2].explicit_label)
+        self.assertEqual(len(canvas.model.bonds), 2)
+        self.assertEqual(canvas.model.bonds[1].order, 2)
+        self.assertEqual(canvas.model.bonds[1].style, "double")
+        self.assertEqual(canvas.model.bonds[1].color, "#778899")
+        self.assertEqual(canvas.add_bond_graphics_calls, [1])
+        self.assertEqual(canvas.ensure_carbon_dot_calls, [1])
+        self.assertEqual(canvas.atom_label_calls, [(2, "O", False, False)])
+        canvas._record_additions.assert_called_once_with(
+            before_next_atom_id=1,
+            before_bond_count=1,
+            before_smiles_input="before",
+            added_scene_items=[],
+        )
+        canvas._restore_selection_from_ids.assert_called_once_with({1, 2}, {1})
+
+    def test_insert_structure_model_uses_carbon_dot_for_implicit_carbon_and_labels_explicit_atoms(self) -> None:
+        canvas = _FakeCanvas()
+        service = StructureInsertService(canvas)
+        model = MoleculeModel(
+            atoms={
+                10: Atom("C", 0.0, 0.0, explicit_label=False),
+                20: Atom("C", 8.0, 0.0, explicit_label=True),
+                30: Atom("Cl", 16.0, 0.0, explicit_label=False),
+            }
+        )
+
+        inserted_atom_ids, inserted_bond_ids = service.insert_structure_model(
+            model,
+            center=QPointF(8.0, 0.0),
+        )
+
+        self.assertEqual(inserted_atom_ids, {0, 1, 2})
+        self.assertEqual(inserted_bond_ids, set())
+        self.assertEqual(canvas.ensure_carbon_dot_calls, [0])
+        self.assertEqual(
+            canvas.atom_label_calls,
+            [
+                (1, "C", False, False),
+                (2, "Cl", False, False),
+            ],
+        )
+        self.assertFalse(canvas.model.atoms[0].explicit_label)
+        self.assertTrue(canvas.model.atoms[1].explicit_label)
+        self.assertFalse(canvas.model.atoms[2].explicit_label)
+
+    def test_insert_structure_model_adds_title_note_and_restores_selection_history(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.last_smiles_input = "CCO"
+        canvas.model.add_atom("H", 100.0, 100.0)
+        service = StructureInsertService(canvas)
+        model = MoleculeModel(
+            atoms={
+                2: Atom("C", 0.0, 0.0, explicit_label=False),
+                4: Atom("N", 10.0, 0.0, explicit_label=True),
+            },
+            bonds=[Bond(2, 4, order=1, style="single", color="#0000ff")],
+        )
+
+        inserted_atom_ids, inserted_bond_ids = service.insert_structure_model(
+            model,
+            center=None,
+            title="Inserted fragment",
+        )
+
+        self.assertEqual(inserted_atom_ids, {1, 2})
+        self.assertEqual(inserted_bond_ids, {0})
+        self.assertEqual(len(canvas.add_text_note_calls), 1)
+        note_pos, note_text = canvas.add_text_note_calls[0]
+        self.assertEqual(note_text, "Inserted fragment")
+        self.assertEqual(_point_tuple(note_pos), (55.0, 12.0))
+        canvas._record_additions.assert_called_once()
+        self.assertEqual(
+            canvas._record_additions.call_args.kwargs,
+            {
+                "before_next_atom_id": 1,
+                "before_bond_count": 0,
+                "before_smiles_input": "CCO",
+                "added_scene_items": [{"kind": "note", "text": "Inserted fragment", "pos": (55.0, 12.0)}],
+            },
+        )
+        canvas._restore_selection_from_ids.assert_called_once_with({1, 2}, {0})
+
+
+if __name__ == "__main__":
+    unittest.main()

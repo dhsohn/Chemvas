@@ -159,7 +159,11 @@ class SceneItemController:
             if item in self.canvas.ring_items:
                 self.canvas.ring_items.remove(item)
         elif kind == "mark":
+            data = item.data(1) or {}
+            atom_id = data.get("atom_id") if isinstance(data, dict) else None
             self.canvas._remove_mark_item(item)
+            if isinstance(atom_id, int) and not self.canvas._marks_by_atom.get(atom_id):
+                self.canvas._marks_by_atom.pop(atom_id, None)
             return
         elif kind == "note":
             if item in self.canvas.selected_notes:
