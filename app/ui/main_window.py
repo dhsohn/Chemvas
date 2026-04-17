@@ -1,5 +1,6 @@
 import math
 from pathlib import Path
+from collections.abc import Callable
 
 from PyQt6.QtCore import QPointF, QRectF, QSize, Qt, QTimer
 from PyQt6.QtGui import (
@@ -45,7 +46,23 @@ from PyQt6.QtWidgets import (
 from core.document_io import read_document, write_document
 from core.model import Atom
 from ui.canvas_view import CanvasView
+from ui.main_window_config import (
+    ARROW_MENU_SPECS,
+    ARROW_PRESET_SPECS,
+    BOND_TOOL_ACTION_SPECS,
+    COLOR_PALETTE_SPECS,
+    LEFT_TOOLBAR_ACTION_ORDER,
+    MARK_TOOL_ACTION_SPECS,
+    TEMPLATE_ENTRY_SPECS,
+    TOOL_ACTION_SPECS,
+)
 from ui.main_window_path_logic import resolve_load_path, resolve_save_as_path, resolve_save_path
+from ui.main_window_theme import (
+    MAIN_WINDOW_STYLESHEET,
+    SMILES_RENDER_BUTTON_STYLE,
+    TOOLBAR_BUTTON_STYLE,
+    TOOLBAR_MENU_BUTTON_STYLE,
+)
 from ui.preview_3d import Preview3D
 
 
@@ -475,253 +492,199 @@ class MainWindow(QMainWindow):
             return
         write_document(path, self._workbook_state(), self.WORKBOOK_FILE_VERSION)
 
+    def _build_checkable_tool_action(
+        self,
+        tool_group: QActionGroup,
+        *,
+        key: str,
+        label: str,
+        icon_method: str,
+        tooltip: str,
+        callback: Callable[[], None],
+    ) -> tuple[str, QAction]:
+        action = QAction(label, self)
+        action.setCheckable(True)
+        action.setIcon(getattr(self, icon_method)())
+        action.setToolTip(tooltip)
+        action.triggered.connect(lambda checked=False, callback=callback: callback())
+        tool_group.addAction(action)
+        return key, action
+
+    def _activate_bond_style_tool(self, value: str) -> None:
+        self._set_tool_with_status("bond", reset_bond_style=False)
+        self._set_bond_style(value)
+
+    def _activate_mark_tool(self, kind: str) -> None:
+        self.canvas.set_mark_kind(kind)
+        self.statusBar().showMessage("Mark Tool")
+
+    def _build_tool_actions(self, tool_group: QActionGroup) -> dict[str, QAction]:
+        actions = dict(
+            self._build_checkable_tool_action(
+                tool_group,
+                key=key,
+                label=label,
+                icon_method=icon_method,
+                tooltip=tooltip,
+                callback=lambda tool=tool: self._set_tool_with_status(tool),
+            )
+            for key, label, tool, icon_method, tooltip in TOOL_ACTION_SPECS
+        )
+        actions.update(
+            dict(
+                self._build_checkable_tool_action(
+                    tool_group,
+                    key=key,
+                    label=label,
+                    icon_method=icon_method,
+                    tooltip=tooltip,
+                    callback=lambda value=value: self._activate_bond_style_tool(value),
+                )
+                for key, label, value, icon_method, tooltip in BOND_TOOL_ACTION_SPECS
+            )
+        )
+        actions.update(
+            dict(
+                self._build_checkable_tool_action(
+                    tool_group,
+                    key=key,
+                    label=label,
+                    icon_method=icon_method,
+                    tooltip=tooltip,
+                    callback=lambda kind=kind: self._activate_mark_tool(kind),
+                )
+                for key, label, kind, icon_method, tooltip in MARK_TOOL_ACTION_SPECS
+            )
+        )
+        return actions
+
+    def _create_toolbar_button(
+        self,
+        *,
+        icon: QIcon | None = None,
+        tooltip: str | None = None,
+        callback: Callable[[], None] | None = None,
+        shortcut=None,
+        text: str | None = None,
+        object_name: str | None = None,
+        style_sheet: str | None = None,
+        auto_raise: bool = True,
+        cursor=None,
+    ) -> QToolButton:
+        button = QToolButton()
+        if icon is not None:
+            button.setIcon(icon)
+        if tooltip is not None:
+            button.setToolTip(tooltip)
+        if shortcut is not None:
+            button.setShortcut(shortcut)
+        if text is not None:
+            button.setText(text)
+        if object_name is not None:
+            button.setObjectName(object_name)
+        if style_sheet is not None:
+            button.setStyleSheet(style_sheet)
+        button.setAutoRaise(auto_raise)
+        if cursor is not None:
+            button.setCursor(cursor)
+        if callback is not None:
+            button.clicked.connect(callback)
+        return button
+
+    def _create_corner_menu_button(
+        self,
+        *,
+        icon: QIcon | None = None,
+        tooltip: str | None = None,
+        style_sheet: str,
+        popup_mode: QToolButton.ToolButtonPopupMode,
+        menu_builder: Callable[[QMenu], None],
+        default_action: QAction | None = None,
+    ) -> CornerMenuButton:
+        button = CornerMenuButton()
+        if default_action is not None:
+            button.setDefaultAction(default_action)
+        elif icon is not None:
+            button.setIcon(icon)
+        if tooltip is not None:
+            button.setToolTip(tooltip)
+        button.setPopupMode(popup_mode)
+        button.setStyleSheet(style_sheet)
+        menu = QMenu(button)
+        menu_builder(menu)
+        button.setMenu(menu)
+        return button
+
+    def _create_save_menu_button(self, save_action: QAction, save_as_action: QAction) -> CornerMenuButton:
+        return self._create_corner_menu_button(
+            style_sheet=TOOLBAR_MENU_BUTTON_STYLE,
+            popup_mode=QToolButton.ToolButtonPopupMode.MenuButtonPopup,
+            menu_builder=lambda menu: menu.addAction(save_as_action),
+            default_action=save_action,
+        )
+
     def _init_toolbars(self) -> None:
         tool_group = QActionGroup(self)
         tool_group.setExclusive(True)
-
-        def tool_action(label: str, tool: str) -> QAction:
-            action = QAction(label, self)
-            action.setCheckable(True)
-            action.triggered.connect(lambda: self._set_tool_with_status(tool))
-            tool_group.addAction(action)
-            return action
 
         left_bar = QToolBar("Tools", self)
         left_bar.setOrientation(Qt.Orientation.Vertical)
         left_bar.setMovable(False)
         left_bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         left_bar.setIconSize(QSize(26, 26))
-        button_style = (
-            "QToolButton {"
-            " border: 1px solid transparent;"
-            " border-radius: 5px;"
-            " padding: 4px;"
-            "}"
-            "QToolButton:hover {"
-            " background-color: #ebe4da;"
-            " border-color: #d4c9bb;"
-            "}"
-            "QToolButton:pressed {"
-            " background-color: #ddd3c5;"
-            " border-color: #c4b6a4;"
-            "}"
-            "QToolButton:checked {"
-            " background-color: #e8ddd0;"
-            " border-color: #b8a48e;"
-            "}"
-        )
-        menu_button_style = (
-            "QToolButton {"
-            " border: 1px solid transparent;"
-            " border-radius: 5px;"
-            " padding: 4px;"
-            " padding-right: 8px;"
-            "}"
-            "QToolButton:hover {"
-            " background-color: #ebe4da;"
-            " border-color: #d4c9bb;"
-            "}"
-            "QToolButton:pressed {"
-            " background-color: #ddd3c5;"
-            " border-color: #c4b6a4;"
-            "}"
-            "QToolButton:checked {"
-            " background-color: #e8ddd0;"
-            " border-color: #b8a48e;"
-            "}"
-            "QToolButton::menu-button {"
-            " subcontrol-origin: padding;"
-            " subcontrol-position: top right;"
-            " width: 14px;"
-            " border: none;"
-            " background: transparent;"
-            "}"
-            "QToolButton::menu-button:hover { background: transparent; }"
-            "QToolButton::menu-button:pressed { background: transparent; }"
-            "QToolButton::menu-indicator { image: none; width: 0px; height: 0px; }"
-            "QToolButton::menu-arrow { image: none; width: 0px; height: 0px; border: none; background: transparent; }"
-        )
-        left_bar.setStyleSheet(button_style)
+        left_bar.setStyleSheet(TOOLBAR_BUTTON_STYLE)
 
-        action_select = tool_action("Select", "select")
-        action_bond = tool_action("Bond", "bond")
-        action_text = tool_action("Atom", "text")
-        action_ring = tool_action("Ring", "benzene")
-        action_arrow = tool_action("Arrow", "arrow")
-        action_ts_bracket = tool_action("TS Bracket", "ts_bracket")
-        action_perspective = tool_action("Perspective", "perspective")
-        action_bond_bold = QAction("Bold Bond", self)
-        action_bond_bold.setCheckable(True)
-        action_bond_bold.setIcon(self._icon_bond_bold())
-        action_bond_bold.triggered.connect(
-            lambda: (self._set_tool_with_status("bond", reset_bond_style=False), self._set_bond_style("Bold"))
-        )
-        tool_group.addAction(action_bond_bold)
-        action_wedge = QAction("Wedge", self)
-        action_wedge.setCheckable(True)
-        action_wedge.setIcon(self._icon_bond_wedge())
-        action_wedge.triggered.connect(
-            lambda: (self._set_tool_with_status("bond", reset_bond_style=False), self._set_bond_style("Wedge"))
-        )
-        tool_group.addAction(action_wedge)
-        action_hash = QAction("Hash", self)
-        action_hash.setCheckable(True)
-        action_hash.setIcon(self._icon_bond_hash())
-        action_hash.triggered.connect(
-            lambda: (self._set_tool_with_status("bond", reset_bond_style=False), self._set_bond_style("Hash"))
-        )
-        tool_group.addAction(action_hash)
-        action_dotted = QAction("Dotted Bond", self)
-        action_dotted.setCheckable(True)
-        action_dotted.setIcon(self._icon_bond_dotted())
-        action_dotted.triggered.connect(
-            lambda: (self._set_tool_with_status("bond", reset_bond_style=False), self._set_bond_style("Dotted"))
-        )
-        tool_group.addAction(action_dotted)
-        action_mark_plus = QAction("Charge +", self)
-        action_mark_plus.setCheckable(True)
-        action_mark_plus.setIcon(self._icon_mark_plus())
-        action_mark_plus.triggered.connect(
-            lambda: (self.canvas.set_mark_kind("plus"), self.statusBar().showMessage("Mark Tool"))
-        )
-        tool_group.addAction(action_mark_plus)
-        action_mark_minus = QAction("Charge -", self)
-        action_mark_minus.setCheckable(True)
-        action_mark_minus.setIcon(self._icon_mark_minus())
-        action_mark_minus.triggered.connect(
-            lambda: (self.canvas.set_mark_kind("minus"), self.statusBar().showMessage("Mark Tool"))
-        )
-        tool_group.addAction(action_mark_minus)
-        action_mark_radical = QAction("Radical", self)
-        action_mark_radical.setCheckable(True)
-        action_mark_radical.setIcon(self._icon_mark_radical())
-        action_mark_radical.triggered.connect(
-            lambda: (self.canvas.set_mark_kind("radical"), self.statusBar().showMessage("Mark Tool"))
-        )
-        tool_group.addAction(action_mark_radical)
-        self._tool_actions = {
-            "select": action_select,
-            "bond": action_bond,
-            "bond_bold": action_bond_bold,
-            "bond_wedge": action_wedge,
-            "bond_hash": action_hash,
-            "bond_dotted": action_dotted,
-            "text": action_text,
-            "mark_plus": action_mark_plus,
-            "mark_minus": action_mark_minus,
-            "mark_radical": action_mark_radical,
-            "benzene": action_ring,
-            "arrow": action_arrow,
-            "ts_bracket": action_ts_bracket,
-            "perspective": action_perspective,
-        }
-
-        action_select.setIcon(self._icon_select())
-        action_select.setToolTip("Select / Marquee (ChemDraw: Space)")
-        action_bond.setIcon(self._icon_bond())
-        action_bond.setToolTip("Bond (ChemDraw: X)")
-        action_text.setIcon(self._icon_text())
-        action_text.setToolTip("Atom / Text (ChemDraw: T)")
-        action_ring.setIcon(self._icon_ring())
-        action_ring.setToolTip("Ring / Benzene (ChemDraw: J)")
-        action_arrow.setIcon(self._icon_arrow())
-        action_arrow.setToolTip("Arrow (ChemDraw: E)")
-        action_ts_bracket.setIcon(self._icon_ts_bracket())
-        action_ts_bracket.setToolTip("TS Bracket (ChemDraw: Shift+G)")
-        action_perspective.setIcon(self._icon_perspective())
-        action_perspective.setToolTip("Perspective Rotation (ChemDraw: Alt+D, Shift+drag locks X/Y)")
-        action_bond_bold.setToolTip("Bold Bond (Bond Hotkey: B)")
-        action_wedge.setToolTip("Wedge Bond (Bond Hotkey: W)")
-        action_hash.setToolTip("Hash Bond (Bond Hotkey: Shift+H)")
-        action_dotted.setToolTip("Dotted Bond")
-        action_mark_plus.setToolTip("Charge + (Atom Hotkey: +)")
-        action_mark_minus.setToolTip("Charge - (Atom Hotkey: -)")
-        action_mark_radical.setToolTip("Radical")
-
-        left_bar.addAction(action_select)
-        left_bar.addAction(action_perspective)
-        left_bar.addAction(action_bond)
-        left_bar.addAction(action_bond_bold)
-        left_bar.addAction(action_wedge)
-        left_bar.addAction(action_hash)
-        left_bar.addAction(action_dotted)
-        left_bar.addAction(action_text)
-        left_bar.addAction(action_mark_plus)
-        left_bar.addAction(action_mark_minus)
-        left_bar.addAction(action_mark_radical)
-        left_bar.addAction(action_ring)
-        templates_button = CornerMenuButton()
-        templates_button.setIcon(self._icon_templates())
-        templates_button.setToolTip("Templates")
-        templates_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        templates_button.setStyleSheet(menu_button_style)
-        templates_menu = QMenu(templates_button)
-        for label, handler in self._template_entries():
-            templates_menu.addAction(self._icon_template_preview(label), label, handler)
-        templates_button.setMenu(templates_menu)
-        left_bar.addWidget(templates_button)
-        arrow_button = CornerMenuButton()
-        arrow_button.setDefaultAction(action_arrow)
-        arrow_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        arrow_button.setStyleSheet(menu_button_style)
-        arrow_menu = QMenu(arrow_button)
-        for label, kind in [
-            ("Reaction", "reaction"),
-            ("Equilibrium", "equilibrium"),
-            ("Resonance", "resonance"),
-            ("Curved Single", "curved_single"),
-            ("Curved Double", "curved_double"),
-            ("Inhibition", "inhibit"),
-            ("Dotted", "dotted"),
-        ]:
-            action = arrow_menu.addAction(self._icon_arrow_preview(kind), label)
-            action.triggered.connect(
-                lambda checked=False, value=label: (
-                    self._set_tool_with_status("arrow"),
-                    self._set_arrow_type(value),
-                )
+        self._tool_actions = self._build_tool_actions(tool_group)
+        for action_key in LEFT_TOOLBAR_ACTION_ORDER:
+            left_bar.addAction(self._tool_actions[action_key])
+        left_bar.addWidget(
+            self._create_corner_menu_button(
+                icon=self._icon_templates(),
+                tooltip="Templates",
+                style_sheet=TOOLBAR_MENU_BUTTON_STYLE,
+                popup_mode=QToolButton.ToolButtonPopupMode.InstantPopup,
+                menu_builder=self._populate_template_menu,
             )
-        preset_menu = arrow_menu.addMenu("Preset")
-        for label in ["Default", "Bold", "Fine"]:
-            action = preset_menu.addAction(label)
-            action.triggered.connect(
-                lambda checked=False, value=label: (
-                    self._set_tool_with_status("arrow"),
-                    self._set_arrow_preset(value),
-                )
+        )
+        left_bar.addWidget(
+            self._create_corner_menu_button(
+                style_sheet=TOOLBAR_MENU_BUTTON_STYLE,
+                popup_mode=QToolButton.ToolButtonPopupMode.InstantPopup,
+                menu_builder=self._populate_arrow_menu,
+                default_action=self._tool_actions["arrow"],
             )
-        arrow_menu.addSeparator()
-        arrow_menu.addAction("Settings...").triggered.connect(self._open_arrow_settings)
-        arrow_button.setMenu(arrow_menu)
-
-        left_bar.addWidget(arrow_button)
-        left_bar.addAction(action_ts_bracket)
-
-        bond_len_btn = QToolButton()
-        bond_len_btn.setToolTip("Bond Length")
-        bond_len_btn.setIcon(self._icon_bond_length())
-        bond_len_btn.clicked.connect(self._set_bond_length)
-
-        flip_h = QToolButton()
-        flip_h.setToolTip("Flip Horizontal (Ctrl+Shift+H)")
-        flip_h.setIcon(self._icon_flip_h())
-        flip_h.clicked.connect(lambda: self.canvas.flip_horizontal())
-        flip_v = QToolButton()
-        flip_v.setToolTip("Flip Vertical (Ctrl+Shift+V)")
-        flip_v.setIcon(self._icon_flip_v())
-        flip_v.clicked.connect(lambda: self.canvas.flip_vertical())
-
-        left_bar.addWidget(flip_h)
-        left_bar.addWidget(flip_v)
+        )
+        left_bar.addAction(self._tool_actions["ts_bracket"])
+        left_bar.addWidget(
+            self._create_toolbar_button(
+                icon=self._icon_bond_length(),
+                tooltip="Bond Length",
+                callback=self._set_bond_length,
+            )
+        )
+        left_bar.addWidget(
+            self._create_toolbar_button(
+                icon=self._icon_flip_h(),
+                tooltip="Flip Horizontal (Ctrl+Shift+H)",
+                callback=lambda: self.canvas.flip_horizontal(),
+            )
+        )
+        left_bar.addWidget(
+            self._create_toolbar_button(
+                icon=self._icon_flip_v(),
+                tooltip="Flip Vertical (Ctrl+Shift+V)",
+                callback=lambda: self.canvas.flip_vertical(),
+            )
+        )
 
         self.addToolBar(Qt.ToolBarArea.LeftToolBarArea, left_bar)
-        action_bond.setChecked(True)
+        self._tool_actions["bond"].setChecked(True)
 
         panel_bar = QToolBar("Panels", self)
         panel_bar.setMovable(False)
         panel_bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         panel_bar.setIconSize(QSize(24, 24))
-        panel_bar.setStyleSheet(button_style)
+        panel_bar.setStyleSheet(TOOLBAR_BUTTON_STYLE)
 
         save_action = QAction("Save", self)
         save_action.setIcon(self._icon_save())
@@ -736,63 +699,42 @@ class MainWindow(QMainWindow):
         save_as_action.triggered.connect(self._save_canvas_as)
         self.addAction(save_as_action)
 
-        save_btn = CornerMenuButton()
-        save_btn.setDefaultAction(save_action)
-        save_btn.setStyleSheet(menu_button_style)
-        save_menu = QMenu(save_btn)
-        save_menu.addAction(save_as_action)
-        save_btn.setMenu(save_menu)
-        save_btn.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
-
-        load_btn = QToolButton()
-        load_btn.setIcon(self._icon_open())
-        load_btn.setToolTip("Load")
-        load_btn.setShortcut(QKeySequence.StandardKey.Open)
-        load_btn.clicked.connect(self._load_canvas)
-
-        export_xyz_btn = QToolButton()
-        export_xyz_btn.setIcon(self._icon_export_xyz())
-        export_xyz_btn.setToolTip("Export 3D XYZ")
-        export_xyz_btn.clicked.connect(self._export_xyz)
-
-        undo_btn = QToolButton()
-        undo_btn.setIcon(self._icon_undo())
-        undo_btn.setToolTip("Undo")
-        undo_btn.setShortcut(QKeySequence.StandardKey.Undo)
-        undo_btn.clicked.connect(lambda: self.canvas.undo())
-
-        redo_btn = QToolButton()
-        redo_btn.setIcon(self._icon_redo())
-        redo_btn.setToolTip("Redo")
-        redo_btn.setShortcut(QKeySequence.StandardKey.Redo)
-        redo_btn.clicked.connect(lambda: self.canvas.redo())
+        save_btn = self._create_save_menu_button(save_action, save_as_action)
+        load_btn = self._create_toolbar_button(
+            icon=self._icon_open(),
+            tooltip="Load",
+            callback=self._load_canvas,
+            shortcut=QKeySequence.StandardKey.Open,
+        )
+        export_xyz_btn = self._create_toolbar_button(
+            icon=self._icon_export_xyz(),
+            tooltip="Export 3D XYZ",
+            callback=self._export_xyz,
+        )
+        undo_btn = self._create_toolbar_button(
+            icon=self._icon_undo(),
+            tooltip="Undo",
+            callback=lambda: self.canvas.undo(),
+            shortcut=QKeySequence.StandardKey.Undo,
+        )
+        redo_btn = self._create_toolbar_button(
+            icon=self._icon_redo(),
+            tooltip="Redo",
+            callback=lambda: self.canvas.redo(),
+            shortcut=QKeySequence.StandardKey.Redo,
+        )
 
         smiles_input = QLineEdit()
         smiles_input.setPlaceholderText("SMILES...")
         smiles_input.setFixedWidth(180)
-        smiles_button = QToolButton()
-        smiles_button.setText("Render")
-        smiles_button.setAutoRaise(False)
-        smiles_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        smiles_button.setObjectName("smiles_render_button")
-        smiles_button.setStyleSheet(
-            "QToolButton#smiles_render_button {"
-            " border: 1px solid #d4c9bb;"
-            " border-radius: 5px;"
-            " padding: 3px 10px;"
-            " background-color: #faf8f5;"
-            " color: #3d3229;"
-            "}"
-            "QToolButton#smiles_render_button:hover {"
-            " background-color: #ebe4da;"
-            " border-color: #c4b6a4;"
-            "}"
-            "QToolButton#smiles_render_button:pressed {"
-            " background-color: #ddd3c5;"
-            " border-color: #b8a48e;"
-            "}"
+        smiles_button = self._create_toolbar_button(
+            text="Render",
+            callback=lambda: self.canvas.begin_smiles_insert(smiles_input.text()),
+            object_name="smiles_render_button",
+            style_sheet=SMILES_RENDER_BUTTON_STYLE,
+            auto_raise=False,
+            cursor=Qt.CursorShape.PointingHandCursor,
         )
-        smiles_button.clicked.connect(lambda: self.canvas.begin_smiles_insert(smiles_input.text()))
         smiles_input.returnPressed.connect(lambda: self.canvas.begin_smiles_insert(smiles_input.text()))
 
         panel_bar.addWidget(save_btn)
@@ -812,34 +754,30 @@ class MainWindow(QMainWindow):
         atom_input.setText(self.canvas.get_atom_symbol())
         atom_input.textChanged.connect(lambda text: self.canvas.set_atom_symbol(text))
         panel_bar.addWidget(atom_input)
-        color_button = CornerMenuButton()
-        color_button.setIcon(self._icon_color())
-        color_button.setToolTip("Color")
-        color_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        color_button.setStyleSheet(menu_button_style)
-        color_menu = QMenu(color_button)
-        for label, hex_value in self._acs_color_palette():
-            pixmap = QPixmap(16, 16)
-            pixmap.fill(QColor(hex_value))
-            color_action = color_menu.addAction(QIcon(pixmap), label)
-            color_action.triggered.connect(lambda checked=False, c=hex_value: self._apply_color_preset(c))
-        color_button.setMenu(color_menu)
+        color_button = self._create_corner_menu_button(
+            icon=self._icon_color(),
+            tooltip="Color",
+            style_sheet=TOOLBAR_MENU_BUTTON_STYLE,
+            popup_mode=QToolButton.ToolButtonPopupMode.InstantPopup,
+            menu_builder=lambda menu: self._populate_palette_menu(menu, self._apply_color_preset),
+        )
         panel_bar.addWidget(color_button)
 
-        ring_fill_button = CornerMenuButton()
-        ring_fill_button.setIcon(self._icon_ring_fill())
-        ring_fill_button.setToolTip("Ring Fill")
-        ring_fill_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        ring_fill_button.setStyleSheet(menu_button_style)
-        ring_fill_menu = QMenu(ring_fill_button)
-        for label, hex_value in self._acs_color_palette():
-            pixmap = QPixmap(16, 16)
-            pixmap.fill(QColor(hex_value))
-            fill_action = ring_fill_menu.addAction(QIcon(pixmap), label)
-            fill_action.triggered.connect(lambda checked=False, c=hex_value: self._apply_ring_fill_preset(c))
-        ring_fill_button.setMenu(ring_fill_menu)
+        ring_fill_button = self._create_corner_menu_button(
+            icon=self._icon_ring_fill(),
+            tooltip="Ring Fill",
+            style_sheet=TOOLBAR_MENU_BUTTON_STYLE,
+            popup_mode=QToolButton.ToolButtonPopupMode.InstantPopup,
+            menu_builder=lambda menu: self._populate_palette_menu(menu, self._apply_ring_fill_preset),
+        )
         panel_bar.addWidget(ring_fill_button)
-        panel_bar.addWidget(bond_len_btn)
+        panel_bar.addWidget(
+            self._create_toolbar_button(
+                icon=self._icon_bond_length(),
+                tooltip="Bond Length",
+                callback=self._set_bond_length,
+            )
+        )
         panel_bar.addSeparator()
 
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, panel_bar)
@@ -1522,328 +1460,7 @@ class MainWindow(QMainWindow):
         self.panel_dock.raise_()
 
     def _apply_theme(self) -> None:
-        self.setStyleSheet(
-            """
-            QMainWindow {
-                background: #f0ebe4;
-            }
-            QToolBar {
-                background: #f7f3ee;
-                border: none;
-                border-bottom: 1px solid #ddd5ca;
-                spacing: 4px;
-                padding: 3px;
-            }
-            QToolBar::separator {
-                background: #ddd5ca;
-                width: 1px;
-                height: 20px;
-                margin: 4px 6px;
-            }
-            QToolButton {
-                border: 1px solid transparent;
-                border-radius: 5px;
-                padding: 5px;
-                color: #3d3229;
-            }
-            QToolButton:hover {
-                background: #ebe4da;
-                border-color: #d4c9bb;
-            }
-            QToolButton:pressed {
-                background: #ddd3c5;
-                border-color: #c4b6a4;
-            }
-            QToolButton:checked {
-                background: #e8ddd0;
-                border-color: #b8a48e;
-            }
-            QLabel, QCheckBox, QGroupBox, QTabBar, QDockWidget, QToolButton {
-                color: #3d3229;
-            }
-            QDockWidget {
-                background: #f7f3ee;
-                border: 1px solid #ddd5ca;
-            }
-            QTabWidget::pane {
-                border: 1px solid #ddd5ca;
-                background: #f7f3ee;
-            }
-            QTabBar::tab {
-                background: #f0ebe4;
-                padding: 6px 10px;
-                border: 1px solid #ddd5ca;
-                border-bottom: none;
-                margin-right: 2px;
-                color: #3d3229;
-            }
-            QTabBar::tab:selected {
-                background: #faf8f5;
-            }
-            QTabWidget#canvasTabs {
-                background: #f0ebe4;
-            }
-            QTabWidget#canvasTabs::tab-bar {
-                alignment: left;
-                left: 8px;
-            }
-            QTabWidget#canvasTabs::pane {
-                border: 1px solid #ddd5ca;
-                background: #f7f3ee;
-            }
-            QTabWidget#canvasTabs QTabBar {
-                background: #f0ebe4;
-                padding: 3px 6px 0 6px;
-            }
-            QTabWidget#canvasTabs QTabBar::tab {
-                background: transparent;
-                color: #5b5045;
-                border: 1px solid transparent;
-                border-bottom-left-radius: 8px;
-                border-bottom-right-radius: 8px;
-                padding: 4px 12px 5px 12px;
-                margin: 0 2px 0 0;
-            }
-            QTabWidget#canvasTabs QTabBar::tab:last {
-                padding: 4px 8px 5px 8px;
-                min-width: 18px;
-            }
-            QTabWidget#canvasTabs QTabBar::tab:hover:!selected {
-                background: #e7dfd4;
-            }
-            QTabWidget#canvasTabs QTabBar::tab:selected {
-                background: #faf8f5;
-                color: #312a24;
-                border-color: #d8d0c5;
-            }
-            QTabWidget#canvasTabs QTabBar QToolButton {
-                background: transparent;
-                border: none;
-                border-radius: 5px;
-                color: #5b5045;
-                padding: 4px 6px;
-            }
-            QTabWidget#canvasTabs QTabBar QToolButton:hover {
-                background: #e7dfd4;
-            }
-            QTabWidget#canvasTabs QToolButton#sheetAddButton {
-                background: transparent;
-                border: 1px solid transparent;
-                border-bottom-left-radius: 8px;
-                border-bottom-right-radius: 8px;
-                color: #5b5045;
-                font-size: 18px;
-                font-weight: 500;
-                margin: 0 4px 0 0;
-                min-width: 26px;
-                padding: 1px 6px 5px 6px;
-            }
-            QTabWidget#canvasTabs QToolButton#sheetAddButton:hover {
-                background: #e7dfd4;
-                border-color: #ddd5ca;
-            }
-            QTabWidget#canvasTabs QToolButton#sheetAddButton:pressed {
-                background: #ddd3c5;
-            }
-            QScrollBar:horizontal {
-                background: #efe8de;
-                height: 16px;
-                margin: 0 16px 0 16px;
-                border-top: 1px solid #ddd5ca;
-            }
-            QScrollBar::handle:horizontal {
-                background: #f8f4ee;
-                border: 1px solid #cfc3b3;
-                border-radius: 8px;
-                min-width: 36px;
-            }
-            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
-                background: #efe8de;
-                border: none;
-                width: 16px;
-                subcontrol-origin: margin;
-            }
-            QScrollBar::sub-line:horizontal {
-                subcontrol-position: left;
-            }
-            QScrollBar::add-line:horizontal {
-                subcontrol-position: right;
-            }
-            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
-                background: #efe8de;
-            }
-            QScrollBar:vertical {
-                background: #efe8de;
-                width: 16px;
-                margin: 16px 0 16px 0;
-                border-left: 1px solid #ddd5ca;
-            }
-            QScrollBar::handle:vertical {
-                background: #f8f4ee;
-                border: 1px solid #cfc3b3;
-                border-radius: 8px;
-                min-height: 36px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                background: #efe8de;
-                border: none;
-                height: 16px;
-                subcontrol-origin: margin;
-            }
-            QScrollBar::sub-line:vertical {
-                subcontrol-position: top;
-            }
-            QScrollBar::add-line:vertical {
-                subcontrol-position: bottom;
-            }
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-                background: #efe8de;
-            }
-            QAbstractScrollArea::corner {
-                background: #efe8de;
-                border-top: 1px solid #ddd5ca;
-                border-left: 1px solid #ddd5ca;
-            }
-            QLineEdit, QComboBox, QSpinBox {
-                background: #faf8f5;
-                border: 1px solid #d4c9bb;
-                border-radius: 4px;
-                padding: 3px 6px;
-                color: #3d3229;
-            }
-            QLineEdit:focus, QComboBox:focus {
-                border-color: #b8a48e;
-            }
-            QSpinBox, QDoubleSpinBox {
-                background: #faf8f5;
-                border: 1px solid #d4c9bb;
-                border-radius: 4px;
-                padding: 2px 6px;
-                color: #3d3229;
-            }
-            QAbstractSpinBox::up-button, QAbstractSpinBox::down-button {
-                background: #f7f3ee;
-                border-left: 1px solid #d4c9bb;
-                width: 14px;
-            }
-            QFrame#spinFrame {
-                background: #faf8f5;
-                border: 1px solid #d4c9bb;
-                border-radius: 4px;
-            }
-            QFrame#spinFrame QDoubleSpinBox {
-                background: transparent;
-                border: none;
-                padding: 2px 6px;
-                color: #3d3229;
-            }
-            QToolButton#spinUpButton {
-                background: #f7f3ee;
-                border-left: 1px solid #d4c9bb;
-                border-bottom: 1px solid #d4c9bb;
-            }
-            QToolButton#spinDownButton {
-                background: #f7f3ee;
-                border-left: 1px solid #d4c9bb;
-            }
-            QComboBox QAbstractItemView {
-                background: #faf8f5;
-                color: #3d3229;
-                border: 1px solid #d4c9bb;
-                selection-background-color: #e8ddd0;
-                selection-color: #3d3229;
-            }
-            QAbstractItemView {
-                background: #faf8f5;
-                color: #3d3229;
-                border: 1px solid #d4c9bb;
-            }
-            QAbstractItemView::item {
-                background: #faf8f5;
-                color: #3d3229;
-            }
-            QPushButton {
-                color: #3d3229;
-                border: 1px solid #d4c9bb;
-                border-radius: 4px;
-                padding: 4px 12px;
-                background: #faf8f5;
-            }
-            QPushButton:hover {
-                background: #ebe4da;
-                border-color: #c4b6a4;
-            }
-            QPushButton:pressed {
-                background: #ddd3c5;
-            }
-            QMenu {
-                background: #faf8f5;
-                border: 1px solid #ddd5ca;
-                border-radius: 6px;
-                padding: 4px 0;
-            }
-            QMenu::item {
-                padding: 6px 24px 6px 12px;
-                color: #3d3229;
-            }
-            QMenu::item:selected {
-                background: #ebe4da;
-                border-radius: 4px;
-            }
-            QMenu::separator {
-                height: 1px;
-                background: #ddd5ca;
-                margin: 4px 8px;
-            }
-            QDialog, QMessageBox {
-                background: #f4f0ea;
-            }
-            QDialog QLabel, QMessageBox QLabel {
-                color: #3d3229;
-            }
-            QDialog QLineEdit, QMessageBox QLineEdit {
-                background: #faf8f5;
-                border: 1px solid #d4c9bb;
-                border-radius: 4px;
-                padding: 3px 6px;
-                color: #3d3229;
-            }
-            QDialog QPushButton, QMessageBox QPushButton {
-                background: #faf8f5;
-                border: 1px solid #d4c9bb;
-                border-radius: 4px;
-                padding: 5px 14px;
-                color: #3d3229;
-            }
-            QDialog QPushButton:hover, QMessageBox QPushButton:hover {
-                background: #ebe4da;
-            }
-            QSlider::groove:horizontal {
-                height: 6px;
-                background: #ddd3c5;
-                border-radius: 3px;
-            }
-            QSlider::handle:horizontal {
-                width: 12px;
-                height: 12px;
-                background: #b8a48e;
-                border-radius: 6px;
-                margin: -4px 0;
-            }
-            QSlider::handle:horizontal:hover {
-                background: #a6917a;
-            }
-            QStatusBar {
-                background: #f7f3ee;
-                border-top: 1px solid #ddd5ca;
-                color: #7a6e61;
-                padding: 2px 8px;
-            }
-            QStatusBar QLabel {
-                color: #7a6e61;
-            }
-            """
-        )
+        self.setStyleSheet(MAIN_WINDOW_STYLESHEET)
 
     def _update_zoom_label(self, zoom_percent: int) -> None:
         if not hasattr(self, "_zoom_label"):
@@ -1910,24 +1527,75 @@ class MainWindow(QMainWindow):
 
         dialog.exec()
 
-    def _template_entries(self) -> list[tuple[str, callable]]:
+    def _add_menu_action(
+        self,
+        menu: QMenu,
+        label: str,
+        callback: Callable[[], None],
+        icon: QIcon | None = None,
+    ) -> QAction:
+        action = menu.addAction(icon, label) if icon is not None else menu.addAction(label)
+        action.triggered.connect(lambda checked=False, callback=callback: callback())
+        return action
+
+    def _palette_icon(self, hex_value: str) -> QIcon:
+        pixmap = QPixmap(16, 16)
+        pixmap.fill(QColor(hex_value))
+        return QIcon(pixmap)
+
+    def _populate_template_menu(self, menu: QMenu) -> None:
+        for label, handler in self._template_entries():
+            self._add_menu_action(menu, label, handler, self._icon_template_preview(label))
+
+    def _populate_arrow_menu(self, menu: QMenu) -> None:
+        for label, kind in ARROW_MENU_SPECS:
+            self._add_menu_action(
+                menu,
+                label,
+                lambda value=label: self._activate_arrow_type_from_menu(value),
+                self._icon_arrow_preview(kind),
+            )
+        preset_menu = menu.addMenu("Preset")
+        for label in ARROW_PRESET_SPECS:
+            self._add_menu_action(
+                preset_menu,
+                label,
+                lambda value=label: self._activate_arrow_preset_from_menu(value),
+            )
+        menu.addSeparator()
+        self._add_menu_action(menu, "Settings...", self._open_arrow_settings)
+
+    def _populate_palette_menu(self, menu: QMenu, callback: Callable[[str], None]) -> None:
+        for label, hex_value in self._acs_color_palette():
+            self._add_menu_action(
+                menu,
+                label,
+                lambda value=hex_value: callback(value),
+                self._palette_icon(hex_value),
+            )
+
+    def _activate_arrow_type_from_menu(self, value: str) -> None:
+        self._set_tool_with_status("arrow")
+        self._set_arrow_type(value)
+
+    def _activate_arrow_preset_from_menu(self, value: str) -> None:
+        self._set_tool_with_status("arrow")
+        self._set_arrow_preset(value)
+
+    def _template_entries(self) -> list[tuple[str, Callable[[], None]]]:
         return [
-            ("Cyclopropane", lambda: self.canvas.begin_ring_template_insert(3)),
-            ("Cyclobutane", lambda: self.canvas.begin_ring_template_insert(4)),
-            ("Cyclopentane", lambda: self.canvas.begin_ring_template_insert(5)),
-            ("Cyclohexane (Chair)", lambda: self.canvas.begin_ring_template_insert(6, style="chair")),
+            (
+                label,
+                lambda ring_size=ring_size, style=style: self.canvas.begin_ring_template_insert(
+                    ring_size,
+                    style=style,
+                ),
+            )
+            for label, ring_size, style in TEMPLATE_ENTRY_SPECS
         ]
 
     def _acs_color_palette(self) -> list[tuple[str, str]]:
-        return [
-            ("Black", "#000000"),
-            ("Gray", "#4a4a4a"),
-            ("Red", "#c00000"),
-            ("Blue", "#1f5eff"),
-            ("Green", "#2e8b57"),
-            ("Purple", "#6a2ea6"),
-            ("Orange", "#c77c00"),
-        ]
+        return list(COLOR_PALETTE_SPECS)
 
     def _apply_color_preset(self, hex_value: str) -> None:
         color = QColor(hex_value)

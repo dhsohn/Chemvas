@@ -72,19 +72,6 @@ class RDKitAdapter:
     def smiles_to_2d(self, smiles: str, scale: float = 40.0) -> Optional[MoleculeModel]:
         return self._import_helper.smiles_to_2d(smiles, scale=scale)
 
-    def _build_rdkit_mol_with_map(
-        self,
-        model: MoleculeModel,
-        *,
-        strict_labels: bool = False,
-        unsupported_bond_styles: set[str] | None = None,
-    ):
-        return self._conversion_helper._build_rdkit_mol_with_map(
-            model,
-            strict_labels=strict_labels,
-            unsupported_bond_styles=unsupported_bond_styles,
-        )
-
     def model_to_rdkit_with_map(self, model: MoleculeModel):
         return self._conversion_helper.model_to_rdkit_with_map(model)
 
@@ -96,106 +83,6 @@ class RDKitAdapter:
 
     def _embed_3d_molecule(self, mol, Chem, AllChem):
         return self._conversion_helper._embed_3d_molecule(mol, Chem, AllChem)
-
-    def _bond_type(self, Chem, order: int):
-        return self._conversion_helper._bond_type(Chem, order)
-
-    def _annotation_for_atom(
-        self,
-        atom_annotations: Mapping[int, Mapping[str, int]] | None,
-        atom_id: int,
-    ) -> tuple[int, int]:
-        return self._conversion_helper._annotation_for_atom(atom_annotations, atom_id)
-
-    def _format_atom_refs(self, refs: list[str]) -> str:
-        return self._conversion_helper._format_atom_refs(refs)
-
-    def _apply_atom_annotation(self, rd_atom, *, formal_charge: int, radical_electrons: int) -> None:
-        self._conversion_helper._apply_atom_annotation(
-            rd_atom,
-            formal_charge=formal_charge,
-            radical_electrons=radical_electrons,
-        )
-
-    def _build_model_adjacency(self, model: MoleculeModel) -> dict[int, list[int]]:
-        return self._conversion_helper._build_model_adjacency(model)
-
-    def _should_disable_implicit_hydrogens(
-        self,
-        model: MoleculeModel,
-        atom_id: int,
-        adjacency: Mapping[int, list[int]],
-    ) -> bool:
-        return self._conversion_helper._should_disable_implicit_hydrogens(model, atom_id, adjacency)
-
-    def _component_sort_key(self, model: MoleculeModel, atom_ids: set[int]) -> tuple[float, float, int]:
-        return self._conversion_helper._component_sort_key(model, atom_ids)
-
-    def _model_components(self, model: MoleculeModel) -> list[set[int]]:
-        return self._conversion_helper._model_components(model)
-
-    def _build_component_model(
-        self,
-        model: MoleculeModel,
-        atom_ids: set[int],
-        atom_annotations: Mapping[int, Mapping[str, int]] | None = None,
-    ) -> tuple[MoleculeModel, dict[int, dict[str, int]]]:
-        return self._conversion_helper._build_component_model(
-            model,
-            atom_ids,
-            atom_annotations=atom_annotations,
-        )
-
-    def _scene_from_embedded_mol(self, mol_h) -> Molecule3DScene:
-        return self._conversion_helper._scene_from_embedded_mol(mol_h)
-
-    def _scene_bounds(self, scene: Molecule3DScene) -> tuple[float, float, float, float, float, float]:
-        return self._conversion_helper._scene_bounds(scene)
-
-    def _translate_scene(
-        self,
-        scene: Molecule3DScene,
-        *,
-        dx: float = 0.0,
-        dy: float = 0.0,
-        dz: float = 0.0,
-    ) -> Molecule3DScene:
-        return self._conversion_helper._translate_scene(scene, dx=dx, dy=dy, dz=dz)
-
-    def _layout_component_scenes(
-        self,
-        component_scenes: list[Molecule3DScene],
-        *,
-        gap: float = 2.5,
-    ) -> Molecule3DScene:
-        return self._conversion_helper._layout_component_scenes(component_scenes, gap=gap)
-
-    def _build_alias_fragment(
-        self,
-        label: str,
-        *,
-        atom_id: int,
-        atom,
-        neighbors: list[int],
-        model: MoleculeModel,
-        formal_charge: int,
-        radical_electrons: int,
-        rw,
-        Chem,
-        AllChem,
-    ) -> tuple[int | None, dict[int, tuple[float, float]] | None]:
-        return self._conversion_helper._build_alias_fragment(
-            label,
-            atom_id=atom_id,
-            atom=atom,
-            neighbors=neighbors,
-            model=model,
-            formal_charge=formal_charge,
-            radical_electrons=radical_electrons,
-            rw=rw,
-            Chem=Chem,
-            AllChem=AllChem,
-        )
 
     def _build_conversion_rdkit_mol(
         self,

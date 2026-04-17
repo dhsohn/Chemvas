@@ -22,7 +22,7 @@ if str(APP_ROOT) not in sys.path:
 if QApplication is not None:
     import core.tools as tools_module
     from core.model import Atom, Bond
-    from core.tools import BondTool, MoveTool, RotateTool, SelectTool, _independent_selection_items
+    from core.tools import ArrowTool, BondTool, MoveTool, RotateTool, SelectTool, TSBracketTool, _independent_selection_items
     from core.history import CompositeCommand, MoveAtomsCommand, MoveItemsCommand, UpdateSceneItemCommand
 
 
@@ -256,6 +256,58 @@ class _FakeMoveCanvas(_FakeSelectCanvas):
 
     def _selected_ids(self):
         return set(self.selected_atom_ids), set(self.selected_bond_ids)
+
+
+class _FakePreviewItem:
+    def __init__(self, scene_obj) -> None:
+        self._scene = scene_obj
+
+    def scene(self):
+        return self._scene
+
+
+class _FakePreviewScene:
+    def __init__(self) -> None:
+        self.removed_items = []
+
+    def removeItem(self, item) -> None:
+        self.removed_items.append(item)
+
+
+class _FakePreviewCanvas:
+    DragMode = SimpleNamespace(NoDrag="none")
+
+    def __init__(self) -> None:
+        self.drag_mode = None
+        self.scene_obj = _FakePreviewScene()
+        self.active_arrow_type = "reaction"
+        self.preview_arrow_calls = []
+        self.preview_ts_bracket_calls = []
+        self.add_arrow_calls = []
+        self.add_ts_bracket_calls = []
+
+    def setDragMode(self, mode) -> None:
+        self.drag_mode = mode
+
+    def scene(self):
+        return self.scene_obj
+
+    def scene_pos_from_event(self, event):
+        return event.position()
+
+    def preview_arrow(self, start, end, arrow_type):
+        self.preview_arrow_calls.append((QPointF(start), QPointF(end), arrow_type))
+        return _FakePreviewItem(self.scene_obj)
+
+    def add_arrow(self, start, end, arrow_type) -> None:
+        self.add_arrow_calls.append((QPointF(start), QPointF(end), arrow_type))
+
+    def preview_ts_bracket(self, start, end):
+        self.preview_ts_bracket_calls.append((QPointF(start), QPointF(end)))
+        return _FakePreviewItem(self.scene_obj)
+
+    def add_ts_bracket_from_points(self, start, end) -> None:
+        self.add_ts_bracket_calls.append((QPointF(start), QPointF(end)))
 
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for tools tests")
@@ -587,6 +639,49 @@ class ToolsUnitTest(unittest.TestCase):
         tool._start_pos = None
         self.assertFalse(tool.on_mouse_move(_FakeEvent(QPointF(0.0, 0.0))))
         self.assertFalse(tool.on_mouse_release(_FakeEvent(QPointF(0.0, 0.0))))
+
+    def test_arrow_tool_preview_drag_and_deactivate_cleanup(self) -> None:
+        canvas = _FakePreviewCanvas()
+        tool = ArrowTool(canvas, mode="auto")
+        tool.activate()
+
+        self.assertEqual(canvas.drag_mode, canvas.DragMode.NoDrag)
+        self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 2.0))))
+        self.assertTrue(tool.on_mouse_move(_FakeEvent(QPointF(5.0, 6.0))))
+        self.assertEqual(canvas.preview_arrow_calls[-1][2], "reaction")
+
+        self.assertTrue(tool.on_mouse_release(_FakeEvent(QPointF(8.0, 9.0))))
+        start, end, arrow_type = canvas.add_arrow_calls[-1]
+        self.assertEqual((start.x(), start.y()), (1.0, 2.0))
+        self.assertEqual((end.x(), end.y()), (8.0, 9.0))
+        self.assertEqual(arrow_type, "reaction")
+        self.assertTrue(canvas.scene_obj.removed_items)
+
+        tool.on_mouse_press(_FakeEvent(QPointF(2.0, 3.0)))
+        tool.on_mouse_move(_FakeEvent(QPointF(4.0, 7.0)))
+        tool.deactivate()
+        self.assertIsNone(tool._start_pos)
+        self.assertIsNone(tool._preview_item)
+
+    def test_ts_bracket_tool_preview_drag_and_deactivate_cleanup(self) -> None:
+        canvas = _FakePreviewCanvas()
+        tool = TSBracketTool(canvas)
+        tool.activate()
+
+        self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(3.0, 4.0))))
+        self.assertTrue(tool.on_mouse_move(_FakeEvent(QPointF(9.0, 10.0))))
+        self.assertEqual(len(canvas.preview_ts_bracket_calls), 1)
+
+        self.assertTrue(tool.on_mouse_release(_FakeEvent(QPointF(12.0, 13.0))))
+        start, end = canvas.add_ts_bracket_calls[-1]
+        self.assertEqual((start.x(), start.y()), (3.0, 4.0))
+        self.assertEqual((end.x(), end.y()), (12.0, 13.0))
+
+        tool.on_mouse_press(_FakeEvent(QPointF(0.0, 1.0)))
+        tool.on_mouse_move(_FakeEvent(QPointF(2.0, 3.0)))
+        tool.deactivate()
+        self.assertIsNone(tool._start_pos)
+        self.assertIsNone(tool._preview_item)
 
 
 if __name__ == "__main__":

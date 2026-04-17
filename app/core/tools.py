@@ -20,6 +20,7 @@ from ui.bond_preview_renderer import (
     clear_bond_preview_items as clear_bond_preview_items_helper,
 )
 from ui.bond_style_logic import style_for_existing_bond_overlay
+from ui.perspective_tool_controller import PerspectiveToolController
 from ui.selection_press_logic import SelectionPressContext, plan_selection_press
 
 
@@ -60,6 +61,10 @@ def _independent_selection_items(selection_items: list, atom_ids: set[int]) -> l
                 continue
         items.append(item)
     return items
+
+
+def _perspective_tool_controller_for(canvas) -> PerspectiveToolController:
+    return PerspectiveToolController(canvas)
 
 
 class _SelectionDragMixin:
@@ -912,49 +917,9 @@ class DeleteTool(Tool):
             self._changed = True
 
 
-class ArrowTool(Tool):
-    def __init__(self, canvas, mode: str = "auto") -> None:
-        super().__init__("arrow")
-        self.canvas = canvas
-        self.mode = mode
-        self._start_pos = None
-        self._preview_item = None
-
-    def activate(self) -> None:
-        self.canvas.setDragMode(self.canvas.DragMode.NoDrag)
-
-    def on_mouse_press(self, event) -> bool:
-        if event.button() != Qt.MouseButton.LeftButton:
-            return False
-        self._start_pos = self.canvas.scene_pos_from_event(event)
-        return True
-
-    def on_mouse_move(self, event) -> bool:
-        if self._start_pos is None:
-            return False
-        current_pos = self.canvas.scene_pos_from_event(event)
-        if self._preview_item is not None:
-            self.canvas.scene().removeItem(self._preview_item)
-        arrow_type = self.mode if self.mode != "auto" else self.canvas.active_arrow_type
-        self._preview_item = self.canvas.preview_arrow(self._start_pos, current_pos, arrow_type)
-        return True
-
-    def on_mouse_release(self, event) -> bool:
-        if self._start_pos is None:
-            return False
-        end_pos = self.canvas.scene_pos_from_event(event)
-        if self._preview_item is not None:
-            self.canvas.scene().removeItem(self._preview_item)
-            self._preview_item = None
-        arrow_type = self.mode if self.mode != "auto" else self.canvas.active_arrow_type
-        self.canvas.add_arrow(self._start_pos, end_pos, arrow_type)
-        self._start_pos = None
-        return True
-
-
-class TSBracketTool(Tool):
-    def __init__(self, canvas) -> None:
-        super().__init__("ts_bracket")
+class _PreviewDragTool(Tool):
+    def __init__(self, name: str, canvas) -> None:
+        super().__init__(name)
         self.canvas = canvas
         self._start_pos = None
         self._preview_item = None
@@ -976,6 +941,12 @@ class TSBracketTool(Tool):
             pass
         self._preview_item = None
 
+    def _build_preview(self, current_pos):
+        raise NotImplementedError
+
+    def _commit_drag(self, end_pos) -> None:
+        raise NotImplementedError
+
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
             return False
@@ -987,7 +958,7 @@ class TSBracketTool(Tool):
             return False
         current_pos = self.canvas.scene_pos_from_event(event)
         self._clear_preview()
-        self._preview_item = self.canvas.preview_ts_bracket(self._start_pos, current_pos)
+        self._preview_item = self._build_preview(current_pos)
         return True
 
     def on_mouse_release(self, event) -> bool:
@@ -995,9 +966,35 @@ class TSBracketTool(Tool):
             return False
         end_pos = self.canvas.scene_pos_from_event(event)
         self._clear_preview()
-        self.canvas.add_ts_bracket_from_points(self._start_pos, end_pos)
+        self._commit_drag(end_pos)
         self._start_pos = None
         return True
+
+
+class ArrowTool(_PreviewDragTool):
+    def __init__(self, canvas, mode: str = "auto") -> None:
+        super().__init__("arrow", canvas)
+        self.mode = mode
+
+    def _arrow_type(self) -> str:
+        return self.mode if self.mode != "auto" else self.canvas.active_arrow_type
+
+    def _build_preview(self, current_pos):
+        return self.canvas.preview_arrow(self._start_pos, current_pos, self._arrow_type())
+
+    def _commit_drag(self, end_pos) -> None:
+        self.canvas.add_arrow(self._start_pos, end_pos, self._arrow_type())
+
+
+class TSBracketTool(_PreviewDragTool):
+    def __init__(self, canvas) -> None:
+        super().__init__("ts_bracket", canvas)
+
+    def _build_preview(self, current_pos):
+        return self.canvas.preview_ts_bracket(self._start_pos, current_pos)
+
+    def _commit_drag(self, end_pos) -> None:
+        self.canvas.add_ts_bracket_from_points(self._start_pos, end_pos)
 
 
 class OrbitalTool(Tool):
@@ -1130,20 +1127,7 @@ class PerspectiveTool(Tool):
             item = self.canvas.item_at_event(event)
             if self.canvas.toggle_item_selection(item):
                 return True
-        self.canvas.clear_handles()
-        press_pos = self.canvas.scene_pos_from_event(event)
-        preferred_item = self.canvas.preferred_structure_item_at_scene_pos(press_pos)
-        if not self.canvas.selection_hit_test(press_pos):
-            item = preferred_item or self.canvas.item_at_event(event)
-            if item is None or not self.canvas.select_structure_for_item(item):
-                return False
-            preferred_item = self.canvas.preferred_structure_item_at_scene_pos(press_pos)
-        axis_hint = None
-        if preferred_item is not None and preferred_item.data(0) == "bond":
-            bond_id = preferred_item.data(1)
-            if isinstance(bond_id, int):
-                axis_hint = bond_id
-        self._rotating = self.canvas.begin_selection_3d_rotation(axis_hint=axis_hint, press_pos=press_pos)
+        self._rotating = _perspective_tool_controller_for(self.canvas).begin_selection_rotation(event)
         if self._rotating:
             self._last_pos = event.position()
             self._axis_lock = None
