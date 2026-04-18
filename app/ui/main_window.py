@@ -53,8 +53,16 @@ from ui.main_window_config import (
     COLOR_PALETTE_SPECS,
     LEFT_TOOLBAR_ACTION_ORDER,
     MARK_TOOL_ACTION_SPECS,
-    TEMPLATE_ENTRY_SPECS,
     TOOL_ACTION_SPECS,
+)
+from ui.main_window_toolbar_logic import (
+    arrow_preset_from_label,
+    arrow_type_from_label,
+    bond_style_from_label,
+    build_template_entries,
+    orbital_type_from_label,
+    tool_action_key_for_canvas_state,
+    tool_display_name,
 )
 from ui.main_window_path_logic import resolve_load_path, resolve_save_as_path, resolve_save_path
 from ui.main_window_theme import (
@@ -1583,16 +1591,7 @@ class MainWindow(QMainWindow):
         self._set_arrow_preset(value)
 
     def _template_entries(self) -> list[tuple[str, Callable[[], None]]]:
-        return [
-            (
-                label,
-                lambda ring_size=ring_size, style=style: self.canvas.begin_ring_template_insert(
-                    ring_size,
-                    style=style,
-                ),
-            )
-            for label, ring_size, style in TEMPLATE_ENTRY_SPECS
-        ]
+        return build_template_entries(self.canvas.begin_ring_template_insert)
 
     def _acs_color_palette(self) -> list[tuple[str, str]]:
         return list(COLOR_PALETTE_SPECS)
@@ -1618,51 +1617,19 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(0, apply_fill)
 
     def _set_bond_style(self, value: str) -> None:
-        mapping = {
-            "Single": ("single", 1),
-            "Double": ("double", 2),
-            "Triple": ("triple", 3),
-            "Bold": ("bold_in", 1),
-            "Wedge": ("wedge", 1),
-            "Hash": ("hash", 1),
-            "Dotted": ("dotted", 1),
-        }
-        style, order = mapping.get(value, ("single", 1))
+        style, order = bond_style_from_label(value)
         self.canvas.set_bond_style(style, order)
-
-    _tool_display_names = {
-        "select": "Select",
-        "bond": "Bond",
-        "text": "Atom / Text",
-        "benzene": "Ring",
-        "arrow": "Arrow",
-        "ts_bracket": "TS Bracket",
-        "orbital": "Orbital",
-        "perspective": "Perspective",
-        "color": "Color",
-        "mark": "Mark",
-    }
 
     def _sync_tool_actions_from_canvas(self) -> None:
         if not hasattr(self, "_tool_actions"):
             return
         active = self.canvas.tools.active.name if self.canvas.tools.active is not None else None
-        action = None
-        if active == "bond":
-            if self.canvas.active_bond_style in {"bold", "bold_in", "bold_out"}:
-                action = self._tool_actions.get("bond_bold")
-            elif self.canvas.active_bond_style == "wedge":
-                action = self._tool_actions.get("bond_wedge")
-            elif self.canvas.active_bond_style == "hash":
-                action = self._tool_actions.get("bond_hash")
-            elif self.canvas.active_bond_style == "dotted":
-                action = self._tool_actions.get("bond_dotted")
-            else:
-                action = self._tool_actions.get("bond")
-        elif active == "mark":
-            action = self._tool_actions.get(f"mark_{self.canvas.mark_kind}")
-        elif active is not None:
-            action = self._tool_actions.get(active)
+        action_key = tool_action_key_for_canvas_state(
+            active,
+            active_bond_style=self.canvas.active_bond_style,
+            mark_kind=self.canvas.mark_kind,
+        )
+        action = self._tool_actions.get(action_key) if action_key is not None else None
         if action is not None:
             action.setChecked(True)
 
@@ -1670,45 +1637,20 @@ class MainWindow(QMainWindow):
         self.canvas.set_tool(tool)
         if tool == "bond" and reset_bond_style:
             self._set_bond_style("Single")
-        display = self._tool_display_names.get(tool, tool.capitalize())
+        display = tool_display_name(tool)
         self.statusBar().showMessage(f"{display} Tool")
 
     def _set_arrow_type(self, value: str) -> None:
-        mapping = {
-            "Reaction": "reaction",
-            "Equilibrium": "equilibrium",
-            "Resonance": "resonance",
-            "Curved Single": "curved_single",
-            "Curved Double": "curved_double",
-            "Inhibition": "inhibit",
-            "Dotted": "dotted",
-        }
-        self.canvas.set_arrow_type(mapping.get(value, "reaction"))
+        self.canvas.set_arrow_type(arrow_type_from_label(value))
 
     def _set_orbital_type(self, value: str) -> None:
-        mapping = {
-            "s": "s",
-            "p": "p",
-            "sp": "sp",
-            "sp2": "sp2",
-            "sp3": "sp3",
-            "d": "d",
-            "MO bonding": "mo_bonding",
-            "MO antibonding": "mo_antibonding",
-        }
-        self.canvas.set_orbital_type(mapping.get(value, "s"))
+        self.canvas.set_orbital_type(orbital_type_from_label(value))
 
     def _set_orbital_phase(self, value: str) -> None:
         self.canvas.set_orbital_phase_enabled(value == "Phase On")
 
     def _set_arrow_preset(self, value: str) -> None:
-        presets = {
-            "Default": (1.2, 0.3),
-            "ACS": (1.2, 0.3),
-            "Bold": (2.2, 0.4),
-            "Fine": (0.8, 0.25),
-        }
-        width, head = presets.get(value, (1.2, 0.3))
+        width, head = arrow_preset_from_label(value)
         self.canvas.set_arrow_line_width(width)
         self.canvas.set_arrow_head_scale(head)
 

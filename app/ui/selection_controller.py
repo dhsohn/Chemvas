@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.graphics_items import NoSelectEllipseItem, NoSelectPathItem, NoSelectRectItem
+from ui.selection_center_logic import bounding_box_center_for_atoms
 from ui.selection_hit_logic import (
     AtomHitCandidate,
     BondHitCandidate,
@@ -630,7 +631,7 @@ class SelectionController:
     def _selection_center_for_atoms(self, atom_ids: set[int]) -> QPointF | None:
         if len(atom_ids) < 2:
             return None
-        return self.canvas._bounding_box_center_for_atoms(atom_ids)
+        return bounding_box_center_for_atoms(atom_ids, atoms=self.canvas.model.atoms)
 
     def _selection_center_marker_enabled(self) -> bool:
         return self.canvas.tools.active is not None and self.canvas.tools.active.name == "perspective"

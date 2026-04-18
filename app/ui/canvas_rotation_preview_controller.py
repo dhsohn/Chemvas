@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from ui.selection_center_logic import center_for_atoms
+from ui.selection_rotation_logic import selected_rotation_atom_ids
+
 
 class CanvasRotationPreviewController:
     def __init__(self, canvas) -> None:
@@ -12,16 +15,8 @@ class CanvasRotationPreviewController:
         if not items:
             return False
         atom_ids, bond_ids = self.canvas._selected_ids()
-        if bond_ids:
-            for bond_id in bond_ids:
-                if not (0 <= bond_id < len(self.canvas.model.bonds)):
-                    continue
-                bond = self.canvas.model.bonds[bond_id]
-                if bond is None:
-                    continue
-                atom_ids.add(bond.a)
-                atom_ids.add(bond.b)
-        center = self.canvas._center_for_atoms(atom_ids)
+        atom_ids = selected_rotation_atom_ids(atom_ids, bond_ids, bonds=self.canvas.model.bonds)
+        center = center_for_atoms(atom_ids, atoms=self.canvas.model.atoms)
         if center is None:
             return False
         self.canvas._rotation_group = self.canvas.scene().createItemGroup(items)

@@ -56,7 +56,6 @@ class _FakeCanvas:
         self.selected_atom_ids: set[int] = set()
         self.selected_bond_ids: set[int] = set()
         self.axis_hint_response: tuple[int, set[int]] | None = None
-        self.bounding_box_center = QPointF(5.0, 6.0)
         self.flattened_coords: dict[int, tuple[float, float, float]] | None = None
 
         self._projection_center_3d = (100.0, 200.0, 300.0)
@@ -81,7 +80,6 @@ class _FakeCanvas:
         self.axis_hint_calls: list[tuple[int, set[int], QPointF | None]] = []
         self.flatten_calls: list[tuple[set[int], dict[int, tuple[float, float, float]]]] = []
         self.average_bond_length_calls: list[tuple[set[int], dict[int, tuple[float, float, float]]]] = []
-        self.bounding_box_calls: list[set[int]] = []
         self.unproject_calls: list[tuple[tuple[float, float], float, tuple[float, float, float], tuple[float, float]]] = []
         self.apply_projected_calls: list[tuple[set[int], dict[int, tuple[float, float, float]]]] = []
         self.redraw_calls: list[set[int]] = []
@@ -127,10 +125,6 @@ class _FakeCanvas:
     ) -> float:
         self.average_bond_length_calls.append((set(atom_ids), dict(coords)))
         return 12.5
-
-    def _bounding_box_center_for_atoms(self, atom_ids: set[int]) -> QPointF | None:
-        self.bounding_box_calls.append(set(atom_ids))
-        return self.bounding_box_center
 
     def _unproject_scene_point_3d(
         self,
@@ -238,22 +232,21 @@ class SelectionRotationControllerTest(unittest.TestCase):
 
         self.assertTrue(rotating)
         self.assertEqual(canvas.axis_hint_calls, [(4, {0, 1, 2}, QPointF(2.0, 3.0))])
-        self.assertEqual(canvas.bounding_box_calls, [{0, 1, 2}])
         self.assertEqual(canvas._rotation_mode, "rigid")
         self.assertIsNone(canvas._rotation_axis_bond_id)
         self.assertIsNone(canvas._rotation_axis_atoms)
         self.assertEqual(canvas.rotation_atom_ids, {0, 1, 2})
         self.assertEqual(canvas._rotation_selection_ids, ({0}, {1}))
-        self.assertEqual(canvas.rotation_center_3d, (5.0, 6.0, 1.0))
-        self.assertEqual(canvas._projection_center_3d, (5.0, 6.0, 1.0))
-        self.assertEqual(canvas._projection_anchor_2d, (5.0, 6.0))
+        self.assertEqual(canvas.rotation_center_3d, (10.0, 2.5, 1.0))
+        self.assertEqual(canvas._projection_center_3d, (10.0, 2.5, 1.0))
+        self.assertEqual(canvas._projection_anchor_2d, (10.0, 2.5))
         self.assertEqual(canvas._rotation_start_positions, {0: (0.0, 0.0), 1: (10.0, 0.0), 2: (20.0, 5.0)})
         self.assertEqual(
             canvas.unproject_calls,
             [
-                ((0.0, 0.0), 0.0, (5.0, 6.0, 1.0), (5.0, 6.0)),
-                ((10.0, 0.0), 0.0, (5.0, 6.0, 1.0), (5.0, 6.0)),
-                ((20.0, 5.0), 3.0, (5.0, 6.0, 1.0), (5.0, 6.0)),
+                ((0.0, 0.0), 0.0, (10.0, 2.5, 1.0), (10.0, 2.5)),
+                ((10.0, 0.0), 0.0, (10.0, 2.5, 1.0), (10.0, 2.5)),
+                ((20.0, 5.0), 3.0, (10.0, 2.5, 1.0), (10.0, 2.5)),
             ],
         )
         self.assertEqual(canvas._rotation_base_coords[0], (0.5, -0.25, 1.0))
@@ -269,12 +262,13 @@ class SelectionRotationControllerTest(unittest.TestCase):
 
         self.assertTrue(rotating)
         self.assertEqual(canvas.axis_hint_calls, [])
-        self.assertEqual(canvas.bounding_box_calls, [{2}])
         self.assertEqual(canvas._rotation_mode, "rigid")
         self.assertEqual(canvas.rotation_atom_ids, {2})
         self.assertEqual(canvas._rotation_selection_ids, (set(), set()))
         self.assertEqual(canvas._rotation_start_positions, {2: (20.0, 5.0)})
         self.assertEqual(canvas._rotation_coord_atom_ids, {2})
+        self.assertEqual(canvas.rotation_center_3d, (20.0, 5.0, 3.0))
+        self.assertEqual(canvas._projection_anchor_2d, (20.0, 5.0))
         self.assertEqual(canvas._rotation_base_coords, {2: (20.5, 4.75, 4.0)})
         self.assertEqual(canvas.atom_coords_3d[2], (20.5, 4.75, 4.0))
         self.assertEqual(canvas.average_bond_length_calls, [({2}, dict(canvas._rotation_base_coords))])
@@ -337,7 +331,6 @@ class SelectionRotationControllerTest(unittest.TestCase):
         rotating = controller.begin_selection_3d_rotation()
 
         self.assertFalse(rotating)
-        self.assertEqual(canvas.bounding_box_calls, [set()])
         self.assertEqual(canvas._rotation_selection_ids, (set(), {1, 99}))
         self.assertEqual(canvas._rotation_start_coords_3d, {})
 

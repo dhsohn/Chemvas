@@ -20,7 +20,7 @@ if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
 if QApplication is not None:
-    from core.model import Bond
+    from core.model import Atom, Bond
     from ui.canvas_view import CanvasView
 
 
@@ -79,11 +79,9 @@ class CanvasViewRotationPreviewHelperTest(unittest.TestCase):
             _rotation_group=None,
             scene=lambda: centerless_scene,
             _selected_ids=mock.Mock(return_value=({1}, set())),
-            model=SimpleNamespace(bonds=[]),
-            _center_for_atoms=mock.Mock(return_value=None),
+            model=SimpleNamespace(atoms={}, bonds=[]),
         )
         self.assertFalse(CanvasView.begin_selection_rotation(centerless_view))
-        centerless_view._center_for_atoms.assert_called_once_with({1})
 
     def test_begin_selection_rotation_builds_group_and_includes_atoms_from_selected_bonds(self) -> None:
         selected_items = [object(), object()]
@@ -93,17 +91,20 @@ class CanvasViewRotationPreviewHelperTest(unittest.TestCase):
             scene=lambda: scene,
             _selected_ids=mock.Mock(return_value=({1}, {0, 1, 99})),
             model=SimpleNamespace(
+                atoms={
+                    1: Atom("C", 1.0, 1.0),
+                    2: Atom("C", 4.0, 7.0),
+                    3: Atom("C", 10.0, 10.0),
+                },
                 bonds=[
                     Bond(2, 3, 1),
                     None,
                 ]
             ),
-            _center_for_atoms=mock.Mock(return_value=QPointF(5.0, 6.0)),
         )
 
         self.assertTrue(CanvasView.begin_selection_rotation(view))
 
-        view._center_for_atoms.assert_called_once_with({1, 2, 3})
         self.assertEqual(scene.created_with, selected_items)
         self.assertEqual(scene._group.origin, QPointF(5.0, 6.0))
         self.assertIs(view._rotation_group, scene._group)

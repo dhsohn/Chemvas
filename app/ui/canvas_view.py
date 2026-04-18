@@ -124,6 +124,7 @@ from ui.scene_item_state import (
 )
 from ui.scene_ops_controller import SceneOpsController
 from ui.selection_controller import SelectionController
+from ui.selection_center_logic import bounding_box_center_for_atoms, center_for_atoms
 from ui.selection_highlight_styler import (
     SelectionHighlightStyler,
     selection_highlight_styler_for,
@@ -154,6 +155,7 @@ from ui.structure_geometry_logic import (
     compute_template_points_for_bond,
 )
 from ui.structure_insert_service import StructureInsertService
+from ui.selection_rotation_logic import rotated_atom_positions, selected_rotation_atom_ids
 
 
 class NoteItem(QGraphicsTextItem):
@@ -3442,31 +3444,22 @@ class CanvasView(QGraphicsView):
 
     def rotate_selection(self, angle_degrees: float) -> None:
         atom_ids, bond_ids = self._selected_ids()
-        if bond_ids:
-            for bond_id in bond_ids:
-                if not (0 <= bond_id < len(self.model.bonds)):
-                    continue
-                bond = self.model.bonds[bond_id]
-                if bond is None:
-                    continue
-                atom_ids.add(bond.a)
-                atom_ids.add(bond.b)
+        atom_ids = selected_rotation_atom_ids(atom_ids, bond_ids, bonds=self.model.bonds)
         if not atom_ids:
             return
         center = self._center_for_atoms(atom_ids)
         if center is None:
             return
         angle = math.radians(angle_degrees)
-        cos_a = math.cos(angle)
-        sin_a = math.sin(angle)
-        for atom_id in atom_ids:
-            atom = self.model.atoms.get(atom_id)
-            if atom is None:
-                continue
-            dx = atom.x - center.x()
-            dy = atom.y - center.y()
-            atom.x = center.x() + dx * cos_a - dy * sin_a
-            atom.y = center.y() + dx * sin_a + dy * cos_a
+        for atom_id, (x, y) in rotated_atom_positions(
+            atom_ids,
+            atoms=self.model.atoms,
+            center=center,
+            angle_radians=angle,
+        ).items():
+            atom = self.model.atoms[atom_id]
+            atom.x = x
+            atom.y = y
             label = self.atom_items.get(atom_id)
             if label is not None:
                 self._position_label(label, atom.x, atom.y)
@@ -4046,30 +4039,10 @@ class CanvasView(QGraphicsView):
             ring_item.setPolygon(rotated)
 
     def _center_for_atoms(self, atom_ids: set[int]) -> QPointF | None:
-        xs = []
-        ys = []
-        for atom_id in atom_ids:
-            atom = self.model.atoms.get(atom_id)
-            if atom is None:
-                continue
-            xs.append(atom.x)
-            ys.append(atom.y)
-        if not xs:
-            return None
-        return QPointF(sum(xs) / len(xs), sum(ys) / len(ys))
+        return center_for_atoms(atom_ids, atoms=self.model.atoms)
 
     def _bounding_box_center_for_atoms(self, atom_ids: set[int]) -> QPointF | None:
-        xs = []
-        ys = []
-        for atom_id in atom_ids:
-            atom = self.model.atoms.get(atom_id)
-            if atom is None:
-                continue
-            xs.append(atom.x)
-            ys.append(atom.y)
-        if not xs:
-            return None
-        return QPointF((min(xs) + max(xs)) / 2.0, (min(ys) + max(ys)) / 2.0)
+        return bounding_box_center_for_atoms(atom_ids, atoms=self.model.atoms)
 
     def _update_view_transform(self) -> None:
         transform = QTransform(self._base_transform)
