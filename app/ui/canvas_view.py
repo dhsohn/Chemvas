@@ -72,6 +72,9 @@ from ui.benzene_preview_service import BenzenePreviewService
 from ui.bond_graphics_logic import refresh_bond_graphics
 from ui.scene_decoration_service import SceneDecorationService
 from ui.canvas_handle_controller import CanvasHandleController
+from ui.curved_arrow_path_service import CurvedArrowPathService, curved_arrow_path_service_for
+from ui.handle_mutation_service import HandleMutationService
+from ui.handle_overlay_service import HandleOverlayService, handle_overlay_service_for
 from ui.canvas_input_controller import CanvasInputController
 from ui.canvas_move_controller import CanvasMoveController
 from ui.canvas_note_controller import CanvasNoteController
@@ -121,6 +124,10 @@ from ui.scene_item_state import (
 )
 from ui.scene_ops_controller import SceneOpsController
 from ui.selection_controller import SelectionController
+from ui.selection_highlight_styler import (
+    SelectionHighlightStyler,
+    selection_highlight_styler_for,
+)
 from ui.selection_hit_logic import (
     SelectionRect,
     SelectionSnapshot,
@@ -313,6 +320,10 @@ class CanvasView(QGraphicsView):
         self._insert_controller = InsertController(self)
         self._input_controller = CanvasInputController(self)
         self._handle_controller = CanvasHandleController(self)
+        self._handle_overlay_service = HandleOverlayService(self)
+        self._handle_mutation_service = HandleMutationService(self)
+        self._curved_arrow_path_service = CurvedArrowPathService(self)
+        self._selection_highlight_styler = SelectionHighlightStyler(self)
         self._move_controller = CanvasMoveController(self)
         self._note_controller = CanvasNoteController(self)
         self._pointer_controller = CanvasPointerController(self)
@@ -1132,15 +1143,7 @@ class CanvasView(QGraphicsView):
         control: QPointF,
         double: bool,
     ) -> None:
-        path = QPainterPath()
-        path.moveTo(start)
-        path.quadTo(control, end)
-        if double:
-            self._add_arrow_head(path, control, end, double=False)
-            self._add_arrow_head(path, control, start, double=False)
-        else:
-            self._add_arrow_head(path, control, end, double=False)
-        item.setPath(path)
+        curved_arrow_path_service_for(self).set_curved_arrow_path(item, start, end, control, double)
 
     def _restore_arrow_from_state(self, arrow_state: dict):
         return self._scene_item_controller._restore_arrow_from_state(arrow_state)
@@ -3336,16 +3339,16 @@ class CanvasView(QGraphicsView):
         return items
 
     def clear_handles(self) -> None:
-        _handle_controller_for(self).clear_handles()
+        handle_overlay_service_for(self).clear_handles()
 
     def show_orbital_handles(self, item) -> None:
-        _handle_controller_for(self).show_orbital_handles(item)
+        handle_overlay_service_for(self).show_orbital_handles(item)
 
     def show_curved_handles(self, item) -> None:
-        _handle_controller_for(self).show_curved_handles(item)
+        handle_overlay_service_for(self).show_curved_handles(item)
 
     def _create_handle(self, pos: QPointF, handle_type: str, target):
-        return _handle_controller_for(self).create_handle(pos, handle_type, target)
+        return handle_overlay_service_for(self).create_handle(pos, handle_type, target)
 
     def update_handle_drag(self, handle, scene_pos: QPointF) -> None:
         _handle_controller_for(self).update_handle_drag(handle, scene_pos)
@@ -3372,13 +3375,13 @@ class CanvasView(QGraphicsView):
         return _handle_controller_for(self).clamp_curved_midpoint(start, end, mid)
 
     def _set_selection_highlight(self, items: list) -> None:
-        _handle_controller_for(self).set_selection_highlight(items)
+        selection_highlight_styler_for(self).set_selection_highlight(items)
 
     def _clear_selection_highlight(self) -> None:
-        _handle_controller_for(self).clear_selection_highlight()
+        selection_highlight_styler_for(self).clear_selection_highlight()
 
     def _apply_selection_style(self, item, selected: bool) -> None:
-        _handle_controller_for(self).apply_selection_style(item, selected)
+        selection_highlight_styler_for(self).apply_selection_style(item, selected)
 
     def mousePressEvent(self, event) -> None:
         _pointer_controller_for(self).mouse_press_event(

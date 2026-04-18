@@ -7,7 +7,15 @@ from PyQt6.QtCore import QPointF
 
 from ui.atom_label_access import add_or_update_atom_label
 from ui.bond_style_logic import style_for_existing_bond_overlay
-from ui.ring_occupancy_logic import point_inside_any_ring
+from ui.structure_benzene_logic import plan_benzene_ring_points
+from ui.structure_growth_logic import (
+    alternating_ring_bond_specs,
+    crown_ether_elements,
+    fused_benzene_centers,
+    mirrored_local_points,
+    other_atom_id_from_bond_result,
+    resolve_bond_placement_context,
+)
 from ui.structure_geometry_logic import compute_free_benzene_ring_points
 
 if TYPE_CHECKING:
@@ -75,32 +83,13 @@ class StructureBuildService:
         center = self.viewport_center()
         step = self.canvas.renderer.style.bond_length_px * 1.5
         merge = []
-        centers = []
-        if count == 2:
-            centers = [QPointF(center.x() - step / 2, center.y()), QPointF(center.x() + step / 2, center.y())]
-        elif mode == "angled":
-            centers = [
-                QPointF(center.x() - step, center.y()),
-                QPointF(center.x(), center.y()),
-                QPointF(center.x() + step * 0.6, center.y() + step * 0.6),
-            ]
-        else:
-            centers = [
-                QPointF(center.x() - step, center.y()),
-                QPointF(center.x(), center.y()),
-                QPointF(center.x() + step, center.y()),
-            ]
-        for ring_center in centers:
+        for ring_center in fused_benzene_centers(center, step, count, mode):
             self.add_ring_from_points(self.canvas._ring_points(ring_center, 6), merge=merge)
 
     def add_crown_ether(self, atoms: int, oxygens: int) -> None:
         center = self.viewport_center()
         points = self.canvas._ring_points(center, atoms, radius=self.canvas.renderer.style.bond_length_px * 1.4)
-        elements = ["C"] * atoms
-        step = atoms // oxygens
-        for i in range(0, atoms, step):
-            elements[i] = "O"
-        self.add_ring_from_points(points, elements=elements)
+        self.add_ring_from_points(points, elements=crown_ether_elements(atoms, oxygens))
 
     def sprout_bond_from_atom(
         self,
@@ -125,19 +114,15 @@ class StructureBuildService:
         if carbon_end is None:
             return
         result = self.add_bond_between_points(start, carbon_end, "single", 1)
-        if result is None:
-            return
-        start_id, end_id = result
-        carbon_id = end_id if start_id == atom_id else start_id
+        carbon_id = other_atom_id_from_bond_result(atom_id, result)
         if carbon_id not in self.canvas.model.atoms:
             return
         carbon_point = self.canvas._atom_point(carbon_id)
         oxygen_end = self.canvas._default_bond_endpoint(carbon_point, carbon_id)
         result = self.add_bond_between_points(carbon_point, oxygen_end, "double", 2)
-        if result is not None:
-            oxygen_id = result[1] if result[0] == carbon_id else result[0]
-            if oxygen_id in self.canvas.model.atoms:
-                add_or_update_atom_label(self.canvas, oxygen_id, "O", show_carbon=True)
+        oxygen_id = other_atom_id_from_bond_result(carbon_id, result)
+        if oxygen_id in self.canvas.model.atoms:
+            add_or_update_atom_label(self.canvas, oxygen_id, "O", show_carbon=True)
         methyl_end = self.canvas._default_bond_endpoint(carbon_point, carbon_id)
         self.add_bond_between_points(carbon_point, methyl_end, "single", 1)
 
@@ -154,15 +139,14 @@ class StructureBuildService:
 
     def fuse_regular_ring_to_bond(self, bond_id: int, n: int) -> None:
         def _build() -> bool:
-            bond = self.canvas.model.bonds[bond_id]
-            if bond is None:
+            placement = resolve_bond_placement_context(
+                bond_id,
+                bonds=self.canvas.model.bonds,
+                atoms=self.canvas.model.atoms,
+            )
+            if placement is None:
                 return False
-            a = self.canvas.model.atoms.get(bond.a)
-            b = self.canvas.model.atoms.get(bond.b)
-            if a is None or b is None:
-                return False
-            midpoint = QPointF((a.x + b.x) / 2.0, (a.y + b.y) / 2.0)
-            result = self.canvas._regular_ring_points_for_bond(n, bond_id, midpoint)
+            result = self.canvas._regular_ring_points_for_bond(n, bond_id, placement.midpoint)
             if result is None:
                 return False
             points, merge = result
@@ -174,18 +158,15 @@ class StructureBuildService:
     def fuse_chair_to_bond(self, bond_id: int, mirrored: bool = False) -> None:
         def _build() -> bool:
             local_center = QPointF(0.0, 0.0)
-            points_local = self.canvas._cyclohexane_chair_points(local_center)
-            if mirrored:
-                points_local = [QPointF(point.x(), -point.y()) for point in points_local]
-            bond = self.canvas.model.bonds[bond_id]
-            if bond is None:
+            points_local = mirrored_local_points(self.canvas._cyclohexane_chair_points(local_center), mirrored)
+            placement = resolve_bond_placement_context(
+                bond_id,
+                bonds=self.canvas.model.bonds,
+                atoms=self.canvas.model.atoms,
+            )
+            if placement is None:
                 return False
-            a = self.canvas.model.atoms.get(bond.a)
-            b = self.canvas.model.atoms.get(bond.b)
-            if a is None or b is None:
-                return False
-            midpoint = QPointF((a.x + b.x) / 2.0, (a.y + b.y) / 2.0)
-            result = self.canvas._template_points_for_bond(points_local, bond_id, midpoint)
+            result = self.canvas._template_points_for_bond(points_local, bond_id, placement.midpoint)
             if result is None:
                 return False
             points, merge = result
@@ -195,15 +176,14 @@ class StructureBuildService:
         self._run_recorded_additions_action(_build)
 
     def fuse_benzene_to_bond(self, bond_id: int) -> object | None:
-        bond = self.canvas.model.bonds[bond_id]
-        if bond is None:
+        placement = resolve_bond_placement_context(
+            bond_id,
+            bonds=self.canvas.model.bonds,
+            atoms=self.canvas.model.atoms,
+        )
+        if placement is None:
             return None
-        a = self.canvas.model.atoms.get(bond.a)
-        b = self.canvas.model.atoms.get(bond.b)
-        if a is None or b is None:
-            return None
-        midpoint = QPointF((a.x + b.x) / 2.0, (a.y + b.y) / 2.0)
-        return self.add_benzene_ring(midpoint, attach_bond_id=bond_id)
+        return self.add_benzene_ring(placement.midpoint, attach_bond_id=bond_id)
 
     def add_bond_between_points(
         self,
@@ -274,40 +254,18 @@ class StructureBuildService:
         attach_atom_id: int | None = None,
         attach_bond_id: int | None = None,
     ) -> tuple[list[QPointF], list[tuple[int, float, float]]] | None:
-        if attach_atom_id is None and attach_bond_id is None and point_inside_any_ring(
+        return plan_benzene_ring_points(
             center,
+            attach_atom_id=attach_atom_id,
+            attach_bond_id=attach_bond_id,
+            bonds=self.canvas.model.bonds,
+            atoms=self.canvas.model.atoms,
             ring_items=self.canvas.ring_items,
-        ):
-            return None
-
-        points: list[QPointF] = []
-        merge: list[tuple[int, float, float]] = []
-
-        if attach_bond_id is not None and 0 <= attach_bond_id < len(self.canvas.model.bonds):
-            bond = self.canvas.model.bonds[attach_bond_id]
-            if bond is not None:
-                a = self.canvas.model.atoms.get(bond.a)
-                b = self.canvas.model.atoms.get(bond.b)
-                if a is not None and b is not None:
-                    result = self.canvas._regular_ring_points_for_bond(6, attach_bond_id, center)
-                    if result is None:
-                        return None
-                    points, merge = result
-
-        if not points and attach_atom_id is not None and attach_atom_id in self.canvas.model.atoms:
-            result = self.canvas._regular_ring_points_for_atom(6, attach_atom_id)
-            if result is None:
-                return None
-            points, merge = result
-
-        if points:
-            return points, merge
-
-        free_points = compute_free_benzene_ring_points(
-            (center.x(), center.y()),
             bond_length=self.canvas.renderer.style.bond_length_px,
+            regular_ring_points_for_bond=self.canvas._regular_ring_points_for_bond,
+            regular_ring_points_for_atom=self.canvas._regular_ring_points_for_atom,
+            compute_free_points=compute_free_benzene_ring_points,
         )
-        return [QPointF(x, y) for x, y in free_points], merge
 
     def add_benzene_ring(
         self,
@@ -331,12 +289,9 @@ class StructureBuildService:
                 atom_ids.append(self.add_atom_with_merge(point, "C", merge))
 
             bonds_start = len(self.canvas.model.bonds)
-            for i in range(6):
-                a_id = atom_ids[i]
-                b_id = atom_ids[(i + 1) % 6]
+            for a_id, b_id, order in alternating_ring_bond_specs(atom_ids):
                 if self.canvas._bond_exists(a_id, b_id):
                     continue
-                order = 2 if i % 2 == 0 else 1
                 self.canvas.add_bond(a_id, b_id, order)
 
             built_ring_item = self.canvas._create_ring_fill_item(points, atom_ids)
