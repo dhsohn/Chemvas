@@ -28,7 +28,7 @@ class SceneItemController:
             ring_state,
             ring_fill_brush_getter=self.canvas.renderer.ring_fill_brush,
         )
-        self.restore_scene_item(item)
+        self.attach_scene_item(item)
         return item
 
     def _restore_note_from_state(self, note_state: dict):
@@ -37,7 +37,7 @@ class SceneItemController:
             note_item_factory=self.canvas._new_note_item,
             note_style_applier=self.canvas._apply_note_style,
         )
-        self.restore_scene_item(item)
+        self.attach_scene_item(item)
         return item
 
     def _restore_mark_from_state(self, mark_state: dict):
@@ -47,7 +47,7 @@ class SceneItemController:
             build_mark_item=self.canvas._build_mark_item,
             set_mark_center=self.canvas._set_mark_center,
         )
-        self.restore_scene_item(item)
+        self.attach_scene_item(item)
         return item
 
     def _restore_arrow_from_state(self, arrow_state: dict):
@@ -56,7 +56,7 @@ class SceneItemController:
             build_arrow_item=self.canvas._build_arrow_item,
             set_curved_arrow_path=self.canvas._set_curved_arrow_path,
         )
-        self.restore_scene_item(item)
+        self.attach_scene_item(item)
         return item
 
     def _restore_ts_bracket_from_state(self, ts_bracket_state: dict):
@@ -64,7 +64,7 @@ class SceneItemController:
             ts_bracket_state,
             build_ts_bracket_item=self.canvas._build_ts_bracket_item,
         )
-        self.restore_scene_item(item)
+        self.attach_scene_item(item)
         return item
 
     def _restore_orbital_from_state(self, orbital_state: dict):
@@ -73,7 +73,7 @@ class SceneItemController:
             build_orbital_items=self.canvas._build_orbital_items,
             orbital_base_handle_dist=self.canvas.renderer.style.bond_length_px * 0.8,
         )
-        self.restore_scene_item(group)
+        self.attach_scene_item(group)
         return group
 
     def create_scene_item_from_state(self, state: dict):
@@ -92,7 +92,7 @@ class SceneItemController:
             orbital_base_handle_dist=self.canvas.renderer.style.bond_length_px * 0.8,
         )
         if item is not None:
-            self.restore_scene_item(item)
+            self.attach_scene_item(item)
             return item
         return None
 
@@ -114,7 +114,7 @@ class SceneItemController:
         for bond_id in self._bond_ids_for_ring_item(item):
             self.canvas.update_bond_geometry(bond_id)
 
-    def restore_scene_item(self, item) -> None:
+    def attach_scene_item(self, item) -> None:
         if item is None:
             return
         try:
@@ -150,6 +150,9 @@ class SceneItemController:
         self.canvas.scene().addItem(item)
         if kind == "ring":
             self._refresh_bond_geometry_for_ring_item(item)
+
+    def restore_scene_item(self, item) -> None:
+        self.attach_scene_item(item)
 
     def remove_scene_item(self, item) -> None:
         if item is None:

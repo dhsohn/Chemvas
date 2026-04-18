@@ -9,7 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
     from PyQt6.QtCore import QPointF, QRectF, Qt
-    from PyQt6.QtGui import QColor, QFont, QPolygonF
+    from PyQt6.QtGui import QColor, QFont, QPainterPath, QPolygonF
     from PyQt6.QtWidgets import QApplication, QGraphicsPathItem, QGraphicsScene, QGraphicsTextItem
 except ModuleNotFoundError:
     QApplication = None
@@ -22,13 +22,6 @@ if str(APP_ROOT) not in sys.path:
 
 if QApplication is not None:
     from core.history import (
-        AddAtomsCommand,
-        AddBondCommand,
-        AddSceneItemsCommand,
-        ChangeAtomLabelCommand,
-        CompositeCommand,
-        DeleteAtomsCommand,
-        DeleteBondCommand,
         UpdateAtomColorCommand,
         UpdateBondCommand,
         UpdateSceneItemCommand,
@@ -185,6 +178,27 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         self.assertEqual(tool_view._notify_tool_change.call_count, 2)
         self.assertEqual(tool_view._refresh_hover_from_cursor.call_count, 2)
 
+    def test_document_session_wrappers_delegate_to_service(self) -> None:
+        document_session_service = mock.Mock()
+        state = {"model": {"atoms": []}}
+        document_session_service.snapshot_state.return_value = state
+        view = SimpleNamespace(_canvas_document_session_service=document_session_service)
+
+        self.assertEqual(CanvasView._snapshot_state(view), state)
+        view._snapshot_state = mock.Mock(return_value=state)
+        self.assertEqual(CanvasView.snapshot_state(view), state)
+        CanvasView._restore_state(view, state)
+        CanvasView.restore_state(view, state)
+        CanvasView.save_to_file(view, "/tmp/example.ldraw")
+        CanvasView.load_from_file(view, "/tmp/example.ldraw")
+
+        view._snapshot_state.assert_called_once_with()
+        document_session_service.snapshot_state.assert_called_once_with()
+        document_session_service.apply_state.assert_called_once_with(state)
+        document_session_service.restore_state.assert_called_once_with(state)
+        document_session_service.save_to_file.assert_called_once_with("/tmp/example.ldraw")
+        document_session_service.load_from_file.assert_called_once_with("/tmp/example.ldraw")
+
     def test_service_and_scene_item_wrappers_delegate(self) -> None:
         scene_item_controller = mock.Mock()
         structure_insert_service = mock.Mock()
@@ -227,6 +241,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         self.assertEqual(CanvasView.create_scene_item_from_state(view, {"kind": "note"}), "item")
         self.assertEqual(CanvasView._bond_ids_for_ring_item(view, "ring-item"), {9})
         CanvasView._refresh_bond_geometry_for_ring_item(view, "ring-item")
+        CanvasView.attach_scene_item(view, "attached-item")
         CanvasView.restore_scene_item(view, "scene-item")
         CanvasView.remove_scene_item(view, "scene-item")
         CanvasView.apply_scene_item_state(view, "scene-item", {"kind": "note"})
@@ -266,6 +281,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             show_carbon=True,
         )
         scene_item_controller._refresh_bond_geometry_for_ring_item.assert_called_once_with("ring-item")
+        scene_item_controller.attach_scene_item.assert_called_once_with("attached-item")
         scene_item_controller.restore_scene_item.assert_called_once_with("scene-item")
         scene_item_controller.remove_scene_item.assert_called_once_with("scene-item")
         scene_item_controller.apply_scene_item_state.assert_called_once_with("scene-item", {"kind": "note"})
@@ -430,6 +446,87 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         selection_highlight_styler.clear_selection_highlight.assert_called_once_with()
         selection_highlight_styler.apply_selection_style.assert_called_once_with(item, True)
 
+    def test_selection_controller_wrappers_delegate_to_public_api(self) -> None:
+        selection_controller = mock.Mock()
+        hit = SimpleNamespace(kind="atom", id=7)
+        path = QPainterPath()
+        item = object()
+        snapshot = object()
+        color = QColor("#123456")
+        center = QPointF(8.0, 9.0)
+        scene_pos = QPointF(2.0, 3.0)
+        view = SimpleNamespace(_selection_controller=selection_controller)
+
+        selection_controller.structure_hit_from_item.return_value = (hit, (1, 2), [3, 4])
+        selection_controller.structure_item_for_hit.return_value = "item"
+        selection_controller.selection_targets_for_item.return_value = ["target"]
+        selection_controller.toggle_item_selection.return_value = False
+        selection_controller.preferred_structure_hit_at_scene_pos.return_value = hit
+        selection_controller.preferred_structure_item_at_scene_pos.return_value = item
+        selection_controller.selection_rects_for_snapshot.return_value = ("rect",)
+        selection_controller.selection_hit_test.return_value = True
+        selection_controller.select_structure_for_item.return_value = True
+        selection_controller.selection_line_stroke_path.return_value = path
+        selection_controller.selection_path_for_bond_item.return_value = path
+        selection_controller.selection_path_for_bond.return_value = path
+        selection_controller.selection_path_for_object_item.return_value = path
+        selection_controller.selection_center_for_atoms.return_value = center
+        selection_controller.selection_center_marker_enabled.return_value = True
+
+        self.assertEqual(CanvasView._structure_hit_from_item(view, item), (hit, (1, 2), [3, 4]))
+        self.assertEqual(CanvasView._structure_item_for_hit(view, hit), "item")
+        self.assertEqual(CanvasView._selection_targets_for_item(view, item), ["target"])
+        self.assertFalse(CanvasView.toggle_item_selection(view, item))
+        self.assertIs(CanvasView.preferred_structure_hit_at_scene_pos(view, scene_pos), hit)
+        self.assertIs(CanvasView.preferred_structure_item_at_scene_pos(view, scene_pos), item)
+        self.assertEqual(CanvasView._selection_rects_for_snapshot(view, snapshot), ("rect",))
+        self.assertTrue(CanvasView.selection_hit_test(view, scene_pos, snapshot=snapshot))
+        self.assertTrue(CanvasView.select_structure_for_item(view, item))
+        CanvasView.select_note(view, item, additive=True)
+        CanvasView.toggle_note_selection(view, item)
+        CanvasView.clear_note_selection(view)
+        CanvasView._update_note_selection_box(view, item)
+        CanvasView._update_selection_outline(view)
+        CanvasView.shift_selection_outlines(view, 1.5, -2.0)
+        self.assertIs(CanvasView._selection_line_stroke_path(view, QPointF(1.0, 2.0), QPointF(3.0, 4.0), 5.0), path)
+        self.assertIs(CanvasView._selection_path_for_bond_item(view, item, width=6.0), path)
+        self.assertIs(CanvasView._selection_path_for_bond(view, 2), path)
+        self.assertIs(CanvasView._selection_path_for_object_item(view, item), path)
+        CanvasView._add_selection_object_overlay(view, item, color)
+        CanvasView._add_selection_component_overlay(view, {1, 2}, {3}, color, 1.5)
+        self.assertEqual(CanvasView._selection_center_for_atoms(view, {1, 2}), center)
+        self.assertTrue(CanvasView._selection_center_marker_enabled(view))
+        CanvasView._add_selection_center_marker(view, center)
+
+        selection_controller.structure_hit_from_item.assert_called_once_with(item)
+        selection_controller.structure_item_for_hit.assert_called_once_with(hit)
+        selection_controller.selection_targets_for_item.assert_called_once_with(item)
+        selection_controller.toggle_item_selection.assert_called_once_with(item)
+        selection_controller.preferred_structure_hit_at_scene_pos.assert_called_once_with(scene_pos)
+        selection_controller.preferred_structure_item_at_scene_pos.assert_called_once_with(scene_pos)
+        selection_controller.selection_rects_for_snapshot.assert_called_once_with(snapshot)
+        selection_controller.selection_hit_test.assert_called_once_with(scene_pos, snapshot=snapshot)
+        selection_controller.select_structure_for_item.assert_called_once_with(item)
+        selection_controller.select_note.assert_called_once_with(item, additive=True)
+        selection_controller.toggle_note_selection.assert_called_once_with(item)
+        selection_controller.clear_note_selection.assert_called_once_with()
+        selection_controller.update_note_selection_box.assert_called_once_with(item)
+        selection_controller.update_selection_outline.assert_called_once_with()
+        selection_controller.shift_selection_outlines.assert_called_once_with(1.5, -2.0)
+        selection_controller.selection_line_stroke_path.assert_called_once_with(
+            QPointF(1.0, 2.0),
+            QPointF(3.0, 4.0),
+            5.0,
+        )
+        selection_controller.selection_path_for_bond_item.assert_called_once_with(item, width=6.0)
+        selection_controller.selection_path_for_bond.assert_called_once_with(2)
+        selection_controller.selection_path_for_object_item.assert_called_once_with(item)
+        selection_controller.add_selection_object_overlay.assert_called_once_with(item, color)
+        selection_controller.add_selection_component_overlay.assert_called_once_with({1, 2}, {3}, color, 1.5)
+        selection_controller.selection_center_for_atoms.assert_called_once_with({1, 2})
+        selection_controller.selection_center_marker_enabled.assert_called_once_with()
+        selection_controller.add_selection_center_marker.assert_called_once_with(center)
+
     def test_handle_overlay_wrappers_delegate(self) -> None:
         handle_overlay_service = mock.Mock()
         item = object()
@@ -526,6 +623,62 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         decoration_service.add_orbital.assert_called_once_with(QPointF(9.0, 8.0))
 
+    def test_scene_decoration_build_wrappers_delegate(self) -> None:
+        build_service = mock.Mock()
+        arrow_item = object()
+        ts_item = object()
+        orbital_items = [object()]
+        path = QPainterPath()
+        rect = QRectF(1.0, 2.0, 3.0, 4.0)
+        view = SimpleNamespace(_scene_decoration_build_service=build_service)
+
+        build_service.preview_arrow.return_value = arrow_item
+        build_service.build_arrow_item.return_value = arrow_item
+        build_service.build_single_head_arrow.return_value = arrow_item
+        build_service.build_double_head_arrow.return_value = arrow_item
+        build_service.build_dotted_arrow.return_value = arrow_item
+        build_service.build_curved_arrow.return_value = arrow_item
+        build_service.build_inhibition_arrow.return_value = arrow_item
+        build_service.build_equilibrium_item.return_value = arrow_item
+        build_service.ts_bracket_rect_from_points.return_value = rect
+        build_service.ts_bracket_stroke_width.return_value = 2.5
+        build_service.ts_bracket_path.return_value = path
+        build_service.build_ts_bracket_item.return_value = ts_item
+        build_service.preview_ts_bracket.return_value = ts_item
+        build_service.build_orbital_items.return_value = orbital_items
+
+        self.assertIs(CanvasView.preview_arrow(view, QPointF(1.0, 2.0), QPointF(3.0, 4.0), "reaction"), arrow_item)
+        self.assertIs(CanvasView._build_arrow_item(view, QPointF(5.0, 6.0), QPointF(7.0, 8.0), "dotted"), arrow_item)
+        self.assertIs(CanvasView._build_single_head_arrow(view, QPointF(9.0, 10.0), QPointF(11.0, 12.0)), arrow_item)
+        self.assertIs(CanvasView._build_double_head_arrow(view, QPointF(13.0, 14.0), QPointF(15.0, 16.0)), arrow_item)
+        self.assertIs(CanvasView._build_dotted_arrow(view, QPointF(17.0, 18.0), QPointF(19.0, 20.0)), arrow_item)
+        self.assertIs(CanvasView._build_curved_arrow(view, QPointF(21.0, 22.0), QPointF(23.0, 24.0), True), arrow_item)
+        self.assertIs(CanvasView._build_inhibition_arrow(view, QPointF(25.0, 26.0), QPointF(27.0, 28.0)), arrow_item)
+        self.assertIs(CanvasView._build_equilibrium_item(view, QPointF(29.0, 30.0), QPointF(31.0, 32.0)), arrow_item)
+        CanvasView._add_arrow_head(view, path, QPointF(33.0, 34.0), QPointF(35.0, 36.0), False)
+        self.assertEqual(CanvasView._ts_bracket_rect_from_points(view, QPointF(37.0, 38.0), QPointF(39.0, 40.0)), rect)
+        self.assertEqual(CanvasView._ts_bracket_stroke_width(view), 2.5)
+        self.assertEqual(CanvasView._ts_bracket_path(view, rect), path)
+        self.assertIs(CanvasView._build_ts_bracket_item(view, rect), ts_item)
+        self.assertIs(CanvasView.preview_ts_bracket(view, QPointF(41.0, 42.0), QPointF(43.0, 44.0)), ts_item)
+        self.assertEqual(CanvasView._build_orbital_items(view, QPointF(45.0, 46.0), "sp2"), orbital_items)
+
+        build_service.preview_arrow.assert_called_once_with(QPointF(1.0, 2.0), QPointF(3.0, 4.0), "reaction")
+        build_service.build_arrow_item.assert_called_once_with(QPointF(5.0, 6.0), QPointF(7.0, 8.0), "dotted")
+        build_service.build_single_head_arrow.assert_called_once_with(QPointF(9.0, 10.0), QPointF(11.0, 12.0))
+        build_service.build_double_head_arrow.assert_called_once_with(QPointF(13.0, 14.0), QPointF(15.0, 16.0))
+        build_service.build_dotted_arrow.assert_called_once_with(QPointF(17.0, 18.0), QPointF(19.0, 20.0))
+        build_service.build_curved_arrow.assert_called_once_with(QPointF(21.0, 22.0), QPointF(23.0, 24.0), True)
+        build_service.build_inhibition_arrow.assert_called_once_with(QPointF(25.0, 26.0), QPointF(27.0, 28.0))
+        build_service.build_equilibrium_item.assert_called_once_with(QPointF(29.0, 30.0), QPointF(31.0, 32.0))
+        build_service.add_arrow_head.assert_called_once_with(path, QPointF(33.0, 34.0), QPointF(35.0, 36.0), False)
+        build_service.ts_bracket_rect_from_points.assert_called_once_with(QPointF(37.0, 38.0), QPointF(39.0, 40.0))
+        build_service.ts_bracket_stroke_width.assert_called_once_with()
+        build_service.ts_bracket_path.assert_called_once_with(rect)
+        build_service.build_ts_bracket_item.assert_called_once_with(rect)
+        build_service.preview_ts_bracket.assert_called_once_with(QPointF(41.0, 42.0), QPointF(43.0, 44.0))
+        build_service.build_orbital_items.assert_called_once_with(QPointF(45.0, 46.0), "sp2")
+
     def test_fragment_template_public_methods_use_recorded_build_helper(self) -> None:
         structure_build_service = SimpleNamespace(
             run_recorded_build=mock.Mock(side_effect=lambda action, **kwargs: action()),
@@ -549,6 +702,206 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         view._add_fused_benzenes.assert_called_once_with(2)
         view._add_crown_ether.assert_called_once_with(12, 4)
 
+    def test_service_backed_fragment_template_wrappers_delegate(self) -> None:
+        structure_build_service = mock.Mock()
+        view = SimpleNamespace(_structure_build_service=structure_build_service)
+
+        for method_name in (
+            "add_cyclohexane_chair",
+            "add_cyclohexane_boat",
+            "add_indole",
+            "add_quinoline",
+            "add_isoquinoline",
+            "add_benzimidazole",
+            "add_phenyl",
+            "add_benzyl",
+            "add_vinyl",
+            "add_allyl",
+            "add_carboxyl",
+            "add_nitro",
+            "add_sulfonyl",
+            "add_carbonyl",
+            "add_tbu",
+            "add_ipr",
+            "add_me",
+            "add_et",
+            "add_peptide_2",
+        ):
+            getattr(CanvasView, method_name)(view)
+
+        for method_name in (
+            "add_cyclohexane_chair",
+            "add_cyclohexane_boat",
+            "add_indole",
+            "add_quinoline",
+            "add_isoquinoline",
+            "add_benzimidazole",
+            "add_phenyl",
+            "add_benzyl",
+            "add_vinyl",
+            "add_allyl",
+            "add_carboxyl",
+            "add_nitro",
+            "add_sulfonyl",
+            "add_carbonyl",
+            "add_tbu",
+            "add_ipr",
+            "add_me",
+            "add_et",
+            "add_peptide_2",
+        ):
+            getattr(structure_build_service, method_name).assert_called_once_with()
+
+    def test_insert_controller_wrappers_delegate_to_public_api(self) -> None:
+        insert_controller = mock.Mock()
+        state = object()
+        request = object()
+        resolvers = object()
+        preview_snapshot = object()
+        pairs = [(1.0, 2.0)]
+        view = SimpleNamespace(_insert_controller=insert_controller)
+
+        insert_controller.insert_session_state.return_value = state
+        insert_controller.template_insert_request.return_value = request
+        insert_controller.template_point_resolvers.return_value = resolvers
+        insert_controller.resolve_ring_points_for_template.return_value = pairs
+        insert_controller.resolve_regular_ring_points_for_template_bond.return_value = pairs
+        insert_controller.resolve_chair_points_for_template.return_value = pairs
+        insert_controller.resolve_boat_points_for_template.return_value = pairs
+        insert_controller.resolve_template_points_for_template_bond.return_value = pairs
+        insert_controller.smiles_preview_snapshot.return_value = preview_snapshot
+        insert_controller.bond_merge_seed.return_value = [(1, 2.0, 3.0)]
+
+        self.assertIs(CanvasView._insert_session_state(view), state)
+        CanvasView._apply_insert_session_state(view, state)
+        CanvasView.load_smiles(view, "CC")
+        CanvasView.begin_smiles_insert(view, "CO")
+        CanvasView.begin_ring_template_insert(view, 6, "chair")
+        CanvasView._cancel_smiles_insert(view)
+        CanvasView._commit_smiles_insert(view, QPointF(4.0, 5.0))
+        CanvasView._clear_smiles_preview(view)
+        self.assertIs(CanvasView._smiles_preview_snapshot(view), preview_snapshot)
+        CanvasView._render_smiles_preview(view, QPointF(6.0, 7.0))
+        CanvasView._cancel_template_insert(view)
+        self.assertIs(CanvasView._template_insert_request(view, QPointF(8.0, 9.0)), request)
+        self.assertIs(CanvasView._template_point_resolvers(view), resolvers)
+        self.assertEqual(CanvasView._resolve_ring_points_for_template(view, (1.0, 2.0), 6, 12.0), pairs)
+        self.assertEqual(CanvasView._resolve_regular_ring_points_for_template_bond(view, 6, 3, (4.0, 5.0)), pairs)
+        self.assertEqual(CanvasView._resolve_chair_points_for_template(view, (0.0, 0.0)), pairs)
+        self.assertEqual(CanvasView._resolve_boat_points_for_template(view, (0.0, 0.0)), pairs)
+        self.assertEqual(
+            CanvasView._resolve_template_points_for_template_bond(view, [(0.0, 0.0)], 4, (2.0, 3.0)),
+            pairs,
+        )
+        self.assertEqual(CanvasView._bond_merge_seed(view, 7), [(1, 2.0, 3.0)])
+        CanvasView._commit_template_insert(view, QPointF(10.0, 11.0))
+        CanvasView._clear_template_preview(view)
+        CanvasView._render_template_preview(view, QPointF(12.0, 13.0))
+
+        insert_controller.insert_session_state.assert_called_once_with()
+        insert_controller.apply_insert_session_state.assert_called_once_with(state)
+        insert_controller.load_smiles.assert_called_once_with("CC")
+        insert_controller.begin_smiles_insert.assert_called_once_with("CO")
+        insert_controller.begin_ring_template_insert.assert_called_once_with(6, "chair")
+        insert_controller.cancel_smiles_insert.assert_called_once_with()
+        insert_controller.commit_smiles_insert.assert_called_once_with(QPointF(4.0, 5.0))
+        insert_controller.clear_smiles_preview.assert_called_once_with()
+        insert_controller.smiles_preview_snapshot.assert_called_once_with()
+        insert_controller.render_smiles_preview.assert_called_once_with(QPointF(6.0, 7.0))
+        insert_controller.cancel_template_insert.assert_called_once_with()
+        insert_controller.template_insert_request.assert_called_once_with(QPointF(8.0, 9.0))
+        insert_controller.template_point_resolvers.assert_called_once_with()
+        insert_controller.resolve_ring_points_for_template.assert_called_once_with((1.0, 2.0), 6, 12.0)
+        insert_controller.resolve_regular_ring_points_for_template_bond.assert_called_once_with(6, 3, (4.0, 5.0))
+        insert_controller.resolve_chair_points_for_template.assert_called_once_with((0.0, 0.0))
+        insert_controller.resolve_boat_points_for_template.assert_called_once_with((0.0, 0.0))
+        insert_controller.resolve_template_points_for_template_bond.assert_called_once_with([(0.0, 0.0)], 4, (2.0, 3.0))
+        insert_controller.bond_merge_seed.assert_called_once_with(7)
+        insert_controller.commit_template_insert.assert_called_once_with(QPointF(10.0, 11.0))
+        insert_controller.clear_template_preview.assert_called_once_with()
+        insert_controller.render_template_preview.assert_called_once_with(QPointF(12.0, 13.0))
+
+    def test_canvas_graph_service_wrappers_delegate_to_public_api(self) -> None:
+        graph_service = mock.Mock()
+        component = {1, 2}
+        axis = (3, {4, 5})
+        view = SimpleNamespace(_canvas_graph_service=graph_service)
+
+        graph_service.connected_components.return_value = [component]
+        graph_service.component_without_bond.return_value = component
+        graph_service.bond_in_cycle.return_value = True
+        graph_service.bond_is_rotatable.return_value = False
+        graph_service.bond_component_atoms.return_value = component
+        graph_service.rotation_side_for_bond.return_value = component
+        graph_service.preferred_rotation_side_for_bond.return_value = component
+        graph_service.rotatable_axis_from_selection.return_value = axis
+        graph_service.axis_from_rotation_hint.return_value = axis
+        graph_service.bond_sets_for_atoms.return_value = ({1}, {2})
+        graph_service.expand_connected_atoms.return_value = {1, 2, 3}
+
+        CanvasView._ensure_atom_neighbors(view, 7)
+        CanvasView._ensure_atom_bond_ids(view, 8)
+        CanvasView._add_bond_neighbors(view, 1, 2)
+        CanvasView._remove_bond_neighbors(view, 1, 2, skip_bond_id=3)
+        CanvasView._add_bond_index(view, 4, 1, 2)
+        CanvasView._remove_bond_index(view, 4, 1, 2)
+        CanvasView._rebuild_bond_adjacency(view)
+        self.assertEqual(CanvasView._connected_components(view, {1, 2}), [component])
+        self.assertEqual(CanvasView._component_without_bond(view, 1, 3), component)
+        self.assertTrue(CanvasView._bond_in_cycle(view, 9))
+        self.assertFalse(CanvasView._bond_is_rotatable(view, 9))
+        self.assertEqual(CanvasView._bond_component_atoms(view, 9), component)
+        self.assertEqual(CanvasView._rotation_side_for_bond(view, 9, {1, 2}, True), component)
+        self.assertEqual(
+            CanvasView._preferred_rotation_side_for_bond(view, 9, {1, 2}, press_pos=QPointF(1.0, 2.0), allow_fallback=False),
+            component,
+        )
+        self.assertEqual(CanvasView._rotatable_axis_from_selection(view, {1, 2}, {3}), axis)
+        self.assertEqual(CanvasView._axis_from_rotation_hint(view, 3, {4, 5}, press_pos=QPointF(6.0, 7.0)), axis)
+        self.assertEqual(CanvasView.bond_sets_for_atoms(view, {1, 2}), ({1}, {2}))
+        self.assertEqual(CanvasView._expand_connected_atoms(view, {1}), {1, 2, 3})
+
+        graph_service.ensure_atom_neighbors.assert_called_once_with(7)
+        graph_service.ensure_atom_bond_ids.assert_called_once_with(8)
+        graph_service.add_bond_neighbors.assert_called_once_with(1, 2)
+        graph_service.remove_bond_neighbors.assert_called_once_with(1, 2, skip_bond_id=3)
+        graph_service.add_bond_index.assert_called_once_with(4, 1, 2)
+        graph_service.remove_bond_index.assert_called_once_with(4, 1, 2)
+        graph_service.rebuild_bond_adjacency.assert_called_once_with()
+        graph_service.connected_components.assert_called_once_with({1, 2})
+        graph_service.component_without_bond.assert_called_once_with(1, 3)
+        graph_service.bond_in_cycle.assert_called_once_with(9)
+        graph_service.bond_is_rotatable.assert_called_once_with(9)
+        graph_service.bond_component_atoms.assert_called_once_with(9)
+        graph_service.rotation_side_for_bond.assert_called_once_with(9, {1, 2}, True)
+        graph_service.preferred_rotation_side_for_bond.assert_called_once_with(
+            9,
+            {1, 2},
+            press_pos=QPointF(1.0, 2.0),
+            allow_fallback=False,
+        )
+        graph_service.rotatable_axis_from_selection.assert_called_once_with({1, 2}, {3})
+        graph_service.axis_from_rotation_hint.assert_called_once_with(3, {4, 5}, press_pos=QPointF(6.0, 7.0))
+        graph_service.bond_sets_for_atoms.assert_called_once_with({1, 2})
+        graph_service.expand_connected_atoms.assert_called_once_with({1})
+
+    def test_canvas_bond_mutation_wrappers_delegate_to_public_api(self) -> None:
+        bond_mutation_service = mock.Mock()
+        bond_state = {"a": 1, "b": 2, "order": 2}
+        view = SimpleNamespace(_canvas_bond_mutation_service=bond_mutation_service)
+
+        bond_mutation_service.add_bond.return_value = 7
+
+        self.assertEqual(CanvasView.add_bond(view, 1, 2, order=2), 7)
+        CanvasView._restore_bond_from_state(view, 4, bond_state)
+        CanvasView._remove_bond_by_id(view, 5)
+        CanvasView._trim_bonds_to_length(view, 6)
+
+        bond_mutation_service.add_bond.assert_called_once_with(1, 2, 2)
+        bond_mutation_service.restore_bond_from_state.assert_called_once_with(4, bond_state)
+        bond_mutation_service.remove_bond_by_id.assert_called_once_with(5)
+        bond_mutation_service.trim_bonds_to_length.assert_called_once_with(6)
+
     def test_set_curved_arrow_path_builds_path_and_arrow_heads(self) -> None:
         path_item = QGraphicsPathItem()
         view = SimpleNamespace(_add_arrow_head=mock.Mock())
@@ -565,86 +918,16 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         self.assertFalse(path_item.path().isEmpty())
         self.assertEqual(view._add_arrow_head.call_count, 2)
 
-    def test_record_label_change_builds_composite_single_and_noop_commands(self) -> None:
-        pushed_commands = []
-        view = SimpleNamespace(
-            _history_enabled=True,
-            model=SimpleNamespace(
-                atoms={5: Atom("N", 1.0, 2.0, explicit_label=True)},
-                bonds=[
-                    Bond(5, 6, 2, style="double", color="#112233"),
-                    None,
-                ],
-                next_atom_id=8,
-            ),
-            last_smiles_input="after",
-            _bond_state_dict=lambda bond: {
-                "a": bond.a,
-                "b": bond.b,
-                "order": bond.order,
-                "style": bond.style,
-                "color": bond.color,
-            },
-            _push_command=pushed_commands.append,
-        )
+    def test_atom_label_history_wrappers_delegate_to_service(self) -> None:
+        atom_label_service = mock.Mock()
+        atom_item = object()
+        label_item = object()
+        atom_label_service.atom_item_for_id.return_value = atom_item
+        view = SimpleNamespace(_atom_label_service=atom_label_service)
 
+        self.assertIs(CanvasView._atom_item_for_id(view, 5), atom_item)
         CanvasView._record_label_change(
             view,
-            atom_id=5,
-            before_element="C",
-            before_explicit_label=False,
-            before_smiles_input="before",
-            merge_ids=[7],
-            merge_info={
-                "bond_before_states": {
-                    0: {"a": 5, "b": 6, "order": 1, "style": "single", "color": "#000000"},
-                    1: {"a": 7, "b": 8, "order": 1, "style": "single", "color": "#abcdef"},
-                },
-                "deleted_bond_ids": [1],
-                "atom_states": {7: {"element": "C"}},
-            },
-        )
-
-        self.assertEqual(len(pushed_commands), 1)
-        composite = pushed_commands.pop()
-        self.assertIsInstance(composite, CompositeCommand)
-        self.assertEqual(
-            [type(command) for command in composite.commands],
-            [ChangeAtomLabelCommand, UpdateBondCommand, DeleteBondCommand, DeleteAtomsCommand],
-        )
-        self.assertFalse(composite.commands[-1].remove_marks)
-
-        CanvasView._record_label_change(
-            view,
-            atom_id=5,
-            before_element="C",
-            before_explicit_label=True,
-            before_smiles_input="before",
-            merge_ids=[],
-            merge_info={},
-        )
-        self.assertIsInstance(pushed_commands.pop(), ChangeAtomLabelCommand)
-
-        CanvasView._record_label_change(
-            view,
-            atom_id=5,
-            before_element="N",
-            before_explicit_label=True,
-            before_smiles_input="after",
-            merge_ids=[],
-            merge_info={},
-        )
-        self.assertEqual(pushed_commands, [])
-
-        disabled_view = SimpleNamespace(
-            _history_enabled=False,
-            model=view.model,
-            last_smiles_input="after",
-            _bond_state_dict=view._bond_state_dict,
-            _push_command=pushed_commands.append,
-        )
-        CanvasView._record_label_change(
-            disabled_view,
             atom_id=5,
             before_element="C",
             before_explicit_label=False,
@@ -652,192 +935,89 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             merge_ids=[7],
             merge_info={"atom_states": {7: {"element": "C"}}},
         )
-        self.assertEqual(pushed_commands, [])
-
-    def test_record_additions_builds_composite_single_and_noop_commands(self) -> None:
-        pushed_commands = []
-        note_item = object()
-        view = SimpleNamespace(
-            model=SimpleNamespace(
-                atoms={
-                    1: Atom("C", 0.0, 0.0),
-                    2: Atom("O", 1.0, 0.0),
-                    3: Atom("N", 2.0, 0.0),
-                },
-                bonds=[Bond(1, 2, 1), None, Bond(2, 3, 2)],
-                next_atom_id=4,
-            ),
-            last_smiles_input="after",
-            _atom_state_dict=lambda atom_id: {"atom_id": atom_id},
-            _bond_state_dict=lambda bond: {
-                "a": bond.a,
-                "b": bond.b,
-                "order": bond.order,
-                "style": bond.style,
-                "color": bond.color,
-            },
-            scene_item_state=lambda item: {"kind": "note"} if item is note_item else {},
-            _push_command=pushed_commands.append,
+        CanvasView._ensure_carbon_dot(view, 5)
+        CanvasView._remove_carbon_dot(view, 5)
+        CanvasView._position_label(view, label_item, 2.0, 3.0)
+        CanvasView._restore_atom_item_interaction(
+            view,
+            5,
+            atom_item,
+            was_selected=True,
+            refresh_hover=False,
         )
+
+        atom_label_service.atom_item_for_id.assert_called_once_with(5)
+        atom_label_service.record_label_change.assert_called_once_with(
+            5,
+            "C",
+            False,
+            "before",
+            [7],
+            {"atom_states": {7: {"element": "C"}}},
+        )
+        atom_label_service.ensure_carbon_dot.assert_called_once_with(5)
+        atom_label_service.remove_carbon_dot.assert_called_once_with(5)
+        atom_label_service.position_label.assert_called_once_with(label_item, 2.0, 3.0)
+        atom_label_service.restore_atom_item_interaction.assert_called_once_with(
+            5,
+            atom_item,
+            was_selected=True,
+            refresh_hover=False,
+        )
+
+    def test_history_recording_wrappers_delegate_to_service(self) -> None:
+        history_recording_service = mock.Mock()
+        view = SimpleNamespace(_canvas_history_recording_service=history_recording_service)
 
         CanvasView._record_additions(
             view,
             before_next_atom_id=1,
-            before_bond_count=1,
+            before_bond_count=2,
             before_smiles_input="before",
-            added_scene_items=[note_item, None],
-        )
-
-        self.assertEqual(len(pushed_commands), 1)
-        composite = pushed_commands.pop()
-        self.assertIsInstance(composite, CompositeCommand)
-        self.assertEqual(
-            [type(command) for command in composite.commands],
-            [AddAtomsCommand, AddBondCommand, AddSceneItemsCommand],
-        )
-        self.assertEqual(composite.commands[0].atom_states, {1: {"atom_id": 1}, 2: {"atom_id": 2}, 3: {"atom_id": 3}})
-        self.assertEqual(composite.commands[2].item_states, [{"kind": "note"}])
-
-        single_pushes = []
-        single_view = SimpleNamespace(
-            model=SimpleNamespace(atoms={}, bonds=[], next_atom_id=0),
-            last_smiles_input="after",
-            _atom_state_dict=view._atom_state_dict,
-            _bond_state_dict=view._bond_state_dict,
-            scene_item_state=lambda item: {"kind": "note"},
-            _push_command=single_pushes.append,
-        )
-        CanvasView._record_additions(
-            single_view,
-            before_next_atom_id=0,
-            before_bond_count=0,
-            before_smiles_input=None,
-            added_scene_items=[note_item],
-        )
-        self.assertIsInstance(single_pushes.pop(), AddSceneItemsCommand)
-
-        CanvasView._record_additions(
-            single_view,
-            before_next_atom_id=0,
-            before_bond_count=0,
-            before_smiles_input=None,
-            added_scene_items=[],
-        )
-        self.assertEqual(single_pushes, [])
-
-    def test_bond_restore_remove_trim_and_update_helpers(self) -> None:
-        pushed_commands = []
-        update_view = SimpleNamespace(
-            _history_enabled=True,
-            _push_command=pushed_commands.append,
+            added_scene_items=["note"],
         )
         CanvasView._record_bond_update(
-            update_view,
+            view,
             bond_id=3,
             before_state={"order": 1},
             after_state={"order": 2},
             before_smiles_input="before",
             after_smiles_input="after",
         )
-        self.assertIsInstance(pushed_commands.pop(), UpdateBondCommand)
 
-        CanvasView._record_bond_update(
-            update_view,
-            bond_id=3,
-            before_state={"order": 1},
-            after_state={"order": 1},
-            before_smiles_input="same",
-            after_smiles_input="same",
+        history_recording_service.record_additions.assert_called_once_with(1, 2, "before", ["note"])
+        history_recording_service.record_bond_update.assert_called_once_with(
+            3,
+            {"order": 1},
+            {"order": 2},
+            "before",
+            "after",
         )
-        self.assertEqual(pushed_commands, [])
 
-        restore_scene = _FakeScene()
-        old_bond_item = object()
-        restore_view = SimpleNamespace(
-            bond_items={0: [old_bond_item]},
-            scene=lambda: restore_scene,
-            model=SimpleNamespace(bonds=[Bond(1, 2, 1)]),
-            _remove_bond_index=mock.Mock(),
-            _remove_bond_neighbors=mock.Mock(),
-            _add_bond_neighbors=mock.Mock(),
-            _add_bond_index=mock.Mock(),
-            _add_bond_graphics=mock.Mock(),
-            _mark_spatial_index_dirty=mock.Mock(),
-        )
+    def test_bond_mutation_wrappers_delegate_to_public_api(self) -> None:
+        bond_mutation_service = mock.Mock()
+        bond_mutation_service.add_bond.return_value = 9
+        mutation_view = SimpleNamespace(_canvas_bond_mutation_service=bond_mutation_service)
+
+        self.assertEqual(CanvasView.add_bond(mutation_view, 1, 2, order=3), 9)
         CanvasView._restore_bond_from_state(
-            restore_view,
-            0,
+            mutation_view,
+            4,
             {"a": 2, "b": 3, "order": 2, "style": "double", "color": "#334455"},
         )
-        self.assertEqual(restore_scene.removed_items, [old_bond_item])
-        self.assertEqual(restore_view.model.bonds[0].a, 2)
-        self.assertEqual(restore_view.model.bonds[0].b, 3)
-        restore_view._remove_bond_index.assert_called_once_with(0, 1, 2)
-        restore_view._remove_bond_neighbors.assert_called_once_with(1, 2, skip_bond_id=0)
-        restore_view._add_bond_neighbors.assert_called_once_with(2, 3)
-        restore_view._add_bond_index.assert_called_once_with(0, 2, 3)
-        restore_view._add_bond_graphics.assert_called_once_with(0)
-        restore_view._mark_spatial_index_dirty.assert_called_once_with()
+        CanvasView._remove_bond_by_id(mutation_view, 5)
+        CanvasView._trim_bonds_to_length(mutation_view, 6)
 
-        extend_view = SimpleNamespace(
-            bond_items={},
-            scene=lambda: _FakeScene(),
-            model=SimpleNamespace(bonds=[]),
-            _remove_bond_index=mock.Mock(),
-            _remove_bond_neighbors=mock.Mock(),
-            _add_bond_neighbors=mock.Mock(),
-            _add_bond_index=mock.Mock(),
-            _add_bond_graphics=mock.Mock(),
-            _mark_spatial_index_dirty=mock.Mock(),
+        bond_mutation_service.add_bond.assert_called_once_with(1, 2, 3)
+        bond_mutation_service.restore_bond_from_state.assert_called_once_with(
+            4,
+            {"a": 2, "b": 3, "order": 2, "style": "double", "color": "#334455"},
         )
-        CanvasView._restore_bond_from_state(
-            extend_view,
-            2,
-            {"a": 8, "b": 9, "order": 1, "style": "single", "color": "#000000"},
-        )
-        self.assertEqual(len(extend_view.model.bonds), 3)
-        self.assertIsNone(extend_view.model.bonds[0])
-        self.assertIsNone(extend_view.model.bonds[1])
-        self.assertEqual((extend_view.model.bonds[2].a, extend_view.model.bonds[2].b), (8, 9))
+        bond_mutation_service.remove_bond_by_id.assert_called_once_with(5)
+        bond_mutation_service.trim_bonds_to_length.assert_called_once_with(6)
 
-        remove_scene = _FakeScene()
-        remove_view = SimpleNamespace(
-            model=SimpleNamespace(bonds=[Bond(4, 5, 1)]),
-            bond_items={0: [old_bond_item]},
-            scene=lambda: remove_scene,
-            _remove_bond_index=mock.Mock(),
-            _remove_bond_neighbors=mock.Mock(),
-            _mark_spatial_index_dirty=mock.Mock(),
-        )
-        CanvasView._remove_bond_by_id(remove_view, -1)
-        CanvasView._remove_bond_by_id(remove_view, 0)
-        self.assertEqual(remove_scene.removed_items, [old_bond_item])
-        self.assertIsNone(remove_view.model.bonds[0])
-        remove_view._remove_bond_index.assert_called_once_with(0, 4, 5)
-        remove_view._remove_bond_neighbors.assert_called_once_with(4, 5, skip_bond_id=0)
-        remove_view._mark_spatial_index_dirty.assert_called_once_with()
-
-        trim_scene = _FakeScene()
-        trim_view = SimpleNamespace(
-            model=SimpleNamespace(bonds=[Bond(1, 2, 1), None, Bond(2, 3, 2)]),
-            bond_items={1: [object()], 2: [old_bond_item]},
-            scene=lambda: trim_scene,
-            _remove_bond_index=mock.Mock(),
-            _remove_bond_neighbors=mock.Mock(),
-            _mark_spatial_index_dirty=mock.Mock(),
-        )
-        CanvasView._trim_bonds_to_length(trim_view, -1)
-        CanvasView._trim_bonds_to_length(trim_view, 3)
-        CanvasView._trim_bonds_to_length(trim_view, 1)
-        self.assertEqual(len(trim_view.model.bonds), 1)
-        self.assertEqual(len(trim_scene.removed_items), 2)
-        trim_view._remove_bond_index.assert_called_once_with(2, 2, 3)
-        trim_view._remove_bond_neighbors.assert_called_once_with(2, 3, skip_bond_id=2)
-        trim_view._mark_spatial_index_dirty.assert_called_once_with()
-
-    def test_atom_state_remove_restore_and_color_helpers(self) -> None:
+    def test_atom_state_dict_and_atom_mutation_wrappers_delegate_to_public_api(self) -> None:
         label_item = mock.Mock()
-        dot_item = mock.Mock()
         state_view = SimpleNamespace(
             model=SimpleNamespace(atoms={1: Atom("C", 1.0, 2.0, color="#111111")}),
             atom_items={1: label_item},
@@ -854,103 +1034,38 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         self.assertEqual(CanvasView._atom_state_dict(state_view, 99), {})
 
-        scene = _FakeScene()
-        remove_view = SimpleNamespace(
-            atom_items={1: label_item},
-            atom_dots={1: dot_item},
-            model=SimpleNamespace(
-                atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 2.0, 0.0)},
-                bonds=[Bond(1, 2, 1)],
-            ),
-            atom_coords_3d={1: (0.0, 0.0, 0.0)},
-            _atom_neighbors={1: {2}, 2: {1}},
-            _graph_version=4,
-            _selection_component_cache_signature="cached",
-            _atom_bond_ids={1: {0}, 2: {0}},
-            _remove_marks_for_atom=mock.Mock(),
-            _mark_spatial_index_dirty=mock.Mock(),
-            scene=lambda: scene,
-        )
-        CanvasView._remove_atom_only(remove_view, 1)
-        self.assertEqual(scene.removed_items, [label_item, dot_item])
-        remove_view._remove_marks_for_atom.assert_called_once_with(1)
-        self.assertNotIn(1, remove_view.model.atoms)
-        self.assertNotIn(1, remove_view.atom_coords_3d)
-        self.assertNotIn(1, remove_view._atom_neighbors)
-        self.assertEqual(remove_view._atom_neighbors[2], set())
-        self.assertEqual(remove_view._graph_version, 5)
-        self.assertIsNone(remove_view._selection_component_cache_signature)
-        self.assertEqual(remove_view._atom_bond_ids[2], set())
-        remove_view._mark_spatial_index_dirty.assert_called_once_with()
+        atom_mutation_service = mock.Mock()
+        atom_mutation_service.add_atom.return_value = 7
+        mutation_view = SimpleNamespace(_canvas_atom_mutation_service=atom_mutation_service)
 
-        restore_scene = _FakeScene()
-        old_label = object()
-        old_dot = object()
-        restore_view = SimpleNamespace(
-            model=SimpleNamespace(atoms={}, next_atom_id=1),
-            atom_items={4: old_label},
-            atom_dots={4: old_dot},
-            scene=lambda: restore_scene,
-            _ensure_atom_neighbors=mock.Mock(),
-            _ensure_atom_bond_ids=mock.Mock(),
-            _atom_label_service=mock.Mock(),
-            _ensure_carbon_dot=mock.Mock(),
-            apply_atom_color=mock.Mock(),
-            _mark_spatial_index_dirty=mock.Mock(),
-        )
+        self.assertEqual(CanvasView.add_atom(mutation_view, "N", 1.5, -2.5), 7)
+        CanvasView._remove_atom_only(mutation_view, 1, remove_marks=False)
         CanvasView._restore_atom_from_state(
-            restore_view,
+            mutation_view,
             4,
             {"element": "C", "x": 3.0, "y": 4.0, "color": "#00ff00", "explicit_label": True},
         )
-        self.assertEqual(restore_scene.removed_items, [old_label, old_dot])
-        self.assertEqual(restore_view.model.next_atom_id, 5)
-        restore_view._atom_label_service.add_or_update_atom_label.assert_called_once_with(
+        CanvasView.apply_atom_color(mutation_view, 7, QColor("#aabbcc"))
+
+        atom_mutation_service.add_atom.assert_called_once_with("N", 1.5, -2.5)
+        atom_mutation_service.remove_atom_only.assert_called_once_with(1, remove_marks=False)
+        atom_mutation_service.restore_atom_from_state.assert_called_once_with(
             4,
-            "C",
-            clear_smiles=False,
-            record=False,
-            allow_merge=False,
-            show_carbon=True,
+            {"element": "C", "x": 3.0, "y": 4.0, "color": "#00ff00", "explicit_label": True},
         )
-        restore_view._ensure_carbon_dot.assert_not_called()
-        restore_view.apply_atom_color.assert_called_once_with(4, "#00ff00")
-        restore_view._mark_spatial_index_dirty.assert_called_once_with()
+        atom_mutation_service.apply_atom_color.assert_called_once_with(7, QColor("#aabbcc"))
 
-        carbon_dot_view = SimpleNamespace(
-            model=SimpleNamespace(atoms={}, next_atom_id=0),
-            atom_items={},
-            atom_dots={},
-            scene=lambda: _FakeScene(),
-            _ensure_atom_neighbors=mock.Mock(),
-            _ensure_atom_bond_ids=mock.Mock(),
-            _atom_label_service=mock.Mock(),
-            _ensure_carbon_dot=mock.Mock(),
-            apply_atom_color=mock.Mock(),
-            _mark_spatial_index_dirty=mock.Mock(),
-        )
-        CanvasView._restore_atom_from_state(
-            carbon_dot_view,
-            2,
-            {"element": "C", "x": 0.0, "y": 0.0, "color": "#000000", "explicit_label": False},
-        )
-        carbon_dot_view._ensure_carbon_dot.assert_called_once_with(2)
-        carbon_dot_view._atom_label_service.add_or_update_atom_label.assert_not_called()
+    def test_color_mutation_wrappers_delegate_to_public_api(self) -> None:
+        color_service = mock.Mock()
+        ring_item = object()
+        color = QColor("#336699")
+        view = SimpleNamespace(_canvas_color_mutation_service=color_service)
 
-        color_view = SimpleNamespace(
-            model=SimpleNamespace(atoms={7: Atom("O", 0.0, 0.0, color="#101010")}),
-            atom_items={7: mock.Mock()},
-            atom_dots={7: mock.Mock()},
-            _implicit_carbon_dot_brush=mock.Mock(return_value="brush"),
-        )
-        CanvasView.apply_atom_color(color_view, 7, QColor("#aabbcc"))
-        self.assertEqual(color_view.model.atoms[7].color, "#aabbcc")
-        color_view.atom_items[7].setDefaultTextColor.assert_called_once()
-        color_view.atom_dots[7].setBrush.assert_called_once_with("brush")
+        CanvasView.apply_color_to_item(view, ring_item, color)
+        CanvasView.apply_ring_fill_color(view, ring_item, color, alpha=0.5)
 
-        CanvasView.apply_atom_color(color_view, 7, "not-a-color")
-        self.assertEqual(color_view.model.atoms[7].color, "#aabbcc")
-        CanvasView.apply_atom_color(color_view, 99, "#ffffff")
+        color_service.apply_color_to_item.assert_called_once_with(ring_item, color)
+        color_service.apply_ring_fill_color.assert_called_once_with(ring_item, color, alpha=0.5)
 
     def test_scene_event_and_item_hit_helpers_cover_fallback_paths(self) -> None:
         class _PositionEvent:
@@ -1236,6 +1351,52 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         self.assertEqual(CanvasView.bond_id_from_event(view, event), 2)
         view._find_bond_near.assert_called_once_with(QPointF(3.0, 4.0), 7.0)
 
+    def test_hit_testing_wrappers_delegate_to_service(self) -> None:
+        service = SimpleNamespace(
+            scene_pos_from_event=mock.Mock(return_value=QPointF(1.0, 2.0)),
+            item_at_scene_pos=mock.Mock(return_value="item"),
+            item_at_event=mock.Mock(return_value="event-item"),
+            grid_cell_size=mock.Mock(return_value=20.0),
+            cell_coords=mock.Mock(return_value=(1, 2)),
+            ensure_spatial_index=mock.Mock(),
+            rebuild_spatial_index=mock.Mock(),
+            find_atom_near=mock.Mock(return_value=3),
+            find_bond_near=mock.Mock(return_value=4),
+            distance_point_to_segment=mock.Mock(return_value=5.0),
+            nearest_atom_hit=mock.Mock(return_value=(1, 1.5)),
+            nearest_bond_hit=mock.Mock(return_value=(2, 2.5)),
+            bond_id_from_event=mock.Mock(return_value=6),
+        )
+        view = SimpleNamespace(_hit_testing_service=service)
+        event = object()
+        pos = QPointF(3.0, 4.0)
+
+        self.assertEqual(CanvasView.scene_pos_from_event(view, event), QPointF(1.0, 2.0))
+        self.assertEqual(CanvasView.item_at_scene_pos(view, pos), "item")
+        self.assertEqual(CanvasView.item_at_event(view, event), "event-item")
+        self.assertEqual(CanvasView._grid_cell_size(view), 20.0)
+        self.assertEqual(CanvasView._cell_coords(view, 1.0, 2.0, 3.0), (1, 2))
+        CanvasView._ensure_spatial_index(view)
+        CanvasView._rebuild_spatial_index(view, 18.0)
+        self.assertEqual(CanvasView.find_atom_near(view, 1.0, 2.0, 3.0), 3)
+        self.assertEqual(CanvasView._find_bond_near(view, pos, 7.0), 4)
+        self.assertEqual(CanvasView._nearest_atom_hit(view, pos), (1, 1.5))
+        self.assertEqual(CanvasView._nearest_bond_hit(view, pos), (2, 2.5))
+        self.assertEqual(CanvasView.bond_id_from_event(view, event), 6)
+
+        service.scene_pos_from_event.assert_called_once_with(event)
+        service.item_at_scene_pos.assert_called_once_with(pos)
+        service.item_at_event.assert_called_once_with(event)
+        service.grid_cell_size.assert_called_once_with()
+        service.cell_coords.assert_called_once_with(1.0, 2.0, 3.0)
+        service.ensure_spatial_index.assert_called_once_with()
+        service.rebuild_spatial_index.assert_called_once_with(18.0)
+        service.find_atom_near.assert_called_once_with(1.0, 2.0, 3.0)
+        service.find_bond_near.assert_called_once_with(pos, 7.0)
+        service.nearest_atom_hit.assert_called_once_with(pos)
+        service.nearest_bond_hit.assert_called_once_with(pos)
+        service.bond_id_from_event.assert_called_once_with(event)
+
     def test_selection_and_copy_helpers_cover_transform_copy_and_mark_fallback(self) -> None:
         scene_token = object()
         selected_note = _FakeItem("note", scene_token=scene_token)
@@ -1382,6 +1543,33 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         CanvasView.set_atom_positions(quiet_view, positions={}, coords_3d=None)
         quiet_view._mark_spatial_index_dirty.assert_not_called()
+
+    def test_ring_fill_wrappers_delegate_to_scene_service(self) -> None:
+        scene_service = mock.Mock()
+        ring_item = object()
+        view = SimpleNamespace(_canvas_ring_fill_scene_service=scene_service)
+
+        scene_service.create_ring_fill_item.return_value = ring_item
+
+        CanvasView._update_ring_fills_for_atoms(view, {1, 2, 3})
+        CanvasView._rotate_ring_fills_3d(view, {1, 2, 3}, (4.0, 5.0, 6.0), 0.1, 0.2, 1.5)
+        CanvasView._rotate_ring_fills(view, {1, 2, 3}, QPointF(7.0, 8.0), 0.3)
+        self.assertIs(
+            CanvasView._create_ring_fill_item(
+                view,
+                [QPointF(0.0, 0.0), QPointF(2.0, 0.0), QPointF(1.0, 1.5)],
+                [1, 2, 3],
+            ),
+            ring_item,
+        )
+
+        scene_service.update_ring_fills_for_atoms.assert_called_once_with({1, 2, 3})
+        scene_service.rotate_ring_fills_3d.assert_called_once_with({1, 2, 3}, (4.0, 5.0, 6.0), 0.1, 0.2, 1.5)
+        scene_service.rotate_ring_fills.assert_called_once_with({1, 2, 3}, QPointF(7.0, 8.0), 0.3)
+        scene_service.create_ring_fill_item.assert_called_once_with(
+            [QPointF(0.0, 0.0), QPointF(2.0, 0.0), QPointF(1.0, 1.5)],
+            [1, 2, 3],
+        )
 
     def test_select_structure_for_item_selects_atom_bond_ring_and_scene_items(self) -> None:
         atom_item = _FakeItem("atom", data1=1)
@@ -1551,93 +1739,13 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         CanvasView.apply_color_to_item(atom_view, None, QColor("#ffffff"))
         CanvasView.apply_ring_fill_color(fill_view, None, QColor("#ffffff"))
 
-    def test_clear_scene_resets_canvas_state_and_clears_previews(self) -> None:
-        scene = _FakeScene([_FakeItem("atom")], [_FakeItem("bond")])
-        apply_insert_session_state = mock.Mock()
-        view = SimpleNamespace(
-            scene=lambda: scene,
-            hover_items=[object()],
-            hover_atom_id=3,
-            hover_bond_id=4,
-            model=SimpleNamespace(dummy=True),
-            _mark_spatial_index_dirty=mock.Mock(),
-            atom_coords_3d={1: (1.0, 2.0, 3.0)},
-            _projection_center_3d=(1.0, 1.0, 1.0),
-            _projection_anchor_2d=(2.0, 2.0),
-            _rotation_start_projection_center_3d=(3.0, 3.0, 3.0),
-            _rotation_start_projection_anchor_2d=(4.0, 4.0),
-            _rotation_axis_bond_id=7,
-            _rotation_axis_atoms=(1, 2),
-            _rotation_total_angle=1.2,
-            _rotation_mode="bond",
-            _rotation_free_angle_x=2.3,
-            _rotation_free_angle_y=4.5,
-            _rotation_start_positions={1: (0.0, 0.0)},
-            _rotation_start_coords_3d={1: (0.0, 0.0, 0.0)},
-            _rotation_coord_atom_ids={1},
-            atom_items={1: object()},
-            atom_dots={1: object()},
-            _atom_neighbors={1: {2}},
-            _atom_bond_ids={1: {0}},
-            _graph_version=9,
-            _selection_component_cache_signature="sig",
-            _selection_component_cache=[{1}],
-            bond_items={0: [object()]},
-            ring_items=[object()],
-            note_items=[object()],
-            mark_items=[object()],
-            arrow_items=[object()],
-            ts_bracket_items=[object()],
-            orbital_items=[object()],
-            _marks_by_atom={1: [object()]},
-            _smiles_preview_model=object(),
-            _clear_template_preview=mock.Mock(),
-            _clear_benzene_preview=mock.Mock(),
-            _clear_smiles_preview=mock.Mock(),
-            _apply_insert_session_state=apply_insert_session_state,
-        )
+    def test_clear_scene_wrapper_delegates_to_public_api(self) -> None:
+        reset_service = mock.Mock()
+        view = SimpleNamespace(_canvas_scene_reset_service=reset_service)
 
         CanvasView.clear_scene(view)
 
-        self.assertEqual(view.hover_items, [])
-        self.assertIsNone(view.hover_atom_id)
-        self.assertIsNone(view.hover_bond_id)
-        self.assertIsInstance(view.model, MoleculeModel)
-        view._mark_spatial_index_dirty.assert_called_once_with()
-        self.assertEqual(view.atom_coords_3d, {})
-        self.assertIsNone(view._projection_center_3d)
-        self.assertIsNone(view._projection_anchor_2d)
-        self.assertIsNone(view._rotation_start_projection_center_3d)
-        self.assertIsNone(view._rotation_start_projection_anchor_2d)
-        self.assertIsNone(view._rotation_axis_bond_id)
-        self.assertIsNone(view._rotation_axis_atoms)
-        self.assertEqual(view._rotation_total_angle, 0.0)
-        self.assertIsNone(view._rotation_mode)
-        self.assertEqual(view._rotation_free_angle_x, 0.0)
-        self.assertEqual(view._rotation_free_angle_y, 0.0)
-        self.assertEqual(view._rotation_start_positions, {})
-        self.assertEqual(view._rotation_start_coords_3d, {})
-        self.assertEqual(view._rotation_coord_atom_ids, set())
-        self.assertEqual(view.atom_items, {})
-        self.assertEqual(view.atom_dots, {})
-        self.assertEqual(view._atom_neighbors, {})
-        self.assertEqual(view._atom_bond_ids, {})
-        self.assertEqual(view._graph_version, 0)
-        self.assertIsNone(view._selection_component_cache_signature)
-        self.assertEqual(view._selection_component_cache, [])
-        self.assertEqual(view.bond_items, {})
-        self.assertEqual(view.ring_items, [])
-        self.assertEqual(view.note_items, [])
-        self.assertEqual(view.mark_items, [])
-        self.assertEqual(view.arrow_items, [])
-        self.assertEqual(view.ts_bracket_items, [])
-        self.assertEqual(view.orbital_items, [])
-        self.assertEqual(view._marks_by_atom, {})
-        self.assertIsNone(view._smiles_preview_model)
-        view._clear_template_preview.assert_called_once_with()
-        view._clear_benzene_preview.assert_called_once_with()
-        view._clear_smiles_preview.assert_called_once_with()
-        apply_insert_session_state.assert_called_once()
+        reset_service.clear_scene.assert_called_once_with()
 
 
 if __name__ == "__main__":

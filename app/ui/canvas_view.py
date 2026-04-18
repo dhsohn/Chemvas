@@ -30,23 +30,14 @@ from PyQt6.QtWidgets import (
 )
 
 from core.history import (
-    AddBondCommand,
-    ChangeAtomLabelCommand,
-    DeleteBondCommand,
     HistoryCommand,
-    AddAtomsCommand,
-    AddSceneItemsCommand,
     CompositeCommand,
-    DeleteAtomsCommand,
     SetAtomPositionsCommand,
     SetRingPolygonsCommand,
     UpdateBondLengthCommand,
     UpdateAtomColorCommand,
     UpdateSceneItemCommand,
-    UpdateBondCommand,
 )
-from core.document_io import read_document, write_document
-from core.document_state import deserialize_model_state
 from core.model import Atom, Bond, MoleculeModel
 from core.renderer import Renderer
 from core.rdkit_adapter import RDKitAdapter
@@ -70,6 +61,10 @@ from ui.bond_renderer import BondRenderer
 from ui.atom_label_service import AtomLabelService
 from ui.benzene_preview_service import BenzenePreviewService
 from ui.bond_graphics_logic import refresh_bond_graphics
+from ui.canvas_scene_decoration_build_service import (
+    CanvasSceneDecorationBuildService,
+    canvas_scene_decoration_build_service_for,
+)
 from ui.scene_decoration_service import SceneDecorationService
 from ui.canvas_handle_controller import CanvasHandleController
 from ui.curved_arrow_path_service import CurvedArrowPathService, curved_arrow_path_service_for
@@ -80,16 +75,22 @@ from ui.canvas_move_controller import CanvasMoveController
 from ui.canvas_note_controller import CanvasNoteController
 from ui.canvas_pointer_controller import CanvasPointerController
 from ui.canvas_rotation_preview_controller import CanvasRotationPreviewController
-from ui.canvas_document_state import (
-    apply_document_settings,
-    restore_document_post_model_items,
-    restore_document_pre_model_items,
-    snapshot_canvas_document_state,
+from ui.canvas_atom_mutation_service import CanvasAtomMutationService, canvas_atom_mutation_service_for
+from ui.canvas_bond_mutation_service import CanvasBondMutationService, canvas_bond_mutation_service_for
+from ui.canvas_chemdraw_shortcut_service import (
+    CanvasChemdrawShortcutService,
+    canvas_chemdraw_shortcut_service_for,
 )
+from ui.canvas_hit_testing_service import CanvasHitTestingService, canvas_hit_testing_service_for
+from ui.canvas_color_mutation_service import CanvasColorMutationService, canvas_color_mutation_service_for
+from ui.canvas_document_session_service import CanvasDocumentSessionService
 from ui.canvas_geometry_controller import CanvasGeometryController
+from ui.canvas_graph_service import CanvasGraphService, canvas_graph_service_for
+from ui.canvas_history_recording_service import CanvasHistoryRecordingService
+from ui.canvas_mark_scene_service import CanvasMarkSceneService, canvas_mark_scene_service_for
+from ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService, canvas_ring_fill_scene_service_for
+from ui.canvas_scene_reset_service import CanvasSceneResetService, canvas_scene_reset_service_for
 from ui.graphics_items import (
-    AtomLabelItem,
-    AtomDotItem,
     NoSelectLineItem,
     NoSelectPathItem,
     NoSelectPolygonItem,
@@ -104,7 +105,6 @@ from ui.hover_interaction_service import HoverInteractionService
 from ui.hover_scene_service import HoverSceneService
 from ui.insert_mode_logic import (
     InsertSessionState,
-    clear_insert_session,
 )
 from ui.insert_controller import InsertController
 from ui.mark_hover_preview_service import MarkHoverPreviewService
@@ -194,8 +194,9 @@ def _handle_controller_for(canvas) -> CanvasHandleController:
 
 def _selection_controller_for(canvas) -> SelectionController:
     controller = getattr(canvas, "_selection_controller", None)
-    if isinstance(controller, SelectionController) and controller.canvas is canvas:
-        return controller
+    if controller is not None:
+        if not isinstance(controller, SelectionController) or controller.canvas is canvas:
+            return controller
     return SelectionController(canvas)
 
 
@@ -330,6 +331,16 @@ class CanvasView(QGraphicsView):
         self._note_controller = CanvasNoteController(self)
         self._pointer_controller = CanvasPointerController(self)
         self._geometry_controller = CanvasGeometryController(self)
+        self._canvas_atom_mutation_service = CanvasAtomMutationService(self)
+        self._canvas_bond_mutation_service = CanvasBondMutationService(self)
+        self._chemdraw_shortcut_service = CanvasChemdrawShortcutService(self)
+        self._hit_testing_service = CanvasHitTestingService(self)
+        self._canvas_color_mutation_service = CanvasColorMutationService(self)
+        self._canvas_document_session_service = CanvasDocumentSessionService(self)
+        self._canvas_graph_service = CanvasGraphService(self)
+        self._canvas_history_recording_service = CanvasHistoryRecordingService(self)
+        self._canvas_mark_scene_service = CanvasMarkSceneService(self)
+        self._canvas_ring_fill_scene_service = CanvasRingFillSceneService(self)
         self._rotation_preview_controller = CanvasRotationPreviewController(self)
         self._atom_label_service = AtomLabelService(self)
         self._hover_interaction_service = HoverInteractionService(self)
@@ -338,6 +349,7 @@ class CanvasView(QGraphicsView):
         self._bond_hover_preview_service = BondHoverPreviewService(self)
         self._structure_build_service = StructureBuildService(self)
         self._benzene_preview_service = BenzenePreviewService(self)
+        self._scene_decoration_build_service = CanvasSceneDecorationBuildService(self)
         self._scene_decoration_service = SceneDecorationService(self)
         self._structure_insert_service = StructureInsertService(self)
         self._selection_rotation_controller = SelectionRotationController(self)
@@ -407,181 +419,19 @@ class CanvasView(QGraphicsView):
         return CanvasInputController.shortcut_modifiers(event)
 
     def _handle_chemdraw_shortcut(self, event) -> bool:
-        return _input_controller_for(self).handle_chemdraw_shortcut(event)
+        return canvas_chemdraw_shortcut_service_for(self).handle_shortcut(event)
 
     def _handle_chemdraw_object_shortcut(self, event) -> bool:
-        modifiers = self._shortcut_modifiers(event)
-        if modifiers == (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier):
-            if event.key() == Qt.Key.Key_H:
-                self.flip_horizontal()
-                return True
-            if event.key() == Qt.Key.Key_V:
-                self.flip_vertical()
-                return True
-        return False
+        return canvas_chemdraw_shortcut_service_for(self).handle_object_shortcut(event)
 
     def _handle_chemdraw_generic_hotkey(self, event) -> bool:
-        modifiers = self._shortcut_modifiers(event)
-        if modifiers == Qt.KeyboardModifier.NoModifier:
-            if event.key() == Qt.Key.Key_Space:
-                self.set_tool("select")
-                return True
-            if event.key() == Qt.Key.Key_X:
-                self.set_bond_style("single", 1)
-                return True
-            if event.key() == Qt.Key.Key_T:
-                self.set_tool("text")
-                return True
-            if event.key() == Qt.Key.Key_E:
-                self.set_tool("arrow")
-                return True
-            if event.key() == Qt.Key.Key_J:
-                self.set_tool("benzene")
-                return True
-        if modifiers == Qt.KeyboardModifier.ShiftModifier and event.key() == Qt.Key.Key_G:
-            self.set_tool("ts_bracket")
-            return True
-        if modifiers == Qt.KeyboardModifier.AltModifier and event.key() == Qt.Key.Key_D:
-            self.set_tool("perspective")
-            return True
-        return False
+        return canvas_chemdraw_shortcut_service_for(self).handle_generic_hotkey(event)
 
     def _handle_chemdraw_atom_hotkey(self, event, atom_id: int) -> bool:
-        if atom_id not in self.model.atoms:
-            return False
-        modifiers = self._shortcut_modifiers(event)
-        if modifiers not in (Qt.KeyboardModifier.NoModifier, Qt.KeyboardModifier.ShiftModifier):
-            return False
-        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-            self.prompt_atom_label(atom_id)
-            return True
-        text = event.text()
-        if not text:
-            return False
-        if text == "+":
-            self.add_mark_for_atom(atom_id, self._atom_point(atom_id), kind="plus")
-            return True
-        if text == "-":
-            self.add_mark_for_atom(atom_id, self._atom_point(atom_id), kind="minus")
-            return True
-        label_hotkeys = {
-            "f": "F",
-            "F": "CF3",
-            "p": "P",
-            "P": "Ph",
-            "A": "Ac",
-            "h": "H",
-            "b": "Br",
-            "B": "B",
-            "i": "I",
-            "r": "R",
-            "s": "S",
-            "S": "Si",
-            "m": "Me",
-            "n": "N",
-            "w": "N",
-            "N": "NO2",
-            "c": "C",
-            "l": "Cl",
-            "C": "Cl",
-            "x": "X",
-            "o": "O",
-            "q": "O",
-            "d": "D",
-            "e": "Et",
-            "E": "CO2Me",
-            "Z": "N3",
-            "M": "MgBr",
-            "L": "Li",
-            "O": "OMe",
-            "Q": "Fmoc",
-            "H": "Cbz",
-            "Y": "Boc",
-            # LiteDraw does not yet have ChemDraw's full group-sprout engine for these,
-            # so keep them available as common abbreviation labels.
-            "k": "SO2",
-            "K": "t-Bu",
-        }
-        if text in label_hotkeys:
-            self._atom_label_service.add_or_update_atom_label(atom_id, label_hotkeys[text], show_carbon=True)
-            return True
-        if text in {"0", "1"}:
-            self._sprout_bond_from_atom(atom_id, style="single", order=1, cyclic=text == "0")
-            return True
-        if text == "2":
-            self._sprout_acetyl_from_atom(atom_id)
-            return True
-        if text in {"3", "a"}:
-            self._sprout_benzene_from_atom(atom_id)
-            return True
-        if text == "4":
-            self._sprout_bond_from_atom(atom_id, style="wedge", order=1)
-            return True
-        if text == "5":
-            self._sprout_bond_from_atom(atom_id, style="hash", order=1)
-            return True
-        if text == "6":
-            self._sprout_regular_ring_from_atom(atom_id, 6)
-            return True
-        if text == "7":
-            self._sprout_regular_ring_from_atom(atom_id, 5)
-            return True
-        if text == "8":
-            self._sprout_bond_from_atom(atom_id, style="double", order=2)
-            return True
-        if text == "z":
-            self._sprout_bond_from_atom(atom_id, style="triple", order=3)
-            return True
-        if text == "v":
-            self._sprout_regular_ring_from_atom(atom_id, 3)
-            return True
-        if text == "u":
-            self._sprout_regular_ring_from_atom(atom_id, 4)
-            return True
-        return False
+        return canvas_chemdraw_shortcut_service_for(self).handle_atom_hotkey(event, atom_id)
 
     def _handle_chemdraw_bond_hotkey(self, event, bond_id: int) -> bool:
-        if not (0 <= bond_id < len(self.model.bonds)) or self.model.bonds[bond_id] is None:
-            return False
-        modifiers = self._shortcut_modifiers(event)
-        if modifiers not in (Qt.KeyboardModifier.NoModifier, Qt.KeyboardModifier.ShiftModifier):
-            return False
-        if modifiers == Qt.KeyboardModifier.ShiftModifier:
-            if event.key() == Qt.Key.Key_B:
-                self.apply_bond_style(bond_id, "bold_in", 2)
-                return True
-            if event.key() == Qt.Key.Key_H:
-                self.apply_bond_style(bond_id, "hash", 1)
-                return True
-        text = event.text()
-        if text == "1":
-            self.apply_bond_style(bond_id, "single", 1)
-            return True
-        if text == "2":
-            self.apply_bond_style(bond_id, "double", 2)
-            return True
-        if text == "3":
-            self.apply_bond_style(bond_id, "triple", 3)
-            return True
-        if text == "b":
-            self.apply_bond_style(bond_id, "bold_in", 1)
-            return True
-        if text == "w":
-            self.apply_bond_style(bond_id, "wedge", 1)
-            return True
-        if text == "h":
-            self.apply_bond_style(bond_id, "hash", 1)
-            return True
-        if text == "a":
-            self._fuse_benzene_to_bond(bond_id)
-            return True
-        if text in {"4", "5", "6", "7", "8"}:
-            self._fuse_regular_ring_to_bond(bond_id, int(text))
-            return True
-        if text in {"9", "0"}:
-            self._fuse_chair_to_bond(bond_id, mirrored=text == "0")
-            return True
-        return False
+        return canvas_chemdraw_shortcut_service_for(self).handle_bond_hotkey(event, bond_id)
 
     def _atom_has_visible_label(self, atom_id: int) -> bool:
         atom = self.model.atoms.get(atom_id)
@@ -695,34 +545,19 @@ class CanvasView(QGraphicsView):
         return self._scene_ops_controller.delete_selected_items()
 
     def _snapshot_state(self) -> dict:
-        return snapshot_canvas_document_state(self)
+        return self._canvas_document_session_service.snapshot_state()
 
     def snapshot_state(self) -> dict:
         return self._snapshot_state()
 
     def _restore_state(self, state: dict) -> None:
-        self._history_enabled = False
-        try:
-            self.clear_scene()
-            apply_document_settings(self, state)
-
-            self.model = deserialize_model_state(state.get("model", {}))
-            self._rebuild_bond_adjacency()
-            restore_document_pre_model_items(self, state)
-
-            self._render_model()
-            restore_document_post_model_items(self, state)
-            self._mark_spatial_index_dirty()
-        finally:
-            self._history_enabled = True
+        self._canvas_document_session_service.apply_state(state)
 
     def restore_state(self, state: dict) -> None:
-        self._restore_state(state)
-        self._history = []
-        self._redo_stack = []
+        self._canvas_document_session_service.restore_state(state)
 
     def save_to_file(self, path: str) -> None:
-        write_document(path, self._snapshot_state(), self.FILE_FORMAT_VERSION)
+        self._canvas_document_session_service.save_to_file(path)
 
     def export_xyz(self, path: str) -> None:
         export_model, atom_annotations = self.build_3d_conversion_payload()
@@ -746,10 +581,7 @@ class CanvasView(QGraphicsView):
         )
 
     def load_from_file(self, path: str) -> None:
-        document = read_document(path)
-        self._restore_state(document.state)
-        self._history = []
-        self._redo_stack = []
+        self._canvas_document_session_service.load_from_file(path)
 
     def _push_command(self, command: HistoryCommand) -> None:
         if not self._history_enabled:
@@ -804,76 +636,14 @@ class CanvasView(QGraphicsView):
         merge_ids: list[int],
         merge_info: dict,
     ) -> None:
-        if not self._history_enabled:
-            return
-        atom = self.model.atoms.get(atom_id)
-        after_element = atom.element if atom is not None else before_element
-        after_explicit_label = atom.explicit_label if atom is not None else before_explicit_label
-        after_smiles_input = self.last_smiles_input
-        commands: list[HistoryCommand] = []
-        if (
-            before_element != after_element
-            or before_explicit_label != after_explicit_label
-            or before_smiles_input != after_smiles_input
-        ):
-            commands.append(
-                ChangeAtomLabelCommand(
-                    atom_id=atom_id,
-                    before_element=before_element,
-                    after_element=after_element,
-                    before_explicit_label=before_explicit_label,
-                    after_explicit_label=after_explicit_label,
-                    before_smiles_input=before_smiles_input,
-                    after_smiles_input=after_smiles_input,
-                )
-            )
-        if merge_ids:
-            bond_before_states = merge_info.get("bond_before_states", {})
-            deleted_bond_ids = set(merge_info.get("deleted_bond_ids", []))
-            for bond_id, before_state in bond_before_states.items():
-                if bond_id in deleted_bond_ids:
-                    commands.append(
-                        DeleteBondCommand(
-                            bond_id=bond_id,
-                            bond_state=before_state,
-                            before_smiles_input=before_smiles_input,
-                            after_smiles_input=after_smiles_input,
-                        )
-                    )
-                    continue
-                bond = self.model.bonds[bond_id]
-                if bond is None:
-                    continue
-                after_state = self._bond_state_dict(bond)
-                if before_state != after_state:
-                    commands.append(
-                        UpdateBondCommand(
-                            bond_id=bond_id,
-                            before_state=before_state,
-                            after_state=after_state,
-                            before_smiles_input=before_smiles_input,
-                            after_smiles_input=after_smiles_input,
-                        )
-                    )
-            atom_states = merge_info.get("atom_states", {})
-            if atom_states:
-                commands.append(
-                    DeleteAtomsCommand(
-                        atom_states=atom_states,
-                        mark_states=[],
-                        before_next_atom_id=self.model.next_atom_id,
-                        after_next_atom_id=self.model.next_atom_id,
-                        before_smiles_input=before_smiles_input,
-                        after_smiles_input=after_smiles_input,
-                        remove_marks=False,
-                    )
-                )
-        if not commands:
-            return
-        if len(commands) == 1:
-            self._push_command(commands[0])
-            return
-        self._push_command(CompositeCommand(commands))
+        self._atom_label_service.record_label_change(
+            atom_id,
+            before_element,
+            before_explicit_label,
+            before_smiles_input,
+            merge_ids,
+            merge_info,
+        )
 
     def _bond_state_dict(self, bond: Bond) -> dict:
         return {
@@ -891,48 +661,12 @@ class CanvasView(QGraphicsView):
         before_smiles_input: str | None,
         added_scene_items: list | None = None,
     ) -> None:
-        commands: list[HistoryCommand] = []
-        after_next_atom_id = self.model.next_atom_id
-        if after_next_atom_id > before_next_atom_id:
-            atom_states = {
-                atom_id: self._atom_state_dict(atom_id)
-                for atom_id in range(before_next_atom_id, after_next_atom_id)
-                if atom_id in self.model.atoms
-            }
-            if atom_states:
-                commands.append(
-                    AddAtomsCommand(
-                        atom_states=atom_states,
-                        before_next_atom_id=before_next_atom_id,
-                        after_next_atom_id=after_next_atom_id,
-                        before_smiles_input=before_smiles_input,
-                        after_smiles_input=self.last_smiles_input,
-                    )
-                )
-        for bond_id in range(before_bond_count, len(self.model.bonds)):
-            bond = self.model.bonds[bond_id]
-            if bond is None:
-                continue
-            bond_state = self._bond_state_dict(bond)
-            commands.append(
-                AddBondCommand(
-                    bond_id=bond_id,
-                    bond_state=bond_state,
-                    previous_bond_count=bond_id,
-                    before_smiles_input=before_smiles_input,
-                    after_smiles_input=self.last_smiles_input,
-                )
-            )
-        if added_scene_items:
-            states = [self.scene_item_state(item) for item in added_scene_items if item is not None]
-            if states:
-                commands.append(AddSceneItemsCommand(item_states=states, items=list(added_scene_items)))
-        if not commands:
-            return
-        if len(commands) == 1:
-            self._push_command(commands[0])
-            return
-        self._push_command(CompositeCommand(commands))
+        self._canvas_history_recording_service.record_additions(
+            before_next_atom_id,
+            before_bond_count,
+            before_smiles_input,
+            added_scene_items,
+        )
 
     def _atom_state_dict(self, atom_id: int) -> dict:
         atom = self.model.atoms.get(atom_id)
@@ -950,97 +684,13 @@ class CanvasView(QGraphicsView):
         }
 
     def _remove_atom_only(self, atom_id: int, remove_marks: bool = True) -> None:
-        label = self.atom_items.pop(atom_id, None)
-        if label is not None:
-            self.scene().removeItem(label)
-        dot = self.atom_dots.pop(atom_id, None)
-        if dot is not None:
-            self.scene().removeItem(dot)
-        if remove_marks:
-            self._remove_marks_for_atom(atom_id)
-        self.model.atoms.pop(atom_id, None)
-        self.atom_coords_3d.pop(atom_id, None)
-        neighbors = self._atom_neighbors.pop(atom_id, None)
-        if neighbors:
-            for neighbor in neighbors:
-                neighbor_set = self._atom_neighbors.get(neighbor)
-                if neighbor_set is not None and atom_id in neighbor_set:
-                    neighbor_set.remove(atom_id)
-            self._graph_version += 1
-            self._selection_component_cache_signature = None
-        bond_ids = self._atom_bond_ids.pop(atom_id, None)
-        if bond_ids:
-            for bond_id in list(bond_ids):
-                bond = self.model.bonds[bond_id] if 0 <= bond_id < len(self.model.bonds) else None
-                if bond is None:
-                    continue
-                other_id = bond.b if bond.a == atom_id else bond.a
-                other_set = self._atom_bond_ids.get(other_id)
-                if other_set is not None and bond_id in other_set:
-                    other_set.remove(bond_id)
-        self._mark_spatial_index_dirty()
+        canvas_atom_mutation_service_for(self).remove_atom_only(atom_id, remove_marks=remove_marks)
 
     def _restore_atom_from_state(self, atom_id: int, state: dict) -> None:
-        if not state:
-            return
-        atom = Atom(
-            element=state.get("element", "C"),
-            x=state.get("x", 0.0),
-            y=state.get("y", 0.0),
-            color=state.get("color", "#000000"),
-            explicit_label=bool(state.get("explicit_label", False)),
-        )
-        self.model.atoms[atom_id] = atom
-        self._ensure_atom_neighbors(atom_id)
-        self._ensure_atom_bond_ids(atom_id)
-        if atom_id >= self.model.next_atom_id:
-            self.model.next_atom_id = atom_id + 1
-        existing_label = self.atom_items.pop(atom_id, None)
-        if existing_label is not None:
-            self.scene().removeItem(existing_label)
-        existing_dot = self.atom_dots.pop(atom_id, None)
-        if existing_dot is not None:
-            self.scene().removeItem(existing_dot)
-        if atom.element.upper() == "C":
-            if atom.explicit_label:
-                self._atom_label_service.add_or_update_atom_label(
-                    atom_id,
-                    atom.element,
-                    clear_smiles=False,
-                    record=False,
-                    allow_merge=False,
-                    show_carbon=True,
-                )
-            else:
-                self._ensure_carbon_dot(atom_id)
-        else:
-            self._atom_label_service.add_or_update_atom_label(
-                atom_id,
-                atom.element,
-                clear_smiles=False,
-                record=False,
-                allow_merge=False,
-            )
-        self.apply_atom_color(atom_id, atom.color)
-        self._mark_spatial_index_dirty()
+        canvas_atom_mutation_service_for(self).restore_atom_from_state(atom_id, state)
 
     def apply_atom_color(self, atom_id: int, color: str | QColor) -> None:
-        atom = self.model.atoms.get(atom_id)
-        if atom is None:
-            return
-        if isinstance(color, QColor):
-            color_value = color
-        else:
-            color_value = QColor(color)
-        if not color_value.isValid():
-            return
-        atom.color = color_value.name()
-        label_item = self.atom_items.get(atom_id)
-        if label_item is not None:
-            label_item.setDefaultTextColor(color_value)
-        dot_item = self.atom_dots.get(atom_id)
-        if dot_item is not None:
-            dot_item.setBrush(self._implicit_carbon_dot_brush())
+        canvas_atom_mutation_service_for(self).apply_atom_color(atom_id, color)
 
     def set_atom_positions(
         self,
@@ -1159,6 +809,9 @@ class CanvasView(QGraphicsView):
     def create_scene_item_from_state(self, state: dict):
         return self._scene_item_controller.create_scene_item_from_state(state)
 
+    def attach_scene_item(self, item) -> None:
+        self._scene_item_controller.attach_scene_item(item)
+
     def _bond_ids_for_ring_item(self, item) -> set[int]:
         return self._scene_item_controller._bond_ids_for_ring_item(item)
 
@@ -1182,117 +835,31 @@ class CanvasView(QGraphicsView):
         before_smiles_input: str | None,
         after_smiles_input: str | None,
     ) -> None:
-        if not self._history_enabled:
-            return
-        if before_state == after_state and before_smiles_input == after_smiles_input:
-            return
-        command = UpdateBondCommand(
-            bond_id=bond_id,
-            before_state=before_state,
-            after_state=after_state,
-            before_smiles_input=before_smiles_input,
-            after_smiles_input=after_smiles_input,
+        self._canvas_history_recording_service.record_bond_update(
+            bond_id,
+            before_state,
+            after_state,
+            before_smiles_input,
+            after_smiles_input,
         )
-        self._push_command(command)
 
     def _restore_bond_from_state(self, bond_id: int, bond_state: dict) -> None:
-        if not bond_state:
-            return
-        for item in self.bond_items.get(bond_id, []):
-            self.scene().removeItem(item)
-        self.bond_items.pop(bond_id, None)
-        existing_bond = self.model.bonds[bond_id] if bond_id < len(self.model.bonds) else None
-        bond = Bond(
-            a=bond_state.get("a", 0),
-            b=bond_state.get("b", 0),
-            order=bond_state.get("order", 1),
-            style=bond_state.get("style", "single"),
-            color=bond_state.get("color", "#000000"),
-        )
-        if existing_bond is not None and (existing_bond.a != bond.a or existing_bond.b != bond.b):
-            self._remove_bond_index(bond_id, existing_bond.a, existing_bond.b)
-            self._remove_bond_neighbors(existing_bond.a, existing_bond.b, skip_bond_id=bond_id)
-        if bond_id < len(self.model.bonds):
-            self.model.bonds[bond_id] = bond
-        else:
-            self.model.bonds.extend([None] * (bond_id - len(self.model.bonds)))
-            self.model.bonds.append(bond)
-        if existing_bond is None or (existing_bond.a != bond.a or existing_bond.b != bond.b):
-            self._add_bond_neighbors(bond.a, bond.b)
-            self._add_bond_index(bond_id, bond.a, bond.b)
-        self._add_bond_graphics(bond_id)
-        self._mark_spatial_index_dirty()
+        canvas_bond_mutation_service_for(self).restore_bond_from_state(bond_id, bond_state)
 
     def _remove_bond_by_id(self, bond_id: int) -> None:
-        if not (0 <= bond_id < len(self.model.bonds)):
-            return
-        bond = self.model.bonds[bond_id]
-        for item in self.bond_items.get(bond_id, []):
-            self.scene().removeItem(item)
-        self.bond_items.pop(bond_id, None)
-        if bond is not None:
-            self._remove_bond_index(bond_id, bond.a, bond.b)
-            self._remove_bond_neighbors(bond.a, bond.b, skip_bond_id=bond_id)
-        self.model.bonds[bond_id] = None
-        self._mark_spatial_index_dirty()
+        canvas_bond_mutation_service_for(self).remove_bond_by_id(bond_id)
 
     def _trim_bonds_to_length(self, length: int) -> None:
-        if length < 0 or length >= len(self.model.bonds):
-            return
-        for bond_id in range(length, len(self.model.bonds)):
-            bond = self.model.bonds[bond_id]
-            if bond is not None:
-                self._remove_bond_index(bond_id, bond.a, bond.b)
-                self._remove_bond_neighbors(bond.a, bond.b, skip_bond_id=bond_id)
-            for item in self.bond_items.get(bond_id, []):
-                self.scene().removeItem(item)
-            self.bond_items.pop(bond_id, None)
-        del self.model.bonds[length:]
-        self._mark_spatial_index_dirty()
+        canvas_bond_mutation_service_for(self).trim_bonds_to_length(length)
 
     def scene_pos_from_event(self, event) -> QPointF:
-        if hasattr(event, "position"):
-            return self.mapToScene(event.position().toPoint())
-        if hasattr(event, "pos"):
-            return self.mapToScene(event.pos())
-        pos = self.viewport().mapFromGlobal(QCursor.pos())
-        return self.mapToScene(pos)
+        return canvas_hit_testing_service_for(self).scene_pos_from_event(event)
 
     def item_at_scene_pos(self, pos: QPointF):
-        bond_item = None
-        ring_item = None
-        other_item = None
-        for item in self.scene().items(
-            pos,
-            Qt.ItemSelectionMode.IntersectsItemShape,
-            Qt.SortOrder.DescendingOrder,
-            QTransform(),
-        ):
-            if item.data(0) == "selection_outline":
-                continue
-            kind = item.data(0)
-            if kind in {"note_box", "note_select"}:
-                continue
-            if kind == "atom":
-                return item
-            if kind == "bond" and bond_item is None:
-                bond_item = item
-                continue
-            if kind == "ring" and ring_item is None:
-                ring_item = item
-                continue
-            if other_item is None:
-                other_item = item
-        if bond_item is None:
-            nearby_bond_id = self._find_bond_near(pos, self._bond_pick_radius())
-            if nearby_bond_id is not None:
-                nearby_items = self.bond_items.get(nearby_bond_id, [])
-                if nearby_items:
-                    return nearby_items[0]
-        return bond_item or ring_item or other_item
+        return canvas_hit_testing_service_for(self).item_at_scene_pos(pos)
 
     def item_at_event(self, event):
-        return self.item_at_scene_pos(self.scene_pos_from_event(event))
+        return canvas_hit_testing_service_for(self).item_at_event(event)
 
     @staticmethod
     def _selection_target_item(item) -> bool:
@@ -1322,43 +889,22 @@ class CanvasView(QGraphicsView):
         )
 
     def _nearest_atom_hit(self, pos: QPointF) -> tuple[int, float] | None:
-        atom_id = self.find_atom_near(pos.x(), pos.y(), self._atom_pick_radius())
-        if atom_id is None:
-            return None
-        atom = self.model.atoms.get(atom_id)
-        if atom is None:
-            return None
-        return atom_id, math.hypot(atom.x - pos.x(), atom.y - pos.y())
+        return canvas_hit_testing_service_for(self).nearest_atom_hit(pos)
 
     def _nearest_bond_hit(self, pos: QPointF) -> tuple[int, float] | None:
-        bond_id = self._find_bond_near(pos, self._bond_pick_radius())
-        if bond_id is None or not (0 <= bond_id < len(self.model.bonds)):
-            return None
-        bond = self.model.bonds[bond_id]
-        if bond is None:
-            return None
-        atom_a = self.model.atoms.get(bond.a)
-        atom_b = self.model.atoms.get(bond.b)
-        if atom_a is None or atom_b is None:
-            return None
-        dist = self._distance_point_to_segment(
-            pos,
-            QPointF(atom_a.x, atom_a.y),
-            QPointF(atom_b.x, atom_b.y),
-        )
-        return bond_id, dist
+        return canvas_hit_testing_service_for(self).nearest_bond_hit(pos)
 
     def _structure_hit_from_item(self, item) -> tuple[StructureHit | None, tuple[int, int] | None, list[int] | None]:
-        return _selection_controller_for(self)._structure_hit_from_item(item)
+        return _selection_controller_for(self).structure_hit_from_item(item)
 
     def _structure_item_for_hit(self, hit: StructureHit):
-        return _selection_controller_for(self)._structure_item_for_hit(hit)
+        return _selection_controller_for(self).structure_item_for_hit(hit)
 
     def _atom_item_for_id(self, atom_id: int):
-        return self.atom_items.get(atom_id) or self.atom_dots.get(atom_id)
+        return self._atom_label_service.atom_item_for_id(atom_id)
 
     def _selection_targets_for_item(self, item) -> list[QGraphicsItem]:
-        return _selection_controller_for(self)._selection_targets_for_item(item)
+        return _selection_controller_for(self).selection_targets_for_item(item)
 
     def toggle_item_selection(self, item) -> bool:
         return _selection_controller_for(self).toggle_item_selection(item)
@@ -1370,16 +916,13 @@ class CanvasView(QGraphicsView):
         return _selection_controller_for(self).preferred_structure_item_at_scene_pos(pos)
 
     def bond_id_from_event(self, event) -> int | None:
-        if self.hover_bond_id is not None:
-            return self.hover_bond_id
-        pos = self.scene_pos_from_event(event)
-        return self._find_bond_near(pos, max(self.renderer.style.bond_length_px * 0.35, self._bond_pick_radius()))
+        return canvas_hit_testing_service_for(self).bond_id_from_event(event)
 
     def _selection_rects_for_snapshot(
         self,
         snapshot: SelectionSnapshot,
     ) -> tuple[SelectionRect, ...]:
-        return _selection_controller_for(self)._selection_rects_for_snapshot(snapshot)
+        return _selection_controller_for(self).selection_rects_for_snapshot(snapshot)
 
     def selection_hit_test(
         self,
@@ -1411,91 +954,25 @@ class CanvasView(QGraphicsView):
         self._spatial_index_dirty = True
 
     def _grid_cell_size(self) -> float:
-        return max(8.0, self.renderer.style.bond_length_px)
+        return canvas_hit_testing_service_for(self).grid_cell_size()
 
     def _cell_coords(self, x: float, y: float, cell_size: float) -> tuple[int, int]:
-        return int(math.floor(x / cell_size)), int(math.floor(y / cell_size))
+        return canvas_hit_testing_service_for(self).cell_coords(x, y, cell_size)
 
     def _ensure_spatial_index(self) -> None:
-        cell_size = self._grid_cell_size()
-        if not self._spatial_index_dirty and abs(self._spatial_cell_size - cell_size) < 1e-6:
-            return
-        self._rebuild_spatial_index(cell_size)
+        canvas_hit_testing_service_for(self).ensure_spatial_index()
 
     def _rebuild_spatial_index(self, cell_size: float) -> None:
-        atom_grid: dict[tuple[int, int], set[int]] = {}
-        for atom_id, atom in self.model.atoms.items():
-            key = self._cell_coords(atom.x, atom.y, cell_size)
-            atom_grid.setdefault(key, set()).add(atom_id)
-
-        bond_grid: dict[tuple[int, int], set[int]] = {}
-        for bond_id, bond in enumerate(self.model.bonds):
-            if bond is None:
-                continue
-            a = self.model.atoms.get(bond.a)
-            b = self.model.atoms.get(bond.b)
-            if a is None or b is None:
-                continue
-            min_x = min(a.x, b.x)
-            max_x = max(a.x, b.x)
-            min_y = min(a.y, b.y)
-            max_y = max(a.y, b.y)
-            min_ix, min_iy = self._cell_coords(min_x, min_y, cell_size)
-            max_ix, max_iy = self._cell_coords(max_x, max_y, cell_size)
-            for ix in range(min_ix, max_ix + 1):
-                for iy in range(min_iy, max_iy + 1):
-                    bond_grid.setdefault((ix, iy), set()).add(bond_id)
-
-        self._atom_grid = atom_grid
-        self._bond_grid = bond_grid
-        self._spatial_cell_size = cell_size
-        self._spatial_index_dirty = False
+        canvas_hit_testing_service_for(self).rebuild_spatial_index(cell_size)
 
     def find_atom_near(self, x: float, y: float, max_dist: float) -> int | None:
-        if not self.model.atoms:
-            return None
-        self._ensure_spatial_index()
-        cell_size = self._spatial_cell_size or self._grid_cell_size()
-        if cell_size <= 0:
-            return None
-        cell_radius = int(math.ceil(max_dist / cell_size))
-        ix, iy = self._cell_coords(x, y, cell_size)
-        nearest_id = None
-        nearest_dist_sq = max_dist * max_dist
-        for cx in range(ix - cell_radius, ix + cell_radius + 1):
-            for cy in range(iy - cell_radius, iy + cell_radius + 1):
-                for atom_id in self._atom_grid.get((cx, cy), ()):
-                    atom = self.model.atoms.get(atom_id)
-                    if atom is None:
-                        continue
-                    dx = atom.x - x
-                    dy = atom.y - y
-                    dist_sq = dx * dx + dy * dy
-                    if dist_sq <= nearest_dist_sq:
-                        nearest_id = atom_id
-                        nearest_dist_sq = dist_sq
-        return nearest_id
+        return canvas_hit_testing_service_for(self).find_atom_near(x, y, max_dist)
 
     def add_atom(self, element: str, x: float, y: float) -> int:
-        atom_id = self.model.add_atom(element, x, y)
-        self._ensure_atom_neighbors(atom_id)
-        self._ensure_atom_bond_ids(atom_id)
-        if element.upper() == "C":
-            self._ensure_carbon_dot(atom_id)
-        else:
-            self._atom_label_service.add_or_update_atom_label(atom_id, element, clear_smiles=False, record=False)
-        self._mark_spatial_index_dirty()
-        return atom_id
+        return canvas_atom_mutation_service_for(self).add_atom(element, x, y)
 
     def add_bond(self, a: int, b: int, order: int = 1) -> int:
-        existing_id = self._bond_id_between(a, b)
-        if existing_id is not None:
-            return existing_id
-        self.model.add_bond(a, b, order)
-        self._add_bond_neighbors(a, b)
-        self._add_bond_index(len(self.model.bonds) - 1, a, b)
-        self._mark_spatial_index_dirty()
-        return len(self.model.bonds) - 1
+        return canvas_bond_mutation_service_for(self).add_bond(a, b, order)
 
     def set_bond_style(self, style: str, order: int) -> None:
         self.active_bond_style = style
@@ -2092,16 +1569,7 @@ class CanvasView(QGraphicsView):
         return NoteItem(self)
 
     def add_text_note(self, pos: QPointF, text: str) -> QGraphicsTextItem:
-        item = self._new_note_item()
-        item.setPlainText(text)
-        item._last_text = text
-        item.setData(0, "note")
-        item.setPos(pos)
-        self.scene().addItem(item)
-        self.note_items.append(item)
-        self._make_selectable(item)
-        self._apply_note_style(item)
-        return item
+        return _note_controller_for(self).create_text_note(pos, text)
 
     def add_mark(self, pos: QPointF, kind: str | None = None, atom_id: int | None = None, offset: QPointF | None = None, record: bool = True):
         return self._scene_decoration_service.add_mark(
@@ -2113,86 +1581,33 @@ class CanvasView(QGraphicsView):
         )
 
     def add_mark_for_atom(self, atom_id: int, click_pos: QPointF, kind: str | None = None, record: bool = True):
-        atom = self.model.atoms.get(atom_id)
-        if atom is None:
-            return None
-        kind = kind or self.mark_kind
-        offset = self._mark_offset_from_click(atom_id, click_pos, kind=kind)
-        center = QPointF(atom.x + offset.x(), atom.y + offset.y())
-        return self.add_mark(center, kind=kind, atom_id=atom_id, offset=offset, record=record)
+        return canvas_mark_scene_service_for(self).add_mark_for_atom(
+            atom_id,
+            click_pos,
+            kind=kind,
+            record=record,
+        )
 
     def _mark_selection_radius(self) -> float:
         return self._atom_pick_radius()
 
     def _build_mark_item(self, kind: str):
-        selection_radius = self._mark_selection_radius()
-        if kind == "radical":
-            radius = max(1.2, self.renderer.style.bond_line_width * 0.7)
-            hit_padding = max(0.0, selection_radius - radius)
-            item = AtomDotItem(-radius, -radius, radius * 2.0, radius * 2.0, hit_padding=hit_padding)
-            item.setBrush(QColor(self.renderer.style.atom_color))
-            item.setPen(QPen(Qt.PenStyle.NoPen))
-            return item
-        if kind in {"plus", "minus"}:
-            text_item = AtomLabelItem(hit_radius=selection_radius)
-            text_item.setFont(self.renderer.atom_font())
-            text_item.setDefaultTextColor(QColor(self.renderer.style.atom_color))
-            text_item.setPlainText("+" if kind == "plus" else "-")
-            return text_item
-        return None
+        return canvas_scene_decoration_build_service_for(self).build_mark_item(kind)
 
     def _mark_offset_from_click(self, atom_id: int, click_pos: QPointF, kind: str | None = None) -> QPointF:
-        atom = self.model.atoms.get(atom_id)
-        if atom is None:
-            return QPointF(0.0, 0.0)
-        dx = click_pos.x() - atom.x
-        dy = click_pos.y() - atom.y
-        length = math.hypot(dx, dy)
-        if length <= 1e-6:
-            dx = 1.0
-            dy = -1.0
-            length = math.hypot(dx, dy)
-        direction_x = dx / length
-        direction_y = dy / length
-        target = self.renderer.style.bond_length_px * 0.2
-        mark_kind = kind or self.mark_kind
-        label_target = self._mark_target_distance_for_atom(atom_id, direction_x, direction_y, mark_kind)
-        if label_target > target:
-            target += (label_target - target) * 0.25
-        return QPointF(direction_x * target, direction_y * target)
+        return canvas_mark_scene_service_for(self).mark_offset_from_click(atom_id, click_pos, kind=kind)
 
     def _mark_center(self, item) -> QPointF:
-        if isinstance(item, QGraphicsTextItem):
-            rect = item.boundingRect()
-            return QPointF(item.pos().x() + rect.center().x(), item.pos().y() + rect.center().y())
-        return item.pos()
+        return canvas_scene_decoration_build_service_for(self).mark_center(item)
 
     def _set_mark_center(self, item, center: QPointF) -> None:
-        if isinstance(item, QGraphicsTextItem):
-            rect = item.boundingRect()
-            item.setPos(center.x() - rect.center().x(), center.y() - rect.center().y())
-        else:
-            item.setPos(center)
+        canvas_scene_decoration_build_service_for(self).set_mark_center(item, center)
 
     def _remove_mark_item(self, item) -> None:
-        if item in self.mark_items:
-            self.mark_items.remove(item)
-        data = item.data(1) or {}
-        atom_id = data.get("atom_id")
-        if isinstance(atom_id, int):
-            marks = self._marks_by_atom.get(atom_id)
-            if marks and item in marks:
-                marks.remove(item)
-            if marks and not marks:
-                self._marks_by_atom.pop(atom_id, None)
-        self.scene().removeItem(item)
+        canvas_mark_scene_service_for(self).remove_mark_item(item)
 
     def _remove_marks_for_atom(self, atom_id: int) -> None:
-        marks = self._marks_by_atom.pop(atom_id, [])
-        for item in list(marks):
-            if item in self.mark_items:
-                self.mark_items.remove(item)
-            self.scene().removeItem(item)
+        canvas_mark_scene_service_for(self).remove_marks_for_atom(atom_id)
 
     def update_text_note(self, item: QGraphicsTextItem, text: str) -> None:
         _note_controller_for(self).update_text_note(item, text)
@@ -2279,19 +1694,19 @@ class CanvasView(QGraphicsView):
         end: QPointF,
         width: float,
     ) -> QPainterPath:
-        return _selection_controller_for(self)._selection_line_stroke_path(start, end, width)
+        return _selection_controller_for(self).selection_line_stroke_path(start, end, width)
 
     def _selection_path_for_bond_item(self, item, width: float | None = None) -> QPainterPath:
-        return _selection_controller_for(self)._selection_path_for_bond_item(item, width=width)
+        return _selection_controller_for(self).selection_path_for_bond_item(item, width=width)
 
     def _selection_path_for_bond(self, bond_id: int) -> QPainterPath:
-        return _selection_controller_for(self)._selection_path_for_bond(bond_id)
+        return _selection_controller_for(self).selection_path_for_bond(bond_id)
 
     def _selection_path_for_object_item(self, item) -> QPainterPath:
-        return _selection_controller_for(self)._selection_path_for_object_item(item)
+        return _selection_controller_for(self).selection_path_for_object_item(item)
 
     def _add_selection_object_overlay(self, item, color: QColor) -> None:
-        _selection_controller_for(self)._add_selection_object_overlay(item, color)
+        _selection_controller_for(self).add_selection_object_overlay(item, color)
 
     def _add_selection_component_overlay(
         self,
@@ -2300,184 +1715,55 @@ class CanvasView(QGraphicsView):
         color: QColor,
         atom_pad: float,
     ) -> None:
-        _selection_controller_for(self)._add_selection_component_overlay(atom_ids, bond_ids, color, atom_pad)
+        _selection_controller_for(self).add_selection_component_overlay(atom_ids, bond_ids, color, atom_pad)
 
     def _selection_center_for_atoms(self, atom_ids: set[int]) -> QPointF | None:
-        return _selection_controller_for(self)._selection_center_for_atoms(atom_ids)
+        return _selection_controller_for(self).selection_center_for_atoms(atom_ids)
 
     def _selection_center_marker_enabled(self) -> bool:
-        return _selection_controller_for(self)._selection_center_marker_enabled()
+        return _selection_controller_for(self).selection_center_marker_enabled()
 
     def _add_selection_center_marker(self, center: QPointF) -> None:
-        _selection_controller_for(self)._add_selection_center_marker(center)
+        _selection_controller_for(self).add_selection_center_marker(center)
 
     def suspend_selection_outline(self, suspend: bool) -> None:
         self._suspend_selection_outline = bool(suspend)
 
     def _ensure_atom_neighbors(self, atom_id: int) -> None:
-        if atom_id not in self._atom_neighbors:
-            self._atom_neighbors[atom_id] = set()
+        canvas_graph_service_for(self).ensure_atom_neighbors(atom_id)
 
     def _ensure_atom_bond_ids(self, atom_id: int) -> None:
-        if atom_id not in self._atom_bond_ids:
-            self._atom_bond_ids[atom_id] = set()
+        canvas_graph_service_for(self).ensure_atom_bond_ids(atom_id)
 
     def _add_bond_neighbors(self, a_id: int, b_id: int) -> None:
-        self._atom_neighbors.setdefault(a_id, set()).add(b_id)
-        self._atom_neighbors.setdefault(b_id, set()).add(a_id)
-        self._graph_version += 1
+        canvas_graph_service_for(self).add_bond_neighbors(a_id, b_id)
 
     def _remove_bond_neighbors(self, a_id: int, b_id: int, skip_bond_id: int | None = None) -> None:
-        if self._bond_id_between(a_id, b_id, skip_bond_id=skip_bond_id) is not None:
-            return
-        changed = False
-        neighbors_a = self._atom_neighbors.get(a_id)
-        if neighbors_a is not None and b_id in neighbors_a:
-            neighbors_a.remove(b_id)
-            changed = True
-        neighbors_b = self._atom_neighbors.get(b_id)
-        if neighbors_b is not None and a_id in neighbors_b:
-            neighbors_b.remove(a_id)
-            changed = True
-        if changed:
-            self._graph_version += 1
+        canvas_graph_service_for(self).remove_bond_neighbors(a_id, b_id, skip_bond_id=skip_bond_id)
 
     def _add_bond_index(self, bond_id: int, a_id: int, b_id: int) -> None:
-        self._atom_bond_ids.setdefault(a_id, set()).add(bond_id)
-        self._atom_bond_ids.setdefault(b_id, set()).add(bond_id)
+        canvas_graph_service_for(self).add_bond_index(bond_id, a_id, b_id)
 
     def _remove_bond_index(self, bond_id: int, a_id: int, b_id: int) -> None:
-        bonds_a = self._atom_bond_ids.get(a_id)
-        if bonds_a is not None and bond_id in bonds_a:
-            bonds_a.remove(bond_id)
-        bonds_b = self._atom_bond_ids.get(b_id)
-        if bonds_b is not None and bond_id in bonds_b:
-            bonds_b.remove(bond_id)
+        canvas_graph_service_for(self).remove_bond_index(bond_id, a_id, b_id)
 
     def _rebuild_bond_adjacency(self) -> None:
-        self._atom_neighbors = {atom_id: set() for atom_id in self.model.atoms}
-        self._atom_bond_ids = {atom_id: set() for atom_id in self.model.atoms}
-        for bond_id, bond in enumerate(self.model.bonds):
-            if bond is None:
-                continue
-            self._atom_neighbors.setdefault(bond.a, set()).add(bond.b)
-            self._atom_neighbors.setdefault(bond.b, set()).add(bond.a)
-            self._atom_bond_ids.setdefault(bond.a, set()).add(bond_id)
-            self._atom_bond_ids.setdefault(bond.b, set()).add(bond_id)
-        self._graph_version += 1
-        self._selection_component_cache_signature = None
-        self._selection_component_cache = []
+        canvas_graph_service_for(self).rebuild_bond_adjacency()
 
     def _connected_components(self, atom_ids: set[int]) -> list[set[int]]:
-        if not atom_ids:
-            return []
-        remaining = set(atom_ids)
-        components = []
-        while remaining:
-            start = remaining.pop()
-            stack = [start]
-            comp = {start}
-            while stack:
-                current = stack.pop()
-                for neighbor in self._atom_neighbors.get(current, ()):
-                    if neighbor not in atom_ids:
-                        continue
-                    if neighbor in remaining:
-                        remaining.remove(neighbor)
-                        comp.add(neighbor)
-                        stack.append(neighbor)
-            components.append(comp)
-        return components
+        return canvas_graph_service_for(self).connected_components(atom_ids)
 
     def _component_without_bond(self, start_atom_id: int, skip_bond_id: int) -> set[int]:
-        skip_bond = None
-        skip_a = None
-        skip_b = None
-        has_alt_between = False
-        if 0 <= skip_bond_id < len(self.model.bonds):
-            skip_bond = self.model.bonds[skip_bond_id]
-        if skip_bond is not None:
-            skip_a = skip_bond.a
-            skip_b = skip_bond.b
-            shared = self._atom_bond_ids.get(skip_a, set()) & self._atom_bond_ids.get(skip_b, set())
-            has_alt_between = any(bond_id != skip_bond_id for bond_id in shared)
-        visited = {start_atom_id}
-        stack = [start_atom_id]
-        while stack:
-            current = stack.pop()
-            for neighbor in self._atom_neighbors.get(current, ()):
-                if (
-                    skip_bond is not None
-                    and not has_alt_between
-                    and (
-                        (current == skip_a and neighbor == skip_b)
-                        or (current == skip_b and neighbor == skip_a)
-                    )
-                ):
-                    continue
-                if neighbor in visited:
-                    continue
-                visited.add(neighbor)
-                stack.append(neighbor)
-        return visited
+        return canvas_graph_service_for(self).component_without_bond(start_atom_id, skip_bond_id)
 
     def _bond_in_cycle(self, bond_id: int) -> bool:
-        cached = self._bond_cycle_cache.get(bond_id)
-        if cached is not None and cached[0] == self._graph_version:
-            return cached[1]
-        if not (0 <= bond_id < len(self.model.bonds)):
-            self._bond_cycle_cache[bond_id] = (self._graph_version, False)
-            return False
-        bond = self.model.bonds[bond_id]
-        if bond is None:
-            self._bond_cycle_cache[bond_id] = (self._graph_version, False)
-            return False
-        start = bond.a
-        target = bond.b
-        shared = self._atom_bond_ids.get(start, set()) & self._atom_bond_ids.get(target, set())
-        has_alt_between = any(other_id != bond_id for other_id in shared)
-        visited = {start}
-        stack = [start]
-        while stack:
-            current = stack.pop()
-            for neighbor in self._atom_neighbors.get(current, ()):
-                if (
-                    not has_alt_between
-                    and (
-                        (current == start and neighbor == target)
-                        or (current == target and neighbor == start)
-                    )
-                ):
-                    continue
-                if neighbor in visited:
-                    continue
-                if neighbor == target:
-                    self._bond_cycle_cache[bond_id] = (self._graph_version, True)
-                    return True
-                visited.add(neighbor)
-                stack.append(neighbor)
-        self._bond_cycle_cache[bond_id] = (self._graph_version, False)
-        return False
+        return canvas_graph_service_for(self).bond_in_cycle(bond_id)
 
     def _bond_is_rotatable(self, bond_id: int) -> bool:
-        if not (0 <= bond_id < len(self.model.bonds)):
-            return False
-        bond = self.model.bonds[bond_id]
-        if bond is None or bond.order != 1:
-            return False
-        if self._bond_in_cycle(bond_id):
-            return False
-        return True
+        return canvas_graph_service_for(self).bond_is_rotatable(bond_id)
 
     def _bond_component_atoms(self, bond_id: int) -> set[int] | None:
-        if not (0 <= bond_id < len(self.model.bonds)):
-            return None
-        bond = self.model.bonds[bond_id]
-        if bond is None:
-            return None
-        comp_a = self._component_without_bond(bond.a, bond_id)
-        comp_b = self._component_without_bond(bond.b, bond_id)
-        return comp_a | comp_b
+        return canvas_graph_service_for(self).bond_component_atoms(bond_id)
 
     def _rotation_side_for_bond(
         self,
@@ -2485,36 +1771,11 @@ class CanvasView(QGraphicsView):
         selected_atom_ids: set[int],
         allow_fallback: bool,
     ) -> set[int] | None:
-        if not (0 <= bond_id < len(self.model.bonds)):
-            return None
-        bond = self.model.bonds[bond_id]
-        if bond is None:
-            return None
-        comp_a = self._component_without_bond(bond.a, bond_id)
-        comp_b = self._component_without_bond(bond.b, bond_id)
-        effective_selected = set(selected_atom_ids) - {bond.a, bond.b}
-        selected_in_a = effective_selected & comp_a
-        selected_in_b = effective_selected & comp_b
-        if selected_in_a and not selected_in_b:
-            return comp_a
-        if selected_in_b and not selected_in_a:
-            return comp_b
-        if not selected_in_a and not selected_in_b:
-            a_selected = bond.a in selected_atom_ids
-            b_selected = bond.b in selected_atom_ids
-            if a_selected ^ b_selected:
-                return comp_a if a_selected else comp_b
-        if allow_fallback:
-            count_a = len(selected_in_a)
-            count_b = len(selected_in_b)
-            if count_a != count_b:
-                return comp_a if count_a > count_b else comp_b
-            size_a = max(0, len(comp_a) - 1)
-            size_b = max(0, len(comp_b) - 1)
-            if size_a != size_b:
-                return comp_a if size_a > size_b else comp_b
-            return comp_a if len(comp_a) >= len(comp_b) else comp_b
-        return None
+        return canvas_graph_service_for(self).rotation_side_for_bond(
+            bond_id,
+            selected_atom_ids,
+            allow_fallback,
+        )
 
     def _preferred_rotation_side_for_bond(
         self,
@@ -2523,184 +1784,22 @@ class CanvasView(QGraphicsView):
         press_pos: QPointF | None = None,
         allow_fallback: bool = True,
     ) -> set[int] | None:
-        if not (0 <= bond_id < len(self.model.bonds)):
-            return None
-        bond = self.model.bonds[bond_id]
-        if bond is None:
-            return None
-        comp_a = self._component_without_bond(bond.a, bond_id)
-        comp_b = self._component_without_bond(bond.b, bond_id)
-        component = comp_a | comp_b
-        selected_in_component = set(selected_atom_ids) & component
-        is_partial_selection = 0 < len(selected_in_component) < len(component)
-        effective_selected = selected_in_component - {bond.a, bond.b}
-        selected_in_a = effective_selected & comp_a
-        selected_in_b = effective_selected & comp_b
-        overlap_a = selected_in_component & comp_a
-        overlap_b = selected_in_component & comp_b
-        atom_a = self.model.atoms.get(bond.a)
-        atom_b = self.model.atoms.get(bond.b)
-        dist_a = None
-        dist_b = None
-        if is_partial_selection:
-            if selected_in_a and not selected_in_b:
-                return comp_a
-            if selected_in_b and not selected_in_a:
-                return comp_b
-            if overlap_a and not overlap_b:
-                return comp_a
-            if overlap_b and not overlap_a:
-                return comp_b
-            coverage_a = len(overlap_a) / max(1, len(comp_a))
-            coverage_b = len(overlap_b) / max(1, len(comp_b))
-            if abs(coverage_a - coverage_b) > 1e-9:
-                return comp_a if coverage_a > coverage_b else comp_b
-            if len(selected_in_a) != len(selected_in_b):
-                return comp_a if len(selected_in_a) > len(selected_in_b) else comp_b
-            if len(overlap_a) != len(overlap_b):
-                return comp_a if len(overlap_a) > len(overlap_b) else comp_b
-        elif not selected_in_a and not selected_in_b:
-            a_selected = bond.a in selected_atom_ids
-            b_selected = bond.b in selected_atom_ids
-            if a_selected ^ b_selected:
-                return comp_a if a_selected else comp_b
-        if press_pos is not None and atom_a is not None and atom_b is not None:
-            dist_a = math.hypot(press_pos.x() - atom_a.x, press_pos.y() - atom_a.y)
-            dist_b = math.hypot(press_pos.x() - atom_b.x, press_pos.y() - atom_b.y)
-            tol = self.renderer.style.bond_length_px * 0.05
-            if abs(dist_a - dist_b) > tol:
-                return comp_a if dist_a < dist_b else comp_b
-        if not allow_fallback:
-            return None
-        if is_partial_selection:
-            count_a = len(selected_in_a)
-            count_b = len(selected_in_b)
-            if count_a != count_b:
-                return comp_a if count_a > count_b else comp_b
-        size_a = max(0, len(comp_a) - 1)
-        size_b = max(0, len(comp_b) - 1)
-        if size_a != size_b:
-            return comp_a if size_a < size_b else comp_b
-        if dist_a is not None and dist_b is not None:
-            return comp_a if dist_a <= dist_b else comp_b
-        return comp_a if bond.a <= bond.b else comp_b
+        return canvas_graph_service_for(self).preferred_rotation_side_for_bond(
+            bond_id,
+            selected_atom_ids,
+            press_pos=press_pos,
+            allow_fallback=allow_fallback,
+        )
 
     def _rotatable_axis_from_selection(
         self,
         selected_atom_ids: set[int],
         selected_bond_ids: set[int],
     ) -> tuple[int, set[int]] | None:
-        if self._rotation_axis_cache_version != self._graph_version:
-            self._rotation_axis_cache.clear()
-            self._rotation_axis_cache_version = self._graph_version
-        cache_key = (
-            frozenset(selected_atom_ids),
-            frozenset(selected_bond_ids),
-            self._graph_version,
+        return canvas_graph_service_for(self).rotatable_axis_from_selection(
+            selected_atom_ids,
+            selected_bond_ids,
         )
-        if cache_key in self._rotation_axis_cache:
-            return self._rotation_axis_cache[cache_key]
-        def _store(axis: tuple[int, set[int]] | None) -> tuple[int, set[int]] | None:
-            self._rotation_axis_cache[cache_key] = axis
-            return axis
-        explicit_atoms = set(selected_atom_ids)
-        bond_atoms: set[int] = set()
-        selected_bonds: set[int] = set()
-        for bond_id in selected_bond_ids:
-            if not (0 <= bond_id < len(self.model.bonds)):
-                continue
-            bond = self.model.bonds[bond_id]
-            if bond is None:
-                continue
-            selected_bonds.add(bond_id)
-            bond_atoms.add(bond.a)
-            bond_atoms.add(bond.b)
-        atoms_for_boundary = explicit_atoms | bond_atoms
-        if selected_bonds and len(selected_bonds) == 1:
-            bond_id = next(iter(selected_bonds))
-            if self._bond_is_rotatable(bond_id):
-                rotating = self._preferred_rotation_side_for_bond(
-                    bond_id,
-                    atoms_for_boundary,
-                    allow_fallback=True,
-                )
-                if rotating is not None:
-                    return _store((bond_id, rotating))
-        if not explicit_atoms and len(selected_bonds) > 1:
-            selected_degree: dict[int, int] = {}
-            for bond_id in selected_bonds:
-                bond = self.model.bonds[bond_id]
-                if bond is None:
-                    continue
-                selected_degree[bond.a] = selected_degree.get(bond.a, 0) + 1
-                selected_degree[bond.b] = selected_degree.get(bond.b, 0) + 1
-            has_unselected_bond: dict[int, bool] = {}
-            for other_id, other in enumerate(self.model.bonds):
-                if other is None or other_id in selected_bonds:
-                    continue
-                has_unselected_bond[other.a] = True
-                has_unselected_bond[other.b] = True
-            candidates = []
-            for bond_id in selected_bonds:
-                bond = self.model.bonds[bond_id]
-                if bond is None:
-                    continue
-                a_leaf = selected_degree.get(bond.a, 0) == 1 and has_unselected_bond.get(bond.a, False)
-                b_leaf = selected_degree.get(bond.b, 0) == 1 and has_unselected_bond.get(bond.b, False)
-                if a_leaf ^ b_leaf:
-                    candidates.append(bond_id)
-            if len(candidates) == 1:
-                bond_id = candidates[0]
-                if self._bond_is_rotatable(bond_id):
-                    rotating = self._rotation_side_for_bond(
-                        bond_id,
-                        bond_atoms,
-                        allow_fallback=True,
-                    )
-                    if rotating is not None:
-                        return _store((bond_id, rotating))
-                return _store(None)
-        if not atoms_for_boundary:
-            return _store(None)
-        boundary = []
-        for bond_id, bond in enumerate(self.model.bonds):
-            if bond is None:
-                continue
-            a_sel = bond.a in atoms_for_boundary
-            b_sel = bond.b in atoms_for_boundary
-            if a_sel ^ b_sel:
-                boundary.append(bond_id)
-        if len(boundary) == 1:
-            bond_id = boundary[0]
-            if not self._bond_is_rotatable(bond_id):
-                return _store(None)
-            rotating = self._rotation_side_for_bond(
-                bond_id,
-                atoms_for_boundary,
-                allow_fallback=not explicit_atoms,
-            )
-            if rotating is not None:
-                return _store((bond_id, rotating))
-        atoms_for_axis = set(atoms_for_boundary)
-        if not atoms_for_axis:
-            return _store(None)
-        candidates: list[tuple[int, set[int]]] = []
-        for bond_id, bond in enumerate(self.model.bonds):
-            if bond is None or not self._bond_is_rotatable(bond_id):
-                continue
-            rotating = self._rotation_side_for_bond(
-                bond_id,
-                atoms_for_axis,
-                allow_fallback=False,
-            )
-            if rotating is None:
-                continue
-            candidates.append((bond_id, rotating))
-        if len(candidates) == 1:
-            axis = candidates[0]
-        else:
-            axis = None
-        return _store(axis)
 
     def set_selection_info_callback(self, callback) -> None:
         self._selection_info_callback = callback
@@ -2828,13 +1927,7 @@ class CanvasView(QGraphicsView):
         atom_id: int | None = None,
         kind: str | None = None,
     ) -> QPointF:
-        if atom_id is None:
-            return QPointF(pos)
-        atom = self.model.atoms.get(atom_id)
-        if atom is None:
-            return QPointF(pos)
-        offset = self._mark_offset_from_click(atom_id, pos, kind=kind)
-        return QPointF(atom.x + offset.x(), atom.y + offset.y())
+        return canvas_mark_scene_service_for(self).mark_center_for_pointer(pos, atom_id, kind=kind)
 
     def _add_mark_hover_preview(self, pos: QPointF) -> None:
         self._mark_hover_preview_service.add_mark_hover_preview(pos)
@@ -2846,41 +1939,7 @@ class CanvasView(QGraphicsView):
         hover_interaction_service.update_hover_highlight(pos)
 
     def _find_bond_near(self, pos: QPointF, max_dist: float) -> int | None:
-        if not self.model.bonds:
-            return None
-        self._ensure_spatial_index()
-        cell_size = self._spatial_cell_size or self._grid_cell_size()
-        if cell_size <= 0:
-            return None
-        cell_radius = int(math.ceil(max_dist / cell_size))
-        ix, iy = self._cell_coords(pos.x(), pos.y(), cell_size)
-        nearest = None
-        nearest_dist = max_dist
-        seen: set[int] = set()
-        for cx in range(ix - cell_radius, ix + cell_radius + 1):
-            for cy in range(iy - cell_radius, iy + cell_radius + 1):
-                for bond_id in self._bond_grid.get((cx, cy), ()):
-                    if bond_id in seen:
-                        continue
-                    seen.add(bond_id)
-                    if not (0 <= bond_id < len(self.model.bonds)):
-                        continue
-                    bond = self.model.bonds[bond_id]
-                    if bond is None:
-                        continue
-                    a = self.model.atoms.get(bond.a)
-                    b = self.model.atoms.get(bond.b)
-                    if a is None or b is None:
-                        continue
-                    dist = self._distance_point_to_segment(
-                        pos,
-                        QPointF(a.x, a.y),
-                        QPointF(b.x, b.y),
-                    )
-                    if dist <= nearest_dist:
-                        nearest = bond_id
-                        nearest_dist = dist
-        return nearest
+        return canvas_hit_testing_service_for(self).find_bond_near(pos, max_dist)
 
     def _add_bond_style_hover_preview(self, bond) -> None:
         self._bond_hover_preview_service.add_bond_style_hover_preview(bond)
@@ -3029,227 +2088,49 @@ class CanvasView(QGraphicsView):
 
     @staticmethod
     def _distance_point_to_segment(p: QPointF, a: QPointF, b: QPointF) -> float:
-        abx = b.x() - a.x()
-        aby = b.y() - a.y()
-        apx = p.x() - a.x()
-        apy = p.y() - a.y()
-        ab_len_sq = abx * abx + aby * aby
-        if ab_len_sq == 0:
-            return math.hypot(apx, apy)
-        t = max(0.0, min(1.0, (apx * abx + apy * aby) / ab_len_sq))
-        cx = a.x() + abx * t
-        cy = a.y() + aby * t
-        return math.hypot(p.x() - cx, p.y() - cy)
+        return CanvasHitTestingService.distance_point_to_segment(p, a, b)
 
     def add_arrow(self, start: QPointF, end: QPointF, kind: str):
         return self._scene_decoration_service.add_arrow(start, end, kind)
 
     def preview_arrow(self, start: QPointF, end: QPointF, kind: str):
-        item = self._build_arrow_item(start, end, kind)
-        self.scene().addItem(item)
-        return item
+        return canvas_scene_decoration_build_service_for(self).preview_arrow(start, end, kind)
 
     def _build_arrow_item(self, start: QPointF, end: QPointF, kind: str) -> QGraphicsPathItem:
-        if kind == "equilibrium":
-            return self._build_equilibrium_item(start, end)
-        if kind == "resonance":
-            return self._build_double_head_arrow(start, end)
-        if kind == "curved_single":
-            return self._build_curved_arrow(start, end, double=False)
-        if kind == "curved_double":
-            return self._build_curved_arrow(start, end, double=True)
-        if kind == "inhibit":
-            return self._build_inhibition_arrow(start, end)
-        if kind == "dotted":
-            return self._build_dotted_arrow(start, end)
-        return self._build_single_head_arrow(start, end)
-
-    def _arrow_pen(self, dotted: bool = False):
-        pen = self.renderer.bond_pen()
-        pen.setWidthF(self.arrow_line_width)
-        if dotted:
-            pen.setStyle(Qt.PenStyle.DashLine)
-        return pen
+        return canvas_scene_decoration_build_service_for(self).build_arrow_item(start, end, kind)
 
     def _build_single_head_arrow(self, start: QPointF, end: QPointF) -> QGraphicsPathItem:
-        path = QPainterPath()
-        path.moveTo(start)
-        path.lineTo(end)
-        self._add_arrow_head(path, start, end, double=False)
-        item = NoSelectPathItem(path)
-        item.setPen(self._arrow_pen())
-        item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        item.setData(2, {"start": start, "end": end, "control": None, "double": False})
-        return item
+        return canvas_scene_decoration_build_service_for(self).build_single_head_arrow(start, end)
 
     def _build_double_head_arrow(self, start: QPointF, end: QPointF) -> QGraphicsPathItem:
-        path = QPainterPath()
-        path.moveTo(start)
-        path.lineTo(end)
-        self._add_arrow_head(path, start, end, double=False)
-        self._add_arrow_head(path, end, start, double=False)
-        item = NoSelectPathItem(path)
-        item.setPen(self._arrow_pen())
-        item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        item.setData(2, {"start": start, "end": end, "control": None, "double": False})
-        return item
+        return canvas_scene_decoration_build_service_for(self).build_double_head_arrow(start, end)
 
     def _build_dotted_arrow(self, start: QPointF, end: QPointF) -> QGraphicsPathItem:
-        path = QPainterPath()
-        path.moveTo(start)
-        path.lineTo(end)
-        self._add_arrow_head(path, start, end, double=False)
-        item = NoSelectPathItem(path)
-        item.setPen(self._arrow_pen(dotted=True))
-        item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        item.setData(2, {"start": start, "end": end, "control": None, "double": False})
-        return item
+        return canvas_scene_decoration_build_service_for(self).build_dotted_arrow(start, end)
 
     def _build_curved_arrow(self, start: QPointF, end: QPointF, double: bool) -> QGraphicsPathItem:
-        dx = end.x() - start.x()
-        dy = end.y() - start.y()
-        length = math.hypot(dx, dy) or 1.0
-        nx = -dy / length
-        ny = dx / length
-        control = QPointF(start.x() + dx * 0.5 + nx * length * 0.3, start.y() + dy * 0.5 + ny * length * 0.3)
-        path = QPainterPath()
-        path.moveTo(start)
-        path.quadTo(control, end)
-        if double:
-            self._add_arrow_head(path, control, end, double=False)
-            self._add_arrow_head(path, control, start, double=False)
-        else:
-            self._add_arrow_head(path, control, end, double=False)
-        item = NoSelectPathItem(path)
-        item.setPen(self._arrow_pen())
-        item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        item.setData(2, {"start": start, "end": end, "control": control, "double": double})
-        return item
+        return canvas_scene_decoration_build_service_for(self).build_curved_arrow(start, end, double)
 
     def _build_inhibition_arrow(self, start: QPointF, end: QPointF) -> QGraphicsPathItem:
-        dx = end.x() - start.x()
-        dy = end.y() - start.y()
-        length = math.hypot(dx, dy) or 1.0
-        nx = -dy / length
-        ny = dx / length
-        bar = self.renderer.style.bond_length_px * 0.2
-
-        path = QPainterPath()
-        path.moveTo(start)
-        path.lineTo(end)
-        bar_start = QPointF(end.x() - nx * bar, end.y() - ny * bar)
-        bar_end = QPointF(end.x() + nx * bar, end.y() + ny * bar)
-        path.moveTo(bar_start)
-        path.lineTo(bar_end)
-        item = NoSelectPathItem(path)
-        item.setPen(self._arrow_pen())
-        item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        item.setData(2, {"start": start, "end": end, "control": None, "double": False})
-        return item
+        return canvas_scene_decoration_build_service_for(self).build_inhibition_arrow(start, end)
 
     def _build_equilibrium_item(self, start: QPointF, end: QPointF) -> QGraphicsPathItem:
-        dx = end.x() - start.x()
-        dy = end.y() - start.y()
-        length = math.hypot(dx, dy) or 1.0
-        nx = -dy / length
-        ny = dx / length
-        offset = self.renderer.style.bond_spacing_px * 1.5
-        start_up = QPointF(start.x() + nx * offset, start.y() + ny * offset)
-        end_up = QPointF(end.x() + nx * offset, end.y() + ny * offset)
-        start_down = QPointF(start.x() - nx * offset, start.y() - ny * offset)
-        end_down = QPointF(end.x() - nx * offset, end.y() - ny * offset)
-
-        path = QPainterPath()
-        path.addPath(self._build_single_head_arrow(start_up, end_up).path())
-        path.addPath(self._build_single_head_arrow(end_down, start_down).path())
-
-        item = NoSelectPathItem(path)
-        item.setPen(self._arrow_pen())
-        item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        item.setData(2, {"start": start, "end": end, "control": None, "double": False})
-        return item
+        return canvas_scene_decoration_build_service_for(self).build_equilibrium_item(start, end)
 
     def _add_arrow_head(self, path: QPainterPath, start: QPointF, end: QPointF, double: bool) -> None:
-        angle = math.atan2(end.y() - start.y(), end.x() - start.x())
-        head_len = self.renderer.style.bond_length_px * self.arrow_head_scale
-        head_angle = math.radians(25)
-        offsets = [0.0]
-        if double:
-            offset_mag = max(1.4, self.arrow_line_width * 1.2)
-            offsets = [-offset_mag, offset_mag]
-        for offset in offsets:
-            dx = math.cos(angle + math.pi / 2) * offset
-            dy = math.sin(angle + math.pi / 2) * offset
-            tip = QPointF(end.x() + dx, end.y() + dy) if double else end
-            left = QPointF(
-                tip.x() - head_len * math.cos(angle - head_angle),
-                tip.y() - head_len * math.sin(angle - head_angle),
-            )
-            right = QPointF(
-                tip.x() - head_len * math.cos(angle + head_angle),
-                tip.y() - head_len * math.sin(angle + head_angle),
-            )
-            path.moveTo(left)
-            path.lineTo(tip)
-            path.lineTo(right)
+        canvas_scene_decoration_build_service_for(self).add_arrow_head(path, start, end, double)
 
     def _ts_bracket_rect_from_points(self, start: QPointF, end: QPointF) -> QRectF:
-        rect = QRectF(start, end).normalized()
-        min_width = self.renderer.style.bond_length_px * 1.8
-        min_height = self.renderer.style.bond_length_px * 2.4
-        if rect.width() < 4.0 and rect.height() < 4.0:
-            return QRectF(
-                start.x() - min_width / 2.0,
-                start.y() - min_height / 2.0,
-                min_width,
-                min_height,
-            )
-        center = rect.center()
-        width = max(rect.width(), min_width)
-        height = max(rect.height(), min_height)
-        return QRectF(center.x() - width / 2.0, center.y() - height / 2.0, width, height)
+        return canvas_scene_decoration_build_service_for(self).ts_bracket_rect_from_points(start, end)
 
     def _ts_bracket_stroke_width(self) -> float:
-        return max(0.8, self.renderer.style.bond_line_width * 0.58)
+        return canvas_scene_decoration_build_service_for(self).ts_bracket_stroke_width()
 
     def _ts_bracket_path(self, rect: QRectF) -> QPainterPath:
-        rect = QRectF(rect).normalized()
-        hook = min(rect.width() * 0.18, self.renderer.style.bond_length_px * 0.55)
-        hook = max(hook, self.renderer.style.bond_length_px * 0.28)
-        bracket_lines = QPainterPath()
-        bracket_lines.moveTo(rect.left() + hook, rect.top())
-        bracket_lines.lineTo(rect.left(), rect.top())
-        bracket_lines.lineTo(rect.left(), rect.bottom())
-        bracket_lines.lineTo(rect.left() + hook, rect.bottom())
-        bracket_lines.moveTo(rect.right() - hook, rect.top())
-        bracket_lines.lineTo(rect.right(), rect.top())
-        bracket_lines.lineTo(rect.right(), rect.bottom())
-        bracket_lines.lineTo(rect.right() - hook, rect.bottom())
-
-        stroker = QPainterPathStroker()
-        stroker.setWidth(self._ts_bracket_stroke_width())
-        stroker.setCapStyle(Qt.PenCapStyle.FlatCap)
-        stroker.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
-        path = stroker.createStroke(bracket_lines)
-
-        font = QFont(self.renderer.style.font_family)
-        font.setPixelSize(max(10, round(min(rect.height() * 0.22, self.renderer.style.bond_length_px * 0.95))))
-        path.addText(
-            rect.right() + hook * 0.18,
-            rect.top() + font.pixelSize() * 0.18,
-            font,
-            "\u2021",
-        )
-        return path
+        return canvas_scene_decoration_build_service_for(self).ts_bracket_path(rect)
 
     def _build_ts_bracket_item(self, rect: QRectF) -> QGraphicsPathItem:
-        normalized = QRectF(rect).normalized()
-        item = NoSelectPathItem(self._ts_bracket_path(normalized))
-        item.setPen(QPen(Qt.PenStyle.NoPen))
-        item.setBrush(QBrush(QColor(self.renderer.style.bond_color)))
-        item.setData(0, "ts_bracket")
-        item.setData(1, {"rect": normalized})
-        return item
+        return canvas_scene_decoration_build_service_for(self).build_ts_bracket_item(rect)
 
     def add_ts_bracket_from_points(self, start: QPointF, end: QPointF):
         return self.add_ts_bracket(self._ts_bracket_rect_from_points(start, end))
@@ -3258,87 +2139,13 @@ class CanvasView(QGraphicsView):
         return self._scene_decoration_service.add_ts_bracket(rect)
 
     def preview_ts_bracket(self, start: QPointF, end: QPointF):
-        item = self._build_ts_bracket_item(self._ts_bracket_rect_from_points(start, end))
-        preview_color = QColor(120, 120, 120, 140)
-        item.setBrush(QBrush(preview_color))
-        self.scene().addItem(item)
-        return item
+        return canvas_scene_decoration_build_service_for(self).preview_ts_bracket(start, end)
 
     def add_orbital(self, center: QPointF) -> None:
         return self._scene_decoration_service.add_orbital(center)
 
     def _build_orbital_items(self, center: QPointF, kind: str):
-        radius = self.renderer.style.bond_length_px * 0.35
-        pen = self.renderer.bond_pen()
-        pos_color = QColor(self.renderer.style.orbital_positive_color)
-        neg_color = QColor(self.renderer.style.orbital_negative_color)
-        pos_color.setAlphaF(self.renderer.style.orbital_alpha)
-        neg_color.setAlphaF(self.renderer.style.orbital_alpha)
-
-        def _ellipse_item(cx, cy, rx, ry, fill=None):
-            item = QGraphicsEllipseItem(cx - rx, cy - ry, rx * 2, ry * 2)
-            item.setPen(pen)
-            if fill is not None:
-                item.setBrush(fill)
-            return item
-
-        items = []
-        if kind == "s":
-            fill = pos_color if self.orbital_phase_enabled else None
-            items.append(_ellipse_item(center.x(), center.y(), radius, radius, fill))
-            return items
-        if kind == "p":
-            fill1 = pos_color if self.orbital_phase_enabled else None
-            fill2 = neg_color if self.orbital_phase_enabled else None
-            items.append(_ellipse_item(center.x() - radius, center.y(), radius, radius * 0.7, fill1))
-            items.append(_ellipse_item(center.x() + radius, center.y(), radius, radius * 0.7, fill2))
-            return items
-        if kind == "sp":
-            fill1 = pos_color if self.orbital_phase_enabled else None
-            fill2 = neg_color if self.orbital_phase_enabled else None
-            items.append(_ellipse_item(center.x() - radius * 1.2, center.y(), radius * 1.2, radius * 0.7, fill1))
-            items.append(_ellipse_item(center.x() + radius * 0.6, center.y(), radius * 0.6, radius * 0.4, fill2))
-            return items
-        if kind == "sp2":
-            fill = pos_color if self.orbital_phase_enabled else None
-            for angle in [0, 120, 240]:
-                rad = math.radians(angle)
-                cx = center.x() + math.cos(rad) * radius * 1.1
-                cy = center.y() + math.sin(rad) * radius * 1.1
-                items.append(_ellipse_item(cx, cy, radius * 0.75, radius * 0.5, fill))
-            return items
-        if kind == "sp3":
-            fill = pos_color if self.orbital_phase_enabled else None
-            for angle in [45, 135, 225, 315]:
-                rad = math.radians(angle)
-                cx = center.x() + math.cos(rad) * radius * 1.1
-                cy = center.y() + math.sin(rad) * radius * 1.1
-                items.append(_ellipse_item(cx, cy, radius * 0.7, radius * 0.45, fill))
-            return items
-        if kind == "d":
-            fill1 = pos_color if self.orbital_phase_enabled else None
-            fill2 = neg_color if self.orbital_phase_enabled else None
-            for angle, fill in [(45, fill1), (135, fill2), (225, fill1), (315, fill2)]:
-                rad = math.radians(angle)
-                cx = center.x() + math.cos(rad) * radius * 1.1
-                cy = center.y() + math.sin(rad) * radius * 1.1
-                items.append(_ellipse_item(cx, cy, radius * 0.7, radius * 0.45, fill))
-            return items
-        if kind == "mo_bonding":
-            fill = pos_color if self.orbital_phase_enabled else None
-            items.append(_ellipse_item(center.x() - radius, center.y(), radius, radius * 0.7, fill))
-            items.append(_ellipse_item(center.x() + radius, center.y(), radius, radius * 0.7, fill))
-            return items
-        if kind == "mo_antibonding":
-            fill1 = pos_color if self.orbital_phase_enabled else None
-            fill2 = neg_color if self.orbital_phase_enabled else None
-            items.append(_ellipse_item(center.x() - radius, center.y(), radius, radius * 0.7, fill1))
-            items.append(_ellipse_item(center.x() + radius, center.y(), radius, radius * 0.7, fill2))
-            node = NoSelectLineItem(center.x(), center.y() - radius * 0.8, center.x(), center.y() + radius * 0.8)
-            node.setPen(pen)
-            items.append(node)
-            return items
-        return items
+        return canvas_scene_decoration_build_service_for(self).build_orbital_items(center, kind)
 
     def clear_handles(self) -> None:
         handle_overlay_service_for(self).clear_handles()
@@ -3474,23 +2281,11 @@ class CanvasView(QGraphicsView):
         rotation_atom_ids: set[int],
         press_pos: QPointF | None = None,
     ) -> tuple[int, set[int]] | None:
-        if not self._bond_is_rotatable(axis_hint):
-            return None
-        component = self._bond_component_atoms(axis_hint)
-        if component is None:
-            return None
-        selected_in_component = rotation_atom_ids & component
-        if not selected_in_component:
-            return None
-        rotating = self._preferred_rotation_side_for_bond(
+        return canvas_graph_service_for(self).axis_from_rotation_hint(
             axis_hint,
-            selected_in_component,
+            rotation_atom_ids,
             press_pos=press_pos,
-            allow_fallback=True,
         )
-        if rotating is None:
-            return None
-        return axis_hint, rotating
 
     def begin_selection_3d_rotation(
         self,
@@ -3516,32 +2311,7 @@ class CanvasView(QGraphicsView):
             self._redraw_bond(bond_id)
 
     def bond_sets_for_atoms(self, atom_ids: set[int]) -> tuple[set[int], set[int]]:
-        internal: set[int] = set()
-        boundary: set[int] = set()
-        if not atom_ids:
-            return internal, boundary
-        bond_ids: set[int] = set()
-        for atom_id in atom_ids:
-            bond_ids.update(self._atom_bond_ids.get(atom_id, ()))
-        if not bond_ids:
-            for bond_id, bond in enumerate(self.model.bonds):
-                if bond is None:
-                    continue
-                a_in = bond.a in atom_ids
-                b_in = bond.b in atom_ids
-                if a_in or b_in:
-                    bond_ids.add(bond_id)
-        for bond_id in bond_ids:
-            bond = self.model.bonds[bond_id]
-            if bond is None:
-                continue
-            a_in = bond.a in atom_ids
-            b_in = bond.b in atom_ids
-            if a_in and b_in:
-                internal.add(bond_id)
-            elif a_in or b_in:
-                boundary.add(bond_id)
-        return internal, boundary
+        return canvas_graph_service_for(self).bond_sets_for_atoms(atom_ids)
 
     def _restore_selection_from_ids(self, atom_ids: set[int], bond_ids: set[int]) -> None:
         self.scene().clearSelection()
@@ -3555,41 +2325,10 @@ class CanvasView(QGraphicsView):
         self._update_selection_outline()
 
     def _expand_connected_atoms(self, atom_ids: set[int]) -> set[int]:
-        if not atom_ids:
-            return set()
-        adjacency: dict[int, set[int]] = {}
-        for bond in self.model.bonds:
-            if bond is None:
-                continue
-            adjacency.setdefault(bond.a, set()).add(bond.b)
-            adjacency.setdefault(bond.b, set()).add(bond.a)
-        visited = set(atom_ids)
-        stack = list(atom_ids)
-        while stack:
-            current = stack.pop()
-            for neighbor in adjacency.get(current, set()):
-                if neighbor not in visited:
-                    visited.add(neighbor)
-                    stack.append(neighbor)
-        return visited
+        return canvas_graph_service_for(self).expand_connected_atoms(atom_ids)
 
     def _update_ring_fills_for_atoms(self, atom_ids: set[int]) -> None:
-        if not atom_ids:
-            return
-        for ring_item in self.ring_items:
-            ring_atom_ids = ring_item.data(2)
-            if not isinstance(ring_atom_ids, list):
-                continue
-            if not any(atom_id in atom_ids for atom_id in ring_atom_ids):
-                continue
-            points = []
-            for atom_id in ring_atom_ids:
-                atom = self.model.atoms.get(atom_id)
-                if atom is None:
-                    continue
-                points.append(QPointF(atom.x, atom.y))
-                if len(points) >= 3:
-                    ring_item.setPolygon(QPolygonF(points))
+        canvas_ring_fill_scene_service_for(self).update_ring_fills_for_atoms(atom_ids)
 
     @staticmethod
     def _normalize_3d(
@@ -3927,61 +2666,7 @@ class CanvasView(QGraphicsView):
         angle_y: float,
         f: float,
     ) -> None:
-        cx, cy, cz = center
-        cos_y = math.cos(angle_y)
-        sin_y = math.sin(angle_y)
-        cos_x = math.cos(angle_x)
-        sin_x = math.sin(angle_x)
-        tol = self.renderer.style.bond_length_px * 0.25
-        atom_points = []
-        for atom_id in atom_ids:
-            atom = self.model.atoms.get(atom_id)
-            if atom is None:
-                continue
-            atom_points.append(QPointF(atom.x, atom.y))
-        if not atom_points:
-            return
-        for ring_item in self.ring_items:
-            ring_atom_ids = ring_item.data(2)
-            if isinstance(ring_atom_ids, list):
-                if not any(atom_id in atom_ids for atom_id in ring_atom_ids):
-                    continue
-                points = []
-                for atom_id in ring_atom_ids:
-                    atom = self.model.atoms.get(atom_id)
-                    if atom is None:
-                        continue
-                    points.append(QPointF(atom.x, atom.y))
-                if len(points) >= 3:
-                    ring_item.setPolygon(QPolygonF(points))
-                continue
-            polygon = ring_item.polygon()
-            matched = False
-            for point in polygon:
-                for atom_point in atom_points:
-                    if math.hypot(point.x() - atom_point.x(), point.y() - atom_point.y()) <= tol:
-                        matched = True
-                        break
-                if matched:
-                    break
-            if not matched:
-                continue
-            rotated = QPolygonF()
-            for point in polygon:
-                x = point.x() - cx
-                y = point.y() - cy
-                z = 0.0 - cz
-                rx = x * cos_y + z * sin_y
-                rz = -x * sin_y + z * cos_y
-                ry = y * cos_x - rz * sin_x
-                rz2 = y * sin_x + rz * cos_x
-                x = rx + cx
-                y = ry + cy
-                z = rz2 + cz
-                proj_x = x
-                proj_y = y
-                rotated.append(QPointF(proj_x, proj_y))
-            ring_item.setPolygon(rotated)
+        canvas_ring_fill_scene_service_for(self).rotate_ring_fills_3d(atom_ids, center, angle_x, angle_y, f)
 
     def begin_selection_rotation(self) -> bool:
         return _rotation_preview_controller_for(self).begin_selection_rotation()
@@ -3993,50 +2678,7 @@ class CanvasView(QGraphicsView):
         _rotation_preview_controller_for(self).commit_selection_rotation()
 
     def _rotate_ring_fills(self, atom_ids: set[int], center: QPointF, angle_rad: float) -> None:
-        cos_a = math.cos(angle_rad)
-        sin_a = math.sin(angle_rad)
-        tol = self.renderer.style.bond_length_px * 0.25
-        atom_points = []
-        for atom_id in atom_ids:
-            atom = self.model.atoms.get(atom_id)
-            if atom is None:
-                continue
-            atom_points.append(QPointF(atom.x, atom.y))
-        if not atom_points:
-            return
-        for ring_item in self.ring_items:
-            ring_atom_ids = ring_item.data(2)
-            if isinstance(ring_atom_ids, list):
-                if not any(atom_id in atom_ids for atom_id in ring_atom_ids):
-                    continue
-                points = []
-                for atom_id in ring_atom_ids:
-                    atom = self.model.atoms.get(atom_id)
-                    if atom is None:
-                        continue
-                    points.append(QPointF(atom.x, atom.y))
-                if len(points) >= 3:
-                    ring_item.setPolygon(QPolygonF(points))
-                continue
-            polygon = ring_item.polygon()
-            matched = False
-            for point in polygon:
-                for atom_point in atom_points:
-                    if math.hypot(point.x() - atom_point.x(), point.y() - atom_point.y()) <= tol:
-                        matched = True
-                        break
-                if matched:
-                    break
-            if not matched:
-                continue
-            rotated = QPolygonF()
-            for point in polygon:
-                dx = point.x() - center.x()
-                dy = point.y() - center.y()
-                rx = center.x() + dx * cos_a - dy * sin_a
-                ry = center.y() + dx * sin_a + dy * cos_a
-                rotated.append(QPointF(rx, ry))
-            ring_item.setPolygon(rotated)
+        canvas_ring_fill_scene_service_for(self).rotate_ring_fills(atom_ids, center, angle_rad)
 
     def _center_for_atoms(self, atom_ids: set[int]) -> QPointF | None:
         return center_for_atoms(atom_ids, atoms=self.model.atoms)
@@ -4090,14 +2732,7 @@ class CanvasView(QGraphicsView):
         )
 
     def _create_ring_fill_item(self, points: list[QPointF], atom_ids: list[int]):
-        polygon = QPolygonF(points)
-        ring_item = NoSelectPolygonItem(polygon)
-        ring_item.setBrush(self.renderer.ring_fill_brush())
-        ring_item.setPen(QPen(Qt.PenStyle.NoPen))
-        ring_item.setData(0, "ring")
-        ring_item.setData(2, list(atom_ids))
-        self._make_selectable(ring_item)
-        return ring_item
+        return canvas_ring_fill_scene_service_for(self).create_ring_fill_item(points, atom_ids)
 
     def _bond_id_between(self, a_id: int, b_id: int, skip_bond_id: int | None = None) -> int | None:
         if a_id == b_id:
@@ -4147,30 +2782,10 @@ class CanvasView(QGraphicsView):
         self.add_benzene_ring(center)
 
     def add_cyclohexane_chair(self) -> None:
-        def _build() -> None:
-            center = self._structure_build_service.viewport_center()
-            points = self._cyclohexane_chair_points(center)
-            atom_ids = [self.add_atom("C", point.x(), point.y()) for point in points]
-            for i in range(6):
-                self.add_bond(atom_ids[i], atom_ids[(i + 1) % 6])
-            for i in range(6):
-                bond_id = len(self.model.bonds) - 6 + i
-                self._add_bond_graphics(bond_id)
-
-        self._structure_build_service.run_recorded_build(_build)
+        self._structure_build_service.add_cyclohexane_chair()
 
     def add_cyclohexane_boat(self) -> None:
-        def _build() -> None:
-            center = self._structure_build_service.viewport_center()
-            points = self._cyclohexane_boat_points(center)
-            atom_ids = [self.add_atom("C", point.x(), point.y()) for point in points]
-            for i in range(6):
-                self.add_bond(atom_ids[i], atom_ids[(i + 1) % 6])
-            for i in range(6):
-                bond_id = len(self.model.bonds) - 6 + i
-                self._add_bond_graphics(bond_id)
-
-        self._structure_build_service.run_recorded_build(_build)
+        self._structure_build_service.add_cyclohexane_boat()
 
     def add_cyclopropane(self) -> None:
         self._structure_build_service.run_recorded_build(lambda: self._add_regular_ring_template(3))
@@ -4182,10 +2797,10 @@ class CanvasView(QGraphicsView):
         self._structure_build_service.run_recorded_build(lambda: self._add_regular_ring_template(5))
 
     def _insert_session_state(self) -> InsertSessionState:
-        return self._insert_controller._insert_session_state()
+        return self._insert_controller.insert_session_state()
 
     def _apply_insert_session_state(self, state: InsertSessionState) -> None:
-        self._insert_controller._apply_insert_session_state(state)
+        self._insert_controller.apply_insert_session_state(state)
 
     def begin_ring_template_insert(self, ring_size: int, style: str = "regular") -> None:
         self._insert_controller.begin_ring_template_insert(ring_size, style)
@@ -4230,189 +2845,52 @@ class CanvasView(QGraphicsView):
         )
 
     def add_indole(self) -> None:
-        def _build() -> None:
-            center = self._structure_build_service.viewport_center()
-            merge = []
-            self._add_ring_from_points(self._ring_points(center, 6), merge=merge)
-            five_center = QPointF(
-                center.x() + self.renderer.style.bond_length_px * 1.1,
-                center.y() + self.renderer.style.bond_length_px * 0.6,
-            )
-            elements = ["N", "C", "C", "C", "C"]
-            self._add_ring_from_points(self._ring_points(five_center, 5), elements=elements, merge=merge)
-
-        self._structure_build_service.run_recorded_build(_build)
+        self._structure_build_service.add_indole()
 
     def add_quinoline(self) -> None:
-        def _build() -> None:
-            center = self._structure_build_service.viewport_center()
-            merge = []
-            self._add_ring_from_points(self._ring_points(center, 6), merge=merge)
-            other_center = QPointF(center.x() + self.renderer.style.bond_length_px * 1.5, center.y())
-            elements = ["N", "C", "C", "C", "C", "C"]
-            self._add_ring_from_points(self._ring_points(other_center, 6), elements=elements, merge=merge)
-
-        self._structure_build_service.run_recorded_build(_build)
+        self._structure_build_service.add_quinoline()
 
     def add_isoquinoline(self) -> None:
-        def _build() -> None:
-            center = self._structure_build_service.viewport_center()
-            merge = []
-            self._add_ring_from_points(self._ring_points(center, 6), merge=merge)
-            other_center = QPointF(center.x() + self.renderer.style.bond_length_px * 1.5, center.y())
-            elements = ["C", "C", "C", "C", "N", "C"]
-            self._add_ring_from_points(self._ring_points(other_center, 6), elements=elements, merge=merge)
-
-        self._structure_build_service.run_recorded_build(_build)
+        self._structure_build_service.add_isoquinoline()
 
     def add_benzimidazole(self) -> None:
-        def _build() -> None:
-            center = self._structure_build_service.viewport_center()
-            merge = []
-            self._add_ring_from_points(self._ring_points(center, 6), merge=merge)
-            five_center = QPointF(
-                center.x() + self.renderer.style.bond_length_px * 1.1,
-                center.y() + self.renderer.style.bond_length_px * 0.6,
-            )
-            elements = ["N", "C", "N", "C", "C"]
-            self._add_ring_from_points(self._ring_points(five_center, 5), elements=elements, merge=merge)
-
-        self._structure_build_service.run_recorded_build(_build)
+        self._structure_build_service.add_benzimidazole()
 
     def add_phenyl(self) -> None:
-        def _build() -> None:
-            center = self._structure_build_service.viewport_center()
-            atom_ids = self._add_ring_from_points(self._ring_points(center, 6))
-            attach = QPointF(center.x() - self.renderer.style.bond_length_px * 2.0, center.y())
-            attach_id = self.add_atom("C", attach.x(), attach.y())
-            self.add_bond(atom_ids[0], attach_id)
-            self._add_bond_graphics(len(self.model.bonds) - 1)
-
-        self._structure_build_service.run_recorded_build(_build)
+        self._structure_build_service.add_phenyl()
 
     def add_benzyl(self) -> None:
-        def _build() -> None:
-            center = self._structure_build_service.viewport_center()
-            atom_ids = self._add_ring_from_points(self._ring_points(center, 6))
-            start = QPointF(center.x() - self.renderer.style.bond_length_px * 2.0, center.y())
-            mid = QPointF(start.x() - self.renderer.style.bond_length_px, start.y())
-            chain_ids = self._add_linear_chain([start, mid], ["C", "C"], [1])
-            self.add_bond(atom_ids[0], chain_ids[0])
-            self._add_bond_graphics(len(self.model.bonds) - 1)
-
-        self._structure_build_service.run_recorded_build(_build)
+        self._structure_build_service.add_benzyl()
 
     def add_vinyl(self) -> None:
-        def _build() -> None:
-            center = self._structure_build_service.viewport_center()
-            p1 = QPointF(center.x() - self.renderer.style.bond_length_px, center.y())
-            p2 = QPointF(center.x(), center.y())
-            self._add_linear_chain([p1, p2], ["C", "C"], [2])
-
-        self._structure_build_service.run_recorded_build(_build)
+        self._structure_build_service.add_vinyl()
 
     def add_allyl(self) -> None:
-        def _build() -> None:
-            center = self._structure_build_service.viewport_center()
-            step = self.renderer.style.bond_length_px
-            points = [
-                QPointF(center.x() - step, center.y()),
-                QPointF(center.x(), center.y()),
-                QPointF(center.x() + step, center.y()),
-            ]
-            self._add_linear_chain(points, ["C", "C", "C"], [2, 1])
-
-        self._structure_build_service.run_recorded_build(_build)
+        self._structure_build_service.add_allyl()
 
     def add_carboxyl(self) -> None:
-        def _build() -> None:
-            center = self._structure_build_service.viewport_center()
-            step = self.renderer.style.bond_length_px
-            c = QPointF(center.x(), center.y())
-            o1 = QPointF(center.x() + step, center.y() - step * 0.6)
-            o2 = QPointF(center.x() + step, center.y() + step * 0.6)
-            self._add_linear_chain([c, o1], ["C", "O"], [2])
-            self._add_linear_chain([c, o2], ["C", "O"], [1])
-
-        self._structure_build_service.run_recorded_build(_build)
+        self._structure_build_service.add_carboxyl()
 
     def add_nitro(self) -> None:
-        def _build() -> None:
-            center = self._structure_build_service.viewport_center()
-            step = self.renderer.style.bond_length_px
-            n = QPointF(center.x(), center.y())
-            o1 = QPointF(center.x() + step, center.y() - step * 0.6)
-            o2 = QPointF(center.x() + step, center.y() + step * 0.6)
-            self._add_linear_chain([n, o1], ["N", "O"], [2])
-            self._add_linear_chain([n, o2], ["N", "O"], [2])
-
-        self._structure_build_service.run_recorded_build(_build)
+        self._structure_build_service.add_nitro()
 
     def add_sulfonyl(self) -> None:
-        def _build() -> None:
-            center = self._structure_build_service.viewport_center()
-            step = self.renderer.style.bond_length_px
-            s = QPointF(center.x(), center.y())
-            o1 = QPointF(center.x() + step, center.y() - step * 0.7)
-            o2 = QPointF(center.x() + step, center.y() + step * 0.7)
-            self._add_linear_chain([s, o1], ["S", "O"], [2])
-            self._add_linear_chain([s, o2], ["S", "O"], [2])
-
-        self._structure_build_service.run_recorded_build(_build)
+        self._structure_build_service.add_sulfonyl()
 
     def add_carbonyl(self) -> None:
-        def _build() -> None:
-            center = self._structure_build_service.viewport_center()
-            step = self.renderer.style.bond_length_px
-            c = QPointF(center.x(), center.y())
-            o = QPointF(center.x() + step, center.y())
-            self._add_linear_chain([c, o], ["C", "O"], [2])
-
-        self._structure_build_service.run_recorded_build(_build)
+        self._structure_build_service.add_carbonyl()
 
     def add_tbu(self) -> None:
-        def _build() -> None:
-            center = self._structure_build_service.viewport_center()
-            step = self.renderer.style.bond_length_px
-            c = QPointF(center.x(), center.y())
-            branches = [
-                QPointF(center.x() + step, center.y()),
-                QPointF(center.x() - step, center.y()),
-                QPointF(center.x(), center.y() - step),
-            ]
-            for b in branches:
-                self._add_linear_chain([c, b], ["C", "C"], [1])
-
-        self._structure_build_service.run_recorded_build(_build)
+        self._structure_build_service.add_tbu()
 
     def add_ipr(self) -> None:
-        def _build() -> None:
-            center = self._structure_build_service.viewport_center()
-            step = self.renderer.style.bond_length_px
-            c = QPointF(center.x(), center.y())
-            b1 = QPointF(center.x() + step, center.y())
-            b2 = QPointF(center.x(), center.y() - step)
-            self._add_linear_chain([c, b1], ["C", "C"], [1])
-            self._add_linear_chain([c, b2], ["C", "C"], [1])
-
-        self._structure_build_service.run_recorded_build(_build)
+        self._structure_build_service.add_ipr()
 
     def add_me(self) -> None:
-        def _build() -> None:
-            p = self._structure_build_service.viewport_center()
-            self._add_linear_chain([p], ["C"], [])
-
-        self._structure_build_service.run_recorded_build(_build)
+        self._structure_build_service.add_me()
 
     def add_et(self) -> None:
-        def _build() -> None:
-            center = self._structure_build_service.viewport_center()
-            step = self.renderer.style.bond_length_px
-            p1 = QPointF(center.x() - step / 2, center.y())
-            p2 = QPointF(center.x() + step / 2, center.y())
-            self._add_linear_chain([p1, p2], ["C", "C"], [1])
-
-        self._structure_build_service.run_recorded_build(_build)
+        self._structure_build_service.add_et()
 
     def add_pyranose(self) -> None:
         self._structure_build_service.run_recorded_build(
@@ -4425,33 +2903,7 @@ class CanvasView(QGraphicsView):
         )
 
     def add_peptide_2(self) -> None:
-        def _build() -> None:
-            center = self._structure_build_service.viewport_center()
-            step = self.renderer.style.bond_length_px
-            points = [
-                QPointF(center.x() - step * 2, center.y()),
-                QPointF(center.x() - step, center.y()),
-                QPointF(center.x(), center.y()),
-                QPointF(center.x() + step, center.y()),
-                QPointF(center.x() + step * 2, center.y()),
-                QPointF(center.x() + step * 3, center.y()),
-            ]
-            elements = ["N", "C", "C", "N", "C", "C"]
-            chain_ids = self._add_linear_chain(points, elements, [1, 1, 1, 1, 1])
-            carbonyl_1 = chain_ids[1]
-            carbonyl_2 = chain_ids[4]
-            o1 = QPointF(points[1].x(), points[1].y() - step * 0.8)
-            o2 = QPointF(points[4].x(), points[4].y() - step * 0.8)
-            o1_id = self.add_atom("O", o1.x(), o1.y())
-            o2_id = self.add_atom("O", o2.x(), o2.y())
-            self.add_bond(carbonyl_1, o1_id, 2)
-            self.add_bond(carbonyl_2, o2_id, 2)
-            self._add_bond_graphics(len(self.model.bonds) - 2)
-            self._add_bond_graphics(len(self.model.bonds) - 1)
-            self._atom_label_service.add_or_update_atom_label(o1_id, "O", record=False)
-            self._atom_label_service.add_or_update_atom_label(o2_id, "O", record=False)
-
-        self._structure_build_service.run_recorded_build(_build)
+        self._structure_build_service.add_peptide_2()
 
     def add_crown_12_4(self) -> None:
         self._structure_build_service.run_recorded_build(lambda: self._add_crown_ether(12, 4))
@@ -4591,39 +3043,13 @@ class CanvasView(QGraphicsView):
         )
 
     def _ensure_carbon_dot(self, atom_id: int) -> None:
-        if atom_id in self.atom_dots:
-            return
-        atom = self.model.atoms.get(atom_id)
-        if atom is None:
-            return
-        radius = max(0.6, self.renderer.style.bond_line_width * 0.6)
-        pick_radius = self._atom_pick_radius()
-        dot = AtomDotItem(
-            -radius,
-            -radius,
-            radius * 2.0,
-            radius * 2.0,
-            hit_padding=max(0.0, pick_radius - radius),
-        )
-        dot.setBrush(self._implicit_carbon_dot_brush())
-        dot.setPen(QPen(Qt.PenStyle.NoPen))
-        dot.setZValue(3)
-        dot.setData(0, "atom")
-        dot.setData(1, atom_id)
-        self._make_selectable(dot)
-        dot.setPos(atom.x, atom.y)
-        self.scene().addItem(dot)
-        self.atom_dots[atom_id] = dot
+        self._atom_label_service.ensure_carbon_dot(atom_id)
 
     def _remove_carbon_dot(self, atom_id: int) -> None:
-        dot = self.atom_dots.pop(atom_id, None)
-        if dot is not None:
-            self.scene().removeItem(dot)
+        self._atom_label_service.remove_carbon_dot(atom_id)
 
     def _position_label(self, item: QGraphicsTextItem, x: float, y: float) -> None:
-        rect = item.boundingRect()
-        offset = self.renderer.style.atom_label_offset_px
-        item.setPos(x - rect.center().x() + offset, y - rect.center().y() - offset)
+        self._atom_label_service.position_label(item, x, y)
 
     def _restore_atom_item_interaction(
         self,
@@ -4633,142 +3059,21 @@ class CanvasView(QGraphicsView):
         was_selected: bool,
         refresh_hover: bool,
     ) -> None:
-        replacement_item = self._atom_item_for_id(atom_id)
-        if was_selected and replacement_item is not None and replacement_item is not previous_item:
-            replacement_item.setSelected(True)
-        if refresh_hover:
-            self._refresh_hover_from_cursor()
+        self._atom_label_service.restore_atom_item_interaction(
+            atom_id,
+            previous_item,
+            was_selected=was_selected,
+            refresh_hover=refresh_hover,
+        )
 
     def apply_color_to_item(self, item, color: QColor) -> None:
-        if item is None or not color.isValid():
-            return
-        try:
-            if item.scene() is not self.scene():
-                return
-        except RuntimeError:
-            return
-        kind = item.data(0)
-        if kind == "bond":
-            bond_id = item.data(1)
-            if isinstance(bond_id, int) and 0 <= bond_id < len(self.model.bonds):
-                bond = self.model.bonds[bond_id]
-                if bond is None:
-                    return
-                before_state = self._bond_state_dict(bond)
-                bond.color = color.name()
-                for bond_item in self.bond_items.get(bond_id, []):
-                    self._apply_color_to_bond_item(bond_item, color)
-                after_state = self._bond_state_dict(bond)
-                if before_state != after_state:
-                    command = UpdateBondCommand(
-                        bond_id=bond_id,
-                        before_state=before_state,
-                        after_state=after_state,
-                        before_smiles_input=self.last_smiles_input,
-                        after_smiles_input=self.last_smiles_input,
-                    )
-                    self._push_command(command)
-        elif kind == "atom":
-            atom_id = item.data(1)
-            if isinstance(item, QGraphicsTextItem):
-                item.setDefaultTextColor(color)
-            elif isinstance(item, AtomDotItem):
-                item.setBrush(self._implicit_carbon_dot_brush())
-            elif isinstance(item, QGraphicsEllipseItem):
-                item.setBrush(color)
-            if atom_id in self.model.atoms:
-                before_color = self.model.atoms[atom_id].color
-                self.model.atoms[atom_id].color = color.name()
-                label_item = self.atom_items.get(atom_id)
-                if label_item is not None and label_item is not item:
-                    label_item.setDefaultTextColor(color)
-                dot_item = self.atom_dots.get(atom_id)
-                if dot_item is not None and dot_item is not item:
-                    dot_item.setBrush(self._implicit_carbon_dot_brush())
-                after_color = self.model.atoms[atom_id].color
-                if before_color != after_color:
-                    command = UpdateAtomColorCommand(
-                        atom_id=atom_id,
-                        before_color=before_color,
-                        after_color=after_color,
-                    )
-                    self._push_command(command)
-        elif kind == "ring":
-            ring_atom_ids = item.data(2)
-            if not isinstance(ring_atom_ids, list):
-                return
-            atom_ids = {
-                atom_id
-                for atom_id in ring_atom_ids
-                if isinstance(atom_id, int) and atom_id in self.model.atoms
-            }
-            if not atom_ids:
-                return
-            bond_ids, _ = self.bond_sets_for_atoms(atom_ids)
-            for atom_id in sorted(atom_ids):
-                atom_item = self.atom_items.get(atom_id) or self.atom_dots.get(atom_id)
-                if atom_item is not None:
-                    self.apply_color_to_item(atom_item, color)
-            for bond_id in sorted(bond_ids):
-                bond_items = self.bond_items.get(bond_id, [])
-                if bond_items:
-                    self.apply_color_to_item(bond_items[0], color)
+        canvas_color_mutation_service_for(self).apply_color_to_item(item, color)
 
     def apply_ring_fill_color(self, item, color: QColor, alpha: float = 0.25) -> None:
-        if item is None or not color.isValid():
-            return
-        if item.data(0) != "ring":
-            return
-        before_state = self._ring_state_dict(item)
-        fill = QColor(color)
-        fill.setAlphaF(max(0.0, min(1.0, float(alpha))))
-        item.setBrush(fill)
-        after_state = self._ring_state_dict(item)
-        if before_state != after_state:
-            command = UpdateSceneItemCommand(item, before_state, after_state)
-            self._push_command(command)
+        canvas_color_mutation_service_for(self).apply_ring_fill_color(item, color, alpha=alpha)
 
     def clear_scene(self) -> None:
-        self.scene().clear()
-        self.hover_items = []
-        self.hover_atom_id = None
-        self.hover_bond_id = None
-        self.model = MoleculeModel()
-        self._mark_spatial_index_dirty()
-        self.atom_coords_3d = {}
-        self._projection_center_3d = None
-        self._projection_anchor_2d = None
-        self._rotation_start_projection_center_3d = None
-        self._rotation_start_projection_anchor_2d = None
-        self._rotation_axis_bond_id = None
-        self._rotation_axis_atoms = None
-        self._rotation_total_angle = 0.0
-        self._rotation_mode = None
-        self._rotation_free_angle_x = 0.0
-        self._rotation_free_angle_y = 0.0
-        self._rotation_start_positions = {}
-        self._rotation_start_coords_3d = {}
-        self._rotation_coord_atom_ids = set()
-        self.atom_items = {}
-        self.atom_dots = {}
-        self._atom_neighbors = {}
-        self._atom_bond_ids = {}
-        self._graph_version = 0
-        self._selection_component_cache_signature = None
-        self._selection_component_cache = []
-        self.bond_items = {}
-        self.ring_items = []
-        self.note_items = []
-        self.mark_items = []
-        self.arrow_items = []
-        self.ts_bracket_items = []
-        self.orbital_items = []
-        self._marks_by_atom = {}
-        self._smiles_preview_model = None
-        self._clear_template_preview()
-        self._clear_benzene_preview()
-        self._clear_smiles_preview()
-        self._apply_insert_session_state(clear_insert_session())
+        canvas_scene_reset_service_for(self).clear_scene()
 
     def load_smiles(self, smiles: str) -> None:
         self._insert_controller.load_smiles(smiles)
@@ -4777,28 +3082,28 @@ class CanvasView(QGraphicsView):
         self._insert_controller.begin_smiles_insert(smiles)
 
     def _cancel_smiles_insert(self) -> None:
-        self._insert_controller._cancel_smiles_insert()
+        self._insert_controller.cancel_smiles_insert()
 
     def _commit_smiles_insert(self, pos: QPointF) -> None:
-        self._insert_controller._commit_smiles_insert(pos)
+        self._insert_controller.commit_smiles_insert(pos)
 
     def _clear_smiles_preview(self) -> None:
-        self._insert_controller._clear_smiles_preview()
+        self._insert_controller.clear_smiles_preview()
 
     def _smiles_preview_snapshot(self):
-        return self._insert_controller._smiles_preview_snapshot()
+        return self._insert_controller.smiles_preview_snapshot()
 
     def _render_smiles_preview(self, pos: QPointF) -> None:
-        self._insert_controller._render_smiles_preview(pos)
+        self._insert_controller.render_smiles_preview(pos)
 
     def _cancel_template_insert(self) -> None:
-        self._insert_controller._cancel_template_insert()
+        self._insert_controller.cancel_template_insert()
 
     def _template_insert_request(self, pos: QPointF) -> TemplateInsertRequest | None:
-        return self._insert_controller._template_insert_request(pos)
+        return self._insert_controller.template_insert_request(pos)
 
     def _template_point_resolvers(self) -> TemplatePointResolvers:
-        return self._insert_controller._template_point_resolvers()
+        return self._insert_controller.template_point_resolvers()
 
     def _resolve_ring_points_for_template(
         self,
@@ -4806,7 +3111,7 @@ class CanvasView(QGraphicsView):
         n: int,
         radius: float | None,
     ) -> list[tuple[float, float]]:
-        return self._insert_controller._resolve_ring_points_for_template(center, n, radius)
+        return self._insert_controller.resolve_ring_points_for_template(center, n, radius)
 
     def _resolve_regular_ring_points_for_template_bond(
         self,
@@ -4814,13 +3119,13 @@ class CanvasView(QGraphicsView):
         bond_id: int,
         center: tuple[float, float],
     ) -> list[tuple[float, float]] | None:
-        return self._insert_controller._resolve_regular_ring_points_for_template_bond(n, bond_id, center)
+        return self._insert_controller.resolve_regular_ring_points_for_template_bond(n, bond_id, center)
 
     def _resolve_chair_points_for_template(self, center: tuple[float, float]) -> list[tuple[float, float]]:
-        return self._insert_controller._resolve_chair_points_for_template(center)
+        return self._insert_controller.resolve_chair_points_for_template(center)
 
     def _resolve_boat_points_for_template(self, center: tuple[float, float]) -> list[tuple[float, float]]:
-        return self._insert_controller._resolve_boat_points_for_template(center)
+        return self._insert_controller.resolve_boat_points_for_template(center)
 
     def _resolve_template_points_for_template_bond(
         self,
@@ -4828,7 +3133,7 @@ class CanvasView(QGraphicsView):
         bond_id: int,
         center: tuple[float, float],
     ) -> list[tuple[float, float]] | None:
-        return self._insert_controller._resolve_template_points_for_template_bond(points_local, bond_id, center)
+        return self._insert_controller.resolve_template_points_for_template_bond(points_local, bond_id, center)
 
     def _template_points_from_pairs(
         self,
@@ -4837,16 +3142,16 @@ class CanvasView(QGraphicsView):
         return InsertController._template_points_from_pairs(points)
 
     def _bond_merge_seed(self, bond_id: int | None) -> list[tuple[int, float, float]]:
-        return self._insert_controller._bond_merge_seed(bond_id)
+        return self._insert_controller.bond_merge_seed(bond_id)
 
     def _commit_template_insert(self, pos: QPointF) -> None:
-        self._insert_controller._commit_template_insert(pos)
+        self._insert_controller.commit_template_insert(pos)
 
     def _clear_template_preview(self) -> None:
-        self._insert_controller._clear_template_preview()
+        self._insert_controller.clear_template_preview()
 
     def _render_template_preview(self, pos: QPointF) -> None:
-        self._insert_controller._render_template_preview(pos)
+        self._insert_controller.render_template_preview(pos)
 
     def _clear_benzene_preview(self) -> None:
         self._benzene_preview_service.clear_preview()

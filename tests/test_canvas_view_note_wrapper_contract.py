@@ -8,7 +8,7 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtCore import Qt
+    from PyQt6.QtCore import QPointF, Qt
     from PyQt6.QtGui import QColor, QFont
     from PyQt6.QtWidgets import QApplication, QGraphicsItem, QGraphicsRectItem, QGraphicsScene, QGraphicsTextItem
 except ModuleNotFoundError:
@@ -28,6 +28,10 @@ if QApplication is not None:
 class _FakeNoteController:
     def __init__(self) -> None:
         self.calls: list[tuple] = []
+
+    def create_text_note(self, pos, text):
+        self.calls.append(("create_text_note", pos, text))
+        return "note-item"
 
     def update_text_note(self, item, text) -> None:
         self.calls.append(("update_text_note", item, text))
@@ -83,6 +87,17 @@ class CanvasViewNoteWrapperContractTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
+
+    def test_canvas_view_add_text_note_delegates_to_note_controller(self) -> None:
+        scene = QGraphicsScene()
+        fake_controller = _FakeNoteController()
+        view = _make_canvas_note_view(scene)
+
+        with mock.patch("ui.canvas_view._note_controller_for", return_value=fake_controller):
+            item = CanvasView.add_text_note(view, QPointF(3.0, 4.0), "Scheme")
+
+        self.assertEqual(item, "note-item")
+        self.assertEqual(fake_controller.calls, [("create_text_note", QPointF(3.0, 4.0), "Scheme")])
 
     def test_canvas_view_note_wrappers_delegate_to_note_controller(self) -> None:
         scene = QGraphicsScene()

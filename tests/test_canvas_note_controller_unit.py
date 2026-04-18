@@ -8,7 +8,7 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtCore import Qt
+    from PyQt6.QtCore import QPointF, Qt
     from PyQt6.QtGui import QColor, QFont
     from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsTextItem
 except ModuleNotFoundError:
@@ -63,6 +63,38 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         self.assertTrue(item.textInteractionFlags() & Qt.TextInteractionFlag.TextEditorInteraction)
         self.assertTrue(bool(item.flags() & item.GraphicsItemFlag.ItemIsFocusable))
         self.assertTrue(item.textCursor().hasSelection())
+
+    def test_create_text_note_registers_scene_item_and_applies_style(self) -> None:
+        scene = QGraphicsScene()
+        item = QGraphicsTextItem()
+        pos = QPointF(3.0, 4.0)
+
+        def _attach(target) -> None:
+            scene.addItem(target)
+            canvas.note_items.append(target)
+            canvas._make_selectable(target)
+
+        canvas = SimpleNamespace(
+            note_items=[],
+            attach_scene_item=mock.Mock(side_effect=_attach),
+            _new_note_item=mock.Mock(return_value=item),
+            _make_selectable=mock.Mock(),
+        )
+        controller = CanvasNoteController(canvas)
+        controller.apply_note_style = mock.Mock()
+
+        created = controller.create_text_note(pos, "Mechanism")
+
+        self.assertIs(created, item)
+        self.assertEqual(item.toPlainText(), "Mechanism")
+        self.assertEqual(item._last_text, "Mechanism")
+        self.assertEqual(item.data(0), "note")
+        self.assertEqual(item.pos(), pos)
+        self.assertEqual(canvas.note_items, [item])
+        self.assertIn(item, scene.items())
+        canvas.attach_scene_item.assert_called_once_with(item)
+        canvas._make_selectable.assert_called_once_with(item)
+        controller.apply_note_style.assert_called_once_with(item)
 
     def test_apply_text_style_to_selected_and_update_text_note_refresh_note_box(self) -> None:
         scene = QGraphicsScene()

@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.graphics_items import NoSelectEllipseItem, NoSelectPathItem, NoSelectRectItem
+from ui.canvas_hit_testing_service import canvas_hit_testing_service_for
 from ui.selection_center_logic import bounding_box_center_for_atoms
 from ui.selection_hit_logic import (
     AtomHitCandidate,
@@ -39,31 +40,10 @@ class SelectionController:
         return self.canvas.atom_items.get(atom_id) or self.canvas.atom_dots.get(atom_id)
 
     def _nearest_atom_hit(self, pos: QPointF) -> tuple[int, float] | None:
-        atom_id = self.canvas.find_atom_near(pos.x(), pos.y(), self.canvas._atom_pick_radius())
-        if atom_id is None:
-            return None
-        atom = self.canvas.model.atoms.get(atom_id)
-        if atom is None:
-            return None
-        return atom_id, math.hypot(atom.x - pos.x(), atom.y - pos.y())
+        return canvas_hit_testing_service_for(self.canvas).nearest_atom_hit(pos)
 
     def _nearest_bond_hit(self, pos: QPointF) -> tuple[int, float] | None:
-        bond_id = self.canvas._find_bond_near(pos, self.canvas._bond_pick_radius())
-        if bond_id is None or not (0 <= bond_id < len(self.canvas.model.bonds)):
-            return None
-        bond = self.canvas.model.bonds[bond_id]
-        if bond is None:
-            return None
-        atom_a = self.canvas.model.atoms.get(bond.a)
-        atom_b = self.canvas.model.atoms.get(bond.b)
-        if atom_a is None or atom_b is None:
-            return None
-        dist = self.canvas._distance_point_to_segment(
-            pos,
-            QPointF(atom_a.x, atom_a.y),
-            QPointF(atom_b.x, atom_b.y),
-        )
-        return bond_id, dist
+        return canvas_hit_testing_service_for(self.canvas).nearest_bond_hit(pos)
 
     def _structure_hit_from_item(self, item) -> tuple[StructureHit | None, tuple[int, int] | None, list[int] | None]:
         if item is None:
@@ -88,6 +68,9 @@ class SelectionController:
             return StructureHit(kind="ring"), None, None
         return StructureHit(kind="other"), None, None
 
+    def structure_hit_from_item(self, item) -> tuple[StructureHit | None, tuple[int, int] | None, list[int] | None]:
+        return self._structure_hit_from_item(item)
+
     def _structure_item_for_hit(self, hit: StructureHit):
         if hit.kind == "atom" and isinstance(hit.id, int):
             return self._atom_item_for_id(hit.id)
@@ -96,6 +79,9 @@ class SelectionController:
             if bond_items:
                 return bond_items[0]
         return None
+
+    def structure_item_for_hit(self, hit: StructureHit):
+        return self._structure_item_for_hit(hit)
 
     def _selection_targets_for_item(self, item) -> list[QGraphicsItem]:
         if item is None:
@@ -128,6 +114,9 @@ class SelectionController:
         }:
             return [item]
         return []
+
+    def selection_targets_for_item(self, item) -> list[QGraphicsItem]:
+        return self._selection_targets_for_item(item)
 
     def toggle_item_selection(self, item) -> bool:
         targets = self._selection_targets_for_item(item)
@@ -340,6 +329,12 @@ class SelectionController:
             )
         return tuple(rects)
 
+    def selection_rects_for_snapshot(
+        self,
+        snapshot,
+    ) -> tuple[SelectionRect, ...]:
+        return self._selection_rects_for_snapshot(snapshot)
+
     def selection_hit_test(self, pos: QPointF, snapshot=None) -> bool:
         if snapshot is None:
             snapshot = self.canvas._selection_snapshot()
@@ -464,6 +459,14 @@ class SelectionController:
         stroker.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
         return stroker.createStroke(bond_path)
 
+    def selection_line_stroke_path(
+        self,
+        start: QPointF,
+        end: QPointF,
+        width: float,
+    ) -> QPainterPath:
+        return self._selection_line_stroke_path(start, end, width)
+
     def _selection_path_for_bond_item(self, item, width: float | None = None) -> QPainterPath:
         if isinstance(item, QGraphicsLineItem):
             line = item.line()
@@ -485,6 +488,9 @@ class SelectionController:
             stroker.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
             return stroker.createStroke(mapped_path)
         return QPainterPath()
+
+    def selection_path_for_bond_item(self, item, width: float | None = None) -> QPainterPath:
+        return self._selection_path_for_bond_item(item, width=width)
 
     def _selection_path_for_bond(self, bond_id: int) -> QPainterPath:
         if not (0 <= bond_id < len(self.canvas.model.bonds)):
@@ -541,6 +547,9 @@ class SelectionController:
                 bond_path.addPath(item_path)
         return bond_path
 
+    def selection_path_for_bond(self, bond_id: int) -> QPainterPath:
+        return self._selection_path_for_bond(bond_id)
+
     def _selection_path_for_object_item(self, item) -> QPainterPath:
         kind = item.data(0)
         pad = self.canvas.renderer.style.bond_length_px * 0.12
@@ -584,6 +593,9 @@ class SelectionController:
         simplified.setFillRule(Qt.FillRule.WindingFill)
         return simplified
 
+    def selection_path_for_object_item(self, item) -> QPainterPath:
+        return self._selection_path_for_object_item(item)
+
     def _add_selection_object_overlay(self, item, color: QColor) -> None:
         path = self._selection_path_for_object_item(item)
         if path.isEmpty():
@@ -596,6 +608,9 @@ class SelectionController:
         outline.setBrush(QBrush(color))
         self.canvas.scene().addItem(outline)
         self.canvas.selection_outlines.append(outline)
+
+    def add_selection_object_overlay(self, item, color: QColor) -> None:
+        self._add_selection_object_overlay(item, color)
 
     def _add_selection_component_overlay(
         self,
@@ -628,13 +643,28 @@ class SelectionController:
         self.canvas.scene().addItem(outline)
         self.canvas.selection_outlines.append(outline)
 
+    def add_selection_component_overlay(
+        self,
+        atom_ids: set[int],
+        bond_ids: set[int],
+        color: QColor,
+        atom_pad: float,
+    ) -> None:
+        self._add_selection_component_overlay(atom_ids, bond_ids, color, atom_pad)
+
     def _selection_center_for_atoms(self, atom_ids: set[int]) -> QPointF | None:
         if len(atom_ids) < 2:
             return None
         return bounding_box_center_for_atoms(atom_ids, atoms=self.canvas.model.atoms)
 
+    def selection_center_for_atoms(self, atom_ids: set[int]) -> QPointF | None:
+        return self._selection_center_for_atoms(atom_ids)
+
     def _selection_center_marker_enabled(self) -> bool:
         return self.canvas.tools.active is not None and self.canvas.tools.active.name == "perspective"
+
+    def selection_center_marker_enabled(self) -> bool:
+        return self._selection_center_marker_enabled()
 
     def _add_selection_center_marker(self, center: QPointF) -> None:
         outer_radius = max(3.5, self.canvas.renderer.style.bond_length_px * 0.14)
@@ -668,6 +698,9 @@ class SelectionController:
         inner.setBrush(QBrush(QColor("#ff4dc9")))
         self.canvas.scene().addItem(inner)
         self.canvas.selection_outlines.append(inner)
+
+    def add_selection_center_marker(self, center: QPointF) -> None:
+        self._add_selection_center_marker(center)
 
 
 __all__ = ["SelectionController"]

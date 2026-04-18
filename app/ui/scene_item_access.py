@@ -63,6 +63,18 @@ def create_scene_item_from_state(canvas, state: dict):
     return canvas.create_scene_item_from_state(state)
 
 
+def attach_scene_item(canvas, item) -> None:
+    controller = scene_item_controller(canvas)
+    if controller is not None and hasattr(controller, "attach_scene_item"):
+        controller.attach_scene_item(item)
+        return
+    attach = getattr(canvas, "attach_scene_item", None)
+    if callable(attach):
+        attach(item)
+        return
+    restore_scene_item(canvas, item)
+
+
 def restore_scene_item(canvas, item) -> None:
     controller = scene_item_controller(canvas)
     if controller is not None:
@@ -81,6 +93,7 @@ def remove_scene_item(canvas, item) -> None:
 
 __all__ = [
     "apply_scene_item_state",
+    "attach_scene_item",
     "create_scene_item_from_state",
     "remove_scene_item",
     "restore_arrow_from_state",

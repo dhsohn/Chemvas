@@ -54,13 +54,21 @@ class SceneDecorationServiceTest(unittest.TestCase):
         scene = _FakeScene()
         pushed = []
         text_mark = QGraphicsTextItem("-")
+
+        def _attach(item) -> None:
+            scene.addItem(item)
+            canvas.mark_items.append(item)
+            data = item.data(1) or {}
+            atom_id = data.get("atom_id") if isinstance(data, dict) else None
+            if isinstance(atom_id, int):
+                canvas._marks_by_atom.setdefault(atom_id, []).append(item)
+
         canvas = SimpleNamespace(
             mark_kind="plus",
             mark_items=[],
             _marks_by_atom={},
             _build_mark_item=mock.Mock(side_effect=[text_mark, None]),
-            _make_selectable=mock.Mock(),
-            scene=lambda: scene,
+            attach_scene_item=mock.Mock(side_effect=_attach),
             _set_mark_center=mock.Mock(),
             _mark_state_dict=mock.Mock(return_value={"kind": "mark", "atom_id": 7}),
             _push_command=pushed.append,
@@ -84,7 +92,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
         self.assertEqual(canvas.mark_items, [item])
         self.assertEqual(canvas._marks_by_atom, {7: [item]})
         self.assertEqual(scene.items, [item])
-        canvas._make_selectable.assert_called_once_with(item)
+        canvas.attach_scene_item.assert_called_once_with(item)
         canvas._set_mark_center.assert_called_once_with(item, QPointF(4.0, 5.0))
         self.assertEqual(len(pushed), 1)
         self.assertIsInstance(pushed[0], AddSceneItemsCommand)
@@ -98,13 +106,22 @@ class SceneDecorationServiceTest(unittest.TestCase):
         arrow_item = _FakeItem()
         arrow_item.setData(2, {"control": QPointF(2.0, 3.0)})
         ts_item = _FakeItem()
+        ts_item.setData(0, "ts_bracket")
+
+        def _attach(item) -> None:
+            scene.addItem(item)
+            kind = item.data(0)
+            if kind == "ts_bracket":
+                canvas.ts_bracket_items.append(item)
+            else:
+                canvas.arrow_items.append(item)
+
         canvas = SimpleNamespace(
             arrow_items=[],
             ts_bracket_items=[],
             _build_arrow_item=mock.Mock(return_value=arrow_item),
             _build_ts_bracket_item=mock.Mock(return_value=ts_item),
-            _make_selectable=mock.Mock(),
-            scene=lambda: scene,
+            attach_scene_item=mock.Mock(side_effect=_attach),
             _arrow_state_dict=mock.Mock(return_value={"kind": "arrow"}),
             _ts_bracket_state_dict=mock.Mock(return_value={"kind": "ts_bracket"}),
             _push_command=pushed.append,
@@ -123,36 +140,51 @@ class SceneDecorationServiceTest(unittest.TestCase):
         self.assertEqual(canvas.arrow_items, [arrow_item])
         self.assertEqual(canvas.ts_bracket_items, [ts_item])
         self.assertEqual(scene.items, [arrow_item, ts_item])
+        self.assertEqual(canvas.attach_scene_item.call_args_list, [mock.call(arrow_item), mock.call(ts_item)])
         self.assertEqual(len(pushed), 2)
         self.assertTrue(all(isinstance(command, AddSceneItemsCommand) for command in pushed))
 
     def test_add_orbital_uses_restore_and_skips_none_builds(self) -> None:
         pushed = []
-        restored = []
         group = object()
         canvas = SimpleNamespace(
             active_orbital_type="p",
-            renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
-            _build_orbital_items=mock.Mock(),
-            _scene_item_controller=SimpleNamespace(restore_scene_item=restored.append),
+            create_scene_item_from_state=mock.Mock(side_effect=[None, group]),
             _orbital_state_dict=mock.Mock(return_value={"kind": "orbital"}),
             _push_command=pushed.append,
         )
         service = SceneDecorationService(canvas)
 
-        with mock.patch(
-            "ui.scene_decoration_service.create_orbital_item_from_state_helper",
-            side_effect=[None, group],
-        ) as build_orbital:
-            self.assertIsNone(service.add_orbital(QPointF(1.0, 2.0)))
-            result = service.add_orbital(QPointF(3.0, 4.0))
+        self.assertIsNone(service.add_orbital(QPointF(1.0, 2.0)))
+        result = service.add_orbital(QPointF(3.0, 4.0))
 
         self.assertIs(result, group)
-        self.assertEqual(restored, [group])
         self.assertEqual(len(pushed), 1)
         self.assertIsInstance(pushed[0], AddSceneItemsCommand)
         self.assertEqual(pushed[0].item_states, [{"kind": "orbital"}])
-        self.assertEqual(build_orbital.call_count, 2)
+        self.assertEqual(
+            canvas.create_scene_item_from_state.call_args_list,
+            [
+                mock.call(
+                    {
+                        "kind": "orbital",
+                        "orbital_kind": "p",
+                        "center": (1.0, 2.0),
+                        "scale": 1.0,
+                        "rotation": 0.0,
+                    }
+                ),
+                mock.call(
+                    {
+                        "kind": "orbital",
+                        "orbital_kind": "p",
+                        "center": (3.0, 4.0),
+                        "scale": 1.0,
+                        "rotation": 0.0,
+                    }
+                ),
+            ],
+        )
 
 
 if __name__ == "__main__":

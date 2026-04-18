@@ -66,27 +66,31 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         self.assertEqual(MainWindow._normalize_xyz_export_path("/tmp/export"), "/tmp/export.xyz")
         self.assertEqual(MainWindow._normalize_xyz_export_path("/tmp/export.xyz"), "/tmp/export.xyz")
 
-    def test_save_canvas_to_path_success_updates_state_and_status(self) -> None:
-        self.window._current_file_path = "/tmp/old.ldraw"
-        self.window._save_document_state = mock.Mock()
+    def test_document_action_wrappers_delegate_to_service(self) -> None:
+        service = mock.Mock()
+        self.window._document_action_service = service
 
-        result = self.window._save_canvas_to_path("/tmp/new.ldraw")
+        MainWindow._save_canvas_to_path(self.window, "/tmp/new.ldraw")
+        MainWindow._save_canvas(self.window)
+        MainWindow._save_canvas_as(self.window)
+        MainWindow._export_xyz(self.window)
+        MainWindow._load_canvas(self.window)
 
-        self.assertTrue(result)
-        self.window._save_document_state.assert_called_once_with("/tmp/new.ldraw")
-        self.assertEqual(self.window._current_file_path, "/tmp/new.ldraw")
-        self.assertEqual(self.window.statusBar().currentMessage(), "Saved: /tmp/new.ldraw")
-
-    def test_save_canvas_to_path_failure_warns_and_keeps_previous_path(self) -> None:
-        self.window._current_file_path = "/tmp/old.ldraw"
-        self.window._save_document_state = mock.Mock(side_effect=RuntimeError("boom"))
-
-        with mock.patch("ui.main_window.QMessageBox.warning") as warning:
-            result = self.window._save_canvas_to_path("/tmp/new.ldraw")
-
-        self.assertFalse(result)
-        self.assertEqual(self.window._current_file_path, "/tmp/old.ldraw")
-        warning.assert_called_once_with(self.window, "Save Error", "Failed to save file:\nboom")
+        self.assertEqual(service.save_canvas_to_path.call_args.args, (self.window, "/tmp/new.ldraw"))
+        self.assertIn("message_box", service.save_canvas_to_path.call_args.kwargs)
+        self.assertEqual(service.save_canvas.call_args.args, (self.window,))
+        self.assertIn("resolve_save_path", service.save_canvas.call_args.kwargs)
+        self.assertEqual(service.save_canvas_as.call_args.args, (self.window,))
+        self.assertIn("file_dialog", service.save_canvas_as.call_args.kwargs)
+        self.assertIn("resolve_save_as_path", service.save_canvas_as.call_args.kwargs)
+        self.assertEqual(service.export_xyz.call_args.args, (self.window,))
+        self.assertIn("file_dialog", service.export_xyz.call_args.kwargs)
+        self.assertIn("message_box", service.export_xyz.call_args.kwargs)
+        self.assertEqual(service.load_canvas.call_args.args, (self.window,))
+        self.assertIn("file_dialog", service.load_canvas.call_args.kwargs)
+        self.assertIn("message_box", service.load_canvas.call_args.kwargs)
+        self.assertIn("read_document", service.load_canvas.call_args.kwargs)
+        self.assertIn("resolve_load_path", service.load_canvas.call_args.kwargs)
 
     def test_save_action_prefers_current_path_and_falls_back_to_save_as(self) -> None:
         save_action = self._find_action("Save")

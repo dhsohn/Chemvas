@@ -4,6 +4,8 @@ from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtGui import QKeySequence, QNativeGestureEvent
 from PyQt6.QtWidgets import QGraphicsTextItem, QGraphicsView
 
+from ui.canvas_chemdraw_shortcut_service import canvas_chemdraw_shortcut_service_for
+
 
 class CanvasInputController:
     def __init__(self, canvas) -> None:
@@ -84,13 +86,7 @@ class CanvasInputController:
         QGraphicsView.keyPressEvent(self.canvas, event)
 
     def handle_chemdraw_shortcut(self, event) -> bool:
-        if self.canvas._handle_chemdraw_object_shortcut(event):
-            return True
-        if self.canvas.hover_atom_id is not None:
-            return self.canvas._handle_chemdraw_atom_hotkey(event, self.canvas.hover_atom_id)
-        if self.canvas.hover_bond_id is not None:
-            return self.canvas._handle_chemdraw_bond_hotkey(event, self.canvas.hover_bond_id)
-        return self.canvas._handle_chemdraw_generic_hotkey(event)
+        return canvas_chemdraw_shortcut_service_for(self.canvas).handle_shortcut(event)
 
     def should_override_chemdraw_shortcut(self, event) -> bool:
         self.canvas._refresh_hover_from_cursor()

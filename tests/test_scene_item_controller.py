@@ -170,15 +170,15 @@ class SceneItemControllerTest(unittest.TestCase):
         self.canvas = _FakeCanvas()
         self.controller = SceneItemController(self.canvas)
 
-    def test_restore_scene_item_updates_registries_without_duplicates(self) -> None:
+    def test_attach_scene_item_updates_registries_without_duplicates(self) -> None:
         mark = QGraphicsTextItem("+")
         mark.setData(0, "mark")
         mark.setData(1, {"atom_id": 7})
         note = QGraphicsTextItem("Mechanism")
         note.setData(0, "note")
 
-        self.controller.restore_scene_item(mark)
-        self.controller.restore_scene_item(mark)
+        self.controller.attach_scene_item(mark)
+        self.controller.attach_scene_item(mark)
         self.controller.restore_scene_item(note)
 
         self.assertEqual(self.canvas.mark_items, [mark])
