@@ -644,6 +644,105 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertEqual(mol.bonds, [(0, 1, "single")])
         self.assertEqual(chem.sanitized_molecules, [])
 
+    def test_model_to_rdkit_with_map_strict_labels_reports_invalid_labels(self) -> None:
+        adapter = RDKitAdapter()
+        chem = _FakeChem({})
+        adapter._rdkit = (chem, _FakeAllChem())
+        model = MoleculeModel()
+        for index, label in enumerate(["Xx", "Me", "Et", "Ph", "OMe", "Boc"]):
+            model.add_atom(label, float(index), 0.0)
+
+        mol, atom_map = adapter._conversion_helper._build_rdkit_mol_with_map(model, strict_labels=True)
+
+        self.assertIsNone(mol)
+        self.assertIsNone(atom_map)
+        self.assertEqual(
+            adapter.last_error,
+            "XYZ export supports element symbols only. "
+            "Unsupported atom labels: Xx (atom 0), Me (atom 1), Et (atom 2), "
+            "Ph (atom 3), OMe (atom 4), ....",
+        )
+
+    def test_model_to_rdkit_with_map_rejects_unsupported_bond_styles(self) -> None:
+        adapter = RDKitAdapter()
+        chem = _FakeChem({})
+        adapter._rdkit = (chem, _FakeAllChem())
+        model = MoleculeModel()
+        a0 = model.add_atom("C", 0.0, 0.0)
+        a1 = model.add_atom("O", 1.0, 0.0)
+        a2 = model.add_atom("N", 2.0, 0.0)
+        model.add_bond(a0, a1, 1)
+        model.bonds[-1].style = "wedge"
+        model.add_bond(a1, a2, 1)
+        model.bonds[-1].style = "hash"
+
+        mol, atom_map = adapter._conversion_helper._build_rdkit_mol_with_map(
+            model,
+            unsupported_bond_styles={"wedge", "hash"},
+        )
+
+        self.assertIsNone(mol)
+        self.assertIsNone(atom_map)
+        self.assertEqual(
+            adapter.last_error,
+            "XYZ export does not yet support wedge/hash stereobonds. "
+            "Unsupported bond styles: wedge (bond 0), hash (bond 1).",
+        )
+
+    def test_build_conversion_rdkit_mol_reports_invalid_labels_with_supported_aliases(self) -> None:
+        adapter = RDKitAdapter()
+        chem = _FakeChem({})
+        adapter._rdkit = (chem, _FakeAllChem())
+        model = MoleculeModel()
+        invalid_labels = [f"Bad{i}" for i in range(6)]
+        for index, label in enumerate(invalid_labels):
+            model.add_atom(label, float(index), 0.0)
+
+        def atom_factory(symbol: str) -> _FakeRDAtom:
+            if symbol.startswith("Bad"):
+                raise ValueError("invalid atom")
+            return _FakeRDAtom(symbol)
+
+        with mock.patch.object(chem, "Atom", side_effect=atom_factory):
+            mol = adapter._build_conversion_rdkit_mol(model)
+
+        self.assertIsNone(mol)
+        self.assertEqual(
+            adapter.last_error,
+            "Unsupported atom labels for 3D conversion: "
+            "Bad0 (atom 0), Bad1 (atom 1), Bad2 (atom 2), Bad3 (atom 3), Bad4 (atom 4), .... "
+            "Supported aliases: Boc, CO2Me, Et, Me, OH, OMe, Ph, i-Pr, t-Bu.",
+        )
+
+    def test_build_conversion_rdkit_mol_rejects_wedge_on_non_single_bond(self) -> None:
+        adapter = RDKitAdapter()
+        chem = _FakeChem({})
+        adapter._rdkit = (chem, _FakeAllChem())
+        model = MoleculeModel()
+        a0 = model.add_atom("C", 0.0, 0.0)
+        a1 = model.add_atom("O", 1.0, 0.0)
+        model.add_bond(a0, a1, 2)
+        model.bonds[-1].style = "wedge"
+
+        mol = adapter._build_conversion_rdkit_mol(model)
+
+        self.assertIsNone(mol)
+        self.assertEqual(
+            adapter.last_error,
+            "Bond 0 uses style 'wedge' with order 2. "
+            "Stereo export currently supports wedge/hash on single bonds only.",
+        )
+
+    def test_build_conversion_rdkit_mol_sets_invalid_structure_error_on_sanitize_failure(self) -> None:
+        adapter = RDKitAdapter()
+        chem = _FakeChem({}, sanitize_error=RuntimeError("bad sanitize"))
+        adapter._rdkit = (chem, _FakeAllChem())
+
+        mol = adapter._build_conversion_rdkit_mol(self._simple_model())
+
+        self.assertIsNone(mol)
+        self.assertEqual(adapter.last_error, "3D conversion produced an invalid structure: bad sanitize")
+
     def test_model_to_rdkit_returns_molecule_from_wrapped_builder(self) -> None:
         adapter = RDKitAdapter()
         expected = SimpleNamespace(name="mol")
@@ -703,6 +802,35 @@ class RDKitAdapterTest(unittest.TestCase):
 
         self.assertIsNone(coords)
         self.assertEqual(adapter.last_error, "RDKit is not available in this environment.")
+
+    def test_model_to_3d_scene_returns_none_when_rdkit_is_unavailable(self) -> None:
+        adapter = RDKitAdapter()
+        adapter._rdkit = (None, None)
+
+        scene = adapter.model_to_3d_scene(self._simple_model())
+
+        self.assertIsNone(scene)
+        self.assertEqual(adapter.last_error, "RDKit is not available in this environment.")
+
+    def test_model_to_3d_scene_returns_none_for_empty_model(self) -> None:
+        adapter = RDKitAdapter()
+        adapter._rdkit = (_FakeChem({}), _FakeAllChem3D())
+
+        scene = adapter.model_to_3d_scene(MoleculeModel())
+
+        self.assertIsNone(scene)
+        self.assertEqual(adapter.last_error, "There is no chemical structure to preview.")
+
+    def test_model_to_3d_scene_sets_fallback_error_when_component_build_fails_silently(self) -> None:
+        adapter = RDKitAdapter()
+        adapter._rdkit = (_FakeChem({}), _FakeAllChem3D())
+        adapter.last_error = None
+
+        with mock.patch.object(adapter, "_build_conversion_rdkit_mol", return_value=None):
+            scene = adapter.model_to_3d_scene(self._simple_model())
+
+        self.assertIsNone(scene)
+        self.assertEqual(adapter.last_error, "Failed to build a 3D preview structure.")
 
     def test_model_to_3d_coords_returns_none_when_model_conversion_fails(self) -> None:
         adapter = RDKitAdapter()

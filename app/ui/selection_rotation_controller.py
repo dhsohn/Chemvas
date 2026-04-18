@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QPointF
 
 from core.history import SetAtomPositionsCommand
+from ui.selection_center_logic import bounding_box_center_for_atoms
+from ui.selection_rotation_logic import selected_rotation_atom_ids
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
@@ -33,15 +35,11 @@ class SelectionRotationController:
             atom_id = data.get("atom_id")
             if isinstance(atom_id, int):
                 explicit_atom_ids.add(atom_id)
-        rotation_atom_ids = set(explicit_atom_ids)
-        for bond_id in bond_ids:
-            if not (0 <= bond_id < len(self.canvas.model.bonds)):
-                continue
-            bond = self.canvas.model.bonds[bond_id]
-            if bond is None:
-                continue
-            rotation_atom_ids.add(bond.a)
-            rotation_atom_ids.add(bond.b)
+        rotation_atom_ids = selected_rotation_atom_ids(
+            explicit_atom_ids,
+            bond_ids,
+            bonds=self.canvas.model.bonds,
+        )
         if not rotation_atom_ids and not bond_ids:
             return False
         axis = None
@@ -112,7 +110,7 @@ class SelectionRotationController:
             )
             return True
         self.canvas._rotation_selection_ids = (set(atom_ids), set(bond_ids))
-        screen_center = self.canvas._bounding_box_center_for_atoms(rotation_atom_ids)
+        screen_center = bounding_box_center_for_atoms(rotation_atom_ids, atoms=self.canvas.model.atoms)
         if screen_center is None:
             return False
         anchor_2d = (screen_center.x(), screen_center.y())

@@ -404,7 +404,14 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
 
     def test_shift_selection_outlines_and_center_helpers_cover_simple_branches(self) -> None:
         outline = _FakeItem("selection_outline")
-        canvas = _make_canvas(selection_outlines=[outline], tools=SimpleNamespace(active=SimpleNamespace(name="perspective")))
+        canvas = _make_canvas(
+            selection_outlines=[outline],
+            tools=SimpleNamespace(active=SimpleNamespace(name="perspective")),
+            model=SimpleNamespace(
+                atoms={1: Atom("C", 2.0, 3.0), 2: Atom("C", 8.0, 9.0)},
+                bonds=[],
+            ),
+        )
         controller = SelectionController(canvas)
 
         controller.shift_selection_outlines(3.0, -2.0)

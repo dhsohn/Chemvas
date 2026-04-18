@@ -6,11 +6,11 @@
 ## 1. 현재 상태 요약
 
 - 실행 기준: `pytest --cov=app --cov-report=term-missing`
-- 결과: `857 passed in 11.67s`
-- 전체 커버리지: `89%`
-- 첫 보고서 시점 대비: `+459 tests`, `+18%p`
+- 결과: `875 passed in 11.87s`
+- 전체 커버리지: `90%`
+- 첫 보고서 시점 대비: `+477 tests`, `+19%p`
 
-이번 라운드로 `InsertController` 1차 정리는 이미 끝났고, `SceneOpsController`도 delete/clipboard/transform/paste orchestration 대부분이 helper/service로 빠진 상태다. 직전 턴에는 `scene_item_access`를 추가해서 `core/history.py`, `SceneOpsController`, note 삭제 경로, delete tool scene-item 삭제 경로가 공통 controller-first fallback을 쓰도록 통일했고, `SceneOpsController`의 flip/paste apply도 `CanvasView` public wrapper 대신 이 access helper를 경유하도록 정리했다. 이후 `scene_item_access`를 ring/note/arrow/`ts_bracket`/orbital restore까지 확장했고, `canvas_document_state`의 document restore도 direct controller 참조 대신 같은 helper를 쓰도록 바꿨다. 최근에는 `atom_label_access`를 추가해 label-change 경로도 service-first fallback으로 통일했고, `structure_build_service`로 ring/chain/model build orchestration을 분리했다. 이번 턴에는 여기에 `_add_bond_between_points()`와 `add_benzene_ring()`의 mutation+history orchestration, `_sprout_regular_ring_from_atom()` / `_fuse_regular_ring_to_bond()` / `_fuse_chair_to_bond()`의 ring/template growth wrapper, `_sprout_bond_from_atom()` / `_sprout_benzene_from_atom()` / `_sprout_acetyl_from_atom()` / `_fuse_benzene_to_bond()`의 atom/bond growth orchestration, 그리고 `_benzene_ring_points()`의 attach-bond / attach-atom / free-placement resolution까지 `StructureBuildService`로 이동했다. `_sprout_bond_endpoint()` / `_regular_ring_points_for_atom()` / `_regular_ring_points_for_bond()` / `_template_points_for_bond()`에 이어 free benzene hexagon 계산도 `structure_geometry_logic` pure helper로 분리했다. 이어서 bond 기반 ring occupancy polygon lookup을 `ring_occupancy_logic`로 뺐고, benzene hover preview orchestration은 `BenzenePreviewService`로 이동시켜 `_ring_polygon_points_for_bond()`, `_clear_benzene_preview()`, `_render_benzene_preview()`를 shim으로 줄였다. bond hover preview 조합도 `BondHoverPreviewService`로 이동시켜 `_add_bond_style_hover_preview()`, `_add_bond_tool_hover_preview()`, no-atoms bond hover preview 경로를 shim 수준으로 축소했고, mark hover preview 조합도 `MarkHoverPreviewService`로 이동시켜 `_add_mark_hover_preview()`를 shim으로 줄였다. 직전 턴에는 `_update_hover_highlight()`의 hit/preview decision을 `hover_highlight_logic` pure helper로 분리했고, hover scene mutation ownership도 `hover_scene_service`로 모아 `_clear_hover_highlight()`, `_add_atom_hover_indicator()`, `_add_bond_hover_indicator()`, `_add_hover_preview_items()`를 service-first wrapper로 정리했다. 이어서 `hover_interaction_service`로 hover apply/orchestration 자체를 빼서 `CanvasView._update_hover_highlight()`를 delegation shim으로 줄였다. 추가 턴에서는 `selection_highlight_styler`, `handle_overlay_service`, `handle_mutation_service`, `curved_arrow_path_service`를 차례로 넣어 selection pen mutation, handle clear/show/create lifecycle, orbital/curved handle mutation, curved arrow path rebuild를 각각 별도 경계로 분리했다. 이번 턴에는 `structure_benzene_logic`, `structure_growth_logic`를 추가해서 benzene attach/free fallback plan, fused benzene center 계산, crown ether element stride, bond midpoint resolution, mirrored template point 변환, alternating ring bond spec를 pure helper로 분리했고, 이어서 `canvas_geometry_logic`로 line/segment/ray/rect 교차 계산을 별도 순수 모듈로 분리했다. 현재는 `CanvasView 3651 stmts / 82%`, `StructureBuildService 233 stmts / 92%`, `CanvasGeometryController 156 stmts / 83%`, `CanvasHandleController 54 stmts / 84%`, `SceneOpsController 187 stmts / 98%`, `SceneItemController 131 stmts / 99%`, `canvas_document_state 94%`, `scene_item_access 100%`, `core/tools.py 93%`이며, 다음 주 타깃은 `CanvasView`의 나머지 adapter/pass-through 표면과 `selection center` / `MainWindow` 계열의 큰 orchestration surface다.
+이번 라운드로 `InsertController` 1차 정리와 `SceneOpsController`의 delete/clipboard/transform/paste orchestration 분리는 사실상 끝났다. 직전까지는 `scene_item_access`, `atom_label_access`, `structure_build_service`, hover/preview service, handle service, `structure_benzene_logic`, `structure_growth_logic`, `canvas_geometry_logic`까지 들어가면서 `CanvasView`의 큰 wrapper surface를 꾸준히 깎아 왔다. 이번 턴에는 여기에 `selection_center_logic`와 `selection_rotation_logic`를 추가해 atom-set center 계산과 rotation target/context 확장을 pure helper로 분리했고, `CanvasRotationPreviewController`, `SelectionRotationController`, `SelectionController`, `CanvasView.rotate_selection()`이 그 helper를 직접 쓰도록 정리했다. `CanvasGeometryController`는 추가 추출보다 direct stateful branch test를 보강하는 쪽으로 방향을 확정했고, `main_window_toolbar_logic`를 추가해 template entry 생성, bond/arrow/orbital preset mapping, checked-action sync key 계산, tool status display name을 `MainWindow` 밖으로 옮겼다. 마지막으로 `rdkit_conversion`은 구조 개편 대신 strict label, unsupported stereobond, sanitize failure, 3D scene fallback failure 같은 user-visible branch 테스트를 집중 보강했다. 현재는 `CanvasView 3619 stmts / 82%`, `StructureBuildService 233 stmts / 92%`, `CanvasGeometryController 156 stmts / 93%`, `CanvasHandleController 54 stmts / 84%`, `SceneOpsController 187 stmts / 98%`, `SceneItemController 131 stmts / 99%`, `main_window 1289 stmts / 84%`, `rdkit_conversion 464 stmts / 91%`, `canvas_document_state 94%`, `scene_item_access 100%`, `core/tools.py 93%`이며, 다음 주 타깃은 여전히 `CanvasView`의 나머지 adapter/pass-through와 `MainWindow`의 남은 대형 orchestration surface다.
 
 ## 2. 이번 라운드에서 완료된 작업
 
@@ -135,6 +135,17 @@
 - `app/ui/canvas_geometry_logic.py`
   - line/segment/ray/rect 교차 계산 분리
   - `CanvasGeometryController`의 순수 기하 계산 묶음을 별도 helper로 이동
+- `app/ui/selection_center_logic.py`
+  - atom-set centroid 계산 분리
+  - atom-set bounding-box center 계산 분리
+- `app/ui/selection_rotation_logic.py`
+  - selected bond -> rotation atom set 확장 규칙 분리
+  - 2D selection rotation 좌표 계산 분리
+- `app/ui/main_window_toolbar_logic.py`
+  - template entry callback 생성 분리
+  - bond/arrow/orbital preset mapping 분리
+  - toolbar checked-action sync key 계산 분리
+  - tool display name mapping 분리
 - `app/ui/structure_geometry_logic.py`
   - cyclic sprout endpoint 계산 분리
   - atom/bond attach ring point 계산 분리
@@ -219,6 +230,15 @@
   - line/segment/ray/rect 순수 계산 제거
   - `mark_target_distance_for_atom()`이 canvas wrapper 우회 없이 pure helper를 직접 사용하도록 정리
   - controller는 canvas state 기반 geometry orchestration과 adapter 역할 중심으로 축소
+- `app/ui/selection_controller.py`
+  - selection center marker용 bounding-box center 계산이 pure helper를 직접 사용하도록 정리
+- `app/ui/canvas_rotation_preview_controller.py`
+  - selection preview의 selected bond -> atom 확장과 center 계산이 pure helper를 직접 사용하도록 정리
+- `app/ui/selection_rotation_controller.py`
+  - 3D rigid rotation path의 selected bond -> atom 확장과 bounding-box center 계산이 pure helper를 직접 사용하도록 정리
+- `app/ui/main_window.py`
+  - template entry, bond/arrow/orbital preset mapping, checked-action sync key 계산이 `main_window_toolbar_logic` 경유로 축소
+  - toolbar/menu widget 조립은 남기고 pure mapping/orchestration 계산만 별도 모듈로 이동
 - `app/core/history.py`
   - scene-item history command가 공통 `scene_item_access` helper를 사용하도록 정리
   - create / restore / remove / apply / mark restore 경로를 controller-first access layer로 통일
@@ -251,6 +271,10 @@
 - `tests/test_structure_benzene_logic.py`
 - `tests/test_structure_growth_logic.py`
 - `tests/test_canvas_geometry_logic.py`
+- `tests/test_selection_center_logic.py`
+- `tests/test_selection_rotation_logic.py`
+- `tests/test_canvas_geometry_controller.py`
+- `tests/test_main_window_toolbar_logic.py`
 - `tests/test_scene_decoration_service.py`
 - `tests/test_bond_graphics_logic.py`
 - `tests/test_insert_smiles_transaction.py`
@@ -258,6 +282,7 @@
 - `tests/test_insert_controller.py` 추가 보강
 - `tests/test_text_tool_logic.py`
 - `tests/test_delete_tool_logic.py`
+- `tests/test_core_rdkit_adapter.py` failure branch 추가 보강
 - `tests/test_perspective_drag_logic.py`
 - `tests/test_tool_overlay_logic.py`
 - `tests/test_bond_tool_logic.py`
@@ -372,16 +397,16 @@
 
 | 영역 | 규모 / 커버리지 | 근거 | 판단 |
 | --- | --- | --- | --- |
-| `app/ui/canvas_view.py` | `3651 stmts / 82%` | hover/selection/handle path는 service로 빠졌지만 adapter와 wrapper 표면이 여전히 가장 크다 | 지금 바로 이어갈 1순위 |
+| `app/ui/canvas_view.py` | `3619 stmts / 82%` | hover/selection/handle path는 service로 빠졌고 selection center/rotation helper도 분리됐지만 adapter와 wrapper 표면이 여전히 가장 크다 | 지금 바로 이어갈 1순위 |
 | `app/ui/canvas_handle_controller.py` | `54 stmts / 84%` | overlay/mutation/highlight가 빠져 dispatch와 geometry wrapper만 남았다 | 낮은 우선순위 |
 | `app/core/tools.py` | `828 stmts / 93%` | 구조 추출과 wrapper-only branch polish가 대부분 끝났고 남은 건 소수 예외 경로다 | 낮은 우선순위 |
 | `app/ui/scene_item_controller.py` | `131 stmts / 99%` | helper/controller 경계는 사실상 안정화됐고 남은 건 미세 branch arc 수준이다 | 급하지 않음 |
 | `app/ui/canvas_document_state.py` | `78 stmts / 94%` | document restore는 access layer로 정리됐고 smoke도 들어가서 현재는 유지 단계다 | 급하지 않음 |
 | `app/ui/structure_build_service.py` | `233 stmts / 92%` | pure benzene/growth helper가 빠져 mutation/service 역할이 선명해졌다 | 중간 우선순위 |
-| `app/ui/canvas_geometry_controller.py` | `156 stmts / 83%` | pure geometry quartet는 빠졌지만 stateful geometry helper가 아직 남아 있다 | 중간 우선순위 |
+| `app/ui/canvas_geometry_controller.py` | `156 stmts / 93%` | 추가 추출보다 direct stateful branch test 보강이 맞고, 이번 라운드로 그 방향이 정리됐다 | 낮은 우선순위 |
 | `app/ui/structure_geometry_logic.py` | `102 stmts / 85%` | geometry lookup/packaging에 free benzene hexagon까지 분리됐고 남은 miss는 invalid/default 세부 분기다 | 중간 우선순위 |
-| `app/ui/main_window.py` | `1306 stmts / 84%` | 툴바 wiring과 theme 적용이 여전히 크고 inline 연결이 많다 | 중간 우선순위 |
-| `app/core/rdkit_conversion.py` | `464 stmts / 84%` | user-visible failure branch가 많고 남은 miss가 분기 밀집 구간에 모여 있다 | targeted test 보강 후보 |
+| `app/ui/main_window.py` | `1289 stmts / 84%` | toolbar/menu pure mapping은 빠졌지만 widget 조립과 workbook/theme orchestration이 여전히 크다 | 중간 우선순위 |
+| `app/core/rdkit_conversion.py` | `464 stmts / 91%` | 주요 user-visible failure branch는 메워졌고, 남은 miss는 alias fragment failure matrix와 swallowed-exception 쪽이다 | 낮은 우선순위 |
 | `app/ui/scene_transform_logic.py` | `184 stmts / 99%` | transform helper는 사실상 안정화됐고 남은 miss는 note vertical valid-rect 정도다 | 급하지 않음 |
 | `app/ui/scene_ops_controller.py` | `187 stmts / 98%` | orchestration controller로 거의 정리됐고 남은 리팩토링 ROI가 낮다 | 급하지 않음 |
 | `app/ui/insert_controller.py` | `184 stmts / 93%` | 1차 분리 완료, 남은 건 failure-path polishing 수준 | 급하지 않음 |
@@ -502,12 +527,12 @@ controller는 canvas collaborator 연결만 담당하는 얇은 조정자로 남
 
 이제 남은 `CanvasView` 축소는 hover/selection/handle 이후 adapter/pass-through와 큰 orchestration surface 쪽이 중심이다. 다음 축소는 history/document restore처럼 실제 협력 지점에서 access layer를 더 쓰게 하거나, `CanvasGeometryController` / `MainWindow` / `structure_build_service` 주변의 대형 협력 면을 더 줄이는 방향이 맞다.
 
-### 4.5 `MainWindow`와 `RDKitConversion`은 여전히 후순위다
+### 4.5 `MainWindow`는 1차 toolbar 분리가 끝났고, `RDKitConversion`은 targeted test 보강이 먼저 닫혔다
 
-- `MainWindow`: descriptor 기반 toolbar/theme 정리
-- `RDKitConversion`: 구조 개편보다 실패 branch test 보강
+- `MainWindow`: toolbar/menu pure mapping은 분리 완료, 남은 건 workbook/theme/late-bound canvas orchestration
+- `RDKitConversion`: strict label / unsupported stereobond / sanitize / 3D scene fallback 같은 user-visible failure branch는 보강 완료
 
-둘 다 중요하지만, 현재 구조 리스크 대비 우선순위는 `core/tools.py`와 `SceneOpsController`보다 낮다.
+둘 다 남은 일이 없지는 않지만, 현재 구조 리스크 대비 우선순위는 `CanvasView`와 `MainWindow`의 남은 orchestration surface보다 낮다.
 
 ## 5. 테스트 커버리지 확장 권장안
 
@@ -546,8 +571,8 @@ controller는 canvas collaborator 연결만 담당하는 얇은 조정자로 남
 
 #### `RDKitConversionHelper`
 
-- 오류 메시지 포맷
-- unsupported combination branch
+- alias fragment failure matrix
+- swallowed-exception branch
 - multi-component layout edge case
 
 ## 6. 유지하는 편이 좋은 영역
@@ -592,16 +617,18 @@ controller는 canvas collaborator 연결만 담당하는 얇은 조정자로 남
 1. `CanvasView`의 남은 add/mutation orchestration과 pass-through 표면을 한 번 더 줄인다.
 2. `scene_transform_logic`의 남은 edge branch를 direct test로 보강한다.
 3. `core/tools.py` wrapper branch를 targeted polish 한다.
-4. `MainWindow`, `RDKitConversion`을 순서대로 다듬는다.
+4. `MainWindow`의 workbook/theme/orchestration surface를 추가로 줄인다.
+5. 필요하면 `RDKitConversion`의 alias fragment failure matrix를 targeted test로 더 메운다.
 
 ## 8. 결론
 
-첫 보고서에서 제시한 방향은 여전히 맞다. 다만 이번 라운드로 `InsertController`는 더 이상 주 병목이 아니고, `core/tools.py`도 첫 추출이 사실상 마무리 단계에 들어갔다. transaction builder, commit service, text-tool helper, delete-tool helper, perspective-drag helper, tool-overlay helper, bond-tool helper, preview tool GUI smoke에 이어 `SceneOpsController` delete helper, delete apply helper, clipboard helper, clipboard transaction helper, transform helper, transform apply helper, paste apply helper, 단건 mutation helper, bond redraw helper, flip scene-item bounds/center/state helper까지 들어간 상태라서, 다음 단계는 `SceneOpsController` 추가 분해보다 `CanvasView` 2차 축소와 `scene_transform_logic` edge branch 보강에 집중하는 것이다.
+첫 보고서에서 제시한 방향은 여전히 맞다. 다만 이번 라운드로 `InsertController`는 더 이상 주 병목이 아니고, `core/tools.py`도 첫 추출이 사실상 마무리 단계에 들어갔다. 여기에 이번 턴에 `selection_center_logic`, `selection_rotation_logic`, `main_window_toolbar_logic`까지 추가되면서 selection/rotation pure helper와 `MainWindow` toolbar mapping도 별도 경계로 정리됐다. `CanvasGeometryController`는 추가 추출보다 direct stateful branch test로 방향이 정리됐고, `RDKitConversion`의 주요 user-visible failure branch도 테스트로 보강됐다. 따라서 다음 단계는 `SceneOpsController` 추가 분해보다 `CanvasView` 2차 축소와 `MainWindow`의 남은 workbook/theme/orchestration surface에 집중하는 것이다.
 
 현재 총평:
 
 - 방금 큰 구조 추출이 끝난 곳: `InsertController`, `core/tools.py` 1차 정리
 - 이번에 닫은 항목: preview tool GUI smoke, `SceneOpsController` delete plan 분리, delete apply 분리, clipboard payload 분리, clipboard transaction 2차 분리, transform grouping/atom map 분리, transform apply/command assembly 분리, paste apply 분리, 단건 mutation helper 분리, bond redraw/selection restore 공통화, flip scene-item bounds/center/state helper 분리, `SceneDecorationService`를 통한 scene-decoration add/history 분리
 - 지금 바로 손대야 할 곳: `CanvasView` 2차 축소
-- 그 다음 targeted polish 후보: `scene_transform_logic`, `core/tools.py`
-- 큰 리팩터링보다 targeted test 보강이 맞는 곳: `RDKitConversion`
+- 그 다음 구조 후보: `MainWindow`의 남은 workbook/theme/orchestration surface
+- targeted polish 후보: `scene_transform_logic`, `core/tools.py`
+- 큰 리팩터링보다 targeted test 보강이 맞는 곳: `RDKitConversion` alias fragment failure matrix

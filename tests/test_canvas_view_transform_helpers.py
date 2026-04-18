@@ -139,6 +139,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
 
     def test_rotate_selection_skips_when_nothing_can_be_rotated(self) -> None:
         empty_view = SimpleNamespace(
+            model=SimpleNamespace(atoms={}, bonds=[]),
             _selected_ids=mock.Mock(return_value=(set(), set())),
             _center_for_atoms=mock.Mock(),
             _position_label=mock.Mock(),
@@ -156,7 +157,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
         empty_view._update_selection_outline.assert_not_called()
 
         no_center_view = SimpleNamespace(
-            model=SimpleNamespace(atoms={1: Atom("C", 2.0, 3.0)}),
+            model=SimpleNamespace(atoms={1: Atom("C", 2.0, 3.0)}, bonds=[]),
             atom_items={1: object()},
             _selected_ids=mock.Mock(return_value=({1}, set())),
             _center_for_atoms=mock.Mock(return_value=None),
