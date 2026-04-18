@@ -178,6 +178,7 @@ class _FakeBondCanvas:
         self.preview_build_items = ["new-preview"]
         self.atom_near = None
         self.item = None
+        self.preferred_item = None
         self.hover_bond_id = None
         self.model = SimpleNamespace(
             atoms={
@@ -219,6 +220,9 @@ class _FakeBondCanvas:
 
     def item_at_event(self, event):
         return self.item
+
+    def preferred_structure_item_at_scene_pos(self, pos):
+        return self.preferred_item
 
     def apply_bond_style(self, bond_id, style, order) -> None:
         self.bond_style_calls.append((bond_id, style, order))
@@ -541,6 +545,51 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertEqual(canvas.updated_outline, 1)
         self.assertIsNone(tool._drag_item)
 
+    def test_move_tool_covers_noop_invalid_and_throttled_wrapper_paths(self) -> None:
+        canvas = _FakeMoveCanvas()
+        tool = MoveTool(canvas)
+
+        self.assertFalse(tool.on_mouse_press(_FakeEvent(button=Qt.MouseButton.RightButton)))
+        self.assertFalse(tool.on_mouse_move(_FakeEvent(QPointF(1.0, 1.0))))
+        tool._apply_drag_delta(QPointF(2.0, 3.0))
+        self.assertEqual(canvas.moved_items, [])
+
+        selected_note = _FakeItem("note")
+        canvas.selected_items_for_transform = [selected_note]
+        canvas.selected_atom_ids = set()
+        canvas.selected_bond_ids = {1, 99}
+        canvas.model.bonds[1] = None
+        self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(2.0, 2.0))))
+        self.assertTrue(tool._drag_selection)
+        self.assertEqual(tool._selection_atom_ids, set())
+
+        tool = MoveTool(_FakeMoveCanvas())
+        self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
+        self.assertIsNone(tool._drag_item)
+
+        canvas = _FakeMoveCanvas()
+        tool = MoveTool(canvas)
+        canvas.item = _FakeItem("note")
+        self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
+        self.assertIsNone(tool._drag_item)
+
+        moved_item = _FakeItem("arrow")
+        canvas.item = moved_item
+        self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
+        tool._last_drag_time = 100.0
+        with mock.patch.object(tools_module.time, "monotonic", return_value=100.0 + tool._drag_interval / 2.0):
+            self.assertTrue(tool.on_mouse_move(_FakeEvent(QPointF(4.0, 5.0))))
+        self.assertEqual(canvas.moved_items, [])
+
+        with mock.patch.object(tools_module.time, "monotonic", return_value=100.0 + tool._drag_interval * 2.0):
+            self.assertTrue(tool.on_mouse_move(_FakeEvent(QPointF(4.0, 5.0))))
+        self.assertEqual(canvas.moved_items[-1][1:3], (3.0, 4.0))
+
+        tool._start_pos = QPointF(4.0, 5.0)
+        tool._moved = False
+        self.assertTrue(tool.on_mouse_release(_FakeEvent(QPointF(4.0, 5.0))))
+        self.assertEqual(len(canvas.pushed_commands), 0)
+
     def test_bond_tool_preview_management_and_snap_helpers(self) -> None:
         canvas = _FakeBondCanvas()
         tool = BondTool(canvas)
@@ -622,6 +671,14 @@ class ToolsUnitTest(unittest.TestCase):
             self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(2.0, 2.0))))
             preview.assert_called_once()
 
+        canvas.atom_near = None
+        canvas.item = None
+        canvas.preferred_item = _FakeItem("bond", 0)
+        canvas.active_bond_style = "single"
+        self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(3.0, 3.0))))
+        self.assertEqual(canvas.cycle_calls[-1], 0)
+        canvas.preferred_item = None
+
         with mock.patch.object(tool, "_set_preview_items") as preview:
             self.assertTrue(tool.on_mouse_move(_FakeEvent(QPointF(4.0, 4.0))))
             preview.assert_called_once()
@@ -682,6 +739,19 @@ class ToolsUnitTest(unittest.TestCase):
         tool.deactivate()
         self.assertIsNone(tool._start_pos)
         self.assertIsNone(tool._preview_item)
+
+    def test_preview_drag_base_and_inherited_false_paths(self) -> None:
+        canvas = _FakePreviewCanvas()
+        preview_tool = tools_module._PreviewDragTool("preview", canvas)
+        with self.assertRaises(NotImplementedError):
+            preview_tool._build_preview(QPointF(1.0, 2.0))
+        with self.assertRaises(NotImplementedError):
+            preview_tool._commit_drag(QPointF(3.0, 4.0))
+
+        tool = ArrowTool(canvas)
+        self.assertFalse(tool.on_mouse_press(_FakeEvent(button=Qt.MouseButton.RightButton)))
+        self.assertFalse(tool.on_mouse_move(_FakeEvent(QPointF(1.0, 2.0))))
+        self.assertFalse(tool.on_mouse_release(_FakeEvent(QPointF(1.0, 2.0))))
 
 
 if __name__ == "__main__":

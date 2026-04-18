@@ -12,6 +12,7 @@ APP_ROOT = ROOT / "app"
 if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
+from core.history import AddAtomsCommand, AddBondCommand, CompositeCommand, DeleteAtomsCommand, DeleteBondCommand, DeleteSceneItemsCommand
 from core.model import Atom, Bond, MoleculeModel
 from ui.insert_controller import InsertController
 from ui.template_insert_logic import TemplateInsertRequest, TemplateInsertResolution, plan_template_commit
@@ -35,6 +36,19 @@ class _FakeViewport:
 
     def rect(self) -> _FakeRect:
         return _FakeRect(self._center)
+
+
+class _FakeSceneItem:
+    def __init__(self, kind: str, atom_id=None) -> None:
+        self.kind = kind
+        self._payload = {}
+        if atom_id is not None:
+            self._payload["atom_id"] = atom_id
+
+    def data(self, role: int):
+        if role != 1:
+            return None
+        return dict(self._payload)
 
 
 class _FakeCanvas:
@@ -80,6 +94,8 @@ class _FakeCanvas:
 
         self.clear_scene = Mock()
         self._push_command = Mock()
+        self._rebuild_bond_adjacency = Mock()
+        self._render_model = Mock()
         self._record_additions = Mock()
         self._add_ring_from_points = Mock()
         self._add_bond_graphics = Mock()
@@ -95,6 +111,7 @@ class _FakeCanvas:
         self._atom_state_dict = Mock(side_effect=lambda atom_id: {"atom_id": atom_id})
         self._bond_state_dict = Mock(side_effect=lambda bond: {"bond": (bond.a, bond.b, bond.order)})
         self._mark_state_dict = Mock(return_value={"kind": "mark"})
+        self.scene_item_state = Mock(side_effect=lambda item: {"kind": getattr(item, "kind", "item")})
         self._add_atom_with_merge = Mock()
         self._bond_exists = Mock(return_value=False)
         self._find_bond_near = Mock(return_value=None)
@@ -118,9 +135,10 @@ class _FakeCanvas:
         self.add_atom_calls.append((element, x, y))
         return self.model.add_atom(element, x, y)
 
-    def add_bond(self, a_id: int, b_id: int, order: int = 1) -> None:
+    def add_bond(self, a_id: int, b_id: int, order: int = 1) -> int:
         self.add_bond_calls.append((a_id, b_id, order))
         self.model.add_bond(a_id, b_id, order)
+        return len(self.model.bonds) - 1
 
     def _ensure_carbon_dot(self, atom_id: int) -> None:
         self.ensure_carbon_dot_calls.append(atom_id)
@@ -202,6 +220,77 @@ class InsertControllerTest(unittest.TestCase):
         canvas.clear_scene.assert_not_called()
         canvas._push_command.assert_not_called()
         self.assertEqual(canvas.last_smiles_input, "C")
+
+    def test_load_smiles_replaces_scene_and_pushes_history_command(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.last_smiles_input = "before"
+        canvas.model.add_atom("N", -5.0, -5.0)
+        canvas.model.add_bond(0, 0, 1)
+        bound_mark = _FakeSceneItem("bound-mark", atom_id=0)
+        free_mark = _FakeSceneItem("free-mark")
+        note = _FakeSceneItem("note")
+        canvas._marks_by_atom = {0: [bound_mark]}
+        canvas.mark_items = [bound_mark, free_mark]
+        canvas.note_items = [note]
+        canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(
+            atoms={0: Atom("C", 1.0, 2.0)},
+            bonds=[Bond(0, 0, 1)],
+        )
+
+        def _clear_scene() -> None:
+            canvas.model = MoleculeModel()
+
+        canvas.clear_scene = Mock(side_effect=_clear_scene)
+        controller = InsertController(canvas)
+
+        controller.load_smiles(" C ")
+
+        canvas.clear_scene.assert_called_once_with()
+        canvas._rebuild_bond_adjacency.assert_called_once_with()
+        canvas._render_model.assert_called_once_with()
+        self.assertEqual(canvas.last_smiles_input, "C")
+        command = canvas._push_command.call_args.args[0]
+        self.assertIsInstance(command, CompositeCommand)
+        self.assertEqual(
+            [type(child) for child in command.commands],
+            [DeleteBondCommand, DeleteAtomsCommand, DeleteSceneItemsCommand, AddAtomsCommand, AddBondCommand],
+        )
+        delete_bond = command.commands[0]
+        delete_atoms = command.commands[1]
+        delete_scene_items = command.commands[2]
+        add_atoms = command.commands[3]
+        add_bond = command.commands[4]
+        self.assertEqual(delete_bond.before_smiles_input, "before")
+        self.assertEqual(delete_bond.after_smiles_input, "C")
+        self.assertEqual(delete_atoms.before_next_atom_id, 1)
+        self.assertEqual(delete_atoms.after_next_atom_id, 0)
+        self.assertEqual(delete_atoms.mark_states, [{"kind": "mark"}])
+        self.assertEqual(delete_scene_items.item_states, [{"kind": "free-mark"}, {"kind": "note"}])
+        self.assertEqual(add_atoms.before_next_atom_id, 0)
+        self.assertEqual(add_atoms.after_next_atom_id, 1)
+        self.assertEqual(add_bond.previous_bond_count, 0)
+
+    def test_load_smiles_skips_push_when_history_builder_returns_none(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(atoms={0: Atom("C", 1.0, 2.0)})
+
+        def _clear_scene() -> None:
+            canvas.model = MoleculeModel()
+
+        canvas.clear_scene = Mock(side_effect=_clear_scene)
+        controller = InsertController(canvas)
+        controller._smiles_load_transaction_builder.capture = Mock(return_value="snapshot")
+        controller._smiles_load_transaction_builder.build_command = Mock(return_value=None)
+
+        controller.load_smiles("C")
+
+        controller._smiles_load_transaction_builder.capture.assert_called_once_with()
+        controller._smiles_load_transaction_builder.build_command.assert_called_once_with(
+            "snapshot",
+            after_clear_next_atom_id=0,
+            after_smiles_input="C",
+        )
+        canvas._push_command.assert_not_called()
 
     def test_begin_ring_template_insert_noops_for_invalid_request(self) -> None:
         canvas = _FakeCanvas()

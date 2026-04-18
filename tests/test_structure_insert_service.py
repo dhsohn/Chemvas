@@ -77,6 +77,8 @@ class _FakeCanvas:
         *,
         clear_smiles: bool = True,
         record: bool = True,
+        allow_merge: bool = True,
+        show_carbon: bool = False,
     ) -> None:
         self.atom_label_calls.append((atom_id, text, clear_smiles, record))
 
@@ -207,6 +209,35 @@ class StructureInsertServiceTest(unittest.TestCase):
             },
         )
         canvas._restore_selection_from_ids.assert_called_once_with({1, 2}, {0})
+
+    def test_insert_structure_model_prefers_atom_label_service_over_canvas_wrapper(self) -> None:
+        canvas = _FakeCanvas()
+        service_calls = []
+        canvas._atom_label_service = SimpleNamespace(
+            add_or_update_atom_label=lambda atom_id, text, **kwargs: service_calls.append((atom_id, text, kwargs))
+        )
+        model = MoleculeModel(
+            atoms={
+                3: Atom("C", 0.0, 0.0, explicit_label=True),
+                5: Atom("N", 10.0, 0.0, explicit_label=False),
+            }
+        )
+
+        inserted_atom_ids, inserted_bond_ids = StructureInsertService(canvas).insert_structure_model(
+            model,
+            center=QPointF(5.0, 0.0),
+        )
+
+        self.assertEqual(inserted_atom_ids, {0, 1})
+        self.assertEqual(inserted_bond_ids, set())
+        self.assertEqual(
+            service_calls,
+            [
+                (0, "C", {"clear_smiles": False, "record": False, "allow_merge": True, "show_carbon": False}),
+                (1, "N", {"clear_smiles": False, "record": False, "allow_merge": True, "show_carbon": False}),
+            ],
+        )
+        self.assertEqual(canvas.atom_label_calls, [])
 
 
 if __name__ == "__main__":

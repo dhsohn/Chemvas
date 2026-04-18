@@ -212,6 +212,27 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         self.assertEqual(canvas.updated_boxes, [item])
         self.assertEqual(canvas.removed_items, [item])
 
+    def test_handle_note_focus_out_prefers_scene_item_controller_for_removal(self) -> None:
+        controller_remove = mock.Mock()
+        canvas = SimpleNamespace(
+            commands=[],
+            removed_items=[],
+            selected_notes=[],
+            updated_boxes=[],
+            _note_state_dict=lambda item: {},
+            _scene_item_controller=SimpleNamespace(remove_scene_item=controller_remove),
+        )
+        canvas._push_command = canvas.commands.append
+        canvas.remove_scene_item = canvas.removed_items.append
+        canvas._update_note_selection_box = canvas.updated_boxes.append
+        controller = CanvasNoteController(canvas)
+        item = NoteItem(canvas)
+
+        controller.handle_note_focus_out(item)
+
+        controller_remove.assert_called_once_with(item)
+        self.assertEqual(canvas.removed_items, [])
+
 
 if __name__ == "__main__":
     unittest.main()

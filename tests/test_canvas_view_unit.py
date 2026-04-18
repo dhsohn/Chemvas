@@ -291,7 +291,11 @@ class CanvasViewUnitTest(unittest.TestCase):
             prompt_atom_label=lambda atom_id: calls.append(("prompt", atom_id)),
             _atom_point=lambda atom_id: QPointF(1.0, 2.0),
             add_mark_for_atom=lambda atom_id, pos, kind: calls.append(("mark", atom_id, pos.x(), pos.y(), kind)),
-            add_or_update_atom_label=lambda atom_id, text, show_carbon=True: calls.append(("label", atom_id, text, show_carbon)),
+            _atom_label_service=SimpleNamespace(
+                add_or_update_atom_label=lambda atom_id, text, show_carbon=True: calls.append(
+                    ("label", atom_id, text, show_carbon)
+                )
+            ),
             _sprout_bond_from_atom=lambda atom_id, style, order, cyclic=False: calls.append(("bond", atom_id, style, order, cyclic)),
             _sprout_acetyl_from_atom=lambda atom_id: calls.append(("acetyl", atom_id)),
             _sprout_benzene_from_atom=lambda atom_id: calls.append(("benzene", atom_id)),
@@ -409,6 +413,103 @@ class CanvasViewUnitTest(unittest.TestCase):
         two_neighbors = CanvasView._sprout_bond_endpoint(fake_view, 1, cyclic=True)
         self.assertAlmostEqual(two_neighbors.x(), -10.0)
         self.assertAlmostEqual(two_neighbors.y(), -17.32050807568877)
+
+    def test_structure_geometry_wrappers_convert_pure_logic_results(self) -> None:
+        fake_view = SimpleNamespace(
+            model=SimpleNamespace(
+                atoms={
+                    1: Atom("C", 0.0, 0.0),
+                    2: Atom("C", 10.0, 0.0),
+                },
+                bonds=[Bond(1, 2, 1)],
+            ),
+            renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
+            _default_bond_endpoint=lambda start, atom_id: QPointF(5.0, 6.0),
+            _ring_polygon_points_for_bond=mock.Mock(return_value=[(0.0, 0.0), (1.0, 1.0)]),
+        )
+
+        with (
+            mock.patch("ui.canvas_view.compute_sprout_bond_endpoint", return_value=(7.0, 8.0)) as sprout,
+            mock.patch(
+                "ui.canvas_view.compute_regular_ring_points_for_atom",
+                return_value=([(1.0, 2.0)], [(1, 0.0, 0.0)]),
+            ) as atom_ring,
+            mock.patch(
+                "ui.canvas_view.compute_regular_ring_points_for_bond",
+                return_value=([(3.0, 4.0)], [(1, 0.0, 0.0), (2, 10.0, 0.0)]),
+            ) as bond_ring,
+            mock.patch(
+                "ui.canvas_view.compute_template_points_for_bond",
+                return_value=([(5.0, 6.0)], [(1, 0.0, 0.0), (2, 10.0, 0.0)]),
+            ) as template,
+        ):
+            endpoint = CanvasView._sprout_bond_endpoint(fake_view, 1, cyclic=False)
+            atom_result = CanvasView._regular_ring_points_for_atom(fake_view, 6, 1)
+            bond_result = CanvasView._regular_ring_points_for_bond(fake_view, 6, 0, QPointF(9.0, 10.0))
+            template_result = CanvasView._template_points_for_bond(
+                fake_view,
+                [QPointF(1.0, 1.0), QPointF(2.0, 2.0)],
+                0,
+                QPointF(11.0, 12.0),
+            )
+
+        self.assertEqual((endpoint.x(), endpoint.y()), (7.0, 8.0))
+        assert atom_result is not None
+        assert bond_result is not None
+        assert template_result is not None
+        self.assertEqual((atom_result[0][0].x(), atom_result[0][0].y()), (1.0, 2.0))
+        self.assertEqual((bond_result[0][0].x(), bond_result[0][0].y()), (3.0, 4.0))
+        self.assertEqual((template_result[0][0].x(), template_result[0][0].y()), (5.0, 6.0))
+        sprout.assert_called_once_with(
+            1,
+            atoms=fake_view.model.atoms,
+            bonds=fake_view.model.bonds,
+            bond_length=20.0,
+            cyclic=False,
+            default_endpoint=(5.0, 6.0),
+        )
+        atom_ring.assert_called_once_with(
+            6,
+            1,
+            atoms=fake_view.model.atoms,
+            bonds=fake_view.model.bonds,
+            bond_length=20.0,
+        )
+        bond_ring.assert_called_once_with(
+            6,
+            0,
+            atoms=fake_view.model.atoms,
+            bonds=fake_view.model.bonds,
+            center_hint=(9.0, 10.0),
+            occupied_polygon=[(0.0, 0.0), (1.0, 1.0)],
+        )
+        template.assert_called_once_with(
+            [(1.0, 1.0), (2.0, 2.0)],
+            0,
+            atoms=fake_view.model.atoms,
+            bonds=fake_view.model.bonds,
+            center_hint=(11.0, 12.0),
+            occupied_polygon=[(0.0, 0.0), (1.0, 1.0)],
+        )
+
+    def test_ring_polygon_points_for_bond_wrapper_delegates_to_occupancy_helper(self) -> None:
+        fake_view = SimpleNamespace(
+            model=SimpleNamespace(bonds=[Bond(1, 2, 1)]),
+            ring_items=["ring"],
+        )
+
+        with mock.patch(
+            "ui.canvas_view.ring_polygon_points_for_bond",
+            return_value=[(1.0, 2.0), (3.0, 4.0)],
+        ) as occupancy:
+            result = CanvasView._ring_polygon_points_for_bond(fake_view, 0)
+
+        self.assertEqual(result, [(1.0, 2.0), (3.0, 4.0)])
+        occupancy.assert_called_once_with(
+            0,
+            bonds=fake_view.model.bonds,
+            ring_items=fake_view.ring_items,
+        )
 
 
 if __name__ == "__main__":

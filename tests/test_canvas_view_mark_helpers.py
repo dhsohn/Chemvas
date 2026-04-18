@@ -114,20 +114,9 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
         self.assertAlmostEqual(offset.y(), 8.0)
         view._mark_target_distance_for_atom.assert_called_once_with(7, 0.6, 0.8, "radical")
 
-    def test_add_mark_attaches_metadata_tracks_registry_and_uses_kind_specific_item(self) -> None:
-        scene = _FakeScene()
-        view = SimpleNamespace(
-            renderer=self._renderer(),
-            scene=lambda: scene,
-            _mark_selection_radius=lambda: 7.5,
-            _build_mark_item=lambda kind: CanvasView._build_mark_item(view, kind),
-            _make_selectable=mock.Mock(),
-            _set_mark_center=mock.Mock(),
-            _push_command=mock.Mock(),
-            mark_items=[],
-            _marks_by_atom={},
-            mark_kind="plus",
-        )
+    def test_add_mark_delegates_to_scene_decoration_service(self) -> None:
+        service = mock.Mock(return_value="mark-item")
+        view = SimpleNamespace(_scene_decoration_service=SimpleNamespace(add_mark=service))
 
         item = CanvasView.add_mark(
             view,
@@ -138,16 +127,11 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
             record=False,
         )
 
-        self.assertIsInstance(item, AtomLabelItem)
-        self.assertEqual(item.toPlainText(), "-")
-        self.assertEqual(item.data(0), "mark")
-        self.assertEqual(
-            item.data(1),
-            {"kind": "minus", "atom_id": 7, "dx": 1.5, "dy": -2.5, "text": "-"},
+        self.assertEqual(item, "mark-item")
+        service.assert_called_once_with(
+            QPointF(4.0, 5.0),
+            kind="minus",
+            atom_id=7,
+            offset=QPointF(1.5, -2.5),
+            record=False,
         )
-        self.assertEqual(view.mark_items, [item])
-        self.assertEqual(view._marks_by_atom, {7: [item]})
-        self.assertEqual(scene.items, [item])
-        view._make_selectable.assert_called_once_with(item)
-        view._set_mark_center.assert_called_once_with(item, QPointF(4.0, 5.0))
-        view._push_command.assert_not_called()

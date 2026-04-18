@@ -3,6 +3,14 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from core.document_state import serialize_model_state, serialize_settings
+from ui.scene_item_access import (
+    restore_arrow_from_state,
+    restore_mark_from_state,
+    restore_note_from_state,
+    restore_orbital_from_state,
+    restore_ring_from_state,
+    restore_ts_bracket_from_state,
+)
 
 
 def snapshot_canvas_document_state(canvas) -> dict:
@@ -45,15 +53,16 @@ def apply_document_settings(canvas, state: dict) -> None:
 
 def restore_document_pre_model_items(canvas, state: dict) -> None:
     for ring_state in state.get("ring_fills", []):
-        canvas._restore_ring_from_state(ring_state)
+        restore_ring_from_state(canvas, ring_state)
 
 
 def restore_document_post_model_items(canvas, state: dict) -> None:
     for note_state in state.get("notes", []):
-        canvas._restore_note_from_state(note_state)
+        restore_note_from_state(canvas, note_state)
 
     for mark_state in state.get("marks", []):
-        canvas._restore_mark_from_state(
+        restore_mark_from_state(
+            canvas,
             {
                 "kind": "mark",
                 "mark_kind": mark_state.get("kind", "plus"),
@@ -67,13 +76,14 @@ def restore_document_post_model_items(canvas, state: dict) -> None:
         )
 
     for arrow_state in state.get("arrows", []):
-        canvas._restore_arrow_from_state(arrow_state)
+        restore_arrow_from_state(canvas, arrow_state)
 
     for ts_bracket_state in state.get("ts_brackets", []):
-        canvas._restore_ts_bracket_from_state(ts_bracket_state)
+        restore_ts_bracket_from_state(canvas, ts_bracket_state)
 
     for orbital_state in state.get("orbitals", []):
-        canvas._restore_orbital_from_state(
+        restore_orbital_from_state(
+            canvas,
             {
                 "kind": "orbital",
                 "orbital_kind": orbital_state.get("kind", "s"),

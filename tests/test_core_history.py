@@ -152,6 +152,28 @@ class _FakeCanvas:
         self.calls.append(("_restore_mark_from_state", dict(mark_state)))
 
 
+class _FakeSceneItemController:
+    def __init__(self, canvas: _FakeCanvas) -> None:
+        self.canvas = canvas
+
+    def apply_scene_item_state(self, item, state) -> None:
+        self.canvas.calls.append(("controller_apply_scene_item_state", item, dict(state)))
+
+    def create_scene_item_from_state(self, state):
+        item = {"controller_created_from": dict(state)}
+        self.canvas.calls.append(("controller_create_scene_item_from_state", dict(state)))
+        return item
+
+    def restore_scene_item(self, item) -> None:
+        self.canvas.calls.append(("controller_restore_scene_item", item))
+
+    def remove_scene_item(self, item) -> None:
+        self.canvas.calls.append(("controller_remove_scene_item", item))
+
+    def _restore_mark_from_state(self, mark_state) -> None:
+        self.canvas.calls.append(("controller_restore_mark_from_state", dict(mark_state)))
+
+
 class HistoryCommandTest(unittest.TestCase):
     def test_composite_command_undo_redo_order(self) -> None:
         log: list[str] = []
@@ -329,6 +351,48 @@ class HistoryCommandTest(unittest.TestCase):
         self.assertIn(("remove_scene_item", delete_item), canvas.calls)
         self.assertIn(("restore_scene_item", delete_item), canvas.calls)
 
+    def test_scene_item_commands_prefer_scene_item_controller_when_available(self) -> None:
+        canvas = _FakeCanvas()
+        canvas._scene_item_controller = _FakeSceneItemController(canvas)
+        add_command = AddSceneItemsCommand(item_states=[{"kind": "note"}])
+        delete_command = DeleteSceneItemsCommand(item_states=[{"kind": "arrow"}])
+        update_command = UpdateSceneItemCommand("item", {"x": 1}, {"x": 2})
+        delete_atoms_command = DeleteAtomsCommand(
+            atom_states={},
+            mark_states=[{"kind": "plus"}],
+            before_next_atom_id=1,
+            after_next_atom_id=1,
+            before_smiles_input="before",
+            after_smiles_input="after",
+        )
+
+        add_command.redo(canvas)
+        add_item = add_command.items[0]
+        add_command.undo(canvas)
+        add_command.redo(canvas)
+
+        delete_command.undo(canvas)
+        delete_item = delete_command.items[0]
+        delete_command.redo(canvas)
+        delete_command.undo(canvas)
+
+        update_command.undo(canvas)
+        update_command.redo(canvas)
+        delete_atoms_command.undo(canvas)
+
+        self.assertIn(("controller_create_scene_item_from_state", {"kind": "note"}), canvas.calls)
+        self.assertIn(("controller_remove_scene_item", add_item), canvas.calls)
+        self.assertIn(("controller_restore_scene_item", add_item), canvas.calls)
+        self.assertIn(("controller_create_scene_item_from_state", {"kind": "arrow"}), canvas.calls)
+        self.assertIn(("controller_remove_scene_item", delete_item), canvas.calls)
+        self.assertIn(("controller_restore_scene_item", delete_item), canvas.calls)
+        self.assertIn(("controller_apply_scene_item_state", "item", {"x": 1}), canvas.calls)
+        self.assertIn(("controller_apply_scene_item_state", "item", {"x": 2}), canvas.calls)
+        self.assertIn(("controller_restore_mark_from_state", {"kind": "plus"}), canvas.calls)
+        self.assertNotIn(("create_scene_item_from_state", {"kind": "note"}), canvas.calls)
+        self.assertNotIn(("apply_scene_item_state", "item", {"x": 1}), canvas.calls)
+        self.assertNotIn(("_restore_mark_from_state", {"kind": "plus"}), canvas.calls)
+
     def test_change_atom_label_command_replays_label_state_without_recording(self) -> None:
         canvas = _FakeCanvas()
         command = ChangeAtomLabelCommand(
@@ -354,6 +418,42 @@ class HistoryCommandTest(unittest.TestCase):
             canvas.calls[1],
             ("add_or_update_atom_label", 5, "N", False, False, False, True),
         )
+
+    def test_change_atom_label_command_prefers_atom_label_service_when_available(self) -> None:
+        canvas = _FakeCanvas()
+        service_calls = []
+        canvas._atom_label_service = SimpleNamespace(
+            add_or_update_atom_label=lambda atom_id, text, **kwargs: service_calls.append((atom_id, text, kwargs))
+        )
+        command = ChangeAtomLabelCommand(
+            atom_id=7,
+            before_element="C",
+            after_element="Cl",
+            before_explicit_label=False,
+            after_explicit_label=False,
+            before_smiles_input="before",
+            after_smiles_input="after",
+        )
+
+        command.redo(canvas)
+
+        self.assertEqual(
+            service_calls,
+            [
+                (
+                    7,
+                    "Cl",
+                    {
+                        "clear_smiles": False,
+                        "record": False,
+                        "allow_merge": False,
+                        "show_carbon": False,
+                    },
+                )
+            ],
+        )
+        self.assertEqual(canvas.calls, [])
+        self.assertEqual(canvas.last_smiles_input, "after")
 
     def test_bond_commands_remove_trim_and_restore(self) -> None:
         canvas = _FakeCanvas()

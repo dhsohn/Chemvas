@@ -27,6 +27,7 @@ if str(APP_ROOT) not in sys.path:
 
 if QApplication is not None:
     from core.model import Atom, Bond
+    from ui.bond_hover_preview_service import BondHoverPreviewService
     from ui.canvas_view import CanvasView
 
 
@@ -83,6 +84,9 @@ class CanvasViewHoverPreviewTest(unittest.TestCase):
         view._add_atom_hover_indicator = lambda atom_id: CanvasView._add_atom_hover_indicator(view, atom_id)
         view._add_hover_preview_items = lambda items: CanvasView._add_hover_preview_items(view, items)
 
+    def _bind_bond_hover_preview_service(self, view: SimpleNamespace) -> None:
+        view._bond_hover_preview_service = BondHoverPreviewService(view)
+
     def test_add_mark_hover_preview_adds_and_skips_duplicate_previews(self) -> None:
         scene = QGraphicsScene()
         view = self._make_view(scene=scene, atoms={1: Atom("C", 10.0, 20.0)}, active_tool=None)
@@ -138,6 +142,7 @@ class CanvasViewHoverPreviewTest(unittest.TestCase):
         no_atoms_clear._clear_hover_highlight.assert_called_once_with()
 
         no_atoms_preview = self._make_view(atoms={}, bonds=[], active_tool="bond")
+        self._bind_bond_hover_preview_service(no_atoms_preview)
         no_atoms_preview._clear_hover_highlight = mock.Mock()
         no_atoms_preview._bond_preview_signature = mock.Mock(return_value="wedge:1")
         no_atoms_preview._build_bond_preview_items = mock.Mock(return_value=["preview"])
@@ -155,6 +160,7 @@ class CanvasViewHoverPreviewTest(unittest.TestCase):
         bonds = [Bond(1, 2)]
 
         atom_view = self._make_view(atoms=atoms, bonds=bonds, active_tool="bond", active_bond_style="wedge")
+        self._bind_bond_hover_preview_service(atom_view)
         atom_view.preferred_structure_hit_at_scene_pos = mock.Mock(return_value=SimpleNamespace(kind="atom", id=1))
         atom_view._clear_hover_highlight = mock.Mock()
         atom_view._add_atom_hover_indicator = mock.Mock()
@@ -171,6 +177,7 @@ class CanvasViewHoverPreviewTest(unittest.TestCase):
         self.assertEqual(atom_view._hover_preview_style, "wedge:1:13.0:14.0")
 
         bond_view = self._make_view(atoms=atoms, bonds=bonds, active_tool="bond", active_bond_style="hash")
+        self._bind_bond_hover_preview_service(bond_view)
         bond_view.preferred_structure_hit_at_scene_pos = mock.Mock(return_value=SimpleNamespace(kind="bond", id=0))
         bond_view._clear_hover_highlight = mock.Mock()
         bond_view._add_bond_style_hover_preview = mock.Mock(
@@ -199,6 +206,7 @@ class CanvasViewHoverPreviewTest(unittest.TestCase):
         bond = Bond(1, 2)
 
         style_view = self._make_view(atoms=atoms, bonds=[bond], active_tool="bond", active_bond_style="wedge")
+        self._bind_bond_hover_preview_service(style_view)
         style_view._build_bond_preview_items = mock.Mock(return_value=["style-preview"])
         style_view._add_hover_preview_items = mock.Mock()
 
@@ -215,6 +223,7 @@ class CanvasViewHoverPreviewTest(unittest.TestCase):
         ]:
             with self.subTest(tool_name=tool_name, style_name=style_name, atom_count=len(atom_map)):
                 skip_view = self._make_view(atoms=atom_map, bonds=[bond], active_tool=tool_name, active_bond_style=style_name)
+                self._bind_bond_hover_preview_service(skip_view)
                 skip_view._build_bond_preview_items = mock.Mock()
                 skip_view._add_hover_preview_items = mock.Mock()
                 CanvasView._add_bond_style_hover_preview(skip_view, bond)
@@ -222,6 +231,7 @@ class CanvasViewHoverPreviewTest(unittest.TestCase):
                 self.assertEqual(skip_view._add_hover_preview_items.call_count, expected_calls)
 
         tool_view = self._make_view(atoms=atoms, bonds=[bond], active_tool="bond")
+        self._bind_bond_hover_preview_service(tool_view)
         tool_view._bond_hover_endpoint = mock.Mock(return_value=QPointF(17.0, 18.0))
         tool_view._build_bond_preview_items = mock.Mock(return_value=["tool-preview"])
         tool_view._add_hover_preview_items = mock.Mock()
@@ -233,6 +243,7 @@ class CanvasViewHoverPreviewTest(unittest.TestCase):
         tool_view._add_hover_preview_items.assert_called_once_with(["tool-preview"])
 
         missing_atom_view = self._make_view(atoms=atoms, bonds=[bond], active_tool="bond")
+        self._bind_bond_hover_preview_service(missing_atom_view)
         missing_atom_view._build_bond_preview_items = mock.Mock()
         missing_atom_view._add_hover_preview_items = mock.Mock()
         CanvasView._add_bond_tool_hover_preview(missing_atom_view, 999, QPointF(1.0, 2.0))
@@ -240,6 +251,7 @@ class CanvasViewHoverPreviewTest(unittest.TestCase):
         missing_atom_view._add_hover_preview_items.assert_not_called()
 
         nonbond_view = self._make_view(atoms=atoms, bonds=[bond], active_tool="select")
+        self._bind_bond_hover_preview_service(nonbond_view)
         nonbond_view._build_bond_preview_items = mock.Mock()
         nonbond_view._add_hover_preview_items = mock.Mock()
         CanvasView._add_bond_tool_hover_preview(nonbond_view, 1, QPointF(1.0, 2.0))

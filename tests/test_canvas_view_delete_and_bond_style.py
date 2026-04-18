@@ -30,6 +30,17 @@ class _FakeScene:
         self.removeItem = mock.Mock()
 
 
+class _FakeSelectableItem:
+    def __init__(self, *, selected: bool = False) -> None:
+        self._selected = selected
+
+    def isSelected(self) -> bool:
+        return self._selected
+
+    def setSelected(self, selected: bool) -> None:
+        self._selected = selected
+
+
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas view tests")
 class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
     @classmethod
@@ -146,13 +157,15 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         scene = _FakeScene()
         wedge_bond = Bond(1, 2, 1, style="wedge")
         plain_bond = Bond(3, 4, 1, style="single")
+        replacement_item = _FakeSelectableItem()
+        original_selected_item = _FakeSelectableItem(selected=True)
         view = SimpleNamespace(
             model=SimpleNamespace(bonds=[wedge_bond, plain_bond]),
-            bond_items={0: ["old-a", "old-b"], 1: ["old-c"]},
+            bond_items={0: [original_selected_item, "old-b"], 1: ["old-c"]},
             scene=lambda: scene,
             last_smiles_input="C=C",
             _bond_state_dict=mock.Mock(side_effect=lambda bond: {"a": bond.a, "b": bond.b, "style": bond.style}),
-            _add_bond_graphics=mock.Mock(),
+            _add_bond_graphics=mock.Mock(side_effect=lambda bond_id: view.bond_items.__setitem__(bond_id, [replacement_item])),
             _redraw_connected_bonds=mock.Mock(),
             _record_bond_update=mock.Mock(),
         )
@@ -163,8 +176,9 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         controller.flip_bond_direction(0)
 
         self.assertEqual((wedge_bond.a, wedge_bond.b), (2, 1))
-        self.assertEqual(view.bond_items[0], [])
-        scene.removeItem.assert_has_calls([mock.call("old-a"), mock.call("old-b")])
+        self.assertEqual(view.bond_items[0], [replacement_item])
+        self.assertTrue(replacement_item.isSelected())
+        scene.removeItem.assert_has_calls([mock.call(original_selected_item), mock.call("old-b")])
         view._add_bond_graphics.assert_called_once_with(0)
         view._redraw_connected_bonds.assert_has_calls([mock.call(2, skip_bond_id=0), mock.call(1, skip_bond_id=0)])
         view._record_bond_update.assert_called_once()
@@ -173,13 +187,22 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         scene = _FakeScene()
         styled_bond = Bond(1, 2, 1, style="single")
         cycled_bond = Bond(3, 4, 1, style="single")
+        styled_replacement = _FakeSelectableItem()
+        cycled_replacement = _FakeSelectableItem()
+        original_style_item = _FakeSelectableItem(selected=True)
+        original_cycle_item = _FakeSelectableItem(selected=True)
         view = SimpleNamespace(
             model=SimpleNamespace(bonds=[styled_bond, cycled_bond]),
-            bond_items={0: ["style-item"], 1: ["cycle-item"]},
+            bond_items={0: [original_style_item], 1: [original_cycle_item]},
             scene=lambda: scene,
             last_smiles_input="CN",
             _bond_state_dict=mock.Mock(side_effect=lambda bond: {"a": bond.a, "b": bond.b, "style": bond.style, "order": bond.order}),
-            _add_bond_graphics=mock.Mock(),
+            _add_bond_graphics=mock.Mock(
+                side_effect=lambda bond_id: view.bond_items.__setitem__(
+                    bond_id,
+                    [styled_replacement if bond_id == 0 else cycled_replacement],
+                )
+            ),
             _redraw_connected_bonds=mock.Mock(),
             _record_bond_update=mock.Mock(),
         )
@@ -188,16 +211,18 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         controller.apply_bond_style(0, "double", 2)
 
         self.assertEqual((styled_bond.style, styled_bond.order), ("double", 2))
-        self.assertEqual(view.bond_items[0], [])
+        self.assertEqual(view.bond_items[0], [styled_replacement])
+        self.assertTrue(styled_replacement.isSelected())
         view._add_bond_graphics.assert_called_once_with(0)
         view._redraw_connected_bonds.assert_has_calls([mock.call(1, skip_bond_id=0), mock.call(2, skip_bond_id=0)])
 
-        with mock.patch("ui.scene_ops_controller.cycle_plain_bond_style", return_value=("aromatic", 3)) as cycle_style:
+        with mock.patch("ui.scene_single_item_mutation_logic.cycle_plain_bond_style", return_value=("aromatic", 3)) as cycle_style:
             controller.cycle_bond_style(1)
 
         cycle_style.assert_called_once_with("single", 1)
         self.assertEqual((cycled_bond.style, cycled_bond.order), ("aromatic", 3))
-        self.assertEqual(view.bond_items[1], [])
+        self.assertEqual(view.bond_items[1], [cycled_replacement])
+        self.assertTrue(cycled_replacement.isSelected())
         self.assertEqual(view._add_bond_graphics.call_args_list[-1], mock.call(1))
         self.assertEqual(view._record_bond_update.call_count, 2)
 

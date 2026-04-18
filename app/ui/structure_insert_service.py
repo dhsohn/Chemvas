@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QPointF
 
 from core.model import MoleculeModel
+from ui.atom_label_access import add_or_update_atom_label
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
@@ -69,7 +70,13 @@ class StructureInsertService:
             if atom.element == "C" and not atom.explicit_label:
                 self.canvas._ensure_carbon_dot(new_id)
             else:
-                self.canvas.add_or_update_atom_label(new_id, atom.element, clear_smiles=False, record=False)
+                add_or_update_atom_label(
+                    self.canvas,
+                    new_id,
+                    atom.element,
+                    clear_smiles=False,
+                    record=False,
+                )
 
         added_scene_items = []
         if title:

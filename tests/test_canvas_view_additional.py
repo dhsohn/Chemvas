@@ -8,7 +8,7 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtCore import QPointF, Qt
+    from PyQt6.QtCore import QPointF, QRectF, Qt
     from PyQt6.QtGui import QColor, QFont, QPolygonF
     from PyQt6.QtWidgets import QApplication, QGraphicsPathItem, QGraphicsScene, QGraphicsTextItem
 except ModuleNotFoundError:
@@ -190,6 +190,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         structure_insert_service = mock.Mock()
         selection_rotation_controller = mock.Mock()
         atom_label_service = mock.Mock()
+        model = object()
         structure_insert_service.insert_structure_model.return_value = ({1}, {2})
         selection_rotation_controller.begin_selection_3d_rotation.return_value = True
         scene_item_controller._restore_ring_from_state.return_value = "ring"
@@ -211,7 +212,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
 
         result = CanvasView.insert_structure_model(
             view,
-            model=object(),
+            model=model,
             center=QPointF(3.0, 4.0),
             title="Inserted",
         )
@@ -244,7 +245,11 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             show_carbon=True,
         )
 
-        structure_insert_service.insert_structure_model.assert_called_once()
+        structure_insert_service.insert_structure_model.assert_called_once_with(
+            model,
+            center=QPointF(3.0, 4.0),
+            title="Inserted",
+        )
         selection_rotation_controller.begin_selection_3d_rotation.assert_called_once_with(
             axis_hint=7,
             press_pos=QPointF(1.0, 2.0),
@@ -264,6 +269,192 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         scene_item_controller.restore_scene_item.assert_called_once_with("scene-item")
         scene_item_controller.remove_scene_item.assert_called_once_with("scene-item")
         scene_item_controller.apply_scene_item_state.assert_called_once_with("scene-item", {"kind": "note"})
+
+    def test_clear_and_prompt_atom_label_use_atom_label_service(self) -> None:
+        atom_label_service = mock.Mock()
+        view = SimpleNamespace(
+            model=SimpleNamespace(
+                atoms={
+                    1: Atom("C", 0.0, 0.0, explicit_label=False),
+                    2: Atom("O", 1.0, 0.0, explicit_label=True),
+                }
+            ),
+            _atom_label_service=atom_label_service,
+        )
+
+        CanvasView.clear_atom_label(view, 1)
+        with mock.patch("ui.canvas_view.QInputDialog.getText", side_effect=[(" N ", True), ("   ", True)]):
+            CanvasView.prompt_atom_label(view, 2)
+            CanvasView.prompt_atom_label(view, 1)
+
+        atom_label_service.add_or_update_atom_label.assert_has_calls(
+            [
+                mock.call(1, "C", show_carbon=False),
+                mock.call(2, "N", show_carbon=True),
+                mock.call(1, "C", show_carbon=False),
+            ]
+        )
+
+    def test_structure_build_wrappers_delegate(self) -> None:
+        structure_build_service = mock.Mock()
+        structure_build_service.add_atom_with_merge.return_value = 7
+        structure_build_service.add_ring_from_points.return_value = [1, 2, 3]
+        structure_build_service.add_linear_chain.return_value = [4, 5]
+        structure_build_service.add_bond_between_points.return_value = (8, 9)
+        structure_build_service.benzene_ring_points.return_value = ([QPointF(6.0, 7.0)], [(1, 0.0, 0.0)])
+        view = SimpleNamespace(_structure_build_service=structure_build_service)
+
+        CanvasView._add_regular_ring_template(view, 6)
+        CanvasView._add_hetero_ring_template(view, 5, ["O", "C", "C", "C", "C"])
+        CanvasView._add_fused_benzenes(view, 3, mode="angled")
+        CanvasView._add_crown_ether(view, 18, 6)
+        self.assertEqual(CanvasView._add_ring_from_points(view, ["p"], elements=["N"], merge=["m"]), [1, 2, 3])
+        self.assertEqual(CanvasView._add_atom_with_merge(view, QPointF(1.0, 2.0), "Cl", []), 7)
+        self.assertEqual(CanvasView._add_linear_chain(view, ["a"], ["C"], []), [4, 5])
+        self.assertEqual(
+            CanvasView._add_bond_between_points(view, QPointF(0.0, 0.0), QPointF(1.0, 0.0), "double", 2),
+            (8, 9),
+        )
+        self.assertEqual(
+            CanvasView._benzene_ring_points(view, QPointF(2.0, 3.0), attach_atom_id=1, attach_bond_id=2),
+            ([QPointF(6.0, 7.0)], [(1, 0.0, 0.0)]),
+        )
+        CanvasView._sprout_bond_from_atom(view, 4, "double", 2, cyclic=True)
+        CanvasView._sprout_benzene_from_atom(view, 6)
+        CanvasView._sprout_acetyl_from_atom(view, 8)
+        CanvasView._sprout_regular_ring_from_atom(view, 5, 6)
+        CanvasView._fuse_benzene_to_bond(view, 3)
+        CanvasView._fuse_regular_ring_to_bond(view, 7, 5)
+        CanvasView._fuse_chair_to_bond(view, 9, mirrored=True)
+        CanvasView.add_benzene_ring(view, QPointF(3.0, 4.0), attach_atom_id=1, attach_bond_id=2, before_smiles_input="before")
+        CanvasView._render_model(view)
+
+        structure_build_service.add_regular_ring_template.assert_called_once_with(6)
+        structure_build_service.add_hetero_ring_template.assert_called_once_with(5, ["O", "C", "C", "C", "C"])
+        structure_build_service.add_fused_benzenes.assert_called_once_with(3, mode="angled")
+        structure_build_service.add_crown_ether.assert_called_once_with(18, 6)
+        structure_build_service.add_ring_from_points.assert_called_once_with(["p"], elements=["N"], merge=["m"])
+        structure_build_service.add_atom_with_merge.assert_called_once()
+        structure_build_service.add_linear_chain.assert_called_once_with(["a"], ["C"], [])
+        structure_build_service.add_bond_between_points.assert_called_once_with(
+            QPointF(0.0, 0.0),
+            QPointF(1.0, 0.0),
+            "double",
+            2,
+        )
+        structure_build_service.benzene_ring_points.assert_called_once_with(
+            QPointF(2.0, 3.0),
+            attach_atom_id=1,
+            attach_bond_id=2,
+        )
+        structure_build_service.sprout_bond_from_atom.assert_called_once_with(4, style="double", order=2, cyclic=True)
+        structure_build_service.sprout_benzene_from_atom.assert_called_once_with(6)
+        structure_build_service.sprout_acetyl_from_atom.assert_called_once_with(8)
+        structure_build_service.sprout_regular_ring_from_atom.assert_called_once_with(5, 6)
+        structure_build_service.fuse_benzene_to_bond.assert_called_once_with(3)
+        structure_build_service.fuse_regular_ring_to_bond.assert_called_once_with(7, 5)
+        structure_build_service.fuse_chair_to_bond.assert_called_once_with(9, mirrored=True)
+        structure_build_service.add_benzene_ring.assert_called_once_with(
+            QPointF(3.0, 4.0),
+            attach_atom_id=1,
+            attach_bond_id=2,
+            before_smiles_input="before",
+        )
+        structure_build_service.render_model.assert_called_once_with()
+
+    def test_benzene_preview_wrappers_delegate(self) -> None:
+        benzene_preview_service = mock.Mock()
+        view = SimpleNamespace(_benzene_preview_service=benzene_preview_service)
+
+        CanvasView._clear_benzene_preview(view)
+        CanvasView._render_benzene_preview(view, QPointF(2.0, 3.0), attach_atom_id=1, attach_bond_id=2)
+
+        benzene_preview_service.clear_preview.assert_called_once_with()
+        benzene_preview_service.render_preview.assert_called_once_with(
+            QPointF(2.0, 3.0),
+            attach_atom_id=1,
+            attach_bond_id=2,
+        )
+
+    def test_bond_hover_preview_wrappers_delegate(self) -> None:
+        bond_hover_preview_service = mock.Mock()
+        bond = object()
+        view = SimpleNamespace(_bond_hover_preview_service=bond_hover_preview_service)
+
+        CanvasView._add_bond_style_hover_preview(view, bond)
+        CanvasView._add_bond_tool_hover_preview(view, 3, QPointF(4.0, 5.0))
+
+        bond_hover_preview_service.add_bond_style_hover_preview.assert_called_once_with(bond)
+        bond_hover_preview_service.add_bond_tool_hover_preview.assert_called_once_with(3, QPointF(4.0, 5.0))
+
+    def test_scene_decoration_wrappers_delegate(self) -> None:
+        decoration_service = mock.Mock()
+        decoration_service.add_mark.return_value = "mark"
+        decoration_service.add_arrow.return_value = "arrow"
+        decoration_service.add_ts_bracket.return_value = "ts"
+        decoration_service.add_orbital.return_value = "orbital"
+        view = SimpleNamespace(_scene_decoration_service=decoration_service)
+
+        self.assertEqual(
+            CanvasView.add_mark(
+                view,
+                QPointF(1.0, 2.0),
+                kind="plus",
+                atom_id=5,
+                offset=QPointF(0.5, -0.5),
+                record=False,
+            ),
+            "mark",
+        )
+        self.assertEqual(
+            CanvasView.add_arrow(view, QPointF(0.0, 0.0), QPointF(4.0, 5.0), "reaction"),
+            "arrow",
+        )
+        self.assertEqual(
+            CanvasView.add_ts_bracket(view, QRectF(QPointF(0.0, 0.0), QPointF(3.0, 6.0))),
+            "ts",
+        )
+        self.assertEqual(CanvasView.add_orbital(view, QPointF(9.0, 8.0)), "orbital")
+
+        decoration_service.add_mark.assert_called_once_with(
+            QPointF(1.0, 2.0),
+            kind="plus",
+            atom_id=5,
+            offset=QPointF(0.5, -0.5),
+            record=False,
+        )
+        decoration_service.add_arrow.assert_called_once_with(
+            QPointF(0.0, 0.0),
+            QPointF(4.0, 5.0),
+            "reaction",
+        )
+        decoration_service.add_ts_bracket.assert_called_once_with(
+            QRectF(QPointF(0.0, 0.0), QPointF(3.0, 6.0)),
+        )
+        decoration_service.add_orbital.assert_called_once_with(QPointF(9.0, 8.0))
+
+    def test_fragment_template_public_methods_use_recorded_build_helper(self) -> None:
+        structure_build_service = SimpleNamespace(
+            run_recorded_build=mock.Mock(side_effect=lambda action, **kwargs: action()),
+        )
+        view = SimpleNamespace(
+            _structure_build_service=structure_build_service,
+            _add_regular_ring_template=mock.Mock(),
+            _add_hetero_ring_template=mock.Mock(),
+            _add_fused_benzenes=mock.Mock(),
+            _add_crown_ether=mock.Mock(),
+        )
+
+        CanvasView.add_cyclopropane(view)
+        CanvasView.add_pyridine(view)
+        CanvasView.add_naphthalene(view)
+        CanvasView.add_crown_12_4(view)
+
+        self.assertEqual(structure_build_service.run_recorded_build.call_count, 4)
+        view._add_regular_ring_template.assert_called_once_with(3)
+        view._add_hetero_ring_template.assert_called_once_with(6, ["C", "C", "C", "C", "C", "N"])
+        view._add_fused_benzenes.assert_called_once_with(2)
+        view._add_crown_ether.assert_called_once_with(12, 4)
 
     def test_set_curved_arrow_path_builds_path_and_arrow_heads(self) -> None:
         path_item = QGraphicsPathItem()
@@ -609,7 +800,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             scene=lambda: restore_scene,
             _ensure_atom_neighbors=mock.Mock(),
             _ensure_atom_bond_ids=mock.Mock(),
-            add_or_update_atom_label=mock.Mock(),
+            _atom_label_service=mock.Mock(),
             _ensure_carbon_dot=mock.Mock(),
             apply_atom_color=mock.Mock(),
             _mark_spatial_index_dirty=mock.Mock(),
@@ -621,7 +812,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         self.assertEqual(restore_scene.removed_items, [old_label, old_dot])
         self.assertEqual(restore_view.model.next_atom_id, 5)
-        restore_view.add_or_update_atom_label.assert_called_once_with(
+        restore_view._atom_label_service.add_or_update_atom_label.assert_called_once_with(
             4,
             "C",
             clear_smiles=False,
@@ -640,7 +831,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             scene=lambda: _FakeScene(),
             _ensure_atom_neighbors=mock.Mock(),
             _ensure_atom_bond_ids=mock.Mock(),
-            add_or_update_atom_label=mock.Mock(),
+            _atom_label_service=mock.Mock(),
             _ensure_carbon_dot=mock.Mock(),
             apply_atom_color=mock.Mock(),
             _mark_spatial_index_dirty=mock.Mock(),
@@ -651,7 +842,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             {"element": "C", "x": 0.0, "y": 0.0, "color": "#000000", "explicit_label": False},
         )
         carbon_dot_view._ensure_carbon_dot.assert_called_once_with(2)
-        carbon_dot_view.add_or_update_atom_label.assert_not_called()
+        carbon_dot_view._atom_label_service.add_or_update_atom_label.assert_not_called()
 
         color_view = SimpleNamespace(
             model=SimpleNamespace(atoms={7: Atom("O", 0.0, 0.0, color="#101010")}),

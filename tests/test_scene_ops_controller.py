@@ -34,6 +34,7 @@ if QApplication is not None:
         DeleteSceneItemsCommand,
     )
     from core.model import Atom, Bond, MoleculeModel
+    from ui.scene_clipboard_transaction_logic import build_clipboard_copy_plan
     from ui.scene_ops_controller import SceneOpsController
 
 
@@ -229,6 +230,20 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertEqual(canvas.removed_scene_items, [note_item])
         self.assertEqual(canvas.clear_handles_calls, 0)
 
+    def test_delete_ring_prefers_scene_item_controller_when_available(self) -> None:
+        canvas = _FakeCanvas()
+        ring_item = _make_ring_item()
+        controller_removed_items: list[object] = []
+        canvas._ring_state_dict = lambda item: {"kind": "ring", "points": [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]}
+        canvas._scene_item_controller = SimpleNamespace(remove_scene_item=controller_removed_items.append)
+        controller = SceneOpsController(canvas)
+
+        command = controller.delete_ring(ring_item, record=False)
+
+        self.assertIsInstance(command, DeleteSceneItemsCommand)
+        self.assertEqual(controller_removed_items, [ring_item])
+        self.assertEqual(canvas.removed_scene_items, [])
+
     def test_clipboard_selection_payload_rejects_wrong_type_and_version(self) -> None:
         canvas = _FakeCanvas()
         controller = SceneOpsController(canvas)
@@ -313,14 +328,20 @@ class SceneOpsControllerTest(unittest.TestCase):
 
         self.assertIsNone(controller._selection_payload_for_clipboard())
 
-    def test_copy_bounds_for_items_returns_union_of_valid_rects(self) -> None:
+    def test_clipboard_copy_plan_uses_union_of_valid_rects(self) -> None:
         first = _make_rect_item("note", rect=QRectF(0.0, 0.0, 10.0, 10.0))
         invalid = _make_rect_item("note", rect=QRectF())
         second = _make_rect_item("note", rect=QRectF(20.0, 10.0, 5.0, 5.0))
 
-        bounds = SceneOpsController._copy_bounds_for_items([first, invalid, second])
+        plan = build_clipboard_copy_plan(
+            [first, invalid, second],
+            payload=None,
+            bond_line_width=0.5,
+            device_pixel_ratio=1.0,
+        )
 
-        self.assertEqual(bounds, QRectF(-0.5, -0.5, 26.0, 16.0))
+        assert plan is not None
+        self.assertEqual(plan.source, QRectF(-2.5, -2.5, 30.0, 20.0))
 
     def test_copy_selection_to_clipboard_handles_empty_and_successful_copy(self) -> None:
         canvas = _FakeCanvas()
@@ -446,42 +467,12 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertEqual(canvas.created_scene_item_states, [{"kind": "note", "text": "solo", "x": 28.0, "y": 33.0}])
         self.assertEqual(canvas.record_additions_calls, [(0, 0, None, canvas.created_items)])
 
-    def test_flip_scene_item_state_recomputes_atom_bound_mark_offset(self) -> None:
+    def test_flip_selected_items_noop_paths(self) -> None:
         canvas = _FakeCanvas()
-        canvas.model.atoms[7] = Atom("C", 10.0, 2.0)
-        mark_item = _make_rect_item("mark")
         controller = SceneOpsController(canvas)
 
-        after_state = controller._flip_scene_item_state(
-            mark_item,
-            {"kind": "mark", "atom_id": 7, "x": 7.0, "y": 3.0, "dx": -3.0, "dy": 1.0},
-            QPointF(5.0, 0.0),
-            True,
-            {7: (1.0, 2.0)},
-        )
-
-        self.assertEqual(after_state["x"], 3.0)
-        self.assertEqual(after_state["y"], 3.0)
-        self.assertEqual(after_state["dx"], 2.0)
-        self.assertEqual(after_state["dy"], 1.0)
-
-    def test_flip_bounds_and_flip_selected_items_noop_paths(self) -> None:
-        canvas = _FakeCanvas()
-        note_item = _make_note_item("note", 3.0, 4.0)
-        arrow_item = _make_rect_item(
-            "arrow",
-            state={"kind": "arrow", "start": (1.0, 2.0), "end": (5.0, 6.0), "control": (3.0, 8.0)},
-        )
-        controller = SceneOpsController(canvas)
-
-        note_bounds = controller._flip_bounds_for_item(note_item)
-        arrow_bounds = controller._flip_bounds_for_item(arrow_item)
-        center = controller._flip_center_for_selection(set(), [note_item, arrow_item])
         controller.flip_selected_items(horizontal=True)
 
-        self.assertIsNotNone(note_bounds)
-        self.assertEqual((arrow_bounds.left(), arrow_bounds.top(), arrow_bounds.right(), arrow_bounds.bottom()), (1.0, 2.0, 5.0, 8.0))
-        self.assertIsNotNone(center)
         self.assertEqual(canvas.pushed_commands, [])
 
 
