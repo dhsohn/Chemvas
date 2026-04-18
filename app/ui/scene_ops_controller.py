@@ -229,27 +229,33 @@ class SceneOpsController:
             atom_components=atom_components,
             marks_by_atom=self.canvas._marks_by_atom,
         )
-        flip_bounds = lambda item: flip_bounds_for_item(
-            item,
-            scene_item_state_getter=self.canvas.scene_item_state,
-            bounds_from_points=self.canvas._bounds_from_points,
-        )
-        flip_center = lambda selected_atom_ids, selected_items: flip_center_for_selection(
-            selected_atom_ids,
-            selected_items,
-            atoms=self.canvas.model.atoms,
-            flip_bounds_getter=flip_bounds,
-        )
-        flip_state = lambda item, before_state, center, is_horizontal, transformed: flip_scene_item_state(
-            item,
-            before_state,
-            center=center,
-            horizontal=is_horizontal,
-            transformed_atom_positions=transformed,
-            atoms=self.canvas.model.atoms,
-            flip_point=self.canvas._flip_point,
-            ts_bracket_rect_from_state=self.canvas._ts_bracket_rect_from_state,
-        )
+
+        def flip_bounds(item):
+            return flip_bounds_for_item(
+                item,
+                scene_item_state_getter=self.canvas.scene_item_state,
+                bounds_from_points=self.canvas._bounds_from_points,
+            )
+
+        def flip_center(selected_atom_ids, selected_items):
+            return flip_center_for_selection(
+                selected_atom_ids,
+                selected_items,
+                atoms=self.canvas.model.atoms,
+                flip_bounds_getter=flip_bounds,
+            )
+
+        def flip_state(item, before_state, center, is_horizontal, transformed):
+            return flip_scene_item_state(
+                item,
+                before_state,
+                center=center,
+                horizontal=is_horizontal,
+                transformed_atom_positions=transformed,
+                atoms=self.canvas.model.atoms,
+                flip_point=self.canvas._flip_point,
+                ts_bracket_rect_from_state=self.canvas._ts_bracket_rect_from_state,
+            )
 
         for component, component_items in zip(atom_components, groups.component_items):
             center = center_for_flip_group(
