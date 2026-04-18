@@ -53,10 +53,7 @@ from core.rdkit_adapter import RDKitAdapter
 from core.template_geometry import (
     cyclohexane_boat_points,
     cyclohexane_chair_points,
-    place_template_on_bond as project_template_on_bond,
     regular_ring_radius,
-    regular_ring_points_for_atom as build_regular_ring_points_for_atom,
-    regular_ring_points_for_bond as build_regular_ring_points_for_bond,
     ring_points,
     scale_points_to_bond_length,
 )
@@ -68,15 +65,12 @@ from ui.bond_preview_renderer import (
     build_bond_preview_items as build_bond_preview_items_helper,
     update_bond_preview_items as update_bond_preview_items_helper,
 )
-from ui.bond_style_logic import (
-    style_for_existing_bond_overlay,
-)
+from ui.bond_hover_preview_service import BondHoverPreviewService
 from ui.bond_renderer import BondRenderer
-from ui.benzene_preview_renderer import (
-    clear_benzene_preview as clear_benzene_preview_helper,
-    rebuild_benzene_preview as rebuild_benzene_preview_helper,
-)
 from ui.atom_label_service import AtomLabelService
+from ui.benzene_preview_service import BenzenePreviewService
+from ui.bond_graphics_logic import refresh_bond_graphics
+from ui.scene_decoration_service import SceneDecorationService
 from ui.canvas_handle_controller import CanvasHandleController
 from ui.canvas_input_controller import CanvasInputController
 from ui.canvas_move_controller import CanvasMoveController
@@ -110,9 +104,7 @@ from ui.insert_mode_logic import (
 from ui.insert_controller import InsertController
 from ui.scene_item_controller import SceneItemController
 from ui.selection_rotation_controller import SelectionRotationController
-from ui.scene_item_restore import (
-    create_orbital_item_from_state as create_orbital_item_from_state_helper,
-)
+from ui.ring_occupancy_logic import ring_polygon_points_for_bond
 from ui.scene_item_state import (
     ARROW_KINDS,
     arrow_state_dict as arrow_state_dict_helper,
@@ -143,6 +135,13 @@ from ui.structure_payload_logic import (
 from ui.template_insert_logic import (
     TemplateInsertRequest,
     TemplatePointResolvers,
+)
+from ui.structure_build_service import StructureBuildService
+from ui.structure_geometry_logic import (
+    compute_regular_ring_points_for_atom,
+    compute_regular_ring_points_for_bond,
+    compute_sprout_bond_endpoint,
+    compute_template_points_for_bond,
 )
 from ui.structure_insert_service import StructureInsertService
 
@@ -317,6 +316,10 @@ class CanvasView(QGraphicsView):
         self._geometry_controller = CanvasGeometryController(self)
         self._rotation_preview_controller = CanvasRotationPreviewController(self)
         self._atom_label_service = AtomLabelService(self)
+        self._bond_hover_preview_service = BondHoverPreviewService(self)
+        self._structure_build_service = StructureBuildService(self)
+        self._benzene_preview_service = BenzenePreviewService(self)
+        self._scene_decoration_service = SceneDecorationService(self)
         self._structure_insert_service = StructureInsertService(self)
         self._selection_rotation_controller = SelectionRotationController(self)
         self._selection_info_cache = ("", "")
@@ -481,7 +484,7 @@ class CanvasView(QGraphicsView):
             "K": "t-Bu",
         }
         if text in label_hotkeys:
-            self.add_or_update_atom_label(atom_id, label_hotkeys[text], show_carbon=True)
+            self._atom_label_service.add_or_update_atom_label(atom_id, label_hotkeys[text], show_carbon=True)
             return True
         if text in {"0", "1"}:
             self._sprout_bond_from_atom(atom_id, style="single", order=1, cyclic=text == "0")
@@ -586,7 +589,7 @@ class CanvasView(QGraphicsView):
     def clear_atom_label(self, atom_id: int) -> None:
         if atom_id not in self.model.atoms:
             return
-        self.add_or_update_atom_label(atom_id, "C", show_carbon=False)
+        self._atom_label_service.add_or_update_atom_label(atom_id, "C", show_carbon=False)
 
     def prompt_atom_label(self, atom_id: int) -> None:
         atom = self.model.atoms.get(atom_id)
@@ -603,185 +606,71 @@ class CanvasView(QGraphicsView):
             return
         text = text.strip()
         if not text:
-            self.clear_atom_label(atom_id)
+            self._atom_label_service.add_or_update_atom_label(atom_id, "C", show_carbon=False)
             return
-        self.add_or_update_atom_label(atom_id, text, show_carbon=True)
+        self._atom_label_service.add_or_update_atom_label(atom_id, text, show_carbon=True)
 
     def _sprout_bond_endpoint(self, atom_id: int, cyclic: bool = False) -> QPointF | None:
         atom = self.model.atoms.get(atom_id)
-        if atom is None:
+        default_endpoint = None
+        if atom is not None and not cyclic:
+            start = QPointF(atom.x, atom.y)
+            endpoint = self._default_bond_endpoint(start, atom_id)
+            default_endpoint = (endpoint.x(), endpoint.y())
+        point = compute_sprout_bond_endpoint(
+            atom_id,
+            atoms=self.model.atoms,
+            bonds=self.model.bonds,
+            bond_length=self.renderer.style.bond_length_px,
+            cyclic=cyclic,
+            default_endpoint=default_endpoint,
+        )
+        if point is None:
             return None
-        start = QPointF(atom.x, atom.y)
-        if not cyclic:
-            return self._default_bond_endpoint(start, atom_id)
-        vectors = []
-        for bond in self.model.bonds:
-            if bond is None or (bond.a != atom_id and bond.b != atom_id):
-                continue
-            other_id = bond.b if bond.a == atom_id else bond.a
-            other = self.model.atoms.get(other_id)
-            if other is None:
-                continue
-            dx = other.x - atom.x
-            dy = other.y - atom.y
-            length = math.hypot(dx, dy)
-            if length <= 1e-6:
-                continue
-            vectors.append((dx / length, dy / length))
-        if not vectors:
-            angle = 60.0
-        elif len(vectors) == 1:
-            angle = math.degrees(math.atan2(vectors[0][1], vectors[0][0])) + 120.0
-        else:
-            sx = sum(v[0] for v in vectors)
-            sy = sum(v[1] for v in vectors)
-            if math.hypot(sx, sy) > 1e-6:
-                angle = math.degrees(math.atan2(-sy, -sx))
-            else:
-                angle = math.degrees(math.atan2(vectors[0][1], vectors[0][0])) + 120.0
-        snap_angle = round(angle / 60.0) * 60.0
-        bond_len = self.renderer.style.bond_length_px
-        rad = math.radians(snap_angle)
-        return QPointF(start.x() + math.cos(rad) * bond_len, start.y() + math.sin(rad) * bond_len)
+        return QPointF(point[0], point[1])
 
     def _sprout_bond_from_atom(self, atom_id: int, style: str, order: int, cyclic: bool = False) -> None:
-        start = self._atom_point(atom_id)
-        end = self._sprout_bond_endpoint(atom_id, cyclic=cyclic)
-        if end is None:
-            return
-        self._add_bond_between_points(start, end, style, order)
+        self._structure_build_service.sprout_bond_from_atom(
+            atom_id,
+            style=style,
+            order=order,
+            cyclic=cyclic,
+        )
 
     def _sprout_benzene_from_atom(self, atom_id: int) -> None:
-        self.add_benzene_ring(self._atom_point(atom_id), attach_atom_id=atom_id)
+        self._structure_build_service.sprout_benzene_from_atom(atom_id)
 
     def _sprout_acetyl_from_atom(self, atom_id: int) -> None:
-        start = self._atom_point(atom_id)
-        carbon_end = self._sprout_bond_endpoint(atom_id, cyclic=False)
-        if carbon_end is None:
-            return
-        result = self._add_bond_between_points(start, carbon_end, "single", 1)
-        if result is None:
-            return
-        start_id, end_id = result
-        carbon_id = end_id if start_id == atom_id else start_id
-        if carbon_id not in self.model.atoms:
-            return
-        carbon_point = self._atom_point(carbon_id)
-        oxygen_end = self._default_bond_endpoint(carbon_point, carbon_id)
-        result = self._add_bond_between_points(carbon_point, oxygen_end, "double", 2)
-        if result is not None:
-            oxygen_id = result[1] if result[0] == carbon_id else result[0]
-            if oxygen_id in self.model.atoms:
-                self.add_or_update_atom_label(oxygen_id, "O", show_carbon=True)
-        methyl_end = self._default_bond_endpoint(carbon_point, carbon_id)
-        self._add_bond_between_points(carbon_point, methyl_end, "single", 1)
+        self._structure_build_service.sprout_acetyl_from_atom(atom_id)
 
     def _regular_ring_points_for_atom(
         self,
         n: int,
         attach_atom_id: int,
     ) -> tuple[list[QPointF], list[tuple[int, float, float]]] | None:
-        if n < 3 or attach_atom_id not in self.model.atoms:
-            return None
-        atom = self.model.atoms[attach_atom_id]
-        ax, ay = atom.x, atom.y
-        neighbor_points = []
-        for bond in self.model.bonds:
-            if bond is None or (bond.a != attach_atom_id and bond.b != attach_atom_id):
-                continue
-            other_id = bond.b if bond.a == attach_atom_id else bond.a
-            other = self.model.atoms.get(other_id)
-            if other is None:
-                continue
-            neighbor_points.append((other.x, other.y))
-        points = build_regular_ring_points_for_atom(
+        result = compute_regular_ring_points_for_atom(
             n,
-            (ax, ay),
-            neighbor_points,
-            self.renderer.style.bond_length_px,
+            attach_atom_id,
+            atoms=self.model.atoms,
+            bonds=self.model.bonds,
+            bond_length=self.renderer.style.bond_length_px,
         )
-        if points is None:
+        if result is None:
             return None
-        return [QPointF(x, y) for x, y in points], [(attach_atom_id, ax, ay)]
+        points, merge = result
+        return [QPointF(x, y) for x, y in points], merge
 
     def _sprout_regular_ring_from_atom(self, atom_id: int, n: int) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        result = self._regular_ring_points_for_atom(n, atom_id)
-        if result is None:
-            return
-        points, merge = result
-        self._add_ring_from_points(points, merge=merge)
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        self._structure_build_service.sprout_regular_ring_from_atom(atom_id, n)
 
     def _fuse_benzene_to_bond(self, bond_id: int) -> None:
-        bond = self.model.bonds[bond_id]
-        if bond is None:
-            return
-        a = self.model.atoms.get(bond.a)
-        b = self.model.atoms.get(bond.b)
-        if a is None or b is None:
-            return
-        midpoint = QPointF((a.x + b.x) / 2.0, (a.y + b.y) / 2.0)
-        self.add_benzene_ring(midpoint, attach_bond_id=bond_id)
+        self._structure_build_service.fuse_benzene_to_bond(bond_id)
 
     def _fuse_regular_ring_to_bond(self, bond_id: int, n: int) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        bond = self.model.bonds[bond_id]
-        if bond is None:
-            return
-        a = self.model.atoms.get(bond.a)
-        b = self.model.atoms.get(bond.b)
-        if a is None or b is None:
-            return
-        midpoint = QPointF((a.x + b.x) / 2.0, (a.y + b.y) / 2.0)
-        result = self._regular_ring_points_for_bond(n, bond_id, midpoint)
-        if result is None:
-            return
-        points, merge = result
-        self._add_ring_from_points(points, merge=merge)
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        self._structure_build_service.fuse_regular_ring_to_bond(bond_id, n)
 
     def _fuse_chair_to_bond(self, bond_id: int, mirrored: bool = False) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        local_center = QPointF(0.0, 0.0)
-        points_local = self._cyclohexane_chair_points(local_center)
-        if mirrored:
-            points_local = [QPointF(point.x(), -point.y()) for point in points_local]
-        bond = self.model.bonds[bond_id]
-        if bond is None:
-            return
-        a = self.model.atoms.get(bond.a)
-        b = self.model.atoms.get(bond.b)
-        if a is None or b is None:
-            return
-        midpoint = QPointF((a.x + b.x) / 2.0, (a.y + b.y) / 2.0)
-        result = self._template_points_for_bond(points_local, bond_id, midpoint)
-        if result is None:
-            return
-        points, merge = result
-        self._add_ring_from_points(points, merge=merge)
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        self._structure_build_service.fuse_chair_to_bond(bond_id, mirrored=mirrored)
 
     def delete_selected_items(self) -> bool:
         return self._scene_ops_controller.delete_selected_items()
@@ -1095,7 +984,7 @@ class CanvasView(QGraphicsView):
             self.scene().removeItem(existing_dot)
         if atom.element.upper() == "C":
             if atom.explicit_label:
-                self.add_or_update_atom_label(
+                self._atom_label_service.add_or_update_atom_label(
                     atom_id,
                     atom.element,
                     clear_smiles=False,
@@ -1106,7 +995,7 @@ class CanvasView(QGraphicsView):
             else:
                 self._ensure_carbon_dot(atom_id)
         else:
-            self.add_or_update_atom_label(
+            self._atom_label_service.add_or_update_atom_label(
                 atom_id,
                 atom.element,
                 clear_smiles=False,
@@ -1583,7 +1472,7 @@ class CanvasView(QGraphicsView):
         if element.upper() == "C":
             self._ensure_carbon_dot(atom_id)
         else:
-            self.add_or_update_atom_label(atom_id, element, clear_smiles=False, record=False)
+            self._atom_label_service.add_or_update_atom_label(atom_id, element, clear_smiles=False, record=False)
         self._mark_spatial_index_dirty()
         return atom_id
 
@@ -1903,42 +1792,11 @@ class CanvasView(QGraphicsView):
         max_y = max(point.y() for point in points)
         return QRectF(QPointF(min_x, min_y), QPointF(max_x, max_y))
 
-    def _flip_bounds_for_item(self, item) -> QRectF | None:
-        return self._scene_ops_controller._flip_bounds_for_item(item)
-
-    def _flip_center_for_selection(self, atom_ids: set[int], items: list[QGraphicsItem]) -> QPointF | None:
-        return self._scene_ops_controller._flip_center_for_selection(atom_ids, items)
-
-    def _flip_scene_item_state(
-        self,
-        item,
-        before_state: dict,
-        center: QPointF,
-        horizontal: bool,
-        transformed_atom_positions: dict[int, tuple[float, float]],
-    ) -> dict:
-        return self._scene_ops_controller._flip_scene_item_state(
-            item,
-            before_state,
-            center,
-            horizontal,
-            transformed_atom_positions,
-        )
-
-    def _selected_atom_components_for_transform(self, atom_ids: set[int]) -> list[set[int]]:
-        return self._scene_ops_controller._selected_atom_components_for_transform(atom_ids)
-
-    def _center_for_flip_group(self, atom_ids: set[int], items: list[QGraphicsItem]) -> QPointF | None:
-        return self._scene_ops_controller._center_for_flip_group(atom_ids, items)
-
-    def _flip_selected_items(self, horizontal: bool) -> None:
-        self._scene_ops_controller.flip_selected_items(horizontal)
-
     def flip_horizontal(self) -> None:
-        self._flip_selected_items(horizontal=True)
+        self._scene_ops_controller.flip_selected_items(horizontal=True)
 
     def flip_vertical(self) -> None:
-        self._flip_selected_items(horizontal=False)
+        self._scene_ops_controller.flip_selected_items(horizontal=False)
 
     def _rebuild_graphics(self) -> None:
         for items in self.bond_items.values():
@@ -2235,29 +2093,13 @@ class CanvasView(QGraphicsView):
         return item
 
     def add_mark(self, pos: QPointF, kind: str | None = None, atom_id: int | None = None, offset: QPointF | None = None, record: bool = True):
-        kind = kind or self.mark_kind
-        item = self._build_mark_item(kind)
-        if item is None:
-            return None
-        data = {"kind": kind, "atom_id": atom_id}
-        if offset is not None:
-            data["dx"] = offset.x()
-            data["dy"] = offset.y()
-        if isinstance(item, QGraphicsTextItem):
-            data["text"] = item.toPlainText()
-        item.setData(0, "mark")
-        item.setData(1, data)
-        self._make_selectable(item)
-        self.scene().addItem(item)
-        self.mark_items.append(item)
-        if atom_id is not None:
-            self._marks_by_atom.setdefault(atom_id, []).append(item)
-        self._set_mark_center(item, pos)
-        if record:
-            state = self._mark_state_dict(item)
-            command = AddSceneItemsCommand(item_states=[state], items=[item])
-            self._push_command(command)
-        return item
+        return self._scene_decoration_service.add_mark(
+            pos,
+            kind=kind,
+            atom_id=atom_id,
+            offset=offset,
+            record=record,
+        )
 
     def add_mark_for_atom(self, atom_id: int, click_pos: QPointF, kind: str | None = None, record: bool = True):
         atom = self.model.atoms.get(atom_id)
@@ -2995,8 +2837,7 @@ class CanvasView(QGraphicsView):
                     return
                 self._clear_hover_highlight()
                 self._hover_preview_style = preview_key
-                items = self._build_bond_preview_items(start, end)
-                self._add_hover_preview_items(items)
+                self._bond_hover_preview_service.add_free_bond_hover_preview(pos)
                 return
             self._clear_hover_highlight()
             return
@@ -3090,34 +2931,10 @@ class CanvasView(QGraphicsView):
         return nearest
 
     def _add_bond_style_hover_preview(self, bond) -> None:
-        if self.tools.active is None or self.tools.active.name != "bond":
-            return
-        style = self.active_bond_style
-        if style not in {"wedge", "hash"}:
-            return
-        a = self.model.atoms.get(bond.a)
-        b = self.model.atoms.get(bond.b)
-        if a is None or b is None:
-            return
-        self._hover_preview_style = style
-        items = self._build_bond_preview_items(
-            QPointF(a.x, a.y),
-            QPointF(b.x, b.y),
-            bond.a,
-            bond.b,
-        )
-        self._add_hover_preview_items(items)
+        self._bond_hover_preview_service.add_bond_style_hover_preview(bond)
 
     def _add_bond_tool_hover_preview(self, atom_id: int, pos: QPointF) -> None:
-        if self.tools.active is None or self.tools.active.name != "bond":
-            return
-        atom = self.model.atoms.get(atom_id)
-        if atom is None:
-            return
-        start = QPointF(atom.x, atom.y)
-        end = self._bond_hover_endpoint(start, pos, atom_id)
-        items = self._build_bond_preview_items(start, end, atom_id, None)
-        self._add_hover_preview_items(items)
+        self._bond_hover_preview_service.add_bond_tool_hover_preview(atom_id, pos)
 
     def _bond_preview_config(
         self,
@@ -3269,28 +3086,7 @@ class CanvasView(QGraphicsView):
         return math.hypot(p.x() - cx, p.y() - cy)
 
     def add_arrow(self, start: QPointF, end: QPointF, kind: str):
-        item = self._build_arrow_item(start, end, kind)
-        scene_kind = "arrow" if kind == "reaction" else kind
-        item.setData(0, scene_kind)
-        data = item.data(2) or {}
-        if scene_kind in {"curved_single", "curved_double"}:
-            data.update(
-                {
-                    "start": start,
-                    "end": end,
-                    "double": scene_kind == "curved_double",
-                }
-            )
-        else:
-            data = {"start": start, "end": end, "control": None, "double": False}
-        item.setData(2, data)
-        self._make_selectable(item)
-        self.scene().addItem(item)
-        self.arrow_items.append(item)
-        state = self._arrow_state_dict(item)
-        command = AddSceneItemsCommand(item_states=[state], items=[item])
-        self._push_command(command)
-        return item
+        return self._scene_decoration_service.add_arrow(start, end, kind)
 
     def preview_arrow(self, start: QPointF, end: QPointF, kind: str):
         item = self._build_arrow_item(start, end, kind)
@@ -3503,14 +3299,7 @@ class CanvasView(QGraphicsView):
         return self.add_ts_bracket(self._ts_bracket_rect_from_points(start, end))
 
     def add_ts_bracket(self, rect: QRectF):
-        item = self._build_ts_bracket_item(rect)
-        self._make_selectable(item)
-        self.scene().addItem(item)
-        self.ts_bracket_items.append(item)
-        state = self._ts_bracket_state_dict(item)
-        command = AddSceneItemsCommand(item_states=[state], items=[item])
-        self._push_command(command)
-        return item
+        return self._scene_decoration_service.add_ts_bracket(rect)
 
     def preview_ts_bracket(self, start: QPointF, end: QPointF):
         item = self._build_ts_bracket_item(self._ts_bracket_rect_from_points(start, end))
@@ -3520,23 +3309,7 @@ class CanvasView(QGraphicsView):
         return item
 
     def add_orbital(self, center: QPointF) -> None:
-        group = create_orbital_item_from_state_helper(
-            {
-                "kind": "orbital",
-                "orbital_kind": self.active_orbital_type,
-                "center": (center.x(), center.y()),
-                "scale": 1.0,
-                "rotation": 0.0,
-            },
-            build_orbital_items=self._build_orbital_items,
-            orbital_base_handle_dist=self.renderer.style.bond_length_px * 0.8,
-        )
-        if group is None:
-            return
-        self.restore_scene_item(group)
-        state = self._orbital_state_dict(group)
-        command = AddSceneItemsCommand(item_states=[state], items=[group])
-        self._push_command(command)
+        return self._scene_decoration_service.add_orbital(center)
 
     def _build_orbital_items(self, center: QPointF, kind: str):
         radius = self.renderer.style.bond_length_px * 0.35
@@ -4361,61 +4134,7 @@ class CanvasView(QGraphicsView):
         style: str,
         order: int,
     ) -> tuple[int, int] | None:
-        if start == end:
-            return None
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        snap_tol = self.renderer.style.bond_length_px * 0.1
-        start_id = self.find_atom_near(start.x(), start.y(), snap_tol)
-        if start_id is None:
-            start_id = self.add_atom("C", start.x(), start.y())
-        end_id = self.find_atom_near(end.x(), end.y(), snap_tol)
-        if end_id is None:
-            end_id = self.add_atom("C", end.x(), end.y())
-        if start_id == end_id:
-            return None
-        existing_bond_id = self._bond_id_between(start_id, end_id)
-        if existing_bond_id is not None:
-            bond = self.model.bonds[existing_bond_id]
-            if bond is None:
-                return None
-            before_state = self._bond_state_dict(bond)
-            next_style, next_order = style_for_existing_bond_overlay(
-                bond.style,
-                bond.order,
-                style,
-                order,
-            )
-            bond.style = next_style
-            bond.order = next_order
-            self._redraw_bond(existing_bond_id)
-            self._redraw_connected_bonds(bond.a, skip_bond_id=existing_bond_id)
-            self._redraw_connected_bonds(bond.b, skip_bond_id=existing_bond_id)
-            after_state = self._bond_state_dict(bond)
-            self._record_bond_update(
-                existing_bond_id,
-                before_state,
-                after_state,
-                before_smiles_input,
-                self.last_smiles_input,
-            )
-            return start_id, end_id
-        bond_id = self.add_bond(start_id, end_id, order)
-        bond = self.model.bonds[bond_id]
-        if bond is None:
-            return None
-        bond.style = style
-        self._add_bond_graphics(bond_id)
-        self._redraw_connected_bonds(start_id, skip_bond_id=bond_id)
-        self._redraw_connected_bonds(end_id, skip_bond_id=bond_id)
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
-        return start_id, end_id
+        return self._structure_build_service.add_bond_between_points(start, end, style, order)
 
     def _benzene_ring_points(
         self,
@@ -4423,69 +4142,11 @@ class CanvasView(QGraphicsView):
         attach_atom_id: int | None = None,
         attach_bond_id: int | None = None,
     ) -> tuple[list[QPointF], list[tuple[int, float, float]]] | None:
-        radius = self.renderer.style.bond_length_px
-        if attach_atom_id is None and attach_bond_id is None:
-            for ring_item in self.ring_items:
-                polygon = ring_item.polygon()
-                if polygon.containsPoint(center, Qt.FillRule.WindingFill):
-                    return None
-
-        points: list[QPointF] = []
-        merge: list[tuple[int, float, float]] = []
-
-        if attach_bond_id is not None and 0 <= attach_bond_id < len(self.model.bonds):
-            bond = self.model.bonds[attach_bond_id]
-            if bond is not None:
-                a = self.model.atoms.get(bond.a)
-                b = self.model.atoms.get(bond.b)
-                if a is not None and b is not None:
-                    ax, ay = a.x, a.y
-                    bx, by = b.x, b.y
-                    points_local = build_regular_ring_points_for_bond(
-                        6,
-                        (ax, ay),
-                        (bx, by),
-                        center_hint=(center.x(), center.y()),
-                        occupied_polygon=self._ring_polygon_points_for_bond(bond_id=attach_bond_id),
-                    )
-                    if points_local is None:
-                        return None
-                    points = [QPointF(x, y) for x, y in points_local]
-                    merge = [(bond.a, ax, ay), (bond.b, bx, by)]
-
-        if not points and attach_atom_id is not None and attach_atom_id in self.model.atoms:
-            atom = self.model.atoms[attach_atom_id]
-            ax, ay = atom.x, atom.y
-            neighbor_points = []
-            for bond in self.model.bonds:
-                if bond is None:
-                    continue
-                if bond.a != attach_atom_id and bond.b != attach_atom_id:
-                    continue
-                other_id = bond.b if bond.a == attach_atom_id else bond.a
-                other = self.model.atoms.get(other_id)
-                if other is None:
-                    continue
-                neighbor_points.append((other.x, other.y))
-            atom_points = build_regular_ring_points_for_atom(
-                6,
-                (ax, ay),
-                neighbor_points,
-                radius,
-            )
-            if atom_points is None:
-                return None
-            points = [QPointF(x, y) for x, y in atom_points]
-            merge = [(attach_atom_id, ax, ay)]
-
-        if not points:
-            for i in range(6):
-                angle = math.radians(60 * i - 30)
-                x = center.x() + radius * math.cos(angle)
-                y = center.y() + radius * math.sin(angle)
-                points.append(QPointF(x, y))
-
-        return points, merge
+        return self._structure_build_service.benzene_ring_points(
+            center,
+            attach_atom_id=attach_atom_id,
+            attach_bond_id=attach_bond_id,
+        )
 
     def add_benzene_ring(
         self,
@@ -4494,29 +4155,14 @@ class CanvasView(QGraphicsView):
         attach_bond_id: int | None = None,
         before_smiles_input: str | None = None,
     ) -> None:
-        if before_smiles_input is None:
-            before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        result = self._benzene_ring_points(center, attach_atom_id, attach_bond_id)
-        if result is None:
-            return
-        points, merge = result
+        self._structure_build_service.add_benzene_ring(
+            center,
+            attach_atom_id=attach_atom_id,
+            attach_bond_id=attach_bond_id,
+            before_smiles_input=before_smiles_input,
+        )
 
-        atom_ids: list[int] = []
-        for point in points:
-            atom_ids.append(self._add_atom_with_merge(point, "C", merge))
-
-        bonds_start = len(self.model.bonds)
-        for i in range(6):
-            a_id = atom_ids[i]
-            b_id = atom_ids[(i + 1) % 6]
-            if self._bond_exists(a_id, b_id):
-                continue
-            order = 2 if i % 2 == 0 else 1
-            self.add_bond(a_id, b_id, order)
-
+    def _create_ring_fill_item(self, points: list[QPointF], atom_ids: list[int]):
         polygon = QPolygonF(points)
         ring_item = NoSelectPolygonItem(polygon)
         ring_item.setBrush(self.renderer.ring_fill_brush())
@@ -4524,17 +4170,7 @@ class CanvasView(QGraphicsView):
         ring_item.setData(0, "ring")
         ring_item.setData(2, list(atom_ids))
         self._make_selectable(ring_item)
-        self.scene().addItem(ring_item)
-        self.ring_items.append(ring_item)
-
-        for bond_id in range(bonds_start, len(self.model.bonds)):
-            self._add_bond_graphics(bond_id)
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-            added_scene_items=[ring_item],
-        )
+        return ring_item
 
     def _bond_id_between(self, a_id: int, b_id: int, skip_bond_id: int | None = None) -> int | None:
         if a_id == b_id:
@@ -4584,88 +4220,39 @@ class CanvasView(QGraphicsView):
         self.add_benzene_ring(center)
 
     def add_cyclohexane_chair(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        center = self.mapToScene(self.viewport().rect().center())
-        points = self._cyclohexane_chair_points(center)
+        def _build() -> None:
+            center = self._structure_build_service.viewport_center()
+            points = self._cyclohexane_chair_points(center)
+            atom_ids = [self.add_atom("C", point.x(), point.y()) for point in points]
+            for i in range(6):
+                self.add_bond(atom_ids[i], atom_ids[(i + 1) % 6])
+            for i in range(6):
+                bond_id = len(self.model.bonds) - 6 + i
+                self._add_bond_graphics(bond_id)
 
-        atom_ids = []
-        for point in points:
-            atom_ids.append(self.add_atom("C", point.x(), point.y()))
-
-        for i in range(6):
-            self.add_bond(atom_ids[i], atom_ids[(i + 1) % 6])
-
-        for i in range(6):
-            bond_id = len(self.model.bonds) - 6 + i
-            self._add_bond_graphics(bond_id)
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        self._structure_build_service.run_recorded_build(_build)
 
     def add_cyclohexane_boat(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        center = self.mapToScene(self.viewport().rect().center())
-        points = self._cyclohexane_boat_points(center)
+        def _build() -> None:
+            center = self._structure_build_service.viewport_center()
+            points = self._cyclohexane_boat_points(center)
+            atom_ids = [self.add_atom("C", point.x(), point.y()) for point in points]
+            for i in range(6):
+                self.add_bond(atom_ids[i], atom_ids[(i + 1) % 6])
+            for i in range(6):
+                bond_id = len(self.model.bonds) - 6 + i
+                self._add_bond_graphics(bond_id)
 
-        atom_ids = []
-        for point in points:
-            atom_ids.append(self.add_atom("C", point.x(), point.y()))
-
-        for i in range(6):
-            self.add_bond(atom_ids[i], atom_ids[(i + 1) % 6])
-
-        for i in range(6):
-            bond_id = len(self.model.bonds) - 6 + i
-            self._add_bond_graphics(bond_id)
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        self._structure_build_service.run_recorded_build(_build)
 
     def add_cyclopropane(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        self._add_regular_ring_template(3)
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        self._structure_build_service.run_recorded_build(lambda: self._add_regular_ring_template(3))
 
     def add_cyclobutane(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        self._add_regular_ring_template(4)
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        self._structure_build_service.run_recorded_build(lambda: self._add_regular_ring_template(4))
 
     def add_cyclopentane(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        self._add_regular_ring_template(5)
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        self._structure_build_service.run_recorded_build(lambda: self._add_regular_ring_template(5))
 
     def _insert_session_state(self) -> InsertSessionState:
         return self._insert_controller._insert_session_state()
@@ -4677,517 +4264,288 @@ class CanvasView(QGraphicsView):
         self._insert_controller.begin_ring_template_insert(ring_size, style)
 
     def add_naphthalene(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        self._add_fused_benzenes(2)
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        self._structure_build_service.run_recorded_build(lambda: self._add_fused_benzenes(2))
 
     def add_anthracene(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        self._add_fused_benzenes(3, mode="linear")
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        self._structure_build_service.run_recorded_build(lambda: self._add_fused_benzenes(3, mode="linear"))
 
     def add_phenanthrene(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        self._add_fused_benzenes(3, mode="angled")
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        self._structure_build_service.run_recorded_build(lambda: self._add_fused_benzenes(3, mode="angled"))
 
     def add_pyridine(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        self._add_hetero_ring_template(6, ["C", "C", "C", "C", "C", "N"])
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
+        self._structure_build_service.run_recorded_build(
+            lambda: self._add_hetero_ring_template(6, ["C", "C", "C", "C", "C", "N"])
         )
 
     def add_pyrimidine(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        self._add_hetero_ring_template(6, ["N", "C", "N", "C", "C", "C"])
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
+        self._structure_build_service.run_recorded_build(
+            lambda: self._add_hetero_ring_template(6, ["N", "C", "N", "C", "C", "C"])
         )
 
     def add_imidazole(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        self._add_hetero_ring_template(5, ["C", "N", "C", "N", "C"])
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
+        self._structure_build_service.run_recorded_build(
+            lambda: self._add_hetero_ring_template(5, ["C", "N", "C", "N", "C"])
         )
 
     def add_pyrrole(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        self._add_hetero_ring_template(5, ["N", "C", "C", "C", "C"])
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
+        self._structure_build_service.run_recorded_build(
+            lambda: self._add_hetero_ring_template(5, ["N", "C", "C", "C", "C"])
         )
 
     def add_furan(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        self._add_hetero_ring_template(5, ["O", "C", "C", "C", "C"])
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
+        self._structure_build_service.run_recorded_build(
+            lambda: self._add_hetero_ring_template(5, ["O", "C", "C", "C", "C"])
         )
 
     def add_thiophene(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        self._add_hetero_ring_template(5, ["S", "C", "C", "C", "C"])
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
+        self._structure_build_service.run_recorded_build(
+            lambda: self._add_hetero_ring_template(5, ["S", "C", "C", "C", "C"])
         )
 
     def add_indole(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        center = self.mapToScene(self.viewport().rect().center())
-        merge = []
-        self._add_ring_from_points(self._ring_points(center, 6), merge=merge)
-        five_center = QPointF(center.x() + self.renderer.style.bond_length_px * 1.1, center.y() + self.renderer.style.bond_length_px * 0.6)
-        elements = ["N", "C", "C", "C", "C"]
-        self._add_ring_from_points(self._ring_points(five_center, 5), elements=elements, merge=merge)
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        def _build() -> None:
+            center = self._structure_build_service.viewport_center()
+            merge = []
+            self._add_ring_from_points(self._ring_points(center, 6), merge=merge)
+            five_center = QPointF(
+                center.x() + self.renderer.style.bond_length_px * 1.1,
+                center.y() + self.renderer.style.bond_length_px * 0.6,
+            )
+            elements = ["N", "C", "C", "C", "C"]
+            self._add_ring_from_points(self._ring_points(five_center, 5), elements=elements, merge=merge)
+
+        self._structure_build_service.run_recorded_build(_build)
 
     def add_quinoline(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        center = self.mapToScene(self.viewport().rect().center())
-        merge = []
-        self._add_ring_from_points(self._ring_points(center, 6), merge=merge)
-        other_center = QPointF(center.x() + self.renderer.style.bond_length_px * 1.5, center.y())
-        elements = ["N", "C", "C", "C", "C", "C"]
-        self._add_ring_from_points(self._ring_points(other_center, 6), elements=elements, merge=merge)
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        def _build() -> None:
+            center = self._structure_build_service.viewport_center()
+            merge = []
+            self._add_ring_from_points(self._ring_points(center, 6), merge=merge)
+            other_center = QPointF(center.x() + self.renderer.style.bond_length_px * 1.5, center.y())
+            elements = ["N", "C", "C", "C", "C", "C"]
+            self._add_ring_from_points(self._ring_points(other_center, 6), elements=elements, merge=merge)
+
+        self._structure_build_service.run_recorded_build(_build)
 
     def add_isoquinoline(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        center = self.mapToScene(self.viewport().rect().center())
-        merge = []
-        self._add_ring_from_points(self._ring_points(center, 6), merge=merge)
-        other_center = QPointF(center.x() + self.renderer.style.bond_length_px * 1.5, center.y())
-        elements = ["C", "C", "C", "C", "N", "C"]
-        self._add_ring_from_points(self._ring_points(other_center, 6), elements=elements, merge=merge)
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        def _build() -> None:
+            center = self._structure_build_service.viewport_center()
+            merge = []
+            self._add_ring_from_points(self._ring_points(center, 6), merge=merge)
+            other_center = QPointF(center.x() + self.renderer.style.bond_length_px * 1.5, center.y())
+            elements = ["C", "C", "C", "C", "N", "C"]
+            self._add_ring_from_points(self._ring_points(other_center, 6), elements=elements, merge=merge)
+
+        self._structure_build_service.run_recorded_build(_build)
 
     def add_benzimidazole(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        center = self.mapToScene(self.viewport().rect().center())
-        merge = []
-        self._add_ring_from_points(self._ring_points(center, 6), merge=merge)
-        five_center = QPointF(center.x() + self.renderer.style.bond_length_px * 1.1, center.y() + self.renderer.style.bond_length_px * 0.6)
-        elements = ["N", "C", "N", "C", "C"]
-        self._add_ring_from_points(self._ring_points(five_center, 5), elements=elements, merge=merge)
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        def _build() -> None:
+            center = self._structure_build_service.viewport_center()
+            merge = []
+            self._add_ring_from_points(self._ring_points(center, 6), merge=merge)
+            five_center = QPointF(
+                center.x() + self.renderer.style.bond_length_px * 1.1,
+                center.y() + self.renderer.style.bond_length_px * 0.6,
+            )
+            elements = ["N", "C", "N", "C", "C"]
+            self._add_ring_from_points(self._ring_points(five_center, 5), elements=elements, merge=merge)
+
+        self._structure_build_service.run_recorded_build(_build)
 
     def add_phenyl(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        center = self.mapToScene(self.viewport().rect().center())
-        atom_ids = self._add_ring_from_points(self._ring_points(center, 6))
-        attach = QPointF(center.x() - self.renderer.style.bond_length_px * 2.0, center.y())
-        attach_id = self.add_atom("C", attach.x(), attach.y())
-        self.add_bond(atom_ids[0], attach_id)
-        self._add_bond_graphics(len(self.model.bonds) - 1)
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        def _build() -> None:
+            center = self._structure_build_service.viewport_center()
+            atom_ids = self._add_ring_from_points(self._ring_points(center, 6))
+            attach = QPointF(center.x() - self.renderer.style.bond_length_px * 2.0, center.y())
+            attach_id = self.add_atom("C", attach.x(), attach.y())
+            self.add_bond(atom_ids[0], attach_id)
+            self._add_bond_graphics(len(self.model.bonds) - 1)
+
+        self._structure_build_service.run_recorded_build(_build)
 
     def add_benzyl(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        center = self.mapToScene(self.viewport().rect().center())
-        atom_ids = self._add_ring_from_points(self._ring_points(center, 6))
-        start = QPointF(center.x() - self.renderer.style.bond_length_px * 2.0, center.y())
-        mid = QPointF(start.x() - self.renderer.style.bond_length_px, start.y())
-        chain_ids = self._add_linear_chain([start, mid], ["C", "C"], [1])
-        self.add_bond(atom_ids[0], chain_ids[0])
-        self._add_bond_graphics(len(self.model.bonds) - 1)
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        def _build() -> None:
+            center = self._structure_build_service.viewport_center()
+            atom_ids = self._add_ring_from_points(self._ring_points(center, 6))
+            start = QPointF(center.x() - self.renderer.style.bond_length_px * 2.0, center.y())
+            mid = QPointF(start.x() - self.renderer.style.bond_length_px, start.y())
+            chain_ids = self._add_linear_chain([start, mid], ["C", "C"], [1])
+            self.add_bond(atom_ids[0], chain_ids[0])
+            self._add_bond_graphics(len(self.model.bonds) - 1)
+
+        self._structure_build_service.run_recorded_build(_build)
 
     def add_vinyl(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        center = self.mapToScene(self.viewport().rect().center())
-        p1 = QPointF(center.x() - self.renderer.style.bond_length_px, center.y())
-        p2 = QPointF(center.x(), center.y())
-        self._add_linear_chain([p1, p2], ["C", "C"], [2])
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        def _build() -> None:
+            center = self._structure_build_service.viewport_center()
+            p1 = QPointF(center.x() - self.renderer.style.bond_length_px, center.y())
+            p2 = QPointF(center.x(), center.y())
+            self._add_linear_chain([p1, p2], ["C", "C"], [2])
+
+        self._structure_build_service.run_recorded_build(_build)
 
     def add_allyl(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        center = self.mapToScene(self.viewport().rect().center())
-        step = self.renderer.style.bond_length_px
-        points = [QPointF(center.x() - step, center.y()), QPointF(center.x(), center.y()), QPointF(center.x() + step, center.y())]
-        self._add_linear_chain(points, ["C", "C", "C"], [2, 1])
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        def _build() -> None:
+            center = self._structure_build_service.viewport_center()
+            step = self.renderer.style.bond_length_px
+            points = [
+                QPointF(center.x() - step, center.y()),
+                QPointF(center.x(), center.y()),
+                QPointF(center.x() + step, center.y()),
+            ]
+            self._add_linear_chain(points, ["C", "C", "C"], [2, 1])
+
+        self._structure_build_service.run_recorded_build(_build)
 
     def add_carboxyl(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        center = self.mapToScene(self.viewport().rect().center())
-        step = self.renderer.style.bond_length_px
-        c = QPointF(center.x(), center.y())
-        o1 = QPointF(center.x() + step, center.y() - step * 0.6)
-        o2 = QPointF(center.x() + step, center.y() + step * 0.6)
-        self._add_linear_chain([c, o1], ["C", "O"], [2])
-        self._add_linear_chain([c, o2], ["C", "O"], [1])
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        def _build() -> None:
+            center = self._structure_build_service.viewport_center()
+            step = self.renderer.style.bond_length_px
+            c = QPointF(center.x(), center.y())
+            o1 = QPointF(center.x() + step, center.y() - step * 0.6)
+            o2 = QPointF(center.x() + step, center.y() + step * 0.6)
+            self._add_linear_chain([c, o1], ["C", "O"], [2])
+            self._add_linear_chain([c, o2], ["C", "O"], [1])
+
+        self._structure_build_service.run_recorded_build(_build)
 
     def add_nitro(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        center = self.mapToScene(self.viewport().rect().center())
-        step = self.renderer.style.bond_length_px
-        n = QPointF(center.x(), center.y())
-        o1 = QPointF(center.x() + step, center.y() - step * 0.6)
-        o2 = QPointF(center.x() + step, center.y() + step * 0.6)
-        self._add_linear_chain([n, o1], ["N", "O"], [2])
-        self._add_linear_chain([n, o2], ["N", "O"], [2])
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        def _build() -> None:
+            center = self._structure_build_service.viewport_center()
+            step = self.renderer.style.bond_length_px
+            n = QPointF(center.x(), center.y())
+            o1 = QPointF(center.x() + step, center.y() - step * 0.6)
+            o2 = QPointF(center.x() + step, center.y() + step * 0.6)
+            self._add_linear_chain([n, o1], ["N", "O"], [2])
+            self._add_linear_chain([n, o2], ["N", "O"], [2])
+
+        self._structure_build_service.run_recorded_build(_build)
 
     def add_sulfonyl(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        center = self.mapToScene(self.viewport().rect().center())
-        step = self.renderer.style.bond_length_px
-        s = QPointF(center.x(), center.y())
-        o1 = QPointF(center.x() + step, center.y() - step * 0.7)
-        o2 = QPointF(center.x() + step, center.y() + step * 0.7)
-        self._add_linear_chain([s, o1], ["S", "O"], [2])
-        self._add_linear_chain([s, o2], ["S", "O"], [2])
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        def _build() -> None:
+            center = self._structure_build_service.viewport_center()
+            step = self.renderer.style.bond_length_px
+            s = QPointF(center.x(), center.y())
+            o1 = QPointF(center.x() + step, center.y() - step * 0.7)
+            o2 = QPointF(center.x() + step, center.y() + step * 0.7)
+            self._add_linear_chain([s, o1], ["S", "O"], [2])
+            self._add_linear_chain([s, o2], ["S", "O"], [2])
+
+        self._structure_build_service.run_recorded_build(_build)
 
     def add_carbonyl(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        center = self.mapToScene(self.viewport().rect().center())
-        step = self.renderer.style.bond_length_px
-        c = QPointF(center.x(), center.y())
-        o = QPointF(center.x() + step, center.y())
-        self._add_linear_chain([c, o], ["C", "O"], [2])
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        def _build() -> None:
+            center = self._structure_build_service.viewport_center()
+            step = self.renderer.style.bond_length_px
+            c = QPointF(center.x(), center.y())
+            o = QPointF(center.x() + step, center.y())
+            self._add_linear_chain([c, o], ["C", "O"], [2])
+
+        self._structure_build_service.run_recorded_build(_build)
 
     def add_tbu(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        center = self.mapToScene(self.viewport().rect().center())
-        step = self.renderer.style.bond_length_px
-        c = QPointF(center.x(), center.y())
-        branches = [
-            QPointF(center.x() + step, center.y()),
-            QPointF(center.x() - step, center.y()),
-            QPointF(center.x(), center.y() - step),
-        ]
-        for b in branches:
-            self._add_linear_chain([c, b], ["C", "C"], [1])
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        def _build() -> None:
+            center = self._structure_build_service.viewport_center()
+            step = self.renderer.style.bond_length_px
+            c = QPointF(center.x(), center.y())
+            branches = [
+                QPointF(center.x() + step, center.y()),
+                QPointF(center.x() - step, center.y()),
+                QPointF(center.x(), center.y() - step),
+            ]
+            for b in branches:
+                self._add_linear_chain([c, b], ["C", "C"], [1])
+
+        self._structure_build_service.run_recorded_build(_build)
 
     def add_ipr(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        center = self.mapToScene(self.viewport().rect().center())
-        step = self.renderer.style.bond_length_px
-        c = QPointF(center.x(), center.y())
-        b1 = QPointF(center.x() + step, center.y())
-        b2 = QPointF(center.x(), center.y() - step)
-        self._add_linear_chain([c, b1], ["C", "C"], [1])
-        self._add_linear_chain([c, b2], ["C", "C"], [1])
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        def _build() -> None:
+            center = self._structure_build_service.viewport_center()
+            step = self.renderer.style.bond_length_px
+            c = QPointF(center.x(), center.y())
+            b1 = QPointF(center.x() + step, center.y())
+            b2 = QPointF(center.x(), center.y() - step)
+            self._add_linear_chain([c, b1], ["C", "C"], [1])
+            self._add_linear_chain([c, b2], ["C", "C"], [1])
+
+        self._structure_build_service.run_recorded_build(_build)
 
     def add_me(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        center = self.mapToScene(self.viewport().rect().center())
-        p = QPointF(center.x(), center.y())
-        self._add_linear_chain([p], ["C"], [])
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        def _build() -> None:
+            p = self._structure_build_service.viewport_center()
+            self._add_linear_chain([p], ["C"], [])
+
+        self._structure_build_service.run_recorded_build(_build)
 
     def add_et(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        center = self.mapToScene(self.viewport().rect().center())
-        step = self.renderer.style.bond_length_px
-        p1 = QPointF(center.x() - step / 2, center.y())
-        p2 = QPointF(center.x() + step / 2, center.y())
-        self._add_linear_chain([p1, p2], ["C", "C"], [1])
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        def _build() -> None:
+            center = self._structure_build_service.viewport_center()
+            step = self.renderer.style.bond_length_px
+            p1 = QPointF(center.x() - step / 2, center.y())
+            p2 = QPointF(center.x() + step / 2, center.y())
+            self._add_linear_chain([p1, p2], ["C", "C"], [1])
+
+        self._structure_build_service.run_recorded_build(_build)
 
     def add_pyranose(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        self._add_hetero_ring_template(6, ["O", "C", "C", "C", "C", "C"])
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
+        self._structure_build_service.run_recorded_build(
+            lambda: self._add_hetero_ring_template(6, ["O", "C", "C", "C", "C", "C"])
         )
 
     def add_furanose(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        self._add_hetero_ring_template(5, ["O", "C", "C", "C", "C"])
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
+        self._structure_build_service.run_recorded_build(
+            lambda: self._add_hetero_ring_template(5, ["O", "C", "C", "C", "C"])
         )
 
     def add_peptide_2(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        center = self.mapToScene(self.viewport().rect().center())
-        step = self.renderer.style.bond_length_px
-        points = [
-            QPointF(center.x() - step * 2, center.y()),
-            QPointF(center.x() - step, center.y()),
-            QPointF(center.x(), center.y()),
-            QPointF(center.x() + step, center.y()),
-            QPointF(center.x() + step * 2, center.y()),
-            QPointF(center.x() + step * 3, center.y()),
-        ]
-        elements = ["N", "C", "C", "N", "C", "C"]
-        bonds = [1, 1, 1, 1, 1]
-        chain_ids = self._add_linear_chain(points, elements, bonds)
-        carbonyl_1 = chain_ids[1]
-        carbonyl_2 = chain_ids[4]
-        o1 = QPointF(points[1].x(), points[1].y() - step * 0.8)
-        o2 = QPointF(points[4].x(), points[4].y() - step * 0.8)
-        o1_id = self.add_atom("O", o1.x(), o1.y())
-        o2_id = self.add_atom("O", o2.x(), o2.y())
-        self.add_bond(carbonyl_1, o1_id, 2)
-        self.add_bond(carbonyl_2, o2_id, 2)
-        self._add_bond_graphics(len(self.model.bonds) - 2)
-        self._add_bond_graphics(len(self.model.bonds) - 1)
-        self.add_or_update_atom_label(o1_id, "O", record=False)
-        self.add_or_update_atom_label(o2_id, "O", record=False)
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
-
-    def add_crown_12_4(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        self._add_crown_ether(12, 4)
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
-
-    def add_crown_15_5(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        self._add_crown_ether(15, 5)
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
-
-    def add_crown_18_6(self) -> None:
-        before_smiles_input = self.last_smiles_input
-        before_next_atom_id = self.model.next_atom_id
-        before_bond_count = len(self.model.bonds)
-        self.last_smiles_input = None
-        self._add_crown_ether(18, 6)
-        self._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
-
-    def _add_regular_ring_template(self, n: int) -> None:
-        center = self.mapToScene(self.viewport().rect().center())
-        radius = self._regular_ring_radius(n)
-        self._add_ring_from_points(self._ring_points(center, n, radius=radius))
-
-    def _add_hetero_ring_template(self, n: int, elements: list[str]) -> None:
-        center = self.mapToScene(self.viewport().rect().center())
-        radius = self._regular_ring_radius(n)
-        self._add_ring_from_points(self._ring_points(center, n, radius=radius), elements=elements)
-
-    def _add_fused_benzenes(self, count: int, mode: str = "linear") -> None:
-        center = self.mapToScene(self.viewport().rect().center())
-        step = self.renderer.style.bond_length_px * 1.5
-        merge = []
-        centers = []
-        if count == 2:
-            centers = [QPointF(center.x() - step / 2, center.y()), QPointF(center.x() + step / 2, center.y())]
-        elif mode == "angled":
-            centers = [
+        def _build() -> None:
+            center = self._structure_build_service.viewport_center()
+            step = self.renderer.style.bond_length_px
+            points = [
+                QPointF(center.x() - step * 2, center.y()),
                 QPointF(center.x() - step, center.y()),
                 QPointF(center.x(), center.y()),
-                QPointF(center.x() + step * 0.6, center.y() + step * 0.6),
+                QPointF(center.x() + step, center.y()),
+                QPointF(center.x() + step * 2, center.y()),
+                QPointF(center.x() + step * 3, center.y()),
             ]
-        else:
-            centers = [QPointF(center.x() - step, center.y()), QPointF(center.x(), center.y()), QPointF(center.x() + step, center.y())]
-        for ring_center in centers:
-            self._add_ring_from_points(self._ring_points(ring_center, 6), merge=merge)
+            elements = ["N", "C", "C", "N", "C", "C"]
+            chain_ids = self._add_linear_chain(points, elements, [1, 1, 1, 1, 1])
+            carbonyl_1 = chain_ids[1]
+            carbonyl_2 = chain_ids[4]
+            o1 = QPointF(points[1].x(), points[1].y() - step * 0.8)
+            o2 = QPointF(points[4].x(), points[4].y() - step * 0.8)
+            o1_id = self.add_atom("O", o1.x(), o1.y())
+            o2_id = self.add_atom("O", o2.x(), o2.y())
+            self.add_bond(carbonyl_1, o1_id, 2)
+            self.add_bond(carbonyl_2, o2_id, 2)
+            self._add_bond_graphics(len(self.model.bonds) - 2)
+            self._add_bond_graphics(len(self.model.bonds) - 1)
+            self._atom_label_service.add_or_update_atom_label(o1_id, "O", record=False)
+            self._atom_label_service.add_or_update_atom_label(o2_id, "O", record=False)
+
+        self._structure_build_service.run_recorded_build(_build)
+
+    def add_crown_12_4(self) -> None:
+        self._structure_build_service.run_recorded_build(lambda: self._add_crown_ether(12, 4))
+
+    def add_crown_15_5(self) -> None:
+        self._structure_build_service.run_recorded_build(lambda: self._add_crown_ether(15, 5))
+
+    def add_crown_18_6(self) -> None:
+        self._structure_build_service.run_recorded_build(lambda: self._add_crown_ether(18, 6))
+
+    def _add_regular_ring_template(self, n: int) -> None:
+        self._structure_build_service.add_regular_ring_template(n)
+
+    def _add_hetero_ring_template(self, n: int, elements: list[str]) -> None:
+        self._structure_build_service.add_hetero_ring_template(n, elements)
+
+    def _add_fused_benzenes(self, count: int, mode: str = "linear") -> None:
+        self._structure_build_service.add_fused_benzenes(count, mode=mode)
 
     def _add_crown_ether(self, atoms: int, oxygens: int) -> None:
-        center = self.mapToScene(self.viewport().rect().center())
-        points = self._ring_points(center, atoms, radius=self.renderer.style.bond_length_px * 1.4)
-        elements = ["C"] * atoms
-        step = atoms // oxygens
-        for i in range(0, atoms, step):
-            elements[i] = "O"
-        self._add_ring_from_points(points, elements=elements)
+        self._structure_build_service.add_crown_ether(atoms, oxygens)
 
     def _cyclohexane_chair_points(self, center: QPointF) -> list[QPointF]:
         points = cyclohexane_chair_points(
@@ -5236,27 +4594,18 @@ class CanvasView(QGraphicsView):
         bond_id: int,
         center_hint: QPointF | None = None,
     ) -> tuple[list[QPointF], list[tuple[int, float, float]]] | None:
-        if len(points_local) < 2 or not (0 <= bond_id < len(self.model.bonds)):
-            return None
-        bond = self.model.bonds[bond_id]
-        if bond is None:
-            return None
-        a = self.model.atoms.get(bond.a)
-        b = self.model.atoms.get(bond.b)
-        if a is None or b is None:
-            return None
-        ax, ay = a.x, a.y
-        bx, by = b.x, b.y
-        points = project_template_on_bond(
+        result = compute_template_points_for_bond(
             [(point.x(), point.y()) for point in points_local],
-            (ax, ay),
-            (bx, by),
+            bond_id,
+            atoms=self.model.atoms,
+            bonds=self.model.bonds,
             center_hint=(center_hint.x(), center_hint.y()) if center_hint is not None else None,
             occupied_polygon=self._ring_polygon_points_for_bond(bond_id),
         )
-        if points is None:
+        if result is None:
             return None
-        return [QPointF(x, y) for x, y in points], [(bond.a, ax, ay), (bond.b, bx, by)]
+        points, merge = result
+        return [QPointF(x, y) for x, y in points], merge
 
     def _regular_ring_points_for_bond(
         self,
@@ -5264,89 +4613,37 @@ class CanvasView(QGraphicsView):
         bond_id: int,
         center_hint: QPointF | None = None,
     ) -> tuple[list[QPointF], list[tuple[int, float, float]]] | None:
-        if n < 3 or not (0 <= bond_id < len(self.model.bonds)):
-            return None
-        bond = self.model.bonds[bond_id]
-        if bond is None:
-            return None
-        a = self.model.atoms.get(bond.a)
-        b = self.model.atoms.get(bond.b)
-        if a is None or b is None:
-            return None
-        ax, ay = a.x, a.y
-        bx, by = b.x, b.y
-        points = build_regular_ring_points_for_bond(
+        result = compute_regular_ring_points_for_bond(
             n,
-            (ax, ay),
-            (bx, by),
+            bond_id,
+            atoms=self.model.atoms,
+            bonds=self.model.bonds,
             center_hint=(center_hint.x(), center_hint.y()) if center_hint is not None else None,
             occupied_polygon=self._ring_polygon_points_for_bond(bond_id),
         )
-        if points is None:
+        if result is None:
             return None
-        merge = [(bond.a, ax, ay), (bond.b, bx, by)]
+        points, merge = result
         return [QPointF(x, y) for x, y in points], merge
 
     def _ring_polygon_points_for_bond(self, bond_id: int) -> list[tuple[float, float]] | None:
-        if not (0 <= bond_id < len(self.model.bonds)):
-            return None
-        bond = self.model.bonds[bond_id]
-        if bond is None:
-            return None
-        for ring_item in self.ring_items:
-            ring_atom_ids = ring_item.data(2)
-            if not isinstance(ring_atom_ids, list):
-                continue
-            if bond.a not in ring_atom_ids or bond.b not in ring_atom_ids:
-                continue
-            polygon = ring_item.polygon()
-            return [(point.x(), point.y()) for point in polygon]
-        return None
+        return ring_polygon_points_for_bond(
+            bond_id,
+            bonds=self.model.bonds,
+            ring_items=self.ring_items,
+        )
 
     def _add_ring_from_points(self, points, elements: list[str] | None = None, merge: list | None = None):
-        merge = merge or []
-        atom_ids = []
-        for idx, point in enumerate(points):
-            element = elements[idx] if elements else "C"
-            atom_id = self._add_atom_with_merge(point, element, merge)
-            atom_ids.append(atom_id)
-        bonds_start = len(self.model.bonds)
-        for i in range(len(atom_ids)):
-            self.add_bond(atom_ids[i], atom_ids[(i + 1) % len(atom_ids)])
-        for bond_id in range(bonds_start, len(self.model.bonds)):
-            self._add_bond_graphics(bond_id)
-        for atom_id, element in zip(atom_ids, elements or ["C"] * len(atom_ids)):
-            if element != "C":
-                atom = self.model.atoms[atom_id]
-                self.add_or_update_atom_label(atom_id, atom.element, record=False)
-        return atom_ids
+        return self._structure_build_service.add_ring_from_points(points, elements=elements, merge=merge)
 
     def _add_atom_with_merge(self, point: QPointF, element: str, merge: list) -> int:
-        tol = self.renderer.style.bond_length_px * 0.2
-        for entry in merge:
-            atom_id, x, y = entry
-            if abs(point.x() - x) < tol and abs(point.y() - y) < tol:
-                return atom_id
-        atom_id = self.add_atom(element, point.x(), point.y())
-        merge.append((atom_id, point.x(), point.y()))
-        return atom_id
+        return self._structure_build_service.add_atom_with_merge(point, element, merge)
 
     def _merge_overlapping_atoms(self, atom_id: int) -> tuple[list[int], dict]:
         return self._atom_label_service.merge_overlapping_atoms(atom_id)
 
     def _add_linear_chain(self, points: list[QPointF], elements: list[str], bonds: list[int]):
-        atom_ids = []
-        for point, element in zip(points, elements):
-            atom_ids.append(self.add_atom(element, point.x(), point.y()))
-        bonds_start = len(self.model.bonds)
-        for i, order in enumerate(bonds):
-            self.add_bond(atom_ids[i], atom_ids[i + 1], order)
-        for bond_id in range(bonds_start, len(self.model.bonds)):
-            self._add_bond_graphics(bond_id)
-        for atom_id, element in zip(atom_ids, elements):
-            if element != "C":
-                self.add_or_update_atom_label(atom_id, element, record=False)
-        return atom_ids
+        return self._structure_build_service.add_linear_chain(points, elements, bonds)
 
     def add_or_update_atom_label(
         self,
@@ -5625,22 +4922,7 @@ class CanvasView(QGraphicsView):
         self._insert_controller._render_template_preview(pos)
 
     def _clear_benzene_preview(self) -> None:
-        self._benzene_preview_items = clear_benzene_preview_helper(self.scene(), self._benzene_preview_items)
-
-    def _create_benzene_preview_inner_bond_item(
-        self,
-        start: QPointF,
-        end: QPointF,
-        center: QPointF,
-    ):
-        items = self._draw_ring_double_bond(
-            Atom("C", start.x(), start.y()),
-            Atom("C", end.x(), end.y()),
-            center,
-        )
-        if len(items) < 2:
-            return None
-        return items[1]
+        self._benzene_preview_service.clear_preview()
 
     def _render_benzene_preview(
         self,
@@ -5648,39 +4930,14 @@ class CanvasView(QGraphicsView):
         attach_atom_id: int | None = None,
         attach_bond_id: int | None = None,
     ) -> None:
-        self._clear_benzene_preview()
-        result = self._benzene_ring_points(pos, attach_atom_id, attach_bond_id)
-        if result is None:
-            return
-        points, _ = result
-        self._benzene_preview_items = rebuild_benzene_preview_helper(
-            self.scene(),
-            points,
-            base_pen=self.renderer.bond_pen(),
-            atom_radius=max(0.6, self.renderer.style.bond_line_width * 0.6),
-            create_inner_bond_item=self._create_benzene_preview_inner_bond_item,
+        self._benzene_preview_service.render_preview(
+            pos,
+            attach_atom_id=attach_atom_id,
+            attach_bond_id=attach_bond_id,
         )
 
     def _render_model(self) -> None:
-        for bond_id, bond in enumerate(self.model.bonds):
-            if bond is None:
-                continue
-            self._add_bond_graphics(bond_id)
-
-        for atom_id, atom in self.model.atoms.items():
-            if atom.element == "C":
-                if atom.explicit_label:
-                    self.add_or_update_atom_label(
-                        atom_id,
-                        atom.element,
-                        clear_smiles=False,
-                        record=False,
-                        show_carbon=True,
-                    )
-                else:
-                    self._ensure_carbon_dot(atom_id)
-            else:
-                self.add_or_update_atom_label(atom_id, atom.element, clear_smiles=False, record=False)
+        self._structure_build_service.render_model()
 
     def move_item(self, item, dx: float, dy: float, update_selection: bool = True) -> None:
         _move_controller_for(self).move_item(item, dx, dy, update_selection=update_selection)
@@ -5778,14 +5035,13 @@ class CanvasView(QGraphicsView):
             self._redraw_bond(bond_id)
 
     def _redraw_bond(self, bond_id: int) -> None:
-        selected = any(item.isSelected() for item in self.bond_items.get(bond_id, []))
-        for item in self.bond_items.get(bond_id, []):
-            self.scene().removeItem(item)
-        self.bond_items[bond_id] = []
-        self._add_bond_graphics(bond_id)
-        if selected:
-            for item in self.bond_items.get(bond_id, []):
-                item.setSelected(True)
+        refresh_bond_graphics(
+            bond_id,
+            bonds=self.model.bonds,
+            bond_items=self.bond_items,
+            remove_scene_item=self.scene().removeItem,
+            add_bond_graphics=self._add_bond_graphics,
+        )
 
     def delete_atom(self, atom_id: int, record: bool = True) -> HistoryCommand | None:
         return self._scene_ops_controller.delete_atom(atom_id, record=record)

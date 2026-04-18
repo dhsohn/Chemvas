@@ -2,6 +2,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from ui.atom_label_access import add_or_update_atom_label
+from ui.scene_item_access import (
+    apply_scene_item_state as _apply_scene_item_state,
+    create_scene_item_from_state as _create_scene_item_from_state,
+    remove_scene_item as _remove_scene_item,
+    restore_mark_from_state as _restore_mark_from_state,
+    restore_scene_item as _restore_scene_item,
+)
+
 
 class HistoryCommand:
     def undo(self, canvas) -> None:
@@ -212,7 +221,7 @@ class DeleteAtomsCommand(HistoryCommand):
             canvas._restore_atom_from_state(atom_id, state)
         if self.remove_marks:
             for mark_state in self.mark_states:
-                canvas._restore_mark_from_state(mark_state)
+                _restore_mark_from_state(canvas, mark_state)
         canvas.model.next_atom_id = self.before_next_atom_id
         canvas.last_smiles_input = self.before_smiles_input
 
@@ -243,10 +252,10 @@ class UpdateSceneItemCommand(HistoryCommand):
     after_state: dict
 
     def undo(self, canvas) -> None:
-        canvas.apply_scene_item_state(self.item, self.before_state)
+        _apply_scene_item_state(canvas, self.item, self.before_state)
 
     def redo(self, canvas) -> None:
-        canvas.apply_scene_item_state(self.item, self.after_state)
+        _apply_scene_item_state(canvas, self.item, self.after_state)
 
 
 @dataclass
@@ -257,16 +266,16 @@ class AddSceneItemsCommand(HistoryCommand):
     def redo(self, canvas) -> None:
         if not self.items:
             for state in self.item_states:
-                self.items.append(canvas.create_scene_item_from_state(state))
+                self.items.append(_create_scene_item_from_state(canvas, state))
             return
         for item in self.items:
             if item is None:
                 continue
-            canvas.restore_scene_item(item)
+            _restore_scene_item(canvas, item)
 
     def undo(self, canvas) -> None:
         for item in self.items:
-            canvas.remove_scene_item(item)
+            _remove_scene_item(canvas, item)
 
 
 @dataclass
@@ -276,17 +285,17 @@ class DeleteSceneItemsCommand(HistoryCommand):
 
     def redo(self, canvas) -> None:
         for item in self.items:
-            canvas.remove_scene_item(item)
+            _remove_scene_item(canvas, item)
 
     def undo(self, canvas) -> None:
         if not self.items:
             for state in self.item_states:
-                self.items.append(canvas.create_scene_item_from_state(state))
+                self.items.append(_create_scene_item_from_state(canvas, state))
             return
         for item in self.items:
             if item is None:
                 continue
-            canvas.restore_scene_item(item)
+            _restore_scene_item(canvas, item)
 
 
 @dataclass
@@ -306,7 +315,8 @@ class ChangeAtomLabelCommand(HistoryCommand):
         explicit_label: bool,
         smiles_input: str | None,
     ) -> None:
-        canvas.add_or_update_atom_label(
+        add_or_update_atom_label(
+            canvas,
             self.atom_id,
             element,
             clear_smiles=False,

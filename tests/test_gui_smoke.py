@@ -534,6 +534,108 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
         canvas.set_tool("select")
 
+    def test_arrow_tool_drag_preview_clears_on_tool_change_and_stale_release_does_not_commit(self) -> None:
+        canvas = self.window.canvas
+
+        canvas.set_tool("arrow")
+        arrow_tool = canvas.tools.active
+        self.assertEqual(arrow_tool.name, "arrow")
+        self.assertEqual(len(canvas.arrow_items), 0)
+
+        start = QPointF(-12.0, -8.0)
+        end = QPointF(64.0, 28.0)
+        start_pos = canvas.mapFromScene(start)
+        end_pos = canvas.mapFromScene(end)
+
+        QTest.mousePress(
+            canvas.viewport(),
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+            start_pos,
+        )
+        self.app.processEvents()
+        QTest.qWait(10)
+        QTest.mouseMove(canvas.viewport(), end_pos)
+        self.app.processEvents()
+        QTest.qWait(10)
+
+        preview_item = arrow_tool._preview_item
+        self.assertIsNotNone(preview_item)
+        self.assertIsNotNone(arrow_tool._start_pos)
+        assert preview_item is not None
+        self.assertIs(preview_item.scene(), canvas.scene())
+
+        canvas.set_tool("select")
+        self.app.processEvents()
+        QTest.qWait(10)
+
+        self.assertEqual(canvas.tools.active.name, "select")
+        self.assertIsNone(arrow_tool._preview_item)
+        self.assertIsNone(arrow_tool._start_pos)
+        self.assertIsNone(preview_item.scene())
+
+        QTest.mouseRelease(
+            canvas.viewport(),
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+            end_pos,
+        )
+        self.app.processEvents()
+        QTest.qWait(10)
+
+        self.assertEqual(len(canvas.arrow_items), 0)
+
+    def test_ts_bracket_drag_preview_clears_on_tool_change_and_stale_release_does_not_commit(self) -> None:
+        canvas = self.window.canvas
+
+        canvas.set_tool("ts_bracket")
+        tool = canvas.tools.active
+        self.assertEqual(tool.name, "ts_bracket")
+        self.assertEqual(len(canvas.ts_bracket_items), 0)
+
+        start = QPointF(18.0, -24.0)
+        end = QPointF(88.0, 42.0)
+        start_pos = canvas.mapFromScene(start)
+        end_pos = canvas.mapFromScene(end)
+
+        QTest.mousePress(
+            canvas.viewport(),
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+            start_pos,
+        )
+        self.app.processEvents()
+        QTest.qWait(10)
+        QTest.mouseMove(canvas.viewport(), end_pos)
+        self.app.processEvents()
+        QTest.qWait(10)
+
+        preview_item = tool._preview_item
+        self.assertIsNotNone(preview_item)
+        self.assertIsNotNone(tool._start_pos)
+        assert preview_item is not None
+        self.assertIs(preview_item.scene(), canvas.scene())
+
+        canvas.set_tool("select")
+        self.app.processEvents()
+        QTest.qWait(10)
+
+        self.assertEqual(canvas.tools.active.name, "select")
+        self.assertIsNone(tool._preview_item)
+        self.assertIsNone(tool._start_pos)
+        self.assertIsNone(preview_item.scene())
+
+        QTest.mouseRelease(
+            canvas.viewport(),
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+            end_pos,
+        )
+        self.app.processEvents()
+        QTest.qWait(10)
+
+        self.assertEqual(len(canvas.ts_bracket_items), 0)
+
     def test_scroll_refresh_clears_stale_hover_preview(self) -> None:
         atom_id = self.window.canvas.add_atom("C", 0.0, 0.0)
         viewport_pos = self.window.canvas.mapFromScene(QPointF(0.0, 0.0))

@@ -78,14 +78,15 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
 
         self.assertEqual(atom_ids, {1, 2, 3, 4, 7})
 
-    def test_flip_wrappers_delegate_to_private_helper(self) -> None:
-        view = SimpleNamespace(_flip_selected_items=mock.Mock())
+    def test_flip_wrappers_delegate_to_scene_ops_controller(self) -> None:
+        controller = SimpleNamespace(flip_selected_items=mock.Mock())
+        view = SimpleNamespace(_scene_ops_controller=controller)
 
         CanvasView.flip_horizontal(view)
         CanvasView.flip_vertical(view)
 
-        view._flip_selected_items.assert_has_calls([mock.call(horizontal=True), mock.call(horizontal=False)])
-        self.assertEqual(view._flip_selected_items.call_count, 2)
+        controller.flip_selected_items.assert_has_calls([mock.call(horizontal=True), mock.call(horizontal=False)])
+        self.assertEqual(controller.flip_selected_items.call_count, 2)
 
     def test_clipboard_and_delete_wrappers_delegate_to_scene_ops_controller(self) -> None:
         controller = SimpleNamespace(

@@ -5,15 +5,6 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QMessageBox
 
-from core.history import (
-    AddAtomsCommand,
-    AddBondCommand,
-    CompositeCommand,
-    DeleteAtomsCommand,
-    DeleteBondCommand,
-    DeleteSceneItemsCommand,
-    HistoryCommand,
-)
 from ui.insert_mode_logic import (
     InsertSessionState,
     begin_smiles_insert as begin_smiles_insert_state,
@@ -22,6 +13,8 @@ from ui.insert_mode_logic import (
     cancel_smiles_insert as cancel_smiles_insert_state,
     cancel_template_insert as cancel_template_insert_state,
 )
+from ui.insert_commit_service import InsertCommitService
+from ui.insert_smiles_transaction import SmilesLoadTransactionBuilder
 from ui.preview_scene_renderer import (
     apply_smiles_preview_geometry as apply_smiles_preview_geometry_helper,
     apply_template_preview_geometry as apply_template_preview_geometry_helper,
@@ -40,6 +33,8 @@ if TYPE_CHECKING:
 class InsertController:
     def __init__(self, canvas: CanvasView) -> None:
         self.canvas = canvas
+        self._insert_commit_service = InsertCommitService(canvas)
+        self._smiles_load_transaction_builder = SmilesLoadTransactionBuilder(canvas)
 
     def _insert_session_state(self) -> InsertSessionState:
         smiles_center = None
@@ -85,100 +80,25 @@ class InsertController:
         smiles = smiles.strip()
         if not smiles:
             return
-        before_smiles_input = self.canvas.last_smiles_input
-        before_next_atom_id = self.canvas.model.next_atom_id
-        atom_states = {atom_id: self.canvas._atom_state_dict(atom_id) for atom_id in self.canvas.model.atoms}
-        bond_states = {
-            bond_id: self.canvas._bond_state_dict(bond)
-            for bond_id, bond in enumerate(self.canvas.model.bonds)
-            if bond is not None
-        }
-        mark_states_for_atoms = []
-        for atom_id in atom_states:
-            for mark in self.canvas._marks_by_atom.get(atom_id, []):
-                mark_states_for_atoms.append(self.canvas._mark_state_dict(mark))
-        ring_items = list(self.canvas.ring_items)
-        free_mark_items = []
-        note_items = list(self.canvas.note_items)
-        arrow_items = list(self.canvas.arrow_items)
-        ts_bracket_items = list(self.canvas.ts_bracket_items)
-        orbital_items = list(self.canvas.orbital_items)
-        for item in self.canvas.mark_items:
-            data = item.data(1) or {}
-            atom_id = data.get("atom_id")
-            if not isinstance(atom_id, int) or atom_id not in atom_states:
-                free_mark_items.append(item)
         model = self.canvas.rdkit.smiles_to_2d(smiles, scale=self.canvas.renderer.style.bond_length_px)
         if model is None:
             message = self.canvas.rdkit.last_error or "Failed to render SMILES."
             QMessageBox.warning(self.canvas, "SMILES Error", message)
             return
+        snapshot = self._smiles_load_transaction_builder.capture()
         self.canvas.clear_scene()
         after_clear_next_atom_id = self.canvas.model.next_atom_id
         self.canvas.model = model
         self.canvas._rebuild_bond_adjacency()
         self.canvas.last_smiles_input = smiles
         self.canvas._render_model()
-        commands: list[HistoryCommand] = []
-        for bond_id, bond_state in bond_states.items():
-            commands.append(
-                DeleteBondCommand(
-                    bond_id=bond_id,
-                    bond_state=bond_state,
-                    before_smiles_input=before_smiles_input,
-                    after_smiles_input=smiles,
-                )
-            )
-        if atom_states:
-            commands.append(
-                DeleteAtomsCommand(
-                    atom_states=atom_states,
-                    mark_states=mark_states_for_atoms,
-                    before_next_atom_id=before_next_atom_id,
-                    after_next_atom_id=after_clear_next_atom_id,
-                    before_smiles_input=before_smiles_input,
-                    after_smiles_input=smiles,
-                )
-            )
-        scene_items = []
-        scene_items.extend(ring_items)
-        scene_items.extend(free_mark_items)
-        scene_items.extend(note_items)
-        scene_items.extend(arrow_items)
-        scene_items.extend(ts_bracket_items)
-        scene_items.extend(orbital_items)
-        if scene_items:
-            scene_states = [self.canvas.scene_item_state(item) for item in scene_items]
-            commands.append(DeleteSceneItemsCommand(item_states=scene_states, items=scene_items))
-        new_atom_states = {atom_id: self.canvas._atom_state_dict(atom_id) for atom_id in self.canvas.model.atoms}
-        if new_atom_states:
-            commands.append(
-                AddAtomsCommand(
-                    atom_states=new_atom_states,
-                    before_next_atom_id=after_clear_next_atom_id,
-                    after_next_atom_id=self.canvas.model.next_atom_id,
-                    before_smiles_input=before_smiles_input,
-                    after_smiles_input=smiles,
-                )
-            )
-        for bond_id, bond in enumerate(self.canvas.model.bonds):
-            if bond is None:
-                continue
-            commands.append(
-                AddBondCommand(
-                    bond_id=bond_id,
-                    bond_state=self.canvas._bond_state_dict(bond),
-                    previous_bond_count=bond_id,
-                    before_smiles_input=before_smiles_input,
-                    after_smiles_input=smiles,
-                )
-            )
-        if not commands:
-            return
-        if len(commands) == 1:
-            self.canvas._push_command(commands[0])
-            return
-        self.canvas._push_command(CompositeCommand(commands))
+        command = self._smiles_load_transaction_builder.build_command(
+            snapshot,
+            after_clear_next_atom_id=after_clear_next_atom_id,
+            after_smiles_input=smiles,
+        )
+        if command is not None:
+            self.canvas._push_command(command)
 
     def begin_smiles_insert(self, smiles: str) -> None:
         if self.canvas._template_insert_active:
@@ -220,41 +140,13 @@ class InsertController:
         if plan is None:
             self._cancel_smiles_insert()
             return
-        before_smiles_input = self.canvas.last_smiles_input
-        before_next_atom_id = self.canvas.model.next_atom_id
-        before_bond_count = len(self.canvas.model.bonds)
-        id_map: dict[int, int] = {}
-        for atom_plan in plan.atoms:
-            new_id = self.canvas.add_atom(atom_plan.element, atom_plan.x, atom_plan.y)
-            self.canvas.model.atoms[new_id].color = atom_plan.color
-            self.canvas.model.atoms[new_id].explicit_label = atom_plan.explicit_label
-            id_map[atom_plan.source_atom_id] = new_id
-        bonds_start = len(self.canvas.model.bonds)
-        for bond_plan in plan.bonds:
-            a_id = id_map.get(bond_plan.source_a)
-            b_id = id_map.get(bond_plan.source_b)
-            if a_id is None or b_id is None:
-                self._cancel_smiles_insert()
-                return
-            self.canvas.add_bond(a_id, b_id, bond_plan.order)
-            created = self.canvas.model.bonds[-1]
-            created.style = bond_plan.style
-            created.color = bond_plan.color
-        for new_bond_id in range(bonds_start, len(self.canvas.model.bonds)):
-            self.canvas._add_bond_graphics(new_bond_id)
-        for new_id in id_map.values():
-            atom = self.canvas.model.atoms[new_id]
-            if atom.element == "C" and not atom.explicit_label:
-                self.canvas._ensure_carbon_dot(new_id)
-            else:
-                self.canvas.add_or_update_atom_label(new_id, atom.element, clear_smiles=False, record=False)
-        self.canvas.last_smiles_input = self.canvas._smiles_preview_smiles
+        if not self._insert_commit_service.apply_smiles_commit(
+            plan,
+            after_smiles_input=self.canvas._smiles_preview_smiles,
+        ):
+            self._cancel_smiles_insert()
+            return
         self._cancel_smiles_insert()
-        self.canvas._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
 
     def _clear_smiles_preview(self) -> None:
         (
@@ -371,16 +263,7 @@ class InsertController:
         return [QPointF(x, y) for x, y in points]
 
     def _bond_merge_seed(self, bond_id: int | None) -> list[tuple[int, float, float]]:
-        if bond_id is None or not (0 <= bond_id < len(self.canvas.model.bonds)):
-            return []
-        bond = self.canvas.model.bonds[bond_id]
-        if bond is None:
-            return []
-        atom_a = self.canvas.model.atoms.get(bond.a)
-        atom_b = self.canvas.model.atoms.get(bond.b)
-        if atom_a is None or atom_b is None:
-            return []
-        return [(bond.a, atom_a.x, atom_a.y), (bond.b, atom_b.x, atom_b.y)]
+        return self._insert_commit_service._bond_merge_seed(bond_id)
 
     def _commit_template_insert(self, pos: QPointF) -> None:
         request = self._template_insert_request(pos)
@@ -391,54 +274,18 @@ class InsertController:
         if plan is None:
             self._cancel_template_insert()
             return
-        before_smiles_input = self.canvas.last_smiles_input
-        before_next_atom_id = self.canvas.model.next_atom_id
-        before_bond_count = len(self.canvas.model.bonds)
-        self.canvas.last_smiles_input = None
-
-        if plan.generator == "benzene":
-            if request.bond_id is not None:
-                self.canvas.add_benzene_ring(
-                    pos,
-                    attach_bond_id=request.bond_id,
-                    before_smiles_input=before_smiles_input,
-                )
-            else:
-                self.canvas.add_benzene_ring(pos, before_smiles_input=before_smiles_input)
+        resolution = None
+        if plan.generator != "benzene":
+            resolution = resolve_template_insert(request, plan, self._template_point_resolvers())
+        if not self._insert_commit_service.apply_template_commit(
+            pos,
+            request=request,
+            plan=plan,
+            resolution=resolution,
+        ):
             self._cancel_template_insert()
             return
-
-        resolution = resolve_template_insert(request, plan, self._template_point_resolvers())
-        if resolution is None:
-            self._cancel_template_insert()
-            return
-        points = self._template_points_from_pairs(resolution.points)
-        if points is None:
-            self._cancel_template_insert()
-            return
-
-        if plan.generator in {"bond_regular_ring", "bond_template_shape"}:
-            merge = self._bond_merge_seed(plan.bond_id)
-            atom_ids = []
-            for point in points:
-                atom_ids.append(self.canvas._add_atom_with_merge(point, "C", merge))
-            bonds_start = len(self.canvas.model.bonds)
-            for index in range(len(atom_ids)):
-                a_id = atom_ids[index]
-                b_id = atom_ids[(index + 1) % len(atom_ids)]
-                if self.canvas._bond_exists(a_id, b_id):
-                    continue
-                self.canvas.add_bond(a_id, b_id)
-            for new_bond_id in range(bonds_start, len(self.canvas.model.bonds)):
-                self.canvas._add_bond_graphics(new_bond_id)
-        else:
-            self.canvas._add_ring_from_points(points)
         self._cancel_template_insert()
-        self.canvas._record_additions(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
 
     def _clear_template_preview(self) -> None:
         (

@@ -7,21 +7,33 @@ from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QInputDialog
 
 from core.history import (
-    AddAtomsCommand,
     CompositeCommand,
-    DeleteSceneItemsCommand,
     MoveAtomsCommand,
     MoveItemsCommand,
-    SetSmilesInputCommand,
     UpdateSceneItemCommand,
 )
+from core.delete_tool_logic import build_delete_tool_history_command, erase_delete_tool_item
+from core.bond_tool_logic import (
+    resolve_bond_endpoint_target,
+    resolve_bond_press_target,
+    resolve_bond_snap_target,
+)
+from core.perspective_drag_logic import resolve_perspective_drag_update
+from core.tool_overlay_logic import activate_tool_no_drag, clear_temporary_tool_overlay
 from ui.bond_preview_renderer import (
     add_bond_preview_items as add_bond_preview_items_helper,
     clear_bond_preview_items as clear_bond_preview_items_helper,
 )
+from ui.atom_label_access import add_or_update_atom_label
 from ui.bond_style_logic import style_for_existing_bond_overlay
 from ui.perspective_tool_controller import PerspectiveToolController
 from ui.selection_press_logic import SelectionPressContext, plan_selection_press
+from core.text_tool_logic import (
+    build_created_atom_command,
+    normalize_text_symbol,
+    plan_text_input,
+    resolve_text_tool_target,
+)
 
 
 class Tool:
@@ -306,7 +318,7 @@ class RotateTool(Tool):
         self._last_pos = None
 
     def activate(self) -> None:
-        self.canvas.setDragMode(self.canvas.DragMode.NoDrag)
+        activate_tool_no_drag(self.canvas)
 
     def on_mouse_press(self, event) -> bool:
         if event.button() == Qt.MouseButton.LeftButton:
@@ -339,7 +351,7 @@ class BondTool(Tool):
         self._preview_signature: str | None = None
 
     def activate(self) -> None:
-        self.canvas.setDragMode(self.canvas.DragMode.NoDrag)
+        activate_tool_no_drag(self.canvas)
 
     def deactivate(self) -> None:
         self._clear_preview_items()
@@ -413,23 +425,24 @@ class BondTool(Tool):
             press_pos.y(),
             self.canvas.renderer.style.bond_length_px * 0.35,
         )
-        if atom_id is None:
-            item = self.canvas.item_at_event(event)
-            if item is None and hasattr(self.canvas, "preferred_structure_item_at_scene_pos"):
-                item = self.canvas.preferred_structure_item_at_scene_pos(press_pos)
-            if item is not None and item.data(0) == "bond":
-                bond_id = item.data(1)
-                if isinstance(bond_id, int):
-                    return self._apply_active_style_to_bond(bond_id)
-            if hasattr(self.canvas, "_find_bond_near"):
-                bond_id = self.canvas._find_bond_near(
-                    press_pos,
-                    self.canvas.renderer.style.bond_length_px * 0.35,
-                )
-                if isinstance(bond_id, int):
-                    return self._apply_active_style_to_bond(bond_id)
-            if self.canvas.hover_bond_id is not None:
-                return self._apply_active_style_to_bond(self.canvas.hover_bond_id)
+        item = self.canvas.item_at_event(event)
+        if item is None and hasattr(self.canvas, "preferred_structure_item_at_scene_pos"):
+            item = self.canvas.preferred_structure_item_at_scene_pos(press_pos)
+        nearby_bond_id = None
+        if atom_id is None and hasattr(self.canvas, "_find_bond_near"):
+            nearby_bond_id = self.canvas._find_bond_near(
+                press_pos,
+                self.canvas.renderer.style.bond_length_px * 0.35,
+            )
+        press_bond_id = resolve_bond_press_target(
+            atom_id=atom_id,
+            item_kind=item.data(0) if item is not None else None,
+            item_bond_id=item.data(1) if item is not None else None,
+            nearby_bond_id=nearby_bond_id,
+            hover_bond_id=self.canvas.hover_bond_id,
+        )
+        if press_bond_id is not None:
+            return self._apply_active_style_to_bond(press_bond_id)
         self._press_scene_pos = press_pos
         self._start_pos = self._snap_to_atom(self._press_scene_pos)
         self._set_preview_items(self._start_pos, self._start_pos)
@@ -468,27 +481,19 @@ class BondTool(Tool):
             pos.y(),
             self.canvas.renderer.style.bond_length_px * 0.35,
         )
-        if atom_id is None:
+        bond_id = None
+        if atom_id is None and hasattr(self.canvas, "_find_bond_near"):
             bond_id = self.canvas._find_bond_near(pos, self.canvas.renderer.style.bond_length_px * 0.2)
-            if bond_id is None:
-                return pos
-            bond = self.canvas.model.bonds[bond_id]
-            if bond is None:
-                return pos
-            a = self.canvas.model.atoms[bond.a]
-            b = self.canvas.model.atoms[bond.b]
-            da = (pos.x() - a.x) ** 2 + (pos.y() - a.y) ** 2
-            db = (pos.x() - b.x) ** 2 + (pos.y() - b.y) ** 2
-            target = a if da <= db else b
-            return QPointF(target.x, target.y)
-        if ignore_start and atom_id == self._start_atom_id:
-            return pos
-        atom = self.canvas.model.atoms.get(atom_id)
-        if atom is None:
-            return pos
-        if not ignore_start:
-            self._start_atom_id = atom_id
-        return QPointF(atom.x, atom.y)
+        target = resolve_bond_snap_target(
+            self.canvas.model,
+            pos=(pos.x(), pos.y()),
+            atom_id=atom_id,
+            bond_id=bond_id,
+            start_atom_id=self._start_atom_id,
+            ignore_start=ignore_start,
+        )
+        self._start_atom_id = target.start_atom_id
+        return QPointF(*target.pos)
 
     def _snap_endpoint(self, start, end):
         atom_id = self.canvas.find_atom_near(
@@ -496,21 +501,16 @@ class BondTool(Tool):
             end.y(),
             self.canvas.renderer.style.bond_length_px * 0.35,
         )
-        if atom_id is not None and atom_id != self._start_atom_id:
-            atom = self.canvas.model.atoms.get(atom_id)
-            if atom is not None:
-                return QPointF(atom.x, atom.y)
-        dx = end.x() - start.x()
-        dy = end.y() - start.y()
-        length = math.hypot(dx, dy)
-        if length == 0:
-            return end
-        angle = math.degrees(math.atan2(dy, dx))
-        step = self.canvas.snap_angle_step or 30
-        snap_angle = round(angle / step) * step
-        bond_len = self.canvas.renderer.style.bond_length_px
-        rad = math.radians(snap_angle)
-        return start + QPointF(math.cos(rad) * bond_len, math.sin(rad) * bond_len)
+        target = resolve_bond_endpoint_target(
+            self.canvas.model,
+            start=(start.x(), start.y()),
+            end=(end.x(), end.y()),
+            atom_id=atom_id,
+            start_atom_id=self._start_atom_id,
+            snap_angle_step=self.canvas.snap_angle_step,
+            bond_length=self.canvas.renderer.style.bond_length_px,
+        )
+        return QPointF(*target)
 
 
 class TextTool(Tool):
@@ -519,7 +519,7 @@ class TextTool(Tool):
         self.canvas = canvas
 
     def activate(self) -> None:
-        self.canvas.setDragMode(self.canvas.DragMode.NoDrag)
+        activate_tool_no_drag(self.canvas)
 
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
@@ -527,57 +527,41 @@ class TextTool(Tool):
         pos = self.canvas.scene_pos_from_event(event)
         pick_radius = self.canvas.renderer.style.bond_length_px * 0.9
         bond_pick_radius = self.canvas.renderer.style.bond_length_px * 0.6
-        atom_id = None
-        if self.canvas.hover_atom_id is not None:
-            atom_id = self.canvas.hover_atom_id
-            atom = self.canvas.model.atoms.get(atom_id)
-            if atom is not None:
-                pos = QPointF(atom.x, atom.y)
         item = self.canvas.item_at_event(event)
-        if atom_id is None and item is not None and item.data(0) == "atom":
+        item_atom_id = None
+        if item is not None and item.data(0) == "atom":
             data_id = item.data(1)
-            if isinstance(data_id, int) and data_id in self.canvas.model.atoms:
-                atom_id = data_id
-                atom = self.canvas.model.atoms[atom_id]
-                pos = QPointF(atom.x, atom.y)
-        if atom_id is None and self.canvas.hover_bond_id is not None:
-            bond = self.canvas.model.bonds[self.canvas.hover_bond_id]
-            if bond is not None:
-                a = self.canvas.model.atoms.get(bond.a)
-                b = self.canvas.model.atoms.get(bond.b)
-                if a is not None and b is not None:
-                    da = (pos.x() - a.x) ** 2 + (pos.y() - a.y) ** 2
-                    db = (pos.x() - b.x) ** 2 + (pos.y() - b.y) ** 2
-                    atom_id = bond.a if da <= db else bond.b
-                    atom = self.canvas.model.atoms[atom_id]
-                    pos = QPointF(atom.x, atom.y)
-        if atom_id is None:
-            bond_id = self.canvas._find_bond_near(pos, bond_pick_radius)
-            if bond_id is not None:
-                bond = self.canvas.model.bonds[bond_id]
-                if bond is not None:
-                    a = self.canvas.model.atoms.get(bond.a)
-                    b = self.canvas.model.atoms.get(bond.b)
-                    if a is not None and b is not None:
-                        da = (pos.x() - a.x) ** 2 + (pos.y() - a.y) ** 2
-                        db = (pos.x() - b.x) ** 2 + (pos.y() - b.y) ** 2
-                        atom_id = bond.a if da <= db else bond.b
-                        atom = self.canvas.model.atoms[atom_id]
-                        pos = QPointF(atom.x, atom.y)
-        if atom_id is None:
-            atom_id = self.canvas.find_atom_near(pos.x(), pos.y(), pick_radius)
-        text = self._normalized_symbol(self.canvas.get_atom_symbol())
-        if not text:
-            initial = self.canvas.model.atoms[atom_id].element if atom_id is not None else ""
+            if isinstance(data_id, int):
+                item_atom_id = data_id
+        nearby_bond_id = None
+        nearby_atom_id = None
+        if self.canvas.hover_atom_id is None and item_atom_id is None:
+            nearby_bond_id = self.canvas._find_bond_near(pos, bond_pick_radius)
+            nearby_atom_id = self.canvas.find_atom_near(pos.x(), pos.y(), pick_radius)
+        target = resolve_text_tool_target(
+            self.canvas.model,
+            pos=(pos.x(), pos.y()),
+            hover_atom_id=self.canvas.hover_atom_id,
+            item_atom_id=item_atom_id,
+            hover_bond_id=self.canvas.hover_bond_id,
+            nearby_bond_id=nearby_bond_id,
+            nearby_atom_id=nearby_atom_id,
+        )
+        atom_id = target.atom_id
+        pos = QPointF(*target.pos)
+        existing_element = self.canvas.model.atoms[atom_id].element if atom_id is not None else ""
+        input_plan = plan_text_input(self.canvas.get_atom_symbol(), existing_element=existing_element)
+        text = input_plan.text
+        if input_plan.needs_prompt:
             text, ok = QInputDialog.getText(
                 self.canvas,
                 "Atom Label",
                 "Enter atom symbol:",
-                text=initial,
+                text=input_plan.initial,
             )
             if not ok:
                 return True
-            text = self._normalized_symbol(text)
+            text = normalize_text_symbol(text)
         created_atom = False
         if atom_id is None:
             if not text:
@@ -587,10 +571,11 @@ class TextTool(Tool):
             atom_id = self.canvas.add_atom(text, pos.x(), pos.y())
             created_atom = True
         if created_atom:
-            self.canvas.add_or_update_atom_label(atom_id, text, show_carbon=True, record=False)
+            add_or_update_atom_label(self.canvas, atom_id, text, show_carbon=True, record=False)
             atom_state = self.canvas._atom_state_dict(atom_id)
-            command = AddAtomsCommand(
-                atom_states={atom_id: atom_state},
+            command = build_created_atom_command(
+                atom_id=atom_id,
+                atom_state=atom_state,
                 before_next_atom_id=before_next_atom_id,
                 after_next_atom_id=self.canvas.model.next_atom_id,
                 before_smiles_input=before_smiles_input,
@@ -598,12 +583,12 @@ class TextTool(Tool):
             )
             self.canvas._push_command(command)
         else:
-            self.canvas.add_or_update_atom_label(atom_id, text, show_carbon=True)
+            add_or_update_atom_label(self.canvas, atom_id, text, show_carbon=True)
         return True
 
     @staticmethod
     def _normalized_symbol(text: str) -> str:
-        return text.strip()
+        return normalize_text_symbol(text)
 
 
 class BenzeneTool(Tool):
@@ -612,7 +597,7 @@ class BenzeneTool(Tool):
         self.canvas = canvas
 
     def activate(self) -> None:
-        self.canvas.setDragMode(self.canvas.DragMode.NoDrag)
+        activate_tool_no_drag(self.canvas)
         self.canvas._clear_benzene_preview()
 
     def deactivate(self) -> None:
@@ -652,7 +637,7 @@ class ColorTool(Tool):
         self._last_color = None
 
     def activate(self) -> None:
-        self.canvas.setDragMode(self.canvas.DragMode.NoDrag)
+        activate_tool_no_drag(self.canvas)
 
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
@@ -679,7 +664,7 @@ class FlipTool(Tool):
         self.canvas = canvas
 
     def activate(self) -> None:
-        self.canvas.setDragMode(self.canvas.DragMode.NoDrag)
+        activate_tool_no_drag(self.canvas)
 
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
@@ -699,7 +684,7 @@ class EditBondTool(Tool):
         self.canvas = canvas
 
     def activate(self) -> None:
-        self.canvas.setDragMode(self.canvas.DragMode.NoDrag)
+        activate_tool_no_drag(self.canvas)
 
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
@@ -728,7 +713,7 @@ class MoveTool(_SelectionDragMixin, Tool):
         self._total_delta = QPointF(0.0, 0.0)
 
     def activate(self) -> None:
-        self.canvas.setDragMode(self.canvas.DragMode.NoDrag)
+        activate_tool_no_drag(self.canvas)
 
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
@@ -825,7 +810,7 @@ class DeleteTool(Tool):
         self._before_smiles_input = None
 
     def activate(self) -> None:
-        self.canvas.setDragMode(self.canvas.DragMode.NoDrag)
+        activate_tool_no_drag(self.canvas)
 
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
@@ -847,17 +832,13 @@ class DeleteTool(Tool):
     def on_mouse_release(self, event) -> bool:
         self._erasing = False
         if self._changed and self._commands:
-            self._commands.insert(
-                0,
-                SetSmilesInputCommand(
-                    before_value=self._before_smiles_input,
-                    after_value=self.canvas.last_smiles_input,
-                ),
+            command = build_delete_tool_history_command(
+                self._commands,
+                before_smiles_input=self._before_smiles_input,
+                after_smiles_input=self.canvas.last_smiles_input,
             )
-            if len(self._commands) == 1:
-                self.canvas._push_command(self._commands[0])
-            else:
-                self.canvas._push_command(CompositeCommand(self._commands))
+            if command is not None:
+                self.canvas._push_command(command)
         self._changed = False
         self._commands = []
         self._before_smiles_input = None
@@ -872,49 +853,12 @@ class DeleteTool(Tool):
                 return
         except RuntimeError:
             return
-        kind = item.data(0)
-        if kind == "atom":
-            atom_id = item.data(1)
-            if isinstance(atom_id, int):
-                command = self.canvas.delete_atom(atom_id, record=False)
-                if command is not None:
-                    self._commands.append(command)
-                self._changed = True
-        elif kind == "bond":
-            bond_id = item.data(1)
-            if isinstance(bond_id, int):
-                command = self.canvas.delete_bond(bond_id, record=False)
-                if command is not None:
-                    self._commands.append(command)
-                self._changed = True
-        elif kind == "ring":
-            command = self.canvas.delete_ring(item, record=False)
-            if command is not None:
-                self._commands.append(command)
-            self._changed = True
-        elif kind in {
-            "arrow",
-            "equilibrium",
-            "resonance",
-            "curved_single",
-            "curved_double",
-            "inhibit",
-            "dotted",
-            "orbital",
-            "ts_bracket",
-            "note",
-        }:
-            state = self.canvas.scene_item_state(item)
-            self.canvas.remove_scene_item(item)
-            command = DeleteSceneItemsCommand(item_states=[state], items=[item])
+        changed, command = erase_delete_tool_item(self.canvas, item)
+        if not changed:
+            return
+        if command is not None:
             self._commands.append(command)
-            self._changed = True
-        else:
-            state = self.canvas.scene_item_state(item)
-            self.canvas.remove_scene_item(item)
-            command = DeleteSceneItemsCommand(item_states=[state], items=[item])
-            self._commands.append(command)
-            self._changed = True
+        self._changed = True
 
 
 class _PreviewDragTool(Tool):
@@ -925,21 +869,14 @@ class _PreviewDragTool(Tool):
         self._preview_item = None
 
     def activate(self) -> None:
-        self.canvas.setDragMode(self.canvas.DragMode.NoDrag)
+        activate_tool_no_drag(self.canvas)
 
     def deactivate(self) -> None:
         self._clear_preview()
         self._start_pos = None
 
     def _clear_preview(self) -> None:
-        if self._preview_item is None:
-            return
-        try:
-            if self._preview_item.scene() is self.canvas.scene():
-                self.canvas.scene().removeItem(self._preview_item)
-        except RuntimeError:
-            pass
-        self._preview_item = None
+        self._preview_item = clear_temporary_tool_overlay(self.canvas, preview_item=self._preview_item)
 
     def _build_preview(self, current_pos):
         raise NotImplementedError
@@ -1003,7 +940,7 @@ class OrbitalTool(Tool):
         self.canvas = canvas
 
     def activate(self) -> None:
-        self.canvas.setDragMode(self.canvas.DragMode.NoDrag)
+        activate_tool_no_drag(self.canvas)
 
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
@@ -1020,25 +957,31 @@ class TransformTool(Tool):
         self._active_handle = None
 
     def activate(self) -> None:
-        self.canvas.setDragMode(self.canvas.DragMode.NoDrag)
+        activate_tool_no_drag(self.canvas)
+
+    def deactivate(self) -> None:
+        clear_temporary_tool_overlay(self.canvas, clear_handles=True)
+        self._active_handle = None
 
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
             return False
         item = self.canvas.item_at_event(event)
         if item is None:
-            self.canvas.clear_handles()
+            clear_temporary_tool_overlay(self.canvas, clear_handles=True)
+            self._active_handle = None
             return True
         if item.data(0) == "handle":
             self._active_handle = item
             return True
+        self._active_handle = None
         kind = item.data(0)
         if kind == "orbital":
             self.canvas.show_orbital_handles(item)
         elif kind in {"curved_single", "curved_double"}:
             self.canvas.show_curved_handles(item)
         else:
-            self.canvas.clear_handles()
+            clear_temporary_tool_overlay(self.canvas, clear_handles=True)
         return True
 
 
@@ -1048,7 +991,7 @@ class MarkTool(Tool):
         self.canvas = canvas
 
     def activate(self) -> None:
-        self.canvas.setDragMode(self.canvas.DragMode.NoDrag)
+        activate_tool_no_drag(self.canvas)
 
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
@@ -1073,7 +1016,7 @@ class NoteTool(Tool):
         self._active_handle = None
 
     def activate(self) -> None:
-        self.canvas.setDragMode(self.canvas.DragMode.NoDrag)
+        activate_tool_no_drag(self.canvas)
 
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
@@ -1140,20 +1083,17 @@ class PerspectiveTool(Tool):
             return self._rotating
         current = event.position()
         delta = current - self._last_pos
-        delta_x = delta.x()
-        delta_y = delta.y()
-        if self.canvas._rotation_mode == "rigid" and event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
-            if self._axis_lock is None:
-                if abs(delta_x) < 1e-9 and abs(delta_y) < 1e-9:
-                    return True
-                self._axis_lock = "x" if abs(delta_x) >= abs(delta_y) else "y"
-            if self._axis_lock == "x":
-                delta_y = 0.0
-            else:
-                delta_x = 0.0
-        else:
-            self._axis_lock = None
-        self.canvas.update_selection_3d_rotation(delta_x, delta_y)
+        update = resolve_perspective_drag_update(
+            delta_x=delta.x(),
+            delta_y=delta.y(),
+            axis_lock=self._axis_lock,
+            rotation_mode=self.canvas._rotation_mode,
+            shift_pressed=bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier),
+        )
+        self._axis_lock = update.axis_lock
+        if not update.should_update:
+            return True
+        self.canvas.update_selection_3d_rotation(update.delta_x, update.delta_y)
         self._last_pos = current
         return True
 

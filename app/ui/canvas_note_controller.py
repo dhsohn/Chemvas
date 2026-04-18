@@ -6,6 +6,7 @@ from PyQt6.QtGui import QBrush, QColor, QFont, QPen, QTextBlockFormat, QTextCurs
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsRectItem, QGraphicsTextItem
 
 from ui.graphics_items import NoSelectRectItem
+from ui.scene_item_access import remove_scene_item
 
 
 class CanvasNoteController:
@@ -30,14 +31,14 @@ class CanvasNoteController:
         if item._last_text:
             before_state = self.canvas._note_state_dict(item)
             command = DeleteSceneItemsCommand(item_states=[before_state], items=[item])
-            self.canvas.remove_scene_item(item)
+            remove_scene_item(self.canvas, item)
             self.canvas._push_command(command)
             item._last_text = ""
             return
         if item in self.canvas.selected_notes:
             self.canvas.selected_notes.remove(item)
             self.canvas._update_note_selection_box(item)
-        self.canvas.remove_scene_item(item)
+        remove_scene_item(self.canvas, item)
 
     def update_text_note(self, item: QGraphicsTextItem, text: str) -> None:
         item.setPlainText(text)
