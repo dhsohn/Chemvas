@@ -6,6 +6,13 @@ from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QFontMetricsF
 from PyQt6.QtWidgets import QGraphicsPolygonItem, QGraphicsTextItem
 
+from ui.canvas_geometry_logic import (
+    line_rect_clip_t as line_rect_clip_t_helper,
+    line_rect_intersections as line_rect_intersections_helper,
+    ray_rect_exit_distance as ray_rect_exit_distance_helper,
+    segment_intersection_t as segment_intersection_t_helper,
+)
+
 
 class CanvasGeometryController:
     def __init__(self, canvas) -> None:
@@ -103,70 +110,14 @@ class CanvasGeometryController:
         pad = max(0.02, self.canvas.renderer.style.bond_line_width * 0.03)
         return (max_dist + pad) * 0.6
 
-    @staticmethod
-    def line_rect_clip_t(p1: QPointF, p2: QPointF, rect: QRectF) -> tuple[float, float] | None:
-        dx = p2.x() - p1.x()
-        dy = p2.y() - p1.y()
-        p = [-dx, dx, -dy, dy]
-        q = [
-            p1.x() - rect.left(),
-            rect.right() - p1.x(),
-            p1.y() - rect.top(),
-            rect.bottom() - p1.y(),
-        ]
-        u1 = 0.0
-        u2 = 1.0
-        for pi, qi in zip(p, q):
-            if abs(pi) < 1e-9:
-                if qi < 0:
-                    return None
-                continue
-            t = qi / pi
-            if pi < 0:
-                u1 = max(u1, t)
-            else:
-                u2 = min(u2, t)
-            if u1 > u2:
-                return None
-        return u1, u2
+    def line_rect_clip_t(self, p1: QPointF, p2: QPointF, rect: QRectF) -> tuple[float, float] | None:
+        return line_rect_clip_t_helper(p1, p2, rect)
 
-    @staticmethod
-    def segment_intersection_t(p1: QPointF, p2: QPointF, q1: QPointF, q2: QPointF) -> float | None:
-        r = QPointF(p2.x() - p1.x(), p2.y() - p1.y())
-        s = QPointF(q2.x() - q1.x(), q2.y() - q1.y())
-        denom = r.x() * s.y() - r.y() * s.x()
-        if abs(denom) < 1e-8:
-            return None
-        q_p = QPointF(q1.x() - p1.x(), q1.y() - p1.y())
-        t = (q_p.x() * s.y() - q_p.y() * s.x()) / denom
-        u = (q_p.x() * r.y() - q_p.y() * r.x()) / denom
-        if 0.0 <= t <= 1.0 and 0.0 <= u <= 1.0:
-            return t
-        return None
+    def segment_intersection_t(self, p1: QPointF, p2: QPointF, q1: QPointF, q2: QPointF) -> float | None:
+        return segment_intersection_t_helper(p1, p2, q1, q2)
 
-    @staticmethod
-    def ray_rect_exit_distance(origin: QPointF, direction: QPointF, rect: QRectF) -> float | None:
-        t_min = float("-inf")
-        t_max = float("inf")
-        for origin_value, direction_value, min_value, max_value in (
-            (origin.x(), direction.x(), rect.left(), rect.right()),
-            (origin.y(), direction.y(), rect.top(), rect.bottom()),
-        ):
-            if abs(direction_value) < 1e-8:
-                if origin_value < min_value or origin_value > max_value:
-                    return None
-                continue
-            t1 = (min_value - origin_value) / direction_value
-            t2 = (max_value - origin_value) / direction_value
-            t_near = min(t1, t2)
-            t_far = max(t1, t2)
-            t_min = max(t_min, t_near)
-            t_max = min(t_max, t_far)
-            if t_min > t_max:
-                return None
-        if t_max < 0.0:
-            return None
-        return max(0.0, t_max)
+    def ray_rect_exit_distance(self, origin: QPointF, direction: QPointF, rect: QRectF) -> float | None:
+        return ray_rect_exit_distance_helper(origin, direction, rect)
 
     def mark_clearance_for_kind(self, kind: str) -> float:
         gap = max(0.6, self.canvas.renderer.style.bond_length_px * 0.05)
@@ -193,7 +144,7 @@ class CanvasGeometryController:
             return 0.0
         clearance = self.canvas._mark_clearance_for_kind(kind)
         expanded_rect = label_rect.adjusted(-clearance, -clearance, clearance, clearance)
-        distance = self.canvas._ray_rect_exit_distance(
+        distance = ray_rect_exit_distance_helper(
             QPointF(atom.x, atom.y),
             QPointF(direction_x, direction_y),
             expanded_rect,
@@ -201,17 +152,7 @@ class CanvasGeometryController:
         return 0.0 if distance is None else distance
 
     def line_rect_intersections(self, p1: QPointF, p2: QPointF, rect: QRectF) -> list[float]:
-        tl = rect.topLeft()
-        tr = rect.topRight()
-        br = rect.bottomRight()
-        bl = rect.bottomLeft()
-        edges = [(tl, tr), (tr, br), (br, bl), (bl, tl)]
-        hits = []
-        for a, b in edges:
-            t = self.canvas._segment_intersection_t(p1, p2, a, b)
-            if t is not None:
-                hits.append(t)
-        return hits
+        return line_rect_intersections_helper(p1, p2, rect)
 
     def trim_line_for_labels(
         self,

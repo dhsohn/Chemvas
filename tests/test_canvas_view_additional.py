@@ -417,6 +417,69 @@ class CanvasViewAdditionalTest(unittest.TestCase):
 
         hover_interaction_service.update_hover_highlight.assert_called_once_with(QPointF(8.0, 9.0))
 
+    def test_selection_highlight_wrappers_delegate(self) -> None:
+        selection_highlight_styler = mock.Mock()
+        item = object()
+        view = SimpleNamespace(_selection_highlight_styler=selection_highlight_styler)
+
+        CanvasView._set_selection_highlight(view, [item])
+        CanvasView._clear_selection_highlight(view)
+        CanvasView._apply_selection_style(view, item, True)
+
+        selection_highlight_styler.set_selection_highlight.assert_called_once_with([item])
+        selection_highlight_styler.clear_selection_highlight.assert_called_once_with()
+        selection_highlight_styler.apply_selection_style.assert_called_once_with(item, True)
+
+    def test_handle_overlay_wrappers_delegate(self) -> None:
+        handle_overlay_service = mock.Mock()
+        item = object()
+        view = SimpleNamespace(_handle_overlay_service=handle_overlay_service)
+
+        CanvasView.clear_handles(view)
+        CanvasView.show_orbital_handles(view, item)
+        CanvasView.show_curved_handles(view, item)
+        CanvasView._create_handle(view, QPointF(1.0, 2.0), "orbital_scale", item)
+
+        handle_overlay_service.clear_handles.assert_called_once_with()
+        handle_overlay_service.show_orbital_handles.assert_called_once_with(item)
+        handle_overlay_service.show_curved_handles.assert_called_once_with(item)
+        handle_overlay_service.create_handle.assert_called_once_with(QPointF(1.0, 2.0), "orbital_scale", item)
+
+    def test_handle_mutation_wrappers_delegate(self) -> None:
+        handle_mutation_service = mock.Mock()
+        item = object()
+        view = SimpleNamespace(_handle_mutation_service=handle_mutation_service)
+
+        CanvasView._update_orbital_scale(view, item, QPointF(3.0, 4.0))
+        CanvasView._update_orbital_rotate(view, item, QPointF(5.0, 6.0))
+        CanvasView._update_curved_control(view, item, QPointF(7.0, 8.0))
+
+        handle_mutation_service.update_orbital_scale.assert_called_once_with(item, QPointF(3.0, 4.0))
+        handle_mutation_service.update_orbital_rotate.assert_called_once_with(item, QPointF(5.0, 6.0))
+        handle_mutation_service.update_curved_control.assert_called_once_with(item, QPointF(7.0, 8.0))
+
+    def test_curved_arrow_path_wrapper_delegates(self) -> None:
+        curved_arrow_path_service = mock.Mock()
+        item = object()
+        view = SimpleNamespace(_curved_arrow_path_service=curved_arrow_path_service)
+
+        CanvasView._set_curved_arrow_path(
+            view,
+            item,
+            start=QPointF(0.0, 0.0),
+            end=QPointF(10.0, 0.0),
+            control=QPointF(5.0, 4.0),
+            double=False,
+        )
+
+        curved_arrow_path_service.set_curved_arrow_path.assert_called_once_with(
+            item,
+            QPointF(0.0, 0.0),
+            QPointF(10.0, 0.0),
+            QPointF(5.0, 4.0),
+            False,
+        )
+
     def test_scene_decoration_wrappers_delegate(self) -> None:
         decoration_service = mock.Mock()
         decoration_service.add_mark.return_value = "mark"
