@@ -150,6 +150,11 @@ class _FakeCanvas:
     def scene(self):
         return SimpleNamespace(addItem=lambda item: self.scene_items.append(item))
 
+    def attach_scene_item(self, item) -> None:
+        self.scene_items.append(item)
+        if isinstance(item, dict) and item.get("kind") == "ring":
+            self.ring_items.append(item)
+
     def _create_ring_fill_item(self, points, atom_ids):
         return {"kind": "ring", "points": [(point.x(), point.y()) for point in points], "atom_ids": list(atom_ids)}
 
@@ -243,6 +248,90 @@ class StructureBuildServiceTest(unittest.TestCase):
             service.add_ring_from_points.call_args.kwargs["elements"],
             ["O", "C", "C", "O", "C", "C", "O", "C", "C", "O", "C", "C"],
         )
+
+    def test_cyclohexane_builders_delegate_to_ring_builder_and_record_history(self) -> None:
+        canvas = _FakeCanvas()
+        service = StructureBuildService(canvas)
+        chair_points = [QPointF(float(index), float(index + 1)) for index in range(6)]
+        boat_points = [QPointF(float(index), float(-index)) for index in range(6)]
+        canvas._cyclohexane_chair_points = Mock(return_value=chair_points)
+        canvas._cyclohexane_boat_points = Mock(return_value=boat_points)
+        service.add_ring_from_points = Mock()
+
+        service.add_cyclohexane_chair()
+
+        canvas._cyclohexane_chair_points.assert_called_once_with(QPointF(50.0, 60.0))
+        self.assertEqual(service.add_ring_from_points.call_args.args[0], chair_points)
+        self.assertEqual(
+            canvas.record_calls,
+            [
+                {
+                    "before_next_atom_id": 0,
+                    "before_bond_count": 0,
+                    "before_smiles_input": "before",
+                    "added_scene_items": [],
+                }
+            ],
+        )
+
+        canvas.last_smiles_input = "before"
+        canvas.record_calls.clear()
+        service.add_ring_from_points.reset_mock()
+
+        service.add_cyclohexane_boat()
+
+        canvas._cyclohexane_boat_points.assert_called_once_with(QPointF(50.0, 60.0))
+        self.assertEqual(service.add_ring_from_points.call_args.args[0], boat_points)
+        self.assertEqual(
+            canvas.record_calls,
+            [
+                {
+                    "before_next_atom_id": 0,
+                    "before_bond_count": 0,
+                    "before_smiles_input": "before",
+                    "added_scene_items": [],
+                }
+            ],
+        )
+
+    def test_fused_heterocycle_builders_use_expected_offsets_and_merge_contract(self) -> None:
+        cases = (
+            ("add_indole", 5, ["N", "C", "C", "C", "C"], (72.0, 72.0)),
+            ("add_quinoline", 6, ["N", "C", "C", "C", "C", "C"], (80.0, 60.0)),
+            ("add_isoquinoline", 6, ["C", "C", "C", "C", "N", "C"], (80.0, 60.0)),
+            ("add_benzimidazole", 5, ["N", "C", "N", "C", "C"], (72.0, 72.0)),
+        )
+
+        for method_name, ring_size, elements, expected_second_center in cases:
+            with self.subTest(method=method_name):
+                canvas = _FakeCanvas()
+                service = StructureBuildService(canvas)
+                service.add_ring_from_points = Mock()
+
+                getattr(service, method_name)()
+
+                self.assertEqual(
+                    canvas.ring_points_calls,
+                    [
+                        (6, (50.0, 60.0), None),
+                        (ring_size, expected_second_center, None),
+                    ],
+                )
+                first_merge = service.add_ring_from_points.call_args_list[0].kwargs["merge"]
+                second_merge = service.add_ring_from_points.call_args_list[1].kwargs["merge"]
+                self.assertIs(first_merge, second_merge)
+                self.assertEqual(service.add_ring_from_points.call_args_list[1].kwargs["elements"], elements)
+                self.assertEqual(
+                    canvas.record_calls,
+                    [
+                        {
+                            "before_next_atom_id": 0,
+                            "before_bond_count": 0,
+                            "before_smiles_input": "before",
+                            "added_scene_items": [],
+                        }
+                    ],
+                )
 
     def test_add_atom_with_merge_reuses_close_points(self) -> None:
         canvas = _FakeCanvas()
@@ -568,6 +657,74 @@ class StructureBuildServiceTest(unittest.TestCase):
                     "before_bond_count": 1,
                     "before_smiles_input": None,
                 },
+            ],
+        )
+
+    def test_ring_and_chain_fragment_builders_record_expected_counts(self) -> None:
+        cases = (
+            ("add_phenyl", 7, 7, 7),
+            ("add_benzyl", 8, 8, 8),
+            ("add_vinyl", 2, 1, 1),
+            ("add_allyl", 3, 2, 2),
+            ("add_carboxyl", 4, 2, 2),
+            ("add_nitro", 4, 2, 2),
+            ("add_sulfonyl", 4, 2, 2),
+            ("add_carbonyl", 2, 1, 1),
+            ("add_tbu", 6, 3, 3),
+            ("add_ipr", 4, 2, 2),
+            ("add_me", 1, 0, 0),
+            ("add_et", 2, 1, 1),
+        )
+
+        for method_name, atom_count, bond_count, graphic_count in cases:
+            with self.subTest(method=method_name):
+                canvas = _FakeCanvas()
+                service = StructureBuildService(canvas)
+                if method_name in {"add_phenyl", "add_benzyl"}:
+                    canvas._ring_points = Mock(
+                        return_value=[QPointF(50.0 + index * 10.0, 60.0) for index in range(6)]
+                    )
+
+                getattr(service, method_name)()
+
+                self.assertEqual(len(canvas.model.atoms), atom_count)
+                self.assertEqual(len(canvas.model.bonds), bond_count)
+                self.assertEqual(len(canvas.added_graphics), graphic_count)
+                self.assertEqual(
+                    canvas.record_calls,
+                    [
+                        {
+                            "before_next_atom_id": 0,
+                            "before_bond_count": 0,
+                            "before_smiles_input": "before",
+                            "added_scene_items": [],
+                        }
+                    ],
+                )
+
+    def test_add_peptide_2_adds_carbonyl_oxygens_and_labels_them(self) -> None:
+        canvas = _FakeCanvas()
+        oxygen_label_service = Mock()
+        canvas._atom_label_service = SimpleNamespace(add_or_update_atom_label=oxygen_label_service)
+        service = StructureBuildService(canvas)
+
+        service.add_peptide_2()
+
+        oxygen_labels = [call.args[:2] for call in oxygen_label_service.call_args_list if call.args[1] == "O"]
+        self.assertEqual(len(canvas.model.atoms), 8)
+        self.assertEqual(len(canvas.model.bonds), 7)
+        self.assertEqual(canvas.added_graphics, [0, 1, 2, 3, 4, 5, 6])
+        self.assertEqual(oxygen_labels, [(6, "O"), (7, "O")])
+        self.assertTrue(all(call.kwargs == {"record": False} for call in oxygen_label_service.call_args_list[-2:]))
+        self.assertEqual(
+            canvas.record_calls,
+            [
+                {
+                    "before_next_atom_id": 0,
+                    "before_bond_count": 0,
+                    "before_smiles_input": "before",
+                    "added_scene_items": [],
+                }
             ],
         )
 

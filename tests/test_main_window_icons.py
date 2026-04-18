@@ -3,12 +3,13 @@ import os
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
     from PyQt6.QtCore import QPointF, QRectF, Qt
-    from PyQt6.QtGui import QColor, QPainter, QPen, QPixmap
+    from PyQt6.QtGui import QColor, QPainter, QPen, QPixmap, QPolygonF
     from PyQt6.QtWidgets import QApplication
 except ModuleNotFoundError:
     QApplication = None
@@ -19,6 +20,7 @@ except ModuleNotFoundError:
     QPainter = None
     QPen = None
     QPixmap = None
+    QPolygonF = None
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,6 +30,7 @@ if str(APP_ROOT) not in sys.path:
 
 if QApplication is not None:
     from ui.main_window import MainWindow
+    from ui.main_window_icon_factory import MainWindowIconFactory
 
 
 def _opaque_bounds(image) -> tuple[int, int, int, int] | None:
@@ -43,7 +46,7 @@ def _opaque_bounds(image) -> tuple[int, int, int, int] | None:
     return min(xs), min(ys), max(xs), max(ys)
 
 
-def _render_chair_bounds(window: "MainWindow", rect) -> tuple[int, int, int, int] | None:
+def _render_chair_bounds(factory: "MainWindowIconFactory", rect) -> tuple[int, int, int, int] | None:
     pixmap = QPixmap(26, 26)
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
@@ -51,7 +54,7 @@ def _render_chair_bounds(window: "MainWindow", rect) -> tuple[int, int, int, int
     pen = QPen(QColor("#3d3229"))
     pen.setWidthF(1.6)
     painter.setPen(pen)
-    chair = window._chair_icon_points(rect)
+    chair = factory.chair_icon_points(rect)
     if not chair.isEmpty():
         painter.drawPolygon(chair)
     painter.end()
@@ -67,6 +70,7 @@ class MainWindowIconGeometryTest(unittest.TestCase):
 
     def setUp(self) -> None:
         self.window = MainWindow()
+        self.factory = MainWindowIconFactory(self.window)
 
     def tearDown(self) -> None:
         self.window.close()
@@ -74,9 +78,9 @@ class MainWindowIconGeometryTest(unittest.TestCase):
 
     def test_ring_icon_inner_bond_matches_canvas_spacing_and_orientation(self) -> None:
         center = QPointF(15.0, 15.0)
-        outer = self.window._benzene_icon_polygon(center, 10.0)
-        base_segments = self.window._benzene_icon_inner_segments(outer, center)
-        inner_segments = self.window._benzene_icon_inner_segments(outer, center, spacing_scale=0.92)
+        outer = self.factory.benzene_icon_polygon(center, 10.0)
+        base_segments = self.factory.benzene_icon_inner_segments(outer, center)
+        inner_segments = self.factory.benzene_icon_inner_segments(outer, center, spacing_scale=0.92)
 
         self.assertEqual(len(base_segments), 3)
         self.assertEqual(len(inner_segments), 3)
@@ -101,7 +105,7 @@ class MainWindowIconGeometryTest(unittest.TestCase):
         self.assertGreater(inner_mid_x, center.x())
 
     def test_ring_icon_fills_toolbar_icon_size_more_like_canvas_preview(self) -> None:
-        pixmap = self.window._icon_ring().pixmap(26, 26)
+        pixmap = self.factory.icon_ring().pixmap(26, 26)
         image = pixmap.toImage()
         bounds = _opaque_bounds(image)
         self.assertIsNotNone(bounds)
@@ -110,10 +114,10 @@ class MainWindowIconGeometryTest(unittest.TestCase):
         self.assertGreaterEqual(max_y - min_y + 1, 24)
 
     def test_chair_template_icons_use_larger_geometry(self) -> None:
-        old_bounds = _render_chair_bounds(self.window, QRectF(4.0, 7.0, 22.0, 16.0))
-        toolbar_bounds = _opaque_bounds(self.window._icon_templates().pixmap(26, 26).toImage())
+        old_bounds = _render_chair_bounds(self.factory, QRectF(4.0, 7.0, 22.0, 16.0))
+        toolbar_bounds = _opaque_bounds(self.factory.icon_templates().pixmap(26, 26).toImage())
         preview_bounds = _opaque_bounds(
-            self.window._icon_template_preview("Cyclohexane (Chair)").pixmap(26, 26).toImage()
+            self.factory.icon_template_preview("Cyclohexane (Chair)").pixmap(26, 26).toImage()
         )
 
         self.assertIsNotNone(old_bounds)
@@ -130,3 +134,59 @@ class MainWindowIconGeometryTest(unittest.TestCase):
         self.assertLessEqual(preview_min_x, old_min_x)
         self.assertLessEqual(toolbar_min_y, old_min_y)
         self.assertLessEqual(preview_min_y, old_min_y)
+
+    def test_canvas_dependent_wedge_icon_renders_non_empty_bounds(self) -> None:
+        bounds = _opaque_bounds(self.factory.icon_bond_wedge().pixmap(30, 30).toImage())
+        self.assertIsNotNone(bounds)
+
+    def test_benzene_inner_segments_handle_short_and_zero_length_polygons(self) -> None:
+        center = QPointF(15.0, 15.0)
+
+        self.assertEqual(self.factory.benzene_icon_inner_segments(QPolygonF([center]), center), [])
+        self.assertEqual(
+            self.factory.benzene_icon_inner_segments(QPolygonF([center, center]), center),
+            [],
+        )
+
+    def test_basic_toolbar_icons_render_non_empty_bounds(self) -> None:
+        for icon in (
+            self.factory.icon_add_sheet(),
+            self.factory.icon_info(),
+            self.factory.icon_bond_double(),
+            self.factory.icon_bond_triple(),
+            self.factory.icon_orbital(),
+            self.factory.icon_move(),
+        ):
+            self.assertIsNotNone(_opaque_bounds(icon.pixmap(30, 30).toImage()))
+
+    def test_arrow_preview_matrix_renders_special_cases(self) -> None:
+        for kind in ("reaction", "dotted", "curved_single", "curved_double", "equilibrium", "resonance", "inhibit"):
+            bounds = _opaque_bounds(self.factory.icon_arrow_preview(kind).pixmap(30, 30).toImage())
+            self.assertIsNotNone(bounds, kind)
+
+    def test_orbital_preview_matrix_renders_distinct_families(self) -> None:
+        for kind in ("s", "p", "sp", "sp2", "sp3", "d", "dz2"):
+            bounds = _opaque_bounds(self.factory.icon_orbital_preview(kind).pixmap(30, 30).toImage())
+            self.assertIsNotNone(bounds, kind)
+
+    def test_template_preview_matrix_covers_ring_fragment_and_text_variants(self) -> None:
+        labels = (
+            "Benzene",
+            "Naphthalene",
+            "18-Crown-6",
+            "Me",
+            "Vinyl",
+            "Carboxyl",
+            "Nitro",
+            "Unknown Template",
+        )
+        for label in labels:
+            bounds = _opaque_bounds(self.factory.icon_template_preview(label).pixmap(30, 30).toImage())
+            self.assertIsNotNone(bounds, label)
+
+    def test_template_icons_tolerate_empty_chair_geometry_and_zero_rect(self) -> None:
+        with mock.patch.object(self.factory, "chair_icon_points", return_value=QPolygonF()):
+            self.assertIsNone(_opaque_bounds(self.factory.icon_templates().pixmap(30, 30).toImage()))
+            self.assertIsNone(
+                _opaque_bounds(self.factory.icon_template_preview("Cyclohexane (Chair)").pixmap(30, 30).toImage())
+            )

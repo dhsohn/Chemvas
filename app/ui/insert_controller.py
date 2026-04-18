@@ -52,6 +52,9 @@ class InsertController:
             smiles_center=smiles_center,
         )
 
+    def insert_session_state(self) -> InsertSessionState:
+        return self._insert_session_state()
+
     def _apply_insert_session_state(self, state: InsertSessionState) -> None:
         template_was_active = self.canvas._template_insert_active
         smiles_was_active = self.canvas._smiles_insert_active
@@ -65,6 +68,9 @@ class InsertController:
             self._clear_template_preview()
         if smiles_was_active and not state.smiles_active:
             self._clear_smiles_preview()
+
+    def apply_insert_session_state(self, state: InsertSessionState) -> None:
+        self._apply_insert_session_state(state)
 
     def begin_ring_template_insert(self, ring_size: int, style: str = "regular") -> None:
         next_state = begin_template_insert_state(self._insert_session_state(), ring_size, style)
@@ -129,6 +135,9 @@ class InsertController:
         next_state = cancel_smiles_insert_state(self._insert_session_state())
         self._apply_insert_session_state(next_state)
 
+    def cancel_smiles_insert(self) -> None:
+        self._cancel_smiles_insert()
+
     def _commit_smiles_insert(self, pos: QPointF) -> None:
         plan = plan_smiles_commit(
             self.canvas._smiles_preview_model,
@@ -148,6 +157,9 @@ class InsertController:
             return
         self._cancel_smiles_insert()
 
+    def commit_smiles_insert(self, pos: QPointF) -> None:
+        self._commit_smiles_insert(pos)
+
     def _clear_smiles_preview(self) -> None:
         (
             self.canvas._smiles_preview_items,
@@ -155,11 +167,17 @@ class InsertController:
             self.canvas._smiles_preview_atom_items,
         ) = clear_smiles_preview_helper(self.canvas.scene(), self.canvas._smiles_preview_items)
 
+    def clear_smiles_preview(self) -> None:
+        self._clear_smiles_preview()
+
     def _smiles_preview_snapshot(self):
         return smiles_preview_snapshot_helper(
             self.canvas._smiles_preview_bond_items,
             self.canvas._smiles_preview_atom_items,
         )
+
+    def smiles_preview_snapshot(self):
+        return self._smiles_preview_snapshot()
 
     def _render_smiles_preview(self, pos: QPointF) -> None:
         atom_radius = max(0.6, self.canvas.renderer.style.bond_line_width * 0.6)
@@ -190,9 +208,15 @@ class InsertController:
             action=preview_plan.action,
         )
 
+    def render_smiles_preview(self, pos: QPointF) -> None:
+        self._render_smiles_preview(pos)
+
     def _cancel_template_insert(self) -> None:
         next_state = cancel_template_insert_state(self._insert_session_state())
         self._apply_insert_session_state(next_state)
+
+    def cancel_template_insert(self) -> None:
+        self._cancel_template_insert()
 
     def _template_insert_request(self, pos: QPointF) -> TemplateInsertRequest | None:
         return build_template_insert_request(
@@ -200,6 +224,9 @@ class InsertController:
             cursor_pos=(pos.x(), pos.y()),
             bond_id=self.canvas._find_bond_near(pos, self.canvas.renderer.style.bond_length_px * 0.35),
         )
+
+    def template_insert_request(self, pos: QPointF) -> TemplateInsertRequest | None:
+        return self._template_insert_request(pos)
 
     def _template_point_resolvers(self) -> TemplatePointResolvers:
         return TemplatePointResolvers(
@@ -211,6 +238,9 @@ class InsertController:
             template_points_for_bond=self._resolve_template_points_for_template_bond,
         )
 
+    def template_point_resolvers(self) -> TemplatePointResolvers:
+        return self._template_point_resolvers()
+
     def _resolve_ring_points_for_template(
         self,
         center: tuple[float, float],
@@ -219,6 +249,14 @@ class InsertController:
     ) -> list[tuple[float, float]]:
         points = self.canvas._ring_points(QPointF(*center), n, radius=radius)
         return [(point.x(), point.y()) for point in points]
+
+    def resolve_ring_points_for_template(
+        self,
+        center: tuple[float, float],
+        n: int,
+        radius: float | None,
+    ) -> list[tuple[float, float]]:
+        return self._resolve_ring_points_for_template(center, n, radius)
 
     def _resolve_regular_ring_points_for_template_bond(
         self,
@@ -231,13 +269,27 @@ class InsertController:
             return None
         return [(point.x(), point.y()) for point in result[0]]
 
+    def resolve_regular_ring_points_for_template_bond(
+        self,
+        n: int,
+        bond_id: int,
+        center: tuple[float, float],
+    ) -> list[tuple[float, float]] | None:
+        return self._resolve_regular_ring_points_for_template_bond(n, bond_id, center)
+
     def _resolve_chair_points_for_template(self, center: tuple[float, float]) -> list[tuple[float, float]]:
         points = self.canvas._cyclohexane_chair_points(QPointF(*center))
         return [(point.x(), point.y()) for point in points]
 
+    def resolve_chair_points_for_template(self, center: tuple[float, float]) -> list[tuple[float, float]]:
+        return self._resolve_chair_points_for_template(center)
+
     def _resolve_boat_points_for_template(self, center: tuple[float, float]) -> list[tuple[float, float]]:
         points = self.canvas._cyclohexane_boat_points(QPointF(*center))
         return [(point.x(), point.y()) for point in points]
+
+    def resolve_boat_points_for_template(self, center: tuple[float, float]) -> list[tuple[float, float]]:
+        return self._resolve_boat_points_for_template(center)
 
     def _resolve_template_points_for_template_bond(
         self,
@@ -254,6 +306,14 @@ class InsertController:
             return None
         return [(point.x(), point.y()) for point in result[0]]
 
+    def resolve_template_points_for_template_bond(
+        self,
+        points_local: list[tuple[float, float]],
+        bond_id: int,
+        center: tuple[float, float],
+    ) -> list[tuple[float, float]] | None:
+        return self._resolve_template_points_for_template_bond(points_local, bond_id, center)
+
     @staticmethod
     def _template_points_from_pairs(
         points: list[tuple[float, float]] | None,
@@ -264,6 +324,9 @@ class InsertController:
 
     def _bond_merge_seed(self, bond_id: int | None) -> list[tuple[int, float, float]]:
         return self._insert_commit_service._bond_merge_seed(bond_id)
+
+    def bond_merge_seed(self, bond_id: int | None) -> list[tuple[int, float, float]]:
+        return self._bond_merge_seed(bond_id)
 
     def _commit_template_insert(self, pos: QPointF) -> None:
         request = self._template_insert_request(pos)
@@ -287,12 +350,18 @@ class InsertController:
             return
         self._cancel_template_insert()
 
+    def commit_template_insert(self, pos: QPointF) -> None:
+        self._commit_template_insert(pos)
+
     def _clear_template_preview(self) -> None:
         (
             self.canvas._template_preview_items,
             self.canvas._template_preview_lines,
             self.canvas._template_preview_dots,
         ) = clear_template_preview_helper(self.canvas.scene(), self.canvas._template_preview_items)
+
+    def clear_template_preview(self) -> None:
+        self._clear_template_preview()
 
     def _render_template_preview(self, pos: QPointF) -> None:
         request = self._template_insert_request(pos)
@@ -334,6 +403,9 @@ class InsertController:
             existing_dots=self.canvas._template_preview_dots,
             action=preview_plan.action,
         )
+
+    def render_template_preview(self, pos: QPointF) -> None:
+        self._render_template_preview(pos)
 
 
 __all__ = ["InsertController"]

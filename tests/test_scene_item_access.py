@@ -10,6 +10,7 @@ if str(APP_ROOT) not in sys.path:
 
 from ui.scene_item_access import (
     apply_scene_item_state,
+    attach_scene_item,
     create_scene_item_from_state,
     remove_scene_item,
     restore_arrow_from_state,
@@ -59,6 +60,9 @@ class _Canvas:
     def restore_scene_item(self, item) -> None:
         self.calls.append(("canvas_restore", item))
 
+    def attach_scene_item(self, item) -> None:
+        self.calls.append(("canvas_attach", item))
+
     def remove_scene_item(self, item) -> None:
         self.calls.append(("canvas_remove", item))
 
@@ -100,6 +104,9 @@ class _Controller:
     def restore_scene_item(self, item) -> None:
         self.canvas.calls.append(("controller_restore", item))
 
+    def attach_scene_item(self, item) -> None:
+        self.canvas.calls.append(("controller_attach", item))
+
     def remove_scene_item(self, item) -> None:
         self.canvas.calls.append(("controller_remove", item))
 
@@ -113,6 +120,7 @@ class SceneItemAccessTest(unittest.TestCase):
         self.assertEqual(restore_ring_from_state(canvas, {"kind": "ring"}), ("controller_ring", {"kind": "ring"}))
         self.assertEqual(restore_note_from_state(canvas, {"kind": "note"}), ("controller_note", {"kind": "note"}))
         self.assertEqual(create_scene_item_from_state(canvas, {"id": 1}), ("controller", {"id": 1}))
+        attach_scene_item(canvas, item)
         restore_scene_item(canvas, item)
         remove_scene_item(canvas, item)
         apply_scene_item_state(canvas, item, {"x": 2})
@@ -133,6 +141,7 @@ class SceneItemAccessTest(unittest.TestCase):
                 ("controller_restore_ring", {"kind": "ring"}),
                 ("controller_restore_note", {"kind": "note"}),
                 ("controller_create", {"id": 1}),
+                ("controller_attach", item),
                 ("controller_restore", item),
                 ("controller_remove", item),
                 ("controller_apply", item, {"x": 2}),
@@ -150,6 +159,7 @@ class SceneItemAccessTest(unittest.TestCase):
         self.assertEqual(restore_ring_from_state(canvas, {"kind": "ring"}), ("canvas_ring", {"kind": "ring"}))
         self.assertEqual(restore_note_from_state(canvas, {"kind": "note"}), ("canvas_note", {"kind": "note"}))
         self.assertEqual(create_scene_item_from_state(canvas, {"id": 1}), ("canvas", {"id": 1}))
+        attach_scene_item(canvas, item)
         restore_scene_item(canvas, item)
         remove_scene_item(canvas, item)
         apply_scene_item_state(canvas, item, {"x": 2})
@@ -167,6 +177,7 @@ class SceneItemAccessTest(unittest.TestCase):
                 ("canvas_restore_ring", {"kind": "ring"}),
                 ("canvas_restore_note", {"kind": "note"}),
                 ("canvas_create", {"id": 1}),
+                ("canvas_attach", item),
                 ("canvas_restore", item),
                 ("canvas_remove", item),
                 ("canvas_apply", item, {"x": 2}),

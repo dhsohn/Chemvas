@@ -1,17 +1,27 @@
 from __future__ import annotations
 
 from core.history import AddSceneItemsCommand, DeleteSceneItemsCommand, UpdateSceneItemCommand
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QBrush, QColor, QFont, QPen, QTextBlockFormat, QTextCursor
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsRectItem, QGraphicsTextItem
 
 from ui.graphics_items import NoSelectRectItem
-from ui.scene_item_access import remove_scene_item
+from ui.scene_item_access import attach_scene_item, remove_scene_item
 
 
 class CanvasNoteController:
     def __init__(self, canvas) -> None:
         self.canvas = canvas
+
+    def create_text_note(self, pos: QPointF, text: str) -> QGraphicsTextItem:
+        item = self.canvas._new_note_item()
+        item.setPlainText(text)
+        item._last_text = text
+        item.setData(0, "note")
+        item.setPos(pos)
+        attach_scene_item(self.canvas, item)
+        self.apply_note_style(item)
+        return item
 
     def handle_note_focus_out(self, item: QGraphicsTextItem) -> None:
         text = item.toPlainText().strip()

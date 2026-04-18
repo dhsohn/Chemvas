@@ -186,6 +186,31 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
 
         self.assertFalse(controller.toggle_item_selection(_FakeItem("atom", data1="bad")))
 
+    def test_nearest_hit_helpers_delegate_to_hit_testing_service(self) -> None:
+        service = SimpleNamespace(
+            scene_pos_from_event=mock.Mock(),
+            item_at_scene_pos=mock.Mock(),
+            item_at_event=mock.Mock(),
+            grid_cell_size=mock.Mock(),
+            cell_coords=mock.Mock(),
+            ensure_spatial_index=mock.Mock(),
+            rebuild_spatial_index=mock.Mock(),
+            find_atom_near=mock.Mock(),
+            find_bond_near=mock.Mock(),
+            distance_point_to_segment=mock.Mock(),
+            nearest_atom_hit=mock.Mock(return_value=(1, 1.25)),
+            nearest_bond_hit=mock.Mock(return_value=(2, 2.5)),
+            bond_id_from_event=mock.Mock(),
+        )
+        canvas = _make_canvas(_hit_testing_service=service)
+        controller = SelectionController(canvas)
+        pos = QPointF(3.0, 4.0)
+
+        self.assertEqual(controller._nearest_atom_hit(pos), (1, 1.25))
+        self.assertEqual(controller._nearest_bond_hit(pos), (2, 2.5))
+        service.nearest_atom_hit.assert_called_once_with(pos)
+        service.nearest_bond_hit.assert_called_once_with(pos)
+
     def test_preferred_structure_hit_at_scene_pos_prefers_atom_hit_ring_atom_and_fallback(self) -> None:
         atom_item = _FakeItem("atom", data1=1)
         ring_item = _FakeItem("ring", data2=[1, 2, 3])

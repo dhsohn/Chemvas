@@ -2,11 +2,19 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PyQt6.QtGui import QColor
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor, QPen
 
+from core.history import (
+    ChangeAtomLabelCommand,
+    CompositeCommand,
+    DeleteAtomsCommand,
+    DeleteBondCommand,
+    UpdateBondCommand,
+)
 from core.model import Bond
 from ui.bond_style_logic import STANDARD_BOND_STYLES
-from ui.graphics_items import AtomLabelItem
+from ui.graphics_items import AtomDotItem, AtomLabelItem
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
@@ -15,6 +23,138 @@ if TYPE_CHECKING:
 class AtomLabelService:
     def __init__(self, canvas: CanvasView) -> None:
         self.canvas = canvas
+
+    def atom_item_for_id(self, atom_id: int):
+        return self.canvas.atom_items.get(atom_id) or self.canvas.atom_dots.get(atom_id)
+
+    def ensure_carbon_dot(self, atom_id: int) -> None:
+        if atom_id in self.canvas.atom_dots:
+            return
+        atom = self.canvas.model.atoms.get(atom_id)
+        if atom is None:
+            return
+        radius = max(0.6, self.canvas.renderer.style.bond_line_width * 0.6)
+        pick_radius = self.canvas._atom_pick_radius()
+        dot = AtomDotItem(
+            -radius,
+            -radius,
+            radius * 2.0,
+            radius * 2.0,
+            hit_padding=max(0.0, pick_radius - radius),
+        )
+        dot.setBrush(self.canvas._implicit_carbon_dot_brush())
+        dot.setPen(QPen(Qt.PenStyle.NoPen))
+        dot.setZValue(3)
+        dot.setData(0, "atom")
+        dot.setData(1, atom_id)
+        self.canvas._make_selectable(dot)
+        dot.setPos(atom.x, atom.y)
+        self.canvas.scene().addItem(dot)
+        self.canvas.atom_dots[atom_id] = dot
+
+    def remove_carbon_dot(self, atom_id: int) -> None:
+        dot = self.canvas.atom_dots.pop(atom_id, None)
+        if dot is not None:
+            self.canvas.scene().removeItem(dot)
+
+    def position_label(self, item, x: float, y: float) -> None:
+        rect = item.boundingRect()
+        offset = self.canvas.renderer.style.atom_label_offset_px
+        item.setPos(x - rect.center().x() + offset, y - rect.center().y() - offset)
+
+    def restore_atom_item_interaction(
+        self,
+        atom_id: int,
+        previous_item,
+        *,
+        was_selected: bool,
+        refresh_hover: bool,
+    ) -> None:
+        replacement_item = self.atom_item_for_id(atom_id)
+        if was_selected and replacement_item is not None and replacement_item is not previous_item:
+            replacement_item.setSelected(True)
+        if refresh_hover:
+            self.canvas._refresh_hover_from_cursor()
+
+    def record_label_change(
+        self,
+        atom_id: int,
+        before_element: str,
+        before_explicit_label: bool,
+        before_smiles_input: str | None,
+        merge_ids: list[int],
+        merge_info: dict,
+    ) -> None:
+        if not self.canvas._history_enabled:
+            return
+        atom = self.canvas.model.atoms.get(atom_id)
+        after_element = atom.element if atom is not None else before_element
+        after_explicit_label = atom.explicit_label if atom is not None else before_explicit_label
+        after_smiles_input = self.canvas.last_smiles_input
+        commands = []
+        if (
+            before_element != after_element
+            or before_explicit_label != after_explicit_label
+            or before_smiles_input != after_smiles_input
+        ):
+            commands.append(
+                ChangeAtomLabelCommand(
+                    atom_id=atom_id,
+                    before_element=before_element,
+                    after_element=after_element,
+                    before_explicit_label=before_explicit_label,
+                    after_explicit_label=after_explicit_label,
+                    before_smiles_input=before_smiles_input,
+                    after_smiles_input=after_smiles_input,
+                )
+            )
+        if merge_ids:
+            bond_before_states = merge_info.get("bond_before_states", {})
+            deleted_bond_ids = set(merge_info.get("deleted_bond_ids", []))
+            for bond_id, before_state in bond_before_states.items():
+                if bond_id in deleted_bond_ids:
+                    commands.append(
+                        DeleteBondCommand(
+                            bond_id=bond_id,
+                            bond_state=before_state,
+                            before_smiles_input=before_smiles_input,
+                            after_smiles_input=after_smiles_input,
+                        )
+                    )
+                    continue
+                bond = self.canvas.model.bonds[bond_id]
+                if bond is None:
+                    continue
+                after_state = self.canvas._bond_state_dict(bond)
+                if before_state != after_state:
+                    commands.append(
+                        UpdateBondCommand(
+                            bond_id=bond_id,
+                            before_state=before_state,
+                            after_state=after_state,
+                            before_smiles_input=before_smiles_input,
+                            after_smiles_input=after_smiles_input,
+                        )
+                    )
+            atom_states = merge_info.get("atom_states", {})
+            if atom_states:
+                commands.append(
+                    DeleteAtomsCommand(
+                        atom_states=atom_states,
+                        mark_states=[],
+                        before_next_atom_id=self.canvas.model.next_atom_id,
+                        after_next_atom_id=self.canvas.model.next_atom_id,
+                        before_smiles_input=before_smiles_input,
+                        after_smiles_input=after_smiles_input,
+                        remove_marks=False,
+                    )
+                )
+        if not commands:
+            return
+        if len(commands) == 1:
+            self.canvas._push_command(commands[0])
+            return
+        self.canvas._push_command(CompositeCommand(commands))
 
     def merge_overlapping_atoms(self, atom_id: int) -> tuple[list[int], dict]:
         atom = self.canvas.model.atoms.get(atom_id)
@@ -122,7 +262,7 @@ class AtomLabelService:
         before_element = atom.element
         before_explicit_label = atom.explicit_label
         before_smiles_input = self.canvas.last_smiles_input
-        previous_atom_item = self.canvas._atom_item_for_id(atom_id)
+        previous_atom_item = self.atom_item_for_id(atom_id)
         was_selected = bool(previous_atom_item is not None and previous_atom_item.isSelected())
         refresh_hover = self.canvas.hover_atom_id == atom_id
         if text:
@@ -146,16 +286,16 @@ class AtomLabelService:
                 self.canvas.scene().removeItem(existing_item)
                 self.canvas.atom_items.pop(atom_id, None)
             if atom.element == "C":
-                self.canvas._ensure_carbon_dot(atom_id)
+                self.ensure_carbon_dot(atom_id)
             self.canvas._redraw_connected_bonds(atom_id)
-            self.canvas._restore_atom_item_interaction(
+            self.restore_atom_item_interaction(
                 atom_id,
                 previous_atom_item,
                 was_selected=was_selected,
                 refresh_hover=refresh_hover,
             )
             if record:
-                self.canvas._record_label_change(
+                self.record_label_change(
                     atom_id,
                     before_element,
                     before_explicit_label,
@@ -192,18 +332,18 @@ class AtomLabelService:
         text_item.setZValue(3)
         self.canvas._make_selectable(text_item)
         text_item.setPlainText(text)
-        self.canvas._position_label(text_item, atom.x, atom.y)
-        self.canvas._remove_carbon_dot(atom_id)
+        self.position_label(text_item, atom.x, atom.y)
+        self.remove_carbon_dot(atom_id)
         merge_ids, merge_info = self.merge_overlapping_atoms(atom_id) if allow_merge else ([], {})
         self.canvas._redraw_connected_bonds(atom_id)
-        self.canvas._restore_atom_item_interaction(
+        self.restore_atom_item_interaction(
             atom_id,
             previous_atom_item,
             was_selected=was_selected,
             refresh_hover=refresh_hover,
         )
         if record:
-            self.canvas._record_label_change(
+            self.record_label_change(
                 atom_id,
                 before_element,
                 before_explicit_label,

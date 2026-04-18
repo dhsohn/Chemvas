@@ -135,3 +135,43 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
             offset=QPointF(1.5, -2.5),
             record=False,
         )
+
+    def test_mark_build_wrappers_delegate_to_scene_decoration_build_service(self) -> None:
+        build_service = mock.Mock()
+        mark_item = object()
+        center = QPointF(6.0, 7.0)
+        view = SimpleNamespace(_scene_decoration_build_service=build_service)
+
+        build_service.build_mark_item.return_value = mark_item
+        build_service.mark_center.return_value = center
+
+        self.assertIs(CanvasView._build_mark_item(view, "plus"), mark_item)
+        self.assertEqual(CanvasView._mark_center(view, mark_item), center)
+        CanvasView._set_mark_center(view, mark_item, QPointF(8.0, 9.0))
+
+        build_service.build_mark_item.assert_called_once_with("plus")
+        build_service.mark_center.assert_called_once_with(mark_item)
+        build_service.set_mark_center.assert_called_once_with(mark_item, QPointF(8.0, 9.0))
+
+    def test_mark_scene_wrappers_delegate_to_mark_scene_service(self) -> None:
+        scene_service = mock.Mock()
+        mark_item = object()
+        center = QPointF(4.0, 5.0)
+        offset = QPointF(1.5, -2.5)
+        view = SimpleNamespace(_canvas_mark_scene_service=scene_service)
+
+        scene_service.add_mark_for_atom.return_value = mark_item
+        scene_service.mark_offset_from_click.return_value = offset
+        scene_service.mark_center_for_pointer.return_value = center
+
+        self.assertIs(CanvasView.add_mark_for_atom(view, 7, QPointF(12.0, 13.0), kind="minus", record=False), mark_item)
+        self.assertEqual(CanvasView._mark_offset_from_click(view, 7, QPointF(12.0, 13.0), kind="minus"), offset)
+        CanvasView._remove_mark_item(view, mark_item)
+        CanvasView._remove_marks_for_atom(view, 7)
+        self.assertEqual(CanvasView._mark_center_for_pointer(view, QPointF(12.0, 13.0), 7, kind="minus"), center)
+
+        scene_service.add_mark_for_atom.assert_called_once_with(7, QPointF(12.0, 13.0), kind="minus", record=False)
+        scene_service.mark_offset_from_click.assert_called_once_with(7, QPointF(12.0, 13.0), kind="minus")
+        scene_service.remove_mark_item.assert_called_once_with(mark_item)
+        scene_service.remove_marks_for_atom.assert_called_once_with(7)
+        scene_service.mark_center_for_pointer.assert_called_once_with(QPointF(12.0, 13.0), 7, kind="minus")

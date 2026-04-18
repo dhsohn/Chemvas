@@ -114,7 +114,7 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertEqual(canvas.updated_boxes, [item])
         self.assertEqual(canvas.removed_items, [item])
 
-    def test_chemdraw_shortcut_helpers_dispatch_to_expected_actions(self) -> None:
+    def test_shortcut_modifiers_mask_meta_bits(self) -> None:
         mask_event = _FakeKeyEvent(
             Qt.Key.Key_H,
             Qt.KeyboardModifier.ShiftModifier
@@ -126,51 +126,28 @@ class CanvasViewUnitTest(unittest.TestCase):
             Qt.KeyboardModifier.ShiftModifier | Qt.KeyboardModifier.ControlModifier,
         )
 
-        view = SimpleNamespace(
-            _shortcut_modifiers=lambda event: CanvasView._shortcut_modifiers(event),
-            flip_horizontal=mock.Mock(),
-            flip_vertical=mock.Mock(),
-            set_tool=mock.Mock(),
-            set_bond_style=mock.Mock(),
-        )
-        self.assertTrue(CanvasView._handle_chemdraw_object_shortcut(view, _FakeKeyEvent(Qt.Key.Key_H, Qt.KeyboardModifier.ShiftModifier | Qt.KeyboardModifier.ControlModifier)))
-        view.flip_horizontal.assert_called_once()
-        self.assertTrue(CanvasView._handle_chemdraw_object_shortcut(view, _FakeKeyEvent(Qt.Key.Key_V, Qt.KeyboardModifier.ShiftModifier | Qt.KeyboardModifier.ControlModifier)))
-        view.flip_vertical.assert_called_once()
-        self.assertFalse(CanvasView._handle_chemdraw_object_shortcut(view, _FakeKeyEvent(Qt.Key.Key_X)))
-
-        self.assertTrue(CanvasView._handle_chemdraw_generic_hotkey(view, _FakeKeyEvent(Qt.Key.Key_Space)))
-        view.set_tool.assert_called_with("select")
-        self.assertTrue(CanvasView._handle_chemdraw_generic_hotkey(view, _FakeKeyEvent(Qt.Key.Key_X)))
-        view.set_bond_style.assert_called_with("single", 1)
-        self.assertTrue(CanvasView._handle_chemdraw_generic_hotkey(view, _FakeKeyEvent(Qt.Key.Key_G, Qt.KeyboardModifier.ShiftModifier)))
-        self.assertTrue(CanvasView._handle_chemdraw_generic_hotkey(view, _FakeKeyEvent(Qt.Key.Key_D, Qt.KeyboardModifier.AltModifier)))
-        self.assertFalse(CanvasView._handle_chemdraw_generic_hotkey(view, _FakeKeyEvent(Qt.Key.Key_Z)))
-
-    def test_handle_chemdraw_shortcut_routes_between_object_atom_bond_and_generic_handlers(self) -> None:
-        view = SimpleNamespace(
-            _handle_chemdraw_object_shortcut=mock.Mock(return_value=False),
-            _handle_chemdraw_atom_hotkey=mock.Mock(return_value=True),
-            _handle_chemdraw_bond_hotkey=mock.Mock(return_value=True),
-            _handle_chemdraw_generic_hotkey=mock.Mock(return_value=True),
-            hover_atom_id=4,
-            hover_bond_id=None,
-        )
+    def test_chemdraw_shortcut_wrappers_delegate_to_service(self) -> None:
+        service = mock.Mock()
+        view = SimpleNamespace(_chemdraw_shortcut_service=service)
         event = _FakeKeyEvent(Qt.Key.Key_C, text="c")
-        self.assertTrue(CanvasView._handle_chemdraw_shortcut(view, event))
-        view._handle_chemdraw_atom_hotkey.assert_called_once_with(event, 4)
 
-        view.hover_atom_id = None
-        view.hover_bond_id = 7
-        self.assertTrue(CanvasView._handle_chemdraw_shortcut(view, event))
-        view._handle_chemdraw_bond_hotkey.assert_called_once_with(event, 7)
+        service.handle_shortcut.return_value = True
+        service.handle_object_shortcut.return_value = True
+        service.handle_generic_hotkey.return_value = True
+        service.handle_atom_hotkey.return_value = True
+        service.handle_bond_hotkey.return_value = True
 
-        view.hover_bond_id = None
         self.assertTrue(CanvasView._handle_chemdraw_shortcut(view, event))
-        view._handle_chemdraw_generic_hotkey.assert_called_once_with(event)
+        self.assertTrue(CanvasView._handle_chemdraw_object_shortcut(view, event))
+        self.assertTrue(CanvasView._handle_chemdraw_generic_hotkey(view, event))
+        self.assertTrue(CanvasView._handle_chemdraw_atom_hotkey(view, event, 4))
+        self.assertTrue(CanvasView._handle_chemdraw_bond_hotkey(view, event, 7))
 
-        view._handle_chemdraw_object_shortcut.return_value = True
-        self.assertTrue(CanvasView._handle_chemdraw_shortcut(view, event))
+        service.handle_shortcut.assert_called_once_with(event)
+        service.handle_object_shortcut.assert_called_once_with(event)
+        service.handle_generic_hotkey.assert_called_once_with(event)
+        service.handle_atom_hotkey.assert_called_once_with(event, 4)
+        service.handle_bond_hotkey.assert_called_once_with(event, 7)
 
     def test_selection_helpers_and_geometry_helpers_cover_common_paths(self) -> None:
         self.assertTrue(CanvasView._selection_target_item(_FakeItem("atom")))
@@ -283,60 +260,7 @@ class CanvasViewUnitTest(unittest.TestCase):
             7.0710678118654755,
         )
 
-    def test_atom_hotkey_routes_to_prompt_marks_labels_and_sprouts(self) -> None:
-        calls: list[tuple] = []
-        fake_view = SimpleNamespace(
-            model=SimpleNamespace(atoms={1: Atom("C", 1.0, 2.0)}, bonds=[]),
-            _shortcut_modifiers=lambda event: CanvasView._shortcut_modifiers(event),
-            prompt_atom_label=lambda atom_id: calls.append(("prompt", atom_id)),
-            _atom_point=lambda atom_id: QPointF(1.0, 2.0),
-            add_mark_for_atom=lambda atom_id, pos, kind: calls.append(("mark", atom_id, pos.x(), pos.y(), kind)),
-            _atom_label_service=SimpleNamespace(
-                add_or_update_atom_label=lambda atom_id, text, show_carbon=True: calls.append(
-                    ("label", atom_id, text, show_carbon)
-                )
-            ),
-            _sprout_bond_from_atom=lambda atom_id, style, order, cyclic=False: calls.append(("bond", atom_id, style, order, cyclic)),
-            _sprout_acetyl_from_atom=lambda atom_id: calls.append(("acetyl", atom_id)),
-            _sprout_benzene_from_atom=lambda atom_id: calls.append(("benzene", atom_id)),
-            _sprout_regular_ring_from_atom=lambda atom_id, n: calls.append(("ring", atom_id, n)),
-        )
-
-        self.assertFalse(CanvasView._handle_chemdraw_atom_hotkey(fake_view, _FakeKeyEvent(Qt.Key.Key_C, text="c"), 99))
-        self.assertFalse(
-            CanvasView._handle_chemdraw_atom_hotkey(
-                fake_view,
-                _FakeKeyEvent(Qt.Key.Key_C, Qt.KeyboardModifier.ControlModifier, text="c"),
-                1,
-            )
-        )
-        self.assertTrue(CanvasView._handle_chemdraw_atom_hotkey(fake_view, _FakeKeyEvent(Qt.Key.Key_Return), 1))
-        self.assertTrue(CanvasView._handle_chemdraw_atom_hotkey(fake_view, _FakeKeyEvent(Qt.Key.Key_Plus, text="+"), 1))
-        self.assertTrue(CanvasView._handle_chemdraw_atom_hotkey(fake_view, _FakeKeyEvent(Qt.Key.Key_Minus, text="-"), 1))
-        self.assertTrue(CanvasView._handle_chemdraw_atom_hotkey(fake_view, _FakeKeyEvent(Qt.Key.Key_F, text="F"), 1))
-        self.assertTrue(CanvasView._handle_chemdraw_atom_hotkey(fake_view, _FakeKeyEvent(Qt.Key.Key_0, text="0"), 1))
-        self.assertTrue(CanvasView._handle_chemdraw_atom_hotkey(fake_view, _FakeKeyEvent(Qt.Key.Key_2, text="2"), 1))
-        self.assertTrue(CanvasView._handle_chemdraw_atom_hotkey(fake_view, _FakeKeyEvent(Qt.Key.Key_3, text="3"), 1))
-        self.assertTrue(CanvasView._handle_chemdraw_atom_hotkey(fake_view, _FakeKeyEvent(Qt.Key.Key_4, text="4"), 1))
-        self.assertTrue(CanvasView._handle_chemdraw_atom_hotkey(fake_view, _FakeKeyEvent(Qt.Key.Key_6, text="6"), 1))
-        self.assertTrue(CanvasView._handle_chemdraw_atom_hotkey(fake_view, _FakeKeyEvent(Qt.Key.Key_8, text="8"), 1))
-        self.assertTrue(CanvasView._handle_chemdraw_atom_hotkey(fake_view, _FakeKeyEvent(Qt.Key.Key_Z, text="z"), 1))
-        self.assertTrue(CanvasView._handle_chemdraw_atom_hotkey(fake_view, _FakeKeyEvent(Qt.Key.Key_V, text="v"), 1))
-        self.assertFalse(CanvasView._handle_chemdraw_atom_hotkey(fake_view, _FakeKeyEvent(Qt.Key.Key_unknown, text=""), 1))
-        self.assertIn(("prompt", 1), calls)
-        self.assertIn(("mark", 1, 1.0, 2.0, "plus"), calls)
-        self.assertIn(("mark", 1, 1.0, 2.0, "minus"), calls)
-        self.assertIn(("label", 1, "CF3", True), calls)
-        self.assertIn(("bond", 1, "single", 1, True), calls)
-        self.assertIn(("acetyl", 1), calls)
-        self.assertIn(("benzene", 1), calls)
-        self.assertIn(("ring", 1, 6), calls)
-        self.assertIn(("bond", 1, "double", 2, False), calls)
-        self.assertIn(("bond", 1, "triple", 3, False), calls)
-        self.assertIn(("ring", 1, 3), calls)
-
     def test_bond_hotkey_visible_label_and_atom_point_helpers(self) -> None:
-        calls: list[tuple] = []
         fake_view = SimpleNamespace(
             model=SimpleNamespace(
                 atoms={
@@ -346,46 +270,13 @@ class CanvasViewUnitTest(unittest.TestCase):
                 bonds=[Bond(1, 2, 1), None],
             ),
             atom_items={1: object()},
-            _shortcut_modifiers=lambda event: CanvasView._shortcut_modifiers(event),
-            apply_bond_style=lambda bond_id, style, order: calls.append(("style", bond_id, style, order)),
-            _fuse_benzene_to_bond=lambda bond_id: calls.append(("benzene", bond_id)),
-            _fuse_regular_ring_to_bond=lambda bond_id, n: calls.append(("ring", bond_id, n)),
-            _fuse_chair_to_bond=lambda bond_id, mirrored=False: calls.append(("chair", bond_id, mirrored)),
         )
 
-        self.assertFalse(CanvasView._handle_chemdraw_bond_hotkey(fake_view, _FakeKeyEvent(Qt.Key.Key_1, text="1"), 1))
-        self.assertFalse(
-            CanvasView._handle_chemdraw_bond_hotkey(
-                fake_view,
-                _FakeKeyEvent(Qt.Key.Key_1, Qt.KeyboardModifier.ControlModifier, text="1"),
-                0,
-            )
-        )
-        self.assertTrue(CanvasView._handle_chemdraw_bond_hotkey(fake_view, _FakeKeyEvent(Qt.Key.Key_B, Qt.KeyboardModifier.ShiftModifier, text="B"), 0))
-        self.assertTrue(CanvasView._handle_chemdraw_bond_hotkey(fake_view, _FakeKeyEvent(Qt.Key.Key_H, Qt.KeyboardModifier.ShiftModifier, text="H"), 0))
-        self.assertTrue(CanvasView._handle_chemdraw_bond_hotkey(fake_view, _FakeKeyEvent(Qt.Key.Key_1, text="1"), 0))
-        self.assertTrue(CanvasView._handle_chemdraw_bond_hotkey(fake_view, _FakeKeyEvent(Qt.Key.Key_2, text="2"), 0))
-        self.assertTrue(CanvasView._handle_chemdraw_bond_hotkey(fake_view, _FakeKeyEvent(Qt.Key.Key_3, text="3"), 0))
-        self.assertTrue(CanvasView._handle_chemdraw_bond_hotkey(fake_view, _FakeKeyEvent(Qt.Key.Key_B, text="b"), 0))
-        self.assertTrue(CanvasView._handle_chemdraw_bond_hotkey(fake_view, _FakeKeyEvent(Qt.Key.Key_W, text="w"), 0))
-        self.assertTrue(CanvasView._handle_chemdraw_bond_hotkey(fake_view, _FakeKeyEvent(Qt.Key.Key_H, text="h"), 0))
-        self.assertTrue(CanvasView._handle_chemdraw_bond_hotkey(fake_view, _FakeKeyEvent(Qt.Key.Key_A, text="a"), 0))
-        self.assertTrue(CanvasView._handle_chemdraw_bond_hotkey(fake_view, _FakeKeyEvent(Qt.Key.Key_6, text="6"), 0))
-        self.assertTrue(CanvasView._handle_chemdraw_bond_hotkey(fake_view, _FakeKeyEvent(Qt.Key.Key_0, text="0"), 0))
-        self.assertFalse(CanvasView._handle_chemdraw_bond_hotkey(fake_view, _FakeKeyEvent(Qt.Key.Key_X, text="x"), 0))
         self.assertTrue(CanvasView._atom_has_visible_label(fake_view, 1))
         fake_view.atom_items = {}
         self.assertFalse(CanvasView._atom_has_visible_label(fake_view, 1))
         self.assertTrue(CanvasView._atom_has_visible_label(fake_view, 2))
         self.assertEqual((CanvasView._atom_point(fake_view, 2).x(), CanvasView._atom_point(fake_view, 2).y()), (4.0, 5.0))
-        self.assertIn(("style", 0, "bold_in", 2), calls)
-        self.assertIn(("style", 0, "hash", 1), calls)
-        self.assertIn(("style", 0, "single", 1), calls)
-        self.assertIn(("style", 0, "double", 2), calls)
-        self.assertIn(("style", 0, "triple", 3), calls)
-        self.assertIn(("benzene", 0), calls)
-        self.assertIn(("ring", 0, 6), calls)
-        self.assertIn(("chair", 0, True), calls)
 
     def test_sprout_bond_endpoint_handles_default_and_cyclic_cases(self) -> None:
         fake_view = SimpleNamespace(
