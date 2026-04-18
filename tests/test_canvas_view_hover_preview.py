@@ -29,6 +29,7 @@ if QApplication is not None:
     from core.model import Atom, Bond
     from ui.bond_hover_preview_service import BondHoverPreviewService
     from ui.canvas_view import CanvasView
+    from ui.mark_hover_preview_service import MarkHoverPreviewService
 
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas view tests")
@@ -83,6 +84,7 @@ class CanvasViewHoverPreviewTest(unittest.TestCase):
         view._set_mark_center = lambda item, center: CanvasView._set_mark_center(view, item, center)
         view._add_atom_hover_indicator = lambda atom_id: CanvasView._add_atom_hover_indicator(view, atom_id)
         view._add_hover_preview_items = lambda items: CanvasView._add_hover_preview_items(view, items)
+        view._mark_hover_preview_service = MarkHoverPreviewService(view)
 
     def _bind_bond_hover_preview_service(self, view: SimpleNamespace) -> None:
         view._bond_hover_preview_service = BondHoverPreviewService(view)

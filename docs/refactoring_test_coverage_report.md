@@ -6,11 +6,11 @@
 ## 1. 현재 상태 요약
 
 - 실행 기준: `pytest --cov=app --cov-report=term-missing`
-- 결과: `812 passed in 11.94s`
+- 결과: `832 passed in 11.60s`
 - 전체 커버리지: `89%`
-- 첫 보고서 시점 대비: `+414 tests`, `+18%p`
+- 첫 보고서 시점 대비: `+434 tests`, `+18%p`
 
-이번 라운드로 `InsertController` 1차 정리는 이미 끝났고, `SceneOpsController`도 delete/clipboard/transform/paste orchestration 대부분이 helper/service로 빠진 상태다. 직전 턴에는 `scene_item_access`를 추가해서 `core/history.py`, `SceneOpsController`, note 삭제 경로, delete tool scene-item 삭제 경로가 공통 controller-first fallback을 쓰도록 통일했고, `SceneOpsController`의 flip/paste apply도 `CanvasView` public wrapper 대신 이 access helper를 경유하도록 정리했다. 이후 `scene_item_access`를 ring/note/arrow/`ts_bracket`/orbital restore까지 확장했고, `canvas_document_state`의 document restore도 direct controller 참조 대신 같은 helper를 쓰도록 바꿨다. 최근에는 `atom_label_access`를 추가해 label-change 경로도 service-first fallback으로 통일했고, `structure_build_service`로 ring/chain/model build orchestration을 분리했다. 이번 턴에는 여기에 `_add_bond_between_points()`와 `add_benzene_ring()`의 mutation+history orchestration, `_sprout_regular_ring_from_atom()` / `_fuse_regular_ring_to_bond()` / `_fuse_chair_to_bond()`의 ring/template growth wrapper, `_sprout_bond_from_atom()` / `_sprout_benzene_from_atom()` / `_sprout_acetyl_from_atom()` / `_fuse_benzene_to_bond()`의 atom/bond growth orchestration, 그리고 `_benzene_ring_points()`의 attach-bond / attach-atom / free-placement resolution까지 `StructureBuildService`로 이동했다. `_sprout_bond_endpoint()` / `_regular_ring_points_for_atom()` / `_regular_ring_points_for_bond()` / `_template_points_for_bond()`에 이어 free benzene hexagon 계산도 `structure_geometry_logic` pure helper로 분리했다. 이어서 bond 기반 ring occupancy polygon lookup을 `ring_occupancy_logic`로 뺐고, benzene hover preview orchestration은 `BenzenePreviewService`로 이동시켜 `_ring_polygon_points_for_bond()`, `_clear_benzene_preview()`, `_render_benzene_preview()`를 shim으로 줄였다. 이번 추가 턴에서는 bond hover preview 조합도 `BondHoverPreviewService`로 이동시켜 `_add_bond_style_hover_preview()`, `_add_bond_tool_hover_preview()`, no-atoms bond hover preview 경로를 shim 수준으로 축소했다. `add_mark()` / `add_arrow()` / `add_ts_bracket()` / `add_orbital()`의 scene-decoration add flow는 `SceneDecorationService`로 이동했다. 현재는 `CanvasView 3696 stmts / 82%`, `SceneOpsController 184 stmts / 98%`, `SceneItemController 131 stmts / 99%`, `canvas_document_state 94%`, `scene_item_access 100%`, `core/tools.py 93%`로, 남은 주 타깃은 `CanvasView`의 나머지 large orchestration 표면과 일부 호환용 pass-through다.
+이번 라운드로 `InsertController` 1차 정리는 이미 끝났고, `SceneOpsController`도 delete/clipboard/transform/paste orchestration 대부분이 helper/service로 빠진 상태다. 직전 턴에는 `scene_item_access`를 추가해서 `core/history.py`, `SceneOpsController`, note 삭제 경로, delete tool scene-item 삭제 경로가 공통 controller-first fallback을 쓰도록 통일했고, `SceneOpsController`의 flip/paste apply도 `CanvasView` public wrapper 대신 이 access helper를 경유하도록 정리했다. 이후 `scene_item_access`를 ring/note/arrow/`ts_bracket`/orbital restore까지 확장했고, `canvas_document_state`의 document restore도 direct controller 참조 대신 같은 helper를 쓰도록 바꿨다. 최근에는 `atom_label_access`를 추가해 label-change 경로도 service-first fallback으로 통일했고, `structure_build_service`로 ring/chain/model build orchestration을 분리했다. 이번 턴에는 여기에 `_add_bond_between_points()`와 `add_benzene_ring()`의 mutation+history orchestration, `_sprout_regular_ring_from_atom()` / `_fuse_regular_ring_to_bond()` / `_fuse_chair_to_bond()`의 ring/template growth wrapper, `_sprout_bond_from_atom()` / `_sprout_benzene_from_atom()` / `_sprout_acetyl_from_atom()` / `_fuse_benzene_to_bond()`의 atom/bond growth orchestration, 그리고 `_benzene_ring_points()`의 attach-bond / attach-atom / free-placement resolution까지 `StructureBuildService`로 이동했다. `_sprout_bond_endpoint()` / `_regular_ring_points_for_atom()` / `_regular_ring_points_for_bond()` / `_template_points_for_bond()`에 이어 free benzene hexagon 계산도 `structure_geometry_logic` pure helper로 분리했다. 이어서 bond 기반 ring occupancy polygon lookup을 `ring_occupancy_logic`로 뺐고, benzene hover preview orchestration은 `BenzenePreviewService`로 이동시켜 `_ring_polygon_points_for_bond()`, `_clear_benzene_preview()`, `_render_benzene_preview()`를 shim으로 줄였다. bond hover preview 조합도 `BondHoverPreviewService`로 이동시켜 `_add_bond_style_hover_preview()`, `_add_bond_tool_hover_preview()`, no-atoms bond hover preview 경로를 shim 수준으로 축소했고, mark hover preview 조합도 `MarkHoverPreviewService`로 이동시켜 `_add_mark_hover_preview()`를 shim으로 줄였다. 직전 턴에는 `_update_hover_highlight()`의 hit/preview decision을 `hover_highlight_logic` pure helper로 분리했고, hover scene mutation ownership도 `hover_scene_service`로 모아 `_clear_hover_highlight()`, `_add_atom_hover_indicator()`, `_add_bond_hover_indicator()`, `_add_hover_preview_items()`를 service-first wrapper로 정리했다. 이번 추가 턴에서는 남아 있던 hover apply/orchestration 자체를 `hover_interaction_service`로 빼서 `CanvasView._update_hover_highlight()`를 delegation shim으로 줄였다. 그 결과 `CanvasView`는 `3650 stmts / 82%`까지 다시 내려왔고, hover state machine은 decision / scene mutation / orchestration 세 층으로 분리됐다. 현재는 `SceneOpsController 184 stmts / 98%`, `SceneItemController 131 stmts / 99%`, `canvas_document_state 94%`, `scene_item_access 100%`, `core/tools.py 93%`이며, 남은 주 타깃은 `CanvasHandleController`의 selection highlight styler나 `CanvasView`의 나머지 adapter/pass-through 표면이다.
 
 ## 2. 이번 라운드에서 완료된 작업
 
@@ -101,6 +101,18 @@
 - `app/ui/bond_hover_preview_service.py`
   - bond style hover preview 조합 분리
   - atom-start / free-start bond hover preview 조합 분리
+- `app/ui/mark_hover_preview_service.py`
+  - mark hover preview key 계산과 atom/free 분기 분리
+  - mark hover preview item 배치 orchestration 분리
+- `app/ui/hover_highlight_logic.py`
+  - hover highlight hit/preview decision 분리
+  - atom/bond/free preview clear/no-op 판단 분리
+- `app/ui/hover_scene_service.py`
+  - hover item clear / preview add / atom/bond indicator scene mutation 분리
+  - `hover_items`, `hover_atom_id`, `hover_bond_id`, `_hover_preview_style` lifecycle 공통화
+- `app/ui/hover_interaction_service.py`
+  - hover hit lookup / preview key 계산 / apply orchestration 분리
+  - `hover_highlight_logic`와 hover preview/scene service 연결 경계 정리
 - `app/ui/structure_geometry_logic.py`
   - cyclic sprout endpoint 계산 분리
   - atom/bond attach ring point 계산 분리
@@ -166,6 +178,8 @@
   - `_ring_polygon_points_for_bond()`가 occupancy helper delegation wrapper로 축소
   - `_clear_benzene_preview()` / `_render_benzene_preview()`가 preview service delegation wrapper로 축소
   - `_add_bond_style_hover_preview()` / `_add_bond_tool_hover_preview()`와 no-atoms bond hover preview 경로가 hover preview service 경유로 축소
+  - `_add_mark_hover_preview()`가 mark hover preview service 경유로 축소
+  - `_update_hover_highlight()`의 decision이 pure helper 경유로 축소
   - `_sprout_regular_ring_from_atom()` / `_fuse_regular_ring_to_bond()` / `_fuse_chair_to_bond()`가 service delegation wrapper로 축소
   - `_sprout_bond_from_atom()` / `_sprout_benzene_from_atom()` / `_sprout_acetyl_from_atom()` / `_fuse_benzene_to_bond()`가 service delegation wrapper로 축소
   - `_sprout_bond_endpoint()` / `_regular_ring_points_for_atom()` / `_regular_ring_points_for_bond()` / `_template_points_for_bond()`가 pure helper adapter로 축소
@@ -192,6 +206,10 @@
 - `tests/test_ring_occupancy_logic.py`
 - `tests/test_benzene_preview_service.py`
 - `tests/test_bond_hover_preview_service.py`
+- `tests/test_mark_hover_preview_service.py`
+- `tests/test_hover_highlight_logic.py`
+- `tests/test_hover_scene_service.py`
+- `tests/test_hover_interaction_service.py`
 - `tests/test_scene_decoration_service.py`
 - `tests/test_bond_graphics_logic.py`
 - `tests/test_insert_smiles_transaction.py`
@@ -273,6 +291,10 @@
 - `ring_occupancy_logic`의 polygon lookup / deleted-item skip / point-in-ring contract 고정
 - `BenzenePreviewService`의 clear/render preview orchestration contract 고정
 - `BondHoverPreviewService`의 style/tool/free hover preview orchestration contract 고정
+- `MarkHoverPreviewService`의 atom/free hover preview orchestration contract 고정
+- `hover_highlight_logic`의 clear/no-op/atom/bond/free preview decision contract 고정
+- `HoverSceneService`의 clear/add atom/add bond/add preview/no-op direct contract 고정
+- `HoverInteractionService`의 mark/no-atoms/atom-hit/bond-hit/invalid/noop orchestration contract 고정
 - `StructureBuildService.sprout/fuse ring-template helper`의 record/no-op contract 고정
 - `StructureBuildService.sprout bond/benzene/acetyl + fuse benzene helper`의 direct contract 고정
 - `structure_geometry_logic`의 sprout endpoint / ring attach / template projection / free benzene geometry contract 고정
@@ -281,6 +303,11 @@
 - `CanvasView._ring_polygon_points_for_bond()`가 occupancy helper delegation shim으로 동작한다는 smoke 고정
 - `CanvasView._clear_benzene_preview()` / `_render_benzene_preview()`가 preview service delegation shim으로 동작한다는 smoke 고정
 - `CanvasView._add_bond_style_hover_preview()` / `_add_bond_tool_hover_preview()`가 hover preview service delegation shim으로 동작한다는 smoke 고정
+- `CanvasView._add_mark_hover_preview()`가 mark hover preview service delegation shim으로 동작한다는 smoke 고정
+- `_update_hover_highlight()`의 state decision이 pure helper contract를 따르도록 고정
+- `BondHoverPreviewService` / `MarkHoverPreviewService`가 hover scene service-first 경로를 우선 사용한다는 smoke 고정
+- `CanvasView._clear_hover_highlight()` / `_add_atom_hover_indicator()` / `_add_bond_hover_indicator()` / `_add_hover_preview_items()`가 hover scene service delegation shim으로 동작한다는 smoke 고정
+- `CanvasView._update_hover_highlight()`가 hover interaction service delegation shim으로 동작한다는 smoke 고정
 - `CanvasView._sprout_regular_ring_from_atom()` / `_fuse_regular_ring_to_bond()` / `_fuse_chair_to_bond()`가 service delegation shim으로 동작한다는 smoke 고정
 - `CanvasView._sprout_bond_from_atom()` / `_sprout_benzene_from_atom()` / `_sprout_acetyl_from_atom()` / `_fuse_benzene_to_bond()`가 service delegation shim으로 동작한다는 smoke 고정
 - `CanvasView` geometry helper wrapper가 pure helper 결과를 `QPointF`/merge로 adapter한다는 smoke 고정
@@ -291,7 +318,8 @@
 
 | 영역 | 규모 / 커버리지 | 근거 | 판단 |
 | --- | --- | --- | --- |
-| `app/ui/canvas_view.py` | `3696 stmts / 82%` | bond/benzene + scene-decoration add + sprout/fuse growth wrapper와 geometry helper adapter, benzene point resolver, preview/occupancy shim, bond hover preview shim까지 빠졌지만 여전히 가장 큰 파일이다 | 지금 바로 이어갈 1순위 |
+| `app/ui/canvas_view.py` | `3650 stmts / 82%` | hover state machine은 service 계층으로 빠졌지만 adapter와 wrapper 표면이 여전히 가장 크다 | 지금 바로 이어갈 1순위 |
+| `app/ui/canvas_handle_controller.py` | `127 stmts / 96%` | selection highlight pen mutation과 handle lifecycle이 아직 한 곳에 묶여 있다 | 다음 구조 추출 후보 |
 | `app/core/tools.py` | `828 stmts / 93%` | 구조 추출과 wrapper-only branch polish가 대부분 끝났고 남은 건 소수 예외 경로다 | 낮은 우선순위 |
 | `app/ui/scene_item_controller.py` | `131 stmts / 99%` | helper/controller 경계는 사실상 안정화됐고 남은 건 미세 branch arc 수준이다 | 급하지 않음 |
 | `app/ui/canvas_document_state.py` | `78 stmts / 94%` | document restore는 access layer로 정리됐고 smoke도 들어가서 현재는 유지 단계다 | 급하지 않음 |
@@ -406,8 +434,12 @@ controller는 canvas collaborator 연결만 담당하는 얇은 조정자로 남
 - `CanvasView._ring_polygon_points_for_bond()`가 `ring_occupancy_logic` 경유
 - `CanvasView._clear_benzene_preview()` / `_render_benzene_preview()`가 `BenzenePreviewService` 경유
 - `CanvasView._add_bond_style_hover_preview()` / `_add_bond_tool_hover_preview()`와 no-atoms bond preview 경로가 `BondHoverPreviewService` 경유
+- `CanvasView._add_mark_hover_preview()`가 `MarkHoverPreviewService` 경유
+- `CanvasView._update_hover_highlight()`의 clear/no-op/preview decision이 `hover_highlight_logic` 경유
+- `CanvasView._clear_hover_highlight()` / `_add_atom_hover_indicator()` / `_add_bond_hover_indicator()` / `_add_hover_preview_items()`가 `HoverSceneService` 경유
+- `CanvasView._update_hover_highlight()` apply/orchestration이 `HoverInteractionService` 경유
 
-이제 남은 `CanvasView` scene-item pass-through는 대부분 일부 테스트/협력자 호환용 public 표면과 `CanvasView` 본체의 wrapper 정의 자체다. 다음 축소는 history/document restore처럼 실제 협력 지점에서 access layer를 더 쓰게 하거나, wrapper를 타는 외부 협력 경로를 더 줄이는 방향이 맞다.
+이제 남은 `CanvasView` 축소는 hover보다는 adapter/pass-through와 selection highlight 협력 경계 쪽이 중심이다. 다음 축소는 history/document restore처럼 실제 협력 지점에서 access layer를 더 쓰게 하거나, `CanvasHandleController`의 selection highlight styler를 분리하는 방향이 맞다.
 
 ### 4.5 `MainWindow`와 `RDKitConversion`은 여전히 후순위다
 

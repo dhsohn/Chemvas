@@ -97,11 +97,14 @@ from ui.hover_scene_renderer import (
     build_bond_hover_indicator as build_bond_hover_indicator_helper,
     clear_hover_items as clear_hover_items_helper,
 )
+from ui.hover_interaction_service import HoverInteractionService
+from ui.hover_scene_service import HoverSceneService
 from ui.insert_mode_logic import (
     InsertSessionState,
     clear_insert_session,
 )
 from ui.insert_controller import InsertController
+from ui.mark_hover_preview_service import MarkHoverPreviewService
 from ui.scene_item_controller import SceneItemController
 from ui.selection_rotation_controller import SelectionRotationController
 from ui.ring_occupancy_logic import ring_polygon_points_for_bond
@@ -316,6 +319,9 @@ class CanvasView(QGraphicsView):
         self._geometry_controller = CanvasGeometryController(self)
         self._rotation_preview_controller = CanvasRotationPreviewController(self)
         self._atom_label_service = AtomLabelService(self)
+        self._hover_interaction_service = HoverInteractionService(self)
+        self._hover_scene_service = HoverSceneService(self)
+        self._mark_hover_preview_service = MarkHoverPreviewService(self)
         self._bond_hover_preview_service = BondHoverPreviewService(self)
         self._structure_build_service = StructureBuildService(self)
         self._benzene_preview_service = BenzenePreviewService(self)
@@ -2766,17 +2772,48 @@ class CanvasView(QGraphicsView):
         self._selection_info_callback(formula_text, mw_text)
 
     def _clear_hover_highlight(self) -> None:
+        hover_scene_service = getattr(self, "_hover_scene_service", None)
+        if hover_scene_service is not None:
+            hover_scene_service.clear_hover_highlight()
+            return
         self.hover_items = clear_hover_items_helper(self.scene(), self.hover_items)
         self.hover_atom_id = None
         self.hover_bond_id = None
         self._hover_preview_style = None
 
     def _add_atom_hover_indicator(self, atom_id: int) -> None:
+        hover_scene_service = getattr(self, "_hover_scene_service", None)
+        if hover_scene_service is not None:
+            hover_scene_service.add_atom_hover_indicator(atom_id)
+            return
         atom = self.model.atoms.get(atom_id)
         if atom is None:
             return
         radius = self.renderer.style.bond_length_px * 0.25
         circle = build_atom_hover_indicator_helper(QPointF(atom.x, atom.y), radius)
+        self.scene().addItem(circle)
+        self.hover_items.append(circle)
+
+    def _add_bond_hover_indicator(self, bond_id: int) -> None:
+        hover_scene_service = getattr(self, "_hover_scene_service", None)
+        if hover_scene_service is not None:
+            hover_scene_service.add_bond_hover_indicator(bond_id)
+            return
+        if not (0 <= bond_id < len(self.model.bonds)):
+            return
+        bond = self.model.bonds[bond_id]
+        if bond is None:
+            return
+        a = self.model.atoms.get(bond.a)
+        b = self.model.atoms.get(bond.b)
+        if a is None or b is None:
+            return
+        radius = self.renderer.style.bond_length_px * 0.22
+        circle = build_bond_hover_indicator_helper(
+            QPointF(a.x, a.y),
+            QPointF(b.x, b.y),
+            radius,
+        )
         self.scene().addItem(circle)
         self.hover_items.append(circle)
 
@@ -2795,103 +2832,13 @@ class CanvasView(QGraphicsView):
         return QPointF(atom.x + offset.x(), atom.y + offset.y())
 
     def _add_mark_hover_preview(self, pos: QPointF) -> None:
-        atom_id = self.find_atom_near(
-            pos.x(),
-            pos.y(),
-            self.renderer.style.bond_length_px * 0.35,
-        )
-        kind = self.mark_kind
-        center = self._mark_center_for_pointer(pos, atom_id, kind=kind)
-        scope = f"atom:{atom_id}" if atom_id is not None else "free"
-        preview_key = f"mark:{kind}:{scope}:{round(center.x(), 1)}:{round(center.y(), 1)}"
-        if atom_id == self.hover_atom_id and preview_key == self._hover_preview_style:
-            return
-        if atom_id is None and self.hover_atom_id is None and self.hover_bond_id is None and preview_key == self._hover_preview_style:
-            return
-        self._clear_hover_highlight()
-        if atom_id is not None:
-            self.hover_atom_id = atom_id
-            self._add_atom_hover_indicator(atom_id)
-        item = self._build_mark_item(kind)
-        if item is None:
-            return
-        self._set_mark_center(item, center)
-        self._hover_preview_style = preview_key
-        self._add_hover_preview_items([item])
+        self._mark_hover_preview_service.add_mark_hover_preview(pos)
 
     def _update_hover_highlight(self, pos: QPointF) -> None:
-        if self.tools.active is not None and self.tools.active.name == "mark":
-            self._add_mark_hover_preview(pos)
-            return
-        if not self.model.atoms:
-            if self.tools.active is not None and self.tools.active.name == "bond":
-                preview_style = self._bond_preview_signature()
-                if preview_style is None:
-                    self._clear_hover_highlight()
-                    return
-                start = QPointF(pos.x(), pos.y())
-                bond_len = self.renderer.style.bond_length_px
-                end = QPointF(pos.x() + bond_len, pos.y())
-                preview_key = f"{preview_style}:{round(start.x(), 1)}:{round(start.y(), 1)}"
-                if preview_key == self._hover_preview_style:
-                    return
-                self._clear_hover_highlight()
-                self._hover_preview_style = preview_key
-                self._bond_hover_preview_service.add_free_bond_hover_preview(pos)
-                return
-            self._clear_hover_highlight()
-            return
-        preferred_hit = self.preferred_structure_hit_at_scene_pos(pos)
-        if preferred_hit is None:
-            self._clear_hover_highlight()
-            return
-        if preferred_hit.kind == "atom" and isinstance(preferred_hit.id, int):
-            atom_id = preferred_hit.id
-            preview_style = self._bond_preview_signature()
-            preview_key = None
-            if preview_style is not None:
-                atom = self.model.atoms.get(atom_id)
-                if atom is None:
-                    self._clear_hover_highlight()
-                    return
-                end = self._bond_hover_endpoint(QPointF(atom.x, atom.y), pos, atom_id)
-                preview_key = f"{preview_style}:{round(end.x(), 1)}:{round(end.y(), 1)}"
-            if atom_id == self.hover_atom_id and preview_key == self._hover_preview_style:
-                return
-            self._clear_hover_highlight()
-            self.hover_atom_id = atom_id
-            self._add_atom_hover_indicator(atom_id)
-            if preview_style is not None and preview_key is not None:
-                self._hover_preview_style = preview_key
-                self._add_bond_tool_hover_preview(atom_id, pos)
-            return
-        if preferred_hit.kind != "bond" or not isinstance(preferred_hit.id, int):
-            self._clear_hover_highlight()
-            return
-        bond_id = preferred_hit.id
-        preview_style = None
-        if self.tools.active is not None and self.tools.active.name == "bond":
-            if self.active_bond_style in {"wedge", "hash"}:
-                preview_style = self.active_bond_style
-        if bond_id == self.hover_bond_id and preview_style == self._hover_preview_style:
-            return
-        self._clear_hover_highlight()
-        self.hover_bond_id = bond_id
-        bond = self.model.bonds[bond_id]
-        if bond is None:
-            return
-        a = self.model.atoms[bond.a]
-        b = self.model.atoms[bond.b]
-        radius = self.renderer.style.bond_length_px * 0.22
-        circle = build_bond_hover_indicator_helper(
-            QPointF(a.x, a.y),
-            QPointF(b.x, b.y),
-            radius,
-        )
-        self.scene().addItem(circle)
-        self.hover_items.append(circle)
-        if preview_style:
-            self._add_bond_style_hover_preview(bond)
+        hover_interaction_service = getattr(self, "_hover_interaction_service", None)
+        if hover_interaction_service is None:
+            hover_interaction_service = HoverInteractionService(self)
+        hover_interaction_service.update_hover_highlight(pos)
 
     def _find_bond_near(self, pos: QPointF, max_dist: float) -> int | None:
         if not self.model.bonds:
@@ -3010,6 +2957,10 @@ class CanvasView(QGraphicsView):
         )
 
     def _add_hover_preview_items(self, items: list) -> None:
+        hover_scene_service = getattr(self, "_hover_scene_service", None)
+        if hover_scene_service is not None:
+            hover_scene_service.add_hover_preview_items(items)
+            return
         if not items:
             return
         self.hover_items.extend(add_hover_preview_items_helper(self.scene(), items))
