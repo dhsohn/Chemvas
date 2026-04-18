@@ -68,7 +68,6 @@ class CanvasRingFillSceneService:
                 rx = x * cos_y + z * sin_y
                 rz = -x * sin_y + z * cos_y
                 ry = y * cos_x - rz * sin_x
-                rz2 = y * sin_x + rz * cos_x
                 rotated.append(QPointF(rx + cx, ry + cy))
             ring_item.setPolygon(rotated)
 

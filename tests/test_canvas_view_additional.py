@@ -26,7 +26,7 @@ if QApplication is not None:
         UpdateBondCommand,
         UpdateSceneItemCommand,
     )
-    from core.model import Atom, Bond, MoleculeModel
+    from core.model import Atom, Bond
     from ui.canvas_view import CanvasView
 
 

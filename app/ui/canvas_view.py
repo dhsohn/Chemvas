@@ -7,10 +7,8 @@ from PyQt6.QtGui import (
     QColor,
     QCursor,
     QFont,
-    QBrush,
     QPainter,
     QPainterPath,
-    QPainterPathStroker,
     QPen,
     QPolygonF,
     QNativeGestureEvent,
@@ -35,10 +33,8 @@ from core.history import (
     SetAtomPositionsCommand,
     SetRingPolygonsCommand,
     UpdateBondLengthCommand,
-    UpdateAtomColorCommand,
-    UpdateSceneItemCommand,
 )
-from core.model import Atom, Bond, MoleculeModel
+from core.model import Bond, MoleculeModel
 from core.renderer import Renderer
 from core.rdkit_adapter import RDKitAdapter
 from core.template_geometry import (
@@ -89,12 +85,7 @@ from ui.canvas_graph_service import CanvasGraphService, canvas_graph_service_for
 from ui.canvas_history_recording_service import CanvasHistoryRecordingService
 from ui.canvas_mark_scene_service import CanvasMarkSceneService, canvas_mark_scene_service_for
 from ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService, canvas_ring_fill_scene_service_for
-from ui.canvas_scene_reset_service import CanvasSceneResetService, canvas_scene_reset_service_for
-from ui.graphics_items import (
-    NoSelectLineItem,
-    NoSelectPathItem,
-    NoSelectPolygonItem,
-)
+from ui.canvas_scene_reset_service import canvas_scene_reset_service_for
 from ui.hover_scene_renderer import (
     add_hover_preview_items as add_hover_preview_items_helper,
     build_atom_hover_indicator as build_atom_hover_indicator_helper,

@@ -23,14 +23,6 @@ from PyQt6.QtWidgets import (
 
 from core.document_io import read_document
 from ui.canvas_view import CanvasView
-from ui.main_window_config import (
-    ARROW_MENU_SPECS,
-    ARROW_PRESET_SPECS,
-    BOND_TOOL_ACTION_SPECS,
-    COLOR_PALETTE_SPECS,
-    MARK_TOOL_ACTION_SPECS,
-    TOOL_ACTION_SPECS,
-)
 from ui.main_window_canvas_logic import (
     active_canvas_sheet_index as active_canvas_sheet_index_helper,
     active_canvas_tab_index as active_canvas_tab_index_helper,
