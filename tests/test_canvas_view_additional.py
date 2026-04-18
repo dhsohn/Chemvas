@@ -387,6 +387,36 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         bond_hover_preview_service.add_bond_style_hover_preview.assert_called_once_with(bond)
         bond_hover_preview_service.add_bond_tool_hover_preview.assert_called_once_with(3, QPointF(4.0, 5.0))
 
+    def test_mark_hover_preview_wrapper_delegates(self) -> None:
+        mark_hover_preview_service = mock.Mock()
+        view = SimpleNamespace(_mark_hover_preview_service=mark_hover_preview_service)
+
+        CanvasView._add_mark_hover_preview(view, QPointF(6.0, 7.0))
+
+        mark_hover_preview_service.add_mark_hover_preview.assert_called_once_with(QPointF(6.0, 7.0))
+
+    def test_hover_scene_wrappers_delegate(self) -> None:
+        hover_scene_service = mock.Mock()
+        view = SimpleNamespace(_hover_scene_service=hover_scene_service)
+
+        CanvasView._clear_hover_highlight(view)
+        CanvasView._add_atom_hover_indicator(view, 3)
+        CanvasView._add_bond_hover_indicator(view, 4)
+        CanvasView._add_hover_preview_items(view, ["preview"])
+
+        hover_scene_service.clear_hover_highlight.assert_called_once_with()
+        hover_scene_service.add_atom_hover_indicator.assert_called_once_with(3)
+        hover_scene_service.add_bond_hover_indicator.assert_called_once_with(4)
+        hover_scene_service.add_hover_preview_items.assert_called_once_with(["preview"])
+
+    def test_hover_interaction_wrapper_delegates(self) -> None:
+        hover_interaction_service = mock.Mock()
+        view = SimpleNamespace(_hover_interaction_service=hover_interaction_service)
+
+        CanvasView._update_hover_highlight(view, QPointF(8.0, 9.0))
+
+        hover_interaction_service.update_hover_highlight.assert_called_once_with(QPointF(8.0, 9.0))
+
     def test_scene_decoration_wrappers_delegate(self) -> None:
         decoration_service = mock.Mock()
         decoration_service.add_mark.return_value = "mark"

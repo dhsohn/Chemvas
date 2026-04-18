@@ -17,6 +17,28 @@ from ui.bond_hover_preview_service import BondHoverPreviewService
 
 
 class BondHoverPreviewServiceTest(unittest.TestCase):
+    def test_add_bond_hover_preview_prefers_hover_scene_service_when_available(self) -> None:
+        hover_scene_service = mock.Mock()
+        canvas = SimpleNamespace(
+            tools=SimpleNamespace(active=SimpleNamespace(name="bond")),
+            active_bond_style="wedge",
+            model=SimpleNamespace(
+                atoms={1: Atom("C", 10.0, 20.0), 2: Atom("C", 30.0, 20.0)},
+            ),
+            _hover_preview_style=None,
+            _hover_scene_service=hover_scene_service,
+            _build_bond_preview_items=mock.Mock(return_value=["preview"]),
+            _bond_hover_endpoint=mock.Mock(return_value=QPointF(17.0, 18.0)),
+            renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
+        )
+        service = BondHoverPreviewService(canvas)
+
+        service.add_bond_style_hover_preview(Bond(1, 2))
+        service.add_bond_tool_hover_preview(1, QPointF(40.0, 41.0))
+        service.add_free_bond_hover_preview(QPointF(5.0, 6.0))
+
+        self.assertEqual(hover_scene_service.add_hover_preview_items.call_count, 3)
+
     def test_add_bond_style_hover_preview_applies_for_supported_styles_only(self) -> None:
         canvas = SimpleNamespace(
             tools=SimpleNamespace(active=SimpleNamespace(name="bond")),
