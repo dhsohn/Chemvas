@@ -12,6 +12,7 @@ from core.document_state import (
     LITEDRAW_FILE_TYPE,
     SINGLE_SHEET_FILE_VERSION,
     WORKBOOK_FILE_VERSION,
+    _mapping_value,
     atom_to_state,
     bond_to_state,
     build_document_payload,
@@ -130,6 +131,42 @@ class DocumentStateTest(unittest.TestCase):
         self.assertIn(7, model.atoms)
         self.assertIn(8, model.atoms)
 
+    def test_deserialize_model_state_tolerates_non_mapping_atoms_and_non_list_bonds(self) -> None:
+        model = deserialize_model_state(
+            {
+                "atoms": "not-a-mapping",
+                "bonds": "not-a-list",
+                "next_atom_id": 2,
+            }
+        )
+
+        self.assertEqual(model.atoms, {})
+        self.assertEqual(model.bonds, [])
+        self.assertEqual(model.next_atom_id, 2)
+
+    def test_deserialize_model_state_skips_invalid_bond_entries_and_uses_mapping_defaults(self) -> None:
+        model = deserialize_model_state(
+            {
+                "atoms": {
+                    "1": {"x": 1.5, "y": None},
+                },
+                "bonds": [
+                    "bad-entry",
+                    {"a": None, "b": 2, "order": None, "style": None, "color": None},
+                ],
+            }
+        )
+
+        self.assertEqual(model.atoms[1].element, "C")
+        self.assertEqual(model.atoms[1].x, 1.5)
+        self.assertEqual(model.atoms[1].y, 0.0)
+        self.assertEqual(model.bonds[0].a, 0)
+        self.assertEqual(model.bonds[0].b, 2)
+        self.assertEqual(model.bonds[0].order, 1)
+        self.assertEqual(model.bonds[0].style, "single")
+        self.assertEqual(model.bonds[0].color, "#000000")
+        self.assertEqual(_mapping_value("bad-mapping", "x", "fallback"), "fallback")
+
     def test_settings_and_payload_helpers_round_trip(self) -> None:
         settings = serialize_settings(
             bond_length_px=18.0,
@@ -218,6 +255,14 @@ class DocumentStateTest(unittest.TestCase):
                 {
                     "model": {"atoms": {}, "bonds": [], "next_atom_id": 0},
                     "version": SINGLE_SHEET_FILE_VERSION,
+                }
+            )
+        with self.assertRaises(ValueError):
+            extract_document_state(
+                {
+                    "type": LITEDRAW_FILE_TYPE,
+                    "version": SINGLE_SHEET_FILE_VERSION,
+                    "state": [],
                 }
             )
 

@@ -23,7 +23,9 @@ if str(APP_ROOT) not in sys.path:
 if QApplication is not None:
     from core.history import AddSceneItemsCommand, DeleteSceneItemsCommand, UpdateSceneItemCommand
     from core.model import Atom, Bond
-    from ui.canvas_view import CanvasView, NoteItem
+    from ui.canvas_rotation_preview_controller import CanvasRotationPreviewController
+    from ui.canvas_view import CanvasView, NoteItem, _rotation_preview_controller_for, _selection_controller_for
+    from ui.selection_controller import SelectionController
 
 
 class _FakeNoteCanvas:
@@ -114,6 +116,35 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertEqual(canvas.updated_boxes, [item])
         self.assertEqual(canvas.removed_items, [item])
 
+    def test_controller_helper_wrappers_reuse_matching_instances_and_recreate_foreign_bound_ones(self) -> None:
+        canvas = SimpleNamespace()
+
+        same_selection_controller = SelectionController(canvas)
+        canvas._selection_controller = same_selection_controller
+        self.assertIs(_selection_controller_for(canvas), same_selection_controller)
+
+        foreign_selection_controller = SelectionController(SimpleNamespace())
+        canvas._selection_controller = foreign_selection_controller
+        rebound_selection_controller = _selection_controller_for(canvas)
+        self.assertIsInstance(rebound_selection_controller, SelectionController)
+        self.assertIsNot(rebound_selection_controller, foreign_selection_controller)
+        self.assertIs(rebound_selection_controller.canvas, canvas)
+
+        passthrough_controller = object()
+        canvas._selection_controller = passthrough_controller
+        self.assertIs(_selection_controller_for(canvas), passthrough_controller)
+
+        same_rotation_controller = CanvasRotationPreviewController(canvas)
+        canvas._rotation_preview_controller = same_rotation_controller
+        self.assertIs(_rotation_preview_controller_for(canvas), same_rotation_controller)
+
+        foreign_rotation_controller = CanvasRotationPreviewController(SimpleNamespace())
+        canvas._rotation_preview_controller = foreign_rotation_controller
+        rebound_rotation_controller = _rotation_preview_controller_for(canvas)
+        self.assertIsInstance(rebound_rotation_controller, CanvasRotationPreviewController)
+        self.assertIsNot(rebound_rotation_controller, foreign_rotation_controller)
+        self.assertIs(rebound_rotation_controller.canvas, canvas)
+
     def test_shortcut_modifiers_mask_meta_bits(self) -> None:
         mask_event = _FakeKeyEvent(
             Qt.Key.Key_H,
@@ -173,6 +204,85 @@ class CanvasViewUnitTest(unittest.TestCase):
         bounds = CanvasView._bounds_from_points([QPointF(-2.0, 3.0), QPointF(4.0, -1.0)])
         self.assertEqual((bounds.left(), bounds.top(), bounds.right(), bounds.bottom()), (-2.0, -1.0, 4.0, 3.0))
 
+    def test_structure_selection_and_payload_helpers_cover_selected_and_empty_cases(self) -> None:
+        selected_item = SimpleNamespace(isSelected=lambda: True)
+        view = SimpleNamespace(
+            _structure_hit_from_item=mock.Mock(
+                side_effect=[
+                    (SimpleNamespace(kind="atom", id=1), None, ()),
+                    (SimpleNamespace(kind="bond", id=9), (1, 2), ()),
+                    (SimpleNamespace(kind="ring", id=5), None, (7, 8)),
+                    (SimpleNamespace(kind="other", id=None), None, ()),
+                    (None, None, ()),
+                ]
+            ),
+        )
+
+        self.assertTrue(CanvasView.structure_item_is_selected(view, selected_item, {1}, set()))
+        self.assertTrue(CanvasView.structure_item_is_selected(view, selected_item, {1}, set()))
+        self.assertTrue(CanvasView.structure_item_is_selected(view, selected_item, {7}, set()))
+        self.assertTrue(CanvasView.structure_item_is_selected(view, selected_item, set(), set()))
+        self.assertFalse(CanvasView.structure_item_is_selected(view, None, set(), set()))
+
+        selected_ids_view = SimpleNamespace(_selected_chemical_ids=mock.Mock(return_value=({3}, {4})))
+        self.assertEqual(CanvasView._selected_structure_ids(selected_ids_view), ({3}, {4}))
+        with self.assertRaisesRegex(ValueError, "Select a molecular structure"):
+            CanvasView._selected_structure_ids(
+                SimpleNamespace(_selected_chemical_ids=mock.Mock(return_value=(set(), set()))),
+                require_non_empty=True,
+            )
+
+        selected_payload_view = SimpleNamespace(
+            _selected_chemical_ids=mock.Mock(return_value=({5}, {6})),
+            build_structure_payload=mock.Mock(return_value=("payload", {}, (0.0, 0.0, 1.0, 1.0))),
+        )
+        selected_payload_view._selected_structure_ids = lambda require_non_empty=False: CanvasView._selected_structure_ids(
+            selected_payload_view,
+            require_non_empty=require_non_empty,
+        )
+        self.assertEqual(
+            CanvasView.build_selected_structure_payload(selected_payload_view),
+            ("payload", {}, (0.0, 0.0, 1.0, 1.0)),
+        )
+        selected_payload_view.build_structure_payload.assert_called_once_with({5}, {6})
+
+        payload_view = SimpleNamespace(
+            model="model",
+            _selected_structure_ids=mock.Mock(return_value=({7}, {8})),
+            _mark_kinds_by_atom=mock.Mock(return_value={7: ["plus"]}),
+            _bounds_for_atoms=mock.Mock(),
+        )
+        with mock.patch("ui.canvas_view.build_3d_conversion_payload_state", return_value=("export", {"a": 1})) as build_3d:
+            self.assertEqual(CanvasView.build_3d_conversion_payload(payload_view), ("export", {"a": 1}))
+        build_3d.assert_called_once_with(
+            "model",
+            {7},
+            {8},
+            {7: ["plus"]},
+            bounds_getter=payload_view._bounds_for_atoms,
+        )
+
+        structure_payload_view = SimpleNamespace(
+            model="model",
+            _mark_kinds_by_atom=mock.Mock(return_value={9: ["minus"]}),
+            _bounds_for_atoms=mock.Mock(),
+        )
+        with mock.patch(
+            "ui.canvas_view.build_structure_payload_state",
+            return_value=("export", {"b": 2}, (1.0, 2.0, 3.0, 4.0)),
+        ) as build_structure:
+            self.assertEqual(
+                CanvasView.build_structure_payload(structure_payload_view, {9}, {10}),
+                ("export", {"b": 2}, (1.0, 2.0, 3.0, 4.0)),
+            )
+        build_structure.assert_called_once_with(
+            "model",
+            {9},
+            {10},
+            {9: ["minus"]},
+            bounds_getter=structure_payload_view._bounds_for_atoms,
+        )
+
     def test_translation_helpers_compact_labels_and_selection_overlay_values(self) -> None:
         fake_view = SimpleNamespace(
             _translated_point_value=lambda value, dx, dy: CanvasView._translated_point_value(value, dx, dy),
@@ -228,6 +338,75 @@ class CanvasViewUnitTest(unittest.TestCase):
             ),
             {"kind": "ts_bracket", "left": 3.0, "right": 5.0, "top": 1.0, "bottom": 3.0},
         )
+        self.assertIsNone(
+            CanvasView._translated_scene_item_state(
+                fake_view,
+                {"kind": "ring", "atom_ids": [], "points": []},
+                dx=0.0,
+                dy=0.0,
+                atom_id_map={},
+            )
+        )
+        self.assertEqual(
+            CanvasView._translated_scene_item_state(
+                fake_view,
+                {"kind": "ring", "atom_ids": [1], "points": ["bad", (1.0, 2.0)]},
+                dx=2.0,
+                dy=3.0,
+                atom_id_map={1: 5},
+            ),
+            {"kind": "ring", "atom_ids": [5], "points": [(3.0, 5.0)]},
+        )
+        self.assertEqual(
+            CanvasView._translated_scene_item_state(
+                fake_view,
+                {"kind": "mark", "atom_id": 1, "x": 2.0},
+                dx=4.0,
+                dy=-1.0,
+                atom_id_map={1: 9},
+            ),
+            {"kind": "mark", "atom_id": 9, "x": 6.0},
+        )
+        self.assertEqual(
+            CanvasView._translated_scene_item_state(
+                fake_view,
+                {"kind": "mark", "atom_id": 1, "y": 3.0},
+                dx=4.0,
+                dy=-1.0,
+                atom_id_map={1: 9},
+            ),
+            {"kind": "mark", "atom_id": 9, "y": 2.0},
+        )
+        self.assertEqual(
+            CanvasView._translated_scene_item_state(
+                fake_view,
+                {"kind": "note", "x": 1.0, "y": 2.0},
+                dx=5.0,
+                dy=6.0,
+                atom_id_map={},
+            ),
+            {"kind": "note", "x": 6.0, "y": 8.0},
+        )
+        self.assertEqual(
+            CanvasView._translated_scene_item_state(
+                fake_view,
+                {"kind": "ts_bracket", "left": "bad", "right": 3.0, "top": "bad", "bottom": 4.0},
+                dx=2.0,
+                dy=-1.0,
+                atom_id_map={},
+            ),
+            {"kind": "ts_bracket", "left": "bad", "right": 5.0, "top": "bad", "bottom": 3.0},
+        )
+        self.assertEqual(
+            CanvasView._translated_scene_item_state(
+                fake_view,
+                {"kind": "other", "value": 1},
+                dx=1.0,
+                dy=1.0,
+                atom_id_map={},
+            ),
+            {"kind": "other", "value": 1},
+        )
         self.assertIsNone(CanvasView._translated_scene_item_state(fake_view, "bad", dx=0.0, dy=0.0, atom_id_map={}))
 
         self.assertTrue(CanvasView._uses_compact_label_hit_shape("C"))
@@ -236,6 +415,23 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertEqual(CanvasView._implicit_carbon_dot_brush().alpha(), 0)
         self.assertEqual(CanvasView._clipboard_paste_offset(2, 20.0), (36.0, 36.0))
         self.assertEqual(CanvasView._selection_signature_for({1, 2}, {3}), (frozenset({1, 2}), frozenset({3})))
+
+    def test_wrapper_helpers_delegate_to_state_and_structure_builders(self) -> None:
+        with mock.patch("ui.canvas_view.ts_bracket_rect_from_state_helper", return_value="rect") as rect_helper:
+            self.assertEqual(CanvasView._ts_bracket_rect_from_state(SimpleNamespace(), {"kind": "ts_bracket"}), "rect")
+        rect_helper.assert_called_once_with({"kind": "ts_bracket"})
+
+        with mock.patch("ui.canvas_view.expand_atom_ids_for_structure_state", return_value={1, 2, 3}) as expand_atom_ids:
+            self.assertEqual(
+                CanvasView._expanded_atom_ids_for_structure(SimpleNamespace(model="model"), {1}, {7}),
+                {1, 2, 3},
+            )
+        expand_atom_ids.assert_called_once_with("model", {1}, {7})
+
+        with mock.patch("ui.canvas_view.build_atom_annotations_state", return_value={5: {"plus": 1}}) as build_annotations:
+            view = SimpleNamespace(_mark_kinds_by_atom=mock.Mock(return_value={5: ["plus"]}))
+            self.assertEqual(CanvasView._build_atom_annotations(view, {5}, {5: 9}), {5: {"plus": 1}})
+        build_annotations.assert_called_once_with({5}, {5: 9}, {5: ["plus"]})
 
     def test_selection_indicator_overlay_width_and_segment_distance(self) -> None:
         fake_view = SimpleNamespace(
@@ -276,6 +472,7 @@ class CanvasViewUnitTest(unittest.TestCase):
         fake_view.atom_items = {}
         self.assertFalse(CanvasView._atom_has_visible_label(fake_view, 1))
         self.assertTrue(CanvasView._atom_has_visible_label(fake_view, 2))
+        self.assertFalse(CanvasView._atom_has_visible_label(fake_view, 99))
         self.assertEqual((CanvasView._atom_point(fake_view, 2).x(), CanvasView._atom_point(fake_view, 2).y()), (4.0, 5.0))
 
     def test_sprout_bond_endpoint_handles_default_and_cyclic_cases(self) -> None:
@@ -382,6 +579,15 @@ class CanvasViewUnitTest(unittest.TestCase):
             center_hint=(11.0, 12.0),
             occupied_polygon=[(0.0, 0.0), (1.0, 1.0)],
         )
+
+    def test_regular_ring_points_for_atom_wrapper_returns_none_when_logic_fails(self) -> None:
+        fake_view = SimpleNamespace(
+            model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[]),
+            renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
+        )
+
+        with mock.patch("ui.canvas_view.compute_regular_ring_points_for_atom", return_value=None):
+            self.assertIsNone(CanvasView._regular_ring_points_for_atom(fake_view, 6, 1))
 
     def test_ring_polygon_points_for_bond_wrapper_delegates_to_occupancy_helper(self) -> None:
         fake_view = SimpleNamespace(

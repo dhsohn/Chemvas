@@ -14,7 +14,7 @@ if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
 from core.model import Bond
-from ui.canvas_bond_mutation_service import CanvasBondMutationService
+from ui.canvas_bond_mutation_service import CanvasBondMutationService, canvas_bond_mutation_service_for
 
 
 class _FakeModel:
@@ -155,6 +155,26 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
         canvas._mark_spatial_index_dirty.assert_called_once_with()
         self.assertNotIn(0, canvas.bond_items)
 
+    def test_remove_bond_by_id_skips_index_cleanup_for_none_bond(self) -> None:
+        scene = _FakeScene()
+        old_item = object()
+        canvas = SimpleNamespace(
+            model=SimpleNamespace(bonds=[None]),
+            bond_items={0: [old_item]},
+            scene=lambda: scene,
+            _remove_bond_index=mock.Mock(),
+            _remove_bond_neighbors=mock.Mock(),
+            _mark_spatial_index_dirty=mock.Mock(),
+        )
+
+        CanvasBondMutationService(canvas).remove_bond_by_id(0)
+
+        self.assertEqual(scene.removed_items, [old_item])
+        self.assertIsNone(canvas.model.bonds[0])
+        canvas._remove_bond_index.assert_not_called()
+        canvas._remove_bond_neighbors.assert_not_called()
+        canvas._mark_spatial_index_dirty.assert_called_once_with()
+
     def test_trim_bonds_to_length_removes_tail_cleanup(self) -> None:
         scene = _FakeScene()
         tail_item = object()
@@ -179,6 +199,40 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
         canvas._mark_spatial_index_dirty.assert_called_once_with()
         self.assertNotIn(1, canvas.bond_items)
         self.assertNotIn(2, canvas.bond_items)
+
+    def test_restore_bond_from_state_ignores_empty_state_and_factory_reuses_duck_service(self) -> None:
+        canvas = SimpleNamespace(
+            bond_items={},
+            scene=lambda: _FakeScene(),
+            model=SimpleNamespace(bonds=[]),
+            _remove_bond_index=mock.Mock(),
+            _remove_bond_neighbors=mock.Mock(),
+            _add_bond_neighbors=mock.Mock(),
+            _add_bond_index=mock.Mock(),
+            _add_bond_graphics=mock.Mock(),
+            _mark_spatial_index_dirty=mock.Mock(),
+        )
+
+        CanvasBondMutationService(canvas).restore_bond_from_state(0, {})
+        canvas._add_bond_graphics.assert_not_called()
+        canvas._mark_spatial_index_dirty.assert_not_called()
+
+        real_service = CanvasBondMutationService(canvas)
+        canvas._canvas_bond_mutation_service = real_service
+        self.assertIs(canvas_bond_mutation_service_for(canvas), real_service)
+
+        duck_service = SimpleNamespace(
+            add_bond=mock.Mock(),
+            restore_bond_from_state=mock.Mock(),
+            remove_bond_by_id=mock.Mock(),
+            trim_bonds_to_length=mock.Mock(),
+        )
+        canvas._canvas_bond_mutation_service = duck_service
+        self.assertIs(canvas_bond_mutation_service_for(canvas), duck_service)
+
+        canvas._canvas_bond_mutation_service = object()
+        fallback = canvas_bond_mutation_service_for(canvas)
+        self.assertIsInstance(fallback, CanvasBondMutationService)
 
 
 if __name__ == "__main__":

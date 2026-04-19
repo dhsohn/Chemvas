@@ -338,3 +338,176 @@ class SceneItemStateUnitTest(unittest.TestCase):
         self.assertTrue(data["double"])
         set_curved_arrow_path.assert_called_once()
         build_arrow_item.assert_not_called()
+
+    def test_scene_item_state_serializes_note_and_apply_handles_none_or_empty_state(self) -> None:
+        note = QGraphicsTextItem("memo")
+        note.setData(0, "note")
+        note.setPos(QPointF(2.0, -3.0))
+
+        state = scene_item_state(note, mark_center_getter=lambda _: QPointF())
+
+        self.assertEqual(state, {"kind": "note", "text": "memo", "x": 2.0, "y": -3.0})
+
+        style_applier = mock.Mock()
+        note.setPlainText("unchanged")
+        apply_scene_item_state(
+            None,
+            {"kind": "note", "text": "ignored"},
+            model_atoms={},
+            note_style_applier=style_applier,
+            mark_center_setter=lambda item, center: None,
+            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
+            ts_bracket_path_builder=lambda rect: QPainterPath(),
+            bond_color="#000000",
+            build_arrow_item=lambda start, end, kind: QGraphicsPathItem(),
+            set_curved_arrow_path=lambda *args: None,
+            orbital_base_handle_dist=18.0,
+        )
+        apply_scene_item_state(
+            note,
+            {},
+            model_atoms={},
+            note_style_applier=style_applier,
+            mark_center_setter=lambda item, center: None,
+            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
+            ts_bracket_path_builder=lambda rect: QPainterPath(),
+            bond_color="#000000",
+            build_arrow_item=lambda start, end, kind: QGraphicsPathItem(),
+            set_curved_arrow_path=lambda *args: None,
+            orbital_base_handle_dist=18.0,
+        )
+
+        self.assertEqual(note.toPlainText(), "unchanged")
+        style_applier.assert_not_called()
+
+    def test_apply_mark_state_handles_non_text_items_none_text_and_missing_center(self) -> None:
+        path_mark = QGraphicsPathItem()
+        path_mark.setData(1, {"kind": "plus", "atom_id": 1, "dx": 2.0, "dy": 3.0, "text": "+"})
+        center_setter = mock.Mock()
+
+        apply_scene_item_state(
+            path_mark,
+            {"kind": "mark", "mark_kind": "minus", "atom_id": 99, "dx": 4.0, "dy": 5.0, "text": "-"},
+            model_atoms={},
+            note_style_applier=lambda item: None,
+            mark_center_setter=center_setter,
+            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
+            ts_bracket_path_builder=lambda rect: QPainterPath(),
+            bond_color="#000000",
+            build_arrow_item=lambda start, end, kind: QGraphicsPathItem(),
+            set_curved_arrow_path=lambda *args: None,
+            orbital_base_handle_dist=18.0,
+        )
+
+        self.assertEqual(path_mark.data(1)["kind"], "minus")
+        self.assertEqual(path_mark.data(1)["text"], "-")
+        center_setter.assert_not_called()
+
+        text_mark = QGraphicsTextItem("keep")
+        text_mark.setData(1, {"kind": "plus"})
+        apply_scene_item_state(
+            text_mark,
+            {"kind": "mark", "mark_kind": "radical", "atom_id": None, "text": None},
+            model_atoms={},
+            note_style_applier=lambda item: None,
+            mark_center_setter=lambda item, center: None,
+            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
+            ts_bracket_path_builder=lambda rect: QPainterPath(),
+            bond_color="#000000",
+            build_arrow_item=lambda start, end, kind: QGraphicsPathItem(),
+            set_curved_arrow_path=lambda *args: None,
+            orbital_base_handle_dist=18.0,
+        )
+
+        self.assertEqual(text_mark.toPlainText(), "keep")
+        self.assertEqual(text_mark.data(1)["kind"], "radical")
+
+    def test_apply_scene_item_state_guard_paths_cover_ring_bracket_orbital_and_arrow(self) -> None:
+        ring = QGraphicsPolygonItem(QPolygonF([QPointF(0.0, 0.0), QPointF(4.0, 0.0), QPointF(2.0, 3.0)]))
+        original_polygon = QPolygonF(ring.polygon())
+        apply_scene_item_state(
+            ring,
+            {"kind": "ring", "points": [(0.0, 0.0), (1.0, 1.0)]},
+            model_atoms={},
+            note_style_applier=lambda item: None,
+            mark_center_setter=lambda item, center: None,
+            ring_fill_brush_getter=lambda: QBrush(QColor("#55AA11")),
+            ts_bracket_path_builder=lambda rect: QPainterPath(),
+            bond_color="#000000",
+            build_arrow_item=lambda start, end, kind: QGraphicsPathItem(),
+            set_curved_arrow_path=lambda *args: None,
+            orbital_base_handle_dist=18.0,
+        )
+        self.assertEqual(len(ring.polygon()), len(original_polygon))
+        self.assertEqual(ring.brush().color().name(), "#55aa11")
+
+        bracket = QGraphicsPathItem()
+        path_builder = mock.Mock()
+        apply_scene_item_state(
+            bracket,
+            {"kind": "ts_bracket", "left": "bad", "top": 0.0, "right": 1.0, "bottom": 2.0},
+            model_atoms={},
+            note_style_applier=lambda item: None,
+            mark_center_setter=lambda item, center: None,
+            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
+            ts_bracket_path_builder=path_builder,
+            bond_color="#000000",
+            build_arrow_item=lambda start, end, kind: QGraphicsPathItem(),
+            set_curved_arrow_path=lambda *args: None,
+            orbital_base_handle_dist=18.0,
+        )
+        path_builder.assert_not_called()
+
+        orbital = QGraphicsItemGroup()
+        orbital.setData(1, {"center": QPointF(1.0, 2.0), "base_handle_dist": 11.0})
+        apply_scene_item_state(
+            orbital,
+            {"kind": "orbital", "center": None, "scale": 2.0, "rotation": 45.0},
+            model_atoms={},
+            note_style_applier=lambda item: None,
+            mark_center_setter=lambda item, center: None,
+            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
+            ts_bracket_path_builder=lambda rect: QPainterPath(),
+            bond_color="#000000",
+            build_arrow_item=lambda start, end, kind: QGraphicsPathItem(),
+            set_curved_arrow_path=lambda *args: None,
+            orbital_base_handle_dist=24.0,
+        )
+        self.assertEqual((orbital.data(1)["center"].x(), orbital.data(1)["center"].y()), (1.0, 2.0))
+        self.assertAlmostEqual(orbital.scale(), 2.0)
+        self.assertAlmostEqual(orbital.rotation(), 45.0)
+
+        arrow = QGraphicsPathItem()
+        arrow.setData(2, {"start": QPointF(1.0, 1.0), "end": QPointF(2.0, 2.0)})
+        build_arrow_item = mock.Mock()
+        apply_scene_item_state(
+            arrow,
+            {"kind": "arrow", "start": None, "end": (5.0, 5.0)},
+            model_atoms={},
+            note_style_applier=lambda item: None,
+            mark_center_setter=lambda item, center: None,
+            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
+            ts_bracket_path_builder=lambda rect: QPainterPath(),
+            bond_color="#000000",
+            build_arrow_item=build_arrow_item,
+            set_curved_arrow_path=lambda *args: None,
+            orbital_base_handle_dist=18.0,
+        )
+        self.assertEqual((arrow.data(2)["start"].x(), arrow.data(2)["start"].y()), (1.0, 1.0))
+        build_arrow_item.assert_not_called()
+
+        text_item = QGraphicsTextItem("x")
+        apply_scene_item_state(
+            text_item,
+            {"kind": "arrow", "start": (0.0, 0.0), "end": (1.0, 1.0)},
+            model_atoms={},
+            note_style_applier=lambda item: None,
+            mark_center_setter=lambda item, center: None,
+            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
+            ts_bracket_path_builder=lambda rect: QPainterPath(),
+            bond_color="#000000",
+            build_arrow_item=build_arrow_item,
+            set_curved_arrow_path=lambda *args: None,
+            orbital_base_handle_dist=18.0,
+        )
+        self.assertEqual(text_item.toPlainText(), "x")

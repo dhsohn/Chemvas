@@ -56,6 +56,29 @@ class CanvasViewSceneOpsRebuildTest(unittest.TestCase):
         self.assertEqual(view.atom_dots, {})
         view._render_model.assert_called_once_with()
 
+    def test_scene_item_clear_helpers_remove_items_and_return_empty_maps(self) -> None:
+        scene = _FakeScene()
+        bond_a = object()
+        bond_b = object()
+        atom_label = object()
+
+        self.assertEqual(
+            CanvasView._clear_scene_item_list_map(scene, {1: [bond_a], 2: [bond_b]}),
+            {},
+        )
+        self.assertEqual(
+            scene.removeItem.call_args_list,
+            [mock.call(bond_a), mock.call(bond_b)],
+        )
+
+        scene.removeItem.reset_mock()
+        self.assertEqual(CanvasView._clear_scene_item_map(scene, {3: atom_label}), {})
+        scene.removeItem.assert_called_once_with(atom_label)
+
+        scene.removeItem.reset_mock()
+        CanvasView._remove_scene_items(scene, [])
+        scene.removeItem.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

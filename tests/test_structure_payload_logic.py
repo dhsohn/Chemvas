@@ -10,6 +10,7 @@ if str(APP_ROOT) not in sys.path:
 
 from core.model import Bond, MoleculeModel
 from ui.structure_payload_logic import (
+    build_atom_annotations,
     build_3d_conversion_payload,
     build_structure_payload,
     build_submodel,
@@ -118,6 +119,50 @@ class StructurePayloadLogicTest(unittest.TestCase):
         self.assertEqual(len(export_model.bonds), 2)
         self.assertEqual(atom_annotations[0], {"formal_charge": -1})
         self.assertEqual(atom_annotations[2], {"radical_electrons": 1})
+
+    def test_expand_build_and_annotation_helpers_skip_invalid_or_missing_entries(self) -> None:
+        model = MoleculeModel()
+        model.add_atom("C", 0.0, 0.0)
+        model.bonds = [None, Bond(0, 9, 1, "wedge", "#334455")]
+
+        selected = expand_atom_ids_for_structure(model, {0, 5}, {-1, 0, 1, 4})
+
+        self.assertEqual(selected, {0, 5, 9})
+
+        submodel, bounds, id_map = build_submodel(
+            model,
+            {0, 5},
+            {0, 1, 4},
+            bounds_getter=self._bounds_for,
+        )
+
+        self.assertEqual(bounds, (0.0, -1.0, 9.0, 1.0))
+        self.assertEqual(id_map, {0: 0})
+        self.assertEqual(sorted(submodel.atoms), [0])
+        self.assertEqual(submodel.bonds, [])
+
+        annotations = build_atom_annotations(
+            {0, 7},
+            id_map,
+            {
+                0: ["plus", "minus", "radical", "radical"],
+                7: ["plus"],
+            },
+        )
+        self.assertEqual(annotations, {0: {"radical_electrons": 2}})
+
+    def test_build_structure_payload_rejects_nonempty_selection_without_exportable_atoms(self) -> None:
+        model = MoleculeModel()
+        model.bonds = [Bond(7, 8, 1)]
+
+        with self.assertRaisesRegex(ValueError, "There is no chemical structure to export."):
+            build_structure_payload(
+                model,
+                set(),
+                {0},
+                {},
+                bounds_getter=self._bounds_for,
+            )
 
 
 if __name__ == "__main__":

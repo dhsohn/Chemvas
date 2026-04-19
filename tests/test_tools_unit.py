@@ -22,7 +22,7 @@ if str(APP_ROOT) not in sys.path:
 if QApplication is not None:
     import core.tools as tools_module
     from core.model import Atom, Bond
-    from core.tools import ArrowTool, BondTool, MoveTool, RotateTool, SelectTool, TSBracketTool, _independent_selection_items
+    from core.tools import ArrowTool, BondTool, MoveTool, RotateTool, SelectTool, TSBracketTool, Tool, _independent_selection_items
     from core.history import CompositeCommand, MoveAtomsCommand, MoveItemsCommand, UpdateSceneItemCommand
 
 
@@ -342,6 +342,36 @@ class ToolsUnitTest(unittest.TestCase):
 
         self.assertEqual(filtered, [mark_free, kept])
 
+    def test_base_tool_and_selection_drag_helpers_cover_item_only_and_noop_paths(self) -> None:
+        base_tool = Tool("base")
+        base_tool.activate()
+        base_tool.deactivate()
+        self.assertFalse(base_tool.on_mouse_press(_FakeEvent()))
+        self.assertFalse(base_tool.on_mouse_move(_FakeEvent()))
+        self.assertFalse(base_tool.on_mouse_release(_FakeEvent()))
+
+        canvas = _FakeSelectCanvas()
+        tool = SelectTool(canvas)
+        tool._apply_drag_delta(QPointF(1.0, 2.0))
+        self.assertEqual(canvas.moved_atoms, [])
+        self.assertEqual(canvas.moved_items, [])
+
+        selection_item = _FakeItem("note")
+        self.assertTrue(tool._begin_selection_drag(set(), [selection_item], QPointF(0.0, 0.0)))
+        self.assertEqual(tool._drag_bond_ids, set())
+        self.assertEqual(tool._drag_boundary_bond_ids, set())
+        item_only_command = tool._build_move_command()
+        self.assertIsInstance(item_only_command, MoveItemsCommand)
+
+        tool._selection_atom_ids = set()
+        tool._selection_items = []
+        self.assertIsNone(tool._build_move_command())
+        tool._moved = True
+        tool._suspended_outline = False
+        tool._commit_selection_drag()
+        self.assertEqual(canvas.updated_outline, 1)
+        self.assertEqual(canvas.pushed_commands, [])
+
     def test_select_tool_context_begin_and_structure_selection_helpers(self) -> None:
         canvas = _FakeSelectCanvas()
         tool = SelectTool(canvas)
@@ -375,6 +405,46 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertEqual(len(tool._selection_items), 1)
         self.assertEqual(tool._drag_bond_ids, {1})
         self.assertEqual(tool._drag_boundary_bond_ids, {2})
+
+    def test_select_tool_additional_guard_paths_cover_invalid_targets_and_decisions(self) -> None:
+        canvas = _FakeSelectCanvas()
+        tool = SelectTool(canvas)
+
+        self.assertFalse(tool._select_structure_item(None))
+        self.assertFalse(tool._select_structure_item(_FakeItem("atom", 4)))
+        self.assertFalse(tool._select_structure_item(_FakeItem("bond", "bad")))
+        self.assertFalse(tool._select_structure_item(_FakeItem("bond", 8)))
+        self.assertFalse(tool._select_structure_item(_FakeItem("other", 1)))
+        self.assertFalse(tool.on_mouse_press(_FakeEvent(button=Qt.MouseButton.RightButton)))
+
+        canvas.item = _FakeItem("note")
+        canvas.toggle_result = False
+        canvas.preferred_item = None
+        self.assertFalse(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 2.0), modifiers=Qt.KeyboardModifier.ShiftModifier)))
+
+        canvas.scene_obj.selected_items = [_FakeItem("note")]
+        canvas.snapshot = SimpleNamespace(selected_atom_ids={1}, selection_items=[_FakeItem("note")])
+        canvas.atom_items[1] = _FakeItem("atom", 1)
+        canvas.preferred_item = _FakeItem("atom", 1)
+        canvas.item = None
+        with mock.patch.object(tools_module, "plan_selection_press", return_value=SimpleNamespace(action="ignore")):
+            self.assertFalse(tool.on_mouse_press(_FakeEvent(QPointF(2.0, 3.0))))
+
+        with mock.patch.object(tools_module, "plan_selection_press", return_value=SimpleNamespace(action="reselect_preferred_and_drag")):
+            canvas.preferred_item = None
+            self.assertFalse(tool.on_mouse_press(_FakeEvent(QPointF(2.0, 3.0))))
+
+        with mock.patch.object(tools_module, "plan_selection_press", return_value=SimpleNamespace(action="reselect_preferred_and_drag")):
+            canvas.preferred_item = _FakeItem("atom", 4)
+            self.assertFalse(tool.on_mouse_press(_FakeEvent(QPointF(2.0, 3.0))))
+
+        with mock.patch.object(tools_module, "plan_selection_press", return_value=SimpleNamespace(action="reselect_preferred_and_drag")):
+            canvas.preferred_item = _FakeItem("atom", 5)
+            canvas.atom_items[5] = _FakeItem("atom", 5)
+            canvas.snapshot = SimpleNamespace(selected_atom_ids=set(), selection_items=[])
+            self.assertFalse(tool.on_mouse_press(_FakeEvent(QPointF(2.0, 3.0))))
+
+        self.assertFalse(tool.on_mouse_move(_FakeEvent(QPointF(9.0, 9.0))))
 
     def test_select_tool_mouse_press_handles_shift_handle_curve_and_drag_paths(self) -> None:
         canvas = _FakeSelectCanvas()
@@ -635,6 +705,58 @@ class ToolsUnitTest(unittest.TestCase):
         endpoint = tool._snap_endpoint(QPointF(0.0, 0.0), QPointF(8.0, 4.0))
         self.assertAlmostEqual(endpoint.x(), 17.320508075688775)
         self.assertAlmostEqual(endpoint.y(), 10.0)
+
+    def test_bond_tool_additional_guard_and_deactivate_paths(self) -> None:
+        canvas = _FakeBondCanvas()
+        tool = BondTool(canvas)
+        tool._preview_signature = "single:1"
+        tool.deactivate()
+        self.assertIsNone(tool._start_pos)
+        self.assertIsNone(tool._start_atom_id)
+        self.assertIsNone(tool._press_scene_pos)
+        self.assertIsNone(tool._preview_signature)
+
+        tool._clear_preview_items()
+        self.assertIsNone(tool._preview_signature)
+
+        canvas.preview_build_items = []
+        with mock.patch.object(tools_module, "add_bond_preview_items_helper") as add_helper:
+            tool._set_preview_items(QPointF(0.0, 0.0), QPointF(2.0, 0.0))
+        add_helper.assert_not_called()
+
+        self.assertFalse(tool._apply_active_style_to_bond(99))
+        canvas.model.bonds[0] = None
+        self.assertFalse(tool._apply_active_style_to_bond(0))
+
+        canvas.model.bonds[0] = Bond(1, 2, 2, style="bold_out")
+        canvas.active_bond_style = "bold"
+        self.assertTrue(tool._apply_active_style_to_bond(0))
+        self.assertEqual(canvas.bond_style_calls[-1], (0, "bold_in", 2))
+
+        canvas.model.bonds[0] = Bond(1, 2, 2, style="single")
+        self.assertTrue(tool._apply_active_style_to_bond(0))
+        self.assertEqual(canvas.bond_style_calls[-1], (0, "bold_in", 2))
+        self.assertFalse(tool.on_mouse_press(_FakeEvent(button=Qt.MouseButton.RightButton)))
+
+        with mock.patch.object(tool, "_clear_preview_items") as clear_preview, \
+             mock.patch.object(tool, "_snap_to_atom", return_value=QPointF(8.0, 8.0)), \
+             mock.patch.object(tool, "_snap_endpoint", return_value=QPointF(9.0, 9.0)):
+            tool._start_pos = QPointF(1.0, 1.0)
+            tool._start_atom_id = 1
+            tool._press_scene_pos = None
+            self.assertTrue(tool.on_mouse_release(_FakeEvent(QPointF(4.0, 4.0))))
+            clear_preview.assert_called_once()
+        self.assertEqual(canvas.added_bonds[-1][1], QPointF(canvas.default_endpoint))
+
+        canvas.added_bonds.clear()
+        with mock.patch.object(tool, "_clear_preview_items"), \
+             mock.patch.object(tool, "_snap_to_atom", return_value=QPointF(6.0, 6.0)), \
+             mock.patch.object(tool, "_snap_endpoint", return_value=QPointF(7.0, 7.0)):
+            tool._start_pos = QPointF(1.0, 1.0)
+            tool._start_atom_id = 1
+            tool._press_scene_pos = QPointF(0.0, 0.0)
+            self.assertTrue(tool.on_mouse_release(_FakeEvent(QPointF(20.0, 0.0))))
+        self.assertEqual(canvas.added_bonds[-1][1], QPointF(7.0, 7.0))
 
     def test_bond_tool_mouse_press_move_release_and_style_dispatch(self) -> None:
         canvas = _FakeBondCanvas()

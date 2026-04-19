@@ -38,7 +38,10 @@ if QApplication is not None:
         BondPreviewBuildResolvers,
         BondPreviewConfig,
         BondPreviewUpdateResolvers,
+        _apply_plain_double_preview_variant,
         _expanded_bold_segment,
+        _plain_double_preview_segments,
+        _trim_segment,
         add_bond_preview_items,
         build_bond_preview_items,
         clear_bond_preview_items,
@@ -170,6 +173,15 @@ class BondPreviewRendererTest(unittest.TestCase):
 
         self.assertEqual(clear_bond_preview_items(QGraphicsScene(), [DeadItem()]), [])
 
+    def test_clear_bond_preview_items_leaves_detached_items_untouched(self) -> None:
+        scene = QGraphicsScene()
+        other_scene = QGraphicsScene()
+        detached = QGraphicsLineItem(0.0, 0.0, 1.0, 1.0)
+        other_scene.addItem(detached)
+
+        self.assertEqual(clear_bond_preview_items(scene, [detached]), [])
+        self.assertIs(detached.scene(), other_scene)
+
     def test_build_wedge_preview_delegates_to_resolver(self) -> None:
         expected = [QGraphicsPolygonItem()]
         wedge = mock.Mock(return_value=expected)
@@ -279,6 +291,33 @@ class BondPreviewRendererTest(unittest.TestCase):
 
         self.assertEqual(items, [first, second])
         draw_parallel.assert_called_once()
+
+    def test_build_bold_preview_without_outward_flag_keeps_normal_direction(self) -> None:
+        strip = QGraphicsPolygonItem()
+        line_normal = mock.Mock(return_value=(0.25, 0.75))
+        one_sided = mock.Mock(return_value=strip)
+        resolvers = BondPreviewBuildResolvers(
+            draw_wedge_bond=mock.Mock(),
+            draw_hash_bond=mock.Mock(),
+            draw_dotted_bond=mock.Mock(),
+            draw_parallel_bonds=lambda *_args: [QGraphicsLineItem(0.0, 0.0, 10.0, 0.0), QGraphicsLineItem(0.0, 1.0, 10.0, 1.0)],
+            line_normal=line_normal,
+            one_sided_bond_strip=one_sided,
+            bond_pen=mock.Mock(),
+            dotted_bond_pen=mock.Mock(),
+        )
+
+        items = build_bond_preview_items(
+            QPointF(0.0, 0.0),
+            QPointF(14.0, 0.0),
+            config=_config(style="bold", order=2),
+            a_id=1,
+            b_id=2,
+            resolvers=resolvers,
+        )
+
+        self.assertIsInstance(items[0], QGraphicsPolygonItem)
+        one_sided.assert_called_once_with(0.0, 0.0, 10.0, 0.0, 0.25, 0.75, 1.2, 3.5999999999999996)
 
     def test_build_parallel_nonbold_preview_uses_parallel_resolver(self) -> None:
         expected = [QGraphicsLineItem(0.0, 0.0, 8.0, 0.0), QGraphicsLineItem(0.0, 1.0, 8.0, 1.0)]
@@ -533,6 +572,48 @@ class BondPreviewRendererTest(unittest.TestCase):
 
         self.assertFalse(updated)
 
+    def test_update_dotted_preview_returns_false_for_wrong_item_type(self) -> None:
+        updated = update_bond_preview_items(
+            [QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)],
+            QPointF(0.0, 0.0),
+            QPointF(10.0, 0.0),
+            config=_config(style="dotted", order=1),
+            a_id=None,
+            b_id=None,
+            resolvers=_update_resolvers(),
+        )
+
+        self.assertFalse(updated)
+
+    def test_update_bold_parallel_preview_returns_false_for_bad_later_item(self) -> None:
+        updated = update_bond_preview_items(
+            [QGraphicsPolygonItem(), QGraphicsPolygonItem()],
+            QPointF(0.0, 0.0),
+            QPointF(10.0, 0.0),
+            config=_config(style="bold", order=2),
+            a_id=1,
+            b_id=2,
+            resolvers=_update_resolvers(),
+        )
+
+        self.assertFalse(updated)
+
+    def test_update_bold_single_preview_outward_updates_polygon(self) -> None:
+        item = QGraphicsPolygonItem()
+
+        updated = update_bond_preview_items(
+            [item],
+            QPointF(0.0, 0.0),
+            QPointF(10.0, 0.0),
+            config=_config(style="bold_out", order=1),
+            a_id=None,
+            b_id=None,
+            resolvers=_update_resolvers(),
+        )
+
+        self.assertTrue(updated)
+        self.assertEqual(len(item.polygon()), 4)
+
     def test_update_parallel_nonbold_preview_updates_all_line_items(self) -> None:
         items = [QGraphicsLineItem(0.0, 0.0, 1.0, 0.0), QGraphicsLineItem(0.0, 1.0, 1.0, 1.0)]
 
@@ -586,6 +667,56 @@ class BondPreviewRendererTest(unittest.TestCase):
         )
 
         self.assertFalse(updated)
+
+    def test_update_plain_double_and_parallel_preview_cover_length_and_type_guards(self) -> None:
+        self.assertFalse(
+            update_bond_preview_items(
+                [QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)],
+                QPointF(0.0, 0.0),
+                QPointF(10.0, 0.0),
+                config=_config(style="double", order=2),
+                a_id=None,
+                b_id=None,
+                resolvers=_update_resolvers(),
+            )
+        )
+        self.assertFalse(
+            update_bond_preview_items(
+                [QGraphicsLineItem(0.0, 0.0, 1.0, 0.0), QGraphicsPolygonItem()],
+                QPointF(0.0, 0.0),
+                QPointF(10.0, 0.0),
+                config=_config(style="double", order=2),
+                a_id=None,
+                b_id=None,
+                resolvers=_update_resolvers(),
+            )
+        )
+        self.assertFalse(
+            update_bond_preview_items(
+                [QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)],
+                QPointF(0.0, 0.0),
+                QPointF(10.0, 0.0),
+                config=_config(style="single", order=2),
+                a_id=None,
+                b_id=None,
+                resolvers=_update_resolvers(),
+            )
+        )
+
+    def test_plain_double_helper_tails_cover_trim_len_and_passthrough_paths(self) -> None:
+        segment = (0.0, 0.0, 10.0, 0.0)
+        self.assertEqual(_trim_segment(segment, 0.0), segment)
+        self.assertEqual(_plain_double_preview_segments((segment,), "double"), (segment,))
+
+        centered = _plain_double_preview_segments(
+            ((0.0, -2.0, 10.0, -2.0), (0.0, 2.0, 10.0, 2.0)),
+            "double_centered",
+        )
+        self.assertEqual((centered[0][1], centered[1][1]), (-2.2, 2.2))
+
+        first = QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)
+        items = [first]
+        self.assertIs(_apply_plain_double_preview_variant(items, "double"), items)
 
     def test_update_single_preview_returns_false_for_wrong_item_shape(self) -> None:
         updated = update_bond_preview_items(

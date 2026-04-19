@@ -7,8 +7,8 @@ from pathlib import Path
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtCore import QPointF
-    from PyQt6.QtGui import QColor, QPen
+    from PyQt6.QtCore import QPointF, Qt
+    from PyQt6.QtGui import QBrush, QColor, QPen
     from PyQt6.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsLineItem, QGraphicsScene
 except ModuleNotFoundError:
     QApplication = None
@@ -23,7 +23,7 @@ if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
 if QApplication is not None:
-    from ui.benzene_preview_renderer import clear_benzene_preview, rebuild_benzene_preview
+    from ui.benzene_preview_renderer import _apply_preview_style, clear_benzene_preview, rebuild_benzene_preview
     from ui.graphics_items import NoSelectLineItem
 
 
@@ -119,6 +119,91 @@ class BenzenePreviewRendererTest(unittest.TestCase):
         self.assertEqual(cleared_items, [])
         self.assertEqual(len(self.scene.items()), 0)
         self.assertTrue(all(item.scene() is None for item in items))
+
+    def test_clear_benzene_preview_skips_detached_and_runtime_error_items(self) -> None:
+        other_scene = QGraphicsScene()
+        detached = QGraphicsLineItem(0.0, 0.0, 1.0, 1.0)
+        other_scene.addItem(detached)
+
+        class _DisposedItem:
+            def scene(self):
+                raise RuntimeError("disposed")
+
+        cleared_items = clear_benzene_preview(self.scene, [detached, _DisposedItem()])
+
+        self.assertEqual(cleared_items, [])
+        self.assertIs(detached.scene(), other_scene)
+
+    def test_rebuild_benzene_preview_covers_empty_ring_inner_none_and_brush_style_updates(self) -> None:
+        original_items = rebuild_benzene_preview(
+            self.scene,
+            _hexagon_points(radius=7.0),
+            base_pen=self.base_pen,
+            atom_radius=1.0,
+            create_inner_bond_item=lambda point, next_point, center: QGraphicsLineItem(
+                point.x(), point.y(), center.x(), center.y()
+            ),
+        )
+
+        self.assertEqual(
+            rebuild_benzene_preview(
+                self.scene,
+                [],
+                base_pen=self.base_pen,
+                atom_radius=1.0,
+                create_inner_bond_item=lambda point, next_point, center: None,
+                existing_items=original_items,
+            ),
+            [],
+        )
+        self.assertEqual(len(self.scene.items()), 0)
+
+        call_count = 0
+
+        def create_inner_bond_item(point: QPointF, next_point: QPointF, center: QPointF):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:
+                return None
+            item = QGraphicsEllipseItem(center.x() - 1.0, center.y() - 1.0, 2.0, 2.0)
+            item.setPen(QPen(QColor("#112233")))
+            item.setBrush(QColor("#445566"))
+            return item
+
+        items = rebuild_benzene_preview(
+            self.scene,
+            _hexagon_points(radius=9.0),
+            base_pen=self.base_pen,
+            atom_radius=-2.0,
+            create_inner_bond_item=create_inner_bond_item,
+        )
+
+        inner_dots = [item for item in items if isinstance(item, QGraphicsEllipseItem) and item.rect().width() == 2.0]
+        atom_dots = [item for item in items if isinstance(item, QGraphicsEllipseItem) and item.rect().width() == 0.0]
+        self.assertEqual(call_count, 3)
+        self.assertEqual(len(inner_dots), 2)
+        self.assertEqual(len(atom_dots), 6)
+        self.assertEqual(inner_dots[0].pen().color(), QColor(120, 120, 120, 140))
+        self.assertEqual(inner_dots[0].brush().color(), QColor(120, 120, 120, 140))
+
+    def test_apply_preview_style_skips_items_without_pen_and_no_brush_fill(self) -> None:
+        class _BrushOnlyItem:
+            def __init__(self) -> None:
+                self._brush = QBrush(Qt.BrushStyle.NoBrush)
+                self.set_brush_calls = 0
+
+            def brush(self):
+                return QBrush(self._brush)
+
+            def setBrush(self, brush) -> None:
+                self.set_brush_calls += 1
+                self._brush = QBrush(brush)
+
+        item = _BrushOnlyItem()
+
+        _apply_preview_style(item, QColor("#abcdef"))
+
+        self.assertEqual(item.set_brush_calls, 0)
 
 
 def _hexagon_points(*, radius: float, center: tuple[float, float] = (0.0, 0.0)) -> list[QPointF]:

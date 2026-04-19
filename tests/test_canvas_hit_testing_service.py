@@ -126,6 +126,16 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
 
         self.assertIs(fallback_service.item_at_scene_pos(QPointF(2.0, 2.0)), nearby_bond_graphic)
 
+        empty_fallback_canvas = SimpleNamespace(
+            scene=lambda: _FakeScene([_FakeItem("note_box"), _FakeItem("other")]),
+            bond_items={4: []},
+            _bond_pick_radius=mock.Mock(return_value=7.0),
+        )
+        empty_fallback_service = CanvasHitTestingService(empty_fallback_canvas)
+        empty_fallback_service.find_bond_near = mock.Mock(return_value=4)
+
+        self.assertEqual(empty_fallback_service.item_at_scene_pos(QPointF(2.0, 2.0)).data(0), "other")
+
     def test_spatial_index_helpers_rebuild_and_find_atom_and_bond(self) -> None:
         canvas = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
@@ -154,6 +164,47 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
         self.assertEqual(service.find_atom_near(1.0, 1.0, 5.0), 1)
         self.assertEqual(service.find_bond_near(QPointF(5.0, 2.0), 4.0), 0)
         self.assertIsNone(service.find_bond_near(QPointF(40.0, 40.0), 4.0))
+
+    def test_spatial_index_and_nearest_helpers_cover_missing_sparse_and_zero_cell_paths(self) -> None:
+        sparse_canvas = SimpleNamespace(
+            renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
+            model=SimpleNamespace(
+                atoms={1: Atom("C", 0.0, 0.0)},
+                bonds=[Bond(1, 99, 1)],
+            ),
+            _spatial_index_dirty=True,
+            _spatial_cell_size=0.0,
+            _atom_grid={},
+            _bond_grid={},
+        )
+        sparse_service = CanvasHitTestingService(sparse_canvas)
+        sparse_service.rebuild_spatial_index(20.0)
+        self.assertEqual(sparse_canvas._bond_grid, {})
+
+        zero_cell_canvas = SimpleNamespace(
+            renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
+            model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[Bond(1, 2, 1)]),
+            _spatial_index_dirty=False,
+            _spatial_cell_size=0.0,
+            _atom_grid={(0, 0): {1}},
+            _bond_grid={(0, 0): {0}},
+            _grid_cell_size=lambda: 0.0,
+        )
+        zero_cell_service = CanvasHitTestingService(zero_cell_canvas)
+        self.assertIsNone(zero_cell_service.find_atom_near(0.0, 0.0, 5.0))
+        self.assertIsNone(zero_cell_service.find_bond_near(QPointF(0.0, 0.0), 5.0))
+
+        sparse_lookup_canvas = SimpleNamespace(
+            renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
+            model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[None, Bond(1, 99, 1)]),
+            _spatial_index_dirty=False,
+            _spatial_cell_size=20.0,
+            _atom_grid={(0, 0): {9, 1}},
+            _bond_grid={(0, 0): {5, 0, 1}},
+        )
+        sparse_lookup_service = CanvasHitTestingService(sparse_lookup_canvas)
+        self.assertEqual(sparse_lookup_service.find_atom_near(0.0, 0.0, 5.0), 1)
+        self.assertIsNone(sparse_lookup_service.find_bond_near(QPointF(0.0, 0.0), 5.0))
 
     def test_nearest_hit_helpers_and_bond_id_from_event_use_canvas_overrides(self) -> None:
         canvas = SimpleNamespace(

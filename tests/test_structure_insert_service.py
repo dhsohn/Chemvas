@@ -87,6 +87,22 @@ class _FakeCanvas:
         return {"kind": "note", "text": text, "pos": _point_tuple(pos)}
 
 
+class _EphemeralBondList(list):
+    def __init__(self, items=(), *, none_after_first_read: set[int] | None = None) -> None:
+        super().__init__(items)
+        self._none_after_first_read = set(none_after_first_read or ())
+        self._reads: dict[int, int] = {}
+
+    def __getitem__(self, index):
+        if isinstance(index, slice):
+            return super().__getitem__(index)
+        value = super().__getitem__(index)
+        self._reads[index] = self._reads.get(index, 0) + 1
+        if index in self._none_after_first_read and self._reads[index] > 1:
+            return None
+        return value
+
+
 class StructureInsertServiceTest(unittest.TestCase):
     def test_insert_structure_model_is_no_op_for_empty_model(self) -> None:
         canvas = _FakeCanvas()
@@ -238,6 +254,50 @@ class StructureInsertServiceTest(unittest.TestCase):
             ],
         )
         self.assertEqual(canvas.atom_label_calls, [])
+
+    def test_insert_structure_model_skips_none_and_unmapped_source_bonds(self) -> None:
+        canvas = _FakeCanvas()
+        model = MoleculeModel(
+            atoms={
+                1: Atom("C", 0.0, 0.0, explicit_label=False),
+                2: Atom("O", 8.0, 0.0, explicit_label=True),
+            },
+            bonds=[
+                None,
+                Bond(1, 99, order=1, style="single", color="#111111"),
+                Bond(1, 2, order=2, style="double", color="#222222"),
+            ],
+        )
+
+        inserted_atom_ids, inserted_bond_ids = StructureInsertService(canvas).insert_structure_model(
+            model,
+            center=QPointF(4.0, 0.0),
+        )
+
+        self.assertEqual(inserted_atom_ids, {0, 1})
+        self.assertEqual(inserted_bond_ids, {0})
+        self.assertEqual(len(canvas.model.bonds), 1)
+        self.assertEqual(canvas.add_bond_graphics_calls, [0])
+
+    def test_insert_structure_model_skips_graphics_for_sparse_new_bond_slots(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model.bonds = _EphemeralBondList(canvas.model.bonds, none_after_first_read={0})
+        model = MoleculeModel(
+            atoms={
+                4: Atom("C", 0.0, 0.0, explicit_label=False),
+                8: Atom("C", 10.0, 0.0, explicit_label=False),
+            },
+            bonds=[Bond(4, 8, order=1, style="single", color="#333333")],
+        )
+
+        inserted_atom_ids, inserted_bond_ids = StructureInsertService(canvas).insert_structure_model(
+            model,
+            center=QPointF(5.0, 0.0),
+        )
+
+        self.assertEqual(inserted_atom_ids, {0, 1})
+        self.assertEqual(inserted_bond_ids, set())
+        self.assertEqual(canvas.add_bond_graphics_calls, [])
 
 
 if __name__ == "__main__":

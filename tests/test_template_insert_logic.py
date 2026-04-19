@@ -10,6 +10,7 @@ if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
 from ui.template_insert_logic import (
+    TemplateInsertPlan,
     TemplateInsertRequest,
     TemplatePointResolvers,
     plan_template_commit,
@@ -165,6 +166,65 @@ class TemplateInsertLogicTest(unittest.TestCase):
 
         assert plan is not None
         self.assertIsNone(resolve_template_insert(request, plan, resolvers))
+
+    def test_resolve_rejects_invalid_internal_bond_plans(self) -> None:
+        request = TemplateInsertRequest(ring_size=6, cursor_pos=(0.0, 0.0), ring_style="regular")
+        resolvers = _make_resolvers()
+
+        self.assertIsNone(
+            resolve_template_insert(
+                request,
+                TemplateInsertPlan(
+                    generator="bond_regular_ring",
+                    ring_size=6,
+                    ring_style="regular",
+                    bond_id=None,
+                ),
+                resolvers,
+            )
+        )
+        self.assertIsNone(
+            resolve_template_insert(
+                request,
+                TemplateInsertPlan(
+                    generator="bond_template_shape",
+                    ring_size=6,
+                    ring_style="chair",
+                    bond_id=None,
+                    template_shape="chair",
+                ),
+                resolvers,
+            )
+        )
+
+    def test_resolve_rejects_unknown_generator_and_missing_template_shape(self) -> None:
+        request = TemplateInsertRequest(ring_size=6, cursor_pos=(0.0, 0.0), ring_style="regular")
+        resolvers = _make_resolvers()
+
+        self.assertIsNone(
+            resolve_template_insert(
+                request,
+                TemplateInsertPlan(
+                    generator="unknown",
+                    ring_size=6,
+                    ring_style="regular",
+                    bond_id=None,
+                ),
+                resolvers,
+            )
+        )
+        with self.assertRaises(ValueError):
+            resolve_template_insert(
+                request,
+                TemplateInsertPlan(
+                    generator="free_template_shape",
+                    ring_size=6,
+                    ring_style="chair",
+                    bond_id=None,
+                    template_shape=None,
+                ),
+                resolvers,
+            )
 
     def test_resolve_benzene_returns_special_resolution_without_point_generation(self) -> None:
         request = TemplateInsertRequest(ring_size=6, cursor_pos=(0.0, 0.0), bond_id=9, ring_style="benzene")

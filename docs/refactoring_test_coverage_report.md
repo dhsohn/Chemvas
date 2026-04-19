@@ -6,11 +6,11 @@
 ## 1. 현재 상태 요약
 
 - 실행 기준: `pytest --cov=app --cov-report=term-missing`
-- 결과: `1067 passed, 27 subtests passed in 13.84s`
-- 전체 커버리지: `93%`
-- 첫 보고서 시점 대비: `+669 tests`, `+22%p`
+- 결과: `1196 passed in 14.18s`
+- 전체 커버리지: `99%`
+- 첫 보고서 시점 대비: `+798 tests`, `+28%p`
 
-이번 턴에는 `SceneItemController`에 `attach_scene_item()` seam을 추가해 runtime add와 restore가 같은 registry 규칙을 타게 정리했다. [scene_decoration_service.py](/Users/daehyupsohn/LiteDraw/app/ui/scene_decoration_service.py), [canvas_note_controller.py](/Users/daehyupsohn/LiteDraw/app/ui/canvas_note_controller.py), [structure_build_service.py](/Users/daehyupsohn/LiteDraw/app/ui/structure_build_service.py)는 이제 mark/arrow/TS bracket/orbital/note/ring fill 등록을 [scene_item_access.py](/Users/daehyupsohn/LiteDraw/app/ui/scene_item_access.py)의 `attach_scene_item()` access layer로 통일하고, [tests/test_scene_item_controller.py](/Users/daehyupsohn/LiteDraw/tests/test_scene_item_controller.py), [tests/test_scene_decoration_service.py](/Users/daehyupsohn/LiteDraw/tests/test_scene_decoration_service.py), [tests/test_canvas_note_controller_unit.py](/Users/daehyupsohn/LiteDraw/tests/test_canvas_note_controller_unit.py), [tests/test_scene_item_access.py](/Users/daehyupsohn/LiteDraw/tests/test_scene_item_access.py), [tests/test_structure_build_service.py](/Users/daehyupsohn/LiteDraw/tests/test_structure_build_service.py), [tests/test_canvas_view_additional.py](/Users/daehyupsohn/LiteDraw/tests/test_canvas_view_additional.py)로 direct/wrapper contract를 고정했다. 현재 주요 수치는 `CanvasArrowBuildService 100%`, `CanvasSceneDecorationBuildService 100%`, `CanvasSceneResetService 100%`, `SceneDecorationService 100%`, `MainWindowIconFactory 100%`, `CanvasColorMutationService 100 stmts / 99%`, `CanvasGraphService 408 stmts / 95%`, `MainWindowCanvasTabUIService 100%`, `CanvasHitTestingService 206 stmts / 95%`, `CanvasChemdrawShortcutService 155 stmts / 94%`, `CanvasView 2163 stmts / 88%`, `SelectionController 465 stmts / 90%`, `main_window 348 stmts / 94%`, `StructureBuildService 376 stmts / 94%`, `CanvasNoteController 107 stmts / 94%`, `MainWindowCanvasSheetService 100%`, `MainWindowWorkbookDocumentService 100%`, `MainWindowActiveCanvasUIService 100%`, `main_window_document_action_service 116 stmts / 99%`, `main_window_tool_routing_service 58 stmts / 99%`, `main_window_tool_state_service 100%`, `main_window_ui_assembly_service 231 stmts / 93%`, `CanvasGeometryController 156 stmts / 93%`, `SceneOpsController 187 stmts / 98%`, `SceneItemController 133 stmts / 99%`, `rdkit_conversion 464 stmts / 91%`, `canvas_document_state 94%`, `scene_item_access 68 stmts / 98%`, `core/tools.py 93%`이며, 다음 우선순위는 `CanvasView`의 residual add/scene orchestration, `CanvasView`의 model-backed scene lifecycle/rebuild seam, `MainWindowTextStyleService`의 dialog/no-op branch, `CanvasGeometryController`의 stateful branch polish다.
+이번 턴에는 [test_graphics_items.py](/Users/daehyupsohn/LiteDraw/tests/test_graphics_items.py), [test_structure_benzene_logic.py](/Users/daehyupsohn/LiteDraw/tests/test_structure_benzene_logic.py), [test_bond_graphics_logic.py](/Users/daehyupsohn/LiteDraw/tests/test_bond_graphics_logic.py), [test_template_insert_logic.py](/Users/daehyupsohn/LiteDraw/tests/test_template_insert_logic.py), [test_benzene_preview_service.py](/Users/daehyupsohn/LiteDraw/tests/test_benzene_preview_service.py)를 보강해 `graphics_items`, `structure_benzene_logic`, `bond_graphics_logic`, `template_insert_logic`, `benzene_preview_service`의 남은 guard/fallback branch를 모두 닫았다. 그 결과 이번에 지정한 다섯 모듈은 모두 `100%`까지 올라왔고, 다음 우선순위는 `preview_scene_renderer`, `scene_clipboard_logic`, `scene_delete_logic`, `canvas_move_controller`, `text_tool_logic` 같은 95%대 tail이다.
 
 ## 2. 이번 라운드에서 완료된 작업
 
@@ -364,6 +364,7 @@
 - `app/ui/canvas_note_controller.py`
   - note focus-out 삭제 경로가 공통 `scene_item_access` helper를 사용하도록 정리
   - `create_text_note()`가 note 생성/scene 등록/style 적용 orchestration을 흡수
+  - note border disable fallback이 `QPen(Qt.PenStyle.NoPen)`을 쓰도록 수정해 `TypeError`를 제거
 - `app/core/delete_tool_logic.py`
   - erase scene-item 삭제 경로가 공통 `scene_item_access` helper를 사용하도록 정리
 - `app/ui/structure_insert_service.py`
@@ -374,35 +375,37 @@
 ### 2.3 새로 추가되거나 강화된 테스트
 
 - `tests/test_atom_label_access.py`
+- `tests/test_graphics_items.py`
 - `tests/test_structure_build_service.py`
 - `tests/test_structure_geometry_logic.py`
 - `tests/test_ring_occupancy_logic.py`
-- `tests/test_benzene_preview_service.py`
+- `tests/test_benzene_preview_service.py` 추가 보강
 - `tests/test_bond_hover_preview_service.py`
 - `tests/test_mark_hover_preview_service.py`
 - `tests/test_hover_highlight_logic.py`
 - `tests/test_hover_scene_service.py`
-- `tests/test_hover_interaction_service.py`
+- `tests/test_hover_interaction_service.py` 추가 보강
 - `tests/test_selection_highlight_styler.py`
 - `tests/test_handle_overlay_service.py`
 - `tests/test_handle_mutation_service.py`
 - `tests/test_curved_arrow_path_service.py`
-- `tests/test_structure_benzene_logic.py`
+- `tests/test_structure_benzene_logic.py` 추가 보강
 - `tests/test_structure_growth_logic.py`
-- `tests/test_canvas_geometry_logic.py`
+- `tests/test_canvas_geometry_logic.py` 추가 보강
 - `tests/test_selection_center_logic.py`
 - `tests/test_selection_rotation_logic.py`
 - `tests/test_canvas_geometry_controller.py`
 - `tests/test_main_window_toolbar_logic.py`
 - `tests/test_atom_label_service.py`
-- `tests/test_canvas_atom_mutation_service.py`
+- `tests/test_canvas_atom_mutation_service.py` 추가 보강
 - `tests/test_canvas_color_mutation_service.py`
+- `tests/test_canvas_bond_mutation_service.py` 추가 보강
 - `tests/test_canvas_document_session_service.py`
-- `tests/test_canvas_history_recording_service.py`
+- `tests/test_canvas_history_recording_service.py` 추가 보강
 - `tests/test_canvas_mark_scene_service.py`
 - `tests/test_canvas_arrow_build_service.py`
 - `tests/test_canvas_chemdraw_shortcut_service.py`
-- `tests/test_canvas_hit_testing_service.py`
+- `tests/test_canvas_hit_testing_service.py` 추가 보강
 - `tests/test_canvas_ring_fill_scene_service.py`
 - `tests/test_canvas_scene_decoration_build_service.py`
 - `tests/test_main_window_workbook_document_service.py`
@@ -411,15 +414,19 @@
 - `tests/test_main_window_canvas_sheet_service.py`
 - `tests/test_main_window_canvas_tab_ui_service.py`
 - `tests/test_main_window_text_style_service.py`
+- `tests/test_main_window_dialog_actions.py` 추가 보강
 - `tests/test_main_window_icons.py` 추가 보강
 - `tests/test_main_window_tool_action_service.py`
 - `tests/test_main_window_tool_routing_service.py`
 - `tests/test_main_window_tool_state_service.py`
 - `tests/test_scene_decoration_build_service.py`
 - `tests/test_scene_decoration_service.py`
-- `tests/test_bond_graphics_logic.py`
+- `tests/test_bond_graphics_logic.py` 추가 보강
 - `tests/test_insert_smiles_transaction.py`
-- `tests/test_insert_commit_service.py`
+- `tests/test_template_insert_logic.py` 추가 보강
+- `tests/test_insert_commit_service.py` 추가 보강
+- `tests/test_structure_payload_logic.py` 추가 보강
+- `tests/test_scene_item_state_unit.py` 추가 보강
 - `tests/test_insert_controller.py` 추가 보강
 - `tests/test_text_tool_logic.py`
 - `tests/test_delete_tool_logic.py`
@@ -445,7 +452,8 @@
 - `tests/test_canvas_document_state.py`
 - `tests/test_tools_unit.py` 추가 보강
 - `tests/test_structure_insert_service.py` 추가 보강
-- `tests/test_canvas_graph_service.py`
+- `tests/test_canvas_graph_service.py` 추가 보강
+- `tests/test_bond_style_logic.py` 추가 보강
 - `tests/test_canvas_view_additional.py` 추가 보강
 - `tests/test_canvas_view_mark_helpers.py` 추가 보강
 - `tests/test_main_window_icons.py` direct factory coverage로 재정렬
@@ -515,8 +523,11 @@
 - `HandleMutationService`의 orbital scale/rotate fallback, curved control update contract 고정
 - `CurvedArrowPathService`의 path rebuild / arrow head append direct contract 고정
 - `structure_benzene_logic`의 bond 우선 / atom fallback / failed bond terminal / blocked free-center contract 고정
+- `structure_benzene_logic`의 `None` bond / missing endpoint fallback과 failed atom geometry terminal contract 고정
 - `structure_growth_logic`의 fused center / crown stride / mirrored template / bond midpoint / alternating bond spec contract 고정
+- `graphics_items`의 no-select rect paint와 atom dot/label hit-bound contract 고정
 - `canvas_geometry_logic`의 line/segment/ray/rect pure geometry contract 고정
+- `canvas_geometry_logic`의 clip reject, `u1 > u2`, `t_min > t_max`, `t_max < 0` branch contract 고정
 - `StructureBuildService.sprout/fuse ring-template helper`의 record/no-op contract 고정
 - `StructureBuildService.sprout bond/benzene/acetyl + fuse benzene helper`의 direct contract 고정
 - `StructureBuildService`의 chair/boat, fused heterocycle, sidechain/functional fragment, `peptide_2` builder contract 고정
@@ -536,10 +547,12 @@
 - `CanvasView.begin_ring_template_insert()`를 포함한 insert wrapper가 `InsertController` public API로 위임된다는 contract 고정
 - `CanvasView` graph/topology wrapper가 `CanvasGraphService` public API로 위임된다는 contract 고정
 - `CanvasGraphService`의 duplicate-bond adjacency guard, cycle cache invalidation, rotation-hint rejection contract 고정
+- `CanvasGraphService`의 partial-selection dead fallback 제거와 rotation side/axis boundary, isolated/no-rotatable selection fallback contract 고정
 - `CanvasView.add_atom()` / `_remove_atom_only()` / `_restore_atom_from_state()` / `apply_atom_color()`가 `CanvasAtomMutationService` public API로 위임된다는 contract 고정
 - `CanvasAtomMutationService`의 atom add/remove/restore/color lifecycle contract 고정
 - `CanvasView.add_bond()` / `_restore_bond_from_state()` / `_remove_bond_by_id()` / `_trim_bonds_to_length()`가 `CanvasBondMutationService` public API로 위임된다는 contract 고정
 - `CanvasBondMutationService`의 duplicate-bond no-op, sparse restore, adjacency rewire, trim cleanup contract 고정
+- `CanvasBondMutationService`의 `None` bond remove, empty-state restore, service resolver fallback contract 고정
 - `CanvasView.apply_color_to_item()` / `apply_ring_fill_color()`가 `CanvasColorMutationService` public API로 위임된다는 contract 고정
 - `CanvasColorMutationService`의 bond/atom/ring recolor와 ring-fill history contract 고정
 - `AtomLabelService`의 carbon-dot lifecycle, label positioning, selected replacement restore, label-change history assembly contract 고정
@@ -547,6 +560,7 @@
 - `CanvasDocumentSessionService`의 restore 순서, history disable/reenable, save/load/history-reset contract 고정
 - `CanvasView._snapshot_state()` / `_restore_state()` / `restore_state()` / `save_to_file()` / `load_from_file()`가 `CanvasDocumentSessionService` public API로 위임된다는 contract 고정
 - `CanvasHistoryRecordingService`의 composite/single/no-op additions push와 bond-update history guard contract 고정
+- `CanvasHistoryRecordingService`의 empty sparse atom range, `None` new bond, `None`-only scene item no-op contract 고정
 - `CanvasView._record_additions()` / `_record_bond_update()`가 `CanvasHistoryRecordingService` public API로 위임된다는 contract 고정
 - `CanvasNoteController.create_text_note()`의 note item 생성/registry/style contract 고정
 - `CanvasView.add_text_note()`가 `CanvasNoteController` public API로 위임된다는 contract 고정
@@ -562,6 +576,9 @@
 - `CanvasView.add_mark()` / `add_arrow()` / `add_ts_bracket()` / `add_orbital()`가 service delegation shim으로 동작한다는 smoke 고정
 - `CanvasSceneDecorationBuildService`의 arrow dispatch / curved metadata / TS bracket builder / orbital item factory / preview scene registration contract 고정
 - `CanvasArrowBuildService`의 arrow dispatch / curved metadata / preview add / pen contract 고정
+- `bond_graphics_logic`의 non-selectable original/replacement item fallback과 selection restore contract 고정
+- `template_insert_logic`의 invalid internal bond plan, unknown generator, missing template shape guard contract 고정
+- `BenzenePreviewService._create_inner_bond_item()`의 secondary item missing fallback contract 고정
 - `CanvasSceneDecorationBuildService`의 mark builder / mark center helper contract 고정
 - `CanvasSceneDecorationBuildService`의 arrow façade가 `CanvasArrowBuildService`로 위임된다는 contract 고정
 - `CanvasMarkSceneService`의 mark add / offset / cleanup / pointer-center contract 고정
@@ -572,6 +589,7 @@
 - `CanvasChemdrawShortcutService`의 object/generic/atom/bond hotkey dispatch contract 고정
 - `CanvasView` ChemDraw shortcut wrapper가 `CanvasChemdrawShortcutService` public API로 위임된다는 contract 고정
 - `CanvasHitTestingService`의 scene lookup / spatial index / nearest hit / bond-id direct contract 고정
+- `CanvasHitTestingService`의 empty bond graphic fallback, zero-cell guard, sparse atom/bond grid tolerance contract 고정
 - `CanvasView` hit-testing wrapper가 `CanvasHitTestingService` public API로 위임된다는 contract 고정
 - `SelectionController` nearest-hit helper가 `CanvasHitTestingService` consumer로 동작한다는 contract 고정
 - `CanvasView`의 chair/boat, fused heterocycle, sidechain/functional fragment, `peptide_2` public builder가 `StructureBuildService` delegation shim으로 동작한다는 smoke 고정
@@ -605,46 +623,62 @@
 
 | 영역 | 규모 / 커버리지 | 근거 | 판단 |
 | --- | --- | --- | --- |
-| `app/ui/canvas_view.py` | `2163 stmts / 88%` | hit-testing, reset lifecycle, runtime scene-item attach seam까지 빠지면서 residual add/scene orchestration과 GUI edge branch가 더 압축됐다 | 중간 우선순위 |
+| `app/ui/canvas_view.py` | `2224 stmts / 99%` | selection-copy/translation wrapper, projection anchor/center fallback, planar fragment invalid/collinear path, average-bond-length / rotation-scale guard까지 direct test로 메워 사실상 유지 단계다 | 급하지 않음 |
+| `app/ui/preview_scene_renderer.py` | `107 stmts / 95%` | preview item rebuild/clear contract는 안정화됐고 남은 건 소수 paint/pen fallback branch다 | 다음 우선순위 |
+| `app/ui/scene_clipboard_logic.py` | `102 stmts / 95%` | payload serialize/decode 경계는 안정화됐고 남은 건 compatibility/no-op tail이다 | 다음 우선순위 |
+| `app/ui/scene_delete_logic.py` | `91 stmts / 95%` | delete plan helper는 정리됐고 남은 건 rare selection bucket branch다 | 다음 우선순위 |
+| `app/ui/canvas_move_controller.py` | `125 stmts / 95%` | move controller는 wrapper/helper 구조가 정리돼 남은 건 drag guard와 release edge branch 수준이다 | 다음 우선순위 |
+| `app/core/text_tool_logic.py` | `65 stmts / 95%` | target/prompt planning은 분리됐고 남은 건 소수 invalid/default branch다 | 다음 우선순위 |
+| `app/ui/selection_controller.py` | `465 stmts / 97%` | public wrapper, object/bond path helper, overlay/no-op arc, invalid target selection path까지 direct test로 정리돼 사실상 마무리 단계다 | 급하지 않음 |
+| `app/ui/bond_renderer.py` | `697 stmts / 99%` | 3D/2D ring double style variant, dotted-double ring-center path, bold/plain-double update/add matrix를 direct test로 메워 사실상 마무리 단계다 | 급하지 않음 |
+| `app/ui/preview_3d.py` | `232 stmts / 99%` | rebuild guard, mouse/wheel input, `_safe_update()`, empty projection paint path까지 닫혀 유지 단계로 들어갔다 | 급하지 않음 |
 | `app/ui/canvas_arrow_build_service.py` | `100%` | arrow matrix direct test를 보강해 specialized arrow와 double-head helper branch까지 닫았다 | 급하지 않음 |
-| `app/ui/canvas_hit_testing_service.py` | `206 stmts / 95%` | 새 hit-testing 경계는 direct/wrapper/consumer test까지 들어가 안정화됐고 남은 건 소수 guard branch 수준이다 | 급하지 않음 |
-| `app/ui/canvas_chemdraw_shortcut_service.py` | `155 stmts / 94%` | shortcut decision table은 별도 경계로 안정화됐고 남은 건 소수 no-op/guard branch 수준이다 | 급하지 않음 |
+| `app/ui/canvas_hit_testing_service.py` | `100%` | empty bond graphic fallback, zero-cell guard, sparse grid tolerance까지 닫혀 유지 단계다 | 급하지 않음 |
+| `app/ui/canvas_chemdraw_shortcut_service.py` | `100%` | object/generic/atom/bond shortcut matrix와 service resolver까지 direct test로 닫혀 유지 단계다 | 급하지 않음 |
 | `app/ui/canvas_scene_decoration_build_service.py` | `100%` | orbital matrix와 orbital geometry branch까지 direct test로 닫혀 유지 단계로 들어갔다 | 급하지 않음 |
 | `app/ui/canvas_scene_reset_service.py` | `100%` | `CanvasView.clear_scene()` reset lifecycle과 factory seam이 별도 경계로 분리되어 direct/wrapper contract까지 고정됐다 | 급하지 않음 |
-| `app/ui/canvas_ring_fill_scene_service.py` | `127 stmts / 93%` | ring fill lifecycle은 분리와 direct/wrapper test까지 끝났고, 남은 건 tuple-like metadata 같은 소수 compatibility branch다 | 급하지 않음 |
-| `app/ui/canvas_mark_scene_service.py` | `70 stmts / 91%` | mark add/cleanup/pointer-center 경계는 direct/wrapper test까지 들어가 안정화됐다 | 급하지 않음 |
+| `app/ui/canvas_ring_fill_scene_service.py` | `126 stmts / 99%` | list-backed/non-list ring update와 2D/3D rotate branch가 거의 닫혀 소수 compatibility tail만 남았다 | 급하지 않음 |
+| `app/ui/canvas_mark_scene_service.py` | `100%` | missing-atom/no-registry/remove fallback과 service resolver까지 direct test로 닫혀 유지 단계다 | 급하지 않음 |
 | `app/ui/canvas_document_session_service.py` | `100%` | document session 경계는 direct/wrapper test까지 들어가 안정화됐다 | 급하지 않음 |
-| `app/ui/canvas_history_recording_service.py` | `35 stmts / 93%` | additions/bond-update command assembly는 별도 경계로 안정화됐고 남은 건 소수 branch polish 정도다 | 급하지 않음 |
-| `app/ui/canvas_note_controller.py` | `109 stmts / 94%` | note lifecycle은 생성까지 controller로 흡수됐고 남은 건 소수 branch polish 정도다 | 급하지 않음 |
+| `app/ui/canvas_history_recording_service.py` | `100%` | additions/bond-update command assembly와 sparse/no-op path까지 닫혀 유지 단계다 | 급하지 않음 |
+| `app/ui/canvas_note_controller.py` | `107 stmts / 99%` | note lifecycle은 생성/삭제/style/box fallback까지 정리됐고 border-disable `TypeError`도 제거돼 사실상 마무리 단계다 | 급하지 않음 |
 | `app/ui/atom_label_service.py` | `224 stmts / 96%` | 이번에 helper/history 경계를 흡수했고 direct contract도 고정돼 안정권에 들어갔다 | 급하지 않음 |
 | `app/ui/canvas_color_mutation_service.py` | `100 stmts / 99%` | invalid/no-op/factory seam까지 direct test로 메워 사실상 유지 단계다 | 급하지 않음 |
-| `app/ui/canvas_atom_mutation_service.py` | `87 stmts / 92%` | atom lifecycle 경계는 새 service로 안정화됐고 남은 건 소수 fallback/guard branch 수준이다 | 급하지 않음 |
-| `app/ui/canvas_bond_mutation_service.py` | `67 stmts / 95%` | bond lifecycle 경계는 새 service로 안정화됐고 남은 건 소수 guard branch 수준이다 | 급하지 않음 |
-| `app/ui/canvas_graph_service.py` | `408 stmts / 95%` | cycle/rotation-axis/factory seam과 stale-cache guard를 direct test로 메웠고 dead guard도 정리했다 | 급하지 않음 |
-| `app/ui/canvas_handle_controller.py` | `54 stmts / 84%` | overlay/mutation/highlight가 빠져 dispatch와 geometry wrapper만 남았다 | 낮은 우선순위 |
-| `app/core/tools.py` | `828 stmts / 93%` | 구조 추출과 wrapper-only branch polish가 대부분 끝났고 남은 건 소수 예외 경로다 | 낮은 우선순위 |
+| `app/ui/canvas_atom_mutation_service.py` | `100%` | sparse neighbor/bond index, empty-state restore, factory resolver까지 direct test로 닫혀 유지 단계다 | 급하지 않음 |
+| `app/ui/canvas_bond_mutation_service.py` | `100%` | `None` bond remove, empty-state restore, resolver fallback까지 direct test로 닫혀 유지 단계다 | 급하지 않음 |
+| `app/ui/canvas_graph_service.py` | `100%` | cycle/rotation-axis/factory seam과 boundary/isolated fallback까지 direct test로 닫았고 dead duplicate fallback도 제거했다 | 급하지 않음 |
+| `app/ui/canvas_input_controller.py` | `100%` | key press routing, shortcut override, native gesture, copy/paste false fallthrough까지 direct test로 닫고 dead delete tail도 제거했다 | 급하지 않음 |
+| `app/ui/canvas_handle_controller.py` | `100%` | overlay/mutation/highlight delegation, handle drag dispatch, snap-distance wrapper까지 direct test로 닫혀 유지 단계다 | 급하지 않음 |
+| `app/ui/benzene_preview_renderer.py` | `100%` | detached/disposed clear path, empty ring, inner-none, preview-style helper branch까지 direct test로 닫혔다 | 급하지 않음 |
+| `app/core/tools.py` | `828 stmts / 99%` | base/select/bond/move/delete/benzene/color/flip/edit/perspective guard와 no-op arc를 direct test로 메워 사실상 마무리됐다 | 급하지 않음 |
 | `app/ui/scene_item_controller.py` | `133 stmts / 99%` | `attach_scene_item()` seam으로 runtime add와 restore를 같은 registry 규칙으로 묶었고 남은 건 미세 branch arc 수준이다 | 급하지 않음 |
-| `app/ui/canvas_document_state.py` | `78 stmts / 94%` | document restore는 access layer로 정리됐고 smoke도 들어가서 현재는 유지 단계다 | 급하지 않음 |
-| `app/ui/structure_build_service.py` | `376 stmts / 94%` | fragment/template builder까지 service로 이동하면서 build orchestration 경계가 더 선명해졌다 | 중간 우선순위 |
-| `app/ui/canvas_geometry_controller.py` | `156 stmts / 93%` | 추가 추출보다 direct stateful branch test 보강이 맞고, 이번 라운드로 그 방향이 정리됐다 | 낮은 우선순위 |
-| `app/ui/structure_geometry_logic.py` | `102 stmts / 85%` | geometry lookup/packaging에 free benzene hexagon까지 분리됐고 남은 miss는 invalid/default 세부 분기다 | 중간 우선순위 |
-| `app/ui/main_window.py` | `348 stmts / 94%` | tool action build block까지 빠지면서 residual late-bound wiring과 소수 dialog/status branch만 남았다 | 급하지 않음 |
+| `app/core/document_state.py` | `100%` | wrapped/bare payload guard, non-mapping/list tolerance, internal default mapping fallback까지 direct test로 닫혀 유지 단계다 | 급하지 않음 |
+| `app/ui/canvas_document_state.py` | `100%` | snapshot attached/disposed filter, empty arrow skip, settings apply fallback까지 direct test로 닫혀 유지 단계다 | 급하지 않음 |
+| `app/ui/structure_build_service.py` | `100%` | builder edge/no-op/fallback까지 direct test로 닫혀 유지 단계로 들어갔다 | 급하지 않음 |
+| `app/ui/canvas_geometry_controller.py` | `100%` | ring lookup / label padding helper와 stateful branch direct test를 마쳐 유지 단계로 들어갔다 | 급하지 않음 |
+| `app/ui/structure_geometry_logic.py` | `100%` | geometry lookup/result packaging helper와 invalid/default direct test까지 닫혀 유지 단계로 들어갔다 | 급하지 않음 |
+| `app/ui/main_window.py` | `100%` | active-canvas no-op/error, result-sheet naming, panel/zoom helper, 잔여 icon wrapper까지 direct test로 닫혀 유지 단계다 | 급하지 않음 |
 | `app/ui/main_window_tool_action_service.py` | `100%` | tool action build와 callback wiring은 direct/wrapper test까지 들어가 안정화됐다 | 급하지 않음 |
 | `app/ui/main_window_icon_factory.py` | `100%` | painter matrix direct test를 보강했고 dead guard branch도 정리해 유지 단계로 들어갔다 | 급하지 않음 |
 | `app/ui/main_window_canvas_sheet_service.py` | `100%` | canvas-sheet/open-result create 경계는 direct test까지 들어가 안정화됐다 | 급하지 않음 |
-| `app/ui/main_window_text_style_service.py` | `26 stmts / 89%` | text/note style action은 별도 경계로 정리됐고 남은 건 invalid dialog/no-op branch 소수다 | 급하지 않음 |
+| `app/ui/main_window_text_style_service.py` | `100%` | color dialog / setter dispatch helper와 no-op branch direct test까지 들어가 유지 단계다 | 급하지 않음 |
 | `app/ui/main_window_active_canvas_ui_service.py` | `100%` | active-canvas bind/refresh/change 경계는 direct/wrapper test까지 들어가 안정화됐다 | 급하지 않음 |
 | `app/ui/main_window_workbook_document_service.py` | `100%` | workbook save/restore document session 경계는 direct/wrapper test까지 들어가 안정화됐다 | 급하지 않음 |
 | `app/ui/main_window_canvas_tab_ui_service.py` | `100%` | tab guard/reselect/new-sheet contract를 direct test로 메웠고 unreachable delete guard도 정리했다 | 급하지 않음 |
 | `app/ui/main_window_document_action_service.py` | `116 stmts / 99%` | save/load/export/bond-length 경계는 새 service로 안정화됐고 contract test도 충분하다 | 급하지 않음 |
 | `app/ui/main_window_tool_routing_service.py` | `58 stmts / 99%` | menu wiring 경계는 새 service로 안정화됐고 남은 일은 사실상 없다 | 급하지 않음 |
 | `app/ui/main_window_tool_state_service.py` | `100%` | tool/state sync 2차 routing은 direct/wrapper test까지 들어가 안정화됐다 | 급하지 않음 |
-| `app/ui/main_window_ui_assembly_service.py` | `231 stmts / 93%` | toolbar/panel/theme/dialog assembly는 별도 경계로 정리됐고 contract test도 들어가서 현재는 유지 단계다 | 낮은 우선순위 |
+| `app/ui/main_window_ui_assembly_service.py` | `231 stmts / 99%` | toolbar/panel/theme/dialog assembly에 더해 `ArrowButton`/`CornerMenuButton` paint와 icon-only factory path까지 닫혀 유지 단계다 | 급하지 않음 |
 | `app/ui/main_window_canvas_logic.py` | `82 stmts / 96%` | active canvas/workbook helper는 별도 경계로 안정화됐고 남은 건 malformed input 세부 branch 정도다 | 급하지 않음 |
-| `app/core/rdkit_conversion.py` | `464 stmts / 91%` | 주요 user-visible failure branch는 메워졌고, 남은 miss는 alias fragment failure matrix와 swallowed-exception 쪽이다 | 낮은 우선순위 |
+| `app/ui/graphics_items.py` | `100%` | no-select rect paint, atom dot/label hit padding/radius fallback까지 direct test로 닫혀 유지 단계다 | 급하지 않음 |
+| `app/ui/structure_benzene_logic.py` | `100%` | bond/atom/free precedence와 invalid attachment fallback까지 direct test로 닫혀 유지 단계다 | 급하지 않음 |
+| `app/ui/bond_graphics_logic.py` | `100%` | selection restore와 non-selectable item fallback까지 direct test로 닫혀 유지 단계다 | 급하지 않음 |
+| `app/ui/template_insert_logic.py` | `100%` | benzene special-case, internal invalid plan guard, missing template shape까지 direct test로 닫혀 유지 단계다 | 급하지 않음 |
+| `app/ui/benzene_preview_service.py` | `100%` | preview clear/render와 inner-bond secondary item fallback까지 direct test로 닫혀 유지 단계다 | 급하지 않음 |
+| `app/core/rdkit_conversion.py` | `464 stmts / 99%` | alias fragment failure matrix와 conformer/stereo swallow branch까지 거의 닫혀 남은 miss가 소수 비핵심 arc로 줄었다 | 급하지 않음 |
 | `app/ui/scene_transform_logic.py` | `184 stmts / 99%` | transform helper는 사실상 안정화됐고 남은 miss는 note vertical valid-rect 정도다 | 급하지 않음 |
 | `app/ui/scene_ops_controller.py` | `187 stmts / 98%` | orchestration controller로 거의 정리됐고 남은 리팩토링 ROI가 낮다 | 급하지 않음 |
-| `app/ui/insert_controller.py` | `222 stmts / 91%` | wrapper-facing public seam까지 정리됐고 남은 건 failure-path polishing 수준이다 | 급하지 않음 |
+| `app/ui/insert_controller.py` | `100%` | public wrapper seam과 smiles/template failure/clear preview tail까지 direct test로 닫혀 유지 단계다 | 급하지 않음 |
 
 ## 4. 리팩토링 권장 사항
 
@@ -831,6 +865,8 @@ controller는 canvas collaborator 연결만 담당하는 얇은 조정자로 남
 - `app/core/template_geometry.py`
 - `app/core/document_io.py`
 - `app/core/rdkit_adapter.py`
+- `app/ui/graphics_items.py`
+- `app/ui/benzene_preview_service.py`
 - `app/ui/template_insert_logic.py`
 - `app/ui/smiles_insert_logic.py`
 - `app/ui/selection_hit_logic.py`
@@ -853,6 +889,7 @@ controller는 canvas collaborator 연결만 담당하는 얇은 조정자로 남
 - `app/ui/scene_transform_apply_logic.py`
 - `app/ui/scene_paste_apply_logic.py`
 - `app/ui/scene_decoration_service.py`
+- `app/ui/structure_benzene_logic.py`
 
 공통점:
 
@@ -862,14 +899,14 @@ controller는 canvas collaborator 연결만 담당하는 얇은 조정자로 남
 
 ## 7. 권장 실행 순서
 
-1. `CanvasView`의 residual add/scene orchestration과 model-backed scene lifecycle/rebuild seam을 줄인다.
-2. `MainWindowTextStyleService`의 dialog/no-op branch를 direct test로 더 메운다.
-3. `CanvasGeometryController`의 stateful branch를 direct test로 더 메운다.
-4. 필요하면 `RDKitConversion`의 alias fragment failure matrix를 targeted test로 더 메운다.
+1. `preview_scene_renderer`, `scene_clipboard_logic`, `scene_delete_logic`, `canvas_move_controller`, `text_tool_logic`의 95% edge branch를 먼저 줄인다.
+2. `main_window_canvas_logic`, `handle_interaction_logic`, `hover_scene_renderer`, `main.py`, `perspective_drag_logic`, `tool_overlay_logic`의 96% branch를 메운다.
+3. `selection_controller`, `selection_rotation_controller`, `atom_label_service`, `template_geometry`, `core/history`, `rdkit_conversion`의 97%대 유지성 polish를 진행한다.
+4. 마지막으로 `CanvasView`, `bond_renderer`, `bond_preview_renderer`, `core/tools.py` 같은 99% arc는 ROI가 있을 때만 정리한다.
 
 ## 8. 결론
 
-첫 보고서에서 제시한 방향은 여전히 맞다. 이번 라운드로 `CanvasColorMutationService`, `CanvasGraphService`, `CanvasSceneDecorationBuildService`, `MainWindowCanvasTabUIService`의 residual branch를 direct test로 닫았고, 이어서 `CanvasView.clear_scene()` reset lifecycle은 `CanvasSceneResetService`로, runtime scene item register는 `SceneItemController.attach_scene_item()` seam으로 정리했다. insert/selection wrapper seam, graph service, atom/bond/color mutation service, document session service, history recording service, note creation seam, scene decoration build seam, arrow build seam, mark scene seam, ring fill scene seam, shortcut seam, hit-testing seam, scene reset seam, scene item attach seam, tool action seam, UI assembly service, document action service, tool routing service, tool state service, text style service, icon factory, active-canvas UI service, canvas-tab UI service, workbook document service, canvas-sheet service까지 정리되면서 `CanvasView`의 남은 문제는 residual add/scene orchestration과 일부 isolated edge branch로 더 압축됐고, `MainWindow`는 thin late-bound wiring에 더 가까워졌다. `CanvasGeometryController`는 추가 추출보다 direct stateful branch test로 방향이 정리됐고, `RDKitConversion`의 주요 user-visible failure branch도 테스트로 보강됐다. 따라서 다음 단계는 큰 구조 추출보다 `CanvasView`, `MainWindowTextStyleService`, `CanvasGeometryController` 같은 남은 direct-test ROI가 높은 경계에 집중하는 것이다.
+첫 보고서에서 제시한 방향은 여전히 맞다. 이번 라운드까지 오면서 `graphics_items`, `structure_benzene_logic`, `bond_graphics_logic`, `template_insert_logic`, `benzene_preview_service`도 `100%`까지 닫혔고, 전체 커버리지는 `99%`를 유지한 채 `1196 passed`까지 올라왔다. 이미 `InsertCommitService`, `SceneItemState`, `HoverInteractionService`, `MainWindow`, `CanvasInputController`, `CanvasHandleController`, `BenzenePreviewRenderer`, `core.document_state`, `canvas_document_state`, `CanvasMarkSceneService`, `CanvasChemdrawShortcutService`, `InsertController`, `MainWindowTextStyleService`, `CanvasGeometryController`, `StructureGeometryLogic`, `StructureBuildService`, `CanvasAtomMutationService`, `BondStyleLogic`, `StructureInsertService`, `CanvasGraphService`, `CanvasHistoryRecordingService`, `CanvasHitTestingService`, `CanvasBondMutationService`, `canvas_geometry_logic`가 `100%`이고, `CanvasNoteController`, `StructurePayloadLogic`, `CanvasRingFillSceneService`, `BondPreviewRenderer`, `BondRenderer`, `RDKitConversion`, `preview_3d`, `core/tools.py`, `main_window_ui_assembly_service`, `CanvasView`도 `99%`까지 올라와 있다. 현재 단계의 다음 초점은 큰 구조 추출보다 `preview_scene_renderer`, `scene_clipboard_logic`, `scene_delete_logic`, `canvas_move_controller`, `text_tool_logic` 같은 95%대 tail을 줄이는 것이다.
 
 현재 총평:
 
@@ -881,7 +918,9 @@ controller는 canvas collaborator 연결만 담당하는 얇은 조정자로 남
 - 이번에 닫은 항목에 추가: `CanvasGraphService` dead `atoms_for_axis` guard 정리, `MainWindowCanvasTabUIService` unreachable `widget is not None` guard 정리
 - 이번에 닫은 항목에 추가: `CanvasSceneDecorationBuildService` orbital geometry branch direct test 보강, `CanvasView.clear_scene()`의 `CanvasSceneResetService` 추출과 reset lifecycle/factory seam 고정
 - 이번에 닫은 항목에 추가: `SceneItemController.attach_scene_item()` seam 추가, `SceneDecorationService` / `CanvasNoteController` / `StructureBuildService`의 runtime scene item register를 `scene_item_access.attach_scene_item()`으로 통일, controller-first / wrapper-fallback access contract 고정
-- 지금 바로 손대야 할 곳: `CanvasView` residual add/scene orchestration과 model-backed scene lifecycle/rebuild seam
-- 그 다음 구조 후보: `MainWindowTextStyleService` dialog/no-op branch, `CanvasGeometryController` stateful branch polish
-- targeted polish 후보: `scene_transform_logic`, `core/tools.py`
-- 큰 리팩터링보다 targeted test 보강이 맞는 곳: `RDKitConversion` alias fragment failure matrix
+- 이번에 닫은 항목에 추가: `BondRenderer` ring/double/bold variant matrix direct test 보강과 `CanvasView` projection/planar/rotation fallback helper direct test 보강
+- 이번에 닫은 항목에 추가: `graphics_items` no-select paint + atom hit-bound contract direct test, `structure_benzene_logic` invalid attachment fallback direct test, `bond_graphics_logic` non-selectable fallback direct test, `template_insert_logic` invalid internal plan guard direct test, `BenzenePreviewService` inner-bond fallback direct test
+- 지금 바로 손대야 할 곳: `preview_scene_renderer` / `scene_clipboard_logic` / `scene_delete_logic`
+- 그 다음 구조 후보: `canvas_move_controller` / `text_tool_logic` / `main_window_canvas_logic`
+- targeted polish 후보: `handle_interaction_logic`, `hover_scene_renderer`, `main.py`, `perspective_drag_logic`, `tool_overlay_logic`
+- 큰 리팩터링보다 targeted test 보강이 맞는 곳: 위 90~95%대 service/controller 모듈 전반

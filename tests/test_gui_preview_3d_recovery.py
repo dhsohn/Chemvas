@@ -4,12 +4,14 @@ import os
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
+    from PyQt6.QtCore import QPoint, QPointF, Qt
     from PyQt6.QtTest import QTest
-    from PyQt6.QtWidgets import QApplication
+    from PyQt6.QtWidgets import QApplication, QWidget
 except ModuleNotFoundError:
     QApplication = None
     QTest = None
@@ -24,6 +26,36 @@ if QApplication is not None:
     from core.model import MoleculeModel
     from core.rdkit_adapter import Molecule3DAtom, Molecule3DBond, Molecule3DScene
     from ui.preview_3d import Preview3D
+
+
+class _FakeMouseEvent:
+    def __init__(
+        self,
+        position: QPointF,
+        *,
+        button=Qt.MouseButton.NoButton,
+        buttons=Qt.MouseButton.NoButton,
+    ) -> None:
+        self._position = QPointF(position)
+        self._button = button
+        self._buttons = buttons
+
+    def button(self):
+        return self._button
+
+    def buttons(self):
+        return self._buttons
+
+    def position(self):
+        return QPointF(self._position)
+
+
+class _FakeWheelEvent:
+    def __init__(self, delta: int) -> None:
+        self._delta = delta
+
+    def angleDelta(self):
+        return QPoint(0, self._delta)
 
 
 class SequencedCanvas:
@@ -152,6 +184,115 @@ class Preview3DRecoveryTest(unittest.TestCase):
         self.assertEqual(len(adapter.calls), 2)
         self.assertEqual(preview._scene, scene)
         self.assertEqual(preview._message, "")
+
+    def test_rebuild_scene_handles_disposed_missing_pending_and_empty_project_scene(self) -> None:
+        preview = self._create_preview(SequencedAdapter([]))
+        preview._disposed = True
+        preview._pending_model = self._make_model()
+
+        preview._rebuild_scene()
+        self.assertIsNone(preview._scene)
+
+        preview._disposed = False
+        preview._scene = self._make_scene()
+        preview._pending_model = None
+        with mock.patch.object(preview, "_safe_update") as safe_update:
+            preview._rebuild_scene()
+        self.assertIsNone(preview._scene)
+        self.assertEqual(preview._message, "3D preview unavailable")
+        safe_update.assert_called_once_with()
+
+        self.assertEqual(preview._project_scene(Molecule3DScene(atoms=(), bonds=())), [])
+
+    def test_mouse_and_wheel_events_update_rotation_zoom_and_last_pos(self) -> None:
+        preview = self._create_preview(SequencedAdapter([]))
+
+        with (
+            mock.patch.object(QWidget, "mousePressEvent", new=mock.Mock(return_value=None)) as base_press,
+            mock.patch.object(QWidget, "mouseMoveEvent", new=mock.Mock(return_value=None)) as base_move,
+            mock.patch.object(QWidget, "mouseReleaseEvent", new=mock.Mock(return_value=None)) as base_release,
+            mock.patch.object(QWidget, "wheelEvent", new=mock.Mock(return_value=None)) as base_wheel,
+            mock.patch.object(preview, "update") as update,
+        ):
+            press = _FakeMouseEvent(QPointF(4.0, 5.0), button=Qt.MouseButton.LeftButton)
+            preview.mousePressEvent(press)
+            self.assertEqual(preview._last_pos, QPointF(4.0, 5.0))
+
+            rotation_before = (preview._rotation_x, preview._rotation_y)
+            move = _FakeMouseEvent(QPointF(10.0, 8.0), buttons=Qt.MouseButton.LeftButton)
+            preview.mouseMoveEvent(move)
+            self.assertNotEqual((preview._rotation_x, preview._rotation_y), rotation_before)
+            self.assertEqual(preview._last_pos, QPointF(10.0, 8.0))
+            update.assert_called_once_with()
+
+            release = _FakeMouseEvent(QPointF(10.0, 8.0), button=Qt.MouseButton.LeftButton)
+            preview.mouseReleaseEvent(release)
+            self.assertIsNone(preview._last_pos)
+
+            zoom_before = preview._zoom
+            preview.wheelEvent(_FakeWheelEvent(120))
+            self.assertGreater(preview._zoom, zoom_before)
+
+            zoom_after_in = preview._zoom
+            preview.wheelEvent(_FakeWheelEvent(0))
+            self.assertEqual(preview._zoom, zoom_after_in)
+
+            preview.wheelEvent(_FakeWheelEvent(-120))
+            self.assertLess(preview._zoom, zoom_after_in)
+
+            base_press.assert_called_once_with(press)
+            base_move.assert_called_once_with(move)
+            base_release.assert_called_once_with(release)
+            self.assertEqual(base_wheel.call_count, 3)
+
+    def test_safe_update_and_paint_event_cover_runtime_invalid_bond_and_empty_projection_paths(self) -> None:
+        preview = self._create_preview(SequencedAdapter([]))
+        preview._disposed = True
+        preview._safe_update()
+
+        preview._disposed = False
+        preview.update = mock.Mock(side_effect=RuntimeError("deleted"))
+        preview._safe_update()
+        self.assertTrue(preview._disposed)
+
+        preview._disposed = False
+        preview._scene = Molecule3DScene(
+            atoms=(Molecule3DAtom("C", 0.0, 0.0, 0.0),),
+            bonds=(Molecule3DBond(0, 99, 1),),
+        )
+        preview._message = "No projection"
+        with mock.patch.object(preview, "_project_scene", return_value=[]):
+            preview.paintEvent(None)
+
+        with mock.patch.object(preview, "_project_scene", return_value=[(40.0, 50.0, 0.0, 8.0)]):
+            preview.paintEvent(None)
+
+    def test_set_structure_set_info_and_footer_helpers_cover_signature_info_and_overlay_paths(self) -> None:
+        preview = self._create_preview(SequencedAdapter([]))
+        model = self._make_model()
+
+        with (
+            mock.patch.object(preview, "_safe_update") as safe_update,
+            mock.patch.object(preview._update_timer, "start") as start,
+        ):
+            preview.set_structure(model, {0: {"formal_charge": 1}})
+            preview.set_structure(model, {0: {"formal_charge": 1}})
+            preview.set_info("C2H6O", "46.07")
+            preview.set_info("C2H6O", "46.07")
+
+        self.assertEqual(preview._current_signature, preview._payload_signature(model, {0: {"formal_charge": 1}}))
+        self.assertEqual(preview._pending_model, model)
+        self.assertEqual(preview._pending_annotations, {0: {"formal_charge": 1}})
+        self.assertEqual(preview._info_lines(), ["Formula: C2H6O", "MW: 46.07"])
+        self.assertGreater(preview._footer_height(preview._info_lines()), 0.0)
+        self.assertEqual(start.call_count, 1)
+        self.assertEqual(safe_update.call_count, 2)
+
+        projected = preview._project_scene(self._make_scene(), footer_height=80.0)
+        self.assertEqual(len(projected), 2)
+
+        preview._scene = self._make_scene()
+        preview.paintEvent(None)
 
 
 if __name__ == "__main__":

@@ -275,11 +275,6 @@ class CanvasGraphService:
                 return comp_a if dist_a < dist_b else comp_b
         if not allow_fallback:
             return None
-        if is_partial_selection:
-            count_a = len(selected_in_a)
-            count_b = len(selected_in_b)
-            if count_a != count_b:
-                return comp_a if count_a > count_b else comp_b
         size_a = max(0, len(comp_a) - 1)
         size_b = max(0, len(comp_b) - 1)
         if size_a != size_b:
@@ -341,8 +336,6 @@ class CanvasGraphService:
             selected_degree: dict[int, int] = {}
             for bond_id in selected_bonds:
                 bond = self.canvas.model.bonds[bond_id]
-                if bond is None:
-                    continue
                 selected_degree[bond.a] = selected_degree.get(bond.a, 0) + 1
                 selected_degree[bond.b] = selected_degree.get(bond.b, 0) + 1
             has_unselected_bond: dict[int, bool] = {}
@@ -354,8 +347,6 @@ class CanvasGraphService:
             candidates = []
             for bond_id in selected_bonds:
                 bond = self.canvas.model.bonds[bond_id]
-                if bond is None:
-                    continue
                 a_leaf = selected_degree.get(bond.a, 0) == 1 and has_unselected_bond.get(bond.a, False)
                 b_leaf = selected_degree.get(bond.b, 0) == 1 and has_unselected_bond.get(bond.b, False)
                 if a_leaf ^ b_leaf:

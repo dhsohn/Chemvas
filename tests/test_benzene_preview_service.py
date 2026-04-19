@@ -96,6 +96,17 @@ class BenzenePreviewServiceTest(unittest.TestCase):
         self.assertEqual(item, "inner")
         canvas._draw_ring_double_bond.assert_called_once()
 
+    def test_create_inner_bond_item_returns_none_when_secondary_item_is_missing(self) -> None:
+        canvas = SimpleNamespace(
+            _draw_ring_double_bond=mock.Mock(return_value=["outer"]),
+        )
+        service = BenzenePreviewService(canvas)
+
+        item = service._create_inner_bond_item(QPointF(1.0, 2.0), QPointF(3.0, 4.0), QPointF(5.0, 6.0))
+
+        self.assertIsNone(item)
+        canvas._draw_ring_double_bond.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

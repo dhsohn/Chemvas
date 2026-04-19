@@ -299,9 +299,15 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
 
         CanvasView.clear_atom_label(view, 1)
-        with mock.patch("ui.canvas_view.QInputDialog.getText", side_effect=[(" N ", True), ("   ", True)]):
+        CanvasView.clear_atom_label(view, 99)
+        with mock.patch(
+            "ui.canvas_view.QInputDialog.getText",
+            side_effect=[(" N ", True), ("   ", True), ("ignored", False)],
+        ):
             CanvasView.prompt_atom_label(view, 2)
             CanvasView.prompt_atom_label(view, 1)
+            CanvasView.prompt_atom_label(view, 99)
+            CanvasView.prompt_atom_label(view, 2)
 
         atom_label_service.add_or_update_atom_label.assert_has_calls(
             [
@@ -310,6 +316,77 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 mock.call(1, "C", show_carbon=False),
             ]
         )
+
+    def test_refresh_hover_from_cursor_and_export_xyz_cover_guard_and_error_paths(self) -> None:
+        CanvasView._refresh_hover_from_cursor(SimpleNamespace())
+
+        template_view = SimpleNamespace(
+            tools=object(),
+            _template_insert_active=True,
+            _smiles_insert_active=False,
+            _clear_hover_highlight=mock.Mock(),
+        )
+        CanvasView._refresh_hover_from_cursor(template_view)
+        template_view._clear_hover_highlight.assert_called_once_with()
+
+        viewport = SimpleNamespace(
+            mapFromGlobal=mock.Mock(return_value=QPointF(4.0, 5.0)),
+            rect=lambda: SimpleNamespace(contains=lambda _pos: True),
+        )
+        inside_view = SimpleNamespace(
+            tools=object(),
+            _template_insert_active=False,
+            _smiles_insert_active=False,
+            viewport=lambda: viewport,
+            mapToScene=mock.Mock(return_value=QPointF(7.0, 8.0)),
+            _update_hover_highlight=mock.Mock(),
+            _clear_hover_highlight=mock.Mock(),
+        )
+        with mock.patch("ui.canvas_view.QCursor.pos", return_value=QPointF(1.0, 2.0)):
+            CanvasView._refresh_hover_from_cursor(inside_view)
+        inside_view._update_hover_highlight.assert_called_once_with(QPointF(7.0, 8.0))
+        inside_view._clear_hover_highlight.assert_not_called()
+
+        outside_view = SimpleNamespace(
+            tools=object(),
+            _template_insert_active=False,
+            _smiles_insert_active=False,
+            viewport=lambda: SimpleNamespace(
+                mapFromGlobal=mock.Mock(return_value=QPointF(9.0, 10.0)),
+                rect=lambda: SimpleNamespace(contains=lambda _pos: False),
+            ),
+            mapToScene=mock.Mock(),
+            _update_hover_highlight=mock.Mock(),
+            _clear_hover_highlight=mock.Mock(),
+        )
+        with mock.patch("ui.canvas_view.QCursor.pos", return_value=QPointF(3.0, 4.0)):
+            CanvasView._refresh_hover_from_cursor(outside_view)
+        outside_view._clear_hover_highlight.assert_called_once_with()
+        outside_view._update_hover_highlight.assert_not_called()
+
+        error_view = SimpleNamespace(
+            build_3d_conversion_payload=mock.Mock(return_value=("model", {"a": 1})),
+            rdkit=SimpleNamespace(
+                model_to_xyz_block=mock.Mock(return_value=None),
+                last_error="RDKit export failed",
+            ),
+        )
+        with self.assertRaisesRegex(ValueError, "RDKit export failed"):
+            CanvasView.export_xyz(error_view, "/tmp/unused.xyz")
+
+        error_view.rdkit.last_error = None
+        with self.assertRaisesRegex(ValueError, "Failed to export 3D XYZ."):
+            CanvasView.export_xyz(error_view, "/tmp/unused.xyz")
+
+    def test_notify_tool_change_handles_missing_callback(self) -> None:
+        view = SimpleNamespace(_tool_change_callback=None)
+
+        CanvasView._notify_tool_change(view)
+
+        callback = mock.Mock()
+        view._tool_change_callback = callback
+        CanvasView._notify_tool_change(view)
+        callback.assert_called_once_with()
 
     def test_structure_build_wrappers_delegate(self) -> None:
         structure_build_service = mock.Mock()
@@ -690,17 +767,76 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             _add_fused_benzenes=mock.Mock(),
             _add_crown_ether=mock.Mock(),
         )
+        view._run_recorded_structure_build = lambda action: CanvasView._run_recorded_structure_build(view, action)
+        view._run_recorded_regular_ring_template = lambda n: CanvasView._run_recorded_regular_ring_template(view, n)
+        view._run_recorded_hetero_ring_template = lambda n, elements: CanvasView._run_recorded_hetero_ring_template(
+            view,
+            n,
+            elements,
+        )
+        view._run_recorded_fused_benzenes = lambda count, mode="linear": CanvasView._run_recorded_fused_benzenes(
+            view,
+            count,
+            mode=mode,
+        )
+        view._run_recorded_crown_ether = lambda atoms, oxygens: CanvasView._run_recorded_crown_ether(
+            view,
+            atoms,
+            oxygens,
+        )
 
         CanvasView.add_cyclopropane(view)
+        CanvasView.add_cyclobutane(view)
+        CanvasView.add_cyclopentane(view)
         CanvasView.add_pyridine(view)
+        CanvasView.add_pyrimidine(view)
+        CanvasView.add_imidazole(view)
+        CanvasView.add_pyrrole(view)
+        CanvasView.add_furan(view)
+        CanvasView.add_thiophene(view)
         CanvasView.add_naphthalene(view)
+        CanvasView.add_anthracene(view)
+        CanvasView.add_phenanthrene(view)
+        CanvasView.add_pyranose(view)
+        CanvasView.add_furanose(view)
         CanvasView.add_crown_12_4(view)
+        CanvasView.add_crown_15_5(view)
+        CanvasView.add_crown_18_6(view)
 
-        self.assertEqual(structure_build_service.run_recorded_build.call_count, 4)
-        view._add_regular_ring_template.assert_called_once_with(3)
-        view._add_hetero_ring_template.assert_called_once_with(6, ["C", "C", "C", "C", "C", "N"])
-        view._add_fused_benzenes.assert_called_once_with(2)
-        view._add_crown_ether.assert_called_once_with(12, 4)
+        self.assertEqual(structure_build_service.run_recorded_build.call_count, 17)
+        self.assertEqual(
+            view._add_regular_ring_template.call_args_list,
+            [mock.call(3), mock.call(4), mock.call(5)],
+        )
+        self.assertEqual(
+            view._add_hetero_ring_template.call_args_list,
+            [
+                mock.call(6, ["C", "C", "C", "C", "C", "N"]),
+                mock.call(6, ["N", "C", "N", "C", "C", "C"]),
+                mock.call(5, ["C", "N", "C", "N", "C"]),
+                mock.call(5, ["N", "C", "C", "C", "C"]),
+                mock.call(5, ["O", "C", "C", "C", "C"]),
+                mock.call(5, ["S", "C", "C", "C", "C"]),
+                mock.call(6, ["O", "C", "C", "C", "C", "C"]),
+                mock.call(5, ["O", "C", "C", "C", "C"]),
+            ],
+        )
+        self.assertEqual(
+            view._add_fused_benzenes.call_args_list,
+            [mock.call(2, mode="linear"), mock.call(3, mode="linear"), mock.call(3, mode="angled")],
+        )
+        self.assertEqual(
+            view._add_crown_ether.call_args_list,
+            [mock.call(12, 4), mock.call(15, 5), mock.call(18, 6)],
+        )
+
+    def test_add_benzene_template_uses_viewport_scene_center_helper(self) -> None:
+        view = SimpleNamespace(add_benzene_ring=mock.Mock())
+        view._viewport_scene_center = lambda: QPointF(12.0, 13.0)
+
+        CanvasView.add_benzene_template(view)
+
+        view.add_benzene_ring.assert_called_once_with(QPointF(12.0, 13.0))
 
     def test_service_backed_fragment_template_wrappers_delegate(self) -> None:
         structure_build_service = mock.Mock()
@@ -1543,6 +1679,30 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         CanvasView.set_atom_positions(quiet_view, positions={}, coords_3d=None)
         quiet_view._mark_spatial_index_dirty.assert_not_called()
+
+        noop_view = SimpleNamespace(
+            model=SimpleNamespace(atoms={1: Atom("C", 1.0, 1.0)}),
+            atom_coords_3d={},
+            atom_items={},
+            atom_dots={},
+            _marks_by_atom={},
+            _position_label=mock.Mock(),
+            _set_mark_center=mock.Mock(),
+            _redraw_bonds_for_atoms=mock.Mock(),
+            _update_ring_fills_for_atoms=mock.Mock(),
+            _mark_spatial_index_dirty=mock.Mock(),
+            _update_selection_outline=mock.Mock(),
+        )
+        CanvasView.set_atom_positions(
+            noop_view,
+            positions={99: (3.0, 4.0)},
+            coords_3d={98: (5.0, 6.0, 7.0)},
+            update_selection=False,
+        )
+        noop_view._redraw_bonds_for_atoms.assert_not_called()
+        noop_view._update_ring_fills_for_atoms.assert_not_called()
+        noop_view._mark_spatial_index_dirty.assert_called_once_with()
+        noop_view._update_selection_outline.assert_not_called()
 
     def test_ring_fill_wrappers_delegate_to_scene_service(self) -> None:
         scene_service = mock.Mock()

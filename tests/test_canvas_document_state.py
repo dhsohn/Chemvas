@@ -1,6 +1,8 @@
 import sys
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -8,7 +10,13 @@ APP_ROOT = ROOT / "app"
 if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
-from ui.canvas_document_state import restore_document_post_model_items, restore_document_pre_model_items
+from core.model import Atom, Bond, MoleculeModel
+from ui.canvas_document_state import (
+    apply_document_settings,
+    restore_document_post_model_items,
+    restore_document_pre_model_items,
+    snapshot_canvas_document_state,
+)
 
 
 class _Canvas:
@@ -57,7 +65,108 @@ class _Controller:
         self.canvas.calls.append(("controller_orbital", dict(orbital_state)))
 
 
+class _SceneItem:
+    def __init__(self, scene_obj) -> None:
+        self._scene = scene_obj
+
+    def scene(self):
+        return self._scene
+
+
+class _DisposedSceneItem:
+    def scene(self):
+        raise RuntimeError("disposed")
+
+
 class CanvasDocumentStateTest(unittest.TestCase):
+    def test_snapshot_canvas_document_state_skips_detached_disposed_and_empty_arrow_state(self) -> None:
+        scene_obj = object()
+        attached = _SceneItem(scene_obj)
+        detached = _SceneItem(object())
+        disposed = _DisposedSceneItem()
+
+        canvas = SimpleNamespace(
+            model=MoleculeModel(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[Bond(1, 1, 1)]),
+            atom_items={1: object()},
+            ring_items=[attached, detached, disposed],
+            note_items=[attached, detached],
+            mark_items=[attached],
+            arrow_items=[attached, detached],
+            ts_bracket_items=[attached],
+            orbital_items=[attached],
+            renderer=SimpleNamespace(
+                style=SimpleNamespace(bond_length_px=18.0),
+                set_bond_length=mock.Mock(),
+            ),
+            arrow_line_width=1.5,
+            arrow_head_scale=0.4,
+            orbital_phase_enabled=True,
+            text_font_size=13,
+            text_font_weight=600,
+            text_italic=False,
+            last_smiles_input="CCO",
+            scene=lambda: scene_obj,
+            _ring_state_dict=lambda item: {"points": [(0.0, 0.0)], "atom_ids": [1], "color": "#abcdef", "alpha": 0.25},
+            _note_state_dict=lambda item: {"text": "note", "x": 1.0, "y": 2.0},
+            _mark_state_dict=lambda item: {"mark_kind": "plus", "text": "+", "atom_id": 1, "dx": 0.5, "dy": -0.5, "x": 3.0, "y": 4.0},
+            _arrow_state_dict=lambda item: {} if item is attached else {"kind": "arrow", "start": (0.0, 0.0), "end": (1.0, 1.0)},
+            _ts_bracket_state_dict=lambda item: {"kind": "ts_bracket", "rect": (0.0, 0.0, 1.0, 1.0)},
+            _orbital_state_dict=lambda item: {"orbital_kind": "p", "center": (2.0, 3.0), "scale": 2.0, "rotation": 45.0},
+        )
+
+        state = snapshot_canvas_document_state(canvas)
+
+        self.assertTrue(state["model"]["atoms"][1]["explicit_label"])
+        self.assertEqual(state["ring_fills"], [{"points": [(0.0, 0.0)], "atom_ids": [1], "color": "#abcdef", "alpha": 0.25}])
+        self.assertEqual(state["notes"], [{"text": "note", "x": 1.0, "y": 2.0}])
+        self.assertEqual(
+            state["marks"],
+            [{"kind": "plus", "text": "+", "atom_id": 1, "dx": 0.5, "dy": -0.5, "x": 3.0, "y": 4.0}],
+        )
+        self.assertEqual(state["arrows"], [])
+        self.assertEqual(state["ts_brackets"], [{"kind": "ts_bracket", "rect": (0.0, 0.0, 1.0, 1.0)}])
+        self.assertEqual(
+            state["orbitals"],
+            [{"kind": "p", "center": (2.0, 3.0), "scale": 2.0, "rotation": 45.0}],
+        )
+        self.assertEqual(state["last_smiles_input"], "CCO")
+
+    def test_apply_document_settings_uses_state_values_and_preserves_missing_defaults(self) -> None:
+        canvas = SimpleNamespace(
+            renderer=SimpleNamespace(
+                style=SimpleNamespace(bond_length_px=18.0),
+                set_bond_length=mock.Mock(),
+            ),
+            arrow_line_width=1.0,
+            arrow_head_scale=0.3,
+            orbital_phase_enabled=False,
+            text_font_size=12,
+            text_font_weight=400,
+            text_italic=False,
+            last_smiles_input="before",
+        )
+
+        apply_document_settings(
+            canvas,
+            {
+                "settings": {
+                    "bond_length_px": 22.0,
+                    "arrow_head_scale": 0.5,
+                    "text_italic": True,
+                },
+                "last_smiles_input": "after",
+            },
+        )
+
+        canvas.renderer.set_bond_length.assert_called_once_with(22.0)
+        self.assertEqual(canvas.arrow_line_width, 1.0)
+        self.assertEqual(canvas.arrow_head_scale, 0.5)
+        self.assertFalse(canvas.orbital_phase_enabled)
+        self.assertEqual(canvas.text_font_size, 12)
+        self.assertEqual(canvas.text_font_weight, 400)
+        self.assertTrue(canvas.text_italic)
+        self.assertEqual(canvas.last_smiles_input, "after")
+
     def test_restore_document_items_prefer_scene_item_controller(self) -> None:
         canvas = _Canvas()
         canvas._scene_item_controller = _Controller(canvas)

@@ -32,6 +32,7 @@ class CanvasGeometryLogicTest(unittest.TestCase):
             (0.0, 1.0),
         )
         self.assertIsNone(line_rect_clip_t(QPointF(-1.0, 3.0), QPointF(3.0, 3.0), rect))
+        self.assertIsNone(line_rect_clip_t(QPointF(-1.0, 3.0), QPointF(1.0, 5.0), rect))
 
     def test_segment_intersection_t_and_line_rect_intersections_cover_hits_and_misses(self) -> None:
         self.assertAlmostEqual(
@@ -80,6 +81,8 @@ class CanvasGeometryLogicTest(unittest.TestCase):
             1.0,
         )
         self.assertIsNone(ray_rect_exit_distance(QPointF(3.0, 0.0), QPointF(0.0, 1.0), rect))
+        self.assertIsNone(ray_rect_exit_distance(QPointF(-3.0, 3.0), QPointF(1.0, 1.0), rect))
+        self.assertIsNone(ray_rect_exit_distance(QPointF(3.0, 0.0), QPointF(1.0, 0.0), rect))
         self.assertTrue(math.isinf(ray_rect_exit_distance(QPointF(0.0, 0.0), QPointF(0.0, 0.0), rect)))
 
 
