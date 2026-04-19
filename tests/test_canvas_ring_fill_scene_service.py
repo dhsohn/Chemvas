@@ -99,6 +99,22 @@ class CanvasRingFillSceneServiceTest(unittest.TestCase):
         non_matching_ring.setPolygon.assert_not_called()
         invalid_ring.setPolygon.assert_not_called()
 
+    def test_update_ring_fills_for_atoms_skips_missing_atoms_and_short_polygons(self) -> None:
+        short_ring = _FakeRingItem([1, 2, 99])
+        canvas = SimpleNamespace(
+            model=SimpleNamespace(
+                atoms={
+                    1: Atom("C", 0.0, 0.0),
+                    2: Atom("C", 2.0, 0.0),
+                }
+            ),
+            ring_items=[short_ring],
+        )
+
+        CanvasRingFillSceneService(canvas).update_ring_fills_for_atoms({1, 2, 99})
+
+        short_ring.setPolygon.assert_not_called()
+
     def test_rotate_ring_fills_returns_when_no_atom_points(self) -> None:
         ring_item = _FakeRingItem([1, 2, 3], [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)])
         canvas = SimpleNamespace(
@@ -189,6 +205,34 @@ class CanvasRingFillSceneServiceTest(unittest.TestCase):
 
         self.assertEqual(len(matching_ring.setPolygon.call_args.args[0]), 3)
         self.assertNotEqual(_polygon_points(matching_ring.polygon()), [(0.0, 0.0), (2.0, 0.0), (0.0, 2.0)])
+        skipped_ring.setPolygon.assert_not_called()
+
+    def test_rotate_ring_fills_3d_skips_nonmatching_and_short_list_backed_rings(self) -> None:
+        short_ring = _FakeRingItem([1, 2, 99])
+        skipped_ring = _FakeRingItem([7, 8, 9])
+        canvas = SimpleNamespace(
+            model=SimpleNamespace(
+                atoms={
+                    1: Atom("C", 0.0, 0.0),
+                    2: Atom("C", 2.0, 0.0),
+                    7: Atom("O", 9.0, 9.0),
+                    8: Atom("O", 10.0, 9.0),
+                    9: Atom("O", 9.0, 10.0),
+                }
+            ),
+            ring_items=[short_ring, skipped_ring],
+            renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=8.0)),
+        )
+
+        CanvasRingFillSceneService(canvas).rotate_ring_fills_3d(
+            {1, 2, 99},
+            (1.0, 1.0, 0.0),
+            math.pi / 4.0,
+            math.pi / 4.0,
+            1.0,
+        )
+
+        short_ring.setPolygon.assert_not_called()
         skipped_ring.setPolygon.assert_not_called()
 
     def test_create_ring_fill_item_sets_metadata_and_selectable_contract(self) -> None:

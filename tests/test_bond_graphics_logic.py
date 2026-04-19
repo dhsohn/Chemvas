@@ -92,6 +92,53 @@ class BondGraphicsLogicTest(unittest.TestCase):
         self.assertTrue(replacement.isSelected())
         self.assertEqual(redraw_calls, [(1, 0), (2, 0)])
 
+    def test_refresh_bond_graphics_tolerates_non_selectable_original_items(self) -> None:
+        removed: list[object] = []
+        add_calls: list[int] = []
+        original = object()
+        replacement = object()
+        bond_items: dict[int, list[object]] = {0: [original]}
+
+        def add_bond_graphics(bond_id: int) -> None:
+            add_calls.append(bond_id)
+            bond_items[bond_id] = [replacement]
+
+        self.assertTrue(
+            refresh_bond_graphics(
+                0,
+                bonds=[Bond(1, 2, 1)],
+                bond_items=bond_items,
+                remove_scene_item=removed.append,
+                add_bond_graphics=add_bond_graphics,
+            )
+        )
+
+        self.assertEqual(removed, [original])
+        self.assertEqual(add_calls, [0])
+        self.assertEqual(bond_items[0], [replacement])
+
+    def test_refresh_bond_graphics_skips_selection_restore_for_non_selectable_replacements(self) -> None:
+        removed: list[object] = []
+        original = _FakeSelectableItem(selected=True)
+        replacement = object()
+        bond_items: dict[int, list[object]] = {0: [original]}
+
+        def add_bond_graphics(bond_id: int) -> None:
+            bond_items[bond_id] = [replacement]
+
+        self.assertTrue(
+            refresh_bond_graphics(
+                0,
+                bonds=[Bond(1, 2, 1)],
+                bond_items=bond_items,
+                remove_scene_item=removed.append,
+                add_bond_graphics=add_bond_graphics,
+            )
+        )
+
+        self.assertEqual(removed, [original])
+        self.assertEqual(bond_items[0], [replacement])
+
 
 if __name__ == "__main__":
     unittest.main()

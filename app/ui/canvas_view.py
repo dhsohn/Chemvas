@@ -965,27 +965,22 @@ class CanvasView(QGraphicsView):
     def add_bond(self, a: int, b: int, order: int = 1) -> int:
         return canvas_bond_mutation_service_for(self).add_bond(a, b, order)
 
-    def set_bond_style(self, style: str, order: int) -> None:
-        self.active_bond_style = style
-        self.active_bond_order = order
-        self.tools.set_active("bond")
+    def _activate_tool_variant(self, tool_name: str, **state) -> None:
+        for attr_name, value in state.items():
+            setattr(self, attr_name, value)
+        self.tools.set_active(tool_name)
         self._update_selection_outline()
         self._notify_tool_change()
         self._refresh_hover_from_cursor()
+
+    def set_bond_style(self, style: str, order: int) -> None:
+        self._activate_tool_variant("bond", active_bond_style=style, active_bond_order=order)
 
     def set_arrow_type(self, arrow_type: str) -> None:
-        self.active_arrow_type = arrow_type
-        self.tools.set_active("arrow")
-        self._update_selection_outline()
-        self._notify_tool_change()
-        self._refresh_hover_from_cursor()
+        self._activate_tool_variant("arrow", active_arrow_type=arrow_type)
 
     def set_orbital_type(self, orbital_type: str) -> None:
-        self.active_orbital_type = orbital_type
-        self.tools.set_active("orbital")
-        self._update_selection_outline()
-        self._notify_tool_change()
-        self._refresh_hover_from_cursor()
+        self._activate_tool_variant("orbital", active_orbital_type=orbital_type)
 
     def set_orbital_phase_enabled(self, enabled: bool) -> None:
         self.orbital_phase_enabled = enabled
@@ -1225,23 +1220,38 @@ class CanvasView(QGraphicsView):
             ring_item.setPolygon(scaled)
         self._mark_spatial_index_dirty()
 
+    def _selected_scene_notes(self) -> list[QGraphicsItem]:
+        scene = self.scene()
+        return [note for note in self.selected_notes if note.scene() is scene]
+
+    @staticmethod
+    def _append_unique_scene_item(
+        items: list[QGraphicsItem],
+        seen: set[QGraphicsItem],
+        item: QGraphicsItem,
+        *,
+        excluded_kinds: set[str],
+    ) -> bool:
+        if item in seen:
+            return False
+        if item.data(0) in excluded_kinds:
+            return False
+        seen.add(item)
+        items.append(item)
+        return True
+
+    def _selected_scene_items(self, *, excluded_kinds: set[str]) -> list[QGraphicsItem]:
+        items: list[QGraphicsItem] = []
+        seen: set[QGraphicsItem] = set()
+        for item in self.scene().selectedItems():
+            CanvasView._append_unique_scene_item(items, seen, item, excluded_kinds=excluded_kinds)
+        for note in CanvasView._selected_scene_notes(self):
+            CanvasView._append_unique_scene_item(items, seen, note, excluded_kinds=excluded_kinds)
+        return items
+
     def _selected_items_for_transform(self) -> list[QGraphicsItem]:
         excluded_kinds = {"handle", "note_box", "note_select", "selection_outline"}
-        selected = [
-            item
-            for item in self.scene().selectedItems()
-            if item.data(0) not in excluded_kinds
-        ]
-        if self.selected_notes:
-            selected.extend(note for note in self.selected_notes if note.scene() is self.scene())
-        items: list[QGraphicsItem] = []
-        seen = set()
-        for item in selected:
-            if item in seen:
-                continue
-            seen.add(item)
-            items.append(item)
-        return items
+        return CanvasView._selected_scene_items(self, excluded_kinds=excluded_kinds)
 
     def _selected_atom_ids_for_transform(self) -> set[int]:
         atom_ids, bond_ids = self._selected_ids()
@@ -1278,52 +1288,75 @@ class CanvasView(QGraphicsView):
         self._scene_ops_controller.flip_selected_items(horizontal=False)
 
     def _rebuild_graphics(self) -> None:
-        for items in self.bond_items.values():
-            for item in items:
-                self.scene().removeItem(item)
-        self.bond_items = {}
-
-        for label in self.atom_items.values():
-            self.scene().removeItem(label)
-        self.atom_items = {}
-        for dot in self.atom_dots.values():
-            self.scene().removeItem(dot)
-        self.atom_dots = {}
-
+        scene = self.scene()
+        self.bond_items = CanvasView._clear_scene_item_list_map(scene, self.bond_items)
+        self.atom_items = CanvasView._clear_scene_item_map(scene, self.atom_items)
+        self.atom_dots = CanvasView._clear_scene_item_map(scene, self.atom_dots)
         self._render_model()
+
+    @staticmethod
+    def _remove_scene_items(scene: QGraphicsScene, items) -> None:
+        for item in items:
+            scene.removeItem(item)
+
+    @staticmethod
+    def _clear_scene_item_map(scene: QGraphicsScene, item_map: dict) -> dict:
+        CanvasView._remove_scene_items(scene, item_map.values())
+        return {}
+
+    @staticmethod
+    def _clear_scene_item_list_map(scene: QGraphicsScene, item_map: dict) -> dict:
+        for items in item_map.values():
+            CanvasView._remove_scene_items(scene, items)
+        return {}
+
+    def _append_ring_selection_atom_ids(self, atom_ids: set[int], ring_atom_ids) -> None:
+        if not isinstance(ring_atom_ids, list):
+            return
+        for atom_id in ring_atom_ids:
+            if isinstance(atom_id, int) and atom_id in self.model.atoms:
+                atom_ids.add(atom_id)
+
+    def _append_polygon_selection_atom_ids(self, atom_ids: set[int], polygon) -> None:
+        for atom_id, atom in self.model.atoms.items():
+            if polygon.containsPoint(QPointF(atom.x, atom.y), Qt.FillRule.WindingFill):
+                atom_ids.add(atom_id)
+
+    def _append_selected_item_ids(
+        self,
+        atom_ids: set[int],
+        bond_ids: set[int],
+        item: QGraphicsItem,
+    ) -> None:
+        kind = item.data(0)
+        if kind == "atom":
+            atom_id = item.data(1)
+            if isinstance(atom_id, int):
+                atom_ids.add(atom_id)
+            return
+        if kind == "bond":
+            bond_id = item.data(1)
+            if isinstance(bond_id, int):
+                bond_ids.add(bond_id)
+            return
+        if kind != "ring":
+            return
+        ring_atom_ids = item.data(2)
+        if isinstance(ring_atom_ids, list):
+            CanvasView._append_ring_selection_atom_ids(self, atom_ids, ring_atom_ids)
+            return
+        if hasattr(item, "polygon"):
+            CanvasView._append_polygon_selection_atom_ids(self, atom_ids, item.polygon())
 
     def _selected_ids(self) -> tuple[set[int], set[int]]:
         atom_ids = set()
         bond_ids = set()
         for item in self.scene().selectedItems():
-            kind = item.data(0)
-            if kind == "atom":
-                atom_id = item.data(1)
-                if isinstance(atom_id, int):
-                    atom_ids.add(atom_id)
-            elif kind == "bond":
-                bond_id = item.data(1)
-                if isinstance(bond_id, int):
-                    bond_ids.add(bond_id)
-            elif kind == "ring":
-                ring_atom_ids = item.data(2)
-                if isinstance(ring_atom_ids, list):
-                    for atom_id in ring_atom_ids:
-                        if isinstance(atom_id, int) and atom_id in self.model.atoms:
-                            atom_ids.add(atom_id)
-                elif hasattr(item, "polygon"):
-                    polygon = item.polygon()
-                    for atom_id, atom in self.model.atoms.items():
-                        if polygon.containsPoint(QPointF(atom.x, atom.y), Qt.FillRule.WindingFill):
-                            atom_ids.add(atom_id)
+            CanvasView._append_selected_item_ids(self, atom_ids, bond_ids, item)
         return atom_ids, bond_ids
 
-    def _selected_chemical_ids(self) -> tuple[set[int], set[int]]:
-        atom_ids, bond_ids = self._selected_ids()
-        if atom_ids or bond_ids:
-            return atom_ids, bond_ids
-        # Scene-only items such as arrows, notes, and TS brackets should not
-        # suppress a real atom-bound annotation selection from the 3D/export path.
+    def _selected_mark_atom_ids(self) -> set[int]:
+        atom_ids: set[int] = set()
         for item in self.scene().selectedItems():
             if item.data(0) != "mark":
                 continue
@@ -1331,33 +1364,28 @@ class CanvasView(QGraphicsView):
             atom_id = data.get("atom_id")
             if isinstance(atom_id, int) and atom_id in self.model.atoms:
                 atom_ids.add(atom_id)
+        return atom_ids
+
+    def _selected_chemical_ids(self) -> tuple[set[int], set[int]]:
+        atom_ids, bond_ids = self._selected_ids()
+        if atom_ids or bond_ids:
+            return atom_ids, bond_ids
+        # Scene-only items such as arrows, notes, and TS brackets should not
+        # suppress a real atom-bound annotation selection from the 3D/export path.
+        atom_ids.update(CanvasView._selected_mark_atom_ids(self))
         return atom_ids, bond_ids
 
     def _selection_items_for_copy(self) -> list[QGraphicsItem]:
         excluded_kinds = {"handle", "note_select", "selection_outline"}
-        selected = [
-            item
-            for item in self.scene().selectedItems()
-            if item.data(0) not in excluded_kinds
-        ]
-        if self.selected_notes:
-            selected.extend(note for note in self.selected_notes if note.scene() is self.scene())
+        selected = CanvasView._selected_scene_items(self, excluded_kinds=excluded_kinds)
         if not selected:
             return []
         items: list[QGraphicsItem] = []
-        seen = set()
-
-        def add_item(item: QGraphicsItem) -> None:
-            if item in seen:
-                return
-            kind = item.data(0)
-            if kind in excluded_kinds:
-                return
-            seen.add(item)
-            items.append(item)
+        seen: set[QGraphicsItem] = set()
 
         def add_with_children(item: QGraphicsItem) -> None:
-            add_item(item)
+            if not CanvasView._append_unique_scene_item(items, seen, item, excluded_kinds=excluded_kinds):
+                return
             for child in item.childItems():
                 add_with_children(child)
 
@@ -1504,7 +1532,7 @@ class CanvasView(QGraphicsView):
         return mark_kinds_by_atom
 
     def build_3d_conversion_payload(self) -> tuple[MoleculeModel, dict[int, dict[str, int]]]:
-        atom_ids, bond_ids = self._selected_chemical_ids()
+        atom_ids, bond_ids = self._selected_structure_ids()
         return build_3d_conversion_payload_state(
             self.model,
             atom_ids,
@@ -1513,10 +1541,14 @@ class CanvasView(QGraphicsView):
             bounds_getter=self._bounds_for_atoms,
         )
 
-    def build_selected_structure_payload(self) -> tuple[MoleculeModel, dict[int, dict[str, int]], tuple[float, float, float, float]]:
+    def _selected_structure_ids(self, *, require_non_empty: bool = False) -> tuple[set[int], set[int]]:
         atom_ids, bond_ids = self._selected_chemical_ids()
-        if not atom_ids and not bond_ids:
+        if require_non_empty and not atom_ids and not bond_ids:
             raise ValueError("Select a molecular structure on the canvas first.")
+        return atom_ids, bond_ids
+
+    def build_selected_structure_payload(self) -> tuple[MoleculeModel, dict[int, dict[str, int]], tuple[float, float, float, float]]:
+        atom_ids, bond_ids = self._selected_structure_ids(require_non_empty=True)
         return self.build_structure_payload(atom_ids, bond_ids)
 
     def build_structure_payload(
@@ -1532,6 +1564,14 @@ class CanvasView(QGraphicsView):
             bounds_getter=self._bounds_for_atoms,
         )
 
+    @staticmethod
+    def _extend_bounds_with_item_rect(xs: list[float], ys: list[float], item: QGraphicsItem | None) -> None:
+        if item is None:
+            return
+        rect = item.sceneBoundingRect()
+        xs.extend([rect.left(), rect.right()])
+        ys.extend([rect.top(), rect.bottom()])
+
     def _bounds_for_atoms(self, atom_ids: set[int], include_labels: bool = False):
         xs = []
         ys = []
@@ -1542,16 +1582,8 @@ class CanvasView(QGraphicsView):
             xs.append(atom.x)
             ys.append(atom.y)
             if include_labels:
-                label = self.atom_items.get(atom_id)
-                if label is not None:
-                    rect = label.sceneBoundingRect()
-                    xs.extend([rect.left(), rect.right()])
-                    ys.extend([rect.top(), rect.bottom()])
-                dot = self.atom_dots.get(atom_id)
-                if dot is not None:
-                    rect = dot.sceneBoundingRect()
-                    xs.extend([rect.left(), rect.right()])
-                    ys.extend([rect.top(), rect.bottom()])
+                self._extend_bounds_with_item_rect(xs, ys, self.atom_items.get(atom_id))
+                self._extend_bounds_with_item_rect(xs, ys, self.atom_dots.get(atom_id))
         if not xs:
             return self.model.bounds()
         return min(xs), min(ys), max(xs), max(ys)
@@ -1876,6 +1908,10 @@ class CanvasView(QGraphicsView):
         self.hover_bond_id = None
         self._hover_preview_style = None
 
+    def _add_hover_indicator_item(self, item: QGraphicsItem) -> None:
+        self.scene().addItem(item)
+        self.hover_items.append(item)
+
     def _add_atom_hover_indicator(self, atom_id: int) -> None:
         hover_scene_service = getattr(self, "_hover_scene_service", None)
         if hover_scene_service is not None:
@@ -1886,8 +1922,7 @@ class CanvasView(QGraphicsView):
             return
         radius = self.renderer.style.bond_length_px * 0.25
         circle = build_atom_hover_indicator_helper(QPointF(atom.x, atom.y), radius)
-        self.scene().addItem(circle)
-        self.hover_items.append(circle)
+        self._add_hover_indicator_item(circle)
 
     def _add_bond_hover_indicator(self, bond_id: int) -> None:
         hover_scene_service = getattr(self, "_hover_scene_service", None)
@@ -1909,8 +1944,7 @@ class CanvasView(QGraphicsView):
             QPointF(b.x, b.y),
             radius,
         )
-        self.scene().addItem(circle)
-        self.hover_items.append(circle)
+        self._add_hover_indicator_item(circle)
 
     def _mark_center_for_pointer(
         self,
@@ -2020,39 +2054,45 @@ class CanvasView(QGraphicsView):
             return
         self.hover_items.extend(add_hover_preview_items_helper(self.scene(), items))
 
+    def _connected_atom_unit_vectors(self, atom_id: int) -> list[tuple[float, float]]:
+        atom = self.model.atoms.get(atom_id)
+        if atom is None:
+            return []
+        vectors: list[tuple[float, float]] = []
+        for bond in self.model.bonds:
+            if bond is None or (bond.a != atom_id and bond.b != atom_id):
+                continue
+            other_id = bond.b if bond.a == atom_id else bond.a
+            other = self.model.atoms.get(other_id)
+            if other is None:
+                continue
+            dx = other.x - atom.x
+            dy = other.y - atom.y
+            length = math.hypot(dx, dy)
+            if length <= 1e-9:
+                continue
+            vectors.append((dx / length, dy / length))
+        return vectors
+
+    @staticmethod
+    def _default_bond_angle_for_vectors(vectors: list[tuple[float, float]]) -> float:
+        if len(vectors) >= 2:
+            sx = sum(dx for dx, _ in vectors)
+            sy = sum(dy for _, dy in vectors)
+            if math.hypot(sx, sy) > 1e-6:
+                return math.degrees(math.atan2(-sy, -sx))
+            return math.degrees(math.atan2(vectors[0][1], vectors[0][0])) - 90.0
+        if vectors:
+            return math.degrees(math.atan2(vectors[0][1], vectors[0][0])) - 120.0
+        return 0.0
+
     def _default_bond_endpoint(self, start: QPointF, start_atom_id: int | None) -> QPointF:
         bond_len = self.renderer.style.bond_length_px
         angle = 0.0
         if start_atom_id is not None:
-            atom = self.model.atoms.get(start_atom_id)
-            if atom is not None:
-                connected = [
-                    bond
-                    for bond in self.model.bonds
-                    if bond is not None and (bond.a == start_atom_id or bond.b == start_atom_id)
-                ]
-                if connected:
-                    vectors = []
-                    for bond in connected:
-                        other_id = bond.b if bond.a == start_atom_id else bond.a
-                        other = self.model.atoms.get(other_id)
-                        if other is None:
-                            continue
-                        dx = other.x - atom.x
-                        dy = other.y - atom.y
-                        length = math.hypot(dx, dy)
-                        if length == 0:
-                            continue
-                        vectors.append((dx / length, dy / length))
-                    if len(vectors) >= 2:
-                        sx = sum(v[0] for v in vectors)
-                        sy = sum(v[1] for v in vectors)
-                        if math.hypot(sx, sy) > 1e-6:
-                            angle = math.degrees(math.atan2(-sy, -sx))
-                        else:
-                            angle = math.degrees(math.atan2(vectors[0][1], vectors[0][0])) - 90.0
-                    elif vectors:
-                        angle = math.degrees(math.atan2(vectors[0][1], vectors[0][0])) - 120.0
+            angle = CanvasView._default_bond_angle_for_vectors(
+                CanvasView._connected_atom_unit_vectors(self, start_atom_id)
+            )
         rad = math.radians(angle)
         return QPointF(start.x() + math.cos(rad) * bond_len, start.y() + math.sin(rad) * bond_len)
 
@@ -2295,10 +2335,7 @@ class CanvasView(QGraphicsView):
         self._selection_rotation_controller.end_selection_3d_rotation()
 
     def _redraw_bonds_for_atoms(self, atom_ids: set[int]) -> None:
-        bond_ids = set()
-        for atom_id in atom_ids:
-            bond_ids.update(self._atom_bond_ids.get(atom_id, ()))
-        for bond_id in bond_ids:
+        for bond_id in CanvasView._bond_ids_for_atom_ids(self, atom_ids):
             self._redraw_bond(bond_id)
 
     def bond_sets_for_atoms(self, atom_ids: set[int]) -> tuple[set[int], set[int]]:
@@ -2563,15 +2600,7 @@ class CanvasView(QGraphicsView):
     ) -> float | None:
         if not atom_ids:
             return None
-        bond_ids: set[int] = set()
-        for atom_id in atom_ids:
-            bond_ids.update(self._atom_bond_ids.get(atom_id, ()))
-        if not bond_ids:
-            for bond_id, bond in enumerate(self.model.bonds):
-                if bond is None:
-                    continue
-                if bond.a in atom_ids and bond.b in atom_ids:
-                    bond_ids.add(bond_id)
+        bond_ids = CanvasView._bond_ids_within_atom_ids(self, atom_ids)
         if not bond_ids:
             return None
         total = 0.0
@@ -2596,6 +2625,34 @@ class CanvasView(QGraphicsView):
             return None
         return total / count
 
+    def _bond_ids_for_atom_ids(self, atom_ids: set[int]) -> set[int]:
+        bond_ids: set[int] = set()
+        for atom_id in atom_ids:
+            bond_ids.update(self._atom_bond_ids.get(atom_id, ()))
+        return bond_ids
+
+    def _bond_ids_within_atom_ids(self, atom_ids: set[int]) -> set[int]:
+        if not atom_ids:
+            return set()
+        bond_ids = CanvasView._bond_ids_for_atom_ids(self, atom_ids)
+        if not bond_ids:
+            # Some test/setup paths do not materialize the adjacency cache.
+            return {
+                bond_id
+                for bond_id, bond in enumerate(self.model.bonds)
+                if bond is not None and bond.a in atom_ids and bond.b in atom_ids
+            }
+        selected_bond_ids: set[int] = set()
+        for bond_id in bond_ids:
+            if not (0 <= bond_id < len(self.model.bonds)):
+                continue
+            bond = self.model.bonds[bond_id]
+            if bond is None:
+                continue
+            if bond.a in atom_ids and bond.b in atom_ids:
+                selected_bond_ids.add(bond_id)
+        return selected_bond_ids
+
     def _rotation_scale_for_coords(
         self,
         atom_ids: set[int],
@@ -2608,7 +2665,7 @@ class CanvasView(QGraphicsView):
         scale_atom_ids.update(extra_atom_ids)
         current_coords = dict(self._rotation_base_coords)
         current_coords.update(rotated_coords)
-        current_avg = self._average_bond_length_for_atoms(scale_atom_ids, current_coords)
+        current_avg = CanvasView._average_bond_length_for_atoms(self, scale_atom_ids, current_coords)
         if not current_avg or current_avg <= 1e-9:
             return 1.0
         scale = self._rotation_base_bond_length / current_avg
@@ -2725,20 +2782,39 @@ class CanvasView(QGraphicsView):
     def _create_ring_fill_item(self, points: list[QPointF], atom_ids: list[int]):
         return canvas_ring_fill_scene_service_for(self).create_ring_fill_item(points, atom_ids)
 
+    @staticmethod
+    def _bond_matches_atoms(bond: Bond | None, a_id: int, b_id: int) -> bool:
+        if bond is None:
+            return False
+        return (bond.a == a_id and bond.b == b_id) or (bond.a == b_id and bond.b == a_id)
+
+    @staticmethod
+    def _first_matching_bond_id(
+        bonds: list[Bond | None],
+        a_id: int,
+        b_id: int,
+        *,
+        skip_bond_id: int | None = None,
+    ) -> int | None:
+        for bond_id, bond in enumerate(bonds):
+            if skip_bond_id is not None and bond_id == skip_bond_id:
+                continue
+            if CanvasView._bond_matches_atoms(bond, a_id, b_id):
+                return bond_id
+        return None
+
     def _bond_id_between(self, a_id: int, b_id: int, skip_bond_id: int | None = None) -> int | None:
         if a_id == b_id:
             return None
         bonds_a = self._atom_bond_ids.get(a_id)
         bonds_b = self._atom_bond_ids.get(b_id)
         if bonds_a is None or bonds_b is None:
-            for bond_id, bond in enumerate(self.model.bonds):
-                if skip_bond_id is not None and bond_id == skip_bond_id:
-                    continue
-                if bond is None:
-                    continue
-                if (bond.a == a_id and bond.b == b_id) or (bond.a == b_id and bond.b == a_id):
-                    return bond_id
-            return None
+            return CanvasView._first_matching_bond_id(
+                self.model.bonds,
+                a_id,
+                b_id,
+                skip_bond_id=skip_bond_id,
+            )
         if not bonds_a or not bonds_b:
             return None
         shared = bonds_a & bonds_b
@@ -2749,14 +2825,12 @@ class CanvasView(QGraphicsView):
             return None
         for bond_id in sorted(shared):
             bond = self.model.bonds[bond_id]
-            if bond is None:
-                continue
-            if (bond.a == a_id and bond.b == b_id) or (bond.a == b_id and bond.b == a_id):
+            if CanvasView._bond_matches_atoms(bond, a_id, b_id):
                 return bond_id
         return None
 
     def _bond_exists(self, a_id: int, b_id: int) -> bool:
-        return self._bond_id_between(a_id, b_id) is not None
+        return CanvasView._bond_id_between(self, a_id, b_id) is not None
 
     def _atom_bond_order_sum(self, atom_id: int) -> int:
         total = 0
@@ -2767,10 +2841,26 @@ class CanvasView(QGraphicsView):
                 total += max(1, int(bond.order or 1))
         return total
 
+    def _viewport_scene_center(self) -> QPointF:
+        return self.mapToScene(self.viewport().rect().center())
+
+    def _run_recorded_structure_build(self, action) -> None:
+        self._structure_build_service.run_recorded_build(action)
+
+    def _run_recorded_regular_ring_template(self, n: int) -> None:
+        self._run_recorded_structure_build(lambda: self._add_regular_ring_template(n))
+
+    def _run_recorded_hetero_ring_template(self, n: int, elements: list[str]) -> None:
+        self._run_recorded_structure_build(lambda: self._add_hetero_ring_template(n, elements))
+
+    def _run_recorded_fused_benzenes(self, count: int, *, mode: str = "linear") -> None:
+        self._run_recorded_structure_build(lambda: self._add_fused_benzenes(count, mode=mode))
+
+    def _run_recorded_crown_ether(self, atoms: int, oxygens: int) -> None:
+        self._run_recorded_structure_build(lambda: self._add_crown_ether(atoms, oxygens))
 
     def add_benzene_template(self) -> None:
-        center = self.mapToScene(self.viewport().rect().center())
-        self.add_benzene_ring(center)
+        self.add_benzene_ring(self._viewport_scene_center())
 
     def add_cyclohexane_chair(self) -> None:
         self._structure_build_service.add_cyclohexane_chair()
@@ -2779,13 +2869,13 @@ class CanvasView(QGraphicsView):
         self._structure_build_service.add_cyclohexane_boat()
 
     def add_cyclopropane(self) -> None:
-        self._structure_build_service.run_recorded_build(lambda: self._add_regular_ring_template(3))
+        self._run_recorded_regular_ring_template(3)
 
     def add_cyclobutane(self) -> None:
-        self._structure_build_service.run_recorded_build(lambda: self._add_regular_ring_template(4))
+        self._run_recorded_regular_ring_template(4)
 
     def add_cyclopentane(self) -> None:
-        self._structure_build_service.run_recorded_build(lambda: self._add_regular_ring_template(5))
+        self._run_recorded_regular_ring_template(5)
 
     def _insert_session_state(self) -> InsertSessionState:
         return self._insert_controller.insert_session_state()
@@ -2797,43 +2887,31 @@ class CanvasView(QGraphicsView):
         self._insert_controller.begin_ring_template_insert(ring_size, style)
 
     def add_naphthalene(self) -> None:
-        self._structure_build_service.run_recorded_build(lambda: self._add_fused_benzenes(2))
+        self._run_recorded_fused_benzenes(2)
 
     def add_anthracene(self) -> None:
-        self._structure_build_service.run_recorded_build(lambda: self._add_fused_benzenes(3, mode="linear"))
+        self._run_recorded_fused_benzenes(3, mode="linear")
 
     def add_phenanthrene(self) -> None:
-        self._structure_build_service.run_recorded_build(lambda: self._add_fused_benzenes(3, mode="angled"))
+        self._run_recorded_fused_benzenes(3, mode="angled")
 
     def add_pyridine(self) -> None:
-        self._structure_build_service.run_recorded_build(
-            lambda: self._add_hetero_ring_template(6, ["C", "C", "C", "C", "C", "N"])
-        )
+        self._run_recorded_hetero_ring_template(6, ["C", "C", "C", "C", "C", "N"])
 
     def add_pyrimidine(self) -> None:
-        self._structure_build_service.run_recorded_build(
-            lambda: self._add_hetero_ring_template(6, ["N", "C", "N", "C", "C", "C"])
-        )
+        self._run_recorded_hetero_ring_template(6, ["N", "C", "N", "C", "C", "C"])
 
     def add_imidazole(self) -> None:
-        self._structure_build_service.run_recorded_build(
-            lambda: self._add_hetero_ring_template(5, ["C", "N", "C", "N", "C"])
-        )
+        self._run_recorded_hetero_ring_template(5, ["C", "N", "C", "N", "C"])
 
     def add_pyrrole(self) -> None:
-        self._structure_build_service.run_recorded_build(
-            lambda: self._add_hetero_ring_template(5, ["N", "C", "C", "C", "C"])
-        )
+        self._run_recorded_hetero_ring_template(5, ["N", "C", "C", "C", "C"])
 
     def add_furan(self) -> None:
-        self._structure_build_service.run_recorded_build(
-            lambda: self._add_hetero_ring_template(5, ["O", "C", "C", "C", "C"])
-        )
+        self._run_recorded_hetero_ring_template(5, ["O", "C", "C", "C", "C"])
 
     def add_thiophene(self) -> None:
-        self._structure_build_service.run_recorded_build(
-            lambda: self._add_hetero_ring_template(5, ["S", "C", "C", "C", "C"])
-        )
+        self._run_recorded_hetero_ring_template(5, ["S", "C", "C", "C", "C"])
 
     def add_indole(self) -> None:
         self._structure_build_service.add_indole()
@@ -2884,26 +2962,22 @@ class CanvasView(QGraphicsView):
         self._structure_build_service.add_et()
 
     def add_pyranose(self) -> None:
-        self._structure_build_service.run_recorded_build(
-            lambda: self._add_hetero_ring_template(6, ["O", "C", "C", "C", "C", "C"])
-        )
+        self._run_recorded_hetero_ring_template(6, ["O", "C", "C", "C", "C", "C"])
 
     def add_furanose(self) -> None:
-        self._structure_build_service.run_recorded_build(
-            lambda: self._add_hetero_ring_template(5, ["O", "C", "C", "C", "C"])
-        )
+        self._run_recorded_hetero_ring_template(5, ["O", "C", "C", "C", "C"])
 
     def add_peptide_2(self) -> None:
         self._structure_build_service.add_peptide_2()
 
     def add_crown_12_4(self) -> None:
-        self._structure_build_service.run_recorded_build(lambda: self._add_crown_ether(12, 4))
+        self._run_recorded_crown_ether(12, 4)
 
     def add_crown_15_5(self) -> None:
-        self._structure_build_service.run_recorded_build(lambda: self._add_crown_ether(15, 5))
+        self._run_recorded_crown_ether(15, 5)
 
     def add_crown_18_6(self) -> None:
-        self._structure_build_service.run_recorded_build(lambda: self._add_crown_ether(18, 6))
+        self._run_recorded_crown_ether(18, 6)
 
     def _add_regular_ring_template(self, n: int) -> None:
         self._structure_build_service.add_regular_ring_template(n)
@@ -2917,19 +2991,42 @@ class CanvasView(QGraphicsView):
     def _add_crown_ether(self, atoms: int, oxygens: int) -> None:
         self._structure_build_service.add_crown_ether(atoms, oxygens)
 
+    @staticmethod
+    def _qpoints_from_pairs(points: list[tuple[float, float]]) -> list[QPointF]:
+        return [QPointF(x, y) for x, y in points]
+
+    @staticmethod
+    def _point_pairs(points: list[QPointF]) -> list[tuple[float, float]]:
+        return [(point.x(), point.y()) for point in points]
+
+    @staticmethod
+    def _point_pair(point: QPointF | None) -> tuple[float, float] | None:
+        if point is None:
+            return None
+        return point.x(), point.y()
+
+    @staticmethod
+    def _template_geometry_result(
+        result: tuple[list[tuple[float, float]], list[tuple[int, float, float]]] | None,
+    ) -> tuple[list[QPointF], list[tuple[int, float, float]]] | None:
+        if result is None:
+            return None
+        points, merge = result
+        return CanvasView._qpoints_from_pairs(points), merge
+
     def _cyclohexane_chair_points(self, center: QPointF) -> list[QPointF]:
         points = cyclohexane_chair_points(
             (center.x(), center.y()),
             self.renderer.style.bond_length_px,
         )
-        return [QPointF(x, y) for x, y in points]
+        return CanvasView._qpoints_from_pairs(points)
 
     def _cyclohexane_boat_points(self, center: QPointF) -> list[QPointF]:
         points = cyclohexane_boat_points(
             (center.x(), center.y()),
             self.renderer.style.bond_length_px,
         )
-        return [QPointF(x, y) for x, y in points]
+        return CanvasView._qpoints_from_pairs(points)
 
     @staticmethod
     def _scale_points_to_bond_length(
@@ -2942,7 +3039,7 @@ class CanvasView(QGraphicsView):
             (center.x(), center.y()),
             bond_length,
         )
-        return [QPointF(x, y) for x, y in scaled]
+        return CanvasView._qpoints_from_pairs(scaled)
 
     def _ring_points(self, center: QPointF, n: int, radius: float | None = None):
         points = ring_points(
@@ -2950,7 +3047,7 @@ class CanvasView(QGraphicsView):
             n,
             radius or self.renderer.style.bond_length_px,
         )
-        return [QPointF(x, y) for x, y in points]
+        return CanvasView._qpoints_from_pairs(points)
 
     def _regular_ring_radius(self, n: int, bond_length: float | None = None) -> float:
         return regular_ring_radius(
@@ -2964,18 +3061,13 @@ class CanvasView(QGraphicsView):
         bond_id: int,
         center_hint: QPointF | None = None,
     ) -> tuple[list[QPointF], list[tuple[int, float, float]]] | None:
-        result = compute_template_points_for_bond(
-            [(point.x(), point.y()) for point in points_local],
+        return CanvasView._compute_bond_template_geometry(
+            self,
+            compute_template_points_for_bond,
+            CanvasView._point_pairs(points_local),
             bond_id,
-            atoms=self.model.atoms,
-            bonds=self.model.bonds,
-            center_hint=(center_hint.x(), center_hint.y()) if center_hint is not None else None,
-            occupied_polygon=self._ring_polygon_points_for_bond(bond_id),
+            center_hint=center_hint,
         )
-        if result is None:
-            return None
-        points, merge = result
-        return [QPointF(x, y) for x, y in points], merge
 
     def _regular_ring_points_for_bond(
         self,
@@ -2983,18 +3075,31 @@ class CanvasView(QGraphicsView):
         bond_id: int,
         center_hint: QPointF | None = None,
     ) -> tuple[list[QPointF], list[tuple[int, float, float]]] | None:
-        result = compute_regular_ring_points_for_bond(
+        return CanvasView._compute_bond_template_geometry(
+            self,
+            compute_regular_ring_points_for_bond,
             n,
+            bond_id,
+            center_hint=center_hint,
+        )
+
+    def _compute_bond_template_geometry(
+        self,
+        geometry_fn,
+        geometry_input,
+        bond_id: int,
+        *,
+        center_hint: QPointF | None = None,
+    ) -> tuple[list[QPointF], list[tuple[int, float, float]]] | None:
+        result = geometry_fn(
+            geometry_input,
             bond_id,
             atoms=self.model.atoms,
             bonds=self.model.bonds,
-            center_hint=(center_hint.x(), center_hint.y()) if center_hint is not None else None,
+            center_hint=CanvasView._point_pair(center_hint),
             occupied_polygon=self._ring_polygon_points_for_bond(bond_id),
         )
-        if result is None:
-            return None
-        points, merge = result
-        return [QPointF(x, y) for x, y in points], merge
+        return CanvasView._template_geometry_result(result)
 
     def _ring_polygon_points_for_bond(self, bond_id: int) -> list[tuple[float, float]] | None:
         return ring_polygon_points_for_bond(
@@ -3130,7 +3235,7 @@ class CanvasView(QGraphicsView):
         self,
         points: list[tuple[float, float]] | None,
     ) -> list[QPointF] | None:
-        return InsertController._template_points_from_pairs(points)
+        return None if points is None else CanvasView._qpoints_from_pairs(points)
 
     def _bond_merge_seed(self, bond_id: int | None) -> list[tuple[int, float, float]]:
         return self._insert_controller.bond_merge_seed(bond_id)
@@ -3385,20 +3490,40 @@ class CanvasView(QGraphicsView):
         y2: float,
         target: QPointF | None = None,
     ) -> tuple[float, float]:
-        dx = x2 - x1
-        dy = y2 - y1
-        length = math.hypot(dx, dy) or 1.0
-        nx = -dy / length
-        ny = dx / length
+        nx, ny, _ = CanvasView._line_normal_components(x1, y1, x2, y2)
         if target is None:
             return nx, ny
         mid_x = (x1 + x2) / 2.0
         mid_y = (y1 + y2) / 2.0
-        to_tx = target.x() - mid_x
-        to_ty = target.y() - mid_y
+        return CanvasView._orient_normal_toward_target(nx, ny, mid_x, mid_y, target.x(), target.y())
+
+    @staticmethod
+    def _line_normal_components(
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+    ) -> tuple[float, float, float]:
+        dx = x2 - x1
+        dy = y2 - y1
+        length = math.hypot(dx, dy)
+        if length < 1e-9:
+            return 0.0, 0.0, 0.0
+        return -dy / length, dx / length, length
+
+    @staticmethod
+    def _orient_normal_toward_target(
+        nx: float,
+        ny: float,
+        mid_x: float,
+        mid_y: float,
+        target_x: float,
+        target_y: float,
+    ) -> tuple[float, float]:
+        to_tx = target_x - mid_x
+        to_ty = target_y - mid_y
         if nx * to_tx + ny * to_ty < 0:
-            nx = -nx
-            ny = -ny
+            return -nx, -ny
         return nx, ny
 
     def _bond_offset_unit_3d(
@@ -3413,22 +3538,14 @@ class CanvasView(QGraphicsView):
             return None
         ax, ay = atom_a.x, atom_a.y
         bx, by = atom_b.x, atom_b.y
-        dx = bx - ax
-        dy = by - ay
-        length = math.hypot(dx, dy)
+        nx, ny, length = CanvasView._line_normal_components(ax, ay, bx, by)
         if length < 1e-9:
             return None
-        nx = -dy / length
-        ny = dx / length
         if target is not None:
             mid_x = (ax + bx) * 0.5
             mid_y = (ay + by) * 0.5
             target_x, target_y = self._project_point_3d(target)
-            to_tx = target_x - mid_x
-            to_ty = target_y - mid_y
-            if nx * to_tx + ny * to_ty < 0:
-                nx = -nx
-                ny = -ny
+            nx, ny = CanvasView._orient_normal_toward_target(nx, ny, mid_x, mid_y, target_x, target_y)
         return (nx, ny)
 
     def _draw_parallel_bonds(

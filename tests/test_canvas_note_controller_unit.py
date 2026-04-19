@@ -265,6 +265,110 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         controller_remove.assert_called_once_with(item)
         self.assertEqual(canvas.removed_items, [])
 
+    def test_update_note_box_covers_no_brush_and_no_pen_fallbacks(self) -> None:
+        scene = QGraphicsScene()
+        item = QGraphicsTextItem("Mechanism")
+        scene.addItem(item)
+        canvas = SimpleNamespace(
+            note_padding=6.0,
+            note_box_enabled=False,
+            note_border_enabled=True,
+            note_box_color=QColor("#ffffff"),
+            note_box_alpha=0.4,
+            note_border_color=QColor("#111111"),
+            note_border_width=1.2,
+        )
+        controller = CanvasNoteController(canvas)
+
+        controller.update_note_box(item)
+        box = item.data(20)
+        self.assertEqual(box.brush().style(), Qt.BrushStyle.NoBrush)
+
+        canvas.note_box_enabled = True
+        canvas.note_border_enabled = False
+        controller.update_note_box(item)
+        self.assertEqual(box.pen().style(), Qt.PenStyle.NoPen)
+
+    def test_apply_note_style_prefers_line_height_type_enum_when_available(self) -> None:
+        class FakeOption:
+            def __init__(self) -> None:
+                self.alignment = None
+
+            def setAlignment(self, value) -> None:
+                self.alignment = value
+
+        class FakeDocument:
+            def __init__(self) -> None:
+                self.option = FakeOption()
+                self.saved_option = None
+
+            def defaultTextOption(self):
+                return self.option
+
+            def setDefaultTextOption(self, option) -> None:
+                self.saved_option = option
+
+        class FakeBlockFormat:
+            class LineHeightType:
+                ProportionalHeight = "proportional"
+
+            def __init__(self) -> None:
+                self.height = None
+
+            def setLineHeight(self, value, height_type) -> None:
+                self.height = (value, height_type)
+
+        class FakeCursor:
+            SelectionType = SimpleNamespace(Document="document")
+            last_instance = None
+
+            def __init__(self, document) -> None:
+                self.document = document
+                self.selection = None
+                self.block_format = None
+                FakeCursor.last_instance = self
+
+            def select(self, selection) -> None:
+                self.selection = selection
+
+            def mergeBlockFormat(self, block_format) -> None:
+                self.block_format = block_format
+
+        document = FakeDocument()
+        item = SimpleNamespace(
+            setFont=mock.Mock(),
+            setDefaultTextColor=mock.Mock(),
+            document=lambda: document,
+        )
+        canvas = SimpleNamespace(
+            text_font_family="Arial",
+            text_font_size=13,
+            text_font_weight=QFont.Weight.Bold,
+            text_italic=False,
+            text_color=QColor("#334455"),
+            text_alignment=Qt.AlignmentFlag.AlignHCenter,
+            text_line_spacing=1.25,
+            _update_note_selection_box=mock.Mock(),
+        )
+        controller = CanvasNoteController(canvas)
+        controller.update_note_box = mock.Mock()
+
+        with mock.patch("ui.canvas_note_controller.QTextBlockFormat", FakeBlockFormat), mock.patch(
+            "ui.canvas_note_controller.QTextCursor",
+            FakeCursor,
+        ):
+            controller.apply_note_style(item)
+
+        self.assertEqual(document.option.alignment, Qt.AlignmentFlag.AlignHCenter)
+        self.assertIs(document.saved_option, document.option)
+        self.assertEqual(FakeCursor.last_instance.selection, FakeCursor.SelectionType.Document)
+        self.assertEqual(
+            FakeCursor.last_instance.block_format.height,
+            (125, FakeBlockFormat.LineHeightType.ProportionalHeight),
+        )
+        controller.update_note_box.assert_called_once_with(item)
+        canvas._update_note_selection_box.assert_called_once_with(item)
+
 
 if __name__ == "__main__":
     unittest.main()

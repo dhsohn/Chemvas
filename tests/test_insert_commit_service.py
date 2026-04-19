@@ -2,6 +2,9 @@ import sys
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
+
+from PyQt6.QtCore import QPointF
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -103,6 +106,35 @@ class _FakeCanvas:
             before_smiles_input=before_smiles_input,
             added_scene_items=[],
         )
+
+
+class _MutableSourceId:
+    def __init__(self, label: str) -> None:
+        self.label = label
+        self._hash = hash(label)
+
+    def __hash__(self) -> int:
+        return self._hash
+
+    def __eq__(self, other) -> bool:
+        return self is other
+
+    def mutate(self) -> None:
+        self._hash += 1
+
+
+class _HashChangingCanvas(_FakeCanvas):
+    def __init__(self, key_to_mutate: _MutableSourceId) -> None:
+        super().__init__()
+        self._key_to_mutate = key_to_mutate
+        self._add_atom_count = 0
+
+    def add_atom(self, element: str, x: float, y: float) -> int:
+        atom_id = super().add_atom(element, x, y)
+        self._add_atom_count += 1
+        if self._add_atom_count == 2:
+            self._key_to_mutate.mutate()
+        return atom_id
 
 
 class InsertCommitServiceTest(unittest.TestCase):
@@ -276,6 +308,123 @@ class InsertCommitServiceTest(unittest.TestCase):
 
         self.assertFalse(
             service.apply_smiles_commit_plan(None, before_smiles_input="before", after_smiles_input="after")
+        )
+
+    def test_service_template_wrappers_rewrite_cursor_delegate_and_handle_none_merge_seed(self) -> None:
+        canvas = _FakeCanvas()
+        service = InsertCommitService(canvas)
+        request = TemplateInsertRequest(ring_size=6, cursor_pos=(1.0, 2.0), bond_id=4, ring_style="chair")
+        plan = TemplateInsertPlan(
+            generator="free_regular_ring",
+            ring_size=6,
+            ring_style="chair",
+            bond_id=4,
+            template_shape="chair",
+        )
+        resolution = TemplateInsertResolution(plan=plan, points=[(0.0, 0.0), (1.0, 1.0)])
+
+        with mock.patch("ui.insert_commit_service.apply_template_commit_resolution", return_value=True) as patched:
+            applied = service.apply_template_commit(
+                QPointF(9.0, 10.0),
+                request=request,
+                plan=plan,
+                resolution=resolution,
+            )
+
+        self.assertTrue(applied)
+        called_request = patched.call_args.args[1]
+        self.assertEqual(called_request.cursor_pos, (9.0, 10.0))
+        self.assertEqual(patched.call_args.kwargs["before_smiles_input"], "before")
+        self.assertEqual(service._bond_merge_seed(None), [])
+
+        with mock.patch("ui.insert_commit_service.apply_template_commit_resolution", return_value=False) as patched:
+            self.assertFalse(
+                service.apply_template_commit_resolution(
+                    request,
+                    plan,
+                    resolution,
+                    before_smiles_input="old",
+                    after_smiles_input="new",
+                )
+            )
+        self.assertEqual(patched.call_args.kwargs["after_smiles_input"], "new")
+
+    def test_apply_smiles_commit_plan_rejects_duplicate_and_unknown_bond_sources(self) -> None:
+        duplicate_canvas = _FakeCanvas()
+        duplicate_plan = SmilesCommitPlan(
+            offset=(0.0, 0.0),
+            atoms=[
+                SmilesAtomPlacement(7, "C", 0.0, 0.0, "#111111", False),
+                SmilesAtomPlacement(7, "N", 1.0, 1.0, "#222222", False),
+            ],
+            bonds=[],
+        )
+        self.assertFalse(
+            apply_smiles_commit_plan(
+                duplicate_canvas,
+                duplicate_plan,
+                before_smiles_input="before",
+                after_smiles_input="after",
+            )
+        )
+
+        invalid_bond_canvas = _FakeCanvas()
+        invalid_bond_plan = SmilesCommitPlan(
+            offset=(0.0, 0.0),
+            atoms=[SmilesAtomPlacement(0, "C", 0.0, 0.0, "#111111", False)],
+            bonds=[SmilesBondPlacement(0, 0, 99, 1, "solid", "#222222")],
+        )
+        self.assertFalse(
+            apply_smiles_commit_plan(
+                invalid_bond_canvas,
+                invalid_bond_plan,
+                before_smiles_input="before",
+                after_smiles_input="after",
+            )
+        )
+
+    def test_apply_smiles_commit_plan_returns_false_when_id_lookup_breaks_after_atom_creation(self) -> None:
+        source_a = _MutableSourceId("a")
+        source_b = _MutableSourceId("b")
+        canvas = _HashChangingCanvas(source_a)
+        plan = SmilesCommitPlan(
+            offset=(0.0, 0.0),
+            atoms=[
+                SmilesAtomPlacement(source_a, "C", 0.0, 0.0, "#111111", False),
+                SmilesAtomPlacement(source_b, "N", 1.0, 0.0, "#222222", True),
+            ],
+            bonds=[SmilesBondPlacement(0, source_a, source_b, 1, "solid", "#333333")],
+        )
+
+        self.assertFalse(
+            apply_smiles_commit_plan(
+                canvas,
+                plan,
+                before_smiles_input="before",
+                after_smiles_input="after",
+            )
+        )
+
+    def test_apply_template_commit_resolution_rejects_bond_generators_without_bond_id(self) -> None:
+        canvas = _FakeCanvas()
+        request = TemplateInsertRequest(ring_size=6, cursor_pos=(3.0, 4.0), ring_style="regular")
+        plan = TemplateInsertPlan(
+            generator="bond_regular_ring",
+            ring_size=6,
+            ring_style="regular",
+            bond_id=None,
+            radius_mode="regular_polygon",
+        )
+        resolution = TemplateInsertResolution(plan=plan, points=[(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)])
+
+        self.assertFalse(
+            apply_template_commit_resolution(
+                canvas,
+                request,
+                plan,
+                resolution,
+                before_smiles_input="before",
+            )
         )
 
 

@@ -79,10 +79,7 @@ def compute_regular_ring_points_for_atom(
         neighbor_points,
         bond_length,
     )
-    if points is None:
-        return None
-    ox, oy = origin
-    return points, [(attach_atom_id, ox, oy)]
+    return _atom_geometry_result(points, attach_atom_id, origin)
 
 
 def compute_regular_ring_points_for_bond(
@@ -107,11 +104,7 @@ def compute_regular_ring_points_for_bond(
         center_hint=center_hint,
         occupied_polygon=occupied_polygon,
     )
-    if points is None:
-        return None
-    ax, ay = a_point
-    bx, by = b_point
-    return points, [(bond.a, ax, ay), (bond.b, bx, by)]
+    return _bond_geometry_result(points, bond, a_point, b_point)
 
 
 def compute_template_points_for_bond(
@@ -136,11 +129,41 @@ def compute_template_points_for_bond(
         center_hint=center_hint,
         occupied_polygon=occupied_polygon,
     )
+    return _bond_geometry_result(points, bond, a_point, b_point)
+
+
+def _geometry_result(
+    points: list[Point] | None,
+    merge_entries: list[MergeEntry],
+) -> tuple[list[Point], list[MergeEntry]] | None:
     if points is None:
         return None
-    ax, ay = a_point
-    bx, by = b_point
-    return points, [(bond.a, ax, ay), (bond.b, bx, by)]
+    return points, merge_entries
+
+
+def _merge_entry(atom_id: int, point: Point) -> MergeEntry:
+    x, y = point
+    return atom_id, x, y
+
+
+def _atom_geometry_result(
+    points: list[Point] | None,
+    atom_id: int,
+    origin: Point,
+) -> tuple[list[Point], list[MergeEntry]] | None:
+    return _geometry_result(points, [_merge_entry(atom_id, origin)])
+
+
+def _bond_geometry_result(
+    points: list[Point] | None,
+    bond: Bond,
+    a_point: Point,
+    b_point: Point,
+) -> tuple[list[Point], list[MergeEntry]] | None:
+    return _geometry_result(
+        points,
+        [_merge_entry(bond.a, a_point), _merge_entry(bond.b, b_point)],
+    )
 
 
 def compute_free_benzene_ring_points(

@@ -120,6 +120,7 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
         )
 
         CanvasView._emit_selection_info(pending_view)
+        CanvasView._emit_selection_info(pending_view)
         self.assertEqual(pending_callback.call_args_list, [mock.call("", "")])
         self.assertEqual(pending_view._selection_pending_signature, (frozenset({7}), frozenset({8})))
         self.assertTrue(pending_view._rdkit_warmup_pending)
@@ -187,17 +188,51 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
         self.assertFalse(idle_view._rdkit_warmup_pending)
         self.assertIsNone(idle_view._selection_pending_signature)
 
-    def test_clear_hover_highlight_and_add_atom_hover_indicator_manage_scene_items(self) -> None:
+        busy_emit = mock.Mock()
+        busy_rdkit = mock.Mock()
+        busy_rdkit.is_unavailable.return_value = False
+        busy_rdkit.is_loaded.return_value = False
+        busy_view = SimpleNamespace(
+            rdkit=busy_rdkit,
+            _rdkit_warmup_pending=True,
+            _selection_pending_signature=("pending",),
+            _last_interaction_time=18.0,
+            _rdkit_idle_threshold=5.0,
+            _emit_selection_info=busy_emit,
+        )
+
+        with mock.patch("ui.canvas_view.time.monotonic", return_value=20.0):
+            CanvasView._maybe_warm_rdkit(busy_view)
+
+        busy_rdkit.preload.assert_not_called()
+        busy_emit.assert_not_called()
+        self.assertTrue(busy_view._rdkit_warmup_pending)
+        self.assertEqual(busy_view._selection_pending_signature, ("pending",))
+
+    def test_emit_selection_info_returns_immediately_without_callback(self) -> None:
+        no_callback_view = SimpleNamespace(_selection_info_callback=None)
+
+        CanvasView._emit_selection_info(no_callback_view)
+
+    def test_clear_hover_highlight_and_add_hover_indicators_manage_scene_items(self) -> None:
         scene = QGraphicsScene()
         view = SimpleNamespace(
             scene=lambda: scene,
-            model=SimpleNamespace(atoms={3: Atom("C", 12.0, 34.0)}),
+            model=SimpleNamespace(
+                atoms={
+                    1: Atom("C", 10.0, 10.0),
+                    2: Atom("C", 30.0, 10.0),
+                    3: Atom("C", 12.0, 34.0),
+                },
+                bonds=[Bond(1, 2, 1), None],
+            ),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
             hover_items=[],
             hover_atom_id=99,
             hover_bond_id=77,
             _hover_preview_style="preview",
         )
+        view._add_hover_indicator_item = lambda item: CanvasView._add_hover_indicator_item(view, item)
 
         CanvasView._add_atom_hover_indicator(view, 3)
         self.assertEqual(len(view.hover_items), 1)
@@ -210,9 +245,22 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
         self.assertAlmostEqual(rect.width(), 10.0)
         self.assertAlmostEqual(rect.height(), 10.0)
 
+        CanvasView._add_bond_hover_indicator(view, 0)
+        self.assertEqual(len(view.hover_items), 2)
+        self.assertEqual(len(scene.items()), 2)
+        bond_indicator = view.hover_items[1]
+        self.assertIsInstance(bond_indicator, QGraphicsEllipseItem)
+        bond_rect = bond_indicator.rect()
+        self.assertAlmostEqual(bond_rect.width(), 8.8)
+        self.assertAlmostEqual(bond_rect.height(), 8.8)
+
         CanvasView._add_atom_hover_indicator(view, 999)
-        self.assertEqual(len(view.hover_items), 1)
-        self.assertEqual(len(scene.items()), 1)
+        CanvasView._add_bond_hover_indicator(view, 1)
+        CanvasView._add_bond_hover_indicator(view, 99)
+        view.model.bonds[0] = Bond(1, 9, 1)
+        CanvasView._add_bond_hover_indicator(view, 0)
+        self.assertEqual(len(view.hover_items), 2)
+        self.assertEqual(len(scene.items()), 2)
 
         CanvasView._clear_hover_highlight(view)
         self.assertEqual(view.hover_items, [])
@@ -275,6 +323,10 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
         self.assertAlmostEqual(missing.x(), 13.0)
         self.assertAlmostEqual(missing.y(), 4.0)
 
+        no_atom = CanvasView._default_bond_endpoint(single_view, QPointF(3.0, 4.0), None)
+        self.assertAlmostEqual(no_atom.x(), 13.0)
+        self.assertAlmostEqual(no_atom.y(), 4.0)
+
         single = CanvasView._default_bond_endpoint(single_view, QPointF(10.0, 10.0), 0)
         self.assertAlmostEqual(single.x(), 5.0, places=2)
         self.assertAlmostEqual(single.y(), 1.34, places=2)
@@ -293,3 +345,32 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
         balanced = CanvasView._default_bond_endpoint(balanced_view, QPointF(0.0, 0.0), 0)
         self.assertAlmostEqual(balanced.x(), 0.0, places=2)
         self.assertAlmostEqual(balanced.y(), -10.0, places=2)
+
+    def test_connected_atom_vectors_and_angle_helper_skip_invalid_neighbors(self) -> None:
+        view = SimpleNamespace(
+            model=SimpleNamespace(
+                atoms={
+                    0: Atom("C", 0.0, 0.0),
+                    1: Atom("C", 10.0, 0.0),
+                    2: Atom("C", 0.0, 10.0),
+                    3: Atom("C", 0.0, 0.0),
+                },
+                bonds=[Bond(0, 1), Bond(0, 2), Bond(0, 99), Bond(0, 3), None],
+            )
+        )
+
+        vectors = CanvasView._connected_atom_unit_vectors(view, 0)
+        self.assertEqual(len(vectors), 2)
+        self.assertEqual(vectors, [(1.0, 0.0), (0.0, 1.0)])
+        self.assertEqual(CanvasView._connected_atom_unit_vectors(view, 999), [])
+
+        self.assertEqual(CanvasView._default_bond_angle_for_vectors([]), 0.0)
+        self.assertEqual(CanvasView._default_bond_angle_for_vectors([(1.0, 0.0)]), -120.0)
+        self.assertEqual(
+            CanvasView._default_bond_angle_for_vectors([(1.0, 0.0), (-1.0, 0.0)]),
+            -90.0,
+        )
+        self.assertEqual(
+            CanvasView._default_bond_angle_for_vectors([(1.0, 0.0), (0.0, 1.0)]),
+            -135.0,
+        )

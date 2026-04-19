@@ -127,4 +127,4 @@ class CanvasNoteController:
             pen.setWidthF(self.canvas.note_border_width)
             box.setPen(pen)
         else:
-            box.setPen(Qt.PenStyle.NoPen)
+            box.setPen(QPen(Qt.PenStyle.NoPen))

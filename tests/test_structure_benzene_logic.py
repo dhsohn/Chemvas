@@ -103,6 +103,59 @@ class StructureBenzeneLogicTest(unittest.TestCase):
 
         self.assertIsNone(result)
 
+    def test_plan_benzene_ring_points_skips_invalid_bond_to_atom_fallback_paths(self) -> None:
+        center = QPointF(5.0, 6.0)
+        atom_result = ([QPointF(3.0, 4.0)], [(1, 0.0, 0.0)])
+        regular_ring_points_for_atom = mock.Mock(return_value=atom_result)
+
+        none_bond_result = plan_benzene_ring_points(
+            center,
+            attach_atom_id=1,
+            attach_bond_id=0,
+            bonds=[None],
+            atoms={1: Atom("C", 0.0, 0.0)},
+            ring_items=[],
+            bond_length=20.0,
+            regular_ring_points_for_bond=mock.Mock(),
+            regular_ring_points_for_atom=regular_ring_points_for_atom,
+            compute_free_points=mock.Mock(),
+        )
+        missing_endpoint_result = plan_benzene_ring_points(
+            center,
+            attach_atom_id=1,
+            attach_bond_id=0,
+            bonds=[Bond(1, 2, 1)],
+            atoms={1: Atom("C", 0.0, 0.0)},
+            ring_items=[],
+            bond_length=20.0,
+            regular_ring_points_for_bond=mock.Mock(),
+            regular_ring_points_for_atom=regular_ring_points_for_atom,
+            compute_free_points=mock.Mock(),
+        )
+
+        self.assertEqual(none_bond_result, atom_result)
+        self.assertEqual(missing_endpoint_result, atom_result)
+        self.assertEqual(regular_ring_points_for_atom.call_count, 2)
+
+    def test_plan_benzene_ring_points_treats_failed_atom_geometry_as_terminal(self) -> None:
+        compute_free_points = mock.Mock(return_value=[(7.0, 8.0)])
+
+        result = plan_benzene_ring_points(
+            QPointF(5.0, 6.0),
+            attach_atom_id=1,
+            attach_bond_id=None,
+            bonds=[],
+            atoms={1: Atom("C", 0.0, 0.0)},
+            ring_items=[],
+            bond_length=20.0,
+            regular_ring_points_for_bond=mock.Mock(),
+            regular_ring_points_for_atom=mock.Mock(return_value=None),
+            compute_free_points=compute_free_points,
+        )
+
+        self.assertIsNone(result)
+        compute_free_points.assert_not_called()
+
     def test_plan_benzene_ring_points_blocks_free_center_inside_existing_ring(self) -> None:
         result = plan_benzene_ring_points(
             QPointF(5.0, 6.0),

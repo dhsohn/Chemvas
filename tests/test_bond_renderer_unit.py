@@ -9,7 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
     from PyQt6.QtCore import QPointF, Qt
-    from PyQt6.QtGui import QColor, QPen, QPolygonF
+    from PyQt6.QtGui import QColor, QPainterPath, QPen, QPolygonF
     from PyQt6.QtWidgets import (
         QApplication,
         QGraphicsLineItem,
@@ -187,6 +187,38 @@ class BondRendererUnitTest(unittest.TestCase):
             [(0.0, -0.5), (10.0, -0.5), (10.0, 2.5), (0.0, 2.5)],
         )
 
+    def test_helper_edge_guards_cover_invalid_ids_and_label_driven_paths(self) -> None:
+        self.canvas._atom_bond_ids = {0: {0, 99}, 1: {0, 1}}
+        self.canvas.model.bonds = [Bond(0, 1, 1), Bond(2, 1, 1)]
+        del self.canvas.model.atoms[2]
+
+        trim = self.renderer._junction_trim_for_atom(0, 1)
+        self.assertGreater(trim, 0.0)
+        self.assertEqual(self.renderer._trim_segment((0.0, 0.0, 10.0, 0.0), 0.0), (0.0, 0.0, 10.0, 0.0))
+        self.assertIsNone(self.renderer._double_neighbor_target(0, 1))
+
+        self.canvas.model.atoms[2] = Atom("C", 2.0, 6.0)
+        self.canvas._atom_bond_ids = {0: {0, 1}, 1: {0}}
+        self.canvas._line_normal = mock.Mock(return_value=(0.25, 0.75))
+        self.assertEqual(self.renderer._plain_double_normal(0.0, 0.0, 10.0, 0.0, 0, 1), (0.25, 0.75))
+        self.canvas._line_normal.assert_called_once()
+        self.assertIsNotNone(self.canvas._line_normal.call_args.args[4])
+        self.canvas._line_normal = lambda x1, y1, x2, y2, ring_center: self.canvas._normal
+
+        self.canvas._labels = {0: object(), 1: object()}
+        outer, inner, _ = self.renderer.plain_double_segments(
+            0.0,
+            0.0,
+            10.0,
+            0.0,
+            style="double_outer",
+            a_id=0,
+            b_id=1,
+        )
+        self.assertEqual(outer, (0.0, 0.0, 10.0, 0.0))
+        self.assertAlmostEqual(inner[0], 0.8)
+        self.assertAlmostEqual(inner[2], 9.2)
+
     def test_plain_double_segments_switch_which_side_is_shortened(self) -> None:
         outer_default, inner_default, normal = self.renderer.plain_double_segments(
             0.0,
@@ -243,6 +275,117 @@ class BondRendererUnitTest(unittest.TestCase):
         self.assertGreater(inner[3], 0.0)
         self.assertAlmostEqual(normal[0], 0.0)
         self.assertAlmostEqual(normal[1], 1.0)
+
+    def test_ring_double_segments_cover_3d_variants_and_fallback_guards(self) -> None:
+        self.canvas._coords_3d = {
+            0: (0.0, 0.0, 0.0),
+            1: (10.0, 0.0, 0.0),
+        }
+        self.canvas._labels = {0: object(), 1: object()}
+        self.canvas._project_point_3d = lambda point: (point[0], point[1] + point[2])
+
+        default_outer, default_inner, _ = self.renderer.ring_double_segments(
+            self.canvas.model.atoms[0],
+            self.canvas.model.atoms[1],
+            QPointF(5.0, 5.0),
+            0,
+            1,
+            center_3d=(5.0, 5.0, 5.0),
+        )
+        center_outer, center_inner, _ = self.renderer.ring_double_segments(
+            self.canvas.model.atoms[0],
+            self.canvas.model.atoms[1],
+            QPointF(5.0, 5.0),
+            0,
+            1,
+            center_3d=(5.0, 5.0, 5.0),
+            style="double_center",
+        )
+        outer_outer, outer_inner, _ = self.renderer.ring_double_segments(
+            self.canvas.model.atoms[0],
+            self.canvas.model.atoms[1],
+            QPointF(5.0, 5.0),
+            0,
+            1,
+            center_3d=(5.0, 5.0, 5.0),
+            style="double_outer",
+        )
+
+        self.assertEqual(default_outer, (0.0, 0.0, 10.0, 0.0))
+        self.assertAlmostEqual(default_inner[0], 0.8)
+        self.assertAlmostEqual(center_outer[0], 0.0)
+        self.assertAlmostEqual(center_inner[0], 0.0)
+        self.assertGreater(outer_outer[0], 0.0)
+        self.assertLess(outer_outer[2], 10.0)
+        self.assertAlmostEqual(outer_inner[0], 0.0)
+        self.assertAlmostEqual(outer_inner[2], 10.0)
+
+        self.canvas._project_point_3d = lambda point: (point[0], point[1])
+        zero_offset_outer, zero_offset_inner, zero_offset_normal = self.renderer.ring_double_segments(
+            self.canvas.model.atoms[0],
+            self.canvas.model.atoms[1],
+            QPointF(5.0, 5.0),
+            0,
+            1,
+            center_3d=(5.0, 0.0, 5.0),
+        )
+        self.assertEqual(zero_offset_outer, (0.0, 0.0, 10.0, 0.0))
+        self.assertGreater(zero_offset_inner[1], 0.0)
+        self.assertEqual(zero_offset_normal, (0.0, 1.0))
+
+        self.canvas._coords_3d = {
+            0: (0.0, 0.0, 0.0),
+            1: (0.0, 0.0, 0.0),
+        }
+        collapsed_outer, _, collapsed_normal = self.renderer.ring_double_segments(
+            self.canvas.model.atoms[0],
+            self.canvas.model.atoms[1],
+            QPointF(5.0, 5.0),
+            0,
+            1,
+            center_3d=(5.0, 5.0, 0.0),
+        )
+        self.assertEqual(collapsed_outer, (0.0, 0.0, 10.0, 0.0))
+        self.assertEqual(collapsed_normal, (0.0, 1.0))
+
+        self.canvas._coords_3d = {
+            0: (0.0, 0.0, 0.0),
+            1: (10.0, 0.0, 0.0),
+        }
+        axial_outer, _, axial_normal = self.renderer.ring_double_segments(
+            self.canvas.model.atoms[0],
+            self.canvas.model.atoms[1],
+            QPointF(5.0, 5.0),
+            0,
+            1,
+            center_3d=(15.0, 0.0, 0.0),
+        )
+        self.assertEqual(axial_outer, (0.0, 0.0, 10.0, 0.0))
+        self.assertEqual(axial_normal, (0.0, 1.0))
+
+        self.canvas._offset_unit = (0.0, 1.0, 0.0)
+        centered_outer, centered_inner, centered_normal = self.renderer.ring_double_segments(
+            self.canvas.model.atoms[0],
+            self.canvas.model.atoms[1],
+            QPointF(5.0, -5.0),
+            0,
+            1,
+            style="double_center",
+        )
+        outer_outer_2d, outer_inner_2d, outer_normal_2d = self.renderer.ring_double_segments(
+            self.canvas.model.atoms[0],
+            self.canvas.model.atoms[1],
+            QPointF(5.0, -5.0),
+            0,
+            1,
+            style="double_outer",
+        )
+        self.assertEqual(centered_normal, (0.0, -1.0))
+        self.assertLess(centered_inner[1], 0.0)
+        self.assertLess(outer_outer_2d[0], 1.0)
+        self.assertGreater(outer_outer_2d[0], 0.0)
+        self.assertLess(outer_inner_2d[1], 0.0)
+        self.assertEqual(outer_normal_2d, (0.0, -1.0))
 
     def test_ring_double_segments_falls_back_to_2d_and_flips_toward_center(self) -> None:
         outer, inner, normal = self.renderer.ring_double_segments(
@@ -312,6 +455,74 @@ class BondRendererUnitTest(unittest.TestCase):
         self.assertEqual(len(items), 2)
         self.assertIsInstance(items[0], NoSelectLineItem)
         self.assertIsInstance(items[1], NoSelectPathItem)
+
+    def test_draw_dotted_double_and_parallel_bonds_cover_ring_center_and_default_offsets(self) -> None:
+        self.canvas._offset_unit = (0.0, 1.0, 0.0)
+
+        segments = self.renderer.parallel_bond_segments(0.0, 0.0, 10.0, 0.0, 4, 0, 1)
+        items = self.renderer.draw_parallel_bonds(0.0, 0.0, 10.0, 0.0, 4, 0, 1)
+        self.assertEqual(segments, [(0.0, 0.0, 10.0, 0.0)])
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].line().y1(), 0.0)
+
+        with mock.patch.object(
+            self.renderer,
+            "ring_double_segments",
+            return_value=((0.0, 0.0, 10.0, 0.0), (1.0, 1.0, 9.0, 1.0), (0.0, 1.0)),
+        ) as ring_segments:
+            dotted_items = self.renderer.draw_dotted_double_bond(
+                self.canvas.model.atoms[0],
+                self.canvas.model.atoms[1],
+                style="dotted_double_outer",
+                a_id=0,
+                b_id=1,
+                ring_center=QPointF(5.0, 5.0),
+                center_3d=(1.0, 2.0, 3.0),
+            )
+        ring_segments.assert_called_once()
+        self.assertIsInstance(dotted_items[0], NoSelectPathItem)
+        self.assertIsInstance(dotted_items[1], NoSelectLineItem)
+
+    def test_junction_trim_and_dotted_bond_path_cover_guard_scaling_and_midpoint_cases(self) -> None:
+        self.assertEqual(self.renderer._junction_trim_for_atom(None, 1), 0.0)
+
+        self.canvas._atom_bond_ids = {0: {0, 1, 2}}
+        self.canvas.model.bonds = [Bond(0, 1, 1), None, Bond(0, 2, 1)]
+        self.assertGreater(self.renderer._junction_trim_for_atom(0, 1), 0.0)
+
+        self.canvas._atom_bond_ids = {0: {0}}
+        self.canvas.model.bonds = [Bond(0, 1, 1)]
+        self.assertEqual(self.renderer._junction_trim_for_atom(0, 1), 0.0)
+
+        zero_length_path = self.renderer.dotted_bond_path(1.0, 2.0, 1.0, 2.0)
+        self.assertFalse(zero_length_path.isEmpty())
+
+        with mock.patch.object(self.renderer, "_junction_trim_for_atom", side_effect=[5.0, 5.0]):
+            midpoint_path = self.renderer.dotted_bond_path(0.0, 0.0, 0.000002, 0.0, 0, 1)
+        self.assertFalse(midpoint_path.isEmpty())
+
+    def test_double_neighbor_target_and_plain_double_normal_cover_invalid_and_offset_fallbacks(self) -> None:
+        self.assertIsNone(self.renderer._double_neighbor_target(None, 1))
+        self.assertIsNone(self.renderer._double_neighbor_target(0, None))
+
+        self.canvas.model.atoms[3] = Atom("C", 10.0, 10.0)
+        self.canvas._atom_bond_ids = {0: {0, 1, 2, 3}, 1: {0, 4}}
+        self.canvas.model.bonds = [
+            Bond(0, 1, 1),
+            None,
+            Bond(0, 2, 1),
+            Bond(3, 0, 1),
+            Bond(1, 2, 1),
+        ]
+        target = self.renderer._double_neighbor_target(0, 1)
+        self.assertEqual((target.x(), target.y()), (10.0 / 3.0, 10.0))
+
+        self.canvas._atom_bond_ids = {}
+        self.canvas._offset_unit = (0.6, 0.8, 0.0)
+        self.assertEqual(self.renderer._plain_double_normal(0.0, 0.0, 10.0, 0.0, 0, 1), (0.6, 0.8))
+
+        self.canvas._offset_unit = None
+        self.assertEqual(self.renderer._plain_double_normal(0.0, 0.0, 10.0, 0.0, 0, 1), self.canvas._normal)
 
     def test_draw_ring_double_bond_switches_outer_style(self) -> None:
         with mock.patch.object(
@@ -427,6 +638,150 @@ class BondRendererUnitTest(unittest.TestCase):
         self.renderer.update_bond_geometry(0)
         self.assertTrue(all(line.line().length() > 0.0 for line in lines))
 
+    def test_update_bond_geometry_covers_dotted_double_variants(self) -> None:
+        outer_path = QGraphicsPathItem(QPainterPath())
+        inner_line = QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)
+        self._set_bond(Bond(0, 1, 2, style="dotted_double_outer"))
+        self.canvas.bond_items[0] = [outer_path, inner_line]
+        self.renderer.update_bond_geometry(0)
+        self.assertFalse(outer_path.path().isEmpty())
+        self.assertGreater(inner_line.line().length(), 0.0)
+
+        outer_line = QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)
+        inner_path = QGraphicsPathItem(QPainterPath())
+        self._set_bond(Bond(0, 1, 2, style="dotted_double"))
+        self.canvas.bond_items[0] = [outer_line, inner_path]
+        self.renderer.update_bond_geometry(0)
+        self.assertGreater(outer_line.line().length(), 0.0)
+        self.assertFalse(inner_path.path().isEmpty())
+
+    def test_update_bond_geometry_covers_item_mismatch_and_remaining_variant_paths(self) -> None:
+        wedge_line = QGraphicsLineItem(4.0, 5.0, 6.0, 7.0)
+        self._set_bond(Bond(0, 1, 1, style="wedge"))
+        self.canvas.bond_items[0] = [wedge_line]
+        self.renderer.update_bond_geometry(0)
+        self.assertEqual((wedge_line.line().x1(), wedge_line.line().y1()), (4.0, 5.0))
+
+        hash_polygon = QGraphicsPolygonItem(QPolygonF())
+        hash_line = QGraphicsLineItem(0.0, 0.0, 0.0, 0.0)
+        self._set_bond(Bond(0, 1, 1, style="hash"))
+        self.canvas.bond_items[0] = [hash_polygon, hash_line]
+        self.renderer.update_bond_geometry(0)
+        self.assertGreater(hash_line.line().length(), 0.0)
+
+        dotted_line = QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)
+        self._set_bond(Bond(0, 1, 1, style="dotted"))
+        self.canvas.bond_items[0] = [dotted_line, QGraphicsPathItem(QPainterPath())]
+        self.renderer.update_bond_geometry(0)
+        self.assertGreater(dotted_line.line().length(), 0.0)
+
+        self._set_bond(Bond(0, 1, 2, style="dotted_double_outer"))
+        self.canvas._ring_center = QPointF(5.0, 5.0)
+        ring_outer_path = QGraphicsPathItem(QPainterPath())
+        ring_inner_line = QGraphicsLineItem(0.0, 0.0, 0.0, 0.0)
+        self.canvas.bond_items[0] = [ring_outer_path, ring_inner_line]
+        with mock.patch.object(
+            self.renderer,
+            "ring_double_segments",
+            return_value=((0.0, 0.0, 10.0, 0.0), (1.0, 1.0, 9.0, 1.0), (0.0, 1.0)),
+        ):
+            self.renderer.update_bond_geometry(0)
+        self.assertFalse(ring_outer_path.path().isEmpty())
+        self.assertGreater(ring_inner_line.line().length(), 0.0)
+
+        self._set_bond(Bond(0, 1, 2, style="dotted_double"))
+        wrong_outer = QGraphicsPolygonItem(QPolygonF())
+        wrong_inner = QGraphicsPolygonItem(QPolygonF())
+        self.canvas.bond_items[0] = [wrong_outer, wrong_inner]
+        with mock.patch.object(
+            self.renderer,
+            "ring_double_segments",
+            return_value=((0.0, 0.0, 10.0, 0.0), (1.0, 1.0, 9.0, 1.0), (0.0, 1.0)),
+        ):
+            self.renderer.update_bond_geometry(0)
+        self.assertEqual(len(wrong_outer.polygon()), 0)
+        self.assertEqual(len(wrong_inner.polygon()), 0)
+
+        ring_outer_line = QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)
+        ring_inner_polygon = QGraphicsPolygonItem(QPolygonF())
+        self._set_bond(Bond(0, 1, 2, style="bold_out"))
+        self.canvas._ring_center = QPointF(5.0, 5.0)
+        self.canvas.bond_items[0] = [ring_outer_line, ring_inner_polygon]
+        with mock.patch.object(
+            self.renderer,
+            "ring_double_segments",
+            return_value=((0.0, 0.0, 10.0, 0.0), (1.0, 1.0, 9.0, 1.0), (0.0, 1.0)),
+        ):
+            self.renderer.update_bond_geometry(0)
+        self.assertEqual((ring_outer_line.line().x1(), ring_outer_line.line().x2()), (0.0, 10.0))
+
+        empty_parallel_item = QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)
+        self._set_bond(Bond(0, 1, 3, style="bold"))
+        self.canvas._ring_center = None
+        self.canvas.bond_items[0] = [empty_parallel_item]
+        with mock.patch.object(self.renderer, "parallel_bond_segments", return_value=[]):
+            self.renderer.update_bond_geometry(0)
+        self.assertGreater(empty_parallel_item.line().length(), 0.0)
+
+        outward_polygon = QGraphicsPolygonItem(QPolygonF())
+        self._set_bond(Bond(0, 1, 1, style="bold_out"))
+        self.canvas.bond_items[0] = [outward_polygon]
+        self.renderer.update_bond_geometry(0)
+        self.assertEqual(len(outward_polygon.polygon()), 4)
+
+        outward_parallel_polygon = QGraphicsPolygonItem(QPolygonF())
+        outward_parallel_line = QGraphicsLineItem(0.0, 0.0, 0.0, 0.0)
+        ignored_parallel_polygon = QGraphicsPolygonItem(QPolygonF())
+        self._set_bond(Bond(0, 1, 3, style="bold_out"))
+        self.canvas.bond_items[0] = [
+            outward_parallel_polygon,
+            outward_parallel_line,
+            ignored_parallel_polygon,
+        ]
+        with mock.patch.object(
+            self.renderer,
+            "parallel_bond_segments",
+            return_value=[
+                (0.0, 0.0, 10.0, 0.0),
+                (0.0, 2.0, 10.0, 2.0),
+                (0.0, 4.0, 10.0, 4.0),
+            ],
+        ):
+            self.renderer.update_bond_geometry(0)
+        self.assertEqual(len(outward_parallel_polygon.polygon()), 4)
+        self.assertGreater(outward_parallel_line.line().length(), 0.0)
+        self.assertEqual(len(ignored_parallel_polygon.polygon()), 0)
+
+        inward_parallel_line = QGraphicsLineItem(0.0, 0.0, 0.0, 0.0)
+        ignored_inner_polygon = QGraphicsPolygonItem(QPolygonF())
+        self._set_bond(Bond(0, 1, 3, style="bold"))
+        self.canvas.bond_items[0] = [inward_parallel_line, ignored_inner_polygon]
+        with mock.patch.object(
+            self.renderer,
+            "parallel_bond_segments",
+            return_value=[
+                (1.0, 0.0, 9.0, 0.0),
+                (1.0, 2.0, 9.0, 2.0),
+            ],
+        ):
+            self.renderer.update_bond_geometry(0)
+        self.assertEqual((inward_parallel_line.line().x1(), inward_parallel_line.line().x2()), (1.0, 9.0))
+
+        double_outer = QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)
+        double_inner = QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)
+        self._set_bond(Bond(0, 1, 2, style="single"))
+        self.canvas._ring_center = None
+        self.canvas.bond_items[0] = [double_outer, double_inner]
+        self.renderer.update_bond_geometry(0)
+        self.assertGreater(double_outer.line().length(), 0.0)
+        self.assertGreater(double_inner.line().length(), 0.0)
+
+        single_polygon = QGraphicsPolygonItem(QPolygonF())
+        self._set_bond(Bond(0, 1, 1, style="single"))
+        self.canvas.bond_items[0] = [single_polygon]
+        self.renderer.update_bond_geometry(0)
+        self.assertEqual(len(single_polygon.polygon()), 0)
+
     def test_add_bond_graphics_returns_early_for_none_bond(self) -> None:
         self._set_bond(None)
         self.renderer.add_bond_graphics(0)
@@ -484,6 +839,32 @@ class BondRendererUnitTest(unittest.TestCase):
         self._set_bond(Bond(0, 1, 3, style="single"))
         self.renderer.add_bond_graphics(0)
         self.assertEqual(len(self.canvas.bond_items[0]), 3)
+
+    def test_add_bond_graphics_covers_remaining_bold_and_plain_double_nonring_variants(self) -> None:
+        self.canvas._ring_center = None
+        self._set_bond(Bond(0, 1, 3, style="bold_out"))
+        self.renderer.add_bond_graphics(0)
+        self.assertEqual(len(self.canvas.bond_items[0]), 3)
+        self.assertIsInstance(self.canvas.bond_items[0][0], (NoSelectPolygonItem, NoSelectLineItem))
+
+        self.canvas._scene.clear()
+        self._set_bond(Bond(0, 1, 1, style="bold"))
+        self.renderer.add_bond_graphics(0)
+        self.assertEqual(len(self.canvas.bond_items[0]), 1)
+        self.assertIsInstance(self.canvas.bond_items[0][0], (NoSelectPolygonItem, NoSelectLineItem))
+
+        self.canvas._scene.clear()
+        self._set_bond(Bond(0, 1, 2, style="single"))
+        self.renderer.add_bond_graphics(0)
+        self.assertEqual(len(self.canvas.bond_items[0]), 2)
+        self.assertTrue(all(isinstance(item, NoSelectLineItem) for item in self.canvas.bond_items[0]))
+
+        self.canvas._scene.clear()
+        self._set_bond(Bond(0, 1, 3, style="bold"))
+        replacement = NoSelectPolygonItem(QPolygonF())
+        with mock.patch.object(self.renderer, "draw_parallel_bonds", return_value=[replacement]):
+            self.renderer.add_bond_graphics(0)
+        self.assertIs(self.canvas.bond_items[0][0], replacement)
 
 
 if __name__ == "__main__":

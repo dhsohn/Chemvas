@@ -16,7 +16,7 @@ if str(APP_ROOT) not in sys.path:
 from PyQt6.QtGui import QColor
 
 from core.model import Atom, Bond
-from ui.canvas_atom_mutation_service import CanvasAtomMutationService
+from ui.canvas_atom_mutation_service import CanvasAtomMutationService, canvas_atom_mutation_service_for
 
 
 class _FakeModel:
@@ -226,6 +226,88 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
         self.assertEqual(canvas.model.atoms[7].color, "#101010")
         canvas.atom_items[7].setDefaultTextColor.assert_not_called()
         canvas.atom_dots[7].setBrush.assert_not_called()
+
+    def test_remove_atom_only_tolerates_sparse_neighbor_and_bond_indexes(self) -> None:
+        canvas = SimpleNamespace(
+            atom_items={},
+            atom_dots={},
+            model=SimpleNamespace(
+                atoms={1: Atom("C", 0.0, 0.0)},
+                bonds=[None, Bond(1, 9, 1)],
+            ),
+            atom_coords_3d={},
+            _atom_neighbors={1: {2, 3}, 2: {1}},
+            _graph_version=7,
+            _selection_component_cache_signature="cached",
+            _atom_bond_ids={1: {0, 1, 8}, 2: set()},
+            _remove_marks_for_atom=mock.Mock(),
+            _mark_spatial_index_dirty=mock.Mock(),
+            scene=lambda: _FakeScene(),
+        )
+
+        CanvasAtomMutationService(canvas).remove_atom_only(1)
+
+        self.assertEqual(canvas._atom_neighbors[2], set())
+        self.assertEqual(canvas._graph_version, 8)
+        self.assertIsNone(canvas._selection_component_cache_signature)
+        canvas._mark_spatial_index_dirty.assert_called_once_with()
+
+    def test_restore_atom_from_state_skips_empty_input_and_labels_noncarbon_atoms(self) -> None:
+        canvas = SimpleNamespace(
+            model=_FakeModel(next_atom_id=10),
+            atom_items={},
+            atom_dots={},
+            scene=lambda: _FakeScene(),
+            _ensure_atom_neighbors=mock.Mock(),
+            _ensure_atom_bond_ids=mock.Mock(),
+            _atom_label_service=mock.Mock(),
+            _ensure_carbon_dot=mock.Mock(),
+            _mark_spatial_index_dirty=mock.Mock(),
+        )
+        service = CanvasAtomMutationService(canvas)
+        service.apply_atom_color = mock.Mock()
+
+        service.restore_atom_from_state(5, {})
+        canvas._ensure_atom_neighbors.assert_not_called()
+        canvas._atom_label_service.add_or_update_atom_label.assert_not_called()
+
+        service.restore_atom_from_state(
+            5,
+            {"element": "O", "x": 1.0, "y": 2.0, "color": "#123456", "explicit_label": False},
+        )
+
+        canvas._ensure_atom_neighbors.assert_called_once_with(5)
+        canvas._ensure_atom_bond_ids.assert_called_once_with(5)
+        canvas._atom_label_service.add_or_update_atom_label.assert_called_once_with(
+            5,
+            "O",
+            clear_smiles=False,
+            record=False,
+            allow_merge=False,
+        )
+        canvas._ensure_carbon_dot.assert_not_called()
+        service.apply_atom_color.assert_called_once_with(5, "#123456")
+        self.assertEqual(canvas.model.next_atom_id, 10)
+
+    def test_service_factory_reuses_real_duck_typed_and_fallback_services(self) -> None:
+        canvas = SimpleNamespace()
+        real_service = CanvasAtomMutationService(canvas)
+        canvas._canvas_atom_mutation_service = real_service
+        self.assertIs(canvas_atom_mutation_service_for(canvas), real_service)
+
+        duck_service = SimpleNamespace(
+            add_atom=mock.Mock(),
+            remove_atom_only=mock.Mock(),
+            restore_atom_from_state=mock.Mock(),
+            apply_atom_color=mock.Mock(),
+        )
+        canvas._canvas_atom_mutation_service = duck_service
+        self.assertIs(canvas_atom_mutation_service_for(canvas), duck_service)
+
+        canvas._canvas_atom_mutation_service = object()
+        fallback = canvas_atom_mutation_service_for(canvas)
+        self.assertIsInstance(fallback, CanvasAtomMutationService)
+        self.assertIs(fallback.canvas, canvas)
 
 
 if __name__ == "__main__":

@@ -212,6 +212,28 @@ class StructureBuildServiceTest(unittest.TestCase):
             ],
         )
 
+    def test_recorded_build_helpers_preserve_explicit_smiles_input_and_skip_failed_actions(self) -> None:
+        canvas = _FakeCanvas()
+        service = StructureBuildService(canvas)
+
+        service.run_recorded_build(lambda: [], before_smiles_input="explicit")
+
+        self.assertEqual(
+            canvas.record_calls,
+            [
+                {
+                    "before_next_atom_id": 0,
+                    "before_bond_count": 0,
+                    "before_smiles_input": "explicit",
+                    "added_scene_items": [],
+                }
+            ],
+        )
+
+        canvas.record_calls.clear()
+        self.assertFalse(service._run_recorded_additions_action(lambda: False, before_smiles_input="kept"))
+        self.assertEqual(canvas.record_calls, [])
+
     def test_template_helpers_compute_centered_inputs(self) -> None:
         canvas = _FakeCanvas()
         service = StructureBuildService(canvas)
@@ -534,6 +556,52 @@ class StructureBuildServiceTest(unittest.TestCase):
         )
         service.add_benzene_ring.assert_called_once_with(QPointF(4.0, 5.0), attach_atom_id=3)
 
+    def test_sprout_and_fuse_helpers_return_early_when_geometry_resolution_fails(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={
+                0: Atom("C", 0.0, 0.0),
+                1: Atom("C", 10.0, 0.0),
+            },
+            bonds=[Bond(0, 1, 1)],
+        )
+        service = StructureBuildService(canvas)
+        service.add_bond_between_points = Mock()
+        service.add_ring_from_points = Mock()
+
+        canvas._sprout_bond_endpoint = Mock(return_value=None)
+        self.assertIsNone(service.sprout_bond_from_atom(0, style="single", order=1))
+        service.sprout_acetyl_from_atom(0)
+        service.add_bond_between_points.assert_not_called()
+
+        canvas._sprout_bond_endpoint = Mock(return_value=QPointF(20.0, 0.0))
+        service.add_bond_between_points.reset_mock()
+        service.add_bond_between_points.return_value = (0, 99)
+        service.sprout_acetyl_from_atom(0)
+        self.assertEqual(service.add_bond_between_points.call_args_list, [mock.call(QPointF(0.0, 0.0), QPointF(20.0, 0.0), "single", 1)])
+
+        service.add_bond_between_points.reset_mock()
+        service.add_bond_between_points.side_effect = [(0, 1), (1, 99), (1, 0)]
+        canvas.wrapper_label_calls.clear()
+        service.sprout_acetyl_from_atom(0)
+        self.assertEqual(
+            service.add_bond_between_points.call_args_list,
+            [
+                mock.call(QPointF(0.0, 0.0), QPointF(20.0, 0.0), "single", 1),
+                mock.call(QPointF(10.0, 0.0), QPointF(30.0, 0.0), "double", 2),
+                mock.call(QPointF(10.0, 0.0), QPointF(30.0, 0.0), "single", 1),
+            ],
+        )
+        self.assertEqual(canvas.wrapper_label_calls, [])
+
+        canvas._regular_ring_points_for_bond = Mock(return_value=None)
+        canvas._template_points_for_bond = Mock(return_value=None)
+        service.fuse_regular_ring_to_bond(99, 6)
+        service.fuse_regular_ring_to_bond(0, 6)
+        service.fuse_chair_to_bond(99)
+        service.fuse_chair_to_bond(0)
+        service.add_ring_from_points.assert_not_called()
+
     def test_sprout_acetyl_from_atom_builds_three_bonds_and_labels_oxygen(self) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
@@ -575,6 +643,27 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertEqual(service.fuse_benzene_to_bond(0), "ring")
         self.assertIsNone(service.fuse_benzene_to_bond(1))
         service.add_benzene_ring.assert_called_once_with(QPointF(5.0, 2.0), attach_bond_id=0)
+
+    def test_add_bond_between_points_returns_none_for_collapsed_or_invalid_paths(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(atoms={0: Atom("C", 0.0, 0.0), 1: Atom("C", 10.0, 0.0)}, bonds=[])
+        service = StructureBuildService(canvas)
+
+        self.assertIsNone(service.add_bond_between_points(QPointF(1.0, 2.0), QPointF(1.0, 2.0), "single", 1))
+
+        canvas.find_atom_near = Mock(side_effect=[0, 0])
+        self.assertIsNone(service.add_bond_between_points(QPointF(0.0, 0.0), QPointF(10.0, 0.0), "single", 1))
+
+        canvas.find_atom_near = Mock(side_effect=[0, 1])
+        canvas.model.bonds = [None]
+        canvas._bond_id_between = Mock(return_value=0)
+        self.assertIsNone(service.add_bond_between_points(QPointF(0.0, 0.0), QPointF(10.0, 0.0), "single", 1))
+
+        canvas.model.bonds = [None]
+        canvas._bond_id_between = Mock(return_value=None)
+        canvas.find_atom_near = Mock(side_effect=[0, 1])
+        canvas.add_bond = Mock(return_value=0)
+        self.assertIsNone(service.add_bond_between_points(QPointF(0.0, 0.0), QPointF(10.0, 0.0), "single", 1))
 
     def test_ring_growth_helpers_record_only_when_geometry_resolves(self) -> None:
         canvas = _FakeCanvas()
@@ -659,6 +748,42 @@ class StructureBuildServiceTest(unittest.TestCase):
                 },
             ],
         )
+
+    def test_add_benzene_ring_handles_failed_geometry_and_preexisting_ring_bonds(self) -> None:
+        canvas = _FakeCanvas()
+        service = StructureBuildService(canvas)
+
+        service.benzene_ring_points = Mock(return_value=None)
+        self.assertIsNone(service.add_benzene_ring(QPointF(5.0, 6.0)))
+        self.assertEqual(
+            canvas.record_calls,
+            [
+                {
+                    "before_next_atom_id": 0,
+                    "before_bond_count": 0,
+                    "before_smiles_input": "before",
+                    "added_scene_items": [],
+                }
+            ],
+        )
+
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={index: Atom("C", float(index), 0.0) for index in range(6)},
+            bonds=[Bond(0, 1, 1)],
+        )
+        service = StructureBuildService(canvas)
+        points = [QPointF(float(index), float(index % 2)) for index in range(6)]
+        service.benzene_ring_points = Mock(return_value=(points, []))
+        service.add_atom_with_merge = Mock(side_effect=list(range(6)))
+
+        ring_item = service.add_benzene_ring(QPointF(1.0, 2.0))
+
+        self.assertIsNotNone(ring_item)
+        assert ring_item is not None
+        self.assertEqual(len(canvas.model.bonds), 6)
+        self.assertEqual(canvas.added_graphics, [1, 2, 3, 4, 5])
+        self.assertEqual(canvas.scene_items, [ring_item])
 
     def test_ring_and_chain_fragment_builders_record_expected_counts(self) -> None:
         cases = (

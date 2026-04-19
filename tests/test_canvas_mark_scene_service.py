@@ -21,11 +21,40 @@ if str(APP_ROOT) not in sys.path:
 
 if QPointF is not None:
     from core.model import Atom
-    from ui.canvas_mark_scene_service import CanvasMarkSceneService
+    from ui.canvas_mark_scene_service import CanvasMarkSceneService, canvas_mark_scene_service_for
 
 
 @unittest.skipUnless(QPointF is not None, "PyQt6 is required for canvas mark scene service tests")
 class CanvasMarkSceneServiceTest(unittest.TestCase):
+    def test_missing_atom_paths_and_service_resolver_cover_fallback_branches(self) -> None:
+        canvas = SimpleNamespace(
+            model=SimpleNamespace(atoms={}),
+            mark_kind="plus",
+            add_mark=mock.Mock(),
+        )
+        service = CanvasMarkSceneService(canvas)
+
+        self.assertIsNone(service.add_mark_for_atom(7, QPointF(1.0, 2.0)))
+        self.assertEqual(service.mark_offset_from_click(7, QPointF(1.0, 2.0)), QPointF(0.0, 0.0))
+        canvas.add_mark.assert_not_called()
+
+        bound_canvas = SimpleNamespace()
+        bound = CanvasMarkSceneService(bound_canvas)
+        bound_canvas._canvas_mark_scene_service = bound
+        self.assertIs(canvas_mark_scene_service_for(bound_canvas), bound)
+
+        injected = SimpleNamespace(
+            add_mark_for_atom=mock.Mock(),
+            mark_offset_from_click=mock.Mock(),
+            remove_mark_item=mock.Mock(),
+            remove_marks_for_atom=mock.Mock(),
+            mark_center_for_pointer=mock.Mock(),
+        )
+        other_canvas = SimpleNamespace(_canvas_mark_scene_service=injected)
+        self.assertIs(canvas_mark_scene_service_for(other_canvas), injected)
+        fresh_canvas = SimpleNamespace()
+        self.assertIsInstance(canvas_mark_scene_service_for(fresh_canvas), CanvasMarkSceneService)
+
     def test_add_mark_for_atom_uses_offset_and_forwards_to_add_mark(self) -> None:
         canvas = SimpleNamespace(
             model=SimpleNamespace(atoms={7: Atom("C", 10.0, 20.0)}),
@@ -85,6 +114,25 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
         self.assertEqual(canvas.mark_items, [free_mark])
         self.assertEqual(canvas._marks_by_atom, {})
         self.assertEqual(scene.removeItem.call_args_list, [mock.call(atom_mark), mock.call(atom_mark_2)])
+
+    def test_remove_mark_item_and_remove_marks_for_atom_cover_no_registry_matches(self) -> None:
+        scene = SimpleNamespace(removeItem=mock.Mock())
+        loose_mark = SimpleNamespace(data=lambda key: None)
+        foreign_mark = SimpleNamespace(data=lambda key: {1: {"atom_id": 5}}.get(key))
+        canvas = SimpleNamespace(
+            mark_items=[],
+            _marks_by_atom={5: [foreign_mark]},
+            scene=lambda: scene,
+        )
+        service = CanvasMarkSceneService(canvas)
+
+        service.remove_mark_item(loose_mark)
+        service.remove_mark_item(SimpleNamespace(data=lambda key: {1: {"atom_id": 6}}.get(key)))
+        canvas.mark_items = []
+        service.remove_marks_for_atom(5)
+
+        self.assertEqual(canvas._marks_by_atom, {})
+        self.assertEqual(scene.removeItem.call_args_list, [mock.call(loose_mark), mock.call(mock.ANY), mock.call(foreign_mark)])
 
     def test_mark_center_for_pointer_returns_pointer_for_missing_atom(self) -> None:
         canvas = SimpleNamespace(

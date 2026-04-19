@@ -110,6 +110,37 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
 
         canvas._push_command.assert_not_called()
 
+    def test_record_additions_skips_none_new_bonds(self) -> None:
+        canvas = _make_canvas(
+            bonds=[SimpleNamespace(name="existing-bond"), None],
+            next_atom_id=0,
+        )
+
+        CanvasHistoryRecordingService(canvas).record_additions(
+            before_next_atom_id=0,
+            before_bond_count=1,
+            before_smiles_input="before-smiles",
+            added_scene_items=None,
+        )
+
+        canvas._push_command.assert_not_called()
+
+    def test_record_additions_skips_empty_sparse_atom_range_and_none_only_scene_items(self) -> None:
+        canvas = _make_canvas(
+            atoms={0: object()},
+            bonds=[],
+            next_atom_id=3,
+        )
+
+        CanvasHistoryRecordingService(canvas).record_additions(
+            before_next_atom_id=1,
+            before_bond_count=0,
+            before_smiles_input="before-smiles",
+            added_scene_items=[None],
+        )
+
+        canvas._push_command.assert_not_called()
+
     def test_record_bond_update_pushes_update_command_when_state_changes(self) -> None:
         canvas = _make_canvas(history_enabled=True)
 

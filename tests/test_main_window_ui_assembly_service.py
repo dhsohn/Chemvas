@@ -8,7 +8,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
     from PyQt6.QtCore import Qt
-    from PyQt6.QtGui import QAction, QIcon, QKeySequence
+    from PyQt6.QtGui import QAction, QIcon, QKeySequence, QPixmap
     from PyQt6.QtWidgets import (
         QApplication,
         QCheckBox,
@@ -36,7 +36,11 @@ if QApplication is not None:
     from ui.main_window import MainWindow
     from ui.main_window_config import LEFT_TOOLBAR_ACTION_ORDER
     from ui.main_window_theme import MAIN_WINDOW_STYLESHEET
-    from ui.main_window_ui_assembly_service import MainWindowUIAssemblyService
+    from ui.main_window_ui_assembly_service import (
+        ArrowButton,
+        CornerMenuButton,
+        MainWindowUIAssemblyService,
+    )
 
 
 class _HarnessCanvas:
@@ -113,6 +117,11 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.app.processEvents()
 
+    def _filled_icon(self) -> QIcon:
+        pixmap = QPixmap(8, 8)
+        pixmap.fill(Qt.GlobalColor.black)
+        return QIcon(pixmap)
+
     def test_create_toolbar_button_sets_properties_and_callback(self) -> None:
         callback = mock.Mock()
         shortcut = QKeySequence("Ctrl+L")
@@ -158,6 +167,44 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.assertEqual(button.styleSheet(), "padding: 0;")
         self.assertEqual(button.popupMode(), QToolButton.ToolButtonPopupMode.MenuButtonPopup)
         self.assertEqual([action.text() for action in button.menu().actions()], ["Save As..."])
+
+    def test_button_factories_cover_icon_only_and_paint_paths(self) -> None:
+        owner = QWidget()
+        self.addCleanup(owner.close)
+        icon = self._filled_icon()
+
+        toolbar_button = self.service.create_toolbar_button(
+            icon=icon,
+            tooltip="Plain",
+        )
+        self.assertEqual(toolbar_button.toolTip(), "Plain")
+        self.assertTrue(toolbar_button.autoRaise())
+        self.assertFalse(toolbar_button.icon().isNull())
+        toolbar_button.click()
+
+        corner_button = self.service.create_corner_menu_button(
+            icon=icon,
+            tooltip="Palette",
+            style_sheet="padding: 1px;",
+            popup_mode=QToolButton.ToolButtonPopupMode.InstantPopup,
+            menu_builder=lambda menu: menu.addAction("Pick"),
+        )
+        self.assertIsNone(corner_button.defaultAction())
+        self.assertFalse(corner_button.icon().isNull())
+        self.assertEqual([action.text() for action in corner_button.menu().actions()], ["Pick"])
+
+        up_button = ArrowButton("up", owner)
+        down_button = ArrowButton("down", owner)
+        menu_indicator = CornerMenuButton(owner)
+        self.assertTrue(up_button.autoRaise())
+        self.assertEqual(up_button.focusPolicy(), Qt.FocusPolicy.NoFocus)
+
+        for widget, size in ((up_button, (8, 6)), (down_button, (20, 20)), (menu_indicator, (18, 18))):
+            widget.resize(*size)
+            widget.show()
+            self.app.processEvents()
+            pixmap = widget.grab()
+            self.assertFalse(pixmap.isNull())
 
     def test_create_save_menu_button_uses_save_as_action_menu(self) -> None:
         owner = QMainWindow()

@@ -80,6 +80,7 @@ class CanvasViewHoverPreviewTest(unittest.TestCase):
         view._atom_pick_radius = lambda: CanvasView._atom_pick_radius(view)
         view._mark_selection_radius = lambda: CanvasView._mark_selection_radius(view)
         view._clear_hover_highlight = lambda: CanvasView._clear_hover_highlight(view)
+        view._add_hover_indicator_item = lambda item: CanvasView._add_hover_indicator_item(view, item)
         view._build_mark_item = lambda kind: CanvasView._build_mark_item(view, kind)
         view._set_mark_center = lambda item, center: CanvasView._set_mark_center(view, item, center)
         view._add_atom_hover_indicator = lambda atom_id: CanvasView._add_atom_hover_indicator(view, atom_id)

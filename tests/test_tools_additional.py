@@ -21,7 +21,7 @@ if str(APP_ROOT) not in sys.path:
 
 if QApplication is not None:
     import core.tools as tools_module
-    from core.history import AddAtomsCommand, CompositeCommand, DeleteSceneItemsCommand, SetSmilesInputCommand
+    from core.history import AddAtomsCommand, CompositeCommand, DeleteSceneItemsCommand, MoveItemsCommand, SetSmilesInputCommand
     from core.model import Atom, Bond, MoleculeModel
     from core.tools import (
         BenzeneTool,
@@ -30,6 +30,7 @@ if QApplication is not None:
         EditBondTool,
         FlipTool,
         MarkTool,
+        MoveTool,
         NoteTool,
         OrbitalTool,
         PerspectiveTool,
@@ -242,6 +243,41 @@ class _DeleteCanvas:
 
     def remove_scene_item(self, item) -> None:
         self.removed_items.append(item)
+
+    def _push_command(self, command) -> None:
+        self.pushed_commands.append(command)
+
+
+class _MoveCanvas:
+    DragMode = SimpleNamespace(NoDrag="none")
+
+    def __init__(self) -> None:
+        self.drag_mode = None
+        self.selected_items_for_transform = []
+        self.selected_atom_ids = set()
+        self.selected_bond_ids = set()
+        self.model = SimpleNamespace(bonds=[Bond(1, 2, 1)])
+        self.item = None
+        self.pushed_commands = []
+        self.selection_outline_updates = 0
+
+    def setDragMode(self, mode) -> None:
+        self.drag_mode = mode
+
+    def _selected_items_for_transform(self):
+        return list(self.selected_items_for_transform)
+
+    def _selected_ids(self):
+        return set(self.selected_atom_ids), set(self.selected_bond_ids)
+
+    def item_at_event(self, event):
+        return self.item
+
+    def move_item(self, item, dx: float, dy: float) -> None:
+        pass
+
+    def _update_selection_outline(self) -> None:
+        self.selection_outline_updates += 1
 
     def _push_command(self, command) -> None:
         self.pushed_commands.append(command)
@@ -679,6 +715,112 @@ class ToolsAdditionalTest(unittest.TestCase):
         self.assertIsInstance(canvas.pushed_commands[-1], CompositeCommand)
         self.assertIsInstance(canvas.pushed_commands[-1].commands[0], SetSmilesInputCommand)
         self.assertEqual(canvas.pushed_commands[-1].commands[1], "atom-5")
+
+    def test_misc_tool_guard_paths_cover_benzene_color_flip_edit_and_move_delete_edges(self) -> None:
+        benzene_calls = []
+        preview_calls = []
+        clear_calls = []
+        benzene_canvas = SimpleNamespace(
+            DragMode=SimpleNamespace(NoDrag="none"),
+            drag_mode=None,
+            hover_bond_id=None,
+            hover_atom_id=5,
+            setDragMode=lambda mode: setattr(benzene_canvas, "drag_mode", mode),
+            scene_pos_from_event=lambda event: event.position(),
+            add_benzene_ring=lambda pos, attach_atom_id=None, attach_bond_id=None: benzene_calls.append(
+                (QPointF(pos), attach_atom_id, attach_bond_id)
+            ),
+            _clear_benzene_preview=lambda: clear_calls.append(True),
+            _render_benzene_preview=lambda pos, attach_atom_id=None, attach_bond_id=None: preview_calls.append(
+                (QPointF(pos), attach_atom_id, attach_bond_id)
+            ),
+        )
+        benzene_tool = BenzeneTool(benzene_canvas)
+        benzene_tool.activate()
+        self.assertFalse(benzene_tool.on_mouse_press(_Event(button=Qt.MouseButton.RightButton)))
+        self.assertTrue(benzene_tool.on_mouse_press(_Event(QPointF(1.0, 2.0))))
+        benzene_canvas.hover_atom_id = None
+        self.assertTrue(benzene_tool.on_mouse_press(_Event(QPointF(3.0, 4.0))))
+        benzene_canvas.hover_bond_id = 9
+        self.assertFalse(benzene_tool.on_mouse_move(_Event(QPointF(5.0, 6.0), buttons=Qt.MouseButton.LeftButton)))
+        self.assertTrue(benzene_tool.on_mouse_move(_Event(QPointF(5.0, 6.0), buttons=Qt.MouseButton.NoButton)))
+        self.assertEqual(benzene_calls[0][1:], (5, None))
+        self.assertEqual(benzene_calls[1][1:], (None, None))
+        self.assertEqual(preview_calls[-1][1:], (None, 9))
+
+        misc_canvas = _MiscCanvas()
+        color_tool = ColorTool(misc_canvas)
+        flip_tool = FlipTool(misc_canvas)
+        edit_tool = EditBondTool(misc_canvas)
+        self.assertFalse(color_tool.on_mouse_press(_Event(button=Qt.MouseButton.RightButton)))
+        misc_canvas.scene_obj._selected_items = []
+        self.assertTrue(color_tool.on_mouse_press(_Event(QPointF())))
+        misc_canvas.item = _DataItem("atom", 1)
+        color_tool._last_color = "not-a-color"
+        self.assertTrue(color_tool.on_mouse_press(_Event(QPointF())))
+        self.assertEqual(misc_canvas.colored, [])
+
+        self.assertFalse(flip_tool.on_mouse_press(_Event(button=Qt.MouseButton.RightButton)))
+        misc_canvas.item = None
+        self.assertTrue(flip_tool.on_mouse_press(_Event(QPointF())))
+        self.assertFalse(edit_tool.on_mouse_press(_Event(button=Qt.MouseButton.RightButton)))
+        misc_canvas.bond_id = None
+        self.assertTrue(edit_tool.on_mouse_press(_Event(QPointF())))
+        self.assertEqual(misc_canvas.cycled, [])
+
+        move_canvas = _MoveCanvas()
+        move_tool = MoveTool(move_canvas)
+        self.assertFalse(move_tool.on_mouse_press(_Event(button=Qt.MouseButton.RightButton)))
+        move_canvas.selected_items_for_transform = [_DataItem("note", 1)]
+        move_canvas.item = None
+        with mock.patch.object(move_tool, "_begin_selection_drag", return_value=False):
+            self.assertTrue(move_tool.on_mouse_press(_Event(QPointF(1.0, 1.0))))
+        move_tool._start_pos = QPointF(0.0, 0.0)
+        self.assertTrue(move_tool.on_mouse_move(_Event(QPointF(1.0, 1.0))))
+        move_tool._drag_item = _DataItem("arrow", 2)
+        move_tool._start_pos = QPointF(1.0, 1.0)
+        move_tool._moved = True
+        move_tool._total_delta = QPointF(3.0, 4.0)
+        self.assertTrue(move_tool.on_mouse_release(_Event(QPointF(1.0, 1.0))))
+        self.assertIsInstance(move_canvas.pushed_commands[-1], MoveItemsCommand)
+
+        delete_canvas = _DeleteCanvas()
+        delete_tool = DeleteTool(delete_canvas)
+        self.assertFalse(delete_tool.on_mouse_move(_Event(QPointF())))
+        delete_tool._erasing = True
+        self.assertFalse(delete_tool.on_mouse_move(_Event(QPointF(), buttons=Qt.MouseButton.NoButton)))
+        delete_tool._changed = True
+        delete_tool._commands = ["cmd"]
+        delete_tool._before_smiles_input = "before"
+        with mock.patch.object(tools_module, "build_delete_tool_history_command", return_value=None):
+            self.assertTrue(delete_tool.on_mouse_release(_Event(QPointF())))
+        self.assertEqual(delete_canvas.pushed_commands, [])
+
+        delete_canvas.item = _DataItem("note", 1, scene_obj=object())
+        delete_tool._erase_at_event(_Event(QPointF()))
+        self.assertEqual(delete_canvas.removed_items, [])
+
+        class _RuntimeSceneItem:
+            def scene(self):
+                raise RuntimeError("disposed")
+
+        delete_canvas.item = _RuntimeSceneItem()
+        delete_tool._erase_at_event(_Event(QPointF()))
+
+        delete_canvas.item = _DataItem("atom", 2, scene_obj=delete_canvas.scene())
+        with mock.patch.object(tools_module, "erase_delete_tool_item", return_value=(False, None)):
+            delete_tool._erase_at_event(_Event(QPointF()))
+        self.assertFalse(delete_tool._changed)
+
+        with mock.patch.object(tools_module, "erase_delete_tool_item", return_value=(True, None)):
+            delete_tool._erase_at_event(_Event(QPointF()))
+        self.assertTrue(delete_tool._changed)
+        self.assertEqual(delete_tool._commands, [])
+
+        perspective_canvas = _PerspectiveCanvas()
+        perspective_tool = PerspectiveTool(perspective_canvas)
+        self.assertTrue(perspective_tool.on_mouse_release(_Event(QPointF())))
+        self.assertEqual(perspective_canvas.end_calls, 0)
 
     def test_orbital_transform_mark_and_note_tools_cover_mouse_press_paths(self) -> None:
         canvas = _OrbitalMarkNoteCanvas()

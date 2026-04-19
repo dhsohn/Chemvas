@@ -12,7 +12,7 @@ APP_ROOT = ROOT / "app"
 if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
-from core.model import MoleculeModel
+from core.model import Bond, MoleculeModel
 from core.rdkit_adapter import RDKitAdapter
 
 try:
@@ -428,6 +428,194 @@ class _FakeAllChem3D:
         if self._optimize_error is not None:
             raise self._optimize_error
         return 0
+
+
+class _FakeAliasAtom:
+    def __init__(self, idx: int, symbol: str, atomic_num: int) -> None:
+        self._idx = idx
+        self.symbol = symbol
+        self._atomic_num = atomic_num
+        self._neighbors: list["_FakeAliasAtom"] = []
+
+    def GetIdx(self) -> int:
+        return self._idx
+
+    def GetAtomicNum(self) -> int:
+        return self._atomic_num
+
+    def GetNeighbors(self):
+        return list(self._neighbors)
+
+    def add_neighbor(self, atom: "_FakeAliasAtom") -> None:
+        self._neighbors.append(atom)
+
+
+class _FakeAliasBond:
+    def __init__(self, begin_idx: int, end_idx: int, bond_type: str = "single") -> None:
+        self._begin_idx = begin_idx
+        self._end_idx = end_idx
+        self._bond_type = bond_type
+
+    def GetBeginAtomIdx(self) -> int:
+        return self._begin_idx
+
+    def GetEndAtomIdx(self) -> int:
+        return self._end_idx
+
+    def GetBondType(self) -> str:
+        return self._bond_type
+
+
+class _FakeAliasFragment:
+    def __init__(
+        self,
+        atoms: list[_FakeAliasAtom],
+        bonds: list[_FakeAliasBond],
+        *,
+        positions: dict[int, tuple[float, float, float]] | None = None,
+        conformer_count: int = 1,
+    ) -> None:
+        self._atoms = atoms
+        self._bonds = bonds
+        self._conformer_count = conformer_count
+        atom_map = {atom.GetIdx(): atom for atom in atoms}
+        for bond in bonds:
+            begin = atom_map.get(bond.GetBeginAtomIdx())
+            end = atom_map.get(bond.GetEndAtomIdx())
+            if begin is None or end is None:
+                continue
+            begin.add_neighbor(end)
+            end.add_neighbor(begin)
+        if positions is None:
+            positions = {atom.GetIdx(): (float(atom.GetIdx()), 0.0, 0.0) for atom in atoms}
+        self._conformer = _FakeConformer(positions)
+
+    def GetAtoms(self):
+        return list(self._atoms)
+
+    def GetBonds(self):
+        return list(self._bonds)
+
+    def GetNumConformers(self) -> int:
+        return self._conformer_count
+
+    def GetConformer(self) -> _FakeConformer:
+        return self._conformer
+
+
+class _FakeSettableConformer:
+    def __init__(self, num_atoms: int) -> None:
+        self.num_atoms = num_atoms
+        self.positions: dict[int, tuple[float, float, float]] = {}
+
+    def SetAtomPosition(self, atom_idx: int, pos) -> None:
+        self.positions[atom_idx] = pos
+
+
+class _FakeWritableBond:
+    def __init__(self, begin_idx: int, end_idx: int, bond_type: str) -> None:
+        self.begin_idx = begin_idx
+        self.end_idx = end_idx
+        self.bond_type = bond_type
+        self.direction = None
+
+    def SetBondDir(self, direction) -> None:
+        self.direction = direction
+
+
+class _FakeWritableMol:
+    def __init__(self, atoms: list[_FakeRDAtom], bonds: list[_FakeWritableBond], *, add_conformer_error: Exception | None = None) -> None:
+        self.atoms = atoms
+        self.bonds = bonds
+        self._add_conformer_error = add_conformer_error
+        self.conformers: list[_FakeSettableConformer] = []
+
+    def GetNumAtoms(self) -> int:
+        return len(self.atoms)
+
+    def AddConformer(self, conformer: _FakeSettableConformer, assignId: bool = True) -> None:
+        if self._add_conformer_error is not None:
+            raise self._add_conformer_error
+        self.conformers.append(conformer)
+
+
+class _FakeDirectionalRWMol:
+    def __init__(self, *, add_conformer_error: Exception | None = None) -> None:
+        self.atoms: list[_FakeRDAtom] = []
+        self.bonds: list[_FakeWritableBond] = []
+        self._mol = _FakeWritableMol(self.atoms, self.bonds, add_conformer_error=add_conformer_error)
+
+    def AddAtom(self, atom: _FakeRDAtom) -> int:
+        self.atoms.append(atom)
+        return len(self.atoms) - 1
+
+    def AddBond(self, a: int, b: int, btype: str) -> None:
+        self.bonds.append(_FakeWritableBond(a, b, btype))
+
+    def GetBondBetweenAtoms(self, a: int, b: int):
+        for bond in self.bonds:
+            if {bond.begin_idx, bond.end_idx} == {a, b}:
+                return bond
+        return None
+
+    def GetMol(self):
+        return self._mol
+
+
+class _FakeDirectionalChem(_FakeChem):
+    class BondDir:
+        BEGINWEDGE = "beginwedge"
+        BEGINDASH = "begindash"
+
+    def __init__(
+        self,
+        mols_by_smiles: dict[str, _FakeMol | _FakeAliasFragment | None],
+        *,
+        add_conformer_error: Exception | None = None,
+        stereo_error_method: str | None = None,
+        sanitize_error: Exception | None = None,
+    ) -> None:
+        super().__init__(mols_by_smiles, sanitize_error=sanitize_error)
+        self._add_conformer_error = add_conformer_error
+        self._stereo_error_method = stereo_error_method
+        self.stereo_calls: list[str] = []
+
+    def Atom(self, symbol) -> _FakeRDAtom:
+        if isinstance(symbol, _FakeAliasAtom):
+            return _FakeRDAtom(symbol.symbol)
+        return super().Atom(symbol)
+
+    def RWMol(self) -> _FakeDirectionalRWMol:
+        return _FakeDirectionalRWMol(add_conformer_error=self._add_conformer_error)
+
+    def Conformer(self, num_atoms: int) -> _FakeSettableConformer:
+        return _FakeSettableConformer(num_atoms)
+
+    def AssignChiralTypesFromBondDirs(self, mol) -> None:
+        self.stereo_calls.append("AssignChiralTypesFromBondDirs")
+        if self._stereo_error_method == "AssignChiralTypesFromBondDirs":
+            raise RuntimeError("stereo failure")
+
+    def SetBondStereoFromDirections(self, mol) -> None:
+        self.stereo_calls.append("SetBondStereoFromDirections")
+        if self._stereo_error_method == "SetBondStereoFromDirections":
+            raise RuntimeError("stereo failure")
+
+    def AssignStereochemistry(self, mol, force: bool = True, cleanIt: bool = True) -> None:
+        self.stereo_calls.append("AssignStereochemistry")
+        if self._stereo_error_method == "AssignStereochemistry":
+            raise RuntimeError("stereo failure")
+
+
+class _FakeAllChemCoords(_FakeAllChem):
+    def __init__(self, compute_error: Exception | None = None) -> None:
+        self._compute_error = compute_error
+        self.compute_calls = 0
+
+    def Compute2DCoords(self, mol) -> None:
+        self.compute_calls += 1
+        if self._compute_error is not None:
+            raise self._compute_error
 
 
 class RDKitAdapterTest(unittest.TestCase):
@@ -1237,6 +1425,331 @@ class RDKitAdapterTest(unittest.TestCase):
         adapter._rdkit = (None, None)
         self.assertFalse(adapter.is_loaded())
         self.assertTrue(adapter.is_unavailable())
+
+
+class RDKitConversionEdgeTest(unittest.TestCase):
+    def test_helper_branches_cover_short_error_details_component_filtering_and_empty_layout(self) -> None:
+        adapter = RDKitAdapter()
+        helper = adapter._conversion_helper
+        adapter._rdkit = (_FakeChem({}), _FakeAllChem())
+
+        invalid_model = MoleculeModel()
+        invalid_model.add_atom("Xx", 0.0, 0.0)
+        invalid_model.add_atom("Me", 1.0, 0.0)
+        mol, atom_map = helper._build_rdkit_mol_with_map(invalid_model, strict_labels=True)
+        self.assertIsNone(mol)
+        self.assertIsNone(atom_map)
+        self.assertEqual(
+            adapter.last_error,
+            "XYZ export supports element symbols only. Unsupported atom labels: Xx (atom 0), Me (atom 1).",
+        )
+
+        style_model = MoleculeModel()
+        a0 = style_model.add_atom("C", 0.0, 0.0)
+        a1 = style_model.add_atom("O", 1.0, 0.0)
+        style_model.add_bond(a0, a1, 1)
+        style_model.bonds[-1].style = "wedge"
+        mol, atom_map = helper._build_rdkit_mol_with_map(
+            style_model,
+            unsupported_bond_styles={"wedge"},
+        )
+        self.assertIsNone(mol)
+        self.assertIsNone(atom_map)
+        self.assertEqual(
+            adapter.last_error,
+            "XYZ export does not yet support wedge/hash stereobonds. Unsupported bond styles: wedge (bond 0).",
+        )
+
+        model = MoleculeModel()
+        atom_id = model.add_atom("C", 0.0, 0.0)
+        model.bonds.append(None)
+        component_model, annotations = helper._build_component_model(
+            model,
+            {atom_id, 99},
+            atom_annotations={atom_id: {}},
+        )
+        self.assertEqual(sorted(component_model.atoms), [0])
+        self.assertEqual(component_model.bonds, [])
+        self.assertEqual(annotations, {})
+        self.assertEqual(helper._format_atom_refs(["a (atom 1)", "b (atom 2)"]), "a (atom 1), b (atom 2)")
+        self.assertEqual(helper._layout_component_scenes([]).atoms, ())
+
+    def test_build_alias_fragment_covers_failure_matrix_and_success_paths(self) -> None:
+        adapter = RDKitAdapter()
+        helper = adapter._conversion_helper
+        model = MoleculeModel()
+        anchor_id = model.add_atom("C", 3.0, 4.0)
+        alias_id = model.add_atom("Alias", 5.0, 5.0)
+        model.add_bond(anchor_id, alias_id, 1)
+        alias_atom = model.atoms[alias_id]
+
+        self.assertEqual(
+            helper._build_alias_fragment(
+                "Unknown",
+                atom_id=alias_id,
+                atom=alias_atom,
+                neighbors=[anchor_id],
+                model=model,
+                formal_charge=0,
+                radical_electrons=0,
+                rw=_FakeRWMol(),
+                Chem=_FakeDirectionalChem({}),
+                AllChem=_FakeAllChemCoords(),
+            ),
+            (None, None),
+        )
+
+        adapter._alias_smiles = {"Alias": "[*:1]C"}
+        chem = _FakeDirectionalChem({})
+        all_chem = _FakeAllChemCoords()
+        rw = _FakeRWMol()
+        self.assertEqual(
+            helper._build_alias_fragment(
+                "Alias",
+                atom_id=alias_id,
+                atom=alias_atom,
+                neighbors=[],
+                model=model,
+                formal_charge=0,
+                radical_electrons=0,
+                rw=rw,
+                Chem=chem,
+                AllChem=all_chem,
+            ),
+            (None, None),
+        )
+        self.assertEqual(
+            adapter.last_error,
+            "Alias label 'Alias' on atom 1 requires exactly one attachment bond for 3D conversion, but found 0.",
+        )
+
+        adapter.last_error = None
+        chem = _FakeDirectionalChem({"[*:1]C": None})
+        self.assertEqual(
+            helper._build_alias_fragment(
+                "Alias",
+                atom_id=alias_id,
+                atom=alias_atom,
+                neighbors=[anchor_id],
+                model=model,
+                formal_charge=0,
+                radical_electrons=0,
+                rw=_FakeRWMol(),
+                Chem=chem,
+                AllChem=all_chem,
+            ),
+            (None, None),
+        )
+        self.assertEqual(adapter.last_error, "Failed to expand alias label 'Alias' for 3D conversion.")
+
+        no_dummy_fragment = _FakeAliasFragment(
+            [_FakeAliasAtom(0, "C", 6)],
+            [],
+        )
+        adapter.last_error = None
+        chem = _FakeDirectionalChem({"[*:1]C": no_dummy_fragment})
+        self.assertEqual(
+            helper._build_alias_fragment(
+                "Alias",
+                atom_id=alias_id,
+                atom=alias_atom,
+                neighbors=[anchor_id],
+                model=model,
+                formal_charge=0,
+                radical_electrons=0,
+                rw=_FakeRWMol(),
+                Chem=chem,
+                AllChem=all_chem,
+            ),
+            (None, None),
+        )
+        self.assertEqual(adapter.last_error, "Alias label 'Alias' has an invalid attachment definition.")
+
+        dummy = _FakeAliasAtom(0, "*", 0)
+        topology_fragment = _FakeAliasFragment([dummy], [])
+        adapter.last_error = None
+        chem = _FakeDirectionalChem({"[*:1]C": topology_fragment})
+        self.assertEqual(
+            helper._build_alias_fragment(
+                "Alias",
+                atom_id=alias_id,
+                atom=alias_atom,
+                neighbors=[anchor_id],
+                model=model,
+                formal_charge=0,
+                radical_electrons=0,
+                rw=_FakeRWMol(),
+                Chem=chem,
+                AllChem=all_chem,
+            ),
+            (None, None),
+        )
+        self.assertEqual(adapter.last_error, "Alias label 'Alias' has an invalid attachment topology.")
+
+        dummy = _FakeAliasAtom(0, "*", 0)
+        ghost = _FakeAliasAtom(7, "C", 6)
+        dummy.add_neighbor(ghost)
+        unattached_fragment = _FakeAliasFragment([dummy], [])
+        adapter.last_error = None
+        chem = _FakeDirectionalChem({"[*:1]C": unattached_fragment})
+        self.assertEqual(
+            helper._build_alias_fragment(
+                "Alias",
+                atom_id=alias_id,
+                atom=alias_atom,
+                neighbors=[anchor_id],
+                model=model,
+                formal_charge=0,
+                radical_electrons=0,
+                rw=_FakeRWMol(),
+                Chem=chem,
+                AllChem=all_chem,
+            ),
+            (None, None),
+        )
+        self.assertEqual(adapter.last_error, "Alias label 'Alias' could not be attached.")
+
+        dummy = _FakeAliasAtom(0, "*", 0)
+        attach = _FakeAliasAtom(1, "O", 8)
+        no_conf_fragment = _FakeAliasFragment([dummy, attach], [_FakeAliasBond(0, 1)], conformer_count=0)
+        adapter.last_error = None
+        attachment_idx, coord_map = helper._build_alias_fragment(
+            "Alias",
+            atom_id=alias_id,
+            atom=alias_atom,
+            neighbors=[anchor_id],
+            model=model,
+            formal_charge=1,
+            radical_electrons=0,
+            rw=_FakeRWMol(),
+            Chem=_FakeDirectionalChem({"[*:1]C": no_conf_fragment}),
+            AllChem=all_chem,
+        )
+        self.assertEqual(coord_map, {attachment_idx: (5.0, 5.0)})
+
+        dummy = _FakeAliasAtom(0, "*", 0)
+        attach = _FakeAliasAtom(1, "O", 8)
+        missing_neighbor_fragment = _FakeAliasFragment([dummy, attach], [_FakeAliasBond(0, 1)])
+        adapter.last_error = None
+        self.assertEqual(
+            helper._build_alias_fragment(
+                "Alias",
+                atom_id=alias_id,
+                atom=alias_atom,
+                neighbors=[99],
+                model=model,
+                formal_charge=0,
+                radical_electrons=0,
+                rw=_FakeRWMol(),
+                Chem=_FakeDirectionalChem({"[*:1]C": missing_neighbor_fragment}),
+                AllChem=all_chem,
+            ),
+            (None, None),
+        )
+        self.assertEqual(adapter.last_error, "Alias label 'Alias' is attached to a missing atom.")
+
+        dummy = _FakeAliasAtom(0, "*", 0)
+        attach = _FakeAliasAtom(1, "O", 8)
+        extra = _FakeAliasAtom(2, "C", 6)
+        success_fragment = _FakeAliasFragment(
+            [dummy, attach, extra],
+            [_FakeAliasBond(0, 1), _FakeAliasBond(1, 2)],
+            positions={
+                0: (0.0, 0.0, 0.0),
+                1: (1.0, 0.0, 0.0),
+                2: (2.0, 0.0, 0.0),
+            },
+        )
+        rw = _FakeRWMol()
+        adapter.last_error = None
+        attachment_idx, coord_map = helper._build_alias_fragment(
+            "Alias",
+            atom_id=alias_id,
+            atom=alias_atom,
+            neighbors=[anchor_id],
+            model=model,
+            formal_charge=1,
+            radical_electrons=1,
+            rw=rw,
+            Chem=_FakeDirectionalChem({"[*:1]C": success_fragment}),
+            AllChem=_FakeAllChemCoords(RuntimeError("coords failed")),
+        )
+        self.assertIsNotNone(attachment_idx)
+        assert attachment_idx is not None
+        self.assertEqual(coord_map[attachment_idx], (5.0, 5.0))
+        self.assertEqual(len(rw.bonds), 1)
+        self.assertEqual(rw.bonds[0], (0, 1, "single"))
+        self.assertEqual(rw.atoms[attachment_idx].formal_charge, 1)
+        self.assertEqual(rw.atoms[attachment_idx].radical_electrons, 1)
+
+    def test_build_conversion_rdkit_mol_covers_unavailable_alias_failure_and_directional_branches(self) -> None:
+        adapter = RDKitAdapter()
+        adapter._rdkit = (None, None)
+        self.assertIsNone(adapter._build_conversion_rdkit_mol(MoleculeModel()))
+        self.assertEqual(adapter.last_error, "RDKit is not available in this environment.")
+
+        adapter = RDKitAdapter()
+        alias_model = MoleculeModel()
+        scaffold = alias_model.add_atom("C", 0.0, 0.0)
+        alias = alias_model.add_atom("Me", 1.0, 0.0)
+        alias_model.add_bond(scaffold, alias, 1)
+        adapter._rdkit = (_FakeDirectionalChem({}), _FakeAllChemCoords())
+        with mock.patch.object(adapter._conversion_helper, "_build_alias_fragment", return_value=(None, None)):
+            self.assertIsNone(adapter._build_conversion_rdkit_mol(alias_model))
+
+        adapter = RDKitAdapter()
+        chem = _FakeDirectionalChem({}, add_conformer_error=RuntimeError("conformer failed"))
+        adapter._rdkit = (chem, _FakeAllChemCoords())
+        model = MoleculeModel()
+        a0 = model.add_atom("C", 0.0, 0.0)
+        a1 = model.add_atom("O", 1.0, 0.0)
+        model.bonds.append(None)
+        model.bonds.append(Bond(a0, a0, 1))
+        model.bonds.append(Bond(a0, 99, 1))
+        model.add_bond(a0, a1, 1)
+        model.bonds[-1].style = "wedge"
+        model.add_bond(a1, a0, 1)
+
+        mol = adapter._build_conversion_rdkit_mol(model)
+
+        self.assertIsNotNone(mol)
+        assert mol is not None
+        self.assertEqual(len(mol.bonds), 1)
+        self.assertEqual(mol.bonds[0].direction, chem.BondDir.BEGINWEDGE)
+        self.assertEqual(len(mol.conformers), 0)
+
+        adapter = RDKitAdapter()
+        chem = _FakeDirectionalChem({}, stereo_error_method="AssignStereochemistry")
+        adapter._rdkit = (chem, _FakeAllChemCoords())
+        model = MoleculeModel()
+        a0 = model.add_atom("C", 0.0, 0.0)
+        a1 = model.add_atom("O", 1.0, 0.0)
+        model.add_bond(a0, a1, 1)
+        model.bonds[-1].style = "hash"
+
+        mol = adapter._build_conversion_rdkit_mol(model)
+
+        self.assertIsNotNone(mol)
+        assert mol is not None
+        self.assertEqual(mol.bonds[0].direction, chem.BondDir.BEGINDASH)
+        self.assertEqual(
+            chem.stereo_calls,
+            [
+                "AssignChiralTypesFromBondDirs",
+                "SetBondStereoFromDirections",
+                "AssignStereochemistry",
+            ],
+        )
+
+    def test_model_to_3d_scene_preserves_specific_component_build_errors(self) -> None:
+        adapter = RDKitAdapter()
+        adapter._rdkit = (_FakeDirectionalChem({}), _FakeAllChem3D())
+        adapter.last_error = "Alias expansion failed."
+
+        with mock.patch.object(adapter, "_build_conversion_rdkit_mol", return_value=None):
+            self.assertIsNone(adapter.model_to_3d_scene(RDKitAdapterTest()._simple_model()))
+
+        self.assertEqual(adapter.last_error, "Alias expansion failed.")
 
 
 if __name__ == "__main__":

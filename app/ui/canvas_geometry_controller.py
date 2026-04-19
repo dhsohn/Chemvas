@@ -18,42 +18,51 @@ class CanvasGeometryController:
     def __init__(self, canvas) -> None:
         self.canvas = canvas
 
-    def ring_center_for_bond(self, bond) -> QPointF | None:
+    @staticmethod
+    def _ring_atom_ids(ring_item) -> list[int] | None:
+        ring_atom_ids = ring_item.data(2)
+        return ring_atom_ids if isinstance(ring_atom_ids, list) else None
+
+    def _ring_items_for_bond(self, bond):
         for ring_item in self.canvas.ring_items:
-            ring_atom_ids = ring_item.data(2)
-            if not isinstance(ring_atom_ids, list):
+            ring_atom_ids = self._ring_atom_ids(ring_item)
+            if ring_atom_ids is None:
                 continue
             if bond.a in ring_atom_ids and bond.b in ring_atom_ids:
-                xs = []
-                ys = []
-                for atom_id in ring_atom_ids:
-                    atom = self.canvas.model.atoms.get(atom_id)
-                    if atom is None:
-                        continue
-                    xs.append(atom.x)
-                    ys.append(atom.y)
-                if xs and ys:
-                    return QPointF(sum(xs) / len(xs), sum(ys) / len(ys))
+                yield ring_item, ring_atom_ids
+
+    def _padded_label_rect(self, rect: QRectF) -> QRectF:
+        pad = max(0.05, self.canvas.renderer.style.bond_line_width * 0.05)
+        return rect.adjusted(-pad, -pad, pad, pad)
+
+    def ring_center_for_bond(self, bond) -> QPointF | None:
+        for _, ring_atom_ids in self._ring_items_for_bond(bond):
+            xs = []
+            ys = []
+            for atom_id in ring_atom_ids:
+                atom = self.canvas.model.atoms.get(atom_id)
+                if atom is None:
+                    continue
+                xs.append(atom.x)
+                ys.append(atom.y)
+            if xs and ys:
+                return QPointF(sum(xs) / len(xs), sum(ys) / len(ys))
         return None
 
     def ring_center_3d_for_bond(self, bond) -> tuple[float, float, float] | None:
-        for ring_item in self.canvas.ring_items:
-            ring_atom_ids = ring_item.data(2)
-            if not isinstance(ring_atom_ids, list):
-                continue
-            if bond.a in ring_atom_ids and bond.b in ring_atom_ids:
-                coords = []
-                for atom_id in ring_atom_ids:
-                    coord = self.canvas._current_atom_coords_3d(atom_id)
-                    if coord is not None:
-                        coords.append(coord)
-                if len(coords) < 3:
-                    return None
-                sum_x = sum(c[0] for c in coords)
-                sum_y = sum(c[1] for c in coords)
-                sum_z = sum(c[2] for c in coords)
-                count = len(coords)
-                return (sum_x / count, sum_y / count, sum_z / count)
+        for _, ring_atom_ids in self._ring_items_for_bond(bond):
+            coords = []
+            for atom_id in ring_atom_ids:
+                coord = self.canvas._current_atom_coords_3d(atom_id)
+                if coord is not None:
+                    coords.append(coord)
+            if len(coords) < 3:
+                return None
+            sum_x = sum(c[0] for c in coords)
+            sum_y = sum(c[1] for c in coords)
+            sum_z = sum(c[2] for c in coords)
+            count = len(coords)
+            return (sum_x / count, sum_y / count, sum_z / count)
         return None
 
     def ring_for_bond(self, bond_id: int) -> QGraphicsPolygonItem | None:
@@ -62,21 +71,15 @@ class CanvasGeometryController:
         bond = self.canvas.model.bonds[bond_id]
         if bond is None:
             return None
-        for ring_item in self.canvas.ring_items:
-            ring_atom_ids = ring_item.data(2)
-            if not isinstance(ring_atom_ids, list):
-                continue
-            if bond.a in ring_atom_ids and bond.b in ring_atom_ids:
-                return ring_item
+        for ring_item, _ in self._ring_items_for_bond(bond):
+            return ring_item
         return None
 
     def label_rect_for_atom(self, atom_id: int) -> QRectF | None:
         item = self.canvas.atom_items.get(atom_id)
         if item is None:
             return None
-        rect = item.sceneBoundingRect()
-        pad = max(0.05, self.canvas.renderer.style.bond_line_width * 0.05)
-        return rect.adjusted(-pad, -pad, pad, pad)
+        return self._padded_label_rect(item.sceneBoundingRect())
 
     @staticmethod
     def visible_text_rect(item: QGraphicsTextItem) -> QRectF:
@@ -86,9 +89,7 @@ class CanvasGeometryController:
         item = self.canvas.atom_items.get(atom_id)
         if item is None:
             return None
-        rect = self.visible_text_rect(item)
-        pad = max(0.05, self.canvas.renderer.style.bond_line_width * 0.05)
-        return rect.adjusted(-pad, -pad, pad, pad)
+        return self._padded_label_rect(self.visible_text_rect(item))
 
     def label_cut_radius_for_atom(self, atom_id: int) -> float | None:
         item = self.canvas.atom_items.get(atom_id)

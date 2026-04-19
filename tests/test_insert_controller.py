@@ -159,6 +159,48 @@ class _FakeCanvas:
 
 
 class InsertControllerTest(unittest.TestCase):
+    def test_public_wrappers_delegate_to_internal_helpers(self) -> None:
+        canvas = _FakeCanvas()
+        controller = InsertController(canvas)
+        state = controller._insert_session_state()
+        request = TemplateInsertRequest(6, (1.0, 2.0), 3, "chair")
+        resolvers = object()
+        pairs = [(1.0, 2.0)]
+        preview_snapshot = ({0: ["bond"]}, {1: "atom"})
+
+        controller._insert_session_state = Mock(return_value=state)
+        controller._smiles_preview_snapshot = Mock(return_value=preview_snapshot)
+        controller._template_insert_request = Mock(return_value=request)
+        controller._template_point_resolvers = Mock(return_value=resolvers)
+        controller._resolve_ring_points_for_template = Mock(return_value=pairs)
+        controller._resolve_regular_ring_points_for_template_bond = Mock(return_value=pairs)
+        controller._resolve_chair_points_for_template = Mock(return_value=pairs)
+        controller._resolve_boat_points_for_template = Mock(return_value=pairs)
+        controller._resolve_template_points_for_template_bond = Mock(return_value=pairs)
+        controller._bond_merge_seed = Mock(return_value=[(1, 2.0, 3.0)])
+
+        self.assertIs(controller.insert_session_state(), state)
+        self.assertEqual(controller.smiles_preview_snapshot(), preview_snapshot)
+        self.assertIs(controller.template_insert_request(QPointF(1.0, 2.0)), request)
+        self.assertIs(controller.template_point_resolvers(), resolvers)
+        self.assertEqual(controller.resolve_ring_points_for_template((1.0, 2.0), 6, 12.0), pairs)
+        self.assertEqual(controller.resolve_regular_ring_points_for_template_bond(6, 3, (4.0, 5.0)), pairs)
+        self.assertEqual(controller.resolve_chair_points_for_template((0.0, 0.0)), pairs)
+        self.assertEqual(controller.resolve_boat_points_for_template((0.0, 0.0)), pairs)
+        self.assertEqual(controller.resolve_template_points_for_template_bond([(0.0, 0.0)], 4, (2.0, 3.0)), pairs)
+        self.assertEqual(controller.bond_merge_seed(7), [(1, 2.0, 3.0)])
+
+        controller._insert_session_state.assert_called_once_with()
+        controller._smiles_preview_snapshot.assert_called_once_with()
+        controller._template_insert_request.assert_called_once_with(QPointF(1.0, 2.0))
+        controller._template_point_resolvers.assert_called_once_with()
+        controller._resolve_ring_points_for_template.assert_called_once_with((1.0, 2.0), 6, 12.0)
+        controller._resolve_regular_ring_points_for_template_bond.assert_called_once_with(6, 3, (4.0, 5.0))
+        controller._resolve_chair_points_for_template.assert_called_once_with((0.0, 0.0))
+        controller._resolve_boat_points_for_template.assert_called_once_with((0.0, 0.0))
+        controller._resolve_template_points_for_template_bond.assert_called_once_with([(0.0, 0.0)], 4, (2.0, 3.0))
+        controller._bond_merge_seed.assert_called_once_with(7)
+
     def test_insert_session_state_and_apply_insert_session_state_track_and_clear_modes(self) -> None:
         canvas = _FakeCanvas()
         canvas._template_insert_active = True
@@ -406,6 +448,23 @@ class InsertControllerTest(unittest.TestCase):
         controller._clear_smiles_preview.assert_called_once_with()
         canvas._record_additions.assert_not_called()
 
+    def test_commit_smiles_insert_cancels_when_commit_service_rejects_plan(self) -> None:
+        canvas = _FakeCanvas()
+        canvas._smiles_insert_active = True
+        canvas._smiles_preview_smiles = "CO"
+        canvas._smiles_preview_center = QPointF(5.0, 0.0)
+        canvas._smiles_preview_model = MoleculeModel(atoms={0: Atom("C", 0.0, 0.0)})
+        controller = InsertController(canvas)
+        controller._clear_smiles_preview = Mock()
+
+        with patch.object(type(controller._insert_commit_service), "apply_smiles_commit", return_value=False) as apply_commit:
+            controller._commit_smiles_insert(QPointF(40.0, 20.0))
+
+        apply_commit.assert_called_once()
+        self.assertFalse(canvas._smiles_insert_active)
+        self.assertIsNone(canvas._smiles_preview_model)
+        controller._clear_smiles_preview.assert_called_once_with()
+
     def test_commit_smiles_insert_adds_atoms_bonds_labels_and_history(self) -> None:
         canvas = _FakeCanvas()
         canvas.last_smiles_input = "before"
@@ -632,6 +691,10 @@ class InsertControllerTest(unittest.TestCase):
             controller._resolve_template_points_for_template_bond([(0.0, 0.0)], 4, (2.0, 3.0)),
             [(11.0, 12.0)],
         )
+        canvas._regular_ring_points_for_bond.return_value = None
+        canvas._template_points_for_bond.return_value = None
+        self.assertIsNone(controller._resolve_regular_ring_points_for_template_bond(6, 3, (4.0, 5.0)))
+        self.assertIsNone(controller._resolve_template_points_for_template_bond([(0.0, 0.0)], 4, (2.0, 3.0)))
         self.assertIsNone(controller._template_points_from_pairs(None))
         self.assertEqual(_point_tuples(controller._template_points_from_pairs([(1.0, 1.5)])), [(1.0, 1.5)])
 
@@ -708,6 +771,48 @@ class InsertControllerTest(unittest.TestCase):
         with patch.object(controller, "_template_insert_request", return_value=request), patch(
             "ui.insert_controller.plan_template_preview",
             return_value=None,
+        ):
+            controller._render_template_preview(QPointF(4.0, 5.0))
+        controller._clear_template_preview.assert_called_once_with()
+
+    def test_render_template_preview_clears_for_missing_resolution_points_and_clear_action(self) -> None:
+        canvas = _FakeCanvas()
+        controller = InsertController(canvas)
+        controller._clear_template_preview = Mock()
+        request = TemplateInsertRequest(5, (4.0, 5.0), ring_style="regular")
+        plan = SimpleNamespace(generator="free_regular_ring")
+
+        with patch.object(controller, "_template_insert_request", return_value=request), patch(
+            "ui.insert_controller.plan_template_preview",
+            return_value=plan,
+        ), patch(
+            "ui.insert_controller.resolve_template_insert",
+            return_value=None,
+        ):
+            controller._render_template_preview(QPointF(4.0, 5.0))
+        controller._clear_template_preview.assert_called_once_with()
+
+        controller._clear_template_preview.reset_mock()
+        with patch.object(controller, "_template_insert_request", return_value=request), patch(
+            "ui.insert_controller.plan_template_preview",
+            return_value=plan,
+        ), patch(
+            "ui.insert_controller.resolve_template_insert",
+            return_value=TemplateInsertResolution(plan=plan, points=None),
+        ):
+            controller._render_template_preview(QPointF(4.0, 5.0))
+        controller._clear_template_preview.assert_called_once_with()
+
+        controller._clear_template_preview.reset_mock()
+        with patch.object(controller, "_template_insert_request", return_value=request), patch(
+            "ui.insert_controller.plan_template_preview",
+            return_value=plan,
+        ), patch(
+            "ui.insert_controller.resolve_template_insert",
+            return_value=TemplateInsertResolution(plan=plan, points=[(1.0, 2.0)]),
+        ), patch(
+            "ui.insert_controller.plan_template_preview_update",
+            return_value=SimpleNamespace(action="clear", geometry=None),
         ):
             controller._render_template_preview(QPointF(4.0, 5.0))
         controller._clear_template_preview.assert_called_once_with()

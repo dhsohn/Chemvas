@@ -7,9 +7,9 @@ from types import SimpleNamespace
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtCore import QRectF
+    from PyQt6.QtCore import QPointF, QRectF
     from PyQt6.QtGui import QFont
-    from PyQt6.QtWidgets import QApplication
+    from PyQt6.QtWidgets import QApplication, QGraphicsTextItem
 except ModuleNotFoundError:
     QApplication = None
 
@@ -53,17 +53,44 @@ class CanvasGeometryControllerTest(unittest.TestCase):
         ring_item = _FakeRingItem([1, 2, 3])
         controller = CanvasGeometryController(
             SimpleNamespace(
-                model=SimpleNamespace(bonds=[Bond(1, 2, 1), None]),
+                model=SimpleNamespace(bonds=[Bond(1, 2, 1), None, Bond(4, 5, 1)]),
                 ring_items=[_FakeRingItem("bad"), ring_item],
             )
         )
 
         self.assertIsNone(controller.ring_for_bond(-1))
         self.assertIsNone(controller.ring_for_bond(1))
+        self.assertIsNone(controller.ring_for_bond(2))
         self.assertIsNone(controller.ring_for_bond(9))
         self.assertIs(controller.ring_for_bond(0), ring_item)
 
-    def test_label_rect_helpers_return_none_for_missing_items(self) -> None:
+    def test_ring_center_helpers_skip_invalid_and_missing_atoms(self) -> None:
+        ring_item = _FakeRingItem([1, 2, 3])
+        controller = CanvasGeometryController(
+            SimpleNamespace(
+                model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0), 3: Atom("C", 6.0, 12.0)}),
+                ring_items=[_FakeRingItem("bad"), ring_item, _FakeRingItem([7, 8])],
+                _current_atom_coords_3d=lambda atom_id: {
+                    1: (0.0, 0.0, 0.0),
+                    2: None,
+                    3: (6.0, 12.0, 9.0),
+                }.get(atom_id),
+            )
+        )
+
+        center = controller.ring_center_for_bond(Bond(1, 3, 1))
+        self.assertEqual(center, QPointF(3.0, 6.0))
+        self.assertIsNone(controller.ring_center_for_bond(Bond(7, 8, 1)))
+        self.assertIsNone(controller.ring_center_3d_for_bond(Bond(1, 3, 1)))
+
+        controller.canvas._current_atom_coords_3d = lambda atom_id: {
+            1: (0.0, 0.0, 0.0),
+            2: (3.0, 6.0, 3.0),
+            3: (6.0, 12.0, 9.0),
+        }.get(atom_id)
+        self.assertEqual(controller.ring_center_3d_for_bond(Bond(1, 3, 1)), (3.0, 6.0, 4.0))
+
+    def test_label_rect_helpers_return_none_for_missing_items_and_pad_present_items(self) -> None:
         controller = CanvasGeometryController(
             SimpleNamespace(
                 atom_items={},
@@ -74,6 +101,25 @@ class CanvasGeometryControllerTest(unittest.TestCase):
 
         self.assertIsNone(controller.label_rect_for_atom(1))
         self.assertIsNone(controller.visible_label_rect_for_atom(1))
+        self.assertIsNone(controller.label_cut_radius_for_atom(1))
+
+        label_item = QGraphicsTextItem("OH")
+        label_item.setPos(1.0, 2.0)
+        controller.canvas.atom_items = {1: label_item}
+        label_rect = controller.label_rect_for_atom(1)
+        visible_rect = controller.visible_label_rect_for_atom(1)
+        base_label_rect = label_item.sceneBoundingRect()
+        base_visible_rect = CanvasGeometryController.visible_text_rect(label_item)
+        self.assertLess(label_rect.left(), base_label_rect.left())
+        self.assertLess(label_rect.top(), base_label_rect.top())
+        self.assertGreater(label_rect.right(), base_label_rect.right())
+        self.assertGreater(label_rect.bottom(), base_label_rect.bottom())
+        self.assertLess(visible_rect.left(), base_visible_rect.left())
+        self.assertLess(visible_rect.top(), base_visible_rect.top())
+        self.assertGreater(visible_rect.right(), base_visible_rect.right())
+        self.assertGreater(visible_rect.bottom(), base_visible_rect.bottom())
+
+        controller.canvas.model.atoms = {}
         self.assertIsNone(controller.label_cut_radius_for_atom(1))
 
     def test_mark_clearance_for_kind_covers_radical_plus_minus_and_default(self) -> None:
@@ -88,6 +134,26 @@ class CanvasGeometryControllerTest(unittest.TestCase):
         self.assertGreater(controller.mark_clearance_for_kind("plus"), default_gap)
         self.assertGreater(controller.mark_clearance_for_kind("minus"), default_gap)
 
+    def test_math_wrapper_helpers_delegate_to_pure_geometry_logic(self) -> None:
+        controller = CanvasGeometryController(SimpleNamespace())
+        rect = QRectF(0.0, 0.0, 10.0, 10.0)
+
+        self.assertEqual(controller.line_rect_clip_t(QPointF(-5.0, 5.0), QPointF(15.0, 5.0), rect), (0.25, 0.75))
+        self.assertEqual(
+            controller.segment_intersection_t(
+                QPointF(0.0, 0.0),
+                QPointF(10.0, 10.0),
+                QPointF(0.0, 10.0),
+                QPointF(10.0, 0.0),
+            ),
+            0.5,
+        )
+        self.assertEqual(controller.ray_rect_exit_distance(QPointF(5.0, 5.0), QPointF(1.0, 0.0), rect), 5.0)
+        self.assertEqual(
+            sorted(controller.line_rect_intersections(QPointF(-5.0, 5.0), QPointF(15.0, 5.0), rect)),
+            [0.25, 0.75],
+        )
+
     def test_trim_line_for_labels_handles_none_radii_and_min_span_clamp(self) -> None:
         canvas = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_line_width=5.0)),
@@ -101,6 +167,16 @@ class CanvasGeometryControllerTest(unittest.TestCase):
         tight = controller.trim_line_for_labels(1, 2, 0.0, 0.0, 100.0, 0.0)
         self.assertAlmostEqual(tight[0], 0.0)
         self.assertAlmostEqual(tight[1], 0.503)
+
+    def test_trim_line_for_labels_clamps_start_only_and_end_only_min_span(self) -> None:
+        canvas = SimpleNamespace(
+            renderer=SimpleNamespace(style=SimpleNamespace(bond_line_width=5.0)),
+            _label_cut_radius_for_atom=lambda atom_id: {1: 99.9, 2: 99.9}.get(atom_id),
+        )
+        controller = CanvasGeometryController(canvas)
+
+        self.assertEqual(controller.trim_line_for_labels(1, None, 0.0, 0.0, 100.0, 0.0), (0.98, 1.0))
+        self.assertEqual(controller.trim_line_for_labels(None, 2, 0.0, 0.0, 100.0, 0.0), (0.0, 0.02))
 
 
 if __name__ == "__main__":

@@ -64,20 +64,9 @@ class CanvasInputController:
                     self.canvas.delete_atom(self.canvas.hover_atom_id, record=True)
                 event.accept()
                 return
-            elif self.canvas.hover_bond_id is not None:
-                bond_id = self.canvas.hover_bond_id
+            if self.canvas.hover_bond_id is not None:
                 self.canvas._clear_hover_highlight()
-                if bond_id is not None:
-                    self.canvas.delete_bond(bond_id, record=True)
-                    event.accept()
-                    return
-            else:
-                if self.canvas.hover_bond_id is not None and self.canvas.hover_atom_id is None:
-                    bond = self.canvas.model.bonds[self.canvas.hover_bond_id]
-                    if bond is not None:
-                        ring_item = self.canvas._ring_for_bond(self.canvas.hover_bond_id)
-                        if ring_item is not None:
-                            self.canvas.delete_ring(ring_item, record=True)
+                self.canvas.delete_bond(self.canvas.hover_bond_id, record=True)
             event.accept()
             return
         if self.canvas._handle_chemdraw_shortcut(event):

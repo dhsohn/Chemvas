@@ -20,7 +20,7 @@ if str(APP_ROOT) not in sys.path:
 
 if QPointF is not None:
     from core.model import Atom, Bond
-    from ui.canvas_chemdraw_shortcut_service import CanvasChemdrawShortcutService
+    from ui.canvas_chemdraw_shortcut_service import CanvasChemdrawShortcutService, canvas_chemdraw_shortcut_service_for
     from ui.canvas_view import CanvasView
 
 
@@ -142,19 +142,26 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         self.assertTrue(service.handle_atom_hotkey(_FakeKeyEvent(Qt.Key.Key_2, text="2"), 1))
         self.assertTrue(service.handle_atom_hotkey(_FakeKeyEvent(Qt.Key.Key_3, text="3"), 1))
         self.assertTrue(service.handle_atom_hotkey(_FakeKeyEvent(Qt.Key.Key_4, text="4"), 1))
+        self.assertTrue(service.handle_atom_hotkey(_FakeKeyEvent(Qt.Key.Key_5, text="5"), 1))
         self.assertTrue(service.handle_atom_hotkey(_FakeKeyEvent(Qt.Key.Key_6, text="6"), 1))
+        self.assertTrue(service.handle_atom_hotkey(_FakeKeyEvent(Qt.Key.Key_7, text="7"), 1))
         self.assertTrue(service.handle_atom_hotkey(_FakeKeyEvent(Qt.Key.Key_8, text="8"), 1))
         self.assertTrue(service.handle_atom_hotkey(_FakeKeyEvent(Qt.Key.Key_Z, text="z"), 1))
+        self.assertTrue(service.handle_atom_hotkey(_FakeKeyEvent(Qt.Key.Key_U, text="u"), 1))
         self.assertTrue(service.handle_atom_hotkey(_FakeKeyEvent(Qt.Key.Key_V, text="v"), 1))
         self.assertFalse(service.handle_atom_hotkey(_FakeKeyEvent(Qt.Key.Key_unknown, text=""), 1))
+        self.assertFalse(service.handle_atom_hotkey(_FakeKeyEvent(Qt.Key.Key_unknown, text="?"), 1))
 
         self.assertIn(("prompt", 1), calls)
         self.assertIn(("mark", 1, 1.0, 2.0, "plus"), calls)
         self.assertIn(("mark", 1, 1.0, 2.0, "minus"), calls)
         self.assertIn(("label", 1, "CF3", True), calls)
         self.assertIn(("bond", 1, "single", 1, True), calls)
+        self.assertIn(("bond", 1, "hash", 1, False), calls)
         self.assertIn(("acetyl", 1), calls)
         self.assertIn(("benzene", 1), calls)
+        self.assertIn(("ring", 1, 5), calls)
+        self.assertIn(("ring", 1, 4), calls)
         self.assertIn(("ring", 1, 6), calls)
         self.assertIn(("bond", 1, "double", 2, False), calls)
         self.assertIn(("bond", 1, "triple", 3, False), calls)
@@ -205,6 +212,27 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         self.assertIn(("benzene", 0), calls)
         self.assertIn(("ring", 0, 6), calls)
         self.assertIn(("chair", 0, True), calls)
+
+    def test_service_resolver_reuses_bound_duck_typed_or_fresh_service(self) -> None:
+        canvas = SimpleNamespace()
+        bound = CanvasChemdrawShortcutService(canvas)
+        canvas._chemdraw_shortcut_service = bound
+        self.assertIs(canvas_chemdraw_shortcut_service_for(canvas), bound)
+
+        injected = SimpleNamespace(
+            handle_shortcut=mock.Mock(),
+            handle_object_shortcut=mock.Mock(),
+            handle_generic_hotkey=mock.Mock(),
+            handle_atom_hotkey=mock.Mock(),
+            handle_bond_hotkey=mock.Mock(),
+        )
+        other_canvas = SimpleNamespace(_chemdraw_shortcut_service=injected)
+        self.assertIs(canvas_chemdraw_shortcut_service_for(other_canvas), injected)
+
+        fresh_canvas = SimpleNamespace()
+        resolved = canvas_chemdraw_shortcut_service_for(fresh_canvas)
+        self.assertIsInstance(resolved, CanvasChemdrawShortcutService)
+        self.assertIs(resolved.canvas, fresh_canvas)
 
 
 if __name__ == "__main__":

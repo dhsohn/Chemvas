@@ -133,6 +133,54 @@ class HoverInteractionServiceTest(unittest.TestCase):
         bond_canvas._add_bond_hover_indicator.assert_not_called()
         bond_canvas._add_bond_style_hover_preview.assert_not_called()
 
+    def test_atom_preview_returns_signature_without_key_for_missing_atom(self) -> None:
+        canvas = self._make_canvas(atoms={1: Atom("C", 0.0, 0.0)}, active_tool="bond")
+        canvas._bond_preview_signature = mock.Mock(return_value="wedge:1")
+
+        signature, key = HoverInteractionService(canvas)._atom_preview(
+            QPointF(4.0, 5.0),
+            SimpleNamespace(kind="atom", id=99),
+        )
+
+        self.assertEqual(signature, "wedge:1")
+        self.assertIsNone(key)
+
+    def test_apply_plan_clears_for_missing_atom_or_bond_targets(self) -> None:
+        canvas = self._make_canvas(atoms={1: Atom("C", 0.0, 0.0)}, active_tool="bond")
+        service = HoverInteractionService(canvas)
+
+        service._apply_plan(SimpleNamespace(action="atom_hit", hover_atom_id=None, preview_key="wedge"), QPointF())
+        canvas._clear_hover_highlight.assert_called_once_with()
+        canvas._add_atom_hover_indicator.assert_not_called()
+
+        canvas._clear_hover_highlight.reset_mock()
+        service._apply_plan(SimpleNamespace(action="bond_hit", hover_bond_id=None, preview_key="hash"), QPointF())
+        canvas._clear_hover_highlight.assert_called_once_with()
+        canvas._add_bond_hover_indicator.assert_not_called()
+
+    def test_apply_plan_skips_missing_bond_objects_and_bond_lookup_handles_exceptions(self) -> None:
+        none_bond_canvas = self._make_canvas(
+            atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 1.0, 0.0)},
+            bonds=[None],
+            active_tool="bond",
+        )
+        service = HoverInteractionService(none_bond_canvas)
+
+        service._apply_plan(SimpleNamespace(action="bond_hit", hover_bond_id=0, preview_key="hash"), QPointF())
+
+        none_bond_canvas._clear_hover_highlight.assert_called_once_with()
+        self.assertEqual(none_bond_canvas.hover_bond_id, 0)
+        none_bond_canvas._add_bond_hover_indicator.assert_not_called()
+        none_bond_canvas._add_bond_style_hover_preview.assert_not_called()
+
+        bad_key_canvas = self._make_canvas()
+        bad_key_canvas.model.bonds = {}
+        self.assertIsNone(HoverInteractionService(bad_key_canvas)._bond_for_id(3))
+
+        bad_type_canvas = self._make_canvas()
+        bad_type_canvas.model.bonds = None
+        self.assertIsNone(HoverInteractionService(bad_type_canvas)._bond_for_id(0))
+
 
 if __name__ == "__main__":
     unittest.main()
