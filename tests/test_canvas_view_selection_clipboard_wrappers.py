@@ -8,7 +8,7 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtCore import QPointF, QRectF, Qt
+    from PyQt6.QtCore import QPointF, QRectF
     from PyQt6.QtGui import QPolygonF
     from PyQt6.QtWidgets import QApplication
 except ModuleNotFoundError:
