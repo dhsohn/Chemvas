@@ -53,7 +53,14 @@ class HandleOverlayService:
             mid = self.canvas._curved_midpoint(start, item.data(2).get("control"), end)
         else:
             mid = item.boundingRect().center()
-        self.canvas._active_handles = [self.create_handle(mid, "curved_control", item)]
+        handles = [self.create_handle(mid, "curved_control", item)]
+        if isinstance(start, QPointF) and isinstance(end, QPointF):
+            handles = [
+                self.create_handle(start, "curved_start", item),
+                handles[0],
+                self.create_handle(end, "curved_end", item),
+            ]
+        self.canvas._active_handles = handles
         self.canvas._handle_target = item
 
     def create_handle(self, pos: QPointF, handle_type: str, target):

@@ -627,10 +627,12 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         CanvasView._update_orbital_scale(view, item, QPointF(3.0, 4.0))
         CanvasView._update_orbital_rotate(view, item, QPointF(5.0, 6.0))
         CanvasView._update_curved_control(view, item, QPointF(7.0, 8.0))
+        CanvasView._update_curved_endpoint(view, item, QPointF(9.0, 10.0), "start")
 
         handle_mutation_service.update_orbital_scale.assert_called_once_with(item, QPointF(3.0, 4.0))
         handle_mutation_service.update_orbital_rotate.assert_called_once_with(item, QPointF(5.0, 6.0))
         handle_mutation_service.update_curved_control.assert_called_once_with(item, QPointF(7.0, 8.0))
+        handle_mutation_service.update_curved_endpoint.assert_called_once_with(item, QPointF(9.0, 10.0), "start")
 
     def test_curved_arrow_path_wrapper_delegates(self) -> None:
         curved_arrow_path_service = mock.Mock()

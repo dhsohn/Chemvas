@@ -139,8 +139,11 @@ class HandleOverlayServiceTest(unittest.TestCase):
         canvas._set_selection_highlight.assert_called_once_with([item])
         canvas._default_curved_control.assert_called_once_with(QPointF(0.0, 0.0), QPointF(10.0, 0.0))
         canvas._update_curved_control.assert_called_once_with(item, QPointF(5.0, 4.0))
-        self.assertEqual(len(canvas._active_handles), 1)
-        self.assertEqual((canvas._active_handles[0].rect().center().x(), canvas._active_handles[0].rect().center().y()), (5.0, 4.0))
+        self.assertEqual(len(canvas._active_handles), 3)
+        self.assertEqual(
+            [(handle.data(1), handle.rect().center().x(), handle.rect().center().y()) for handle in canvas._active_handles],
+            [("curved_start", 0.0, 0.0), ("curved_control", 5.0, 4.0), ("curved_end", 10.0, 0.0)],
+        )
 
         fallback = _FakeGraphicsItem(rect=QRectF(0.0, 0.0, 20.0, 20.0), data={2: {}})
         canvas._set_selection_highlight.reset_mock()
@@ -148,6 +151,7 @@ class HandleOverlayServiceTest(unittest.TestCase):
         service.show_curved_handles(fallback)
         canvas._set_selection_highlight.assert_called_once_with([fallback])
         canvas._update_curved_control.assert_not_called()
+        self.assertEqual(len(canvas._active_handles), 1)
         self.assertEqual((canvas._active_handles[0].rect().center().x(), canvas._active_handles[0].rect().center().y()), (10.0, 10.0))
 
         controlled = _FakeGraphicsItem(
@@ -158,6 +162,10 @@ class HandleOverlayServiceTest(unittest.TestCase):
         service.show_curved_handles(controlled)
         canvas._default_curved_control.assert_not_called()
         canvas._update_curved_control.assert_called_once_with(controlled, QPointF(5.0, 4.0))
+        self.assertEqual(
+            [handle.data(1) for handle in canvas._active_handles],
+            ["curved_start", "curved_control", "curved_end"],
+        )
 
     def test_handle_overlay_service_for_reuses_matching_or_duck_typed_service(self) -> None:
         scene = QGraphicsScene()
