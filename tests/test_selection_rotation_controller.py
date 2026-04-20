@@ -190,6 +190,23 @@ class SelectionRotationControllerTest(unittest.TestCase):
         self.assertEqual(canvas._rotation_coord_atom_ids, set())
         self.assertEqual(canvas.axis_hint_calls, [])
 
+    def test_begin_selection_3d_rotation_skips_non_mark_and_invalid_mark_items(self) -> None:
+        canvas = _FakeCanvas()
+        canvas._scene = _FakeScene(
+            [
+                _FakeSceneItem("atom"),
+                _FakeSceneItem("mark", {"atom_id": "bad"}),
+                _FakeSceneItem("mark", {"atom_id": 2}),
+            ]
+        )
+        controller = SelectionRotationController(canvas)
+
+        rotating = controller.begin_selection_3d_rotation()
+
+        self.assertTrue(rotating)
+        self.assertEqual(canvas.axis_hint_calls, [])
+        self.assertEqual(canvas.rotation_atom_ids, {2})
+
     def test_begin_selection_3d_rotation_uses_axis_hint_bond_path(self) -> None:
         canvas = _FakeCanvas()
         canvas.selected_atom_ids = {2}
@@ -334,6 +351,31 @@ class SelectionRotationControllerTest(unittest.TestCase):
         self.assertEqual(canvas._rotation_selection_ids, (set(), {1, 99}))
         self.assertEqual(canvas._rotation_start_coords_3d, {})
 
+    def test_begin_selection_3d_rotation_returns_false_when_rotation_atoms_have_no_coords(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.selected_atom_ids = {0}
+        canvas.atom_coords_3d = {}
+        controller = SelectionRotationController(canvas)
+
+        rotating = controller.begin_selection_3d_rotation()
+
+        self.assertFalse(rotating)
+        self.assertEqual(canvas._rotation_selection_ids, ({0}, set()))
+        self.assertEqual(canvas._rotation_start_coords_3d, {})
+        self.assertEqual(canvas._rotation_coord_atom_ids, set())
+
+    def test_begin_selection_3d_rotation_skips_missing_atoms_during_rigid_unprojection(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.selected_atom_ids = {1, 2}
+        del canvas.model.atoms[1]
+        controller = SelectionRotationController(canvas)
+
+        rotating = controller.begin_selection_3d_rotation()
+
+        self.assertTrue(rotating)
+        self.assertNotIn(1, canvas._rotation_base_coords)
+        self.assertIn(2, canvas._rotation_base_coords)
+
     def test_update_selection_3d_rotation_noops_without_atoms_and_updates_rigid_rotation(self) -> None:
         canvas = _FakeCanvas()
         controller = SelectionRotationController(canvas)
@@ -418,30 +460,81 @@ class SelectionRotationControllerTest(unittest.TestCase):
         controller.update_selection_3d_rotation(0.0, 0.0)
         self.assertEqual(canvas.apply_projected_calls, [])
 
+        canvas.rotation_atom_ids = {0, 9}
+        canvas._rotation_base_coords = {0: (1.0, 0.0, 0.0)}
+        controller.update_selection_3d_rotation(10.0, 0.0)
+        self.assertEqual(len(canvas.apply_projected_calls), 1)
+        atom_ids, rotated = canvas.apply_projected_calls[0]
+        self.assertEqual(atom_ids, {0, 9})
+        self.assertEqual(set(rotated), {0})
+
+        canvas = _FakeCanvas()
+        controller = SelectionRotationController(canvas)
+        canvas.rotation_atom_ids = {0}
+        canvas._rotation_mode = "rigid"
         canvas.rotation_center_3d = None
+        canvas._rotation_base_coords = {0: (1.0, 0.0, 0.0)}
         controller.update_selection_3d_rotation(10.0, 0.0)
         self.assertEqual(canvas.apply_projected_calls, [])
 
-        canvas._rotation_mode = None
-        controller.update_selection_3d_rotation(10.0, 5.0)
-        self.assertEqual(canvas.apply_projected_calls, [])
-
+    def test_update_selection_3d_rotation_handles_bond_mode_zero_delta_and_missing_axis_data(self) -> None:
+        canvas = _FakeCanvas()
+        controller = SelectionRotationController(canvas)
+        canvas.rotation_atom_ids = {2}
         canvas._rotation_mode = "bond"
         canvas._rotation_axis_atoms = (0, 1)
+
         controller.update_selection_3d_rotation(0.0, 0.0)
         self.assertEqual(canvas.apply_projected_calls, [])
 
+        canvas._rotation_axis_atoms = None
+        controller.update_selection_3d_rotation(10.0, 0.0)
+        self.assertEqual(canvas.apply_projected_calls, [])
+
+        canvas._rotation_axis_atoms = (0, 1)
         canvas._rotation_base_coords = {0: (0.0, 0.0, 0.0)}
-        controller.update_selection_3d_rotation(10.0, 5.0)
+        controller.update_selection_3d_rotation(10.0, 0.0)
         self.assertEqual(canvas.apply_projected_calls, [])
 
         canvas._rotation_base_coords = {
             0: (0.0, 0.0, 0.0),
             1: (10.0, 0.0, 0.0),
         }
-        canvas.rotation_atom_ids = {0, 2}
-        controller.update_selection_3d_rotation(10.0, 5.0)
-        self.assertEqual(canvas.apply_projected_calls[-1], ({0, 2}, {0: (0.1, -0.1, 0.5)}))
+        canvas.rotation_atom_ids = {2, 9}
+        controller.update_selection_3d_rotation(10.0, 0.0)
+        self.assertEqual(len(canvas.apply_projected_calls), 1)
+        atom_ids, rotated = canvas.apply_projected_calls[0]
+        self.assertEqual(atom_ids, {2, 9})
+        self.assertEqual(rotated, {})
+
+        zero_canvas = _FakeCanvas()
+        zero_controller = SelectionRotationController(zero_canvas)
+        zero_canvas.rotation_atom_ids = {2}
+        zero_canvas._rotation_mode = "bond"
+        zero_canvas._rotation_axis_atoms = (0, 1)
+        zero_controller.update_selection_3d_rotation(0.0, 0.0)
+        self.assertEqual(zero_canvas.apply_projected_calls, [])
+
+        missing_axis_canvas = _FakeCanvas()
+        missing_axis_controller = SelectionRotationController(missing_axis_canvas)
+        missing_axis_canvas.rotation_atom_ids = {2}
+        missing_axis_canvas._rotation_mode = "bond"
+        missing_axis_canvas._rotation_axis_atoms = (0, 1)
+        missing_axis_canvas._rotation_base_coords = {0: (0.0, 0.0, 0.0)}
+        missing_axis_controller.update_selection_3d_rotation(10.0, 5.0)
+        self.assertEqual(missing_axis_canvas.apply_projected_calls, [])
+
+        partial_coords_canvas = _FakeCanvas()
+        partial_coords_controller = SelectionRotationController(partial_coords_canvas)
+        partial_coords_canvas.rotation_atom_ids = {0, 2}
+        partial_coords_canvas._rotation_mode = "bond"
+        partial_coords_canvas._rotation_axis_atoms = (0, 1)
+        partial_coords_canvas._rotation_base_coords = {
+            0: (0.0, 0.0, 0.0),
+            1: (10.0, 0.0, 0.0),
+        }
+        partial_coords_controller.update_selection_3d_rotation(10.0, 5.0)
+        self.assertEqual(partial_coords_canvas.apply_projected_calls[-1], ({0, 2}, {0: (0.05, -0.05, 0.5)}))
 
     def test_end_selection_3d_rotation_pushes_command_and_restores_selection(self) -> None:
         canvas = _FakeCanvas()

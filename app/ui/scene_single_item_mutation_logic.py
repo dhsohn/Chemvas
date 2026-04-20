@@ -33,8 +33,6 @@ def delete_atom_with_history(
     commands: list[HistoryCommand] = []
     for bond_id in sorted(bonds_to_remove, reverse=True):
         bond = bonds[bond_id]
-        if bond is None:
-            continue
         bond_state = bond_state_getter(bond)
         remove_bond_by_id(bond_id)
         redraw_connected_bonds(bond.a)

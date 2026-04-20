@@ -78,6 +78,15 @@ class ToolOverlayLogicTest(unittest.TestCase):
         self.assertIsNone(result)
         self.assertEqual(canvas.clear_handles_calls, 1)
 
+    def test_clear_temporary_tool_overlay_ignores_preview_item_from_other_scene(self) -> None:
+        canvas = _Canvas()
+        preview_item = _PreviewItem(_Scene())
+
+        result = clear_temporary_tool_overlay(canvas, preview_item=preview_item)
+
+        self.assertIsNone(result)
+        self.assertEqual(canvas.scene_obj.removed_items, [])
+
     def test_clear_temporary_tool_overlay_ignores_runtime_error_from_preview_item(self) -> None:
         canvas = _Canvas()
 

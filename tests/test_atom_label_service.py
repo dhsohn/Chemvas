@@ -312,6 +312,19 @@ class AtomLabelServiceTest(unittest.TestCase):
         self.assertNotIn(1, canvas.atom_dots)
         self.assertIn(dot_item, canvas.scene_obj.removed_items)
 
+    def test_ensure_carbon_dot_is_noop_for_existing_dot_and_missing_atom(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(atoms={1: Atom("C", 4.0, 6.0)})
+        existing_dot = _FakeGraphicsItem()
+        canvas.atom_dots[1] = existing_dot
+        service = AtomLabelService(canvas)
+
+        service.ensure_carbon_dot(1)
+        service.ensure_carbon_dot(2)
+
+        self.assertIs(canvas.atom_dots[1], existing_dot)
+        self.assertEqual(canvas.scene_obj.added_items, [])
+
     def test_record_label_change_builds_composite_single_and_noop_commands(self) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
@@ -379,6 +392,35 @@ class AtomLabelServiceTest(unittest.TestCase):
             merge_ids=[7],
             merge_info={"atom_states": {7: {"element": "C"}}},
         )
+        self.assertEqual(canvas.pushed_commands, [])
+
+    def test_record_label_change_skips_none_and_unchanged_bond_states(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={5: Atom("N", 1.0, 2.0, explicit_label=True)},
+            bonds=[
+                None,
+                Bond(5, 6, 2, style="double", color="#112233"),
+            ],
+        )
+        canvas.last_smiles_input = "stable"
+        service = AtomLabelService(canvas)
+
+        service.record_label_change(
+            atom_id=5,
+            before_element="N",
+            before_explicit_label=True,
+            before_smiles_input="stable",
+            merge_ids=[7],
+            merge_info={
+                "bond_before_states": {
+                    0: {"a": 7, "b": 8, "order": 1, "style": "single", "color": "#abcdef"},
+                    1: {"a": 5, "b": 6, "order": 2, "style": "double", "color": "#112233"},
+                },
+                "deleted_bond_ids": [],
+            },
+        )
+
         self.assertEqual(canvas.pushed_commands, [])
 
     def test_add_or_update_atom_label_removes_label_to_carbon_dot_and_records_change(self) -> None:
@@ -450,6 +492,18 @@ class AtomLabelServiceTest(unittest.TestCase):
         self.assertEqual(existing_item.data(0), "atom")
         self.assertEqual(existing_item.data(1), 1)
         self.assertEqual(canvas.last_smiles_input, "preserve")
+        self.assertEqual(canvas.scene_obj.removed_items, [])
+
+    def test_add_or_update_atom_label_adds_carbon_dot_without_existing_label(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(atoms={1: Atom("C", 1.0, 2.0)})
+        service = AtomLabelService(canvas)
+
+        service.add_or_update_atom_label(1, "", record=False)
+
+        self.assertNotIn(1, canvas.atom_items)
+        self.assertIn(1, canvas.atom_dots)
+        self.assertEqual(canvas.redraw_calls, [1])
         self.assertEqual(canvas.scene_obj.removed_items, [])
 
     def test_add_or_update_atom_label_removes_non_carbon_label_without_dot_when_record_disabled(self) -> None:

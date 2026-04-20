@@ -222,9 +222,6 @@ class AtomLabelService:
                 pair_keep[key] = bond_id
                 continue
             keep_bond = self.canvas.model.bonds[keep_id]
-            if keep_bond is None:
-                pair_keep[key] = bond_id
-                continue
             if bond_rank(bond, bond_id) > bond_rank(keep_bond, keep_id):
                 duplicate_ids.add(keep_id)
                 pair_keep[key] = bond_id
@@ -232,16 +229,13 @@ class AtomLabelService:
                 duplicate_ids.add(bond_id)
         for bond_id in sorted(duplicate_ids):
             bond = self.canvas.model.bonds[bond_id]
-            if bond is None:
-                continue
             if bond_id not in merge_info["bond_before_states"]:
                 merge_info["bond_before_states"][bond_id] = self.canvas._bond_state_dict(bond)
             for item in self.canvas.bond_items.get(bond_id, []):
                 self.canvas.scene().removeItem(item)
             self.canvas.bond_items.pop(bond_id, None)
             self.canvas.model.bonds[bond_id] = None
-            if bond_id not in merge_info["deleted_bond_ids"]:
-                merge_info["deleted_bond_ids"].append(bond_id)
+            merge_info["deleted_bond_ids"].append(bond_id)
         for other_id in merge_ids:
             self.canvas.model.atoms.pop(other_id, None)
         self.canvas._rebuild_bond_adjacency()
@@ -321,9 +315,8 @@ class AtomLabelService:
             self.canvas.atom_items[atom_id] = text_item
         else:
             text_item = existing_item
-            if isinstance(text_item, AtomLabelItem):
-                text_item.set_hit_padding(label_hit_padding)
-                text_item.set_hit_radius(label_hit_radius)
+            text_item.set_hit_padding(label_hit_padding)
+            text_item.set_hit_radius(label_hit_radius)
 
         text_item.setFont(self.canvas.renderer.atom_font())
         text_item.setDefaultTextColor(QColor(self.canvas.renderer.style.atom_color))

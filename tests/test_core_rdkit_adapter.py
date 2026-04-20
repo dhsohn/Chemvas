@@ -713,6 +713,25 @@ class RDKitAdapterTest(unittest.TestCase):
         assert model is not None
         self.assertAlmostEqual(model.atoms[2].x, 20.0)
 
+    def test_smiles_to_2d_ignores_zero_length_bonds_without_positive_reference_distance(self) -> None:
+        fake_mol = _FakeMol(
+            atom_symbols=["C", "O"],
+            bonds=[(0, 1, 1.0)],
+            positions={0: (0.0, 0.0, 0.0), 1: (0.0, 0.0, 0.0)},
+        )
+        adapter = RDKitAdapter()
+        adapter._rdkit = (_FakeChem({"CO": fake_mol}), _FakeAllChem())
+
+        model = adapter.smiles_to_2d("CO", scale=20.0)
+
+        self.assertIsNotNone(model)
+        assert model is not None
+        self.assertEqual(len(model.bonds), 1)
+        self.assertAlmostEqual(model.atoms[0].x, 0.0)
+        self.assertAlmostEqual(model.atoms[0].y, -0.0)
+        self.assertAlmostEqual(model.atoms[1].x, 0.0)
+        self.assertAlmostEqual(model.atoms[1].y, -0.0)
+
     def test_smiles_to_2d_preserves_coords_without_reference_distance(self) -> None:
         fake_mol = _FakeMol(
             atom_symbols=["He"],

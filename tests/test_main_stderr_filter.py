@@ -1,4 +1,5 @@
 import os
+import runpy
 import types
 import unittest
 import sys
@@ -116,6 +117,47 @@ class MainStderrFilterTest(unittest.TestCase):
         self.assertTrue(FakeApplication.instances[0].exec_called)
         self.assertTrue(FakeMainWindow.instances[0].shown)
         self.assertEqual([event[0] for event in events], ["enter", "show", "exec", "exit"])
+
+    def test_main_module_executes_main_when_run_as_script(self) -> None:
+        events: list[str] = []
+
+        class FakeApplication:
+            def __init__(self, args) -> None:
+                self.args = args
+                events.append("app")
+
+            def exec(self) -> None:
+                events.append("exec")
+
+        class FakeMainWindow:
+            def show(self) -> None:
+                events.append("show")
+
+        pyqt6_module = types.ModuleType("PyQt6")
+        pyqt6_module.__path__ = []
+        qt_widgets_module = types.ModuleType("PyQt6.QtWidgets")
+        qt_widgets_module.QApplication = FakeApplication
+        pyqt6_module.QtWidgets = qt_widgets_module
+
+        ui_module = types.ModuleType("ui")
+        ui_module.__path__ = []
+        main_window_module = types.ModuleType("ui.main_window")
+        main_window_module.MainWindow = FakeMainWindow
+        ui_module.main_window = main_window_module
+
+        with mock.patch.dict(
+            sys.modules,
+            {
+                "PyQt6": pyqt6_module,
+                "PyQt6.QtWidgets": qt_widgets_module,
+                "ui": ui_module,
+                "ui.main_window": main_window_module,
+            },
+        ):
+            with mock.patch.object(sys, "platform", "linux"):
+                runpy.run_module("main", run_name="__main__")
+
+        self.assertEqual(events, ["app", "show", "exec"])
 
 
 if __name__ == "__main__":

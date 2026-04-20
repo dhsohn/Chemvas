@@ -12,6 +12,7 @@ if str(APP_ROOT) not in sys.path:
 from core.model import MoleculeModel
 from ui.smiles_insert_logic import (
     SmilesPreviewResolvers,
+    build_smiles_preview_geometry,
     build_smiles_preview_snapshot,
     plan_smiles_commit,
     plan_smiles_preview_update,
@@ -30,6 +31,15 @@ def _build_model(*, include_dangling_bond: bool = False) -> MoleculeModel:
     model.bonds[0].color = "#123456"
     if include_dangling_bond:
         model.add_bond(right, 999, 1)
+    return model
+
+
+def _build_single_bond_model_with_sparse_prefix() -> MoleculeModel:
+    model = MoleculeModel()
+    left = model.add_atom("C", -5.0, 0.0)
+    right = model.add_atom("O", 5.0, 0.0)
+    model.add_bond(left, right, 1)
+    model.bonds.insert(0, None)
     return model
 
 
@@ -75,6 +85,16 @@ class SmilesInsertLogicTest(unittest.TestCase):
 
     def test_plan_smiles_commit_rejects_dangling_bond_endpoint(self) -> None:
         self.assertIsNone(plan_smiles_commit(_build_model(include_dangling_bond=True), (0.0, 0.0), (0.0, 0.0)))
+
+    def test_plan_smiles_commit_skips_none_bonds(self) -> None:
+        model = _build_single_bond_model_with_sparse_prefix()
+
+        plan = plan_smiles_commit(model, (0.0, 0.0), (3.0, 4.0))
+
+        assert plan is not None
+        self.assertEqual(len(plan.bonds), 1)
+        self.assertEqual(plan.bonds[0].source_bond_id, 1)
+        self.assertEqual(plan.bonds[0].order, 1)
 
     def test_plan_smiles_preview_returns_clear_without_model_center_or_radius(self) -> None:
         resolvers = SmilesPreviewResolvers(parallel_bond_segments=Mock(return_value=[]))
@@ -147,6 +167,17 @@ class SmilesInsertLogicTest(unittest.TestCase):
         plan = plan_smiles_preview_update(model, (0.0, 0.0), (0.0, 0.0), 2.0, existing, resolvers)
 
         self.assertEqual(plan.action, "clear")
+
+    def test_build_smiles_preview_geometry_skips_none_bonds_and_uses_single_segment_for_order_one(self) -> None:
+        model = _build_single_bond_model_with_sparse_prefix()
+        resolver = Mock(return_value=[(0.0, 1.0, 2.0, 3.0)])
+        resolvers = SmilesPreviewResolvers(parallel_bond_segments=resolver)
+
+        geometry = build_smiles_preview_geometry(model, (0.0, 0.0), (2.0, -1.0), 1.5, resolvers)
+
+        assert geometry is not None
+        self.assertEqual(geometry.bond_segments, {1: ((-3.0, -1.0, 7.0, -1.0),)})
+        resolver.assert_not_called()
 
 
 if __name__ == "__main__":

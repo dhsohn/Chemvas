@@ -188,6 +188,15 @@ class SceneItemAccessTest(unittest.TestCase):
             ],
         )
 
+    def test_attach_scene_item_falls_back_to_restore_when_attach_is_missing(self) -> None:
+        canvas = _Canvas()
+        item = object()
+        canvas.attach_scene_item = None
+
+        attach_scene_item(canvas, item)
+
+        self.assertEqual(canvas.calls, [("canvas_restore", item)])
+
 
 if __name__ == "__main__":
     unittest.main()

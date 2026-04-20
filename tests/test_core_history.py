@@ -18,6 +18,7 @@ from core.history import (
     DeleteAtomsCommand,
     DeleteBondCommand,
     DeleteSceneItemsCommand,
+    HistoryCommand,
     MoveAtomsCommand,
     MoveItemsCommand,
     SetAtomPositionsCommand,
@@ -174,7 +175,23 @@ class _FakeSceneItemController:
         self.canvas.calls.append(("controller_restore_mark_from_state", dict(mark_state)))
 
 
+class _MinimalCanvas:
+    def __init__(self) -> None:
+        self.calls: list[tuple] = []
+
+    def set_atom_positions(self, positions, update_selection=True) -> None:
+        self.calls.append(("set_atom_positions", dict(positions), update_selection))
+
+
 class HistoryCommandTest(unittest.TestCase):
+    def test_history_command_base_methods_raise_not_implemented(self) -> None:
+        command = HistoryCommand()
+
+        with self.assertRaises(NotImplementedError):
+            command.undo(None)
+        with self.assertRaises(NotImplementedError):
+            command.redo(None)
+
     def test_composite_command_undo_redo_order(self) -> None:
         log: list[str] = []
         command = CompositeCommand(
@@ -202,7 +219,7 @@ class HistoryCommandTest(unittest.TestCase):
         scene_item = _FakeItem(canvas.scene())
         off_scene_item = _FakeItem(object())
         dead_item = _FakeItem(canvas.scene(), raises=True)
-        move_items = MoveItemsCommand([scene_item, off_scene_item, dead_item], 2.0, 5.0)
+        move_items = MoveItemsCommand([scene_item, None, off_scene_item, dead_item], 2.0, 5.0)
 
         move_atoms.undo(canvas)
         move_atoms.redo(canvas)
@@ -251,6 +268,30 @@ class HistoryCommandTest(unittest.TestCase):
         command.undo(canvas)
         self.assertIsNone(canvas._projection_center_3d)
         self.assertIsNone(canvas._projection_anchor_2d)
+
+    def test_set_atom_positions_command_skips_missing_projection_attrs_and_typeerror_fallback(self) -> None:
+        canvas = _MinimalCanvas()
+
+        class _CoordsCanvas(_MinimalCanvas):
+            def set_atom_positions(self, positions, update_selection=True, coords_3d=None) -> None:  # type: ignore[override]
+                if coords_3d is not None:
+                    raise TypeError("coords_3d unsupported")
+                super().set_atom_positions(positions, update_selection=update_selection)
+
+        coords_canvas = _CoordsCanvas()
+        command = SetAtomPositionsCommand(
+            {1: (0.0, 0.0)},
+            {1: (2.0, 3.0)},
+            before_coords_3d={1: (0.0, 0.0, 0.0)},
+            after_coords_3d={1: (2.0, 3.0, 4.0)},
+            restore_projection_state=True,
+        )
+
+        command.redo(coords_canvas)
+        command.undo(canvas)
+
+        self.assertEqual(coords_canvas.calls, [("set_atom_positions", {1: (2.0, 3.0)}, True)])
+        self.assertEqual(canvas.calls, [("set_atom_positions", {1: (0.0, 0.0)}, True)])
 
     def test_update_commands_apply_length_color_scene_state_and_smiles(self) -> None:
         canvas = _FakeCanvas()
@@ -350,6 +391,22 @@ class HistoryCommandTest(unittest.TestCase):
         self.assertIn(("create_scene_item_from_state", {"kind": "arrow"}), canvas.calls)
         self.assertIn(("remove_scene_item", delete_item), canvas.calls)
         self.assertIn(("restore_scene_item", delete_item), canvas.calls)
+
+    def test_scene_item_commands_skip_none_items_when_restoring_existing_pool(self) -> None:
+        canvas = _FakeCanvas()
+        add_command = AddSceneItemsCommand(item_states=[], items=[None, "note-item"])
+        delete_command = DeleteSceneItemsCommand(item_states=[], items=[None, "arrow-item"])
+
+        add_command.redo(canvas)
+        delete_command.undo(canvas)
+
+        self.assertEqual(
+            canvas.calls,
+            [
+                ("restore_scene_item", "note-item"),
+                ("restore_scene_item", "arrow-item"),
+            ],
+        )
 
     def test_scene_item_commands_prefer_scene_item_controller_when_available(self) -> None:
         canvas = _FakeCanvas()

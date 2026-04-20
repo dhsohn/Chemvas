@@ -8,7 +8,7 @@ APP_ROOT = ROOT / "app"
 if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
-from core.history import AddAtomsCommand, CompositeCommand, DeleteSceneItemsCommand
+from core.history import AddAtomsCommand, AddBondCommand, CompositeCommand, DeleteSceneItemsCommand
 from core.model import Atom, Bond, MoleculeModel
 from ui.insert_smiles_transaction import SmilesLoadTransactionBuilder
 
@@ -183,6 +183,31 @@ class SmilesLoadTransactionBuilderTest(unittest.TestCase):
         delete_scene_items = [child for child in command.commands if isinstance(child, DeleteSceneItemsCommand)]
         self.assertEqual(len(delete_scene_items), 1)
         self.assertEqual(delete_scene_items[0].item_states, [{"kind": "ring"}])
+
+    def test_build_command_skips_sparse_new_bonds(self) -> None:
+        canvas = _FakeCanvas()
+        builder = SmilesLoadTransactionBuilder(canvas)
+        snapshot = builder.capture()
+        canvas.model = MoleculeModel(
+            atoms={
+                0: Atom("C", 1.0, 2.0),
+                1: Atom("O", 3.0, 4.0),
+            },
+            bonds=[None, Bond(0, 1, 2)],
+        )
+
+        command = builder.build_command(
+            snapshot,
+            after_clear_next_atom_id=0,
+            after_smiles_input="CO",
+        )
+
+        self.assertIsInstance(command, CompositeCommand)
+        assert command is not None
+        add_bond_commands = [child for child in command.commands if isinstance(child, AddBondCommand)]
+        self.assertEqual(len(add_bond_commands), 1)
+        self.assertEqual(add_bond_commands[0].bond_id, 1)
+        self.assertEqual(add_bond_commands[0].bond_state["order"], 2)
 
 
 if __name__ == "__main__":

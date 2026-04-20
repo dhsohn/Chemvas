@@ -244,6 +244,18 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertEqual(controller_removed_items, [ring_item])
         self.assertEqual(canvas.removed_scene_items, [])
 
+    def test_delete_ring_records_command_when_enabled(self) -> None:
+        canvas = _FakeCanvas()
+        ring_item = _make_ring_item()
+        canvas._ring_state_dict = lambda item: {"kind": "ring", "points": [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]}
+        controller = SceneOpsController(canvas)
+
+        command = controller.delete_ring(ring_item, record=True)
+
+        self.assertIsInstance(command, DeleteSceneItemsCommand)
+        self.assertEqual(canvas.removed_scene_items, [ring_item])
+        self.assertEqual(canvas.pushed_commands, [command])
+
     def test_clipboard_selection_payload_rejects_wrong_type_and_version(self) -> None:
         canvas = _FakeCanvas()
         controller = SceneOpsController(canvas)
@@ -474,6 +486,17 @@ class SceneOpsControllerTest(unittest.TestCase):
         controller.flip_selected_items(horizontal=True)
 
         self.assertEqual(canvas.pushed_commands, [])
+
+    def test_flip_selected_items_skips_atom_component_without_center(self) -> None:
+        canvas = _FakeCanvas()
+        missing_atom_item = _make_rect_item("atom", data1=99)
+        canvas.add_item(missing_atom_item, selected=True)
+        controller = SceneOpsController(canvas)
+
+        controller.flip_selected_items(horizontal=True)
+
+        self.assertEqual(canvas.pushed_commands, [])
+        self.assertEqual(canvas.update_selection_outline_calls, 0)
 
 
 class _FakeCanvas:

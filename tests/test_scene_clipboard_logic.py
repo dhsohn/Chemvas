@@ -74,10 +74,20 @@ def _make_ring_item(atom_ids: list[int], *, state: dict | None = None) -> QGraph
 
 
 class _BrokenSceneItem:
-    def __init__(self, kind: str, *, state: dict | None = None, data1=None, scene_value=None, raise_scene: bool = False) -> None:
+    def __init__(
+        self,
+        kind: str,
+        *,
+        state: dict | None = None,
+        data1=None,
+        data2=None,
+        scene_value=None,
+        raise_scene: bool = False,
+    ) -> None:
         self._kind = kind
         self._state = dict(state) if isinstance(state, dict) else state
         self._data1 = data1
+        self._data2 = data2
         self._scene_value = scene_value
         self._raise_scene = raise_scene
 
@@ -87,7 +97,7 @@ class _BrokenSceneItem:
         if role == 1:
             return self._data1
         if role == 2:
-            return None
+            return self._data2
         if role == 9:
             return self._state
         return None
@@ -126,19 +136,27 @@ class SceneClipboardLogicTest(unittest.TestCase):
             state={"kind": "mark", "atom_id": 2, "x": 9.0, "y": 9.0},
             raise_scene=True,
         )
+        off_scene_mark = _BrokenSceneItem(
+            "mark",
+            state={"kind": "mark", "atom_id": 2, "x": 5.0, "y": 6.0},
+            scene_value=object(),
+        )
+        empty_linked_mark = _BrokenSceneItem("mark", state={}, scene_value=scene)
         empty_mark = _BrokenSceneItem("mark", state={}, scene_value=scene)
         scene_note = _BrokenSceneItem("note", state={"kind": "note", "text": "keep", "x": 4.0, "y": 5.0})
         empty_scene_item = _BrokenSceneItem("arrow", state={})
         wrong_scene_ring = _BrokenSceneItem("ring", state={"kind": "ring"}, scene_value=object())
         broken_ring = _BrokenSceneItem("ring", state={"kind": "ring"}, raise_scene=True)
+        invalid_ids_ring = _BrokenSceneItem("ring", state={"kind": "ring"}, data2=[1, "bad"], scene_value=scene)
+        empty_state_ring = _BrokenSceneItem("ring", state={}, data2=[1, 2], scene_value=scene)
 
         payload = build_selection_clipboard_payload(
             selected_items=[duplicate_selected_mark, empty_mark, scene_note, empty_scene_item],
             explicit_atom_ids={1, 3},
             selected_bond_ids={0, 1, 99},
             bonds=[Bond(1, 2, 1, style="single", color="#111111"), None],
-            ring_items=[wrong_scene_ring, broken_ring],
-            marks_by_atom={2: [valid_mark, runtime_mark]},
+            ring_items=[wrong_scene_ring, broken_ring, invalid_ids_ring, empty_state_ring],
+            marks_by_atom={2: [valid_mark, valid_mark, off_scene_mark, runtime_mark, empty_linked_mark]},
             scene=scene,
             atom_state_getter=lambda atom_id: (
                 {}

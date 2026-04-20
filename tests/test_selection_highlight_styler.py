@@ -19,7 +19,7 @@ if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
 if QApplication is not None:
-    from ui.selection_highlight_styler import SelectionHighlightStyler
+    from ui.selection_highlight_styler import SelectionHighlightStyler, selection_highlight_styler_for
 
 
 def _path_item(color: str = "#111111", width: float = 1.5) -> QGraphicsPathItem:
@@ -98,6 +98,38 @@ class SelectionHighlightStylerTest(unittest.TestCase):
         styler.apply_selection_style(item, False)
 
         self.assertEqual(canvas._selected_items, [])
+
+    def test_apply_selection_style_ignores_non_pen_restore_data(self) -> None:
+        canvas = self._make_canvas()
+        styler = SelectionHighlightStyler(canvas)
+        item = _path_item("#555555", 1.1)
+        item.setData(6, "not-a-pen")
+
+        styler.apply_selection_style(item, False)
+
+        self.assertEqual(item.pen().color().name(), "#555555")
+        self.assertAlmostEqual(item.pen().widthF(), 1.1)
+
+    def test_selection_highlight_styler_for_reuses_matching_or_duck_typed_service(self) -> None:
+        canvas = self._make_canvas()
+        matching = SelectionHighlightStyler(canvas)
+        canvas._selection_highlight_styler = matching
+
+        self.assertIs(selection_highlight_styler_for(canvas), matching)
+
+        duck = SimpleNamespace(
+            canvas=object(),
+            set_selection_highlight=lambda items: None,
+            clear_selection_highlight=lambda: None,
+            apply_selection_style=lambda item, selected: None,
+        )
+        canvas._selection_highlight_styler = duck
+        self.assertIs(selection_highlight_styler_for(canvas), duck)
+
+        canvas._selection_highlight_styler = SimpleNamespace(set_selection_highlight=lambda items: None)
+        fallback = selection_highlight_styler_for(canvas)
+        self.assertIsInstance(fallback, SelectionHighlightStyler)
+        self.assertIs(fallback.canvas, canvas)
 
 
 if __name__ == "__main__":
