@@ -174,6 +174,7 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
         view._clamp_curved_midpoint = lambda start, end, mid: CanvasView._clamp_curved_midpoint(view, start, end, mid)
         view._control_from_midpoint = lambda start, end, mid: CanvasView._control_from_midpoint(view, start, end, mid)
         view._update_curved_control = lambda item, pos: CanvasView._update_curved_control(view, item, pos)
+        view._update_curved_endpoint = lambda item, pos, endpoint: CanvasView._update_curved_endpoint(view, item, pos, endpoint)
 
         CanvasView.show_orbital_handles(view, orbital)
         first_handles = list(view._active_handles)
@@ -181,8 +182,7 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
         CanvasView.show_curved_handles(view, curved)
 
         self.assertTrue(all(handle.scene() is None for handle in first_handles))
-        self.assertEqual(len(view._active_handles), 1)
-        self.assertEqual(view._active_handles[0].data(1), "curved_control")
+        self.assertEqual([handle.data(1) for handle in view._active_handles], ["curved_start", "curved_control", "curved_end"])
         self.assertIs(view._handle_target, curved)
         self.assertEqual(orbital.pen().color().name(), "#111111")
         self.assertEqual(curved.pen().color().name(), "#1f5eff")
@@ -193,6 +193,7 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
             _update_orbital_scale=mock.Mock(),
             _update_orbital_rotate=mock.Mock(),
             _update_curved_control=mock.Mock(),
+            _update_curved_endpoint=mock.Mock(),
             show_orbital_handles=mock.Mock(),
             show_curved_handles=mock.Mock(),
         )
@@ -206,6 +207,12 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
         curved_handle = QGraphicsEllipseItem(0.0, 0.0, 4.0, 4.0)
         curved_handle.setData(1, "curved_control")
         curved_handle.setData(2, target)
+        curved_start_handle = QGraphicsEllipseItem(0.0, 0.0, 4.0, 4.0)
+        curved_start_handle.setData(1, "curved_start")
+        curved_start_handle.setData(2, target)
+        curved_end_handle = QGraphicsEllipseItem(0.0, 0.0, 4.0, 4.0)
+        curved_end_handle.setData(1, "curved_end")
+        curved_end_handle.setData(2, target)
         orphan_handle = QGraphicsEllipseItem(0.0, 0.0, 4.0, 4.0)
         orphan_handle.setData(1, "orbital_scale")
         orphan_handle.setData(2, None)
@@ -221,6 +228,13 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
         CanvasView.update_handle_drag(view, curved_handle, QPointF(3.0, 4.0))
         view._update_curved_control.assert_called_once_with(target, QPointF(3.0, 4.0))
         view.show_curved_handles.assert_called_once_with(target)
+
+        CanvasView.update_handle_drag(view, curved_start_handle, QPointF(-1.0, 2.0))
+        CanvasView.update_handle_drag(view, curved_end_handle, QPointF(12.0, -3.0))
+        view._update_curved_endpoint.assert_has_calls(
+            [mock.call(target, QPointF(-1.0, 2.0), "start"), mock.call(target, QPointF(12.0, -3.0), "end")]
+        )
+        self.assertEqual(view.show_curved_handles.call_count, 3)
 
         CanvasView.update_handle_drag(view, orphan_handle, QPointF(1.0, 1.0))
         self.assertEqual(view._update_orbital_scale.call_count, 1)

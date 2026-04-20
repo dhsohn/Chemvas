@@ -2202,6 +2202,9 @@ class CanvasView(QGraphicsView):
     def _update_curved_control(self, item, pos: QPointF) -> None:
         _handle_controller_for(self).update_curved_control(item, pos)
 
+    def _update_curved_endpoint(self, item, pos: QPointF, endpoint: str) -> None:
+        _handle_controller_for(self).update_curved_endpoint(item, pos, endpoint)
+
     def _default_curved_control(self, start: QPointF, end: QPointF) -> QPointF:
         return _handle_controller_for(self).default_curved_control(start, end)
 

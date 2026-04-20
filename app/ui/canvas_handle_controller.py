@@ -43,6 +43,12 @@ class CanvasHandleController:
         elif handle_type == "curved_control":
             self.canvas._update_curved_control(target, scene_pos)
             self.canvas.show_curved_handles(target)
+        elif handle_type == "curved_start":
+            self.canvas._update_curved_endpoint(target, scene_pos, "start")
+            self.canvas.show_curved_handles(target)
+        elif handle_type == "curved_end":
+            self.canvas._update_curved_endpoint(target, scene_pos, "end")
+            self.canvas.show_curved_handles(target)
 
     def update_orbital_scale(self, item, pos: QPointF) -> None:
         handle_mutation_service_for(self.canvas).update_orbital_scale(item, pos)
@@ -52,6 +58,9 @@ class CanvasHandleController:
 
     def update_curved_control(self, item, pos: QPointF) -> None:
         handle_mutation_service_for(self.canvas).update_curved_control(item, pos)
+
+    def update_curved_endpoint(self, item, pos: QPointF, endpoint: str) -> None:
+        handle_mutation_service_for(self.canvas).update_curved_endpoint(item, pos, endpoint)
 
     def default_curved_control(self, start: QPointF, end: QPointF) -> QPointF:
         return default_curved_control_helper(start, end)

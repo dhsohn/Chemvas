@@ -7,11 +7,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
     from PyQt6.QtCore import QPointF
+    from PyQt6.QtCore import Qt
     from PyQt6.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsScene
 except ModuleNotFoundError:
     QApplication = None
     QGraphicsEllipseItem = None
     QGraphicsScene = None
+    Qt = None
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -55,6 +57,9 @@ class HandleInteractionLogicTest(unittest.TestCase):
         self.assertAlmostEqual(handle.rect().center().x(), 12.0)
         self.assertAlmostEqual(handle.rect().center().y(), -4.0)
         self.assertEqual(handle.zValue(), 30)
+        self.assertEqual(handle.brush().style(), Qt.BrushStyle.NoBrush)
+        self.assertEqual(handle.pen().color().name(), "#d32f2f")
+        self.assertEqual(handle.pen().style(), Qt.PenStyle.DashLine)
 
     def test_clear_handle_items_removes_scene_items(self) -> None:
         scene = QGraphicsScene()

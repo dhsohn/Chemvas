@@ -3,8 +3,8 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 
-from PyQt6.QtCore import QPointF
-from PyQt6.QtGui import QColor, QPen
+from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtGui import QBrush, QColor, QPen
 from PyQt6.QtWidgets import QGraphicsEllipseItem, QGraphicsItem, QGraphicsScene
 
 
@@ -29,8 +29,11 @@ def create_handle_item(
     radius: float = 5.0,
 ) -> QGraphicsEllipseItem:
     handle = QGraphicsEllipseItem(pos.x() - radius, pos.y() - radius, radius * 2.0, radius * 2.0)
-    handle.setBrush(QColor("#ffffff"))
-    handle.setPen(QPen(QColor("#333333")))
+    handle.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+    pen = QPen(QColor("#d32f2f"))
+    pen.setStyle(Qt.PenStyle.DashLine)
+    pen.setWidthF(1.2)
+    handle.setPen(pen)
     handle.setData(0, "handle")
     handle.setData(1, handle_type)
     handle.setData(2, target)

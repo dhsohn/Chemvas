@@ -54,6 +54,29 @@ class HandleMutationService:
         item.setData(2, data)
         self.canvas._update_selection_outline()
 
+    def update_curved_endpoint(self, item, pos: QPointF, endpoint: str) -> None:
+        data = item.data(2) or {}
+        start = data.get("start")
+        end = data.get("end")
+        control = data.get("control")
+        double = data.get("double", False)
+        if not isinstance(start, QPointF) or not isinstance(end, QPointF):
+            return
+        if endpoint == "start":
+            start = QPointF(pos)
+        elif endpoint == "end":
+            end = QPointF(pos)
+        else:
+            return
+        if not isinstance(control, QPointF):
+            control = self.canvas._default_curved_control(start, end)
+        curved_arrow_path_service_for(self.canvas).set_curved_arrow_path(item, start, end, control, double)
+        data["start"] = start
+        data["end"] = end
+        data["control"] = control
+        item.setData(2, data)
+        self.canvas._update_selection_outline()
+
 
 def handle_mutation_service_for(canvas) -> HandleMutationService:
     service = getattr(canvas, "_handle_mutation_service", None)
@@ -61,7 +84,7 @@ def handle_mutation_service_for(canvas) -> HandleMutationService:
         return service
     if service is not None and all(
         hasattr(service, name)
-        for name in ("update_orbital_scale", "update_orbital_rotate", "update_curved_control")
+        for name in ("update_orbital_scale", "update_orbital_rotate", "update_curved_control", "update_curved_endpoint")
     ):
         return service
     return HandleMutationService(canvas)

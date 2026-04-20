@@ -23,6 +23,10 @@ class CurvedArrowPathService:
         control: QPointF,
         double: bool,
     ) -> None:
+        # Curved-arrow geometry is tracked in scene coordinates.
+        # Reset per-item translation before rebuilding the local path so
+        # the rendered arrow stays aligned with endpoint/control handles.
+        item.setPos(0.0, 0.0)
         path = QPainterPath()
         path.moveTo(start)
         path.quadTo(control, end)

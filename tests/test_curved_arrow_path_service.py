@@ -32,6 +32,7 @@ class CurvedArrowPathServiceTest(unittest.TestCase):
 
     def test_set_curved_arrow_path_builds_path_and_arrow_heads(self) -> None:
         path_item = QGraphicsPathItem()
+        path_item.setPos(18.0, -7.0)
         canvas = SimpleNamespace(_add_arrow_head=mock.Mock())
 
         CurvedArrowPathService(canvas).set_curved_arrow_path(
@@ -44,6 +45,7 @@ class CurvedArrowPathServiceTest(unittest.TestCase):
 
         self.assertFalse(path_item.path().isEmpty())
         self.assertEqual(canvas._add_arrow_head.call_count, 2)
+        self.assertEqual(path_item.pos(), QPointF())
 
 
 if __name__ == "__main__":

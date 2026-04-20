@@ -68,6 +68,25 @@ class GuiHandleInteractionTest(unittest.TestCase):
         self.assertEqual(self.window.canvas._active_handles, [])
         self.assertIsNone(self.window.canvas._handle_target)
 
+    def test_show_curved_handles_and_drag_endpoint_updates_arrow_geometry(self) -> None:
+        self.window.canvas.set_bond_length(20.0)
+        curved = self.window.canvas.add_arrow(QPointF(0.0, 0.0), QPointF(30.0, 0.0), "curved_single")
+        self.window.canvas.move_item(curved, 40.0, -15.0)
+
+        self.window.canvas.show_curved_handles(curved)
+
+        self.assertEqual(len(self.window.canvas._active_handles), 3)
+        start_handle = next(handle for handle in self.window.canvas._active_handles if handle.data(1) == "curved_start")
+
+        self.window.canvas.update_handle_drag(start_handle, QPointF(30.0, -10.0))
+
+        data = curved.data(2)
+        self.assertEqual(data["start"], QPointF(30.0, -10.0))
+        self.assertEqual(curved.pos(), QPointF())
+        self.assertEqual(start_handle.data(2), curved)
+        self.assertEqual(len(self.window.canvas._active_handles), 3)
+        self.assertIs(self.window.canvas._handle_target, curved)
+
 
 if __name__ == "__main__":
     unittest.main()

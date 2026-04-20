@@ -96,6 +96,8 @@ class _FakeSelectCanvas:
         self.handle_states = {}
         self.curved_handles_shown = []
         self.clear_handles_calls = 0
+        self._handle_target = None
+        self._active_handles = []
         self.preferred_item = None
         self.selection_hit = False
         self.suspend_calls = []
@@ -473,8 +475,35 @@ class ToolsUnitTest(unittest.TestCase):
         curved = _FakeItem("curved_double")
         canvas.item = curved
         tool._active_handle = None
+        canvas.scene_obj.selected_items = []
         self.assertFalse(tool.on_mouse_press(_FakeEvent(QPointF(4.0, 5.0))))
+        self.assertEqual(canvas.curved_handles_shown, [])
+
+        canvas.scene_obj.selected_items = [curved]
+        canvas.snapshot = SimpleNamespace(selected_atom_ids=set(), selection_items=[curved])
+        second_click = _FakeEvent(QPointF(4.0, 5.0))
+        self.assertTrue(tool.on_mouse_press(second_click))
+        self.assertTrue(tool.on_mouse_release(second_click))
         self.assertEqual(canvas.curved_handles_shown, [curved])
+        self.assertIsNone(tool._pending_curved_handle_item)
+
+        canvas.item = None
+        canvas.selection_hit = True
+        overlay_click = _FakeEvent(QPointF(4.0, 5.0))
+        self.assertTrue(tool.on_mouse_press(overlay_click))
+        self.assertTrue(tool.on_mouse_release(overlay_click))
+        self.assertEqual(canvas.curved_handles_shown, [curved, curved])
+        canvas.selection_hit = False
+
+        canvas._handle_target = curved
+        canvas._active_handles = [object()]
+        canvas.item = None
+        canvas.selection_hit = True
+        third_click = _FakeEvent(QPointF(4.0, 5.0))
+        self.assertTrue(tool.on_mouse_press(third_click))
+        self.assertTrue(tool.on_mouse_release(third_click))
+        self.assertEqual(canvas.clear_handles_calls, 2)
+        canvas.selection_hit = False
 
         preferred = _FakeItem("atom", 4)
         atom_item = _FakeItem("atom", 4)
@@ -550,13 +579,17 @@ class ToolsUnitTest(unittest.TestCase):
         tool._start_pos = QPointF(1.0, 1.0)
         tool._drag_selection = True
         tool._last_drag_time = 100.0
+        tool._pending_curved_handle_item = object()
+        tool._pending_curved_handle_action = "show"
         with mock.patch.object(tools_module.time, "monotonic", return_value=100.0 + tool._drag_interval / 2.0):
             self.assertTrue(tool.on_mouse_move(_FakeEvent(QPointF(3.0, 4.0))))
         self.assertEqual(canvas.shift_calls, [])
+        self.assertIsNotNone(tool._pending_curved_handle_item)
 
         with mock.patch.object(tools_module.time, "monotonic", return_value=100.0 + tool._drag_interval * 2.0):
             self.assertTrue(tool.on_mouse_move(_FakeEvent(QPointF(4.0, 5.0))))
         self.assertTrue(canvas.shift_calls)
+        self.assertIsNone(tool._pending_curved_handle_item)
 
     def test_rotate_tool_activate_press_move_and_release(self) -> None:
         canvas = SimpleNamespace(

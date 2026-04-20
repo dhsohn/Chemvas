@@ -81,6 +81,7 @@ class CanvasHandleControllerTest(unittest.TestCase):
             _update_orbital_scale=mock.Mock(),
             _update_orbital_rotate=mock.Mock(),
             _update_curved_control=mock.Mock(),
+            _update_curved_endpoint=mock.Mock(),
             show_orbital_handles=mock.Mock(),
             show_curved_handles=mock.Mock(),
             _curved_snap=True,
@@ -93,29 +94,38 @@ class CanvasHandleControllerTest(unittest.TestCase):
         controller.update_handle_drag(_Handle("orbital_scale", "orbital"), scene_pos)
         controller.update_handle_drag(_Handle("orbital_rotate", "orbital"), scene_pos)
         controller.update_handle_drag(_Handle("curved_control", "curve"), scene_pos)
+        controller.update_handle_drag(_Handle("curved_start", "curve"), scene_pos)
+        controller.update_handle_drag(_Handle("curved_end", "curve"), scene_pos)
         controller.update_handle_drag(_Handle("unknown", "mystery"), scene_pos)
         controller.update_handle_drag(_Handle("orbital_scale", None), scene_pos)
 
         canvas._update_orbital_scale.assert_called_once_with("orbital", scene_pos)
         canvas._update_orbital_rotate.assert_called_once_with("orbital", scene_pos)
         canvas._update_curved_control.assert_called_once_with("curve", scene_pos)
+        canvas._update_curved_endpoint.assert_has_calls(
+            [mock.call("curve", scene_pos, "start"), mock.call("curve", scene_pos, "end")]
+        )
         self.assertEqual(canvas.show_orbital_handles.call_count, 2)
         canvas.show_orbital_handles.assert_has_calls([mock.call("orbital"), mock.call("orbital")])
-        canvas.show_curved_handles.assert_called_once_with("curve")
+        self.assertEqual(canvas.show_curved_handles.call_count, 3)
+        canvas.show_curved_handles.assert_has_calls([mock.call("curve"), mock.call("curve"), mock.call("curve")])
 
         mutation = SimpleNamespace(
             update_orbital_scale=mock.Mock(),
             update_orbital_rotate=mock.Mock(),
             update_curved_control=mock.Mock(),
+            update_curved_endpoint=mock.Mock(),
         )
         with mock.patch("ui.canvas_handle_controller.handle_mutation_service_for", return_value=mutation) as mutation_for:
             controller.update_orbital_scale("item", QPointF(1.0, 1.0))
             controller.update_orbital_rotate("item", QPointF(2.0, 2.0))
             controller.update_curved_control("item", QPointF(3.0, 3.0))
-        self.assertEqual(mutation_for.call_count, 3)
+            controller.update_curved_endpoint("item", QPointF(4.0, 4.0), "start")
+        self.assertEqual(mutation_for.call_count, 4)
         mutation.update_orbital_scale.assert_called_once_with("item", QPointF(1.0, 1.0))
         mutation.update_orbital_rotate.assert_called_once_with("item", QPointF(2.0, 2.0))
         mutation.update_curved_control.assert_called_once_with("item", QPointF(3.0, 3.0))
+        mutation.update_curved_endpoint.assert_called_once_with("item", QPointF(4.0, 4.0), "start")
 
         with mock.patch(
             "ui.canvas_handle_controller.clamp_curved_midpoint_helper",
