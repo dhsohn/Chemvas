@@ -79,7 +79,7 @@ class SceneOpsController:
         )
 
     def delete_atom(self, atom_id: int, record: bool = True) -> HistoryCommand | None:
-        if not isinstance(atom_id, int):
+        if not isinstance(atom_id, int) or atom_id not in self.canvas.model.atoms:
             return None
         before_smiles_input = self.canvas.last_smiles_input
         command = delete_atom_with_history(
@@ -102,6 +102,8 @@ class SceneOpsController:
         return command
 
     def delete_bond(self, bond_id: int, record: bool = True) -> HistoryCommand | None:
+        if not isinstance(bond_id, int):
+            return None
         before_smiles_input = self.canvas.last_smiles_input
         command = delete_bond_with_history(
             bond_id,
@@ -133,44 +135,54 @@ class SceneOpsController:
         items = self.canvas.scene().selectedItems()
         if not items:
             return False
-        selection = classify_delete_selection(items)
-        plan = build_delete_selection_plan(
-            selection,
-            bonds=self.canvas.model.bonds,
-            marks_by_atom=self.canvas._marks_by_atom,
-            mark_state_getter=self.canvas._mark_state_dict,
-        )
+        suspend_selection_outline = getattr(self.canvas, "suspend_selection_outline", None)
+        refresh_selection_outline = getattr(self.canvas, "_update_selection_outline", None)
+        if callable(suspend_selection_outline):
+            suspend_selection_outline(True)
+        try:
+            selection = classify_delete_selection(items)
+            plan = build_delete_selection_plan(
+                selection,
+                bonds=self.canvas.model.bonds,
+                marks_by_atom=self.canvas._marks_by_atom,
+                mark_state_getter=self.canvas._mark_state_dict,
+            )
 
-        if plan.single_bond_id is not None:
-            self.delete_bond(plan.single_bond_id, record=True)
+            if plan.single_bond_id is not None:
+                self.delete_bond(plan.single_bond_id, record=True)
+                return True
+
+            before_smiles_input = self.canvas.last_smiles_input
+            if plan.clear_smiles_input:
+                self.canvas.last_smiles_input = None
+            commands = apply_delete_selection_plan(
+                plan,
+                bonds=self.canvas.model.bonds,
+                before_smiles_input=before_smiles_input,
+                current_smiles_input_getter=lambda: self.canvas.last_smiles_input,
+                bond_state_getter=self.canvas._bond_state_dict,
+                remove_bond_by_id=self.canvas._remove_bond_by_id,
+                redraw_connected_bonds=self.canvas._redraw_connected_bonds,
+                atom_state_getter=self.canvas._atom_state_dict,
+                next_atom_id_getter=lambda: self.canvas.model.next_atom_id,
+                remove_atom_only=self.canvas._remove_atom_only,
+                scene_item_state_getter=self.canvas.scene_item_state,
+                remove_scene_item=self._remove_scene_item,
+                clear_handles=self.canvas.clear_handles,
+            )
+
+            if not commands:
+                return False
+            if len(commands) == 1:
+                self.canvas._push_command(commands[0])
+                return True
+            self.canvas._push_command(CompositeCommand(commands))
             return True
-
-        before_smiles_input = self.canvas.last_smiles_input
-        if plan.clear_smiles_input:
-            self.canvas.last_smiles_input = None
-        commands = apply_delete_selection_plan(
-            plan,
-            bonds=self.canvas.model.bonds,
-            before_smiles_input=before_smiles_input,
-            current_smiles_input_getter=lambda: self.canvas.last_smiles_input,
-            bond_state_getter=self.canvas._bond_state_dict,
-            remove_bond_by_id=self.canvas._remove_bond_by_id,
-            redraw_connected_bonds=self.canvas._redraw_connected_bonds,
-            atom_state_getter=self.canvas._atom_state_dict,
-            next_atom_id_getter=lambda: self.canvas.model.next_atom_id,
-            remove_atom_only=self.canvas._remove_atom_only,
-            scene_item_state_getter=self.canvas.scene_item_state,
-            remove_scene_item=self._remove_scene_item,
-            clear_handles=self.canvas.clear_handles,
-        )
-
-        if not commands:
-            return False
-        if len(commands) == 1:
-            self.canvas._push_command(commands[0])
-            return True
-        self.canvas._push_command(CompositeCommand(commands))
-        return True
+        finally:
+            if callable(suspend_selection_outline):
+                suspend_selection_outline(False)
+            if callable(refresh_selection_outline):
+                refresh_selection_outline()
 
     def flip_bond_direction(self, bond_id: int) -> None:
         flip_bond_direction_with_history(

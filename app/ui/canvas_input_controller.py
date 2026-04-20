@@ -58,15 +58,18 @@ class CanvasInputController:
                 event.accept()
                 return
             if self.canvas.hover_atom_id is not None:
-                if self.canvas._atom_has_visible_label(self.canvas.hover_atom_id):
-                    self.canvas.clear_atom_label(self.canvas.hover_atom_id)
+                atom_id = self.canvas.hover_atom_id
+                if self.canvas._atom_has_visible_label(atom_id):
+                    self.canvas.clear_atom_label(atom_id)
                 else:
-                    self.canvas.delete_atom(self.canvas.hover_atom_id, record=True)
+                    self.canvas._clear_hover_highlight()
+                    self.canvas.delete_atom(atom_id, record=True)
                 event.accept()
                 return
             if self.canvas.hover_bond_id is not None:
+                bond_id = self.canvas.hover_bond_id
                 self.canvas._clear_hover_highlight()
-                self.canvas.delete_bond(self.canvas.hover_bond_id, record=True)
+                self.canvas.delete_bond(bond_id, record=True)
             event.accept()
             return
         if self.canvas._handle_chemdraw_shortcut(event):
