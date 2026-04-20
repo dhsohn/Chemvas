@@ -68,6 +68,7 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         controller = SceneOpsController(view)
 
         self.assertIsNone(controller.delete_atom("bad"))
+        self.assertIsNone(controller.delete_atom(9))
 
         command = controller.delete_atom(1)
 
@@ -125,6 +126,7 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         )
         controller = SceneOpsController(view)
 
+        self.assertIsNone(controller.delete_bond(None))
         self.assertIsNone(controller.delete_bond(-1))
         self.assertIsNone(controller.delete_bond(1))
 

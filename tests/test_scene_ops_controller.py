@@ -115,6 +115,8 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertIsInstance(canvas.pushed_commands[0], DeleteBondCommand)
         self.assertEqual(canvas.remove_bond_calls, [0])
         self.assertEqual(sorted(canvas.redraw_connected_bonds_calls), [1, 2])
+        self.assertEqual(canvas.suspend_selection_outline_calls, [True, False])
+        self.assertEqual(canvas.update_selection_outline_calls, 1)
 
     def test_delete_selected_items_builds_composite_commands_for_mixed_selection(self) -> None:
         canvas = _FakeCanvas()
@@ -217,6 +219,8 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertNotIn(linked_mark, scene_delete.items)
         self.assertIn(free_mark, scene_delete.items)
         self.assertNotIn(handle_item, scene_delete.items)
+        self.assertEqual(canvas.suspend_selection_outline_calls, [True, False])
+        self.assertEqual(canvas.update_selection_outline_calls, 1)
 
     def test_delete_selected_items_pushes_single_scene_item_command(self) -> None:
         canvas = _FakeCanvas()
@@ -229,6 +233,8 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertIsInstance(canvas.pushed_commands[0], DeleteSceneItemsCommand)
         self.assertEqual(canvas.removed_scene_items, [note_item])
         self.assertEqual(canvas.clear_handles_calls, 0)
+        self.assertEqual(canvas.suspend_selection_outline_calls, [True, False])
+        self.assertEqual(canvas.update_selection_outline_calls, 1)
 
     def test_delete_ring_prefers_scene_item_controller_when_available(self) -> None:
         canvas = _FakeCanvas()
@@ -531,6 +537,7 @@ class _FakeCanvas:
         self.selected_notes: list[QGraphicsTextItem] = []
         self.clear_note_selection_calls = 0
         self.update_selection_outline_calls = 0
+        self.suspend_selection_outline_calls: list[bool] = []
         self.record_additions_calls: list[tuple[int, int, str | None, list[QGraphicsItem]]] = []
 
     def scene(self) -> QGraphicsScene:
@@ -589,6 +596,12 @@ class _FakeCanvas:
 
     def clear_handles(self) -> None:
         self.clear_handles_calls += 1
+
+    def suspend_selection_outline(self, suspended: bool) -> None:
+        self.suspend_selection_outline_calls.append(bool(suspended))
+
+    def _update_selection_outline(self) -> None:
+        self.update_selection_outline_calls += 1
 
     def _push_command(self, command) -> None:
         self.pushed_commands.append(command)

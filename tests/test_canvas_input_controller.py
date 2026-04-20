@@ -208,12 +208,16 @@ class CanvasInputControllerTest(unittest.TestCase):
         canvas._atom_has_visible_label.return_value = False
         atom_delete_event = _FakeEvent(key=Qt.Key.Key_Delete)
         controller.key_press_event(atom_delete_event)
+        canvas._clear_hover_highlight.assert_called_once_with()
         canvas.delete_atom.assert_called_once_with(7, record=True)
         atom_delete_event.accept.assert_called_once_with()
 
         canvas = _Canvas()
         controller = CanvasInputController(canvas)
         canvas.hover_bond_id = 1
+        def clear_hover() -> None:
+            canvas.hover_bond_id = None
+        canvas._clear_hover_highlight.side_effect = clear_hover
         bond_delete_event = _FakeEvent(key=Qt.Key.Key_Delete)
         controller.key_press_event(bond_delete_event)
         canvas._clear_hover_highlight.assert_called_once_with()

@@ -71,7 +71,7 @@ def delete_bond_with_history(
     remove_bond_by_id: Callable[[int], None],
     redraw_connected_bonds: Callable[[int], None],
 ) -> DeleteBondCommand | None:
-    if not (0 <= bond_id < len(bonds)):
+    if not isinstance(bond_id, int) or not (0 <= bond_id < len(bonds)):
         return None
     bond = bonds[bond_id]
     if bond is None:
