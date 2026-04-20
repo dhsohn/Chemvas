@@ -89,6 +89,31 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
             base_press.assert_called_once()
             tool_view._clear_hover_highlight.assert_called_once_with()
 
+    def test_mouse_double_click_event_routes_non_select_tools_and_select_tool_falls_through(self) -> None:
+        with mock.patch.object(
+            QGraphicsView,
+            "mouseDoubleClickEvent",
+            new=mock.Mock(return_value=None),
+        ) as base_double:
+            tool = SimpleNamespace(name="bond", on_mouse_press=mock.Mock(return_value=True))
+            tool_view = self._new_view(tool_active=tool)
+
+            CanvasView.mouseDoubleClickEvent(tool_view, _FakeEvent(button=Qt.MouseButton.LeftButton))
+
+            tool.on_mouse_press.assert_called_once()
+            base_double.assert_not_called()
+            tool_view._clear_hover_highlight.assert_called_once_with()
+
+            select_tool = SimpleNamespace(name="select", on_mouse_press=mock.Mock(return_value=True))
+            select_view = self._new_view(tool_active=select_tool)
+            base_double.reset_mock()
+
+            CanvasView.mouseDoubleClickEvent(select_view, _FakeEvent(button=Qt.MouseButton.LeftButton))
+
+            select_tool.on_mouse_press.assert_not_called()
+            base_double.assert_called_once()
+            select_view._clear_hover_highlight.assert_called_once_with()
+
     def test_mouse_move_event_fallthrough_calls_super_for_hover_and_drag_paths(self) -> None:
         with mock.patch.object(QGraphicsView, "mouseMoveEvent", new=mock.Mock(return_value=None)) as base_move:
             hover_tool = SimpleNamespace(on_mouse_move=mock.Mock(return_value=False))

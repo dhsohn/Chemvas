@@ -534,6 +534,35 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
         canvas.set_tool("select")
 
+    def test_bond_tool_double_click_on_same_origin_creates_second_bond_without_selecting_atom(self) -> None:
+        canvas = self.window.canvas
+        canvas.set_tool("bond")
+
+        origin = QPointF(0.0, 0.0)
+        self._click_scene_point(origin)
+
+        self.assertEqual(len([bond for bond in canvas.model.bonds if bond is not None]), 1)
+        self.assertEqual(canvas.scene().selectedItems(), [])
+
+        viewport_pos = canvas.mapFromScene(origin)
+        QTest.mouseDClick(
+            canvas.viewport(),
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+            viewport_pos,
+        )
+        QTest.mouseRelease(
+            canvas.viewport(),
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+            viewport_pos,
+        )
+        self.app.processEvents()
+        QTest.qWait(10)
+
+        self.assertEqual(len([bond for bond in canvas.model.bonds if bond is not None]), 2)
+        self.assertEqual(canvas.scene().selectedItems(), [])
+
     def test_arrow_tool_drag_preview_clears_on_tool_change_and_stale_release_does_not_commit(self) -> None:
         canvas = self.window.canvas
 

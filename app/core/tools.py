@@ -415,9 +415,19 @@ class BondTool(Tool):
         self.canvas.cycle_bond_style(bond_id)
         return True
 
+    def _clear_existing_selection(self) -> None:
+        scene = self.canvas.scene()
+        selected_items = getattr(scene, "selectedItems", None)
+        if callable(selected_items) and selected_items():
+            scene.clearSelection()
+        selected_notes = getattr(self.canvas, "selected_notes", None)
+        if selected_notes:
+            self.canvas.clear_note_selection()
+
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
             return False
+        self._clear_existing_selection()
         press_pos = self.canvas.scene_pos_from_event(event)
         atom_id = self.canvas.find_atom_near(
             press_pos.x(),

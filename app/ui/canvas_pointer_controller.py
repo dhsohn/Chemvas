@@ -7,7 +7,13 @@ class CanvasPointerController:
     def __init__(self, canvas) -> None:
         self.canvas = canvas
 
-    def mouse_press_event(self, event, *, base_mouse_press_event) -> None:
+    def _dispatch_press_event(
+        self,
+        event,
+        *,
+        base_event,
+        allow_select_tool: bool,
+    ) -> None:
         self.canvas._touch_interaction()
         if self.canvas._template_insert_active and event.button() == Qt.MouseButton.LeftButton:
             self.canvas._commit_template_insert(self.canvas.scene_pos_from_event(event))
@@ -17,11 +23,26 @@ class CanvasPointerController:
             self.canvas._commit_smiles_insert(self.canvas.scene_pos_from_event(event))
             self.canvas._clear_hover_highlight()
             return
-        if self.canvas.tools.active and self.canvas.tools.active.on_mouse_press(event):
+        active_tool = self.canvas.tools.active
+        if active_tool and (allow_select_tool or active_tool.name != "select") and active_tool.on_mouse_press(event):
             self.canvas._clear_hover_highlight()
             return
-        base_mouse_press_event(event)
+        base_event(event)
         self.canvas._clear_hover_highlight()
+
+    def mouse_press_event(self, event, *, base_mouse_press_event) -> None:
+        self._dispatch_press_event(
+            event,
+            base_event=base_mouse_press_event,
+            allow_select_tool=True,
+        )
+
+    def mouse_double_click_event(self, event, *, base_mouse_double_click_event) -> None:
+        self._dispatch_press_event(
+            event,
+            base_event=base_mouse_double_click_event,
+            allow_select_tool=False,
+        )
 
     def mouse_move_event(self, event, *, base_mouse_move_event) -> None:
         self.canvas._touch_interaction()
