@@ -21,7 +21,7 @@ if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
 if QApplication is not None:
-    from ui.handle_overlay_service import HandleOverlayService
+    from ui.handle_overlay_service import HandleOverlayService, handle_overlay_service_for
 
 
 class _FakeGraphicsItem:
@@ -149,6 +149,38 @@ class HandleOverlayServiceTest(unittest.TestCase):
         canvas._set_selection_highlight.assert_called_once_with([fallback])
         canvas._update_curved_control.assert_not_called()
         self.assertEqual((canvas._active_handles[0].rect().center().x(), canvas._active_handles[0].rect().center().y()), (10.0, 10.0))
+
+        controlled = _FakeGraphicsItem(
+            data={2: {"start": QPointF(1.0, 1.0), "end": QPointF(9.0, 1.0), "control": QPointF(5.0, 6.0)}}
+        )
+        canvas._default_curved_control.reset_mock()
+        canvas._update_curved_control.reset_mock()
+        service.show_curved_handles(controlled)
+        canvas._default_curved_control.assert_not_called()
+        canvas._update_curved_control.assert_called_once_with(controlled, QPointF(5.0, 4.0))
+
+    def test_handle_overlay_service_for_reuses_matching_or_duck_typed_service(self) -> None:
+        scene = QGraphicsScene()
+        canvas = self._make_canvas(scene)
+        matching = HandleOverlayService(canvas)
+        canvas._handle_overlay_service = matching
+
+        self.assertIs(handle_overlay_service_for(canvas), matching)
+
+        duck = SimpleNamespace(
+            canvas=object(),
+            clear_handles=mock.Mock(),
+            show_orbital_handles=mock.Mock(),
+            show_curved_handles=mock.Mock(),
+            create_handle=mock.Mock(),
+        )
+        canvas._handle_overlay_service = duck
+        self.assertIs(handle_overlay_service_for(canvas), duck)
+
+        canvas._handle_overlay_service = SimpleNamespace(clear_handles=mock.Mock())
+        fallback = handle_overlay_service_for(canvas)
+        self.assertIsInstance(fallback, HandleOverlayService)
+        self.assertIs(fallback.canvas, canvas)
 
 
 if __name__ == "__main__":

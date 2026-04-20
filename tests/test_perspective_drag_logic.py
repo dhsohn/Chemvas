@@ -70,6 +70,20 @@ class PerspectiveDragLogicTest(unittest.TestCase):
         self.assertIsNone(update.axis_lock)
         self.assertTrue(update.should_update)
 
+    def test_resolve_perspective_drag_update_preserves_existing_y_lock(self) -> None:
+        update = resolve_perspective_drag_update(
+            delta_x=3.0,
+            delta_y=4.0,
+            axis_lock="y",
+            rotation_mode="rigid",
+            shift_pressed=True,
+        )
+
+        self.assertEqual(update.delta_x, 0.0)
+        self.assertEqual(update.delta_y, 4.0)
+        self.assertEqual(update.axis_lock, "y")
+        self.assertTrue(update.should_update)
+
 
 if __name__ == "__main__":
     unittest.main()

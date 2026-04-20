@@ -33,6 +33,11 @@ if QApplication is not None:
     )
 
 
+class _BrokenHandle:
+    def scene(self):
+        raise RuntimeError("wrapped C/C++ object has been deleted")
+
+
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for handle interaction tests")
 class HandleInteractionLogicTest(unittest.TestCase):
     @classmethod
@@ -63,6 +68,18 @@ class HandleInteractionLogicTest(unittest.TestCase):
         self.assertEqual(cleared, [])
         self.assertIsNone(handle_a.scene())
         self.assertIsNone(handle_b.scene())
+        self.assertEqual(len(scene.items()), 0)
+
+    def test_clear_handle_items_ignores_off_scene_and_runtime_error_handles(self) -> None:
+        scene = QGraphicsScene()
+        other_scene = QGraphicsScene()
+        off_scene_handle = create_handle_item(QPointF(4.0, 0.0), "orbital_scale", object())
+        other_scene.addItem(off_scene_handle)
+
+        cleared = clear_handle_items(scene, [off_scene_handle, _BrokenHandle()])
+
+        self.assertEqual(cleared, [])
+        self.assertIs(off_scene_handle.scene(), other_scene)
         self.assertEqual(len(scene.items()), 0)
 
     def test_orbital_helpers_compute_positions_scale_and_rotation(self) -> None:
@@ -104,6 +121,17 @@ class HandleInteractionLogicTest(unittest.TestCase):
 
         self.assertAlmostEqual(clamped.x(), 0.0)
         self.assertAlmostEqual(clamped.y(), 32.0)
+
+        unsnapped = clamp_curved_midpoint(
+            start,
+            end,
+            QPointF(0.0, 17.0),
+            snap_enabled=False,
+            snap_distance=6.0,
+        )
+
+        self.assertAlmostEqual(unsnapped.x(), 0.0)
+        self.assertAlmostEqual(unsnapped.y(), 17.0)
 
 
 if __name__ == "__main__":

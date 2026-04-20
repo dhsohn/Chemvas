@@ -85,6 +85,22 @@ class SceneDeleteLogicTest(unittest.TestCase):
         self.assertEqual(buckets.orbital_items, [orbital_item])
         self.assertEqual(buckets.other_items, [other_item])
 
+    def test_classify_delete_selection_skips_wrong_typed_core_items(self) -> None:
+        buckets = classify_delete_selection(
+            [
+                _make_rect_item("atom", data1="bad"),
+                _make_rect_item("bond", data1="bad"),
+                _make_rect_item("ring"),
+                _make_rect_item("note"),
+            ]
+        )
+
+        self.assertEqual(buckets.atom_ids, set())
+        self.assertEqual(buckets.bond_ids, set())
+        self.assertEqual(buckets.ring_items, [])
+        self.assertEqual(buckets.note_items, [])
+        self.assertEqual(buckets.other_items, [])
+
     def test_build_delete_selection_plan_detects_single_bond_fast_path(self) -> None:
         bond_item = _make_rect_item("bond", data1=0)
         selection = classify_delete_selection(
@@ -107,6 +123,35 @@ class SceneDeleteLogicTest(unittest.TestCase):
         self.assertTrue(plan.has_work())
         self.assertEqual(plan.bond_ids_to_remove, [])
         self.assertEqual(plan.scene_items, [])
+
+    def test_build_delete_selection_plan_single_bond_fast_path_skips_missing_bond(self) -> None:
+        selection = classify_delete_selection([_make_rect_item("bond", data1=0)])
+
+        plan = build_delete_selection_plan(
+            selection,
+            bonds=[None],
+            marks_by_atom={},
+            mark_state_getter=lambda item: {"kind": item.data(0)},
+        )
+
+        self.assertEqual(plan.single_bond_id, None)
+        self.assertEqual(plan.bond_ids_to_remove, [0])
+        self.assertTrue(plan.has_work())
+
+    def test_build_delete_selection_plan_skips_none_and_unrelated_bonds(self) -> None:
+        selection = classify_delete_selection([_make_rect_item("atom", data1=1)])
+
+        plan = build_delete_selection_plan(
+            selection,
+            bonds=[None, Bond(2, 3, 1)],
+            marks_by_atom={},
+            mark_state_getter=lambda item: {"kind": item.data(0)},
+        )
+
+        self.assertEqual(plan.single_bond_id, None)
+        self.assertEqual(plan.bond_ids_to_remove, [])
+        self.assertEqual(plan.atom_ids, [1])
+        self.assertTrue(plan.clear_smiles_input)
 
     def test_build_delete_selection_plan_filters_atom_bound_marks_and_requests_handle_clear(self) -> None:
         atom_item = _make_rect_item("atom", data1=1)

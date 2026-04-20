@@ -45,13 +45,6 @@ class MarkHoverPreviewService:
         preview_key = f"mark:{kind}:{scope}:{round(center.x(), 1)}:{round(center.y(), 1)}"
         if atom_id == self.canvas.hover_atom_id and preview_key == self.canvas._hover_preview_style:
             return
-        if (
-            atom_id is None
-            and self.canvas.hover_atom_id is None
-            and self.canvas.hover_bond_id is None
-            and preview_key == self.canvas._hover_preview_style
-        ):
-            return
         self._clear_hover_highlight()
         if atom_id is not None:
             self.canvas.hover_atom_id = atom_id

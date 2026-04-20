@@ -150,6 +150,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         atom_item = _FakeItem("atom", data1=1)
         bad_atom_item = _FakeItem("atom", data1="x")
         bond_item = _FakeItem("bond", data1=0)
+        deleted_bond_item = _FakeItem("bond", data1=1)
         bad_bond_item = _FakeItem("bond", data1=9)
         ring_item = _FakeItem("ring", data2=[1, 2, 3])
         bare_ring_item = _FakeItem("ring", data2="bad")
@@ -158,7 +159,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
             atom_items={1: atom_item},
             atom_dots={2: _FakeItem("atom", data1=2)},
             bond_items={0: [bond_item]},
-            model=SimpleNamespace(atoms={}, bonds=[Bond(1, 2, 1)]),
+            model=SimpleNamespace(atoms={}, bonds=[Bond(1, 2, 1), None]),
         )
         controller = SelectionController(canvas)
 
@@ -167,6 +168,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         self.assertEqual(controller._structure_hit_from_item(bad_atom_item), (None, None, None))
         self.assertEqual(controller._structure_hit_from_item(bond_item)[0], StructureHit(kind="bond", id=0))
         self.assertEqual(controller._structure_hit_from_item(bond_item)[1], (1, 2))
+        self.assertEqual(controller._structure_hit_from_item(deleted_bond_item), (None, None, None))
         self.assertEqual(controller._structure_hit_from_item(bad_bond_item), (None, None, None))
         self.assertEqual(controller._structure_hit_from_item(ring_item)[0], StructureHit(kind="ring"))
         self.assertEqual(controller._structure_hit_from_item(ring_item)[2], [1, 2, 3])
@@ -238,6 +240,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
     def test_preferred_structure_hit_at_scene_pos_prefers_atom_hit_ring_atom_and_fallback(self) -> None:
         atom_item = _FakeItem("atom", data1=1)
         ring_item = _FakeItem("ring", data2=[1, 2, 3])
+        bare_ring_item = _FakeItem("ring", data2="bad")
         fallback_item = _FakeItem("note")
         canvas = _make_canvas(
             atom_items={1: atom_item},
@@ -303,6 +306,56 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
                 StructureHit(kind="other"),
             )
 
+        bare_ring_canvas = _make_canvas(
+            atom_items={},
+            atom_dots={},
+            item_at_scene_pos=mock.Mock(return_value=bare_ring_item),
+            model=SimpleNamespace(atoms={}, bonds=[]),
+        )
+        bare_ring_controller = SelectionController(bare_ring_canvas)
+        with mock.patch("ui.selection_controller.choose_preferred_structure_hit", return_value=None):
+            self.assertEqual(
+                bare_ring_controller.preferred_structure_hit_at_scene_pos(QPointF(0.0, 0.0)),
+                StructureHit(kind="ring"),
+            )
+
+        ring_fallback_canvas = _make_canvas(
+            atom_items={},
+            atom_dots={},
+            item_at_scene_pos=mock.Mock(return_value=ring_item),
+            model=SimpleNamespace(
+                atoms={
+                    1: Atom("C", 0.0, 0.0),
+                    2: Atom("C", 2.0, 0.0),
+                    3: Atom("C", 1.0, 2.0),
+                },
+                bonds=[],
+            ),
+        )
+        ring_fallback_controller = SelectionController(ring_fallback_canvas)
+        with (
+            mock.patch("ui.selection_controller.choose_preferred_structure_hit", return_value=None),
+            mock.patch("ui.selection_controller.nearest_ring_atom_id", return_value=None),
+        ):
+            self.assertEqual(
+                ring_fallback_controller.preferred_structure_hit_at_scene_pos(QPointF(1.5, 0.2)),
+                StructureHit(kind="ring"),
+            )
+
+        missing_preferred_item_canvas = _make_canvas(
+            item_at_scene_pos=mock.Mock(return_value=fallback_item),
+            model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[]),
+        )
+        missing_preferred_item_controller = SelectionController(missing_preferred_item_canvas)
+        with mock.patch(
+            "ui.selection_controller.choose_preferred_structure_hit",
+            return_value=StructureHit(kind="atom", id=1),
+        ):
+            self.assertEqual(
+                missing_preferred_item_controller.preferred_structure_hit_at_scene_pos(QPointF(0.0, 0.0)),
+                StructureHit(kind="other"),
+            )
+
     def test_preferred_structure_item_at_scene_pos_returns_hit_item_or_original_item(self) -> None:
         canvas = _make_canvas(item_at_scene_pos=mock.Mock(return_value=_FakeItem("ring")))
         controller = SelectionController(canvas)
@@ -320,20 +373,22 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         atom_item = _FakeItem("atom", data1=1)
         atom_item_2 = _FakeItem("atom", data1=2)
         bond_item = _FakeItem("bond", data1=0)
+        deleted_bond_item = _FakeItem("bond", data1=1)
         bond_graphic = _FakeItem("bond")
         ring_item = _FakeItem("ring", data2=[1, 2])
+        unrelated_ring_item = _FakeItem("ring", data2=[1, 3])
         note_item = _FakeItem("note")
-        scene = _FakeScene([atom_item, bond_item, ring_item, note_item])
+        scene = _FakeScene([atom_item, bond_item, ring_item, unrelated_ring_item, note_item])
         canvas = _make_canvas(
             scene=scene,
             model=SimpleNamespace(
-                atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 2.0, 0.0)},
-                bonds=[Bond(1, 2, 1)],
+                atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 2.0, 0.0), 3: Atom("N", 4.0, 0.0)},
+                bonds=[Bond(1, 2, 1), None, Bond(1, 3, 1)],
             ),
             atom_items={1: atom_item, 2: atom_item_2},
             atom_dots={},
-            bond_items={0: [bond_graphic]},
-            ring_items=[ring_item],
+            bond_items={0: [bond_graphic], 2: [_FakeItem("bond")]},
+            ring_items=[ring_item, unrelated_ring_item],
             _expand_connected_atoms=mock.Mock(return_value={1, 2}),
             _update_selection_outline=mock.Mock(),
         )
@@ -345,6 +400,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         self.assertTrue(atom_item_2.isSelected())
         self.assertTrue(bond_graphic.isSelected())
         self.assertTrue(ring_item.isSelected())
+        self.assertFalse(unrelated_ring_item.isSelected())
         canvas._update_selection_outline.assert_called_once_with()
 
         scene.clear_selection_calls = 0
@@ -357,8 +413,37 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         invalid_atom = _FakeItem("atom", data1="bad")
         self.assertFalse(controller.select_structure_for_item(invalid_atom))
         self.assertFalse(controller.select_structure_for_item(_FakeItem("bond", data1=99)))
+        self.assertFalse(controller.select_structure_for_item(deleted_bond_item))
         self.assertFalse(controller.select_structure_for_item(_FakeItem("ring", data2="bad")))
+        self.assertFalse(controller.select_structure_for_item(_FakeItem("unknown")))
         self.assertFalse(controller.select_structure_for_item(None))
+
+        empty_ring_canvas = _make_canvas(
+            scene=_FakeScene(),
+            model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[]),
+            atom_items={1: atom_item},
+            atom_dots={},
+            bond_items={},
+            ring_items=[],
+            _expand_connected_atoms=lambda atom_ids: atom_ids,
+            _update_selection_outline=mock.Mock(),
+        )
+        empty_ring_controller = SelectionController(empty_ring_canvas)
+        self.assertFalse(empty_ring_controller.select_structure_for_item(_FakeItem("ring", data2=[9, "bad"])))
+
+        sparse_canvas = _make_canvas(
+            scene=_FakeScene(),
+            model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 2.0, 0.0)}, bonds=[Bond(1, 2, 1)]),
+            atom_items={1: atom_item},
+            atom_dots={},
+            bond_items={0: [bond_graphic]},
+            ring_items=[],
+            _expand_connected_atoms=mock.Mock(return_value={1, 2}),
+            _update_selection_outline=mock.Mock(),
+        )
+        sparse_controller = SelectionController(sparse_canvas)
+        self.assertTrue(sparse_controller.select_structure_for_item(_FakeItem("atom", data1=1)))
+        self.assertTrue(atom_item.isSelected())
 
     def test_public_wrapper_methods_delegate_to_private_helpers(self) -> None:
         controller = SelectionController(_make_canvas())
@@ -433,9 +518,16 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         controller.select_note(note_a, additive=True)
         self.assertEqual(canvas.selected_notes, [note_b, note_a])
 
+        controller.select_note(note_a, additive=True)
+        self.assertEqual(canvas.selected_notes, [note_b, note_a])
+
         controller.toggle_note_selection(note_b)
         self.assertEqual(canvas.selected_notes, [note_a])
         self.assertFalse(note_b.data(21).isVisible())
+
+        controller.toggle_note_selection(note_b)
+        self.assertEqual(canvas.selected_notes, [note_a, note_b])
+        self.assertTrue(note_b.data(21).isVisible())
 
         controller.clear_note_selection()
         self.assertEqual(canvas.selected_notes, [])
@@ -475,6 +567,22 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         self.assertTrue(request.item_is_selected)
         self.assertEqual(request.selected_atom_ids, {1, 2})
         self.assertEqual(request.selected_bond_ids, {0})
+
+        none_bounds_canvas = _make_canvas(
+            _connected_components=mock.Mock(return_value=[{1, 2}]),
+            _bounds_for_atoms=mock.Mock(return_value=None),
+        )
+        none_bounds_controller = SelectionController(none_bounds_canvas)
+        self.assertEqual(
+            none_bounds_controller._selection_rects_for_snapshot(
+                SimpleNamespace(selected_atom_ids={1, 2}, selected_bond_ids=set(), selection_items=[])
+            ),
+            (),
+        )
+
+        none_snapshot_canvas = _make_canvas(_selection_snapshot=mock.Mock(return_value=None))
+        none_snapshot_controller = SelectionController(none_snapshot_canvas)
+        self.assertFalse(none_snapshot_controller.selection_hit_test(QPointF(1.0, 2.0)))
 
     def test_update_selection_outline_covers_suspend_clear_filtered_and_overlay_paths(self) -> None:
         suspended_canvas = _make_canvas(_suspend_selection_outline=True)
@@ -522,6 +630,22 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         controller._add_selection_center_marker.assert_called_once_with(QPointF(1.0, 0.0))
         controller._add_selection_object_overlay.assert_called_once_with(object_item, mock.ANY)
         active_canvas._emit_selection_info.assert_called_once_with()
+
+        deleted_bond_scene = _FakeScene([_FakeItem("arrow")])
+        deleted_bond_canvas = _make_canvas(
+            scene=deleted_bond_scene,
+            model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 2.0, 0.0)}, bonds=[Bond(1, 2, 1), None]),
+            _selected_ids=mock.Mock(return_value=(set(), {-1, 1})),
+            _connected_components=mock.Mock(return_value=[]),
+        )
+        deleted_bond_controller = SelectionController(deleted_bond_canvas)
+        deleted_bond_controller._add_selection_component_overlay = mock.Mock()
+        deleted_bond_controller._selection_center_for_atoms = mock.Mock(return_value=None)
+        deleted_bond_controller._selection_center_marker_enabled = mock.Mock(return_value=False)
+        deleted_bond_controller._add_selection_object_overlay = mock.Mock()
+        deleted_bond_controller.update_selection_outline()
+        deleted_bond_controller._add_selection_component_overlay.assert_not_called()
+        deleted_bond_controller._add_selection_object_overlay.assert_called_once()
 
     def test_shift_selection_outlines_and_center_helpers_cover_simple_branches(self) -> None:
         outline = _FakeItem("selection_outline")
@@ -596,7 +720,24 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         canvas.bond_items[0] = [line_item_a, line_item_b]
         self.assertFalse(controller.selection_path_for_bond(0).isEmpty())
 
+        canvas._ring_center_for_bond = lambda bond: QPointF(5.0, 0.0)
+        canvas.bond_items[0] = [object()]
+        self.assertTrue(controller.selection_path_for_bond(0).isEmpty())
+
+        canvas.model = SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[Bond(1, 2, 2)])
+        canvas.bond_items[0] = [QGraphicsLineItem(0.0, 0.0, 10.0, 0.0), QGraphicsLineItem(0.0, 2.0, 10.0, 2.0)]
+        canvas._ring_center_for_bond = lambda bond: None
+        self.assertFalse(controller.selection_path_for_bond(0).isEmpty())
+
+        canvas.model = SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 0.0, 0.0)}, bonds=[Bond(1, 2, 2)])
+        canvas.bond_items[0] = [QGraphicsLineItem(0.0, 0.0, 10.0, 0.0), QGraphicsLineItem(0.0, 2.0, 10.0, 2.0)]
+        self.assertFalse(controller.selection_path_for_bond(0).isEmpty())
+
         self.assertFalse(controller.selection_path_for_object_item(_FakeItem("mark")).isEmpty())
+        arrow_path_item = QGraphicsPathItem(filled_path)
+        arrow_path_item.setData(0, "arrow")
+        arrow_path_item.setPen(QPen(QColor("#112233"), 1.2))
+        self.assertFalse(controller.selection_path_for_object_item(arrow_path_item).isEmpty())
         self.assertFalse(controller.selection_path_for_object_item(text_item).isEmpty())
         self.assertFalse(controller.selection_path_for_object_item(empty_shape_item).isEmpty())
 
@@ -619,7 +760,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         controller.add_selection_component_overlay({1}, {0}, QColor("#334455"), 1.0)
         self.assertEqual(len(canvas.selection_outlines), 2)
 
-        self.assertEqual(controller.selection_center_for_atoms({1, 2}), QPointF(5.0, 0.0))
+        self.assertEqual(controller.selection_center_for_atoms({1, 2}), QPointF(0.0, 0.0))
         self.assertTrue(controller.selection_center_marker_enabled())
         controller.add_selection_center_marker(QPointF(5.0, 5.0))
         self.assertEqual(len(canvas.selection_outlines), 4)

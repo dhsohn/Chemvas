@@ -41,8 +41,10 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
         canvas_b = object()
         entries = [(1, canvas_a), (3, canvas_b)]
 
+        self.assertEqual(active_canvas_tab_index(entries, None), -1)
         self.assertEqual(active_canvas_tab_index(entries, canvas_b), 3)
         self.assertEqual(active_canvas_tab_index(entries, object()), -1)
+        self.assertEqual(active_canvas_sheet_index(entries, None), 0)
         self.assertEqual(active_canvas_sheet_index(entries, canvas_b), 1)
         self.assertEqual(active_canvas_sheet_index(entries, object()), 0)
 
@@ -154,6 +156,7 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
 
     def test_canvas_sheet_name_counter_tracks_default_sheet_names(self) -> None:
         self.assertEqual(canvas_sheet_name_counter([]), 0)
+        self.assertEqual(canvas_sheet_name_counter(["Sheet draft", "Sheet 2", "Sheet 9"]), 9)
         self.assertEqual(canvas_sheet_name_counter(["Reactant", "Sheet 2", "Sheet 9"]), 9)
         self.assertEqual(canvas_sheet_name_counter(["Result 1"], prefix="Result"), 1)
 

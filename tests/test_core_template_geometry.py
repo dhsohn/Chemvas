@@ -220,6 +220,39 @@ class TemplateGeometryTest(unittest.TestCase):
         )
         self.assertIsNone(rejected)
 
+    def test_place_template_on_bond_keeps_default_side_for_lower_occupied_polygon_and_short_polygon(self) -> None:
+        triangle = [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]
+
+        points = place_template_on_bond(
+            triangle,
+            (2.0, 3.0),
+            (5.0, 3.0),
+            occupied_polygon=[(1.0, -0.5), (4.0, -0.5), (4.0, 2.5), (1.0, 2.5)],
+            center_hint=(2.0, 10.0),
+        )
+        assert points is not None
+        self.assertGreater(points[2][1], 3.0)
+
+        short_polygon = place_template_on_bond(
+            triangle,
+            (2.0, 3.0),
+            (5.0, 3.0),
+            occupied_polygon=[(0.0, 0.0), (1.0, 1.0)],
+        )
+        assert short_polygon is not None
+        self.assertGreater(short_polygon[2][1], 3.0)
+
+    def test_place_template_on_bond_keeps_default_side_when_center_hint_is_farther_from_mirror(self) -> None:
+        points = place_template_on_bond(
+            [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)],
+            (2.0, 3.0),
+            (5.0, 3.0),
+            center_hint=(2.0, 10.0),
+        )
+
+        assert points is not None
+        self.assertGreater(points[2][1], 3.0)
+
     def test_regular_ring_points_for_bond_uses_bond_as_first_edge(self) -> None:
         points = regular_ring_points_for_bond(6, (0.0, 0.0), (10.0, 0.0))
 
@@ -260,6 +293,25 @@ class TemplateGeometryTest(unittest.TestCase):
                 occupied_polygon=[(-1.0, -20.0), (11.0, -20.0), (11.0, 20.0), (-1.0, 20.0)],
             )
         )
+
+    def test_regular_ring_points_for_bond_handles_lower_and_non_intersecting_occupied_polygons(self) -> None:
+        lower_blocked = regular_ring_points_for_bond(
+            6,
+            (0.0, 0.0),
+            (10.0, 0.0),
+            occupied_polygon=[(0.0, -20.0), (10.0, -20.0), (10.0, -2.0), (0.0, -2.0)],
+        )
+        assert lower_blocked is not None
+        self.assertGreater(sum(y for _, y in lower_blocked) / len(lower_blocked), 0.0)
+
+        far_polygon = regular_ring_points_for_bond(
+            6,
+            (0.0, 0.0),
+            (10.0, 0.0),
+            occupied_polygon=[(20.0, 20.0), (21.0, 20.0), (21.0, 21.0), (20.0, 21.0)],
+        )
+        assert far_polygon is not None
+        self.assertGreater(sum(y for _, y in far_polygon) / len(far_polygon), 0.0)
 
 
 if __name__ == "__main__":
