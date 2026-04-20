@@ -169,7 +169,7 @@ class _FakeBondCanvas:
 
     def __init__(self) -> None:
         self.drag_mode = None
-        self.scene_obj = object()
+        self.scene_obj = _FakeScene()
         self.active_bond_style = "single"
         self.active_bond_order = 1
         self.snap_angle_step = 30
@@ -195,12 +195,18 @@ class _FakeBondCanvas:
         self.default_endpoint = QPointF(15.0, 0.0)
         self.added_bonds = []
         self.scene_positions = []
+        self.selected_notes = []
+        self.clear_note_selection_calls = 0
 
     def setDragMode(self, mode) -> None:
         self.drag_mode = mode
 
     def scene(self):
         return self.scene_obj
+
+    def clear_note_selection(self) -> None:
+        self.clear_note_selection_calls += 1
+        self.selected_notes = []
 
     def update_bond_preview_items(self, preview_items, start, end, a_id, b_id, style, order):
         self.bond_preview_updates.append((list(preview_items), QPointF(start), QPointF(end), a_id, b_id, style, order))
@@ -761,6 +767,19 @@ class ToolsUnitTest(unittest.TestCase):
     def test_bond_tool_mouse_press_move_release_and_style_dispatch(self) -> None:
         canvas = _FakeBondCanvas()
         tool = BondTool(canvas)
+
+        selected_item = _FakeItem("atom", 99)
+        selected_item.setSelected(True)
+        canvas.scene_obj.selected_items = [selected_item]
+        canvas.selected_notes = ["note"]
+        canvas.atom_near = 1
+        with mock.patch.object(tool, "_set_preview_items"):
+            self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(2.0, 2.0))))
+        self.assertEqual(canvas.scene_obj.clear_selection_calls, 1)
+        self.assertEqual(canvas.scene_obj.selectedItems(), [])
+        self.assertEqual(canvas.selected_notes, [])
+        self.assertEqual(canvas.clear_note_selection_calls, 1)
+        canvas.atom_near = None
 
         canvas.item = _FakeItem("bond", 0)
         canvas.active_bond_style = "wedge"

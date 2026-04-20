@@ -2229,6 +2229,12 @@ class CanvasView(QGraphicsView):
             base_mouse_press_event=super().mousePressEvent,
         )
 
+    def mouseDoubleClickEvent(self, event) -> None:
+        _pointer_controller_for(self).mouse_double_click_event(
+            event,
+            base_mouse_double_click_event=super().mouseDoubleClickEvent,
+        )
+
     def mouseMoveEvent(self, event) -> None:
         _pointer_controller_for(self).mouse_move_event(
             event,
