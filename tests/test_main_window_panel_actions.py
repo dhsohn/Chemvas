@@ -155,6 +155,10 @@ class MainWindowPanelActionsTest(unittest.TestCase):
 
     def test_export_button_normalizes_path_and_reports_success_and_failure(self) -> None:
         export_button = self._find_button(tool_tip="Export 3D XYZ")
+        self.assertFalse(export_button.isEnabled())
+        self.window.canvas.model.add_atom("C", 0.0, 0.0)
+        self.window._update_action_availability()
+        self.assertTrue(export_button.isEnabled())
 
         with mock.patch("ui.main_window.QFileDialog.getSaveFileName", return_value=("/tmp/output", "")) as dialog:
             self.window.canvas.export_xyz = mock.Mock()
@@ -187,6 +191,13 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         self.window.canvas.flip_horizontal = mock.Mock()
         self.window.canvas.flip_vertical = mock.Mock()
         self.window.canvas.begin_smiles_insert = mock.Mock()
+        self.assertFalse(undo_button.isEnabled())
+        self.assertFalse(redo_button.isEnabled())
+        self.window.canvas._history = [object()]
+        self.window.canvas._redo_stack = [object()]
+        self.window._update_action_availability()
+        self.assertTrue(undo_button.isEnabled())
+        self.assertTrue(redo_button.isEnabled())
 
         undo_button.click()
         redo_button.click()

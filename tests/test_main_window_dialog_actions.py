@@ -104,6 +104,20 @@ class MainWindowDialogActionsTest(unittest.TestCase):
         self.assertIs(self.window._icon_orbital(), orbital_icon)
         self.assertIs(self.window._icon_move(), move_icon)
 
+    def test_status_bar_exposes_structured_context_and_transient_messages(self) -> None:
+        self.assertEqual(self.window._status_tool_label.text(), "Tool: Bond")
+        self.assertEqual(self.window._status_sheet_label.text(), "Sheet: Sheet 1 (1/1)")
+        self.assertEqual(self.window._status_selection_label.text(), "Selection: 0")
+        self.assertEqual(self.window._status_zoom_caption.text(), "Zoom")
+        self.assertEqual(self.window._zoom_label.text(), "100%")
+
+        self.window._update_zoom_label(175)
+        self.assertEqual(self.window._zoom_label.text(), "175%")
+        self.assertEqual(self.window._zoom_label.statusTip(), "Zoom: 175%")
+
+        self.window._show_status_message("Saved")
+        self.assertEqual(self.window.statusBar().currentMessage(), "Saved")
+
 
 if __name__ == "__main__":
     unittest.main()

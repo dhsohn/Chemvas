@@ -233,7 +233,7 @@ class CanvasView(QGraphicsView):
         self.scene().selectionChanged.connect(self._update_selection_outline)
         self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
-        self.setBackgroundBrush(QColor("#fdf9f3"))
+        self.setBackgroundBrush(QColor("#ffffff"))
         self.setSceneRect(QRectF(-2000.0, -2000.0, 4000.0, 4000.0))
         self.setMouseTracking(True)
         self.viewport().setMouseTracking(True)
@@ -396,6 +396,7 @@ class CanvasView(QGraphicsView):
         self._redo_stack: list[HistoryCommand] = []
         self._history_enabled = True
         self._history_limit = 100
+        self._history_change_callback = None
         self._clipboard_selection_payload_json: str | None = None
         self._clipboard_paste_source_json: str | None = None
         self._clipboard_paste_count = 0
@@ -581,6 +582,9 @@ class CanvasView(QGraphicsView):
         if len(self._history) > self._history_limit:
             self._history.pop(0)
         self._redo_stack.clear()
+        notify_history_change = getattr(self, "_notify_history_change", None)
+        if callable(notify_history_change):
+            notify_history_change()
 
     def undo(self) -> None:
         if not self._history:
@@ -588,6 +592,9 @@ class CanvasView(QGraphicsView):
         command = self._history.pop()
         self._redo_stack.append(command)
         command.undo(self)
+        notify_history_change = getattr(self, "_notify_history_change", None)
+        if callable(notify_history_change):
+            notify_history_change()
 
     def redo(self) -> None:
         if not self._redo_stack:
@@ -595,6 +602,16 @@ class CanvasView(QGraphicsView):
         command = self._redo_stack.pop()
         self._history.append(command)
         command.redo(self)
+        notify_history_change = getattr(self, "_notify_history_change", None)
+        if callable(notify_history_change):
+            notify_history_change()
+
+    def set_history_change_callback(self, callback) -> None:
+        self._history_change_callback = callback
+
+    def _notify_history_change(self) -> None:
+        if self._history_change_callback is not None:
+            self._history_change_callback()
 
     def set_tool_change_callback(self, callback) -> None:
         self._tool_change_callback = callback

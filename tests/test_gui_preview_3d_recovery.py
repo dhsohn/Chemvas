@@ -9,7 +9,7 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtCore import QPoint, QPointF, Qt
+    from PyQt6.QtCore import QPoint, QPointF, QRectF, Qt
     from PyQt6.QtTest import QTest
     from PyQt6.QtWidgets import QApplication, QWidget
 except ModuleNotFoundError:
@@ -293,6 +293,53 @@ class Preview3DRecoveryTest(unittest.TestCase):
 
         preview._scene = self._make_scene()
         preview.paintEvent(None)
+
+    def test_inspector_layout_and_state_helpers_cover_preview_panel_sections(self) -> None:
+        preview = self._create_preview(SequencedAdapter([]))
+        preview.resize(320, 260)
+
+        self.assertEqual(preview._metadata_summary(), "No structure loaded")
+        self.assertEqual(preview._status_badge()[0], "Empty")
+        self.assertEqual(preview._empty_state_text(), ("No 3D structure", "Canvas has no molecule"))
+
+        preview._message = "There is no chemical structure to export."
+        self.assertEqual(preview._metadata_summary(), "No structure loaded")
+        self.assertEqual(preview._status_badge()[0], "Empty")
+        self.assertEqual(preview._empty_state_text(), ("No 3D structure", "Canvas has no molecule"))
+
+        preview._message = "Updating 3D preview..."
+        self.assertEqual(preview._metadata_summary(), "Preparing coordinates")
+        self.assertEqual(preview._status_badge()[0], "Building")
+        self.assertEqual(preview._empty_state_text(), ("Building preview", "Preparing coordinates"))
+
+        preview._message = "Temporary 3D failure while preparing the selected structure"
+        self.assertEqual(preview._metadata_summary(), "Preview needs attention")
+        self.assertEqual(preview._status_badge()[0], "Issue")
+        self.assertEqual(
+            preview._empty_state_text(),
+            ("Preview unavailable", "Temporary 3D failure while preparing the selected structure"),
+        )
+
+        preview._scene = self._make_scene()
+        preview.set_info("C2H6O", "46.07")
+        self.assertEqual(preview._metadata_summary(), "2 atoms / 1 bond")
+        self.assertEqual(preview._status_badge()[0], "Ready")
+        self.assertEqual(preview._info_items(), [("FORMULA", "C2H6O"), ("MW", "46.07")])
+        self.assertGreaterEqual(preview._footer_height(preview._info_lines()), 68.0)
+
+        layout = preview._layout_rects(preview._info_lines())
+        self.assertFalse(layout["footer"].isNull())
+        self.assertLess(layout["header"].bottom(), layout["viewport"].top())
+        self.assertLess(layout["viewport"].bottom(), layout["footer"].top())
+        self.assertTrue(layout["viewport"].contains(layout["molecule"]))
+        footer_items = preview._footer_item_rects(layout["footer"], 2)
+        self.assertEqual(len(footer_items), 2)
+        self.assertGreater(footer_items[0].width(), layout["footer"].width() * 0.9)
+        self.assertLess(footer_items[0].bottom(), footer_items[1].top())
+
+        projected = preview._project_scene(preview._scene, viewport_rect=QRectF(40.0, 70.0, 220.0, 120.0))
+        self.assertEqual(len(projected), 2)
+        self.assertTrue(all(40.0 <= atom[0] <= 260.0 for atom in projected))
 
 
 if __name__ == "__main__":

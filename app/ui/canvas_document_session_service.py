@@ -35,6 +35,9 @@ class CanvasDocumentSessionService:
         self.apply_state(state)
         self.canvas._history = []
         self.canvas._redo_stack = []
+        notify_history_change = getattr(self.canvas, "_notify_history_change", None)
+        if callable(notify_history_change):
+            notify_history_change()
 
     def save_to_file(self, path: str) -> None:
         write_document(path, self.snapshot_state(), self.canvas.FILE_FORMAT_VERSION)

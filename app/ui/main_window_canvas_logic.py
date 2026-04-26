@@ -83,12 +83,16 @@ def bind_active_canvas_callbacks(
     selection_info_callback,
     tool_change_callback,
     zoom_callback,
+    history_change_callback,
 ) -> None:
     for canvas in canvases:
         is_active = canvas is active_canvas
         canvas.set_selection_info_callback(selection_info_callback if is_active else None)
         canvas.set_tool_change_callback(tool_change_callback if is_active else None)
         canvas.set_zoom_callback(zoom_callback if is_active else None)
+        set_history_change_callback = getattr(canvas, "set_history_change_callback", None)
+        if callable(set_history_change_callback):
+            set_history_change_callback(history_change_callback if is_active else None)
 
 
 def build_workbook_sheet_states(

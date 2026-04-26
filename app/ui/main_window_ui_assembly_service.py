@@ -41,6 +41,9 @@ class MainWindowToolbarAssembly:
     save_action: QAction
     save_as_action: QAction
     save_button: QToolButton
+    export_xyz_button: QToolButton | None = None
+    undo_button: QToolButton | None = None
+    redo_button: QToolButton | None = None
 
 
 @dataclass(frozen=True)
@@ -107,6 +110,7 @@ class MainWindowUIAssemblyService:
         *,
         icon: QIcon | None = None,
         tooltip: str | None = None,
+        status_tip: str | None = None,
         callback: Callable[[], None] | None = None,
         shortcut=None,
         text: str | None = None,
@@ -120,6 +124,9 @@ class MainWindowUIAssemblyService:
             button.setIcon(icon)
         if tooltip is not None:
             button.setToolTip(tooltip)
+        resolved_status_tip = status_tip if status_tip is not None else tooltip
+        if resolved_status_tip is not None:
+            button.setStatusTip(resolved_status_tip)
         if shortcut is not None:
             button.setShortcut(shortcut)
         if text is not None:
@@ -140,6 +147,7 @@ class MainWindowUIAssemblyService:
         *,
         icon: QIcon | None = None,
         tooltip: str | None = None,
+        status_tip: str | None = None,
         style_sheet: str,
         popup_mode: QToolButton.ToolButtonPopupMode,
         menu_builder: Callable[[QMenu], None],
@@ -152,6 +160,9 @@ class MainWindowUIAssemblyService:
             button.setIcon(icon)
         if tooltip is not None:
             button.setToolTip(tooltip)
+        resolved_status_tip = status_tip if status_tip is not None else tooltip
+        if resolved_status_tip is not None:
+            button.setStatusTip(resolved_status_tip)
         button.setPopupMode(popup_mode)
         button.setStyleSheet(style_sheet)
         menu = QMenu(button)
@@ -161,11 +172,19 @@ class MainWindowUIAssemblyService:
 
     def create_save_menu_button(self, save_action: QAction, save_as_action: QAction) -> CornerMenuButton:
         return self.create_corner_menu_button(
+            tooltip=save_action.toolTip(),
+            status_tip=save_action.statusTip() or save_action.toolTip(),
             style_sheet=TOOLBAR_MENU_BUTTON_STYLE,
             popup_mode=QToolButton.ToolButtonPopupMode.MenuButtonPopup,
             menu_builder=lambda menu: menu.addAction(save_as_action),
             default_action=save_action,
         )
+
+    def create_toolbar_section_label(self, text: str) -> QLabel:
+        label = QLabel(text)
+        label.setObjectName("toolbarSectionLabel")
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        return label
 
     def init_toolbars(self, window) -> MainWindowToolbarAssembly:
         tool_group = QActionGroup(window)
@@ -179,8 +198,19 @@ class MainWindowUIAssemblyService:
         left_bar.setStyleSheet(TOOLBAR_BUTTON_STYLE)
 
         tool_actions = window._build_tool_actions(tool_group)
-        for action_key in LEFT_TOOLBAR_ACTION_ORDER:
-            left_bar.addAction(tool_actions[action_key])
+        left_groups = (
+            ("select", "perspective"),
+            ("bond", "bond_bold", "bond_wedge", "bond_hash", "bond_dotted"),
+            ("text", "mark_plus", "mark_minus", "mark_radical"),
+            ("benzene",),
+        )
+        for group_index, action_keys in enumerate(left_groups):
+            if group_index:
+                left_bar.addSeparator()
+            for action_key in action_keys:
+                if action_key in LEFT_TOOLBAR_ACTION_ORDER:
+                    left_bar.addAction(tool_actions[action_key])
+        left_bar.addSeparator()
         left_bar.addWidget(
             self.create_corner_menu_button(
                 icon=window._icon_templates(),
@@ -199,6 +229,7 @@ class MainWindowUIAssemblyService:
             )
         )
         left_bar.addAction(tool_actions["ts_bracket"])
+        left_bar.addSeparator()
         left_bar.addWidget(
             self.create_toolbar_button(
                 icon=window._icon_bond_length(),
@@ -225,6 +256,7 @@ class MainWindowUIAssemblyService:
         tool_actions["bond"].setChecked(True)
 
         panel_bar = QToolBar("Panels", window)
+        panel_bar.setObjectName("topRoleToolbar")
         panel_bar.setMovable(False)
         panel_bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         panel_bar.setIconSize(QSize(24, 24))
@@ -233,12 +265,14 @@ class MainWindowUIAssemblyService:
         save_action = QAction("Save", window)
         save_action.setIcon(window._icon_save())
         save_action.setToolTip("Save")
+        save_action.setStatusTip("Save the current drawing")
         save_action.setShortcut(QKeySequence.StandardKey.Save)
         save_action.triggered.connect(window._save_canvas)
         window.addAction(save_action)
 
         save_as_action = QAction("Save As...", window)
         save_as_action.setToolTip("Save As")
+        save_as_action.setStatusTip("Save the current drawing to a new file")
         save_as_action.setShortcut(QKeySequence.StandardKey.SaveAs)
         save_as_action.triggered.connect(window._save_canvas_as)
         window.addAction(save_as_action)
@@ -247,32 +281,44 @@ class MainWindowUIAssemblyService:
         load_btn = self.create_toolbar_button(
             icon=window._icon_open(),
             tooltip="Load",
+            status_tip="Open a drawing or workbook",
             callback=window._load_canvas,
             shortcut=QKeySequence.StandardKey.Open,
         )
         export_xyz_btn = self.create_toolbar_button(
             icon=window._icon_export_xyz(),
             tooltip="Export 3D XYZ",
+            status_tip="Export the current structure as 3D XYZ",
             callback=window._export_xyz,
+            object_name="export_xyz_button",
         )
         undo_btn = self.create_toolbar_button(
             icon=window._icon_undo(),
             tooltip="Undo",
+            status_tip="Undo the last edit",
             callback=lambda: window.canvas.undo(),
             shortcut=QKeySequence.StandardKey.Undo,
+            object_name="undo_button",
         )
         redo_btn = self.create_toolbar_button(
             icon=window._icon_redo(),
             tooltip="Redo",
+            status_tip="Redo the last undone edit",
             callback=lambda: window.canvas.redo(),
             shortcut=QKeySequence.StandardKey.Redo,
+            object_name="redo_button",
         )
 
         smiles_input = QLineEdit()
+        smiles_input.setObjectName("smilesInput")
         smiles_input.setPlaceholderText("SMILES...")
         smiles_input.setFixedWidth(180)
+        smiles_input.setToolTip("SMILES")
+        smiles_input.setStatusTip("Type a SMILES string to insert")
         smiles_button = self.create_toolbar_button(
-            text="Render",
+            text="Insert",
+            tooltip="Insert SMILES",
+            status_tip="Insert the typed SMILES structure",
             callback=lambda: window.canvas.begin_smiles_insert(smiles_input.text()),
             object_name="smiles_render_button",
             style_sheet=SMILES_RENDER_BUTTON_STYLE,
@@ -281,28 +327,36 @@ class MainWindowUIAssemblyService:
         )
         smiles_input.returnPressed.connect(lambda: window.canvas.begin_smiles_insert(smiles_input.text()))
 
+        panel_bar.addWidget(self.create_toolbar_section_label("File"))
         panel_bar.addWidget(save_button)
         panel_bar.addWidget(load_btn)
         panel_bar.addWidget(export_xyz_btn)
         panel_bar.addSeparator()
+        panel_bar.addWidget(self.create_toolbar_section_label("History"))
         panel_bar.addWidget(undo_btn)
         panel_bar.addWidget(redo_btn)
         panel_bar.addSeparator()
+        panel_bar.addWidget(self.create_toolbar_section_label("SMILES"))
         panel_bar.addWidget(smiles_input)
         panel_bar.addWidget(smiles_button)
         panel_bar.addSeparator()
 
         atom_input = QLineEdit()
+        atom_input.setObjectName("atomInput")
         atom_input.setPlaceholderText("Atom")
         atom_input.setFixedWidth(60)
         atom_input.setMaxLength(4)
         atom_input.setText(window.canvas.get_atom_symbol())
+        atom_input.setToolTip("Atom Symbol")
+        atom_input.setStatusTip("Set the atom symbol used by atom and bond tools")
         atom_input.textChanged.connect(lambda text: window.canvas.set_atom_symbol(text))
+        panel_bar.addWidget(self.create_toolbar_section_label("Style"))
         panel_bar.addWidget(atom_input)
         panel_bar.addWidget(
             self.create_corner_menu_button(
                 icon=window._icon_color(),
                 tooltip="Color",
+                status_tip="Set the drawing color",
                 style_sheet=TOOLBAR_MENU_BUTTON_STYLE,
                 popup_mode=QToolButton.ToolButtonPopupMode.InstantPopup,
                 menu_builder=lambda menu: window._populate_palette_menu(menu, window._apply_color_preset),
@@ -312,6 +366,7 @@ class MainWindowUIAssemblyService:
             self.create_corner_menu_button(
                 icon=window._icon_ring_fill(),
                 tooltip="Ring Fill",
+                status_tip="Set the ring fill color",
                 style_sheet=TOOLBAR_MENU_BUTTON_STYLE,
                 popup_mode=QToolButton.ToolButtonPopupMode.InstantPopup,
                 menu_builder=lambda menu: window._populate_palette_menu(menu, window._apply_ring_fill_preset),
@@ -321,6 +376,7 @@ class MainWindowUIAssemblyService:
             self.create_toolbar_button(
                 icon=window._icon_bond_length(),
                 tooltip="Bond Length",
+                status_tip="Set the default bond length",
                 callback=window._set_bond_length,
             )
         )
@@ -335,6 +391,9 @@ class MainWindowUIAssemblyService:
             save_action=save_action,
             save_as_action=save_as_action,
             save_button=save_button,
+            export_xyz_button=export_xyz_btn,
+            undo_button=undo_btn,
+            redo_button=redo_btn,
         )
 
     def init_panels(self, window) -> MainWindowPanelAssembly:

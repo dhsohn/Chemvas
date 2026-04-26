@@ -86,6 +86,7 @@ class MainWindowToolActionServiceTest(unittest.TestCase):
 
         icon_method.assert_called_once_with()
         self.assertEqual(action.toolTip(), "Pick atoms")
+        self.assertEqual(action.statusTip(), "Pick atoms")
         self.assertTrue(action.isCheckable())
         action.trigger()
         callback.assert_called_once_with()
