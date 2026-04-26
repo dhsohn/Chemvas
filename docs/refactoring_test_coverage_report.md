@@ -1,16 +1,18 @@
 # Refactoring / Test Coverage Report
 
 작성일: 2026-04-17
-최종 갱신: 2026-04-20
+최종 갱신: 2026-04-26
 
 ## 1. 현재 상태 요약
 
 - 실행 기준: `pytest --cov=app --cov-report=term-missing`
-- 결과: `1234 passed in 14.32s`
+- 결과: `1269 passed in 15.64s`
 - 전체 커버리지: `99%`
-- 첫 보고서 시점 대비: `+836 tests`, `+28%p`
+- 첫 보고서 시점 대비: `+871 tests`, `+28%p`
 
-이번 턴에는 [test_core_rdkit_adapter.py](/Users/daehyupsohn/LiteDraw/tests/test_core_rdkit_adapter.py), [test_handle_overlay_service.py](/Users/daehyupsohn/LiteDraw/tests/test_handle_overlay_service.py), [test_insert_smiles_transaction.py](/Users/daehyupsohn/LiteDraw/tests/test_insert_smiles_transaction.py), [test_scene_item_access.py](/Users/daehyupsohn/LiteDraw/tests/test_scene_item_access.py), [test_scene_ops_controller.py](/Users/daehyupsohn/LiteDraw/tests/test_scene_ops_controller.py), [test_selection_highlight_styler.py](/Users/daehyupsohn/LiteDraw/tests/test_selection_highlight_styler.py)를 보강했고, [scene_single_item_mutation_logic.py](/Users/daehyupsohn/LiteDraw/app/ui/scene_single_item_mutation_logic.py)에서는 도달 불가능한 dead guard를 제거했다. 이걸로 `rdkit_import`, `handle_overlay_service`, `insert_smiles_transaction`, `scene_item_access`, `scene_ops_controller`, `scene_single_item_mutation_logic`, `selection_highlight_styler`가 `100%`까지 올라갔다. 다음 우선순위는 `rdkit_conversion`, `canvas_ring_fill_scene_service`, `main_window_ui_assembly_service`, `scene_item_restore`, `scene_transform_logic`의 99% tail이다.
+이번 턴에는 [test_core_tail_coverage.py](/Users/daehyupsohn/LiteDraw/tests/test_core_tail_coverage.py), [test_ui_service_tail_coverage.py](/Users/daehyupsohn/LiteDraw/tests/test_ui_service_tail_coverage.py), [test_renderer_canvas_tail_coverage.py](/Users/daehyupsohn/LiteDraw/tests/test_renderer_canvas_tail_coverage.py)를 추가하고 [test_canvas_view_projection_math.py](/Users/daehyupsohn/LiteDraw/tests/test_canvas_view_projection_math.py)를 보강했다. [canvas_view.py](/Users/daehyupsohn/LiteDraw/app/ui/canvas_view.py)에서는 항상 양수인 projection scale에 걸린 도달 불가능 guard를 제거했다.
+
+현재 statement miss는 `0`이고 남은 항목은 branch partial `15`개뿐이다. 이번 턴으로 `rdkit_conversion`, `core/tools`, `canvas_ring_fill_scene_service`, `handle_mutation_service`, `main_window_ui_assembly_service`, `scene_item_restore`, `scene_transform_logic`의 이전 99% statement tail은 닫혔다. 다음 우선순위는 `bond_renderer`, `preview_3d`, `scene_item_controller`, `scene_ops_controller`, `structure_payload_logic`의 남은 branch arc다.
 
 ## 2. 이번 라운드에서 완료된 작업
 
@@ -466,9 +468,23 @@
 - `tests/test_main_window_workbook_tabs.py` 추가 보강
 - `tests/test_main_window_canvas_tab_ui_service.py` 추가 보강
 - `tests/test_main_window_toolbar_actions.py` 추가 보강
+- `tests/test_core_tail_coverage.py`
+- `tests/test_ui_service_tail_coverage.py`
+- `tests/test_renderer_canvas_tail_coverage.py`
+- `tests/test_canvas_view_projection_math.py` 추가 보강
 
 강화된 포인트:
 
+- `RDKitConversionHelper`의 unsupported style truncate, alias fragment no-2D-coords, sparse atom-map bond skip branch 고정
+- `core/tools.py`의 `SelectTool` / `TextTool` / `MoveTool` rare GUI branch 고정
+- `CanvasRingFillSceneService`의 3D list-backed ring refresh branch 고정
+- `HandleMutationService`의 invalid curved endpoint no-op branch 고정
+- `MainWindowUIAssemblyService`의 arrow paint / no-icon corner menu branch 고정
+- `scene_item_restore` orbital empty-builder fallback 고정
+- `scene_transform_logic` valid note vertical flip branch 고정
+- `BondPreviewRenderer` / `BondRenderer`의 bold, dotted, ring-double, higher-order geometry tail branch 고정
+- `CanvasView`의 no-ring bond-length command path, selection/translation/rotation fallback, 평균 bond length defensive branch 고정
+- `CanvasView._unproject_scene_point_3d()`의 도달 불가능한 zero-scale guard 제거
 - `load_smiles()` history subcommand 순서와 payload 고정
 - free mark vs attached mark 분리 검증
 - `build_command() is None`일 때 `_push_command` 미호출 보장
@@ -637,18 +653,14 @@
 
 | 영역 | 규모 / 커버리지 | 근거 | 판단 |
 | --- | --- | --- | --- |
-| `app/core/rdkit_conversion.py` | `464 stmts / 99%` | alias/fragment failure matrix는 거의 닫혔고 line miss 두 개와 partial 몇 갈래만 남았다 | 다음 우선순위 |
-| `app/ui/canvas_ring_fill_scene_service.py` | `126 stmts / 99%` | polygon/ring-fill update tail 한 줄이 남아 있다 | 다음 우선순위 |
-| `app/ui/main_window_ui_assembly_service.py` | `231 stmts / 99%` | assembly 초기화 rare branch와 partial 두 갈래가 남아 있다 | 다음 우선순위 |
-| `app/ui/scene_item_restore.py` | `122 stmts / 99%` | restore fallback 한 줄이 남아 있다 | 다음 우선순위 |
-| `app/ui/scene_transform_logic.py` | `184 stmts / 99%` | flipped-state edge 두 줄만 남아 있어 후순위로 정리 가능하다 | 다음 우선순위 |
-| `app/ui/main_window_document_action_service.py` | `116 stmts / 99%` | dialog/status update exit branch 하나만 남아 있다 | 그 다음 |
-| `app/ui/main_window_tool_routing_service.py` | `58 stmts / 99%` | tool routing partial branch 한 갈래만 남아 있다 | 그 다음 |
-| `app/ui/canvas_view.py` | `2224 stmts / 99%` | 구조 추출은 사실상 끝났고 남은 건 ROI 낮은 micro arc다 | 급하지 않음 |
-| `app/core/tools.py` | `828 stmts / 99%` | 대형 구조 정리는 끝났고 rare GUI/default arc만 남았다 | 급하지 않음 |
-| `app/ui/bond_renderer.py` | `697 stmts / 99%` | variant matrix는 닫혔고 미세 branch arc만 남았다 | 급하지 않음 |
-| `app/ui/preview_3d.py` | `232 stmts / 99%` | rebuild/input/paint fallback이 정리돼 유지 단계다 | 급하지 않음 |
-| `이번 턴 완료 묶음` | `100%` | `rdkit_import`, `handle_overlay_service`, `insert_smiles_transaction`, `scene_item_access`, `scene_ops_controller`, `scene_single_item_mutation_logic`, `selection_highlight_styler` | 유지 단계 |
+| `app/ui/bond_renderer.py` | `697 stmts / 99%` | statement miss는 없고 geometry update rare branch 4갈래만 남았다 | 다음 우선순위 |
+| `app/ui/preview_3d.py` | `232 stmts / 99%` | input/rebuild fallback branch 3갈래만 남았다 | 다음 우선순위 |
+| `app/ui/scene_item_controller.py` | `133 stmts / 99%` | attach/remove controller fallback branch 3갈래만 남았다 | 그 다음 |
+| `app/ui/scene_ops_controller.py` | `198 stmts / 99%` | delete/clipboard/flip orchestration branch 2갈래만 남았다 | 그 다음 |
+| `app/ui/structure_payload_logic.py` | `88 stmts / 99%` | payload fallback branch 1갈래만 남았다 | 그 다음 |
+| `app/ui/main_window_document_action_service.py` | `116 stmts / 99%` | dialog/status update exit branch 하나만 남아 있다 | 유지보수 tail |
+| `app/ui/main_window_tool_routing_service.py` | `58 stmts / 99%` | tool routing partial branch 한 갈래만 남았다 | 유지보수 tail |
+| `이번 턴 완료 묶음` | statement `100%` | `rdkit_conversion`, `core/tools`, `canvas_ring_fill_scene_service`, `handle_mutation_service`, `main_window_ui_assembly_service`, `scene_item_restore`, `scene_transform_logic`, `canvas_view` statement miss를 모두 닫았다 | 유지 단계 |
 
 ## 4. 리팩토링 권장 사항
 
@@ -868,14 +880,14 @@ controller는 canvas collaborator 연결만 담당하는 얇은 조정자로 남
 
 ## 7. 권장 실행 순서
 
-1. `core/history`, `template_geometry`, `mark_hover_preview_service`, `selection_controller`, `selection_rotation_controller`, `smiles_insert_logic`의 97%대 edge branch를 먼저 줄인다.
-2. `scene_ops_controller`, `insert_smiles_transaction`, `scene_item_access`, `handle_overlay_service`의 98% tail을 정리한다.
-3. `CanvasView`, `core/tools.py`, `bond_renderer`, `preview_3d`, `rdkit_conversion` 같은 99% arc는 ROI가 있을 때만 건드린다.
-4. 이미 `100%`에 들어간 service/controller 묶음은 회귀 방지 중심으로 유지한다.
+1. 남은 branch partial 중 `bond_renderer`와 `preview_3d`처럼 사용자-visible geometry/render fallback에 가까운 항목부터 줄인다.
+2. `scene_item_controller`, `scene_ops_controller`, `structure_payload_logic`의 controller/payload fallback branch를 targeted test로 정리한다.
+3. `main_window_document_action_service`, `main_window_tool_routing_service`는 ROI가 있을 때만 유지보수 tail로 건드린다.
+4. statement `100%`에 들어간 service/controller 묶음은 회귀 방지 중심으로 유지한다.
 
 ## 8. 결론
 
-첫 보고서에서 제시한 방향은 여전히 맞다. 이번 라운드에서는 `preview_scene_renderer`, `scene_clipboard_logic`, `scene_delete_logic`, `canvas_move_controller`, `text_tool_logic`, `tool_overlay_logic`, `main_window_canvas_logic`, `handle_interaction_logic`, `hover_scene_renderer`, `main.py`, `perspective_drag_logic`, `atom_label_service`를 `100%`까지 닫았고, 전체 커버리지는 `99%`를 유지한 채 `1214 passed`까지 올라왔다. 이미 `InsertCommitService`, `SceneItemState`, `HoverInteractionService`, `MainWindow`, `CanvasInputController`, `CanvasHandleController`, `BenzenePreviewRenderer`, `core.document_state`, `canvas_document_state`, `CanvasMarkSceneService`, `CanvasChemdrawShortcutService`, `InsertController`, `MainWindowTextStyleService`, `CanvasGeometryController`, `StructureGeometryLogic`, `StructureBuildService`, `CanvasAtomMutationService`, `BondStyleLogic`, `StructureInsertService`, `CanvasGraphService`, `CanvasHistoryRecordingService`, `CanvasHitTestingService`, `CanvasBondMutationService`, `canvas_geometry_logic`도 계속 `100%`를 유지하고 있다. 현재 단계의 다음 초점은 큰 구조 추출보다 `core/history`, `template_geometry`, `mark_hover_preview_service`, `selection_controller`, `selection_rotation_controller`, `smiles_insert_logic` 같은 97%대 tail을 줄이는 것이다.
+첫 보고서에서 제시한 방향은 여전히 맞다. 이번 라운드에서는 `rdkit_conversion`, `core/tools`, `canvas_ring_fill_scene_service`, `handle_mutation_service`, `main_window_ui_assembly_service`, `scene_item_restore`, `scene_transform_logic`, `canvas_view`의 남은 statement tail을 닫았고, 전체 커버리지는 `99%`를 유지한 채 `1269 passed`까지 올라왔다. 현재 statement miss는 `0`이고 남은 작업은 `bond_renderer`, `preview_3d`, `scene_item_controller`, `scene_ops_controller`, `structure_payload_logic` 등에 남은 branch partial 15개 정리다.
 
 현재 총평:
 
@@ -889,7 +901,9 @@ controller는 canvas collaborator 연결만 담당하는 얇은 조정자로 남
 - 이번에 닫은 항목에 추가: `SceneItemController.attach_scene_item()` seam 추가, `SceneDecorationService` / `CanvasNoteController` / `StructureBuildService`의 runtime scene item register를 `scene_item_access.attach_scene_item()`으로 통일, controller-first / wrapper-fallback access contract 고정
 - 이번에 닫은 항목에 추가: `BondRenderer` ring/double/bold variant matrix direct test 보강과 `CanvasView` projection/planar/rotation fallback helper direct test 보강
 - 이번에 닫은 항목에 추가: `graphics_items` no-select paint + atom hit-bound contract direct test, `structure_benzene_logic` invalid attachment fallback direct test, `bond_graphics_logic` non-selectable fallback direct test, `template_insert_logic` invalid internal plan guard direct test, `BenzenePreviewService` inner-bond fallback direct test
-- 지금 바로 손대야 할 곳: `core/history` / `template_geometry` / `mark_hover_preview_service`
-- 그 다음 구조 후보: `selection_controller` / `selection_rotation_controller` / `smiles_insert_logic`
-- targeted polish 후보: `scene_ops_controller` / `insert_smiles_transaction` / `scene_item_access` / `handle_overlay_service`
-- 큰 리팩터링보다 targeted test 보강이 맞는 곳: 위 90~95%대 service/controller 모듈 전반
+- 이번에 닫은 항목에 추가: `RDKitConversionHelper`, `core/tools.py`, UI service tail, renderer/canvas tail 전용 테스트 보강
+- 이번에 닫은 항목에 추가: `CanvasView._unproject_scene_point_3d()`의 도달 불가능 zero-scale guard 제거
+- 지금 바로 손대야 할 곳: `bond_renderer` / `preview_3d`
+- 그 다음 구조 후보: `scene_item_controller` / `scene_ops_controller` / `structure_payload_logic`
+- targeted polish 후보: `main_window_document_action_service` / `main_window_tool_routing_service`
+- 큰 리팩터링보다 targeted branch test 보강이 맞는 단계

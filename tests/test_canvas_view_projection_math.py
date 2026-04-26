@@ -487,6 +487,29 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             )
         )
 
+        forced_tail_view = SimpleNamespace(
+            model=SimpleNamespace(
+                bonds=[
+                    None,
+                    Bond(1, 3, 1),
+                    Bond(1, 2, 1),
+                ]
+            )
+        )
+        with mock.patch.object(CanvasView, "_bond_ids_within_atom_ids", return_value={0, 1, 2}):
+            self.assertAlmostEqual(
+                CanvasView._average_bond_length_for_atoms(
+                    forced_tail_view,
+                    {1, 2},
+                    {
+                        1: (0.0, 0.0, 0.0),
+                        2: (3.0, 4.0, 0.0),
+                        3: (2.0, 0.0, 0.0),
+                    },
+                ),
+                5.0,
+            )
+
     def test_bond_lookup_average_scale_and_axis_rotation_helpers(self) -> None:
         indexed_view = SimpleNamespace(
             _atom_bond_ids={1: {0, 99}, 2: {0, 1}, 3: {1, 2}},

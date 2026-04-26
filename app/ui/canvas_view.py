@@ -2423,8 +2423,6 @@ class CanvasView(QGraphicsView):
         dz = max(min(z - cz, focal * 0.7), -focal * 0.8)
         denom = max(focal - dz, focal * 0.2)
         scale = focal / denom
-        if abs(scale) <= 1e-9:
-            return (point.x(), point.y(), z)
         return (
             cx + (point.x() - anchor_x) / scale,
             cy + (point.y() - anchor_y) / scale,
