@@ -8,13 +8,14 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtCore import QPointF, QRectF, Qt
+    from PyQt6.QtCore import QPointF, QRectF, QSize, Qt
     from PyQt6.QtGui import QColor, QPainter, QPen, QPixmap, QPolygonF
     from PyQt6.QtWidgets import QApplication
 except ModuleNotFoundError:
     QApplication = None
     QPointF = None
     QRectF = None
+    QSize = None
     Qt = None
     QColor = None
     QPainter = None
@@ -158,6 +159,24 @@ class MainWindowIconGeometryTest(unittest.TestCase):
             self.factory.icon_move(),
         ):
             self.assertIsNotNone(_opaque_bounds(icon.pixmap(30, 30).toImage()))
+
+    def test_shared_icon_size_and_pen_helpers_stay_consistent(self) -> None:
+        expected_size = QSize(self.factory.ICON_SIZE, self.factory.ICON_SIZE)
+        for icon in (
+            self.factory.icon_ring(),
+            self.factory.icon_save(),
+            self.factory.icon_arrow(),
+            self.factory.icon_color(),
+            self.factory.icon_templates(),
+        ):
+            self.assertIn(expected_size, icon.availableSizes())
+
+        default_pen = self.factory._icon_pen()
+        active_pen = self.factory._icon_pen(self.factory.STROKE_ACTIVE)
+        self.assertEqual(default_pen.color().name(), self.factory.STROKE_COLOR)
+        self.assertAlmostEqual(default_pen.widthF(), self.factory.STROKE_THIN)
+        self.assertEqual(active_pen.color().name(), self.factory.STROKE_COLOR)
+        self.assertAlmostEqual(active_pen.widthF(), self.factory.STROKE_ACTIVE)
 
     def test_arrow_preview_matrix_renders_special_cases(self) -> None:
         for kind in ("reaction", "dotted", "curved_single", "curved_double", "equilibrium", "resonance", "inhibit"):

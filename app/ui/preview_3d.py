@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 
 from PyQt6.QtCore import QPointF, QRectF, QTimer, Qt
-from PyQt6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPen
+from PyQt6.QtGui import QColor, QFont, QFontMetricsF, QLinearGradient, QPainter, QPen
 from PyQt6.QtWidgets import QWidget
 
 from core.rdkit_adapter import Molecule3DScene, RDKitAdapter
@@ -164,22 +164,21 @@ class Preview3D(QWidget):
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        painter.fillRect(self.rect(), QColor("#f7f1e8"))
-
-        inner = self.rect().adjusted(10, 10, -10, -10)
-        painter.setPen(QPen(QColor("#d8ccbd"), 1.0))
-        painter.drawRoundedRect(inner, 10, 10)
-
-        if self._scene is None:
-            painter.setPen(QColor("#6f6457"))
-            painter.drawText(inner, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, self._message)
-            return
+        painter.fillRect(self.rect(), QColor("#f1ebe3"))
 
         info_lines = self._info_lines()
-        projected_atoms = self._project_scene(self._scene, footer_height=self._footer_height(info_lines))
+        layout = self._layout_rects(info_lines)
+        self._draw_panel(painter, layout["panel"])
+        self._draw_header(painter, layout["header"])
+        self._draw_viewport(painter, layout["viewport"])
+
+        if self._scene is None:
+            self._draw_empty_state(painter, layout["viewport"])
+            return
+
+        projected_atoms = self._project_scene(self._scene, viewport_rect=layout["molecule"])
         if not projected_atoms:
-            painter.setPen(QColor("#6f6457"))
-            painter.drawText(inner, Qt.AlignmentFlag.AlignCenter, self._message or "3D preview unavailable")
+            self._draw_empty_state(painter, layout["viewport"])
             return
 
         bond_depths = []
@@ -191,7 +190,9 @@ class Preview3D(QWidget):
             bond_depths.append((az + bz, bond, (ax, ay), (bx, by)))
         for _, bond, start, end in sorted(bond_depths, key=lambda item: item[0]):
             width = 1.4 + max(0, bond.order - 1) * 1.0
-            painter.setPen(QPen(QColor("#6d5d4e"), width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+            painter.setPen(QPen(QColor(93, 82, 69, 70), width + 1.8, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+            painter.drawLine(QPointF(start[0] + 1.0, start[1] + 1.2), QPointF(end[0] + 1.0, end[1] + 1.2))
+            painter.setPen(QPen(QColor("#5f5346"), width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
             painter.drawLine(QPointF(*start), QPointF(*end))
 
         atom_draws = []
@@ -200,9 +201,15 @@ class Preview3D(QWidget):
             atom_draws.append((pz, atom.symbol, px, py, radius))
         for _, symbol, px, py, radius in sorted(atom_draws, key=lambda item: item[0]):
             fill = self._element_color(symbol)
-            painter.setPen(QPen(QColor("#3d3229"), 1.0))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(55, 45, 36, 35))
+            painter.drawEllipse(QPointF(px + 1.1, py + 1.8), radius * 1.04, radius * 1.04)
+            painter.setPen(QPen(QColor("#362f29"), 1.0))
             painter.setBrush(fill)
             painter.drawEllipse(QPointF(px, py), radius, radius)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(255, 255, 255, 72))
+            painter.drawEllipse(QPointF(px - radius * 0.28, py - radius * 0.32), radius * 0.33, radius * 0.24)
             if symbol != "C" or radius >= 9.0:
                 painter.save()
                 painter.setPen(QColor("#1f1a16"))
@@ -213,28 +220,242 @@ class Preview3D(QWidget):
                 painter.drawText(text_rect, int(Qt.AlignmentFlag.AlignCenter), symbol)
                 painter.restore()
 
+        self._draw_interaction_hints(painter, layout["viewport"])
+        if info_lines:
+            self._draw_footer(painter, layout["footer"])
+
+    def _layout_rects(self, info_lines: list[str] | None = None) -> dict[str, QRectF]:
+        info_lines = info_lines or []
+        panel = QRectF(self.rect()).adjusted(8.0, 8.0, -8.0, -8.0)
+        if panel.width() <= 0.0 or panel.height() <= 0.0:
+            panel = QRectF(self.rect())
+
+        pad = 12.0
+        header_height = 42.0
+        footer_height = self._footer_height(info_lines)
+        footer_gap = 8.0 if footer_height > 0.0 else 0.0
+
+        header = QRectF(panel.left() + pad, panel.top() + 10.0, max(20.0, panel.width() - pad * 2.0), header_height)
+        footer = QRectF()
+        viewport_bottom = panel.bottom() - pad - footer_height - footer_gap
+        viewport_top = header.bottom() + 8.0
+        viewport_height = max(48.0, viewport_bottom - viewport_top)
+        viewport = QRectF(panel.left() + pad, viewport_top, max(20.0, panel.width() - pad * 2.0), viewport_height)
+        if footer_height > 0.0:
+            footer_top = min(panel.bottom() - pad - footer_height, viewport.bottom() + footer_gap)
+            footer = QRectF(panel.left() + pad, footer_top, max(20.0, panel.width() - pad * 2.0), footer_height)
+
+        molecule = viewport.adjusted(18.0, 22.0, -18.0, -14.0)
+        if molecule.width() < 36.0 or molecule.height() < 36.0:
+            molecule = viewport.adjusted(10.0, 16.0, -10.0, -10.0)
+
+        return {
+            "panel": panel,
+            "header": header,
+            "viewport": viewport,
+            "molecule": molecule,
+            "footer": footer,
+        }
+
+    def _draw_panel(self, painter: QPainter, rect: QRectF) -> None:
         painter.save()
-        painter.setPen(QColor("#8a7a68"))
-        painter.setFont(self._overlay_font())
-        painter.drawText(inner.adjusted(10, 10, -10, -10), Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight, "drag: rotate\nwheel: zoom")
+        shadow = rect.translated(0.0, 1.0)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(58, 47, 38, 18))
+        painter.drawRoundedRect(shadow, 9.0, 9.0)
+
+        gradient = QLinearGradient(rect.topLeft(), rect.bottomLeft())
+        gradient.setColorAt(0.0, QColor("#fffdf9"))
+        gradient.setColorAt(1.0, QColor("#f5eee6"))
+        painter.setBrush(gradient)
+        painter.setPen(QPen(QColor("#d5c9ba"), 1.0))
+        painter.drawRoundedRect(rect, 9.0, 9.0)
         painter.restore()
 
-        if info_lines:
-            painter.save()
-            painter.setPen(QColor("#6f6457"))
-            painter.setFont(self._overlay_font())
-            painter.drawText(
-                inner.adjusted(10, 10, -10, -10),
-                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom,
-                "\n".join(info_lines),
-            )
+    def _draw_header(self, painter: QPainter, rect: QRectF) -> None:
+        painter.save()
+        title_font = QFont(self.font())
+        title_font.setPixelSize(13)
+        title_font.setWeight(QFont.Weight.DemiBold)
+        caption_font = self._caption_font()
+
+        status_text, status_fill, status_border, status_pen = self._status_badge()
+        metrics = QFontMetricsF(caption_font)
+        badge_width = max(50.0, metrics.horizontalAdvance(status_text) + 20.0)
+        badge = QRectF(rect.right() - badge_width, rect.top() + 4.0, badge_width, 22.0)
+        painter.setPen(QPen(status_border, 1.0))
+        painter.setBrush(status_fill)
+        painter.drawRoundedRect(badge, 11.0, 11.0)
+        painter.setPen(status_pen)
+        painter.setFont(caption_font)
+        painter.drawText(badge, int(Qt.AlignmentFlag.AlignCenter), status_text)
+
+        title_rect = QRectF(rect.left(), rect.top() + 1.0, max(20.0, rect.width() - badge_width - 10.0), 20.0)
+        painter.setPen(QColor("#2f2924"))
+        painter.setFont(title_font)
+        painter.drawText(title_rect, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), "3D Preview")
+
+        subtitle = self._metadata_summary()
+        subtitle_rect = QRectF(rect.left(), title_rect.bottom() + 1.0, rect.width(), 17.0)
+        painter.setPen(QColor("#7c6d5f"))
+        painter.setFont(caption_font)
+        painter.drawText(subtitle_rect, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), subtitle)
+        painter.restore()
+
+    def _draw_viewport(self, painter: QPainter, rect: QRectF) -> None:
+        painter.save()
+        painter.setPen(QPen(QColor("#d8cec2"), 1.0))
+        painter.setBrush(QColor("#fbfaf6"))
+        painter.drawRoundedRect(rect, 7.0, 7.0)
+
+        inner = rect.adjusted(6.0, 6.0, -6.0, -6.0)
+        painter.setPen(QPen(QColor(216, 206, 194, 90), 1.0))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(inner, 5.0, 5.0)
+
+        tick_pen = QPen(QColor(166, 150, 132, 80), 1.0)
+        painter.setPen(tick_pen)
+        tick = 12.0
+        corners = (
+            (inner.left(), inner.top(), 1.0, 1.0),
+            (inner.right(), inner.top(), -1.0, 1.0),
+            (inner.left(), inner.bottom(), 1.0, -1.0),
+            (inner.right(), inner.bottom(), -1.0, -1.0),
+        )
+        for x, y, dx, dy in corners:
+            painter.drawLine(QPointF(x, y), QPointF(x + tick * dx, y))
+            painter.drawLine(QPointF(x, y), QPointF(x, y + tick * dy))
+        painter.restore()
+
+    def _draw_empty_state(self, painter: QPainter, rect: QRectF) -> None:
+        title, detail = self._empty_state_text()
+        painter.save()
+        center = rect.center()
+        icon_center = QPointF(center.x(), center.y() - 24.0)
+        line_pen = QPen(QColor("#b8aa9a"), 1.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+        painter.setPen(line_pen)
+        painter.drawLine(icon_center + QPointF(-18.0, 3.0), icon_center + QPointF(0.0, -9.0))
+        painter.drawLine(icon_center + QPointF(0.0, -9.0), icon_center + QPointF(19.0, 5.0))
+        painter.drawLine(icon_center + QPointF(-18.0, 3.0), icon_center + QPointF(14.0, 18.0))
+
+        for point, radius, color in (
+            (icon_center + QPointF(-18.0, 3.0), 5.0, QColor("#786b60")),
+            (icon_center + QPointF(0.0, -9.0), 6.0, QColor("#cc584d")),
+            (icon_center + QPointF(19.0, 5.0), 4.5, QColor("#4b73c4")),
+            (icon_center + QPointF(14.0, 18.0), 4.0, QColor("#f3efe7")),
+        ):
+            painter.setBrush(color)
+            painter.setPen(QPen(QColor("#5f5346"), 1.0))
+            painter.drawEllipse(point, radius, radius)
+
+        title_font = QFont(self.font())
+        title_font.setPixelSize(13)
+        title_font.setWeight(QFont.Weight.DemiBold)
+        detail_font = self._overlay_font()
+        title_rect = QRectF(rect.left() + 18.0, center.y() + 6.0, rect.width() - 36.0, 18.0)
+        detail_rect = QRectF(rect.left() + 22.0, title_rect.bottom() + 3.0, rect.width() - 44.0, 34.0)
+
+        painter.setPen(QColor("#3b332c"))
+        painter.setFont(title_font)
+        painter.drawText(title_rect, int(Qt.AlignmentFlag.AlignCenter), title)
+        painter.setPen(QColor("#7a6b5d"))
+        painter.setFont(detail_font)
+        painter.drawText(
+            detail_rect,
+            int(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop | Qt.TextFlag.TextWordWrap),
+            detail,
+        )
+        painter.restore()
+
+    def _draw_interaction_hints(self, painter: QPainter, viewport: QRectF) -> None:
+        painter.save()
+        labels = ("Drag rotate", "Wheel zoom")
+        font = self._caption_font()
+        painter.setFont(font)
+        metrics = QFontMetricsF(font)
+        gap = 5.0
+        widths = [metrics.horizontalAdvance(label) + 18.0 for label in labels]
+        total_width = sum(widths) + gap
+        x = viewport.right() - total_width - 10.0
+        y = viewport.top() + 10.0
+        for label, width in zip(labels, widths):
+            pill = QRectF(x, y, width, 22.0)
+            painter.setPen(QPen(QColor("#d2c7b9"), 1.0))
+            painter.setBrush(QColor("#fffdf9"))
+            painter.drawRoundedRect(pill, 11.0, 11.0)
+            painter.setPen(QColor("#746658"))
+            painter.drawText(pill, int(Qt.AlignmentFlag.AlignCenter), label)
+            x += width + gap
+        painter.restore()
+
+    def _draw_footer(self, painter: QPainter, rect: QRectF) -> None:
+        if rect.isNull():
+            return
+        painter.save()
+        painter.setPen(QPen(QColor("#d8cec2"), 1.0))
+        painter.setBrush(QColor("#f8f4ee"))
+        painter.drawRoundedRect(rect, 7.0, 7.0)
+
+        items = self._info_items()
+        if not items:
             painter.restore()
+            return
+        for item_rect, (label, value) in zip(self._footer_item_rects(rect, len(items)), items):
+            self._draw_info_chip(painter, item_rect, label, value)
+        painter.restore()
+
+    def _footer_item_rects(self, rect: QRectF, item_count: int) -> list[QRectF]:
+        if rect.isNull() or item_count <= 0:
+            return []
+        gap = 6.0
+        available_height = max(18.0, rect.height() - gap * (item_count + 1))
+        item_height = available_height / item_count
+        item_width = max(18.0, rect.width() - gap * 2.0)
+        x = rect.left() + gap
+        y = rect.top() + gap
+        return [
+            QRectF(x, y + index * (item_height + gap), item_width, item_height)
+            for index in range(item_count)
+        ]
+
+    def _draw_info_chip(self, painter: QPainter, rect: QRectF, label: str, value: str) -> None:
+        painter.save()
+        painter.setPen(QPen(QColor("#e0d5c8"), 1.0))
+        painter.setBrush(QColor("#fffdf9"))
+        painter.drawRoundedRect(rect, 6.0, 6.0)
+
+        label_font = self._caption_font()
+        value_font = self._overlay_font()
+        value_font.setWeight(QFont.Weight.DemiBold)
+        label_metrics = QFontMetricsF(label_font)
+        value_metrics = QFontMetricsF(value_font)
+        label_width = label_metrics.horizontalAdvance(label) + 10.0
+        label_rect = QRectF(rect.left() + 7.0, rect.top(), label_width, rect.height())
+        value_rect = QRectF(
+            label_rect.right() + 3.0,
+            rect.top(),
+            max(8.0, rect.right() - label_rect.right() - 10.0),
+            rect.height(),
+        )
+
+        painter.setFont(label_font)
+        painter.setPen(QColor("#897b6c"))
+        painter.drawText(label_rect, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), label)
+        painter.setFont(value_font)
+        painter.setPen(QColor("#332c26"))
+        painter.drawText(
+            value_rect,
+            int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter),
+            value_metrics.elidedText(value, Qt.TextElideMode.ElideRight, value_rect.width()),
+        )
+        painter.restore()
 
     def _project_scene(
         self,
         scene: Molecule3DScene,
         *,
         footer_height: float = 0.0,
+        viewport_rect: QRectF | None = None,
     ) -> list[tuple[float, float, float, float]]:
         if not scene.atoms:
             return []
@@ -259,8 +480,11 @@ class Preview3D(QWidget):
             rotated.append((x1, y1, z2))
             max_extent = max(max_extent, math.sqrt(x1 * x1 + y1 * y1 + z2 * z2))
 
-        content_rect = QRectF(self.rect()).adjusted(18.0, 18.0, -18.0, -18.0)
-        if footer_height > 0.0:
+        if viewport_rect is not None:
+            content_rect = QRectF(viewport_rect)
+        else:
+            content_rect = QRectF(self.rect()).adjusted(18.0, 18.0, -18.0, -18.0)
+        if viewport_rect is None and footer_height > 0.0:
             content_rect.setBottom(max(content_rect.top() + 40.0, content_rect.bottom() - footer_height))
         available = max(40.0, min(content_rect.width(), content_rect.height()))
         scale = (available * 0.36 * self._zoom) / max_extent
@@ -296,6 +520,11 @@ class Preview3D(QWidget):
         font.setPixelSize(12)
         return font
 
+    def _caption_font(self) -> QFont:
+        font = QFont(self.font())
+        font.setPixelSize(11)
+        return font
+
     def _info_lines(self) -> list[str]:
         lines: list[str] = []
         if self._formula_text:
@@ -304,8 +533,54 @@ class Preview3D(QWidget):
             lines.append(f"MW: {self._mw_text}")
         return lines
 
+    def _info_items(self) -> list[tuple[str, str]]:
+        items: list[tuple[str, str]] = []
+        if self._formula_text:
+            items.append(("FORMULA", self._formula_text))
+        if self._mw_text:
+            items.append(("MW", self._mw_text))
+        return items
+
     def _footer_height(self, lines: list[str]) -> float:
         if not lines:
             return 0.0
         metrics = QFontMetricsF(self._overlay_font())
-        return metrics.lineSpacing() * len(lines) + 12.0
+        row_height = max(28.0, metrics.lineSpacing() + 10.0)
+        gap = 6.0
+        return row_height * len(lines) + gap * (len(lines) + 1)
+
+    def _metadata_summary(self) -> str:
+        if self._scene is not None:
+            atom_count = len(self._scene.atoms)
+            bond_count = len(self._scene.bonds)
+            atom_label = "atom" if atom_count == 1 else "atoms"
+            bond_label = "bond" if bond_count == 1 else "bonds"
+            return f"{atom_count} {atom_label} / {bond_count} {bond_label}"
+        if self._message.startswith("Updating"):
+            return "Preparing coordinates"
+        if self._is_empty_message():
+            return "No structure loaded"
+        return "Preview needs attention"
+
+    def _status_badge(self) -> tuple[str, QColor, QColor, QColor]:
+        if self._scene is not None:
+            return "Ready", QColor("#e6f1ec"), QColor("#acc8ba"), QColor("#315b47")
+        if self._message.startswith("Updating"):
+            return "Building", QColor("#eef2f7"), QColor("#c6d0dd"), QColor("#4b5d72")
+        if self._is_empty_message():
+            return "Empty", QColor("#f0ebe4"), QColor("#d4c9bb"), QColor("#6d5f52")
+        return "Issue", QColor("#f8ece7"), QColor("#dfb9aa"), QColor("#7c3e2f")
+
+    def _empty_state_text(self) -> tuple[str, str]:
+        message = " ".join((self._message or "3D preview unavailable").split())
+        if message.startswith("Updating"):
+            return "Building preview", "Preparing coordinates"
+        if self._is_empty_message(message):
+            return "No 3D structure", "Canvas has no molecule"
+        if len(message) > 96:
+            message = f"{message[:93]}..."
+        return "Preview unavailable", message
+
+    def _is_empty_message(self, message: str | None = None) -> bool:
+        message = " ".join((self._message if message is None else message or "").split()).lower()
+        return message in {"", "3d preview unavailable"} or "no chemical structure" in message

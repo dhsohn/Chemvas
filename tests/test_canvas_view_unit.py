@@ -9,7 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
     from PyQt6.QtCore import QEvent, QPointF, Qt
-    from PyQt6.QtGui import QFocusEvent, QPen
+    from PyQt6.QtGui import QColor, QFocusEvent, QPen
     from PyQt6.QtWidgets import QApplication
 except ModuleNotFoundError:
     QApplication = None
@@ -85,6 +85,12 @@ class CanvasViewUnitTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
+
+    def test_canvas_background_defaults_to_white(self) -> None:
+        canvas = CanvasView()
+        self.addCleanup(canvas.close)
+
+        self.assertEqual(canvas.backgroundBrush().color(), QColor("#ffffff"))
 
     def test_note_item_focus_out_adds_updates_and_deletes_commands(self) -> None:
         canvas = _FakeNoteCanvas()

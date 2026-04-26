@@ -33,6 +33,7 @@ from ui.main_window_icon_factory import MainWindowIconFactory
 from ui.main_window_text_style_service import MainWindowTextStyleService
 from ui.main_window_tool_state_service import MainWindowToolStateService
 from ui.main_window_tool_routing_service import MainWindowToolRoutingService
+from ui.main_window_toolbar_logic import tool_display_name
 from ui.main_window_canvas_tab_ui_service import MainWindowCanvasTabUIService
 from ui.main_window_active_canvas_ui_service import MainWindowActiveCanvasUIService
 from ui.main_window_workbook_document_service import MainWindowWorkbookDocumentService
@@ -74,6 +75,9 @@ class MainWindow(QMainWindow):
         self.resize(1100, 760)
 
         self._atom_input = None
+        self._export_xyz_button = None
+        self._undo_button = None
+        self._redo_button = None
         self._canvas_name_counter = 0
         self._result_sheet_counter = 0
         self._last_canvas_tab_index = 0
@@ -116,13 +120,7 @@ class MainWindow(QMainWindow):
         self._apply_theme()
         self._bind_active_canvas()
         self.preview_3d.refresh_from_canvas(self.canvas)
-
-        self._zoom_label = QLabel("100%")
-        self._zoom_label.setFixedWidth(50)
-        self._zoom_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self.statusBar().addPermanentWidget(self._zoom_label)
-        self._update_zoom_label(self._current_zoom_percent())
-        self.statusBar().showMessage("Ready")
+        self._init_status_bar()
 
     @property
     def canvas(self) -> CanvasView:
@@ -237,15 +235,19 @@ class MainWindow(QMainWindow):
 
     def _handle_selection_info(self, _formula: str, _mw: str) -> None:
         self._active_canvas_ui_service.handle_selection_info(self, _formula, _mw)
+        self._update_selection_status_label()
+        self._update_action_availability()
 
     def _current_zoom_percent(self) -> int:
         return self._active_canvas_ui_service.current_zoom_percent(self)
 
     def _refresh_active_canvas_ui(self) -> None:
         self._active_canvas_ui_service.refresh_active_canvas_ui(self)
+        self._refresh_status_context(update_zoom=False)
 
     def _on_canvas_tab_changed(self, index: int) -> None:
         self._active_canvas_ui_service.on_canvas_tab_changed(self, index)
+        self._refresh_status_context(update_zoom=False)
 
     def _new_canvas_sheet(self) -> None:
         self._canvas_tab_ui_service.new_canvas_sheet(self)
@@ -348,6 +350,10 @@ class MainWindow(QMainWindow):
         assembly = self._ui_assembly_service.init_toolbars(self)
         self._tool_actions = assembly.tool_actions
         self._atom_input = assembly.atom_input
+        self._export_xyz_button = assembly.export_xyz_button
+        self._undo_button = assembly.undo_button
+        self._redo_button = assembly.redo_button
+        self._update_action_availability()
 
     def _make_icon(self, painter_fn, size: int = 30) -> QIcon:
         return self._icon_factory.make_icon(painter_fn, size)
@@ -493,10 +499,129 @@ class MainWindow(QMainWindow):
     def _apply_theme(self) -> None:
         self._ui_assembly_service.apply_theme(self)
 
+    def _init_status_bar(self) -> None:
+        self._status_tool_label = QLabel()
+        self._status_sheet_label = QLabel()
+        self._status_selection_label = QLabel()
+        self._status_zoom_caption = QLabel("Zoom")
+        self._zoom_label = QLabel("100%")
+
+        for label in (
+            self._status_tool_label,
+            self._status_sheet_label,
+            self._status_selection_label,
+            self._status_zoom_caption,
+        ):
+            label.setObjectName("statusContextLabel")
+            label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+
+        self._zoom_label.setObjectName("statusZoomLabel")
+        self._zoom_label.setFixedWidth(50)
+        self._zoom_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+
+        self.statusBar().addPermanentWidget(self._status_tool_label)
+        self.statusBar().addPermanentWidget(self._status_sheet_label)
+        self.statusBar().addPermanentWidget(self._status_selection_label)
+        self.statusBar().addPermanentWidget(self._status_zoom_caption)
+        self.statusBar().addPermanentWidget(self._zoom_label)
+        self._refresh_status_context()
+        self.statusBar().showMessage("Ready")
+
+    def _show_status_message(self, message: str, timeout: int = 0) -> None:
+        self.statusBar().showMessage(message, timeout)
+
+    def _active_tool_status_text(self) -> str:
+        canvas = self._active_canvas_or_none()
+        active_tool = getattr(getattr(canvas, "tools", None), "active", None)
+        tool_name = getattr(active_tool, "name", None)
+        if not tool_name:
+            return "Tool: None"
+        return f"Tool: {tool_display_name(str(tool_name))}"
+
+    def _active_sheet_status_text(self) -> str:
+        sheet_count = self._canvas_sheet_count()
+        if sheet_count <= 0:
+            return "Sheet: None"
+        sheet_name = self._active_canvas_sheet_name() or "Untitled"
+        sheet_index = self._active_canvas_sheet_index() + 1
+        return f"Sheet: {sheet_name} ({sheet_index}/{sheet_count})"
+
+    @staticmethod
+    def _selection_item_identity(item) -> tuple[str, object]:
+        kind = item.data(0) if hasattr(item, "data") else None
+        item_id = item.data(1) if hasattr(item, "data") else None
+        if kind in {"atom", "bond"} and isinstance(item_id, int):
+            return str(kind), item_id
+        ring_ids = item.data(2) if kind == "ring" and hasattr(item, "data") else None
+        if isinstance(ring_ids, list):
+            return "ring", tuple(ring_ids)
+        return "item", id(item)
+
+    def _current_selection_count(self) -> int:
+        canvas = self._active_canvas_or_none()
+        if canvas is None:
+            return 0
+        scene_getter = getattr(canvas, "scene", None)
+        scene = scene_getter() if callable(scene_getter) else None
+        selected_items_getter = getattr(scene, "selectedItems", None)
+        selected_items = selected_items_getter() if callable(selected_items_getter) else []
+        excluded_kinds = {"handle", "note_box", "note_select", "selection_outline"}
+        identities: set[tuple[str, object]] = set()
+        for item in selected_items:
+            kind = item.data(0) if hasattr(item, "data") else None
+            if kind in excluded_kinds:
+                continue
+            identities.add(self._selection_item_identity(item))
+        for note in getattr(canvas, "selected_notes", []):
+            note_scene_getter = getattr(note, "scene", None)
+            if callable(note_scene_getter) and note_scene_getter() is scene:
+                identities.add(("note", id(note)))
+        return len(identities)
+
+    def _update_tool_status_label(self) -> None:
+        if hasattr(self, "_status_tool_label"):
+            self._status_tool_label.setText(self._active_tool_status_text())
+
+    def _update_sheet_status_label(self) -> None:
+        if hasattr(self, "_status_sheet_label"):
+            self._status_sheet_label.setText(self._active_sheet_status_text())
+
+    def _update_selection_status_label(self) -> None:
+        if hasattr(self, "_status_selection_label"):
+            self._status_selection_label.setText(f"Selection: {self._current_selection_count()}")
+
+    def _refresh_status_context(self, *, update_zoom: bool = True) -> None:
+        self._update_tool_status_label()
+        self._update_sheet_status_label()
+        self._update_selection_status_label()
+        if update_zoom:
+            try:
+                zoom_percent = self._current_zoom_percent()
+            except RuntimeError:
+                zoom_percent = 100
+            self._update_zoom_label(zoom_percent)
+
+    def _update_action_availability(self) -> None:
+        canvas = self._active_canvas_or_none()
+        can_undo = bool(getattr(canvas, "_history", [])) if canvas is not None else False
+        can_redo = bool(getattr(canvas, "_redo_stack", [])) if canvas is not None else False
+        model = getattr(canvas, "model", None) if canvas is not None else None
+        can_export = bool(getattr(model, "atoms", {}))
+
+        for button, enabled in (
+            (getattr(self, "_undo_button", None), can_undo),
+            (getattr(self, "_redo_button", None), can_redo),
+            (getattr(self, "_export_xyz_button", None), can_export),
+        ):
+            if button is not None:
+                button.setEnabled(enabled)
+
     def _update_zoom_label(self, zoom_percent: int) -> None:
         if not hasattr(self, "_zoom_label"):
             return
         self._zoom_label.setText(f"{zoom_percent}%")
+        self._zoom_label.setToolTip(f"Zoom: {zoom_percent}%")
+        self._zoom_label.setStatusTip(f"Zoom: {zoom_percent}%")
 
     def _open_arrow_settings(self) -> None:
         self._ui_assembly_service.open_arrow_settings(self)
@@ -545,6 +670,7 @@ class MainWindow(QMainWindow):
 
     def _sync_tool_actions_from_canvas(self) -> None:
         self._tool_state_service.sync_tool_actions_from_canvas(self)
+        self._update_tool_status_label()
 
     def _set_tool_with_status(self, tool: str, reset_bond_style: bool = True) -> None:
         self._tool_state_service.set_tool_with_status(self, tool, reset_bond_style=reset_bond_style)

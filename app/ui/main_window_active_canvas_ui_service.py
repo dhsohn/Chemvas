@@ -14,6 +14,7 @@ class MainWindowActiveCanvasUIService:
             selection_info_callback=window._handle_selection_info,
             tool_change_callback=window._sync_tool_actions_from_canvas,
             zoom_callback=window._update_zoom_label,
+            history_change_callback=window._update_action_availability,
         )
 
     def handle_selection_info(self, window, _formula: str, _mw: str) -> None:
@@ -32,6 +33,7 @@ class MainWindowActiveCanvasUIService:
         if hasattr(window, "_zoom_label"):
             window._update_zoom_label(self.current_zoom_percent(window))
         window._sync_tool_actions_from_canvas()
+        window._update_action_availability()
         window.preview_3d.refresh_from_canvas(window.canvas)
 
     def on_canvas_tab_changed(self, window, index: int) -> None:

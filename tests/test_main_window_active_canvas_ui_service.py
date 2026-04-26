@@ -52,6 +52,7 @@ class _FakeWindow:
         self._new_canvas_sheet = mock.Mock()
         self._refresh_active_canvas_ui = mock.Mock()
         self._update_zoom_label = mock.Mock()
+        self._update_action_availability = mock.Mock()
         self._handle_selection_info = mock.Mock()
 
     @property
@@ -90,9 +91,11 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
             mock.patch.object(self.window.canvas_a, "set_selection_info_callback") as inactive_selection,
             mock.patch.object(self.window.canvas_a, "set_tool_change_callback") as inactive_tool_change,
             mock.patch.object(self.window.canvas_a, "set_zoom_callback") as inactive_zoom,
+            mock.patch.object(self.window.canvas_a, "set_history_change_callback") as inactive_history,
             mock.patch.object(self.window.canvas_b, "set_selection_info_callback") as active_selection,
             mock.patch.object(self.window.canvas_b, "set_tool_change_callback") as active_tool_change,
             mock.patch.object(self.window.canvas_b, "set_zoom_callback") as active_zoom,
+            mock.patch.object(self.window.canvas_b, "set_history_change_callback") as active_history,
         ):
             self.service.bind_active_canvas(self.window)
 
@@ -100,9 +103,11 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         active_selection.assert_called_once_with(self.window._handle_selection_info)
         active_tool_change.assert_called_once_with(self.window._sync_tool_actions_from_canvas)
         active_zoom.assert_called_once_with(self.window._update_zoom_label)
+        active_history.assert_called_once_with(self.window._update_action_availability)
         inactive_selection.assert_called_once_with(None)
         inactive_tool_change.assert_called_once_with(None)
         inactive_zoom.assert_called_once_with(None)
+        inactive_history.assert_called_once_with(None)
 
     def test_handle_selection_info_refreshes_preview_from_active_canvas(self) -> None:
         self.window.canvas_tabs.setCurrentWidget(self.window.canvas_b)
@@ -130,9 +135,11 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
             mock.patch.object(self.window.canvas_a, "set_selection_info_callback") as inactive_selection,
             mock.patch.object(self.window.canvas_a, "set_tool_change_callback") as inactive_tool_change,
             mock.patch.object(self.window.canvas_a, "set_zoom_callback") as inactive_zoom,
+            mock.patch.object(self.window.canvas_a, "set_history_change_callback") as inactive_history,
             mock.patch.object(self.window.canvas_b, "set_selection_info_callback") as active_selection,
             mock.patch.object(self.window.canvas_b, "set_tool_change_callback") as active_tool_change,
             mock.patch.object(self.window.canvas_b, "set_zoom_callback") as active_zoom,
+            mock.patch.object(self.window.canvas_b, "set_history_change_callback") as active_history,
             mock.patch.object(self.window.canvas_b, "transform", return_value=transform),
             mock.patch.object(self.window.canvas_b, "get_atom_symbol", return_value="N"),
         ):
@@ -144,14 +151,17 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         )
         self.window._update_zoom_label.assert_called_once_with(275)
         self.window._sync_tool_actions_from_canvas.assert_called_once_with()
+        self.window._update_action_availability.assert_called_once_with()
         self.window.preview_3d.refresh_from_canvas.assert_called_once_with(self.window.canvas_b)
         self.assertIs(self.window.preview_3d._rdkit, self.window.canvas_b.rdkit)
         active_selection.assert_called_once_with(self.window._handle_selection_info)
         active_tool_change.assert_called_once_with(self.window._sync_tool_actions_from_canvas)
         active_zoom.assert_called_once_with(self.window._update_zoom_label)
+        active_history.assert_called_once_with(self.window._update_action_availability)
         inactive_selection.assert_called_once_with(None)
         inactive_tool_change.assert_called_once_with(None)
         inactive_zoom.assert_called_once_with(None)
+        inactive_history.assert_called_once_with(None)
 
     def test_on_canvas_tab_changed_ignores_suspended_invalid_and_non_canvas_targets(self) -> None:
         other_widget = QWidget()

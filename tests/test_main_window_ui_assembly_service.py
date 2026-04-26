@@ -15,6 +15,7 @@ try:
         QComboBox,
         QDialog,
         QDockWidget,
+        QLabel,
         QLineEdit,
         QMainWindow,
         QMenu,
@@ -139,6 +140,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         )
 
         self.assertEqual(button.toolTip(), "Load")
+        self.assertEqual(button.statusTip(), "Load")
         self.assertEqual(button.text(), "Load")
         self.assertEqual(button.objectName(), "load_button")
         self.assertEqual(button.styleSheet(), "color: red;")
@@ -164,6 +166,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
 
         self.assertIs(button.defaultAction(), save_action)
         self.assertEqual(button.toolTip(), "Save")
+        self.assertEqual(button.statusTip(), "Save")
         self.assertEqual(button.styleSheet(), "padding: 0;")
         self.assertEqual(button.popupMode(), QToolButton.ToolButtonPopupMode.MenuButtonPopup)
         self.assertEqual([action.text() for action in button.menu().actions()], ["Save As..."])
@@ -178,6 +181,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             tooltip="Plain",
         )
         self.assertEqual(toolbar_button.toolTip(), "Plain")
+        self.assertEqual(toolbar_button.statusTip(), "Plain")
         self.assertTrue(toolbar_button.autoRaise())
         self.assertFalse(toolbar_button.icon().isNull())
         toolbar_button.click()
@@ -215,6 +219,8 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         button = self.service.create_save_menu_button(save_action, save_as_action)
 
         self.assertIs(button.defaultAction(), save_action)
+        self.assertEqual(button.toolTip(), "Save")
+        self.assertEqual(button.statusTip(), "Save")
         self.assertEqual(button.popupMode(), QToolButton.ToolButtonPopupMode.MenuButtonPopup)
         self.assertEqual(button.menu().actions(), [save_as_action])
 
@@ -226,10 +232,23 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
 
         self.assertEqual(len(window.findChildren(QToolBar)), 2)
         self.assertEqual(assembly.left_bar.orientation(), Qt.Orientation.Vertical)
+        self.assertGreaterEqual(
+            sum(1 for action in assembly.left_bar.actions() if action.isSeparator()),
+            4,
+        )
         self.assertTrue(assembly.tool_actions["bond"].isChecked())
         self.assertEqual(assembly.atom_input.text(), "N")
         self.assertIs(assembly.save_button.defaultAction(), assembly.save_action)
         self.assertEqual(assembly.save_button.menu().actions(), [assembly.save_as_action])
+        self.assertEqual(assembly.save_action.statusTip(), "Save the current drawing")
+        self.assertEqual(assembly.save_as_action.statusTip(), "Save the current drawing to a new file")
+
+        section_labels = [
+            label.text()
+            for label in assembly.panel_bar.findChildren(QLabel)
+            if label.objectName() == "toolbarSectionLabel"
+        ]
+        self.assertEqual(section_labels, ["File", "History", "SMILES", "Style"])
 
         assembly.atom_input.setText("Cl")
         window.canvas.set_atom_symbol.assert_called_with("Cl")
@@ -239,6 +258,11 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         )
         smiles_button = assembly.panel_bar.findChild(QToolButton, "smiles_render_button")
         self.assertIsNotNone(smiles_button)
+        self.assertEqual(smiles_button.text(), "Insert")
+        self.assertEqual(smiles_button.statusTip(), "Insert the typed SMILES structure")
+        self.assertIs(assembly.export_xyz_button, assembly.panel_bar.findChild(QToolButton, "export_xyz_button"))
+        self.assertIs(assembly.undo_button, assembly.panel_bar.findChild(QToolButton, "undo_button"))
+        self.assertIs(assembly.redo_button, assembly.panel_bar.findChild(QToolButton, "redo_button"))
 
         smiles_input.setText("CCO")
         smiles_button.click()

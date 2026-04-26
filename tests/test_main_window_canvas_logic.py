@@ -78,15 +78,18 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
             set_selection_info_callback=mock.Mock(),
             set_tool_change_callback=mock.Mock(),
             set_zoom_callback=mock.Mock(),
+            set_history_change_callback=mock.Mock(),
         )
         inactive_canvas = SimpleNamespace(
             set_selection_info_callback=mock.Mock(),
             set_tool_change_callback=mock.Mock(),
             set_zoom_callback=mock.Mock(),
+            set_history_change_callback=mock.Mock(),
         )
         selection_info_callback = object()
         tool_change_callback = object()
         zoom_callback = object()
+        history_change_callback = object()
 
         bind_active_canvas_callbacks(
             [inactive_canvas, active_canvas],
@@ -94,14 +97,17 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
             selection_info_callback=selection_info_callback,
             tool_change_callback=tool_change_callback,
             zoom_callback=zoom_callback,
+            history_change_callback=history_change_callback,
         )
 
         active_canvas.set_selection_info_callback.assert_called_once_with(selection_info_callback)
         active_canvas.set_tool_change_callback.assert_called_once_with(tool_change_callback)
         active_canvas.set_zoom_callback.assert_called_once_with(zoom_callback)
+        active_canvas.set_history_change_callback.assert_called_once_with(history_change_callback)
         inactive_canvas.set_selection_info_callback.assert_called_once_with(None)
         inactive_canvas.set_tool_change_callback.assert_called_once_with(None)
         inactive_canvas.set_zoom_callback.assert_called_once_with(None)
+        inactive_canvas.set_history_change_callback.assert_called_once_with(None)
 
     def test_build_workbook_sheet_states_uses_tab_names_or_sheet_fallback(self) -> None:
         canvas_a = SimpleNamespace(snapshot_state=mock.Mock(return_value={"atoms": [1]}))

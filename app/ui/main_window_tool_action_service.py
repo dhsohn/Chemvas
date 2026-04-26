@@ -8,6 +8,14 @@ from ui.main_window_config import (
 
 
 class MainWindowToolActionService:
+    @staticmethod
+    def _show_status_message(window, message: str) -> None:
+        show_status_message = getattr(window, "_show_status_message", None)
+        if callable(show_status_message):
+            show_status_message(message)
+            return
+        window.statusBar().showMessage(message)
+
     def build_checkable_tool_action(
         self,
         window,
@@ -23,6 +31,7 @@ class MainWindowToolActionService:
         action.setCheckable(True)
         action.setIcon(getattr(window, icon_method)())
         action.setToolTip(tooltip)
+        action.setStatusTip(tooltip)
         action.triggered.connect(lambda checked=False, callback=callback: callback())
         tool_group.addAction(action)
         return key, action
@@ -33,7 +42,10 @@ class MainWindowToolActionService:
 
     def activate_mark_tool(self, window, kind: str) -> None:
         window.canvas.set_mark_kind(kind)
-        window.statusBar().showMessage("Mark Tool")
+        self._show_status_message(window, "Mark Tool")
+        refresh_status_context = getattr(window, "_refresh_status_context", None)
+        if callable(refresh_status_context):
+            refresh_status_context()
 
     def build_tool_actions(self, window, tool_group) -> dict[str, object]:
         actions = dict(

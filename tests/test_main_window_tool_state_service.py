@@ -69,6 +69,12 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         self.assertEqual([call.args for call in set_tool.call_args_list], [("bond",), ("bond",), ("select",)])
         set_bond_style.assert_called_once_with(self.window, "Single")
 
+    def test_set_tool_with_status_refreshes_structured_tool_state(self) -> None:
+        self.service.set_tool_with_status(self.window, "select")
+
+        self.assertEqual(self.window.statusBar().currentMessage(), "Select Tool")
+        self.assertEqual(self.window._status_tool_label.text(), "Tool: Select")
+
     def test_sync_tool_actions_from_canvas_follows_active_tool_variants(self) -> None:
         self._reset_tool_checks()
         self.window.canvas.tools.active = SimpleNamespace(name="bond")

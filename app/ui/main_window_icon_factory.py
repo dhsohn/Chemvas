@@ -9,10 +9,55 @@ from core.model import Atom
 
 
 class MainWindowIconFactory:
+    ICON_SIZE = 30
+    ICON_CONTENT_MIN = 5
+    ICON_CONTENT_MAX = 25
+    ICON_CENTER = ICON_SIZE // 2
+
+    STROKE_COLOR = "#3d3229"
+    MUTED_STROKE_COLOR = "#8b7355"
+    PALE_FILL_COLOR = "#f3ead7"
+    ACCENT_FILL_COLOR = "#d8c8a6"
+
+    STROKE_FINE = 1.0
+    STROKE_THIN = 1.4
+    STROKE_REGULAR = 1.6
+    STROKE_MOLECULE = 1.8
+    STROKE_ACTIVE = 2.0
+
     def __init__(self, window) -> None:
         self.window = window
 
-    def make_icon(self, painter_fn, size: int = 30) -> QIcon:
+    def _icon_color(self, color=None) -> QColor:
+        return QColor(self.STROKE_COLOR if color is None else color)
+
+    def _icon_pen(
+        self,
+        width: float | None = None,
+        *,
+        color=None,
+        style: Qt.PenStyle | None = None,
+    ) -> QPen:
+        pen = QPen(self._icon_color(color))
+        pen.setWidthF(self.STROKE_THIN if width is None else width)
+        if style is not None:
+            pen.setStyle(style)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        return pen
+
+    def _icon_brush(self, color=None) -> QBrush:
+        return QBrush(self._icon_color(color))
+
+    def _renderer_icon_pen(self, pen: QPen) -> QPen:
+        icon_pen = QPen(pen)
+        icon_pen.setColor(self._icon_color())
+        icon_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        icon_pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        return icon_pen
+
+    def make_icon(self, painter_fn, size: int | None = None) -> QIcon:
+        size = self.ICON_SIZE if size is None else size
         pixmap = QPixmap(size, size)
         pixmap.fill(Qt.GlobalColor.transparent)
         painter = QPainter(pixmap)
@@ -23,18 +68,19 @@ class MainWindowIconFactory:
 
     def icon_select(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#8b7355"))
-            pen.setWidthF(2.0)
-            pen.setStyle(Qt.PenStyle.DashLine)
-            p.setPen(pen)
+            p.setPen(
+                self._icon_pen(
+                    self.STROKE_ACTIVE,
+                    color=self.MUTED_STROKE_COLOR,
+                    style=Qt.PenStyle.DashLine,
+                )
+            )
             p.drawRect(5, 6, 20, 18)
         return self.make_icon(draw)
 
     def icon_bond(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#3d3229"))
-            pen.setWidthF(2.0)
-            p.setPen(pen)
+            p.setPen(self._icon_pen(self.STROKE_ACTIVE))
             p.drawLine(7, 23, 23, 7)
         return self.make_icon(draw)
 
@@ -46,31 +92,27 @@ class MainWindowIconFactory:
             dy = end.y() - start.y()
             start = QPointF(start.x() + dx * 0.025, start.y() + dy * 0.025)
             end = QPointF(end.x() - dx * 0.025, end.y() - dy * 0.025)
-            p.setPen(self.window.canvas.renderer.bold_bond_pen())
+            p.setPen(self._renderer_icon_pen(self.window.canvas.renderer.bold_bond_pen()))
             p.drawLine(start, end)
         return self.make_icon(draw)
 
     def icon_mark_plus(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#3d3229"))
-            pen.setWidthF(2.0)
-            p.setPen(pen)
+            p.setPen(self._icon_pen(self.STROKE_ACTIVE))
             p.drawLine(15, 7, 15, 23)
             p.drawLine(7, 15, 23, 15)
         return self.make_icon(draw)
 
     def icon_mark_minus(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#3d3229"))
-            pen.setWidthF(2.0)
-            p.setPen(pen)
+            p.setPen(self._icon_pen(self.STROKE_ACTIVE))
             p.drawLine(7, 15, 23, 15)
         return self.make_icon(draw)
 
     def icon_mark_radical(self) -> QIcon:
         def draw(p):
             p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QColor("#3d3229"))
+            p.setBrush(self._icon_brush())
             p.drawEllipse(12, 12, 6, 6)
         return self.make_icon(draw)
 
@@ -80,7 +122,7 @@ class MainWindowIconFactory:
             font.setBold(True)
             font.setPointSize(22)
             p.setFont(font)
-            p.setPen(QPen(QColor("#3d3229")))
+            p.setPen(self._icon_pen(self.STROKE_ACTIVE))
             p.drawText(7, 21, "A")
         return self.make_icon(draw)
 
@@ -147,20 +189,15 @@ class MainWindowIconFactory:
         return segments
 
     def icon_ring(self) -> QIcon:
-        icon_size = 26
+        icon_size = self.ICON_SIZE
         center = QPointF(icon_size / 2.0, icon_size / 2.0)
-        radius = 11.2
+        radius = 13.4
 
         def draw(p):
             p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-            pen = QPen(QColor("#3d3229"))
-            pen.setWidthF(1.8)
-            p.setPen(pen)
+            p.setPen(self._icon_pen(self.STROKE_MOLECULE))
             outer = self.benzene_icon_polygon(center, radius)
             p.drawPolygon(outer)
-            inner_pen = QPen(QColor("#3d3229"))
-            inner_pen.setWidthF(1.8)
-            p.setPen(inner_pen)
             for start, end in self.benzene_icon_inner_segments(outer, center, spacing_scale=0.92):
                 p.drawLine(start, end)
         return self.make_icon(draw, size=icon_size)
@@ -168,10 +205,9 @@ class MainWindowIconFactory:
     def icon_ring_fill(self) -> QIcon:
         def draw(p):
             p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-            pen = QPen(QColor("#3d3229"))
-            pen.setWidthF(1.8)
-            center = QPointF(15.0, 15.0)
-            radius = 10.0
+            pen = self._icon_pen(self.STROKE_MOLECULE)
+            center = QPointF(float(self.ICON_CENTER), float(self.ICON_CENTER))
+            radius = (self.ICON_CONTENT_MAX - self.ICON_CONTENT_MIN) / 2.0
             outer = QPolygonF()
             for i in range(5):
                 angle = math.radians(360 / 5 * i - 90)
@@ -182,15 +218,13 @@ class MainWindowIconFactory:
                     )
                 )
             p.setPen(pen)
-            p.setBrush(QBrush(QColor("#f3ead7")))
+            p.setBrush(self._icon_brush(self.PALE_FILL_COLOR))
             p.drawPolygon(outer)
         return self.make_icon(draw)
 
     def icon_undo(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#3d3229"))
-            pen.setWidthF(1.6)
-            p.setPen(pen)
+            p.setPen(self._icon_pen(self.STROKE_REGULAR))
             p.drawArc(5, 8, 18, 18, 90 * 16, 270 * 16)
             p.drawLine(8, 10, 5, 15)
             p.drawLine(8, 10, 11, 10)
@@ -198,9 +232,7 @@ class MainWindowIconFactory:
 
     def icon_redo(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#3d3229"))
-            pen.setWidthF(1.6)
-            p.setPen(pen)
+            p.setPen(self._icon_pen(self.STROKE_REGULAR))
             p.drawArc(8, 8, 18, 18, 180 * 16, 270 * 16)
             p.drawLine(23, 10, 25, 15)
             p.drawLine(23, 10, 19, 10)
@@ -208,9 +240,7 @@ class MainWindowIconFactory:
 
     def icon_save(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#3d3229"))
-            pen.setWidthF(1.4)
-            p.setPen(pen)
+            p.setPen(self._icon_pen(self.STROKE_THIN))
             p.drawRect(6, 5, 18, 20)
             p.drawLine(6, 11, 24, 11)
             p.drawRect(10, 15, 10, 8)
@@ -218,9 +248,7 @@ class MainWindowIconFactory:
 
     def icon_open(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#3d3229"))
-            pen.setWidthF(1.4)
-            p.setPen(pen)
+            p.setPen(self._icon_pen(self.STROKE_THIN))
             p.drawRect(6, 13, 18, 10)
             p.drawLine(15, 6, 15, 16)
             p.drawLine(11, 10, 15, 6)
@@ -229,9 +257,7 @@ class MainWindowIconFactory:
 
     def icon_export_xyz(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#3d3229"))
-            pen.setWidthF(1.3)
-            p.setPen(pen)
+            p.setPen(self._icon_pen(self.STROKE_THIN))
             p.drawRect(7, 8, 10, 12)
             p.drawLine(17, 8, 23, 12)
             p.drawLine(17, 20, 23, 24)
@@ -244,9 +270,7 @@ class MainWindowIconFactory:
 
     def icon_add_sheet(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#3d3229"))
-            pen.setWidthF(1.4)
-            p.setPen(pen)
+            p.setPen(self._icon_pen(self.STROKE_THIN))
             p.drawRect(6, 7, 18, 16)
             p.drawLine(15, 10, 15, 20)
             p.drawLine(10, 15, 20, 15)
@@ -255,9 +279,7 @@ class MainWindowIconFactory:
 
     def icon_templates(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#3d3229"))
-            pen.setWidthF(1.6)
-            p.setPen(pen)
+            p.setPen(self._icon_pen(self.STROKE_REGULAR))
             chair = self.chair_icon_points(self.chair_icon_rect())
             if not chair.isEmpty():
                 p.drawPolygon(chair)
@@ -265,9 +287,7 @@ class MainWindowIconFactory:
 
     def icon_info(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#3d3229"))
-            pen.setWidthF(1.4)
-            p.setPen(pen)
+            p.setPen(self._icon_pen(self.STROKE_THIN))
             p.drawEllipse(7, 7, 16, 16)
             p.drawLine(15, 13, 15, 19)
             p.drawPoint(15, 10)
@@ -275,18 +295,14 @@ class MainWindowIconFactory:
 
     def icon_bond_double(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#3d3229"))
-            pen.setWidthF(1.6)
-            p.setPen(pen)
+            p.setPen(self._icon_pen(self.STROKE_REGULAR))
             p.drawLine(5, 11, 25, 11)
             p.drawLine(5, 19, 25, 19)
         return self.make_icon(draw)
 
     def icon_bond_triple(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#3d3229"))
-            pen.setWidthF(1.4)
-            p.setPen(pen)
+            p.setPen(self._icon_pen(self.STROKE_THIN))
             p.drawLine(5, 10, 25, 10)
             p.drawLine(5, 15, 25, 15)
             p.drawLine(5, 20, 25, 20)
@@ -309,8 +325,8 @@ class MainWindowIconFactory:
             p2 = QPointF(end.x() + nx * half_width, end.y() + ny * half_width)
             p3 = QPointF(end.x() - nx * half_width, end.y() - ny * half_width)
             polygon = QPolygonF([p1, p2, p3])
-            p.setPen(self.window.canvas.renderer.bond_pen())
-            p.setBrush(QBrush(QColor(self.window.canvas.renderer.style.bond_color)))
+            p.setPen(self._renderer_icon_pen(self.window.canvas.renderer.bond_pen()))
+            p.setBrush(self._icon_brush())
             p.drawPolygon(polygon)
         return self.make_icon(draw)
 
@@ -328,7 +344,7 @@ class MainWindowIconFactory:
             t_positions = [i / (count - 1) for i in range(count)]
             t_sizes = [(i + 1) / (count + 1) for i in range(count)]
             max_t = max(t_sizes) if t_sizes else 1.0
-            p.setPen(self.window.canvas.renderer.bond_pen())
+            p.setPen(self._renderer_icon_pen(self.window.canvas.renderer.bond_pen()))
             for t_pos, t_size in zip(t_positions, t_sizes):
                 cx = start.x() + dx * t_pos
                 cy = start.y() + dy * t_pos
@@ -340,17 +356,13 @@ class MainWindowIconFactory:
 
     def icon_bond_dotted(self) -> QIcon:
         def draw(p):
-            pen = self.window.canvas.renderer.dotted_bond_pen()
-            pen.setColor(QColor("#3d3229"))
-            p.setPen(pen)
+            p.setPen(self._renderer_icon_pen(self.window.canvas.renderer.dotted_bond_pen()))
             p.drawLine(5, 15, 25, 15)
         return self.make_icon(draw)
 
     def icon_bond_length(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#3d3229"))
-            pen.setWidthF(1.4)
-            p.setPen(pen)
+            p.setPen(self._icon_pen(self.STROKE_THIN))
             p.drawLine(6, 15, 24, 15)
             p.drawLine(6, 11, 6, 19)
             p.drawLine(24, 11, 24, 19)
@@ -358,11 +370,8 @@ class MainWindowIconFactory:
 
     def icon_arrow_preview(self, kind: str) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#3d3229"))
-            pen.setWidthF(1.4)
-            if kind == "dotted":
-                pen.setStyle(Qt.PenStyle.DashLine)
-            p.setPen(pen)
+            style = Qt.PenStyle.DashLine if kind == "dotted" else None
+            p.setPen(self._icon_pen(self.STROKE_THIN, style=style))
             if kind in {"curved_single", "curved_double"}:
                 path = QPainterPath()
                 path.moveTo(6, 19)
@@ -405,9 +414,7 @@ class MainWindowIconFactory:
 
     def icon_orbital_preview(self, kind: str) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#3d3229"))
-            pen.setWidthF(1.4)
-            p.setPen(pen)
+            p.setPen(self._icon_pen(self.STROKE_THIN))
             if kind == "s":
                 p.drawEllipse(9, 9, 12, 12)
             elif kind == "p":
@@ -449,9 +456,7 @@ class MainWindowIconFactory:
             p.drawPolygon(poly)
 
         def draw(p):
-            pen = QPen(QColor("#3d3229"))
-            pen.setWidthF(1.4)
-            p.setPen(pen)
+            p.setPen(self._icon_pen(self.STROKE_THIN))
             lower = label.lower()
             if "cyclopropane" in lower:
                 draw_ring(p, 3)
@@ -528,9 +533,7 @@ class MainWindowIconFactory:
 
     def icon_flip_h(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#3d3229"))
-            pen.setWidthF(1.4)
-            p.setPen(pen)
+            p.setPen(self._icon_pen(self.STROKE_THIN))
             p.drawLine(15, 5, 15, 25)
             p.drawLine(7, 9, 13, 9)
             p.drawLine(7, 21, 13, 21)
@@ -540,9 +543,7 @@ class MainWindowIconFactory:
 
     def icon_flip_v(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#3d3229"))
-            pen.setWidthF(1.4)
-            p.setPen(pen)
+            p.setPen(self._icon_pen(self.STROKE_THIN))
             p.drawLine(5, 15, 25, 15)
             p.drawLine(9, 7, 9, 13)
             p.drawLine(21, 7, 21, 13)
@@ -552,19 +553,15 @@ class MainWindowIconFactory:
 
     def icon_arrow(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#3d3229"))
-            pen.setWidthF(2.0)
-            p.setPen(pen)
-            p.drawLine(5, 15, 23, 15)
-            p.drawLine(23, 15, 18, 11)
-            p.drawLine(23, 15, 18, 19)
+            p.setPen(self._icon_pen(self.STROKE_ACTIVE))
+            p.drawLine(self.ICON_CONTENT_MIN, self.ICON_CENTER, 23, self.ICON_CENTER)
+            p.drawLine(23, self.ICON_CENTER, 18, 11)
+            p.drawLine(23, self.ICON_CENTER, 18, 19)
         return self.make_icon(draw)
 
     def icon_ts_bracket(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#3d3229"))
-            pen.setWidthF(1.0)
-            p.setPen(pen)
+            p.setPen(self._icon_pen(self.STROKE_FINE))
             p.drawLine(8, 7, 5, 7)
             p.drawLine(5, 7, 5, 23)
             p.drawLine(5, 23, 8, 23)
@@ -579,36 +576,30 @@ class MainWindowIconFactory:
 
     def icon_orbital(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#3d3229"))
-            pen.setWidthF(1.4)
-            p.setPen(pen)
+            p.setPen(self._icon_pen(self.STROKE_THIN))
             p.drawEllipse(6, 10, 8, 10)
             p.drawEllipse(16, 10, 8, 10)
         return self.make_icon(draw)
 
     def icon_move(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#3d3229"))
-            pen.setWidthF(1.4)
-            p.setPen(pen)
-            p.drawLine(15, 5, 15, 25)
-            p.drawLine(5, 15, 25, 15)
-            p.drawLine(15, 5, 12, 8)
-            p.drawLine(15, 5, 18, 8)
-            p.drawLine(15, 25, 12, 22)
-            p.drawLine(15, 25, 18, 22)
-            p.drawLine(5, 15, 8, 12)
-            p.drawLine(5, 15, 8, 18)
-            p.drawLine(25, 15, 22, 12)
-            p.drawLine(25, 15, 22, 18)
+            p.setPen(self._icon_pen(self.STROKE_THIN))
+            p.drawLine(self.ICON_CENTER, self.ICON_CONTENT_MIN, self.ICON_CENTER, self.ICON_CONTENT_MAX)
+            p.drawLine(self.ICON_CONTENT_MIN, self.ICON_CENTER, self.ICON_CONTENT_MAX, self.ICON_CENTER)
+            p.drawLine(self.ICON_CENTER, self.ICON_CONTENT_MIN, 12, 8)
+            p.drawLine(self.ICON_CENTER, self.ICON_CONTENT_MIN, 18, 8)
+            p.drawLine(self.ICON_CENTER, self.ICON_CONTENT_MAX, 12, 22)
+            p.drawLine(self.ICON_CENTER, self.ICON_CONTENT_MAX, 18, 22)
+            p.drawLine(self.ICON_CONTENT_MIN, self.ICON_CENTER, 8, 12)
+            p.drawLine(self.ICON_CONTENT_MIN, self.ICON_CENTER, 8, 18)
+            p.drawLine(self.ICON_CONTENT_MAX, self.ICON_CENTER, 22, 12)
+            p.drawLine(self.ICON_CONTENT_MAX, self.ICON_CENTER, 22, 18)
         return self.make_icon(draw)
 
     def icon_color(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#3d3229"))
-            pen.setWidthF(1.4)
-            p.setPen(pen)
-            p.setBrush(QBrush(QColor("#d8c8a6")))
+            p.setPen(self._icon_pen(self.STROKE_THIN))
+            p.setBrush(self._icon_brush(self.ACCENT_FILL_COLOR))
             palette = QPainterPath()
             palette.moveTo(4, 18)
             palette.cubicTo(4, 8, 15, 6, 25, 9)
@@ -617,7 +608,7 @@ class MainWindowIconFactory:
             palette.cubicTo(14, 23, 15, 20, 14, 18)
             palette.cubicTo(11, 20, 6, 20, 4, 18)
             p.drawPath(palette)
-            p.setBrush(QBrush(Qt.GlobalColor.white))
+            p.setBrush(self._icon_brush(Qt.GlobalColor.white))
             p.drawEllipse(9, 13, 4, 4)
             p.drawEllipse(14, 11, 4, 4)
             p.drawEllipse(19, 15, 4, 4)
@@ -625,14 +616,20 @@ class MainWindowIconFactory:
 
     def icon_perspective(self) -> QIcon:
         def draw(p):
-            pen = QPen(QColor("#3d3229"))
-            pen.setWidthF(1.4)
-            p.setPen(pen)
-            cx, cy, r = 15.0, 15.0, 10.0
+            p.setPen(self._icon_pen(self.STROKE_THIN))
+            cx, cy = float(self.ICON_CENTER), float(self.ICON_CENTER)
+            r = (self.ICON_CONTENT_MAX - self.ICON_CONTENT_MIN) / 2.0
             start_deg = 40.0
             span_deg = 280.0
             end_deg = (start_deg + span_deg) % 360.0
-            p.drawArc(5, 5, 20, 20, int(start_deg * 16), int(span_deg * 16))
+            p.drawArc(
+                self.ICON_CONTENT_MIN,
+                self.ICON_CONTENT_MIN,
+                self.ICON_CONTENT_MAX - self.ICON_CONTENT_MIN,
+                self.ICON_CONTENT_MAX - self.ICON_CONTENT_MIN,
+                int(start_deg * 16),
+                int(span_deg * 16),
+            )
             rad = math.radians(end_deg)
             end = QPointF(cx + r * math.cos(rad), cy - r * math.sin(rad))
             tangent = rad + math.pi / 2.0
