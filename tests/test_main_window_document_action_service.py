@@ -8,7 +8,7 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtWidgets import QApplication, QDialog, QDoubleSpinBox, QPushButton, QToolButton
+    from PyQt6.QtWidgets import QApplication, QComboBox, QDialog, QDoubleSpinBox, QPushButton, QToolButton
 except ModuleNotFoundError:
     QApplication = None
 
@@ -205,6 +205,37 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             self.service.set_bond_length(self.window)
 
         set_bond_length.assert_called_once_with(25.0)
+
+    def test_setup_sheet_uses_current_canvas_settings_and_applies_confirmed_value(self) -> None:
+        self.window.canvas.set_sheet_setup("A4", "landscape")
+
+        def drive_dialog(dialog: QDialog):
+            self.assertEqual(dialog.windowTitle(), "Setup Sheet")
+
+            size_combo = dialog.findChild(QComboBox, "sheetSizeCombo")
+            orientation_combo = dialog.findChild(QComboBox, "sheetOrientationCombo")
+            ok_button = next(button for button in dialog.findChildren(QPushButton) if button.text() == "OK")
+
+            self.assertIsNotNone(size_combo)
+            self.assertIsNotNone(orientation_combo)
+            self.assertEqual([size_combo.itemText(index) for index in range(size_combo.count())], ["A4"])
+            self.assertEqual(size_combo.currentText(), "A4")
+            self.assertEqual(orientation_combo.currentData(), "landscape")
+
+            portrait_index = orientation_combo.findData("portrait")
+            self.assertGreaterEqual(portrait_index, 0)
+            orientation_combo.setCurrentIndex(portrait_index)
+            ok_button.click()
+
+            return QDialog.DialogCode.Accepted
+
+        with (
+            mock.patch.object(self.window.canvas, "set_sheet_setup") as set_sheet_setup,
+            mock.patch("ui.main_window_document_action_service.QDialog.exec", new=drive_dialog),
+        ):
+            self.service.setup_sheet(self.window)
+
+        set_sheet_setup.assert_called_once_with("A4", "portrait")
 
 
 if __name__ == "__main__":

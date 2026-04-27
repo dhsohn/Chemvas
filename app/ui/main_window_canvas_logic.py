@@ -72,6 +72,12 @@ def copy_canvas_template_settings(canvas, template) -> None:
     if template is None:
         return
     canvas.renderer.set_bond_length(template.renderer.style.bond_length_px)
+    set_sheet_setup = getattr(canvas, "set_sheet_setup", None)
+    if callable(set_sheet_setup):
+        set_sheet_setup(
+            getattr(template, "sheet_size", "A4"),
+            getattr(template, "sheet_orientation", "landscape"),
+        )
     for field_name in CANVAS_TEMPLATE_FIELDS:
         setattr(canvas, field_name, getattr(template, field_name))
 

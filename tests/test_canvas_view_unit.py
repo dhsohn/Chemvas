@@ -92,6 +92,25 @@ class CanvasViewUnitTest(unittest.TestCase):
 
         self.assertEqual(canvas.backgroundBrush().color(), QColor("#ffffff"))
 
+    def test_canvas_defaults_to_a4_landscape_sheet_and_can_switch_portrait(self) -> None:
+        canvas = CanvasView()
+        self.addCleanup(canvas.close)
+
+        self.assertEqual(canvas.sheet_size, "A4")
+        self.assertEqual(canvas.sheet_orientation, "landscape")
+        self.assertAlmostEqual(canvas.sheet_rect().width(), 842.0)
+        self.assertAlmostEqual(canvas.sheet_rect().height(), 595.0)
+        self.assertAlmostEqual(canvas.sceneRect().width(), 1002.0)
+        self.assertAlmostEqual(canvas.sceneRect().height(), 755.0)
+
+        canvas.set_sheet_setup("A4", "portrait")
+
+        self.assertEqual(canvas.sheet_orientation, "portrait")
+        self.assertAlmostEqual(canvas.sheet_rect().width(), 595.0)
+        self.assertAlmostEqual(canvas.sheet_rect().height(), 842.0)
+        self.assertAlmostEqual(canvas.sceneRect().width(), 755.0)
+        self.assertAlmostEqual(canvas.sceneRect().height(), 1002.0)
+
     def test_note_item_focus_out_adds_updates_and_deletes_commands(self) -> None:
         canvas = _FakeNoteCanvas()
         item = NoteItem(canvas)

@@ -65,6 +65,7 @@ class _HarnessWindow(QMainWindow):
         self._load_canvas = mock.Mock()
         self._export_xyz = mock.Mock()
         self._set_bond_length = mock.Mock()
+        self._setup_sheet = mock.Mock()
         self._apply_color_preset = mock.Mock()
         self._apply_ring_fill_preset = mock.Mock()
 
@@ -89,6 +90,7 @@ class _HarnessWindow(QMainWindow):
     _icon_save = _blank_icon
     _icon_open = _blank_icon
     _icon_export_xyz = _blank_icon
+    _icon_setup_sheet = _blank_icon
     _icon_undo = _blank_icon
     _icon_redo = _blank_icon
     _icon_color = _blank_icon
@@ -242,6 +244,14 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.assertEqual(assembly.save_button.menu().actions(), [assembly.save_as_action])
         self.assertEqual(assembly.save_action.statusTip(), "Save the current drawing")
         self.assertEqual(assembly.save_as_action.statusTip(), "Save the current drawing to a new file")
+        self.assertNotIn(
+            "Bond Length",
+            [button.toolTip() for button in assembly.left_bar.findChildren(QToolButton)],
+        )
+        self.assertIn(
+            "Bond Length",
+            [button.toolTip() for button in assembly.panel_bar.findChildren(QToolButton)],
+        )
 
         section_labels = [
             label.text()
@@ -261,12 +271,15 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.assertEqual(smiles_button.text(), "Insert")
         self.assertEqual(smiles_button.statusTip(), "Insert the typed SMILES structure")
         self.assertIs(assembly.export_xyz_button, assembly.panel_bar.findChild(QToolButton, "export_xyz_button"))
+        self.assertIs(assembly.setup_sheet_button, assembly.panel_bar.findChild(QToolButton, "setup_sheet_button"))
         self.assertIs(assembly.undo_button, assembly.panel_bar.findChild(QToolButton, "undo_button"))
         self.assertIs(assembly.redo_button, assembly.panel_bar.findChild(QToolButton, "redo_button"))
 
         smiles_input.setText("CCO")
         smiles_button.click()
         window.canvas.begin_smiles_insert.assert_called_once_with("CCO")
+        assembly.setup_sheet_button.click()
+        window._setup_sheet.assert_called_once_with(False)
 
     def test_init_panels_builds_locked_preview_dock(self) -> None:
         window = _HarnessWindow()

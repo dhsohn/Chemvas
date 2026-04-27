@@ -70,18 +70,31 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         with mock.patch.object(self.window.canvas, "begin_ring_template_insert") as begin_insert:
             entries = dict(self.window._template_entries())
             entries["Cyclopropane"]()
+            entries["Cycloheptane"]()
+            entries["Cyclooctane"]()
             entries["Cyclohexane (Chair)"]()
 
         self.assertEqual(begin_insert.call_args_list[0].args, (3,))
         self.assertEqual(begin_insert.call_args_list[0].kwargs, {"style": "regular"})
-        self.assertEqual(begin_insert.call_args_list[1].args, (6,))
-        self.assertEqual(begin_insert.call_args_list[1].kwargs, {"style": "chair"})
+        self.assertEqual(begin_insert.call_args_list[1].args, (7,))
+        self.assertEqual(begin_insert.call_args_list[1].kwargs, {"style": "regular"})
+        self.assertEqual(begin_insert.call_args_list[2].args, (8,))
+        self.assertEqual(begin_insert.call_args_list[2].kwargs, {"style": "regular"})
+        self.assertEqual(begin_insert.call_args_list[3].args, (6,))
+        self.assertEqual(begin_insert.call_args_list[3].kwargs, {"style": "chair"})
 
         menu = QMenu()
         self.window._populate_template_menu(menu)
         self.assertEqual(
             [action.text() for action in menu.actions()],
-            ["Cyclopropane", "Cyclobutane", "Cyclopentane", "Cyclohexane (Chair)"],
+            [
+                "Cyclopropane",
+                "Cyclobutane",
+                "Cyclopentane",
+                "Cyclohexane (Chair)",
+                "Cycloheptane",
+                "Cyclooctane",
+            ],
         )
 
     def test_ui_assembly_wrappers_delegate_to_service(self) -> None:
@@ -271,6 +284,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         factory.make_icon.return_value = icon
         factory.icon_select.return_value = icon
         factory.icon_ring.return_value = icon
+        factory.icon_setup_sheet.return_value = icon
         factory.icon_arrow_preview.return_value = icon
         factory.icon_template_preview.return_value = icon
         factory.benzene_icon_polygon.return_value = polygon
@@ -281,6 +295,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         self.assertIs(self.window._make_icon(lambda _p: None, size=24), icon)
         self.assertIs(self.window._icon_select(), icon)
         self.assertIs(self.window._icon_ring(), icon)
+        self.assertIs(self.window._icon_setup_sheet(), icon)
         self.assertIs(self.window._icon_arrow_preview("reaction"), icon)
         self.assertIs(self.window._icon_template_preview("Cyclopropane"), icon)
         self.assertIs(self.window._benzene_icon_polygon(point, 10.0), polygon)
@@ -292,6 +307,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         self.assertEqual(factory.make_icon.call_args.args[1], 24)
         factory.icon_select.assert_called_once_with()
         factory.icon_ring.assert_called_once_with()
+        factory.icon_setup_sheet.assert_called_once_with()
         factory.icon_arrow_preview.assert_called_once_with("reaction")
         factory.icon_template_preview.assert_called_once_with("Cyclopropane")
         factory.benzene_icon_polygon.assert_called_once_with(point, 10.0)

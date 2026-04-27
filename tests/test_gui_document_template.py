@@ -523,6 +523,20 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertIs(self.window.canvas._template_preview_lines[0], preview_lines[0])
         self.assertNotEqual(self.window.canvas._template_preview_lines[0].line(), first_line_before)
 
+    def test_large_regular_template_preview_uses_requested_ring_size(self) -> None:
+        for label, ring_size in (("Cycloheptane", 7), ("Cyclooctane", 8)):
+            with self.subTest(label=label):
+                self._template_handler(label)()
+                self.assertTrue(self.window.canvas._template_insert_active)
+                self.assertEqual(self.window.canvas._template_ring_size, ring_size)
+                self.assertEqual(self.window.canvas._template_ring_style, "regular")
+
+                self._hover_scene_point(QPointF(20.0, 20.0))
+
+                self.assertEqual(len(self.window.canvas._template_preview_lines), ring_size)
+                self.assertEqual(len(self.window.canvas._template_preview_dots), ring_size)
+                self.window.canvas._cancel_template_insert()
+
     def test_regular_template_commit_on_bond_merges_existing_endpoints(self) -> None:
         self.window.canvas.add_bond_from_points(QPointF(-20.0, 0.0), QPointF(20.0, 0.0))
         before_atom_count = len(self.window.canvas.model.atoms)

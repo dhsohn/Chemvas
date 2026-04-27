@@ -49,9 +49,14 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
         self.assertEqual(active_canvas_sheet_index(entries, object()), 0)
 
     def test_copy_canvas_template_settings_copies_known_fields(self) -> None:
-        target = SimpleNamespace(renderer=SimpleNamespace(set_bond_length=mock.Mock()))
+        target = SimpleNamespace(
+            renderer=SimpleNamespace(set_bond_length=mock.Mock()),
+            set_sheet_setup=mock.Mock(),
+        )
         template = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=24.0)),
+            sheet_size="A4",
+            sheet_orientation="portrait",
             arrow_line_width=2.5,
             arrow_head_scale=0.35,
             orbital_phase_enabled=True,
@@ -65,6 +70,7 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
         copy_canvas_template_settings(target, None)
 
         target.renderer.set_bond_length.assert_called_once_with(24.0)
+        target.set_sheet_setup.assert_called_once_with("A4", "portrait")
         self.assertEqual(target.arrow_line_width, 2.5)
         self.assertEqual(target.arrow_head_scale, 0.35)
         self.assertTrue(target.orbital_phase_enabled)

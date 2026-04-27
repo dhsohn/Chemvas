@@ -29,9 +29,11 @@ class MainWindowToolbarLogicTest(unittest.TestCase):
         )
 
         entries["Cyclopropane"]()
+        entries["Cycloheptane"]()
+        entries["Cyclooctane"]()
         entries["Cyclohexane (Chair)"]()
 
-        self.assertEqual(calls, [(3, "regular"), (6, "chair")])
+        self.assertEqual(calls, [(3, "regular"), (7, "regular"), (8, "regular"), (6, "chair")])
 
     def test_mapping_helpers_use_expected_defaults(self) -> None:
         self.assertEqual(bond_style_from_label("Bold"), ("bold_in", 1))

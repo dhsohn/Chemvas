@@ -33,6 +33,8 @@ def snapshot_canvas_document_state(canvas) -> dict:
             text_font_size=canvas.text_font_size,
             text_font_weight=canvas.text_font_weight,
             text_italic=canvas.text_italic,
+            sheet_size=getattr(canvas, "sheet_size", "A4"),
+            sheet_orientation=getattr(canvas, "sheet_orientation", "landscape"),
         ),
         "last_smiles_input": canvas.last_smiles_input,
     }
@@ -48,6 +50,12 @@ def apply_document_settings(canvas, state: dict) -> None:
     canvas.text_font_size = settings.get("text_font_size", canvas.text_font_size)
     canvas.text_font_weight = settings.get("text_font_weight", canvas.text_font_weight)
     canvas.text_italic = settings.get("text_italic", canvas.text_italic)
+    set_sheet_setup = getattr(canvas, "set_sheet_setup", None)
+    if callable(set_sheet_setup):
+        set_sheet_setup(
+            settings.get("sheet_size", getattr(canvas, "sheet_size", "A4")),
+            settings.get("sheet_orientation", getattr(canvas, "sheet_orientation", "landscape")),
+        )
     canvas.last_smiles_input = state.get("last_smiles_input")
 
 

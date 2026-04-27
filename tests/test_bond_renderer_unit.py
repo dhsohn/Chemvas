@@ -29,6 +29,8 @@ if str(APP_ROOT) not in sys.path:
 
 if QApplication is not None:
     from core.model import Atom, Bond
+    from core.renderer import Renderer
+    from core.style_acs1996 import ACS1996Style
     from ui.bond_renderer import BondRenderer
     from ui.graphics_items import NoSelectLineItem, NoSelectPathItem, NoSelectPolygonItem
 
@@ -275,6 +277,21 @@ class BondRendererUnitTest(unittest.TestCase):
         self.assertGreater(inner[3], 0.0)
         self.assertAlmostEqual(normal[0], 0.0)
         self.assertAlmostEqual(normal[1], 1.0)
+
+    def test_ring_double_segments_scale_spacing_with_short_bond_length(self) -> None:
+        self.canvas.renderer = Renderer(ACS1996Style(bond_length_px=10.0))
+
+        outer, inner, _ = self.renderer.ring_double_segments(
+            self.canvas.model.atoms[0],
+            self.canvas.model.atoms[1],
+            QPointF(5.0, 5.0),
+            0,
+            1,
+        )
+
+        self.assertEqual(outer, (0.0, 0.0, 10.0, 0.0))
+        self.assertAlmostEqual(inner[1], 2.42)
+        self.assertAlmostEqual(inner[3], 2.42)
 
     def test_ring_double_segments_cover_3d_variants_and_fallback_guards(self) -> None:
         self.canvas._coords_3d = {

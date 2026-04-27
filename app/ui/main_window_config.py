@@ -28,6 +28,8 @@ TEMPLATE_ENTRY_SPECS: list[tuple[str, int, str]] = [
     ("Cyclobutane", 4, "regular"),
     ("Cyclopentane", 5, "regular"),
     ("Cyclohexane (Chair)", 6, "chair"),
+    ("Cycloheptane", 7, "regular"),
+    ("Cyclooctane", 8, "regular"),
 ]
 
 TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [

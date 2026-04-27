@@ -165,6 +165,7 @@ class MainWindowIconGeometryTest(unittest.TestCase):
         for icon in (
             self.factory.icon_ring(),
             self.factory.icon_save(),
+            self.factory.icon_setup_sheet(),
             self.factory.icon_arrow(),
             self.factory.icon_color(),
             self.factory.icon_templates(),
@@ -192,6 +193,8 @@ class MainWindowIconGeometryTest(unittest.TestCase):
         labels = (
             "Benzene",
             "Naphthalene",
+            "Cycloheptane",
+            "Cyclooctane",
             "18-Crown-6",
             "Me",
             "Vinyl",
@@ -202,6 +205,9 @@ class MainWindowIconGeometryTest(unittest.TestCase):
         for label in labels:
             bounds = _opaque_bounds(self.factory.icon_template_preview(label).pixmap(30, 30).toImage())
             self.assertIsNotNone(bounds, label)
+
+        self.assertEqual(self.factory.template_preview_ring_sides("Cycloheptane"), 7)
+        self.assertEqual(self.factory.template_preview_ring_sides("Cyclooctane"), 8)
 
     def test_template_icons_tolerate_empty_chair_geometry_and_zero_rect(self) -> None:
         with mock.patch.object(self.factory, "chair_icon_points", return_value=QPolygonF()):

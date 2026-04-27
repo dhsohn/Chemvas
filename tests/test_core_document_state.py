@@ -176,6 +176,8 @@ class DocumentStateTest(unittest.TestCase):
             text_font_size=13,
             text_font_weight=600,
             text_italic=False,
+            sheet_size="A4",
+            sheet_orientation="portrait",
         )
         state = {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}, "settings": settings}
         payload = build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
