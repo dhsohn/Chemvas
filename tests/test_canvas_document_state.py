@@ -104,6 +104,8 @@ class CanvasDocumentStateTest(unittest.TestCase):
             text_font_size=13,
             text_font_weight=600,
             text_italic=False,
+            sheet_size="A4",
+            sheet_orientation="portrait",
             last_smiles_input="CCO",
             scene=lambda: scene_obj,
             _ring_state_dict=lambda item: {"points": [(0.0, 0.0)], "atom_ids": [1], "color": "#abcdef", "alpha": 0.25},
@@ -129,6 +131,8 @@ class CanvasDocumentStateTest(unittest.TestCase):
             state["orbitals"],
             [{"kind": "p", "center": (2.0, 3.0), "scale": 2.0, "rotation": 45.0}],
         )
+        self.assertEqual(state["settings"]["sheet_size"], "A4")
+        self.assertEqual(state["settings"]["sheet_orientation"], "portrait")
         self.assertEqual(state["last_smiles_input"], "CCO")
 
     def test_apply_document_settings_uses_state_values_and_preserves_missing_defaults(self) -> None:
@@ -143,6 +147,9 @@ class CanvasDocumentStateTest(unittest.TestCase):
             text_font_size=12,
             text_font_weight=400,
             text_italic=False,
+            sheet_size="A4",
+            sheet_orientation="landscape",
+            set_sheet_setup=mock.Mock(),
             last_smiles_input="before",
         )
 
@@ -153,12 +160,14 @@ class CanvasDocumentStateTest(unittest.TestCase):
                     "bond_length_px": 22.0,
                     "arrow_head_scale": 0.5,
                     "text_italic": True,
+                    "sheet_orientation": "portrait",
                 },
                 "last_smiles_input": "after",
             },
         )
 
         canvas.renderer.set_bond_length.assert_called_once_with(22.0)
+        canvas.set_sheet_setup.assert_called_once_with("A4", "portrait")
         self.assertEqual(canvas.arrow_line_width, 1.0)
         self.assertEqual(canvas.arrow_head_scale, 0.5)
         self.assertFalse(canvas.orbital_phase_enabled)

@@ -3,9 +3,19 @@ from __future__ import annotations
 from pathlib import Path
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QDialog, QDoubleSpinBox, QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
+from PyQt6.QtWidgets import (
+    QComboBox,
+    QDialog,
+    QDoubleSpinBox,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+)
 
 from ui.main_window_ui_assembly_service import ArrowButton
+from ui.sheet_setup_logic import SHEET_ORIENTATION_OPTIONS, supported_sheet_sizes
 
 
 class MainWindowDocumentActionService:
@@ -150,6 +160,53 @@ class MainWindowDocumentActionService:
 
         if dialog.exec() == QDialog.DialogCode.Accepted:
             window.canvas.set_bond_length(spin.value())
+
+    def setup_sheet(self, window) -> None:
+        dialog = QDialog(window)
+        dialog.setWindowTitle("Setup Sheet")
+        dialog.setStyleSheet(window.styleSheet())
+        layout = QVBoxLayout(dialog)
+
+        size_label = QLabel("Sheet size:")
+        layout.addWidget(size_label)
+
+        size_combo = QComboBox()
+        size_combo.setObjectName("sheetSizeCombo")
+        size_combo.addItems(supported_sheet_sizes())
+        current_size = getattr(window.canvas, "sheet_size", "A4")
+        size_index = size_combo.findText(current_size)
+        if size_index >= 0:
+            size_combo.setCurrentIndex(size_index)
+        layout.addWidget(size_combo)
+
+        orientation_label = QLabel("Orientation:")
+        layout.addWidget(orientation_label)
+
+        orientation_combo = QComboBox()
+        orientation_combo.setObjectName("sheetOrientationCombo")
+        current_orientation = getattr(window.canvas, "sheet_orientation", "landscape")
+        for value, label in SHEET_ORIENTATION_OPTIONS:
+            orientation_combo.addItem(label, value)
+            if value == current_orientation:
+                orientation_combo.setCurrentIndex(orientation_combo.count() - 1)
+        layout.addWidget(orientation_combo)
+
+        action_row = QHBoxLayout()
+        action_row.addStretch(1)
+        ok_btn = QPushButton("OK")
+        cancel_btn = QPushButton("Cancel")
+        action_row.addWidget(ok_btn)
+        action_row.addWidget(cancel_btn)
+        layout.addLayout(action_row)
+
+        ok_btn.clicked.connect(dialog.accept)
+        cancel_btn.clicked.connect(dialog.reject)
+
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            window.canvas.set_sheet_setup(
+                size_combo.currentText(),
+                orientation_combo.currentData(),
+            )
 
 
 __all__ = ["MainWindowDocumentActionService"]

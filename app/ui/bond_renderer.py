@@ -34,12 +34,43 @@ class BondRenderer:
         item.setPen(pen)
         return item
 
+    def _scaled_metric(self, style_attr: str) -> float:
+        value = float(getattr(self.canvas.renderer.style, style_attr))
+        scale_metric = getattr(self.canvas.renderer, "scaled_style_metric", None)
+        if callable(scale_metric):
+            return scale_metric(value)
+        return value
+
+    def _bond_line_width(self) -> float:
+        getter = getattr(self.canvas.renderer, "bond_line_width", None)
+        if callable(getter):
+            return getter()
+        return self._scaled_metric("bond_line_width")
+
+    def _bold_bond_width(self) -> float:
+        getter = getattr(self.canvas.renderer, "bold_bond_width", None)
+        if callable(getter):
+            return getter()
+        return self.canvas.renderer.bold_bond_pen().widthF()
+
+    def _bond_spacing(self) -> float:
+        getter = getattr(self.canvas.renderer, "bond_spacing", None)
+        if callable(getter):
+            return getter()
+        return self._scaled_metric("bond_spacing_px")
+
+    def _hash_spacing(self) -> float:
+        getter = getattr(self.canvas.renderer, "hash_spacing", None)
+        if callable(getter):
+            return getter()
+        return self._scaled_metric("hash_spacing_px")
+
     def _dotted_dot_radius(self) -> float:
-        return max(0.8, self.canvas.renderer.style.bond_line_width * 0.58)
+        return max(0.4, self._bond_line_width() * 0.58)
 
     def _dotted_target_spacing(self) -> float:
         radius = self._dotted_dot_radius()
-        return max(self.canvas.renderer.style.hash_spacing_px * 0.95, radius * 4.0)
+        return max(self._hash_spacing() * 0.95, radius * 4.0)
 
     def _junction_trim_for_atom(self, atom_id: int | None, other_id: int | None) -> float:
         if atom_id is None:
@@ -56,7 +87,7 @@ class BondRenderer:
                     bond_ids.discard(bond_id)
         if not bond_ids:
             return 0.0
-        return max(self.canvas.renderer.style.hash_spacing_px * 0.4, self._dotted_dot_radius() * 1.75)
+        return max(self._hash_spacing() * 0.4, self._dotted_dot_radius() * 1.75)
 
     def dotted_bond_path(
         self,
@@ -228,7 +259,7 @@ class BondRenderer:
         else:
             nx = -dy / length
             ny = dx / length
-        spacing = self.canvas.renderer.style.bond_spacing_px
+        spacing = self._bond_spacing()
         if count == 2:
             offsets = [-spacing / 2, spacing / 2]
         elif count == 3:
@@ -289,7 +320,7 @@ class BondRenderer:
         return max(1.0, length * 0.12)
 
     def _plain_double_offsets(self) -> tuple[float, float]:
-        side_offset = self.canvas.renderer.style.bond_spacing_px * 1.1
+        side_offset = self._bond_spacing() * 1.1
         return side_offset, side_offset * 0.5
 
     def _double_neighbor_target(
@@ -527,7 +558,7 @@ class BondRenderer:
                         inner_trim = self._double_short_trim(inner_length, has_label=has_label)
                         trim_ratio = min(0.45, inner_trim / inner_length)
                         trimmed_vec3 = (base_b3[0] - base_a3[0], base_b3[1] - base_a3[1], base_b3[2] - base_a3[2])
-                        spacing = self.canvas.renderer.style.bond_spacing_px * 1.1
+                        spacing = self._bond_spacing() * 1.1
                         inner_full_a3 = (
                             base_a3[0] + inward_unit3[0] * spacing,
                             base_a3[1] + inward_unit3[1] * spacing,
@@ -620,7 +651,7 @@ class BondRenderer:
                 nx = -nx
                 ny = -ny
 
-        spacing = self.canvas.renderer.style.bond_spacing_px * 1.1
+        spacing = self._bond_spacing() * 1.1
         t0, t1 = self.canvas._trim_line_for_labels(a_id, b_id, a.x, a.y, b.x, b.y)
         base_bx1 = a.x + dx * t0
         base_by1 = a.y + dy * t0
@@ -680,8 +711,8 @@ class BondRenderer:
                 *outer_seg,
                 use_nx,
                 use_ny,
-                self.canvas.renderer.style.bond_line_width,
-                self.canvas.renderer.style.bold_bond_width * 1.5,
+                self._bond_line_width(),
+                self._bold_bond_width(),
             )
         else:
             outer_item = NoSelectLineItem(*outer_seg)
@@ -742,7 +773,7 @@ class BondRenderer:
         else:
             nx = -dy / length
             ny = dx / length
-        spacing = self.canvas.renderer.style.bond_spacing_px
+        spacing = self._bond_spacing()
         if count == 2:
             offsets = [-spacing / 2, spacing / 2]
         elif count == 3:
@@ -857,7 +888,7 @@ class BondRenderer:
         dx = x2 - x1
         dy = y2 - y1
         length = math.hypot(dx, dy) or 1.0
-        count = max(3, int(length / self.canvas.renderer.style.hash_spacing_px))
+        count = max(3, int(length / max(self._hash_spacing(), 1e-6)))
         segments = self.hash_segments(x1, y1, x2, y2, count, a_id, b_id)
         items = []
         for seg in segments:
@@ -955,8 +986,8 @@ class BondRenderer:
                             *outer_seg,
                             use_nx,
                             use_ny,
-                            self.canvas.renderer.style.bond_line_width,
-                            self.canvas.renderer.style.bold_bond_width * 1.5,
+                            self._bond_line_width(),
+                            self._bold_bond_width(),
                         )
                         outer_item.setPolygon(polygon)
                     elif isinstance(outer_item, QGraphicsLineItem):
@@ -982,8 +1013,8 @@ class BondRenderer:
                         y2,
                         nx,
                         ny,
-                        self.canvas.renderer.style.bond_line_width,
-                        self.canvas.renderer.style.bold_bond_width * 1.5,
+                        self._bond_line_width(),
+                        self._bold_bond_width(),
                     )
                     items[0].setPolygon(polygon)
                 elif isinstance(items[0], QGraphicsLineItem):
@@ -1016,8 +1047,8 @@ class BondRenderer:
                     by2,
                     nx,
                     ny,
-                    self.canvas.renderer.style.bond_line_width,
-                    self.canvas.renderer.style.bold_bond_width * 1.5,
+                    self._bond_line_width(),
+                    self._bold_bond_width(),
                 )
                 items[0].setPolygon(polygon)
             elif isinstance(items[0], QGraphicsLineItem):
@@ -1135,8 +1166,8 @@ class BondRenderer:
                             y2,
                             nx,
                             ny,
-                            self.canvas.renderer.style.bond_line_width,
-                            self.canvas.renderer.style.bold_bond_width * 1.5,
+                            self._bond_line_width(),
+                            self._bold_bond_width(),
                         )
             else:
                 bx1, by1 = a.x, a.y
@@ -1162,8 +1193,8 @@ class BondRenderer:
                     by2,
                     nx,
                     ny,
-                    self.canvas.renderer.style.bond_line_width,
-                    self.canvas.renderer.style.bold_bond_width * 1.5,
+                    self._bond_line_width(),
+                    self._bold_bond_width(),
                 )
                 items = [line_item]
         elif is_plain_double_bond_style(bond.style, bond.order):

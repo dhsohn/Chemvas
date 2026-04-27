@@ -277,6 +277,21 @@ class MainWindowIconFactory:
             p.drawLine(9, 25, 21, 25)
         return self.make_icon(draw)
 
+    def icon_setup_sheet(self) -> QIcon:
+        def draw(p):
+            p.setPen(self._icon_pen(self.STROKE_THIN))
+            path = QPainterPath()
+            path.moveTo(8.0, 5.0)
+            path.lineTo(19.0, 5.0)
+            path.lineTo(24.0, 10.0)
+            path.lineTo(24.0, 25.0)
+            path.lineTo(8.0, 25.0)
+            path.closeSubpath()
+            p.drawPath(path)
+            p.drawLine(QPointF(19.0, 5.0), QPointF(19.0, 10.0))
+            p.drawLine(QPointF(19.0, 10.0), QPointF(24.0, 10.0))
+        return self.make_icon(draw)
+
     def icon_templates(self) -> QIcon:
         def draw(p):
             p.setPen(self._icon_pen(self.STROKE_REGULAR))
@@ -440,6 +455,25 @@ class MainWindowIconFactory:
                 p.drawLine(15, 9, 15, 21)
         return self.make_icon(draw)
 
+    @staticmethod
+    def template_preview_ring_sides(label: str) -> int | None:
+        lower = label.lower()
+        if "cyclopropane" in lower:
+            return 3
+        if "cyclobutane" in lower:
+            return 4
+        if "cyclopentane" in lower or "furan" in lower or "thiophene" in lower:
+            return 5
+        if "cycloheptane" in lower:
+            return 7
+        if "cyclooctane" in lower:
+            return 8
+        if "benzene" in lower or "pyridine" in lower or "pyrimidine" in lower:
+            return 6
+        if "crown" in lower:
+            return 10
+        return None
+
     def icon_template_preview(self, label: str) -> QIcon:
         def draw_ring(p, sides: int):
             center = QPointF(15.0, 15.0)
@@ -458,20 +492,13 @@ class MainWindowIconFactory:
         def draw(p):
             p.setPen(self._icon_pen(self.STROKE_THIN))
             lower = label.lower()
-            if "cyclopropane" in lower:
-                draw_ring(p, 3)
-            elif "cyclobutane" in lower:
-                draw_ring(p, 4)
-            elif "cyclopentane" in lower or "furan" in lower or "thiophene" in lower:
-                draw_ring(p, 5)
-            elif "benzene" in lower or "pyridine" in lower or "pyrimidine" in lower:
-                draw_ring(p, 6)
+            ring_sides = self.template_preview_ring_sides(label)
+            if ring_sides is not None:
+                draw_ring(p, ring_sides)
             elif "naphthalene" in lower or "anthracene" in lower or "phenanthrene" in lower:
                 draw_ring(p, 6)
                 draw_ring(p, 6)
                 p.drawLine(12, 7, 18, 7)
-            elif "crown" in lower:
-                draw_ring(p, 10)
             elif "chair" in lower:
                 chair = self.chair_icon_points(self.chair_icon_rect())
                 if not chair.isEmpty():

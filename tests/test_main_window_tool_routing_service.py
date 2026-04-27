@@ -52,18 +52,31 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
         with mock.patch.object(self.window.canvas, "begin_ring_template_insert") as begin_insert:
             entries = dict(self.service.template_entries(self.window))
             entries["Cyclopropane"]()
+            entries["Cycloheptane"]()
+            entries["Cyclooctane"]()
             entries["Cyclohexane (Chair)"]()
 
         self.assertEqual(begin_insert.call_args_list[0].args, (3,))
         self.assertEqual(begin_insert.call_args_list[0].kwargs, {"style": "regular"})
-        self.assertEqual(begin_insert.call_args_list[1].args, (6,))
-        self.assertEqual(begin_insert.call_args_list[1].kwargs, {"style": "chair"})
+        self.assertEqual(begin_insert.call_args_list[1].args, (7,))
+        self.assertEqual(begin_insert.call_args_list[1].kwargs, {"style": "regular"})
+        self.assertEqual(begin_insert.call_args_list[2].args, (8,))
+        self.assertEqual(begin_insert.call_args_list[2].kwargs, {"style": "regular"})
+        self.assertEqual(begin_insert.call_args_list[3].args, (6,))
+        self.assertEqual(begin_insert.call_args_list[3].kwargs, {"style": "chair"})
 
         menu = QMenu()
         self.service.populate_template_menu(self.window, menu)
         self.assertEqual(
             [action.text() for action in menu.actions()],
-            ["Cyclopropane", "Cyclobutane", "Cyclopentane", "Cyclohexane (Chair)"],
+            [
+                "Cyclopropane",
+                "Cyclobutane",
+                "Cyclopentane",
+                "Cyclohexane (Chair)",
+                "Cycloheptane",
+                "Cyclooctane",
+            ],
         )
 
     def test_arrow_menu_helpers_route_type_and_preset_through_existing_window_methods(self) -> None:

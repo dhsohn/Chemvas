@@ -419,6 +419,9 @@ class MainWindow(QMainWindow):
     def _icon_add_sheet(self) -> QIcon:
         return self._icon_factory.icon_add_sheet()
 
+    def _icon_setup_sheet(self) -> QIcon:
+        return self._icon_factory.icon_setup_sheet()
+
     def _icon_templates(self) -> QIcon:
         return self._icon_factory.icon_templates()
 
@@ -739,3 +742,6 @@ class MainWindow(QMainWindow):
 
     def _set_bond_length(self) -> None:
         self._document_action_service.set_bond_length(self)
+
+    def _setup_sheet(self) -> None:
+        self._document_action_service.setup_sheet(self)

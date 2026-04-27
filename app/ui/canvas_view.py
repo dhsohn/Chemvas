@@ -145,6 +145,13 @@ from ui.structure_geometry_logic import (
     compute_sprout_bond_endpoint,
     compute_template_points_for_bond,
 )
+from ui.sheet_setup_logic import (
+    DEFAULT_SHEET_ORIENTATION,
+    DEFAULT_SHEET_SIZE,
+    SHEET_MARGIN_PX,
+    normalize_sheet_setup,
+    sheet_dimensions_px,
+)
 from ui.structure_insert_service import StructureInsertService
 from ui.selection_rotation_logic import rotated_atom_positions, selected_rotation_atom_ids
 
@@ -234,7 +241,10 @@ class CanvasView(QGraphicsView):
         self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
         self.setBackgroundBrush(QColor("#ffffff"))
-        self.setSceneRect(QRectF(-2000.0, -2000.0, 4000.0, 4000.0))
+        self.sheet_size = DEFAULT_SHEET_SIZE
+        self.sheet_orientation = DEFAULT_SHEET_ORIENTATION
+        self._sheet_rect = QRectF()
+        self._apply_sheet_scene_rect()
         self.setMouseTracking(True)
         self.viewport().setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -402,6 +412,39 @@ class CanvasView(QGraphicsView):
         self._clipboard_paste_count = 0
         self.tools = ToolController(self)
         self.tools.set_active("bond")
+
+    def _apply_sheet_scene_rect(self) -> None:
+        width, height = sheet_dimensions_px(self.sheet_size, self.sheet_orientation)
+        self._sheet_rect = QRectF(-width / 2.0, -height / 2.0, width, height)
+        self.setSceneRect(
+            self._sheet_rect.adjusted(
+                -SHEET_MARGIN_PX,
+                -SHEET_MARGIN_PX,
+                SHEET_MARGIN_PX,
+                SHEET_MARGIN_PX,
+            )
+        )
+
+    def sheet_rect(self) -> QRectF:
+        return QRectF(self._sheet_rect)
+
+    def set_sheet_setup(self, size_name: str, orientation: str) -> None:
+        self.sheet_size, self.sheet_orientation = normalize_sheet_setup(size_name, orientation)
+        self._apply_sheet_scene_rect()
+        self.viewport().update()
+
+    def drawBackground(self, painter: QPainter, rect: QRectF) -> None:
+        painter.save()
+        painter.fillRect(rect, QColor("#f3f0ea"))
+        sheet_rect = self.sheet_rect()
+        painter.fillRect(sheet_rect.translated(4.0, 4.0), QColor(0, 0, 0, 18))
+        painter.fillRect(sheet_rect, QColor("#ffffff"))
+        pen = QPen(QColor("#c8bdad"))
+        pen.setWidthF(1.0)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRect(sheet_rect)
+        painter.restore()
 
     def keyPressEvent(self, event) -> None:
         _input_controller_for(self).key_press_event(event)

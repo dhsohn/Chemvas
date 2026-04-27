@@ -102,6 +102,8 @@ def serialize_settings(
     text_font_size: int,
     text_font_weight: int,
     text_italic: bool,
+    sheet_size: str,
+    sheet_orientation: str,
 ) -> dict:
     return {
         "bond_length_px": bond_length_px,
@@ -111,6 +113,8 @@ def serialize_settings(
         "text_font_size": text_font_size,
         "text_font_weight": text_font_weight,
         "text_italic": text_italic,
+        "sheet_size": sheet_size,
+        "sheet_orientation": sheet_orientation,
     }
 
 

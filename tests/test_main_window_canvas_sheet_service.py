@@ -70,12 +70,15 @@ class MainWindowCanvasSheetServiceTest(unittest.TestCase):
         template.text_font_weight = QFont.Weight.Bold
         template.text_italic = True
         template.mark_kind = "minus"
+        template.set_sheet_setup("A4", "portrait")
 
         canvas = self.service.create_canvas(self.window, template=template)
         self._extra_canvases.append(canvas)
 
         self.assertEqual(canvas.frameStyle(), 0)
         self.assertEqual(canvas.renderer.style.bond_length_px, 42.0)
+        self.assertEqual(canvas.sheet_size, "A4")
+        self.assertEqual(canvas.sheet_orientation, "portrait")
         self.assertEqual(canvas.arrow_line_width, 3.25)
         self.assertEqual(canvas.arrow_head_scale, 0.55)
         self.assertTrue(canvas.orbital_phase_enabled)

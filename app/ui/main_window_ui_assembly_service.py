@@ -42,6 +42,7 @@ class MainWindowToolbarAssembly:
     save_as_action: QAction
     save_button: QToolButton
     export_xyz_button: QToolButton | None = None
+    setup_sheet_button: QToolButton | None = None
     undo_button: QToolButton | None = None
     redo_button: QToolButton | None = None
 
@@ -232,13 +233,6 @@ class MainWindowUIAssemblyService:
         left_bar.addSeparator()
         left_bar.addWidget(
             self.create_toolbar_button(
-                icon=window._icon_bond_length(),
-                tooltip="Bond Length",
-                callback=window._set_bond_length,
-            )
-        )
-        left_bar.addWidget(
-            self.create_toolbar_button(
                 icon=window._icon_flip_h(),
                 tooltip="Flip Horizontal (Ctrl+Shift+H)",
                 callback=lambda: window.canvas.flip_horizontal(),
@@ -292,6 +286,13 @@ class MainWindowUIAssemblyService:
             callback=window._export_xyz,
             object_name="export_xyz_button",
         )
+        setup_sheet_btn = self.create_toolbar_button(
+            icon=window._icon_setup_sheet(),
+            tooltip="Setup Sheet",
+            status_tip="Set the current sheet size and orientation",
+            callback=window._setup_sheet,
+            object_name="setup_sheet_button",
+        )
         undo_btn = self.create_toolbar_button(
             icon=window._icon_undo(),
             tooltip="Undo",
@@ -331,6 +332,7 @@ class MainWindowUIAssemblyService:
         panel_bar.addWidget(save_button)
         panel_bar.addWidget(load_btn)
         panel_bar.addWidget(export_xyz_btn)
+        panel_bar.addWidget(setup_sheet_btn)
         panel_bar.addSeparator()
         panel_bar.addWidget(self.create_toolbar_section_label("History"))
         panel_bar.addWidget(undo_btn)
@@ -392,6 +394,7 @@ class MainWindowUIAssemblyService:
             save_as_action=save_as_action,
             save_button=save_button,
             export_xyz_button=export_xyz_btn,
+            setup_sheet_button=setup_sheet_btn,
             undo_button=undo_btn,
             redo_button=redo_btn,
         )
