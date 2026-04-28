@@ -153,6 +153,7 @@ class MainWindowIconGeometryTest(unittest.TestCase):
         for icon in (
             self.factory.icon_add_sheet(),
             self.factory.icon_info(),
+            self.factory.icon_preview_panel(),
             self.factory.icon_bond_double(),
             self.factory.icon_bond_triple(),
             self.factory.icon_orbital(),

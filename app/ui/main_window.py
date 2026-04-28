@@ -76,6 +76,7 @@ class MainWindow(QMainWindow):
 
         self._atom_input = None
         self._export_xyz_button = None
+        self._preview_panel_button = None
         self._undo_button = None
         self._redo_button = None
         self._canvas_name_counter = 0
@@ -351,6 +352,7 @@ class MainWindow(QMainWindow):
         self._tool_actions = assembly.tool_actions
         self._atom_input = assembly.atom_input
         self._export_xyz_button = assembly.export_xyz_button
+        self._preview_panel_button = assembly.preview_panel_button
         self._undo_button = assembly.undo_button
         self._redo_button = assembly.redo_button
         self._update_action_availability()
@@ -415,6 +417,9 @@ class MainWindow(QMainWindow):
 
     def _icon_export_xyz(self) -> QIcon:
         return self._icon_factory.icon_export_xyz()
+
+    def _icon_preview_panel(self) -> QIcon:
+        return self._icon_factory.icon_preview_panel()
 
     def _icon_add_sheet(self) -> QIcon:
         return self._icon_factory.icon_add_sheet()
@@ -492,12 +497,36 @@ class MainWindow(QMainWindow):
         assembly = self._ui_assembly_service.init_panels(self)
         self.panel_splitter = assembly.splitter
         self.panel_dock = assembly.dock
+        self.panel_dock.visibilityChanged.connect(self._sync_preview_panel_button)
+        self._sync_preview_panel_button()
 
     def _show_panel(self, index: int) -> None:
         if self.panel_dock is None:
             return
         self.panel_dock.show()
         self.panel_dock.raise_()
+        self._sync_preview_panel_button()
+
+    def _toggle_preview_panel(self, checked: bool | None = None) -> None:
+        if self.panel_dock is None:
+            return
+        should_show = self.panel_dock.isHidden() if checked is None else bool(checked)
+        self.panel_dock.setVisible(should_show)
+        if should_show:
+            self.panel_dock.raise_()
+        self._sync_preview_panel_button()
+
+    def _sync_preview_panel_button(self, _visible: bool | None = None) -> None:
+        button = getattr(self, "_preview_panel_button", None)
+        dock = getattr(self, "panel_dock", None)
+        if button is None or dock is None:
+            return
+        hidden = dock.isHidden()
+        if not isinstance(hidden, bool):
+            return
+        previous = button.blockSignals(True)
+        button.setChecked(not hidden)
+        button.blockSignals(previous)
 
     def _apply_theme(self) -> None:
         self._ui_assembly_service.apply_theme(self)
