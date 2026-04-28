@@ -149,7 +149,7 @@ class MainWindowWorkbookTabsTest(unittest.TestCase):
         self.assertEqual(self.window._workbook_state(), {"active_sheet_index": 0, "sheets": []})
         self.window._restore_single_sheet_document({"atoms": []})
         self.window._restore_workbook_document({"sheets": [{"name": "Sheet 1"}]})
-        self.window._save_document_state("/tmp/test.ldraw")
+        self.window._save_document_state("/tmp/test.chemvas")
 
         service.clear_canvas_sheets.assert_called_once_with(self.window)
         service.workbook_state.assert_called_once_with(self.window)
@@ -158,7 +158,7 @@ class MainWindowWorkbookTabsTest(unittest.TestCase):
             self.window,
             {"sheets": [{"name": "Sheet 1"}]},
         )
-        service.save_document_state.assert_called_once_with(self.window, "/tmp/test.ldraw")
+        service.save_document_state.assert_called_once_with(self.window, "/tmp/test.chemvas")
 
     def _build_canvas_sheet_states(self) -> tuple[dict, dict]:
         self.window.canvas.add_bond_from_points(QPointF(-20.0, 0.0), QPointF(20.0, 0.0))
@@ -189,7 +189,7 @@ class MainWindowWorkbookTabsTest(unittest.TestCase):
         self.assertEqual(self.window.canvas_tabs.currentIndex(), 1)
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "workbook.ldraw"
+            path = Path(temp_dir) / "workbook.chemvas"
             self.window._save_document_state(str(path))
             document = read_document(path)
         return document.state

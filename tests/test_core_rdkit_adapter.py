@@ -162,7 +162,7 @@ def _invoke_xyz_export(method, *, model: MoleculeModel, path: Path | None = None
                 continue
             value = str(path)
         elif lower == "comment":
-            value = "LiteDraw XYZ export"
+            value = "Chemvas XYZ export"
         elif parameter.default is not inspect._empty:
             continue
         else:

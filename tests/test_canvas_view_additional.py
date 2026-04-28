@@ -189,15 +189,15 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         self.assertEqual(CanvasView.snapshot_state(view), state)
         CanvasView._restore_state(view, state)
         CanvasView.restore_state(view, state)
-        CanvasView.save_to_file(view, "/tmp/example.ldraw")
-        CanvasView.load_from_file(view, "/tmp/example.ldraw")
+        CanvasView.save_to_file(view, "/tmp/example.chemvas")
+        CanvasView.load_from_file(view, "/tmp/example.chemvas")
 
         view._snapshot_state.assert_called_once_with()
         document_session_service.snapshot_state.assert_called_once_with()
         document_session_service.apply_state.assert_called_once_with(state)
         document_session_service.restore_state.assert_called_once_with(state)
-        document_session_service.save_to_file.assert_called_once_with("/tmp/example.ldraw")
-        document_session_service.load_from_file.assert_called_once_with("/tmp/example.ldraw")
+        document_session_service.save_to_file.assert_called_once_with("/tmp/example.chemvas")
+        document_session_service.load_from_file.assert_called_once_with("/tmp/example.chemvas")
 
     def test_service_and_scene_item_wrappers_delegate(self) -> None:
         scene_item_controller = mock.Mock()

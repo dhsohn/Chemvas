@@ -101,9 +101,9 @@ class MainWindowWorkbookDocumentServiceTest(unittest.TestCase):
         self.assertNotIn("+", [sheet["name"] for sheet in state["sheets"]])
 
         write_document_fn = mock.Mock()
-        self.service.save_document_state(self.window, "/tmp/workbook.ldraw", write_document_fn=write_document_fn)
+        self.service.save_document_state(self.window, "/tmp/workbook.chemvas", write_document_fn=write_document_fn)
         write_document_fn.assert_called_once_with(
-            "/tmp/workbook.ldraw",
+            "/tmp/workbook.chemvas",
             state,
             self.window.WORKBOOK_FILE_VERSION,
         )
@@ -112,9 +112,9 @@ class MainWindowWorkbookDocumentServiceTest(unittest.TestCase):
         self.window.canvas.save_to_file = mock.Mock()
         write_document_fn = mock.Mock()
 
-        self.service.save_document_state(self.window, "/tmp/single.ldraw", write_document_fn=write_document_fn)
+        self.service.save_document_state(self.window, "/tmp/single.chemvas", write_document_fn=write_document_fn)
 
-        self.window.canvas.save_to_file.assert_called_once_with("/tmp/single.ldraw")
+        self.window.canvas.save_to_file.assert_called_once_with("/tmp/single.chemvas")
         write_document_fn.assert_not_called()
 
     def test_restore_single_sheet_document_resets_counter_last_index_and_refreshes_ui(self) -> None:

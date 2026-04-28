@@ -11,21 +11,22 @@ if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
 from core.document_io import (
-    LiteDrawDocument,
+    ChemvasDocument,
     create_document,
     parse_document,
     read_document,
     write_document,
 )
 from core.document_state import (
-    LITEDRAW_FILE_TYPE,
+    CHEMVAS_FILE_TYPE,
+    LEGACY_DOCUMENT_FILE_TYPE,
     SINGLE_SHEET_FILE_VERSION,
     WORKBOOK_FILE_VERSION,
 )
 
 
 class DocumentIOTest(unittest.TestCase):
-    def test_create_document_wraps_state_in_litedraw_payload(self) -> None:
+    def test_create_document_wraps_state_in_chemvas_payload(self) -> None:
         state = {
             "model": {"atoms": {}, "bonds": [], "next_atom_id": 0},
             "last_smiles_input": "CCO",
@@ -33,11 +34,11 @@ class DocumentIOTest(unittest.TestCase):
 
         document = create_document(state, version=SINGLE_SHEET_FILE_VERSION)
 
-        self.assertIsInstance(document, LiteDrawDocument)
+        self.assertIsInstance(document, ChemvasDocument)
         self.assertEqual(
             document.payload,
             {
-                "type": LITEDRAW_FILE_TYPE,
+                "type": CHEMVAS_FILE_TYPE,
                 "version": SINGLE_SHEET_FILE_VERSION,
                 "state": state,
             },
@@ -57,12 +58,12 @@ class DocumentIOTest(unittest.TestCase):
             ],
         }
         payload = {
-            "type": LITEDRAW_FILE_TYPE,
+            "type": CHEMVAS_FILE_TYPE,
             "version": SINGLE_SHEET_FILE_VERSION,
             "state": state,
         }
         workbook_payload = {
-            "type": LITEDRAW_FILE_TYPE,
+            "type": CHEMVAS_FILE_TYPE,
             "version": WORKBOOK_FILE_VERSION,
             "state": workbook_state,
         }
@@ -83,7 +84,7 @@ class DocumentIOTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             parse_document({})
         with self.assertRaises(ValueError):
-            parse_document({"type": LITEDRAW_FILE_TYPE, "version": SINGLE_SHEET_FILE_VERSION, "state": {}})
+            parse_document({"type": CHEMVAS_FILE_TYPE, "version": SINGLE_SHEET_FILE_VERSION, "state": {}})
         with self.assertRaises(ValueError):
             parse_document(
                 {
@@ -95,7 +96,7 @@ class DocumentIOTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             parse_document(
                 {
-                    "type": LITEDRAW_FILE_TYPE,
+                    "type": CHEMVAS_FILE_TYPE,
                     "version": 3,
                     "state": {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}},
                 }
@@ -103,7 +104,7 @@ class DocumentIOTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             parse_document(
                 {
-                    "type": LITEDRAW_FILE_TYPE,
+                    "type": CHEMVAS_FILE_TYPE,
                     "version": SINGLE_SHEET_FILE_VERSION,
                     "state": {"active_sheet_index": 0, "sheets": []},
                 }
@@ -129,7 +130,7 @@ class DocumentIOTest(unittest.TestCase):
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "sample.litedraw"
+            path = Path(temp_dir) / "sample.chemvas"
 
             written = write_document(path, state, version=SINGLE_SHEET_FILE_VERSION)
             loaded = read_document(path)
@@ -137,7 +138,7 @@ class DocumentIOTest(unittest.TestCase):
         self.assertEqual(
             written.payload,
             {
-                "type": LITEDRAW_FILE_TYPE,
+                "type": CHEMVAS_FILE_TYPE,
                 "version": SINGLE_SHEET_FILE_VERSION,
                 "state": state,
             },
@@ -188,7 +189,7 @@ class DocumentIOTest(unittest.TestCase):
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "workbook.ldraw"
+            path = Path(temp_dir) / "workbook.chemvas"
 
             written = write_document(path, state, version=WORKBOOK_FILE_VERSION)
             loaded = read_document(path)
@@ -206,6 +207,23 @@ class DocumentIOTest(unittest.TestCase):
             loaded = read_document(path)
 
         self.assertEqual(loaded.payload, state)
+        self.assertEqual(loaded.state, state)
+
+    def test_read_document_accepts_legacy_wrapped_payloads(self) -> None:
+        state = {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}}
+        payload = {
+            "type": LEGACY_DOCUMENT_FILE_TYPE,
+            "version": SINGLE_SHEET_FILE_VERSION,
+            "state": state,
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "legacy.ldraw"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+
+            loaded = read_document(path)
+
+        self.assertEqual(loaded.payload, payload)
         self.assertEqual(loaded.state, state)
 
 

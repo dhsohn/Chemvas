@@ -58,8 +58,8 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         raise AssertionError(f"Could not find line edit with placeholder={placeholder!r}")
 
     def test_xyz_path_helpers_follow_current_file_and_suffix_rules(self) -> None:
-        self.window._current_file_path = "/tmp/current.ldraw"
-        self.assertEqual(self.window._default_save_dialog_path(), "/tmp/current.ldraw")
+        self.window._current_file_path = "/tmp/current.chemvas"
+        self.assertEqual(self.window._default_save_dialog_path(), "/tmp/current.chemvas")
         self.assertEqual(self.window._default_xyz_export_path(), "/tmp/current.xyz")
         self.assertEqual(MainWindow._normalize_xyz_export_path(None), None)
         self.assertEqual(MainWindow._normalize_xyz_export_path(""), None)
@@ -70,13 +70,13 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         service = mock.Mock()
         self.window._document_action_service = service
 
-        MainWindow._save_canvas_to_path(self.window, "/tmp/new.ldraw")
+        MainWindow._save_canvas_to_path(self.window, "/tmp/new.chemvas")
         MainWindow._save_canvas(self.window)
         MainWindow._save_canvas_as(self.window)
         MainWindow._export_xyz(self.window)
         MainWindow._load_canvas(self.window)
 
-        self.assertEqual(service.save_canvas_to_path.call_args.args, (self.window, "/tmp/new.ldraw"))
+        self.assertEqual(service.save_canvas_to_path.call_args.args, (self.window, "/tmp/new.chemvas"))
         self.assertIn("message_box", service.save_canvas_to_path.call_args.kwargs)
         self.assertEqual(service.save_canvas.call_args.args, (self.window,))
         self.assertIn("resolve_save_path", service.save_canvas.call_args.kwargs)
@@ -97,11 +97,11 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         save_as_called = mock.Mock()
         save_path = mock.Mock()
 
-        self.window._current_file_path = "/tmp/existing.ldraw"
+        self.window._current_file_path = "/tmp/existing.chemvas"
         self.window._save_canvas_to_path = save_path
         self.window._save_canvas_as = save_as_called
         save_action.trigger()
-        save_path.assert_called_once_with("/tmp/existing.ldraw")
+        save_path.assert_called_once_with("/tmp/existing.chemvas")
         save_as_called.assert_not_called()
 
         save_path.reset_mock()
@@ -113,7 +113,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
 
     def test_save_as_action_uses_default_dialog_path_and_normalizes_extension(self) -> None:
         save_as_action = self._find_action("Save As...")
-        self.window._current_file_path = "/tmp/current.ldraw"
+        self.window._current_file_path = "/tmp/current.chemvas"
         save_path = mock.Mock()
 
         with mock.patch("ui.main_window.QFileDialog.getSaveFileName", return_value=("/tmp/new-drawing", "")) as dialog:
@@ -121,37 +121,37 @@ class MainWindowPanelActionsTest(unittest.TestCase):
             save_as_action.trigger()
 
         dialog.assert_called_once()
-        self.assertEqual(dialog.call_args.args[2], "/tmp/current.ldraw")
-        save_path.assert_called_once_with("/tmp/new-drawing.ldraw")
+        self.assertEqual(dialog.call_args.args[2], "/tmp/current.chemvas")
+        save_path.assert_called_once_with("/tmp/new-drawing.chemvas")
 
     def test_load_button_uses_dialog_path_and_handles_failure(self) -> None:
         load_button = self._find_button(tool_tip="Load")
         restore = mock.Mock()
 
         with (
-            mock.patch("ui.main_window.QFileDialog.getOpenFileName", return_value=("/tmp/input.ldraw", "")) as dialog,
+            mock.patch("ui.main_window.QFileDialog.getOpenFileName", return_value=("/tmp/input.chemvas", "")) as dialog,
             mock.patch("ui.main_window.read_document", return_value=SimpleNamespace(state={"atoms": []})) as read_document,
         ):
             self.window._restore_single_sheet_document = restore
             load_button.click()
 
         dialog.assert_called_once()
-        read_document.assert_called_once_with("/tmp/input.ldraw")
+        read_document.assert_called_once_with("/tmp/input.chemvas")
         restore.assert_called_once_with({"atoms": []})
-        self.assertEqual(self.window._current_file_path, "/tmp/input.ldraw")
-        self.assertEqual(self.window.statusBar().currentMessage(), "Loaded: /tmp/input.ldraw")
+        self.assertEqual(self.window._current_file_path, "/tmp/input.chemvas")
+        self.assertEqual(self.window.statusBar().currentMessage(), "Loaded: /tmp/input.chemvas")
 
         load_button = self._find_button(tool_tip="Load")
         with (
-            mock.patch("ui.main_window.QFileDialog.getOpenFileName", return_value=("/tmp/broken.ldraw", "")),
+            mock.patch("ui.main_window.QFileDialog.getOpenFileName", return_value=("/tmp/broken.chemvas", "")),
             mock.patch("ui.main_window.read_document", side_effect=RuntimeError("bad file")),
             mock.patch("ui.main_window.QMessageBox.warning") as warning,
         ):
-            self.window._current_file_path = "/tmp/previous.ldraw"
+            self.window._current_file_path = "/tmp/previous.chemvas"
             load_button.click()
 
         warning.assert_called_once_with(self.window, "Load Error", "Failed to load file:\nbad file")
-        self.assertEqual(self.window._current_file_path, "/tmp/previous.ldraw")
+        self.assertEqual(self.window._current_file_path, "/tmp/previous.chemvas")
 
     def test_export_button_normalizes_path_and_reports_success_and_failure(self) -> None:
         export_button = self._find_button(tool_tip="Export 3D XYZ")

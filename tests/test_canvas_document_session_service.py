@@ -99,18 +99,18 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             mock.patch.object(service, "snapshot_state", return_value={"state": 1}) as snapshot_state,
             mock.patch("ui.canvas_document_session_service.write_document") as write_document,
         ):
-            service.save_to_file("/tmp/example.ldraw")
+            service.save_to_file("/tmp/example.chemvas")
 
         snapshot_state.assert_called_once_with()
-        write_document.assert_called_once_with("/tmp/example.ldraw", {"state": 1}, 7)
+        write_document.assert_called_once_with("/tmp/example.chemvas", {"state": 1}, 7)
 
         with (
             mock.patch("ui.canvas_document_session_service.read_document", return_value=SimpleNamespace(state={"loaded": 1})) as read_document,
             mock.patch.object(service, "restore_state") as restore_state,
         ):
-            service.load_from_file("/tmp/example.ldraw")
+            service.load_from_file("/tmp/example.chemvas")
 
-        read_document.assert_called_once_with("/tmp/example.ldraw")
+        read_document.assert_called_once_with("/tmp/example.chemvas")
         restore_state.assert_called_once_with({"loaded": 1})
 
 

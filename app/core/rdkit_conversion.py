@@ -654,7 +654,7 @@ class RDKitConversionHelper:
         scene = self.adapter.model_to_3d_scene(model, atom_annotations=atom_annotations)
         if scene is None:
             return None
-        lines = [str(len(scene.atoms)), "LiteDraw XYZ export"]
+        lines = [str(len(scene.atoms)), "Chemvas XYZ export"]
         for atom in scene.atoms:
             lines.append(f"{atom.symbol:<2} {atom.x:.6f} {atom.y:.6f} {atom.z:.6f}")
         return "\n".join(lines) + "\n"

@@ -1,7 +1,7 @@
 import os
 
 
-DEFAULT_SAVE_EXTENSION = ".ldraw"
+DEFAULT_SAVE_EXTENSION = ".chemvas"
 
 
 def resolve_save_path(current_path: str | None = None, dialog_path: str | None = None) -> str | None:

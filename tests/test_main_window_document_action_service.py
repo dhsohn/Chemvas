@@ -41,36 +41,36 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
 
     def test_save_canvas_to_path_success_updates_state_and_status(self) -> None:
         message_box = mock.Mock()
-        self.window._current_file_path = "/tmp/old.ldraw"
+        self.window._current_file_path = "/tmp/old.chemvas"
         self.window._save_document_state = mock.Mock()
 
-        result = self.service.save_canvas_to_path(self.window, "/tmp/new.ldraw", message_box=message_box)
+        result = self.service.save_canvas_to_path(self.window, "/tmp/new.chemvas", message_box=message_box)
 
         self.assertTrue(result)
-        self.window._save_document_state.assert_called_once_with("/tmp/new.ldraw")
-        self.assertEqual(self.window._current_file_path, "/tmp/new.ldraw")
-        self.assertEqual(self.window.statusBar().currentMessage(), "Saved: /tmp/new.ldraw")
+        self.window._save_document_state.assert_called_once_with("/tmp/new.chemvas")
+        self.assertEqual(self.window._current_file_path, "/tmp/new.chemvas")
+        self.assertEqual(self.window.statusBar().currentMessage(), "Saved: /tmp/new.chemvas")
         message_box.warning.assert_not_called()
 
     def test_save_canvas_to_path_failure_warns_and_keeps_previous_path(self) -> None:
         message_box = mock.Mock()
-        self.window._current_file_path = "/tmp/old.ldraw"
+        self.window._current_file_path = "/tmp/old.chemvas"
         self.window._save_document_state = mock.Mock(side_effect=RuntimeError("boom"))
 
-        result = self.service.save_canvas_to_path(self.window, "/tmp/new.ldraw", message_box=message_box)
+        result = self.service.save_canvas_to_path(self.window, "/tmp/new.chemvas", message_box=message_box)
 
         self.assertFalse(result)
-        self.assertEqual(self.window._current_file_path, "/tmp/old.ldraw")
+        self.assertEqual(self.window._current_file_path, "/tmp/old.chemvas")
         message_box.warning.assert_called_once_with(self.window, "Save Error", "Failed to save file:\nboom")
 
     def test_save_canvas_prefers_current_path_and_falls_back_to_save_as(self) -> None:
-        self.window._current_file_path = "/tmp/existing.ldraw"
+        self.window._current_file_path = "/tmp/existing.chemvas"
         self.window._save_canvas_to_path = mock.Mock()
         self.window._save_canvas_as = mock.Mock()
 
         self.service.save_canvas(self.window, resolve_save_path=resolve_save_path)
 
-        self.window._save_canvas_to_path.assert_called_once_with("/tmp/existing.ldraw")
+        self.window._save_canvas_to_path.assert_called_once_with("/tmp/existing.chemvas")
         self.window._save_canvas_as.assert_not_called()
 
         self.window._current_file_path = None
@@ -85,14 +85,14 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
     def test_save_canvas_as_uses_default_dialog_path_and_normalizes_extension(self) -> None:
         file_dialog = mock.Mock()
         file_dialog.getSaveFileName.return_value = ("/tmp/new-drawing", "")
-        self.window._current_file_path = "/tmp/current.ldraw"
+        self.window._current_file_path = "/tmp/current.chemvas"
         self.window._save_canvas_to_path = mock.Mock()
 
         self.service.save_canvas_as(self.window, file_dialog=file_dialog, resolve_save_as_path=resolve_save_as_path)
 
         file_dialog.getSaveFileName.assert_called_once()
-        self.assertEqual(file_dialog.getSaveFileName.call_args.args[2], "/tmp/current.ldraw")
-        self.window._save_canvas_to_path.assert_called_once_with("/tmp/new-drawing.ldraw")
+        self.assertEqual(file_dialog.getSaveFileName.call_args.args[2], "/tmp/current.chemvas")
+        self.window._save_canvas_to_path.assert_called_once_with("/tmp/new-drawing.chemvas")
 
     def test_export_xyz_normalizes_path_and_reports_success_and_failure(self) -> None:
         file_dialog = mock.Mock()
@@ -118,7 +118,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
 
     def test_load_canvas_dispatches_single_sheet_and_workbook_states(self) -> None:
         file_dialog = mock.Mock()
-        file_dialog.getOpenFileName.return_value = ("/tmp/input.ldraw", "")
+        file_dialog.getOpenFileName.return_value = ("/tmp/input.chemvas", "")
         message_box = mock.Mock()
         self.window._restore_single_sheet_document = mock.Mock()
         self.window._restore_workbook_document = mock.Mock()
@@ -133,8 +133,8 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
 
         self.window._restore_single_sheet_document.assert_called_once_with({"atoms": []})
         self.window._restore_workbook_document.assert_not_called()
-        self.assertEqual(self.window._current_file_path, "/tmp/input.ldraw")
-        self.assertEqual(self.window.statusBar().currentMessage(), "Loaded: /tmp/input.ldraw")
+        self.assertEqual(self.window._current_file_path, "/tmp/input.chemvas")
+        self.assertEqual(self.window.statusBar().currentMessage(), "Loaded: /tmp/input.chemvas")
 
         self.window._restore_single_sheet_document.reset_mock()
         self.window._restore_workbook_document.reset_mock()
@@ -152,9 +152,9 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
 
     def test_load_canvas_warns_on_read_failure(self) -> None:
         file_dialog = mock.Mock()
-        file_dialog.getOpenFileName.return_value = ("/tmp/broken.ldraw", "")
+        file_dialog.getOpenFileName.return_value = ("/tmp/broken.chemvas", "")
         message_box = mock.Mock()
-        self.window._current_file_path = "/tmp/previous.ldraw"
+        self.window._current_file_path = "/tmp/previous.chemvas"
 
         self.service.load_canvas(
             self.window,
@@ -165,7 +165,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         )
 
         message_box.warning.assert_called_once_with(self.window, "Load Error", "Failed to load file:\nbad file")
-        self.assertEqual(self.window._current_file_path, "/tmp/previous.ldraw")
+        self.assertEqual(self.window._current_file_path, "/tmp/previous.chemvas")
 
     def test_set_bond_length_uses_dialog_controls_and_applies_confirmed_value(self) -> None:
         renderer = SimpleNamespace(style=SimpleNamespace(bond_length_px=24.0))
