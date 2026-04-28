@@ -71,7 +71,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("LightDraw")
+        self.setWindowTitle("Chemvas")
         self.resize(1100, 760)
 
         self._atom_input = None

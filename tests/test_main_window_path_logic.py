@@ -21,7 +21,7 @@ class MainWindowPathLogicTest(unittest.TestCase):
     def test_resolve_save_path_appends_default_extension_for_extensionless_dialog_path(self) -> None:
         self.assertEqual(
             resolve_save_path(dialog_path="/tmp/example"),
-            "/tmp/example.ldraw",
+            "/tmp/example.chemvas",
         )
 
     def test_resolve_save_path_preserves_explicit_dialog_extension(self) -> None:
@@ -37,7 +37,7 @@ class MainWindowPathLogicTest(unittest.TestCase):
     def test_resolve_save_as_path_appends_default_extension_for_extensionless_dialog_path(self) -> None:
         self.assertEqual(
             resolve_save_as_path("/tmp/example"),
-            "/tmp/example.ldraw",
+            "/tmp/example.chemvas",
         )
 
     def test_resolve_save_as_path_preserves_explicit_dialog_extension(self) -> None:
@@ -51,7 +51,7 @@ class MainWindowPathLogicTest(unittest.TestCase):
         self.assertIsNone(resolve_save_as_path(None))
 
     def test_resolve_load_path_returns_selected_path(self) -> None:
-        self.assertEqual(resolve_load_path("/tmp/drawing.ldraw"), "/tmp/drawing.ldraw")
+        self.assertEqual(resolve_load_path("/tmp/drawing.chemvas"), "/tmp/drawing.chemvas")
 
     def test_resolve_load_path_returns_none_when_load_dialog_is_cancelled(self) -> None:
         self.assertIsNone(resolve_load_path(""))

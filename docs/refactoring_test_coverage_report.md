@@ -10,7 +10,7 @@
 - 전체 커버리지: `99%`
 - 첫 보고서 시점 대비: `+871 tests`, `+28%p`
 
-이번 턴에는 [test_core_tail_coverage.py](/Users/daehyupsohn/LiteDraw/tests/test_core_tail_coverage.py), [test_ui_service_tail_coverage.py](/Users/daehyupsohn/LiteDraw/tests/test_ui_service_tail_coverage.py), [test_renderer_canvas_tail_coverage.py](/Users/daehyupsohn/LiteDraw/tests/test_renderer_canvas_tail_coverage.py)를 추가하고 [test_canvas_view_projection_math.py](/Users/daehyupsohn/LiteDraw/tests/test_canvas_view_projection_math.py)를 보강했다. [canvas_view.py](/Users/daehyupsohn/LiteDraw/app/ui/canvas_view.py)에서는 항상 양수인 projection scale에 걸린 도달 불가능 guard를 제거했다.
+이번 턴에는 [test_core_tail_coverage.py](/Users/daehyupsohn/Chemvas/tests/test_core_tail_coverage.py), [test_ui_service_tail_coverage.py](/Users/daehyupsohn/Chemvas/tests/test_ui_service_tail_coverage.py), [test_renderer_canvas_tail_coverage.py](/Users/daehyupsohn/Chemvas/tests/test_renderer_canvas_tail_coverage.py)를 추가하고 [test_canvas_view_projection_math.py](/Users/daehyupsohn/Chemvas/tests/test_canvas_view_projection_math.py)를 보강했다. [canvas_view.py](/Users/daehyupsohn/Chemvas/app/ui/canvas_view.py)에서는 항상 양수인 projection scale에 걸린 도달 불가능 guard를 제거했다.
 
 현재 statement miss는 `0`이고 남은 항목은 branch partial `15`개뿐이다. 이번 턴으로 `rdkit_conversion`, `core/tools`, `canvas_ring_fill_scene_service`, `handle_mutation_service`, `main_window_ui_assembly_service`, `scene_item_restore`, `scene_transform_logic`의 이전 99% statement tail은 닫혔다. 다음 우선순위는 `bond_renderer`, `preview_3d`, `scene_item_controller`, `scene_ops_controller`, `structure_payload_logic`의 남은 branch arc다.
 

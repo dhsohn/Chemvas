@@ -9,7 +9,8 @@ if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
 from core.document_state import (
-    LITEDRAW_FILE_TYPE,
+    CHEMVAS_FILE_TYPE,
+    LEGACY_DOCUMENT_FILE_TYPE,
     SINGLE_SHEET_FILE_VERSION,
     WORKBOOK_FILE_VERSION,
     _mapping_value,
@@ -182,7 +183,7 @@ class DocumentStateTest(unittest.TestCase):
         state = {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}, "settings": settings}
         payload = build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
 
-        self.assertEqual(payload["type"], LITEDRAW_FILE_TYPE)
+        self.assertEqual(payload["type"], CHEMVAS_FILE_TYPE)
         self.assertEqual(payload["version"], SINGLE_SHEET_FILE_VERSION)
         self.assertIs(extract_document_state(payload), state)
         self.assertIs(extract_document_state(state), state)
@@ -200,13 +201,23 @@ class DocumentStateTest(unittest.TestCase):
             "result_sheets": {"sheets": [], "active_index": 0},
         }
         payload = {
-            "type": LITEDRAW_FILE_TYPE,
+            "type": CHEMVAS_FILE_TYPE,
             "version": WORKBOOK_FILE_VERSION,
             "state": workbook_state,
         }
 
         self.assertIs(extract_document_state(payload), workbook_state)
         self.assertIs(extract_document_state(workbook_state), workbook_state)
+
+    def test_extract_document_state_accepts_legacy_wrapped_file_type(self) -> None:
+        state = {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}}
+        payload = {
+            "type": LEGACY_DOCUMENT_FILE_TYPE,
+            "version": SINGLE_SHEET_FILE_VERSION,
+            "state": state,
+        }
+
+        self.assertIs(extract_document_state(payload), state)
 
     def test_build_document_payload_rejects_unsupported_or_mismatched_versions(self) -> None:
         single_sheet_state = {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}}
@@ -239,7 +250,7 @@ class DocumentStateTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             extract_document_state(
                 {
-                    "type": LITEDRAW_FILE_TYPE,
+                    "type": CHEMVAS_FILE_TYPE,
                     "version": "1",
                     "state": {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}},
                 }
@@ -247,7 +258,7 @@ class DocumentStateTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             extract_document_state(
                 {
-                    "type": LITEDRAW_FILE_TYPE,
+                    "type": CHEMVAS_FILE_TYPE,
                     "version": SINGLE_SHEET_FILE_VERSION,
                     "state": {"active_sheet_index": 0, "sheets": []},
                 }
@@ -262,7 +273,7 @@ class DocumentStateTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             extract_document_state(
                 {
-                    "type": LITEDRAW_FILE_TYPE,
+                    "type": CHEMVAS_FILE_TYPE,
                     "version": SINGLE_SHEET_FILE_VERSION,
                     "state": [],
                 }

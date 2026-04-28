@@ -96,7 +96,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             raw_path = Path(temp_dir) / "example"
-            saved_path = Path(f"{raw_path}.ldraw")
+            saved_path = Path(f"{raw_path}.chemvas")
             with patch("ui.main_window.QFileDialog.getSaveFileName", return_value=(str(raw_path), "")):
                 self.window._save_canvas()
 
@@ -113,7 +113,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
     def test_load_canvas_restores_document_and_resets_history(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "roundtrip.ldraw"
+            path = Path(temp_dir) / "roundtrip.chemvas"
             self.window.canvas.add_benzene_ring(QPointF(0.0, 0.0))
             self.window.canvas.add_text_note(QPointF(75.0, 10.0), "Roundtrip")
             self.window.canvas.add_mark(QPointF(20.0, 20.0), kind="minus", atom_id=0, record=False)
@@ -254,7 +254,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             raw_path = Path(temp_dir) / "workbook"
-            saved_path = Path(f"{raw_path}.ldraw")
+            saved_path = Path(f"{raw_path}.chemvas")
             with patch("ui.main_window.QFileDialog.getSaveFileName", return_value=(str(raw_path), "")):
                 self.window._save_canvas()
 
@@ -318,7 +318,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "workbook.ldraw"
+            path = Path(temp_dir) / "workbook.chemvas"
             write_document(path, workbook_state, version=2)
 
             with patch("ui.main_window.QFileDialog.getOpenFileName", return_value=(str(path), "")):
@@ -341,7 +341,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertEqual(self.window.statusBar().currentMessage(), "Idle")
 
     def test_save_canvas_reuses_current_path_without_opening_dialog(self) -> None:
-        self.window._current_file_path = "/tmp/existing.ldraw"
+        self.window._current_file_path = "/tmp/existing.chemvas"
 
         with (
             patch.object(self.window.canvas, "save_to_file") as save_mock,
@@ -349,18 +349,18 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         ):
             self.window._save_canvas()
 
-        save_mock.assert_called_once_with("/tmp/existing.ldraw")
+        save_mock.assert_called_once_with("/tmp/existing.chemvas")
         dialog_mock.assert_not_called()
-        self.assertEqual(self.window._current_file_path, "/tmp/existing.ldraw")
-        self.assertEqual(self.window.statusBar().currentMessage(), "Saved: /tmp/existing.ldraw")
+        self.assertEqual(self.window._current_file_path, "/tmp/existing.chemvas")
+        self.assertEqual(self.window.statusBar().currentMessage(), "Saved: /tmp/existing.chemvas")
 
     def test_save_canvas_as_updates_current_path_and_status_message(self) -> None:
         self.window.canvas.add_bond_from_points(QPointF(-20.0, 0.0), QPointF(20.0, 0.0))
-        self.window._current_file_path = "/tmp/original.ldraw"
+        self.window._current_file_path = "/tmp/original.chemvas"
 
         with tempfile.TemporaryDirectory() as temp_dir:
             raw_path = Path(temp_dir) / "renamed"
-            saved_path = Path(f"{raw_path}.ldraw")
+            saved_path = Path(f"{raw_path}.chemvas")
             with patch("ui.main_window.QFileDialog.getSaveFileName", return_value=(str(raw_path), "")):
                 self.window._save_canvas_as()
 
@@ -370,37 +370,37 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertEqual(self.window.statusBar().currentMessage(), f"Saved: {saved_path}")
 
     def test_save_canvas_as_cancel_keeps_current_path_and_status_message(self) -> None:
-        self.window._current_file_path = "/tmp/original.ldraw"
+        self.window._current_file_path = "/tmp/original.chemvas"
         self.window.statusBar().showMessage("Idle")
 
         with patch("ui.main_window.QFileDialog.getSaveFileName", return_value=("", "")):
             self.window._save_canvas_as()
 
-        self.assertEqual(self.window._current_file_path, "/tmp/original.ldraw")
+        self.assertEqual(self.window._current_file_path, "/tmp/original.chemvas")
         self.assertEqual(self.window.statusBar().currentMessage(), "Idle")
 
     def test_save_canvas_as_failure_warns_and_preserves_current_path(self) -> None:
-        self.window._current_file_path = "/tmp/original.ldraw"
+        self.window._current_file_path = "/tmp/original.chemvas"
         self.window.statusBar().showMessage("Before save as")
 
         with (
-            patch("ui.main_window.QFileDialog.getSaveFileName", return_value=("/tmp/renamed.ldraw", "")),
+            patch("ui.main_window.QFileDialog.getSaveFileName", return_value=("/tmp/renamed.chemvas", "")),
             patch.object(self.window.canvas, "save_to_file", side_effect=OSError("disk full")) as save_mock,
             patch("ui.main_window.QMessageBox.warning") as warning,
         ):
             self.window._save_canvas_as()
 
-        save_mock.assert_called_once_with("/tmp/renamed.ldraw")
+        save_mock.assert_called_once_with("/tmp/renamed.chemvas")
         warning.assert_called_once_with(
             self.window,
             "Save Error",
             "Failed to save file:\ndisk full",
         )
-        self.assertEqual(self.window._current_file_path, "/tmp/original.ldraw")
+        self.assertEqual(self.window._current_file_path, "/tmp/original.chemvas")
         self.assertEqual(self.window.statusBar().currentMessage(), "Before save as")
 
     def test_export_xyz_appends_extension_and_updates_status_message(self) -> None:
-        self.window._current_file_path = "/tmp/example.ldraw"
+        self.window._current_file_path = "/tmp/example.chemvas"
 
         with tempfile.TemporaryDirectory() as temp_dir:
             raw_path = Path(temp_dir) / "exported_structure"
@@ -412,21 +412,21 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
                 self.window._export_xyz()
 
         export_mock.assert_called_once_with(str(expected_path))
-        self.assertEqual(self.window._current_file_path, "/tmp/example.ldraw")
+        self.assertEqual(self.window._current_file_path, "/tmp/example.chemvas")
         self.assertEqual(self.window.statusBar().currentMessage(), f"Exported XYZ: {expected_path}")
 
     def test_export_xyz_cancel_keeps_current_path_and_status_message(self) -> None:
-        self.window._current_file_path = "/tmp/original.ldraw"
+        self.window._current_file_path = "/tmp/original.chemvas"
         self.window.statusBar().showMessage("Idle")
 
         with patch("ui.main_window.QFileDialog.getSaveFileName", return_value=("", "")):
             self.window._export_xyz()
 
-        self.assertEqual(self.window._current_file_path, "/tmp/original.ldraw")
+        self.assertEqual(self.window._current_file_path, "/tmp/original.chemvas")
         self.assertEqual(self.window.statusBar().currentMessage(), "Idle")
 
     def test_export_xyz_failure_warns_and_preserves_status_message(self) -> None:
-        self.window._current_file_path = "/tmp/original.ldraw"
+        self.window._current_file_path = "/tmp/original.chemvas"
         self.window.statusBar().showMessage("Before export")
 
         with (
@@ -442,21 +442,21 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             "Export Error",
             "Failed to export XYZ:\nRDKit missing",
         )
-        self.assertEqual(self.window._current_file_path, "/tmp/original.ldraw")
+        self.assertEqual(self.window._current_file_path, "/tmp/original.chemvas")
         self.assertEqual(self.window.statusBar().currentMessage(), "Before export")
 
     def test_load_canvas_cancel_keeps_current_path_and_status_message(self) -> None:
-        self.window._current_file_path = "/tmp/original.ldraw"
+        self.window._current_file_path = "/tmp/original.chemvas"
         self.window.statusBar().showMessage("Idle")
 
         with patch("ui.main_window.QFileDialog.getOpenFileName", return_value=("", "")):
             self.window._load_canvas()
 
-        self.assertEqual(self.window._current_file_path, "/tmp/original.ldraw")
+        self.assertEqual(self.window._current_file_path, "/tmp/original.chemvas")
         self.assertEqual(self.window.statusBar().currentMessage(), "Idle")
 
     def test_save_canvas_failure_warns_and_preserves_current_path(self) -> None:
-        self.window._current_file_path = "/tmp/original.ldraw"
+        self.window._current_file_path = "/tmp/original.chemvas"
         self.window.statusBar().showMessage("Before save")
 
         with (
@@ -465,13 +465,13 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         ):
             self.window._save_canvas()
 
-        save_mock.assert_called_once_with("/tmp/original.ldraw")
+        save_mock.assert_called_once_with("/tmp/original.chemvas")
         warning.assert_called_once_with(
             self.window,
             "Save Error",
             "Failed to save file:\ndisk full",
         )
-        self.assertEqual(self.window._current_file_path, "/tmp/original.ldraw")
+        self.assertEqual(self.window._current_file_path, "/tmp/original.chemvas")
         self.assertEqual(self.window.statusBar().currentMessage(), "Before save")
 
     def test_load_canvas_failure_warns_and_preserves_existing_scene(self) -> None:
@@ -480,11 +480,11 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.window.canvas.last_smiles_input = "CCO"
         self.window.canvas._history = ["keep-history"]
         self.window.canvas._redo_stack = ["keep-redo"]
-        self.window._current_file_path = "/tmp/original.ldraw"
+        self.window._current_file_path = "/tmp/original.chemvas"
         self.window.statusBar().showMessage("Before load")
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            invalid_path = Path(temp_dir) / "invalid.ldraw"
+            invalid_path = Path(temp_dir) / "invalid.chemvas"
             invalid_path.write_text(dumps({"state": {}}), encoding="utf-8")
 
             with (
@@ -496,9 +496,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         warning.assert_called_once_with(
             self.window,
             "Load Error",
-            "Failed to load file:\nInvalid LiteDraw file.",
+            "Failed to load file:\nInvalid Chemvas file.",
         )
-        self.assertEqual(self.window._current_file_path, "/tmp/original.ldraw")
+        self.assertEqual(self.window._current_file_path, "/tmp/original.chemvas")
         self.assertEqual(self.window.statusBar().currentMessage(), "Before load")
         self.assertEqual(len(self.window.canvas.ring_items), 1)
         self.assertEqual(len(self.window.canvas.note_items), 1)
@@ -790,7 +790,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         def _capture_export(model, atom_annotations=None):
             captured["model"] = model
             captured["atom_annotations"] = atom_annotations
-            return "2\nLiteDraw XYZ export\nC 0.000000 0.000000 0.000000\nC 1.000000 0.000000 0.000000\n"
+            return "2\nChemvas XYZ export\nC 0.000000 0.000000 0.000000\nC 1.000000 0.000000 0.000000\n"
 
         with tempfile.TemporaryDirectory() as temp_dir:
             export_path = Path(temp_dir) / "selected.xyz"
@@ -803,7 +803,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertEqual(len(exported_model.bonds), 1)
         self.assertEqual(exported_model.bonds[0].style, "bold_in")
         self.assertEqual(captured["atom_annotations"], {})
-        self.assertIn("LiteDraw XYZ export", xyz_text)
+        self.assertIn("Chemvas XYZ export", xyz_text)
 
     def test_canvas_export_xyz_passes_charge_and_radical_annotations(self) -> None:
         atom_id = self.window.canvas.add_atom("C", 0.0, 0.0)
@@ -814,7 +814,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
         def _capture_export(model, atom_annotations=None):
             captured["annotations"] = atom_annotations
-            return "1\nLiteDraw XYZ export\nC 0.000000 0.000000 0.000000\n"
+            return "1\nChemvas XYZ export\nC 0.000000 0.000000 0.000000\n"
 
         with tempfile.TemporaryDirectory() as temp_dir:
             export_path = Path(temp_dir) / "charged.xyz"

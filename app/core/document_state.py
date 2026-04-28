@@ -5,7 +5,9 @@ from collections.abc import Collection, Mapping
 from core.model import Atom, Bond, MoleculeModel
 
 
-LITEDRAW_FILE_TYPE = "litedraw"
+CHEMVAS_FILE_TYPE = "chemvas"
+LEGACY_DOCUMENT_FILE_TYPE = "litedraw"
+SUPPORTED_FILE_TYPES = frozenset((CHEMVAS_FILE_TYPE, LEGACY_DOCUMENT_FILE_TYPE))
 SINGLE_SHEET_FILE_VERSION = 1
 WORKBOOK_FILE_VERSION = 2
 SUPPORTED_FILE_VERSIONS = frozenset((SINGLE_SHEET_FILE_VERSION, WORKBOOK_FILE_VERSION))
@@ -121,7 +123,7 @@ def serialize_settings(
 def build_document_payload(state: dict, version: int) -> dict:
     _validate_document_state(state, version)
     return {
-        "type": LITEDRAW_FILE_TYPE,
+        "type": CHEMVAS_FILE_TYPE,
         "version": version,
         "state": state,
     }
@@ -129,7 +131,7 @@ def build_document_payload(state: dict, version: int) -> dict:
 
 def extract_document_state(payload: object) -> dict:
     if not isinstance(payload, dict):
-        raise ValueError("Invalid LiteDraw file.")
+        raise ValueError("Invalid Chemvas file.")
     if any(key in payload for key in ("type", "version", "state")):
         return _extract_wrapped_document_state(payload)
     _validate_bare_document_state(payload)
@@ -137,26 +139,26 @@ def extract_document_state(payload: object) -> dict:
 
 
 def _extract_wrapped_document_state(payload: Mapping[str, object]) -> dict:
-    if payload.get("type") != LITEDRAW_FILE_TYPE:
-        raise ValueError("Invalid LiteDraw file.")
+    if payload.get("type") not in SUPPORTED_FILE_TYPES:
+        raise ValueError("Invalid Chemvas file.")
     version = payload.get("version")
     if type(version) is not int or version not in SUPPORTED_FILE_VERSIONS:
-        raise ValueError("Invalid LiteDraw file.")
+        raise ValueError("Invalid Chemvas file.")
     state = payload.get("state")
     if not isinstance(state, dict):
-        raise ValueError("Invalid LiteDraw file.")
+        raise ValueError("Invalid Chemvas file.")
     _validate_document_state(state, version)
     return state
 
 
 def _validate_bare_document_state(state: Mapping[str, object]) -> None:
     if _state_kind(state) is None:
-        raise ValueError("Invalid LiteDraw file.")
+        raise ValueError("Invalid Chemvas file.")
 
 
 def _validate_document_state(state: Mapping[str, object], version: int) -> None:
     if type(version) is not int or version not in SUPPORTED_FILE_VERSIONS:
-        raise ValueError("Invalid LiteDraw file.")
+        raise ValueError("Invalid Chemvas file.")
     state_kind = _state_kind(state)
     expected_kind = (
         "single_sheet"
@@ -164,7 +166,7 @@ def _validate_document_state(state: Mapping[str, object], version: int) -> None:
         else "workbook"
     )
     if state_kind != expected_kind:
-        raise ValueError("Invalid LiteDraw file.")
+        raise ValueError("Invalid Chemvas file.")
 
 
 def _state_kind(state: Mapping[str, object]) -> str | None:

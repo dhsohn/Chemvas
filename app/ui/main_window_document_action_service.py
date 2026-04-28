@@ -58,7 +58,7 @@ class MainWindowDocumentActionService:
             window,
             "Save Drawing As",
             window._default_save_dialog_path(),
-            "LiteDraw (*.ldraw);;JSON (*.json);;All Files (*)",
+            "Chemvas (*.chemvas);;Legacy files (*.ldraw);;JSON (*.json);;All Files (*)",
         )
         path = resolve_save_as_path(dialog_path)
         if path is None:
@@ -87,7 +87,7 @@ class MainWindowDocumentActionService:
             window,
             "Load Drawing",
             "",
-            "LiteDraw (*.ldraw);;JSON (*.json);;All Files (*)",
+            "Chemvas and legacy files (*.chemvas *.ldraw);;JSON (*.json);;All Files (*)",
         )
         path = resolve_load_path(dialog_path)
         if path is None:
