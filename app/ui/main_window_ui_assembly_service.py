@@ -43,6 +43,7 @@ class MainWindowToolbarAssembly:
     save_button: QToolButton
     export_xyz_button: QToolButton | None = None
     setup_sheet_button: QToolButton | None = None
+    preview_panel_button: QToolButton | None = None
     undo_button: QToolButton | None = None
     redo_button: QToolButton | None = None
 
@@ -286,6 +287,15 @@ class MainWindowUIAssemblyService:
             callback=window._export_xyz,
             object_name="export_xyz_button",
         )
+        preview_panel_btn = self.create_toolbar_button(
+            icon=window._icon_preview_panel(),
+            tooltip="3D Preview Panel",
+            status_tip="Show or hide the right-side 3D preview panel",
+            callback=window._toggle_preview_panel,
+            object_name="preview_panel_button",
+        )
+        preview_panel_btn.setCheckable(True)
+        preview_panel_btn.setChecked(True)
         setup_sheet_btn = self.create_toolbar_button(
             icon=window._icon_setup_sheet(),
             tooltip="Setup Sheet",
@@ -332,6 +342,7 @@ class MainWindowUIAssemblyService:
         panel_bar.addWidget(save_button)
         panel_bar.addWidget(load_btn)
         panel_bar.addWidget(export_xyz_btn)
+        panel_bar.addWidget(preview_panel_btn)
         panel_bar.addWidget(setup_sheet_btn)
         panel_bar.addSeparator()
         panel_bar.addWidget(self.create_toolbar_section_label("History"))
@@ -395,6 +406,7 @@ class MainWindowUIAssemblyService:
             save_button=save_button,
             export_xyz_button=export_xyz_btn,
             setup_sheet_button=setup_sheet_btn,
+            preview_panel_button=preview_panel_btn,
             undo_button=undo_btn,
             redo_button=redo_btn,
         )

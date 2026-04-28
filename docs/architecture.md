@@ -25,7 +25,7 @@ When an operation touches multiple entity types at once (ex: atom creation plus 
 - Wedge/hash bonds should be translated into RDKit bond directions on single bonds only. Invalid stereo usage should fail with a precise message.
 - `.xyz` is coordinate-only. Bond order and reaction semantics are not preserved in the output format and should not be treated as round-trippable state.
 - The preview panel should reuse the same conversion path as `.xyz` export to avoid divergence between what the user sees and what gets exported.
-- The right-side dock is a fixed core workspace region for 3D preview. It should not be treated as an optional utility panel.
+- The right-side dock is a toggleable core workspace region for 3D preview. It stays on the same conversion path as `.xyz` export, but users can hide it when they do not need live 3D inspection.
 - All workbook sheets are canvas sheets. Legacy `result_sheets` payloads may still exist in older files, but current UI ignores them on load.
 
 ## Planned Next Slices

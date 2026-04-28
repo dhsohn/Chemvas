@@ -90,6 +90,7 @@ class MainWindowDialogActionsTest(unittest.TestCase):
         icon_factory = mock.Mock()
         add_sheet_icon = object()
         setup_sheet_icon = object()
+        preview_panel_icon = object()
         info_icon = object()
         double_icon = object()
         triple_icon = object()
@@ -98,6 +99,7 @@ class MainWindowDialogActionsTest(unittest.TestCase):
         move_icon = object()
         icon_factory.icon_add_sheet.return_value = add_sheet_icon
         icon_factory.icon_setup_sheet.return_value = setup_sheet_icon
+        icon_factory.icon_preview_panel.return_value = preview_panel_icon
         icon_factory.icon_info.return_value = info_icon
         icon_factory.icon_bond_double.return_value = double_icon
         icon_factory.icon_bond_triple.return_value = triple_icon
@@ -108,6 +110,7 @@ class MainWindowDialogActionsTest(unittest.TestCase):
 
         self.assertIs(self.window._icon_add_sheet(), add_sheet_icon)
         self.assertIs(self.window._icon_setup_sheet(), setup_sheet_icon)
+        self.assertIs(self.window._icon_preview_panel(), preview_panel_icon)
         self.assertIs(self.window._icon_info(), info_icon)
         self.assertIs(self.window._icon_bond_double(), double_icon)
         self.assertIs(self.window._icon_bond_triple(), triple_icon)

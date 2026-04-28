@@ -178,6 +178,22 @@ class MainWindowPanelActionsTest(unittest.TestCase):
 
         warning.assert_called_once_with(self.window, "Export Error", "Failed to export XYZ:\nno exporter")
 
+    def test_preview_panel_button_hides_and_shows_right_dock(self) -> None:
+        preview_button = self._find_button(object_name="preview_panel_button")
+        self.assertTrue(preview_button.isCheckable())
+        self.assertTrue(preview_button.isChecked())
+        self.assertFalse(self.window.panel_dock.isHidden())
+
+        preview_button.click()
+
+        self.assertTrue(self.window.panel_dock.isHidden())
+        self.assertFalse(preview_button.isChecked())
+
+        preview_button.click()
+
+        self.assertFalse(self.window.panel_dock.isHidden())
+        self.assertTrue(preview_button.isChecked())
+
     def test_undo_redo_smiles_and_flip_buttons_call_canvas_methods(self) -> None:
         undo_button = self._find_button(tool_tip="Undo")
         redo_button = self._find_button(tool_tip="Redo")

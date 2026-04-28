@@ -64,6 +64,7 @@ class _HarnessWindow(QMainWindow):
         self._save_canvas_as = mock.Mock()
         self._load_canvas = mock.Mock()
         self._export_xyz = mock.Mock()
+        self._toggle_preview_panel = mock.Mock()
         self._set_bond_length = mock.Mock()
         self._setup_sheet = mock.Mock()
         self._apply_color_preset = mock.Mock()
@@ -90,6 +91,7 @@ class _HarnessWindow(QMainWindow):
     _icon_save = _blank_icon
     _icon_open = _blank_icon
     _icon_export_xyz = _blank_icon
+    _icon_preview_panel = _blank_icon
     _icon_setup_sheet = _blank_icon
     _icon_undo = _blank_icon
     _icon_redo = _blank_icon
@@ -271,6 +273,12 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.assertEqual(smiles_button.text(), "Insert")
         self.assertEqual(smiles_button.statusTip(), "Insert the typed SMILES structure")
         self.assertIs(assembly.export_xyz_button, assembly.panel_bar.findChild(QToolButton, "export_xyz_button"))
+        self.assertIs(
+            assembly.preview_panel_button,
+            assembly.panel_bar.findChild(QToolButton, "preview_panel_button"),
+        )
+        self.assertTrue(assembly.preview_panel_button.isCheckable())
+        self.assertTrue(assembly.preview_panel_button.isChecked())
         self.assertIs(assembly.setup_sheet_button, assembly.panel_bar.findChild(QToolButton, "setup_sheet_button"))
         self.assertIs(assembly.undo_button, assembly.panel_bar.findChild(QToolButton, "undo_button"))
         self.assertIs(assembly.redo_button, assembly.panel_bar.findChild(QToolButton, "redo_button"))
@@ -278,6 +286,8 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         smiles_input.setText("CCO")
         smiles_button.click()
         window.canvas.begin_smiles_insert.assert_called_once_with("CCO")
+        assembly.preview_panel_button.click()
+        window._toggle_preview_panel.assert_called_once_with(False)
         assembly.setup_sheet_button.click()
         window._setup_sheet.assert_called_once_with(False)
 

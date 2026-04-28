@@ -268,6 +268,24 @@ class MainWindowIconFactory:
             p.drawLine(13, 24, 23, 24)
         return self.make_icon(draw)
 
+    def icon_preview_panel(self) -> QIcon:
+        def draw(p):
+            p.setPen(self._icon_pen(self.STROKE_THIN))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawRect(6, 7, 18, 16)
+            p.drawLine(17, 7, 17, 23)
+            p.drawLine(QPointF(10.0, 18.0), QPointF(13.0, 13.0))
+            p.drawLine(QPointF(13.0, 13.0), QPointF(16.0, 18.0))
+            p.setBrush(self._icon_brush())
+            p.drawEllipse(QPointF(10.0, 18.0), 1.4, 1.4)
+            p.drawEllipse(QPointF(13.0, 13.0), 1.4, 1.4)
+            p.drawEllipse(QPointF(16.0, 18.0), 1.4, 1.4)
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawLine(20, 11, 22, 11)
+            p.drawLine(20, 15, 22, 15)
+            p.drawLine(20, 19, 22, 19)
+        return self.make_icon(draw)
+
     def icon_add_sheet(self) -> QIcon:
         def draw(p):
             p.setPen(self._icon_pen(self.STROKE_THIN))
