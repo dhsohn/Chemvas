@@ -1,7 +1,5 @@
 import os
-import sys
 import unittest
-from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
@@ -11,12 +9,6 @@ try:
     from PyQt6.QtWidgets import QApplication
 except ModuleNotFoundError:
     QApplication = None
-
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
 
 if QApplication is not None:
     try:

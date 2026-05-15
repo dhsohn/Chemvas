@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtWidgets import QGraphicsTextItem
 
-from core.history import AddSceneItemsCommand
+from ui.history_commands import AddSceneItemsCommand
 from ui.scene_item_access import attach_scene_item, create_scene_item_from_state
 
 if TYPE_CHECKING:

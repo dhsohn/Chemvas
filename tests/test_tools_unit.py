@@ -1,7 +1,5 @@
 import os
-import sys
 import unittest
-from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
@@ -13,17 +11,12 @@ try:
 except ModuleNotFoundError:
     QApplication = None
 
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
-
 if QApplication is not None:
-    import core.tools as tools_module
+    import ui.tools as tools_module
     from core.model import Atom, Bond
-    from core.tools import ArrowTool, BondTool, MoveTool, RotateTool, SelectTool, TSBracketTool, Tool, _independent_selection_items
-    from core.history import CompositeCommand, MoveAtomsCommand, MoveItemsCommand, UpdateSceneItemCommand
+    from ui.tools import ArrowTool, BondTool, MoveTool, RotateTool, SelectTool, TSBracketTool, Tool, _independent_selection_items
+    from core.history import CompositeCommand, MoveAtomsCommand, MoveItemsCommand
+    from ui.history_commands import UpdateSceneItemCommand
 
 
 class _FakeItem:

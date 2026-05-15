@@ -6,7 +6,6 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QPen
 
 from core.history import (
-    ChangeAtomLabelCommand,
     CompositeCommand,
     DeleteAtomsCommand,
     DeleteBondCommand,
@@ -15,6 +14,7 @@ from core.history import (
 from core.model import Bond
 from ui.bond_style_logic import STANDARD_BOND_STYLES
 from ui.graphics_items import AtomDotItem, AtomLabelItem
+from ui.history_commands import ChangeAtomLabelCommand
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView

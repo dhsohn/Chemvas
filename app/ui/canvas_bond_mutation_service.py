@@ -16,8 +16,7 @@ class CanvasBondMutationService:
         existing_id = self.canvas._bond_id_between(a, b)
         if existing_id is not None:
             return existing_id
-        self.canvas.model.add_bond(a, b, order)
-        bond_id = len(self.canvas.model.bonds) - 1
+        bond_id = self.canvas.model.add_bond(a, b, order)
         self.canvas._add_bond_neighbors(a, b)
         self.canvas._add_bond_index(bond_id, a, b)
         self.canvas._mark_spatial_index_dirty()

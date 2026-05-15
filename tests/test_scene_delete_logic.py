@@ -1,7 +1,5 @@
 import os
-import sys
 import unittest
-from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -10,15 +8,10 @@ try:
 except ModuleNotFoundError:
     QApplication = None
 
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
-
 if QApplication is not None:
-    from core.history import CompositeCommand, DeleteAtomsCommand, DeleteBondCommand, DeleteSceneItemsCommand
+    from core.history import CompositeCommand, DeleteAtomsCommand, DeleteBondCommand
     from core.model import Atom, Bond, MoleculeModel
+    from ui.history_commands import DeleteSceneItemsCommand
     from ui.scene_delete_logic import build_delete_selection_plan, classify_delete_selection
     from tests.test_scene_ops_controller import (
         SceneOpsController,

@@ -44,7 +44,7 @@ from core.template_geometry import (
     ring_points,
     scale_points_to_bond_length,
 )
-from core.tools import ToolController
+from ui.tools import ToolController
 from ui.bond_preview_renderer import (
     BondPreviewBuildResolvers,
     BondPreviewConfig,
@@ -67,6 +67,7 @@ from ui.curved_arrow_path_service import CurvedArrowPathService, curved_arrow_pa
 from ui.handle_mutation_service import HandleMutationService
 from ui.handle_overlay_service import HandleOverlayService, handle_overlay_service_for
 from ui.canvas_input_controller import CanvasInputController
+from ui.canvas_insert_state import CanvasInsertState
 from ui.canvas_move_controller import CanvasMoveController
 from ui.canvas_note_controller import CanvasNoteController
 from ui.canvas_pointer_controller import CanvasPointerController
@@ -82,6 +83,7 @@ from ui.canvas_color_mutation_service import CanvasColorMutationService, canvas_
 from ui.canvas_document_session_service import CanvasDocumentSessionService
 from ui.canvas_geometry_controller import CanvasGeometryController
 from ui.canvas_graph_service import CanvasGraphService, canvas_graph_service_for
+from ui.canvas_history_state import CanvasHistoryState
 from ui.canvas_history_recording_service import CanvasHistoryRecordingService
 from ui.canvas_mark_scene_service import CanvasMarkSceneService, canvas_mark_scene_service_for
 from ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService, canvas_ring_fill_scene_service_for
@@ -388,25 +390,8 @@ class CanvasView(QGraphicsView):
         self._tool_change_callback = None
         self._rotation_selection_ids = None
         self.selection_outlines: list[QGraphicsItem] = []
-        self._smiles_insert_active = False
-        self._smiles_preview_model: MoleculeModel | None = None
-        self._smiles_preview_items: list[QGraphicsItem] = []
-        self._smiles_preview_bond_items: dict[int, list[QGraphicsItem]] = {}
-        self._smiles_preview_atom_items: dict[int, QGraphicsEllipseItem] = {}
-        self._smiles_preview_center: QPointF | None = None
-        self._smiles_preview_smiles: str | None = None
-        self._template_insert_active = False
-        self._template_ring_size: int | None = None
-        self._template_ring_style: str | None = None
-        self._template_preview_items: list[QGraphicsItem] = []
-        self._template_preview_lines: list[QGraphicsLineItem] = []
-        self._template_preview_dots: list[QGraphicsEllipseItem] = []
-        self._benzene_preview_items: list[QGraphicsItem] = []
-        self._history: list[HistoryCommand] = []
-        self._redo_stack: list[HistoryCommand] = []
-        self._history_enabled = True
-        self._history_limit = 100
-        self._history_change_callback = None
+        self._insert_state = CanvasInsertState()
+        self._history_state = CanvasHistoryState()
         self._clipboard_selection_payload_json: str | None = None
         self._clipboard_paste_source_json: str | None = None
         self._clipboard_paste_count = 0
@@ -427,6 +412,158 @@ class CanvasView(QGraphicsView):
 
     def sheet_rect(self) -> QRectF:
         return QRectF(self._sheet_rect)
+
+    @property
+    def _history(self) -> list[HistoryCommand]:
+        return self._history_state.history
+
+    @_history.setter
+    def _history(self, value: list[HistoryCommand]) -> None:
+        self._history_state.history = value
+
+    @property
+    def _redo_stack(self) -> list[HistoryCommand]:
+        return self._history_state.redo_stack
+
+    @_redo_stack.setter
+    def _redo_stack(self, value: list[HistoryCommand]) -> None:
+        self._history_state.redo_stack = value
+
+    @property
+    def _history_enabled(self) -> bool:
+        return self._history_state.enabled
+
+    @_history_enabled.setter
+    def _history_enabled(self, value: bool) -> None:
+        self._history_state.enabled = value
+
+    @property
+    def _history_limit(self) -> int:
+        return self._history_state.limit
+
+    @_history_limit.setter
+    def _history_limit(self, value: int) -> None:
+        self._history_state.limit = value
+
+    @property
+    def _history_change_callback(self):
+        return self._history_state.change_callback
+
+    @_history_change_callback.setter
+    def _history_change_callback(self, value) -> None:
+        self._history_state.change_callback = value
+
+    @property
+    def _smiles_insert_active(self) -> bool:
+        return self._insert_state.smiles_active
+
+    @_smiles_insert_active.setter
+    def _smiles_insert_active(self, value: bool) -> None:
+        self._insert_state.smiles_active = value
+
+    @property
+    def _smiles_preview_model(self) -> MoleculeModel | None:
+        return self._insert_state.smiles_preview_model
+
+    @_smiles_preview_model.setter
+    def _smiles_preview_model(self, value: MoleculeModel | None) -> None:
+        self._insert_state.smiles_preview_model = value
+
+    @property
+    def _smiles_preview_items(self) -> list[QGraphicsItem]:
+        return self._insert_state.smiles_preview_items
+
+    @_smiles_preview_items.setter
+    def _smiles_preview_items(self, value: list[QGraphicsItem]) -> None:
+        self._insert_state.smiles_preview_items = value
+
+    @property
+    def _smiles_preview_bond_items(self) -> dict[int, list[QGraphicsItem]]:
+        return self._insert_state.smiles_preview_bond_items
+
+    @_smiles_preview_bond_items.setter
+    def _smiles_preview_bond_items(self, value: dict[int, list[QGraphicsItem]]) -> None:
+        self._insert_state.smiles_preview_bond_items = value
+
+    @property
+    def _smiles_preview_atom_items(self) -> dict[int, QGraphicsEllipseItem]:
+        return self._insert_state.smiles_preview_atom_items
+
+    @_smiles_preview_atom_items.setter
+    def _smiles_preview_atom_items(self, value: dict[int, QGraphicsEllipseItem]) -> None:
+        self._insert_state.smiles_preview_atom_items = value
+
+    @property
+    def _smiles_preview_center(self) -> QPointF | None:
+        return self._insert_state.smiles_preview_center
+
+    @_smiles_preview_center.setter
+    def _smiles_preview_center(self, value: QPointF | None) -> None:
+        self._insert_state.smiles_preview_center = value
+
+    @property
+    def _smiles_preview_smiles(self) -> str | None:
+        return self._insert_state.smiles_preview_smiles
+
+    @_smiles_preview_smiles.setter
+    def _smiles_preview_smiles(self, value: str | None) -> None:
+        self._insert_state.smiles_preview_smiles = value
+
+    @property
+    def _template_insert_active(self) -> bool:
+        return self._insert_state.template_active
+
+    @_template_insert_active.setter
+    def _template_insert_active(self, value: bool) -> None:
+        self._insert_state.template_active = value
+
+    @property
+    def _template_ring_size(self) -> int | None:
+        return self._insert_state.template_ring_size
+
+    @_template_ring_size.setter
+    def _template_ring_size(self, value: int | None) -> None:
+        self._insert_state.template_ring_size = value
+
+    @property
+    def _template_ring_style(self) -> str | None:
+        return self._insert_state.template_ring_style
+
+    @_template_ring_style.setter
+    def _template_ring_style(self, value: str | None) -> None:
+        self._insert_state.template_ring_style = value
+
+    @property
+    def _template_preview_items(self) -> list[QGraphicsItem]:
+        return self._insert_state.template_preview_items
+
+    @_template_preview_items.setter
+    def _template_preview_items(self, value: list[QGraphicsItem]) -> None:
+        self._insert_state.template_preview_items = value
+
+    @property
+    def _template_preview_lines(self) -> list[QGraphicsLineItem]:
+        return self._insert_state.template_preview_lines
+
+    @_template_preview_lines.setter
+    def _template_preview_lines(self, value: list[QGraphicsLineItem]) -> None:
+        self._insert_state.template_preview_lines = value
+
+    @property
+    def _template_preview_dots(self) -> list[QGraphicsEllipseItem]:
+        return self._insert_state.template_preview_dots
+
+    @_template_preview_dots.setter
+    def _template_preview_dots(self, value: list[QGraphicsEllipseItem]) -> None:
+        self._insert_state.template_preview_dots = value
+
+    @property
+    def _benzene_preview_items(self) -> list[QGraphicsItem]:
+        return self._insert_state.benzene_preview_items
+
+    @_benzene_preview_items.setter
+    def _benzene_preview_items(self, value: list[QGraphicsItem]) -> None:
+        self._insert_state.benzene_preview_items = value
 
     def set_sheet_setup(self, size_name: str, orientation: str) -> None:
         self.sheet_size, self.sheet_orientation = normalize_sheet_setup(size_name, orientation)
@@ -601,6 +738,29 @@ class CanvasView(QGraphicsView):
             message = self.rdkit.last_error or "Failed to export 3D XYZ."
             raise ValueError(message)
         Path(path).write_text(xyz_block, encoding="utf-8")
+
+    def export_xyz_async(self, path: str, *, on_success, on_error) -> None:
+        try:
+            export_model, atom_annotations = self.build_3d_conversion_payload()
+        except Exception as exc:
+            on_error(str(exc) or "Failed to export 3D XYZ.")
+            return
+        preload = getattr(self.rdkit, "preload", None)
+        is_loaded = getattr(self.rdkit, "is_loaded", None)
+        if callable(preload) and callable(is_loaded) and not is_loaded() and not preload():
+            on_error(self.rdkit.last_error or "RDKit is not available in this environment.")
+            return
+        from ui.rdkit_async_jobs import export_xyz_in_thread
+
+        export_xyz_in_thread(
+            self,
+            rdkit_adapter=self.rdkit,
+            model=export_model,
+            atom_annotations=atom_annotations,
+            path=path,
+            on_success=on_success,
+            on_error=on_error,
+        )
 
     def insert_structure_model(
         self,

@@ -1,16 +1,8 @@
-import sys
 import unittest
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 from PyQt6.QtCore import QPointF
-
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
 
 from core.model import Atom, Bond, MoleculeModel
 from ui.structure_insert_service import StructureInsertService

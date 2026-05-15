@@ -1,16 +1,8 @@
 import os
-import sys
 import unittest
-from pathlib import Path
 from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
-
 from core.tool_overlay_logic import activate_tool_no_drag, clear_temporary_tool_overlay  # noqa: E402
 
 

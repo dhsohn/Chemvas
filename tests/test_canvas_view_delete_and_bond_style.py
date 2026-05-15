@@ -1,7 +1,5 @@
 import os
-import sys
 import unittest
-from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
@@ -12,16 +10,11 @@ try:
 except ModuleNotFoundError:
     QApplication = None
 
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
-
 if QApplication is not None:
-    from core.history import CompositeCommand, DeleteAtomsCommand, DeleteBondCommand, DeleteSceneItemsCommand
+    from core.history import CompositeCommand, DeleteAtomsCommand, DeleteBondCommand
     from core.model import Atom, Bond
     from ui.canvas_view import CanvasView
+    from ui.history_commands import DeleteSceneItemsCommand
     from ui.scene_ops_controller import SceneOpsController
 
 

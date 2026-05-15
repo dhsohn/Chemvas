@@ -75,6 +75,21 @@ class MainWindowDocumentActionService:
         path = window._normalize_xyz_export_path(dialog_path)
         if path is None:
             return
+        export_async = getattr(window.canvas, "export_xyz_async", None)
+        canvas_export = getattr(window.canvas, "export_xyz", None)
+        export_is_default_bound_method = getattr(canvas_export, "__self__", None) is window.canvas
+        if callable(export_async) and export_is_default_bound_method:
+            window.statusBar().showMessage(f"Exporting XYZ: {path}")
+            export_async(
+                path,
+                on_success=lambda export_path: window.statusBar().showMessage(f"Exported XYZ: {export_path}"),
+                on_error=lambda message: message_box.warning(
+                    window,
+                    "Export Error",
+                    f"Failed to export XYZ:\n{message}",
+                ),
+            )
+            return
         try:
             window.canvas.export_xyz(path)
         except Exception as exc:

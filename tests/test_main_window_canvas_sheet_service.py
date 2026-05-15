@@ -1,7 +1,5 @@
 import os
-import sys
 import unittest
-from pathlib import Path
 from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -16,12 +14,6 @@ except ModuleNotFoundError:
     QPointF = None
     QFont = None
     QTest = None
-
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
 
 if QApplication is not None:
     try:

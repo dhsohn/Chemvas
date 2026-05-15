@@ -1,13 +1,5 @@
 import os
-import sys
 import unittest
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
-
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from core.perspective_drag_logic import resolve_perspective_drag_update  # noqa: E402

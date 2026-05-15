@@ -6,7 +6,8 @@ from typing import Callable, Mapping, Sequence
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QGraphicsItem
 
-from core.history import HistoryCommand, SetAtomPositionsCommand, UpdateSceneItemCommand
+from core.history import HistoryCommand, SetAtomPositionsCommand
+from ui.history_commands import UpdateSceneItemCommand
 from ui.scene_transform_logic import FlipAtomPositionMaps
 
 

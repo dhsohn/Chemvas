@@ -1,14 +1,6 @@
-import sys
 import unittest
-from pathlib import Path
 
 from PyQt6.QtCore import QPointF
-
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
 
 from core.model import Bond
 from ui.ring_occupancy_logic import point_inside_any_ring, ring_polygon_points_for_bond

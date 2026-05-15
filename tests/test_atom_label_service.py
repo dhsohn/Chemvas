@@ -1,7 +1,5 @@
 import os
-import sys
 import unittest
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -13,15 +11,8 @@ try:
 except ModuleNotFoundError:
     QApplication = None
 
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
-
 if QApplication is not None:
     from core.history import (
-        ChangeAtomLabelCommand,
         CompositeCommand,
         DeleteAtomsCommand,
         DeleteBondCommand,
@@ -30,6 +21,7 @@ if QApplication is not None:
     from core.model import Atom, Bond, MoleculeModel
     from ui.atom_label_service import AtomLabelService
     from ui.graphics_items import AtomLabelItem
+    from ui.history_commands import ChangeAtomLabelCommand
 
 
 class _FakeScene:

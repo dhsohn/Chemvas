@@ -1,17 +1,9 @@
-import sys
 import unittest
-from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsScene
-
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
 
 from core.model import Atom, Bond
 from ui.canvas_view import CanvasView

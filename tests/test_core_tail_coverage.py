@@ -1,7 +1,5 @@
 import os
-import sys
 import unittest
-from pathlib import Path
 from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -12,17 +10,11 @@ try:
 except ModuleNotFoundError:
     QApplication = None
 
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
-
 from core.model import Atom, Bond, MoleculeModel
 from core.rdkit_adapter import RDKitAdapter
 
 if QApplication is not None:
-    from core.tools import MoveTool, SelectTool, TextTool
+    from ui.tools import MoveTool, SelectTool, TextTool
 
 
 class _FakeRDAtom:

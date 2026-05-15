@@ -115,45 +115,76 @@ def apply_smiles_commit_plan(
     before_bond_count = len(canvas.model.bonds)
 
     id_map: dict[int, int] = {}
-    for atom_plan in plan.atoms:
-        new_id = canvas.add_atom(atom_plan.element, atom_plan.x, atom_plan.y)
-        canvas.model.atoms[new_id].color = atom_plan.color
-        canvas.model.atoms[new_id].explicit_label = atom_plan.explicit_label
-        id_map[atom_plan.source_atom_id] = new_id
+    try:
+        for atom_plan in plan.atoms:
+            new_id = canvas.add_atom(atom_plan.element, atom_plan.x, atom_plan.y)
+            canvas.model.atoms[new_id].color = atom_plan.color
+            canvas.model.atoms[new_id].explicit_label = atom_plan.explicit_label
+            id_map[atom_plan.source_atom_id] = new_id
 
-    bonds_start = len(canvas.model.bonds)
-    for bond_plan in plan.bonds:
-        a_id = id_map.get(bond_plan.source_a)
-        b_id = id_map.get(bond_plan.source_b)
-        if a_id is None or b_id is None:
-            return False
-        canvas.add_bond(a_id, b_id, bond_plan.order)
-        created = canvas.model.bonds[-1]
-        created.style = bond_plan.style
-        created.color = bond_plan.color
+        bonds_start = len(canvas.model.bonds)
+        for bond_plan in plan.bonds:
+            a_id = id_map.get(bond_plan.source_a)
+            b_id = id_map.get(bond_plan.source_b)
+            if a_id is None or b_id is None:
+                _rollback_insert_mutation(
+                    canvas,
+                    before_next_atom_id=before_next_atom_id,
+                    before_bond_count=before_bond_count,
+                    before_smiles_input=before_smiles_input,
+                )
+                return False
+            bond_id = canvas.add_bond(a_id, b_id, bond_plan.order)
+            if not (0 <= bond_id < len(canvas.model.bonds)):
+                _rollback_insert_mutation(
+                    canvas,
+                    before_next_atom_id=before_next_atom_id,
+                    before_bond_count=before_bond_count,
+                    before_smiles_input=before_smiles_input,
+                )
+                return False
+            created = canvas.model.bonds[bond_id]
+            if created is None:
+                _rollback_insert_mutation(
+                    canvas,
+                    before_next_atom_id=before_next_atom_id,
+                    before_bond_count=before_bond_count,
+                    before_smiles_input=before_smiles_input,
+                )
+                return False
+            created.style = bond_plan.style
+            created.color = bond_plan.color
 
-    for new_bond_id in range(bonds_start, len(canvas.model.bonds)):
-        canvas._add_bond_graphics(new_bond_id)
+        for new_bond_id in range(bonds_start, len(canvas.model.bonds)):
+            canvas._add_bond_graphics(new_bond_id)
 
-    for new_id in id_map.values():
-        atom = canvas.model.atoms[new_id]
-        if atom.element == "C" and not atom.explicit_label:
-            canvas._ensure_carbon_dot(new_id)
-        else:
-            add_or_update_atom_label(
-                canvas,
-                new_id,
-                atom.element,
-                clear_smiles=False,
-                record=False,
-            )
+        for new_id in id_map.values():
+            atom = canvas.model.atoms[new_id]
+            if atom.element == "C" and not atom.explicit_label:
+                canvas._ensure_carbon_dot(new_id)
+            else:
+                add_or_update_atom_label(
+                    canvas,
+                    new_id,
+                    atom.element,
+                    clear_smiles=False,
+                    record=False,
+                )
 
-    canvas.last_smiles_input = after_smiles_input
-    canvas._record_additions(
-        before_next_atom_id=before_next_atom_id,
-        before_bond_count=before_bond_count,
-        before_smiles_input=before_smiles_input,
-    )
+        canvas.last_smiles_input = after_smiles_input
+        canvas._record_additions(
+            before_next_atom_id=before_next_atom_id,
+            before_bond_count=before_bond_count,
+            before_smiles_input=before_smiles_input,
+        )
+    except Exception:
+        _rollback_insert_mutation(
+            canvas,
+            before_next_atom_id=before_next_atom_id,
+            before_bond_count=before_bond_count,
+            before_smiles_input=before_smiles_input,
+        )
+        raise
     return True
 
 
@@ -170,13 +201,31 @@ def apply_template_commit_resolution(
         center = QPointF(*request.cursor_pos)
         before_next_atom_id = canvas.model.next_atom_id
         before_bond_count = len(canvas.model.bonds)
-        canvas.last_smiles_input = after_smiles_input
-        canvas.add_benzene_ring(
-            center,
-            attach_bond_id=plan.bond_id,
-            before_smiles_input=before_smiles_input,
-        )
-        return canvas.model.next_atom_id != before_next_atom_id or len(canvas.model.bonds) != before_bond_count
+        try:
+            canvas.last_smiles_input = after_smiles_input
+            canvas.add_benzene_ring(
+                center,
+                attach_bond_id=plan.bond_id,
+                before_smiles_input=before_smiles_input,
+            )
+            changed = canvas.model.next_atom_id != before_next_atom_id or len(canvas.model.bonds) != before_bond_count
+            if not changed:
+                _rollback_insert_mutation(
+                    canvas,
+                    before_next_atom_id=before_next_atom_id,
+                    before_bond_count=before_bond_count,
+                    before_smiles_input=before_smiles_input,
+                )
+                return False
+        except Exception:
+            _rollback_insert_mutation(
+                canvas,
+                before_next_atom_id=before_next_atom_id,
+                before_bond_count=before_bond_count,
+                before_smiles_input=before_smiles_input,
+            )
+            raise
+        return True
 
     if resolution is None or resolution.points is None:
         return False
@@ -184,33 +233,73 @@ def apply_template_commit_resolution(
     points = [QPointF(x, y) for x, y in resolution.points]
     before_next_atom_id = canvas.model.next_atom_id
     before_bond_count = len(canvas.model.bonds)
-    canvas.last_smiles_input = after_smiles_input
 
-    if plan.generator in {"bond_regular_ring", "bond_template_shape"}:
-        if plan.bond_id is None:
-            return False
-        merge = _bond_merge_seed(canvas, plan.bond_id)
-        atom_ids: list[int] = []
-        for point in points:
-            atom_ids.append(canvas._add_atom_with_merge(point, "C", merge))
-        bonds_start = len(canvas.model.bonds)
-        for index in range(len(atom_ids)):
-            a_id = atom_ids[index]
-            b_id = atom_ids[(index + 1) % len(atom_ids)]
-            if canvas._bond_exists(a_id, b_id):
-                continue
-            canvas.add_bond(a_id, b_id)
-        for new_bond_id in range(bonds_start, len(canvas.model.bonds)):
-            canvas._add_bond_graphics(new_bond_id)
-    else:
-        canvas._add_ring_from_points(points)
+    try:
+        if plan.generator in {"bond_regular_ring", "bond_template_shape"}:
+            if plan.bond_id is None:
+                return False
+            merge = _bond_merge_seed(canvas, plan.bond_id)
+            if not merge:
+                return False
+            canvas.last_smiles_input = after_smiles_input
+            atom_ids: list[int] = []
+            for point in points:
+                atom_ids.append(canvas._add_atom_with_merge(point, "C", merge))
+            bonds_start = len(canvas.model.bonds)
+            for index in range(len(atom_ids)):
+                a_id = atom_ids[index]
+                b_id = atom_ids[(index + 1) % len(atom_ids)]
+                if canvas._bond_exists(a_id, b_id):
+                    continue
+                canvas.add_bond(a_id, b_id)
+            for new_bond_id in range(bonds_start, len(canvas.model.bonds)):
+                canvas._add_bond_graphics(new_bond_id)
+        else:
+            canvas.last_smiles_input = after_smiles_input
+            canvas._add_ring_from_points(points)
 
-    canvas._record_additions(
-        before_next_atom_id=before_next_atom_id,
-        before_bond_count=before_bond_count,
-        before_smiles_input=before_smiles_input,
-    )
+        canvas._record_additions(
+            before_next_atom_id=before_next_atom_id,
+            before_bond_count=before_bond_count,
+            before_smiles_input=before_smiles_input,
+        )
+    except Exception:
+        _rollback_insert_mutation(
+            canvas,
+            before_next_atom_id=before_next_atom_id,
+            before_bond_count=before_bond_count,
+            before_smiles_input=before_smiles_input,
+        )
+        raise
     return True
+
+
+def _rollback_insert_mutation(
+    canvas: CanvasView,
+    *,
+    before_next_atom_id: int,
+    before_bond_count: int,
+    before_smiles_input: str | None,
+) -> None:
+    trim_bonds = getattr(canvas, "_trim_bonds_to_length", None)
+    if callable(trim_bonds):
+        trim_bonds(before_bond_count)
+    elif len(canvas.model.bonds) > before_bond_count:
+        del canvas.model.bonds[before_bond_count:]
+
+    remove_atom = getattr(canvas, "_remove_atom_only", None)
+    created_atom_ids = sorted(
+        (atom_id for atom_id in canvas.model.atoms if atom_id >= before_next_atom_id),
+        reverse=True,
+    )
+    for atom_id in created_atom_ids:
+        if callable(remove_atom):
+            remove_atom(atom_id)
+        else:
+            canvas.model.atoms.pop(atom_id, None)
+
+    canvas.model.next_atom_id = before_next_atom_id
+    canvas.last_smiles_input = before_smiles_input
 
 
 def _bond_merge_seed(canvas: CanvasView, bond_id: int) -> list[tuple[int, float, float]]:

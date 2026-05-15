@@ -1,12 +1,4 @@
-import sys
 import unittest
-from pathlib import Path
-
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
 
 from core.model import Atom, MoleculeModel
 
@@ -21,13 +13,14 @@ class MoleculeModelTest(unittest.TestCase):
 
         a0 = model.add_atom("C", 0.0, 0.0)
         a1 = model.add_atom("O", 2.0, 3.0)
-        model.add_bond(a0, a1, 2)
+        bond_id = model.add_bond(a0, a1, 2)
 
         self.assertEqual(a0, 0)
         self.assertEqual(a1, 1)
         self.assertEqual(model.next_atom_id, 2)
         self.assertEqual(model.atoms[a0].element, "C")
         self.assertEqual(model.atoms[a1].element, "O")
+        self.assertEqual(bond_id, 0)
         self.assertEqual(len(model.bonds), 1)
         self.assertEqual(model.bonds[0].a, a0)
         self.assertEqual(model.bonds[0].b, a1)

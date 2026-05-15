@@ -1,7 +1,5 @@
 import os
-import sys
 import unittest
-from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
@@ -19,20 +17,15 @@ try:
 except ModuleNotFoundError:
     QApplication = None
 
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
-
 if QApplication is not None:
-    from core.history import UpdateAtomColorCommand, UpdateBondCommand, UpdateSceneItemCommand
+    from core.history import UpdateAtomColorCommand, UpdateBondCommand
     from core.model import Atom, Bond
     from ui.canvas_color_mutation_service import (
         CanvasColorMutationService,
         canvas_color_mutation_service_for,
     )
     from ui.graphics_items import AtomDotItem
+    from ui.history_commands import UpdateSceneItemCommand
 
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas color mutation tests")

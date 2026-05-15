@@ -1,16 +1,8 @@
-import sys
 import unittest
-from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
 from PyQt6.QtCore import QPointF
-
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
 
 from core.model import Atom, Bond, MoleculeModel
 from ui.insert_commit_service import (
@@ -41,8 +33,7 @@ class _FakeCanvas:
 
     def add_bond(self, a: int, b: int, order: int = 1) -> int:
         self.add_bond_calls.append((a, b, order))
-        self.model.add_bond(a, b, order)
-        return len(self.model.bonds) - 1
+        return self.model.add_bond(a, b, order)
 
     def _add_bond_graphics(self, bond_id: int) -> None:
         self.added_graphics.append(bond_id)
@@ -404,6 +395,11 @@ class InsertCommitServiceTest(unittest.TestCase):
                 after_smiles_input="after",
             )
         )
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertEqual(canvas.model.bonds, [])
+        self.assertEqual(canvas.model.next_atom_id, 0)
+        self.assertEqual(canvas.last_smiles_input, "before")
+        self.assertEqual(canvas.record_calls, [])
 
     def test_apply_template_commit_resolution_rejects_bond_generators_without_bond_id(self) -> None:
         canvas = _FakeCanvas()
@@ -426,6 +422,8 @@ class InsertCommitServiceTest(unittest.TestCase):
                 before_smiles_input="before",
             )
         )
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertEqual(canvas.model.bonds, [])
 
 
 if __name__ == "__main__":

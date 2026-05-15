@@ -1,12 +1,4 @@
-import sys
 import unittest
-from pathlib import Path
-
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
 
 from ui.main_window_toolbar_logic import (
     arrow_preset_from_label,

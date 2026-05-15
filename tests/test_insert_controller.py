@@ -1,20 +1,13 @@
-import sys
 import unittest
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from PyQt6.QtCore import QPointF
 
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
-
-from core.history import AddAtomsCommand, AddBondCommand, CompositeCommand, DeleteAtomsCommand, DeleteBondCommand, DeleteSceneItemsCommand
+from core.history import AddAtomsCommand, AddBondCommand, CompositeCommand, DeleteAtomsCommand, DeleteBondCommand
 from core.model import Atom, Bond, MoleculeModel
 from ui.insert_controller import InsertController
+from ui.history_commands import DeleteSceneItemsCommand
 from ui.template_insert_logic import TemplateInsertRequest, TemplateInsertResolution, plan_template_commit
 
 
@@ -613,7 +606,7 @@ class InsertControllerTest(unittest.TestCase):
         canvas._add_ring_from_points.assert_not_called()
         canvas._record_additions.assert_not_called()
         self.assertFalse(canvas._template_insert_active)
-        self.assertIsNone(canvas.last_smiles_input)
+        self.assertEqual(canvas.last_smiles_input, "before")
 
     def test_commit_template_insert_merges_against_selected_bond_seed(self) -> None:
         canvas = _FakeCanvas()
