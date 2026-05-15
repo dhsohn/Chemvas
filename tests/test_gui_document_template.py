@@ -864,6 +864,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertEqual(atom_annotations, {0: {"formal_charge": 1}})
 
     def test_preview_panel_updates_from_canvas_structure(self) -> None:
+        self.window.preview_3d._async_enabled = False
         atom_id = self.window.canvas.add_atom("N", 0.0, 0.0)
         self.window.canvas.add_mark_for_atom(atom_id, QPointF(10.0, -10.0), kind="plus", record=False)
 
@@ -897,6 +898,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         )
 
     def test_preview_panel_uses_selected_structure_when_scene_only_items_are_also_selected(self) -> None:
+        self.window.preview_3d._async_enabled = False
         left = self.window.canvas.add_atom("C", -20.0, 0.0)
         middle = self.window.canvas.add_atom("C", 0.0, 0.0)
         right = self.window.canvas.add_atom("O", 20.0, 0.0)
