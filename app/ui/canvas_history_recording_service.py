@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from core.history import AddAtomsCommand, AddBondCommand, AddSceneItemsCommand, UpdateBondCommand, CompositeCommand
+from core.history import AddAtomsCommand, AddBondCommand, CompositeCommand, UpdateBondCommand
+from ui.history_commands import AddSceneItemsCommand
 
 
 class CanvasHistoryRecordingService:

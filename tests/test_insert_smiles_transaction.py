@@ -1,15 +1,8 @@
-import sys
 import unittest
-from pathlib import Path
 
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
-
-from core.history import AddAtomsCommand, AddBondCommand, CompositeCommand, DeleteSceneItemsCommand
+from core.history import AddAtomsCommand, AddBondCommand, CompositeCommand
 from core.model import Atom, Bond, MoleculeModel
+from ui.history_commands import DeleteSceneItemsCommand
 from ui.insert_smiles_transaction import SmilesLoadTransactionBuilder
 
 

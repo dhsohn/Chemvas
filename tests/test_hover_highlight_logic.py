@@ -1,12 +1,4 @@
-import sys
 import unittest
-from pathlib import Path
-
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
 
 from ui.hover_highlight_logic import HoverUpdatePlan, plan_structure_hover_update
 from ui.selection_hit_logic import StructureHit

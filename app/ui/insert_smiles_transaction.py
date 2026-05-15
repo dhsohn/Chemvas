@@ -9,9 +9,9 @@ from core.history import (
     CompositeCommand,
     DeleteAtomsCommand,
     DeleteBondCommand,
-    DeleteSceneItemsCommand,
     HistoryCommand,
 )
+from ui.history_commands import DeleteSceneItemsCommand
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView

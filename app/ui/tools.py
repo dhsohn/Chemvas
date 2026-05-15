@@ -9,9 +9,7 @@ from core.history import (
     CompositeCommand,
     MoveAtomsCommand,
     MoveItemsCommand,
-    UpdateSceneItemCommand,
 )
-from core.delete_tool_logic import build_delete_tool_history_command, erase_delete_tool_item
 from core.bond_tool_logic import (
     resolve_bond_endpoint_target,
     resolve_bond_press_target,
@@ -25,6 +23,8 @@ from ui.bond_preview_renderer import (
 )
 from ui.atom_label_access import add_or_update_atom_label
 from ui.bond_style_logic import style_for_existing_bond_overlay
+from ui.delete_tool_logic import build_delete_tool_history_command, erase_delete_tool_item
+from ui.history_commands import UpdateSceneItemCommand
 from ui.perspective_tool_controller import PerspectiveToolController
 from ui.selection_press_logic import SelectionPressContext, plan_selection_press
 from core.text_tool_logic import (

@@ -1,23 +1,12 @@
-import sys
 import unittest
-from pathlib import Path
 from types import SimpleNamespace
-
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
 
 from core.history import (
     AddAtomsCommand,
     AddBondCommand,
-    AddSceneItemsCommand,
-    ChangeAtomLabelCommand,
     CompositeCommand,
     DeleteAtomsCommand,
     DeleteBondCommand,
-    DeleteSceneItemsCommand,
     HistoryCommand,
     MoveAtomsCommand,
     MoveItemsCommand,
@@ -27,6 +16,11 @@ from core.history import (
     UpdateAtomColorCommand,
     UpdateBondCommand,
     UpdateBondLengthCommand,
+)
+from ui.history_commands import (
+    AddSceneItemsCommand,
+    ChangeAtomLabelCommand,
+    DeleteSceneItemsCommand,
     UpdateSceneItemCommand,
 )
 
@@ -150,6 +144,10 @@ class _FakeCanvas:
         self.calls.append(("_restore_bond_from_state", bond_id, dict(bond_state)))
 
     def _restore_mark_from_state(self, mark_state) -> None:
+        controller = getattr(self, "_scene_item_controller", None)
+        if controller is not None and hasattr(controller, "_restore_mark_from_state"):
+            controller._restore_mark_from_state(mark_state)
+            return
         self.calls.append(("_restore_mark_from_state", dict(mark_state)))
 
 

@@ -1,7 +1,5 @@
 import os
-import sys
 import unittest
-from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
@@ -12,14 +10,8 @@ try:
 except ModuleNotFoundError:
     QPointF = None
 
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
-
 if QPointF is not None:
-    from core.tools import PerspectiveTool
+    from ui.tools import PerspectiveTool
     from ui.perspective_tool_controller import PerspectiveToolController
 
 
@@ -157,7 +149,7 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
         first_event = _Event(QPointF(8.0, 4.0))
         second_event = _Event(QPointF(3.0, 1.0))
 
-        with mock.patch("core.tools._perspective_tool_controller_for", return_value=fake_controller):
+        with mock.patch("ui.tools._perspective_tool_controller_for", return_value=fake_controller):
             self.assertTrue(tool.on_mouse_press(first_event))
             self.assertEqual(tool._last_pos, QPointF(8.0, 4.0))
             self.assertTrue(tool._rotating)
@@ -174,7 +166,7 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
         tool = PerspectiveTool(canvas)
         event = _Event(QPointF(1.0, 1.0), modifiers=Qt.KeyboardModifier.ShiftModifier)
 
-        with mock.patch("core.tools._perspective_tool_controller_for") as controller_for:
+        with mock.patch("ui.tools._perspective_tool_controller_for") as controller_for:
             self.assertTrue(tool.on_mouse_press(event))
 
         controller_for.assert_not_called()

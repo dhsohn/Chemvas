@@ -130,6 +130,12 @@ class MainWindow(QMainWindow):
             return canvas
         raise RuntimeError("No active canvas sheet.")
 
+    def closeEvent(self, event) -> None:
+        shutdown_preview = getattr(self.preview_3d, "shutdown", None)
+        if callable(shutdown_preview):
+            shutdown_preview()
+        super().closeEvent(event)
+
     def _active_canvas_or_none(self) -> CanvasView | None:
         return resolve_active_canvas(
             self.canvas_tabs.currentWidget(),

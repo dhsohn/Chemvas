@@ -5,8 +5,9 @@ from typing import TYPE_CHECKING
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QGraphicsEllipseItem, QGraphicsTextItem
 
-from core.history import UpdateAtomColorCommand, UpdateBondCommand, UpdateSceneItemCommand
+from core.history import UpdateAtomColorCommand, UpdateBondCommand
 from ui.graphics_items import AtomDotItem
+from ui.history_commands import UpdateSceneItemCommand
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView

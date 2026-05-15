@@ -1,17 +1,10 @@
 import os
-import sys
 import unittest
-from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
-
-from core.delete_tool_logic import build_delete_tool_history_command, erase_delete_tool_item  # noqa: E402
-from core.history import CompositeCommand, DeleteSceneItemsCommand, HistoryCommand, SetSmilesInputCommand  # noqa: E402
+from ui.delete_tool_logic import build_delete_tool_history_command, erase_delete_tool_item  # noqa: E402
+from core.history import CompositeCommand, HistoryCommand, SetSmilesInputCommand  # noqa: E402
+from ui.history_commands import DeleteSceneItemsCommand  # noqa: E402
 
 
 class _Command(HistoryCommand):

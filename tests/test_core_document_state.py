@@ -1,12 +1,4 @@
-import sys
 import unittest
-from pathlib import Path
-
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
 
 from core.document_state import (
     CHEMVAS_FILE_TYPE,
@@ -218,6 +210,34 @@ class DocumentStateTest(unittest.TestCase):
         }
 
         self.assertIs(extract_document_state(payload), state)
+
+    def test_extract_document_state_rejects_invalid_model_schema(self) -> None:
+        valid_atoms = {"0": {"element": "C", "x": 0.0, "y": 0.0, "color": "#000000"}}
+        invalid_states = [
+            {"model": {"atoms": valid_atoms, "bonds": [{"a": 0, "b": 9, "order": 1}], "next_atom_id": 1}},
+            {"model": {"atoms": valid_atoms, "bonds": [{"a": 0, "b": 0, "order": 4}], "next_atom_id": 1}},
+            {"model": {"atoms": {"0": {"element": "C", "x": float("nan"), "y": 0.0}}, "bonds": []}},
+            {"model": {"atoms": {"0": {"element": "C", "x": 0.0, "y": 0.0, "color": "red"}}, "bonds": []}},
+            {"model": {"atoms": valid_atoms, "bonds": [], "next_atom_id": 0}},
+        ]
+
+        for state in invalid_states:
+            with self.subTest(state=state):
+                with self.assertRaises(ValueError):
+                    build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
+
+    def test_extract_document_state_rejects_invalid_workbook_schema(self) -> None:
+        valid_content = {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}}
+        invalid_states = [
+            {"active_sheet_index": 2, "sheets": [{"kind": "canvas", "content": valid_content}]},
+            {"active_sheet_index": 0, "sheets": ["not-a-sheet"]},
+            {"active_sheet_index": 0, "sheets": [{"kind": "canvas", "content": {}}]},
+        ]
+
+        for state in invalid_states:
+            with self.subTest(state=state):
+                with self.assertRaises(ValueError):
+                    build_document_payload(state, version=WORKBOOK_FILE_VERSION)
 
     def test_build_document_payload_rejects_unsupported_or_mismatched_versions(self) -> None:
         single_sheet_state = {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}}

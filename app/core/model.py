@@ -1,5 +1,6 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple
 
 
 @dataclass
@@ -22,8 +23,8 @@ class Bond:
 
 @dataclass
 class MoleculeModel:
-    atoms: Dict[int, Atom] = field(default_factory=dict)
-    bonds: List[Bond] = field(default_factory=list)
+    atoms: dict[int, Atom] = field(default_factory=dict)
+    bonds: list[Bond | None] = field(default_factory=list)
     next_atom_id: int = 0
 
     def __post_init__(self) -> None:
@@ -36,10 +37,12 @@ class MoleculeModel:
         self.atoms[atom_id] = Atom(element=element, x=x, y=y)
         return atom_id
 
-    def add_bond(self, a: int, b: int, order: int = 1) -> None:
+    def add_bond(self, a: int, b: int, order: int = 1) -> int:
+        bond_id = len(self.bonds)
         self.bonds.append(Bond(a=a, b=b, order=order))
+        return bond_id
 
-    def bounds(self) -> Tuple[float, float, float, float]:
+    def bounds(self) -> tuple[float, float, float, float]:
         if not self.atoms:
             return 0.0, 0.0, 0.0, 0.0
         xs = [atom.x for atom in self.atoms.values()]

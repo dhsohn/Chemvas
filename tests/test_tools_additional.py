@@ -1,7 +1,5 @@
 import os
-import sys
 import unittest
-from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
@@ -13,17 +11,11 @@ try:
 except ModuleNotFoundError:
     QApplication = None
 
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
-
 if QApplication is not None:
-    import core.tools as tools_module
-    from core.history import AddAtomsCommand, CompositeCommand, DeleteSceneItemsCommand, MoveItemsCommand, SetSmilesInputCommand
+    import ui.tools as tools_module
+    from core.history import AddAtomsCommand, CompositeCommand, MoveItemsCommand, SetSmilesInputCommand
     from core.model import Atom, Bond, MoleculeModel
-    from core.tools import (
+    from ui.tools import (
         BenzeneTool,
         ColorTool,
         DeleteTool,
@@ -38,6 +30,7 @@ if QApplication is not None:
         ToolController,
         TransformTool,
     )
+    from ui.history_commands import DeleteSceneItemsCommand
 
 
 class _Event:

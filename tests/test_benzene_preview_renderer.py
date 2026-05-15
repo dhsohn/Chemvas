@@ -1,8 +1,6 @@
 import math
 import os
-import sys
 import unittest
-from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -15,12 +13,6 @@ except ModuleNotFoundError:
     QGraphicsEllipseItem = None
     QGraphicsLineItem = None
     QGraphicsScene = None
-
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
 
 if QApplication is not None:
     from ui.benzene_preview_renderer import _apply_preview_style, clear_benzene_preview, rebuild_benzene_preview

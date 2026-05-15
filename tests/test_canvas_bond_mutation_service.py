@@ -1,17 +1,9 @@
 import os
-import sys
 import unittest
-from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
 
 from core.model import Bond
 from ui.canvas_bond_mutation_service import CanvasBondMutationService, canvas_bond_mutation_service_for
@@ -22,9 +14,11 @@ class _FakeModel:
         self.bonds = list(bonds or [])
         self.add_bond_calls = []
 
-    def add_bond(self, a: int, b: int, order: int) -> None:
+    def add_bond(self, a: int, b: int, order: int) -> int:
         self.add_bond_calls.append((a, b, order))
+        bond_id = len(self.bonds)
         self.bonds.append(Bond(a, b, order))
+        return bond_id
 
 
 class _FakeScene:

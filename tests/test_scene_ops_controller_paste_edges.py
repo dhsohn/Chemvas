@@ -1,7 +1,5 @@
 import os
-import sys
 import unittest
-from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -10,12 +8,6 @@ try:
     from PyQt6.QtWidgets import QApplication, QGraphicsItem
 except ModuleNotFoundError:
     QApplication = None
-
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
 
 if QApplication is not None:
     from tests.test_scene_ops_controller import SceneOpsController, _FakeCanvas, _make_note_item

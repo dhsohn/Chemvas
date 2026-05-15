@@ -1,5 +1,4 @@
 import os
-import sys
 import tempfile
 import unittest
 from json import dumps
@@ -17,12 +16,6 @@ except ModuleNotFoundError:
     QTest = None
     Qt = None
     QPointF = None
-
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
 
 if QApplication is not None:
     from core.document_io import read_document, write_document

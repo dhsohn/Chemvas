@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Callable, Sequence
 
-from core.history import DeleteAtomsCommand, DeleteBondCommand, DeleteSceneItemsCommand, HistoryCommand
+from core.history import DeleteAtomsCommand, DeleteBondCommand, HistoryCommand
+from ui.history_commands import DeleteSceneItemsCommand
 from ui.scene_delete_logic import DeleteSelectionPlan
 
 

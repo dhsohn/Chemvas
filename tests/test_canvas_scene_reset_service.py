@@ -1,17 +1,9 @@
 import os
-import sys
 import unittest
-from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
-
 from core.model import MoleculeModel
 from ui.canvas_scene_reset_service import CanvasSceneResetService, canvas_scene_reset_service_for
 from ui.insert_mode_logic import clear_insert_session

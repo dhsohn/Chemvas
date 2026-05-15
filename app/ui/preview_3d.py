@@ -2,17 +2,48 @@ from __future__ import annotations
 
 import math
 
-from PyQt6.QtCore import QPointF, QRectF, QTimer, Qt
+from PyQt6.QtCore import QObject, QPointF, QRectF, QThread, QTimer, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QFontMetricsF, QLinearGradient, QPainter, QPen
 from PyQt6.QtWidgets import QWidget
 
 from core.rdkit_adapter import Molecule3DScene, RDKitAdapter
 
 
+class _Preview3DWorker(QObject):
+    finished = pyqtSignal(int, object, object, object, object)
+
+    def __init__(self, request_id: int, rdkit_adapter, model, atom_annotations) -> None:
+        super().__init__()
+        self._request_id = request_id
+        self._rdkit = rdkit_adapter
+        self._model = model
+        self._atom_annotations = atom_annotations
+
+    def run(self) -> None:
+        formula = None
+        mw = None
+        scene = None
+        error = None
+        try:
+            formula, mw, _ = self._rdkit.compute_props(self._model)
+            scene = self._rdkit.model_to_3d_scene(
+                self._model,
+                atom_annotations=self._atom_annotations,
+            )
+            if scene is None:
+                error = self._rdkit.last_error or "Failed to build 3D preview."
+        except Exception as exc:
+            error = str(exc) or "Failed to build 3D preview."
+        self.finished.emit(self._request_id, formula, mw, scene, error)
+
+
 class Preview3D(QWidget):
     def __init__(self, rdkit_adapter: RDKitAdapter | None = None) -> None:
         super().__init__()
         self._rdkit = rdkit_adapter or RDKitAdapter()
+        self._async_enabled = rdkit_adapter is None
+        self._preview_request_id = 0
+        self._preview_jobs = {}
         self._disposed = False
         self._pending_model = None
         self._pending_annotations = None
@@ -38,8 +69,9 @@ class Preview3D(QWidget):
         except Exception as exc:
             self.clear_preview(str(exc))
             return
-        formula, mw, _ = self._rdkit.compute_props(model)
-        self.set_info(formula or "", "" if mw is None else f"{mw:.2f}")
+        if not self._async_enabled:
+            formula, mw, _ = self._rdkit.compute_props(model)
+            self.set_info(formula or "", "" if mw is None else f"{mw:.2f}")
         self.set_structure(model, atom_annotations)
 
     def set_structure(self, model, atom_annotations=None) -> None:
@@ -55,6 +87,7 @@ class Preview3D(QWidget):
 
     def clear_preview(self, message: str = "3D preview unavailable") -> None:
         self._update_timer.stop()
+        self._preview_request_id += 1
         self._pending_model = None
         self._pending_annotations = None
         self._current_signature = None
@@ -109,6 +142,11 @@ class Preview3D(QWidget):
             self._message = "3D preview unavailable"
             self._safe_update()
             return
+        if self._async_enabled:
+            if not self._ensure_rdkit_loaded_for_worker():
+                return
+            self._start_preview_worker()
+            return
         scene = self._rdkit.model_to_3d_scene(
             self._pending_model,
             atom_annotations=self._pending_annotations,
@@ -116,6 +154,62 @@ class Preview3D(QWidget):
         if scene is None:
             self.clear_preview(self._rdkit.last_error or "Failed to build 3D preview.")
             return
+        self._scene = scene
+        self._message = ""
+        self._safe_update()
+
+    def _ensure_rdkit_loaded_for_worker(self) -> bool:
+        is_loaded = getattr(self._rdkit, "is_loaded", None)
+        if callable(is_loaded) and is_loaded():
+            return True
+        preload = getattr(self._rdkit, "preload", None)
+        if not callable(preload):
+            return True
+        if preload():
+            return True
+        self.clear_preview(self._rdkit.last_error or "RDKit is not available in this environment.")
+        return False
+
+    def _start_preview_worker(self) -> None:
+        self._preview_request_id += 1
+        request_id = self._preview_request_id
+        thread = QThread(self)
+        worker = _Preview3DWorker(
+            request_id,
+            self._rdkit,
+            self._pending_model,
+            self._pending_annotations,
+        )
+        worker.moveToThread(thread)
+        self._preview_jobs[request_id] = (thread, worker)
+        thread.started.connect(worker.run)
+        worker.finished.connect(self._handle_preview_worker_finished)
+        worker.finished.connect(thread.quit)
+        worker.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        thread.finished.connect(lambda request_id=request_id: self._preview_jobs.pop(request_id, None))
+        thread.start()
+
+    def _handle_preview_worker_finished(
+        self,
+        request_id: int,
+        formula: str | None,
+        mw: float | None,
+        scene: Molecule3DScene | None,
+        error: str | None,
+    ) -> None:
+        if self._disposed or request_id != self._preview_request_id:
+            return
+        if error or scene is None:
+            self._scene = None
+            self._current_signature = None
+            self._formula_text = ""
+            self._mw_text = ""
+            self._message = error or "Failed to build 3D preview."
+            self._safe_update()
+            return
+        self._formula_text = formula or ""
+        self._mw_text = "" if mw is None else f"{mw:.2f}"
         self._scene = scene
         self._message = ""
         self._safe_update()
@@ -149,9 +243,21 @@ class Preview3D(QWidget):
         super().wheelEvent(event)
 
     def closeEvent(self, event) -> None:
-        self._disposed = True
-        self._update_timer.stop()
+        self.shutdown()
         super().closeEvent(event)
+
+    def shutdown(self) -> None:
+        self._disposed = True
+        self._preview_request_id += 1
+        self._update_timer.stop()
+        self._stop_preview_jobs()
+
+    def _stop_preview_jobs(self) -> None:
+        for thread, _worker in list(self._preview_jobs.values()):
+            thread.quit()
+            if thread.isRunning():
+                thread.wait()
+        self._preview_jobs.clear()
 
     def _safe_update(self) -> None:
         if self._disposed:

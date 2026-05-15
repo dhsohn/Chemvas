@@ -1,13 +1,5 @@
-import sys
 import unittest
-from pathlib import Path
 from unittest.mock import Mock
-
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
 
 from ui.template_insert_logic import (
     TemplateInsertPlan,

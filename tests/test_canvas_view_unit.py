@@ -1,7 +1,5 @@
 import os
-import sys
 import unittest
-from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
@@ -14,17 +12,13 @@ try:
 except ModuleNotFoundError:
     QApplication = None
 
-
-ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = ROOT / "app"
-if str(APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(APP_ROOT))
-
 if QApplication is not None:
-    from core.history import AddSceneItemsCommand, DeleteSceneItemsCommand, UpdateSceneItemCommand
     from core.model import Atom, Bond
+    from ui.canvas_history_state import CanvasHistoryState
+    from ui.canvas_insert_state import CanvasInsertState
     from ui.canvas_rotation_preview_controller import CanvasRotationPreviewController
     from ui.canvas_view import CanvasView, NoteItem, _rotation_preview_controller_for, _selection_controller_for
+    from ui.history_commands import AddSceneItemsCommand, DeleteSceneItemsCommand, UpdateSceneItemCommand
     from ui.selection_controller import SelectionController
 
 
@@ -110,6 +104,48 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertAlmostEqual(canvas.sheet_rect().height(), 842.0)
         self.assertAlmostEqual(canvas.sceneRect().width(), 755.0)
         self.assertAlmostEqual(canvas.sceneRect().height(), 1002.0)
+
+    def test_history_fields_are_backed_by_state_holder(self) -> None:
+        canvas = CanvasView()
+        self.addCleanup(canvas.close)
+
+        self.assertIsInstance(canvas._history_state, CanvasHistoryState)
+
+        canvas._history = ["undo"]
+        canvas._redo_stack = ["redo"]
+        canvas._history_enabled = False
+        canvas._history_limit = 3
+        callback = mock.Mock()
+        canvas._history_change_callback = callback
+
+        self.assertEqual(canvas._history_state.history, ["undo"])
+        self.assertEqual(canvas._history_state.redo_stack, ["redo"])
+        self.assertFalse(canvas._history_state.enabled)
+        self.assertEqual(canvas._history_state.limit, 3)
+        self.assertIs(canvas._history_state.change_callback, callback)
+
+    def test_insert_fields_are_backed_by_state_holder(self) -> None:
+        canvas = CanvasView()
+        self.addCleanup(canvas.close)
+
+        self.assertIsInstance(canvas._insert_state, CanvasInsertState)
+
+        center = QPointF(1.0, 2.0)
+        canvas._smiles_insert_active = True
+        canvas._smiles_preview_center = center
+        canvas._smiles_preview_smiles = "CCO"
+        canvas._template_insert_active = True
+        canvas._template_ring_size = 6
+        canvas._template_ring_style = "chair"
+        canvas._template_preview_items = ["template"]
+
+        self.assertTrue(canvas._insert_state.smiles_active)
+        self.assertIs(canvas._insert_state.smiles_preview_center, center)
+        self.assertEqual(canvas._insert_state.smiles_preview_smiles, "CCO")
+        self.assertTrue(canvas._insert_state.template_active)
+        self.assertEqual(canvas._insert_state.template_ring_size, 6)
+        self.assertEqual(canvas._insert_state.template_ring_style, "chair")
+        self.assertEqual(canvas._insert_state.template_preview_items, ["template"])
 
     def test_note_item_focus_out_adds_updates_and_deletes_commands(self) -> None:
         canvas = _FakeNoteCanvas()
