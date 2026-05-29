@@ -29,6 +29,7 @@ from ui.main_window_canvas_logic import (
     resolve_active_canvas,
 )
 from ui.main_window_canvas_sheet_service import MainWindowCanvasSheetService
+from ui.main_window_context_bar_service import MainWindowContextBarService
 from ui.main_window_icon_factory import MainWindowIconFactory
 from ui.main_window_text_style_service import MainWindowTextStyleService
 from ui.main_window_tool_state_service import MainWindowToolStateService
@@ -112,16 +113,19 @@ class MainWindow(QMainWindow):
         self._active_canvas_ui_service = MainWindowActiveCanvasUIService()
         self._workbook_document_service = MainWindowWorkbookDocumentService()
         self._ui_assembly_service = MainWindowUIAssemblyService()
+        self._context_bar_service = MainWindowContextBarService()
 
         self._add_canvas_sheet(name=self._next_canvas_sheet_name(), select=True)
         self._icon_factory = MainWindowIconFactory(self)
         self._ensure_add_sheet_tab()
         self._init_toolbars()
+        self._context_bar_service.init_context_bar(self)
         self._init_panels()
         self._apply_theme()
         self._bind_active_canvas()
         self.preview_3d.refresh_from_canvas(self.canvas)
         self._init_status_bar()
+        self._refresh_context_bar()
 
     @property
     def canvas(self) -> CanvasView:
@@ -255,6 +259,7 @@ class MainWindow(QMainWindow):
     def _on_canvas_tab_changed(self, index: int) -> None:
         self._active_canvas_ui_service.on_canvas_tab_changed(self, index)
         self._refresh_status_context(update_zoom=False)
+        self._refresh_context_bar()
 
     def _new_canvas_sheet(self) -> None:
         self._canvas_tab_ui_service.new_canvas_sheet(self)
@@ -568,6 +573,23 @@ class MainWindow(QMainWindow):
     def _show_status_message(self, message: str, timeout: int = 0) -> None:
         self.statusBar().showMessage(message, timeout)
 
+    def _show_error_message(self, message: str, timeout: int = 6000) -> None:
+        bar = self.statusBar()
+        previous = bar.property("statusState")
+        bar.setProperty("statusState", "error")
+        bar.style().unpolish(bar)
+        bar.style().polish(bar)
+        bar.showMessage(message, timeout)
+        QTimer.singleShot(timeout, self._reset_status_state)
+        if previous == "error":
+            return
+
+    def _reset_status_state(self) -> None:
+        bar = self.statusBar()
+        bar.setProperty("statusState", "")
+        bar.style().unpolish(bar)
+        bar.style().polish(bar)
+
     def _active_tool_status_text(self) -> str:
         canvas = self._active_canvas_or_none()
         active_tool = getattr(getattr(canvas, "tools", None), "active", None)
@@ -709,9 +731,22 @@ class MainWindow(QMainWindow):
     def _sync_tool_actions_from_canvas(self) -> None:
         self._tool_state_service.sync_tool_actions_from_canvas(self)
         self._update_tool_status_label()
+        self._refresh_context_bar()
 
     def _set_tool_with_status(self, tool: str, reset_bond_style: bool = True) -> None:
         self._tool_state_service.set_tool_with_status(self, tool, reset_bond_style=reset_bond_style)
+        self._refresh_context_bar()
+
+    def _active_tool_name(self) -> str | None:
+        canvas = self._active_canvas_or_none()
+        active_tool = getattr(getattr(canvas, "tools", None), "active", None)
+        name = getattr(active_tool, "name", None)
+        return str(name) if name else None
+
+    def _refresh_context_bar(self) -> None:
+        service = getattr(self, "_context_bar_service", None)
+        if service is not None:
+            service.refresh(self, self._active_tool_name())
 
     def _set_arrow_type(self, value: str) -> None:
         self._tool_state_service.set_arrow_type(self, value)

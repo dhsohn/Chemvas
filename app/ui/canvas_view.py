@@ -388,6 +388,7 @@ class CanvasView(QGraphicsView):
         self._hover_preview_style: str | None = None
         self._selection_info_callback = None
         self._tool_change_callback = None
+        self._error_callback = None
         self._rotation_selection_ids = None
         self.selection_outlines: list[QGraphicsItem] = []
         self._insert_state = CanvasInsertState()
@@ -572,15 +573,41 @@ class CanvasView(QGraphicsView):
 
     def drawBackground(self, painter: QPainter, rect: QRectF) -> None:
         painter.save()
-        painter.fillRect(rect, QColor("#f3f0ea"))
+        painter.fillRect(rect, QColor("#ededec"))
         sheet_rect = self.sheet_rect()
-        painter.fillRect(sheet_rect.translated(4.0, 4.0), QColor(0, 0, 0, 18))
+        painter.fillRect(sheet_rect.translated(3.0, 3.0), QColor(0, 0, 0, 14))
         painter.fillRect(sheet_rect, QColor("#ffffff"))
-        pen = QPen(QColor("#c8bdad"))
+        pen = QPen(QColor("#d6d6d1"))
         pen.setWidthF(1.0)
         painter.setPen(pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRect(sheet_rect)
+        self._draw_empty_hint(painter, sheet_rect)
+        painter.restore()
+
+    def _is_canvas_empty(self) -> bool:
+        if getattr(self.model, "atoms", None):
+            return False
+        for collection_name in ("note_items", "arrow_items", "ts_bracket_items"):
+            if getattr(self, collection_name, None):
+                return False
+        return True
+
+    def _draw_empty_hint(self, painter: QPainter, sheet_rect: QRectF) -> None:
+        if not self._is_canvas_empty():
+            return
+        painter.save()
+        pen = QPen(QColor("#aeaea8"))
+        painter.setPen(pen)
+        font = painter.font()
+        font.setPointSize(12)
+        painter.setFont(font)
+        lines = [
+            "Empty sheet — start drawing a structure",
+            "Bond (X): click & drag · element hotkeys c / n / o · J for benzene",
+            "Type a SMILES above and press Insert · Esc to cancel",
+        ]
+        painter.drawText(sheet_rect, int(Qt.AlignmentFlag.AlignCenter), "\n".join(lines))
         painter.restore()
 
     def keyPressEvent(self, event) -> None:
@@ -2046,6 +2073,17 @@ class CanvasView(QGraphicsView):
 
     def set_selection_info_callback(self, callback) -> None:
         self._selection_info_callback = callback
+
+    def set_error_callback(self, callback) -> None:
+        self._error_callback = callback
+
+    def notify_error(self, message: str) -> bool:
+        """Report a user-facing error. Returns True if a handler consumed it."""
+        callback = getattr(self, "_error_callback", None)
+        if callable(callback):
+            callback(message)
+            return True
+        return False
 
     def set_zoom_callback(self, callback) -> None:
         self._zoom_callback = callback

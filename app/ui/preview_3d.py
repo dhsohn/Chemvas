@@ -270,7 +270,7 @@ class Preview3D(QWidget):
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        painter.fillRect(self.rect(), QColor("#f1ebe3"))
+        painter.fillRect(self.rect(), QColor("#f1f1f0"))
 
         info_lines = self._info_lines()
         layout = self._layout_rects(info_lines)
@@ -296,9 +296,9 @@ class Preview3D(QWidget):
             bond_depths.append((az + bz, bond, (ax, ay), (bx, by)))
         for _, bond, start, end in sorted(bond_depths, key=lambda item: item[0]):
             width = 1.4 + max(0, bond.order - 1) * 1.0
-            painter.setPen(QPen(QColor(93, 82, 69, 70), width + 1.8, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+            painter.setPen(QPen(QColor(60, 60, 58, 70), width + 1.8, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
             painter.drawLine(QPointF(start[0] + 1.0, start[1] + 1.2), QPointF(end[0] + 1.0, end[1] + 1.2))
-            painter.setPen(QPen(QColor("#5f5346"), width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+            painter.setPen(QPen(QColor("#4a4a48"), width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
             painter.drawLine(QPointF(*start), QPointF(*end))
 
         atom_draws = []
@@ -308,9 +308,9 @@ class Preview3D(QWidget):
         for _, symbol, px, py, radius in sorted(atom_draws, key=lambda item: item[0]):
             fill = self._element_color(symbol)
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor(55, 45, 36, 35))
+            painter.setBrush(QColor(40, 40, 38, 35))
             painter.drawEllipse(QPointF(px + 1.1, py + 1.8), radius * 1.04, radius * 1.04)
-            painter.setPen(QPen(QColor("#362f29"), 1.0))
+            painter.setPen(QPen(QColor("#2a2a28"), 1.0))
             painter.setBrush(fill)
             painter.drawEllipse(QPointF(px, py), radius, radius)
             painter.setPen(Qt.PenStyle.NoPen)
@@ -318,7 +318,7 @@ class Preview3D(QWidget):
             painter.drawEllipse(QPointF(px - radius * 0.28, py - radius * 0.32), radius * 0.33, radius * 0.24)
             if symbol != "C" or radius >= 9.0:
                 painter.save()
-                painter.setPen(QColor("#1f1a16"))
+                painter.setPen(QColor("#1c1c1a"))
                 font = painter.font()
                 font.setPointSizeF(max(7.0, radius * 0.9))
                 painter.setFont(font)
@@ -367,14 +367,14 @@ class Preview3D(QWidget):
         painter.save()
         shadow = rect.translated(0.0, 1.0)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(58, 47, 38, 18))
+        painter.setBrush(QColor(45, 45, 43, 18))
         painter.drawRoundedRect(shadow, 9.0, 9.0)
 
         gradient = QLinearGradient(rect.topLeft(), rect.bottomLeft())
-        gradient.setColorAt(0.0, QColor("#fffdf9"))
-        gradient.setColorAt(1.0, QColor("#f5eee6"))
+        gradient.setColorAt(0.0, QColor("#ffffff"))
+        gradient.setColorAt(1.0, QColor("#f4f4f3"))
         painter.setBrush(gradient)
-        painter.setPen(QPen(QColor("#d5c9ba"), 1.0))
+        painter.setPen(QPen(QColor("#e0e0dd"), 1.0))
         painter.drawRoundedRect(rect, 9.0, 9.0)
         painter.restore()
 
@@ -397,29 +397,29 @@ class Preview3D(QWidget):
         painter.drawText(badge, int(Qt.AlignmentFlag.AlignCenter), status_text)
 
         title_rect = QRectF(rect.left(), rect.top() + 1.0, max(20.0, rect.width() - badge_width - 10.0), 20.0)
-        painter.setPen(QColor("#2f2924"))
+        painter.setPen(QColor("#232322"))
         painter.setFont(title_font)
         painter.drawText(title_rect, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), "3D Preview")
 
         subtitle = self._metadata_summary()
         subtitle_rect = QRectF(rect.left(), title_rect.bottom() + 1.0, rect.width(), 17.0)
-        painter.setPen(QColor("#7c6d5f"))
+        painter.setPen(QColor("#6f6f6c"))
         painter.setFont(caption_font)
         painter.drawText(subtitle_rect, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), subtitle)
         painter.restore()
 
     def _draw_viewport(self, painter: QPainter, rect: QRectF) -> None:
         painter.save()
-        painter.setPen(QPen(QColor("#d8cec2"), 1.0))
-        painter.setBrush(QColor("#fbfaf6"))
+        painter.setPen(QPen(QColor("#e0e0dd"), 1.0))
+        painter.setBrush(QColor("#fbfbfa"))
         painter.drawRoundedRect(rect, 7.0, 7.0)
 
         inner = rect.adjusted(6.0, 6.0, -6.0, -6.0)
-        painter.setPen(QPen(QColor(216, 206, 194, 90), 1.0))
+        painter.setPen(QPen(QColor(210, 210, 206, 90), 1.0))
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRoundedRect(inner, 5.0, 5.0)
 
-        tick_pen = QPen(QColor(166, 150, 132, 80), 1.0)
+        tick_pen = QPen(QColor(160, 160, 154, 80), 1.0)
         painter.setPen(tick_pen)
         tick = 12.0
         corners = (
@@ -438,20 +438,20 @@ class Preview3D(QWidget):
         painter.save()
         center = rect.center()
         icon_center = QPointF(center.x(), center.y() - 24.0)
-        line_pen = QPen(QColor("#b8aa9a"), 1.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+        line_pen = QPen(QColor("#b0b0ab"), 1.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
         painter.setPen(line_pen)
         painter.drawLine(icon_center + QPointF(-18.0, 3.0), icon_center + QPointF(0.0, -9.0))
         painter.drawLine(icon_center + QPointF(0.0, -9.0), icon_center + QPointF(19.0, 5.0))
         painter.drawLine(icon_center + QPointF(-18.0, 3.0), icon_center + QPointF(14.0, 18.0))
 
         for point, radius, color in (
-            (icon_center + QPointF(-18.0, 3.0), 5.0, QColor("#786b60")),
+            (icon_center + QPointF(-18.0, 3.0), 5.0, QColor("#5a5a56")),
             (icon_center + QPointF(0.0, -9.0), 6.0, QColor("#cc584d")),
             (icon_center + QPointF(19.0, 5.0), 4.5, QColor("#4b73c4")),
-            (icon_center + QPointF(14.0, 18.0), 4.0, QColor("#f3efe7")),
+            (icon_center + QPointF(14.0, 18.0), 4.0, QColor("#ededeb")),
         ):
             painter.setBrush(color)
-            painter.setPen(QPen(QColor("#5f5346"), 1.0))
+            painter.setPen(QPen(QColor("#4a4a48"), 1.0))
             painter.drawEllipse(point, radius, radius)
 
         title_font = QFont(self.font())
@@ -461,10 +461,10 @@ class Preview3D(QWidget):
         title_rect = QRectF(rect.left() + 18.0, center.y() + 6.0, rect.width() - 36.0, 18.0)
         detail_rect = QRectF(rect.left() + 22.0, title_rect.bottom() + 3.0, rect.width() - 44.0, 34.0)
 
-        painter.setPen(QColor("#3b332c"))
+        painter.setPen(QColor("#232322"))
         painter.setFont(title_font)
         painter.drawText(title_rect, int(Qt.AlignmentFlag.AlignCenter), title)
-        painter.setPen(QColor("#7a6b5d"))
+        painter.setPen(QColor("#6f6f6c"))
         painter.setFont(detail_font)
         painter.drawText(
             detail_rect,
@@ -486,10 +486,10 @@ class Preview3D(QWidget):
         y = viewport.top() + 10.0
         for label, width in zip(labels, widths):
             pill = QRectF(x, y, width, 22.0)
-            painter.setPen(QPen(QColor("#d2c7b9"), 1.0))
-            painter.setBrush(QColor("#fffdf9"))
+            painter.setPen(QPen(QColor("#e0e0dd"), 1.0))
+            painter.setBrush(QColor("#ffffff"))
             painter.drawRoundedRect(pill, 11.0, 11.0)
-            painter.setPen(QColor("#746658"))
+            painter.setPen(QColor("#6f6f6c"))
             painter.drawText(pill, int(Qt.AlignmentFlag.AlignCenter), label)
             x += width + gap
         painter.restore()
@@ -498,8 +498,8 @@ class Preview3D(QWidget):
         if rect.isNull():
             return
         painter.save()
-        painter.setPen(QPen(QColor("#d8cec2"), 1.0))
-        painter.setBrush(QColor("#f8f4ee"))
+        painter.setPen(QPen(QColor("#e0e0dd"), 1.0))
+        painter.setBrush(QColor("#f4f4f3"))
         painter.drawRoundedRect(rect, 7.0, 7.0)
 
         items = self._info_items()
@@ -526,8 +526,8 @@ class Preview3D(QWidget):
 
     def _draw_info_chip(self, painter: QPainter, rect: QRectF, label: str, value: str) -> None:
         painter.save()
-        painter.setPen(QPen(QColor("#e0d5c8"), 1.0))
-        painter.setBrush(QColor("#fffdf9"))
+        painter.setPen(QPen(QColor("#e4e4e1"), 1.0))
+        painter.setBrush(QColor("#ffffff"))
         painter.drawRoundedRect(rect, 6.0, 6.0)
 
         label_font = self._caption_font()
@@ -545,10 +545,10 @@ class Preview3D(QWidget):
         )
 
         painter.setFont(label_font)
-        painter.setPen(QColor("#897b6c"))
+        painter.setPen(QColor("#8c8c87"))
         painter.drawText(label_rect, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), label)
         painter.setFont(value_font)
-        painter.setPen(QColor("#332c26"))
+        painter.setPen(QColor("#232322"))
         painter.drawText(
             value_rect,
             int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter),
@@ -608,8 +608,8 @@ class Preview3D(QWidget):
 
     def _element_color(self, symbol: str) -> QColor:
         palette = {
-            "H": QColor("#f3efe7"),
-            "C": QColor("#786b60"),
+            "H": QColor("#ededeb"),
+            "C": QColor("#4a4a48"),
             "N": QColor("#4b73c4"),
             "O": QColor("#cc584d"),
             "S": QColor("#d0a532"),
@@ -619,7 +619,7 @@ class Preview3D(QWidget):
             "Br": QColor("#8b5c43"),
             "I": QColor("#7a5ca8"),
         }
-        return palette.get(symbol, QColor("#d9d1c6"))
+        return palette.get(symbol, QColor("#cfcfca"))
 
     def _overlay_font(self) -> QFont:
         font = QFont(self.font())
@@ -670,12 +670,12 @@ class Preview3D(QWidget):
 
     def _status_badge(self) -> tuple[str, QColor, QColor, QColor]:
         if self._scene is not None:
-            return "Ready", QColor("#e6f1ec"), QColor("#acc8ba"), QColor("#315b47")
+            return "Ready", QColor("#eef0ee"), QColor("#c3c9c2"), QColor("#41514a")
         if self._message.startswith("Updating"):
-            return "Building", QColor("#eef2f7"), QColor("#c6d0dd"), QColor("#4b5d72")
+            return "Building", QColor("#eeeeec"), QColor("#cfcfca"), QColor("#55555a")
         if self._is_empty_message():
-            return "Empty", QColor("#f0ebe4"), QColor("#d4c9bb"), QColor("#6d5f52")
-        return "Issue", QColor("#f8ece7"), QColor("#dfb9aa"), QColor("#7c3e2f")
+            return "Empty", QColor("#ededeb"), QColor("#cfcfca"), QColor("#6f6f6c")
+        return "Issue", QColor("#f6eded"), QColor("#dbbcbc"), QColor("#8a2020")
 
     def _empty_state_text(self) -> tuple[str, str]:
         message = " ".join((self._message or "3D preview unavailable").split())

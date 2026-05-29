@@ -760,7 +760,11 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         ):
             self.window.canvas.begin_smiles_insert("not-a-smiles")
 
-        warning.assert_called_once_with(self.window.canvas, "SMILES Error", "bad smiles")
+        # The error is reported inline via the main window status bar rather
+        # than a blocking modal, so QMessageBox should not be used.
+        warning.assert_not_called()
+        self.assertIn("bad smiles", self.window.statusBar().currentMessage())
+        self.assertEqual(self.window.statusBar().property("statusState"), "error")
         self.assertFalse(self.window.canvas._smiles_insert_active)
         self.assertIsNone(self.window.canvas._smiles_preview_model)
         self.assertEqual(self.window.canvas._smiles_preview_items, [])

@@ -33,10 +33,8 @@ def normalize_sheet_orientation(value: object) -> str:
     aliases = {
         "landscape": "landscape",
         "horizontal": "landscape",
-        "가로": "landscape",
         "portrait": "portrait",
         "vertical": "portrait",
-        "세로": "portrait",
     }
     return aliases.get(text, DEFAULT_SHEET_ORIENTATION)
 

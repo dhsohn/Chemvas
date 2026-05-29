@@ -66,7 +66,7 @@ class ArrowButton(QToolButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor("#3d3229"))
+        painter.setBrush(QColor("#5a5a56"))
         rect = self.rect().adjusted(6, 4, -6, -4)
         if rect.width() <= 0 or rect.height() <= 0:
             return
@@ -91,7 +91,7 @@ class CornerMenuButton(QToolButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor("#8b7d6e"))
+        painter.setBrush(QColor("#9b9b95"))
         rect = self.rect()
         size = 6
         right = rect.right() - 2

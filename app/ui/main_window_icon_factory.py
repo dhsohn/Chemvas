@@ -14,10 +14,10 @@ class MainWindowIconFactory:
     ICON_CONTENT_MAX = 25
     ICON_CENTER = ICON_SIZE // 2
 
-    STROKE_COLOR = "#3d3229"
-    MUTED_STROKE_COLOR = "#8b7355"
-    PALE_FILL_COLOR = "#f3ead7"
-    ACCENT_FILL_COLOR = "#d8c8a6"
+    STROKE_COLOR = "#2f2f2c"
+    MUTED_STROKE_COLOR = "#8c8c87"
+    PALE_FILL_COLOR = "#ededeb"
+    ACCENT_FILL_COLOR = "#d3d3ce"
 
     STROKE_FINE = 1.0
     STROKE_THIN = 1.4
