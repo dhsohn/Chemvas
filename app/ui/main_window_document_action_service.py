@@ -43,7 +43,7 @@ class MainWindowDocumentActionService:
             message_box.warning(window, "Save Error", f"Failed to save file:\n{exc}")
             return False
         window._current_file_path = path
-        window.statusBar().showMessage(f"Saved: {path}")
+        window.statusBar().showMessage(f"Saved: {path}", 4000)
         return True
 
     def save_canvas(self, window, *, resolve_save_path) -> None:
@@ -82,7 +82,7 @@ class MainWindowDocumentActionService:
             window.statusBar().showMessage(f"Exporting XYZ: {path}")
             export_async(
                 path,
-                on_success=lambda export_path: window.statusBar().showMessage(f"Exported XYZ: {export_path}"),
+                on_success=lambda export_path: window.statusBar().showMessage(f"Exported XYZ: {export_path}", 4000),
                 on_error=lambda message: message_box.warning(
                     window,
                     "Export Error",
@@ -95,7 +95,7 @@ class MainWindowDocumentActionService:
         except Exception as exc:
             message_box.warning(window, "Export Error", f"Failed to export XYZ:\n{exc}")
             return
-        window.statusBar().showMessage(f"Exported XYZ: {path}")
+        window.statusBar().showMessage(f"Exported XYZ: {path}", 4000)
 
     def load_canvas(self, window, *, file_dialog, message_box, read_document, resolve_load_path) -> None:
         dialog_path, _ = file_dialog.getOpenFileName(
@@ -118,7 +118,7 @@ class MainWindowDocumentActionService:
         else:
             window._restore_single_sheet_document(state)
         window._current_file_path = path
-        window.statusBar().showMessage(f"Loaded: {path}")
+        window.statusBar().showMessage(f"Loaded: {path}", 4000)
 
     def set_bond_length(self, window) -> None:
         current = window.canvas.renderer.style.bond_length_px

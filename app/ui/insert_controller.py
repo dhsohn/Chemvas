@@ -89,7 +89,9 @@ class InsertController:
         model = self.canvas.rdkit.smiles_to_2d(smiles, scale=self.canvas.renderer.style.bond_length_px)
         if model is None:
             message = self.canvas.rdkit.last_error or "Failed to render SMILES."
-            QMessageBox.warning(self.canvas, "SMILES Error", message)
+            notify_error = getattr(self.canvas, "notify_error", None)
+            if not (callable(notify_error) and notify_error(f"SMILES: {message}")):
+                QMessageBox.warning(self.canvas, "SMILES Error", message)
             return
         snapshot = self._smiles_load_transaction_builder.capture()
         self.canvas.clear_scene()
@@ -116,7 +118,9 @@ class InsertController:
         model = self.canvas.rdkit.smiles_to_2d(smiles, scale=self.canvas.renderer.style.bond_length_px)
         if model is None:
             message = self.canvas.rdkit.last_error or "Failed to render SMILES."
-            QMessageBox.warning(self.canvas, "SMILES Error", message)
+            notify_error = getattr(self.canvas, "notify_error", None)
+            if not (callable(notify_error) and notify_error(f"SMILES: {message}")):
+                QMessageBox.warning(self.canvas, "SMILES Error", message)
             return
         self.canvas._smiles_preview_model = model
         center_xy = smiles_preview_center(model)
