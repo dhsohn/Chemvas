@@ -90,19 +90,23 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         file_dialog = mock.Mock()
         file_dialog.getSaveFileName.return_value = ("/tmp/output", "")
         message_box = mock.Mock()
-        self.window.canvas.export_xyz = mock.Mock()
+        self.window.canvas.export_xyz_async = mock.Mock(
+            side_effect=lambda path, *, on_success, on_error: on_success(path)
+        )
 
         self.service.export_xyz(self.window, file_dialog=file_dialog, message_box=message_box)
 
         file_dialog.getSaveFileName.assert_called_once()
         self.assertEqual(file_dialog.getSaveFileName.call_args.args[2], "")
-        self.window.canvas.export_xyz.assert_called_once_with("/tmp/output.xyz")
+        self.assertEqual(self.window.canvas.export_xyz_async.call_args.args, ("/tmp/output.xyz",))
         self.assertEqual(self.window.statusBar().currentMessage(), "Exported XYZ: /tmp/output.xyz")
         message_box.warning.assert_not_called()
 
         file_dialog.getSaveFileName.reset_mock(return_value=True)
         file_dialog.getSaveFileName.return_value = ("/tmp/output", "")
-        self.window.canvas.export_xyz = mock.Mock(side_effect=RuntimeError("no exporter"))
+        self.window.canvas.export_xyz_async = mock.Mock(
+            side_effect=lambda path, *, on_success, on_error: on_error("no exporter")
+        )
 
         self.service.export_xyz(self.window, file_dialog=file_dialog, message_box=message_box)
 

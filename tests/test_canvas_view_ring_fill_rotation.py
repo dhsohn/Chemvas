@@ -15,6 +15,7 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from core.model import Atom
+    from ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
     from ui.canvas_view import CanvasView
 
 
@@ -54,6 +55,7 @@ class CanvasViewRingFillRotationTest(unittest.TestCase):
             ring_items=[ring_item],
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=12.0)),
         )
+        view._canvas_ring_fill_scene_service = CanvasRingFillSceneService(view)
 
         CanvasView._rotate_ring_fills(view, {1, 2}, QPointF(0.0, 0.0), math.pi / 2.0)
         CanvasView._rotate_ring_fills_3d(view, {1, 2}, (0.0, 0.0, 0.0), math.pi / 4.0, math.pi / 4.0, 1.0)
@@ -78,6 +80,7 @@ class CanvasViewRingFillRotationTest(unittest.TestCase):
             ring_items=[matching_ring, short_ring, non_matching_ring],
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=12.0)),
         )
+        view._canvas_ring_fill_scene_service = CanvasRingFillSceneService(view)
 
         CanvasView._rotate_ring_fills(view, {1, 2, 3}, QPointF(0.0, 0.0), math.pi / 2.0)
 
@@ -102,6 +105,7 @@ class CanvasViewRingFillRotationTest(unittest.TestCase):
             ring_items=[matching_ring, skipped_ring],
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=8.0)),
         )
+        view._canvas_ring_fill_scene_service = CanvasRingFillSceneService(view)
 
         CanvasView._rotate_ring_fills(view, {1, 2, 3}, QPointF(1.0, 1.0), math.pi / 2.0)
 
@@ -125,6 +129,7 @@ class CanvasViewRingFillRotationTest(unittest.TestCase):
             ring_items=[matching_ring, skipped_ring],
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=8.0)),
         )
+        view._canvas_ring_fill_scene_service = CanvasRingFillSceneService(view)
 
         CanvasView._rotate_ring_fills_3d(view, {1, 2, 3}, (1.0, 1.0, 0.0), 0.0, math.pi / 2.0, 1.0)
 

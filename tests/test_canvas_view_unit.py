@@ -16,6 +16,7 @@ if QApplication is not None:
     from core.model import Atom, Bond
     from ui.canvas_history_state import CanvasHistoryState
     from ui.canvas_insert_state import CanvasInsertState
+    from ui.canvas_note_controller import CanvasNoteController
     from ui.canvas_rotation_preview_controller import CanvasRotationPreviewController
     from ui.canvas_view import CanvasView, NoteItem, _rotation_preview_controller_for, _selection_controller_for
     from ui.history_commands import AddSceneItemsCommand, DeleteSceneItemsCommand, UpdateSceneItemCommand
@@ -28,6 +29,8 @@ class _FakeNoteCanvas:
         self.removed_items = []
         self.selected_notes = []
         self.updated_boxes = []
+        self._scene_item_controller = SimpleNamespace(remove_scene_item=self.removed_items.append)
+        self._note_controller = CanvasNoteController(self)
 
     def _note_state_dict(self, item) -> dict:
         return {
@@ -177,7 +180,7 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertEqual(canvas.updated_boxes, [item])
         self.assertEqual(canvas.removed_items, [item])
 
-    def test_controller_helper_wrappers_reuse_matching_instances_and_recreate_foreign_bound_ones(self) -> None:
+    def test_controller_helper_wrappers_return_bound_instances(self) -> None:
         canvas = SimpleNamespace()
 
         same_selection_controller = SelectionController(canvas)
@@ -186,10 +189,7 @@ class CanvasViewUnitTest(unittest.TestCase):
 
         foreign_selection_controller = SelectionController(SimpleNamespace())
         canvas._selection_controller = foreign_selection_controller
-        rebound_selection_controller = _selection_controller_for(canvas)
-        self.assertIsInstance(rebound_selection_controller, SelectionController)
-        self.assertIsNot(rebound_selection_controller, foreign_selection_controller)
-        self.assertIs(rebound_selection_controller.canvas, canvas)
+        self.assertIs(_selection_controller_for(canvas), foreign_selection_controller)
 
         passthrough_controller = object()
         canvas._selection_controller = passthrough_controller
@@ -201,10 +201,7 @@ class CanvasViewUnitTest(unittest.TestCase):
 
         foreign_rotation_controller = CanvasRotationPreviewController(SimpleNamespace())
         canvas._rotation_preview_controller = foreign_rotation_controller
-        rebound_rotation_controller = _rotation_preview_controller_for(canvas)
-        self.assertIsInstance(rebound_rotation_controller, CanvasRotationPreviewController)
-        self.assertIsNot(rebound_rotation_controller, foreign_rotation_controller)
-        self.assertIs(rebound_rotation_controller.canvas, canvas)
+        self.assertIs(_rotation_preview_controller_for(canvas), foreign_rotation_controller)
 
     def test_shortcut_modifiers_mask_meta_bits(self) -> None:
         mask_event = _FakeKeyEvent(

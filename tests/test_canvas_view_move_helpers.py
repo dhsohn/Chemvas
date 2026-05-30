@@ -13,6 +13,7 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from core.model import Atom, Bond
+    from ui.canvas_move_controller import CanvasMoveController
     from ui.canvas_view import CanvasView
 
 
@@ -66,6 +67,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
             _redraw_bond=mock.Mock(),
             _update_selection_outline=mock.Mock(),
         )
+        view._move_controller = CanvasMoveController(view)
 
         CanvasView.move_item(view, missing_item, 2.0, 3.0)
         CanvasView.move_item(view, missing_atom_item, 2.0, 3.0)
@@ -99,6 +101,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
             _mark_center=mock.Mock(return_value=QPointF(15.0, 18.0)),
             _update_selection_outline=mock.Mock(),
         )
+        view._move_controller = CanvasMoveController(view)
 
         CanvasView.move_item(view, bond_item, 4.0, -2.0)
         CanvasView.move_item(view, mark_item, 1.0, 2.0)
@@ -144,6 +147,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
             _mark_center=mock.Mock(return_value=QPointF(15.0, 18.0)),
             _update_selection_outline=mock.Mock(),
         )
+        view._move_controller = CanvasMoveController(view)
 
         CanvasView.move_item(view, invalid_bond_item, 4.0, -2.0)
         CanvasView.move_item(view, missing_bond_item, 4.0, -2.0)
@@ -177,6 +181,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
             _move_rings_for_atoms=mock.Mock(),
             _update_selection_outline=mock.Mock(),
         )
+        view._move_controller = CanvasMoveController(view)
 
         CanvasView.move_atoms(view, set(), 1.0, 2.0)
         view._move_atom.assert_not_called()
@@ -226,6 +231,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
             ),
             ring_items=[matching_ring, short_ring, non_matching_ring, invalid_ring],
         )
+        view._move_controller = CanvasMoveController(view)
 
         CanvasView._move_rings_for_atoms(view, {1, 2, 3}, 10.0, 20.0)
 
@@ -246,6 +252,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
             _marks_by_atom={1: [mark]},
             _mark_spatial_index_dirty=mock.Mock(),
         )
+        view._move_controller = CanvasMoveController(view)
 
         CanvasView._move_atom(view, 1, 2.5, -1.5)
         CanvasView._move_atom(view, 9, 2.0, 3.0)

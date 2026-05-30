@@ -153,17 +153,23 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         self.assertTrue(export_button.isEnabled())
 
         with mock.patch("ui.main_window.QFileDialog.getSaveFileName", return_value=("/tmp/output", "")) as dialog:
-            self.window.canvas.export_xyz = mock.Mock()
+            self.window.canvas.export_xyz_async = mock.Mock(
+                side_effect=lambda path, *, on_success, on_error: on_success(path)
+            )
             export_button.click()
 
         dialog.assert_called_once()
         self.assertEqual(dialog.call_args.args[2], "")
-        self.window.canvas.export_xyz.assert_called_once_with("/tmp/output.xyz")
+        self.assertEqual(self.window.canvas.export_xyz_async.call_args.args, ("/tmp/output.xyz",))
         self.assertEqual(self.window.statusBar().currentMessage(), "Exported XYZ: /tmp/output.xyz")
 
         with (
             mock.patch("ui.main_window.QFileDialog.getSaveFileName", return_value=("/tmp/output", "")),
-            mock.patch.object(self.window.canvas, "export_xyz", side_effect=RuntimeError("no exporter")),
+            mock.patch.object(
+                self.window.canvas,
+                "export_xyz_async",
+                side_effect=lambda path, *, on_success, on_error: on_error("no exporter"),
+            ),
             mock.patch("ui.main_window.QMessageBox.warning") as warning,
         ):
             export_button.click()

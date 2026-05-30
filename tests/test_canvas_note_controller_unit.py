@@ -66,9 +66,10 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             canvas.note_items.append(target)
             canvas._make_selectable(target)
 
+        attach_mock = mock.Mock(side_effect=_attach)
         canvas = SimpleNamespace(
             note_items=[],
-            attach_scene_item=mock.Mock(side_effect=_attach),
+            _scene_item_controller=SimpleNamespace(attach_scene_item=attach_mock),
             _new_note_item=mock.Mock(return_value=item),
             _make_selectable=mock.Mock(),
         )
@@ -84,7 +85,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         self.assertEqual(item.pos(), pos)
         self.assertEqual(canvas.note_items, [item])
         self.assertIn(item, scene.items())
-        canvas.attach_scene_item.assert_called_once_with(item)
+        attach_mock.assert_called_once_with(item)
         canvas._make_selectable.assert_called_once_with(item)
         controller.apply_note_style.assert_called_once_with(item)
 
@@ -194,7 +195,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
         canvas._note_state_dict = _note_state_dict
         canvas._push_command = canvas.commands.append
-        canvas.remove_scene_item = canvas.removed_items.append
+        canvas._scene_item_controller = SimpleNamespace(remove_scene_item=canvas.removed_items.append)
         canvas._update_note_selection_box = canvas.updated_boxes.append
         controller = CanvasNoteController(canvas)
         item = NoteItem(canvas)
@@ -224,7 +225,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             _note_state_dict=lambda item: {},
         )
         canvas._push_command = canvas.commands.append
-        canvas.remove_scene_item = canvas.removed_items.append
+        canvas._scene_item_controller = SimpleNamespace(remove_scene_item=canvas.removed_items.append)
         canvas._update_note_selection_box = canvas.updated_boxes.append
         controller = CanvasNoteController(canvas)
         item = NoteItem(canvas)
@@ -247,7 +248,6 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             _scene_item_controller=SimpleNamespace(remove_scene_item=controller_remove),
         )
         canvas._push_command = canvas.commands.append
-        canvas.remove_scene_item = canvas.removed_items.append
         canvas._update_note_selection_box = canvas.updated_boxes.append
         controller = CanvasNoteController(canvas)
         item = NoteItem(canvas)

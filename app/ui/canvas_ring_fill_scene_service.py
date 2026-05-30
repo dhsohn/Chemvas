@@ -137,18 +137,7 @@ class CanvasRingFillSceneService:
 
 
 def canvas_ring_fill_scene_service_for(canvas) -> CanvasRingFillSceneService:
-    service = getattr(canvas, "_canvas_ring_fill_scene_service", None)
-    required = (
-        "update_ring_fills_for_atoms",
-        "rotate_ring_fills_3d",
-        "rotate_ring_fills",
-        "create_ring_fill_item",
-    )
-    if isinstance(service, CanvasRingFillSceneService) and service.canvas is canvas:
-        return service
-    if service is not None and all(hasattr(service, name) for name in required):
-        return service
-    return CanvasRingFillSceneService(canvas)
+    return canvas._canvas_ring_fill_scene_service
 
 
 __all__ = ["CanvasRingFillSceneService", "canvas_ring_fill_scene_service_for"]

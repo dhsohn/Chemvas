@@ -61,6 +61,8 @@ class _FakeCanvas:
         self.scene_items: list[object] = []
         self.ring_items: list[object] = []
         self.find_atom_near = Mock(return_value=None)
+        self._atom_label_service = SimpleNamespace(add_or_update_atom_label=self.add_or_update_atom_label)
+        self._scene_item_controller = SimpleNamespace(attach_scene_item=self.attach_scene_item)
 
     def viewport(self) -> _FakeViewport:
         return _FakeViewport(self.viewport_center)

@@ -87,13 +87,7 @@ from ui.canvas_history_state import CanvasHistoryState
 from ui.canvas_history_recording_service import CanvasHistoryRecordingService
 from ui.canvas_mark_scene_service import CanvasMarkSceneService, canvas_mark_scene_service_for
 from ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService, canvas_ring_fill_scene_service_for
-from ui.canvas_scene_reset_service import canvas_scene_reset_service_for
-from ui.hover_scene_renderer import (
-    add_hover_preview_items as add_hover_preview_items_helper,
-    build_atom_hover_indicator as build_atom_hover_indicator_helper,
-    build_bond_hover_indicator as build_bond_hover_indicator_helper,
-    clear_hover_items as clear_hover_items_helper,
-)
+from ui.canvas_scene_reset_service import CanvasSceneResetService, canvas_scene_reset_service_for
 from ui.hover_interaction_service import HoverInteractionService
 from ui.hover_scene_service import HoverSceneService
 from ui.insert_mode_logic import (
@@ -172,65 +166,40 @@ class NoteItem(QGraphicsTextItem):
 
 
 def _input_controller_for(canvas) -> CanvasInputController:
-    controller = getattr(canvas, "_input_controller", None)
-    if isinstance(controller, CanvasInputController) and controller.canvas is canvas:
-        return controller
-    return CanvasInputController(canvas)
+    return canvas._input_controller
 
 
 def _pointer_controller_for(canvas) -> CanvasPointerController:
-    controller = getattr(canvas, "_pointer_controller", None)
-    if isinstance(controller, CanvasPointerController) and controller.canvas is canvas:
-        return controller
-    return CanvasPointerController(canvas)
+    return canvas._pointer_controller
 
 
 def _handle_controller_for(canvas) -> CanvasHandleController:
-    controller = getattr(canvas, "_handle_controller", None)
-    if isinstance(controller, CanvasHandleController) and controller.canvas is canvas:
-        return controller
-    return CanvasHandleController(canvas)
+    return canvas._handle_controller
 
 
 def _selection_controller_for(canvas) -> SelectionController:
-    controller = getattr(canvas, "_selection_controller", None)
-    if controller is not None:
-        if not isinstance(controller, SelectionController) or controller.canvas is canvas:
-            return controller
-    return SelectionController(canvas)
+    return canvas._selection_controller
 
 
 def _note_controller_for(canvas) -> CanvasNoteController:
-    controller = getattr(canvas, "_note_controller", None)
-    if isinstance(controller, CanvasNoteController) and controller.canvas is canvas:
-        return controller
-    return CanvasNoteController(canvas)
+    return canvas._note_controller
 
 
 def _move_controller_for(canvas) -> CanvasMoveController:
-    controller = getattr(canvas, "_move_controller", None)
-    if isinstance(controller, CanvasMoveController) and controller.canvas is canvas:
-        return controller
-    return CanvasMoveController(canvas)
+    return canvas._move_controller
 
 
 def _geometry_controller_for(canvas) -> CanvasGeometryController:
-    controller = getattr(canvas, "_geometry_controller", None)
-    if isinstance(controller, CanvasGeometryController) and controller.canvas is canvas:
-        return controller
-    return CanvasGeometryController(canvas)
+    return canvas._geometry_controller
 
 
 def _rotation_preview_controller_for(canvas) -> CanvasRotationPreviewController:
-    controller = getattr(canvas, "_rotation_preview_controller", None)
-    if isinstance(controller, CanvasRotationPreviewController) and controller.canvas is canvas:
-        return controller
-    return CanvasRotationPreviewController(canvas)
+    return canvas._rotation_preview_controller
 
 
 class CanvasView(QGraphicsView):
     FILE_FORMAT_VERSION = 1
-    CLIPBOARD_SELECTION_MIME = "application/x-lightdraw-selection+json"
+    CLIPBOARD_SELECTION_MIME = "application/x-chemvas-selection+json"
     CLIPBOARD_SELECTION_VERSION = 1
 
     def __init__(self) -> None:
@@ -344,6 +313,7 @@ class CanvasView(QGraphicsView):
         self._canvas_history_recording_service = CanvasHistoryRecordingService(self)
         self._canvas_mark_scene_service = CanvasMarkSceneService(self)
         self._canvas_ring_fill_scene_service = CanvasRingFillSceneService(self)
+        self._canvas_scene_reset_service = CanvasSceneResetService(self)
         self._rotation_preview_controller = CanvasRotationPreviewController(self)
         self._atom_label_service = AtomLabelService(self)
         self._hover_interaction_service = HoverInteractionService(self)
@@ -393,7 +363,6 @@ class CanvasView(QGraphicsView):
         self.selection_outlines: list[QGraphicsItem] = []
         self._insert_state = CanvasInsertState()
         self._history_state = CanvasHistoryState()
-        self._clipboard_selection_payload_json: str | None = None
         self._clipboard_paste_source_json: str | None = None
         self._clipboard_paste_count = 0
         self.tools = ToolController(self)
@@ -772,9 +741,7 @@ class CanvasView(QGraphicsView):
         except Exception as exc:
             on_error(str(exc) or "Failed to export 3D XYZ.")
             return
-        preload = getattr(self.rdkit, "preload", None)
-        is_loaded = getattr(self.rdkit, "is_loaded", None)
-        if callable(preload) and callable(is_loaded) and not is_loaded() and not preload():
+        if not self.rdkit.is_loaded() and not self.rdkit.preload():
             on_error(self.rdkit.last_error or "RDKit is not available in this environment.")
             return
         from ui.rdkit_async_jobs import export_xyz_in_thread
@@ -2157,52 +2124,17 @@ class CanvasView(QGraphicsView):
         self._selection_info_callback(formula_text, mw_text)
 
     def _clear_hover_highlight(self) -> None:
-        hover_scene_service = getattr(self, "_hover_scene_service", None)
-        if hover_scene_service is not None:
-            hover_scene_service.clear_hover_highlight()
-            return
-        self.hover_items = clear_hover_items_helper(self.scene(), self.hover_items)
-        self.hover_atom_id = None
-        self.hover_bond_id = None
-        self._hover_preview_style = None
+        self._hover_scene_service.clear_hover_highlight()
 
     def _add_hover_indicator_item(self, item: QGraphicsItem) -> None:
         self.scene().addItem(item)
         self.hover_items.append(item)
 
     def _add_atom_hover_indicator(self, atom_id: int) -> None:
-        hover_scene_service = getattr(self, "_hover_scene_service", None)
-        if hover_scene_service is not None:
-            hover_scene_service.add_atom_hover_indicator(atom_id)
-            return
-        atom = self.model.atoms.get(atom_id)
-        if atom is None:
-            return
-        radius = self.renderer.style.bond_length_px * 0.25
-        circle = build_atom_hover_indicator_helper(QPointF(atom.x, atom.y), radius)
-        self._add_hover_indicator_item(circle)
+        self._hover_scene_service.add_atom_hover_indicator(atom_id)
 
     def _add_bond_hover_indicator(self, bond_id: int) -> None:
-        hover_scene_service = getattr(self, "_hover_scene_service", None)
-        if hover_scene_service is not None:
-            hover_scene_service.add_bond_hover_indicator(bond_id)
-            return
-        if not (0 <= bond_id < len(self.model.bonds)):
-            return
-        bond = self.model.bonds[bond_id]
-        if bond is None:
-            return
-        a = self.model.atoms.get(bond.a)
-        b = self.model.atoms.get(bond.b)
-        if a is None or b is None:
-            return
-        radius = self.renderer.style.bond_length_px * 0.22
-        circle = build_bond_hover_indicator_helper(
-            QPointF(a.x, a.y),
-            QPointF(b.x, b.y),
-            radius,
-        )
-        self._add_hover_indicator_item(circle)
+        self._hover_scene_service.add_bond_hover_indicator(bond_id)
 
     def _mark_center_for_pointer(
         self,
@@ -2216,10 +2148,7 @@ class CanvasView(QGraphicsView):
         self._mark_hover_preview_service.add_mark_hover_preview(pos)
 
     def _update_hover_highlight(self, pos: QPointF) -> None:
-        hover_interaction_service = getattr(self, "_hover_interaction_service", None)
-        if hover_interaction_service is None:
-            hover_interaction_service = HoverInteractionService(self)
-        hover_interaction_service.update_hover_highlight(pos)
+        self._hover_interaction_service.update_hover_highlight(pos)
 
     def _find_bond_near(self, pos: QPointF, max_dist: float) -> int | None:
         return canvas_hit_testing_service_for(self).find_bond_near(pos, max_dist)
@@ -2304,13 +2233,7 @@ class CanvasView(QGraphicsView):
         )
 
     def _add_hover_preview_items(self, items: list) -> None:
-        hover_scene_service = getattr(self, "_hover_scene_service", None)
-        if hover_scene_service is not None:
-            hover_scene_service.add_hover_preview_items(items)
-            return
-        if not items:
-            return
-        self.hover_items.extend(add_hover_preview_items_helper(self.scene(), items))
+        self._hover_scene_service.add_hover_preview_items(items)
 
     def _connected_atom_unit_vectors(self, atom_id: int) -> list[tuple[float, float]]:
         atom = self.model.atoms.get(atom_id)
@@ -2509,6 +2432,8 @@ class CanvasView(QGraphicsView):
         )
 
     def viewportEvent(self, event) -> bool:
+        if "_pointer_controller" not in self.__dict__:
+            return super().viewportEvent(event)
         return _pointer_controller_for(self).viewport_event(
             event,
             single_shot=QTimer.singleShot,
@@ -2522,12 +2447,17 @@ class CanvasView(QGraphicsView):
         )
 
     def event(self, event) -> bool:
+        if "_input_controller" not in self.__dict__:
+            return super().event(event)
         return _input_controller_for(self).event(event, native_gesture_event_type=QNativeGestureEvent)
 
     def _should_override_chemdraw_shortcut(self, event) -> bool:
         return _input_controller_for(self).should_override_chemdraw_shortcut(event)
 
     def scrollContentsBy(self, dx: int, dy: int) -> None:
+        if "_pointer_controller" not in self.__dict__:
+            super().scrollContentsBy(dx, dy)
+            return
         _pointer_controller_for(self).scroll_contents_by(
             dx,
             dy,

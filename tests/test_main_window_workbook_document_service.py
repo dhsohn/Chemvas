@@ -127,7 +127,7 @@ class MainWindowWorkbookDocumentServiceTest(unittest.TestCase):
         self.assertEqual(self.window.canvas_tabs.currentIndex(), 0)
         refresh_active_canvas_ui.assert_called_once_with()
 
-    def test_restore_workbook_document_filters_invalid_sheets_and_clamps_index(self) -> None:
+    def test_restore_workbook_document_rejects_invalid_sheets_without_mutating_tabs(self) -> None:
         reactant_state, product_state = self._build_canvas_sheet_states()
         state = {
             "active_sheet_index": 99,
@@ -139,18 +139,19 @@ class MainWindowWorkbookDocumentServiceTest(unittest.TestCase):
             ],
         }
 
-        self.service.restore_workbook_document(self.window, state)
+        with self.assertRaises(ValueError):
+            self.service.restore_workbook_document(self.window, state)
         self._flush_events()
 
         self.assertEqual(self.window._canvas_sheet_count(), 2)
         self.assertEqual(
             [self.window.canvas_tabs.tabText(index) for index in range(self.window.canvas_tabs.count())],
-            ["Reactant Sheet", "Product Sheet", "+"],
+            ["Sheet 1", "Sheet 2", "+"],
         )
         self.assertEqual(self.window.canvas_tabs.currentIndex(), 1)
-        self.assertEqual(self.window._active_canvas_sheet_name(), "Product Sheet")
+        self.assertEqual(self.window._active_canvas_sheet_name(), "Sheet 2")
 
-    def test_restore_workbook_document_adds_fallback_sheet_and_resyncs_counter(self) -> None:
+    def test_restore_workbook_document_rejects_non_canvas_workbook_without_fallback_sheet(self) -> None:
         state = {
             "active_sheet_index": "abc",
             "sheets": [
@@ -159,7 +160,8 @@ class MainWindowWorkbookDocumentServiceTest(unittest.TestCase):
             ],
         }
 
-        self.service.restore_workbook_document(self.window, state)
+        with self.assertRaises(ValueError):
+            self.service.restore_workbook_document(self.window, state)
         self._flush_events()
 
         self.assertEqual(
@@ -167,14 +169,6 @@ class MainWindowWorkbookDocumentServiceTest(unittest.TestCase):
             ["Sheet 1", "+"],
         )
         self.assertEqual(self.window._canvas_name_counter, 1)
-
-        self.window._new_canvas_sheet()
-        self._flush_events()
-
-        self.assertEqual(
-            [self.window.canvas_tabs.tabText(index) for index in range(self.window.canvas_tabs.count())],
-            ["Sheet 1", "Sheet 2", "+"],
-        )
 
 
 if __name__ == "__main__":

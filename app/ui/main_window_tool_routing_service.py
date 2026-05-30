@@ -73,7 +73,7 @@ class MainWindowToolRoutingService:
 
     def apply_color_preset(self, window, hex_value: str, *, qtimer=QTimer) -> None:
         color = QColor(hex_value)
-        tool = window.canvas.tools.tools.get("color") if hasattr(window.canvas, "tools") else None
+        tool = window.canvas.tools.tools.get("color")
         if tool is not None:
             tool._last_color = color.name()
 

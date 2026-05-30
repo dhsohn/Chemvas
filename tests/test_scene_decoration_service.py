@@ -35,6 +35,17 @@ class _FakeItem:
         return self._data.get(key)
 
 
+class _FakeSceneItemController:
+    def __init__(self, canvas) -> None:
+        self.canvas = canvas
+
+    def attach_scene_item(self, item) -> None:
+        self.canvas.attach_scene_item(item)
+
+    def create_scene_item_from_state(self, state):
+        return self.canvas.create_scene_item_from_state(state)
+
+
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for scene decoration tests")
 class SceneDecorationServiceTest(unittest.TestCase):
     @classmethod
@@ -65,6 +76,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
             _mark_state_dict=mock.Mock(return_value={"kind": "mark", "atom_id": 7}),
             _push_command=pushed.append,
         )
+        canvas._scene_item_controller = _FakeSceneItemController(canvas)
         service = SceneDecorationService(canvas)
 
         item = service.add_mark(
@@ -118,6 +130,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
             _ts_bracket_state_dict=mock.Mock(return_value={"kind": "ts_bracket"}),
             _push_command=pushed.append,
         )
+        canvas._scene_item_controller = _FakeSceneItemController(canvas)
         service = SceneDecorationService(canvas)
 
         arrow = service.add_arrow(QPointF(1.0, 2.0), QPointF(6.0, 7.0), "curved_double")
@@ -145,6 +158,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
             _orbital_state_dict=mock.Mock(return_value={"kind": "orbital"}),
             _push_command=pushed.append,
         )
+        canvas._scene_item_controller = _FakeSceneItemController(canvas)
         service = SceneDecorationService(canvas)
 
         self.assertIsNone(service.add_orbital(QPointF(1.0, 2.0)))

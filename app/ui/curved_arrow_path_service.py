@@ -39,12 +39,7 @@ class CurvedArrowPathService:
 
 
 def curved_arrow_path_service_for(canvas) -> CurvedArrowPathService:
-    service = getattr(canvas, "_curved_arrow_path_service", None)
-    if isinstance(service, CurvedArrowPathService) and service.canvas is canvas:
-        return service
-    if service is not None and hasattr(service, "set_curved_arrow_path"):
-        return service
-    return CurvedArrowPathService(canvas)
+    return canvas._curved_arrow_path_service
 
 
 __all__ = ["CurvedArrowPathService", "curved_arrow_path_service_for"]

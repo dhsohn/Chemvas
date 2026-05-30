@@ -120,20 +120,7 @@ class CanvasAtomMutationService:
 
 
 def canvas_atom_mutation_service_for(canvas) -> CanvasAtomMutationService:
-    service = getattr(canvas, "_canvas_atom_mutation_service", None)
-    if isinstance(service, CanvasAtomMutationService) and service.canvas is canvas:
-        return service
-    if service is not None and all(
-        hasattr(service, name)
-        for name in (
-            "add_atom",
-            "remove_atom_only",
-            "restore_atom_from_state",
-            "apply_atom_color",
-        )
-    ):
-        return service
-    return CanvasAtomMutationService(canvas)
+    return canvas._canvas_atom_mutation_service
 
 
 __all__ = ["CanvasAtomMutationService", "canvas_atom_mutation_service_for"]

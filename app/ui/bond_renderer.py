@@ -34,36 +34,17 @@ class BondRenderer:
         item.setPen(pen)
         return item
 
-    def _scaled_metric(self, style_attr: str) -> float:
-        value = float(getattr(self.canvas.renderer.style, style_attr))
-        scale_metric = getattr(self.canvas.renderer, "scaled_style_metric", None)
-        if callable(scale_metric):
-            return scale_metric(value)
-        return value
-
     def _bond_line_width(self) -> float:
-        getter = getattr(self.canvas.renderer, "bond_line_width", None)
-        if callable(getter):
-            return getter()
-        return self._scaled_metric("bond_line_width")
+        return self.canvas.renderer.bond_line_width()
 
     def _bold_bond_width(self) -> float:
-        getter = getattr(self.canvas.renderer, "bold_bond_width", None)
-        if callable(getter):
-            return getter()
-        return self.canvas.renderer.bold_bond_pen().widthF()
+        return self.canvas.renderer.bold_bond_width()
 
     def _bond_spacing(self) -> float:
-        getter = getattr(self.canvas.renderer, "bond_spacing", None)
-        if callable(getter):
-            return getter()
-        return self._scaled_metric("bond_spacing_px")
+        return self.canvas.renderer.bond_spacing()
 
     def _hash_spacing(self) -> float:
-        getter = getattr(self.canvas.renderer, "hash_spacing", None)
-        if callable(getter):
-            return getter()
-        return self._scaled_metric("hash_spacing_px")
+        return self.canvas.renderer.hash_spacing()
 
     def _dotted_dot_radius(self) -> float:
         return max(0.4, self._bond_line_width() * 0.58)
@@ -75,7 +56,7 @@ class BondRenderer:
     def _junction_trim_for_atom(self, atom_id: int | None, other_id: int | None) -> float:
         if atom_id is None:
             return 0.0
-        bond_ids = set(getattr(self.canvas, "_atom_bond_ids", {}).get(atom_id, ()))
+        bond_ids = set(self.canvas._atom_bond_ids.get(atom_id, ()))
         if other_id is not None:
             for bond_id in list(bond_ids):
                 if not (0 <= bond_id < len(self.canvas.model.bonds)):
@@ -331,8 +312,9 @@ class BondRenderer:
         if a_id is None or b_id is None:
             return None
         points: list[tuple[float, float]] = []
-        atom_bond_ids = getattr(self.canvas, "_atom_bond_ids", {})
-        candidate_bond_ids = set(atom_bond_ids.get(a_id, ())) | set(atom_bond_ids.get(b_id, ()))
+        candidate_bond_ids = set(self.canvas._atom_bond_ids.get(a_id, ())) | set(
+            self.canvas._atom_bond_ids.get(b_id, ())
+        )
         for bond_id in candidate_bond_ids:
             if not (0 <= bond_id < len(self.canvas.model.bonds)):
                 continue

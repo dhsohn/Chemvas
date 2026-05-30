@@ -144,50 +144,19 @@ class SceneItemAccessTest(unittest.TestCase):
             ],
         )
 
-    def test_helpers_fall_back_to_canvas_methods_without_controller(self) -> None:
+    def test_helpers_require_scene_item_controller(self) -> None:
+        canvas = _Canvas()
+
+        with self.assertRaises(AttributeError):
+            restore_ring_from_state(canvas, {"kind": "ring"})
+
+    def test_attach_scene_item_requires_controller_attach_method(self) -> None:
         canvas = _Canvas()
         item = object()
+        canvas._scene_item_controller = object()
 
-        self.assertEqual(restore_ring_from_state(canvas, {"kind": "ring"}), ("canvas_ring", {"kind": "ring"}))
-        self.assertEqual(restore_note_from_state(canvas, {"kind": "note"}), ("canvas_note", {"kind": "note"}))
-        self.assertEqual(create_scene_item_from_state(canvas, {"id": 1}), ("canvas", {"id": 1}))
-        attach_scene_item(canvas, item)
-        restore_scene_item(canvas, item)
-        remove_scene_item(canvas, item)
-        apply_scene_item_state(canvas, item, {"x": 2})
-        restore_mark_from_state(canvas, {"atom_id": 3})
-        self.assertEqual(restore_arrow_from_state(canvas, {"kind": "arrow"}), ("canvas_arrow", {"kind": "arrow"}))
-        self.assertEqual(restore_ts_bracket_from_state(canvas, {"kind": "ts"}), ("canvas_ts", {"kind": "ts"}))
-        self.assertEqual(
-            restore_orbital_from_state(canvas, {"kind": "orbital"}),
-            ("canvas_orbital", {"kind": "orbital"}),
-        )
-
-        self.assertEqual(
-            canvas.calls,
-            [
-                ("canvas_restore_ring", {"kind": "ring"}),
-                ("canvas_restore_note", {"kind": "note"}),
-                ("canvas_create", {"id": 1}),
-                ("canvas_attach", item),
-                ("canvas_restore", item),
-                ("canvas_remove", item),
-                ("canvas_apply", item, {"x": 2}),
-                ("canvas_restore_mark", {"atom_id": 3}),
-                ("canvas_restore_arrow", {"kind": "arrow"}),
-                ("canvas_restore_ts", {"kind": "ts"}),
-                ("canvas_restore_orbital", {"kind": "orbital"}),
-            ],
-        )
-
-    def test_attach_scene_item_falls_back_to_restore_when_attach_is_missing(self) -> None:
-        canvas = _Canvas()
-        item = object()
-        canvas.attach_scene_item = None
-
-        attach_scene_item(canvas, item)
-
-        self.assertEqual(canvas.calls, [("canvas_restore", item)])
+        with self.assertRaises(AttributeError):
+            attach_scene_item(canvas, item)
 
 
 if __name__ == "__main__":

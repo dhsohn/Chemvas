@@ -79,15 +79,7 @@ class HandleMutationService:
 
 
 def handle_mutation_service_for(canvas) -> HandleMutationService:
-    service = getattr(canvas, "_handle_mutation_service", None)
-    if isinstance(service, HandleMutationService) and service.canvas is canvas:
-        return service
-    if service is not None and all(
-        hasattr(service, name)
-        for name in ("update_orbital_scale", "update_orbital_rotate", "update_curved_control", "update_curved_endpoint")
-    ):
-        return service
-    return HandleMutationService(canvas)
+    return canvas._handle_mutation_service
 
 
 __all__ = ["HandleMutationService", "handle_mutation_service_for"]

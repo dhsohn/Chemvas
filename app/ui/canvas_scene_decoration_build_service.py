@@ -220,32 +220,7 @@ class CanvasSceneDecorationBuildService:
 
 
 def canvas_scene_decoration_build_service_for(canvas) -> CanvasSceneDecorationBuildService:
-    service = getattr(canvas, "_scene_decoration_build_service", None)
-    required = (
-        "build_mark_item",
-        "mark_center",
-        "set_mark_center",
-        "preview_arrow",
-        "build_arrow_item",
-        "build_single_head_arrow",
-        "build_double_head_arrow",
-        "build_dotted_arrow",
-        "build_curved_arrow",
-        "build_inhibition_arrow",
-        "build_equilibrium_item",
-        "add_arrow_head",
-        "ts_bracket_rect_from_points",
-        "ts_bracket_stroke_width",
-        "ts_bracket_path",
-        "build_ts_bracket_item",
-        "preview_ts_bracket",
-        "build_orbital_items",
-    )
-    if isinstance(service, CanvasSceneDecorationBuildService) and service.canvas is canvas:
-        return service
-    if service is not None and all(hasattr(service, name) for name in required):
-        return service
-    return CanvasSceneDecorationBuildService(canvas)
+    return canvas._scene_decoration_build_service
 
 
 __all__ = ["CanvasSceneDecorationBuildService", "canvas_scene_decoration_build_service_for"]

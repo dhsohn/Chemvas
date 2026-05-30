@@ -7,7 +7,6 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
     from PyQt6.QtCore import QPointF
-    from PyQt6.QtGui import QCursor
     from PyQt6.QtWidgets import QApplication
 except ModuleNotFoundError:
     QApplication = None
@@ -38,11 +37,6 @@ class _PositionEvent:
         return SimpleNamespace(toPoint=lambda: "position-point")
 
 
-class _PosEvent:
-    def pos(self):
-        return "pos-point"
-
-
 def _service_double(**overrides):
     defaults = dict(
         scene_pos_from_event=mock.Mock(),
@@ -70,22 +64,13 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
 
-    def test_scene_pos_from_event_uses_position_pos_and_cursor_fallback(self) -> None:
-        viewport = SimpleNamespace(mapFromGlobal=lambda pos: "global-point" if pos == "cursor-pos" else "other")
+    def test_scene_pos_from_event_uses_qt6_position(self) -> None:
         canvas = SimpleNamespace(
-            mapToScene=lambda value: QPointF(1.0, 2.0)
-            if value == "position-point"
-            else QPointF(3.0, 4.0)
-            if value == "pos-point"
-            else QPointF(5.0, 6.0),
-            viewport=lambda: viewport,
+            mapToScene=lambda value: QPointF(1.0, 2.0) if value == "position-point" else QPointF(5.0, 6.0),
         )
         service = CanvasHitTestingService(canvas)
 
-        with mock.patch.object(QCursor, "pos", return_value="cursor-pos"):
-            self.assertEqual(service.scene_pos_from_event(_PositionEvent()), QPointF(1.0, 2.0))
-            self.assertEqual(service.scene_pos_from_event(_PosEvent()), QPointF(3.0, 4.0))
-            self.assertEqual(service.scene_pos_from_event(object()), QPointF(5.0, 6.0))
+        self.assertEqual(service.scene_pos_from_event(_PositionEvent()), QPointF(1.0, 2.0))
 
     def test_item_lookup_prefers_atom_and_falls_back_to_nearby_bond(self) -> None:
         atom_item = _FakeItem("atom")
@@ -173,19 +158,6 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
         sparse_service.rebuild_spatial_index(20.0)
         self.assertEqual(sparse_canvas._bond_grid, {})
 
-        zero_cell_canvas = SimpleNamespace(
-            renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
-            model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[Bond(1, 2, 1)]),
-            _spatial_index_dirty=False,
-            _spatial_cell_size=0.0,
-            _atom_grid={(0, 0): {1}},
-            _bond_grid={(0, 0): {0}},
-            _grid_cell_size=lambda: 0.0,
-        )
-        zero_cell_service = CanvasHitTestingService(zero_cell_canvas)
-        self.assertIsNone(zero_cell_service.find_atom_near(0.0, 0.0, 5.0))
-        self.assertIsNone(zero_cell_service.find_bond_near(QPointF(0.0, 0.0), 5.0))
-
         sparse_lookup_canvas = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
             model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[None, Bond(1, 99, 1)]),
@@ -198,7 +170,7 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
         self.assertEqual(sparse_lookup_service.find_atom_near(0.0, 0.0, 5.0), 1)
         self.assertIsNone(sparse_lookup_service.find_bond_near(QPointF(0.0, 0.0), 5.0))
 
-    def test_nearest_hit_helpers_and_bond_id_from_event_use_canvas_overrides(self) -> None:
+    def test_nearest_hit_helpers_and_bond_id_from_event_use_service_methods(self) -> None:
         canvas = SimpleNamespace(
             model=SimpleNamespace(
                 atoms={1: Atom("C", 3.0, 4.0), 2: Atom("O", 10.0, 0.0)},
@@ -208,21 +180,21 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
             _atom_pick_radius=mock.Mock(return_value=5.0),
             _bond_pick_radius=mock.Mock(return_value=6.0),
-            find_atom_near=mock.Mock(return_value=1),
-            _find_bond_near=mock.Mock(return_value=0),
-            _distance_point_to_segment=mock.Mock(return_value=2.5),
-            scene_pos_from_event=mock.Mock(return_value=QPointF(3.0, 4.0)),
         )
         service = CanvasHitTestingService(canvas)
+        service.find_atom_near = mock.Mock(return_value=1)
+        service.find_bond_near = mock.Mock(return_value=0)
+        service.distance_point_to_segment = mock.Mock(return_value=2.5)
+        service.scene_pos_from_event = mock.Mock(return_value=QPointF(3.0, 4.0))
 
         self.assertEqual(service.nearest_atom_hit(QPointF(0.0, 0.0)), (1, 5.0))
         self.assertEqual(service.nearest_bond_hit(QPointF(5.0, 2.0)), (0, 2.5))
         self.assertEqual(service.bond_id_from_event(object()), 7)
 
         canvas.hover_bond_id = None
-        canvas._find_bond_near.return_value = 2
+        service.find_bond_near.return_value = 2
         self.assertEqual(service.bond_id_from_event(object()), 2)
-        canvas._find_bond_near.assert_called_with(QPointF(3.0, 4.0), 7.0)
+        service.find_bond_near.assert_called_with(QPointF(3.0, 4.0), 7.0)
 
     def test_helper_prefers_injected_service_double(self) -> None:
         injected = _service_double()

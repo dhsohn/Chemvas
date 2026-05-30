@@ -205,7 +205,7 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         self.assertIn(("ring", 0, 6), calls)
         self.assertIn(("chair", 0, True), calls)
 
-    def test_service_resolver_reuses_bound_duck_typed_or_fresh_service(self) -> None:
+    def test_service_resolver_returns_bound_service(self) -> None:
         canvas = SimpleNamespace()
         bound = CanvasChemdrawShortcutService(canvas)
         canvas._chemdraw_shortcut_service = bound
@@ -221,10 +221,9 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         other_canvas = SimpleNamespace(_chemdraw_shortcut_service=injected)
         self.assertIs(canvas_chemdraw_shortcut_service_for(other_canvas), injected)
 
-        fresh_canvas = SimpleNamespace()
-        resolved = canvas_chemdraw_shortcut_service_for(fresh_canvas)
-        self.assertIsInstance(resolved, CanvasChemdrawShortcutService)
-        self.assertIs(resolved.canvas, fresh_canvas)
+        placeholder = object()
+        fresh_canvas = SimpleNamespace(_chemdraw_shortcut_service=placeholder)
+        self.assertIs(canvas_chemdraw_shortcut_service_for(fresh_canvas), placeholder)
 
 
 if __name__ == "__main__":

@@ -178,7 +178,6 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
         clipboard = QApplication.clipboard().mimeData()
         self.assertTrue(clipboard.hasImage())
         self.assertFalse(clipboard.hasFormat(canvas.CLIPBOARD_SELECTION_MIME))
-        self.assertIsNone(canvas._clipboard_selection_payload_json)
         self.assertIsNone(canvas._clipboard_paste_source_json)
         self.assertEqual(canvas._clipboard_paste_count, 0)
         self.assertTrue(overlapping_item.isVisible())
@@ -189,7 +188,7 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
         canvas._clipboard_paste_count = 3
         controller = SceneOpsController(canvas)
         payload = {
-            "format": "lightdraw-selection",
+            "format": "chemvas-selection",
             "version": 1,
             "atoms": [
                 "bad-atom",

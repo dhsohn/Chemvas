@@ -60,10 +60,10 @@ def build_clipboard_copy_plan(
     )
 
 
-def clipboard_copy_cache_values(payload_json: str | None) -> tuple[str | None, str | None, int]:
+def clipboard_copy_cache_values(payload_json: str | None) -> tuple[str | None, int]:
     if payload_json is None:
-        return None, None, 0
-    return payload_json, payload_json, 0
+        return None, 0
+    return payload_json, 0
 
 
 def visible_items_to_hide_for_copy(

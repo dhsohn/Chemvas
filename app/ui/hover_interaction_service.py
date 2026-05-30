@@ -98,9 +98,7 @@ class HoverInteractionService:
         bond = self._bond_for_id(bond_id)
         if bond is None:
             return
-        add_bond_hover_indicator = getattr(self.canvas, "_add_bond_hover_indicator", None)
-        if add_bond_hover_indicator is not None:
-            add_bond_hover_indicator(bond_id)
+        self.canvas._add_bond_hover_indicator(bond_id)
         if plan.preview_key:
             self.canvas._add_bond_style_hover_preview(bond)
 

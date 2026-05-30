@@ -169,7 +169,7 @@ class SceneClipboardLogicTest(unittest.TestCase):
         self.assertEqual(
             payload,
             {
-                "format": "lightdraw-selection",
+                "format": "chemvas-selection",
                 "version": 7,
                 "atoms": [
                     {"id": 1, "element": "C", "x": 1.0, "y": 0.0, "color": "#000000", "explicit_label": False},
@@ -182,7 +182,7 @@ class SceneClipboardLogicTest(unittest.TestCase):
             },
         )
 
-    def test_clipboard_payload_candidates_handles_invalid_utf8_and_image_fallback(self) -> None:
+    def test_clipboard_payload_candidates_handles_invalid_utf8(self) -> None:
         from PyQt6.QtCore import QMimeData
 
         mime_data = QMimeData()
@@ -192,10 +192,9 @@ class SceneClipboardLogicTest(unittest.TestCase):
         candidates = clipboard_payload_candidates(
             mime_data,
             mime_type=_FakeCanvas.CLIPBOARD_SELECTION_MIME,
-            cached_payload_json='{"format":"lightdraw-selection","version":1}',
         )
 
-        self.assertEqual(candidates, ['{"format":"lightdraw-selection","version":1}'])
+        self.assertEqual(candidates, [])
 
     def test_decode_clipboard_selection_payload_skips_invalid_candidates_until_valid_dict(self) -> None:
         payload, payload_json = decode_clipboard_selection_payload(
@@ -203,14 +202,14 @@ class SceneClipboardLogicTest(unittest.TestCase):
                 "not-json",
                 "[]",
                 '{"format":"wrong","version":1}',
-                '{"format":"lightdraw-selection","version":999}',
-                '{"format":"lightdraw-selection","version":1,"scene_items":[{"kind":"note"}]}',
+                '{"format":"chemvas-selection","version":999}',
+                '{"format":"chemvas-selection","version":1,"scene_items":[{"kind":"note"}]}',
             ],
             version=1,
         )
 
-        self.assertEqual(payload, {"format": "lightdraw-selection", "version": 1, "scene_items": [{"kind": "note"}]})
-        self.assertEqual(payload_json, '{"format":"lightdraw-selection","version":1,"scene_items":[{"kind":"note"}]}')
+        self.assertEqual(payload, {"format": "chemvas-selection", "version": 1, "scene_items": [{"kind": "note"}]})
+        self.assertEqual(payload_json, '{"format":"chemvas-selection","version":1,"scene_items":[{"kind":"note"}]}')
 
     def test_selection_payload_extends_atom_and_bond_selection_and_keeps_related_scene_items(self) -> None:
         canvas = _FakeCanvas()
@@ -246,7 +245,7 @@ class SceneClipboardLogicTest(unittest.TestCase):
 
         self.assertIsNotNone(payload)
         assert payload is not None
-        self.assertEqual(payload["format"], "lightdraw-selection")
+        self.assertEqual(payload["format"], "chemvas-selection")
         self.assertEqual(payload["version"], 1)
         self.assertEqual(
             payload["atoms"],
@@ -324,39 +323,33 @@ class SceneClipboardLogicTest(unittest.TestCase):
 
         self.assertIsNone(controller._selection_payload_for_clipboard())
 
-    def test_clipboard_selection_payload_prefers_custom_mime_then_cached_image_fallback_and_rejects_wrong_format_or_version(self) -> None:
+    def test_clipboard_selection_payload_uses_custom_mime_and_rejects_wrong_format_or_version(self) -> None:
         canvas = _FakeCanvas()
         controller = SceneOpsController(canvas)
         clipboard = QApplication.clipboard()
 
-        custom_json = json.dumps({"format": "lightdraw-selection", "version": 1, "scene_items": [{"kind": "note"}]}, separators=(",", ":"))
-        cached_json = json.dumps({"format": "lightdraw-selection", "version": 1, "scene_items": [{"kind": "arrow"}]}, separators=(",", ":"))
-        canvas._clipboard_selection_payload_json = cached_json
+        custom_json = json.dumps({"format": "chemvas-selection", "version": 1, "scene_items": [{"kind": "note"}]}, separators=(",", ":"))
 
         clipboard.setMimeData(canvas.new_mime_data(custom_json.encode("utf-8")))
         payload, returned_json = controller._clipboard_selection_payload()
-        self.assertEqual(payload, {"format": "lightdraw-selection", "version": 1, "scene_items": [{"kind": "note"}]})
+        self.assertEqual(payload, {"format": "chemvas-selection", "version": 1, "scene_items": [{"kind": "note"}]})
         self.assertEqual(returned_json, custom_json)
 
         image = QImage(4, 4, QImage.Format.Format_ARGB32)
         clipboard.setMimeData(canvas.new_image_mime_data(image))
-        payload, returned_json = controller._clipboard_selection_payload()
-        self.assertEqual(payload, {"format": "lightdraw-selection", "version": 1, "scene_items": [{"kind": "arrow"}]})
-        self.assertEqual(returned_json, cached_json)
-
-        clipboard.setMimeData(canvas.new_mime_data(b'{"format":"not-lightdraw-selection","version":1}'))
         self.assertEqual(controller._clipboard_selection_payload(), (None, None))
 
-        invalid_version_mime = canvas.new_mime_data(b'{"format":"lightdraw-selection","version":999}')
+        clipboard.setMimeData(canvas.new_mime_data(b'{"format":"not-chemvas-selection","version":1}'))
+        self.assertEqual(controller._clipboard_selection_payload(), (None, None))
+
+        invalid_version_mime = canvas.new_mime_data(b'{"format":"chemvas-selection","version":999}')
         invalid_version_mime.setImageData(QImage(4, 4, QImage.Format.Format_ARGB32))
         clipboard.setMimeData(invalid_version_mime)
-        payload, returned_json = controller._clipboard_selection_payload()
-        self.assertEqual(payload, {"format": "lightdraw-selection", "version": 1, "scene_items": [{"kind": "arrow"}]})
-        self.assertEqual(returned_json, cached_json)
+        self.assertEqual(controller._clipboard_selection_payload(), (None, None))
 
 
 class _FakeCanvas:
-    CLIPBOARD_SELECTION_MIME = "application/x-lightdraw-selection+json"
+    CLIPBOARD_SELECTION_MIME = "application/x-chemvas-selection+json"
     CLIPBOARD_SELECTION_VERSION = 1
 
     def __init__(self) -> None:
@@ -364,7 +357,6 @@ class _FakeCanvas:
         self.model = MoleculeModel()
         self.ring_items: list[QGraphicsItem] = []
         self._marks_by_atom: dict[int, list[QGraphicsItem]] = {}
-        self._clipboard_selection_payload_json = None
         self._clipboard_paste_source_json = None
         self._clipboard_paste_count = 0
 

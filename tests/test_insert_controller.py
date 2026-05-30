@@ -114,6 +114,7 @@ class _FakeCanvas:
         self.add_atom_calls: list[tuple[str, float, float]] = []
         self.ensure_carbon_dot_calls: list[int] = []
         self.atom_label_calls: list[tuple[int, str, bool, bool, bool]] = []
+        self._atom_label_service = SimpleNamespace(add_or_update_atom_label=self.add_or_update_atom_label)
 
     def viewport(self) -> _FakeViewport:
         return _FakeViewport(self._viewport_center)

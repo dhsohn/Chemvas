@@ -1,5 +1,6 @@
 import os
 import unittest
+from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from ui.delete_tool_logic import build_delete_tool_history_command, erase_delete_tool_item  # noqa: E402
@@ -32,6 +33,7 @@ class _Canvas:
         self.deleted_bonds = []
         self.deleted_rings = []
         self.removed_items = []
+        self._scene_item_controller = SimpleNamespace(remove_scene_item=self.remove_scene_item)
 
     def delete_atom(self, atom_id: int, record: bool = True):
         self.deleted_atoms.append((atom_id, record))

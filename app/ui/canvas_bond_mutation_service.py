@@ -78,20 +78,7 @@ class CanvasBondMutationService:
 
 
 def canvas_bond_mutation_service_for(canvas) -> CanvasBondMutationService:
-    service = getattr(canvas, "_canvas_bond_mutation_service", None)
-    if isinstance(service, CanvasBondMutationService) and service.canvas is canvas:
-        return service
-    if service is not None and all(
-        hasattr(service, name)
-        for name in (
-            "add_bond",
-            "restore_bond_from_state",
-            "remove_bond_by_id",
-            "trim_bonds_to_length",
-        )
-    ):
-        return service
-    return CanvasBondMutationService(canvas)
+    return canvas._canvas_bond_mutation_service
 
 
 __all__ = ["CanvasBondMutationService", "canvas_bond_mutation_service_for"]

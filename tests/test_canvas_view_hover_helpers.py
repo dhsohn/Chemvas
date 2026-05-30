@@ -6,7 +6,9 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsScene
 
 from core.model import Atom, Bond
+from ui.canvas_mark_scene_service import CanvasMarkSceneService
 from ui.canvas_view import CanvasView
+from ui.hover_scene_service import HoverSceneService
 
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas view tests")
@@ -224,6 +226,7 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
             hover_bond_id=77,
             _hover_preview_style="preview",
         )
+        view._hover_scene_service = HoverSceneService(view)
         view._add_hover_indicator_item = lambda item: CanvasView._add_hover_indicator_item(view, item)
 
         CanvasView._add_atom_hover_indicator(view, 3)
@@ -264,7 +267,6 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
     def test_mark_center_and_bond_helpers_cover_pointer_and_endpoint_logic(self) -> None:
         view = SimpleNamespace(
             model=SimpleNamespace(atoms={7: Atom("C", 10.0, 20.0)}),
-            _mark_offset_from_click=mock.Mock(return_value=QPointF(1.5, -2.5)),
             tools=SimpleNamespace(active=SimpleNamespace(name="bond")),
             active_bond_style="double",
             active_bond_order=2,
@@ -272,6 +274,8 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
             snap_angle_step=45,
             _default_bond_endpoint=mock.Mock(return_value=QPointF(2.0, 3.0)),
         )
+        view._canvas_mark_scene_service = CanvasMarkSceneService(view)
+        view._canvas_mark_scene_service.mark_offset_from_click = mock.Mock(return_value=QPointF(1.5, -2.5))
 
         point = QPointF(5.0, 6.0)
         self.assertEqual(CanvasView._mark_center_for_pointer(view, point).toPoint(), point.toPoint())
@@ -280,7 +284,7 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
         centered = CanvasView._mark_center_for_pointer(view, point, 7, kind="minus")
         self.assertAlmostEqual(centered.x(), 11.5)
         self.assertAlmostEqual(centered.y(), 17.5)
-        view._mark_offset_from_click.assert_called_once_with(7, point, kind="minus")
+        view._canvas_mark_scene_service.mark_offset_from_click.assert_called_once_with(7, point, kind="minus")
 
         self.assertEqual(CanvasView._bond_preview_signature(view), "double:2")
         view.tools.active = SimpleNamespace(name="select")

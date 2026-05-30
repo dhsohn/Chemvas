@@ -15,7 +15,7 @@ class MainWindowActiveCanvasUIService:
             tool_change_callback=window._sync_tool_actions_from_canvas,
             zoom_callback=window._update_zoom_label,
             history_change_callback=window._update_action_availability,
-            error_callback=getattr(window, "_show_error_message", None),
+            error_callback=window._show_error_message,
         )
 
     def handle_selection_info(self, window, _formula: str, _mw: str) -> None:

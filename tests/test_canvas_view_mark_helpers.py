@@ -15,6 +15,8 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from core.model import Atom
+    from ui.canvas_mark_scene_service import CanvasMarkSceneService
+    from ui.canvas_scene_decoration_build_service import CanvasSceneDecorationBuildService
     from ui.canvas_view import CanvasView
     from ui.graphics_items import AtomDotItem, AtomLabelItem
 
@@ -50,6 +52,7 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
             renderer=self._renderer(),
             _mark_selection_radius=lambda: 7.5,
         )
+        view._scene_decoration_build_service = CanvasSceneDecorationBuildService(view)
 
         radical = CanvasView._build_mark_item(view, "radical")
         self.assertIsInstance(radical, AtomDotItem)
@@ -79,6 +82,7 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
             mark_kind="plus",
             _mark_target_distance_for_atom=mock.Mock(return_value=20.0),
         )
+        view._canvas_mark_scene_service = CanvasMarkSceneService(view)
 
         offset = CanvasView._mark_offset_from_click(view, 7, QPointF(10.0, 20.0), kind="minus")
 
@@ -99,6 +103,7 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
             mark_kind="radical",
             _mark_target_distance_for_atom=mock.Mock(return_value=0.0),
         )
+        view._canvas_mark_scene_service = CanvasMarkSceneService(view)
 
         offset = CanvasView._mark_offset_from_click(view, 7, QPointF(13.0, 24.0))
 

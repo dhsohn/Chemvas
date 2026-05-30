@@ -195,19 +195,7 @@ class CanvasChemdrawShortcutService:
 
 
 def canvas_chemdraw_shortcut_service_for(canvas) -> CanvasChemdrawShortcutService:
-    service = getattr(canvas, "_chemdraw_shortcut_service", None)
-    required = (
-        "handle_shortcut",
-        "handle_object_shortcut",
-        "handle_generic_hotkey",
-        "handle_atom_hotkey",
-        "handle_bond_hotkey",
-    )
-    if isinstance(service, CanvasChemdrawShortcutService) and service.canvas is canvas:
-        return service
-    if service is not None and all(hasattr(service, name) for name in required):
-        return service
-    return CanvasChemdrawShortcutService(canvas)
+    return canvas._chemdraw_shortcut_service
 
 
 __all__ = ["CanvasChemdrawShortcutService", "canvas_chemdraw_shortcut_service_for"]

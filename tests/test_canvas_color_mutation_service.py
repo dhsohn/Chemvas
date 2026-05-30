@@ -254,7 +254,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         self.assertEqual(dot_item.brush().color().name(), "#fedcba")
         self.assertEqual(pushes, [])
 
-    def test_apply_ring_structure_color_covers_invalid_metadata_and_fallback_dispatch(self) -> None:
+    def test_apply_ring_structure_color_covers_invalid_metadata_and_dispatch(self) -> None:
         scene = QGraphicsScene()
         invalid_item = QGraphicsPathItem()
         invalid_item.setData(0, "ring")
@@ -276,18 +276,17 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
             atom_dots={},
             bond_items={7: []},
             bond_sets_for_atoms=mock.Mock(return_value=({7}, set())),
-            apply_color_to_item=None,
+            apply_color_to_item=mock.Mock(),
         )
         service = CanvasColorMutationService(fallback_canvas)
-        service.apply_color_to_item = mock.Mock()
 
         service._apply_ring_structure_color(invalid_item, QColor("#123456"))
         service._apply_ring_structure_color(empty_item, QColor("#123456"))
         service._apply_ring_structure_color(ring_item, QColor("#123456"))
 
-        service.apply_color_to_item.assert_called_once_with(atom_item, QColor("#123456"))
+        fallback_canvas.apply_color_to_item.assert_called_once_with(atom_item, QColor("#123456"))
 
-    def test_canvas_color_mutation_service_for_reuses_real_duck_typed_and_fallback_services(self) -> None:
+    def test_canvas_color_mutation_service_for_returns_bound_service(self) -> None:
         canvas = SimpleNamespace()
         real_service = CanvasColorMutationService(canvas)
         canvas._canvas_color_mutation_service = real_service
@@ -302,9 +301,10 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
 
         self.assertIs(canvas_color_mutation_service_for(canvas), duck_service)
 
-        canvas._canvas_color_mutation_service = object()
+        placeholder = object()
+        canvas._canvas_color_mutation_service = placeholder
 
-        self.assertIsInstance(canvas_color_mutation_service_for(canvas), CanvasColorMutationService)
+        self.assertIs(canvas_color_mutation_service_for(canvas), placeholder)
 
 
 if __name__ == "__main__":

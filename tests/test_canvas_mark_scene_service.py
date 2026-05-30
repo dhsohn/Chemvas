@@ -18,7 +18,7 @@ if QPointF is not None:
 
 @unittest.skipUnless(QPointF is not None, "PyQt6 is required for canvas mark scene service tests")
 class CanvasMarkSceneServiceTest(unittest.TestCase):
-    def test_missing_atom_paths_and_service_resolver_cover_fallback_branches(self) -> None:
+    def test_missing_atom_paths_and_service_resolver_return_bound_service(self) -> None:
         canvas = SimpleNamespace(
             model=SimpleNamespace(atoms={}),
             mark_kind="plus",
@@ -44,8 +44,9 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
         )
         other_canvas = SimpleNamespace(_canvas_mark_scene_service=injected)
         self.assertIs(canvas_mark_scene_service_for(other_canvas), injected)
-        fresh_canvas = SimpleNamespace()
-        self.assertIsInstance(canvas_mark_scene_service_for(fresh_canvas), CanvasMarkSceneService)
+        placeholder = object()
+        fresh_canvas = SimpleNamespace(_canvas_mark_scene_service=placeholder)
+        self.assertIs(canvas_mark_scene_service_for(fresh_canvas), placeholder)
 
     def test_add_mark_for_atom_uses_offset_and_forwards_to_add_mark(self) -> None:
         canvas = SimpleNamespace(

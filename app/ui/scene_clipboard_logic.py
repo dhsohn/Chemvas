@@ -7,6 +7,9 @@ from PyQt6.QtCore import QMimeData
 from PyQt6.QtWidgets import QGraphicsItem
 
 
+CLIPBOARD_SELECTION_FORMAT = "chemvas-selection"
+
+
 def build_selection_clipboard_payload(
     *,
     selected_items: Sequence[QGraphicsItem],
@@ -98,7 +101,7 @@ def build_selection_clipboard_payload(
     if not atoms and not marks and not rings and not scene_item_states:
         return None
     return {
-        "format": "lightdraw-selection",
+        "format": CLIPBOARD_SELECTION_FORMAT,
         "version": version,
         "atoms": atoms,
         "bonds": serialized_bonds,
@@ -112,7 +115,6 @@ def clipboard_payload_candidates(
     mime_data: QMimeData | None,
     *,
     mime_type: str,
-    cached_payload_json: str | None,
 ) -> list[str]:
     payload_candidates: list[str] = []
     if mime_data is not None and mime_data.hasFormat(mime_type):
@@ -120,14 +122,6 @@ def clipboard_payload_candidates(
             payload_candidates.append(bytes(mime_data.data(mime_type)).decode("utf-8"))
         except UnicodeDecodeError:
             pass
-    if (
-        cached_payload_json
-        and mime_data is not None
-        and mime_data.hasImage()
-        and not mime_data.hasText()
-        and cached_payload_json not in payload_candidates
-    ):
-        payload_candidates.append(cached_payload_json)
     return payload_candidates
 
 
@@ -143,7 +137,7 @@ def decode_clipboard_selection_payload(
             continue
         if not isinstance(payload, dict):
             continue
-        if payload.get("format") != "lightdraw-selection":
+        if payload.get("format") != CLIPBOARD_SELECTION_FORMAT:
             continue
         if payload.get("version") != version:
             continue
@@ -152,6 +146,7 @@ def decode_clipboard_selection_payload(
 
 
 __all__ = [
+    "CLIPBOARD_SELECTION_FORMAT",
     "build_selection_clipboard_payload",
     "clipboard_payload_candidates",
     "decode_clipboard_selection_payload",

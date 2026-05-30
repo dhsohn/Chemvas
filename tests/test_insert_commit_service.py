@@ -26,6 +26,7 @@ class _FakeCanvas:
         self.carbon_dots: list[int] = []
         self.ring_calls: list[list[tuple[float, float]]] = []
         self.benzene_calls: list[tuple[float, float, int | None]] = []
+        self._atom_label_service = SimpleNamespace(add_or_update_atom_label=self.add_or_update_atom_label)
 
     def add_atom(self, element: str, x: float, y: float) -> int:
         self.add_atom_calls.append((element, x, y))

@@ -172,7 +172,7 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
         self.assertEqual(bonding_items[0].brush().color(), bonding_items[1].brush().color())
         self.assertEqual(unknown_items, [])
 
-    def test_scene_decoration_build_service_factory_reuses_real_duck_typed_and_fallback_services(self) -> None:
+    def test_scene_decoration_build_service_factory_returns_bound_service(self) -> None:
         self.canvas._scene_decoration_build_service = self.service
         self.assertIs(canvas_scene_decoration_build_service_for(self.canvas), self.service)
 
@@ -199,11 +199,9 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
         self.canvas._scene_decoration_build_service = duck_service
         self.assertIs(canvas_scene_decoration_build_service_for(self.canvas), duck_service)
 
-        self.canvas._scene_decoration_build_service = object()
-        self.assertIsInstance(
-            canvas_scene_decoration_build_service_for(self.canvas),
-            CanvasSceneDecorationBuildService,
-        )
+        placeholder = object()
+        self.canvas._scene_decoration_build_service = placeholder
+        self.assertIs(canvas_scene_decoration_build_service_for(self.canvas), placeholder)
 
     def test_mark_helpers_build_supported_items_and_center_text(self) -> None:
         radical = self.service.build_mark_item("radical")

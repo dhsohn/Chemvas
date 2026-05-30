@@ -46,6 +46,7 @@ class _FakeWindow:
         self._update_zoom_label = mock.Mock()
         self._update_action_availability = mock.Mock()
         self._handle_selection_info = mock.Mock()
+        self._show_error_message = mock.Mock()
 
     @property
     def canvas(self):

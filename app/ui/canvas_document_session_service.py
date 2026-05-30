@@ -22,7 +22,7 @@ class CanvasDocumentSessionService:
         try:
             self.canvas.clear_scene()
             apply_document_settings(self.canvas, state)
-            self.canvas.model = deserialize_model_state(state.get("model", {}))
+            self.canvas.model = deserialize_model_state(state["model"])
             self.canvas._rebuild_bond_adjacency()
             restore_document_pre_model_items(self.canvas, state)
             self.canvas._render_model()
@@ -35,9 +35,7 @@ class CanvasDocumentSessionService:
         self.apply_state(state)
         self.canvas._history = []
         self.canvas._redo_stack = []
-        notify_history_change = getattr(self.canvas, "_notify_history_change", None)
-        if callable(notify_history_change):
-            notify_history_change()
+        self.canvas._notify_history_change()
 
     def save_to_file(self, path: str) -> None:
         write_document(path, self.snapshot_state(), self.canvas.FILE_FORMAT_VERSION)

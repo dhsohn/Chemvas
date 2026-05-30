@@ -127,7 +127,7 @@ class CanvasDocumentStateTest(unittest.TestCase):
         self.assertEqual(state["settings"]["sheet_orientation"], "portrait")
         self.assertEqual(state["last_smiles_input"], "CCO")
 
-    def test_apply_document_settings_uses_state_values_and_preserves_missing_defaults(self) -> None:
+    def test_apply_document_settings_uses_state_values(self) -> None:
         canvas = SimpleNamespace(
             renderer=SimpleNamespace(
                 style=SimpleNamespace(bond_length_px=18.0),
@@ -150,8 +150,13 @@ class CanvasDocumentStateTest(unittest.TestCase):
             {
                 "settings": {
                     "bond_length_px": 22.0,
+                    "arrow_line_width": 1.7,
                     "arrow_head_scale": 0.5,
+                    "orbital_phase_enabled": True,
+                    "text_font_size": 14,
+                    "text_font_weight": 500,
                     "text_italic": True,
+                    "sheet_size": "Letter",
                     "sheet_orientation": "portrait",
                 },
                 "last_smiles_input": "after",
@@ -159,12 +164,12 @@ class CanvasDocumentStateTest(unittest.TestCase):
         )
 
         canvas.renderer.set_bond_length.assert_called_once_with(22.0)
-        canvas.set_sheet_setup.assert_called_once_with("A4", "portrait")
-        self.assertEqual(canvas.arrow_line_width, 1.0)
+        canvas.set_sheet_setup.assert_called_once_with("Letter", "portrait")
+        self.assertEqual(canvas.arrow_line_width, 1.7)
         self.assertEqual(canvas.arrow_head_scale, 0.5)
-        self.assertFalse(canvas.orbital_phase_enabled)
-        self.assertEqual(canvas.text_font_size, 12)
-        self.assertEqual(canvas.text_font_weight, 400)
+        self.assertTrue(canvas.orbital_phase_enabled)
+        self.assertEqual(canvas.text_font_size, 14)
+        self.assertEqual(canvas.text_font_weight, 500)
         self.assertTrue(canvas.text_italic)
         self.assertEqual(canvas.last_smiles_input, "after")
 
@@ -216,7 +221,7 @@ class CanvasDocumentStateTest(unittest.TestCase):
             ],
         )
 
-    def test_restore_document_items_fall_back_to_canvas_wrappers(self) -> None:
+    def test_restore_document_items_require_scene_item_controller(self) -> None:
         canvas = _Canvas()
         state = {
             "ring_fills": [{"points": [(0.0, 0.0)]}],
@@ -227,41 +232,8 @@ class CanvasDocumentStateTest(unittest.TestCase):
             "orbitals": [{"center": (3.0, 4.0)}],
         }
 
-        restore_document_pre_model_items(canvas, state)
-        restore_document_post_model_items(canvas, state)
-
-        self.assertEqual(
-            canvas.calls,
-            [
-                ("canvas_ring", {"points": [(0.0, 0.0)]}),
-                ("canvas_note", {"text": "note", "x": 1.0, "y": 2.0}),
-                (
-                    "canvas_mark",
-                    {
-                        "kind": "mark",
-                        "mark_kind": "plus",
-                        "text": "+",
-                        "atom_id": None,
-                        "dx": None,
-                        "dy": None,
-                        "x": 4.0,
-                        "y": 5.0,
-                    },
-                ),
-                ("canvas_arrow", {"kind": "equilibrium"}),
-                ("canvas_ts", {"kind": "ts_bracket", "rect": (0.0, 0.0, 2.0, 2.0)}),
-                (
-                    "canvas_orbital",
-                    {
-                        "kind": "orbital",
-                        "orbital_kind": "s",
-                        "center": (3.0, 4.0),
-                        "scale": 1.0,
-                        "rotation": 0.0,
-                    },
-                ),
-            ],
-        )
+        with self.assertRaises(AttributeError):
+            restore_document_pre_model_items(canvas, state)
 
 
 if __name__ == "__main__":

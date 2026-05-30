@@ -118,10 +118,9 @@ class SelectionHighlightStylerTest(unittest.TestCase):
         canvas._selection_highlight_styler = duck
         self.assertIs(selection_highlight_styler_for(canvas), duck)
 
-        canvas._selection_highlight_styler = SimpleNamespace(set_selection_highlight=lambda items: None)
-        fallback = selection_highlight_styler_for(canvas)
-        self.assertIsInstance(fallback, SelectionHighlightStyler)
-        self.assertIs(fallback.canvas, canvas)
+        placeholder = object()
+        canvas._selection_highlight_styler = placeholder
+        self.assertIs(selection_highlight_styler_for(canvas), placeholder)
 
 
 if __name__ == "__main__":

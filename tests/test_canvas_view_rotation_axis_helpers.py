@@ -13,6 +13,7 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from core.model import Atom, Bond
+    from ui.canvas_graph_service import CanvasGraphService
     from ui.canvas_view import CanvasView
 
 
@@ -33,12 +34,13 @@ class CanvasViewRotationAxisHelperTest(unittest.TestCase):
     def test_rotation_side_for_bond_prefers_selected_side_endpoint_and_fallback(self) -> None:
         view = SimpleNamespace(
             model=SimpleNamespace(bonds=[Bond(1, 2, 1)]),
-            _component_without_bond=_component_lookup(
-                {
-                    (1, 0): {1, 3},
-                    (2, 0): {2, 4, 5},
-                }
-            ),
+        )
+        view._canvas_graph_service = CanvasGraphService(view)
+        view._canvas_graph_service.component_without_bond = _component_lookup(
+            {
+                (1, 0): {1, 3},
+                (2, 0): {2, 4, 5},
+            }
         )
 
         self.assertEqual(CanvasView._rotation_side_for_bond(view, 0, {1, 3}, allow_fallback=False), {1, 3})
@@ -58,12 +60,13 @@ class CanvasViewRotationAxisHelperTest(unittest.TestCase):
                 },
             ),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
-            _component_without_bond=_component_lookup(
-                {
-                    (1, 0): {1, 3, 6},
-                    (2, 0): {2, 4, 5, 7},
-                }
-            ),
+        )
+        view._canvas_graph_service = CanvasGraphService(view)
+        view._canvas_graph_service.component_without_bond = _component_lookup(
+            {
+                (1, 0): {1, 3, 6},
+                (2, 0): {2, 4, 5, 7},
+            }
         )
 
         self.assertEqual(CanvasView._preferred_rotation_side_for_bond(view, 0, {1, 3}, allow_fallback=True), {1, 3, 6})
@@ -103,10 +106,11 @@ class CanvasViewRotationAxisHelperTest(unittest.TestCase):
             _rotation_axis_cache_version=5,
             _graph_version=5,
             model=SimpleNamespace(bonds=[Bond(1, 2, 1)]),
-            _bond_is_rotatable=mock.Mock(return_value=True),
-            _preferred_rotation_side_for_bond=preferred,
-            _rotation_side_for_bond=mock.Mock(),
         )
+        view._canvas_graph_service = CanvasGraphService(view)
+        view._canvas_graph_service.bond_is_rotatable = mock.Mock(return_value=True)
+        view._canvas_graph_service.preferred_rotation_side_for_bond = preferred
+        view._canvas_graph_service.rotation_side_for_bond = mock.Mock()
 
         first = CanvasView._rotatable_axis_from_selection(view, {1, 2}, {0})
         second = CanvasView._rotatable_axis_from_selection(view, {1, 2}, {0})
@@ -134,10 +138,11 @@ class CanvasViewRotationAxisHelperTest(unittest.TestCase):
                     Bond(3, 4, 1),
                 ]
             ),
-            _bond_is_rotatable=mock.Mock(side_effect=lambda bond_id: bond_id in {0, 1}),
-            _preferred_rotation_side_for_bond=mock.Mock(return_value=None),
-            _rotation_side_for_bond=leaf_rotation,
         )
+        leaf_view._canvas_graph_service = CanvasGraphService(leaf_view)
+        leaf_view._canvas_graph_service.bond_is_rotatable = mock.Mock(side_effect=lambda bond_id: bond_id in {0, 1})
+        leaf_view._canvas_graph_service.preferred_rotation_side_for_bond = mock.Mock(return_value=None)
+        leaf_view._canvas_graph_service.rotation_side_for_bond = leaf_rotation
 
         self.assertEqual(CanvasView._rotatable_axis_from_selection(leaf_view, set(), {0, 1}), (1, {2, 3}))
         leaf_rotation.assert_called_once_with(1, {1, 2, 3}, allow_fallback=True)
@@ -153,10 +158,11 @@ class CanvasViewRotationAxisHelperTest(unittest.TestCase):
                     Bond(2, 3, 1),
                 ]
             ),
-            _bond_is_rotatable=mock.Mock(side_effect=lambda bond_id: bond_id == 1),
-            _preferred_rotation_side_for_bond=mock.Mock(return_value=None),
-            _rotation_side_for_bond=boundary_rotation,
         )
+        boundary_view._canvas_graph_service = CanvasGraphService(boundary_view)
+        boundary_view._canvas_graph_service.bond_is_rotatable = mock.Mock(side_effect=lambda bond_id: bond_id == 1)
+        boundary_view._canvas_graph_service.preferred_rotation_side_for_bond = mock.Mock(return_value=None)
+        boundary_view._canvas_graph_service.rotation_side_for_bond = boundary_rotation
 
         self.assertEqual(CanvasView._rotatable_axis_from_selection(boundary_view, {1, 2}, set()), (1, {1, 2}))
         boundary_rotation.assert_called_once_with(1, {1, 2}, allow_fallback=False)
@@ -166,10 +172,11 @@ class CanvasViewRotationAxisHelperTest(unittest.TestCase):
             _rotation_axis_cache_version=3,
             _graph_version=3,
             model=SimpleNamespace(bonds=[]),
-            _bond_is_rotatable=mock.Mock(return_value=False),
-            _preferred_rotation_side_for_bond=mock.Mock(return_value=None),
-            _rotation_side_for_bond=mock.Mock(return_value=None),
         )
+        none_view._canvas_graph_service = CanvasGraphService(none_view)
+        none_view._canvas_graph_service.bond_is_rotatable = mock.Mock(return_value=False)
+        none_view._canvas_graph_service.preferred_rotation_side_for_bond = mock.Mock(return_value=None)
+        none_view._canvas_graph_service.rotation_side_for_bond = mock.Mock(return_value=None)
 
         self.assertIsNone(CanvasView._rotatable_axis_from_selection(none_view, set(), set()))
 
