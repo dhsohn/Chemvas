@@ -44,15 +44,7 @@ class SelectionHighlightStyler:
 
 
 def selection_highlight_styler_for(canvas) -> SelectionHighlightStyler:
-    styler = getattr(canvas, "_selection_highlight_styler", None)
-    if isinstance(styler, SelectionHighlightStyler) and styler.canvas is canvas:
-        return styler
-    if styler is not None and all(
-        hasattr(styler, name)
-        for name in ("set_selection_highlight", "clear_selection_highlight", "apply_selection_style")
-    ):
-        return styler
-    return SelectionHighlightStyler(canvas)
+    return canvas._selection_highlight_styler
 
 
 __all__ = ["SelectionHighlightStyler", "selection_highlight_styler_for"]

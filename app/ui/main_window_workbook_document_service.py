@@ -6,8 +6,6 @@ from core.document_io import write_document
 from ui.main_window_canvas_logic import (
     build_workbook_sheet_states,
     canvas_sheet_name_counter,
-    clamp_active_sheet_index,
-    coerce_active_sheet_index,
     restorable_canvas_sheets,
 )
 
@@ -44,26 +42,26 @@ class MainWindowWorkbookDocumentService:
         window._refresh_active_canvas_ui()
 
     def restore_workbook_document(self, window, state: dict) -> None:
+        sheets = restorable_canvas_sheets(state["sheets"])
+        active_sheet_index = state["active_sheet_index"]
+        if (
+            type(active_sheet_index) is not int
+            or active_sheet_index < 0
+            or active_sheet_index >= len(sheets)
+        ):
+            raise ValueError("Invalid Chemvas file.")
+
         window._suspend_canvas_tab_reactions = True
         self.clear_canvas_sheets(window)
-        for sheet in restorable_canvas_sheets(
-            state.get("sheets", []),
-            default_name_factory=window._next_canvas_sheet_name,
-        ):
+        for sheet in sheets:
             window._add_canvas_sheet(
                 name=sheet.name,
                 state=sheet.content,
                 select=False,
             )
-        if window._canvas_sheet_count() == 0:
-            window._add_canvas_sheet(name="Sheet 1", select=True)
         canvas_entries = window._canvas_tab_entries()
         window._canvas_name_counter = canvas_sheet_name_counter(
             [window.canvas_tabs.tabText(tab_index) for tab_index, _ in canvas_entries]
-        )
-        active_sheet_index = clamp_active_sheet_index(
-            coerce_active_sheet_index(state.get("active_sheet_index", 0)),
-            len(canvas_entries),
         )
         active_tab_index = canvas_entries[active_sheet_index][0]
         window.canvas_tabs.setCurrentIndex(active_tab_index)

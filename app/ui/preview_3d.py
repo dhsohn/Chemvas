@@ -159,13 +159,9 @@ class Preview3D(QWidget):
         self._safe_update()
 
     def _ensure_rdkit_loaded_for_worker(self) -> bool:
-        is_loaded = getattr(self._rdkit, "is_loaded", None)
-        if callable(is_loaded) and is_loaded():
+        if self._rdkit.is_loaded():
             return True
-        preload = getattr(self._rdkit, "preload", None)
-        if not callable(preload):
-            return True
-        if preload():
+        if self._rdkit.preload():
             return True
         self.clear_preview(self._rdkit.last_error or "RDKit is not available in this environment.")
         return False

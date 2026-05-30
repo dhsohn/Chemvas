@@ -245,7 +245,7 @@ class CanvasRingFillSceneServiceTest(unittest.TestCase):
         self.assertEqual(item.brush().color().name(), brush.color().name())
         canvas._make_selectable.assert_called_once_with(item)
 
-    def test_service_resolver_reuses_bound_or_duck_typed_service(self) -> None:
+    def test_service_resolver_returns_bound_service(self) -> None:
         canvas = SimpleNamespace()
         bound = CanvasRingFillSceneService(canvas)
         canvas._canvas_ring_fill_scene_service = bound
@@ -260,10 +260,9 @@ class CanvasRingFillSceneServiceTest(unittest.TestCase):
         other_canvas = SimpleNamespace(_canvas_ring_fill_scene_service=injected)
         self.assertIs(canvas_ring_fill_scene_service_for(other_canvas), injected)
 
-        fresh_canvas = SimpleNamespace()
-        resolved = canvas_ring_fill_scene_service_for(fresh_canvas)
-        self.assertIsInstance(resolved, CanvasRingFillSceneService)
-        self.assertIs(resolved.canvas, fresh_canvas)
+        placeholder = object()
+        fresh_canvas = SimpleNamespace(_canvas_ring_fill_scene_service=placeholder)
+        self.assertIs(canvas_ring_fill_scene_service_for(fresh_canvas), placeholder)
 
 
 if __name__ == "__main__":

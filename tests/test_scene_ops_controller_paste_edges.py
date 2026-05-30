@@ -102,7 +102,7 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
 
         controller._clipboard_selection_payload = lambda: (
             {
-                "format": "lightdraw-selection",
+                "format": "chemvas-selection",
                 "version": 1,
                 "atoms": [],
                 "bonds": [],
@@ -134,7 +134,7 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
         canvas.translate_empty_kinds = {"skip"}
         controller = SceneOpsController(canvas)
         payload = {
-            "format": "lightdraw-selection",
+            "format": "chemvas-selection",
             "version": 1,
             "atoms": [
                 "bad-atom",
@@ -166,7 +166,7 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
         canvas.translate_empty_kinds = {"skip"}
         controller = SceneOpsController(canvas)
         payload = {
-            "format": "lightdraw-selection",
+            "format": "chemvas-selection",
             "version": 1,
             "atoms": [
                 {"id": 10, "element": "C", "x": 5.0, "y": 7.0, "color": "#123456", "explicit_label": True},
@@ -216,19 +216,17 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
         item.setData(9, {"kind": "note", "text": "flat", "x": 0.0, "y": 0.0})
         canvas.add_item(item, selected=True)
         controller._selection_payload_for_clipboard = lambda: {
-            "format": "lightdraw-selection",
+            "format": "chemvas-selection",
             "version": 1,
             "scene_items": [{"kind": "note", "text": "flat", "x": 0.0, "y": 0.0}],
         }
 
         self.assertFalse(controller.copy_selection_to_clipboard())
-        self.assertIsNone(canvas._clipboard_selection_payload_json)
         self.assertIsNone(canvas._clipboard_paste_source_json)
         self.assertEqual(canvas._clipboard_paste_count, 0)
 
-    def test_copy_selection_to_clipboard_resets_cached_payload_when_copy_has_no_selection_data(self) -> None:
+    def test_copy_selection_to_clipboard_resets_paste_source_when_copy_has_no_selection_data(self) -> None:
         canvas = _RecordingFakeCanvas()
-        canvas._clipboard_selection_payload_json = "stale-selection"
         canvas._clipboard_paste_source_json = "stale-source"
         canvas._clipboard_paste_count = 4
         controller = SceneOpsController(canvas)
@@ -237,7 +235,6 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
         controller._selection_payload_for_clipboard = lambda: None
 
         self.assertTrue(controller.copy_selection_to_clipboard())
-        self.assertIsNone(canvas._clipboard_selection_payload_json)
         self.assertIsNone(canvas._clipboard_paste_source_json)
         self.assertEqual(canvas._clipboard_paste_count, 0)
         mime_data = QApplication.clipboard().mimeData()

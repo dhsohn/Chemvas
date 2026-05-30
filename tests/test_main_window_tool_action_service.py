@@ -21,6 +21,10 @@ class _HarnessWindow(QMainWindow):
         self.canvas = SimpleNamespace(set_mark_kind=mock.Mock())
         self._set_tool_with_status = mock.Mock()
         self._set_bond_style = mock.Mock()
+        self._refresh_status_context = mock.Mock()
+
+    def _show_status_message(self, message: str) -> None:
+        self.statusBar().showMessage(message)
 
     def _new_tool_action(self, label: str):
         from PyQt6.QtGui import QAction

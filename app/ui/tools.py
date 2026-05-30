@@ -222,9 +222,7 @@ class SelectTool(_SelectionDragMixin, Tool):
         self._pending_curved_handle_action = None
 
     def _curved_handle_toggle_action_for_item(self, item) -> str:
-        handles = getattr(self.canvas, "_active_handles", [])
-        handle_target = getattr(self.canvas, "_handle_target", None)
-        if handle_target is item and bool(handles):
+        if self.canvas._handle_target is item and bool(self.canvas._active_handles):
             return "hide"
         return "show"
 
@@ -233,8 +231,7 @@ class SelectTool(_SelectionDragMixin, Tool):
         atom_ids, selection_items = self._selection_drag_context(snapshot)
         if not atom_ids and not selection_items:
             return False
-        handle_target = getattr(self.canvas, "_handle_target", None)
-        if handle_target is not None and handle_target is not item:
+        if self.canvas._handle_target is not None and self.canvas._handle_target is not item:
             self.canvas.clear_handles()
         self._pending_curved_handle_item = item
         self._pending_curved_handle_action = self._curved_handle_toggle_action_for_item(item)
@@ -481,11 +478,9 @@ class BondTool(Tool):
 
     def _clear_existing_selection(self) -> None:
         scene = self.canvas.scene()
-        selected_items = getattr(scene, "selectedItems", None)
-        if callable(selected_items) and selected_items():
+        if scene.selectedItems():
             scene.clearSelection()
-        selected_notes = getattr(self.canvas, "selected_notes", None)
-        if selected_notes:
+        if self.canvas.selected_notes:
             self.canvas.clear_note_selection()
 
     def on_mouse_press(self, event) -> bool:
@@ -499,10 +494,10 @@ class BondTool(Tool):
             self.canvas.renderer.style.bond_length_px * 0.35,
         )
         item = self.canvas.item_at_event(event)
-        if item is None and hasattr(self.canvas, "preferred_structure_item_at_scene_pos"):
+        if item is None:
             item = self.canvas.preferred_structure_item_at_scene_pos(press_pos)
         nearby_bond_id = None
-        if atom_id is None and hasattr(self.canvas, "_find_bond_near"):
+        if atom_id is None:
             nearby_bond_id = self.canvas._find_bond_near(
                 press_pos,
                 self.canvas.renderer.style.bond_length_px * 0.35,
@@ -555,7 +550,7 @@ class BondTool(Tool):
             self.canvas.renderer.style.bond_length_px * 0.35,
         )
         bond_id = None
-        if atom_id is None and hasattr(self.canvas, "_find_bond_near"):
+        if atom_id is None:
             bond_id = self.canvas._find_bond_near(pos, self.canvas.renderer.style.bond_length_px * 0.2)
         target = resolve_bond_snap_target(
             self.canvas.model,

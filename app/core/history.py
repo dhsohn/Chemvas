@@ -100,21 +100,16 @@ class SetAtomPositionsCommand(HistoryCommand):
         projection_anchor_2d: tuple[float, float] | None,
     ) -> None:
         if self.restore_projection_state:
-            if hasattr(canvas, "_projection_center_3d"):
-                canvas._projection_center_3d = projection_center_3d
-            if hasattr(canvas, "_projection_anchor_2d"):
-                canvas._projection_anchor_2d = projection_anchor_2d
+            canvas._projection_center_3d = projection_center_3d
+            canvas._projection_anchor_2d = projection_anchor_2d
         if coords_3d is None:
             canvas.set_atom_positions(positions, update_selection=self.update_selection)
             return
-        try:
-            canvas.set_atom_positions(
-                positions,
-                update_selection=self.update_selection,
-                coords_3d=coords_3d,
-            )
-        except TypeError:
-            canvas.set_atom_positions(positions, update_selection=self.update_selection)
+        canvas.set_atom_positions(
+            positions,
+            update_selection=self.update_selection,
+            coords_3d=coords_3d,
+        )
 
     def undo(self, canvas) -> None:
         self._apply(

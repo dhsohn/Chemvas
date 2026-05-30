@@ -324,6 +324,7 @@ class _TextCanvas:
         self.nearby_atom_calls = []
         self.label_calls = []
         self.model = MoleculeModel(atoms={1: Atom("C", 5.0, 6.0)}, bonds=[])
+        self._atom_label_service = SimpleNamespace(add_or_update_atom_label=self.add_or_update_atom_label)
 
     def scene_pos_from_event(self, event):
         return event.position()

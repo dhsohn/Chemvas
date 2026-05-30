@@ -15,6 +15,8 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from core.model import Atom, Bond
+    from ui.canvas_graph_service import CanvasGraphService
+    from ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
     from ui.canvas_view import CanvasView
 
 
@@ -183,6 +185,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
                 3: {2},
             },
         )
+        classified_view._canvas_graph_service = CanvasGraphService(classified_view)
 
         internal, boundary = CanvasView.bond_sets_for_atoms(classified_view, {1, 2, 3})
         self.assertEqual(internal, {0, 1})
@@ -198,6 +201,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
             ),
             _atom_bond_ids={},
         )
+        fallback_view._canvas_graph_service = CanvasGraphService(fallback_view)
 
         internal, boundary = CanvasView.bond_sets_for_atoms(fallback_view, {5, 6})
         self.assertEqual(internal, {0})
@@ -238,6 +242,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
                 ]
             )
         )
+        view._canvas_graph_service = CanvasGraphService(view)
 
         self.assertEqual(CanvasView._expand_connected_atoms(view, {1}), {1, 2, 3})
         self.assertEqual(CanvasView._expand_connected_atoms(view, {4}), {4, 5})
@@ -260,6 +265,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
             ),
             ring_items=[matching_ring, non_matching_ring, invalid_ring],
         )
+        view._canvas_ring_fill_scene_service = CanvasRingFillSceneService(view)
 
         CanvasView._update_ring_fills_for_atoms(view, {1, 2, 3})
 

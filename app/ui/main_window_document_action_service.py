@@ -58,7 +58,7 @@ class MainWindowDocumentActionService:
             window,
             "Save Drawing As",
             window._default_save_dialog_path(),
-            "Chemvas (*.chemvas);;Legacy files (*.ldraw);;JSON (*.json);;All Files (*)",
+            "Chemvas (*.chemvas);;JSON (*.json);;All Files (*)",
         )
         path = resolve_save_as_path(dialog_path)
         if path is None:
@@ -75,34 +75,29 @@ class MainWindowDocumentActionService:
         path = window._normalize_xyz_export_path(dialog_path)
         if path is None:
             return
-        export_async = getattr(window.canvas, "export_xyz_async", None)
-        canvas_export = getattr(window.canvas, "export_xyz", None)
-        export_is_default_bound_method = getattr(canvas_export, "__self__", None) is window.canvas
-        if callable(export_async) and export_is_default_bound_method:
-            window.statusBar().showMessage(f"Exporting XYZ: {path}")
-            export_async(
-                path,
-                on_success=lambda export_path: window.statusBar().showMessage(f"Exported XYZ: {export_path}", 4000),
-                on_error=lambda message: message_box.warning(
-                    window,
-                    "Export Error",
-                    f"Failed to export XYZ:\n{message}",
-                ),
+        previous_status = window.statusBar().currentMessage()
+
+        def handle_error(message: str) -> None:
+            message_box.warning(
+                window,
+                "Export Error",
+                f"Failed to export XYZ:\n{message}",
             )
-            return
-        try:
-            window.canvas.export_xyz(path)
-        except Exception as exc:
-            message_box.warning(window, "Export Error", f"Failed to export XYZ:\n{exc}")
-            return
-        window.statusBar().showMessage(f"Exported XYZ: {path}", 4000)
+            window.statusBar().showMessage(previous_status)
+
+        window.statusBar().showMessage(f"Exporting XYZ: {path}")
+        window.canvas.export_xyz_async(
+            path,
+            on_success=lambda export_path: window.statusBar().showMessage(f"Exported XYZ: {export_path}", 4000),
+            on_error=handle_error,
+        )
 
     def load_canvas(self, window, *, file_dialog, message_box, read_document, resolve_load_path) -> None:
         dialog_path, _ = file_dialog.getOpenFileName(
             window,
             "Load Drawing",
             "",
-            "Chemvas and legacy files (*.chemvas *.ldraw);;JSON (*.json);;All Files (*)",
+            "Chemvas (*.chemvas);;JSON (*.json);;All Files (*)",
         )
         path = resolve_load_path(dialog_path)
         if path is None:

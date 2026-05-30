@@ -18,8 +18,12 @@ if QApplication is not None:
         UpdateBondCommand,
     )
     from core.model import Atom, Bond
+    from ui.canvas_color_mutation_service import CanvasColorMutationService
+    from ui.canvas_note_controller import CanvasNoteController
     from ui.canvas_view import CanvasView
+    from ui.curved_arrow_path_service import CurvedArrowPathService
     from ui.history_commands import UpdateSceneItemCommand
+    from ui.selection_controller import SelectionController
 
 
 class _FakeCommand:
@@ -612,19 +616,19 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         handle_overlay_service.create_handle.assert_called_once_with(QPointF(1.0, 2.0), "orbital_scale", item)
 
     def test_handle_mutation_wrappers_delegate(self) -> None:
-        handle_mutation_service = mock.Mock()
+        handle_controller = mock.Mock()
         item = object()
-        view = SimpleNamespace(_handle_mutation_service=handle_mutation_service)
+        view = SimpleNamespace(_handle_controller=handle_controller)
 
         CanvasView._update_orbital_scale(view, item, QPointF(3.0, 4.0))
         CanvasView._update_orbital_rotate(view, item, QPointF(5.0, 6.0))
         CanvasView._update_curved_control(view, item, QPointF(7.0, 8.0))
         CanvasView._update_curved_endpoint(view, item, QPointF(9.0, 10.0), "start")
 
-        handle_mutation_service.update_orbital_scale.assert_called_once_with(item, QPointF(3.0, 4.0))
-        handle_mutation_service.update_orbital_rotate.assert_called_once_with(item, QPointF(5.0, 6.0))
-        handle_mutation_service.update_curved_control.assert_called_once_with(item, QPointF(7.0, 8.0))
-        handle_mutation_service.update_curved_endpoint.assert_called_once_with(item, QPointF(9.0, 10.0), "start")
+        handle_controller.update_orbital_scale.assert_called_once_with(item, QPointF(3.0, 4.0))
+        handle_controller.update_orbital_rotate.assert_called_once_with(item, QPointF(5.0, 6.0))
+        handle_controller.update_curved_control.assert_called_once_with(item, QPointF(7.0, 8.0))
+        handle_controller.update_curved_endpoint.assert_called_once_with(item, QPointF(9.0, 10.0), "start")
 
     def test_curved_arrow_path_wrapper_delegates(self) -> None:
         curved_arrow_path_service = mock.Mock()
@@ -1035,6 +1039,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
     def test_set_curved_arrow_path_builds_path_and_arrow_heads(self) -> None:
         path_item = QGraphicsPathItem()
         view = SimpleNamespace(_add_arrow_head=mock.Mock())
+        view._curved_arrow_path_service = CurvedArrowPathService(view)
 
         CanvasView._set_curved_arrow_path(
             view,
@@ -1197,55 +1202,19 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         color_service.apply_color_to_item.assert_called_once_with(ring_item, color)
         color_service.apply_ring_fill_color.assert_called_once_with(ring_item, color, alpha=0.5)
 
-    def test_scene_event_and_item_hit_helpers_cover_fallback_paths(self) -> None:
-        class _PositionEvent:
-            def position(self):
-                return SimpleNamespace(toPoint=lambda: "position-point")
-
-        class _PosEvent:
-            def pos(self):
-                return "pos-point"
-
-        viewport = SimpleNamespace(mapFromGlobal=lambda pos: "global-point")
-        event_view = SimpleNamespace(
-            mapToScene=lambda value: QPointF(1.0, 2.0)
-            if value == "position-point"
-            else QPointF(3.0, 4.0)
-            if value == "pos-point"
-            else QPointF(5.0, 6.0),
-            viewport=lambda: viewport,
+    def test_scene_event_and_item_hit_helpers_delegate_to_hit_testing_service(self) -> None:
+        event = object()
+        pos = QPointF(2.0, 3.0)
+        service = SimpleNamespace(
+            scene_pos_from_event=mock.Mock(return_value=QPointF(1.0, 2.0)),
+            item_at_scene_pos=mock.Mock(return_value="item"),
         )
-        self.assertEqual(CanvasView.scene_pos_from_event(event_view, _PositionEvent()), QPointF(1.0, 2.0))
-        self.assertEqual(CanvasView.scene_pos_from_event(event_view, _PosEvent()), QPointF(3.0, 4.0))
-        self.assertEqual(CanvasView.scene_pos_from_event(event_view, object()), QPointF(5.0, 6.0))
+        view = SimpleNamespace(_hit_testing_service=service)
 
-        atom_item = _FakeItem("atom")
-        hit_scene = _FakeScene(
-            items_at_pos=[
-                _FakeItem("selection_outline"),
-                _FakeItem("note_select"),
-                _FakeItem("bond"),
-                _FakeItem("ring"),
-                atom_item,
-            ]
-        )
-        hit_view = SimpleNamespace(
-            scene=lambda: hit_scene,
-            _find_bond_near=mock.Mock(return_value=None),
-            _bond_pick_radius=mock.Mock(return_value=9.0),
-            bond_items={},
-        )
-        self.assertIs(CanvasView.item_at_scene_pos(hit_view, QPointF(0.0, 0.0)), atom_item)
-
-        nearby_bond_graphic = _FakeItem("bond_graphic")
-        fallback_scene = _FakeScene(items_at_pos=[_FakeItem("note_box"), _FakeItem("other")])
-        fallback_view = SimpleNamespace(
-            scene=lambda: fallback_scene,
-            _find_bond_near=mock.Mock(return_value=4),
-            _bond_pick_radius=mock.Mock(return_value=7.0),
-            bond_items={4: [nearby_bond_graphic]},
-        )
-        self.assertIs(CanvasView.item_at_scene_pos(fallback_view, QPointF(2.0, 2.0)), nearby_bond_graphic)
+        self.assertEqual(CanvasView.scene_pos_from_event(view, event), QPointF(1.0, 2.0))
+        self.assertEqual(CanvasView.item_at_scene_pos(view, pos), "item")
+        service.scene_pos_from_event.assert_called_once_with(event)
+        service.item_at_scene_pos.assert_called_once_with(pos)
 
     def test_pick_radius_and_nearest_hit_helpers_cover_missing_and_success_paths(self) -> None:
         radius_view = SimpleNamespace(
@@ -1254,35 +1223,16 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         self.assertEqual(CanvasView._atom_pick_radius(radius_view), 6.4)
 
         atom_view = SimpleNamespace(
-            find_atom_near=mock.Mock(return_value=1),
-            _atom_pick_radius=mock.Mock(return_value=5.0),
-            model=SimpleNamespace(atoms={1: Atom("C", 3.0, 4.0)}),
+            _hit_testing_service=SimpleNamespace(nearest_atom_hit=mock.Mock(return_value=(1, 5.0))),
         )
         atom_hit = CanvasView._nearest_atom_hit(atom_view, QPointF(0.0, 0.0))
         self.assertEqual(atom_hit, (1, 5.0))
-        atom_view.find_atom_near.return_value = None
-        self.assertIsNone(CanvasView._nearest_atom_hit(atom_view, QPointF(0.0, 0.0)))
-        atom_view.find_atom_near.return_value = 2
-        self.assertIsNone(CanvasView._nearest_atom_hit(atom_view, QPointF(0.0, 0.0)))
 
         bond_view = SimpleNamespace(
-            _find_bond_near=mock.Mock(return_value=0),
-            _bond_pick_radius=mock.Mock(return_value=9.0),
-            model=SimpleNamespace(
-                bonds=[Bond(1, 2, 1), None],
-                atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 10.0, 0.0)},
-            ),
-            _distance_point_to_segment=CanvasView._distance_point_to_segment,
+            _hit_testing_service=SimpleNamespace(nearest_bond_hit=mock.Mock(return_value=(0, 2.0))),
         )
         bond_hit = CanvasView._nearest_bond_hit(bond_view, QPointF(5.0, 2.0))
         self.assertEqual(bond_hit, (0, 2.0))
-        bond_view._find_bond_near.return_value = None
-        self.assertIsNone(CanvasView._nearest_bond_hit(bond_view, QPointF(0.0, 0.0)))
-        bond_view._find_bond_near.return_value = 1
-        self.assertIsNone(CanvasView._nearest_bond_hit(bond_view, QPointF(0.0, 0.0)))
-        bond_view._find_bond_near.return_value = 0
-        bond_view.model.atoms.pop(2)
-        self.assertIsNone(CanvasView._nearest_bond_hit(bond_view, QPointF(0.0, 0.0)))
 
     def test_style_and_text_setting_helpers_clamp_values_and_apply_presets(self) -> None:
         style_view = SimpleNamespace(
@@ -1425,6 +1375,8 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         note_view._update_note_box = lambda target: CanvasView._update_note_box(note_view, target)
         note_view._update_note_selection_box = lambda target: CanvasView._update_note_selection_box(note_view, target)
         note_view._apply_note_style = lambda target: CanvasView._apply_note_style(note_view, target)
+        note_view._selection_controller = SelectionController(note_view)
+        note_view._note_controller = CanvasNoteController(note_view)
 
         CanvasView.select_note(note_view, item, additive=False)
         self.assertEqual(note_view.selected_notes, [item])
@@ -1463,23 +1415,15 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         CanvasView._update_note_box(note_view, item)
         self.assertFalse(item.data(20).isVisible())
 
-    def test_bond_id_from_event_prefers_hover_and_falls_back_to_scene_lookup(self) -> None:
+    def test_bond_id_from_event_delegates_to_hit_testing_service(self) -> None:
         event = object()
+        service = SimpleNamespace(bond_id_from_event=mock.Mock(return_value=7))
         view = SimpleNamespace(
-            hover_bond_id=7,
-            scene_pos_from_event=mock.Mock(),
-            _find_bond_near=mock.Mock(),
-            renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
-            _bond_pick_radius=mock.Mock(return_value=6.0),
+            _hit_testing_service=service,
         )
-        self.assertEqual(CanvasView.bond_id_from_event(view, event), 7)
-        view.scene_pos_from_event.assert_not_called()
 
-        view.hover_bond_id = None
-        view.scene_pos_from_event.return_value = QPointF(3.0, 4.0)
-        view._find_bond_near.return_value = 2
-        self.assertEqual(CanvasView.bond_id_from_event(view, event), 2)
-        view._find_bond_near.assert_called_once_with(QPointF(3.0, 4.0), 7.0)
+        self.assertEqual(CanvasView.bond_id_from_event(view, event), 7)
+        service.bond_id_from_event.assert_called_once_with(event)
 
     def test_hit_testing_wrappers_delegate_to_service(self) -> None:
         service = SimpleNamespace(
@@ -1746,6 +1690,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             _expand_connected_atoms=mock.Mock(return_value={1, 2}),
             _update_selection_outline=mock.Mock(),
         )
+        view._selection_controller = SelectionController(view)
 
         self.assertTrue(CanvasView.select_structure_for_item(view, atom_item))
         self.assertEqual(selection_scene.clear_selection_calls, 1)
@@ -1773,6 +1718,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             _expand_connected_atoms=mock.Mock(return_value={1, 2}),
             _update_selection_outline=mock.Mock(),
         )
+        ring_view._selection_controller = SelectionController(ring_view)
         self.assertTrue(CanvasView.select_structure_for_item(ring_view, ring_only))
         self.assertTrue(ring_only.isSelected())
 
@@ -1787,6 +1733,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             _expand_connected_atoms=mock.Mock(),
             _update_selection_outline=mock.Mock(),
         )
+        note_view._selection_controller = SelectionController(note_view)
         self.assertTrue(CanvasView.select_structure_for_item(note_view, note_item))
         self.assertEqual(note_scene.clear_selection_calls, 1)
         self.assertTrue(note_item.isSelected())
@@ -1803,6 +1750,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             _expand_connected_atoms=mock.Mock(return_value=set()),
             _update_selection_outline=mock.Mock(),
         )
+        invalid_view._selection_controller = SelectionController(invalid_view)
         self.assertFalse(CanvasView.select_structure_for_item(invalid_view, invalid_atom))
         self.assertFalse(CanvasView.select_structure_for_item(invalid_view, None))
 
@@ -1829,6 +1777,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             _apply_color_to_bond_item=mock.Mock(),
             _push_command=bond_pushes.append,
         )
+        bond_view._canvas_color_mutation_service = CanvasColorMutationService(bond_view)
         CanvasView.apply_color_to_item(bond_view, bond_item, QColor("#ff0000"))
         self.assertEqual(bond_view.model.bonds[0].color, "#ff0000")
         bond_view._apply_color_to_bond_item.assert_called_once()
@@ -1848,6 +1797,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             _implicit_carbon_dot_brush=mock.Mock(return_value="dot-brush"),
             _push_command=atom_pushes.append,
         )
+        atom_view._canvas_color_mutation_service = CanvasColorMutationService(atom_view)
         CanvasView.apply_color_to_item(atom_view, atom_item, QColor("#00aa00"))
         self.assertEqual(atom_view.model.atoms[7].color, "#00aa00")
         self.assertEqual(atom_item.defaultTextColor().name(), "#00aa00")
@@ -1867,6 +1817,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             bond_sets_for_atoms=mock.Mock(return_value=({3}, set())),
             apply_color_to_item=mock.Mock(),
         )
+        recurse_view._canvas_color_mutation_service = CanvasColorMutationService(recurse_view)
         CanvasView.apply_color_to_item(recurse_view, ring_item, QColor("#336699"))
         self.assertEqual(
             recurse_view.apply_color_to_item.call_args_list,
@@ -1886,6 +1837,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             },
             _push_command=fill_pushes.append,
         )
+        fill_view._canvas_color_mutation_service = CanvasColorMutationService(fill_view)
         CanvasView.apply_ring_fill_color(fill_view, ring_item, QColor("#123456"), alpha=2.0)
         self.assertAlmostEqual(ring_item.brush().color().alphaF(), 1.0)
         self.assertIsInstance(fill_pushes.pop(), UpdateSceneItemCommand)

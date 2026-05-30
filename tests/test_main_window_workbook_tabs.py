@@ -255,7 +255,7 @@ class MainWindowWorkbookTabsTest(unittest.TestCase):
             self.app.processEvents()
             QTest.qWait(10)
 
-    def test_restore_workbook_filters_invalid_and_non_canvas_sheets(self) -> None:
+    def test_restore_workbook_rejects_invalid_and_non_canvas_sheets(self) -> None:
         reactant_state, product_state = self._build_canvas_sheet_states()
         state = {
             "active_sheet_index": 1,
@@ -267,18 +267,16 @@ class MainWindowWorkbookTabsTest(unittest.TestCase):
             ],
         }
 
-        self._restore_workbook_and_flush(state)
+        with self.assertRaises(ValueError):
+            self.window._restore_workbook_document(state)
 
-        self.assertEqual(self.window._canvas_sheet_count(), 2)
+        self._flush_events()
         self.assertEqual(
             [self.window.canvas_tabs.tabText(index) for index in range(self.window.canvas_tabs.count())],
-            ["Reactant Sheet", "Product Sheet", "+"],
+            ["Sheet 1", "Sheet 2", "+"],
         )
-        self.assertEqual(self.window.canvas_tabs.currentIndex(), 1)
-        self.assertEqual(self.window._active_canvas_sheet_name(), "Product Sheet")
-        self.assertEqual(len(self.window.canvas.ring_items), 1)
 
-    def test_restore_workbook_clamps_active_sheet_index_to_canvas_range(self) -> None:
+    def test_restore_workbook_rejects_out_of_range_active_sheet_index(self) -> None:
         reactant_state, product_state = self._build_canvas_sheet_states()
         base_state = {
             "sheets": [
@@ -287,20 +285,19 @@ class MainWindowWorkbookTabsTest(unittest.TestCase):
             ]
         }
 
-        for requested_index, expected_tab_index, expected_name in (
-            (-5, 0, "Reactant Sheet"),
-            (99, 1, "Product Sheet"),
-        ):
+        for requested_index in (-5, 99):
             with self.subTest(active_sheet_index=requested_index):
                 state = deepcopy(base_state)
                 state["active_sheet_index"] = requested_index
 
-                self._restore_workbook_and_flush(state)
+                with self.assertRaises(ValueError):
+                    self.window._restore_workbook_document(state)
 
-                self.assertEqual(self.window.canvas_tabs.currentIndex(), expected_tab_index)
-                self.assertEqual(self.window._active_canvas_sheet_name(), expected_name)
+                self._flush_events()
+                self.assertEqual(self.window.canvas_tabs.currentIndex(), 1)
+                self.assertEqual(self.window._active_canvas_sheet_name(), "Sheet 2")
 
-    def test_restore_workbook_adds_fallback_sheet_when_no_canvas_sheets_restore(self) -> None:
+    def test_restore_workbook_rejects_empty_or_non_canvas_sheets(self) -> None:
         cases = (
             {"active_sheet_index": 4, "sheets": []},
             {
@@ -314,15 +311,14 @@ class MainWindowWorkbookTabsTest(unittest.TestCase):
 
         for state in cases:
             with self.subTest(state=state):
-                self._restore_workbook_and_flush(deepcopy(state))
+                with self.assertRaises(ValueError):
+                    self.window._restore_workbook_document(deepcopy(state))
 
-                self.assertEqual(self.window._canvas_sheet_count(), 1)
+                self._flush_events()
                 self.assertEqual(
                     [self.window.canvas_tabs.tabText(index) for index in range(self.window.canvas_tabs.count())],
                     ["Sheet 1", "+"],
                 )
-                self.assertEqual(self.window.canvas_tabs.currentIndex(), 0)
-                self.assertEqual(self.window._active_canvas_sheet_name(), "Sheet 1")
 
     def test_restore_workbook_resyncs_sheet_name_counter_for_new_canvas_tabs(self) -> None:
         reactant_state, product_state = self._build_canvas_sheet_states()
@@ -344,7 +340,7 @@ class MainWindowWorkbookTabsTest(unittest.TestCase):
         )
         self.assertEqual(self.window._active_canvas_sheet_name(), "Sheet 3")
 
-    def test_restore_workbook_tolerates_invalid_active_index_and_canvas_content(self) -> None:
+    def test_restore_workbook_rejects_invalid_active_index_and_canvas_content(self) -> None:
         _, product_state = self._build_canvas_sheet_states()
         state = {
             "active_sheet_index": "abc",
@@ -354,16 +350,14 @@ class MainWindowWorkbookTabsTest(unittest.TestCase):
             ],
         }
 
-        self._restore_workbook_and_flush(state)
+        with self.assertRaises(ValueError):
+            self.window._restore_workbook_document(state)
 
-        self.assertEqual(self.window._canvas_sheet_count(), 2)
+        self._flush_events()
         self.assertEqual(
             [self.window.canvas_tabs.tabText(index) for index in range(self.window.canvas_tabs.count())],
-            ["Sheet 1", "Product Sheet", "+"],
+            ["Sheet 1", "Sheet 2", "+"],
         )
-        self.assertEqual(self.window.canvas_tabs.currentIndex(), 0)
-        self.assertEqual(self.window._active_canvas_sheet_name(), "Sheet 1")
-        self.assertEqual(len(self.window.canvas.ring_items), 0)
 
     def test_delete_canvas_sheet_keeps_last_remaining_canvas(self) -> None:
         self.window._delete_canvas_sheet(0)

@@ -13,7 +13,12 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
+    from ui.canvas_handle_controller import CanvasHandleController
     from ui.canvas_view import CanvasView
+    from ui.curved_arrow_path_service import CurvedArrowPathService
+    from ui.handle_mutation_service import HandleMutationService
+    from ui.handle_overlay_service import HandleOverlayService
+    from ui.selection_highlight_styler import SelectionHighlightStyler
 
 
 def _path_item(color: str = "#111111", width: float = 1.5) -> QGraphicsPathItem:
@@ -28,6 +33,14 @@ def _path_item(color: str = "#111111", width: float = 1.5) -> QGraphicsPathItem:
     return item
 
 
+def _attach_handle_services(view: SimpleNamespace) -> None:
+    view._selection_highlight_styler = SelectionHighlightStyler(view)
+    view._handle_overlay_service = HandleOverlayService(view)
+    view._handle_mutation_service = HandleMutationService(view)
+    view._curved_arrow_path_service = CurvedArrowPathService(view)
+    view._handle_controller = CanvasHandleController(view)
+
+
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas view tests")
 class CanvasViewSelectionHighlightTest(unittest.TestCase):
     @classmethod
@@ -37,6 +50,7 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
 
     def test_apply_selection_style_handles_items_and_groups(self) -> None:
         view = SimpleNamespace(_selection_color=QColor("#1f5eff"), _selection_stroke_delta=0.6)
+        _attach_handle_services(view)
         view._apply_selection_style = lambda item, selected: CanvasView._apply_selection_style(view, item, selected)
         item = _path_item()
 
@@ -66,6 +80,7 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
             _selection_stroke_delta=0.5,
             _selected_items=[old_item],
         )
+        _attach_handle_services(view)
         view._apply_selection_style = lambda item, selected: CanvasView._apply_selection_style(view, item, selected)
         view._clear_selection_highlight = lambda: CanvasView._clear_selection_highlight(view)
 
@@ -95,6 +110,7 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
             _selection_stroke_delta=0.6,
             _selected_items=[selected_item],
         )
+        _attach_handle_services(view)
         view._apply_selection_style = lambda item, selected: CanvasView._apply_selection_style(view, item, selected)
         view._clear_selection_highlight = lambda: CanvasView._clear_selection_highlight(view)
         CanvasView._apply_selection_style(view, selected_item, True)
@@ -121,6 +137,7 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
             _selection_stroke_delta=0.6,
             _selected_items=[],
         )
+        _attach_handle_services(view)
         view._apply_selection_style = lambda target, selected: CanvasView._apply_selection_style(view, target, selected)
         view._clear_selection_highlight = lambda: CanvasView._clear_selection_highlight(view)
         view.clear_handles = lambda: CanvasView.clear_handles(view)
@@ -156,6 +173,7 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
             _curved_snap=False,
             _curved_snap_step=2,
         )
+        _attach_handle_services(view)
         view._apply_selection_style = lambda target, selected: CanvasView._apply_selection_style(view, target, selected)
         view._clear_selection_highlight = lambda: CanvasView._clear_selection_highlight(view)
         view._set_selection_highlight = lambda items: CanvasView._set_selection_highlight(view, items)
@@ -189,6 +207,7 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
             show_orbital_handles=mock.Mock(),
             show_curved_handles=mock.Mock(),
         )
+        view._handle_controller = CanvasHandleController(view)
 
         scale_handle = QGraphicsEllipseItem(0.0, 0.0, 4.0, 4.0)
         scale_handle.setData(1, "orbital_scale")
@@ -235,6 +254,7 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
         orbital = _path_item()
         orbital.setData(1, {"center": QPointF(0.0, 0.0), "base_handle_dist": 10.0})
         orbital_view = SimpleNamespace(renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)))
+        _attach_handle_services(orbital_view)
         CanvasView._update_orbital_scale(orbital_view, orbital, QPointF(20.0, 0.0))
         self.assertAlmostEqual(orbital.scale(), 2.0)
 
@@ -243,6 +263,7 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
             _orbital_snap_enabled=True,
             _orbital_snap_step=15,
         )
+        _attach_handle_services(orbital_view)
         CanvasView._update_orbital_rotate(orbital_view, orbital, QPointF(10.0, 10.0))
         self.assertAlmostEqual(orbital.rotation(), 45.0)
 
@@ -258,11 +279,12 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
         )
         curved_view = SimpleNamespace(
             _clamp_curved_midpoint=mock.Mock(return_value=QPointF(5.0, 4.0)),
-            _control_from_midpoint=lambda start, end, mid: CanvasView._control_from_midpoint(
-                SimpleNamespace(), start, end, mid
-            ),
             _add_arrow_head=mock.Mock(),
             _update_selection_outline=mock.Mock(),
+        )
+        _attach_handle_services(curved_view)
+        curved_view._control_from_midpoint = lambda start, end, mid: CanvasView._control_from_midpoint(
+            curved_view, start, end, mid
         )
 
         CanvasView._update_curved_control(curved_view, curved, QPointF(6.0, 6.0))

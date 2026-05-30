@@ -111,32 +111,18 @@ class CanvasColorMutationService:
         if not atom_ids:
             return
         bond_ids, _ = self.canvas.bond_sets_for_atoms(atom_ids)
-        apply_color = getattr(self.canvas, "apply_color_to_item", None)
-        if not callable(apply_color):
-            apply_color = self.apply_color_to_item
         for atom_id in sorted(atom_ids):
             atom_item = self.canvas.atom_items.get(atom_id) or self.canvas.atom_dots.get(atom_id)
             if atom_item is not None:
-                apply_color(atom_item, color)
+                self.canvas.apply_color_to_item(atom_item, color)
         for bond_id in sorted(bond_ids):
             bond_items = self.canvas.bond_items.get(bond_id, [])
             if bond_items:
-                apply_color(bond_items[0], color)
+                self.canvas.apply_color_to_item(bond_items[0], color)
 
 
 def canvas_color_mutation_service_for(canvas) -> CanvasColorMutationService:
-    service = getattr(canvas, "_canvas_color_mutation_service", None)
-    if isinstance(service, CanvasColorMutationService) and service.canvas is canvas:
-        return service
-    if service is not None and all(
-        hasattr(service, name)
-        for name in (
-            "apply_color_to_item",
-            "apply_ring_fill_color",
-        )
-    ):
-        return service
-    return CanvasColorMutationService(canvas)
+    return canvas._canvas_color_mutation_service
 
 
 __all__ = ["CanvasColorMutationService", "canvas_color_mutation_service_for"]

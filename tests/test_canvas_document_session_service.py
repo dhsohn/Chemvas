@@ -75,6 +75,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             _history=[],
             _redo_stack=[],
             FILE_FORMAT_VERSION=7,
+            _notify_history_change=mock.Mock(),
         )
         service = CanvasDocumentSessionService(canvas)
 

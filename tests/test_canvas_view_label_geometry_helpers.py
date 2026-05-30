@@ -14,6 +14,7 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from core.model import Atom, Bond
+    from ui.canvas_geometry_controller import CanvasGeometryController
     from ui.canvas_view import CanvasView
 
 
@@ -53,12 +54,15 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
             atom_items={1: _FakeLabelItem(QRectF(-1.0, -1.0, 2.0, 2.0))},
             renderer=SimpleNamespace(style=SimpleNamespace(bond_line_width=1.0)),
         )
+        view._geometry_controller = CanvasGeometryController(view)
 
         radius = CanvasView._label_cut_radius_for_atom(view, 1)
         self.assertAlmostEqual(radius, (math.sqrt(2.0) + 0.03) * 0.6)
 
         self.assertIsNone(CanvasView._label_cut_radius_for_atom(view, 2))
-        self.assertIsNone(CanvasView._label_cut_radius_for_atom(SimpleNamespace(model=view.model, atom_items={}, renderer=view.renderer), 1))
+        empty_view = SimpleNamespace(model=view.model, atom_items={}, renderer=view.renderer)
+        empty_view._geometry_controller = CanvasGeometryController(empty_view)
+        self.assertIsNone(CanvasView._label_cut_radius_for_atom(empty_view, 1))
 
     def test_mark_target_distance_for_atom_uses_expanded_visible_label_rect(self) -> None:
         view = SimpleNamespace(
@@ -72,41 +76,33 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
             direction,
             rect,
         )
+        view._geometry_controller = CanvasGeometryController(view)
 
         distance = CanvasView._mark_target_distance_for_atom(view, 7, 1.0, 0.0, "plus")
         self.assertAlmostEqual(distance, 3.0)
         view._visible_label_rect_for_atom.assert_called_once_with(7)
         view._mark_clearance_for_kind.assert_called_once_with("plus")
 
-        self.assertEqual(
-            CanvasView._mark_target_distance_for_atom(
-                SimpleNamespace(model=SimpleNamespace(atoms={}), _visible_label_rect_for_atom=mock.Mock(), _mark_clearance_for_kind=mock.Mock()),
-                7,
-                1.0,
-                0.0,
-                "minus",
-            ),
-            0.0,
+        missing_atom_view = SimpleNamespace(
+            model=SimpleNamespace(atoms={}),
+            _visible_label_rect_for_atom=mock.Mock(),
+            _mark_clearance_for_kind=mock.Mock(),
         )
+        missing_atom_view._geometry_controller = CanvasGeometryController(missing_atom_view)
+        self.assertEqual(CanvasView._mark_target_distance_for_atom(missing_atom_view, 7, 1.0, 0.0, "minus"), 0.0)
 
-        self.assertEqual(
-            CanvasView._mark_target_distance_for_atom(
-                SimpleNamespace(
-                    model=SimpleNamespace(atoms={7: Atom("C", 0.0, 0.0)}),
-                    _visible_label_rect_for_atom=mock.Mock(return_value=None),
-                    _mark_clearance_for_kind=mock.Mock(),
-                ),
-                7,
-                1.0,
-                0.0,
-                "minus",
-            ),
-            0.0,
+        missing_label_view = SimpleNamespace(
+            model=SimpleNamespace(atoms={7: Atom("C", 0.0, 0.0)}),
+            _visible_label_rect_for_atom=mock.Mock(return_value=None),
+            _mark_clearance_for_kind=mock.Mock(),
         )
+        missing_label_view._geometry_controller = CanvasGeometryController(missing_label_view)
+        self.assertEqual(CanvasView._mark_target_distance_for_atom(missing_label_view, 7, 1.0, 0.0, "minus"), 0.0)
 
     def test_line_rect_intersections_returns_all_hits_and_skips_disjoint_lines(self) -> None:
         view = SimpleNamespace()
         view._segment_intersection_t = lambda p1, p2, q1, q2: CanvasView._segment_intersection_t(view, p1, p2, q1, q2)
+        view._geometry_controller = CanvasGeometryController(view)
 
         hits = CanvasView._line_rect_intersections(
             view,
@@ -131,6 +127,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
             renderer=SimpleNamespace(style=SimpleNamespace(bond_line_width=5.0)),
             _label_cut_radius_for_atom=mock.Mock(),
         )
+        zero_view._geometry_controller = CanvasGeometryController(zero_view)
         self.assertEqual(CanvasView._trim_line_for_labels(zero_view, 1, 2, 0.0, 0.0, 0.0, 0.0), (0.0, 1.0))
         zero_view._label_cut_radius_for_atom.assert_not_called()
 
@@ -138,6 +135,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
             renderer=SimpleNamespace(style=SimpleNamespace(bond_line_width=5.0)),
             _label_cut_radius_for_atom=mock.Mock(side_effect=lambda atom_id: {1: 5.0}[atom_id]),
         )
+        start_view._geometry_controller = CanvasGeometryController(start_view)
         start_only = CanvasView._trim_line_for_labels(start_view, 1, None, 0.0, 0.0, 100.0, 0.0)
         self.assertAlmostEqual(start_only[0], 0.051)
         self.assertEqual(start_only[1], 1.0)
@@ -146,6 +144,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
             renderer=SimpleNamespace(style=SimpleNamespace(bond_line_width=5.0)),
             _label_cut_radius_for_atom=mock.Mock(side_effect=lambda atom_id: {2: 5.0}[atom_id]),
         )
+        end_view._geometry_controller = CanvasGeometryController(end_view)
         end_only = CanvasView._trim_line_for_labels(end_view, None, 2, 0.0, 0.0, 100.0, 0.0)
         self.assertEqual(end_only[0], 0.0)
         self.assertAlmostEqual(end_only[1], 0.949)
@@ -154,6 +153,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
             renderer=SimpleNamespace(style=SimpleNamespace(bond_line_width=5.0)),
             _label_cut_radius_for_atom=mock.Mock(side_effect=lambda atom_id: {1: 49.6, 2: 49.6}[atom_id]),
         )
+        tight_view._geometry_controller = CanvasGeometryController(tight_view)
         both = CanvasView._trim_line_for_labels(tight_view, 1, 2, 0.0, 0.0, 100.0, 0.0)
         self.assertAlmostEqual(both[0], 0.49)
         self.assertAlmostEqual(both[1], 0.51)
@@ -176,6 +176,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
                 }
             ),
         )
+        view._geometry_controller = CanvasGeometryController(view)
 
         center = CanvasView._ring_center_for_bond(view, Bond(1, 2, 1))
         self.assertIsNotNone(center)
@@ -194,6 +195,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
             ring_items=[_FakeRingItem([1, 2, 3]), _FakeRingItem([4, 5, 6])],
             _current_atom_coords_3d=mock.Mock(side_effect=lambda atom_id: coords_map.get(atom_id)),
         )
+        view._geometry_controller = CanvasGeometryController(view)
 
         center = CanvasView._ring_center_3d_for_bond(view, Bond(1, 2, 1))
         self.assertEqual(center, (2.0, 2.0, 2.0))
@@ -202,6 +204,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
             ring_items=[_FakeRingItem([1, 2, 4])],
             _current_atom_coords_3d=mock.Mock(side_effect=lambda atom_id: coords_map.get(atom_id) if atom_id != 4 else None),
         )
+        sparse_view._geometry_controller = CanvasGeometryController(sparse_view)
         self.assertIsNone(CanvasView._ring_center_3d_for_bond(sparse_view, Bond(1, 2, 1)))
 
         self.assertIsNone(CanvasView._ring_center_3d_for_bond(view, Bond(1, 4, 1)))

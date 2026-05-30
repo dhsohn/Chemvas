@@ -744,9 +744,7 @@ class MainWindow(QMainWindow):
         return str(name) if name else None
 
     def _refresh_context_bar(self) -> None:
-        service = getattr(self, "_context_bar_service", None)
-        if service is not None:
-            service.refresh(self, self._active_tool_name())
+        self._context_bar_service.refresh(self, self._active_tool_name())
 
     def _set_arrow_type(self, value: str) -> None:
         self._tool_state_service.set_arrow_type(self, value)

@@ -164,8 +164,7 @@ class CanvasGraphService:
         bond = self.canvas.model.bonds[bond_id]
         if bond is None or bond.order != 1:
             return False
-        bond_in_cycle = self._graph_method("_bond_in_cycle", self.bond_in_cycle)
-        if bond_in_cycle(bond_id):
+        if self.bond_in_cycle(bond_id):
             return False
         return True
 
@@ -175,9 +174,8 @@ class CanvasGraphService:
         bond = self.canvas.model.bonds[bond_id]
         if bond is None:
             return None
-        component_without_bond = self._graph_method("_component_without_bond", self.component_without_bond)
-        comp_a = component_without_bond(bond.a, bond_id)
-        comp_b = component_without_bond(bond.b, bond_id)
+        comp_a = self.component_without_bond(bond.a, bond_id)
+        comp_b = self.component_without_bond(bond.b, bond_id)
         return comp_a | comp_b
 
     def rotation_side_for_bond(
@@ -191,9 +189,8 @@ class CanvasGraphService:
         bond = self.canvas.model.bonds[bond_id]
         if bond is None:
             return None
-        component_without_bond = self._graph_method("_component_without_bond", self.component_without_bond)
-        comp_a = component_without_bond(bond.a, bond_id)
-        comp_b = component_without_bond(bond.b, bond_id)
+        comp_a = self.component_without_bond(bond.a, bond_id)
+        comp_b = self.component_without_bond(bond.b, bond_id)
         effective_selected = set(selected_atom_ids) - {bond.a, bond.b}
         selected_in_a = effective_selected & comp_a
         selected_in_b = effective_selected & comp_b
@@ -230,9 +227,8 @@ class CanvasGraphService:
         bond = self.canvas.model.bonds[bond_id]
         if bond is None:
             return None
-        component_without_bond = self._graph_method("_component_without_bond", self.component_without_bond)
-        comp_a = component_without_bond(bond.a, bond_id)
-        comp_b = component_without_bond(bond.b, bond_id)
+        comp_a = self.component_without_bond(bond.a, bond_id)
+        comp_b = self.component_without_bond(bond.b, bond_id)
         component = comp_a | comp_b
         selected_in_component = set(selected_atom_ids) & component
         is_partial_selection = 0 < len(selected_in_component) < len(component)
@@ -316,16 +312,10 @@ class CanvasGraphService:
             bond_atoms.add(bond.a)
             bond_atoms.add(bond.b)
         atoms_for_boundary = explicit_atoms | bond_atoms
-        bond_is_rotatable = self._graph_method("_bond_is_rotatable", self.bond_is_rotatable)
-        preferred_rotation_side_for_bond = self._graph_method(
-            "_preferred_rotation_side_for_bond",
-            self.preferred_rotation_side_for_bond,
-        )
-        rotation_side_for_bond = self._graph_method("_rotation_side_for_bond", self.rotation_side_for_bond)
         if selected_bonds and len(selected_bonds) == 1:
             bond_id = next(iter(selected_bonds))
-            if bond_is_rotatable(bond_id):
-                rotating = preferred_rotation_side_for_bond(
+            if self.bond_is_rotatable(bond_id):
+                rotating = self.preferred_rotation_side_for_bond(
                     bond_id,
                     atoms_for_boundary,
                     allow_fallback=True,
@@ -353,8 +343,8 @@ class CanvasGraphService:
                     candidates.append(bond_id)
             if len(candidates) == 1:
                 bond_id = candidates[0]
-                if bond_is_rotatable(bond_id):
-                    rotating = rotation_side_for_bond(
+                if self.bond_is_rotatable(bond_id):
+                    rotating = self.rotation_side_for_bond(
                         bond_id,
                         bond_atoms,
                         allow_fallback=True,
@@ -374,9 +364,9 @@ class CanvasGraphService:
                 boundary.append(bond_id)
         if len(boundary) == 1:
             bond_id = boundary[0]
-            if not bond_is_rotatable(bond_id):
+            if not self.bond_is_rotatable(bond_id):
                 return _store(None)
-            rotating = rotation_side_for_bond(
+            rotating = self.rotation_side_for_bond(
                 bond_id,
                 atoms_for_boundary,
                 allow_fallback=not explicit_atoms,
@@ -386,9 +376,9 @@ class CanvasGraphService:
         atoms_for_axis = set(atoms_for_boundary)
         candidates: list[tuple[int, set[int]]] = []
         for bond_id, bond in enumerate(self.canvas.model.bonds):
-            if bond is None or not bond_is_rotatable(bond_id):
+            if bond is None or not self.bond_is_rotatable(bond_id):
                 continue
-            rotating = rotation_side_for_bond(
+            rotating = self.rotation_side_for_bond(
                 bond_id,
                 atoms_for_axis,
                 allow_fallback=False,
@@ -405,21 +395,15 @@ class CanvasGraphService:
         rotation_atom_ids: set[int],
         press_pos: QPointF | None = None,
     ) -> tuple[int, set[int]] | None:
-        bond_is_rotatable = self._graph_method("_bond_is_rotatable", self.bond_is_rotatable)
-        if not bond_is_rotatable(axis_hint):
+        if not self.bond_is_rotatable(axis_hint):
             return None
-        bond_component_atoms = self._graph_method("_bond_component_atoms", self.bond_component_atoms)
-        component = bond_component_atoms(axis_hint)
+        component = self.bond_component_atoms(axis_hint)
         if component is None:
             return None
         selected_in_component = rotation_atom_ids & component
         if not selected_in_component:
             return None
-        preferred_rotation_side_for_bond = self._graph_method(
-            "_preferred_rotation_side_for_bond",
-            self.preferred_rotation_side_for_bond,
-        )
-        rotating = preferred_rotation_side_for_bond(
+        rotating = self.preferred_rotation_side_for_bond(
             axis_hint,
             selected_in_component,
             press_pos=press_pos,
@@ -476,42 +460,8 @@ class CanvasGraphService:
                     stack.append(neighbor)
         return visited
 
-    def _graph_method(self, canvas_name: str, fallback):
-        override = getattr(self.canvas, canvas_name, None)
-        if callable(override) and getattr(self.canvas, "_canvas_graph_service", None) is not self:
-            return override
-        return fallback
-
-
 def canvas_graph_service_for(canvas) -> CanvasGraphService:
-    service = getattr(canvas, "_canvas_graph_service", None)
-    if isinstance(service, CanvasGraphService) and service.canvas is canvas:
-        return service
-    if service is not None and all(
-        hasattr(service, name)
-        for name in (
-            "ensure_atom_neighbors",
-            "ensure_atom_bond_ids",
-            "add_bond_neighbors",
-            "remove_bond_neighbors",
-            "add_bond_index",
-            "remove_bond_index",
-            "rebuild_bond_adjacency",
-            "connected_components",
-            "component_without_bond",
-            "bond_in_cycle",
-            "bond_is_rotatable",
-            "bond_component_atoms",
-            "rotation_side_for_bond",
-            "preferred_rotation_side_for_bond",
-            "rotatable_axis_from_selection",
-            "axis_from_rotation_hint",
-            "bond_sets_for_atoms",
-            "expand_connected_atoms",
-        )
-    ):
-        return service
-    return CanvasGraphService(canvas)
+    return canvas._canvas_graph_service
 
 
 __all__ = ["CanvasGraphService", "canvas_graph_service_for"]

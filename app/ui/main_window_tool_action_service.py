@@ -10,11 +10,7 @@ from ui.main_window_config import (
 class MainWindowToolActionService:
     @staticmethod
     def _show_status_message(window, message: str) -> None:
-        show_status_message = getattr(window, "_show_status_message", None)
-        if callable(show_status_message):
-            show_status_message(message)
-            return
-        window.statusBar().showMessage(message)
+        window._show_status_message(message)
 
     def build_checkable_tool_action(
         self,
@@ -43,9 +39,7 @@ class MainWindowToolActionService:
     def activate_mark_tool(self, window, kind: str) -> None:
         window.canvas.set_mark_kind(kind)
         self._show_status_message(window, "Mark Tool")
-        refresh_status_context = getattr(window, "_refresh_status_context", None)
-        if callable(refresh_status_context):
-            refresh_status_context()
+        window._refresh_status_context()
 
     def build_tool_actions(self, window, tool_group) -> dict[str, object]:
         actions = dict(

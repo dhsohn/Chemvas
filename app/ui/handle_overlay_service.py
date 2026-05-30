@@ -70,15 +70,7 @@ class HandleOverlayService:
 
 
 def handle_overlay_service_for(canvas) -> HandleOverlayService:
-    service = getattr(canvas, "_handle_overlay_service", None)
-    if isinstance(service, HandleOverlayService) and service.canvas is canvas:
-        return service
-    if service is not None and all(
-        hasattr(service, name)
-        for name in ("clear_handles", "show_orbital_handles", "show_curved_handles", "create_handle")
-    ):
-        return service
-    return HandleOverlayService(canvas)
+    return canvas._handle_overlay_service
 
 
 __all__ = ["HandleOverlayService", "handle_overlay_service_for"]

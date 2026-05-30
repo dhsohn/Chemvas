@@ -77,27 +77,12 @@ class CanvasMarkSceneService:
         atom = self.canvas.model.atoms.get(atom_id)
         if atom is None:
             return QPointF(pos)
-        if not hasattr(self.canvas, "_mark_target_distance_for_atom") and hasattr(self.canvas, "_mark_offset_from_click"):
-            offset = self.canvas._mark_offset_from_click(atom_id, pos, kind=kind)
-        else:
-            offset = self.mark_offset_from_click(atom_id, pos, kind=kind)
+        offset = self.mark_offset_from_click(atom_id, pos, kind=kind)
         return QPointF(atom.x + offset.x(), atom.y + offset.y())
 
 
 def canvas_mark_scene_service_for(canvas) -> CanvasMarkSceneService:
-    service = getattr(canvas, "_canvas_mark_scene_service", None)
-    required = (
-        "add_mark_for_atom",
-        "mark_offset_from_click",
-        "remove_mark_item",
-        "remove_marks_for_atom",
-        "mark_center_for_pointer",
-    )
-    if isinstance(service, CanvasMarkSceneService) and service.canvas is canvas:
-        return service
-    if service is not None and all(hasattr(service, name) for name in required):
-        return service
-    return CanvasMarkSceneService(canvas)
+    return canvas._canvas_mark_scene_service
 
 
 __all__ = ["CanvasMarkSceneService", "canvas_mark_scene_service_for"]

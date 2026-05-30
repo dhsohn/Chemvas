@@ -15,6 +15,7 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from core.model import Atom, Bond
+    from ui.canvas_hit_testing_service import CanvasHitTestingService
     from ui.selection_controller import SelectionController
     from ui.selection_hit_logic import StructureHit
 
@@ -121,6 +122,10 @@ def _make_canvas(**overrides):
         _find_bond_near=mock.Mock(return_value=None),
         find_atom_near=mock.Mock(return_value=None),
         _distance_point_to_segment=mock.Mock(return_value=1.5),
+        _spatial_index_dirty=True,
+        _spatial_cell_size=0.0,
+        _atom_grid={},
+        _bond_grid={},
         _connected_components=mock.Mock(return_value=[]),
         _bounds_for_atoms=mock.Mock(return_value=None),
         _selected_ids=mock.Mock(return_value=(set(), set())),
@@ -128,7 +133,10 @@ def _make_canvas(**overrides):
         tools=SimpleNamespace(active=None),
     )
     defaults.update(overrides)
-    return SimpleNamespace(**defaults)
+    hit_testing_service = defaults.pop("_hit_testing_service", None)
+    canvas = SimpleNamespace(**defaults)
+    canvas._hit_testing_service = hit_testing_service or CanvasHitTestingService(canvas)
+    return canvas
 
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for selection controller tests")

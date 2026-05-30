@@ -19,7 +19,12 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
+    from ui.canvas_handle_controller import CanvasHandleController
     from ui.canvas_view import CanvasView
+    from ui.curved_arrow_path_service import CurvedArrowPathService
+    from ui.handle_mutation_service import HandleMutationService
+    from ui.handle_overlay_service import HandleOverlayService
+    from ui.selection_highlight_styler import SelectionHighlightStyler
 
 
 class _RecordingScene(QGraphicsScene):
@@ -118,6 +123,11 @@ def _make_proxy(scene: QGraphicsScene, *, bond_length_px: float = 40.0) -> Simpl
     view._control_from_midpoint = lambda start, end, mid: CanvasView._control_from_midpoint(view, start, end, mid)
     view._update_curved_control = lambda item, pos: CanvasView._update_curved_control(view, item, pos)
     view._update_curved_endpoint = lambda item, pos, endpoint: CanvasView._update_curved_endpoint(view, item, pos, endpoint)
+    view._selection_highlight_styler = SelectionHighlightStyler(view)
+    view._handle_overlay_service = HandleOverlayService(view)
+    view._handle_mutation_service = HandleMutationService(view)
+    view._curved_arrow_path_service = CurvedArrowPathService(view)
+    view._handle_controller = CanvasHandleController(view)
     return view
 
 

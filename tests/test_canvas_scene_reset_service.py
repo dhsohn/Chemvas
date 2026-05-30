@@ -107,7 +107,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         canvas._clear_smiles_preview.assert_called_once_with()
         apply_insert_session_state.assert_called_once_with(clear_insert_session())
 
-    def test_canvas_scene_reset_service_for_reuses_real_duck_typed_and_fallback_services(self) -> None:
+    def test_canvas_scene_reset_service_for_returns_bound_service(self) -> None:
         canvas = SimpleNamespace()
         real_service = CanvasSceneResetService(canvas)
         canvas._canvas_scene_reset_service = real_service
@@ -119,6 +119,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
 
         self.assertIs(canvas_scene_reset_service_for(canvas), duck_service)
 
-        canvas._canvas_scene_reset_service = object()
+        placeholder = object()
+        canvas._canvas_scene_reset_service = placeholder
 
-        self.assertIsInstance(canvas_scene_reset_service_for(canvas), CanvasSceneResetService)
+        self.assertIs(canvas_scene_reset_service_for(canvas), placeholder)

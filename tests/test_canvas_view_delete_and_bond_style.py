@@ -135,7 +135,7 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         ring_item = object()
         view = SimpleNamespace(
             _ring_state_dict=mock.Mock(return_value={"kind": "ring"}),
-            remove_scene_item=mock.Mock(),
+            _scene_item_controller=SimpleNamespace(remove_scene_item=mock.Mock()),
             _push_command=mock.Mock(),
         )
         controller = SceneOpsController(view)
@@ -145,7 +145,7 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         self.assertIsInstance(command, DeleteSceneItemsCommand)
         self.assertEqual(command.item_states, [{"kind": "ring"}])
         self.assertEqual(command.items, [ring_item])
-        view.remove_scene_item.assert_called_once_with(ring_item)
+        view._scene_item_controller.remove_scene_item.assert_called_once_with(ring_item)
         view._push_command.assert_not_called()
 
     def test_scene_ops_flip_bond_direction_requires_directional_style_and_updates_graphics(self) -> None:

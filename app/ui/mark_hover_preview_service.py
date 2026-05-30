@@ -13,25 +13,13 @@ class MarkHoverPreviewService:
         self.canvas = canvas
 
     def _clear_hover_highlight(self) -> None:
-        hover_scene_service = getattr(self.canvas, "_hover_scene_service", None)
-        if hover_scene_service is not None:
-            hover_scene_service.clear_hover_highlight()
-            return
-        self.canvas._clear_hover_highlight()
+        self.canvas._hover_scene_service.clear_hover_highlight()
 
     def _add_atom_hover_indicator(self, atom_id: int) -> None:
-        hover_scene_service = getattr(self.canvas, "_hover_scene_service", None)
-        if hover_scene_service is not None:
-            hover_scene_service.add_atom_hover_indicator(atom_id)
-            return
-        self.canvas._add_atom_hover_indicator(atom_id)
+        self.canvas._hover_scene_service.add_atom_hover_indicator(atom_id)
 
     def _add_hover_preview_items(self, items) -> None:
-        hover_scene_service = getattr(self.canvas, "_hover_scene_service", None)
-        if hover_scene_service is not None:
-            hover_scene_service.add_hover_preview_items(items)
-            return
-        self.canvas._add_hover_preview_items(items)
+        self.canvas._hover_scene_service.add_hover_preview_items(items)
 
     def add_mark_hover_preview(self, pos: QPointF) -> None:
         atom_id = self.canvas.find_atom_near(

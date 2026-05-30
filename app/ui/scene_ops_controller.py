@@ -135,10 +135,7 @@ class SceneOpsController:
         items = self.canvas.scene().selectedItems()
         if not items:
             return False
-        suspend_selection_outline = getattr(self.canvas, "suspend_selection_outline", None)
-        refresh_selection_outline = getattr(self.canvas, "_update_selection_outline", None)
-        if callable(suspend_selection_outline):
-            suspend_selection_outline(True)
+        self.canvas.suspend_selection_outline(True)
         try:
             selection = classify_delete_selection(items)
             plan = build_delete_selection_plan(
@@ -179,10 +176,8 @@ class SceneOpsController:
             self.canvas._push_command(CompositeCommand(commands))
             return True
         finally:
-            if callable(suspend_selection_outline):
-                suspend_selection_outline(False)
-            if callable(refresh_selection_outline):
-                refresh_selection_outline()
+            self.canvas.suspend_selection_outline(False)
+            self.canvas._update_selection_outline()
 
     def flip_bond_direction(self, bond_id: int) -> None:
         flip_bond_direction_with_history(
@@ -348,7 +343,6 @@ class SceneOpsController:
         payload_candidates = clipboard_payload_candidates(
             mime_data,
             mime_type=self.canvas.CLIPBOARD_SELECTION_MIME,
-            cached_payload_json=self.canvas._clipboard_selection_payload_json,
         )
         return decode_clipboard_selection_payload(
             payload_candidates,
@@ -383,11 +377,7 @@ class SceneOpsController:
             items,
             payload=payload,
             bond_line_width=self.canvas.renderer.style.bond_line_width,
-            device_pixel_ratio=(
-                float(self.canvas.devicePixelRatioF())
-                if hasattr(self.canvas, "devicePixelRatioF")
-                else 1.0
-            ),
+            device_pixel_ratio=float(self.canvas.devicePixelRatioF()),
         )
         if plan is None:
             return False
@@ -417,11 +407,9 @@ class SceneOpsController:
         mime_data.setImageData(image)
         if plan.payload_json is not None:
             mime_data.setData(self.canvas.CLIPBOARD_SELECTION_MIME, plan.payload_json.encode("utf-8"))
-        (
-            self.canvas._clipboard_selection_payload_json,
-            self.canvas._clipboard_paste_source_json,
-            self.canvas._clipboard_paste_count,
-        ) = clipboard_copy_cache_values(plan.payload_json)
+        self.canvas._clipboard_paste_source_json, self.canvas._clipboard_paste_count = clipboard_copy_cache_values(
+            plan.payload_json
+        )
         QApplication.clipboard().setMimeData(mime_data)
         return True
 

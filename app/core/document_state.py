@@ -7,11 +7,35 @@ from core.model import Atom, Bond, MoleculeModel
 
 
 CHEMVAS_FILE_TYPE = "chemvas"
-LEGACY_DOCUMENT_FILE_TYPE = "litedraw"
-SUPPORTED_FILE_TYPES = frozenset((CHEMVAS_FILE_TYPE, LEGACY_DOCUMENT_FILE_TYPE))
 SINGLE_SHEET_FILE_VERSION = 1
 WORKBOOK_FILE_VERSION = 2
 SUPPORTED_FILE_VERSIONS = frozenset((SINGLE_SHEET_FILE_VERSION, WORKBOOK_FILE_VERSION))
+SINGLE_SHEET_STATE_KEYS = frozenset(
+    (
+        "model",
+        "ring_fills",
+        "notes",
+        "marks",
+        "arrows",
+        "ts_brackets",
+        "orbitals",
+        "settings",
+        "last_smiles_input",
+    )
+)
+SETTINGS_KEYS = frozenset(
+    (
+        "bond_length_px",
+        "arrow_line_width",
+        "arrow_head_scale",
+        "orbital_phase_enabled",
+        "text_font_size",
+        "text_font_weight",
+        "text_italic",
+        "sheet_size",
+        "sheet_orientation",
+    )
+)
 VALID_BOND_ORDERS = frozenset((1, 2, 3))
 VALID_BOND_STYLES = frozenset(
     (
@@ -75,42 +99,35 @@ def serialize_model_state(
 
 
 def deserialize_model_state(model_state: Mapping[str, object]) -> MoleculeModel:
-    atoms_state = model_state.get("atoms", {})
-    bonds_state = model_state.get("bonds", [])
+    atoms_state = model_state["atoms"]
+    bonds_state = model_state["bonds"]
     model = MoleculeModel()
-    if isinstance(atoms_state, Mapping):
-        model.atoms = {
-            int(atom_id): Atom(
-                element=_mapping_value(atom_data, "element", "C"),
-                x=float(_mapping_value(atom_data, "x", 0.0)),
-                y=float(_mapping_value(atom_data, "y", 0.0)),
-                color=_mapping_value(atom_data, "color", "#000000"),
-                explicit_label=bool(_mapping_value(atom_data, "explicit_label", False)),
-            )
-            for atom_id, atom_data in atoms_state.items()
-            if isinstance(atom_data, Mapping)
-        }
+    model.atoms = {
+        int(atom_id): Atom(
+            element=atom_data["element"],
+            x=float(atom_data["x"]),
+            y=float(atom_data["y"]),
+            color=atom_data["color"],
+            explicit_label=atom_data["explicit_label"],
+        )
+        for atom_id, atom_data in atoms_state.items()
+    }
     bonds: list[Bond | None] = []
-    if isinstance(bonds_state, list):
-        for bond_data in bonds_state:
-            if bond_data is None:
-                bonds.append(None)
-                continue
-            if not isinstance(bond_data, Mapping):
-                continue
-            bonds.append(
-                Bond(
-                    a=int(_mapping_value(bond_data, "a", 0)),
-                    b=int(_mapping_value(bond_data, "b", 0)),
-                    order=int(_mapping_value(bond_data, "order", 1)),
-                    style=_mapping_value(bond_data, "style", "single"),
-                    color=_mapping_value(bond_data, "color", "#000000"),
-                )
+    for bond_data in bonds_state:
+        if bond_data is None:
+            bonds.append(None)
+            continue
+        bonds.append(
+            Bond(
+                a=int(bond_data["a"]),
+                b=int(bond_data["b"]),
+                order=int(bond_data["order"]),
+                style=bond_data["style"],
+                color=bond_data["color"],
             )
+        )
     model.bonds = bonds
-    minimum_next_atom_id = max(model.atoms, default=-1) + 1
-    parsed_next_atom_id = int(model_state.get("next_atom_id", minimum_next_atom_id))
-    model.next_atom_id = max(parsed_next_atom_id, minimum_next_atom_id)
+    model.next_atom_id = int(model_state["next_atom_id"])
     return model
 
 
@@ -151,14 +168,11 @@ def build_document_payload(state: dict, version: int) -> dict:
 def extract_document_state(payload: object) -> dict:
     if not isinstance(payload, dict):
         raise ValueError("Invalid Chemvas file.")
-    if any(key in payload for key in ("type", "version", "state")):
-        return _extract_wrapped_document_state(payload)
-    _validate_bare_document_state(payload)
-    return payload
+    return _extract_wrapped_document_state(payload)
 
 
 def _extract_wrapped_document_state(payload: Mapping[str, object]) -> dict:
-    if payload.get("type") not in SUPPORTED_FILE_TYPES:
+    if payload.get("type") != CHEMVAS_FILE_TYPE:
         raise ValueError("Invalid Chemvas file.")
     version = payload.get("version")
     if type(version) is not int or version not in SUPPORTED_FILE_VERSIONS:
@@ -168,16 +182,6 @@ def _extract_wrapped_document_state(payload: Mapping[str, object]) -> dict:
         raise ValueError("Invalid Chemvas file.")
     _validate_document_state(state, version)
     return state
-
-
-def _validate_bare_document_state(state: Mapping[str, object]) -> None:
-    state_kind = _state_kind(state)
-    if state_kind is None:
-        raise ValueError("Invalid Chemvas file.")
-    if state_kind == "single_sheet":
-        _validate_single_sheet_state(state)
-    else:
-        _validate_workbook_state(state)
 
 
 def _validate_document_state(state: Mapping[str, object], version: int) -> None:
@@ -208,27 +212,46 @@ def _state_kind(state: Mapping[str, object]) -> str | None:
 
 
 def _validate_single_sheet_state(state: Mapping[str, object]) -> None:
+    if set(state) != SINGLE_SHEET_STATE_KEYS:
+        raise ValueError("Invalid Chemvas file.")
     model_state = state.get("model")
     if not isinstance(model_state, Mapping):
         raise ValueError("Invalid Chemvas file.")
     _validate_model_state(model_state)
+    for key in ("ring_fills", "notes", "marks", "arrows", "ts_brackets", "orbitals"):
+        if not isinstance(state.get(key), list):
+            raise ValueError("Invalid Chemvas file.")
+    settings = state.get("settings")
+    if not isinstance(settings, Mapping):
+        raise ValueError("Invalid Chemvas file.")
+    _validate_settings_state(settings)
+    last_smiles_input = state.get("last_smiles_input")
+    if last_smiles_input is not None and not isinstance(last_smiles_input, str):
+        raise ValueError("Invalid Chemvas file.")
 
 
 def _validate_workbook_state(state: Mapping[str, object]) -> None:
-    sheets_state = state.get("sheets")
-    if not isinstance(sheets_state, list):
+    if set(state) != {"active_sheet_index", "sheets"}:
         raise ValueError("Invalid Chemvas file.")
-    active_sheet_index = state.get("active_sheet_index", 0)
+    sheets_state = state.get("sheets")
+    if not isinstance(sheets_state, list) or not sheets_state:
+        raise ValueError("Invalid Chemvas file.")
+    active_sheet_index = state.get("active_sheet_index")
     if not _is_int(active_sheet_index) or active_sheet_index < 0:
         raise ValueError("Invalid Chemvas file.")
-    if sheets_state and active_sheet_index >= len(sheets_state):
+    if active_sheet_index >= len(sheets_state):
         raise ValueError("Invalid Chemvas file.")
     for sheet_state in sheets_state:
         if not isinstance(sheet_state, Mapping):
             raise ValueError("Invalid Chemvas file.")
-        sheet_kind = sheet_state.get("kind", "canvas")
+        if set(sheet_state) != {"name", "kind", "content"}:
+            raise ValueError("Invalid Chemvas file.")
+        name = sheet_state.get("name")
+        if not isinstance(name, str) or not name:
+            raise ValueError("Invalid Chemvas file.")
+        sheet_kind = sheet_state.get("kind")
         if sheet_kind != "canvas":
-            continue
+            raise ValueError("Invalid Chemvas file.")
         content = sheet_state.get("content")
         if not isinstance(content, Mapping):
             raise ValueError("Invalid Chemvas file.")
@@ -238,6 +261,8 @@ def _validate_workbook_state(state: Mapping[str, object]) -> None:
 def _validate_model_state(model_state: Mapping[str, object]) -> None:
     atoms_state = model_state.get("atoms")
     bonds_state = model_state.get("bonds")
+    if set(model_state) != {"atoms", "bonds", "next_atom_id"}:
+        raise ValueError("Invalid Chemvas file.")
     if not isinstance(atoms_state, Mapping) or not isinstance(bonds_state, list):
         raise ValueError("Invalid Chemvas file.")
 
@@ -249,7 +274,7 @@ def _validate_model_state(model_state: Mapping[str, object]) -> None:
         _validate_atom_state(atom_state)
         atom_ids.add(atom_id)
 
-    next_atom_id = model_state.get("next_atom_id", max(atom_ids, default=-1) + 1)
+    next_atom_id = model_state.get("next_atom_id")
     if not _is_int(next_atom_id) or next_atom_id < max(atom_ids, default=-1) + 1:
         raise ValueError("Invalid Chemvas file.")
 
@@ -262,32 +287,59 @@ def _validate_model_state(model_state: Mapping[str, object]) -> None:
 
 
 def _validate_atom_state(atom_state: Mapping[str, object]) -> None:
-    element = atom_state.get("element", "C")
+    if set(atom_state) != {"element", "x", "y", "color", "explicit_label"}:
+        raise ValueError("Invalid Chemvas file.")
+    element = atom_state.get("element")
     if not isinstance(element, str) or not element.strip():
         raise ValueError("Invalid Chemvas file.")
-    if not _is_number(atom_state.get("x", 0.0)) or not _is_number(atom_state.get("y", 0.0)):
+    if not _is_number(atom_state.get("x")) or not _is_number(atom_state.get("y")):
         raise ValueError("Invalid Chemvas file.")
-    color = atom_state.get("color", "#000000")
+    color = atom_state.get("color")
     if not _is_hex_color(color):
         raise ValueError("Invalid Chemvas file.")
-    explicit_label = atom_state.get("explicit_label", False)
+    explicit_label = atom_state.get("explicit_label")
     if type(explicit_label) is not bool:
         raise ValueError("Invalid Chemvas file.")
 
 
 def _validate_bond_state(bond_state: Mapping[str, object], atom_ids: set[int]) -> None:
+    if set(bond_state) != {"a", "b", "order", "style", "color"}:
+        raise ValueError("Invalid Chemvas file.")
     a = _validated_id(bond_state.get("a"))
     b = _validated_id(bond_state.get("b"))
     if a not in atom_ids or b not in atom_ids:
         raise ValueError("Invalid Chemvas file.")
-    order = bond_state.get("order", 1)
+    order = bond_state.get("order")
     if not _is_int(order) or order not in VALID_BOND_ORDERS:
         raise ValueError("Invalid Chemvas file.")
-    style = bond_state.get("style", "single")
+    style = bond_state.get("style")
     if not isinstance(style, str) or style not in VALID_BOND_STYLES:
         raise ValueError("Invalid Chemvas file.")
-    color = bond_state.get("color", "#000000")
+    color = bond_state.get("color")
     if not _is_hex_color(color):
+        raise ValueError("Invalid Chemvas file.")
+
+
+def _validate_settings_state(settings: Mapping[str, object]) -> None:
+    if set(settings) != SETTINGS_KEYS:
+        raise ValueError("Invalid Chemvas file.")
+    if not _is_number(settings.get("bond_length_px")):
+        raise ValueError("Invalid Chemvas file.")
+    if not _is_number(settings.get("arrow_line_width")):
+        raise ValueError("Invalid Chemvas file.")
+    if not _is_number(settings.get("arrow_head_scale")):
+        raise ValueError("Invalid Chemvas file.")
+    if type(settings.get("orbital_phase_enabled")) is not bool:
+        raise ValueError("Invalid Chemvas file.")
+    if not _is_int(settings.get("text_font_size")):
+        raise ValueError("Invalid Chemvas file.")
+    if not _is_int(settings.get("text_font_weight")):
+        raise ValueError("Invalid Chemvas file.")
+    if type(settings.get("text_italic")) is not bool:
+        raise ValueError("Invalid Chemvas file.")
+    if not isinstance(settings.get("sheet_size"), str) or not settings.get("sheet_size"):
+        raise ValueError("Invalid Chemvas file.")
+    if not isinstance(settings.get("sheet_orientation"), str) or not settings.get("sheet_orientation"):
         raise ValueError("Invalid Chemvas file.")
 
 
@@ -318,10 +370,3 @@ def _is_hex_color(value: object) -> bool:
     if len(digits) not in (3, 6):
         return False
     return all(char in "0123456789abcdefABCDEF" for char in digits)
-
-
-def _mapping_value(mapping: object, key: str, default):
-    if not isinstance(mapping, Mapping):
-        return default
-    value = mapping.get(key, default)
-    return default if value is None else value

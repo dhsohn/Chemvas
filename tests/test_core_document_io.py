@@ -1,4 +1,3 @@
-import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,18 +11,56 @@ from core.document_io import (
 )
 from core.document_state import (
     CHEMVAS_FILE_TYPE,
-    LEGACY_DOCUMENT_FILE_TYPE,
     SINGLE_SHEET_FILE_VERSION,
     WORKBOOK_FILE_VERSION,
+    serialize_settings,
 )
+
+
+def _settings() -> dict:
+    return serialize_settings(
+        bond_length_px=18.0,
+        arrow_line_width=1.5,
+        arrow_head_scale=0.4,
+        orbital_phase_enabled=True,
+        text_font_size=13,
+        text_font_weight=600,
+        text_italic=False,
+        sheet_size="A4",
+        sheet_orientation="portrait",
+    )
+
+
+def _model_state(
+    atoms: dict | None = None,
+    bonds: list | None = None,
+    next_atom_id: int = 0,
+) -> dict:
+    return {
+        "atoms": atoms or {},
+        "bonds": bonds or [],
+        "next_atom_id": next_atom_id,
+    }
+
+
+def _single_sheet_state(model: dict | None = None) -> dict:
+    return {
+        "model": model or _model_state(),
+        "ring_fills": [],
+        "notes": [],
+        "marks": [],
+        "arrows": [],
+        "ts_brackets": [],
+        "orbitals": [],
+        "settings": _settings(),
+        "last_smiles_input": None,
+    }
 
 
 class DocumentIOTest(unittest.TestCase):
     def test_create_document_wraps_state_in_chemvas_payload(self) -> None:
-        state = {
-            "model": {"atoms": {}, "bonds": [], "next_atom_id": 0},
-            "last_smiles_input": "CCO",
-        }
+        state = _single_sheet_state()
+        state["last_smiles_input"] = "CCO"
 
         document = create_document(state, version=SINGLE_SHEET_FILE_VERSION)
 
@@ -38,8 +75,8 @@ class DocumentIOTest(unittest.TestCase):
         )
         self.assertIs(document.state, state)
 
-    def test_parse_document_accepts_wrapped_payload_and_bare_state(self) -> None:
-        state = {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}}
+    def test_parse_document_accepts_wrapped_payloads(self) -> None:
+        state = _single_sheet_state()
         workbook_state = {
             "active_sheet_index": 0,
             "sheets": [
@@ -62,13 +99,10 @@ class DocumentIOTest(unittest.TestCase):
         }
 
         wrapped = parse_document(payload)
-        bare = parse_document(state)
         workbook = parse_document(workbook_payload)
 
         self.assertIs(wrapped.payload, payload)
         self.assertIs(wrapped.state, state)
-        self.assertIs(bare.payload, state)
-        self.assertIs(bare.state, state)
         self.assertIs(workbook.state, workbook_state)
 
     def test_parse_document_rejects_invalid_state_like_document_state(self) -> None:
@@ -83,7 +117,7 @@ class DocumentIOTest(unittest.TestCase):
                 {
                     "type": "unexpected",
                     "version": SINGLE_SHEET_FILE_VERSION,
-                    "state": {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}},
+                    "state": _single_sheet_state(),
                 }
             )
         with self.assertRaises(ValueError):
@@ -91,7 +125,7 @@ class DocumentIOTest(unittest.TestCase):
                 {
                     "type": CHEMVAS_FILE_TYPE,
                     "version": 3,
-                    "state": {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}},
+                    "state": _single_sheet_state(),
                 }
             )
         with self.assertRaises(ValueError):
@@ -112,15 +146,18 @@ class DocumentIOTest(unittest.TestCase):
 
     def test_create_document_rejects_unsupported_or_mismatched_versions(self) -> None:
         with self.assertRaises(ValueError):
-            create_document({"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}}, version=9)
+            create_document(_single_sheet_state(), version=9)
         with self.assertRaises(ValueError):
             create_document({"active_sheet_index": 0, "sheets": []}, version=SINGLE_SHEET_FILE_VERSION)
 
     def test_write_and_read_document_round_trip_wrapped_payload(self) -> None:
-        state = {
-            "model": {"atoms": {"0": {"element": "C"}}, "bonds": [], "next_atom_id": 1},
-            "settings": {"bond_length_px": 18.0},
-        }
+        state = _single_sheet_state(
+            _model_state(
+                {"0": {"element": "C", "x": 0.0, "y": 0.0, "color": "#000000", "explicit_label": False}},
+                [],
+                1,
+            )
+        )
 
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "sample.chemvas"
@@ -146,39 +183,28 @@ class DocumentIOTest(unittest.TestCase):
                 {
                     "name": "Sheet 1",
                     "kind": "canvas",
-                    "content": {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}},
+                    "content": _single_sheet_state(),
                 },
                 {
                     "name": "Sheet 2",
                     "kind": "canvas",
-                    "content": {
-                        "model": {
-                            "atoms": {"0": {"element": "O", "x": 0.0, "y": 0.0, "color": "#000000"}},
-                            "bonds": [],
-                            "next_atom_id": 1,
-                        }
-                    },
+                    "content": _single_sheet_state(
+                        _model_state(
+                            {
+                                "0": {
+                                    "element": "O",
+                                    "x": 0.0,
+                                    "y": 0.0,
+                                    "color": "#000000",
+                                    "explicit_label": False,
+                                }
+                            },
+                            [],
+                            1,
+                        )
+                    ),
                 },
             ],
-            "result_sheets": {
-                "active_index": 0,
-                "sheets": [
-                    {
-                        "title": "Optimization 1",
-                        "content": {
-                            "title": "GFN2-xTB Optimization",
-                            "subtitle": "Reactant input optimized with GFN2-xTB",
-                            "reactant_text": "Sheet 1: 2 atoms",
-                            "product_text": "Opt 1: 2 atoms",
-                            "cue_text": "Compare the structures.",
-                            "notes_text": "TOTAL ENERGY -10.0",
-                            "summary_text": "Optimization complete.",
-                            "metadata": [],
-                            "result_bullets": [],
-                        },
-                    }
-                ],
-            },
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -188,35 +214,6 @@ class DocumentIOTest(unittest.TestCase):
             loaded = read_document(path)
 
         self.assertEqual(loaded.payload, written.payload)
-        self.assertEqual(loaded.state, state)
-
-    def test_read_document_accepts_bare_state_files(self) -> None:
-        state = {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}, "notes": []}
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "legacy.json"
-            path.write_text(json.dumps(state), encoding="utf-8")
-
-            loaded = read_document(path)
-
-        self.assertEqual(loaded.payload, state)
-        self.assertEqual(loaded.state, state)
-
-    def test_read_document_accepts_legacy_wrapped_payloads(self) -> None:
-        state = {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}}
-        payload = {
-            "type": LEGACY_DOCUMENT_FILE_TYPE,
-            "version": SINGLE_SHEET_FILE_VERSION,
-            "state": state,
-        }
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "legacy.ldraw"
-            path.write_text(json.dumps(payload), encoding="utf-8")
-
-            loaded = read_document(path)
-
-        self.assertEqual(loaded.payload, payload)
         self.assertEqual(loaded.state, state)
 
 

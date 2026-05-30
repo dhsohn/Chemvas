@@ -13,11 +13,7 @@ from ui.main_window_toolbar_logic import (
 class MainWindowToolStateService:
     @staticmethod
     def _show_status_message(window, message: str) -> None:
-        show_status_message = getattr(window, "_show_status_message", None)
-        if callable(show_status_message):
-            show_status_message(message)
-            return
-        window.statusBar().showMessage(message)
+        window._show_status_message(message)
 
     def set_bond_style(self, window, value: str) -> None:
         style, order = bond_style_from_label(value)
@@ -41,9 +37,7 @@ class MainWindowToolStateService:
         if tool == "bond" and reset_bond_style:
             self.set_bond_style(window, "Single")
         self._show_status_message(window, f"{tool_display_name(tool)} Tool")
-        refresh_status_context = getattr(window, "_refresh_status_context", None)
-        if callable(refresh_status_context):
-            refresh_status_context()
+        window._refresh_status_context()
 
     def set_arrow_type(self, window, value: str) -> None:
         window.canvas.set_arrow_type(arrow_type_from_label(value))

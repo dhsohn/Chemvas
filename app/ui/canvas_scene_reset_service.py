@@ -52,12 +52,7 @@ class CanvasSceneResetService:
 
 
 def canvas_scene_reset_service_for(canvas) -> CanvasSceneResetService:
-    service = getattr(canvas, "_canvas_scene_reset_service", None)
-    if isinstance(service, CanvasSceneResetService) and service.canvas is canvas:
-        return service
-    if service is not None and hasattr(service, "clear_scene"):
-        return service
-    return CanvasSceneResetService(canvas)
+    return canvas._canvas_scene_reset_service
 
 
 __all__ = ["CanvasSceneResetService", "canvas_scene_reset_service_for"]

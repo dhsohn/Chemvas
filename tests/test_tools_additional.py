@@ -117,6 +117,7 @@ class _TextCanvas:
         self.added_atoms = []
         self.label_calls = []
         self.pushed_commands = []
+        self._atom_label_service = SimpleNamespace(add_or_update_atom_label=self.add_or_update_atom_label)
 
     def setDragMode(self, mode) -> None:
         self.drag_mode = mode
@@ -209,6 +210,7 @@ class _DeleteCanvas:
         self.deleted_rings = []
         self.removed_items = []
         self.pushed_commands = []
+        self._scene_item_controller = SimpleNamespace(remove_scene_item=self.remove_scene_item)
 
     def setDragMode(self, mode) -> None:
         self.drag_mode = mode

@@ -194,7 +194,7 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
         self.assertNotIn(1, canvas.bond_items)
         self.assertNotIn(2, canvas.bond_items)
 
-    def test_restore_bond_from_state_ignores_empty_state_and_factory_reuses_duck_service(self) -> None:
+    def test_restore_bond_from_state_ignores_empty_state_and_factory_returns_bound_service(self) -> None:
         canvas = SimpleNamespace(
             bond_items={},
             scene=lambda: _FakeScene(),
@@ -224,9 +224,9 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
         canvas._canvas_bond_mutation_service = duck_service
         self.assertIs(canvas_bond_mutation_service_for(canvas), duck_service)
 
-        canvas._canvas_bond_mutation_service = object()
-        fallback = canvas_bond_mutation_service_for(canvas)
-        self.assertIsInstance(fallback, CanvasBondMutationService)
+        placeholder = object()
+        canvas._canvas_bond_mutation_service = placeholder
+        self.assertIs(canvas_bond_mutation_service_for(canvas), placeholder)
 
 
 if __name__ == "__main__":

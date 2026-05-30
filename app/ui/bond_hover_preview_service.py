@@ -14,11 +14,7 @@ class BondHoverPreviewService:
         self.canvas = canvas
 
     def _add_hover_preview_items(self, items) -> None:
-        hover_scene_service = getattr(self.canvas, "_hover_scene_service", None)
-        if hover_scene_service is not None:
-            hover_scene_service.add_hover_preview_items(items)
-            return
-        self.canvas._add_hover_preview_items(items)
+        self.canvas._hover_scene_service.add_hover_preview_items(items)
 
     def add_bond_style_hover_preview(self, bond: Bond) -> None:
         if self.canvas.tools.active is None or self.canvas.tools.active.name != "bond":

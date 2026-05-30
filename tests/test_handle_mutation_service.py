@@ -13,6 +13,7 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
+    from ui.curved_arrow_path_service import CurvedArrowPathService
     from ui.handle_mutation_service import HandleMutationService
 
 
@@ -64,7 +65,7 @@ class HandleMutationServiceTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def _make_canvas(self, *, bond_length_px: float = 40.0):
-        return SimpleNamespace(
+        canvas = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=bond_length_px)),
             _orbital_snap_enabled=False,
             _orbital_snap_step=15,
@@ -74,6 +75,8 @@ class HandleMutationServiceTest(unittest.TestCase):
             _add_arrow_head=mock.Mock(),
             _update_selection_outline=mock.Mock(),
         )
+        canvas._curved_arrow_path_service = CurvedArrowPathService(canvas)
+        return canvas
 
     def test_update_orbital_scale_and_rotate_use_center_or_bounds(self) -> None:
         canvas = self._make_canvas(bond_length_px=40.0)

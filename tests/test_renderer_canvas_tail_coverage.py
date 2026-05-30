@@ -51,6 +51,18 @@ class _FakeRenderer:
         pen.setWidthF(self.style.bond_line_width)
         return pen
 
+    def bond_line_width(self) -> float:
+        return self.style.bond_line_width
+
+    def bold_bond_width(self) -> float:
+        return self.style.bold_bond_width
+
+    def bond_spacing(self) -> float:
+        return self.style.bond_spacing_px
+
+    def hash_spacing(self) -> float:
+        return self.style.hash_spacing_px
+
     def dotted_bond_pen(self) -> QPen:
         pen = self.bond_pen()
         pen.setStyle(Qt.PenStyle.DotLine)

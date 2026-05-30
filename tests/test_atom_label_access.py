@@ -56,12 +56,11 @@ class AtomLabelAccessTest(unittest.TestCase):
         )
         self.assertEqual(canvas.wrapper_calls, [])
 
-    def test_add_or_update_atom_label_falls_back_to_canvas_wrapper(self) -> None:
+    def test_add_or_update_atom_label_requires_service(self) -> None:
         canvas = _FakeCanvas()
 
-        add_or_update_atom_label(canvas, 2, "N", record=False)
-
-        self.assertEqual(canvas.wrapper_calls, [(2, "N", True, False, True, False)])
+        with self.assertRaises(AttributeError):
+            add_or_update_atom_label(canvas, 2, "N", record=False)
 
 
 if __name__ == "__main__":

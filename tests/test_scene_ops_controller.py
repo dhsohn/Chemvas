@@ -260,8 +260,8 @@ class SceneOpsControllerTest(unittest.TestCase):
         clipboard = QApplication.clipboard()
 
         for raw_payload in (
-            b'{"format":"not-lightdraw-selection","version":1}',
-            b'{"format":"lightdraw-selection","version":999}',
+            b'{"format":"not-chemvas-selection","version":1}',
+            b'{"format":"chemvas-selection","version":999}',
         ):
             mime_data = canvas.new_mime_data(raw_payload)
             clipboard.setMimeData(mime_data)
@@ -269,20 +269,15 @@ class SceneOpsControllerTest(unittest.TestCase):
             self.assertIsNone(payload)
             self.assertIsNone(payload_json)
 
-    def test_clipboard_selection_payload_uses_image_only_fallback_json(self) -> None:
+    def test_clipboard_selection_payload_rejects_image_only_clipboard(self) -> None:
         canvas = _FakeCanvas()
         controller = SceneOpsController(canvas)
         clipboard = QApplication.clipboard()
-        payload_json = '{"format":"lightdraw-selection","version":1,"scene_items":[{"kind":"note"}]}'
-        canvas._clipboard_selection_payload_json = payload_json
         mime_data = QImage(4, 4, QImage.Format.Format_ARGB32)
         image_mime = canvas.new_image_mime_data(mime_data)
         clipboard.setMimeData(image_mime)
 
-        payload, returned_json = controller._clipboard_selection_payload()
-
-        self.assertEqual(payload, {"format": "lightdraw-selection", "version": 1, "scene_items": [{"kind": "note"}]})
-        self.assertEqual(returned_json, payload_json)
+        self.assertEqual(controller._clipboard_selection_payload(), (None, None))
 
     def test_selection_payload_for_clipboard_includes_linked_items(self) -> None:
         canvas = _FakeCanvas()
@@ -318,7 +313,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         payload = controller._selection_payload_for_clipboard()
 
         assert payload is not None
-        self.assertEqual(payload["format"], "lightdraw-selection")
+        self.assertEqual(payload["format"], "chemvas-selection")
         self.assertEqual(payload["version"], 1)
         self.assertEqual([atom["id"] for atom in payload["atoms"]], [1, 2])
         self.assertEqual(payload["bonds"], [{"a": 1, "b": 2, "order": 2, "style": "double", "color": "#333333"}])
@@ -362,7 +357,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         note_item = _make_note_item("copy", 10.0, 12.0)
         canvas.add_item(note_item, selected=True)
         self.assertTrue(controller.copy_selection_to_clipboard())
-        self.assertIsNotNone(canvas._clipboard_selection_payload_json)
+        self.assertIsNotNone(canvas._clipboard_paste_source_json)
         self.assertEqual(canvas._clipboard_paste_count, 0)
         mime_data = QApplication.clipboard().mimeData()
         self.assertTrue(mime_data.hasImage())
@@ -376,7 +371,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         canvas.add_item(stale_item, selected=True)
 
         payload = {
-            "format": "lightdraw-selection",
+            "format": "chemvas-selection",
             "version": 1,
             "atoms": [
                 {"id": 10, "element": "C", "x": 5.0, "y": 10.0, "color": "#ff0000", "explicit_label": True},
@@ -450,7 +445,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertFalse(controller.paste_selection_from_clipboard())
 
         controller._clipboard_selection_payload = lambda: (
-            {"format": "lightdraw-selection", "version": 1, "atoms": [], "bonds": [], "rings": [], "marks": [], "scene_items": []},
+            {"format": "chemvas-selection", "version": 1, "atoms": [], "bonds": [], "rings": [], "marks": [], "scene_items": []},
             "payload-json",
         )
         self.assertFalse(controller.paste_selection_from_clipboard())
@@ -461,7 +456,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         canvas._clipboard_paste_count = 5
         controller = SceneOpsController(canvas)
         payload = {
-            "format": "lightdraw-selection",
+            "format": "chemvas-selection",
             "version": 1,
             "atoms": [{"id": "bad"}],
             "bonds": [{"a": 1, "b": "bad"}],
@@ -497,8 +492,28 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertEqual(canvas.update_selection_outline_calls, 0)
 
 
+class _FakeSceneItemController:
+    def __init__(self, canvas) -> None:
+        self.canvas = canvas
+
+    def remove_scene_item(self, item: QGraphicsItem) -> None:
+        self.canvas.remove_scene_item(item)
+
+    def create_scene_item_from_state(self, state: dict):
+        return self.canvas.create_scene_item_from_state(state)
+
+    def apply_scene_item_state(self, item: QGraphicsItem, state: dict) -> None:
+        self.canvas.apply_scene_item_state(item, state)
+
+    def attach_scene_item(self, item: QGraphicsItem) -> None:
+        self.canvas.attach_scene_item(item)
+
+    def restore_scene_item(self, item: QGraphicsItem) -> None:
+        self.canvas.restore_scene_item(item)
+
+
 class _FakeCanvas:
-    CLIPBOARD_SELECTION_MIME = "application/x-lightdraw-selection+json"
+    CLIPBOARD_SELECTION_MIME = "application/x-chemvas-selection+json"
     CLIPBOARD_SELECTION_VERSION = 1
 
     def __init__(self) -> None:
@@ -508,7 +523,6 @@ class _FakeCanvas:
         self.last_smiles_input = None
         self._marks_by_atom: dict[int, list[QGraphicsItem]] = {}
         self.ring_items: list[QGraphicsItem] = []
-        self._clipboard_selection_payload_json = None
         self._clipboard_paste_source_json = None
         self._clipboard_paste_count = 0
         self._clipboard_payload = None
@@ -531,6 +545,10 @@ class _FakeCanvas:
         self.update_selection_outline_calls = 0
         self.suspend_selection_outline_calls: list[bool] = []
         self.record_additions_calls: list[tuple[int, int, str | None, list[QGraphicsItem]]] = []
+        self._scene_item_controller = _FakeSceneItemController(self)
+
+    def devicePixelRatioF(self) -> float:
+        return 1.0
 
     def scene(self) -> QGraphicsScene:
         return self._scene
@@ -585,6 +603,12 @@ class _FakeCanvas:
     def remove_scene_item(self, item: QGraphicsItem) -> None:
         self.removed_scene_items.append(item)
         self._scene.removeItem(item)
+
+    def attach_scene_item(self, item: QGraphicsItem) -> None:
+        self.add_item(item)
+
+    def restore_scene_item(self, item: QGraphicsItem) -> None:
+        self.add_item(item)
 
     def clear_handles(self) -> None:
         self.clear_handles_calls += 1

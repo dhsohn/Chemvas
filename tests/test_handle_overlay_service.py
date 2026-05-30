@@ -159,7 +159,7 @@ class HandleOverlayServiceTest(unittest.TestCase):
             ["curved_start", "curved_control", "curved_end"],
         )
 
-    def test_handle_overlay_service_for_reuses_matching_or_duck_typed_service(self) -> None:
+    def test_handle_overlay_service_for_returns_bound_service(self) -> None:
         scene = QGraphicsScene()
         canvas = self._make_canvas(scene)
         matching = HandleOverlayService(canvas)
@@ -177,10 +177,9 @@ class HandleOverlayServiceTest(unittest.TestCase):
         canvas._handle_overlay_service = duck
         self.assertIs(handle_overlay_service_for(canvas), duck)
 
-        canvas._handle_overlay_service = SimpleNamespace(clear_handles=mock.Mock())
-        fallback = handle_overlay_service_for(canvas)
-        self.assertIsInstance(fallback, HandleOverlayService)
-        self.assertIs(fallback.canvas, canvas)
+        placeholder = object()
+        canvas._handle_overlay_service = placeholder
+        self.assertIs(handle_overlay_service_for(canvas), placeholder)
 
 
 if __name__ == "__main__":

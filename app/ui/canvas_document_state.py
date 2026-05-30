@@ -31,73 +31,67 @@ def snapshot_canvas_document_state(canvas) -> dict:
             arrow_head_scale=canvas.arrow_head_scale,
             orbital_phase_enabled=canvas.orbital_phase_enabled,
             text_font_size=canvas.text_font_size,
-            text_font_weight=canvas.text_font_weight,
+            text_font_weight=int(canvas.text_font_weight),
             text_italic=canvas.text_italic,
-            sheet_size=getattr(canvas, "sheet_size", "A4"),
-            sheet_orientation=getattr(canvas, "sheet_orientation", "landscape"),
+            sheet_size=canvas.sheet_size,
+            sheet_orientation=canvas.sheet_orientation,
         ),
         "last_smiles_input": canvas.last_smiles_input,
     }
 
 
 def apply_document_settings(canvas, state: dict) -> None:
-    settings = state.get("settings", {})
-    bond_length = settings.get("bond_length_px", canvas.renderer.style.bond_length_px)
-    canvas.renderer.set_bond_length(bond_length)
-    canvas.arrow_line_width = settings.get("arrow_line_width", canvas.arrow_line_width)
-    canvas.arrow_head_scale = settings.get("arrow_head_scale", canvas.arrow_head_scale)
-    canvas.orbital_phase_enabled = settings.get("orbital_phase_enabled", canvas.orbital_phase_enabled)
-    canvas.text_font_size = settings.get("text_font_size", canvas.text_font_size)
-    canvas.text_font_weight = settings.get("text_font_weight", canvas.text_font_weight)
-    canvas.text_italic = settings.get("text_italic", canvas.text_italic)
-    set_sheet_setup = getattr(canvas, "set_sheet_setup", None)
-    if callable(set_sheet_setup):
-        set_sheet_setup(
-            settings.get("sheet_size", getattr(canvas, "sheet_size", "A4")),
-            settings.get("sheet_orientation", getattr(canvas, "sheet_orientation", "landscape")),
-        )
-    canvas.last_smiles_input = state.get("last_smiles_input")
+    settings = state["settings"]
+    canvas.renderer.set_bond_length(settings["bond_length_px"])
+    canvas.arrow_line_width = settings["arrow_line_width"]
+    canvas.arrow_head_scale = settings["arrow_head_scale"]
+    canvas.orbital_phase_enabled = settings["orbital_phase_enabled"]
+    canvas.text_font_size = settings["text_font_size"]
+    canvas.text_font_weight = settings["text_font_weight"]
+    canvas.text_italic = settings["text_italic"]
+    canvas.set_sheet_setup(settings["sheet_size"], settings["sheet_orientation"])
+    canvas.last_smiles_input = state["last_smiles_input"]
 
 
 def restore_document_pre_model_items(canvas, state: dict) -> None:
-    for ring_state in state.get("ring_fills", []):
+    for ring_state in state["ring_fills"]:
         restore_ring_from_state(canvas, ring_state)
 
 
 def restore_document_post_model_items(canvas, state: dict) -> None:
-    for note_state in state.get("notes", []):
+    for note_state in state["notes"]:
         restore_note_from_state(canvas, note_state)
 
-    for mark_state in state.get("marks", []):
+    for mark_state in state["marks"]:
         restore_mark_from_state(
             canvas,
             {
                 "kind": "mark",
-                "mark_kind": mark_state.get("kind", "plus"),
-                "text": mark_state.get("text"),
-                "atom_id": mark_state.get("atom_id"),
-                "dx": mark_state.get("dx"),
-                "dy": mark_state.get("dy"),
-                "x": mark_state.get("x"),
-                "y": mark_state.get("y"),
+                "mark_kind": mark_state["kind"],
+                "text": mark_state["text"],
+                "atom_id": mark_state["atom_id"],
+                "dx": mark_state["dx"],
+                "dy": mark_state["dy"],
+                "x": mark_state["x"],
+                "y": mark_state["y"],
             }
         )
 
-    for arrow_state in state.get("arrows", []):
+    for arrow_state in state["arrows"]:
         restore_arrow_from_state(canvas, arrow_state)
 
-    for ts_bracket_state in state.get("ts_brackets", []):
+    for ts_bracket_state in state["ts_brackets"]:
         restore_ts_bracket_from_state(canvas, ts_bracket_state)
 
-    for orbital_state in state.get("orbitals", []):
+    for orbital_state in state["orbitals"]:
         restore_orbital_from_state(
             canvas,
             {
                 "kind": "orbital",
-                "orbital_kind": orbital_state.get("kind", "s"),
-                "center": orbital_state.get("center"),
-                "scale": orbital_state.get("scale", 1.0),
-                "rotation": orbital_state.get("rotation", 0.0),
+                "orbital_kind": orbital_state["kind"],
+                "center": orbital_state["center"],
+                "scale": orbital_state["scale"],
+                "rotation": orbital_state["rotation"],
             }
         )
 
@@ -120,10 +114,10 @@ def _snapshot_ring_fills(canvas) -> list[dict]:
         ring_state = canvas._ring_state_dict(ring_item)
         ring_fills.append(
             {
-                "points": ring_state.get("points", []),
-                "atom_ids": ring_state.get("atom_ids"),
-                "color": ring_state.get("color"),
-                "alpha": ring_state.get("alpha", 0.0),
+                "points": ring_state["points"],
+                "atom_ids": ring_state["atom_ids"],
+                "color": ring_state["color"],
+                "alpha": ring_state["alpha"],
             }
         )
     return ring_fills
@@ -135,9 +129,9 @@ def _snapshot_notes(canvas) -> list[dict]:
         note_state = canvas._note_state_dict(item)
         notes.append(
             {
-                "text": note_state.get("text", ""),
-                "x": note_state.get("x", 0.0),
-                "y": note_state.get("y", 0.0),
+                "text": note_state["text"],
+                "x": note_state["x"],
+                "y": note_state["y"],
             }
         )
     return notes
@@ -149,13 +143,13 @@ def _snapshot_marks(canvas) -> list[dict]:
         mark_state = canvas._mark_state_dict(item)
         marks.append(
             {
-                "kind": mark_state.get("mark_kind"),
-                "text": mark_state.get("text"),
-                "atom_id": mark_state.get("atom_id"),
-                "dx": mark_state.get("dx"),
-                "dy": mark_state.get("dy"),
-                "x": mark_state.get("x", 0.0),
-                "y": mark_state.get("y", 0.0),
+                "kind": mark_state["mark_kind"],
+                "text": mark_state["text"],
+                "atom_id": mark_state["atom_id"],
+                "dx": mark_state["dx"],
+                "dy": mark_state["dy"],
+                "x": mark_state["x"],
+                "y": mark_state["y"],
             }
         )
     return marks
@@ -184,10 +178,10 @@ def _snapshot_orbitals(canvas) -> list[dict]:
         orbital_state = canvas._orbital_state_dict(item)
         orbitals.append(
             {
-                "kind": orbital_state.get("orbital_kind", "s"),
-                "center": orbital_state.get("center"),
-                "scale": orbital_state.get("scale", 1.0),
-                "rotation": orbital_state.get("rotation", 0.0),
+                "kind": orbital_state["orbital_kind"],
+                "center": orbital_state["center"],
+                "scale": orbital_state["scale"],
+                "rotation": orbital_state["rotation"],
             }
         )
     return orbitals

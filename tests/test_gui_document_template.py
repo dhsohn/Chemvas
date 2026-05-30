@@ -273,7 +273,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         )
         self.assertNotIn("result_sheets", document.state)
 
-    def test_load_canvas_restores_workbook_sheets_and_ignores_legacy_result_payloads(self) -> None:
+    def test_load_canvas_restores_workbook_sheets(self) -> None:
         self.window.canvas.add_bond_from_points(QPointF(-20.0, 0.0), QPointF(20.0, 0.0))
         first_sheet_state = self.window.canvas.snapshot_state()
 
@@ -287,27 +287,6 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
                 {"name": "Reactant Sheet", "kind": "canvas", "content": first_sheet_state},
                 {"name": "Product Sheet", "kind": "canvas", "content": second_sheet_state},
             ],
-            "result_sheets": {
-                "active_index": 0,
-                "sheets": [
-                    {
-                        "title": "Path 1",
-                        "content": {
-                            "title": "Reaction Path Analysis",
-                            "subtitle": "RMSD push/pull path finder via xtb --path",
-                            "reactant_text": "Reactant Sheet: 2 atoms, 1 bonds, charge +0, radicals 0",
-                            "product_text": "Product Sheet: 6 atoms, 6 bonds, charge +0, radicals 0",
-                            "cue_text": "Inspect the barrier direction.",
-                            "notes_text": "forward barrier (kcal) : 12.5",
-                            "summary_text": "Reaction path analysis complete.",
-                            "metadata": [{"label": "Workflow", "value": "PATH", "emphasis": True}],
-                            "result_bullets": [
-                                {"label": "Forward barrier", "value": "12.5000 kcal/mol", "emphasis": True}
-                            ],
-                        },
-                    }
-                ],
-            },
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -398,13 +377,16 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             raw_path = Path(temp_dir) / "exported_structure"
             expected_path = Path(f"{raw_path}.xyz")
+            def export_success(path, *, on_success, on_error) -> None:
+                on_success(path)
+
             with (
                 patch("ui.main_window.QFileDialog.getSaveFileName", return_value=(str(raw_path), "")),
-                patch.object(self.window.canvas, "export_xyz") as export_mock,
+                patch.object(self.window.canvas, "export_xyz_async", side_effect=export_success) as export_mock,
             ):
                 self.window._export_xyz()
 
-        export_mock.assert_called_once_with(str(expected_path))
+        self.assertEqual(export_mock.call_args.args, (str(expected_path),))
         self.assertEqual(self.window._current_file_path, "/tmp/example.chemvas")
         self.assertEqual(self.window.statusBar().currentMessage(), f"Exported XYZ: {expected_path}")
 
@@ -424,12 +406,16 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
         with (
             patch("ui.main_window.QFileDialog.getSaveFileName", return_value=("/tmp/output.xyz", "")),
-            patch.object(self.window.canvas, "export_xyz", side_effect=ValueError("RDKit missing")) as export_mock,
+            patch.object(
+                self.window.canvas,
+                "export_xyz_async",
+                side_effect=lambda path, *, on_success, on_error: on_error("RDKit missing"),
+            ) as export_mock,
             patch("ui.main_window.QMessageBox.warning") as warning,
         ):
             self.window._export_xyz()
 
-        export_mock.assert_called_once_with("/tmp/output.xyz")
+        self.assertEqual(export_mock.call_args.args, ("/tmp/output.xyz",))
         warning.assert_called_once_with(
             self.window,
             "Export Error",

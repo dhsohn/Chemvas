@@ -65,6 +65,14 @@ class _FakeCanvas:
         self.renderer = _FakeRenderer(self)
         self._projection_center_3d = "before-center"
         self._projection_anchor_2d = "before-anchor"
+        self._atom_label_service = SimpleNamespace(add_or_update_atom_label=self.add_or_update_atom_label)
+        self._scene_item_controller = SimpleNamespace(
+            apply_scene_item_state=self.apply_scene_item_state,
+            create_scene_item_from_state=self.create_scene_item_from_state,
+            restore_scene_item=self.restore_scene_item,
+            remove_scene_item=self.remove_scene_item,
+            _restore_mark_from_state=lambda mark_state: self.calls.append(("_restore_mark_from_state", dict(mark_state))),
+        )
 
     def scene(self):
         return self._scene_obj
@@ -78,7 +86,7 @@ class _FakeCanvas:
     def _update_selection_outline(self) -> None:
         self.calls.append(("_update_selection_outline",))
 
-    def set_atom_positions(self, positions, update_selection=True) -> None:
+    def set_atom_positions(self, positions, update_selection=True, coords_3d=None) -> None:
         self.calls.append(("set_atom_positions", dict(positions), update_selection))
 
     def set_ring_polygons(self, ring_items, polygons) -> None:
@@ -176,8 +184,10 @@ class _FakeSceneItemController:
 class _MinimalCanvas:
     def __init__(self) -> None:
         self.calls: list[tuple] = []
+        self._projection_center_3d = None
+        self._projection_anchor_2d = None
 
-    def set_atom_positions(self, positions, update_selection=True) -> None:
+    def set_atom_positions(self, positions, update_selection=True, coords_3d=None) -> None:
         self.calls.append(("set_atom_positions", dict(positions), update_selection))
 
 
@@ -267,16 +277,8 @@ class HistoryCommandTest(unittest.TestCase):
         self.assertIsNone(canvas._projection_center_3d)
         self.assertIsNone(canvas._projection_anchor_2d)
 
-    def test_set_atom_positions_command_skips_missing_projection_attrs_and_typeerror_fallback(self) -> None:
+    def test_set_atom_positions_command_uses_current_projection_and_coords_contract(self) -> None:
         canvas = _MinimalCanvas()
-
-        class _CoordsCanvas(_MinimalCanvas):
-            def set_atom_positions(self, positions, update_selection=True, coords_3d=None) -> None:  # type: ignore[override]
-                if coords_3d is not None:
-                    raise TypeError("coords_3d unsupported")
-                super().set_atom_positions(positions, update_selection=update_selection)
-
-        coords_canvas = _CoordsCanvas()
         command = SetAtomPositionsCommand(
             {1: (0.0, 0.0)},
             {1: (2.0, 3.0)},
@@ -285,11 +287,18 @@ class HistoryCommandTest(unittest.TestCase):
             restore_projection_state=True,
         )
 
-        command.redo(coords_canvas)
+        command.redo(canvas)
         command.undo(canvas)
 
-        self.assertEqual(coords_canvas.calls, [("set_atom_positions", {1: (2.0, 3.0)}, True)])
-        self.assertEqual(canvas.calls, [("set_atom_positions", {1: (0.0, 0.0)}, True)])
+        self.assertEqual(
+            canvas.calls,
+            [
+                ("set_atom_positions", {1: (2.0, 3.0)}, True),
+                ("set_atom_positions", {1: (0.0, 0.0)}, True),
+            ],
+        )
+        self.assertIsNone(canvas._projection_center_3d)
+        self.assertIsNone(canvas._projection_anchor_2d)
 
     def test_update_commands_apply_length_color_scene_state_and_smiles(self) -> None:
         canvas = _FakeCanvas()

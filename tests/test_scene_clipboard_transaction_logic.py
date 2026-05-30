@@ -48,7 +48,7 @@ class SceneClipboardTransactionLogicTest(unittest.TestCase):
 
         plan = build_clipboard_copy_plan(
             [flat],
-            payload={"format": "lightdraw-selection", "version": 1},
+            payload={"format": "chemvas-selection", "version": 1},
             bond_line_width=1.5,
             device_pixel_ratio=2.0,
         )
@@ -61,7 +61,7 @@ class SceneClipboardTransactionLogicTest(unittest.TestCase):
 
         plan = build_clipboard_copy_plan(
             [first, second],
-            payload={"scene_items": [{"kind": "note"}], "format": "lightdraw-selection", "version": 1},
+            payload={"scene_items": [{"kind": "note"}], "format": "chemvas-selection", "version": 1},
             bond_line_width=2.0,
             device_pixel_ratio=1.5,
         )
@@ -73,17 +73,16 @@ class SceneClipboardTransactionLogicTest(unittest.TestCase):
         self.assertEqual(plan.image_height, 50)
         self.assertEqual(
             plan.payload_json,
-            '{"format":"lightdraw-selection","scene_items":[{"kind":"note"}],"version":1}',
+            '{"format":"chemvas-selection","scene_items":[{"kind":"note"}],"version":1}',
         )
         self.assertEqual(
             clipboard_copy_cache_values(plan.payload_json),
             (
-                '{"format":"lightdraw-selection","scene_items":[{"kind":"note"}],"version":1}',
-                '{"format":"lightdraw-selection","scene_items":[{"kind":"note"}],"version":1}',
+                '{"format":"chemvas-selection","scene_items":[{"kind":"note"}],"version":1}',
                 0,
             ),
         )
-        self.assertEqual(clipboard_copy_cache_values(None), (None, None, 0))
+        self.assertEqual(clipboard_copy_cache_values(None), (None, 0))
 
     def test_visible_items_to_hide_for_copy_skips_selected_and_invisible_items(self) -> None:
         selected = _make_rect_item(QRectF(0.0, 0.0, 10.0, 10.0))

@@ -72,7 +72,7 @@ class ScenePasteApplyLogicTest(unittest.TestCase):
         canvas.translate_none_kinds = {"skip-none"}
         canvas.translate_empty_kinds = {"skip-empty"}
         payload = {
-            "format": "lightdraw-selection",
+            "format": "chemvas-selection",
             "version": 1,
             "atoms": [
                 "bad",
@@ -194,7 +194,7 @@ class ScenePasteApplyLogicTest(unittest.TestCase):
         canvas.translate_none_kinds = {"skip-none"}
         canvas.translate_empty_kinds = {"skip-empty"}
         payload = {
-            "format": "lightdraw-selection",
+            "format": "chemvas-selection",
             "version": 1,
             "atoms": [
                 "bad",

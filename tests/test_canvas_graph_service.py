@@ -75,6 +75,11 @@ class CanvasGraphServiceTest(unittest.TestCase):
             _component_without_bond=mock.Mock(side_effect=[set(comp_a), set(comp_b)]),
         )
 
+    def _rotation_service(self, comp_a, comp_b, *, atoms=None):
+        service = CanvasGraphService(self._rotation_canvas(comp_a, comp_b, atoms=atoms))
+        service.component_without_bond = mock.Mock(side_effect=[set(comp_a), set(comp_b)] * 20)
+        return service
+
     def test_remove_bond_neighbors_preserves_adjacency_when_parallel_bond_exists(self) -> None:
         bonds = [Bond(1, 2, 1), Bond(1, 2, 2)]
         canvas = SimpleNamespace(
@@ -193,8 +198,8 @@ class CanvasGraphServiceTest(unittest.TestCase):
 
     def test_rotatable_and_component_helpers_cover_invalid_none_and_override_paths(self) -> None:
         canvas = self._make_canvas([Bond(1, 2, 2), None])
-        canvas._bond_in_cycle = mock.Mock(return_value=False)
         service = CanvasGraphService(canvas)
+        service.bond_in_cycle = mock.Mock(return_value=False)
 
         self.assertFalse(service.bond_is_rotatable(-1))
         self.assertFalse(service.bond_is_rotatable(1))
@@ -203,71 +208,58 @@ class CanvasGraphServiceTest(unittest.TestCase):
         self.assertIsNone(service.bond_component_atoms(1))
 
         canvas.model.bonds[0] = Bond(1, 2, 1)
-        canvas._component_without_bond = mock.Mock(side_effect=[{1, 3}, {2, 4, 5}])
+        service.component_without_bond = mock.Mock(side_effect=[{1, 3}, {2, 4, 5}])
 
         self.assertTrue(service.bond_is_rotatable(0))
         self.assertEqual(service.bond_component_atoms(0), {1, 2, 3, 4, 5})
 
-        canvas._bond_in_cycle.return_value = True
+        service.bond_in_cycle.return_value = True
         self.assertFalse(service.bond_is_rotatable(0))
 
     def test_rotation_side_for_bond_covers_direct_and_fallback_choices(self) -> None:
-        canvas = self._rotation_canvas({1, 3, 4}, {2, 5})
-        service = CanvasGraphService(canvas)
+        service = self._rotation_service({1, 3, 4}, {2, 5})
 
         self.assertEqual(service.rotation_side_for_bond(0, {3}, allow_fallback=False), {1, 3, 4})
 
-        canvas = self._rotation_canvas({1, 3}, {2, 5, 6})
-        service = CanvasGraphService(canvas)
+        service = self._rotation_service({1, 3}, {2, 5, 6})
         self.assertEqual(service.rotation_side_for_bond(0, {5}, allow_fallback=False), {2, 5, 6})
 
-        canvas = self._rotation_canvas({1, 3, 4}, {2, 5})
-        service = CanvasGraphService(canvas)
+        service = self._rotation_service({1, 3, 4}, {2, 5})
         self.assertEqual(service.rotation_side_for_bond(0, {1}, allow_fallback=False), {1, 3, 4})
 
-        canvas = self._rotation_canvas({1, 3}, {2, 5})
-        service = CanvasGraphService(canvas)
+        service = self._rotation_service({1, 3}, {2, 5})
         self.assertIsNone(service.rotation_side_for_bond(0, set(), allow_fallback=False))
 
-        canvas = self._rotation_canvas({1, 3, 4, 7}, {2, 5})
-        service = CanvasGraphService(canvas)
+        service = self._rotation_service({1, 3, 4, 7}, {2, 5})
         self.assertEqual(service.rotation_side_for_bond(0, {3, 4, 5}, allow_fallback=True), {1, 3, 4, 7})
 
-        canvas = self._rotation_canvas({1, 3}, {2, 5})
-        service = CanvasGraphService(canvas)
+        service = self._rotation_service({1, 3}, {2, 5})
         self.assertEqual(service.rotation_side_for_bond(0, set(), allow_fallback=True), {1, 3})
 
     def test_preferred_rotation_side_for_bond_covers_partial_selection_press_and_fallback_matrix(self) -> None:
-        canvas = self._rotation_canvas({1, 3, 4}, {2, 5, 6})
-        service = CanvasGraphService(canvas)
+        service = self._rotation_service({1, 3, 4}, {2, 5, 6})
         self.assertEqual(service.preferred_rotation_side_for_bond(0, {3}, allow_fallback=True), {1, 3, 4})
 
-        canvas = self._rotation_canvas({1, 3, 4}, {2, 5, 6})
-        service = CanvasGraphService(canvas)
+        service = self._rotation_service({1, 3, 4}, {2, 5, 6})
         self.assertEqual(service.preferred_rotation_side_for_bond(0, {2}, allow_fallback=True), {2, 5, 6})
 
-        canvas = self._rotation_canvas({1, 3, 4, 6}, {2, 5})
-        service = CanvasGraphService(canvas)
+        service = self._rotation_service({1, 3, 4, 6}, {2, 5})
         self.assertEqual(service.preferred_rotation_side_for_bond(0, {3, 4, 5}, allow_fallback=True), {1, 3, 4, 6})
 
-        canvas = self._rotation_canvas({1, 3, 4, 6, 7, 8}, {2, 5, 9})
-        service = CanvasGraphService(canvas)
+        service = self._rotation_service({1, 3, 4, 6, 7, 8}, {2, 5, 9})
         self.assertEqual(service.preferred_rotation_side_for_bond(0, {1, 3, 5}, allow_fallback=True), {1, 3, 4, 6, 7, 8})
 
-        canvas = self._rotation_canvas({1, 3}, {2, 4})
-        service = CanvasGraphService(canvas)
+        service = self._rotation_service({1, 3}, {2, 4})
         self.assertEqual(
             service.preferred_rotation_side_for_bond(0, {3, 4}, press_pos=QPointF(9.0, 0.0), allow_fallback=True),
             {2, 4},
         )
-        canvas = self._rotation_canvas({1, 3}, {2, 4})
-        service = CanvasGraphService(canvas)
+        service = self._rotation_service({1, 3}, {2, 4})
         self.assertIsNone(
             service.preferred_rotation_side_for_bond(0, {3, 4}, press_pos=QPointF(5.0, 0.0), allow_fallback=False)
         )
 
-        canvas = self._rotation_canvas({1, 3}, {2, 4, 5, 6})
-        service = CanvasGraphService(canvas)
+        service = self._rotation_service({1, 3}, {2, 4, 5, 6})
         self.assertEqual(service.preferred_rotation_side_for_bond(0, set(), allow_fallback=True), {1, 3})
 
     def test_rotatable_axis_from_selection_covers_cache_single_bond_leaf_boundary_and_candidate_paths(self) -> None:
@@ -280,15 +272,15 @@ class CanvasGraphServiceTest(unittest.TestCase):
         self.assertEqual(cache_service.rotatable_axis_from_selection({1}, {0}), (0, {1, 2}))
 
         single_canvas = self._make_canvas([Bond(1, 2, 1)])
-        single_canvas._bond_is_rotatable = mock.Mock(return_value=True)
-        single_canvas._preferred_rotation_side_for_bond = mock.Mock(return_value={2})
         single_service = CanvasGraphService(single_canvas)
+        single_service.bond_is_rotatable = mock.Mock(return_value=True)
+        single_service.preferred_rotation_side_for_bond = mock.Mock(return_value={2})
         self.assertEqual(single_service.rotatable_axis_from_selection(set(), {0}), (0, {2}))
 
         leaf_canvas = self._make_canvas([Bond(1, 2, 1), Bond(2, 3, 1), Bond(1, 4, 1)])
-        leaf_canvas._bond_is_rotatable = mock.Mock(return_value=True)
-        leaf_canvas._rotation_side_for_bond = mock.Mock(return_value={1, 4})
         leaf_service = CanvasGraphService(leaf_canvas)
+        leaf_service.bond_is_rotatable = mock.Mock(return_value=True)
+        leaf_service.rotation_side_for_bond = mock.Mock(return_value={1, 4})
         self.assertEqual(leaf_service.rotatable_axis_from_selection(set(), {0, 1}), (0, {1, 4}))
 
         empty_canvas = self._make_canvas([])
@@ -296,20 +288,20 @@ class CanvasGraphServiceTest(unittest.TestCase):
         self.assertIsNone(empty_service.rotatable_axis_from_selection(set(), set()))
 
         boundary_canvas = self._make_canvas([Bond(1, 2, 1)])
-        boundary_canvas._bond_is_rotatable = mock.Mock(side_effect=[False])
         boundary_service = CanvasGraphService(boundary_canvas)
+        boundary_service.bond_is_rotatable = mock.Mock(side_effect=[False])
         self.assertIsNone(boundary_service.rotatable_axis_from_selection({1}, set()))
 
         candidate_canvas = self._make_canvas([Bond(1, 2, 1), Bond(2, 3, 1)])
-        candidate_canvas._bond_is_rotatable = mock.Mock(side_effect=[True, False])
-        candidate_canvas._rotation_side_for_bond = mock.Mock(side_effect=[{1}, None])
         candidate_service = CanvasGraphService(candidate_canvas)
+        candidate_service.bond_is_rotatable = mock.Mock(side_effect=[True, False])
+        candidate_service.rotation_side_for_bond = mock.Mock(side_effect=[{1}, None])
         self.assertEqual(candidate_service.rotatable_axis_from_selection({1, 2, 3}, set()), (0, {1}))
 
         multi_candidate_canvas = self._make_canvas([Bond(1, 2, 1), Bond(2, 3, 1)])
-        multi_candidate_canvas._bond_is_rotatable = mock.Mock(side_effect=[True, True])
-        multi_candidate_canvas._rotation_side_for_bond = mock.Mock(side_effect=[{1}, {2, 3}])
         multi_candidate_service = CanvasGraphService(multi_candidate_canvas)
+        multi_candidate_service.bond_is_rotatable = mock.Mock(side_effect=[True, True])
+        multi_candidate_service.rotation_side_for_bond = mock.Mock(side_effect=[{1}, {2, 3}])
         self.assertIsNone(multi_candidate_service.rotatable_axis_from_selection({1, 2, 3}, set()))
 
     def test_rotatable_axis_from_selection_covers_cache_reset_invalid_selected_and_no_axis_paths(self) -> None:
@@ -323,32 +315,31 @@ class CanvasGraphServiceTest(unittest.TestCase):
         self.assertEqual(canvas._rotation_axis_cache, {(frozenset(), frozenset({99, 1}), 4): None})
 
         single_canvas = self._make_canvas([Bond(1, 2, 1)])
-        single_canvas._bond_is_rotatable = mock.Mock(return_value=True)
-        single_canvas._preferred_rotation_side_for_bond = mock.Mock(return_value=None)
         single_service = CanvasGraphService(single_canvas)
+        single_service.bond_is_rotatable = mock.Mock(return_value=True)
+        single_service.preferred_rotation_side_for_bond = mock.Mock(return_value=None)
         self.assertIsNone(single_service.rotatable_axis_from_selection(set(), {0}))
 
         leaf_canvas = self._make_canvas([Bond(1, 2, 1), Bond(2, 3, 1), None, Bond(1, 4, 1)])
-        leaf_canvas._bond_is_rotatable = mock.Mock(return_value=True)
-        leaf_canvas._rotation_side_for_bond = mock.Mock(return_value=None)
         leaf_service = CanvasGraphService(leaf_canvas)
+        leaf_service.bond_is_rotatable = mock.Mock(return_value=True)
+        leaf_service.rotation_side_for_bond = mock.Mock(return_value=None)
         self.assertIsNone(leaf_service.rotatable_axis_from_selection(set(), {0, 1}))
 
     def test_rotatable_axis_from_selection_covers_boundary_resolution_path(self) -> None:
         canvas = self._make_canvas([Bond(1, 2, 1), None], atoms=self._make_atoms(1, 2, 3))
-        canvas._bond_is_rotatable = mock.Mock(side_effect=[True, False])
-        canvas._rotation_side_for_bond = mock.Mock(return_value={2})
         service = CanvasGraphService(canvas)
+        service.bond_is_rotatable = mock.Mock(side_effect=[True, False])
+        service.rotation_side_for_bond = mock.Mock(return_value={2})
 
         self.assertEqual(service.rotatable_axis_from_selection({1}, set()), (0, {2}))
 
     def test_axis_from_rotation_hint_and_bond_sets_cover_remaining_hint_and_fallback_paths(self) -> None:
-        canvas = SimpleNamespace(
-            _bond_is_rotatable=mock.Mock(side_effect=[False, True, True, True, True]),
-            _bond_component_atoms=mock.Mock(side_effect=[None, {1, 2, 3}, {1, 2, 3}, {1, 2, 3}]),
-            _preferred_rotation_side_for_bond=mock.Mock(side_effect=[None, {2, 3}]),
-        )
+        canvas = SimpleNamespace()
         service = CanvasGraphService(canvas)
+        service.bond_is_rotatable = mock.Mock(side_effect=[False, True, True, True, True])
+        service.bond_component_atoms = mock.Mock(side_effect=[None, {1, 2, 3}, {1, 2, 3}, {1, 2, 3}])
+        service.preferred_rotation_side_for_bond = mock.Mock(side_effect=[None, {2, 3}])
 
         self.assertIsNone(service.axis_from_rotation_hint(4, {1}))
         self.assertIsNone(service.axis_from_rotation_hint(4, {1}))
@@ -368,7 +359,7 @@ class CanvasGraphServiceTest(unittest.TestCase):
         stale_service = CanvasGraphService(stale_canvas)
         self.assertEqual(stale_service.bond_sets_for_atoms({3}), (set(), {1}))
 
-    def test_graph_service_factory_reuses_real_duck_typed_and_fallback_services(self) -> None:
+    def test_graph_service_factory_returns_bound_service(self) -> None:
         canvas = SimpleNamespace()
         real_service = CanvasGraphService(canvas)
         canvas._canvas_graph_service = real_service
@@ -399,26 +390,26 @@ class CanvasGraphServiceTest(unittest.TestCase):
 
         self.assertIs(canvas_graph_service_for(canvas), duck_service)
 
-        canvas._canvas_graph_service = object()
+        placeholder = object()
+        canvas._canvas_graph_service = placeholder
 
-        self.assertIsInstance(canvas_graph_service_for(canvas), CanvasGraphService)
+        self.assertIs(canvas_graph_service_for(canvas), placeholder)
 
     def test_axis_from_rotation_hint_rejects_atoms_outside_component(self) -> None:
-        canvas = SimpleNamespace(
-            _bond_is_rotatable=mock.Mock(return_value=True),
-            _bond_component_atoms=mock.Mock(return_value={1, 2, 3}),
-            _preferred_rotation_side_for_bond=mock.Mock(return_value={2, 3}),
-        )
+        canvas = SimpleNamespace()
         service = CanvasGraphService(canvas)
+        service.bond_is_rotatable = mock.Mock(return_value=True)
+        service.bond_component_atoms = mock.Mock(return_value={1, 2, 3})
+        service.preferred_rotation_side_for_bond = mock.Mock(return_value={2, 3})
 
         self.assertIsNone(service.axis_from_rotation_hint(4, {9}, press_pos=QPointF(1.0, 2.0)))
-        canvas._preferred_rotation_side_for_bond.assert_not_called()
+        service.preferred_rotation_side_for_bond.assert_not_called()
 
         self.assertEqual(
             service.axis_from_rotation_hint(4, {2, 9}, press_pos=QPointF(3.0, 4.0)),
             (4, {2, 3}),
         )
-        canvas._preferred_rotation_side_for_bond.assert_called_once_with(
+        service.preferred_rotation_side_for_bond.assert_called_once_with(
             4,
             {2},
             press_pos=QPointF(3.0, 4.0),
@@ -426,26 +417,21 @@ class CanvasGraphServiceTest(unittest.TestCase):
         )
 
     def test_preferred_rotation_side_covers_remaining_none_overlap_endpoint_and_distance_paths(self) -> None:
-        none_canvas = self._rotation_canvas({1, 3}, {2, 4})
-        none_canvas.model.bonds = [None]
-        none_service = CanvasGraphService(none_canvas)
+        none_service = self._rotation_service({1, 3}, {2, 4})
+        none_service.canvas.model.bonds = [None]
         self.assertIsNone(none_service.rotation_side_for_bond(0, {3}, allow_fallback=True))
         self.assertIsNone(none_service.preferred_rotation_side_for_bond(0, {3}, allow_fallback=True))
 
-        selected_b_canvas = self._rotation_canvas({1, 3}, {2, 4, 5})
-        selected_b_service = CanvasGraphService(selected_b_canvas)
+        selected_b_service = self._rotation_service({1, 3}, {2, 4, 5})
         self.assertEqual(selected_b_service.preferred_rotation_side_for_bond(0, {4}, allow_fallback=True), {2, 4, 5})
 
-        overlap_a_canvas = self._rotation_canvas({1, 3}, {2, 4, 5})
-        overlap_a_service = CanvasGraphService(overlap_a_canvas)
+        overlap_a_service = self._rotation_service({1, 3}, {2, 4, 5})
         self.assertEqual(overlap_a_service.preferred_rotation_side_for_bond(0, {1}, allow_fallback=True), {1, 3})
 
-        endpoint_canvas = self._rotation_canvas({1}, {1})
-        endpoint_service = CanvasGraphService(endpoint_canvas)
+        endpoint_service = self._rotation_service({1}, {1})
         self.assertEqual(endpoint_service.preferred_rotation_side_for_bond(0, {1}, allow_fallback=True), {1})
 
-        distance_canvas = self._rotation_canvas({1, 3}, {2, 4})
-        distance_service = CanvasGraphService(distance_canvas)
+        distance_service = self._rotation_service({1, 3}, {2, 4})
         self.assertEqual(
             distance_service.preferred_rotation_side_for_bond(
                 0,
@@ -458,9 +444,9 @@ class CanvasGraphServiceTest(unittest.TestCase):
 
     def test_rotatable_axis_and_bond_sets_cover_remaining_boundary_none_and_isolated_paths(self) -> None:
         boundary_canvas = self._make_canvas([Bond(1, 2, 1)], atoms=self._make_atoms(1, 2, 3))
-        boundary_canvas._bond_is_rotatable = mock.Mock(return_value=True)
-        boundary_canvas._rotation_side_for_bond = mock.Mock(return_value=None)
         boundary_service = CanvasGraphService(boundary_canvas)
+        boundary_service.bond_is_rotatable = mock.Mock(return_value=True)
+        boundary_service.rotation_side_for_bond = mock.Mock(return_value=None)
 
         self.assertIsNone(boundary_service.rotatable_axis_from_selection({1}, set()))
 
@@ -469,30 +455,31 @@ class CanvasGraphServiceTest(unittest.TestCase):
         self.assertEqual(isolated_service.bond_sets_for_atoms({9}), (set(), set()))
 
     def test_preferred_rotation_side_and_rotatable_axis_cover_remaining_fallback_paths(self) -> None:
-        reverse_canvas = SimpleNamespace(
-            model=SimpleNamespace(
-                atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 10.0, 0.0)},
-                bonds=[Bond(2, 1, 1)],
-            ),
-            renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
-            _component_without_bond=mock.Mock(side_effect=[{2, 4}, {1, 3}]),
+        reverse_service = CanvasGraphService(
+            SimpleNamespace(
+                model=SimpleNamespace(
+                    atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 10.0, 0.0)},
+                    bonds=[Bond(2, 1, 1)],
+                ),
+                renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
+            )
         )
-        reverse_service = CanvasGraphService(reverse_canvas)
+        reverse_service.component_without_bond = mock.Mock(side_effect=[{2, 4}, {1, 3}])
         self.assertEqual(reverse_service.preferred_rotation_side_for_bond(0, set(), allow_fallback=True), {1, 3})
 
         single_canvas = self._make_canvas([Bond(1, 2, 1)])
-        single_canvas._bond_is_rotatable = mock.Mock(return_value=False)
         single_service = CanvasGraphService(single_canvas)
+        single_service.bond_is_rotatable = mock.Mock(return_value=False)
         self.assertIsNone(single_service.rotatable_axis_from_selection(set(), {0}))
 
         no_leaf_canvas = self._make_canvas([Bond(1, 2, 1), Bond(2, 3, 1)])
-        no_leaf_canvas._bond_is_rotatable = mock.Mock(return_value=False)
         no_leaf_service = CanvasGraphService(no_leaf_canvas)
+        no_leaf_service.bond_is_rotatable = mock.Mock(return_value=False)
         self.assertIsNone(no_leaf_service.rotatable_axis_from_selection(set(), {0, 1}))
 
         unique_leaf_canvas = self._make_canvas([Bond(1, 2, 1), Bond(2, 3, 1), Bond(1, 4, 1)])
-        unique_leaf_canvas._bond_is_rotatable = mock.Mock(return_value=False)
         unique_leaf_service = CanvasGraphService(unique_leaf_canvas)
+        unique_leaf_service.bond_is_rotatable = mock.Mock(return_value=False)
         self.assertIsNone(unique_leaf_service.rotatable_axis_from_selection(set(), {0, 1}))
 
 

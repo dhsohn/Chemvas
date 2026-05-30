@@ -2,10 +2,8 @@ import unittest
 
 from core.document_state import (
     CHEMVAS_FILE_TYPE,
-    LEGACY_DOCUMENT_FILE_TYPE,
     SINGLE_SHEET_FILE_VERSION,
     WORKBOOK_FILE_VERSION,
-    _mapping_value,
     atom_to_state,
     bond_to_state,
     build_document_payload,
@@ -15,6 +13,46 @@ from core.document_state import (
     serialize_settings,
 )
 from core.model import Atom, Bond, MoleculeModel
+
+
+def _settings() -> dict:
+    return serialize_settings(
+        bond_length_px=18.0,
+        arrow_line_width=1.5,
+        arrow_head_scale=0.4,
+        orbital_phase_enabled=True,
+        text_font_size=13,
+        text_font_weight=600,
+        text_italic=False,
+        sheet_size="A4",
+        sheet_orientation="portrait",
+    )
+
+
+def _model_state(
+    atoms: dict | None = None,
+    bonds: list | None = None,
+    next_atom_id: int = 0,
+) -> dict:
+    return {
+        "atoms": atoms or {},
+        "bonds": bonds or [],
+        "next_atom_id": next_atom_id,
+    }
+
+
+def _single_sheet_state(model: dict | None = None) -> dict:
+    return {
+        "model": model or _model_state(),
+        "ring_fills": [],
+        "notes": [],
+        "marks": [],
+        "arrows": [],
+        "ts_brackets": [],
+        "orbitals": [],
+        "settings": _settings(),
+        "last_smiles_input": None,
+    }
 
 
 class DocumentStateTest(unittest.TestCase):
@@ -66,7 +104,7 @@ class DocumentStateTest(unittest.TestCase):
         model = deserialize_model_state(
             {
                 "atoms": {
-                    "0": {"element": "C", "x": 1.0, "y": 2.0, "color": "#000000"},
+                    "0": {"element": "C", "x": 1.0, "y": 2.0, "color": "#000000", "explicit_label": False},
                     "2": {
                         "element": "N",
                         "x": -1.0,
@@ -91,74 +129,30 @@ class DocumentStateTest(unittest.TestCase):
         self.assertEqual(model.bonds[0].style, "triple")
         self.assertIsNone(model.bonds[1])
 
-    def test_deserialize_model_state_clamps_missing_next_atom_id(self) -> None:
+    def test_deserialize_model_state_uses_serialized_next_atom_id(self) -> None:
         model = deserialize_model_state(
             {
                 "atoms": {
-                    "3": {"element": "C", "x": 1.0, "y": 2.0, "color": "#000000"},
-                    "7": {"element": "O", "x": -1.0, "y": 0.5, "color": "#ff0000"},
-                },
-                "bonds": [],
-            }
-        )
-
-        self.assertEqual(model.next_atom_id, 8)
-        self.assertEqual(model.add_atom("N", 0.0, 0.0), 8)
-        self.assertIn(7, model.atoms)
-        self.assertIn(8, model.atoms)
-
-    def test_deserialize_model_state_clamps_too_small_next_atom_id(self) -> None:
-        model = deserialize_model_state(
-            {
-                "atoms": {
-                    "3": {"element": "C", "x": 1.0, "y": 2.0, "color": "#000000"},
-                    "7": {"element": "O", "x": -1.0, "y": 0.5, "color": "#ff0000"},
+                    "3": {"element": "C", "x": 1.0, "y": 2.0, "color": "#000000", "explicit_label": False},
+                    "7": {"element": "O", "x": -1.0, "y": 0.5, "color": "#ff0000", "explicit_label": True},
                 },
                 "bonds": [],
                 "next_atom_id": 4,
             }
         )
 
-        self.assertEqual(model.next_atom_id, 8)
-        self.assertEqual(model.add_atom("N", 0.0, 0.0), 8)
+        self.assertEqual(model.next_atom_id, 4)
+        self.assertEqual(model.add_atom("N", 0.0, 0.0), 4)
         self.assertIn(7, model.atoms)
-        self.assertIn(8, model.atoms)
+        self.assertIn(4, model.atoms)
 
-    def test_deserialize_model_state_tolerates_non_mapping_atoms_and_non_list_bonds(self) -> None:
-        model = deserialize_model_state(
-            {
-                "atoms": "not-a-mapping",
-                "bonds": "not-a-list",
-                "next_atom_id": 2,
-            }
-        )
-
-        self.assertEqual(model.atoms, {})
-        self.assertEqual(model.bonds, [])
-        self.assertEqual(model.next_atom_id, 2)
-
-    def test_deserialize_model_state_skips_invalid_bond_entries_and_uses_mapping_defaults(self) -> None:
-        model = deserialize_model_state(
-            {
-                "atoms": {
-                    "1": {"x": 1.5, "y": None},
-                },
-                "bonds": [
-                    "bad-entry",
-                    {"a": None, "b": 2, "order": None, "style": None, "color": None},
-                ],
-            }
-        )
-
-        self.assertEqual(model.atoms[1].element, "C")
-        self.assertEqual(model.atoms[1].x, 1.5)
-        self.assertEqual(model.atoms[1].y, 0.0)
-        self.assertEqual(model.bonds[0].a, 0)
-        self.assertEqual(model.bonds[0].b, 2)
-        self.assertEqual(model.bonds[0].order, 1)
-        self.assertEqual(model.bonds[0].style, "single")
-        self.assertEqual(model.bonds[0].color, "#000000")
-        self.assertEqual(_mapping_value("bad-mapping", "x", "fallback"), "fallback")
+    def test_deserialize_model_state_requires_complete_model_payload(self) -> None:
+        with self.assertRaises(KeyError):
+            deserialize_model_state({"atoms": {}, "bonds": []})
+        with self.assertRaises(KeyError):
+            deserialize_model_state({"atoms": {"1": {"x": 1.5}}, "bonds": [], "next_atom_id": 2})
+        with self.assertRaises(TypeError):
+            deserialize_model_state({"atoms": {}, "bonds": ["bad-entry"], "next_atom_id": 2})
 
     def test_settings_and_payload_helpers_round_trip(self) -> None:
         settings = serialize_settings(
@@ -172,25 +166,25 @@ class DocumentStateTest(unittest.TestCase):
             sheet_size="A4",
             sheet_orientation="portrait",
         )
-        state = {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}, "settings": settings}
+        state = _single_sheet_state()
+        state["settings"] = settings
         payload = build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
 
         self.assertEqual(payload["type"], CHEMVAS_FILE_TYPE)
         self.assertEqual(payload["version"], SINGLE_SHEET_FILE_VERSION)
         self.assertIs(extract_document_state(payload), state)
-        self.assertIs(extract_document_state(state), state)
 
     def test_extract_document_state_accepts_workbook_state(self) -> None:
+        sheet_state = _single_sheet_state()
         workbook_state = {
             "active_sheet_index": 0,
             "sheets": [
                 {
                     "name": "Sheet 1",
                     "kind": "canvas",
-                    "content": {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}},
+                    "content": sheet_state,
                 }
             ],
-            "result_sheets": {"sheets": [], "active_index": 0},
         }
         payload = {
             "type": CHEMVAS_FILE_TYPE,
@@ -199,39 +193,48 @@ class DocumentStateTest(unittest.TestCase):
         }
 
         self.assertIs(extract_document_state(payload), workbook_state)
-        self.assertIs(extract_document_state(workbook_state), workbook_state)
 
-    def test_extract_document_state_accepts_legacy_wrapped_file_type(self) -> None:
-        state = {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}}
+    def test_extract_document_state_rejects_legacy_wrapped_file_type(self) -> None:
+        state = _single_sheet_state()
         payload = {
-            "type": LEGACY_DOCUMENT_FILE_TYPE,
+            "type": "litedraw",
             "version": SINGLE_SHEET_FILE_VERSION,
             "state": state,
         }
 
-        self.assertIs(extract_document_state(payload), state)
+        with self.assertRaises(ValueError):
+            extract_document_state(payload)
 
     def test_extract_document_state_rejects_invalid_model_schema(self) -> None:
-        valid_atoms = {"0": {"element": "C", "x": 0.0, "y": 0.0, "color": "#000000"}}
-        invalid_states = [
-            {"model": {"atoms": valid_atoms, "bonds": [{"a": 0, "b": 9, "order": 1}], "next_atom_id": 1}},
-            {"model": {"atoms": valid_atoms, "bonds": [{"a": 0, "b": 0, "order": 4}], "next_atom_id": 1}},
-            {"model": {"atoms": {"0": {"element": "C", "x": float("nan"), "y": 0.0}}, "bonds": []}},
-            {"model": {"atoms": {"0": {"element": "C", "x": 0.0, "y": 0.0, "color": "red"}}, "bonds": []}},
-            {"model": {"atoms": valid_atoms, "bonds": [], "next_atom_id": 0}},
+        valid_atoms = {"0": {"element": "C", "x": 0.0, "y": 0.0, "color": "#000000", "explicit_label": False}}
+        invalid_models = [
+            _model_state(valid_atoms, [{"a": 0, "b": 9, "order": 1, "style": "single", "color": "#000000"}], 1),
+            _model_state(valid_atoms, [{"a": 0, "b": 0, "order": 4, "style": "single", "color": "#000000"}], 1),
+            _model_state({"0": {"element": "C", "x": float("nan"), "y": 0.0, "color": "#000000", "explicit_label": False}}, [], 1),
+            _model_state({"0": {"element": "C", "x": 0.0, "y": 0.0, "color": "red", "explicit_label": False}}, [], 1),
+            _model_state(valid_atoms, [], 0),
+            {"atoms": valid_atoms, "bonds": []},
+            _model_state({"0": {"element": "C", "x": 0.0, "y": 0.0, "color": "#000000"}}, [], 1),
         ]
 
-        for state in invalid_states:
-            with self.subTest(state=state):
+        for model in invalid_models:
+            with self.subTest(model=model):
                 with self.assertRaises(ValueError):
-                    build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
+                    build_document_payload(_single_sheet_state(model), version=SINGLE_SHEET_FILE_VERSION)
 
     def test_extract_document_state_rejects_invalid_workbook_schema(self) -> None:
-        valid_content = {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}}
+        valid_content = _single_sheet_state()
         invalid_states = [
             {"active_sheet_index": 2, "sheets": [{"kind": "canvas", "content": valid_content}]},
             {"active_sheet_index": 0, "sheets": ["not-a-sheet"]},
             {"active_sheet_index": 0, "sheets": [{"kind": "canvas", "content": {}}]},
+            {"active_sheet_index": 0, "sheets": []},
+            {"active_sheet_index": 0, "sheets": [{"name": "Result", "kind": "result", "content": valid_content}]},
+            {
+                "active_sheet_index": 0,
+                "sheets": [{"name": "Sheet 1", "kind": "canvas", "content": valid_content}],
+                "result_sheets": {"sheets": [], "active_index": 0},
+            },
         ]
 
         for state in invalid_states:
@@ -240,8 +243,11 @@ class DocumentStateTest(unittest.TestCase):
                     build_document_payload(state, version=WORKBOOK_FILE_VERSION)
 
     def test_build_document_payload_rejects_unsupported_or_mismatched_versions(self) -> None:
-        single_sheet_state = {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}}
-        workbook_state = {"active_sheet_index": 0, "sheets": []}
+        single_sheet_state = _single_sheet_state()
+        workbook_state = {
+            "active_sheet_index": 0,
+            "sheets": [{"name": "Sheet 1", "kind": "canvas", "content": single_sheet_state}],
+        }
 
         with self.assertRaises(ValueError):
             build_document_payload(single_sheet_state, version=3)
@@ -264,7 +270,7 @@ class DocumentStateTest(unittest.TestCase):
                 {
                     "type": "unexpected",
                     "version": SINGLE_SHEET_FILE_VERSION,
-                    "state": {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}},
+                    "state": _single_sheet_state(),
                 }
             )
         with self.assertRaises(ValueError):
@@ -272,7 +278,7 @@ class DocumentStateTest(unittest.TestCase):
                 {
                     "type": CHEMVAS_FILE_TYPE,
                     "version": "1",
-                    "state": {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}},
+                    "state": _single_sheet_state(),
                 }
             )
         with self.assertRaises(ValueError):

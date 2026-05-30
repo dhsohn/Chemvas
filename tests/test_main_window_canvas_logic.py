@@ -9,8 +9,6 @@ from ui.main_window_canvas_logic import (
     bind_active_canvas_callbacks,
     build_workbook_sheet_states,
     canvas_sheet_name_counter,
-    clamp_active_sheet_index,
-    coerce_active_sheet_index,
     copy_canvas_template_settings,
     resolve_active_canvas,
     restorable_canvas_sheets,
@@ -74,12 +72,14 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
     def test_bind_active_canvas_callbacks_assigns_only_active_canvas(self) -> None:
         active_canvas = SimpleNamespace(
             set_selection_info_callback=mock.Mock(),
+            set_error_callback=mock.Mock(),
             set_tool_change_callback=mock.Mock(),
             set_zoom_callback=mock.Mock(),
             set_history_change_callback=mock.Mock(),
         )
         inactive_canvas = SimpleNamespace(
             set_selection_info_callback=mock.Mock(),
+            set_error_callback=mock.Mock(),
             set_tool_change_callback=mock.Mock(),
             set_zoom_callback=mock.Mock(),
             set_history_change_callback=mock.Mock(),
@@ -99,10 +99,12 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
         )
 
         active_canvas.set_selection_info_callback.assert_called_once_with(selection_info_callback)
+        active_canvas.set_error_callback.assert_called_once_with(None)
         active_canvas.set_tool_change_callback.assert_called_once_with(tool_change_callback)
         active_canvas.set_zoom_callback.assert_called_once_with(zoom_callback)
         active_canvas.set_history_change_callback.assert_called_once_with(history_change_callback)
         inactive_canvas.set_selection_info_callback.assert_called_once_with(None)
+        inactive_canvas.set_error_callback.assert_called_once_with(None)
         inactive_canvas.set_tool_change_callback.assert_called_once_with(None)
         inactive_canvas.set_zoom_callback.assert_called_once_with(None)
         inactive_canvas.set_history_change_callback.assert_called_once_with(None)
@@ -124,51 +126,40 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
             ],
         )
 
-    def test_restorable_canvas_sheets_filters_invalid_entries_and_normalizes_payloads(self) -> None:
-        generated_names: list[str] = []
-
-        def default_name_factory() -> str:
-            generated_names.append("called")
-            return "Sheet 3"
-
+    def test_restorable_canvas_sheets_returns_canvas_payloads(self) -> None:
         sheets = restorable_canvas_sheets(
             [
                 {"name": "Reactant", "kind": "canvas", "content": {"atoms": [1]}},
-                "skip-me",
-                {"name": "Summary", "kind": "result", "content": {"atoms": [9]}},
-                {"kind": "canvas", "content": {"atoms": [2]}},
-                {"name": "Broken", "kind": "canvas", "content": "not-a-dict"},
+                {"name": "Product", "kind": "canvas", "content": {"atoms": [2]}},
             ],
-            default_name_factory=default_name_factory,
         )
 
         self.assertEqual(
             sheets,
             [
                 RestorableCanvasSheet(name="Reactant", content={"atoms": [1]}),
-                RestorableCanvasSheet(name="Sheet 3", content={"atoms": [2]}),
-                RestorableCanvasSheet(name="Broken", content={}),
+                RestorableCanvasSheet(name="Product", content={"atoms": [2]}),
             ],
         )
-        self.assertEqual(generated_names, ["called"])
 
-    def test_coerce_active_sheet_index_falls_back_for_invalid_values(self) -> None:
-        self.assertEqual(coerce_active_sheet_index(2), 2)
-        self.assertEqual(coerce_active_sheet_index("4"), 4)
-        self.assertEqual(coerce_active_sheet_index("abc"), 0)
-        self.assertEqual(coerce_active_sheet_index(None), 0)
+    def test_restorable_canvas_sheets_rejects_invalid_entries(self) -> None:
+        invalid_sheet_groups = (
+            ["skip-me"],
+            [{"name": "Summary", "kind": "result", "content": {"atoms": [9]}}],
+            [{"kind": "canvas", "content": {"atoms": [2]}}],
+            [{"name": "Broken", "kind": "canvas", "content": "not-a-dict"}],
+        )
+
+        for sheet_states in invalid_sheet_groups:
+            with self.subTest(sheet_states=sheet_states):
+                with self.assertRaises((KeyError, ValueError)):
+                    restorable_canvas_sheets(sheet_states)
 
     def test_canvas_sheet_name_counter_tracks_default_sheet_names(self) -> None:
         self.assertEqual(canvas_sheet_name_counter([]), 0)
         self.assertEqual(canvas_sheet_name_counter(["Sheet draft", "Sheet 2", "Sheet 9"]), 9)
         self.assertEqual(canvas_sheet_name_counter(["Reactant", "Sheet 2", "Sheet 9"]), 9)
         self.assertEqual(canvas_sheet_name_counter(["Result 1"], prefix="Result"), 1)
-
-    def test_clamp_active_sheet_index_bounds_requested_index(self) -> None:
-        self.assertEqual(clamp_active_sheet_index(-3, 2), 0)
-        self.assertEqual(clamp_active_sheet_index(1, 2), 1)
-        self.assertEqual(clamp_active_sheet_index(8, 2), 1)
-        self.assertEqual(clamp_active_sheet_index(5, 0), 0)
 
 
 if __name__ == "__main__":

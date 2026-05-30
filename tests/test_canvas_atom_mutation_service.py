@@ -281,7 +281,7 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
         service.apply_atom_color.assert_called_once_with(5, "#123456")
         self.assertEqual(canvas.model.next_atom_id, 10)
 
-    def test_service_factory_reuses_real_duck_typed_and_fallback_services(self) -> None:
+    def test_service_factory_returns_bound_service(self) -> None:
         canvas = SimpleNamespace()
         real_service = CanvasAtomMutationService(canvas)
         canvas._canvas_atom_mutation_service = real_service
@@ -296,10 +296,9 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
         canvas._canvas_atom_mutation_service = duck_service
         self.assertIs(canvas_atom_mutation_service_for(canvas), duck_service)
 
-        canvas._canvas_atom_mutation_service = object()
-        fallback = canvas_atom_mutation_service_for(canvas)
-        self.assertIsInstance(fallback, CanvasAtomMutationService)
-        self.assertIs(fallback.canvas, canvas)
+        placeholder = object()
+        canvas._canvas_atom_mutation_service = placeholder
+        self.assertIs(canvas_atom_mutation_service_for(canvas), placeholder)
 
 
 if __name__ == "__main__":
