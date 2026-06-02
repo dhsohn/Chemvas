@@ -97,6 +97,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         corner_button = CornerMenuButton()
         save_button = CornerMenuButton()
         save_action = QAction("Save", self.window)
+        load_action = QAction("Load", self.window)
         save_as_action = QAction("Save As...", self.window)
         atom_input = QLineEdit()
         tool_actions = {"bond": QAction("Bond", self.window)}
@@ -108,6 +109,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
             save_action=save_action,
             save_as_action=save_as_action,
             save_button=save_button,
+            load_action=load_action,
         )
         panel_assembly = MainWindowPanelAssembly(
             splitter=QSplitter(),
@@ -116,6 +118,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         service.create_toolbar_button.return_value = toolbar_button
         service.create_corner_menu_button.return_value = corner_button
         service.create_save_menu_button.return_value = save_button
+        service.create_file_project_menu_button.return_value = save_button
         service.init_toolbars.return_value = toolbar_assembly
         service.init_panels.return_value = panel_assembly
 
@@ -171,10 +174,21 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         self.assertIs(self.window._create_save_menu_button(save_action, save_as_action), save_button)
         service.create_save_menu_button.assert_called_once_with(save_action, save_as_action)
 
+        self.assertIs(
+            self.window._create_file_project_menu_button(save_action, load_action, save_as_action),
+            save_button,
+        )
+        service.create_file_project_menu_button.assert_called_once_with(
+            save_action,
+            load_action,
+            save_as_action,
+        )
+
         self.window._init_toolbars()
         service.init_toolbars.assert_called_once_with(self.window)
         self.assertIs(self.window._tool_actions, tool_actions)
         self.assertIs(self.window._atom_input, atom_input)
+        self.assertIs(self.window._load_action, load_action)
 
         self.window._init_panels()
         service.init_panels.assert_called_once_with(self.window)

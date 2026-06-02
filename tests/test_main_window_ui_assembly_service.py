@@ -222,6 +222,21 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.assertEqual(button.popupMode(), QToolButton.ToolButtonPopupMode.MenuButtonPopup)
         self.assertEqual(button.menu().actions(), [save_as_action])
 
+    def test_create_file_project_menu_button_uses_file_project_actions(self) -> None:
+        owner = QMainWindow()
+        self.addCleanup(owner.close)
+        save_action = QAction("Save", owner)
+        load_action = QAction("Load", owner)
+        save_as_action = QAction("Save As...", owner)
+
+        button = self.service.create_file_project_menu_button(save_action, load_action, save_as_action)
+
+        self.assertIs(button.defaultAction(), save_action)
+        self.assertEqual(button.toolTip(), "File")
+        self.assertEqual(button.statusTip(), "Save, load, or save as the current file")
+        self.assertEqual(button.popupMode(), QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        self.assertEqual(button.menu().actions(), [load_action, save_action, save_as_action])
+
     def test_init_toolbars_builds_bars_and_wires_inputs(self) -> None:
         window = _HarnessWindow()
         self.addCleanup(window.close)
@@ -237,12 +252,21 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.assertTrue(assembly.tool_actions["bond"].isChecked())
         self.assertEqual(assembly.atom_input.text(), "N")
         self.assertIs(assembly.save_button.defaultAction(), assembly.save_action)
-        self.assertEqual(assembly.save_button.menu().actions(), [assembly.save_as_action])
+        self.assertEqual(
+            assembly.save_button.menu().actions(),
+            [assembly.load_action, assembly.save_action, assembly.save_as_action],
+        )
+        self.assertEqual(assembly.save_button.toolTip(), "File")
+        self.assertEqual(assembly.load_action.statusTip(), "Open a drawing or workbook")
         self.assertEqual(assembly.save_action.statusTip(), "Save the current drawing")
         self.assertEqual(assembly.save_as_action.statusTip(), "Save the current drawing to a new file")
         self.assertNotIn(
             "Bond Length",
             [button.toolTip() for button in assembly.left_bar.findChildren(QToolButton)],
+        )
+        self.assertNotIn(
+            "Load",
+            [button.toolTip() for button in assembly.panel_bar.findChildren(QToolButton)],
         )
         self.assertIn(
             "Bond Length",

@@ -74,6 +74,7 @@ class MainWindow(QMainWindow):
         self.resize(1100, 760)
 
         self._atom_input = None
+        self._load_action = None
         self._export_xyz_button = None
         self._preview_panel_button = None
         self._undo_button = None
@@ -356,10 +357,23 @@ class MainWindow(QMainWindow):
     def _create_save_menu_button(self, save_action: QAction, save_as_action: QAction) -> CornerMenuButton:
         return self._ui_assembly_service.create_save_menu_button(save_action, save_as_action)
 
+    def _create_file_project_menu_button(
+        self,
+        save_action: QAction,
+        load_action: QAction,
+        save_as_action: QAction,
+    ) -> CornerMenuButton:
+        return self._ui_assembly_service.create_file_project_menu_button(
+            save_action,
+            load_action,
+            save_as_action,
+        )
+
     def _init_toolbars(self) -> None:
         assembly = self._ui_assembly_service.init_toolbars(self)
         self._tool_actions = assembly.tool_actions
         self._atom_input = assembly.atom_input
+        self._load_action = assembly.load_action
         self._export_xyz_button = assembly.export_xyz_button
         self._preview_panel_button = assembly.preview_panel_button
         self._undo_button = assembly.undo_button
