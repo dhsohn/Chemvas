@@ -41,6 +41,7 @@ class MainWindowToolbarAssembly:
     save_action: QAction
     save_as_action: QAction
     save_button: QToolButton
+    load_action: QAction | None = None
     export_xyz_button: QToolButton | None = None
     setup_sheet_button: QToolButton | None = None
     preview_panel_button: QToolButton | None = None
@@ -182,6 +183,26 @@ class MainWindowUIAssemblyService:
             default_action=save_action,
         )
 
+    def create_file_project_menu_button(
+        self,
+        save_action: QAction,
+        load_action: QAction,
+        save_as_action: QAction,
+    ) -> CornerMenuButton:
+        def build_menu(menu: QMenu) -> None:
+            menu.addAction(load_action)
+            menu.addAction(save_action)
+            menu.addAction(save_as_action)
+
+        return self.create_corner_menu_button(
+            tooltip="File",
+            status_tip="Save, load, or save as the current file",
+            style_sheet=TOOLBAR_MENU_BUTTON_STYLE,
+            popup_mode=QToolButton.ToolButtonPopupMode.MenuButtonPopup,
+            menu_builder=build_menu,
+            default_action=save_action,
+        )
+
     def create_toolbar_section_label(self, text: str) -> QLabel:
         label = QLabel(text)
         label.setObjectName("toolbarSectionLabel")
@@ -272,14 +293,15 @@ class MainWindowUIAssemblyService:
         save_as_action.triggered.connect(window._save_canvas_as)
         window.addAction(save_as_action)
 
-        save_button = self.create_save_menu_button(save_action, save_as_action)
-        load_btn = self.create_toolbar_button(
-            icon=window._icon_factory.icon_open(),
-            tooltip="Load",
-            status_tip="Open a drawing or workbook",
-            callback=window._load_canvas,
-            shortcut=QKeySequence.StandardKey.Open,
-        )
+        load_action = QAction("Load", window)
+        load_action.setIcon(window._icon_factory.icon_open())
+        load_action.setToolTip("Load")
+        load_action.setStatusTip("Open a drawing or workbook")
+        load_action.setShortcut(QKeySequence.StandardKey.Open)
+        load_action.triggered.connect(window._load_canvas)
+        window.addAction(load_action)
+
+        save_button = self.create_file_project_menu_button(save_action, load_action, save_as_action)
         export_xyz_btn = self.create_toolbar_button(
             icon=window._icon_factory.icon_export_xyz(),
             tooltip="Export 3D XYZ",
@@ -340,7 +362,6 @@ class MainWindowUIAssemblyService:
 
         panel_bar.addWidget(self.create_toolbar_section_label("File"))
         panel_bar.addWidget(save_button)
-        panel_bar.addWidget(load_btn)
         panel_bar.addWidget(export_xyz_btn)
         panel_bar.addWidget(preview_panel_btn)
         panel_bar.addWidget(setup_sheet_btn)
@@ -404,6 +425,7 @@ class MainWindowUIAssemblyService:
             save_action=save_action,
             save_as_action=save_as_action,
             save_button=save_button,
+            load_action=load_action,
             export_xyz_button=export_xyz_btn,
             setup_sheet_button=setup_sheet_btn,
             preview_panel_button=preview_panel_btn,

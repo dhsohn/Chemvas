@@ -116,8 +116,8 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         self.assertEqual(dialog.call_args.args[2], "/tmp/current.chemvas")
         save_path.assert_called_once_with("/tmp/new-drawing.chemvas")
 
-    def test_load_button_uses_dialog_path_and_handles_failure(self) -> None:
-        load_button = self._find_button(tool_tip="Load")
+    def test_load_menu_action_uses_dialog_path_and_handles_failure(self) -> None:
+        load_action = self._find_action("Load")
         restore = mock.Mock()
 
         with (
@@ -125,7 +125,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
             mock.patch("ui.main_window.read_document", return_value=SimpleNamespace(state={"atoms": []})) as read_document,
         ):
             self.window._restore_single_sheet_document = restore
-            load_button.click()
+            load_action.trigger()
 
         dialog.assert_called_once()
         read_document.assert_called_once_with("/tmp/input.chemvas")
@@ -133,14 +133,13 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         self.assertEqual(self.window._current_file_path, "/tmp/input.chemvas")
         self.assertEqual(self.window.statusBar().currentMessage(), "Loaded: /tmp/input.chemvas")
 
-        load_button = self._find_button(tool_tip="Load")
         with (
             mock.patch("ui.main_window.QFileDialog.getOpenFileName", return_value=("/tmp/broken.chemvas", "")),
             mock.patch("ui.main_window.read_document", side_effect=RuntimeError("bad file")),
             mock.patch("ui.main_window.QMessageBox.warning") as warning,
         ):
             self.window._current_file_path = "/tmp/previous.chemvas"
-            load_button.click()
+            load_action.trigger()
 
         warning.assert_called_once_with(self.window, "Load Error", "Failed to load file:\nbad file")
         self.assertEqual(self.window._current_file_path, "/tmp/previous.chemvas")
