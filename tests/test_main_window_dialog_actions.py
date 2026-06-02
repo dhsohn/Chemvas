@@ -27,14 +27,6 @@ class MainWindowDialogActionsTest(unittest.TestCase):
         self.window.close()
         self.app.processEvents()
 
-    def test_open_arrow_settings_delegates_to_ui_assembly_service(self) -> None:
-        service = mock.Mock()
-        self.window._ui_assembly_service = service
-
-        self.window._open_arrow_settings()
-
-        service.open_arrow_settings.assert_called_once_with(self.window)
-
     def test_set_bond_length_delegates_to_document_action_service(self) -> None:
         service = mock.Mock()
         self.window._document_action_service = service

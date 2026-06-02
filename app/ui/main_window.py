@@ -79,6 +79,7 @@ class MainWindow(QMainWindow):
         self._preview_panel_button = None
         self._undo_button = None
         self._redo_button = None
+        self._context_bar_page_override = None
         self._canvas_name_counter = 0
         self._result_sheet_counter = 0
         self._last_canvas_tab_index = 0
@@ -307,6 +308,9 @@ class MainWindow(QMainWindow):
     def _activate_mark_tool(self, kind: str) -> None:
         self._tool_action_service.activate_mark_tool(self, kind)
 
+    def _activate_template_tool(self) -> None:
+        self._tool_action_service.activate_template_tool(self)
+
     def _build_tool_actions(self, tool_group: QActionGroup) -> dict[str, QAction]:
         return self._tool_action_service.build_tool_actions(self, tool_group)
 
@@ -467,6 +471,8 @@ class MainWindow(QMainWindow):
         bar.style().polish(bar)
 
     def _active_tool_status_text(self) -> str:
+        if self._context_bar_page_override == "template":
+            return "Tool: Template"
         canvas = self._active_canvas_or_none()
         if canvas is None:
             return "Tool: None"
@@ -557,9 +563,6 @@ class MainWindow(QMainWindow):
         self._zoom_label.setToolTip(f"Zoom: {zoom_percent}%")
         self._zoom_label.setStatusTip(f"Zoom: {zoom_percent}%")
 
-    def _open_arrow_settings(self) -> None:
-        self._ui_assembly_service.open_arrow_settings(self)
-
     def _add_menu_action(
         self,
         menu: QMenu,
@@ -603,12 +606,21 @@ class MainWindow(QMainWindow):
         self._tool_state_service.set_bond_style(self, value)
 
     def _sync_tool_actions_from_canvas(self) -> None:
+        self._context_bar_page_override = None
         self._tool_state_service.sync_tool_actions_from_canvas(self)
         self._update_tool_status_label()
         self._refresh_context_bar()
 
     def _set_tool_with_status(self, tool: str, reset_bond_style: bool = True) -> None:
+        self._context_bar_page_override = None
         self._tool_state_service.set_tool_with_status(self, tool, reset_bond_style=reset_bond_style)
+        self._refresh_context_bar()
+
+    def _show_context_page(self, page_key: str) -> None:
+        self._context_bar_page_override = page_key
+        action = getattr(self, "_tool_actions", {}).get(page_key)
+        if action is not None:
+            action.setChecked(True)
         self._refresh_context_bar()
 
     def _active_tool_name(self) -> str | None:
@@ -620,7 +632,11 @@ class MainWindow(QMainWindow):
         return str(name) if name else None
 
     def _refresh_context_bar(self) -> None:
-        self._context_bar_service.refresh(self, self._active_tool_name())
+        self._context_bar_service.refresh(
+            self,
+            self._active_tool_name(),
+            page_key=self._context_bar_page_override,
+        )
 
     def _set_arrow_type(self, value: str) -> None:
         self._tool_state_service.set_arrow_type(self, value)

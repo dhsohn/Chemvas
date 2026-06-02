@@ -89,6 +89,42 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
             ],
         )
 
+    def test_template_action_shows_context_icon_buttons_and_routes_current_canvas(self) -> None:
+        with mock.patch.object(self.window.canvas, "begin_ring_template_insert") as begin_insert:
+            self.window._tool_actions["template"].trigger()
+
+            button = next(
+                widget for widget in self.window.findChildren(QToolButton) if widget.toolTip() == "Cyclopropane"
+            )
+            self.assertEqual(self.window._context_bar_page_override, "template")
+            self.assertTrue(self.window._tool_actions["template"].isChecked())
+            self.assertEqual(self.window.statusBar().currentMessage(), "Template Tool")
+            self.assertEqual(self.window._status_tool_label.text(), "Tool: Template")
+
+            button.click()
+
+        begin_insert.assert_called_once_with(3, style="regular")
+
+    def test_arrow_action_shows_context_icon_buttons_and_routes_type_and_preset(self) -> None:
+        with (
+            mock.patch.object(self.window, "_set_arrow_type") as set_arrow_type,
+            mock.patch.object(self.window, "_set_arrow_preset") as set_arrow_preset,
+        ):
+            self.window._tool_actions["arrow"].trigger()
+
+            arrow_button = next(
+                widget for widget in self.window.findChildren(QToolButton) if widget.toolTip() == "Curved Double"
+            )
+            preset_button = next(
+                widget for widget in self.window.findChildren(QToolButton) if widget.toolTip() == "Bold arrow preset"
+            )
+
+            arrow_button.click()
+            preset_button.click()
+
+        set_arrow_type.assert_called_once_with("Curved Double")
+        set_arrow_preset.assert_called_once_with("Bold")
+
     def test_ui_assembly_wrappers_delegate_to_service(self) -> None:
         service = mock.Mock()
         self.window._ui_assembly_service = service
@@ -309,6 +345,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         )
         self.window._activate_bond_style_tool("Hash")
         self.window._activate_mark_tool("minus")
+        self.window._activate_template_tool()
         self.assertEqual(self.window._build_tool_actions(tool_group), {"select": action})
 
         service.build_checkable_tool_action.assert_called_once_with(
@@ -322,6 +359,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         )
         service.activate_bond_style_tool.assert_called_once_with(self.window, "Hash")
         service.activate_mark_tool.assert_called_once_with(self.window, "minus")
+        service.activate_template_tool.assert_called_once_with(self.window)
         service.build_tool_actions.assert_called_once_with(self.window, tool_group)
 
     def test_arrow_menu_helpers_route_type_and_preset_through_existing_methods(self) -> None:
@@ -329,7 +367,6 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
             mock.patch.object(self.window, "_set_tool_with_status") as set_tool,
             mock.patch.object(self.window, "_set_arrow_type") as set_type,
             mock.patch.object(self.window, "_set_arrow_preset") as set_preset,
-            mock.patch.object(self.window, "_open_arrow_settings") as open_settings,
         ):
             self.window._activate_arrow_type_from_menu("Reaction")
             self.window._activate_arrow_preset_from_menu("Bold")
@@ -338,13 +375,23 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
             preset_menu = next(action.menu() for action in menu.actions() if action.menu() is not None)
             menu.actions()[0].trigger()
             preset_menu.actions()[0].trigger()
-            menu.actions()[-1].trigger()
 
         self.assertEqual(set_tool.call_args_list[0].args, ("arrow",))
         self.assertEqual(set_tool.call_args_list[1].args, ("arrow",))
         self.assertTrue(any(call.args == ("Reaction",) for call in set_type.call_args_list))
         self.assertTrue(any(call.args == ("Default",) for call in set_preset.call_args_list))
-        open_settings.assert_called_once_with()
+        self.assertEqual(
+            [action.text() for action in menu.actions() if action.menu() is None],
+            [
+                "Reaction",
+                "Equilibrium",
+                "Resonance",
+                "Curved Single",
+                "Curved Double",
+                "Inhibition",
+                "Dotted",
+            ],
+        )
 
     def test_text_preset_and_palette_menu_helpers_delegate_correctly(self) -> None:
         with (

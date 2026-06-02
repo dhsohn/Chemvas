@@ -3,7 +3,6 @@ from __future__ import annotations
 from PyQt6.QtCore import QSize, Qt
 from PyQt6.QtWidgets import (
     QButtonGroup,
-    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -14,7 +13,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.main_window_config import ARROW_MENU_SPECS
+from ui.main_window_config import ARROW_MENU_SPECS, ARROW_PRESET_SPECS, TEMPLATE_ENTRY_SPECS
 from ui.main_window_theme import TOOLBAR_BUTTON_STYLE
 from ui.main_window_toolbar_logic import BOND_STYLE_BY_LABEL
 
@@ -24,6 +23,7 @@ _TOOL_PAGE_KEYS = {
     "arrow": "arrow",
     "text": "atom",
     "benzene": "ring",
+    "template": "template",
 }
 
 # Every entry sets a single active bond style, so they form one exclusive group.
@@ -51,6 +51,8 @@ class MainWindowContextBarService:
         self._pages: dict[str, QWidget] = {}
         self._bond_group: QButtonGroup | None = None
         self._bond_buttons: dict[str, QToolButton] = {}
+        self._arrow_group: QButtonGroup | None = None
+        self._arrow_buttons: dict[str, QToolButton] = {}
 
     def init_context_bar(self, window) -> QToolBar:
         bar = QToolBar("Options", window)
@@ -63,6 +65,7 @@ class MainWindowContextBarService:
         self._pages = {
             "empty": self._build_empty_page(),
             "bond": self._build_bond_page(window),
+            "template": self._build_template_page(window),
             "arrow": self._build_arrow_page(window),
             "atom": self._build_atom_page(window),
             "ring": self._build_ring_page(window),
@@ -76,14 +79,16 @@ class MainWindowContextBarService:
         window.addToolBar(Qt.ToolBarArea.TopToolBarArea, bar)
         return bar
 
-    def refresh(self, window, tool: str | None) -> None:
+    def refresh(self, window, tool: str | None, *, page_key: str | None = None) -> None:
         if self._stack is None:
             return
-        key = _TOOL_PAGE_KEYS.get(tool or "", "empty")
+        key = page_key or _TOOL_PAGE_KEYS.get(tool or "", "empty")
         page = self._pages.get(key, self._pages["empty"])
         self._stack.setCurrentWidget(page)
         if key == "bond":
             self.reflect_state(window)
+        elif key == "arrow":
+            self.reflect_arrow_state(window)
 
     def reflect_state(self, window) -> None:
         if not self._bond_buttons or self._bond_group is None:
@@ -103,6 +108,20 @@ class MainWindowContextBarService:
             button.setChecked(button is target)
             button.blockSignals(blocked)
         self._bond_group.setExclusive(True)
+
+    def reflect_arrow_state(self, window) -> None:
+        if not self._arrow_buttons or self._arrow_group is None:
+            return
+        canvas = window._active_canvas_or_none()
+        if canvas is None:
+            return
+        target = self._arrow_buttons.get(canvas.active_arrow_type)
+        self._arrow_group.setExclusive(False)
+        for button in self._arrow_buttons.values():
+            blocked = button.blockSignals(True)
+            button.setChecked(button is target)
+            button.blockSignals(blocked)
+        self._arrow_group.setExclusive(True)
 
     # -- page builders -------------------------------------------------
 
@@ -147,6 +166,16 @@ class MainWindowContextBarService:
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         return button
 
+    @staticmethod
+    def _text_button(text: str, tooltip: str) -> QToolButton:
+        button = QToolButton()
+        button.setText(text)
+        button.setToolTip(tooltip)
+        button.setAutoRaise(True)
+        button.setStyleSheet(TOOLBAR_BUTTON_STYLE)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        return button
+
     def _build_empty_page(self) -> QWidget:
         page, layout = self._new_page()
         layout.addWidget(self._hint_label("Select a tool to see its options here"))
@@ -175,16 +204,42 @@ class MainWindowContextBarService:
         layout.addStretch(1)
         return page
 
+    def _build_template_page(self, window) -> QWidget:
+        page, layout = self._new_page()
+        layout.addWidget(self._section_label("Template"))
+        for label, ring_size, style in TEMPLATE_ENTRY_SPECS:
+            button = self._icon_button(window._icon_factory.icon_template_preview(label), label)
+            button.clicked.connect(
+                lambda _checked=False, n=ring_size, s=style: window.canvas.begin_ring_template_insert(
+                    n,
+                    style=s,
+                )
+            )
+            layout.addWidget(button)
+        layout.addStretch(1)
+        return page
+
     def _build_arrow_page(self, window) -> QWidget:
         page, layout = self._new_page()
         layout.addWidget(self._section_label("Arrow"))
-        combo = QComboBox()
-        for label, _value in ARROW_MENU_SPECS:
-            combo.addItem(label)
-        combo.setToolTip("Arrow type")
-        combo.setFixedWidth(140)
-        combo.currentTextChanged.connect(window._set_arrow_type)
-        layout.addWidget(combo)
+
+        group = QButtonGroup(page)
+        group.setExclusive(True)
+        self._arrow_group = group
+        self._arrow_buttons = {}
+        for label, value in ARROW_MENU_SPECS:
+            button = self._icon_button(window._icon_factory.icon_arrow_preview(value), label, checkable=True)
+            button.clicked.connect(lambda _checked, v=label: window._set_arrow_type(v))
+            group.addButton(button)
+            self._arrow_buttons[value] = button
+            layout.addWidget(button)
+
+        layout.addWidget(self._divider())
+        layout.addWidget(self._hint_label("Preset"))
+        for label in ARROW_PRESET_SPECS:
+            button = self._text_button(label, f"{label} arrow preset")
+            button.clicked.connect(lambda _checked=False, v=label: window._set_arrow_preset(v))
+            layout.addWidget(button)
 
         layout.addWidget(self._divider())
         layout.addWidget(self._hint_label("Width"))
@@ -205,10 +260,6 @@ class MainWindowContextBarService:
         head.valueChanged.connect(lambda v: window.canvas.set_arrow_head_scale(v / 100.0))
         layout.addWidget(head)
 
-        layout.addWidget(self._divider())
-        more = self._icon_button(window._icon_factory.icon_arrow(), "Open arrow settings")
-        more.clicked.connect(window._open_arrow_settings)
-        layout.addWidget(more)
         layout.addStretch(1)
         return page
 
@@ -224,9 +275,7 @@ class MainWindowContextBarService:
     def _build_ring_page(self, window) -> QWidget:
         page, layout = self._new_page()
         layout.addWidget(self._section_label("Ring"))
-        layout.addWidget(
-            self._hint_label("Pick rings from the Templates menu above · J for benzene")
-        )
+        layout.addWidget(self._hint_label("Benzene ring"))
         layout.addStretch(1)
         return page
 
