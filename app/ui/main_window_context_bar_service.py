@@ -28,13 +28,13 @@ _TOOL_PAGE_KEYS = {
 
 # Every entry sets a single active bond style, so they form one exclusive group.
 _BOND_SEGMENTS = [
-    ("Single", "_icon_bond", "Single bond (1)"),
-    ("Double", "_icon_bond_double", "Double bond (2)"),
-    ("Triple", "_icon_bond_triple", "Triple bond (3)"),
-    ("Bold", "_icon_bond_bold", "Bold bond (B)"),
-    ("Wedge", "_icon_bond_wedge", "Wedge bond (W)"),
-    ("Hash", "_icon_bond_hash", "Hash bond (Shift+H)"),
-    ("Dotted", "_icon_bond_dotted", "Dotted bond"),
+    ("Single", "icon_bond", "Single bond (1)"),
+    ("Double", "icon_bond_double", "Double bond (2)"),
+    ("Triple", "icon_bond_triple", "Triple bond (3)"),
+    ("Bold", "icon_bond_bold", "Bold bond (B)"),
+    ("Wedge", "icon_bond_wedge", "Wedge bond (W)"),
+    ("Hash", "icon_bond_hash", "Hash bond (Shift+H)"),
+    ("Dotted", "icon_bond_dotted", "Dotted bond"),
 ]
 
 # (style, order) -> segment label, for reflecting the canvas state.
@@ -92,8 +92,8 @@ class MainWindowContextBarService:
         if canvas is None:
             return
         key = (
-            getattr(canvas, "active_bond_style", None),
-            getattr(canvas, "active_bond_order", None),
+            canvas.active_bond_style,
+            canvas.active_bond_order,
         )
         label = _LABEL_BY_STYLE.get(key)
         target = self._bond_buttons.get(label)
@@ -162,14 +162,14 @@ class MainWindowContextBarService:
         self._bond_group = group
         self._bond_buttons = {}
         for label, icon_method, tip in _BOND_SEGMENTS:
-            button = self._icon_button(getattr(window, icon_method)(), tip, checkable=True)
+            button = self._icon_button(getattr(window._icon_factory, icon_method)(), tip, checkable=True)
             button.clicked.connect(lambda _checked, v=label: window._activate_bond_style_tool(v))
             group.addButton(button)
             self._bond_buttons[label] = button
             layout.addWidget(button)
 
         layout.addWidget(self._divider())
-        length_button = self._icon_button(window._icon_bond_length(), "Set the default bond length")
+        length_button = self._icon_button(window._icon_factory.icon_bond_length(), "Set the default bond length")
         length_button.clicked.connect(window._set_bond_length)
         layout.addWidget(length_button)
         layout.addStretch(1)
@@ -206,7 +206,7 @@ class MainWindowContextBarService:
         layout.addWidget(head)
 
         layout.addWidget(self._divider())
-        more = self._icon_button(window._icon_arrow(), "Open arrow settings")
+        more = self._icon_button(window._icon_factory.icon_arrow(), "Open arrow settings")
         more.clicked.connect(window._open_arrow_settings)
         layout.addWidget(more)
         layout.addStretch(1)

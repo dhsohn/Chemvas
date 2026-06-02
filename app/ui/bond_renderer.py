@@ -12,12 +12,14 @@ from ui.bond_style_logic import (
     is_dotted_double_bond_style,
     normalized_plain_double_style,
 )
+from ui.canvas_graph_state import graph_state_for
 from ui.graphics_items import NoSelectLineItem, NoSelectPathItem, NoSelectPolygonItem
 
 
 class BondRenderer:
     def __init__(self, canvas) -> None:
         self.canvas = canvas
+        self.graph = graph_state_for(canvas)
         self._bold_out_length_scale = 1.1
 
     def _line_item(
@@ -56,7 +58,7 @@ class BondRenderer:
     def _junction_trim_for_atom(self, atom_id: int | None, other_id: int | None) -> float:
         if atom_id is None:
             return 0.0
-        bond_ids = set(self.canvas._atom_bond_ids.get(atom_id, ()))
+        bond_ids = set(self.graph.atom_bond_ids.get(atom_id, ()))
         if other_id is not None:
             for bond_id in list(bond_ids):
                 if not (0 <= bond_id < len(self.canvas.model.bonds)):
@@ -312,8 +314,8 @@ class BondRenderer:
         if a_id is None or b_id is None:
             return None
         points: list[tuple[float, float]] = []
-        candidate_bond_ids = set(self.canvas._atom_bond_ids.get(a_id, ())) | set(
-            self.canvas._atom_bond_ids.get(b_id, ())
+        candidate_bond_ids = set(self.graph.atom_bond_ids.get(a_id, ())) | set(
+            self.graph.atom_bond_ids.get(b_id, ())
         )
         for bond_id in candidate_bond_ids:
             if not (0 <= bond_id < len(self.canvas.model.bonds)):

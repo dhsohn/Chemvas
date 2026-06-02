@@ -215,7 +215,7 @@ class MainWindowUIAssemblyService:
         left_bar.addSeparator()
         left_bar.addWidget(
             self.create_corner_menu_button(
-                icon=window._icon_templates(),
+                icon=window._icon_factory.icon_templates(),
                 tooltip="Templates",
                 style_sheet=TOOLBAR_MENU_BUTTON_STYLE,
                 popup_mode=QToolButton.ToolButtonPopupMode.InstantPopup,
@@ -234,14 +234,14 @@ class MainWindowUIAssemblyService:
         left_bar.addSeparator()
         left_bar.addWidget(
             self.create_toolbar_button(
-                icon=window._icon_flip_h(),
+                icon=window._icon_factory.icon_flip_h(),
                 tooltip="Flip Horizontal (Ctrl+Shift+H)",
                 callback=lambda: window.canvas.flip_horizontal(),
             )
         )
         left_bar.addWidget(
             self.create_toolbar_button(
-                icon=window._icon_flip_v(),
+                icon=window._icon_factory.icon_flip_v(),
                 tooltip="Flip Vertical (Ctrl+Shift+V)",
                 callback=lambda: window.canvas.flip_vertical(),
             )
@@ -258,7 +258,7 @@ class MainWindowUIAssemblyService:
         panel_bar.setStyleSheet(TOOLBAR_BUTTON_STYLE)
 
         save_action = QAction("Save", window)
-        save_action.setIcon(window._icon_save())
+        save_action.setIcon(window._icon_factory.icon_save())
         save_action.setToolTip("Save")
         save_action.setStatusTip("Save the current drawing")
         save_action.setShortcut(QKeySequence.StandardKey.Save)
@@ -274,21 +274,21 @@ class MainWindowUIAssemblyService:
 
         save_button = self.create_save_menu_button(save_action, save_as_action)
         load_btn = self.create_toolbar_button(
-            icon=window._icon_open(),
+            icon=window._icon_factory.icon_open(),
             tooltip="Load",
             status_tip="Open a drawing or workbook",
             callback=window._load_canvas,
             shortcut=QKeySequence.StandardKey.Open,
         )
         export_xyz_btn = self.create_toolbar_button(
-            icon=window._icon_export_xyz(),
+            icon=window._icon_factory.icon_export_xyz(),
             tooltip="Export 3D XYZ",
             status_tip="Export the current structure as 3D XYZ",
             callback=window._export_xyz,
             object_name="export_xyz_button",
         )
         preview_panel_btn = self.create_toolbar_button(
-            icon=window._icon_preview_panel(),
+            icon=window._icon_factory.icon_preview_panel(),
             tooltip="3D Preview Panel",
             status_tip="Show or hide the right-side 3D preview panel",
             callback=window._toggle_preview_panel,
@@ -297,14 +297,14 @@ class MainWindowUIAssemblyService:
         preview_panel_btn.setCheckable(True)
         preview_panel_btn.setChecked(True)
         setup_sheet_btn = self.create_toolbar_button(
-            icon=window._icon_setup_sheet(),
+            icon=window._icon_factory.icon_setup_sheet(),
             tooltip="Setup Sheet",
             status_tip="Set the current sheet size and orientation",
             callback=window._setup_sheet,
             object_name="setup_sheet_button",
         )
         undo_btn = self.create_toolbar_button(
-            icon=window._icon_undo(),
+            icon=window._icon_factory.icon_undo(),
             tooltip="Undo",
             status_tip="Undo the last edit",
             callback=lambda: window.canvas.undo(),
@@ -312,7 +312,7 @@ class MainWindowUIAssemblyService:
             object_name="undo_button",
         )
         redo_btn = self.create_toolbar_button(
-            icon=window._icon_redo(),
+            icon=window._icon_factory.icon_redo(),
             tooltip="Redo",
             status_tip="Redo the last undone edit",
             callback=lambda: window.canvas.redo(),
@@ -367,7 +367,7 @@ class MainWindowUIAssemblyService:
         panel_bar.addWidget(atom_input)
         panel_bar.addWidget(
             self.create_corner_menu_button(
-                icon=window._icon_color(),
+                icon=window._icon_factory.icon_color(),
                 tooltip="Color",
                 status_tip="Set the drawing color",
                 style_sheet=TOOLBAR_MENU_BUTTON_STYLE,
@@ -377,7 +377,7 @@ class MainWindowUIAssemblyService:
         )
         panel_bar.addWidget(
             self.create_corner_menu_button(
-                icon=window._icon_ring_fill(),
+                icon=window._icon_factory.icon_ring_fill(),
                 tooltip="Ring Fill",
                 status_tip="Set the ring fill color",
                 style_sheet=TOOLBAR_MENU_BUTTON_STYLE,
@@ -387,7 +387,7 @@ class MainWindowUIAssemblyService:
         )
         panel_bar.addWidget(
             self.create_toolbar_button(
-                icon=window._icon_bond_length(),
+                icon=window._icon_factory.icon_bond_length(),
                 tooltip="Bond Length",
                 status_tip="Set the default bond length",
                 callback=window._set_bond_length,

@@ -183,7 +183,7 @@ class MainWindowDocumentActionService:
         size_combo = QComboBox()
         size_combo.setObjectName("sheetSizeCombo")
         size_combo.addItems(supported_sheet_sizes())
-        current_size = getattr(window.canvas, "sheet_size", "A4")
+        current_size = window.canvas.sheet_size
         size_index = size_combo.findText(current_size)
         if size_index >= 0:
             size_combo.setCurrentIndex(size_index)
@@ -194,7 +194,7 @@ class MainWindowDocumentActionService:
 
         orientation_combo = QComboBox()
         orientation_combo.setObjectName("sheetOrientationCombo")
-        current_orientation = getattr(window.canvas, "sheet_orientation", "landscape")
+        current_orientation = window.canvas.sheet_orientation
         for value, label in SHEET_ORIENTATION_OPTIONS:
             orientation_combo.addItem(label, value)
             if value == current_orientation:

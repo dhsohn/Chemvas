@@ -46,6 +46,7 @@ from ui.scene_item_access import (
     create_scene_item_from_state as create_scene_item_from_state_helper,
     remove_scene_item as remove_scene_item_helper,
 )
+from ui.canvas_graph_state import graph_state_for
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
@@ -54,6 +55,7 @@ if TYPE_CHECKING:
 class SceneOpsController:
     def __init__(self, canvas: CanvasView) -> None:
         self.canvas = canvas
+        self.graph = graph_state_for(canvas)
 
     def _remove_scene_item(self, item) -> None:
         remove_scene_item_helper(self.canvas, item)
@@ -217,11 +219,11 @@ class SceneOpsController:
     def _selected_atom_components_for_transform(self, atom_ids: set[int]) -> list[set[int]]:
         if not atom_ids:
             return []
-        component_key = (frozenset(atom_ids), self.canvas._graph_version)
-        if component_key != self.canvas._selection_component_cache_signature:
-            self.canvas._selection_component_cache_signature = component_key
-            self.canvas._selection_component_cache = self.canvas._connected_components(atom_ids)
-        return [set(component) for component in self.canvas._selection_component_cache]
+        component_key = (frozenset(atom_ids), self.graph.graph_version)
+        if component_key != self.graph.selection_component_cache_signature:
+            self.graph.selection_component_cache_signature = component_key
+            self.graph.selection_component_cache = self.canvas._connected_components(atom_ids)
+        return [set(component) for component in self.graph.selection_component_cache]
 
     def flip_selected_items(self, horizontal: bool) -> None:
         items = self.canvas._selected_items_for_transform()

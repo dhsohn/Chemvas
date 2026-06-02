@@ -33,32 +33,32 @@ TEMPLATE_ENTRY_SPECS: list[tuple[str, int, str]] = [
 ]
 
 TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
-    ("select", "Select", "select", "_icon_select", "Select / Marquee (ChemDraw: Space)"),
-    ("bond", "Bond", "bond", "_icon_bond", "Bond (ChemDraw: X)"),
-    ("text", "Atom", "text", "_icon_text", "Atom / Text (ChemDraw: T)"),
-    ("benzene", "Ring", "benzene", "_icon_ring", "Ring / Benzene (ChemDraw: J)"),
-    ("arrow", "Arrow", "arrow", "_icon_arrow", "Arrow (ChemDraw: E)"),
-    ("ts_bracket", "TS Bracket", "ts_bracket", "_icon_ts_bracket", "TS Bracket (ChemDraw: Shift+G)"),
+    ("select", "Select", "select", "icon_select", "Select / Marquee (ChemDraw: Space)"),
+    ("bond", "Bond", "bond", "icon_bond", "Bond (ChemDraw: X)"),
+    ("text", "Atom", "text", "icon_text", "Atom / Text (ChemDraw: T)"),
+    ("benzene", "Ring", "benzene", "icon_ring", "Ring / Benzene (ChemDraw: J)"),
+    ("arrow", "Arrow", "arrow", "icon_arrow", "Arrow (ChemDraw: E)"),
+    ("ts_bracket", "TS Bracket", "ts_bracket", "icon_ts_bracket", "TS Bracket (ChemDraw: Shift+G)"),
     (
         "perspective",
         "Perspective",
         "perspective",
-        "_icon_perspective",
+        "icon_perspective",
         "Perspective Rotation (ChemDraw: Alt+D, Shift+drag locks X/Y)",
     ),
 ]
 
 BOND_TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
-    ("bond_bold", "Bold Bond", "Bold", "_icon_bond_bold", "Bold Bond (Bond Hotkey: B)"),
-    ("bond_wedge", "Wedge", "Wedge", "_icon_bond_wedge", "Wedge Bond (Bond Hotkey: W)"),
-    ("bond_hash", "Hash", "Hash", "_icon_bond_hash", "Hash Bond (Bond Hotkey: Shift+H)"),
-    ("bond_dotted", "Dotted Bond", "Dotted", "_icon_bond_dotted", "Dotted Bond"),
+    ("bond_bold", "Bold Bond", "Bold", "icon_bond_bold", "Bold Bond (Bond Hotkey: B)"),
+    ("bond_wedge", "Wedge", "Wedge", "icon_bond_wedge", "Wedge Bond (Bond Hotkey: W)"),
+    ("bond_hash", "Hash", "Hash", "icon_bond_hash", "Hash Bond (Bond Hotkey: Shift+H)"),
+    ("bond_dotted", "Dotted Bond", "Dotted", "icon_bond_dotted", "Dotted Bond"),
 ]
 
 MARK_TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
-    ("mark_plus", "Charge +", "plus", "_icon_mark_plus", "Charge + (Atom Hotkey: +)"),
-    ("mark_minus", "Charge -", "minus", "_icon_mark_minus", "Charge - (Atom Hotkey: -)"),
-    ("mark_radical", "Radical", "radical", "_icon_mark_radical", "Radical"),
+    ("mark_plus", "Charge +", "plus", "icon_mark_plus", "Charge + (Atom Hotkey: +)"),
+    ("mark_minus", "Charge -", "minus", "icon_mark_minus", "Charge - (Atom Hotkey: -)"),
+    ("mark_radical", "Radical", "radical", "icon_mark_radical", "Radical"),
 ]
 
 LEFT_TOOLBAR_ACTION_ORDER: list[str] = [

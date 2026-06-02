@@ -13,6 +13,7 @@ from core.history import (
 )
 from core.model import Bond
 from ui.bond_style_logic import STANDARD_BOND_STYLES
+from ui.canvas_history_state import history_state_for
 from ui.graphics_items import AtomDotItem, AtomLabelItem
 from ui.history_commands import ChangeAtomLabelCommand
 
@@ -85,7 +86,7 @@ class AtomLabelService:
         merge_ids: list[int],
         merge_info: dict,
     ) -> None:
-        if not self.canvas._history_enabled:
+        if not history_state_for(self.canvas).enabled:
             return
         atom = self.canvas.model.atoms.get(atom_id)
         after_element = atom.element if atom is not None else before_element

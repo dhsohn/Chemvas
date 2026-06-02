@@ -26,6 +26,7 @@ from ui.bond_style_logic import style_for_existing_bond_overlay
 from ui.delete_tool_logic import build_delete_tool_history_command, erase_delete_tool_item
 from ui.history_commands import UpdateSceneItemCommand
 from ui.perspective_tool_controller import PerspectiveToolController
+from ui.canvas_rotation_state import rotation_state_for
 from ui.selection_press_logic import SelectionPressContext, plan_selection_press
 from core.text_tool_logic import (
     build_created_atom_command,
@@ -1155,7 +1156,7 @@ class PerspectiveTool(Tool):
             delta_x=delta.x(),
             delta_y=delta.y(),
             axis_lock=self._axis_lock,
-            rotation_mode=self.canvas._rotation_mode,
+            rotation_mode=rotation_state_for(self.canvas).mode,
             shift_pressed=bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier),
         )
         self._axis_lock = update.axis_lock

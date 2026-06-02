@@ -33,8 +33,8 @@ class MainWindowToolRoutingService:
         return list(COLOR_PALETTE_SPECS)
 
     def populate_template_menu(self, window, menu) -> None:
-        for label, handler in window._template_entries():
-            self.add_menu_action(menu, label, handler, window._icon_template_preview(label))
+        for label, handler in self.template_entries(window):
+            self.add_menu_action(menu, label, handler, window._icon_factory.icon_template_preview(label))
 
     def populate_arrow_menu(self, window, menu) -> None:
         for label, kind in ARROW_MENU_SPECS:
@@ -42,7 +42,7 @@ class MainWindowToolRoutingService:
                 menu,
                 label,
                 lambda value=label: window._activate_arrow_type_from_menu(value),
-                window._icon_arrow_preview(kind),
+                window._icon_factory.icon_arrow_preview(kind),
             )
         preset_menu = menu.addMenu("Preset")
         for label in ARROW_PRESET_SPECS:
@@ -55,7 +55,7 @@ class MainWindowToolRoutingService:
         self.add_menu_action(menu, "Settings...", window._open_arrow_settings)
 
     def populate_palette_menu(self, window, menu, callback: Callable[[str], None]) -> None:
-        for label, hex_value in window._acs_color_palette():
+        for label, hex_value in self.acs_color_palette():
             self.add_menu_action(
                 menu,
                 label,
