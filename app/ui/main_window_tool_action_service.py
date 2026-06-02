@@ -3,6 +3,7 @@ from __future__ import annotations
 from ui.main_window_config import (
     BOND_TOOL_ACTION_SPECS,
     MARK_TOOL_ACTION_SPECS,
+    TEMPLATE_TOOL_ACTION_SPEC,
     TOOL_ACTION_SPECS,
 )
 
@@ -41,6 +42,11 @@ class MainWindowToolActionService:
         self._show_status_message(window, "Mark Tool")
         window._refresh_status_context()
 
+    def activate_template_tool(self, window) -> None:
+        window._show_context_page("template")
+        self._show_status_message(window, "Template Tool")
+        window._refresh_status_context()
+
     def build_tool_actions(self, window, tool_group) -> dict[str, object]:
         actions = dict(
             self.build_checkable_tool_action(
@@ -54,6 +60,17 @@ class MainWindowToolActionService:
             )
             for key, label, tool, icon_method, tooltip in TOOL_ACTION_SPECS
         )
+        key, label, icon_method, tooltip = TEMPLATE_TOOL_ACTION_SPEC
+        _, template_action = self.build_checkable_tool_action(
+            window,
+            tool_group,
+            key=key,
+            label=label,
+            icon_method=icon_method,
+            tooltip=tooltip,
+            callback=lambda: self.activate_template_tool(window),
+        )
+        actions[key] = template_action
         actions.update(
             dict(
                 self.build_checkable_tool_action(

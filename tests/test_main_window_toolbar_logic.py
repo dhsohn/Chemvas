@@ -37,6 +37,7 @@ class MainWindowToolbarLogicTest(unittest.TestCase):
         self.assertEqual(arrow_preset_from_label("Bold"), (2.2, 0.4))
         self.assertEqual(arrow_preset_from_label("Unknown"), (1.2, 0.3))
         self.assertEqual(tool_display_name("text"), "Atom / Text")
+        self.assertEqual(tool_display_name("template"), "Template")
         self.assertEqual(tool_display_name("mystery"), "Mystery")
 
     def test_tool_action_key_for_canvas_state_handles_bond_mark_and_regular_tools(self) -> None:
@@ -46,7 +47,7 @@ class MainWindowToolbarLogicTest(unittest.TestCase):
                 active_bond_style="hash",
                 mark_kind="plus",
             ),
-            "bond_hash",
+            "bond",
         )
         self.assertEqual(
             tool_action_key_for_canvas_state(
@@ -54,7 +55,7 @@ class MainWindowToolbarLogicTest(unittest.TestCase):
                 active_bond_style="bold_out",
                 mark_kind="plus",
             ),
-            "bond_bold",
+            "bond",
         )
         self.assertEqual(
             tool_action_key_for_canvas_state(

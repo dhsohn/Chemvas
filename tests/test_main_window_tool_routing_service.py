@@ -76,7 +76,6 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
             mock.patch.object(self.window, "_set_tool_with_status") as set_tool,
             mock.patch.object(self.window, "_set_arrow_type") as set_type,
             mock.patch.object(self.window, "_set_arrow_preset") as set_preset,
-            mock.patch.object(self.window, "_open_arrow_settings") as open_settings,
         ):
             self.service.activate_arrow_type_from_menu(self.window, "Reaction")
             self.service.activate_arrow_preset_from_menu(self.window, "Bold")
@@ -85,13 +84,12 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
             preset_menu = next(action.menu() for action in menu.actions() if action.menu() is not None)
             menu.actions()[0].trigger()
             preset_menu.actions()[0].trigger()
-            menu.actions()[-1].trigger()
 
         self.assertEqual(set_tool.call_args_list[0].args, ("arrow",))
         self.assertEqual(set_tool.call_args_list[1].args, ("arrow",))
         self.assertTrue(any(call.args == ("Reaction",) for call in set_type.call_args_list))
         self.assertTrue(any(call.args == ("Default",) for call in set_preset.call_args_list))
-        open_settings.assert_called_once_with()
+        self.assertNotIn("Settings...", [action.text() for action in menu.actions()])
 
     def test_palette_menu_and_color_presets_route_selected_items(self) -> None:
         palette_calls = []

@@ -48,6 +48,13 @@ TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
     ),
 ]
 
+TEMPLATE_TOOL_ACTION_SPEC: tuple[str, str, str, str] = (
+    "template",
+    "Template",
+    "icon_templates",
+    "Templates",
+)
+
 BOND_TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
     ("bond_bold", "Bold Bond", "Bold", "icon_bond_bold", "Bold Bond (Bond Hotkey: B)"),
     ("bond_wedge", "Wedge", "Wedge", "icon_bond_wedge", "Wedge Bond (Bond Hotkey: W)"),
@@ -62,18 +69,15 @@ MARK_TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
 ]
 
 LEFT_TOOLBAR_ACTION_ORDER: list[str] = [
-    "select",
-    "perspective",
     "bond",
-    "bond_bold",
-    "bond_wedge",
-    "bond_hash",
-    "bond_dotted",
     "text",
     "mark_plus",
     "mark_minus",
     "mark_radical",
     "benzene",
+    "template",
+    "arrow",
+    "ts_bracket",
 ]
 
 ARROW_MENU_ITEMS = ARROW_MENU_SPECS
@@ -91,6 +95,7 @@ __all__ = [
     "COLOR_PALETTE_SPECS",
     "LEFT_TOOLBAR_ACTION_ORDER",
     "MARK_TOOL_ACTION_SPECS",
+    "TEMPLATE_TOOL_ACTION_SPEC",
     "TEMPLATE_ENTRY_SPECS",
     "TOOL_ACTION_SPECS",
 ]

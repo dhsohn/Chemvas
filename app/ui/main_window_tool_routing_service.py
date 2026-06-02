@@ -51,8 +51,6 @@ class MainWindowToolRoutingService:
                 label,
                 lambda value=label: window._activate_arrow_preset_from_menu(value),
             )
-        menu.addSeparator()
-        self.add_menu_action(menu, "Settings...", window._open_arrow_settings)
 
     def populate_palette_menu(self, window, menu, callback: Callable[[str], None]) -> None:
         for label, hex_value in self.acs_color_palette():

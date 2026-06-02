@@ -21,12 +21,14 @@ class _HarnessWindow(QMainWindow):
         self.canvas = SimpleNamespace(set_mark_kind=mock.Mock())
         self._set_tool_with_status = mock.Mock()
         self._set_bond_style = mock.Mock()
+        self._show_context_page = mock.Mock()
         self._refresh_status_context = mock.Mock()
         self._icon_factory = SimpleNamespace(
             icon_select=self._blank_icon,
             icon_bond=self._blank_icon,
             icon_text=self._blank_icon,
             icon_ring=self._blank_icon,
+            icon_templates=self._blank_icon,
             icon_arrow=self._blank_icon,
             icon_ts_bracket=self._blank_icon,
             icon_perspective=self._blank_icon,
@@ -100,15 +102,23 @@ class MainWindowToolActionServiceTest(unittest.TestCase):
         self.window.canvas.set_mark_kind.assert_called_once_with("minus")
         self.assertEqual(self.window.statusBar().currentMessage(), "Mark Tool")
 
+    def test_activate_template_tool_shows_template_context(self) -> None:
+        self.service.activate_template_tool(self.window)
+
+        self.window._show_context_page.assert_called_once_with("template")
+        self.assertEqual(self.window.statusBar().currentMessage(), "Template Tool")
+
     def test_build_tool_actions_wires_tool_bond_and_mark_callbacks(self) -> None:
         actions = self.service.build_tool_actions(self.window, QActionGroup(self.window))
 
         actions["select"].trigger()
+        actions["template"].trigger()
         actions["bond_hash"].trigger()
         actions["mark_minus"].trigger()
 
         self.window._set_tool_with_status.assert_any_call("select")
         self.window._set_tool_with_status.assert_any_call("bond", reset_bond_style=False)
+        self.window._show_context_page.assert_called_once_with("template")
         self.window._set_bond_style.assert_called_once_with("Hash")
         self.window.canvas.set_mark_kind.assert_called_once_with("minus")
 

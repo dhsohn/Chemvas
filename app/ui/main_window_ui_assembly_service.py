@@ -6,24 +6,17 @@ from dataclasses import dataclass
 from PyQt6.QtCore import QPointF, QSize, Qt
 from PyQt6.QtGui import QAction, QActionGroup, QColor, QIcon, QKeySequence, QPainter, QPolygonF
 from PyQt6.QtWidgets import (
-    QCheckBox,
-    QComboBox,
-    QDialog,
     QDockWidget,
-    QHBoxLayout,
     QLabel,
     QLineEdit,
     QMenu,
-    QPushButton,
-    QSlider,
     QSplitter,
     QToolBar,
     QToolButton,
-    QVBoxLayout,
     QWidget,
 )
 
-from ui.main_window_config import ARROW_PRESET_SPECS, LEFT_TOOLBAR_ACTION_ORDER
+from ui.main_window_config import LEFT_TOOLBAR_ACTION_ORDER
 from ui.main_window_theme import (
     MAIN_WINDOW_STYLESHEET,
     SMILES_RENDER_BUTTON_STYLE,
@@ -222,10 +215,10 @@ class MainWindowUIAssemblyService:
 
         tool_actions = window._build_tool_actions(tool_group)
         left_groups = (
-            ("select", "perspective"),
-            ("bond", "bond_bold", "bond_wedge", "bond_hash", "bond_dotted"),
-            ("text", "mark_plus", "mark_minus", "mark_radical"),
-            ("benzene",),
+            ("bond", "text"),
+            ("mark_plus", "mark_minus", "mark_radical"),
+            ("benzene", "template"),
+            ("arrow", "ts_bracket"),
         )
         for group_index, action_keys in enumerate(left_groups):
             if group_index:
@@ -233,40 +226,6 @@ class MainWindowUIAssemblyService:
             for action_key in action_keys:
                 if action_key in LEFT_TOOLBAR_ACTION_ORDER:
                     left_bar.addAction(tool_actions[action_key])
-        left_bar.addSeparator()
-        left_bar.addWidget(
-            self.create_corner_menu_button(
-                icon=window._icon_factory.icon_templates(),
-                tooltip="Templates",
-                style_sheet=TOOLBAR_MENU_BUTTON_STYLE,
-                popup_mode=QToolButton.ToolButtonPopupMode.InstantPopup,
-                menu_builder=window._populate_template_menu,
-            )
-        )
-        left_bar.addWidget(
-            self.create_corner_menu_button(
-                style_sheet=TOOLBAR_MENU_BUTTON_STYLE,
-                popup_mode=QToolButton.ToolButtonPopupMode.InstantPopup,
-                menu_builder=window._populate_arrow_menu,
-                default_action=tool_actions["arrow"],
-            )
-        )
-        left_bar.addAction(tool_actions["ts_bracket"])
-        left_bar.addSeparator()
-        left_bar.addWidget(
-            self.create_toolbar_button(
-                icon=window._icon_factory.icon_flip_h(),
-                tooltip="Flip Horizontal (Ctrl+Shift+H)",
-                callback=lambda: window.canvas.flip_horizontal(),
-            )
-        )
-        left_bar.addWidget(
-            self.create_toolbar_button(
-                icon=window._icon_factory.icon_flip_v(),
-                tooltip="Flip Vertical (Ctrl+Shift+V)",
-                callback=lambda: window.canvas.flip_vertical(),
-            )
-        )
 
         window.addToolBar(Qt.ToolBarArea.LeftToolBarArea, left_bar)
         tool_actions["bond"].setChecked(True)
@@ -341,6 +300,18 @@ class MainWindowUIAssemblyService:
             shortcut=QKeySequence.StandardKey.Redo,
             object_name="redo_button",
         )
+        flip_h_btn = self.create_toolbar_button(
+            icon=window._icon_factory.icon_flip_h(),
+            tooltip="Flip Horizontal (Ctrl+Shift+H)",
+            status_tip="Flip the current selection horizontally",
+            callback=lambda: window.canvas.flip_horizontal(),
+        )
+        flip_v_btn = self.create_toolbar_button(
+            icon=window._icon_factory.icon_flip_v(),
+            tooltip="Flip Vertical (Ctrl+Shift+V)",
+            status_tip="Flip the current selection vertically",
+            callback=lambda: window.canvas.flip_vertical(),
+        )
 
         smiles_input = QLineEdit()
         smiles_input.setObjectName("smilesInput")
@@ -414,6 +385,8 @@ class MainWindowUIAssemblyService:
                 callback=window._set_bond_length,
             )
         )
+        panel_bar.addWidget(flip_h_btn)
+        panel_bar.addWidget(flip_v_btn)
         panel_bar.addSeparator()
 
         window.addToolBar(Qt.ToolBarArea.TopToolBarArea, panel_bar)
@@ -455,66 +428,6 @@ class MainWindowUIAssemblyService:
 
     def apply_theme(self, window) -> None:
         window.setStyleSheet(MAIN_WINDOW_STYLESHEET)
-
-    def open_arrow_settings(self, window) -> None:
-        dialog = QDialog(window)
-        dialog.setWindowTitle("Arrow Settings")
-        dialog.setStyleSheet(window.styleSheet())
-        layout = QVBoxLayout(dialog)
-
-        preset_label = QLabel("Preset")
-        preset_combo = QComboBox()
-        preset_combo.addItems(ARROW_PRESET_SPECS)
-        preset_combo.currentTextChanged.connect(window._set_arrow_preset)
-
-        width_label = QLabel("Width")
-        width_slider = QSlider(Qt.Orientation.Horizontal)
-        width_slider.setMinimum(1)
-        width_slider.setMaximum(6)
-        width_slider.setValue(int(window.canvas.get_arrow_line_width()))
-        width_slider.valueChanged.connect(lambda value: window.canvas.set_arrow_line_width(value))
-
-        head_label = QLabel("Head")
-        head_slider = QSlider(Qt.Orientation.Horizontal)
-        head_slider.setMinimum(10)
-        head_slider.setMaximum(60)
-        head_slider.setValue(int(window.canvas.get_arrow_head_scale() * 100))
-        head_slider.valueChanged.connect(lambda value: window.canvas.set_arrow_head_scale(value / 100.0))
-
-        snap_check = QCheckBox("Curve Snap")
-        snap_check.setChecked(window.canvas.get_curved_snap())
-        snap_check.toggled.connect(window.canvas.set_curved_snap)
-
-        symmetry_check = QCheckBox("Curve Symmetry")
-        symmetry_check.setChecked(window.canvas.get_curved_symmetry())
-        symmetry_check.toggled.connect(window.canvas.set_curved_symmetry)
-
-        snap_label = QLabel("Snap Step")
-        snap_slider = QSlider(Qt.Orientation.Horizontal)
-        snap_slider.setMinimum(5)
-        snap_slider.setMaximum(40)
-        snap_slider.setValue(int(window.canvas.get_curved_snap_step() * 100))
-        snap_slider.valueChanged.connect(lambda value: window.canvas.set_curved_snap_step(value / 100.0))
-
-        layout.addWidget(preset_label)
-        layout.addWidget(preset_combo)
-        layout.addWidget(width_label)
-        layout.addWidget(width_slider)
-        layout.addWidget(head_label)
-        layout.addWidget(head_slider)
-        layout.addWidget(snap_check)
-        layout.addWidget(symmetry_check)
-        layout.addWidget(snap_label)
-        layout.addWidget(snap_slider)
-
-        close_row = QHBoxLayout()
-        close_row.addStretch(1)
-        close_btn = QPushButton("Close")
-        close_btn.clicked.connect(dialog.accept)
-        close_row.addWidget(close_btn)
-        layout.addLayout(close_row)
-
-        dialog.exec()
 
 
 __all__ = [

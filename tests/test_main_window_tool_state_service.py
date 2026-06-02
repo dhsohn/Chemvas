@@ -72,7 +72,7 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         self.window.canvas.tools.active = SimpleNamespace(name="bond")
         self.window.canvas.active_bond_style = "hash"
         self.service.sync_tool_actions_from_canvas(self.window)
-        self.assertTrue(self.window._tool_actions["bond_hash"].isChecked())
+        self.assertTrue(self.window._tool_actions["bond"].isChecked())
 
         self._reset_tool_checks()
         self.window.canvas.tools.active = SimpleNamespace(name="mark")

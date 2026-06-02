@@ -50,6 +50,7 @@ TOOL_DISPLAY_NAMES: dict[str, str] = {
     "benzene": "Ring",
     "arrow": "Arrow",
     "ts_bracket": "TS Bracket",
+    "template": "Template",
     "orbital": "Orbital",
     "perspective": "Perspective",
     "color": "Color",
@@ -99,14 +100,6 @@ def tool_action_key_for_canvas_state(
     mark_kind: str,
 ) -> str | None:
     if active_tool == "bond":
-        if active_bond_style in {"bold", "bold_in", "bold_out"}:
-            return "bond_bold"
-        if active_bond_style == "wedge":
-            return "bond_wedge"
-        if active_bond_style == "hash":
-            return "bond_hash"
-        if active_bond_style == "dotted":
-            return "bond_dotted"
         return "bond"
     if active_tool == "mark":
         return f"mark_{mark_kind}"
