@@ -25,7 +25,7 @@ class MainWindowToolActionService:
     ) -> tuple[str, object]:
         action = window._new_tool_action(label)
         action.setCheckable(True)
-        action.setIcon(getattr(window, icon_method)())
+        action.setIcon(getattr(window._icon_factory, icon_method)())
         action.setToolTip(tooltip)
         action.setStatusTip(tooltip)
         action.triggered.connect(lambda checked=False, callback=callback: callback())

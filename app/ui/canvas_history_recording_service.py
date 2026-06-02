@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from core.history import AddAtomsCommand, AddBondCommand, CompositeCommand, UpdateBondCommand
+from ui.canvas_history_state import history_state_for
 from ui.history_commands import AddSceneItemsCommand
 
 
@@ -66,7 +67,7 @@ class CanvasHistoryRecordingService:
         before_smiles_input: str | None,
         after_smiles_input: str | None,
     ) -> None:
-        if not self.canvas._history_enabled:
+        if not history_state_for(self.canvas).enabled:
             return
         if before_state == after_state and before_smiles_input == after_smiles_input:
             return

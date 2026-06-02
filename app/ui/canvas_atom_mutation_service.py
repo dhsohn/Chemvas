@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from PyQt6.QtGui import QColor
 
 from core.model import Atom
+from ui.canvas_graph_state import graph_state_for
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
@@ -13,6 +14,7 @@ if TYPE_CHECKING:
 class CanvasAtomMutationService:
     def __init__(self, canvas: CanvasView) -> None:
         self.canvas = canvas
+        self.graph = graph_state_for(canvas)
 
     def add_atom(self, element: str, x: float, y: float) -> int:
         atom_id = self.canvas.model.add_atom(element, x, y)
@@ -36,22 +38,21 @@ class CanvasAtomMutationService:
             self.canvas._remove_marks_for_atom(atom_id)
         self.canvas.model.atoms.pop(atom_id, None)
         self.canvas.atom_coords_3d.pop(atom_id, None)
-        neighbors = self.canvas._atom_neighbors.pop(atom_id, None)
+        neighbors = self.graph.atom_neighbors.pop(atom_id, None)
         if neighbors:
             for neighbor in neighbors:
-                neighbor_set = self.canvas._atom_neighbors.get(neighbor)
+                neighbor_set = self.graph.atom_neighbors.get(neighbor)
                 if neighbor_set is not None and atom_id in neighbor_set:
                     neighbor_set.remove(atom_id)
-            self.canvas._graph_version += 1
-            self.canvas._selection_component_cache_signature = None
-        bond_ids = self.canvas._atom_bond_ids.pop(atom_id, None)
+            self.graph.bump_version()
+        bond_ids = self.graph.atom_bond_ids.pop(atom_id, None)
         if bond_ids:
             for bond_id in list(bond_ids):
                 bond = self.canvas.model.bonds[bond_id] if 0 <= bond_id < len(self.canvas.model.bonds) else None
                 if bond is None:
                     continue
                 other_id = bond.b if bond.a == atom_id else bond.a
-                other_set = self.canvas._atom_bond_ids.get(other_id)
+                other_set = self.graph.atom_bond_ids.get(other_id)
                 if other_set is not None and bond_id in other_set:
                     other_set.remove(bond_id)
         self.canvas._mark_spatial_index_dirty()

@@ -5,67 +5,69 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
 
+from ui.canvas_graph_state import CanvasGraphState, CanvasGraphStateAdapter, graph_state_for
+
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
 
 
 class CanvasGraphService:
-    def __init__(self, canvas: CanvasView) -> None:
+    def __init__(self, canvas: CanvasView, graph_state: CanvasGraphState | CanvasGraphStateAdapter | None = None) -> None:
         self.canvas = canvas
+        self.graph = graph_state if graph_state is not None else graph_state_for(canvas)
 
     def ensure_atom_neighbors(self, atom_id: int) -> None:
-        if atom_id not in self.canvas._atom_neighbors:
-            self.canvas._atom_neighbors[atom_id] = set()
+        if atom_id not in self.graph.atom_neighbors:
+            self.graph.atom_neighbors[atom_id] = set()
 
     def ensure_atom_bond_ids(self, atom_id: int) -> None:
-        if atom_id not in self.canvas._atom_bond_ids:
-            self.canvas._atom_bond_ids[atom_id] = set()
+        if atom_id not in self.graph.atom_bond_ids:
+            self.graph.atom_bond_ids[atom_id] = set()
 
     def add_bond_neighbors(self, a_id: int, b_id: int) -> None:
-        self.canvas._atom_neighbors.setdefault(a_id, set()).add(b_id)
-        self.canvas._atom_neighbors.setdefault(b_id, set()).add(a_id)
-        self.canvas._graph_version += 1
+        self.graph.atom_neighbors.setdefault(a_id, set()).add(b_id)
+        self.graph.atom_neighbors.setdefault(b_id, set()).add(a_id)
+        self.graph.bump_version()
 
     def remove_bond_neighbors(self, a_id: int, b_id: int, skip_bond_id: int | None = None) -> None:
         if self.canvas._bond_id_between(a_id, b_id, skip_bond_id=skip_bond_id) is not None:
             return
         changed = False
-        neighbors_a = self.canvas._atom_neighbors.get(a_id)
+        neighbors_a = self.graph.atom_neighbors.get(a_id)
         if neighbors_a is not None and b_id in neighbors_a:
             neighbors_a.remove(b_id)
             changed = True
-        neighbors_b = self.canvas._atom_neighbors.get(b_id)
+        neighbors_b = self.graph.atom_neighbors.get(b_id)
         if neighbors_b is not None and a_id in neighbors_b:
             neighbors_b.remove(a_id)
             changed = True
         if changed:
-            self.canvas._graph_version += 1
+            self.graph.bump_version()
 
     def add_bond_index(self, bond_id: int, a_id: int, b_id: int) -> None:
-        self.canvas._atom_bond_ids.setdefault(a_id, set()).add(bond_id)
-        self.canvas._atom_bond_ids.setdefault(b_id, set()).add(bond_id)
+        self.graph.atom_bond_ids.setdefault(a_id, set()).add(bond_id)
+        self.graph.atom_bond_ids.setdefault(b_id, set()).add(bond_id)
 
     def remove_bond_index(self, bond_id: int, a_id: int, b_id: int) -> None:
-        bonds_a = self.canvas._atom_bond_ids.get(a_id)
+        bonds_a = self.graph.atom_bond_ids.get(a_id)
         if bonds_a is not None and bond_id in bonds_a:
             bonds_a.remove(bond_id)
-        bonds_b = self.canvas._atom_bond_ids.get(b_id)
+        bonds_b = self.graph.atom_bond_ids.get(b_id)
         if bonds_b is not None and bond_id in bonds_b:
             bonds_b.remove(bond_id)
 
     def rebuild_bond_adjacency(self) -> None:
-        self.canvas._atom_neighbors = {atom_id: set() for atom_id in self.canvas.model.atoms}
-        self.canvas._atom_bond_ids = {atom_id: set() for atom_id in self.canvas.model.atoms}
+        self.graph.atom_neighbors = {atom_id: set() for atom_id in self.canvas.model.atoms}
+        self.graph.atom_bond_ids = {atom_id: set() for atom_id in self.canvas.model.atoms}
         for bond_id, bond in enumerate(self.canvas.model.bonds):
             if bond is None:
                 continue
-            self.canvas._atom_neighbors.setdefault(bond.a, set()).add(bond.b)
-            self.canvas._atom_neighbors.setdefault(bond.b, set()).add(bond.a)
-            self.canvas._atom_bond_ids.setdefault(bond.a, set()).add(bond_id)
-            self.canvas._atom_bond_ids.setdefault(bond.b, set()).add(bond_id)
-        self.canvas._graph_version += 1
-        self.canvas._selection_component_cache_signature = None
-        self.canvas._selection_component_cache = []
+            self.graph.atom_neighbors.setdefault(bond.a, set()).add(bond.b)
+            self.graph.atom_neighbors.setdefault(bond.b, set()).add(bond.a)
+            self.graph.atom_bond_ids.setdefault(bond.a, set()).add(bond_id)
+            self.graph.atom_bond_ids.setdefault(bond.b, set()).add(bond_id)
+        self.graph.bump_version()
+        self.graph.selection_component_cache = []
 
     def connected_components(self, atom_ids: set[int]) -> list[set[int]]:
         if not atom_ids:
@@ -78,7 +80,7 @@ class CanvasGraphService:
             comp = {start}
             while stack:
                 current = stack.pop()
-                for neighbor in self.canvas._atom_neighbors.get(current, ()):
+                for neighbor in self.graph.atom_neighbors.get(current, ()):
                     if neighbor not in atom_ids:
                         continue
                     if neighbor in remaining:
@@ -98,13 +100,13 @@ class CanvasGraphService:
         if skip_bond is not None:
             skip_a = skip_bond.a
             skip_b = skip_bond.b
-            shared = self.canvas._atom_bond_ids.get(skip_a, set()) & self.canvas._atom_bond_ids.get(skip_b, set())
+            shared = self.graph.atom_bond_ids.get(skip_a, set()) & self.graph.atom_bond_ids.get(skip_b, set())
             has_alt_between = any(bond_id != skip_bond_id for bond_id in shared)
         visited = {start_atom_id}
         stack = [start_atom_id]
         while stack:
             current = stack.pop()
-            for neighbor in self.canvas._atom_neighbors.get(current, ()):
+            for neighbor in self.graph.atom_neighbors.get(current, ()):
                 if (
                     skip_bond is not None
                     and not has_alt_between
@@ -121,25 +123,25 @@ class CanvasGraphService:
         return visited
 
     def bond_in_cycle(self, bond_id: int) -> bool:
-        cached = self.canvas._bond_cycle_cache.get(bond_id)
-        if cached is not None and cached[0] == self.canvas._graph_version:
+        cached = self.graph.bond_cycle_cache.get(bond_id)
+        if cached is not None and cached[0] == self.graph.graph_version:
             return cached[1]
         if not (0 <= bond_id < len(self.canvas.model.bonds)):
-            self.canvas._bond_cycle_cache[bond_id] = (self.canvas._graph_version, False)
+            self.graph.bond_cycle_cache[bond_id] = (self.graph.graph_version, False)
             return False
         bond = self.canvas.model.bonds[bond_id]
         if bond is None:
-            self.canvas._bond_cycle_cache[bond_id] = (self.canvas._graph_version, False)
+            self.graph.bond_cycle_cache[bond_id] = (self.graph.graph_version, False)
             return False
         start = bond.a
         target = bond.b
-        shared = self.canvas._atom_bond_ids.get(start, set()) & self.canvas._atom_bond_ids.get(target, set())
+        shared = self.graph.atom_bond_ids.get(start, set()) & self.graph.atom_bond_ids.get(target, set())
         has_alt_between = any(other_id != bond_id for other_id in shared)
         visited = {start}
         stack = [start]
         while stack:
             current = stack.pop()
-            for neighbor in self.canvas._atom_neighbors.get(current, ()):
+            for neighbor in self.graph.atom_neighbors.get(current, ()):
                 if (
                     not has_alt_between
                     and (
@@ -151,11 +153,11 @@ class CanvasGraphService:
                 if neighbor in visited:
                     continue
                 if neighbor == target:
-                    self.canvas._bond_cycle_cache[bond_id] = (self.canvas._graph_version, True)
+                    self.graph.bond_cycle_cache[bond_id] = (self.graph.graph_version, True)
                     return True
                 visited.add(neighbor)
                 stack.append(neighbor)
-        self.canvas._bond_cycle_cache[bond_id] = (self.canvas._graph_version, False)
+        self.graph.bond_cycle_cache[bond_id] = (self.graph.graph_version, False)
         return False
 
     def bond_is_rotatable(self, bond_id: int) -> bool:
@@ -284,19 +286,19 @@ class CanvasGraphService:
         selected_atom_ids: set[int],
         selected_bond_ids: set[int],
     ) -> tuple[int, set[int]] | None:
-        if self.canvas._rotation_axis_cache_version != self.canvas._graph_version:
-            self.canvas._rotation_axis_cache.clear()
-            self.canvas._rotation_axis_cache_version = self.canvas._graph_version
+        if self.graph.rotation_axis_cache_version != self.graph.graph_version:
+            self.graph.rotation_axis_cache.clear()
+            self.graph.rotation_axis_cache_version = self.graph.graph_version
         cache_key = (
             frozenset(selected_atom_ids),
             frozenset(selected_bond_ids),
-            self.canvas._graph_version,
+            self.graph.graph_version,
         )
-        if cache_key in self.canvas._rotation_axis_cache:
-            return self.canvas._rotation_axis_cache[cache_key]
+        if cache_key in self.graph.rotation_axis_cache:
+            return self.graph.rotation_axis_cache[cache_key]
 
         def _store(axis: tuple[int, set[int]] | None) -> tuple[int, set[int]] | None:
-            self.canvas._rotation_axis_cache[cache_key] = axis
+            self.graph.rotation_axis_cache[cache_key] = axis
             return axis
 
         explicit_atoms = set(selected_atom_ids)
@@ -420,7 +422,7 @@ class CanvasGraphService:
             return internal, boundary
         bond_ids: set[int] = set()
         for atom_id in atom_ids:
-            bond_ids.update(self.canvas._atom_bond_ids.get(atom_id, ()))
+            bond_ids.update(self.graph.atom_bond_ids.get(atom_id, ()))
         if not bond_ids:
             for bond_id, bond in enumerate(self.canvas.model.bonds):
                 if bond is None:

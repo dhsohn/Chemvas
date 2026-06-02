@@ -1,12 +1,10 @@
 from collections.abc import Callable
 
-from PyQt6.QtCore import QPointF, QRectF, QSize, Qt, QTimer
+from PyQt6.QtCore import QSize, Qt, QTimer
 from PyQt6.QtGui import (
     QAction,
     QActionGroup,
     QIcon,
-    QPainter,
-    QPolygonF,
 )
 from PyQt6.QtWidgets import (
     QColorDialog,
@@ -368,142 +366,6 @@ class MainWindow(QMainWindow):
         self._redo_button = assembly.redo_button
         self._update_action_availability()
 
-    def _make_icon(self, painter_fn, size: int = 30) -> QIcon:
-        return self._icon_factory.make_icon(painter_fn, size)
-
-    def _icon_select(self) -> QIcon:
-        return self._icon_factory.icon_select()
-
-    def _icon_bond(self) -> QIcon:
-        return self._icon_factory.icon_bond()
-
-    def _icon_bond_bold(self) -> QIcon:
-        return self._icon_factory.icon_bond_bold()
-
-    def _icon_mark_plus(self) -> QIcon:
-        return self._icon_factory.icon_mark_plus()
-
-    def _icon_mark_minus(self) -> QIcon:
-        return self._icon_factory.icon_mark_minus()
-
-    def _icon_mark_radical(self) -> QIcon:
-        return self._icon_factory.icon_mark_radical()
-
-    def _icon_text(self) -> QIcon:
-        return self._icon_factory.icon_text()
-
-    def _benzene_icon_polygon(self, center: QPointF, radius: float) -> QPolygonF:
-        return self._icon_factory.benzene_icon_polygon(center, radius)
-
-    def _benzene_icon_inner_segments(
-        self,
-        polygon: QPolygonF,
-        center: QPointF,
-        *,
-        spacing_scale: float = 1.0,
-    ) -> list[tuple[QPointF, QPointF]]:
-        return self._icon_factory.benzene_icon_inner_segments(
-            polygon,
-            center,
-            spacing_scale=spacing_scale,
-        )
-
-    def _icon_ring(self) -> QIcon:
-        return self._icon_factory.icon_ring()
-
-    def _icon_ring_fill(self) -> QIcon:
-        return self._icon_factory.icon_ring_fill()
-
-    def _icon_undo(self) -> QIcon:
-        return self._icon_factory.icon_undo()
-
-    def _icon_redo(self) -> QIcon:
-        return self._icon_factory.icon_redo()
-
-    def _icon_save(self) -> QIcon:
-        return self._icon_factory.icon_save()
-
-    def _icon_open(self) -> QIcon:
-        return self._icon_factory.icon_open()
-
-    def _icon_export_xyz(self) -> QIcon:
-        return self._icon_factory.icon_export_xyz()
-
-    def _icon_preview_panel(self) -> QIcon:
-        return self._icon_factory.icon_preview_panel()
-
-    def _icon_add_sheet(self) -> QIcon:
-        return self._icon_factory.icon_add_sheet()
-
-    def _icon_setup_sheet(self) -> QIcon:
-        return self._icon_factory.icon_setup_sheet()
-
-    def _icon_templates(self) -> QIcon:
-        return self._icon_factory.icon_templates()
-
-    def _icon_info(self) -> QIcon:
-        return self._icon_factory.icon_info()
-
-    def _icon_bond_double(self) -> QIcon:
-        return self._icon_factory.icon_bond_double()
-
-    def _icon_bond_triple(self) -> QIcon:
-        return self._icon_factory.icon_bond_triple()
-
-    def _icon_bond_wedge(self) -> QIcon:
-        return self._icon_factory.icon_bond_wedge()
-
-    def _icon_bond_hash(self) -> QIcon:
-        return self._icon_factory.icon_bond_hash()
-
-    def _icon_bond_dotted(self) -> QIcon:
-        return self._icon_factory.icon_bond_dotted()
-
-    def _icon_bond_length(self) -> QIcon:
-        return self._icon_factory.icon_bond_length()
-
-    def _icon_arrow_preview(self, kind: str) -> QIcon:
-        return self._icon_factory.icon_arrow_preview(kind)
-
-    def _draw_arrow_head(self, painter: QPainter, start: QPointF, end: QPointF) -> None:
-        self._icon_factory.draw_arrow_head(painter, start, end)
-
-    def _icon_orbital_preview(self, kind: str) -> QIcon:
-        return self._icon_factory.icon_orbital_preview(kind)
-
-    def _icon_template_preview(self, label: str) -> QIcon:
-        return self._icon_factory.icon_template_preview(label)
-
-    def _chair_icon_rect(self) -> QRectF:
-        return self._icon_factory.chair_icon_rect()
-
-    def _chair_icon_points(self, rect: QRectF) -> QPolygonF:
-        return self._icon_factory.chair_icon_points(rect)
-
-    def _icon_flip_h(self) -> QIcon:
-        return self._icon_factory.icon_flip_h()
-
-    def _icon_flip_v(self) -> QIcon:
-        return self._icon_factory.icon_flip_v()
-
-    def _icon_arrow(self) -> QIcon:
-        return self._icon_factory.icon_arrow()
-
-    def _icon_ts_bracket(self) -> QIcon:
-        return self._icon_factory.icon_ts_bracket()
-
-    def _icon_orbital(self) -> QIcon:
-        return self._icon_factory.icon_orbital()
-
-    def _icon_move(self) -> QIcon:
-        return self._icon_factory.icon_move()
-
-    def _icon_color(self) -> QIcon:
-        return self._icon_factory.icon_color()
-
-    def _icon_perspective(self) -> QIcon:
-        return self._icon_factory.icon_perspective()
-
     def _init_panels(self) -> None:
         assembly = self._ui_assembly_service.init_panels(self)
         self.panel_splitter = assembly.splitter
@@ -528,8 +390,8 @@ class MainWindow(QMainWindow):
         self._sync_preview_panel_button()
 
     def _sync_preview_panel_button(self, _visible: bool | None = None) -> None:
-        button = getattr(self, "_preview_panel_button", None)
-        dock = getattr(self, "panel_dock", None)
+        button = self._preview_panel_button
+        dock = self.panel_dock
         if button is None or dock is None:
             return
         hidden = dock.isHidden()
@@ -592,8 +454,10 @@ class MainWindow(QMainWindow):
 
     def _active_tool_status_text(self) -> str:
         canvas = self._active_canvas_or_none()
-        active_tool = getattr(getattr(canvas, "tools", None), "active", None)
-        tool_name = getattr(active_tool, "name", None)
+        if canvas is None:
+            return "Tool: None"
+        active_tool = canvas.tools.active
+        tool_name = active_tool.name if active_tool is not None else None
         if not tool_name:
             return "Tool: None"
         return f"Tool: {tool_display_name(str(tool_name))}"
@@ -608,11 +472,11 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _selection_item_identity(item) -> tuple[str, object]:
-        kind = item.data(0) if hasattr(item, "data") else None
-        item_id = item.data(1) if hasattr(item, "data") else None
+        kind = item.data(0)
+        item_id = item.data(1)
         if kind in {"atom", "bond"} and isinstance(item_id, int):
             return str(kind), item_id
-        ring_ids = item.data(2) if kind == "ring" and hasattr(item, "data") else None
+        ring_ids = item.data(2) if kind == "ring" else None
         if isinstance(ring_ids, list):
             return "ring", tuple(ring_ids)
         return "item", id(item)
@@ -621,20 +485,17 @@ class MainWindow(QMainWindow):
         canvas = self._active_canvas_or_none()
         if canvas is None:
             return 0
-        scene_getter = getattr(canvas, "scene", None)
-        scene = scene_getter() if callable(scene_getter) else None
-        selected_items_getter = getattr(scene, "selectedItems", None)
-        selected_items = selected_items_getter() if callable(selected_items_getter) else []
+        scene = canvas.scene()
+        selected_items = scene.selectedItems()
         excluded_kinds = {"handle", "note_box", "note_select", "selection_outline"}
         identities: set[tuple[str, object]] = set()
         for item in selected_items:
-            kind = item.data(0) if hasattr(item, "data") else None
+            kind = item.data(0)
             if kind in excluded_kinds:
                 continue
             identities.add(self._selection_item_identity(item))
-        for note in getattr(canvas, "selected_notes", []):
-            note_scene_getter = getattr(note, "scene", None)
-            if callable(note_scene_getter) and note_scene_getter() is scene:
+        for note in canvas.selected_notes:
+            if note.scene() is scene:
                 identities.add(("note", id(note)))
         return len(identities)
 
@@ -663,15 +524,14 @@ class MainWindow(QMainWindow):
 
     def _update_action_availability(self) -> None:
         canvas = self._active_canvas_or_none()
-        can_undo = bool(getattr(canvas, "_history", [])) if canvas is not None else False
-        can_redo = bool(getattr(canvas, "_redo_stack", [])) if canvas is not None else False
-        model = getattr(canvas, "model", None) if canvas is not None else None
-        can_export = bool(getattr(model, "atoms", {}))
+        can_undo = bool(canvas._history_state.history) if canvas is not None else False
+        can_redo = bool(canvas._history_state.redo_stack) if canvas is not None else False
+        can_export = bool(canvas.model.atoms) if canvas is not None else False
 
         for button, enabled in (
-            (getattr(self, "_undo_button", None), can_undo),
-            (getattr(self, "_redo_button", None), can_redo),
-            (getattr(self, "_export_xyz_button", None), can_export),
+            (self._undo_button, can_undo),
+            (self._redo_button, can_redo),
+            (self._export_xyz_button, can_export),
         ):
             if button is not None:
                 button.setEnabled(enabled)
@@ -739,8 +599,10 @@ class MainWindow(QMainWindow):
 
     def _active_tool_name(self) -> str | None:
         canvas = self._active_canvas_or_none()
-        active_tool = getattr(getattr(canvas, "tools", None), "active", None)
-        name = getattr(active_tool, "name", None)
+        if canvas is None:
+            return None
+        active_tool = canvas.tools.active
+        name = active_tool.name if active_tool is not None else None
         return str(name) if name else None
 
     def _refresh_context_bar(self) -> None:

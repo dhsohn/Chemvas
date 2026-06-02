@@ -18,7 +18,6 @@ from PyQt6.QtWidgets import (
     QGraphicsEllipseItem,
     QGraphicsItem,
     QGraphicsItemGroup,
-    QGraphicsLineItem,
     QGraphicsPathItem,
     QGraphicsPolygonItem,
     QGraphicsScene,
@@ -67,7 +66,7 @@ from ui.curved_arrow_path_service import CurvedArrowPathService, curved_arrow_pa
 from ui.handle_mutation_service import HandleMutationService
 from ui.handle_overlay_service import HandleOverlayService, handle_overlay_service_for
 from ui.canvas_input_controller import CanvasInputController
-from ui.canvas_insert_state import CanvasInsertState
+from ui.canvas_insert_state import CanvasInsertState, insert_state_for
 from ui.canvas_move_controller import CanvasMoveController
 from ui.canvas_note_controller import CanvasNoteController
 from ui.canvas_pointer_controller import CanvasPointerController
@@ -82,11 +81,13 @@ from ui.canvas_hit_testing_service import CanvasHitTestingService, canvas_hit_te
 from ui.canvas_color_mutation_service import CanvasColorMutationService, canvas_color_mutation_service_for
 from ui.canvas_document_session_service import CanvasDocumentSessionService
 from ui.canvas_geometry_controller import CanvasGeometryController
+from ui.canvas_graph_state import CanvasGraphState, graph_state_for
 from ui.canvas_graph_service import CanvasGraphService, canvas_graph_service_for
-from ui.canvas_history_state import CanvasHistoryState
+from ui.canvas_history_state import CanvasHistoryState, history_state_for
 from ui.canvas_history_recording_service import CanvasHistoryRecordingService
 from ui.canvas_mark_scene_service import CanvasMarkSceneService, canvas_mark_scene_service_for
 from ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService, canvas_ring_fill_scene_service_for
+from ui.canvas_rotation_state import CanvasRotationState, rotation_state_for
 from ui.canvas_scene_reset_service import CanvasSceneResetService, canvas_scene_reset_service_for
 from ui.hover_interaction_service import HoverInteractionService
 from ui.hover_scene_service import HoverSceneService
@@ -150,6 +151,7 @@ from ui.sheet_setup_logic import (
 )
 from ui.structure_insert_service import StructureInsertService
 from ui.selection_rotation_logic import rotated_atom_positions, selected_rotation_atom_ids
+from ui.state_field import StateField
 
 
 class NoteItem(QGraphicsTextItem):
@@ -202,6 +204,55 @@ class CanvasView(QGraphicsView):
     CLIPBOARD_SELECTION_MIME = "application/x-chemvas-selection+json"
     CLIPBOARD_SELECTION_VERSION = 1
 
+    _atom_neighbors = StateField("_graph_state", "atom_neighbors")
+    _atom_bond_ids = StateField("_graph_state", "atom_bond_ids")
+    _graph_version = StateField("_graph_state", "graph_version")
+    _selection_component_cache_signature = StateField("_graph_state", "selection_component_cache_signature")
+    _selection_component_cache = StateField("_graph_state", "selection_component_cache")
+    _rotation_axis_cache = StateField("_graph_state", "rotation_axis_cache")
+    _rotation_axis_cache_version = StateField("_graph_state", "rotation_axis_cache_version")
+    _bond_cycle_cache = StateField("_graph_state", "bond_cycle_cache")
+
+    _history = StateField("_history_state", "history")
+    _redo_stack = StateField("_history_state", "redo_stack")
+    _history_enabled = StateField("_history_state", "enabled")
+    _history_limit = StateField("_history_state", "limit")
+    _history_change_callback = StateField("_history_state", "change_callback")
+
+    _smiles_insert_active = StateField("_insert_state", "smiles_active")
+    _smiles_preview_model = StateField("_insert_state", "smiles_preview_model")
+    _smiles_preview_items = StateField("_insert_state", "smiles_preview_items")
+    _smiles_preview_bond_items = StateField("_insert_state", "smiles_preview_bond_items")
+    _smiles_preview_atom_items = StateField("_insert_state", "smiles_preview_atom_items")
+    _smiles_preview_center = StateField("_insert_state", "smiles_preview_center")
+    _smiles_preview_smiles = StateField("_insert_state", "smiles_preview_smiles")
+    _template_insert_active = StateField("_insert_state", "template_active")
+    _template_ring_size = StateField("_insert_state", "template_ring_size")
+    _template_ring_style = StateField("_insert_state", "template_ring_style")
+    _template_preview_items = StateField("_insert_state", "template_preview_items")
+    _template_preview_lines = StateField("_insert_state", "template_preview_lines")
+    _template_preview_dots = StateField("_insert_state", "template_preview_dots")
+    _benzene_preview_items = StateField("_insert_state", "benzene_preview_items")
+
+    _rotation_base_coords = StateField("_rotation_state", "base_coords")
+    _rotation_axis_bond_id = StateField("_rotation_state", "axis_bond_id")
+    _rotation_axis_atoms = StateField("_rotation_state", "axis_atoms")
+    _rotation_total_angle = StateField("_rotation_state", "total_angle")
+    _rotation_mode = StateField("_rotation_state", "mode")
+    _rotation_free_angle_x = StateField("_rotation_state", "free_angle_x")
+    _rotation_free_angle_y = StateField("_rotation_state", "free_angle_y")
+    _rotation_base_bond_length = StateField("_rotation_state", "base_bond_length")
+    rotation_atom_ids = StateField("_rotation_state", "atom_ids")
+    rotation_center_3d = StateField("_rotation_state", "center_3d")
+    _projection_center_3d = StateField("_rotation_state", "projection_center_3d")
+    _projection_anchor_2d = StateField("_rotation_state", "projection_anchor_2d")
+    _rotation_start_projection_center_3d = StateField("_rotation_state", "start_projection_center_3d")
+    _rotation_start_projection_anchor_2d = StateField("_rotation_state", "start_projection_anchor_2d")
+    _rotation_start_positions = StateField("_rotation_state", "start_positions")
+    _rotation_start_coords_3d = StateField("_rotation_state", "start_coords_3d")
+    _rotation_coord_atom_ids = StateField("_rotation_state", "coord_atom_ids")
+    _rotation_selection_ids = StateField("_rotation_state", "selection_ids")
+
     def __init__(self) -> None:
         super().__init__()
         self.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -231,14 +282,7 @@ class CanvasView(QGraphicsView):
         self._rdkit_idle_timer.start()
         self.atom_items: dict[int, QGraphicsTextItem] = {}
         self.atom_dots: dict[int, QGraphicsEllipseItem] = {}
-        self._atom_neighbors: dict[int, set[int]] = {}
-        self._atom_bond_ids: dict[int, set[int]] = {}
-        self._graph_version = 0
-        self._selection_component_cache_signature: tuple[frozenset[int], int] | None = None
-        self._selection_component_cache: list[set[int]] = []
-        self._rotation_axis_cache: dict[tuple[frozenset[int], frozenset[int], int], tuple[int, set[int]] | None] = {}
-        self._rotation_axis_cache_version = self._graph_version
-        self._bond_cycle_cache: dict[int, tuple[int, bool]] = {}
+        self._graph_state = CanvasGraphState()
         self.atom_symbol = "C"
         self.bond_items: dict[int, list] = {}
         self._bond_renderer = BondRenderer(self)
@@ -255,24 +299,8 @@ class CanvasView(QGraphicsView):
         self._perspective_scale_y = 1.0
         self._rotation_group = None
         self.atom_coords_3d: dict[int, tuple[float, float, float]] = {}
-        self._rotation_base_coords: dict[int, tuple[float, float, float]] = {}
-        self._rotation_axis_bond_id: int | None = None
-        self._rotation_axis_atoms: tuple[int, int] | None = None
-        self._rotation_total_angle = 0.0
-        self._rotation_mode: str | None = None
-        self._rotation_free_angle_x = 0.0
-        self._rotation_free_angle_y = 0.0
+        self._rotation_state = CanvasRotationState()
         self._rotation_depth_factor = 1.0
-        self._rotation_base_bond_length: float | None = None
-        self.rotation_atom_ids: set[int] = set()
-        self.rotation_center_3d: tuple[float, float, float] | None = None
-        self._projection_center_3d: tuple[float, float, float] | None = None
-        self._projection_anchor_2d: tuple[float, float] | None = None
-        self._rotation_start_projection_center_3d: tuple[float, float, float] | None = None
-        self._rotation_start_projection_anchor_2d: tuple[float, float] | None = None
-        self._rotation_start_positions: dict[int, tuple[float, float]] = {}
-        self._rotation_start_coords_3d: dict[int, tuple[float, float, float]] = {}
-        self._rotation_coord_atom_ids: set[int] = set()
         self.active_arrow_type = "reaction"
         self.active_orbital_type = "s"
         self.orbital_phase_enabled = False
@@ -309,7 +337,7 @@ class CanvasView(QGraphicsView):
         self._hit_testing_service = CanvasHitTestingService(self)
         self._canvas_color_mutation_service = CanvasColorMutationService(self)
         self._canvas_document_session_service = CanvasDocumentSessionService(self)
-        self._canvas_graph_service = CanvasGraphService(self)
+        self._canvas_graph_service = CanvasGraphService(self, self._graph_state)
         self._canvas_history_recording_service = CanvasHistoryRecordingService(self)
         self._canvas_mark_scene_service = CanvasMarkSceneService(self)
         self._canvas_ring_fill_scene_service = CanvasRingFillSceneService(self)
@@ -383,158 +411,6 @@ class CanvasView(QGraphicsView):
     def sheet_rect(self) -> QRectF:
         return QRectF(self._sheet_rect)
 
-    @property
-    def _history(self) -> list[HistoryCommand]:
-        return self._history_state.history
-
-    @_history.setter
-    def _history(self, value: list[HistoryCommand]) -> None:
-        self._history_state.history = value
-
-    @property
-    def _redo_stack(self) -> list[HistoryCommand]:
-        return self._history_state.redo_stack
-
-    @_redo_stack.setter
-    def _redo_stack(self, value: list[HistoryCommand]) -> None:
-        self._history_state.redo_stack = value
-
-    @property
-    def _history_enabled(self) -> bool:
-        return self._history_state.enabled
-
-    @_history_enabled.setter
-    def _history_enabled(self, value: bool) -> None:
-        self._history_state.enabled = value
-
-    @property
-    def _history_limit(self) -> int:
-        return self._history_state.limit
-
-    @_history_limit.setter
-    def _history_limit(self, value: int) -> None:
-        self._history_state.limit = value
-
-    @property
-    def _history_change_callback(self):
-        return self._history_state.change_callback
-
-    @_history_change_callback.setter
-    def _history_change_callback(self, value) -> None:
-        self._history_state.change_callback = value
-
-    @property
-    def _smiles_insert_active(self) -> bool:
-        return self._insert_state.smiles_active
-
-    @_smiles_insert_active.setter
-    def _smiles_insert_active(self, value: bool) -> None:
-        self._insert_state.smiles_active = value
-
-    @property
-    def _smiles_preview_model(self) -> MoleculeModel | None:
-        return self._insert_state.smiles_preview_model
-
-    @_smiles_preview_model.setter
-    def _smiles_preview_model(self, value: MoleculeModel | None) -> None:
-        self._insert_state.smiles_preview_model = value
-
-    @property
-    def _smiles_preview_items(self) -> list[QGraphicsItem]:
-        return self._insert_state.smiles_preview_items
-
-    @_smiles_preview_items.setter
-    def _smiles_preview_items(self, value: list[QGraphicsItem]) -> None:
-        self._insert_state.smiles_preview_items = value
-
-    @property
-    def _smiles_preview_bond_items(self) -> dict[int, list[QGraphicsItem]]:
-        return self._insert_state.smiles_preview_bond_items
-
-    @_smiles_preview_bond_items.setter
-    def _smiles_preview_bond_items(self, value: dict[int, list[QGraphicsItem]]) -> None:
-        self._insert_state.smiles_preview_bond_items = value
-
-    @property
-    def _smiles_preview_atom_items(self) -> dict[int, QGraphicsEllipseItem]:
-        return self._insert_state.smiles_preview_atom_items
-
-    @_smiles_preview_atom_items.setter
-    def _smiles_preview_atom_items(self, value: dict[int, QGraphicsEllipseItem]) -> None:
-        self._insert_state.smiles_preview_atom_items = value
-
-    @property
-    def _smiles_preview_center(self) -> QPointF | None:
-        return self._insert_state.smiles_preview_center
-
-    @_smiles_preview_center.setter
-    def _smiles_preview_center(self, value: QPointF | None) -> None:
-        self._insert_state.smiles_preview_center = value
-
-    @property
-    def _smiles_preview_smiles(self) -> str | None:
-        return self._insert_state.smiles_preview_smiles
-
-    @_smiles_preview_smiles.setter
-    def _smiles_preview_smiles(self, value: str | None) -> None:
-        self._insert_state.smiles_preview_smiles = value
-
-    @property
-    def _template_insert_active(self) -> bool:
-        return self._insert_state.template_active
-
-    @_template_insert_active.setter
-    def _template_insert_active(self, value: bool) -> None:
-        self._insert_state.template_active = value
-
-    @property
-    def _template_ring_size(self) -> int | None:
-        return self._insert_state.template_ring_size
-
-    @_template_ring_size.setter
-    def _template_ring_size(self, value: int | None) -> None:
-        self._insert_state.template_ring_size = value
-
-    @property
-    def _template_ring_style(self) -> str | None:
-        return self._insert_state.template_ring_style
-
-    @_template_ring_style.setter
-    def _template_ring_style(self, value: str | None) -> None:
-        self._insert_state.template_ring_style = value
-
-    @property
-    def _template_preview_items(self) -> list[QGraphicsItem]:
-        return self._insert_state.template_preview_items
-
-    @_template_preview_items.setter
-    def _template_preview_items(self, value: list[QGraphicsItem]) -> None:
-        self._insert_state.template_preview_items = value
-
-    @property
-    def _template_preview_lines(self) -> list[QGraphicsLineItem]:
-        return self._insert_state.template_preview_lines
-
-    @_template_preview_lines.setter
-    def _template_preview_lines(self, value: list[QGraphicsLineItem]) -> None:
-        self._insert_state.template_preview_lines = value
-
-    @property
-    def _template_preview_dots(self) -> list[QGraphicsEllipseItem]:
-        return self._insert_state.template_preview_dots
-
-    @_template_preview_dots.setter
-    def _template_preview_dots(self, value: list[QGraphicsEllipseItem]) -> None:
-        self._insert_state.template_preview_dots = value
-
-    @property
-    def _benzene_preview_items(self) -> list[QGraphicsItem]:
-        return self._insert_state.benzene_preview_items
-
-    @_benzene_preview_items.setter
-    def _benzene_preview_items(self, value: list[QGraphicsItem]) -> None:
-        self._insert_state.benzene_preview_items = value
-
     def set_sheet_setup(self, size_name: str, orientation: str) -> None:
         self.sheet_size, self.sheet_orientation = normalize_sheet_setup(size_name, orientation)
         self._apply_sheet_scene_rect()
@@ -588,7 +464,8 @@ class CanvasView(QGraphicsView):
     def _refresh_hover_from_cursor(self) -> None:
         if not hasattr(self, "tools"):
             return
-        if getattr(self, "_template_insert_active", False) or getattr(self, "_smiles_insert_active", False):
+        insert_state = insert_state_for(self)
+        if insert_state.template_active or insert_state.smiles_active:
             self._clear_hover_highlight()
             return
         viewport_pos = self.viewport().mapFromGlobal(QCursor.pos())
@@ -747,42 +624,40 @@ class CanvasView(QGraphicsView):
         self._canvas_document_session_service.load_from_file(path)
 
     def _push_command(self, command: HistoryCommand) -> None:
-        if not self._history_enabled:
+        history = history_state_for(self)
+        if not history.enabled:
             return
-        self._history.append(command)
-        if len(self._history) > self._history_limit:
-            self._history.pop(0)
-        self._redo_stack.clear()
-        notify_history_change = getattr(self, "_notify_history_change", None)
-        if callable(notify_history_change):
-            notify_history_change()
+        history.history.append(command)
+        if len(history.history) > history.limit:
+            history.history.pop(0)
+        history.redo_stack.clear()
+        CanvasView._notify_history_change(self)
 
     def undo(self) -> None:
-        if not self._history:
+        history = history_state_for(self)
+        if not history.history:
             return
-        command = self._history.pop()
-        self._redo_stack.append(command)
+        command = history.history.pop()
+        history.redo_stack.append(command)
         command.undo(self)
-        notify_history_change = getattr(self, "_notify_history_change", None)
-        if callable(notify_history_change):
-            notify_history_change()
+        CanvasView._notify_history_change(self)
 
     def redo(self) -> None:
-        if not self._redo_stack:
+        history = history_state_for(self)
+        if not history.redo_stack:
             return
-        command = self._redo_stack.pop()
-        self._history.append(command)
+        command = history.redo_stack.pop()
+        history.history.append(command)
         command.redo(self)
-        notify_history_change = getattr(self, "_notify_history_change", None)
-        if callable(notify_history_change):
-            notify_history_change()
+        CanvasView._notify_history_change(self)
 
     def set_history_change_callback(self, callback) -> None:
-        self._history_change_callback = callback
+        history_state_for(self).change_callback = callback
 
     def _notify_history_change(self) -> None:
-        if self._history_change_callback is not None:
-            self._history_change_callback()
+        history = history_state_for(self)
+        if history.change_callback is not None:
+            history.change_callback()
 
     def set_tool_change_callback(self, callback) -> None:
         self._tool_change_callback = callback
@@ -792,9 +667,9 @@ class CanvasView(QGraphicsView):
             self._tool_change_callback()
 
     def _cancel_pending_insert_modes(self) -> None:
-        if getattr(self, "_template_insert_active", False):
+        if self._insert_state.template_active:
             self._cancel_template_insert()
-        if getattr(self, "_smiles_insert_active", False):
+        if self._insert_state.smiles_active:
             self._cancel_smiles_insert()
 
     def set_tool(self, tool_name: str) -> None:
@@ -2028,9 +1903,8 @@ class CanvasView(QGraphicsView):
 
     def notify_error(self, message: str) -> bool:
         """Report a user-facing error. Returns True if a handler consumed it."""
-        callback = getattr(self, "_error_callback", None)
-        if callable(callback):
-            callback(message)
+        if self._error_callback is not None:
+            self._error_callback(message)
             return True
         return False
 
@@ -2557,12 +2431,13 @@ class CanvasView(QGraphicsView):
         center_3d: tuple[float, float, float] | None = None,
         anchor_2d: tuple[float, float] | None = None,
     ) -> tuple[float, float]:
+        rotation = rotation_state_for(self)
         if center_3d is None:
-            center_3d = self._projection_center_3d
+            center_3d = rotation.projection_center_3d
         if center_3d is None:
             return point[0], point[1]
         if anchor_2d is None:
-            anchor_2d = self._projection_anchor_2d or (center_3d[0], center_3d[1])
+            anchor_2d = rotation.projection_anchor_2d or (center_3d[0], center_3d[1])
         cx, cy, cz = center_3d
         anchor_x, anchor_y = anchor_2d
         focal = self._perspective_camera_distance()
@@ -2581,12 +2456,13 @@ class CanvasView(QGraphicsView):
         center_3d: tuple[float, float, float] | None = None,
         anchor_2d: tuple[float, float] | None = None,
     ) -> tuple[float, float, float]:
+        rotation = rotation_state_for(self)
         if center_3d is None:
-            center_3d = self._projection_center_3d
+            center_3d = rotation.projection_center_3d
         if center_3d is None:
             return (point.x(), point.y(), z)
         if anchor_2d is None:
-            anchor_2d = self._projection_anchor_2d or (center_3d[0], center_3d[1])
+            anchor_2d = rotation.projection_anchor_2d or (center_3d[0], center_3d[1])
         cx, cy, cz = center_3d
         anchor_x, anchor_y = anchor_2d
         focal = self._perspective_camera_distance()
@@ -2630,7 +2506,8 @@ class CanvasView(QGraphicsView):
         )
 
     def _atom_in_planar_system(self, atom_id: int) -> bool:
-        for bond_id in self._atom_bond_ids.get(atom_id, ()):
+        graph = graph_state_for(self)
+        for bond_id in graph.atom_bond_ids.get(atom_id, ()):
             if not (0 <= bond_id < len(self.model.bonds)):
                 continue
             bond = self.model.bonds[bond_id]
@@ -2803,9 +2680,10 @@ class CanvasView(QGraphicsView):
         return total / count
 
     def _bond_ids_for_atom_ids(self, atom_ids: set[int]) -> set[int]:
+        graph = graph_state_for(self)
         bond_ids: set[int] = set()
         for atom_id in atom_ids:
-            bond_ids.update(self._atom_bond_ids.get(atom_id, ()))
+            bond_ids.update(graph.atom_bond_ids.get(atom_id, ()))
         return bond_ids
 
     def _bond_ids_within_atom_ids(self, atom_ids: set[int]) -> set[int]:
@@ -2836,16 +2714,17 @@ class CanvasView(QGraphicsView):
         rotated_coords: dict[int, tuple[float, float, float]],
         extra_atom_ids: set[int] | tuple[int, ...] = (),
     ) -> float:
-        if not self._rotation_base_bond_length:
+        rotation = rotation_state_for(self)
+        if not rotation.base_bond_length:
             return 1.0
         scale_atom_ids = set(atom_ids)
         scale_atom_ids.update(extra_atom_ids)
-        current_coords = dict(self._rotation_base_coords)
+        current_coords = dict(rotation.base_coords)
         current_coords.update(rotated_coords)
         current_avg = CanvasView._average_bond_length_for_atoms(self, scale_atom_ids, current_coords)
         if not current_avg or current_avg <= 1e-9:
             return 1.0
-        scale = self._rotation_base_bond_length / current_avg
+        scale = rotation.base_bond_length / current_avg
         if not math.isfinite(scale) or scale <= 0.0:
             return 1.0
         return scale
@@ -2983,8 +2862,9 @@ class CanvasView(QGraphicsView):
     def _bond_id_between(self, a_id: int, b_id: int, skip_bond_id: int | None = None) -> int | None:
         if a_id == b_id:
             return None
-        bonds_a = self._atom_bond_ids.get(a_id)
-        bonds_b = self._atom_bond_ids.get(b_id)
+        graph = graph_state_for(self)
+        bonds_a = graph.atom_bond_ids.get(a_id)
+        bonds_b = graph.atom_bond_ids.get(b_id)
         if bonds_a is None or bonds_b is None:
             return CanvasView._first_matching_bond_id(
                 self.model.bonds,
@@ -3534,7 +3414,8 @@ class CanvasView(QGraphicsView):
         self._bond_renderer.update_bond_geometry(bond_id)
 
     def _redraw_connected_bonds(self, atom_id: int, skip_bond_id: int | None = None) -> None:
-        for bond_id in self._atom_bond_ids.get(atom_id, ()):
+        graph = graph_state_for(self)
+        for bond_id in graph.atom_bond_ids.get(atom_id, ()):
             if skip_bond_id is not None and bond_id == skip_bond_id:
                 continue
             self._redraw_bond(bond_id)

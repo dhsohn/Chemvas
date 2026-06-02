@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from core.document_io import read_document, write_document
 from core.document_state import deserialize_model_state
+from ui.canvas_history_state import history_state_for
 from ui.canvas_document_state import (
     apply_document_settings,
     restore_document_post_model_items,
@@ -18,7 +19,8 @@ class CanvasDocumentSessionService:
         return snapshot_canvas_document_state(self.canvas)
 
     def apply_state(self, state: dict) -> None:
-        self.canvas._history_enabled = False
+        history = history_state_for(self.canvas)
+        history.enabled = False
         try:
             self.canvas.clear_scene()
             apply_document_settings(self.canvas, state)
@@ -29,12 +31,13 @@ class CanvasDocumentSessionService:
             restore_document_post_model_items(self.canvas, state)
             self.canvas._mark_spatial_index_dirty()
         finally:
-            self.canvas._history_enabled = True
+            history.enabled = True
 
     def restore_state(self, state: dict) -> None:
         self.apply_state(state)
-        self.canvas._history = []
-        self.canvas._redo_stack = []
+        history = history_state_for(self.canvas)
+        history.history = []
+        history.redo_stack = []
         self.canvas._notify_history_change()
 
     def save_to_file(self, path: str) -> None:

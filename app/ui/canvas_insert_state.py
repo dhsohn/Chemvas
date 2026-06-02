@@ -24,4 +24,37 @@ class CanvasInsertState:
     benzene_preview_items: list[Any] = field(default_factory=list)
 
 
-__all__ = ["CanvasInsertState"]
+class CanvasInsertStateAdapter:
+    def __init__(self, canvas: Any) -> None:
+        self._canvas = canvas
+
+    def _ensure(self, name: str, default):
+        if not hasattr(self._canvas, name):
+            setattr(self._canvas, name, default() if callable(default) else default)
+        return getattr(self._canvas, name)
+
+    @property
+    def smiles_active(self) -> bool:
+        return self._ensure("_smiles_insert_active", False)
+
+    @smiles_active.setter
+    def smiles_active(self, value: bool) -> None:
+        self._canvas._smiles_insert_active = value
+
+    @property
+    def template_active(self) -> bool:
+        return self._ensure("_template_insert_active", False)
+
+    @template_active.setter
+    def template_active(self, value: bool) -> None:
+        self._canvas._template_insert_active = value
+
+
+def insert_state_for(canvas: Any) -> CanvasInsertState | CanvasInsertStateAdapter:
+    state = getattr(canvas, "_insert_state", None)
+    if state is not None:
+        return state
+    return CanvasInsertStateAdapter(canvas)
+
+
+__all__ = ["CanvasInsertState", "CanvasInsertStateAdapter", "insert_state_for"]

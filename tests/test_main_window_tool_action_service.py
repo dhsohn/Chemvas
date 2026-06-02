@@ -22,6 +22,22 @@ class _HarnessWindow(QMainWindow):
         self._set_tool_with_status = mock.Mock()
         self._set_bond_style = mock.Mock()
         self._refresh_status_context = mock.Mock()
+        self._icon_factory = SimpleNamespace(
+            icon_select=self._blank_icon,
+            icon_bond=self._blank_icon,
+            icon_text=self._blank_icon,
+            icon_ring=self._blank_icon,
+            icon_arrow=self._blank_icon,
+            icon_ts_bracket=self._blank_icon,
+            icon_perspective=self._blank_icon,
+            icon_bond_bold=self._blank_icon,
+            icon_bond_wedge=self._blank_icon,
+            icon_bond_hash=self._blank_icon,
+            icon_bond_dotted=self._blank_icon,
+            icon_mark_plus=self._blank_icon,
+            icon_mark_minus=self._blank_icon,
+            icon_mark_radical=self._blank_icon,
+        )
 
     def _show_status_message(self, message: str) -> None:
         self.statusBar().showMessage(message)
@@ -33,21 +49,6 @@ class _HarnessWindow(QMainWindow):
 
     def _blank_icon(self):
         return QIcon()
-
-    _icon_select = _blank_icon
-    _icon_bond = _blank_icon
-    _icon_text = _blank_icon
-    _icon_ring = _blank_icon
-    _icon_arrow = _blank_icon
-    _icon_ts_bracket = _blank_icon
-    _icon_perspective = _blank_icon
-    _icon_bond_bold = _blank_icon
-    _icon_bond_wedge = _blank_icon
-    _icon_bond_hash = _blank_icon
-    _icon_bond_dotted = _blank_icon
-    _icon_mark_plus = _blank_icon
-    _icon_mark_minus = _blank_icon
-    _icon_mark_radical = _blank_icon
 
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for main window tool action tests")
@@ -65,17 +66,17 @@ class MainWindowToolActionServiceTest(unittest.TestCase):
         self.window.close()
         self.app.processEvents()
 
-    def test_build_checkable_tool_action_uses_late_bound_icon_wrapper(self) -> None:
+    def test_build_checkable_tool_action_uses_late_bound_icon_factory(self) -> None:
         tool_group = QActionGroup(self.window)
         callback = mock.Mock()
 
-        with mock.patch.object(self.window, "_icon_select", return_value=QIcon()) as icon_method:
+        with mock.patch.object(self.window._icon_factory, "icon_select", return_value=QIcon()) as icon_method:
             _, action = self.service.build_checkable_tool_action(
                 self.window,
                 tool_group,
                 key="select",
                 label="Select",
-                icon_method="_icon_select",
+                icon_method="icon_select",
                 tooltip="Pick atoms",
                 callback=callback,
             )

@@ -62,7 +62,7 @@ class MainWindowDialogActionsTest(unittest.TestCase):
         self.assertEqual(self.window._next_result_canvas_name("Result"), "Result 1")
         self.assertEqual(self.window._next_result_canvas_name("Result"), "Result 2")
 
-    def test_panel_zoom_and_icon_wrappers_cover_residual_main_window_helpers(self) -> None:
+    def test_panel_zoom_and_icon_factory_cover_residual_main_window_helpers(self) -> None:
         self.window.panel_dock = None
         self.window._show_panel(0)
 
@@ -100,15 +100,16 @@ class MainWindowDialogActionsTest(unittest.TestCase):
         icon_factory.icon_move.return_value = move_icon
         self.window._icon_factory = icon_factory
 
-        self.assertIs(self.window._icon_add_sheet(), add_sheet_icon)
-        self.assertIs(self.window._icon_setup_sheet(), setup_sheet_icon)
-        self.assertIs(self.window._icon_preview_panel(), preview_panel_icon)
-        self.assertIs(self.window._icon_info(), info_icon)
-        self.assertIs(self.window._icon_bond_double(), double_icon)
-        self.assertIs(self.window._icon_bond_triple(), triple_icon)
-        self.assertIs(self.window._icon_orbital_preview("sp2"), preview_icon)
-        self.assertIs(self.window._icon_orbital(), orbital_icon)
-        self.assertIs(self.window._icon_move(), move_icon)
+        self.assertFalse(hasattr(self.window, "_icon_add_sheet"))
+        self.assertIs(self.window._icon_factory.icon_add_sheet(), add_sheet_icon)
+        self.assertIs(self.window._icon_factory.icon_setup_sheet(), setup_sheet_icon)
+        self.assertIs(self.window._icon_factory.icon_preview_panel(), preview_panel_icon)
+        self.assertIs(self.window._icon_factory.icon_info(), info_icon)
+        self.assertIs(self.window._icon_factory.icon_bond_double(), double_icon)
+        self.assertIs(self.window._icon_factory.icon_bond_triple(), triple_icon)
+        self.assertIs(self.window._icon_factory.icon_orbital_preview("sp2"), preview_icon)
+        self.assertIs(self.window._icon_factory.icon_orbital(), orbital_icon)
+        self.assertIs(self.window._icon_factory.icon_move(), move_icon)
 
     def test_status_bar_exposes_structured_context_and_transient_messages(self) -> None:
         self.assertEqual(self.window._status_tool_label.text(), "Tool: Bond")

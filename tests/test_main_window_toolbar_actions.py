@@ -262,51 +262,16 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         self.assertIn("get_color", service.set_note_border_color.call_args.kwargs)
         service.set_text_preset.assert_called_once_with(self.window, "ACS")
 
-    def test_icon_wrappers_delegate_to_factory(self) -> None:
+    def test_main_window_uses_icon_factory_without_icon_wrappers(self) -> None:
         factory = mock.Mock()
         self.window._icon_factory = factory
 
         icon = QIcon()
-        polygon = object()
-        segments = [("start", "end")]
-        rect = object()
-        painter = object()
-        point = object()
-
-        factory.make_icon.return_value = icon
         factory.icon_select.return_value = icon
-        factory.icon_ring.return_value = icon
-        factory.icon_setup_sheet.return_value = icon
-        factory.icon_arrow_preview.return_value = icon
-        factory.icon_template_preview.return_value = icon
-        factory.benzene_icon_polygon.return_value = polygon
-        factory.benzene_icon_inner_segments.return_value = segments
-        factory.chair_icon_rect.return_value = rect
-        factory.chair_icon_points.return_value = polygon
 
-        self.assertIs(self.window._make_icon(lambda _p: None, size=24), icon)
-        self.assertIs(self.window._icon_select(), icon)
-        self.assertIs(self.window._icon_ring(), icon)
-        self.assertIs(self.window._icon_setup_sheet(), icon)
-        self.assertIs(self.window._icon_arrow_preview("reaction"), icon)
-        self.assertIs(self.window._icon_template_preview("Cyclopropane"), icon)
-        self.assertIs(self.window._benzene_icon_polygon(point, 10.0), polygon)
-        self.assertEqual(self.window._benzene_icon_inner_segments(polygon, point, spacing_scale=0.92), segments)
-        self.assertIs(self.window._chair_icon_rect(), rect)
-        self.assertIs(self.window._chair_icon_points(rect), polygon)
-        self.window._draw_arrow_head(painter, point, point)
-
-        self.assertEqual(factory.make_icon.call_args.args[1], 24)
+        self.assertIs(self.window._icon_factory.icon_select(), icon)
+        self.assertFalse(hasattr(self.window, "_icon_select"))
         factory.icon_select.assert_called_once_with()
-        factory.icon_ring.assert_called_once_with()
-        factory.icon_setup_sheet.assert_called_once_with()
-        factory.icon_arrow_preview.assert_called_once_with("reaction")
-        factory.icon_template_preview.assert_called_once_with("Cyclopropane")
-        factory.benzene_icon_polygon.assert_called_once_with(point, 10.0)
-        factory.benzene_icon_inner_segments.assert_called_once_with(polygon, point, spacing_scale=0.92)
-        factory.chair_icon_rect.assert_called_once_with()
-        factory.chair_icon_points.assert_called_once_with(rect)
-        factory.draw_arrow_head.assert_called_once_with(painter, point, point)
 
     def test_tool_action_wrappers_delegate_to_service(self) -> None:
         service = mock.Mock()
@@ -322,7 +287,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
                 tool_group,
                 key="select",
                 label="Select",
-                icon_method="_icon_select",
+                icon_method="icon_select",
                 tooltip="Pick atoms",
                 callback=callback,
             ),
@@ -337,7 +302,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
             tool_group,
             key="select",
             label="Select",
-            icon_method="_icon_select",
+            icon_method="icon_select",
             tooltip="Pick atoms",
             callback=callback,
         )

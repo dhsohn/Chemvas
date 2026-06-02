@@ -1,5 +1,6 @@
 import os
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -61,6 +62,21 @@ class _HarnessWindow(QMainWindow):
         self._setup_sheet = mock.Mock()
         self._apply_color_preset = mock.Mock()
         self._apply_ring_fill_preset = mock.Mock()
+        self._icon_factory = SimpleNamespace(
+            icon_templates=self._blank_icon,
+            icon_bond_length=self._blank_icon,
+            icon_flip_h=self._blank_icon,
+            icon_flip_v=self._blank_icon,
+            icon_save=self._blank_icon,
+            icon_open=self._blank_icon,
+            icon_export_xyz=self._blank_icon,
+            icon_preview_panel=self._blank_icon,
+            icon_setup_sheet=self._blank_icon,
+            icon_undo=self._blank_icon,
+            icon_redo=self._blank_icon,
+            icon_color=self._blank_icon,
+            icon_ring_fill=self._blank_icon,
+        )
 
     def _build_tool_actions(self, tool_group) -> dict[str, QAction]:
         actions: dict[str, QAction] = {}
@@ -75,20 +91,6 @@ class _HarnessWindow(QMainWindow):
 
     def _blank_icon(self) -> QIcon:
         return QIcon()
-
-    _icon_templates = _blank_icon
-    _icon_bond_length = _blank_icon
-    _icon_flip_h = _blank_icon
-    _icon_flip_v = _blank_icon
-    _icon_save = _blank_icon
-    _icon_open = _blank_icon
-    _icon_export_xyz = _blank_icon
-    _icon_preview_panel = _blank_icon
-    _icon_setup_sheet = _blank_icon
-    _icon_undo = _blank_icon
-    _icon_redo = _blank_icon
-    _icon_color = _blank_icon
-    _icon_ring_fill = _blank_icon
 
     def _populate_template_menu(self, menu: QMenu) -> None:
         menu.addAction("Template")
