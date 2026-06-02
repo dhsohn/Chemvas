@@ -760,7 +760,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertEqual(self.window.canvas.tools.active.name, "bond")
         self.assertGreater(len(self.window.canvas.ring_items), ring_count_before)
 
-    def test_clicking_bond_cycles_double_variants_before_returning_to_single(self) -> None:
+    def test_clicking_bond_toggles_single_and_double_without_variant_cycle(self) -> None:
         self.window.canvas.add_bond_from_points(QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
         bond_id = next(i for i, bond in enumerate(self.window.canvas.model.bonds) if bond is not None)
         midpoint = QPointF(0.0, 0.0)
@@ -772,11 +772,11 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
         self._click_scene_point(midpoint)
         bond = self.window.canvas.model.bonds[bond_id]
-        self.assertEqual((bond.style, bond.order), ("double_center", 2))
+        self.assertEqual((bond.style, bond.order), ("single", 1))
 
         self._click_scene_point(midpoint)
         bond = self.window.canvas.model.bonds[bond_id]
-        self.assertEqual((bond.style, bond.order), ("double_outer", 2))
+        self.assertEqual((bond.style, bond.order), ("double", 2))
 
         self._click_scene_point(midpoint)
         bond = self.window.canvas.model.bonds[bond_id]

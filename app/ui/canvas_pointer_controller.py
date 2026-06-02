@@ -1,6 +1,22 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import QEvent, Qt
+from PyQt6.QtWidgets import QMenu
+
+from ui.bond_style_logic import (
+    DOUBLE_STYLE_CENTER,
+    DOUBLE_STYLE_DEFAULT,
+    DOUBLE_STYLE_OUTER,
+    is_plain_double_bond_style,
+    normalized_plain_double_style,
+)
+
+
+DOUBLE_BOND_CONTEXT_STYLES = (
+    ("Inward", DOUBLE_STYLE_DEFAULT),
+    ("Centered", DOUBLE_STYLE_CENTER),
+    ("Outward", DOUBLE_STYLE_OUTER),
+)
 
 
 class CanvasPointerController:
@@ -15,6 +31,9 @@ class CanvasPointerController:
         allow_select_tool: bool,
     ) -> None:
         self.canvas._touch_interaction()
+        if event.button() == Qt.MouseButton.RightButton and self._show_double_bond_context_menu(event):
+            self.canvas._clear_hover_highlight()
+            return
         if self.canvas._template_insert_active and event.button() == Qt.MouseButton.LeftButton:
             self.canvas._commit_template_insert(self.canvas.scene_pos_from_event(event))
             self.canvas._clear_hover_highlight()
@@ -29,6 +48,47 @@ class CanvasPointerController:
             return
         base_event(event)
         self.canvas._clear_hover_highlight()
+
+    def _show_double_bond_context_menu(self, event, *, menu_factory=QMenu) -> bool:
+        bond_id = self._context_bond_id(event)
+        if bond_id is None or not (0 <= bond_id < len(self.canvas.model.bonds)):
+            return False
+        bond = self.canvas.model.bonds[bond_id]
+        if bond is None or not is_plain_double_bond_style(bond.style, bond.order):
+            return False
+
+        current_style = normalized_plain_double_style(bond.style, bond.order)
+        menu = menu_factory(self.canvas)
+        for label, style in DOUBLE_BOND_CONTEXT_STYLES:
+            action = menu.addAction(label)
+            action.setCheckable(True)
+            action.setChecked(style == current_style)
+            action.triggered.connect(
+                lambda _checked=False, target_style=style: self.canvas.apply_bond_style(
+                    bond_id,
+                    target_style,
+                    2,
+                )
+            )
+        menu.exec(self._event_global_pos(event))
+        return True
+
+    def _context_bond_id(self, event) -> int | None:
+        if not hasattr(event, "position"):
+            return None
+        item = self.canvas.item_at_event(event)
+        if item is not None and item.data(0) == "bond":
+            bond_id = item.data(1)
+            if isinstance(bond_id, int):
+                return bond_id
+        return self.canvas.bond_id_from_event(event)
+
+    def _event_global_pos(self, event):
+        if hasattr(event, "globalPosition"):
+            return event.globalPosition().toPoint()
+        if hasattr(event, "globalPos"):
+            return event.globalPos()
+        return self.canvas.viewport().mapToGlobal(event.position().toPoint())
 
     def mouse_press_event(self, event, *, base_mouse_press_event) -> None:
         self._dispatch_press_event(

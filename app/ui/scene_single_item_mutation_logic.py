@@ -179,7 +179,11 @@ def cycle_bond_style_with_history(
         return False
 
     def mutate(target) -> None:
-        next_style, next_order = cycle_plain_bond_style(target.style, target.order)
+        next_style, next_order = cycle_plain_bond_style(
+            target.style,
+            target.order,
+            allow_double_variants=False,
+        )
         target.style = next_style
         target.order = next_order
 
