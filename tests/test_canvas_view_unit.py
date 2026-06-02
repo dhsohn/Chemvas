@@ -150,6 +150,40 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertEqual(canvas._insert_state.template_ring_style, "chair")
         self.assertEqual(canvas._insert_state.template_preview_items, ["template"])
 
+    def test_set_tool_and_mark_kind_cancel_pending_insert_modes(self) -> None:
+        canvas = CanvasView()
+        self.addCleanup(canvas.close)
+        canvas._refresh_hover_from_cursor = mock.Mock()
+
+        canvas._template_insert_active = True
+        canvas._template_ring_size = 5
+        canvas._template_ring_style = "regular"
+        canvas._smiles_insert_active = True
+        canvas._smiles_preview_smiles = "CC"
+        canvas._smiles_preview_center = QPointF(1.0, 2.0)
+
+        canvas.set_tool("benzene")
+
+        self.assertFalse(canvas._template_insert_active)
+        self.assertIsNone(canvas._template_ring_size)
+        self.assertIsNone(canvas._template_ring_style)
+        self.assertFalse(canvas._smiles_insert_active)
+        self.assertIsNone(canvas._smiles_preview_smiles)
+        self.assertIsNone(canvas._smiles_preview_center)
+        self.assertEqual(canvas.tools.active.name, "benzene")
+
+        canvas._template_insert_active = True
+        canvas._template_ring_size = 6
+        canvas._template_ring_style = "benzene"
+
+        canvas.set_mark_kind("minus")
+
+        self.assertFalse(canvas._template_insert_active)
+        self.assertIsNone(canvas._template_ring_size)
+        self.assertIsNone(canvas._template_ring_style)
+        self.assertEqual(canvas.mark_kind, "minus")
+        self.assertEqual(canvas.tools.active.name, "mark")
+
     def test_note_item_focus_out_adds_updates_and_deletes_commands(self) -> None:
         canvas = _FakeNoteCanvas()
         item = NoteItem(canvas)

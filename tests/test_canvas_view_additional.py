@@ -158,6 +158,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
 
         tool_view = SimpleNamespace(
             tools=SimpleNamespace(set_active=mock.Mock()),
+            _cancel_pending_insert_modes=mock.Mock(),
             _update_selection_outline=mock.Mock(),
             _notify_tool_change=mock.Mock(),
             _refresh_hover_from_cursor=mock.Mock(),
@@ -169,6 +170,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
 
         tool_view.tools.set_active.assert_any_call("bond")
         tool_view.tools.set_active.assert_any_call("mark")
+        self.assertEqual(tool_view._cancel_pending_insert_modes.call_count, 2)
         self.assertEqual(tool_view.mark_kind, "minus")
         self.assertEqual(tool_view._update_selection_outline.call_count, 2)
         self.assertEqual(tool_view._notify_tool_change.call_count, 2)

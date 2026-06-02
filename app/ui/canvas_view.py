@@ -791,7 +791,14 @@ class CanvasView(QGraphicsView):
         if self._tool_change_callback is not None:
             self._tool_change_callback()
 
+    def _cancel_pending_insert_modes(self) -> None:
+        if getattr(self, "_template_insert_active", False):
+            self._cancel_template_insert()
+        if getattr(self, "_smiles_insert_active", False):
+            self._cancel_smiles_insert()
+
     def set_tool(self, tool_name: str) -> None:
+        self._cancel_pending_insert_modes()
         self.tools.set_active(tool_name)
         self._update_selection_outline()
         self._notify_tool_change()
@@ -800,6 +807,7 @@ class CanvasView(QGraphicsView):
     def set_mark_kind(self, kind: str) -> None:
         if kind not in {"plus", "minus", "radical"}:
             return
+        self._cancel_pending_insert_modes()
         self.mark_kind = kind
         self.tools.set_active("mark")
         self._update_selection_outline()
