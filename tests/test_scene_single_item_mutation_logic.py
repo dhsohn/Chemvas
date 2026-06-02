@@ -254,7 +254,7 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
                 )
             )
 
-        cycle_style.assert_called_once_with("single", 1)
+        cycle_style.assert_called_once_with("single", 1, allow_double_variants=False)
         self.assertEqual((bonds[1].style, bonds[1].order), ("aromatic", 3))
         self.assertEqual(rebuild_calls, [(0, True), (1, False)])
         self.assertEqual(

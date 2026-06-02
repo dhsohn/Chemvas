@@ -214,7 +214,7 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         with mock.patch("ui.scene_single_item_mutation_logic.cycle_plain_bond_style", return_value=("aromatic", 3)) as cycle_style:
             controller.cycle_bond_style(1)
 
-        cycle_style.assert_called_once_with("single", 1)
+        cycle_style.assert_called_once_with("single", 1, allow_double_variants=False)
         self.assertEqual((cycled_bond.style, cycled_bond.order), ("aromatic", 3))
         self.assertEqual(view.bond_items[1], [cycled_replacement])
         self.assertTrue(cycled_replacement.isSelected())

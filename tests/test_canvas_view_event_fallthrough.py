@@ -22,10 +22,14 @@ class _FakeEvent:
         *,
         button=Qt.MouseButton.NoButton,
         buttons=Qt.MouseButton.NoButton,
+        pos=None,
+        global_pos=None,
     ) -> None:
         self._event_type = event_type
         self._button = button
         self._buttons = buttons
+        self._pos = QPointF(0.0, 0.0) if pos is None else pos
+        self._global_pos = QPointF(10.0, 20.0) if global_pos is None else global_pos
         self.accept = mock.Mock()
 
     def type(self):
@@ -36,6 +40,51 @@ class _FakeEvent:
 
     def buttons(self):
         return self._buttons
+
+    def position(self):
+        return self._pos
+
+    def globalPosition(self):
+        return self._global_pos
+
+
+class _FakeAction:
+    def __init__(self, label: str) -> None:
+        self.label = label
+        self.checkable = False
+        self.checked = False
+        self._callback = None
+        self.triggered = SimpleNamespace(connect=self._connect)
+
+    def setCheckable(self, value: bool) -> None:
+        self.checkable = value
+
+    def setChecked(self, value: bool) -> None:
+        self.checked = value
+
+    def _connect(self, callback) -> None:
+        self._callback = callback
+
+    def trigger(self) -> None:
+        self._callback(False)
+
+
+class _FakeMenu:
+    instances = []
+
+    def __init__(self, parent=None) -> None:
+        self.parent = parent
+        self.actions = []
+        self.exec_pos = None
+        _FakeMenu.instances.append(self)
+
+    def addAction(self, label: str):
+        action = _FakeAction(label)
+        self.actions.append(action)
+        return action
+
+    def exec(self, pos) -> None:
+        self.exec_pos = pos
 
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas view tests")
@@ -64,6 +113,7 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
         with mock.patch.object(QGraphicsView, "mousePressEvent", new=mock.Mock(return_value=None)) as base_press:
             template_view = self._new_view()
             template_view._template_insert_active = True
+            template_view.model.bonds = []
 
             CanvasView.mousePressEvent(template_view, _FakeEvent(button=Qt.MouseButton.RightButton))
 
@@ -80,6 +130,37 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
             tool.on_mouse_press.assert_called_once()
             base_press.assert_called_once()
             tool_view._clear_hover_highlight.assert_called_once_with()
+
+    def test_mouse_press_event_right_click_on_double_bond_shows_variant_menu(self) -> None:
+        from core.model import Atom, Bond
+        from ui.canvas_pointer_controller import CanvasPointerController
+
+        view = self._new_view()
+        view.model.atoms = {
+            1: Atom("C", 0.0, 0.0),
+            2: Atom("C", 20.0, 0.0),
+        }
+        view.model.bonds = [Bond(1, 2, 2, style="double_center")]
+        view.item_at_event = mock.Mock(return_value=None)
+        view.bond_id_from_event = mock.Mock(return_value=0)
+        view.apply_bond_style = mock.Mock()
+        _FakeMenu.instances = []
+
+        controller = CanvasPointerController(view)
+        handled = controller._show_double_bond_context_menu(
+            _FakeEvent(button=Qt.MouseButton.RightButton, global_pos=QPointF(30.0, 40.0)),
+            menu_factory=_FakeMenu,
+        )
+
+        self.assertTrue(handled)
+        menu = _FakeMenu.instances[-1]
+        self.assertEqual([action.label for action in menu.actions], ["Inward", "Centered", "Outward"])
+        self.assertEqual([action.checked for action in menu.actions], [False, True, False])
+        self.assertEqual(menu.exec_pos, QPointF(30.0, 40.0).toPoint())
+
+        menu.actions[2].trigger()
+
+        view.apply_bond_style.assert_called_once_with(0, "double_outer", 2)
 
     def test_mouse_double_click_event_routes_non_select_tools_and_select_tool_falls_through(self) -> None:
         with mock.patch.object(
