@@ -551,32 +551,6 @@ class CanvasView(QGraphicsView):
         painter.setPen(pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRect(sheet_rect)
-        self._draw_empty_hint(painter, sheet_rect)
-        painter.restore()
-
-    def _is_canvas_empty(self) -> bool:
-        if getattr(self.model, "atoms", None):
-            return False
-        for collection_name in ("note_items", "arrow_items", "ts_bracket_items"):
-            if getattr(self, collection_name, None):
-                return False
-        return True
-
-    def _draw_empty_hint(self, painter: QPainter, sheet_rect: QRectF) -> None:
-        if not self._is_canvas_empty():
-            return
-        painter.save()
-        pen = QPen(QColor("#aeaea8"))
-        painter.setPen(pen)
-        font = painter.font()
-        font.setPointSize(12)
-        painter.setFont(font)
-        lines = [
-            "Empty sheet — start drawing a structure",
-            "Bond (X): click & drag · element hotkeys c / n / o · J for benzene",
-            "Type a SMILES above and press Insert · Esc to cancel",
-        ]
-        painter.drawText(sheet_rect, int(Qt.AlignmentFlag.AlignCenter), "\n".join(lines))
         painter.restore()
 
     def keyPressEvent(self, event) -> None:
