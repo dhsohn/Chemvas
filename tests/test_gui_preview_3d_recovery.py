@@ -290,14 +290,14 @@ class Preview3DRecoveryTest(unittest.TestCase):
         preview = self._create_preview(SequencedAdapter([]))
         preview.resize(320, 260)
 
-        self.assertEqual(preview._metadata_summary(), "No structure loaded")
+        self.assertEqual(preview._metadata_summary(), "")
         self.assertEqual(preview._status_badge()[0], "Empty")
-        self.assertEqual(preview._empty_state_text(), ("No 3D structure", "Canvas has no molecule"))
+        self.assertEqual(preview._empty_state_text(), ("No molecule yet", "Draw or paste a structure to preview it in 3D."))
 
         preview._message = "There is no chemical structure to export."
-        self.assertEqual(preview._metadata_summary(), "No structure loaded")
+        self.assertEqual(preview._metadata_summary(), "")
         self.assertEqual(preview._status_badge()[0], "Empty")
-        self.assertEqual(preview._empty_state_text(), ("No 3D structure", "Canvas has no molecule"))
+        self.assertEqual(preview._empty_state_text(), ("No molecule yet", "Draw or paste a structure to preview it in 3D."))
 
         preview._message = "Updating 3D preview..."
         self.assertEqual(preview._metadata_summary(), "Preparing coordinates")

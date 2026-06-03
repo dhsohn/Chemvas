@@ -992,7 +992,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             if (item.data(2) or {}).get("kind") == "component"
         )
         self.assertEqual(component_outline.path().fillRule(), Qt.FillRule.WindingFill)
-        self.assertEqual(component_outline.brush().color().name(), "#1f5eff")
+        self.assertEqual(component_outline.brush().color().name(), "#0d9488")
 
     def test_disconnected_atom_selection_adds_multiple_component_overlays(self) -> None:
         left = self.window.canvas.add_atom("C", -40.0, 0.0)
@@ -1033,7 +1033,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         ]
         self.assertEqual(len(object_outlines), 1)
         outline = object_outlines[0]
-        self.assertEqual(outline.brush().color().name(), "#1f5eff")
+        self.assertEqual(outline.brush().color().name(), "#0d9488")
         self.assertGreater(outline.brush().color().alpha(), 0)
         self.assertEqual(outline.pen().style(), Qt.PenStyle.NoPen)
 
@@ -1049,7 +1049,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             if (item.data(2) or {}).get("kind") == "object"
         ]
         self.assertEqual(len(object_outlines), 2)
-        self.assertTrue(all(item.brush().color().name() == "#1f5eff" for item in object_outlines))
+        self.assertTrue(all(item.brush().color().name() == "#0d9488" for item in object_outlines))
         self.assertTrue(all(item.pen().style() == Qt.PenStyle.NoPen for item in object_outlines))
 
     def test_mark_selection_overlay_matches_single_atom_selection_radius(self) -> None:

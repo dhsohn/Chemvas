@@ -4,6 +4,7 @@ import math
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QBrush, QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap, QPolygonF
+from PyQt6.QtWidgets import QApplication
 
 from core.model import Atom
 
@@ -19,11 +20,11 @@ class MainWindowIconFactory:
     PALE_FILL_COLOR = "#ededeb"
     ACCENT_FILL_COLOR = "#d3d3ce"
 
-    STROKE_FINE = 1.0
-    STROKE_THIN = 1.4
-    STROKE_REGULAR = 1.6
-    STROKE_MOLECULE = 1.8
-    STROKE_ACTIVE = 2.0
+    STROKE_FINE = 1.2
+    STROKE_THIN = 1.6
+    STROKE_REGULAR = 1.8
+    STROKE_MOLECULE = 2.0
+    STROKE_ACTIVE = 2.2
 
     def __init__(self, window) -> None:
         self.window = window
@@ -56,9 +57,22 @@ class MainWindowIconFactory:
         icon_pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
         return icon_pen
 
+    @staticmethod
+    def _device_pixel_ratio() -> float:
+        app = QApplication.instance()
+        if app is not None:
+            screen = app.primaryScreen()
+            if screen is not None:
+                return max(1.0, screen.devicePixelRatio())
+        return 2.0
+
     def make_icon(self, painter_fn, size: int | None = None) -> QIcon:
         size = self.ICON_SIZE if size is None else size
-        pixmap = QPixmap(size, size)
+        # Render into a HiDPI-backed pixmap so the painter keeps working in
+        # logical (0..size) coordinates while the bitmap stays crisp on Retina.
+        dpr = self._device_pixel_ratio()
+        pixmap = QPixmap(round(size * dpr), round(size * dpr))
+        pixmap.setDevicePixelRatio(dpr)
         pixmap.fill(Qt.GlobalColor.transparent)
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -241,18 +255,29 @@ class MainWindowIconFactory:
     def icon_save(self) -> QIcon:
         def draw(p):
             p.setPen(self._icon_pen(self.STROKE_THIN))
-            p.drawRect(6, 5, 18, 20)
-            p.drawLine(6, 11, 24, 11)
-            p.drawRect(10, 15, 10, 8)
+            # Modern "save" metaphor: an arrow dropping into a tray, instead of
+            # the dated floppy-disk glyph.
+            p.drawLine(QPointF(15.0, 5.0), QPointF(15.0, 17.5))
+            p.drawLine(QPointF(10.0, 12.5), QPointF(15.0, 17.5))
+            p.drawLine(QPointF(20.0, 12.5), QPointF(15.0, 17.5))
+            p.drawLine(QPointF(6.0, 19.0), QPointF(6.0, 24.0))
+            p.drawLine(QPointF(6.0, 24.0), QPointF(24.0, 24.0))
+            p.drawLine(QPointF(24.0, 24.0), QPointF(24.0, 19.0))
         return self.make_icon(draw)
 
     def icon_open(self) -> QIcon:
         def draw(p):
             p.setPen(self._icon_pen(self.STROKE_THIN))
-            p.drawRect(6, 13, 18, 10)
-            p.drawLine(15, 6, 15, 16)
-            p.drawLine(11, 10, 15, 6)
-            p.drawLine(19, 10, 15, 6)
+            # Folder glyph: the universal "open file" metaphor.
+            path = QPainterPath()
+            path.moveTo(5.0, 9.5)
+            path.lineTo(11.0, 9.5)
+            path.lineTo(13.5, 12.0)
+            path.lineTo(25.0, 12.0)
+            path.lineTo(25.0, 23.0)
+            path.lineTo(5.0, 23.0)
+            path.closeSubpath()
+            p.drawPath(path)
         return self.make_icon(draw)
 
     def icon_export_xyz(self) -> QIcon:

@@ -343,17 +343,14 @@ class MainWindowUIAssemblyService:
         )
         smiles_input.returnPressed.connect(lambda: window.canvas.begin_smiles_insert(smiles_input.text()))
 
-        panel_bar.addWidget(self.create_toolbar_section_label("File"))
         panel_bar.addWidget(save_button)
         panel_bar.addWidget(export_xyz_btn)
         panel_bar.addWidget(preview_panel_btn)
         panel_bar.addWidget(setup_sheet_btn)
         panel_bar.addSeparator()
-        panel_bar.addWidget(self.create_toolbar_section_label("History"))
         panel_bar.addWidget(undo_btn)
         panel_bar.addWidget(redo_btn)
         panel_bar.addSeparator()
-        panel_bar.addWidget(self.create_toolbar_section_label("SMILES"))
         panel_bar.addWidget(smiles_input)
         panel_bar.addWidget(smiles_button)
         panel_bar.addSeparator()
@@ -367,7 +364,6 @@ class MainWindowUIAssemblyService:
         atom_input.setToolTip("Atom Symbol")
         atom_input.setStatusTip("Set the atom symbol used by atom and bond tools")
         atom_input.textChanged.connect(lambda text: window.canvas.set_atom_symbol(text))
-        panel_bar.addWidget(self.create_toolbar_section_label("Style"))
         panel_bar.addWidget(atom_input)
         panel_bar.addWidget(
             self.create_corner_menu_button(

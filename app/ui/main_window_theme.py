@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 
-# Monochrome light palette. Kept as a single source of truth so the whole app
-# stays visually consistent; a future dark theme can swap these values.
+# Light palette with a teal accent. Kept as a single source of truth so the
+# whole app stays visually consistent; a future dark theme can swap these values.
+# Neutrals stay warm-gray; the accent ramp carries every "active/primary" cue
+# (selected tool, focus ring, primary button, selection highlight).
 PALETTE = {
     "surface_app": "#f1f1f0",
     "surface_bar": "#fbfbfa",
@@ -17,12 +19,17 @@ PALETTE = {
     "text_faint": "#9b9b96",
     "hover": "#ededeb",
     "pressed": "#e2e2df",
-    "checked_bg": "#dcdcd8",
-    "checked_border": "#a8a8a2",
-    "checked_text": "#141413",
-    "accent": "#3a3a37",
     "scrollbar": "#cfcfc9",
     "scrollbar_hover": "#a6a6a0",
+    # Teal accent ramp.
+    "accent": "#0d9488",
+    "accent_hover": "#0f766e",
+    "accent_pressed": "#115e59",
+    "accent_contrast": "#ffffff",
+    # Active/checked controls read as a soft teal, no longer flat gray.
+    "checked_bg": "#d6ece7",
+    "checked_border": "#5fb3a6",
+    "checked_text": "#0b5750",
 }
 
 _P = PALETTE
@@ -70,7 +77,7 @@ MAIN_WINDOW_STYLESHEET = f"""
             }}
             QToolButton {{
                 border: 1px solid transparent;
-                border-radius: 6px;
+                border-radius: 8px;
                 padding: 5px;
                 color: {_P["text"]};
             }}
@@ -155,7 +162,7 @@ MAIN_WINDOW_STYLESHEET = f"""
             QTabWidget#canvasTabs QTabBar QToolButton {{
                 background: transparent;
                 border: none;
-                border-radius: 5px;
+                border-radius: 8px;
                 color: {_P["text_muted"]};
                 padding: 4px 6px;
             }}
@@ -190,7 +197,7 @@ MAIN_WINDOW_STYLESHEET = f"""
             QScrollBar::handle:horizontal {{
                 background: {_P["scrollbar"]};
                 border: 2px solid {_P["surface_app"]};
-                border-radius: 5px;
+                border-radius: 8px;
                 min-width: 36px;
             }}
             QScrollBar::handle:horizontal:hover {{
@@ -220,7 +227,7 @@ MAIN_WINDOW_STYLESHEET = f"""
             QScrollBar::handle:vertical {{
                 background: {_P["scrollbar"]};
                 border: 2px solid {_P["surface_app"]};
-                border-radius: 5px;
+                border-radius: 8px;
                 min-height: 36px;
             }}
             QScrollBar::handle:vertical:hover {{
@@ -249,7 +256,7 @@ MAIN_WINDOW_STYLESHEET = f"""
             QLineEdit, QComboBox, QSpinBox {{
                 background: {_P["surface_input"]};
                 border: 1px solid {_P["border_strong"]};
-                border-radius: 5px;
+                border-radius: 8px;
                 padding: 4px 7px;
                 color: {_P["text"]};
                 selection-background-color: {_P["checked_bg"]};
@@ -261,7 +268,7 @@ MAIN_WINDOW_STYLESHEET = f"""
             QSpinBox, QDoubleSpinBox {{
                 background: {_P["surface_input"]};
                 border: 1px solid {_P["border_strong"]};
-                border-radius: 5px;
+                border-radius: 8px;
                 padding: 2px 6px;
                 color: {_P["text"]};
             }}
@@ -273,7 +280,7 @@ MAIN_WINDOW_STYLESHEET = f"""
             QFrame#spinFrame {{
                 background: {_P["surface_input"]};
                 border: 1px solid {_P["border_strong"]};
-                border-radius: 5px;
+                border-radius: 8px;
             }}
             QFrame#spinFrame QDoubleSpinBox {{
                 background: transparent;
@@ -309,7 +316,7 @@ MAIN_WINDOW_STYLESHEET = f"""
             QPushButton {{
                 color: {_P["text"]};
                 border: 1px solid {_P["border_strong"]};
-                border-radius: 5px;
+                border-radius: 8px;
                 padding: 5px 12px;
                 background: {_P["surface_input"]};
             }}
@@ -348,14 +355,14 @@ MAIN_WINDOW_STYLESHEET = f"""
             QDialog QLineEdit, QMessageBox QLineEdit {{
                 background: {_P["surface_input"]};
                 border: 1px solid {_P["border_strong"]};
-                border-radius: 5px;
+                border-radius: 8px;
                 padding: 3px 6px;
                 color: {_P["text"]};
             }}
             QDialog QPushButton, QMessageBox QPushButton {{
                 background: {_P["surface_input"]};
                 border: 1px solid {_P["border_strong"]};
-                border-radius: 5px;
+                border-radius: 8px;
                 padding: 5px 14px;
                 color: {_P["text"]};
             }}
@@ -371,7 +378,7 @@ MAIN_WINDOW_STYLESHEET = f"""
                 width: 12px;
                 height: 12px;
                 background: {_P["accent"]};
-                border-radius: 6px;
+                border-radius: 8px;
                 margin: -5px 0;
             }}
             QSlider::handle:horizontal:hover {{
@@ -405,7 +412,7 @@ def _flat_toolbutton_style(*, extra: str = "") -> str:
     return (
         "QToolButton {"
         " border: 1px solid transparent;"
-        " border-radius: 6px;"
+        " border-radius: 8px;"
         " padding: 4px;"
         f" color: {_P['text']};"
         "}"
@@ -464,17 +471,17 @@ CONTEXT_SEGMENT_STYLE = _flat_toolbutton_style(
 SMILES_RENDER_BUTTON_STYLE = (
     "QToolButton#smiles_render_button {"
     " border: 1px solid transparent;"
-    " border-radius: 6px;"
+    " border-radius: 8px;"
     " padding: 4px 12px;"
     f" background-color: {_P['accent']};"
-    " color: #f4f4f3;"
+    f" color: {_P['accent_contrast']};"
     " font-weight: 600;"
     "}"
     "QToolButton#smiles_render_button:hover {"
-    f" background-color: {_P['checked_text']};"
+    f" background-color: {_P['accent_hover']};"
     "}"
     "QToolButton#smiles_render_button:pressed {"
-    " background-color: #000000;"
+    f" background-color: {_P['accent_pressed']};"
     "}"
     "QToolButton#smiles_render_button:disabled {"
     f" color: {_P['text_faint']};"

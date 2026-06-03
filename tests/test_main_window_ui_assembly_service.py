@@ -299,7 +299,9 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             for label in assembly.panel_bar.findChildren(QLabel)
             if label.objectName() == "toolbarSectionLabel"
         ]
-        self.assertEqual(section_labels, ["File", "History", "SMILES", "Style"])
+        # Top panel-bar section labels were removed; icon groups rely on
+        # separators + tooltips instead.
+        self.assertEqual(section_labels, [])
 
         assembly.atom_input.setText("Cl")
         window.canvas.set_atom_symbol.assert_called_with("Cl")

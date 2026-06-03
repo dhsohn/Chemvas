@@ -359,12 +359,25 @@ class Preview3D(QWidget):
             "footer": footer,
         }
 
+    @staticmethod
+    def _draw_card_shadow(painter: QPainter, rect: QRectF, radius: float, *, layers=None) -> None:
+        # Layered translucent rounded rects offset downward fake a soft drop
+        # shadow so cards read as floating rather than outlined-and-flat.
+        layers = layers if layers is not None else ((6.0, 7), (3.5, 11), (1.5, 18))
+        painter.save()
+        painter.setPen(Qt.PenStyle.NoPen)
+        for spread, alpha in layers:
+            painter.setBrush(QColor(38, 38, 36, alpha))
+            painter.drawRoundedRect(
+                rect.adjusted(-spread * 0.3, spread * 0.25, spread * 0.3, spread + 1.0),
+                radius + spread * 0.3,
+                radius + spread * 0.3,
+            )
+        painter.restore()
+
     def _draw_panel(self, painter: QPainter, rect: QRectF) -> None:
         painter.save()
-        shadow = rect.translated(0.0, 1.0)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(45, 45, 43, 18))
-        painter.drawRoundedRect(shadow, 9.0, 9.0)
+        self._draw_card_shadow(painter, rect, 9.0)
 
         gradient = QLinearGradient(rect.topLeft(), rect.bottomLeft())
         gradient.setColorAt(0.0, QColor("#ffffff"))
@@ -406,6 +419,7 @@ class Preview3D(QWidget):
 
     def _draw_viewport(self, painter: QPainter, rect: QRectF) -> None:
         painter.save()
+        self._draw_card_shadow(painter, rect, 7.0, layers=((4.0, 4), (2.0, 7)))
         painter.setPen(QPen(QColor("#e0e0dd"), 1.0))
         painter.setBrush(QColor("#fbfbfa"))
         painter.drawRoundedRect(rect, 7.0, 7.0)
@@ -661,7 +675,7 @@ class Preview3D(QWidget):
         if self._message.startswith("Updating"):
             return "Preparing coordinates"
         if self._is_empty_message():
-            return "No structure loaded"
+            return ""
         return "Preview needs attention"
 
     def _status_badge(self) -> tuple[str, QColor, QColor, QColor]:
@@ -678,7 +692,7 @@ class Preview3D(QWidget):
         if message.startswith("Updating"):
             return "Building preview", "Preparing coordinates"
         if self._is_empty_message(message):
-            return "No 3D structure", "Canvas has no molecule"
+            return "No molecule yet", "Draw or paste a structure to preview it in 3D."
         if len(message) > 96:
             message = f"{message[:93]}..."
         return "Preview unavailable", message
