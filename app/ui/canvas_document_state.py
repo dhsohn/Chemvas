@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from core.document_state import serialize_model_state, serialize_settings
+from core.style_presets import DEFAULT_PRESET, apply_preset_to_current
 from ui.scene_item_access import (
     restore_arrow_from_state,
     restore_mark_from_state,
@@ -35,6 +36,7 @@ def snapshot_canvas_document_state(canvas) -> dict:
             text_italic=canvas.text_italic,
             sheet_size=canvas.sheet_size,
             sheet_orientation=canvas.sheet_orientation,
+            style_preset=getattr(canvas, "_style_preset", DEFAULT_PRESET),
         ),
         "last_smiles_input": canvas.last_smiles_input,
     }
@@ -43,6 +45,10 @@ def snapshot_canvas_document_state(canvas) -> dict:
 def apply_document_settings(canvas, state: dict) -> None:
     settings = state["settings"]
     canvas.renderer.set_bond_length(settings["bond_length_px"])
+    # Map the persisted preset name -> style, keeping the just-restored bond length.
+    preset_name = settings.get("style_preset", DEFAULT_PRESET)
+    canvas._style_preset = preset_name
+    canvas.renderer.style = apply_preset_to_current(preset_name, canvas.renderer.style)
     canvas.arrow_line_width = settings["arrow_line_width"]
     canvas.arrow_head_scale = settings["arrow_head_scale"]
     canvas.orbital_phase_enabled = settings["orbital_phase_enabled"]

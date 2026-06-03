@@ -36,6 +36,8 @@ SETTINGS_KEYS = frozenset(
         "sheet_orientation",
     )
 )
+# Keys added after v1; absent in older files (loaded with a sensible default).
+OPTIONAL_SETTINGS_KEYS = frozenset(("style_preset",))
 VALID_BOND_ORDERS = frozenset((1, 2, 3))
 VALID_BOND_STYLES = frozenset(
     (
@@ -142,6 +144,7 @@ def serialize_settings(
     text_italic: bool,
     sheet_size: str,
     sheet_orientation: str,
+    style_preset: str = "ACS 1996",
 ) -> dict:
     return {
         "bond_length_px": bond_length_px,
@@ -153,6 +156,7 @@ def serialize_settings(
         "text_italic": text_italic,
         "sheet_size": sheet_size,
         "sheet_orientation": sheet_orientation,
+        "style_preset": style_preset,
     }
 
 
@@ -321,7 +325,12 @@ def _validate_bond_state(bond_state: Mapping[str, object], atom_ids: set[int]) -
 
 
 def _validate_settings_state(settings: Mapping[str, object]) -> None:
-    if set(settings) != SETTINGS_KEYS:
+    keys = set(settings)
+    # Required keys must all be present; only known optional keys may be added.
+    if not SETTINGS_KEYS <= keys or not keys <= (SETTINGS_KEYS | OPTIONAL_SETTINGS_KEYS):
+        raise ValueError("Invalid Chemvas file.")
+    style_preset = settings.get("style_preset")
+    if style_preset is not None and not isinstance(style_preset, str):
         raise ValueError("Invalid Chemvas file.")
     if not _is_number(settings.get("bond_length_px")):
         raise ValueError("Invalid Chemvas file.")

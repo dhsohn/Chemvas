@@ -181,15 +181,19 @@ class MainWindowUIAssemblyService:
         save_action: QAction,
         load_action: QAction,
         save_as_action: QAction,
+        export_action: QAction | None = None,
     ) -> CornerMenuButton:
         def build_menu(menu: QMenu) -> None:
             menu.addAction(load_action)
             menu.addAction(save_action)
             menu.addAction(save_as_action)
+            if export_action is not None:
+                menu.addSeparator()
+                menu.addAction(export_action)
 
         return self.create_corner_menu_button(
             tooltip="File",
-            status_tip="Save, load, or save as the current file",
+            status_tip="Save, load, export, or save as the current file",
             style_sheet=TOOLBAR_MENU_BUTTON_STYLE,
             popup_mode=QToolButton.ToolButtonPopupMode.MenuButtonPopup,
             menu_builder=build_menu,
@@ -260,7 +264,15 @@ class MainWindowUIAssemblyService:
         load_action.triggered.connect(window._load_canvas)
         window.addAction(load_action)
 
-        save_button = self.create_file_project_menu_button(save_action, load_action, save_as_action)
+        export_figure_action = QAction("Export Figure...", window)
+        export_figure_action.setToolTip("Export Figure")
+        export_figure_action.setStatusTip("Export the drawing as SVG, PDF, or high-resolution PNG/TIFF")
+        export_figure_action.triggered.connect(window._export_figure)
+        window.addAction(export_figure_action)
+
+        save_button = self.create_file_project_menu_button(
+            save_action, load_action, save_as_action, export_figure_action
+        )
         export_xyz_btn = self.create_toolbar_button(
             icon=window._icon_factory.icon_export_xyz(),
             tooltip="Export 3D XYZ",
