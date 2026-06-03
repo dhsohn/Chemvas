@@ -123,6 +123,7 @@ class CanvasDocumentStateTest(unittest.TestCase):
             state["orbitals"],
             [{"kind": "p", "center": (2.0, 3.0), "scale": 2.0, "rotation": 45.0}],
         )
+        self.assertNotIn("style_preset", state["settings"])
         self.assertEqual(state["settings"]["sheet_size"], "A4")
         self.assertEqual(state["settings"]["sheet_orientation"], "portrait")
         self.assertEqual(state["last_smiles_input"], "CCO")
@@ -173,9 +174,8 @@ class CanvasDocumentStateTest(unittest.TestCase):
         self.assertTrue(canvas.text_italic)
         self.assertEqual(canvas.last_smiles_input, "after")
 
-    def test_apply_document_settings_applies_style_preset(self) -> None:
+    def test_apply_document_settings_ignores_legacy_style_preset(self) -> None:
         from core.renderer import Renderer
-        from core.style_presets import style_for_preset
 
         canvas = SimpleNamespace(
             renderer=Renderer(),
@@ -204,42 +204,9 @@ class CanvasDocumentStateTest(unittest.TestCase):
         }
         apply_document_settings(canvas, {"settings": settings, "last_smiles_input": "y"})
 
-        self.assertEqual(canvas._style_preset, "Presentation")
-        preset = style_for_preset("Presentation")
-        self.assertEqual(canvas.renderer.style.font_size_pt, preset.font_size_pt)
-        self.assertEqual(canvas.renderer.style.bond_length_pt, preset.bond_length_pt)
-        # The restored on-screen bond length is kept, not the preset's default.
+        self.assertEqual(canvas.renderer.style.font_size_pt, 12)
+        self.assertEqual(canvas.renderer.style.bond_length_pt, 14.4)
         self.assertEqual(canvas.renderer.style.bond_length_px, 22.0)
-
-    def test_apply_document_settings_defaults_preset_when_absent(self) -> None:
-        from core.renderer import Renderer
-
-        canvas = SimpleNamespace(
-            renderer=Renderer(),
-            arrow_line_width=1.0,
-            arrow_head_scale=0.3,
-            orbital_phase_enabled=False,
-            text_font_size=12,
-            text_font_weight=400,
-            text_italic=False,
-            sheet_size="A4",
-            sheet_orientation="portrait",
-            set_sheet_setup=mock.Mock(),
-            last_smiles_input="x",
-        )
-        settings = {
-            "bond_length_px": 20.0,
-            "arrow_line_width": 1.0,
-            "arrow_head_scale": 0.3,
-            "orbital_phase_enabled": False,
-            "text_font_size": 12,
-            "text_font_weight": 400,
-            "text_italic": False,
-            "sheet_size": "A4",
-            "sheet_orientation": "portrait",
-        }
-        apply_document_settings(canvas, {"settings": settings, "last_smiles_input": "y"})
-        self.assertEqual(canvas._style_preset, "ACS 1996")
 
     def test_restore_document_items_prefer_scene_item_controller(self) -> None:
         canvas = _Canvas()

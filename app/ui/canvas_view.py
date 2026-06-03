@@ -35,7 +35,6 @@ from core.history import (
 )
 from core.model import Bond, MoleculeModel
 from core.renderer import Renderer
-from core.style_presets import DEFAULT_PRESET
 from core.rdkit_adapter import RDKitAdapter
 from core.template_geometry import (
     cyclohexane_boat_points,
@@ -307,7 +306,6 @@ class CanvasView(QGraphicsView):
         self.orbital_phase_enabled = False
         self.arrow_line_width = self.renderer.style.bond_line_width
         self.arrow_head_scale = 0.3
-        self._style_preset = DEFAULT_PRESET
         self._active_handles: list[QGraphicsEllipseItem] = []
         self._handle_target = None
         self._selected_items: list = []
@@ -653,14 +651,6 @@ class CanvasView(QGraphicsView):
             unit_scale=unit_scale,
             target_width_pt=target_width_pt,
         )
-
-    def apply_style_preset(self, name: str) -> None:
-        # Round-trip the whole document so bonds, atom labels, marks, TS brackets,
-        # orbitals and arrows are all rebuilt with the new style (apply_document
-        # _settings maps the preset name -> style). History is preserved.
-        self._style_preset = name
-        state = self._canvas_document_session_service.snapshot_state()
-        self._canvas_document_session_service.apply_state(state)
 
     def insert_structure_model(
         self,

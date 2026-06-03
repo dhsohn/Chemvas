@@ -91,6 +91,15 @@ class AtomDotItem(NoSelectEllipseItem):
         path.addEllipse(rect)
         return path
 
+    def export_scene_bounding_rect(self) -> QRectF:
+        pen = self.pen()
+        brush = self.brush()
+        has_pen = pen.style() != Qt.PenStyle.NoPen and pen.color().alpha() > 0
+        has_brush = brush.style() != Qt.BrushStyle.NoBrush and brush.color().alpha() > 0
+        if not has_pen and not has_brush:
+            return QRectF()
+        return self.mapRectToScene(super().boundingRect())
+
 
 class NoSelectTextItem(QGraphicsTextItem):
     def paint(self, painter, option, widget=None) -> None:
@@ -208,6 +217,9 @@ class AtomLabelItem(NoSelectTextItem):
 
     def boundingRect(self):
         return self._base_rect().united(self._hit_rect())
+
+    def export_scene_bounding_rect(self) -> QRectF:
+        return self.mapRectToScene(self._base_rect())
 
     def shape(self) -> QPainterPath:
         path = QPainterPath()
