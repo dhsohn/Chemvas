@@ -100,32 +100,46 @@ class _FakeCanvas:
         )
 
 
-class _MutableSourceId:
+class _DetachableSourceId:
+    """SMILES source id that compares equal to a same-label twin during plan
+    validation, then "detaches" (compares equal to nothing but itself) once the
+    atoms have been created.
+
+    The earlier ``_MutableSourceId`` bumped ``hash(label)`` by one and relied on
+    the mutated key landing on an empty dict bucket so the later ``id_map``
+    lookup would miss. Whether it actually missed depended on the bucket layout,
+    i.e. on ``PYTHONHASHSEED`` -- so this test was flaky. Driving the miss
+    through equality instead is deterministic: once detached, no stored key is
+    identity- or ``==``-equal to the lookup key, so ``dict.get`` must return
+    ``None`` regardless of hash seed or table layout.
+    """
+
     def __init__(self, label: str) -> None:
         self.label = label
-        self._hash = hash(label)
+        self.attached = True
 
     def __hash__(self) -> int:
-        return self._hash
+        return hash(self.label)
 
     def __eq__(self, other) -> bool:
-        return self is other
+        if self is other:
+            return True
+        if not isinstance(other, _DetachableSourceId):
+            return NotImplemented
+        return self.attached and other.attached and self.label == other.label
 
-    def mutate(self) -> None:
-        self._hash += 1
 
-
-class _HashChangingCanvas(_FakeCanvas):
-    def __init__(self, key_to_mutate: _MutableSourceId) -> None:
+class _DetachingCanvas(_FakeCanvas):
+    def __init__(self, key_to_detach: _DetachableSourceId) -> None:
         super().__init__()
-        self._key_to_mutate = key_to_mutate
+        self._key_to_detach = key_to_detach
         self._add_atom_count = 0
 
     def add_atom(self, element: str, x: float, y: float) -> int:
         atom_id = super().add_atom(element, x, y)
         self._add_atom_count += 1
         if self._add_atom_count == 2:
-            self._key_to_mutate.mutate()
+            self._key_to_detach.attached = False
         return atom_id
 
 
@@ -376,16 +390,21 @@ class InsertCommitServiceTest(unittest.TestCase):
         )
 
     def test_apply_smiles_commit_plan_returns_false_when_id_lookup_breaks_after_atom_creation(self) -> None:
-        source_a = _MutableSourceId("a")
-        source_b = _MutableSourceId("b")
-        canvas = _HashChangingCanvas(source_a)
+        # atom_source and bond_source are equal twins during validation, so the
+        # plan clears the up-front bond-source check. _DetachingCanvas detaches
+        # atom_source once both atoms exist, so the bond's id_map lookup misses
+        # and the commit must roll back -- deterministic across PYTHONHASHSEED.
+        atom_source = _DetachableSourceId("a")
+        bond_source = _DetachableSourceId("a")
+        other_source = _DetachableSourceId("b")
+        canvas = _DetachingCanvas(atom_source)
         plan = SmilesCommitPlan(
             offset=(0.0, 0.0),
             atoms=[
-                SmilesAtomPlacement(source_a, "C", 0.0, 0.0, "#111111", False),
-                SmilesAtomPlacement(source_b, "N", 1.0, 0.0, "#222222", True),
+                SmilesAtomPlacement(atom_source, "C", 0.0, 0.0, "#111111", False),
+                SmilesAtomPlacement(other_source, "N", 1.0, 0.0, "#222222", True),
             ],
-            bonds=[SmilesBondPlacement(0, source_a, source_b, 1, "solid", "#333333")],
+            bonds=[SmilesBondPlacement(0, bond_source, other_source, 1, "solid", "#333333")],
         )
 
         self.assertFalse(
