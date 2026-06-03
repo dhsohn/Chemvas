@@ -1,15 +1,15 @@
 import math
 
 from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import QColor, QBrush, QPainterPath, QPen, QPolygonF
+from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPen, QPolygonF
 from PyQt6.QtWidgets import QGraphicsLineItem, QGraphicsPathItem, QGraphicsPolygonItem
 
 from ui.bond_style_logic import (
     DOUBLE_STYLE_DEFAULT,
     DOUBLE_STYLE_OUTER,
     base_plain_double_style_for_dotted_variant,
-    is_plain_double_bond_style,
     is_dotted_double_bond_style,
+    is_plain_double_bond_style,
     normalized_plain_double_style,
 )
 from ui.canvas_graph_state import graph_state_for
@@ -444,7 +444,7 @@ class BondRenderer:
             t_sizes = [(i + 1) / (count + 1) for i in range(count)]
         max_t = max(t_sizes) if t_sizes else 1.0
         segments = []
-        for t_pos, t_size in zip(t_positions, t_sizes):
+        for t_pos, t_size in zip(t_positions, t_sizes, strict=False):
             cx = base_x1 + dx * t_pos
             cy = base_y1 + dy * t_pos
             size = max_size * (t_size / max_t) if max_t > 0 else max_size
@@ -879,6 +879,208 @@ class BondRenderer:
             items.append(self._line_item(*seg))
         return items
 
+    def _update_wedge_geometry(self, bond, items, a, b) -> None:
+        polygon = self.wedge_polygon(a.x, a.y, b.x, b.y, bond.a, bond.b)
+        if isinstance(items[0], QGraphicsPolygonItem):
+            items[0].setPolygon(polygon)
+
+    def _update_hash_geometry(self, bond, items, a, b) -> None:
+        count = len(items)
+        segments = self.hash_segments(a.x, a.y, b.x, b.y, count, bond.a, bond.b)
+        for item, seg in zip(items, segments, strict=False):
+            if isinstance(item, QGraphicsLineItem):
+                item.setLine(*seg)
+
+    def _update_dotted_geometry(self, bond, items, a, b) -> None:
+        t0, t1 = self.canvas._trim_line_for_labels(bond.a, bond.b, a.x, a.y, b.x, b.y)
+        start_x = a.x + (b.x - a.x) * t0
+        start_y = a.y + (b.y - a.y) * t0
+        end_x = a.x + (b.x - a.x) * t1
+        end_y = a.y + (b.y - a.y) * t1
+        if len(items) == 1 and isinstance(items[0], QGraphicsPathItem):
+            items[0].setPath(self.dotted_bond_path(start_x, start_y, end_x, end_y, bond.a, bond.b))
+
+    def _dotted_double_segments(self, bond, items, a, b):
+        base_style = base_plain_double_style_for_dotted_variant(bond.style, bond.order)
+        ring_center = self.canvas._ring_center_for_bond(bond)
+        if ring_center is not None and len(items) >= 2:
+            ring_center_3d = self.canvas._ring_center_3d_for_bond(bond)
+            outer_seg, inner_seg, _ = self.ring_double_segments(
+                a,
+                b,
+                ring_center,
+                bond.a,
+                bond.b,
+                center_3d=ring_center_3d,
+                style=base_style,
+            )
+        else:
+            outer_seg, inner_seg, _ = self.plain_double_segments(
+                a.x,
+                a.y,
+                b.x,
+                b.y,
+                style=base_style,
+                a_id=bond.a,
+                b_id=bond.b,
+            )
+        return base_style, outer_seg, inner_seg
+
+    def _update_dotted_double_geometry(self, bond, items, a, b) -> None:
+        base_style, outer_seg, inner_seg = self._dotted_double_segments(bond, items, a, b)
+        if len(items) < 2:
+            return
+        outer_dotted = base_style == DOUBLE_STYLE_OUTER
+        if outer_dotted:
+            if isinstance(items[0], QGraphicsPathItem):
+                items[0].setPath(self.dotted_bond_path(*outer_seg, bond.a, bond.b))
+            if isinstance(items[1], QGraphicsLineItem):
+                items[1].setLine(*inner_seg)
+            return
+        if isinstance(items[0], QGraphicsLineItem):
+            items[0].setLine(*outer_seg)
+        if isinstance(items[1], QGraphicsPathItem):
+            items[1].setPath(self.dotted_bond_path(*inner_seg, bond.a, bond.b))
+
+    def _update_ring_bold_double_geometry(self, bond, items, a, b, ring_center, bold_outward: bool) -> None:
+        ring_center_3d = self.canvas._ring_center_3d_for_bond(bond)
+        outer_seg, inner_seg, (nx, ny) = self.ring_double_segments(
+            a,
+            b,
+            ring_center,
+            bond.a,
+            bond.b,
+            center_3d=ring_center_3d,
+        )
+        use_nx, use_ny = (nx, ny) if not bold_outward else (-nx, -ny)
+        outer_item = items[0]
+        if isinstance(outer_item, QGraphicsPolygonItem):
+            polygon = self.strip_polygon(
+                *outer_seg,
+                use_nx,
+                use_ny,
+                self._bond_line_width(),
+                self._bold_bond_width(),
+            )
+            outer_item.setPolygon(polygon)
+        elif isinstance(outer_item, QGraphicsLineItem):
+            outer_item.setLine(*outer_seg)
+        inner_item = items[1]
+        if isinstance(inner_item, QGraphicsLineItem):
+            inner_item.setLine(*inner_seg)
+
+    def _update_bold_multi_geometry(self, bond, items, a, b, bold_outward: bool) -> None:
+        ring_center = self.canvas._ring_center_for_bond(bond) if bond.order == 2 else None
+        if bond.order == 2 and ring_center is not None and len(items) >= 2:
+            self._update_ring_bold_double_geometry(bond, items, a, b, ring_center, bold_outward)
+            return
+        segments = self.parallel_bond_segments(a.x, a.y, b.x, b.y, bond.order, bond.a, bond.b)
+        if not segments:
+            return
+        if isinstance(items[0], QGraphicsPolygonItem):
+            x1, y1, x2, y2 = segments[0]
+            nx, ny = self.canvas._line_normal(x1, y1, x2, y2, None)
+            if bold_outward:
+                nx, ny = -nx, -ny
+            polygon = self.strip_polygon(
+                x1,
+                y1,
+                x2,
+                y2,
+                nx,
+                ny,
+                self._bond_line_width(),
+                self._bold_bond_width(),
+            )
+            items[0].setPolygon(polygon)
+        elif isinstance(items[0], QGraphicsLineItem):
+            items[0].setLine(*segments[0])
+        for item, seg in zip(items[1:], segments[1:], strict=False):
+            if isinstance(item, QGraphicsLineItem):
+                item.setLine(*seg)
+
+    def _update_bold_single_geometry(self, bond, items, a, b, bold_outward: bool) -> None:
+        bx1, by1 = a.x, a.y
+        bx2, by2 = b.x, b.y
+        ring_center = self.canvas._ring_center_for_bond(bond)
+        scale = self._bold_out_scale(bold_outward, ring_center)
+        bx1, by1, bx2, by2 = self._scale_segment(bx1, by1, bx2, by2, scale)
+        pad = self.canvas.renderer.style.bond_length_px * 0.1
+        bx1, by1, bx2, by2 = self._extend_segment(bx1, by1, bx2, by2, pad)
+        dx = bx2 - bx1
+        dy = by2 - by1
+        bx1 = bx1 + dx * 0.025
+        by1 = by1 + dy * 0.025
+        bx2 = bx2 - dx * 0.025
+        by2 = by2 - dy * 0.025
+        nx, ny = self.canvas._line_normal(bx1, by1, bx2, by2, ring_center)
+        if bold_outward:
+            nx, ny = -nx, -ny
+        if isinstance(items[0], QGraphicsPolygonItem):
+            polygon = self.strip_polygon(
+                bx1,
+                by1,
+                bx2,
+                by2,
+                nx,
+                ny,
+                self._bond_line_width(),
+                self._bold_bond_width(),
+            )
+            items[0].setPolygon(polygon)
+        elif isinstance(items[0], QGraphicsLineItem):
+            items[0].setLine(bx1, by1, bx2, by2)
+
+    def _update_bold_geometry(self, bond, items, a, b) -> None:
+        bold_outward = bond.style == "bold_out"
+        if bond.order >= 2:
+            self._update_bold_multi_geometry(bond, items, a, b, bold_outward)
+            return
+        self._update_bold_single_geometry(bond, items, a, b, bold_outward)
+
+    def _update_plain_double_geometry(self, bond, items, a, b) -> None:
+        variant = normalized_plain_double_style(bond.style, bond.order)
+        ring_center = self.canvas._ring_center_for_bond(bond)
+        if ring_center is not None and len(items) >= 2:
+            ring_center_3d = self.canvas._ring_center_3d_for_bond(bond)
+            outer_seg, inner_seg, _ = self.ring_double_segments(
+                a,
+                b,
+                ring_center,
+                bond.a,
+                bond.b,
+                center_3d=ring_center_3d,
+                style=variant,
+            )
+        else:
+            outer_seg, inner_seg, _ = self.plain_double_segments(
+                a.x,
+                a.y,
+                b.x,
+                b.y,
+                style=variant,
+                a_id=bond.a,
+                b_id=bond.b,
+            )
+        if len(items) >= 2 and isinstance(items[0], QGraphicsLineItem) and isinstance(items[1], QGraphicsLineItem):
+            items[0].setLine(*outer_seg)
+            items[1].setLine(*inner_seg)
+
+    def _update_parallel_geometry(self, bond, items, a, b) -> None:
+        segments = self.parallel_bond_segments(a.x, a.y, b.x, b.y, bond.order, bond.a, bond.b)
+        for item, seg in zip(items, segments, strict=False):
+            if isinstance(item, QGraphicsLineItem):
+                item.setLine(*seg)
+
+    def _update_single_geometry(self, bond, items, a, b) -> None:
+        t0, t1 = self.canvas._trim_line_for_labels(bond.a, bond.b, a.x, a.y, b.x, b.y)
+        x1 = a.x + (b.x - a.x) * t0
+        y1 = a.y + (b.y - a.y) * t0
+        x2 = a.x + (b.x - a.x) * t1
+        y2 = a.y + (b.y - a.y) * t1
+        if isinstance(items[0], QGraphicsLineItem):
+            items[0].setLine(x1, y1, x2, y2)
+
     def update_bond_geometry(self, bond_id: int) -> None:
         if not (0 <= bond_id < len(self.canvas.model.bonds)):
             return
@@ -894,197 +1096,23 @@ class BondRenderer:
         b = self.canvas.model.atoms.get(bond.b)
         if a is None or b is None:
             return
+
         if bond.style == "wedge":
-            polygon = self.wedge_polygon(a.x, a.y, b.x, b.y, bond.a, bond.b)
-            if isinstance(items[0], QGraphicsPolygonItem):
-                items[0].setPolygon(polygon)
-            return
-        if bond.style == "hash":
-            count = len(items)
-            segments = self.hash_segments(a.x, a.y, b.x, b.y, count, bond.a, bond.b)
-            for item, seg in zip(items, segments):
-                if isinstance(item, QGraphicsLineItem):
-                    item.setLine(*seg)
-            return
-        if bond.style == "dotted":
-            t0, t1 = self.canvas._trim_line_for_labels(bond.a, bond.b, a.x, a.y, b.x, b.y)
-            start_x = a.x + (b.x - a.x) * t0
-            start_y = a.y + (b.y - a.y) * t0
-            end_x = a.x + (b.x - a.x) * t1
-            end_y = a.y + (b.y - a.y) * t1
-            if len(items) == 1 and isinstance(items[0], QGraphicsPathItem):
-                items[0].setPath(self.dotted_bond_path(start_x, start_y, end_x, end_y, bond.a, bond.b))
-            return
-        if is_dotted_double_bond_style(bond.style, bond.order):
-            base_style = base_plain_double_style_for_dotted_variant(bond.style, bond.order)
-            ring_center = self.canvas._ring_center_for_bond(bond)
-            if ring_center is not None and len(items) >= 2:
-                ring_center_3d = self.canvas._ring_center_3d_for_bond(bond)
-                outer_seg, inner_seg, _ = self.ring_double_segments(
-                    a,
-                    b,
-                    ring_center,
-                    bond.a,
-                    bond.b,
-                    center_3d=ring_center_3d,
-                    style=base_style,
-                )
-            else:
-                outer_seg, inner_seg, _ = self.plain_double_segments(
-                    a.x,
-                    a.y,
-                    b.x,
-                    b.y,
-                    style=base_style,
-                    a_id=bond.a,
-                    b_id=bond.b,
-                )
-            if len(items) >= 2:
-                outer_dotted = base_style == DOUBLE_STYLE_OUTER
-                if outer_dotted:
-                    if isinstance(items[0], QGraphicsPathItem):
-                        items[0].setPath(self.dotted_bond_path(*outer_seg, bond.a, bond.b))
-                    if isinstance(items[1], QGraphicsLineItem):
-                        items[1].setLine(*inner_seg)
-                else:
-                    if isinstance(items[0], QGraphicsLineItem):
-                        items[0].setLine(*outer_seg)
-                    if isinstance(items[1], QGraphicsPathItem):
-                        items[1].setPath(self.dotted_bond_path(*inner_seg, bond.a, bond.b))
-            return
-
-        bold_style = bond.style in {"bold", "bold_in", "bold_out"}
-        bold_outward = bond.style == "bold_out"
-        if bold_style:
-            if bond.order >= 2:
-                ring_center = self.canvas._ring_center_for_bond(bond) if bond.order == 2 else None
-                if bond.order == 2 and ring_center is not None and len(items) >= 2:
-                    ring_center_3d = self.canvas._ring_center_3d_for_bond(bond)
-                    outer_seg, inner_seg, (nx, ny) = self.ring_double_segments(
-                        a, b, ring_center, bond.a, bond.b, center_3d=ring_center_3d
-                    )
-                    use_nx, use_ny = (nx, ny) if not bold_outward else (-nx, -ny)
-                    outer_item = items[0]
-                    if isinstance(outer_item, QGraphicsPolygonItem):
-                        polygon = self.strip_polygon(
-                            *outer_seg,
-                            use_nx,
-                            use_ny,
-                            self._bond_line_width(),
-                            self._bold_bond_width(),
-                        )
-                        outer_item.setPolygon(polygon)
-                    elif isinstance(outer_item, QGraphicsLineItem):
-                        outer_item.setLine(*outer_seg)
-                    inner_item = items[1]
-                    if isinstance(inner_item, QGraphicsLineItem):
-                        inner_item.setLine(*inner_seg)
-                    return
-                segments = self.parallel_bond_segments(
-                    a.x, a.y, b.x, b.y, bond.order, bond.a, bond.b
-                )
-                if not segments:
-                    return
-                if isinstance(items[0], QGraphicsPolygonItem):
-                    x1, y1, x2, y2 = segments[0]
-                    nx, ny = self.canvas._line_normal(x1, y1, x2, y2, None)
-                    if bold_outward:
-                        nx, ny = -nx, -ny
-                    polygon = self.strip_polygon(
-                        x1,
-                        y1,
-                        x2,
-                        y2,
-                        nx,
-                        ny,
-                        self._bond_line_width(),
-                        self._bold_bond_width(),
-                    )
-                    items[0].setPolygon(polygon)
-                elif isinstance(items[0], QGraphicsLineItem):
-                    items[0].setLine(*segments[0])
-                for item, seg in zip(items[1:], segments[1:]):
-                    if isinstance(item, QGraphicsLineItem):
-                        item.setLine(*seg)
-                return
-            bx1, by1 = a.x, a.y
-            bx2, by2 = b.x, b.y
-            ring_center = self.canvas._ring_center_for_bond(bond)
-            scale = self._bold_out_scale(bold_outward, ring_center)
-            bx1, by1, bx2, by2 = self._scale_segment(bx1, by1, bx2, by2, scale)
-            pad = self.canvas.renderer.style.bond_length_px * 0.1
-            bx1, by1, bx2, by2 = self._extend_segment(bx1, by1, bx2, by2, pad)
-            dx = bx2 - bx1
-            dy = by2 - by1
-            bx1 = bx1 + dx * 0.025
-            by1 = by1 + dy * 0.025
-            bx2 = bx2 - dx * 0.025
-            by2 = by2 - dy * 0.025
-            nx, ny = self.canvas._line_normal(bx1, by1, bx2, by2, ring_center)
-            if bold_outward:
-                nx, ny = -nx, -ny
-            if isinstance(items[0], QGraphicsPolygonItem):
-                polygon = self.strip_polygon(
-                    bx1,
-                    by1,
-                    bx2,
-                    by2,
-                    nx,
-                    ny,
-                    self._bond_line_width(),
-                    self._bold_bond_width(),
-                )
-                items[0].setPolygon(polygon)
-            elif isinstance(items[0], QGraphicsLineItem):
-                items[0].setLine(bx1, by1, bx2, by2)
-            return
-
-        if is_plain_double_bond_style(bond.style, bond.order):
-            variant = normalized_plain_double_style(bond.style, bond.order)
-            ring_center = self.canvas._ring_center_for_bond(bond)
-            if ring_center is not None and len(items) >= 2:
-                ring_center_3d = self.canvas._ring_center_3d_for_bond(bond)
-                outer_seg, inner_seg, _ = self.ring_double_segments(
-                    a,
-                    b,
-                    ring_center,
-                    bond.a,
-                    bond.b,
-                    center_3d=ring_center_3d,
-                    style=variant,
-                )
-                if isinstance(items[0], QGraphicsLineItem):
-                    items[0].setLine(*outer_seg)
-                if isinstance(items[1], QGraphicsLineItem):
-                    items[1].setLine(*inner_seg)
-                return
-            outer_seg, inner_seg, _ = self.plain_double_segments(
-                a.x,
-                a.y,
-                b.x,
-                b.y,
-                style=variant,
-                a_id=bond.a,
-                b_id=bond.b,
-            )
-            if len(items) >= 2 and isinstance(items[0], QGraphicsLineItem) and isinstance(items[1], QGraphicsLineItem):
-                items[0].setLine(*outer_seg)
-                items[1].setLine(*inner_seg)
-            return
-        if bond.order >= 2:
-            segments = self.parallel_bond_segments(a.x, a.y, b.x, b.y, bond.order, bond.a, bond.b)
-            for item, seg in zip(items, segments):
-                if isinstance(item, QGraphicsLineItem):
-                    item.setLine(*seg)
-            return
-
-        t0, t1 = self.canvas._trim_line_for_labels(bond.a, bond.b, a.x, a.y, b.x, b.y)
-        x1 = a.x + (b.x - a.x) * t0
-        y1 = a.y + (b.y - a.y) * t0
-        x2 = a.x + (b.x - a.x) * t1
-        y2 = a.y + (b.y - a.y) * t1
-        if isinstance(items[0], QGraphicsLineItem):
-            items[0].setLine(x1, y1, x2, y2)
+            self._update_wedge_geometry(bond, items, a, b)
+        elif bond.style == "hash":
+            self._update_hash_geometry(bond, items, a, b)
+        elif bond.style == "dotted":
+            self._update_dotted_geometry(bond, items, a, b)
+        elif is_dotted_double_bond_style(bond.style, bond.order):
+            self._update_dotted_double_geometry(bond, items, a, b)
+        elif bond.style in {"bold", "bold_in", "bold_out"}:
+            self._update_bold_geometry(bond, items, a, b)
+        elif is_plain_double_bond_style(bond.style, bond.order):
+            self._update_plain_double_geometry(bond, items, a, b)
+        elif bond.order >= 2:
+            self._update_parallel_geometry(bond, items, a, b)
+        else:
+            self._update_single_geometry(bond, items, a, b)
 
     def add_bond_graphics(self, bond_id: int) -> None:
         bond = self.canvas.model.bonds[bond_id]

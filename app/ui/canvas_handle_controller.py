@@ -4,8 +4,14 @@ from PyQt6.QtCore import QPointF
 
 from ui.handle_interaction_logic import (
     clamp_curved_midpoint as clamp_curved_midpoint_helper,
+)
+from ui.handle_interaction_logic import (
     control_from_midpoint as control_from_midpoint_helper,
+)
+from ui.handle_interaction_logic import (
     curved_midpoint as curved_midpoint_helper,
+)
+from ui.handle_interaction_logic import (
     default_curved_control as default_curved_control_helper,
 )
 from ui.handle_mutation_service import handle_mutation_service_for

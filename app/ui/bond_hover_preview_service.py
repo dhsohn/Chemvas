@@ -6,6 +6,7 @@ from PyQt6.QtCore import QPointF
 
 if TYPE_CHECKING:
     from core.model import Bond
+
     from ui.canvas_view import CanvasView
 
 

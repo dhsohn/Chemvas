@@ -124,7 +124,7 @@ def _update_smiles_preview_geometry(
         items = bond_items.get(bond_id)
         if not items or len(items) != len(segments):
             return False
-        for item, segment in zip(items, segments):
+        for item, segment in zip(items, segments, strict=False):
             if not isinstance(item, QGraphicsLineItem):
                 return False
             item.setLine(*segment)
@@ -172,9 +172,9 @@ def _update_template_preview_geometry(
 ) -> bool:
     if len(lines) != len(geometry.line_segments) or len(dots) != len(geometry.dot_rects):
         return False
-    for line, segment in zip(lines, geometry.line_segments):
+    for line, segment in zip(lines, geometry.line_segments, strict=False):
         line.setLine(*segment)
-    for dot, rect in zip(dots, geometry.dot_rects):
+    for dot, rect in zip(dots, geometry.dot_rects, strict=False):
         dot.setRect(*rect)
     return True
 

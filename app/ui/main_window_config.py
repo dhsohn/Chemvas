@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 ARROW_MENU_SPECS: list[tuple[str, str]] = [
     ("Reaction", "reaction"),
     ("Equilibrium", "equilibrium"),

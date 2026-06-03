@@ -12,7 +12,16 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import Sequence
 
-from PyQt6.QtCore import QByteArray, QBuffer, QIODevice, QMarginsF, QRectF, QSize, QSizeF, Qt
+from PyQt6.QtCore import (
+    QBuffer,
+    QByteArray,
+    QIODevice,
+    QMarginsF,
+    QRectF,
+    QSize,
+    QSizeF,
+    Qt,
+)
 from PyQt6.QtGui import QImage, QPageSize, QPainter, QPdfWriter
 from PyQt6.QtSvg import QSvgGenerator
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene

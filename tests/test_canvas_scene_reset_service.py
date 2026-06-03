@@ -5,7 +5,10 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from core.model import MoleculeModel
-from ui.canvas_scene_reset_service import CanvasSceneResetService, canvas_scene_reset_service_for
+from ui.canvas_scene_reset_service import (
+    CanvasSceneResetService,
+    canvas_scene_reset_service_for,
+)
 from ui.insert_mode_logic import clear_insert_session
 
 

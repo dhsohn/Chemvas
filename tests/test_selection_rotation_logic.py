@@ -1,10 +1,12 @@
 import math
 import unittest
 
-from PyQt6.QtCore import QPointF
-
 from core.model import Atom, Bond
-from ui.selection_rotation_logic import rotated_atom_positions, selected_rotation_atom_ids
+from PyQt6.QtCore import QPointF
+from ui.selection_rotation_logic import (
+    rotated_atom_positions,
+    selected_rotation_atom_ids,
+)
 
 
 class SelectionRotationLogicTest(unittest.TestCase):

@@ -5,9 +5,9 @@ from core.template_geometry import (
     cyclohexane_boat_points,
     cyclohexane_chair_points,
     place_template_on_bond,
-    regular_ring_radius,
     regular_ring_points_for_atom,
     regular_ring_points_for_bond,
+    regular_ring_radius,
     ring_points,
     scale_points,
     scale_points_to_bond_length,
@@ -26,7 +26,7 @@ class TemplateGeometryTest(unittest.TestCase):
         places: int = 6,
     ) -> None:
         self.assertEqual(len(actual), len(expected))
-        for actual_point, expected_point in zip(actual, expected):
+        for actual_point, expected_point in zip(actual, expected, strict=False):
             self.assertAlmostEqual(actual_point[0], expected_point[0], places=places)
             self.assertAlmostEqual(actual_point[1], expected_point[1], places=places)
 

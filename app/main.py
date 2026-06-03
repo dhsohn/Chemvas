@@ -4,7 +4,6 @@ import threading
 from contextlib import contextmanager
 from typing import Iterator
 
-
 IGNORED_STDERR_SUBSTRINGS = (
     "TSM AdjustCapsLockLEDForKeyTransitionHandling",
     "error messaging the mach port for IMKCFRunLoopWakeUpReliable",

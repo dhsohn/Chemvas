@@ -1,10 +1,9 @@
 import math
 import unittest
 
-from PyQt6.QtCore import QPointF
-
 from core.history import SetAtomPositionsCommand
 from core.model import Atom, Bond, MoleculeModel
+from PyQt6.QtCore import QPointF
 from ui.selection_rotation_controller import SelectionRotationController
 
 

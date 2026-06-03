@@ -2,7 +2,6 @@ import math
 import unittest
 
 from PyQt6.QtCore import QPointF, QRectF
-
 from ui.canvas_geometry_logic import (
     line_rect_clip_t,
     line_rect_intersections,

@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from core.document_state import serialize_model_state, serialize_settings
+
 from ui.scene_item_access import (
     restore_arrow_from_state,
     restore_mark_from_state,

@@ -13,8 +13,7 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from core.model import Atom
-    from core.model import Bond
+    from core.model import Atom, Bond
     from ui.canvas_view import CanvasView
 
 

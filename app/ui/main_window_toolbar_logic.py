@@ -4,7 +4,6 @@ from collections.abc import Callable
 
 from ui.main_window_config import TEMPLATE_ENTRY_SPECS
 
-
 BOND_STYLE_BY_LABEL: dict[str, tuple[str, int]] = {
     "Single": ("single", 1),
     "Double": ("double", 2),

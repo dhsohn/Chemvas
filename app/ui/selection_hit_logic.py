@@ -4,7 +4,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
 
-
 StructureKind = Literal["atom", "bond", "ring", "other"]
 Point2D = tuple[float, float]
 

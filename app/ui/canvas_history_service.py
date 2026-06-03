@@ -3,7 +3,12 @@ from __future__ import annotations
 from typing import Any
 
 from core.history import HistoryCommand
-from ui.canvas_history_state import CanvasHistoryState, CanvasHistoryStateAdapter, history_state_for
+
+from ui.canvas_history_state import (
+    CanvasHistoryState,
+    CanvasHistoryStateAdapter,
+    history_state_for,
+)
 
 
 class CanvasHistoryService:

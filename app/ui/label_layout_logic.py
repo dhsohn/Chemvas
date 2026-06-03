@@ -152,7 +152,7 @@ def place_runs(
 
     placed: list[PlacedRun] = []
     x = 0.0
-    for run, width, size, offset in zip(runs, widths, sizes, offsets):
+    for run, width, size, offset in zip(runs, widths, sizes, offsets, strict=False):
         placed.append(
             PlacedRun(
                 text=run.text,

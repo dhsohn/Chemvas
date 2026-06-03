@@ -12,7 +12,6 @@ from ui.bond_style_logic import (
 )
 from ui.canvas_insert_state import insert_state_for
 
-
 DOUBLE_BOND_CONTEXT_STYLES = (
     ("Inward", DOUBLE_STYLE_DEFAULT),
     ("Centered", DOUBLE_STYLE_CENTER),

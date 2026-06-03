@@ -13,7 +13,11 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.main_window_config import ARROW_MENU_SPECS, ARROW_PRESET_SPECS, TEMPLATE_ENTRY_SPECS
+from ui.main_window_config import (
+    ARROW_MENU_SPECS,
+    ARROW_PRESET_SPECS,
+    TEMPLATE_ENTRY_SPECS,
+)
 from ui.main_window_theme import TOOLBAR_BUTTON_STYLE
 from ui.main_window_toolbar_logic import BOND_STYLE_BY_LABEL
 

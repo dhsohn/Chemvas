@@ -4,7 +4,6 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
-
 Point2D = tuple[float, float]
 TemplateRingStyle = Literal["regular", "benzene", "chair", "boat"]
 TemplateGenerator = Literal[

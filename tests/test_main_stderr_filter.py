@@ -1,8 +1,8 @@
 import os
 import runpy
+import sys
 import types
 import unittest
-import sys
 from contextlib import contextmanager
 from unittest import mock
 

@@ -11,6 +11,7 @@ from core.history import (
     DeleteBondCommand,
     HistoryCommand,
 )
+
 from ui.canvas_mark_registry import mark_registry_for
 from ui.history_commands import DeleteSceneItemsCommand
 

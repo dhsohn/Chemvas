@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from typing import Callable, Mapping, Sequence
 
-from core.history import CompositeCommand, DeleteAtomsCommand, DeleteBondCommand, HistoryCommand
+from core.history import (
+    CompositeCommand,
+    DeleteAtomsCommand,
+    DeleteBondCommand,
+    HistoryCommand,
+)
+
 from ui.bond_style_logic import cycle_plain_bond_style
 from ui.history_commands import DeleteSceneItemsCommand
 

@@ -47,7 +47,7 @@ def export_xyz_in_thread(
     jobs = getattr(owner, "_rdkit_export_jobs", None)
     if jobs is None:
         jobs = []
-        setattr(owner, "_rdkit_export_jobs", jobs)
+        owner._rdkit_export_jobs = jobs
 
     thread = QThread(owner)
     worker = XYZExportWorker(rdkit_adapter, model, atom_annotations, path)

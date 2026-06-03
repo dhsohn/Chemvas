@@ -1,9 +1,8 @@
 import unittest
 from unittest import mock
 
-from PyQt6.QtCore import QPointF
-
 from core.model import Atom, Bond
+from PyQt6.QtCore import QPointF
 from ui.structure_benzene_logic import plan_benzene_ring_points
 
 

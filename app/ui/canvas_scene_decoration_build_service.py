@@ -7,7 +7,12 @@ from PyQt6.QtGui import QBrush, QColor, QFont, QPainterPath, QPainterPathStroker
 from PyQt6.QtWidgets import QGraphicsEllipseItem, QGraphicsPathItem, QGraphicsTextItem
 
 from ui.canvas_arrow_build_service import CanvasArrowBuildService
-from ui.graphics_items import AtomDotItem, AtomLabelItem, NoSelectLineItem, NoSelectPathItem
+from ui.graphics_items import (
+    AtomDotItem,
+    AtomLabelItem,
+    NoSelectLineItem,
+    NoSelectPathItem,
+)
 
 
 class CanvasSceneDecorationBuildService:

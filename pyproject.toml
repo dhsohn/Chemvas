@@ -16,6 +16,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "coverage[toml]>=7",
+    "mypy>=1.19",
     "pytest>=8",
     "ruff>=0.8",
 ]
@@ -44,7 +45,16 @@ skip_covered = true
 target-version = "py313"
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F"]
+select = ["E4", "E7", "E9", "F", "I", "B", "C901"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 30
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.13"
+mypy_path = "app"
+files = ["app/core"]
+warn_unused_ignores = true

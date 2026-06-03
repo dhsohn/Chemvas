@@ -18,8 +18,17 @@ if QApplication is not None:
     from ui.canvas_insert_state import CanvasInsertState
     from ui.canvas_note_controller import CanvasNoteController
     from ui.canvas_rotation_preview_controller import CanvasRotationPreviewController
-    from ui.canvas_view import CanvasView, NoteItem, _rotation_preview_controller_for, _selection_controller_for
-    from ui.history_commands import AddSceneItemsCommand, DeleteSceneItemsCommand, UpdateSceneItemCommand
+    from ui.canvas_view import (
+        CanvasView,
+        NoteItem,
+        _rotation_preview_controller_for,
+        _selection_controller_for,
+    )
+    from ui.history_commands import (
+        AddSceneItemsCommand,
+        DeleteSceneItemsCommand,
+        UpdateSceneItemCommand,
+    )
     from ui.selection_controller import SelectionController
 
 

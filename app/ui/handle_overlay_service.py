@@ -6,7 +6,11 @@ from PyQt6.QtCore import QPointF
 
 from ui.handle_interaction_logic import (
     clear_handle_items as clear_handle_items_helper,
+)
+from ui.handle_interaction_logic import (
     create_handle_item as create_handle_item_helper,
+)
+from ui.handle_interaction_logic import (
     orbital_handle_positions as orbital_handle_positions_helper,
 )
 

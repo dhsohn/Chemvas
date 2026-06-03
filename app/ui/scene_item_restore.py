@@ -5,11 +5,19 @@ from typing import Any
 
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor, QPen, QPolygonF
-from PyQt6.QtWidgets import QGraphicsItemGroup, QGraphicsPathItem, QGraphicsPolygonItem, QGraphicsTextItem
+from PyQt6.QtWidgets import (
+    QGraphicsItemGroup,
+    QGraphicsPathItem,
+    QGraphicsPolygonItem,
+    QGraphicsTextItem,
+)
 
 from ui.graphics_items import NoSelectPolygonItem
-from ui.scene_item_state import ARROW_KINDS, mark_center_from_state, ts_bracket_rect_from_state
-
+from ui.scene_item_state import (
+    ARROW_KINDS,
+    mark_center_from_state,
+    ts_bracket_rect_from_state,
+)
 
 RingFillBrushGetter = Callable[[], Any]
 NoteItemFactory = Callable[[], QGraphicsTextItem]

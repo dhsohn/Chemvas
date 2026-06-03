@@ -12,7 +12,11 @@ if QApplication is not None:
     from core.history import CompositeCommand, DeleteAtomsCommand, DeleteBondCommand
     from core.model import Atom, Bond, MoleculeModel
     from ui.history_commands import DeleteSceneItemsCommand
-    from ui.scene_delete_logic import build_delete_selection_plan, classify_delete_selection
+    from ui.scene_delete_logic import (
+        build_delete_selection_plan,
+        classify_delete_selection,
+    )
+
     from tests.test_scene_ops_controller import (
         SceneOpsController,
         _FakeCanvas,

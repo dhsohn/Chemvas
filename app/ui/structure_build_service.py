@@ -9,6 +9,7 @@ from ui.atom_label_access import add_or_update_atom_label
 from ui.bond_style_logic import style_for_existing_bond_overlay
 from ui.scene_item_access import attach_scene_item
 from ui.structure_benzene_logic import plan_benzene_ring_points
+from ui.structure_geometry_logic import compute_free_benzene_ring_points
 from ui.structure_growth_logic import (
     alternating_ring_bond_specs,
     crown_ether_elements,
@@ -17,7 +18,6 @@ from ui.structure_growth_logic import (
     other_atom_id_from_bond_result,
     resolve_bond_placement_context,
 )
-from ui.structure_geometry_logic import compute_free_benzene_ring_points
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
@@ -559,7 +559,7 @@ class StructureBuildService:
             self.canvas.add_bond(atom_ids[i], atom_ids[(i + 1) % len(atom_ids)])
         for bond_id in range(bonds_start, len(self.canvas.model.bonds)):
             self.canvas._add_bond_graphics(bond_id)
-        for atom_id, element in zip(atom_ids, elements or ["C"] * len(atom_ids)):
+        for atom_id, element in zip(atom_ids, elements or ["C"] * len(atom_ids), strict=False):
             if element != "C":
                 atom = self.canvas.model.atoms[atom_id]
                 add_or_update_atom_label(
@@ -582,14 +582,14 @@ class StructureBuildService:
 
     def add_linear_chain(self, points: list[QPointF], elements: list[str], bonds: list[int]):
         atom_ids = []
-        for point, element in zip(points, elements):
+        for point, element in zip(points, elements, strict=False):
             atom_ids.append(self.canvas.add_atom(element, point.x(), point.y()))
         bonds_start = len(self.canvas.model.bonds)
         for i, order in enumerate(bonds):
             self.canvas.add_bond(atom_ids[i], atom_ids[i + 1], order)
         for bond_id in range(bonds_start, len(self.canvas.model.bonds)):
             self.canvas._add_bond_graphics(bond_id)
-        for atom_id, element in zip(atom_ids, elements):
+        for atom_id, element in zip(atom_ids, elements, strict=False):
             if element != "C":
                 add_or_update_atom_label(self.canvas, atom_id, element, record=False)
         return atom_ids

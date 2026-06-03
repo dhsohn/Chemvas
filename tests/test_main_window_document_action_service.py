@@ -6,14 +6,25 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtWidgets import QApplication, QComboBox, QDialog, QDoubleSpinBox, QPushButton, QToolButton
+    from PyQt6.QtWidgets import (
+        QApplication,
+        QComboBox,
+        QDialog,
+        QDoubleSpinBox,
+        QPushButton,
+        QToolButton,
+    )
 except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
     from ui.main_window import MainWindow
     from ui.main_window_document_action_service import MainWindowDocumentActionService
-    from ui.main_window_path_logic import resolve_load_path, resolve_save_as_path, resolve_save_path
+    from ui.main_window_path_logic import (
+        resolve_load_path,
+        resolve_save_as_path,
+        resolve_save_path,
+    )
 
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for main window document action tests")
@@ -141,6 +152,126 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         )
         self.assertEqual(self.window.statusBar().currentMessage(), "Exported: /tmp/figure.png")
         message_box.warning.assert_not_called()
+
+    def test_export_figure_cancelled_options_skips_file_dialog(self) -> None:
+        file_dialog = mock.Mock()
+        message_box = mock.Mock()
+        self.window.canvas.export_figure = mock.Mock()
+
+        with mock.patch.object(self.service, "_prompt_export_options", return_value=None):
+            self.service.export_figure(self.window, file_dialog=file_dialog, message_box=message_box)
+
+        file_dialog.getSaveFileName.assert_not_called()
+        self.window.canvas.export_figure.assert_not_called()
+        message_box.warning.assert_not_called()
+
+    def test_export_figure_cancelled_path_skips_export(self) -> None:
+        file_dialog = mock.Mock()
+        file_dialog.getSaveFileName.return_value = ("", "")
+        message_box = mock.Mock()
+        self.window._current_file_path = "/tmp/current.chemvas"
+        self.window.canvas.export_figure = mock.Mock()
+        options = {
+            "fmt": "pdf",
+            "sizing": "bond",
+            "scope": "sheet",
+            "dpi": 300,
+            "background": "transparent",
+        }
+
+        with mock.patch.object(self.service, "_prompt_export_options", return_value=options):
+            self.service.export_figure(self.window, file_dialog=file_dialog, message_box=message_box)
+
+        file_dialog.getSaveFileName.assert_called_once()
+        self.assertEqual(file_dialog.getSaveFileName.call_args.args[2], "/tmp/current.pdf")
+        self.window.canvas.export_figure.assert_not_called()
+        message_box.warning.assert_not_called()
+
+    def test_export_figure_failure_warns_and_keeps_previous_status(self) -> None:
+        file_dialog = mock.Mock()
+        file_dialog.getSaveFileName.return_value = ("/tmp/figure", "")
+        message_box = mock.Mock()
+        self.window.statusBar().showMessage("Before export")
+        self.window.canvas.export_figure = mock.Mock(side_effect=RuntimeError("render failed"))
+        options = {
+            "fmt": "svg",
+            "sizing": "screen",
+            "scope": "sheet",
+            "dpi": 300,
+            "background": "transparent",
+        }
+
+        with mock.patch.object(self.service, "_prompt_export_options", return_value=options):
+            self.service.export_figure(self.window, file_dialog=file_dialog, message_box=message_box)
+
+        self.window.canvas.export_figure.assert_called_once_with(
+            "/tmp/figure.svg",
+            fmt="svg",
+            scope="sheet",
+            dpi=300,
+            background="transparent",
+            sizing="screen",
+        )
+        message_box.warning.assert_called_once_with(
+            self.window,
+            "Export Error",
+            "Failed to export figure:\nrender failed",
+        )
+        self.assertEqual(self.window.statusBar().currentMessage(), "Before export")
+
+    def test_prompt_export_options_returns_selected_values_and_syncs_dpi(self) -> None:
+        def drive_dialog(dialog: QDialog):
+            self.assertEqual(dialog.windowTitle(), "Export Figure")
+
+            format_combo = dialog.findChild(QComboBox, "exportFormatCombo")
+            size_combo = dialog.findChild(QComboBox, "exportSizeCombo")
+            scope_combo = dialog.findChild(QComboBox, "exportScopeCombo")
+            background_combo = dialog.findChild(QComboBox, "exportBackgroundCombo")
+            dpi_combo = dialog.findChild(QComboBox, "exportDpiCombo")
+            export_button = next(button for button in dialog.findChildren(QPushButton) if button.text() == "Export")
+            cancel_button = next(button for button in dialog.findChildren(QPushButton) if button.text() == "Cancel")
+
+            self.assertIsNotNone(format_combo)
+            self.assertIsNotNone(size_combo)
+            self.assertIsNotNone(scope_combo)
+            self.assertIsNotNone(background_combo)
+            self.assertIsNotNone(dpi_combo)
+            self.assertFalse(dpi_combo.isEnabled())
+
+            format_combo.setCurrentIndex(format_combo.findData("png"))
+            self.assertTrue(dpi_combo.isEnabled())
+            size_combo.setCurrentIndex(size_combo.findData("col2"))
+            scope_combo.setCurrentIndex(scope_combo.findData("selection"))
+            background_combo.setCurrentIndex(background_combo.findData("white"))
+            dpi_combo.setCurrentIndex(dpi_combo.findData(600))
+
+            self.assertEqual(export_button.text(), "Export")
+            self.assertEqual(cancel_button.text(), "Cancel")
+            export_button.click()
+            return QDialog.DialogCode.Accepted
+
+        with mock.patch("ui.main_window_document_action_service.QDialog.exec", new=drive_dialog):
+            options = self.service._prompt_export_options(self.window)
+
+        self.assertEqual(
+            options,
+            {
+                "fmt": "png",
+                "sizing": "col2",
+                "scope": "selection",
+                "dpi": 600,
+                "background": "white",
+            },
+        )
+
+    def test_prompt_export_options_cancel_returns_none(self) -> None:
+        def drive_dialog(dialog: QDialog):
+            self.assertEqual(dialog.windowTitle(), "Export Figure")
+            self.assertIsNotNone(dialog.findChild(QComboBox, "exportFormatCombo"))
+            return QDialog.DialogCode.Rejected
+
+        with mock.patch("ui.main_window_document_action_service.QDialog.exec", new=drive_dialog):
+            self.assertIsNone(self.service._prompt_export_options(self.window))
 
     def test_load_canvas_dispatches_single_sheet_and_workbook_states(self) -> None:
         file_dialog = mock.Mock()

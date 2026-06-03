@@ -16,7 +16,9 @@ except ModuleNotFoundError:
 if QApplication is not None:
     from core.model import Atom
     from ui.canvas_mark_scene_service import CanvasMarkSceneService
-    from ui.canvas_scene_decoration_build_service import CanvasSceneDecorationBuildService
+    from ui.canvas_scene_decoration_build_service import (
+        CanvasSceneDecorationBuildService,
+    )
     from ui.canvas_view import CanvasView
     from ui.graphics_items import AtomDotItem, AtomLabelItem
 

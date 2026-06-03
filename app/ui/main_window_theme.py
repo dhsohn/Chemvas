@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 # Light palette with a teal accent. Kept as a single source of truth so the
 # whole app stays visually consistent; a future dark theme can swap these values.
 # Neutrals stay warm-gray; the accent ramp carries every "active/primary" cue

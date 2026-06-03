@@ -478,7 +478,7 @@ class RDKitConversionHelper:
         Chem, AllChem = rdkit
         rw = Chem.RWMol()
         adjacency = self._build_model_adjacency(model)
-        valid_bonds: list[tuple[int, object]] = []
+        valid_bonds: list[tuple[int, Bond]] = []
         for bond_id, bond in enumerate(model.bonds):
             if bond is None or bond.a == bond.b:
                 continue

@@ -1,10 +1,10 @@
 import unittest
 
 from ui.bond_style_logic import (
-    DOUBLE_STYLE_DEFAULT,
-    DOUBLE_STYLE_OUTER,
     DOTTED_DOUBLE_STYLE_DEFAULT,
     DOTTED_DOUBLE_STYLE_OUTER,
+    DOUBLE_STYLE_DEFAULT,
+    DOUBLE_STYLE_OUTER,
     base_plain_double_style_for_dotted_variant,
     cycle_plain_bond_style,
     dotted_double_variant_for_style,

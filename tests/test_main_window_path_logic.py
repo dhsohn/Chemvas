@@ -1,6 +1,10 @@
 import unittest
 
-from ui.main_window_path_logic import resolve_load_path, resolve_save_as_path, resolve_save_path
+from ui.main_window_path_logic import (
+    resolve_load_path,
+    resolve_save_as_path,
+    resolve_save_path,
+)
 
 
 class MainWindowPathLogicTest(unittest.TestCase):

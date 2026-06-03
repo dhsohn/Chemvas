@@ -41,6 +41,9 @@ jobs:
       - name: Lint
         run: python -m ruff check .
 
+      - name: Type check
+        run: python -m mypy
+
       - name: Run tests
         run: python -m coverage run -m pytest
 

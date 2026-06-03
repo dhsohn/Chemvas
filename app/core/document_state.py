@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import math
 from collections.abc import Collection, Mapping
+from typing import Any, TypeGuard, cast
 
 from core.model import Atom, Bond, MoleculeModel
-
 
 CHEMVAS_FILE_TYPE = "chemvas"
 SINGLE_SHEET_FILE_VERSION = 1
@@ -102,16 +102,16 @@ def serialize_model_state(
 
 
 def deserialize_model_state(model_state: Mapping[str, object]) -> MoleculeModel:
-    atoms_state = model_state["atoms"]
-    bonds_state = model_state["bonds"]
+    atoms_state = cast(Mapping[object, Mapping[str, object]], model_state["atoms"])
+    bonds_state = cast(list[Mapping[str, object] | None], model_state["bonds"])
     model = MoleculeModel()
     model.atoms = {
-        int(atom_id): Atom(
-            element=atom_data["element"],
-            x=float(atom_data["x"]),
-            y=float(atom_data["y"]),
-            color=atom_data["color"],
-            explicit_label=atom_data["explicit_label"],
+        int(cast(Any, atom_id)): Atom(
+            element=cast(str, atom_data["element"]),
+            x=float(cast(Any, atom_data["x"])),
+            y=float(cast(Any, atom_data["y"])),
+            color=cast(str, atom_data["color"]),
+            explicit_label=cast(bool, atom_data["explicit_label"]),
         )
         for atom_id, atom_data in atoms_state.items()
     }
@@ -122,15 +122,15 @@ def deserialize_model_state(model_state: Mapping[str, object]) -> MoleculeModel:
             continue
         bonds.append(
             Bond(
-                a=int(bond_data["a"]),
-                b=int(bond_data["b"]),
-                order=int(bond_data["order"]),
-                style=bond_data["style"],
-                color=bond_data["color"],
+                a=int(cast(Any, bond_data["a"])),
+                b=int(cast(Any, bond_data["b"])),
+                order=int(cast(Any, bond_data["order"])),
+                style=cast(str, bond_data["style"]),
+                color=cast(str, bond_data["color"]),
             )
         )
     model.bonds = bonds
-    model.next_atom_id = int(model_state["next_atom_id"])
+    model.next_atom_id = int(cast(Any, model_state["next_atom_id"]))
     return model
 
 
@@ -363,12 +363,14 @@ def _validated_id(value: object) -> int:
     return parsed
 
 
-def _is_int(value: object) -> bool:
+def _is_int(value: object) -> TypeGuard[int]:
     return type(value) is int
 
 
 def _is_number(value: object) -> bool:
-    return type(value) in (int, float) and math.isfinite(value)
+    if type(value) not in (int, float):
+        return False
+    return math.isfinite(cast(float, value))
 
 
 def _is_hex_color(value: object) -> bool:

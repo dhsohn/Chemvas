@@ -12,12 +12,13 @@ except ModuleNotFoundError:
 if QApplication is not None:
     from core.history import SetAtomPositionsCommand
     from ui.history_commands import UpdateSceneItemCommand
-    from tests.test_scene_ops_controller import _make_rect_item
     from ui.scene_transform_apply_logic import (
         apply_component_flip_transform,
         apply_standalone_flip_transform,
     )
     from ui.scene_transform_logic import FlipAtomPositionMaps
+
+    from tests.test_scene_ops_controller import _make_rect_item
 
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for scene transform apply logic tests")

@@ -49,8 +49,7 @@ class RDKitAdapter:
     def _load_rdkit(self):
         if self._rdkit is None:
             try:
-                from rdkit import Chem
-                from rdkit import RDLogger
+                from rdkit import Chem, RDLogger
                 from rdkit.Chem import AllChem
             except Exception:
                 self.last_error = "RDKit is not available in this environment."

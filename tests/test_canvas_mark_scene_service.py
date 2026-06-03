@@ -13,7 +13,10 @@ except ModuleNotFoundError:
 
 if QPointF is not None:
     from core.model import Atom
-    from ui.canvas_mark_scene_service import CanvasMarkSceneService, canvas_mark_scene_service_for
+    from ui.canvas_mark_scene_service import (
+        CanvasMarkSceneService,
+        canvas_mark_scene_service_for,
+    )
 
 
 @unittest.skipUnless(QPointF is not None, "PyQt6 is required for canvas mark scene service tests")

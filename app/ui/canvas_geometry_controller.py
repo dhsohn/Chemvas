@@ -8,8 +8,14 @@ from PyQt6.QtWidgets import QGraphicsPolygonItem, QGraphicsTextItem
 
 from ui.canvas_geometry_logic import (
     line_rect_clip_t as line_rect_clip_t_helper,
+)
+from ui.canvas_geometry_logic import (
     line_rect_intersections as line_rect_intersections_helper,
+)
+from ui.canvas_geometry_logic import (
     ray_rect_exit_distance as ray_rect_exit_distance_helper,
+)
+from ui.canvas_geometry_logic import (
     segment_intersection_t as segment_intersection_t_helper,
 )
 

@@ -14,7 +14,12 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from core.history import CompositeCommand, SetAtomPositionsCommand, SetRingPolygonsCommand, UpdateBondLengthCommand
+    from core.history import (
+        CompositeCommand,
+        SetAtomPositionsCommand,
+        SetRingPolygonsCommand,
+        UpdateBondLengthCommand,
+    )
     from core.model import Atom, Bond
     from ui.canvas_view import CanvasView
 

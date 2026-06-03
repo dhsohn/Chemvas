@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 from core.model import MoleculeModel
 
@@ -85,7 +85,7 @@ class RDKitImportHelper:
             from rdkit.Chem import Descriptors, rdMolDescriptors
 
             formula = rdMolDescriptors.CalcMolFormula(mol_h)
-            mw = Descriptors.MolWt(mol_h)
+            mw = cast(Any, Descriptors).MolWt(mol_h)
             smiles = Chem.MolToSmiles(mol, canonical=True)
             return formula, mw, smiles
         except Exception:

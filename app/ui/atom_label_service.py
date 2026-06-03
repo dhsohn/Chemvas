@@ -2,9 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QPen
-
 from core.history import (
     CompositeCommand,
     DeleteAtomsCommand,
@@ -12,6 +9,9 @@ from core.history import (
     UpdateBondCommand,
 )
 from core.model import Bond
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor, QPen
+
 from ui.bond_style_logic import STANDARD_BOND_STYLES
 from ui.canvas_history_service import history_service_for
 from ui.graphics_items import AtomDotItem, AtomLabelItem

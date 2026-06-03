@@ -5,7 +5,11 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
 
-from ui.canvas_graph_state import CanvasGraphState, CanvasGraphStateAdapter, graph_state_for
+from ui.canvas_graph_state import (
+    CanvasGraphState,
+    CanvasGraphStateAdapter,
+    graph_state_for,
+)
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView

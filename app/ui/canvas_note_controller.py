@@ -4,9 +4,13 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QBrush, QColor, QFont, QPen, QTextBlockFormat, QTextCursor
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsRectItem, QGraphicsTextItem
 
-from ui.graphics_items import NoSelectRectItem
 from ui.canvas_history_service import history_service_for
-from ui.history_commands import AddSceneItemsCommand, DeleteSceneItemsCommand, UpdateSceneItemCommand
+from ui.graphics_items import NoSelectRectItem
+from ui.history_commands import (
+    AddSceneItemsCommand,
+    DeleteSceneItemsCommand,
+    UpdateSceneItemCommand,
+)
 from ui.scene_item_access import attach_scene_item, remove_scene_item
 
 

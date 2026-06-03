@@ -7,6 +7,8 @@ from PyQt6.QtCore import QPointF
 from ui.curved_arrow_path_service import curved_arrow_path_service_for
 from ui.handle_interaction_logic import (
     orbital_rotation_angle as orbital_rotation_angle_helper,
+)
+from ui.handle_interaction_logic import (
     orbital_scale_factor as orbital_scale_factor_helper,
 )
 

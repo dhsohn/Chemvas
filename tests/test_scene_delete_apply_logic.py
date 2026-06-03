@@ -11,9 +11,10 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from core.history import DeleteAtomsCommand, DeleteBondCommand
-    from ui.history_commands import DeleteSceneItemsCommand
     from core.model import Atom, Bond, MoleculeModel
+    from ui.history_commands import DeleteSceneItemsCommand
     from ui.scene_delete_logic import DeleteSelectionPlan
+
     from tests.test_scene_ops_controller import _make_note_item, _make_rect_item
 
 

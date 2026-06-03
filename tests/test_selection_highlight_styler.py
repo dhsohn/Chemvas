@@ -11,7 +11,10 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.selection_highlight_styler import SelectionHighlightStyler, selection_highlight_styler_for
+    from ui.selection_highlight_styler import (
+        SelectionHighlightStyler,
+        selection_highlight_styler_for,
+    )
 
 
 def _path_item(color: str = "#111111", width: float = 1.5) -> QGraphicsPathItem:

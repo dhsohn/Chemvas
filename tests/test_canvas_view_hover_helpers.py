@@ -2,10 +2,9 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from core.model import Atom, Bond
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsScene
-
-from core.model import Atom, Bond
 from ui.canvas_mark_scene_service import CanvasMarkSceneService
 from ui.canvas_view import CanvasView
 from ui.hover_scene_service import HoverSceneService

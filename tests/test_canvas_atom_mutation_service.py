@@ -5,10 +5,12 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtGui import QColor
-
 from core.model import Atom, Bond
-from ui.canvas_atom_mutation_service import CanvasAtomMutationService, canvas_atom_mutation_service_for
+from PyQt6.QtGui import QColor
+from ui.canvas_atom_mutation_service import (
+    CanvasAtomMutationService,
+    canvas_atom_mutation_service_for,
+)
 
 
 class _FakeModel:

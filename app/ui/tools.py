@@ -1,40 +1,45 @@
 import time
 from typing import Dict, Optional
 
-from PyQt6.QtCore import QLineF, QPointF, Qt
-from PyQt6.QtGui import QColor
-from PyQt6.QtWidgets import QInputDialog
-
-from core.history import (
-    CompositeCommand,
-    MoveAtomsCommand,
-    MoveItemsCommand,
-)
 from core.bond_tool_logic import (
     resolve_bond_endpoint_target,
     resolve_bond_press_target,
     resolve_bond_snap_target,
 )
-from core.perspective_drag_logic import resolve_perspective_drag_update
-from core.tool_overlay_logic import activate_tool_no_drag, clear_temporary_tool_overlay
-from ui.bond_preview_renderer import (
-    add_bond_preview_items as add_bond_preview_items_helper,
-    clear_bond_preview_items as clear_bond_preview_items_helper,
+from core.history import (
+    CompositeCommand,
+    MoveAtomsCommand,
+    MoveItemsCommand,
 )
-from ui.atom_label_access import add_or_update_atom_label
-from ui.bond_style_logic import style_for_existing_bond_overlay
-from ui.canvas_history_service import history_service_for
-from ui.delete_tool_logic import build_delete_tool_history_command, erase_delete_tool_item
-from ui.history_commands import UpdateSceneItemCommand
-from ui.perspective_tool_controller import PerspectiveToolController
-from ui.canvas_rotation_state import rotation_state_for
-from ui.selection_press_logic import SelectionPressContext, plan_selection_press
+from core.perspective_drag_logic import resolve_perspective_drag_update
 from core.text_tool_logic import (
     build_created_atom_command,
     normalize_text_symbol,
     plan_text_input,
     resolve_text_tool_target,
 )
+from core.tool_overlay_logic import activate_tool_no_drag, clear_temporary_tool_overlay
+from PyQt6.QtCore import QLineF, QPointF, Qt
+from PyQt6.QtGui import QColor
+from PyQt6.QtWidgets import QInputDialog
+
+from ui.atom_label_access import add_or_update_atom_label
+from ui.bond_preview_renderer import (
+    add_bond_preview_items as add_bond_preview_items_helper,
+)
+from ui.bond_preview_renderer import (
+    clear_bond_preview_items as clear_bond_preview_items_helper,
+)
+from ui.bond_style_logic import style_for_existing_bond_overlay
+from ui.canvas_history_service import history_service_for
+from ui.canvas_rotation_state import rotation_state_for
+from ui.delete_tool_logic import (
+    build_delete_tool_history_command,
+    erase_delete_tool_item,
+)
+from ui.history_commands import UpdateSceneItemCommand
+from ui.perspective_tool_controller import PerspectiveToolController
+from ui.selection_press_logic import SelectionPressContext, plan_selection_press
 
 
 class Tool:

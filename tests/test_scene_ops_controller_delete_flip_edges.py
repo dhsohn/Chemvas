@@ -11,7 +11,13 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from core.history import CompositeCommand
-    from tests.test_scene_ops_controller import SceneOpsController, _FakeCanvas, _make_rect_item, _make_ring_item
+
+    from tests.test_scene_ops_controller import (
+        SceneOpsController,
+        _FakeCanvas,
+        _make_rect_item,
+        _make_ring_item,
+    )
 
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for scene ops controller tests")

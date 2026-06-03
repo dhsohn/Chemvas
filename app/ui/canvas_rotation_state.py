@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-
 Coords3D = tuple[float, float, float]
 Point2D = tuple[float, float]
 

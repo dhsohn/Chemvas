@@ -3,9 +3,9 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from core.history import CompositeCommand, HistoryCommand, SetSmilesInputCommand
+
 from ui.history_commands import DeleteSceneItemsCommand
 from ui.scene_item_access import remove_scene_item
-
 
 DELETE_SCENE_ITEM_KINDS = frozenset(
     {

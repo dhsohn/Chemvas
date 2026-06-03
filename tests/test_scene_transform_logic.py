@@ -19,7 +19,13 @@ if QApplication is not None:
         flip_scene_item_state,
         group_items_for_flip_transform,
     )
-    from tests.test_scene_ops_controller import _FakeCanvas, _make_note_item, _make_rect_item, _make_ring_item
+
+    from tests.test_scene_ops_controller import (
+        _FakeCanvas,
+        _make_note_item,
+        _make_rect_item,
+        _make_ring_item,
+    )
 
 
 class _FakeSceneItem:

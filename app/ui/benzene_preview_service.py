@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from core.model import Atom
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QGraphicsItem
 
 from ui.benzene_preview_renderer import clear_benzene_preview, rebuild_benzene_preview
-from core.model import Atom
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
