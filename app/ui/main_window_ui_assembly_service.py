@@ -7,7 +7,6 @@ from PyQt6.QtCore import QPointF, QSize, Qt
 from PyQt6.QtGui import QAction, QActionGroup, QColor, QIcon, QKeySequence, QPainter, QPolygonF
 from PyQt6.QtWidgets import (
     QDockWidget,
-    QLabel,
     QLineEdit,
     QMenu,
     QSplitter,
@@ -199,12 +198,6 @@ class MainWindowUIAssemblyService:
             menu_builder=build_menu,
             default_action=save_action,
         )
-
-    def create_toolbar_section_label(self, text: str) -> QLabel:
-        label = QLabel(text)
-        label.setObjectName("toolbarSectionLabel")
-        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        return label
 
     def init_toolbars(self, window) -> MainWindowToolbarAssembly:
         tool_group = QActionGroup(window)

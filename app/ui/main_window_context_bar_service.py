@@ -134,13 +134,6 @@ class MainWindowContextBarService:
         return page, layout
 
     @staticmethod
-    def _section_label(text: str) -> QLabel:
-        label = QLabel(text)
-        label.setObjectName("toolbarSectionLabel")
-        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        return label
-
-    @staticmethod
     def _hint_label(text: str) -> QLabel:
         label = QLabel(text)
         label.setObjectName("toolbarSectionLabel")
@@ -184,7 +177,6 @@ class MainWindowContextBarService:
 
     def _build_bond_page(self, window) -> QWidget:
         page, layout = self._new_page()
-        layout.addWidget(self._section_label("Bond"))
 
         group = QButtonGroup(page)
         group.setExclusive(True)
@@ -206,7 +198,6 @@ class MainWindowContextBarService:
 
     def _build_template_page(self, window) -> QWidget:
         page, layout = self._new_page()
-        layout.addWidget(self._section_label("Template"))
         for label, ring_size, style in TEMPLATE_ENTRY_SPECS:
             button = self._icon_button(window._icon_factory.icon_template_preview(label), label)
             button.clicked.connect(
@@ -221,7 +212,6 @@ class MainWindowContextBarService:
 
     def _build_arrow_page(self, window) -> QWidget:
         page, layout = self._new_page()
-        layout.addWidget(self._section_label("Arrow"))
 
         group = QButtonGroup(page)
         group.setExclusive(True)
@@ -265,7 +255,6 @@ class MainWindowContextBarService:
 
     def _build_atom_page(self, window) -> QWidget:
         page, layout = self._new_page()
-        layout.addWidget(self._section_label("Atom"))
         layout.addWidget(
             self._hint_label("Element hotkeys: c n o s p f h · edit label Enter · charge +/-")
         )
@@ -274,7 +263,6 @@ class MainWindowContextBarService:
 
     def _build_ring_page(self, window) -> QWidget:
         page, layout = self._new_page()
-        layout.addWidget(self._section_label("Ring"))
         layout.addWidget(self._hint_label("Benzene ring"))
         layout.addStretch(1)
         return page
