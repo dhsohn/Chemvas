@@ -35,6 +35,7 @@ from core.history import (
 )
 from core.model import Bond, MoleculeModel
 from core.renderer import Renderer
+from core.style_presets import DEFAULT_PRESET
 from core.rdkit_adapter import RDKitAdapter
 from core.template_geometry import (
     cyclohexane_boat_points,
@@ -306,6 +307,7 @@ class CanvasView(QGraphicsView):
         self.orbital_phase_enabled = False
         self.arrow_line_width = self.renderer.style.bond_line_width
         self.arrow_head_scale = 0.3
+        self._style_preset = DEFAULT_PRESET
         self._active_handles: list[QGraphicsEllipseItem] = []
         self._handle_target = None
         self._selected_items: list = []
@@ -606,6 +608,59 @@ class CanvasView(QGraphicsView):
             on_success=on_success,
             on_error=on_error,
         )
+
+    def export_figure(
+        self,
+        path: str,
+        *,
+        fmt: str = "svg",
+        scope: str = "sheet",
+        dpi: int = 300,
+        background: str = "transparent",
+        sizing: str = "bond",
+    ) -> None:
+        from ui.export_plan_logic import points_for_mm
+        from ui.export_render_service import export_scene
+
+        pad = max(2.0, self.renderer.style.bond_line_width * 2.0)
+        items = None
+        if scope == "selection":
+            items = self._selection_items_for_copy()
+            if not items:
+                raise ValueError("Select something to export, or choose Whole sheet.")
+
+        unit_scale = 1.0
+        target_width_pt = None
+        if sizing == "bond":
+            style = self.renderer.style
+            if style.bond_length_px > 0:
+                unit_scale = style.bond_length_pt / style.bond_length_px
+        elif sizing == "col1":
+            target_width_pt = points_for_mm(84.0)
+        elif sizing == "col2":
+            target_width_pt = points_for_mm(174.0)
+        # sizing == "screen" -> unit_scale stays 1.0 (1 scene px -> 1 pt)
+
+        export_scene(
+            self.scene(),
+            path,
+            fmt=fmt,
+            items=items,
+            margin=pad,
+            dpi=dpi,
+            background=background,
+            title="Chemvas drawing",
+            unit_scale=unit_scale,
+            target_width_pt=target_width_pt,
+        )
+
+    def apply_style_preset(self, name: str) -> None:
+        # Round-trip the whole document so bonds, atom labels, marks, TS brackets,
+        # orbitals and arrows are all rebuilt with the new style (apply_document
+        # _settings maps the preset name -> style). History is preserved.
+        self._style_preset = name
+        state = self._canvas_document_session_service.snapshot_state()
+        self._canvas_document_session_service.apply_state(state)
 
     def insert_structure_model(
         self,

@@ -14,6 +14,19 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
+from core.style_presets import DEFAULT_PRESET, preset_names
+from ui.export_dialog_logic import (
+    DEFAULT_DPI,
+    DPI_OPTIONS,
+    EXPORT_BACKGROUNDS,
+    EXPORT_FORMATS,
+    EXPORT_SCOPES,
+    EXPORT_SIZES,
+    default_export_path,
+    file_filter_for_format,
+    is_dpi_relevant,
+    normalize_export_path,
+)
 from ui.main_window_ui_assembly_service import ArrowButton
 from ui.sheet_setup_logic import SHEET_ORIENTATION_OPTIONS, supported_sheet_sizes
 
@@ -91,6 +104,122 @@ class MainWindowDocumentActionService:
             on_success=lambda export_path: window.statusBar().showMessage(f"Exported XYZ: {export_path}", 4000),
             on_error=handle_error,
         )
+
+    def export_figure(self, window, *, file_dialog, message_box) -> None:
+        options = self._prompt_export_options(window)
+        if options is None:
+            return
+        fmt = options["fmt"]
+        dialog_path, _ = file_dialog.getSaveFileName(
+            window,
+            "Export Figure",
+            default_export_path(window._current_file_path, fmt),
+            file_filter_for_format(fmt),
+        )
+        path = normalize_export_path(dialog_path, fmt)
+        if path is None:
+            return
+        try:
+            window.canvas.apply_style_preset(options["preset"])
+            window.canvas.export_figure(
+                path,
+                fmt=fmt,
+                scope=options["scope"],
+                dpi=options["dpi"],
+                background=options["background"],
+                sizing=options["sizing"],
+            )
+        except Exception as exc:
+            message_box.warning(
+                window,
+                "Export Error",
+                f"Failed to export figure:\n{exc}",
+            )
+            return
+        window.statusBar().showMessage(f"Exported: {path}", 4000)
+
+    def _prompt_export_options(self, window):
+        dialog = QDialog(window)
+        dialog.setWindowTitle("Export Figure")
+        dialog.setStyleSheet(window.styleSheet())
+        layout = QVBoxLayout(dialog)
+
+        layout.addWidget(QLabel("Format:"))
+        format_combo = QComboBox()
+        format_combo.setObjectName("exportFormatCombo")
+        for label, fmt, _suffix in EXPORT_FORMATS:
+            format_combo.addItem(label, fmt)
+        layout.addWidget(format_combo)
+
+        layout.addWidget(QLabel("Style preset:"))
+        preset_combo = QComboBox()
+        preset_combo.setObjectName("exportPresetCombo")
+        for name in preset_names():
+            preset_combo.addItem(name, name)
+        preset_index = preset_combo.findData(DEFAULT_PRESET)
+        if preset_index >= 0:
+            preset_combo.setCurrentIndex(preset_index)
+        layout.addWidget(preset_combo)
+
+        layout.addWidget(QLabel("Size:"))
+        size_combo = QComboBox()
+        size_combo.setObjectName("exportSizeCombo")
+        for label, value in EXPORT_SIZES:
+            size_combo.addItem(label, value)
+        layout.addWidget(size_combo)
+
+        layout.addWidget(QLabel("Scope:"))
+        scope_combo = QComboBox()
+        scope_combo.setObjectName("exportScopeCombo")
+        for label, value in EXPORT_SCOPES:
+            scope_combo.addItem(label, value)
+        layout.addWidget(scope_combo)
+
+        layout.addWidget(QLabel("Background:"))
+        background_combo = QComboBox()
+        background_combo.setObjectName("exportBackgroundCombo")
+        for label, value in EXPORT_BACKGROUNDS:
+            background_combo.addItem(label, value)
+        layout.addWidget(background_combo)
+
+        dpi_label = QLabel("Resolution (DPI):")
+        layout.addWidget(dpi_label)
+        dpi_combo = QComboBox()
+        dpi_combo.setObjectName("exportDpiCombo")
+        for value in DPI_OPTIONS:
+            dpi_combo.addItem(str(value), value)
+        dpi_combo.setCurrentIndex(DPI_OPTIONS.index(DEFAULT_DPI))
+        layout.addWidget(dpi_combo)
+
+        def sync_dpi_enabled() -> None:
+            enabled = is_dpi_relevant(format_combo.currentData())
+            dpi_label.setEnabled(enabled)
+            dpi_combo.setEnabled(enabled)
+
+        format_combo.currentIndexChanged.connect(sync_dpi_enabled)
+        sync_dpi_enabled()
+
+        action_row = QHBoxLayout()
+        action_row.addStretch(1)
+        ok_btn = QPushButton("Export")
+        cancel_btn = QPushButton("Cancel")
+        action_row.addWidget(ok_btn)
+        action_row.addWidget(cancel_btn)
+        layout.addLayout(action_row)
+
+        ok_btn.clicked.connect(dialog.accept)
+        cancel_btn.clicked.connect(dialog.reject)
+
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return None
+        return {
+            "fmt": format_combo.currentData(),
+            "preset": preset_combo.currentData(),
+            "sizing": size_combo.currentData(),
+            "scope": scope_combo.currentData(),
+            "dpi": int(dpi_combo.currentData()),
+            "background": background_combo.currentData(),
+        }
 
     def load_canvas(self, window, *, file_dialog, message_box, read_document, resolve_load_path) -> None:
         dialog_path, _ = file_dialog.getOpenFileName(

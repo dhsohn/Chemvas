@@ -52,6 +52,7 @@ class _HarnessWindow(QMainWindow):
         self._save_canvas_as = mock.Mock()
         self._load_canvas = mock.Mock()
         self._export_xyz = mock.Mock()
+        self._export_figure = mock.Mock()
         self._toggle_preview_panel = mock.Mock()
         self._set_bond_length = mock.Mock()
         self._setup_sheet = mock.Mock()
@@ -224,13 +225,20 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         load_action = QAction("Load", owner)
         save_as_action = QAction("Save As...", owner)
 
-        button = self.service.create_file_project_menu_button(save_action, load_action, save_as_action)
+        export_action = QAction("Export Figure...", owner)
+        button = self.service.create_file_project_menu_button(
+            save_action, load_action, save_as_action, export_action
+        )
 
         self.assertIs(button.defaultAction(), save_action)
         self.assertEqual(button.toolTip(), "File")
-        self.assertEqual(button.statusTip(), "Save, load, or save as the current file")
+        self.assertEqual(button.statusTip(), "Save, load, export, or save as the current file")
         self.assertEqual(button.popupMode(), QToolButton.ToolButtonPopupMode.MenuButtonPopup)
-        self.assertEqual(button.menu().actions(), [load_action, save_action, save_as_action])
+        non_separator = [action for action in button.menu().actions() if not action.isSeparator()]
+        self.assertEqual(
+            non_separator, [load_action, save_action, save_as_action, export_action]
+        )
+        self.assertEqual(sum(1 for action in button.menu().actions() if action.isSeparator()), 1)
 
     def test_init_toolbars_builds_bars_and_wires_inputs(self) -> None:
         window = _HarnessWindow()
@@ -261,10 +269,14 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.assertTrue(assembly.tool_actions["bond"].isChecked())
         self.assertEqual(assembly.atom_input.text(), "N")
         self.assertIs(assembly.save_button.defaultAction(), assembly.save_action)
+        menu_actions = [
+            action for action in assembly.save_button.menu().actions() if not action.isSeparator()
+        ]
         self.assertEqual(
-            assembly.save_button.menu().actions(),
+            menu_actions[:3],
             [assembly.load_action, assembly.save_action, assembly.save_as_action],
         )
+        self.assertEqual(menu_actions[3].text(), "Export Figure...")
         self.assertEqual(assembly.save_button.toolTip(), "File")
         self.assertEqual(assembly.load_action.statusTip(), "Open a drawing or workbook")
         self.assertEqual(assembly.save_action.statusTip(), "Save the current drawing")

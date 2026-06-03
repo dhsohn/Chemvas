@@ -174,6 +174,41 @@ class DocumentStateTest(unittest.TestCase):
         self.assertEqual(payload["version"], SINGLE_SHEET_FILE_VERSION)
         self.assertIs(extract_document_state(payload), state)
 
+    def test_settings_serialize_includes_style_preset(self) -> None:
+        settings = serialize_settings(
+            bond_length_px=20.0,
+            arrow_line_width=1.5,
+            arrow_head_scale=0.3,
+            orbital_phase_enabled=False,
+            text_font_size=12,
+            text_font_weight=400,
+            text_italic=False,
+            sheet_size="A4",
+            sheet_orientation="portrait",
+            style_preset="Presentation",
+        )
+        self.assertEqual(settings["style_preset"], "Presentation")
+        state = _single_sheet_state()
+        state["settings"] = settings
+        # Round-trips through validation.
+        build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
+
+    def test_settings_without_style_preset_still_valid(self) -> None:
+        # Older files predate the key; they must still load.
+        settings = _settings()
+        settings.pop("style_preset", None)
+        state = _single_sheet_state()
+        state["settings"] = settings
+        build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
+
+    def test_settings_reject_non_string_style_preset(self) -> None:
+        settings = _settings()
+        settings["style_preset"] = 123
+        state = _single_sheet_state()
+        state["settings"] = settings
+        with self.assertRaises(ValueError):
+            build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
+
     def test_extract_document_state_accepts_workbook_state(self) -> None:
         sheet_state = _single_sheet_state()
         workbook_state = {

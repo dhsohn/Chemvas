@@ -691,6 +691,9 @@ class MainWindow(QMainWindow):
     def _export_xyz(self) -> None:
         self._document_action_service.export_xyz(self, file_dialog=QFileDialog, message_box=QMessageBox)
 
+    def _export_figure(self) -> None:
+        self._document_action_service.export_figure(self, file_dialog=QFileDialog, message_box=QMessageBox)
+
     def _load_canvas(self) -> None:
         self._document_action_service.load_canvas(
             self,
