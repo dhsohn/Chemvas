@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from core.model import MoleculeModel
 from ui.canvas_graph_state import graph_state_for
+from ui.canvas_insert_state import insert_state_for
+from ui.canvas_mark_registry import mark_registry_for
 from ui.canvas_rotation_state import rotation_state_for
 from ui.insert_mode_logic import clear_insert_session
 
@@ -11,6 +13,8 @@ class CanvasSceneResetService:
         self.canvas = canvas
         self.graph = graph_state_for(canvas)
         self.rotation = rotation_state_for(canvas)
+        self.insert_state = insert_state_for(canvas)
+        self.marks = mark_registry_for(canvas)
 
     def clear_scene(self) -> None:
         self.canvas.scene().clear()
@@ -31,8 +35,8 @@ class CanvasSceneResetService:
         self.canvas.arrow_items = []
         self.canvas.ts_bracket_items = []
         self.canvas.orbital_items = []
-        self.canvas._marks_by_atom = {}
-        self.canvas._smiles_preview_model = None
+        self.marks.clear()
+        self.insert_state.smiles_preview_model = None
         self.canvas._clear_template_preview()
         self.canvas._clear_benzene_preview()
         self.canvas._clear_smiles_preview()

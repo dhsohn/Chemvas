@@ -13,7 +13,7 @@ from core.history import (
 )
 from core.model import Bond
 from ui.bond_style_logic import STANDARD_BOND_STYLES
-from ui.canvas_history_state import history_state_for
+from ui.canvas_history_service import history_service_for
 from ui.graphics_items import AtomDotItem, AtomLabelItem
 from ui.history_commands import ChangeAtomLabelCommand
 
@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 class AtomLabelService:
     def __init__(self, canvas: CanvasView) -> None:
         self.canvas = canvas
+        self.history = history_service_for(canvas)
 
     def atom_item_for_id(self, atom_id: int):
         return self.canvas.atom_items.get(atom_id) or self.canvas.atom_dots.get(atom_id)
@@ -86,7 +87,7 @@ class AtomLabelService:
         merge_ids: list[int],
         merge_info: dict,
     ) -> None:
-        if not history_state_for(self.canvas).enabled:
+        if not self.history.is_enabled():
             return
         atom = self.canvas.model.atoms.get(atom_id)
         after_element = atom.element if atom is not None else before_element
@@ -153,9 +154,9 @@ class AtomLabelService:
         if not commands:
             return
         if len(commands) == 1:
-            self.canvas._push_command(commands[0])
+            self.history.push(commands[0])
             return
-        self.canvas._push_command(CompositeCommand(commands))
+        self.history.push(CompositeCommand(commands))
 
     def merge_overlapping_atoms(self, atom_id: int) -> tuple[list[int], dict]:
         atom = self.canvas.model.atoms.get(atom_id)

@@ -48,6 +48,8 @@ from ui.scene_item_access import (
     remove_scene_item as remove_scene_item_helper,
 )
 from ui.canvas_graph_state import graph_state_for
+from ui.canvas_history_service import history_service_for
+from ui.canvas_mark_registry import mark_registry_for
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
@@ -61,6 +63,8 @@ class SceneOpsController:
     def __init__(self, canvas: CanvasView) -> None:
         self.canvas = canvas
         self.graph = graph_state_for(canvas)
+        self.history = history_service_for(canvas)
+        self.marks = mark_registry_for(canvas)
 
     def _remove_scene_item(self, item) -> None:
         remove_scene_item_helper(self.canvas, item)
@@ -92,7 +96,7 @@ class SceneOpsController:
         command = delete_atom_with_history(
             atom_id,
             bonds=self.canvas.model.bonds,
-            marks_by_atom=self.canvas._marks_by_atom,
+            marks_by_atom=self.marks.by_atom,
             before_smiles_input=before_smiles_input,
             current_smiles_input_getter=lambda: self.canvas.last_smiles_input,
             clear_smiles_input=lambda: setattr(self.canvas, "last_smiles_input", None),
@@ -105,7 +109,7 @@ class SceneOpsController:
             remove_atom_only=self.canvas._remove_atom_only,
         )
         if record:
-            self.canvas._push_command(command)
+            self.history.push(command)
         return command
 
     def delete_bond(self, bond_id: int, record: bool = True) -> HistoryCommand | None:
@@ -125,7 +129,7 @@ class SceneOpsController:
         if command is None:
             return None
         if record:
-            self.canvas._push_command(command)
+            self.history.push(command)
         return command
 
     def delete_ring(self, item: QGraphicsPolygonItem, record: bool = True) -> HistoryCommand | None:
@@ -135,7 +139,7 @@ class SceneOpsController:
             remove_scene_item=self._remove_scene_item,
         )
         if record:
-            self.canvas._push_command(command)
+            self.history.push(command)
         return command
 
     def delete_selected_items(self) -> bool:
@@ -148,7 +152,7 @@ class SceneOpsController:
             plan = build_delete_selection_plan(
                 selection,
                 bonds=self.canvas.model.bonds,
-                marks_by_atom=self.canvas._marks_by_atom,
+                marks_by_atom=self.marks.by_atom,
                 mark_state_getter=self.canvas._mark_state_dict,
             )
 
@@ -178,9 +182,9 @@ class SceneOpsController:
             if not commands:
                 return False
             if len(commands) == 1:
-                self.canvas._push_command(commands[0])
+                self.history.push(commands[0])
                 return True
-            self.canvas._push_command(CompositeCommand(commands))
+            self.history.push(CompositeCommand(commands))
             return True
         finally:
             self.canvas.suspend_selection_outline(False)
@@ -241,7 +245,7 @@ class SceneOpsController:
         groups = group_items_for_flip_transform(
             items,
             atom_components=atom_components,
-            marks_by_atom=self.canvas._marks_by_atom,
+            marks_by_atom=self.marks.by_atom,
         )
 
         def flip_bounds(item):
@@ -324,9 +328,9 @@ class SceneOpsController:
             return
         self.canvas._update_selection_outline()
         if len(commands) == 1:
-            self.canvas._push_command(commands[0])
+            self.history.push(commands[0])
             return
-        self.canvas._push_command(CompositeCommand(commands))
+        self.history.push(CompositeCommand(commands))
 
     def _selection_payload_for_clipboard(self) -> dict | None:
         selected_items = self.canvas._selected_items_for_transform()
@@ -337,7 +341,7 @@ class SceneOpsController:
             selected_bond_ids=bond_ids,
             bonds=self.canvas.model.bonds,
             ring_items=self.canvas.ring_items,
-            marks_by_atom=self.canvas._marks_by_atom,
+            marks_by_atom=self.marks.by_atom,
             scene=self.canvas.scene(),
             atom_state_getter=self.canvas._atom_state_dict,
             bond_state_getter=self.canvas._bond_state_dict,

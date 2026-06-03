@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from core.history import AddAtomsCommand, AddBondCommand, CompositeCommand, UpdateBondCommand
-from ui.canvas_history_state import history_state_for
+from ui.canvas_history_service import history_service_for
 from ui.history_commands import AddSceneItemsCommand
 
 
 class CanvasHistoryRecordingService:
-    def __init__(self, canvas) -> None:
+    def __init__(self, canvas, history_service=None) -> None:
         self.canvas = canvas
+        self.history = history_service if history_service is not None else history_service_for(canvas)
 
     def record_additions(
         self,
@@ -55,9 +56,9 @@ class CanvasHistoryRecordingService:
         if not commands:
             return
         if len(commands) == 1:
-            self.canvas._push_command(commands[0])
+            self.history.push(commands[0])
             return
-        self.canvas._push_command(CompositeCommand(commands))
+        self.history.push(CompositeCommand(commands))
 
     def record_bond_update(
         self,
@@ -67,11 +68,11 @@ class CanvasHistoryRecordingService:
         before_smiles_input: str | None,
         after_smiles_input: str | None,
     ) -> None:
-        if not history_state_for(self.canvas).enabled:
+        if not self.history.is_enabled():
             return
         if before_state == after_state and before_smiles_input == after_smiles_input:
             return
-        self.canvas._push_command(
+        self.history.push(
             UpdateBondCommand(
                 bond_id=bond_id,
                 before_state=before_state,

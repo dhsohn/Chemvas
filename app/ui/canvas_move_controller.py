@@ -3,10 +3,13 @@ from __future__ import annotations
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QPolygonF
 
+from ui.canvas_mark_registry import mark_registry_for
+
 
 class CanvasMoveController:
     def __init__(self, canvas) -> None:
         self.canvas = canvas
+        self.marks = mark_registry_for(canvas)
 
     def move_item(self, item, dx: float, dy: float, update_selection: bool = True) -> None:
         kind = item.data(0)
@@ -146,7 +149,7 @@ class CanvasMoveController:
         dot = self.canvas.atom_dots.get(atom_id)
         if dot is not None:
             dot.moveBy(dx, dy)
-        marks = self.canvas._marks_by_atom.get(atom_id)
+        marks = self.marks.get_for_atom(atom_id)
         if marks:
             for mark in list(marks):
                 mark.moveBy(dx, dy)

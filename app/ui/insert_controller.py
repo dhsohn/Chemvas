@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QMessageBox
 
+from ui.canvas_history_service import history_service_for
+from ui.canvas_insert_state import CanvasInsertState, insert_state_for
 from ui.insert_mode_logic import (
     InsertSessionState,
     begin_smiles_insert as begin_smiles_insert_state,
@@ -31,24 +33,26 @@ if TYPE_CHECKING:
 
 
 class InsertController:
-    def __init__(self, canvas: CanvasView) -> None:
+    def __init__(self, canvas: CanvasView, insert_state: CanvasInsertState | None = None) -> None:
         self.canvas = canvas
+        self.insert_state = insert_state if insert_state is not None else insert_state_for(canvas)
+        self.history = history_service_for(canvas)
         self._insert_commit_service = InsertCommitService(canvas)
         self._smiles_load_transaction_builder = SmilesLoadTransactionBuilder(canvas)
 
     def _insert_session_state(self) -> InsertSessionState:
         smiles_center = None
-        if self.canvas._smiles_preview_center is not None:
+        if self.insert_state.smiles_preview_center is not None:
             smiles_center = (
-                self.canvas._smiles_preview_center.x(),
-                self.canvas._smiles_preview_center.y(),
+                self.insert_state.smiles_preview_center.x(),
+                self.insert_state.smiles_preview_center.y(),
             )
         return InsertSessionState(
-            template_active=self.canvas._template_insert_active,
-            template_ring_size=self.canvas._template_ring_size,
-            template_ring_style=self.canvas._template_ring_style,
-            smiles_active=self.canvas._smiles_insert_active,
-            smiles_text=self.canvas._smiles_preview_smiles,
+            template_active=self.insert_state.template_active,
+            template_ring_size=self.insert_state.template_ring_size,
+            template_ring_style=self.insert_state.template_ring_style,
+            smiles_active=self.insert_state.smiles_active,
+            smiles_text=self.insert_state.smiles_preview_smiles,
             smiles_center=smiles_center,
         )
 
@@ -56,14 +60,14 @@ class InsertController:
         return self._insert_session_state()
 
     def _apply_insert_session_state(self, state: InsertSessionState) -> None:
-        template_was_active = self.canvas._template_insert_active
-        smiles_was_active = self.canvas._smiles_insert_active
-        self.canvas._template_insert_active = state.template_active
-        self.canvas._template_ring_size = state.template_ring_size
-        self.canvas._template_ring_style = state.template_ring_style
-        self.canvas._smiles_insert_active = state.smiles_active
-        self.canvas._smiles_preview_smiles = state.smiles_text
-        self.canvas._smiles_preview_center = None if state.smiles_center is None else QPointF(*state.smiles_center)
+        template_was_active = self.insert_state.template_active
+        smiles_was_active = self.insert_state.smiles_active
+        self.insert_state.template_active = state.template_active
+        self.insert_state.template_ring_size = state.template_ring_size
+        self.insert_state.template_ring_style = state.template_ring_style
+        self.insert_state.smiles_active = state.smiles_active
+        self.insert_state.smiles_preview_smiles = state.smiles_text
+        self.insert_state.smiles_preview_center = None if state.smiles_center is None else QPointF(*state.smiles_center)
         if template_was_active and not state.template_active:
             self._clear_template_preview()
         if smiles_was_active and not state.smiles_active:
@@ -76,7 +80,7 @@ class InsertController:
         next_state = begin_template_insert_state(self._insert_session_state(), ring_size, style)
         if next_state is None:
             return
-        if self.canvas._smiles_insert_active:
+        if self.insert_state.smiles_active:
             self._cancel_smiles_insert()
         self.canvas._clear_benzene_preview()
         self._apply_insert_session_state(next_state)
@@ -106,10 +110,10 @@ class InsertController:
             after_smiles_input=smiles,
         )
         if command is not None:
-            self.canvas._push_command(command)
+            self.history.push(command)
 
     def begin_smiles_insert(self, smiles: str) -> None:
-        if self.canvas._template_insert_active:
+        if self.insert_state.template_active:
             self._cancel_template_insert()
         self.canvas._clear_benzene_preview()
         smiles = smiles.strip()
@@ -122,20 +126,20 @@ class InsertController:
             if not (callable(notify_error) and notify_error(f"SMILES: {message}")):
                 QMessageBox.warning(self.canvas, "SMILES Error", message)
             return
-        self.canvas._smiles_preview_model = model
+        self.insert_state.smiles_preview_model = model
         center_xy = smiles_preview_center(model)
         if center_xy is None:
-            self.canvas._smiles_preview_model = None
+            self.insert_state.smiles_preview_model = None
             return
         next_state = begin_smiles_insert_state(self._insert_session_state(), smiles, center_xy)
         if next_state is None:
-            self.canvas._smiles_preview_model = None
+            self.insert_state.smiles_preview_model = None
             return
         self._apply_insert_session_state(next_state)
         self._render_smiles_preview(self.canvas.mapToScene(self.canvas.viewport().rect().center()))
 
     def _cancel_smiles_insert(self) -> None:
-        self.canvas._smiles_preview_model = None
+        self.insert_state.smiles_preview_model = None
         next_state = cancel_smiles_insert_state(self._insert_session_state())
         self._apply_insert_session_state(next_state)
 
@@ -144,10 +148,10 @@ class InsertController:
 
     def _commit_smiles_insert(self, pos: QPointF) -> None:
         plan = plan_smiles_commit(
-            self.canvas._smiles_preview_model,
+            self.insert_state.smiles_preview_model,
             None
-            if self.canvas._smiles_preview_center is None
-            else (self.canvas._smiles_preview_center.x(), self.canvas._smiles_preview_center.y()),
+            if self.insert_state.smiles_preview_center is None
+            else (self.insert_state.smiles_preview_center.x(), self.insert_state.smiles_preview_center.y()),
             (pos.x(), pos.y()),
         )
         if plan is None:
@@ -155,7 +159,7 @@ class InsertController:
             return
         if not self._insert_commit_service.apply_smiles_commit(
             plan,
-            after_smiles_input=self.canvas._smiles_preview_smiles,
+            after_smiles_input=self.insert_state.smiles_preview_smiles,
         ):
             self._cancel_smiles_insert()
             return
@@ -166,18 +170,18 @@ class InsertController:
 
     def _clear_smiles_preview(self) -> None:
         (
-            self.canvas._smiles_preview_items,
-            self.canvas._smiles_preview_bond_items,
-            self.canvas._smiles_preview_atom_items,
-        ) = clear_smiles_preview_helper(self.canvas.scene(), self.canvas._smiles_preview_items)
+            self.insert_state.smiles_preview_items,
+            self.insert_state.smiles_preview_bond_items,
+            self.insert_state.smiles_preview_atom_items,
+        ) = clear_smiles_preview_helper(self.canvas.scene(), self.insert_state.smiles_preview_items)
 
     def clear_smiles_preview(self) -> None:
         self._clear_smiles_preview()
 
     def _smiles_preview_snapshot(self):
         return smiles_preview_snapshot_helper(
-            self.canvas._smiles_preview_bond_items,
-            self.canvas._smiles_preview_atom_items,
+            self.insert_state.smiles_preview_bond_items,
+            self.insert_state.smiles_preview_atom_items,
         )
 
     def smiles_preview_snapshot(self):
@@ -186,10 +190,10 @@ class InsertController:
     def _render_smiles_preview(self, pos: QPointF) -> None:
         atom_radius = max(0.6, self.canvas.renderer.style.bond_line_width * 0.6)
         preview_plan = plan_smiles_preview_update(
-            self.canvas._smiles_preview_model,
+            self.insert_state.smiles_preview_model,
             None
-            if self.canvas._smiles_preview_center is None
-            else (self.canvas._smiles_preview_center.x(), self.canvas._smiles_preview_center.y()),
+            if self.insert_state.smiles_preview_center is None
+            else (self.insert_state.smiles_preview_center.x(), self.insert_state.smiles_preview_center.y()),
             (pos.x(), pos.y()),
             atom_radius,
             self._smiles_preview_snapshot(),
@@ -199,16 +203,16 @@ class InsertController:
             self._clear_smiles_preview()
             return
         (
-            self.canvas._smiles_preview_items,
-            self.canvas._smiles_preview_bond_items,
-            self.canvas._smiles_preview_atom_items,
+            self.insert_state.smiles_preview_items,
+            self.insert_state.smiles_preview_bond_items,
+            self.insert_state.smiles_preview_atom_items,
         ) = apply_smiles_preview_geometry_helper(
             self.canvas.scene(),
             preview_plan.geometry,
             base_pen=self.canvas.renderer.bond_pen(),
-            existing_items=self.canvas._smiles_preview_items,
-            existing_bond_items=self.canvas._smiles_preview_bond_items,
-            existing_atom_items=self.canvas._smiles_preview_atom_items,
+            existing_items=self.insert_state.smiles_preview_items,
+            existing_bond_items=self.insert_state.smiles_preview_bond_items,
+            existing_atom_items=self.insert_state.smiles_preview_atom_items,
             action=preview_plan.action,
         )
 
@@ -359,10 +363,10 @@ class InsertController:
 
     def _clear_template_preview(self) -> None:
         (
-            self.canvas._template_preview_items,
-            self.canvas._template_preview_lines,
-            self.canvas._template_preview_dots,
-        ) = clear_template_preview_helper(self.canvas.scene(), self.canvas._template_preview_items)
+            self.insert_state.template_preview_items,
+            self.insert_state.template_preview_lines,
+            self.insert_state.template_preview_dots,
+        ) = clear_template_preview_helper(self.canvas.scene(), self.insert_state.template_preview_items)
 
     def clear_template_preview(self) -> None:
         self._clear_template_preview()
@@ -388,23 +392,23 @@ class InsertController:
         preview_plan = plan_template_preview_update(
             [(point.x(), point.y()) for point in points],
             atom_radius,
-            len(self.canvas._template_preview_lines),
-            len(self.canvas._template_preview_dots),
+            len(self.insert_state.template_preview_lines),
+            len(self.insert_state.template_preview_dots),
         )
         if preview_plan.action == "clear" or preview_plan.geometry is None:
             self._clear_template_preview()
             return
         (
-            self.canvas._template_preview_items,
-            self.canvas._template_preview_lines,
-            self.canvas._template_preview_dots,
+            self.insert_state.template_preview_items,
+            self.insert_state.template_preview_lines,
+            self.insert_state.template_preview_dots,
         ) = apply_template_preview_geometry_helper(
             self.canvas.scene(),
             preview_plan.geometry,
             base_pen=self.canvas.renderer.bond_pen(),
-            existing_items=self.canvas._template_preview_items,
-            existing_lines=self.canvas._template_preview_lines,
-            existing_dots=self.canvas._template_preview_dots,
+            existing_items=self.insert_state.template_preview_items,
+            existing_lines=self.insert_state.template_preview_lines,
+            existing_dots=self.insert_state.template_preview_dots,
             action=preview_plan.action,
         )
 

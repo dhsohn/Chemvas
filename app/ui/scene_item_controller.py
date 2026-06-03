@@ -13,6 +13,7 @@ from ui.scene_item_restore import (
     create_scene_item_from_state as create_scene_item_from_state_helper,
     create_ts_bracket_item_from_state as create_ts_bracket_item_from_state_helper,
 )
+from ui.canvas_mark_registry import mark_registry_for
 from ui.scene_item_state import ARROW_KINDS, apply_scene_item_state as apply_scene_item_state_helper
 
 if TYPE_CHECKING:
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
 class SceneItemController:
     def __init__(self, canvas: CanvasView) -> None:
         self.canvas = canvas
+        self.marks = mark_registry_for(canvas)
 
     def _restore_ring_from_state(self, ring_state: dict):
         item = create_ring_item_from_state_helper(
@@ -132,7 +134,7 @@ class SceneItemController:
             data = item.data(1) or {}
             atom_id = data.get("atom_id")
             if isinstance(atom_id, int):
-                self.canvas._marks_by_atom.setdefault(atom_id, []).append(item)
+                self.marks.add_for_atom(atom_id, item)
         elif kind == "note":
             item.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
             if item not in self.canvas.note_items:
@@ -165,8 +167,8 @@ class SceneItemController:
             data = item.data(1) or {}
             atom_id = data.get("atom_id") if isinstance(data, dict) else None
             self.canvas._remove_mark_item(item)
-            if isinstance(atom_id, int) and not self.canvas._marks_by_atom.get(atom_id):
-                self.canvas._marks_by_atom.pop(atom_id, None)
+            if isinstance(atom_id, int) and not self.marks.get_for_atom(atom_id):
+                self.marks.by_atom.pop(atom_id, None)
             return
         elif kind == "note":
             if item in self.canvas.selected_notes:
