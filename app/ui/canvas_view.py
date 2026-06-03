@@ -262,7 +262,7 @@ class CanvasView(QGraphicsView):
         self.scene().selectionChanged.connect(self._update_selection_outline)
         self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
-        self.setBackgroundBrush(QColor("#ffffff"))
+        self.setBackgroundBrush(QColor("#e7e7e4"))
         self.sheet_size = DEFAULT_SHEET_SIZE
         self.sheet_orientation = DEFAULT_SHEET_ORIENTATION
         self._sheet_rect = QRectF()
@@ -312,7 +312,7 @@ class CanvasView(QGraphicsView):
         self._curved_snap = False
         self._curved_symmetry = False
         self._curved_snap_step = 0.15
-        self._selection_color = QColor("#1f5eff")
+        self._selection_color = QColor("#0d9488")
         self._selection_stroke_delta = 0.6
         self._suspend_selection_outline = False
         self._selection_signature = None
@@ -418,11 +418,17 @@ class CanvasView(QGraphicsView):
 
     def drawBackground(self, painter: QPainter, rect: QRectF) -> None:
         painter.save()
-        painter.fillRect(rect, QColor("#ededec"))
+        painter.fillRect(rect, QColor("#e7e7e4"))
         sheet_rect = self.sheet_rect()
-        painter.fillRect(sheet_rect.translated(3.0, 3.0), QColor(0, 0, 0, 14))
+        # Layered soft drop shadow so the page reads as paper floating above
+        # the workspace rather than blending into it.
+        for offset, alpha in ((6.0, 5), (4.0, 9), (2.0, 16)):
+            painter.fillRect(
+                sheet_rect.adjusted(-offset * 0.4, offset * 0.3, offset, offset + 1.0),
+                QColor(0, 0, 0, alpha),
+            )
         painter.fillRect(sheet_rect, QColor("#ffffff"))
-        pen = QPen(QColor("#d6d6d1"))
+        pen = QPen(QColor("#dededa"))
         pen.setWidthF(1.0)
         painter.setPen(pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)

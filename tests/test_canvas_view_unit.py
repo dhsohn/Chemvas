@@ -83,11 +83,13 @@ class CanvasViewUnitTest(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
 
-    def test_canvas_background_defaults_to_white(self) -> None:
+    def test_canvas_background_defaults_to_workspace_gray(self) -> None:
         canvas = CanvasView()
         self.addCleanup(canvas.close)
 
-        self.assertEqual(canvas.backgroundBrush().color(), QColor("#ffffff"))
+        # Workspace is a soft gray so the white page reads as paper floating
+        # above it (the page itself is painted white in drawBackground).
+        self.assertEqual(canvas.backgroundBrush().color(), QColor("#e7e7e4"))
 
     def test_canvas_defaults_to_a4_landscape_sheet_and_can_switch_portrait(self) -> None:
         canvas = CanvasView()
