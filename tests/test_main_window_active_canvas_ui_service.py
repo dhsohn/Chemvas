@@ -16,7 +16,9 @@ except ModuleNotFoundError:
 if QApplication is not None:
     try:
         from ui.canvas_view import CanvasView
-        from ui.main_window_active_canvas_ui_service import MainWindowActiveCanvasUIService
+        from ui.main_window_active_canvas_ui_service import (
+            MainWindowActiveCanvasUIService,
+        )
     except (ModuleNotFoundError, SyntaxError):
         CanvasView = None
         MainWindowActiveCanvasUIService = None

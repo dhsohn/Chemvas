@@ -1,8 +1,7 @@
 import unittest
 
-from PyQt6.QtCore import QPointF
-
 from core.model import Atom
+from PyQt6.QtCore import QPointF
 from ui.selection_center_logic import bounding_box_center_for_atoms, center_for_atoms
 
 

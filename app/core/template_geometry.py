@@ -1,7 +1,6 @@
 import math
 from collections.abc import Sequence
 
-
 Point2D = tuple[float, float]
 
 

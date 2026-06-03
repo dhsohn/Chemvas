@@ -3,9 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from PyQt6.QtCore import QPointF
-
 from core.model import Atom, Bond
+from PyQt6.QtCore import QPointF
 
 
 @dataclass(frozen=True)

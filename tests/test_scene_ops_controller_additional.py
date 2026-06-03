@@ -12,6 +12,12 @@ except ModuleNotFoundError:
 if QApplication is not None:
     from core.history import CompositeCommand
     from core.model import Atom
+    from ui.scene_transform_logic import (
+        center_for_flip_group,
+        flip_bounds_for_item,
+        flip_center_for_selection,
+    )
+
     from tests.test_scene_ops_controller import (
         SceneOpsController,
         _FakeCanvas,
@@ -19,7 +25,6 @@ if QApplication is not None:
         _make_rect_item,
         _make_ring_item,
     )
-    from ui.scene_transform_logic import center_for_flip_group, flip_bounds_for_item, flip_center_for_selection
 
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for scene ops controller tests")

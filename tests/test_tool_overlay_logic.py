@@ -3,7 +3,10 @@ import unittest
 from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-from core.tool_overlay_logic import activate_tool_no_drag, clear_temporary_tool_overlay  # noqa: E402
+from core.tool_overlay_logic import (  # noqa: E402
+    activate_tool_no_drag,
+    clear_temporary_tool_overlay,
+)
 
 
 class _Scene:

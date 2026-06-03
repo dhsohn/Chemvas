@@ -2,9 +2,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from PyQt6.QtCore import QPointF
-
 from core.model import Atom, Bond
+from PyQt6.QtCore import QPointF
 from ui.bond_hover_preview_service import BondHoverPreviewService
 
 

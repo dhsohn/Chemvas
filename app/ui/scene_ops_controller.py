@@ -1,12 +1,26 @@
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
+from core.history import CompositeCommand, HistoryCommand
 from PyQt6.QtCore import QMimeData, QRectF, Qt
 from PyQt6.QtGui import QImage, QPainter
-from PyQt6.QtWidgets import QApplication, QGraphicsItem, QGraphicsPolygonItem, QGraphicsTextItem
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsItem,
+    QGraphicsPolygonItem,
+    QGraphicsTextItem,
+)
 
-from core.history import CompositeCommand, HistoryCommand
-from ui.scene_delete_apply_logic import apply_delete_selection_plan
+from ui.bond_graphics_logic import refresh_bond_graphics
+from ui.canvas_graph_state import graph_state_for
+from ui.canvas_history_service import history_service_for
+from ui.canvas_mark_registry import mark_registry_for
+from ui.export_render_service import (
+    content_bounds,
+    render_scene_to_pdf_bytes,
+    render_scene_to_svg_bytes,
+)
 from ui.scene_clipboard_logic import (
     build_selection_clipboard_payload,
     clipboard_payload_candidates,
@@ -18,9 +32,17 @@ from ui.scene_clipboard_transaction_logic import (
     clipboard_copy_cache_values,
     visible_items_to_hide_for_copy,
 )
-from ui.export_render_service import content_bounds, render_scene_to_pdf_bytes, render_scene_to_svg_bytes
-from ui.bond_graphics_logic import refresh_bond_graphics
+from ui.scene_delete_apply_logic import apply_delete_selection_plan
 from ui.scene_delete_logic import build_delete_selection_plan, classify_delete_selection
+from ui.scene_item_access import (
+    apply_scene_item_state as apply_scene_item_state_helper,
+)
+from ui.scene_item_access import (
+    create_scene_item_from_state as create_scene_item_from_state_helper,
+)
+from ui.scene_item_access import (
+    remove_scene_item as remove_scene_item_helper,
+)
 from ui.scene_paste_apply_logic import apply_paste_payload
 from ui.scene_single_item_mutation_logic import (
     apply_bond_style_with_history,
@@ -42,14 +64,6 @@ from ui.scene_transform_logic import (
     flip_scene_item_state,
     group_items_for_flip_transform,
 )
-from ui.scene_item_access import (
-    apply_scene_item_state as apply_scene_item_state_helper,
-    create_scene_item_from_state as create_scene_item_from_state_helper,
-    remove_scene_item as remove_scene_item_helper,
-)
-from ui.canvas_graph_state import graph_state_for
-from ui.canvas_history_service import history_service_for
-from ui.canvas_mark_registry import mark_registry_for
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
@@ -275,7 +289,7 @@ class SceneOpsController:
                 ts_bracket_rect_from_state=self.canvas._ts_bracket_rect_from_state,
             )
 
-        for component, component_items in zip(atom_components, groups.component_items):
+        for component, component_items in zip(atom_components, groups.component_items, strict=False):
             center = center_for_flip_group(
                 component,
                 component_items,

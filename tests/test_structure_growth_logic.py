@@ -1,8 +1,7 @@
 import unittest
 
-from PyQt6.QtCore import QPointF
-
 from core.model import Atom, Bond
+from PyQt6.QtCore import QPointF
 from ui.structure_growth_logic import (
     alternating_ring_bond_specs,
     crown_ether_elements,

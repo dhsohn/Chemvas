@@ -7,7 +7,11 @@ from PyQt6.QtCore import QPointF
 
 from ui.atom_label_access import add_or_update_atom_label
 from ui.smiles_insert_logic import SmilesCommitPlan
-from ui.template_insert_logic import TemplateInsertPlan, TemplateInsertRequest, TemplateInsertResolution
+from ui.template_insert_logic import (
+    TemplateInsertPlan,
+    TemplateInsertRequest,
+    TemplateInsertResolution,
+)
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView

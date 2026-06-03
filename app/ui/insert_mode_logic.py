@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ui.template_insert_logic import Point2D, TemplateInsertRequest, normalize_template_ring_style
+from ui.template_insert_logic import (
+    Point2D,
+    TemplateInsertRequest,
+    normalize_template_ring_style,
+)
 
 
 @dataclass(frozen=True)

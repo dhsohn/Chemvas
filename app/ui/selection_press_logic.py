@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-
 SelectionPressAction = Literal["ignore", "drag_current_selection", "reselect_preferred_and_drag"]
 
 

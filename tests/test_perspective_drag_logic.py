@@ -1,5 +1,6 @@
 import os
 import unittest
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from core.perspective_drag_logic import resolve_perspective_drag_update  # noqa: E402

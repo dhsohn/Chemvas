@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from core.history import AddAtomsCommand
 from core.model import Atom, Bond, MoleculeModel
 
-
 Point2D = tuple[float, float]
 
 

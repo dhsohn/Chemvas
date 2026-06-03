@@ -2,16 +2,23 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from PyQt6.QtCore import QPointF
-
 from core.model import Atom, Bond, MoleculeModel
+from PyQt6.QtCore import QPointF
 from ui.insert_commit_service import (
     InsertCommitService,
     apply_smiles_commit_plan,
     apply_template_commit_resolution,
 )
-from ui.smiles_insert_logic import SmilesAtomPlacement, SmilesBondPlacement, SmilesCommitPlan
-from ui.template_insert_logic import TemplateInsertPlan, TemplateInsertRequest, TemplateInsertResolution
+from ui.smiles_insert_logic import (
+    SmilesAtomPlacement,
+    SmilesBondPlacement,
+    SmilesCommitPlan,
+)
+from ui.template_insert_logic import (
+    TemplateInsertPlan,
+    TemplateInsertRequest,
+    TemplateInsertResolution,
+)
 
 
 class _FakeCanvas:

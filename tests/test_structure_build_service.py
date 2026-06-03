@@ -3,9 +3,8 @@ from types import SimpleNamespace
 from unittest import mock
 from unittest.mock import Mock
 
-from PyQt6.QtCore import QPointF
-
 from core.model import Atom, Bond, MoleculeModel
+from PyQt6.QtCore import QPointF
 from ui.structure_build_service import StructureBuildService
 
 

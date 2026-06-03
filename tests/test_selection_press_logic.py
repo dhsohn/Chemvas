@@ -1,6 +1,10 @@
 import unittest
 
-from ui.selection_press_logic import SelectionPressContext, SelectionPressDecision, plan_selection_press
+from ui.selection_press_logic import (
+    SelectionPressContext,
+    SelectionPressDecision,
+    plan_selection_press,
+)
 
 
 class SelectionPressLogicTest(unittest.TestCase):

@@ -3,11 +3,18 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from core.history import HistoryCommand
+
 from ui.atom_label_access import add_or_update_atom_label
 from ui.scene_item_access import (
     apply_scene_item_state as _apply_scene_item_state,
+)
+from ui.scene_item_access import (
     create_scene_item_from_state as _create_scene_item_from_state,
+)
+from ui.scene_item_access import (
     remove_scene_item as _remove_scene_item,
+)
+from ui.scene_item_access import (
     restore_scene_item as _restore_scene_item,
 )
 

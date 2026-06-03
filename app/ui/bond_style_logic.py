@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 DOUBLE_STYLE_DEFAULT = "double"
 DOUBLE_STYLE_CENTER = "double_center"
 DOUBLE_STYLE_OUTER = "double_outer"

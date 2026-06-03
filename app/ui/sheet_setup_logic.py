@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 DEFAULT_SHEET_SIZE = "A4"
 DEFAULT_SHEET_ORIENTATION = "landscape"
 SHEET_MARGIN_PX = 80.0

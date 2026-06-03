@@ -8,13 +8,20 @@ from PyQt6.QtWidgets import QGraphicsItem
 
 from ui.hover_scene_renderer import (
     add_hover_preview_items as add_hover_preview_items_helper,
+)
+from ui.hover_scene_renderer import (
     build_atom_hover_indicator as build_atom_hover_indicator_helper,
+)
+from ui.hover_scene_renderer import (
     build_bond_hover_indicator as build_bond_hover_indicator_helper,
+)
+from ui.hover_scene_renderer import (
     clear_hover_items as clear_hover_items_helper,
 )
 
 if TYPE_CHECKING:
     from core.model import Bond
+
     from ui.canvas_view import CanvasView
 
 

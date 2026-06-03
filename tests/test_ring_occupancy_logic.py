@@ -1,8 +1,7 @@
 import unittest
 
-from PyQt6.QtCore import QPointF
-
 from core.model import Bond
+from PyQt6.QtCore import QPointF
 from ui.ring_occupancy_logic import point_inside_any_ring, ring_polygon_points_for_bond
 
 

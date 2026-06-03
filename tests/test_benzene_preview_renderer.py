@@ -7,7 +7,12 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 try:
     from PyQt6.QtCore import QPointF, Qt
     from PyQt6.QtGui import QBrush, QColor, QPen
-    from PyQt6.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsLineItem, QGraphicsScene
+    from PyQt6.QtWidgets import (
+        QApplication,
+        QGraphicsEllipseItem,
+        QGraphicsLineItem,
+        QGraphicsScene,
+    )
 except ModuleNotFoundError:
     QApplication = None
     QGraphicsEllipseItem = None
@@ -15,7 +20,11 @@ except ModuleNotFoundError:
     QGraphicsScene = None
 
 if QApplication is not None:
-    from ui.benzene_preview_renderer import _apply_preview_style, clear_benzene_preview, rebuild_benzene_preview
+    from ui.benzene_preview_renderer import (
+        _apply_preview_style,
+        clear_benzene_preview,
+        rebuild_benzene_preview,
+    )
     from ui.graphics_items import NoSelectLineItem
 
 

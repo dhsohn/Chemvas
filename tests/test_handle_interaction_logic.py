@@ -4,8 +4,7 @@ import unittest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtCore import QPointF
-    from PyQt6.QtCore import Qt
+    from PyQt6.QtCore import QPointF, Qt
     from PyQt6.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsScene
 except ModuleNotFoundError:
     QApplication = None

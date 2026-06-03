@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from core.document_io import read_document, write_document
 from core.document_state import deserialize_model_state
-from ui.canvas_history_service import history_service_for
+
 from ui.canvas_document_state import (
     apply_document_settings,
     restore_document_post_model_items,
     restore_document_pre_model_items,
     snapshot_canvas_document_state,
 )
+from ui.canvas_history_service import history_service_for
 
 
 class CanvasDocumentSessionService:

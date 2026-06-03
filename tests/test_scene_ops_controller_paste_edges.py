@@ -10,7 +10,11 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from tests.test_scene_ops_controller import SceneOpsController, _FakeCanvas, _make_note_item
+    from tests.test_scene_ops_controller import (
+        SceneOpsController,
+        _FakeCanvas,
+        _make_note_item,
+    )
 
 
 class _RecordingFakeCanvas(_FakeCanvas):

@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from PyQt6.QtCore import QPointF, Qt
-
 from core.model import Bond
+from PyQt6.QtCore import QPointF, Qt
 
 Point = tuple[float, float]
 

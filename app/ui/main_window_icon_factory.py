@@ -2,11 +2,20 @@ from __future__ import annotations
 
 import math
 
-from PyQt6.QtCore import QPointF, QRectF, Qt
-from PyQt6.QtGui import QBrush, QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap, QPolygonF
-from PyQt6.QtWidgets import QApplication
-
 from core.model import Atom
+from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtGui import (
+    QBrush,
+    QColor,
+    QFont,
+    QIcon,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QPixmap,
+    QPolygonF,
+)
+from PyQt6.QtWidgets import QApplication
 
 
 class MainWindowIconFactory:
@@ -403,7 +412,7 @@ class MainWindowIconFactory:
             t_sizes = [(i + 1) / (count + 1) for i in range(count)]
             max_t = max(t_sizes) if t_sizes else 1.0
             p.setPen(self._renderer_icon_pen(self.window.canvas.renderer.bond_pen()))
-            for t_pos, t_size in zip(t_positions, t_sizes):
+            for t_pos, t_size in zip(t_positions, t_sizes, strict=False):
                 cx = start.x() + dx * t_pos
                 cy = start.y() + dy * t_pos
                 size = max_size * (t_size / max_t) if max_t > 0 else max_size

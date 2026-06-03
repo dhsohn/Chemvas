@@ -16,7 +16,9 @@ except ModuleNotFoundError:
 if QApplication is not None:
     try:
         from ui.main_window import MainWindow
-        from ui.main_window_workbook_document_service import MainWindowWorkbookDocumentService
+        from ui.main_window_workbook_document_service import (
+            MainWindowWorkbookDocumentService,
+        )
     except SyntaxError:
         MainWindow = None
         MainWindowWorkbookDocumentService = None

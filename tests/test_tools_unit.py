@@ -13,10 +13,19 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     import ui.tools as tools_module
-    from core.model import Atom, Bond
-    from ui.tools import ArrowTool, BondTool, MoveTool, RotateTool, SelectTool, TSBracketTool, Tool, _independent_selection_items
     from core.history import CompositeCommand, MoveAtomsCommand, MoveItemsCommand
+    from core.model import Atom, Bond
     from ui.history_commands import UpdateSceneItemCommand
+    from ui.tools import (
+        ArrowTool,
+        BondTool,
+        MoveTool,
+        RotateTool,
+        SelectTool,
+        Tool,
+        TSBracketTool,
+        _independent_selection_items,
+    )
 
 
 class _FakeItem:

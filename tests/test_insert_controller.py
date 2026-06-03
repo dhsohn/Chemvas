@@ -2,13 +2,22 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from PyQt6.QtCore import QPointF
-
-from core.history import AddAtomsCommand, AddBondCommand, CompositeCommand, DeleteAtomsCommand, DeleteBondCommand
+from core.history import (
+    AddAtomsCommand,
+    AddBondCommand,
+    CompositeCommand,
+    DeleteAtomsCommand,
+    DeleteBondCommand,
+)
 from core.model import Atom, Bond, MoleculeModel
-from ui.insert_controller import InsertController
+from PyQt6.QtCore import QPointF
 from ui.history_commands import DeleteSceneItemsCommand
-from ui.template_insert_logic import TemplateInsertRequest, TemplateInsertResolution, plan_template_commit
+from ui.insert_controller import InsertController
+from ui.template_insert_logic import (
+    TemplateInsertRequest,
+    TemplateInsertResolution,
+    plan_template_commit,
+)
 
 
 def _point_tuples(points) -> list[tuple[float, float]]:

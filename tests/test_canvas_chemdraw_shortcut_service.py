@@ -12,7 +12,10 @@ except ModuleNotFoundError:
 
 if QPointF is not None:
     from core.model import Atom, Bond
-    from ui.canvas_chemdraw_shortcut_service import CanvasChemdrawShortcutService, canvas_chemdraw_shortcut_service_for
+    from ui.canvas_chemdraw_shortcut_service import (
+        CanvasChemdrawShortcutService,
+        canvas_chemdraw_shortcut_service_for,
+    )
     from ui.canvas_view import CanvasView
 
 

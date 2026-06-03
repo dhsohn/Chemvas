@@ -13,7 +13,10 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.handle_overlay_service import HandleOverlayService, handle_overlay_service_for
+    from ui.handle_overlay_service import (
+        HandleOverlayService,
+        handle_overlay_service_for,
+    )
 
 
 class _FakeGraphicsItem:

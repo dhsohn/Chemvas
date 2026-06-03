@@ -12,7 +12,6 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
-
 MarkCenterGetter = Callable[[Any], QPointF]
 MarkCenterSetter = Callable[[Any, QPointF], None]
 NoteStyleApplier = Callable[[QGraphicsTextItem], None]

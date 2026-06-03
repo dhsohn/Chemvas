@@ -6,7 +6,7 @@ from unittest.mock import patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtCore import QPointF, QRectF, Qt, QEvent
+    from PyQt6.QtCore import QEvent, QPointF, QRectF, Qt
     from PyQt6.QtTest import QTest
     from PyQt6.QtWidgets import QApplication, QGraphicsPathItem, QGraphicsTextItem
 except ModuleNotFoundError:
@@ -123,7 +123,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertIsInstance(ring_atom_ids, list)
         polygon = ring_item.polygon()
         self.assertEqual(polygon.count(), len(ring_atom_ids))
-        for atom_id, point in zip(ring_atom_ids, polygon):
+        for atom_id, point in zip(ring_atom_ids, polygon, strict=False):
             atom = self.window.canvas.model.atoms.get(atom_id)
             self.assertIsNotNone(atom)
             assert atom is not None
@@ -1229,7 +1229,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
         undone_segments = self._bond_scene_segments(bond_id)
         self.assertEqual(len(undone_segments), len(before_segments))
-        for (ax1, ay1, ax2, ay2), (bx1, by1, bx2, by2) in zip(undone_segments, before_segments):
+        for (ax1, ay1, ax2, ay2), (bx1, by1, bx2, by2) in zip(undone_segments, before_segments, strict=False):
             self.assertAlmostEqual(ax1, bx1, delta=0.01)
             self.assertAlmostEqual(ay1, by1, delta=0.01)
             self.assertAlmostEqual(ax2, bx2, delta=0.01)
@@ -1380,7 +1380,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
                 (self.window.canvas.model.atoms[new_atom_ids[1]].x, self.window.canvas.model.atoms[new_atom_ids[1]].y),
             ]
         )
-        for (orig_x, orig_y), (pasted_x, pasted_y) in zip(original_positions, pasted_positions):
+        for (orig_x, orig_y), (pasted_x, pasted_y) in zip(original_positions, pasted_positions, strict=False):
             self.assertAlmostEqual(pasted_x, orig_x + paste_dx, places=3)
             self.assertAlmostEqual(pasted_y, orig_y + paste_dy, places=3)
 
@@ -1858,10 +1858,10 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
         self.window.canvas.undo()
 
-        for ring_item, before_points in zip(self.window.canvas.ring_items, before_polygons):
+        for ring_item, before_points in zip(self.window.canvas.ring_items, before_polygons, strict=False):
             polygon = ring_item.polygon()
             self.assertEqual(polygon.count(), len(before_points))
-            for point, (before_x, before_y) in zip(polygon, before_points):
+            for point, (before_x, before_y) in zip(polygon, before_points, strict=False):
                 self.assertAlmostEqual(point.x(), before_x)
                 self.assertAlmostEqual(point.y(), before_y)
             self._assert_ring_polygon_matches_atoms(ring_item)
@@ -2007,8 +2007,8 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         for bond_id, before_segments in tracked_segments.items():
             after_segments = self._bond_scene_segments(bond_id)
             self.assertEqual(len(after_segments), len(before_segments))
-            for after_segment, before_segment in zip(after_segments, before_segments):
-                for after_value, before_value in zip(after_segment, before_segment):
+            for after_segment, before_segment in zip(after_segments, before_segments, strict=False):
+                for after_value, before_value in zip(after_segment, before_segment, strict=False):
                     self.assertAlmostEqual(after_value, before_value)
 
     def test_perspective_rotation_on_selected_bond_chooses_clicked_side(self) -> None:

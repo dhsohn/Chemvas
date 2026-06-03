@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-
 CANVAS_TEMPLATE_FIELDS = (
     "arrow_line_width",
     "arrow_head_scale",

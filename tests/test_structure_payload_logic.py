@@ -2,8 +2,8 @@ import unittest
 
 from core.model import Bond, MoleculeModel
 from ui.structure_payload_logic import (
-    build_atom_annotations,
     build_3d_conversion_payload,
+    build_atom_annotations,
     build_structure_payload,
     build_submodel,
     expand_atom_ids_for_structure,

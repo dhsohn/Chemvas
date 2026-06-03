@@ -5,7 +5,11 @@ from collections.abc import Callable
 from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QColor, QIcon, QPixmap
 
-from ui.main_window_config import ARROW_MENU_SPECS, ARROW_PRESET_SPECS, COLOR_PALETTE_SPECS
+from ui.main_window_config import (
+    ARROW_MENU_SPECS,
+    ARROW_PRESET_SPECS,
+    COLOR_PALETTE_SPECS,
+)
 from ui.main_window_toolbar_logic import build_template_entries
 
 

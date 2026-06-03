@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from core.history import UpdateAtomColorCommand, UpdateBondCommand
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QGraphicsEllipseItem, QGraphicsTextItem
 
-from core.history import UpdateAtomColorCommand, UpdateBondCommand
 from ui.canvas_history_service import history_service_for
 from ui.graphics_items import AtomDotItem
 from ui.history_commands import UpdateSceneItemCommand

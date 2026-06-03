@@ -29,7 +29,11 @@ if QApplication is not None:
     from ui.graphics_items import AtomLabelItem
     from ui.history_commands import DeleteSceneItemsCommand
     from ui.scene_clipboard_transaction_logic import build_clipboard_copy_plan
-    from ui.scene_ops_controller import CLIPBOARD_PDF_MIME, CLIPBOARD_SVG_MIME, SceneOpsController
+    from ui.scene_ops_controller import (
+        CLIPBOARD_PDF_MIME,
+        CLIPBOARD_SVG_MIME,
+        SceneOpsController,
+    )
 
 
 def _set_selectable(item: QGraphicsItem) -> QGraphicsItem:

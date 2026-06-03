@@ -11,8 +11,8 @@ except ModuleNotFoundError:
     QPointF = None
 
 if QPointF is not None:
-    from ui.tools import PerspectiveTool
     from ui.perspective_tool_controller import PerspectiveToolController
+    from ui.tools import PerspectiveTool
 
 
 class _Event:

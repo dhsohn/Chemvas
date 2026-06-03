@@ -24,7 +24,6 @@ from ui.bond_style_logic import (
 )
 from ui.graphics_items import NoSelectLineItem
 
-
 LineSegment = tuple[float, float, float, float]
 
 
@@ -193,7 +192,7 @@ def update_bond_preview_items(
         segments = tuple(resolvers.hash_segments(start.x(), start.y(), end.x(), end.y(), count, a_id, b_id))
         if len(items) != len(segments):
             return False
-        for item, seg in zip(items, segments):
+        for item, seg in zip(items, segments, strict=False):
             if not isinstance(item, QGraphicsLineItem):
                 return False
             item.setLine(*seg)
@@ -231,7 +230,7 @@ def update_bond_preview_items(
                 first.setLine(x1, y1, x2, y2)
             else:
                 return False
-            for item, seg in zip(items[1:], segments[1:]):
+            for item, seg in zip(items[1:], segments[1:], strict=False):
                 if not isinstance(item, QGraphicsLineItem):
                     return False
                 item.setLine(*seg)
@@ -267,7 +266,7 @@ def update_bond_preview_items(
             segments,
             normalized_plain_double_style(style, order),
         )
-        for item, seg in zip(items, updated_segments):
+        for item, seg in zip(items, updated_segments, strict=False):
             if not isinstance(item, QGraphicsLineItem):
                 return False
             item.setLine(*seg)
@@ -276,7 +275,7 @@ def update_bond_preview_items(
         segments = tuple(resolvers.parallel_bond_segments(start.x(), start.y(), end.x(), end.y(), order, a_id, b_id))
         if len(items) != len(segments):
             return False
-        for item, seg in zip(items, segments):
+        for item, seg in zip(items, segments, strict=False):
             if not isinstance(item, QGraphicsLineItem):
                 return False
             item.setLine(*seg)
@@ -379,7 +378,7 @@ def _apply_plain_double_preview_variant(items: list, style: str) -> list:
             items[1].line().y2(),
         ),
     )
-    for item, seg in zip(items, _plain_double_preview_segments(segments, style)):
+    for item, seg in zip(items, _plain_double_preview_segments(segments, style), strict=False):
         item.setLine(*seg)
     return items
 

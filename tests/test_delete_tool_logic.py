@@ -3,8 +3,15 @@ import unittest
 from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-from ui.delete_tool_logic import build_delete_tool_history_command, erase_delete_tool_item  # noqa: E402
-from core.history import CompositeCommand, HistoryCommand, SetSmilesInputCommand  # noqa: E402
+from core.history import (  # noqa: E402
+    CompositeCommand,
+    HistoryCommand,
+    SetSmilesInputCommand,
+)
+from ui.delete_tool_logic import (  # noqa: E402
+    build_delete_tool_history_command,
+    erase_delete_tool_item,
+)
 from ui.history_commands import DeleteSceneItemsCommand  # noqa: E402
 
 

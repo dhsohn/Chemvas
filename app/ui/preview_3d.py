@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import math
 
-from PyQt6.QtCore import QObject, QPointF, QRectF, QThread, QTimer, Qt, pyqtSignal
+from core.rdkit_adapter import Molecule3DScene, RDKitAdapter
+from PyQt6.QtCore import QObject, QPointF, QRectF, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QFontMetricsF, QLinearGradient, QPainter, QPen
 from PyQt6.QtWidgets import QWidget
-
-from core.rdkit_adapter import Molecule3DScene, RDKitAdapter
 
 
 class _Preview3DWorker(QObject):
@@ -494,7 +493,7 @@ class Preview3D(QWidget):
         total_width = sum(widths) + gap
         x = viewport.right() - total_width - 10.0
         y = viewport.top() + 10.0
-        for label, width in zip(labels, widths):
+        for label, width in zip(labels, widths, strict=False):
             pill = QRectF(x, y, width, 22.0)
             painter.setPen(QPen(QColor("#e0e0dd"), 1.0))
             painter.setBrush(QColor("#ffffff"))
@@ -516,7 +515,7 @@ class Preview3D(QWidget):
         if not items:
             painter.restore()
             return
-        for item_rect, (label, value) in zip(self._footer_item_rects(rect, len(items)), items):
+        for item_rect, (label, value) in zip(self._footer_item_rects(rect, len(items)), items, strict=False):
             self._draw_info_chip(painter, item_rect, label, value)
         painter.restore()
 
@@ -607,7 +606,7 @@ class Preview3D(QWidget):
         center_x = content_rect.center().x()
         center_y = content_rect.top() + content_rect.height() * 0.55
         projected = []
-        for atom, (x, y, z) in zip(scene.atoms, rotated):
+        for atom, (x, y, z) in zip(scene.atoms, rotated, strict=False):
             depth = 7.0 / max(1.5, 7.0 - z)
             px = center_x + x * scale * depth
             py = center_y - y * scale * depth

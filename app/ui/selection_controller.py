@@ -14,8 +14,8 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
-from ui.graphics_items import NoSelectEllipseItem, NoSelectPathItem, NoSelectRectItem
 from ui.canvas_hit_testing_service import canvas_hit_testing_service_for
+from ui.graphics_items import NoSelectEllipseItem, NoSelectPathItem, NoSelectRectItem
 from ui.selection_center_logic import bounding_box_center_for_atoms
 from ui.selection_hit_logic import (
     AtomHitCandidate,

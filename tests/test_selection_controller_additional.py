@@ -8,8 +8,14 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 try:
     from PyQt6.QtCore import QPointF, QRectF, Qt
     from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPen, QPolygonF
-    from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsTextItem
-    from PyQt6.QtWidgets import QGraphicsLineItem, QGraphicsPathItem, QGraphicsPolygonItem
+    from PyQt6.QtWidgets import (
+        QApplication,
+        QGraphicsLineItem,
+        QGraphicsPathItem,
+        QGraphicsPolygonItem,
+        QGraphicsScene,
+        QGraphicsTextItem,
+    )
 except ModuleNotFoundError:
     QApplication = None
 

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 
+from core.model import Atom, Bond
 from PyQt6.QtCore import QPointF
 
-from core.model import Atom, Bond
 from ui.ring_occupancy_logic import point_inside_any_ring
 
 

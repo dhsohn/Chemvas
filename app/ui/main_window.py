@@ -1,5 +1,6 @@
 from collections.abc import Callable
 
+from core.document_io import read_document
 from PyQt6.QtCore import QSize, Qt, QTimer
 from PyQt6.QtGui import (
     QAction,
@@ -8,41 +9,48 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import (
     QColorDialog,
-    QLabel,
     QFileDialog,
+    QLabel,
     QMainWindow,
     QMenu,
     QMessageBox,
-    QToolButton,
     QTabBar,
     QTabWidget,
+    QToolButton,
     QWidget,
 )
 
-from core.document_io import read_document
 from ui.canvas_view import CanvasView
+from ui.main_window_active_canvas_ui_service import MainWindowActiveCanvasUIService
 from ui.main_window_canvas_logic import (
     active_canvas_sheet_index as active_canvas_sheet_index_helper,
+)
+from ui.main_window_canvas_logic import (
     active_canvas_tab_index as active_canvas_tab_index_helper,
+)
+from ui.main_window_canvas_logic import (
     resolve_active_canvas,
 )
 from ui.main_window_canvas_sheet_service import MainWindowCanvasSheetService
-from ui.main_window_context_bar_service import MainWindowContextBarService
-from ui.main_window_icon_factory import MainWindowIconFactory
-from ui.main_window_text_style_service import MainWindowTextStyleService
-from ui.main_window_tool_state_service import MainWindowToolStateService
-from ui.main_window_tool_routing_service import MainWindowToolRoutingService
-from ui.main_window_toolbar_logic import tool_display_name
 from ui.main_window_canvas_tab_ui_service import MainWindowCanvasTabUIService
-from ui.main_window_active_canvas_ui_service import MainWindowActiveCanvasUIService
-from ui.main_window_workbook_document_service import MainWindowWorkbookDocumentService
-from ui.main_window_path_logic import resolve_load_path, resolve_save_as_path, resolve_save_path
+from ui.main_window_context_bar_service import MainWindowContextBarService
 from ui.main_window_document_action_service import MainWindowDocumentActionService
+from ui.main_window_icon_factory import MainWindowIconFactory
+from ui.main_window_path_logic import (
+    resolve_load_path,
+    resolve_save_as_path,
+    resolve_save_path,
+)
+from ui.main_window_text_style_service import MainWindowTextStyleService
+from ui.main_window_tool_action_service import MainWindowToolActionService
+from ui.main_window_tool_routing_service import MainWindowToolRoutingService
+from ui.main_window_tool_state_service import MainWindowToolStateService
+from ui.main_window_toolbar_logic import tool_display_name
 from ui.main_window_ui_assembly_service import (
     CornerMenuButton,
     MainWindowUIAssemblyService,
 )
-from ui.main_window_tool_action_service import MainWindowToolActionService
+from ui.main_window_workbook_document_service import MainWindowWorkbookDocumentService
 from ui.preview_3d import Preview3D
 
 

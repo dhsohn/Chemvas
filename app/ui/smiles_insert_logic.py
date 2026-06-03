@@ -6,7 +6,6 @@ from typing import Callable, Literal
 
 from core.model import MoleculeModel
 
-
 Point2D = tuple[float, float]
 LineSegment = tuple[float, float, float, float]
 Rect = tuple[float, float, float, float]

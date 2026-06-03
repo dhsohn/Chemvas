@@ -10,7 +10,12 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 try:
     from PyQt6.QtCore import QPointF
     from PyQt6.QtGui import QFont
-    from PyQt6.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsScene, QGraphicsTextItem
+    from PyQt6.QtWidgets import (
+        QApplication,
+        QGraphicsEllipseItem,
+        QGraphicsScene,
+        QGraphicsTextItem,
+    )
 except ModuleNotFoundError:
     QApplication = None
     QGraphicsEllipseItem = None
@@ -20,7 +25,9 @@ except ModuleNotFoundError:
 if QApplication is not None:
     from core.model import Atom, Bond
     from ui.bond_hover_preview_service import BondHoverPreviewService
-    from ui.canvas_scene_decoration_build_service import CanvasSceneDecorationBuildService
+    from ui.canvas_scene_decoration_build_service import (
+        CanvasSceneDecorationBuildService,
+    )
     from ui.canvas_view import CanvasView
     from ui.hover_interaction_service import HoverInteractionService
     from ui.hover_scene_service import HoverSceneService

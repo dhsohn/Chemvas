@@ -3,9 +3,9 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
+from core.history import SetAtomPositionsCommand
 from PyQt6.QtCore import QPointF
 
-from core.history import SetAtomPositionsCommand
 from ui.canvas_history_service import history_service_for
 from ui.canvas_rotation_state import rotation_state_for
 from ui.selection_center_logic import bounding_box_center_for_atoms

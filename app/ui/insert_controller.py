@@ -7,25 +7,52 @@ from PyQt6.QtWidgets import QMessageBox
 
 from ui.canvas_history_service import history_service_for
 from ui.canvas_insert_state import CanvasInsertState, insert_state_for
+from ui.insert_commit_service import InsertCommitService
 from ui.insert_mode_logic import (
     InsertSessionState,
-    begin_smiles_insert as begin_smiles_insert_state,
-    begin_template_insert as begin_template_insert_state,
     build_template_insert_request,
+)
+from ui.insert_mode_logic import (
+    begin_smiles_insert as begin_smiles_insert_state,
+)
+from ui.insert_mode_logic import (
+    begin_template_insert as begin_template_insert_state,
+)
+from ui.insert_mode_logic import (
     cancel_smiles_insert as cancel_smiles_insert_state,
+)
+from ui.insert_mode_logic import (
     cancel_template_insert as cancel_template_insert_state,
 )
-from ui.insert_commit_service import InsertCommitService
 from ui.insert_smiles_transaction import SmilesLoadTransactionBuilder
 from ui.preview_scene_renderer import (
     apply_smiles_preview_geometry as apply_smiles_preview_geometry_helper,
+)
+from ui.preview_scene_renderer import (
     apply_template_preview_geometry as apply_template_preview_geometry_helper,
+)
+from ui.preview_scene_renderer import (
     clear_smiles_preview as clear_smiles_preview_helper,
+)
+from ui.preview_scene_renderer import (
     clear_template_preview as clear_template_preview_helper,
+)
+from ui.preview_scene_renderer import (
     smiles_preview_snapshot as smiles_preview_snapshot_helper,
 )
-from ui.smiles_insert_logic import SmilesPreviewResolvers, plan_smiles_commit, plan_smiles_preview_update, smiles_preview_center
-from ui.template_insert_logic import TemplateInsertRequest, TemplatePointResolvers, plan_template_commit, plan_template_preview, resolve_template_insert
+from ui.smiles_insert_logic import (
+    SmilesPreviewResolvers,
+    plan_smiles_commit,
+    plan_smiles_preview_update,
+    smiles_preview_center,
+)
+from ui.template_insert_logic import (
+    TemplateInsertRequest,
+    TemplatePointResolvers,
+    plan_template_commit,
+    plan_template_preview,
+    resolve_template_insert,
+)
 from ui.template_preview_logic import plan_template_preview_update
 
 if TYPE_CHECKING:

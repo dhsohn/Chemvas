@@ -6,7 +6,10 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from core.model import Bond
-from ui.canvas_bond_mutation_service import CanvasBondMutationService, canvas_bond_mutation_service_for
+from ui.canvas_bond_mutation_service import (
+    CanvasBondMutationService,
+    canvas_bond_mutation_service_for,
+)
 
 
 class _FakeModel:

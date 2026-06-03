@@ -24,7 +24,11 @@ if QApplication is not None:
     from core.renderer import Renderer
     from core.style_acs1996 import ACS1996Style
     from ui.bond_renderer import BondRenderer
-    from ui.graphics_items import NoSelectLineItem, NoSelectPathItem, NoSelectPolygonItem
+    from ui.graphics_items import (
+        NoSelectLineItem,
+        NoSelectPathItem,
+        NoSelectPolygonItem,
+    )
 
 
 class _FakeStyle:

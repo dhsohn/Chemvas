@@ -4,7 +4,15 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from PyQt6.QtCore import QPointF, QSize, Qt
-from PyQt6.QtGui import QAction, QActionGroup, QColor, QIcon, QKeySequence, QPainter, QPolygonF
+from PyQt6.QtGui import (
+    QAction,
+    QActionGroup,
+    QColor,
+    QIcon,
+    QKeySequence,
+    QPainter,
+    QPolygonF,
+)
 from PyQt6.QtWidgets import (
     QDockWidget,
     QLineEdit,

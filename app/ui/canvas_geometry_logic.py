@@ -15,7 +15,7 @@ def line_rect_clip_t(p1: QPointF, p2: QPointF, rect: QRectF) -> tuple[float, flo
     ]
     u1 = 0.0
     u2 = 1.0
-    for pi, qi in zip(p, q):
+    for pi, qi in zip(p, q, strict=False):
         if abs(pi) < 1e-9:
             if qi < 0:
                 return None

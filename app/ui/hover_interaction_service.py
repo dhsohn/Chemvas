@@ -8,6 +8,7 @@ from ui.hover_highlight_logic import plan_structure_hover_update
 
 if TYPE_CHECKING:
     from core.model import Bond
+
     from ui.canvas_view import CanvasView
 
 

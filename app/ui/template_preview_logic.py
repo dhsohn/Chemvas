@@ -4,7 +4,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
 
-
 Point2D = tuple[float, float]
 LineSegment = tuple[float, float, float, float]
 Rect = tuple[float, float, float, float]

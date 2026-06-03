@@ -6,7 +6,11 @@ from collections.abc import Mapping, Sequence
 from core.model import Atom, Bond
 from core.template_geometry import (
     place_template_on_bond as project_template_on_bond,
+)
+from core.template_geometry import (
     regular_ring_points_for_atom as build_regular_ring_points_for_atom,
+)
+from core.template_geometry import (
     regular_ring_points_for_bond as build_regular_ring_points_for_bond,
 )
 

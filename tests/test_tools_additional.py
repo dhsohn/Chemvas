@@ -13,8 +13,14 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     import ui.tools as tools_module
-    from core.history import AddAtomsCommand, CompositeCommand, MoveItemsCommand, SetSmilesInputCommand
+    from core.history import (
+        AddAtomsCommand,
+        CompositeCommand,
+        MoveItemsCommand,
+        SetSmilesInputCommand,
+    )
     from core.model import Atom, Bond, MoleculeModel
+    from ui.history_commands import DeleteSceneItemsCommand
     from ui.tools import (
         BenzeneTool,
         ColorTool,
@@ -30,7 +36,6 @@ if QApplication is not None:
         ToolController,
         TransformTool,
     )
-    from ui.history_commands import DeleteSceneItemsCommand
 
 
 class _Event:

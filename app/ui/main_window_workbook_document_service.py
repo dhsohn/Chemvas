@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from core.document_io import write_document
 from PyQt6.QtWidgets import QWidget
 
-from core.document_io import write_document
 from ui.main_window_canvas_logic import (
     build_workbook_sheet_states,
     canvas_sheet_name_counter,

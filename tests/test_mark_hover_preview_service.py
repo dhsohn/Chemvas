@@ -3,7 +3,6 @@ from types import SimpleNamespace
 from unittest import mock
 
 from PyQt6.QtCore import QPointF
-
 from ui.mark_hover_preview_service import MarkHoverPreviewService
 
 

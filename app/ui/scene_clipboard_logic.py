@@ -6,7 +6,6 @@ from typing import Callable, Mapping, Sequence
 from PyQt6.QtCore import QMimeData
 from PyQt6.QtWidgets import QGraphicsItem
 
-
 CLIPBOARD_SELECTION_FORMAT = "chemvas-selection"
 
 

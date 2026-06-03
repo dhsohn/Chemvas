@@ -2,16 +2,33 @@ import math
 import time
 from pathlib import Path
 
+from core.history import (
+    CompositeCommand,
+    HistoryCommand,
+    SetAtomPositionsCommand,
+    SetRingPolygonsCommand,
+    UpdateBondLengthCommand,
+)
+from core.model import Bond, MoleculeModel
+from core.rdkit_adapter import RDKitAdapter
+from core.renderer import Renderer
+from core.template_geometry import (
+    cyclohexane_boat_points,
+    cyclohexane_chair_points,
+    regular_ring_radius,
+    ring_points,
+    scale_points_to_bond_length,
+)
 from PyQt6.QtCore import QPointF, QRectF, Qt, QTimer
 from PyQt6.QtGui import (
     QColor,
     QCursor,
     QFont,
+    QNativeGestureEvent,
     QPainter,
     QPainterPath,
     QPen,
     QPolygonF,
-    QNativeGestureEvent,
     QTransform,
 )
 from PyQt6.QtWidgets import (
@@ -26,80 +43,86 @@ from PyQt6.QtWidgets import (
     QInputDialog,
 )
 
-from core.history import (
-    HistoryCommand,
-    CompositeCommand,
-    SetAtomPositionsCommand,
-    SetRingPolygonsCommand,
-    UpdateBondLengthCommand,
-)
-from core.model import Bond, MoleculeModel
-from core.renderer import Renderer
-from core.rdkit_adapter import RDKitAdapter
-from core.template_geometry import (
-    cyclohexane_boat_points,
-    cyclohexane_chair_points,
-    regular_ring_radius,
-    ring_points,
-    scale_points_to_bond_length,
-)
+from ui.bond_graphics_logic import refresh_bond_graphics
 from ui.bond_preview_renderer import (
     BondPreviewBuildResolvers,
     BondPreviewConfig,
     BondPreviewUpdateResolvers,
+)
+from ui.bond_preview_renderer import (
     build_bond_preview_items as build_bond_preview_items_helper,
+)
+from ui.bond_preview_renderer import (
     update_bond_preview_items as update_bond_preview_items_helper,
 )
 from ui.bond_renderer import BondRenderer
-from ui.bond_graphics_logic import refresh_bond_graphics
-from ui.canvas_scene_decoration_build_service import (
-    canvas_scene_decoration_build_service_for,
-)
-from ui.canvas_handle_controller import CanvasHandleController
-from ui.curved_arrow_path_service import curved_arrow_path_service_for
-from ui.handle_overlay_service import handle_overlay_service_for
-from ui.canvas_input_controller import CanvasInputController
-from ui.canvas_insert_state import CanvasInsertState, insert_state_for
-from ui.canvas_move_controller import CanvasMoveController
-from ui.canvas_note_controller import CanvasNoteController
-from ui.canvas_pointer_controller import CanvasPointerController
-from ui.canvas_rotation_preview_controller import CanvasRotationPreviewController
 from ui.canvas_atom_mutation_service import canvas_atom_mutation_service_for
 from ui.canvas_bond_mutation_service import canvas_bond_mutation_service_for
 from ui.canvas_chemdraw_shortcut_service import (
     canvas_chemdraw_shortcut_service_for,
 )
-from ui.canvas_hit_testing_service import CanvasHitTestingService, canvas_hit_testing_service_for
 from ui.canvas_color_mutation_service import canvas_color_mutation_service_for
 from ui.canvas_geometry_controller import CanvasGeometryController
-from ui.canvas_graph_state import CanvasGraphState, graph_state_for
 from ui.canvas_graph_service import canvas_graph_service_for
-from ui.canvas_history_state import CanvasHistoryState
+from ui.canvas_graph_state import CanvasGraphState, graph_state_for
+from ui.canvas_handle_controller import CanvasHandleController
 from ui.canvas_history_service import CanvasHistoryService, history_service_for
+from ui.canvas_history_state import CanvasHistoryState
+from ui.canvas_hit_testing_service import (
+    CanvasHitTestingService,
+    canvas_hit_testing_service_for,
+)
+from ui.canvas_input_controller import CanvasInputController
+from ui.canvas_insert_state import CanvasInsertState, insert_state_for
 from ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
 from ui.canvas_mark_scene_service import canvas_mark_scene_service_for
+from ui.canvas_move_controller import CanvasMoveController
+from ui.canvas_note_controller import CanvasNoteController
+from ui.canvas_pointer_controller import CanvasPointerController
 from ui.canvas_ring_fill_scene_service import canvas_ring_fill_scene_service_for
+from ui.canvas_rotation_preview_controller import CanvasRotationPreviewController
 from ui.canvas_rotation_state import CanvasRotationState, rotation_state_for
+from ui.canvas_scene_decoration_build_service import (
+    canvas_scene_decoration_build_service_for,
+)
 from ui.canvas_scene_reset_service import canvas_scene_reset_service_for
 from ui.canvas_services import attach_canvas_services, build_canvas_services
+from ui.curved_arrow_path_service import curved_arrow_path_service_for
+from ui.handle_overlay_service import handle_overlay_service_for
 from ui.insert_mode_logic import (
     InsertSessionState,
 )
 from ui.ring_occupancy_logic import ring_polygon_points_for_bond
 from ui.scene_item_state import (
     ARROW_KINDS,
+)
+from ui.scene_item_state import (
     arrow_state_dict as arrow_state_dict_helper,
+)
+from ui.scene_item_state import (
     mark_state_dict as mark_state_dict_helper,
+)
+from ui.scene_item_state import (
     note_state_dict as note_state_dict_helper,
+)
+from ui.scene_item_state import (
     orbital_state_dict as orbital_state_dict_helper,
+)
+from ui.scene_item_state import (
     ring_state_dict as ring_state_dict_helper,
+)
+from ui.scene_item_state import (
     scene_item_state as scene_item_state_helper,
+)
+from ui.scene_item_state import (
     ts_bracket_rect_from_state as ts_bracket_rect_from_state_helper,
+)
+from ui.scene_item_state import (
     ts_bracket_state_dict as ts_bracket_state_dict_helper,
 )
 from ui.scene_ops_controller import SceneOpsController
-from ui.selection_controller import SelectionController
 from ui.selection_center_logic import bounding_box_center_for_atoms, center_for_atoms
+from ui.selection_controller import SelectionController
 from ui.selection_highlight_styler import (
     selection_highlight_styler_for,
 )
@@ -110,22 +133,9 @@ from ui.selection_hit_logic import (
     build_selection_snapshot,
     structure_hit_is_selected,
 )
-from ui.structure_payload_logic import (
-    build_3d_conversion_payload as build_3d_conversion_payload_state,
-    build_atom_annotations as build_atom_annotations_state,
-    build_structure_payload as build_structure_payload_state,
-    build_submodel as build_submodel_state,
-    expand_atom_ids_for_structure as expand_atom_ids_for_structure_state,
-)
-from ui.template_insert_logic import (
-    TemplateInsertRequest,
-    TemplatePointResolvers,
-)
-from ui.structure_geometry_logic import (
-    compute_regular_ring_points_for_atom,
-    compute_regular_ring_points_for_bond,
-    compute_sprout_bond_endpoint,
-    compute_template_points_for_bond,
+from ui.selection_rotation_logic import (
+    rotated_atom_positions,
+    selected_rotation_atom_ids,
 )
 from ui.sheet_setup_logic import (
     DEFAULT_SHEET_ORIENTATION,
@@ -134,8 +144,32 @@ from ui.sheet_setup_logic import (
     normalize_sheet_setup,
     sheet_dimensions_px,
 )
-from ui.selection_rotation_logic import rotated_atom_positions, selected_rotation_atom_ids
 from ui.state_field import StateField
+from ui.structure_geometry_logic import (
+    compute_regular_ring_points_for_atom,
+    compute_regular_ring_points_for_bond,
+    compute_sprout_bond_endpoint,
+    compute_template_points_for_bond,
+)
+from ui.structure_payload_logic import (
+    build_3d_conversion_payload as build_3d_conversion_payload_state,
+)
+from ui.structure_payload_logic import (
+    build_atom_annotations as build_atom_annotations_state,
+)
+from ui.structure_payload_logic import (
+    build_structure_payload as build_structure_payload_state,
+)
+from ui.structure_payload_logic import (
+    build_submodel as build_submodel_state,
+)
+from ui.structure_payload_logic import (
+    expand_atom_ids_for_structure as expand_atom_ids_for_structure_state,
+)
+from ui.template_insert_logic import (
+    TemplateInsertRequest,
+    TemplatePointResolvers,
+)
 
 
 class NoteItem(QGraphicsTextItem):
@@ -802,7 +836,7 @@ class CanvasView(QGraphicsView):
         ring_items: list[QGraphicsPolygonItem],
         polygons: list[list[tuple[float, float]]],
     ) -> None:
-        for ring_item, points in zip(ring_items, polygons):
+        for ring_item, points in zip(ring_items, polygons, strict=False):
             if ring_item is None:
                 continue
             polygon = QPolygonF([QPointF(x, y) for x, y in points])

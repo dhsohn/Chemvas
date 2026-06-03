@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from core.model import Atom
 from PyQt6.QtGui import QColor
 
-from core.model import Atom
 from ui.canvas_graph_state import graph_state_for
 
 if TYPE_CHECKING:

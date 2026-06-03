@@ -13,7 +13,10 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from core.model import Atom, Bond
-    from ui.canvas_hit_testing_service import CanvasHitTestingService, canvas_hit_testing_service_for
+    from ui.canvas_hit_testing_service import (
+        CanvasHitTestingService,
+        canvas_hit_testing_service_for,
+    )
 
 
 class _FakeScene:

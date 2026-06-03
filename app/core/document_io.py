@@ -8,7 +8,6 @@ from typing import Any, cast
 
 from core.document_state import build_document_payload, extract_document_state
 
-
 PathType = str | PathLike[str]
 
 

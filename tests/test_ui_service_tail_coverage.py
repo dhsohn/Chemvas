@@ -8,7 +8,14 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 try:
     from PyQt6.QtCore import QPointF, QRect, QRectF, Qt
     from PyQt6.QtGui import QColor, QFont, QPolygonF
-    from PyQt6.QtWidgets import QApplication, QGraphicsPathItem, QGraphicsScene, QGraphicsTextItem, QMainWindow, QToolButton
+    from PyQt6.QtWidgets import (
+        QApplication,
+        QGraphicsPathItem,
+        QGraphicsScene,
+        QGraphicsTextItem,
+        QMainWindow,
+        QToolButton,
+    )
 except ModuleNotFoundError:
     QApplication = None
 
@@ -17,7 +24,10 @@ if QApplication is not None:
     from ui.canvas_note_controller import CanvasNoteController
     from ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
     from ui.handle_mutation_service import HandleMutationService
-    from ui.main_window_ui_assembly_service import ArrowButton, MainWindowUIAssemblyService
+    from ui.main_window_ui_assembly_service import (
+        ArrowButton,
+        MainWindowUIAssemblyService,
+    )
     from ui.scene_item_restore import create_orbital_item_from_state
     from ui.scene_paste_apply_logic import apply_paste_payload
     from ui.scene_transform_logic import flip_scene_item_state

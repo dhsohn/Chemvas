@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from core.model import MoleculeModel
 from PyQt6.QtCore import QPointF
 
-from core.model import MoleculeModel
 from ui.atom_label_access import add_or_update_atom_label
 
 if TYPE_CHECKING:

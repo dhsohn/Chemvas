@@ -4,17 +4,30 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt
 
+from ui.canvas_mark_registry import mark_registry_for
 from ui.scene_item_restore import (
     create_arrow_item_from_state as create_arrow_item_from_state_helper,
+)
+from ui.scene_item_restore import (
     create_mark_item_from_state as create_mark_item_from_state_helper,
+)
+from ui.scene_item_restore import (
     create_note_item_from_state as create_note_item_from_state_helper,
+)
+from ui.scene_item_restore import (
     create_orbital_item_from_state as create_orbital_item_from_state_helper,
+)
+from ui.scene_item_restore import (
     create_ring_item_from_state as create_ring_item_from_state_helper,
+)
+from ui.scene_item_restore import (
     create_scene_item_from_state as create_scene_item_from_state_helper,
+)
+from ui.scene_item_restore import (
     create_ts_bracket_item_from_state as create_ts_bracket_item_from_state_helper,
 )
-from ui.canvas_mark_registry import mark_registry_for
-from ui.scene_item_state import ARROW_KINDS, apply_scene_item_state as apply_scene_item_state_helper
+from ui.scene_item_state import ARROW_KINDS
+from ui.scene_item_state import apply_scene_item_state as apply_scene_item_state_helper
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from core.model import MoleculeModel
+
 from ui.canvas_graph_state import graph_state_for
 from ui.canvas_insert_state import insert_state_for
 from ui.canvas_mark_registry import mark_registry_for

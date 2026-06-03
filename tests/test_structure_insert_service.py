@@ -2,9 +2,8 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-from PyQt6.QtCore import QPointF
-
 from core.model import Atom, Bond, MoleculeModel
+from PyQt6.QtCore import QPointF
 from ui.structure_insert_service import StructureInsertService
 
 

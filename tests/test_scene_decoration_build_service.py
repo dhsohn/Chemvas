@@ -7,13 +7,15 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
     from PyQt6.QtCore import QPointF, QRectF, Qt
-    from PyQt6.QtGui import QPen, QColor
+    from PyQt6.QtGui import QColor, QPen
     from PyQt6.QtWidgets import QApplication, QGraphicsEllipseItem
 except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.canvas_scene_decoration_build_service import CanvasSceneDecorationBuildService
+    from ui.canvas_scene_decoration_build_service import (
+        CanvasSceneDecorationBuildService,
+    )
 
 
 class _RecordingScene:

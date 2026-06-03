@@ -5,7 +5,12 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from core.history import AddAtomsCommand, AddBondCommand, CompositeCommand, UpdateBondCommand
+from core.history import (
+    AddAtomsCommand,
+    AddBondCommand,
+    CompositeCommand,
+    UpdateBondCommand,
+)
 from ui.canvas_history_recording_service import CanvasHistoryRecordingService
 from ui.history_commands import AddSceneItemsCommand
 
