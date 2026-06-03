@@ -36,7 +36,8 @@ SETTINGS_KEYS = frozenset(
         "sheet_orientation",
     )
 )
-# Keys added after v1; absent in older files (loaded with a sensible default).
+# Legacy keys accepted for files written while journal presets existed. New
+# saves do not emit these keys.
 OPTIONAL_SETTINGS_KEYS = frozenset(("style_preset",))
 VALID_BOND_ORDERS = frozenset((1, 2, 3))
 VALID_BOND_STYLES = frozenset(
@@ -144,7 +145,6 @@ def serialize_settings(
     text_italic: bool,
     sheet_size: str,
     sheet_orientation: str,
-    style_preset: str = "ACS 1996",
 ) -> dict:
     return {
         "bond_length_px": bond_length_px,
@@ -156,7 +156,6 @@ def serialize_settings(
         "text_italic": text_italic,
         "sheet_size": sheet_size,
         "sheet_orientation": sheet_orientation,
-        "style_preset": style_preset,
     }
 
 

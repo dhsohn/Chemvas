@@ -174,7 +174,7 @@ class DocumentStateTest(unittest.TestCase):
         self.assertEqual(payload["version"], SINGLE_SHEET_FILE_VERSION)
         self.assertIs(extract_document_state(payload), state)
 
-    def test_settings_serialize_includes_style_preset(self) -> None:
+    def test_settings_serialize_omits_legacy_style_preset(self) -> None:
         settings = serialize_settings(
             bond_length_px=20.0,
             arrow_line_width=1.5,
@@ -185,18 +185,16 @@ class DocumentStateTest(unittest.TestCase):
             text_italic=False,
             sheet_size="A4",
             sheet_orientation="portrait",
-            style_preset="Presentation",
         )
-        self.assertEqual(settings["style_preset"], "Presentation")
+        self.assertNotIn("style_preset", settings)
         state = _single_sheet_state()
         state["settings"] = settings
-        # Round-trips through validation.
         build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
 
-    def test_settings_without_style_preset_still_valid(self) -> None:
-        # Older files predate the key; they must still load.
+    def test_settings_with_legacy_style_preset_still_valid(self) -> None:
+        # Files written while journal presets existed may carry this key.
         settings = _settings()
-        settings.pop("style_preset", None)
+        settings["style_preset"] = "Presentation"
         state = _single_sheet_state()
         state["settings"] = settings
         build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)

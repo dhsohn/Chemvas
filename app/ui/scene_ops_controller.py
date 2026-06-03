@@ -18,6 +18,7 @@ from ui.scene_clipboard_transaction_logic import (
     clipboard_copy_cache_values,
     visible_items_to_hide_for_copy,
 )
+from ui.export_render_service import content_bounds, render_scene_to_pdf_bytes, render_scene_to_svg_bytes
 from ui.bond_graphics_logic import refresh_bond_graphics
 from ui.scene_delete_logic import build_delete_selection_plan, classify_delete_selection
 from ui.scene_paste_apply_logic import apply_paste_payload
@@ -50,6 +51,10 @@ from ui.canvas_graph_state import graph_state_for
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
+
+
+CLIPBOARD_SVG_MIME = "image/svg+xml"
+CLIPBOARD_PDF_MIME = "application/pdf"
 
 
 class SceneOpsController:
@@ -407,6 +412,7 @@ class SceneOpsController:
                 item.setVisible(True)
         mime_data = QMimeData()
         mime_data.setImageData(image)
+        self._set_vector_clipboard_data(mime_data, items)
         if plan.payload_json is not None:
             mime_data.setData(self.canvas.CLIPBOARD_SELECTION_MIME, plan.payload_json.encode("utf-8"))
         self.canvas._clipboard_paste_source_json, self.canvas._clipboard_paste_count = clipboard_copy_cache_values(
@@ -414,6 +420,32 @@ class SceneOpsController:
         )
         QApplication.clipboard().setMimeData(mime_data)
         return True
+
+    def _set_vector_clipboard_data(self, mime_data: QMimeData, items: list[QGraphicsItem]) -> None:
+        source = content_bounds(items)
+        if source is None or source.width() <= 0.0 or source.height() <= 0.0:
+            return
+        pad = max(2.0, self.canvas.renderer.style.bond_line_width * 2.0)
+        source = source.adjusted(-pad, -pad, pad, pad)
+        try:
+            svg_data = render_scene_to_svg_bytes(
+                self.canvas.scene(),
+                source=source,
+                items=items,
+                title="Chemvas selection",
+            )
+            pdf_data = render_scene_to_pdf_bytes(
+                self.canvas.scene(),
+                source=source,
+                items=items,
+                title="Chemvas selection",
+            )
+        except Exception:
+            return
+        if svg_data:
+            mime_data.setData(CLIPBOARD_SVG_MIME, svg_data)
+        if pdf_data:
+            mime_data.setData(CLIPBOARD_PDF_MIME, pdf_data)
 
     def paste_selection_from_clipboard(self) -> bool:
         payload, payload_json = self._clipboard_selection_payload()

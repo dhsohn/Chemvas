@@ -9,6 +9,7 @@ description = "A PyQt-based chemical drawing canvas."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "Pillow>=10",
     "PyQt6>=6.7",
 ]
 

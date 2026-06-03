@@ -112,6 +112,36 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
 
         message_box.warning.assert_called_once_with(self.window, "Export Error", "Failed to export XYZ:\nno exporter")
 
+    def test_export_figure_uses_options_without_style_preset_side_effect(self) -> None:
+        file_dialog = mock.Mock()
+        file_dialog.getSaveFileName.return_value = ("/tmp/figure", "")
+        message_box = mock.Mock()
+        self.window._current_file_path = "/tmp/current.chemvas"
+        self.window.canvas.export_figure = mock.Mock()
+        options = {
+            "fmt": "png",
+            "sizing": "col1",
+            "scope": "selection",
+            "dpi": 600,
+            "background": "white",
+        }
+
+        with mock.patch.object(self.service, "_prompt_export_options", return_value=options):
+            self.service.export_figure(self.window, file_dialog=file_dialog, message_box=message_box)
+
+        file_dialog.getSaveFileName.assert_called_once()
+        self.assertEqual(file_dialog.getSaveFileName.call_args.args[2], "/tmp/current.png")
+        self.window.canvas.export_figure.assert_called_once_with(
+            "/tmp/figure.png",
+            fmt="png",
+            scope="selection",
+            dpi=600,
+            background="white",
+            sizing="col1",
+        )
+        self.assertEqual(self.window.statusBar().currentMessage(), "Exported: /tmp/figure.png")
+        message_box.warning.assert_not_called()
+
     def test_load_canvas_dispatches_single_sheet_and_workbook_states(self) -> None:
         file_dialog = mock.Mock()
         file_dialog.getOpenFileName.return_value = ("/tmp/input.chemvas", "")

@@ -1,4 +1,5 @@
 import os
+import re
 import unittest
 from types import SimpleNamespace
 
@@ -6,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
     from PyQt6.QtCore import QPointF, QRectF
-    from PyQt6.QtGui import QImage, QPolygonF
+    from PyQt6.QtGui import QFont, QImage, QPolygonF
     from PyQt6.QtWidgets import (
         QApplication,
         QGraphicsItem,
@@ -25,9 +26,10 @@ if QApplication is not None:
         DeleteBondCommand,
     )
     from core.model import Atom, Bond, MoleculeModel
+    from ui.graphics_items import AtomLabelItem
     from ui.history_commands import DeleteSceneItemsCommand
     from ui.scene_clipboard_transaction_logic import build_clipboard_copy_plan
-    from ui.scene_ops_controller import SceneOpsController
+    from ui.scene_ops_controller import CLIPBOARD_PDF_MIME, CLIPBOARD_SVG_MIME, SceneOpsController
 
 
 def _set_selectable(item: QGraphicsItem) -> QGraphicsItem:
@@ -361,7 +363,30 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertEqual(canvas._clipboard_paste_count, 0)
         mime_data = QApplication.clipboard().mimeData()
         self.assertTrue(mime_data.hasImage())
+        self.assertTrue(mime_data.hasFormat(CLIPBOARD_SVG_MIME))
+        self.assertTrue(mime_data.hasFormat(CLIPBOARD_PDF_MIME))
+        self.assertIn(b"<svg", bytes(mime_data.data(CLIPBOARD_SVG_MIME)))
+        self.assertTrue(bytes(mime_data.data(CLIPBOARD_PDF_MIME)).startswith(b"%PDF-"))
         self.assertTrue(mime_data.hasFormat(canvas.CLIPBOARD_SELECTION_MIME))
+
+    def test_vector_clipboard_uses_label_ink_bounds_not_hit_bounds(self) -> None:
+        canvas = _FakeCanvas()
+        controller = SceneOpsController(canvas)
+        label = _set_selectable(AtomLabelItem("N", hit_radius=80.0))
+        label.setFont(QFont("Arial", 12))
+        label.setData(0, "note")
+        label.setData(9, {"kind": "note", "text": "N", "x": 10.0, "y": 12.0})
+        label.setPos(10.0, 12.0)
+        canvas.add_item(label, selected=True)
+
+        self.assertTrue(controller.copy_selection_to_clipboard())
+        svg_data = bytes(QApplication.clipboard().mimeData().data(CLIPBOARD_SVG_MIME))
+        match = re.search(rb'viewBox="0 0 ([0-9.]+) ([0-9.]+)"', svg_data)
+
+        self.assertIsNotNone(match)
+        assert match is not None
+        vector_width = float(match.group(1))
+        self.assertLess(vector_width, label.sceneBoundingRect().width())
 
     def test_paste_selection_remaps_atom_ids_and_restores_selection(self) -> None:
         canvas = _FakeCanvas()

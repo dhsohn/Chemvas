@@ -14,7 +14,6 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from core.style_presets import DEFAULT_PRESET, preset_names
 from ui.export_dialog_logic import (
     DEFAULT_DPI,
     DPI_OPTIONS,
@@ -120,7 +119,6 @@ class MainWindowDocumentActionService:
         if path is None:
             return
         try:
-            window.canvas.apply_style_preset(options["preset"])
             window.canvas.export_figure(
                 path,
                 fmt=fmt,
@@ -150,16 +148,6 @@ class MainWindowDocumentActionService:
         for label, fmt, _suffix in EXPORT_FORMATS:
             format_combo.addItem(label, fmt)
         layout.addWidget(format_combo)
-
-        layout.addWidget(QLabel("Style preset:"))
-        preset_combo = QComboBox()
-        preset_combo.setObjectName("exportPresetCombo")
-        for name in preset_names():
-            preset_combo.addItem(name, name)
-        preset_index = preset_combo.findData(DEFAULT_PRESET)
-        if preset_index >= 0:
-            preset_combo.setCurrentIndex(preset_index)
-        layout.addWidget(preset_combo)
 
         layout.addWidget(QLabel("Size:"))
         size_combo = QComboBox()
@@ -214,7 +202,6 @@ class MainWindowDocumentActionService:
             return None
         return {
             "fmt": format_combo.currentData(),
-            "preset": preset_combo.currentData(),
             "sizing": size_combo.currentData(),
             "scope": scope_combo.currentData(),
             "dpi": int(dpi_combo.currentData()),
