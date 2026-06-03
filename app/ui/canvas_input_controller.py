@@ -5,11 +5,13 @@ from PyQt6.QtGui import QKeySequence, QNativeGestureEvent
 from PyQt6.QtWidgets import QGraphicsTextItem, QGraphicsView
 
 from ui.canvas_chemdraw_shortcut_service import canvas_chemdraw_shortcut_service_for
+from ui.canvas_insert_state import insert_state_for
 
 
 class CanvasInputController:
     def __init__(self, canvas) -> None:
         self.canvas = canvas
+        self.insert_state = insert_state_for(canvas)
 
     @staticmethod
     def shortcut_modifiers(event) -> Qt.KeyboardModifier:
@@ -28,11 +30,11 @@ class CanvasInputController:
                 return
         self.canvas._refresh_hover_from_cursor()
         if event.key() == Qt.Key.Key_Escape:
-            if self.canvas._template_insert_active:
+            if self.insert_state.template_active:
                 self.canvas._cancel_template_insert()
                 event.accept()
                 return
-            if self.canvas._smiles_insert_active:
+            if self.insert_state.smiles_active:
                 self.canvas._cancel_smiles_insert()
                 event.accept()
                 return

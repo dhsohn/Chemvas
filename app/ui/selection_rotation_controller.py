@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QPointF
 
 from core.history import SetAtomPositionsCommand
+from ui.canvas_history_service import history_service_for
 from ui.canvas_rotation_state import rotation_state_for
 from ui.selection_center_logic import bounding_box_center_for_atoms
 from ui.selection_rotation_logic import selected_rotation_atom_ids
@@ -18,6 +19,7 @@ class SelectionRotationController:
     def __init__(self, canvas: CanvasView) -> None:
         self.canvas = canvas
         self.rotation = rotation_state_for(canvas)
+        self.history = history_service_for(canvas)
 
     def begin_selection_3d_rotation(
         self,
@@ -276,7 +278,7 @@ class SelectionRotationController:
                 before_projection_anchor_2d=before_projection_anchor_2d,
                 after_projection_anchor_2d=after_projection_anchor_2d,
             )
-            self.canvas._push_command(command)
+            self.history.push(command)
         if selection_ids is not None:
             self.canvas._restore_selection_from_ids(*selection_ids)
         self.canvas._emit_selection_info()

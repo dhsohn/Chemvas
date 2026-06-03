@@ -4,10 +4,13 @@ import math
 
 from PyQt6.QtCore import QPointF
 
+from ui.canvas_mark_registry import mark_registry_for
+
 
 class CanvasMarkSceneService:
     def __init__(self, canvas) -> None:
         self.canvas = canvas
+        self.marks = mark_registry_for(canvas)
 
     def add_mark_for_atom(
         self,
@@ -51,15 +54,15 @@ class CanvasMarkSceneService:
         data = item.data(1) or {}
         atom_id = data.get("atom_id")
         if isinstance(atom_id, int):
-            marks = self.canvas._marks_by_atom.get(atom_id)
+            marks = self.marks.get_for_atom(atom_id)
             if marks is not None and item in marks:
                 marks.remove(item)
             if marks is not None and not marks:
-                self.canvas._marks_by_atom.pop(atom_id, None)
+                self.marks.by_atom.pop(atom_id, None)
         self.canvas.scene().removeItem(item)
 
     def remove_marks_for_atom(self, atom_id: int) -> None:
-        marks = self.canvas._marks_by_atom.pop(atom_id, [])
+        marks = self.marks.pop_for_atom(atom_id)
         for item in list(marks):
             if item in self.canvas.mark_items:
                 self.canvas.mark_items.remove(item)

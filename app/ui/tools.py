@@ -23,6 +23,7 @@ from ui.bond_preview_renderer import (
 )
 from ui.atom_label_access import add_or_update_atom_label
 from ui.bond_style_logic import style_for_existing_bond_overlay
+from ui.canvas_history_service import history_service_for
 from ui.delete_tool_logic import build_delete_tool_history_command, erase_delete_tool_item
 from ui.history_commands import UpdateSceneItemCommand
 from ui.perspective_tool_controller import PerspectiveToolController
@@ -160,7 +161,7 @@ class _SelectionDragMixin:
             self.canvas._update_selection_outline()
             command = self._build_move_command()
             if command is not None:
-                self.canvas._push_command(command)
+                history_service_for(self.canvas).push(command)
 
 
 class SelectTool(_SelectionDragMixin, Tool):
@@ -340,7 +341,7 @@ class SelectTool(_SelectionDragMixin, Tool):
             self._clear_pending_curved_handle_toggle()
             if before_state and after_state and before_state != after_state:
                 command = UpdateSceneItemCommand(target, before_state, after_state)
-                self.canvas._push_command(command)
+                history_service_for(self.canvas).push(command)
             return True
         if self._pending_curved_handle_item is not None and not self._moved:
             item = self._pending_curved_handle_item
@@ -650,7 +651,7 @@ class TextTool(Tool):
                 before_smiles_input=before_smiles_input,
                 after_smiles_input=self.canvas.last_smiles_input,
             )
-            self.canvas._push_command(command)
+            history_service_for(self.canvas).push(command)
         else:
             add_or_update_atom_label(self.canvas, atom_id, text, show_carbon=True)
         return True
@@ -860,7 +861,7 @@ class MoveTool(_SelectionDragMixin, Tool):
                     dx=self._total_delta.x(),
                     dy=self._total_delta.y(),
                 )
-                self.canvas._push_command(command)
+                history_service_for(self.canvas).push(command)
         self._drag_item = None
         self._start_pos = None
         self._moved = False
@@ -907,7 +908,7 @@ class DeleteTool(Tool):
                 after_smiles_input=self.canvas.last_smiles_input,
             )
             if command is not None:
-                self.canvas._push_command(command)
+                history_service_for(self.canvas).push(command)
         self._changed = False
         self._commands = []
         self._before_smiles_input = None

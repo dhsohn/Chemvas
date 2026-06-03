@@ -6,6 +6,7 @@ from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QGraphicsEllipseItem, QGraphicsTextItem
 
 from core.history import UpdateAtomColorCommand, UpdateBondCommand
+from ui.canvas_history_service import history_service_for
 from ui.graphics_items import AtomDotItem
 from ui.history_commands import UpdateSceneItemCommand
 
@@ -16,6 +17,7 @@ if TYPE_CHECKING:
 class CanvasColorMutationService:
     def __init__(self, canvas: CanvasView) -> None:
         self.canvas = canvas
+        self.history = history_service_for(canvas)
 
     def apply_color_to_item(self, item, color: QColor) -> None:
         if item is None or not color.isValid():
@@ -46,7 +48,7 @@ class CanvasColorMutationService:
         item.setBrush(fill)
         after_state = self.canvas._ring_state_dict(item)
         if before_state != after_state:
-            self.canvas._push_command(UpdateSceneItemCommand(item, before_state, after_state))
+            self.history.push(UpdateSceneItemCommand(item, before_state, after_state))
 
     def _apply_bond_color(self, item, color: QColor) -> None:
         bond_id = item.data(1)
@@ -61,7 +63,7 @@ class CanvasColorMutationService:
             self.canvas._apply_color_to_bond_item(bond_item, color)
         after_state = self.canvas._bond_state_dict(bond)
         if before_state != after_state:
-            self.canvas._push_command(
+            self.history.push(
                 UpdateBondCommand(
                     bond_id=bond_id,
                     before_state=before_state,
@@ -91,7 +93,7 @@ class CanvasColorMutationService:
             dot_item.setBrush(self.canvas._implicit_carbon_dot_brush())
         after_color = self.canvas.model.atoms[atom_id].color
         if before_color != after_color:
-            self.canvas._push_command(
+            self.history.push(
                 UpdateAtomColorCommand(
                     atom_id=atom_id,
                     before_color=before_color,

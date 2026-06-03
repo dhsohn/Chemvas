@@ -10,6 +10,7 @@ from ui.bond_style_logic import (
     is_plain_double_bond_style,
     normalized_plain_double_style,
 )
+from ui.canvas_insert_state import insert_state_for
 
 
 DOUBLE_BOND_CONTEXT_STYLES = (
@@ -22,6 +23,7 @@ DOUBLE_BOND_CONTEXT_STYLES = (
 class CanvasPointerController:
     def __init__(self, canvas) -> None:
         self.canvas = canvas
+        self.insert_state = insert_state_for(canvas)
 
     def _dispatch_press_event(
         self,
@@ -34,11 +36,11 @@ class CanvasPointerController:
         if event.button() == Qt.MouseButton.RightButton and self._show_double_bond_context_menu(event):
             self.canvas._clear_hover_highlight()
             return
-        if self.canvas._template_insert_active and event.button() == Qt.MouseButton.LeftButton:
+        if self.insert_state.template_active and event.button() == Qt.MouseButton.LeftButton:
             self.canvas._commit_template_insert(self.canvas.scene_pos_from_event(event))
             self.canvas._clear_hover_highlight()
             return
-        if self.canvas._smiles_insert_active and event.button() == Qt.MouseButton.LeftButton:
+        if self.insert_state.smiles_active and event.button() == Qt.MouseButton.LeftButton:
             self.canvas._commit_smiles_insert(self.canvas.scene_pos_from_event(event))
             self.canvas._clear_hover_highlight()
             return
@@ -106,10 +108,10 @@ class CanvasPointerController:
 
     def mouse_move_event(self, event, *, base_mouse_move_event) -> None:
         self.canvas._touch_interaction()
-        if self.canvas._template_insert_active:
+        if self.insert_state.template_active:
             self.canvas._render_template_preview(self.canvas.scene_pos_from_event(event))
             return
-        if self.canvas._smiles_insert_active:
+        if self.insert_state.smiles_active:
             self.canvas._render_smiles_preview(self.canvas.scene_pos_from_event(event))
             return
         if event.buttons() == Qt.MouseButton.NoButton:
@@ -135,9 +137,9 @@ class CanvasPointerController:
             single_shot(0, self.canvas._refresh_hover_from_cursor)
         elif event.type() == QEvent.Type.MouseMove:
             scene_pos = self.canvas.scene_pos_from_event(event)
-            if self.canvas._template_insert_active:
+            if self.insert_state.template_active:
                 self.canvas._render_template_preview(scene_pos)
-            elif self.canvas._smiles_insert_active:
+            elif self.insert_state.smiles_active:
                 self.canvas._render_smiles_preview(scene_pos)
             elif getattr(event, "buttons", lambda: Qt.MouseButton.NoButton)() == Qt.MouseButton.NoButton:
                 self.canvas._update_hover_highlight(scene_pos)

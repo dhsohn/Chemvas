@@ -84,11 +84,14 @@ from ui.canvas_geometry_controller import CanvasGeometryController
 from ui.canvas_graph_state import CanvasGraphState, graph_state_for
 from ui.canvas_graph_service import CanvasGraphService, canvas_graph_service_for
 from ui.canvas_history_state import CanvasHistoryState, history_state_for
+from ui.canvas_history_service import CanvasHistoryService, history_service_for
 from ui.canvas_history_recording_service import CanvasHistoryRecordingService
+from ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
 from ui.canvas_mark_scene_service import CanvasMarkSceneService, canvas_mark_scene_service_for
 from ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService, canvas_ring_fill_scene_service_for
 from ui.canvas_rotation_state import CanvasRotationState, rotation_state_for
 from ui.canvas_scene_reset_service import CanvasSceneResetService, canvas_scene_reset_service_for
+from ui.canvas_services import attach_canvas_services, build_canvas_services
 from ui.hover_interaction_service import HoverInteractionService
 from ui.hover_scene_service import HoverSceneService
 from ui.insert_mode_logic import (
@@ -252,6 +255,7 @@ class CanvasView(QGraphicsView):
     _rotation_start_coords_3d = StateField("_rotation_state", "start_coords_3d")
     _rotation_coord_atom_ids = StateField("_rotation_state", "coord_atom_ids")
     _rotation_selection_ids = StateField("_rotation_state", "selection_ids")
+    _marks_by_atom = StateField("_mark_registry", "by_atom")
 
     def __init__(self) -> None:
         super().__init__()
@@ -283,6 +287,10 @@ class CanvasView(QGraphicsView):
         self.atom_items: dict[int, QGraphicsTextItem] = {}
         self.atom_dots: dict[int, QGraphicsEllipseItem] = {}
         self._graph_state = CanvasGraphState()
+        self._insert_state = CanvasInsertState()
+        self._history_state = CanvasHistoryState()
+        self._history_service = CanvasHistoryService(self, self._history_state)
+        self._mark_registry = CanvasMarkRegistry()
         self.atom_symbol = "C"
         self.bond_items: dict[int, list] = {}
         self._bond_renderer = BondRenderer(self)
@@ -317,43 +325,13 @@ class CanvasView(QGraphicsView):
         self._suspend_selection_outline = False
         self._selection_signature = None
         self._selection_pending_signature = None
-        self._selection_controller = SelectionController(self)
-        self._scene_item_controller = SceneItemController(self)
-        self._scene_ops_controller = SceneOpsController(self)
-        self._insert_controller = InsertController(self)
-        self._input_controller = CanvasInputController(self)
-        self._handle_controller = CanvasHandleController(self)
-        self._handle_overlay_service = HandleOverlayService(self)
-        self._handle_mutation_service = HandleMutationService(self)
-        self._curved_arrow_path_service = CurvedArrowPathService(self)
-        self._selection_highlight_styler = SelectionHighlightStyler(self)
-        self._move_controller = CanvasMoveController(self)
-        self._note_controller = CanvasNoteController(self)
-        self._pointer_controller = CanvasPointerController(self)
-        self._geometry_controller = CanvasGeometryController(self)
-        self._canvas_atom_mutation_service = CanvasAtomMutationService(self)
-        self._canvas_bond_mutation_service = CanvasBondMutationService(self)
-        self._chemdraw_shortcut_service = CanvasChemdrawShortcutService(self)
-        self._hit_testing_service = CanvasHitTestingService(self)
-        self._canvas_color_mutation_service = CanvasColorMutationService(self)
-        self._canvas_document_session_service = CanvasDocumentSessionService(self)
-        self._canvas_graph_service = CanvasGraphService(self, self._graph_state)
-        self._canvas_history_recording_service = CanvasHistoryRecordingService(self)
-        self._canvas_mark_scene_service = CanvasMarkSceneService(self)
-        self._canvas_ring_fill_scene_service = CanvasRingFillSceneService(self)
-        self._canvas_scene_reset_service = CanvasSceneResetService(self)
-        self._rotation_preview_controller = CanvasRotationPreviewController(self)
-        self._atom_label_service = AtomLabelService(self)
-        self._hover_interaction_service = HoverInteractionService(self)
-        self._hover_scene_service = HoverSceneService(self)
-        self._mark_hover_preview_service = MarkHoverPreviewService(self)
-        self._bond_hover_preview_service = BondHoverPreviewService(self)
-        self._structure_build_service = StructureBuildService(self)
-        self._benzene_preview_service = BenzenePreviewService(self)
-        self._scene_decoration_build_service = CanvasSceneDecorationBuildService(self)
-        self._scene_decoration_service = SceneDecorationService(self)
-        self._structure_insert_service = StructureInsertService(self)
-        self._selection_rotation_controller = SelectionRotationController(self)
+        services = build_canvas_services(
+            self,
+            graph_state=self._graph_state,
+            insert_state=self._insert_state,
+            history_service=self._history_service,
+        )
+        attach_canvas_services(self, services)
         self._selection_info_cache = ("", "")
         self._orbital_snap_enabled = False
         self._orbital_snap_step = 15
@@ -379,7 +357,7 @@ class CanvasView(QGraphicsView):
         self.arrow_items: list[QGraphicsPathItem] = []
         self.ts_bracket_items: list[QGraphicsPathItem] = []
         self.orbital_items: list[QGraphicsItemGroup] = []
-        self._marks_by_atom: dict[int, list[QGraphicsItem]] = {}
+        self._marks_by_atom = {}
         self.hover_items: list = []
         self.hover_atom_id: int | None = None
         self.hover_bond_id: int | None = None
@@ -389,11 +367,8 @@ class CanvasView(QGraphicsView):
         self._error_callback = None
         self._rotation_selection_ids = None
         self.selection_outlines: list[QGraphicsItem] = []
-        self._insert_state = CanvasInsertState()
-        self._history_state = CanvasHistoryState()
         self._clipboard_paste_source_json: str | None = None
         self._clipboard_paste_count = 0
-        self.tools = ToolController(self)
         self.tools.set_active("bond")
 
     def _apply_sheet_scene_rect(self) -> None:
@@ -675,40 +650,25 @@ class CanvasView(QGraphicsView):
         self._canvas_document_session_service.load_from_file(path)
 
     def _push_command(self, command: HistoryCommand) -> None:
-        history = history_state_for(self)
-        if not history.enabled:
-            return
-        history.history.append(command)
-        if len(history.history) > history.limit:
-            history.history.pop(0)
-        history.redo_stack.clear()
-        CanvasView._notify_history_change(self)
+        history_service_for(self).push(command)
 
     def undo(self) -> None:
-        history = history_state_for(self)
-        if not history.history:
-            return
-        command = history.history.pop()
-        history.redo_stack.append(command)
-        command.undo(self)
-        CanvasView._notify_history_change(self)
+        history_service_for(self).undo()
 
     def redo(self) -> None:
-        history = history_state_for(self)
-        if not history.redo_stack:
-            return
-        command = history.redo_stack.pop()
-        history.history.append(command)
-        command.redo(self)
-        CanvasView._notify_history_change(self)
+        history_service_for(self).redo()
 
     def set_history_change_callback(self, callback) -> None:
-        history_state_for(self).change_callback = callback
+        history_service_for(self).set_change_callback(callback)
 
     def _notify_history_change(self) -> None:
-        history = history_state_for(self)
-        if history.change_callback is not None:
-            history.change_callback()
+        history_service_for(self).notify_change()
+
+    def can_undo(self) -> bool:
+        return history_service_for(self).can_undo()
+
+    def can_redo(self) -> bool:
+        return history_service_for(self).can_redo()
 
     def set_tool_change_callback(self, callback) -> None:
         self._tool_change_callback = callback
@@ -832,7 +792,7 @@ class CanvasView(QGraphicsView):
             dot = self.atom_dots.get(atom_id)
             if dot is not None:
                 dot.setPos(x, y)
-            marks = self._marks_by_atom.get(atom_id)
+            marks = mark_registry_for(self).get_for_atom(atom_id)
             if marks:
                 for mark in list(marks):
                     data = mark.data(1) or {}
@@ -1320,7 +1280,7 @@ class CanvasView(QGraphicsView):
                     after_polygons=after_ring_polygons,
                 )
             )
-        self._push_command(CompositeCommand(commands))
+        history_service_for(self).push(CompositeCommand(commands))
 
     def _rescale_model(self, scale: float) -> None:
         xs = [atom.x for atom in self.model.atoms.values()]
@@ -1640,7 +1600,7 @@ class CanvasView(QGraphicsView):
 
     def _mark_kinds_by_atom(self) -> dict[int, list[str]]:
         mark_kinds_by_atom: dict[int, list[str]] = {}
-        for atom_id, marks in self._marks_by_atom.items():
+        for atom_id, marks in mark_registry_for(self).items():
             kinds: list[str] = []
             for mark in marks:
                 data = mark.data(1)
@@ -2687,7 +2647,7 @@ class CanvasView(QGraphicsView):
             dot = self.atom_dots.get(atom_id)
             if dot is not None:
                 dot.setPos(atom.x, atom.y)
-            marks = self._marks_by_atom.get(atom_id)
+            marks = mark_registry_for(self).get_for_atom(atom_id)
             if marks:
                 for mark in list(marks):
                     data = mark.data(1) or {}

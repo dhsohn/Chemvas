@@ -11,6 +11,7 @@ from core.history import (
     DeleteBondCommand,
     HistoryCommand,
 )
+from ui.canvas_mark_registry import mark_registry_for
 from ui.history_commands import DeleteSceneItemsCommand
 
 if TYPE_CHECKING:
@@ -95,6 +96,7 @@ class SmilesLoadSnapshot:
 class SmilesLoadTransactionBuilder:
     def __init__(self, canvas: CanvasView) -> None:
         self.canvas = canvas
+        self.marks = mark_registry_for(canvas)
 
     def capture(self) -> SmilesLoadSnapshot:
         atom_states = {atom_id: self.canvas._atom_state_dict(atom_id) for atom_id in self.canvas.model.atoms}
@@ -105,7 +107,7 @@ class SmilesLoadTransactionBuilder:
         }
         mark_states_for_atoms: list[dict] = []
         for atom_id in atom_states:
-            for mark in self.canvas._marks_by_atom.get(atom_id, []):
+            for mark in self.marks.get_for_atom(atom_id) or []:
                 mark_states_for_atoms.append(self.canvas._mark_state_dict(mark))
         scene_items = self._scene_items_for_delete(set(atom_states))
         scene_item_states = [self.canvas.scene_item_state(item) for item in scene_items]

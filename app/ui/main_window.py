@@ -544,8 +544,8 @@ class MainWindow(QMainWindow):
 
     def _update_action_availability(self) -> None:
         canvas = self._active_canvas_or_none()
-        can_undo = bool(canvas._history_state.history) if canvas is not None else False
-        can_redo = bool(canvas._history_state.redo_stack) if canvas is not None else False
+        can_undo = canvas.can_undo() if canvas is not None else False
+        can_redo = canvas.can_redo() if canvas is not None else False
         can_export = bool(canvas.model.atoms) if canvas is not None else False
 
         for button, enabled in (

@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtWidgets import QGraphicsTextItem
 
+from ui.canvas_history_service import history_service_for
 from ui.history_commands import AddSceneItemsCommand
 from ui.scene_item_access import attach_scene_item, create_scene_item_from_state
 
@@ -15,6 +16,7 @@ if TYPE_CHECKING:
 class SceneDecorationService:
     def __init__(self, canvas: CanvasView) -> None:
         self.canvas = canvas
+        self.history = history_service_for(canvas)
 
     def add_mark(
         self,
@@ -87,4 +89,4 @@ class SceneDecorationService:
 
     def _push_add_scene_item(self, item, state: dict) -> None:
         command = AddSceneItemsCommand(item_states=[state], items=[item])
-        self.canvas._push_command(command)
+        self.history.push(command)
