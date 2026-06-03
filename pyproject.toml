@@ -58,3 +58,7 @@ python_version = "3.13"
 mypy_path = "app"
 files = ["app/core"]
 warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["rdkit", "rdkit.*"]
+ignore_missing_imports = true
