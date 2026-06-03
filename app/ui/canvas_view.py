@@ -43,7 +43,6 @@ from core.template_geometry import (
     ring_points,
     scale_points_to_bond_length,
 )
-from ui.tools import ToolController
 from ui.bond_preview_renderer import (
     BondPreviewBuildResolvers,
     BondPreviewConfig,
@@ -51,56 +50,41 @@ from ui.bond_preview_renderer import (
     build_bond_preview_items as build_bond_preview_items_helper,
     update_bond_preview_items as update_bond_preview_items_helper,
 )
-from ui.bond_hover_preview_service import BondHoverPreviewService
 from ui.bond_renderer import BondRenderer
-from ui.atom_label_service import AtomLabelService
-from ui.benzene_preview_service import BenzenePreviewService
 from ui.bond_graphics_logic import refresh_bond_graphics
 from ui.canvas_scene_decoration_build_service import (
-    CanvasSceneDecorationBuildService,
     canvas_scene_decoration_build_service_for,
 )
-from ui.scene_decoration_service import SceneDecorationService
 from ui.canvas_handle_controller import CanvasHandleController
-from ui.curved_arrow_path_service import CurvedArrowPathService, curved_arrow_path_service_for
-from ui.handle_mutation_service import HandleMutationService
-from ui.handle_overlay_service import HandleOverlayService, handle_overlay_service_for
+from ui.curved_arrow_path_service import curved_arrow_path_service_for
+from ui.handle_overlay_service import handle_overlay_service_for
 from ui.canvas_input_controller import CanvasInputController
 from ui.canvas_insert_state import CanvasInsertState, insert_state_for
 from ui.canvas_move_controller import CanvasMoveController
 from ui.canvas_note_controller import CanvasNoteController
 from ui.canvas_pointer_controller import CanvasPointerController
 from ui.canvas_rotation_preview_controller import CanvasRotationPreviewController
-from ui.canvas_atom_mutation_service import CanvasAtomMutationService, canvas_atom_mutation_service_for
-from ui.canvas_bond_mutation_service import CanvasBondMutationService, canvas_bond_mutation_service_for
+from ui.canvas_atom_mutation_service import canvas_atom_mutation_service_for
+from ui.canvas_bond_mutation_service import canvas_bond_mutation_service_for
 from ui.canvas_chemdraw_shortcut_service import (
-    CanvasChemdrawShortcutService,
     canvas_chemdraw_shortcut_service_for,
 )
 from ui.canvas_hit_testing_service import CanvasHitTestingService, canvas_hit_testing_service_for
-from ui.canvas_color_mutation_service import CanvasColorMutationService, canvas_color_mutation_service_for
-from ui.canvas_document_session_service import CanvasDocumentSessionService
+from ui.canvas_color_mutation_service import canvas_color_mutation_service_for
 from ui.canvas_geometry_controller import CanvasGeometryController
 from ui.canvas_graph_state import CanvasGraphState, graph_state_for
-from ui.canvas_graph_service import CanvasGraphService, canvas_graph_service_for
-from ui.canvas_history_state import CanvasHistoryState, history_state_for
+from ui.canvas_graph_service import canvas_graph_service_for
+from ui.canvas_history_state import CanvasHistoryState
 from ui.canvas_history_service import CanvasHistoryService, history_service_for
-from ui.canvas_history_recording_service import CanvasHistoryRecordingService
 from ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
-from ui.canvas_mark_scene_service import CanvasMarkSceneService, canvas_mark_scene_service_for
-from ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService, canvas_ring_fill_scene_service_for
+from ui.canvas_mark_scene_service import canvas_mark_scene_service_for
+from ui.canvas_ring_fill_scene_service import canvas_ring_fill_scene_service_for
 from ui.canvas_rotation_state import CanvasRotationState, rotation_state_for
-from ui.canvas_scene_reset_service import CanvasSceneResetService, canvas_scene_reset_service_for
+from ui.canvas_scene_reset_service import canvas_scene_reset_service_for
 from ui.canvas_services import attach_canvas_services, build_canvas_services
-from ui.hover_interaction_service import HoverInteractionService
-from ui.hover_scene_service import HoverSceneService
 from ui.insert_mode_logic import (
     InsertSessionState,
 )
-from ui.insert_controller import InsertController
-from ui.mark_hover_preview_service import MarkHoverPreviewService
-from ui.scene_item_controller import SceneItemController
-from ui.selection_rotation_controller import SelectionRotationController
 from ui.ring_occupancy_logic import ring_polygon_points_for_bond
 from ui.scene_item_state import (
     ARROW_KINDS,
@@ -117,7 +101,6 @@ from ui.scene_ops_controller import SceneOpsController
 from ui.selection_controller import SelectionController
 from ui.selection_center_logic import bounding_box_center_for_atoms, center_for_atoms
 from ui.selection_highlight_styler import (
-    SelectionHighlightStyler,
     selection_highlight_styler_for,
 )
 from ui.selection_hit_logic import (
@@ -138,7 +121,6 @@ from ui.template_insert_logic import (
     TemplateInsertRequest,
     TemplatePointResolvers,
 )
-from ui.structure_build_service import StructureBuildService
 from ui.structure_geometry_logic import (
     compute_regular_ring_points_for_atom,
     compute_regular_ring_points_for_bond,
@@ -152,7 +134,6 @@ from ui.sheet_setup_logic import (
     normalize_sheet_setup,
     sheet_dimensions_px,
 )
-from ui.structure_insert_service import StructureInsertService
 from ui.selection_rotation_logic import rotated_atom_positions, selected_rotation_atom_ids
 from ui.state_field import StateField
 
