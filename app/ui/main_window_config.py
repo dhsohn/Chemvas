@@ -36,6 +36,7 @@ TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
     ("bond", "Bond", "bond", "icon_bond", "Bond (ChemDraw: X)"),
     ("text", "Atom", "text", "icon_text", "Atom / Text (ChemDraw: T)"),
     ("benzene", "Ring", "benzene", "icon_ring", "Ring / Benzene (ChemDraw: J)"),
+    ("color", "Color", "color", "icon_color", "Color"),
     ("arrow", "Arrow", "arrow", "icon_arrow", "Arrow (ChemDraw: E)"),
     ("ts_bracket", "TS Bracket", "ts_bracket", "icon_ts_bracket", "TS Bracket (ChemDraw: Shift+G)"),
     (
@@ -54,6 +55,13 @@ TEMPLATE_TOOL_ACTION_SPEC: tuple[str, str, str, str] = (
     "Templates",
 )
 
+RING_FILL_TOOL_ACTION_SPEC: tuple[str, str, str, str] = (
+    "ring_fill",
+    "Ring Fill",
+    "icon_ring_fill",
+    "Ring Fill",
+)
+
 BOND_TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
     ("bond_bold", "Bold Bond", "Bold", "icon_bond_bold", "Bold Bond (Bond Hotkey: B)"),
     ("bond_wedge", "Wedge", "Wedge", "icon_bond_wedge", "Wedge Bond (Bond Hotkey: W)"),
@@ -70,7 +78,7 @@ MARK_TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
 LEFT_TOOLBAR_GROUPS: list[tuple[str, ...]] = [
     ("select", "bond", "text"),
     ("mark_plus", "mark_minus", "mark_radical"),
-    ("benzene", "template"),
+    ("benzene", "template", "color", "ring_fill"),
     ("arrow", "ts_bracket", "perspective"),
 ]
 
@@ -92,6 +100,7 @@ __all__ = [
     "LEFT_TOOLBAR_ACTION_ORDER",
     "LEFT_TOOLBAR_GROUPS",
     "MARK_TOOL_ACTION_SPECS",
+    "RING_FILL_TOOL_ACTION_SPEC",
     "TEMPLATE_TOOL_ACTION_SPEC",
     "TEMPLATE_ENTRY_SPECS",
     "TOOL_ACTION_SPECS",

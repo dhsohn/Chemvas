@@ -143,6 +143,14 @@ def build_main_window_services() -> MainWindowServices:
     def set_bond_length_for_window(window) -> None:
         document_action_service.set_bond_length(window)
 
+    tool_routing_service: MainWindowToolRoutingService
+
+    def apply_color_preset_for_window(window, hex_value: str) -> None:
+        tool_routing_service.apply_color_preset(window, hex_value)
+
+    def apply_ring_fill_preset_for_window(window, hex_value: str) -> None:
+        tool_routing_service.apply_ring_fill_preset(window, hex_value)
+
     context_bar_service = MainWindowContextBarService(
         page_builder=MainWindowContextBarPageBuilder(
             insert_controller_for_window=insert_controller_for_window,
@@ -150,6 +158,8 @@ def build_main_window_services() -> MainWindowServices:
             tool_state_service=tool_state_service,
             activate_bond_style_for_window=activate_bond_style_for_window,
             set_bond_length_for_window=set_bond_length_for_window,
+            apply_color_preset_for_window=apply_color_preset_for_window,
+            apply_ring_fill_preset_for_window=apply_ring_fill_preset_for_window,
         ),
         active_tool_name_for_window=active_tool_name_for_window,
         active_canvas_or_none_for_window=active_canvas_or_none_for_window,
@@ -256,10 +266,6 @@ def build_main_window_services() -> MainWindowServices:
         export_xyz=document_action_service.export_xyz,
         toggle_preview_panel=panel_service.toggle_preview_panel,
         setup_sheet=document_action_service.setup_sheet,
-        populate_palette_menu=tool_routing_service.populate_palette_menu,
-        apply_color_preset=tool_routing_service.apply_color_preset,
-        apply_ring_fill_preset=tool_routing_service.apply_ring_fill_preset,
-        set_bond_length=document_action_service.set_bond_length,
     )
     ui_assembly_service = MainWindowUIAssemblyService(
         scene_transform_controller_for_window=scene_transform_controller_for_window,

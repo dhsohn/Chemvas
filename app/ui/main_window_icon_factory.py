@@ -204,6 +204,15 @@ class MainWindowIconFactory:
     def icon_arrow_preview(self, kind: str) -> QIcon:
         return self.make_icon(lambda painter: self._arrow_icons.draw_arrow_preview(painter, kind))
 
+    def icon_arrow_preset(self, label: str) -> QIcon:
+        return self.make_icon(lambda painter: self._arrow_icons.draw_arrow_preset(painter, label))
+
+    def icon_arrow_width(self) -> QIcon:
+        return self.make_icon(self._arrow_icons.draw_arrow_width_control)
+
+    def icon_arrow_head_scale(self) -> QIcon:
+        return self.make_icon(self._arrow_icons.draw_arrow_head_control)
+
     def icon_orbital_preview(self, kind: str) -> QIcon:
         return self.make_icon(lambda painter: self._tool_icons.draw_orbital_preview(painter, kind))
 

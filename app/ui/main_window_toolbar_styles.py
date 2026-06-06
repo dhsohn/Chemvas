@@ -4,13 +4,20 @@ from ui.main_window_palette import PALETTE
 
 _P = PALETTE
 
+TOOLBAR_THICKNESS = 30
+TOOLBAR_BUTTON_SIZE = 22
+TOOLBAR_ICON_SIZE = 18
+CONTEXT_BAR_CONTENT_HEIGHT = 22
+CONTEXT_BAR_BUTTON_HEIGHT = 22
+CONTEXT_BAR_ICON_SIZE = 22
+
 
 def _flat_toolbutton_style(*, extra: str = "") -> str:
     return (
         "QToolButton {"
         " border: 1px solid transparent;"
-        " border-radius: 8px;"
-        " padding: 4px;"
+        " border-radius: 6px;"
+        " padding: 2px;"
         f" color: {_P['text']};"
         "}"
         "QToolButton:hover {"
@@ -50,18 +57,18 @@ LEFT_TOOLBAR_BUTTON_STYLE = _flat_toolbutton_style(
         " padding: 0px;"
         " margin: 0px;"
         " border-radius: 6px;"
-        " min-width: 24px;"
-        " max-width: 24px;"
-        " min-height: 24px;"
-        " max-height: 24px;"
+        f" min-width: {TOOLBAR_BUTTON_SIZE - 2}px;"
+        f" max-width: {TOOLBAR_BUTTON_SIZE - 2}px;"
+        f" min-height: {TOOLBAR_BUTTON_SIZE - 2}px;"
+        f" max-height: {TOOLBAR_BUTTON_SIZE - 2}px;"
         "}"
         "QToolBar::separator {"
         " background: transparent;"
         "}"
         "QToolBar::separator:vertical {"
-        " width: 14px;"
+        " width: 10px;"
         " height: 1px;"
-        " margin: 0px 5px;"
+        " margin: 0px 3px;"
         "}"
     )
 )
@@ -88,7 +95,7 @@ TOOLBAR_MENU_BUTTON_STYLE = _flat_toolbutton_style(
 CONTEXT_SEGMENT_STYLE = _flat_toolbutton_style(
     extra=(
         "QToolButton {"
-        " padding: 4px 10px;"
+        " padding: 2px 8px;"
         " font-size: 12px;"
         "}"
     )
@@ -97,8 +104,8 @@ CONTEXT_SEGMENT_STYLE = _flat_toolbutton_style(
 SMILES_RENDER_BUTTON_STYLE = (
     "QToolButton#smiles_render_button {"
     " border: 1px solid transparent;"
-    " border-radius: 8px;"
-    " padding: 4px 12px;"
+    " border-radius: 6px;"
+    " padding: 1px 10px;"
     f" background-color: {_P['accent']};"
     f" color: {_P['accent_contrast']};"
     " font-weight: 600;"
@@ -119,8 +126,14 @@ SMILES_RENDER_BUTTON_STYLE = (
 
 __all__ = [
     "CONTEXT_SEGMENT_STYLE",
+    "CONTEXT_BAR_BUTTON_HEIGHT",
+    "CONTEXT_BAR_CONTENT_HEIGHT",
+    "CONTEXT_BAR_ICON_SIZE",
     "LEFT_TOOLBAR_BUTTON_STYLE",
     "SMILES_RENDER_BUTTON_STYLE",
+    "TOOLBAR_BUTTON_SIZE",
     "TOOLBAR_BUTTON_STYLE",
+    "TOOLBAR_ICON_SIZE",
     "TOOLBAR_MENU_BUTTON_STYLE",
+    "TOOLBAR_THICKNESS",
 ]

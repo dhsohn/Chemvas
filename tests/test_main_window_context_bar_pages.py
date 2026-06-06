@@ -6,7 +6,7 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtWidgets import QApplication, QSlider, QToolButton
+    from PyQt6.QtWidgets import QApplication, QLabel, QSlider, QToolButton
 except ModuleNotFoundError:
     QApplication = None
 
@@ -16,6 +16,10 @@ if QApplication is not None:
     from ui.main_window_context_bar_pages import (
         MainWindowContextBarPageBuilder,
         bond_label_for_state,
+    )
+    from ui.main_window_theme import (
+        CONTEXT_BAR_BUTTON_HEIGHT,
+        CONTEXT_BAR_ICON_SIZE,
     )
 
 
@@ -40,12 +44,16 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         self.tool_state_service = mock.Mock()
         self.activate_bond_style_for_window = mock.Mock()
         self.set_bond_length_for_window = mock.Mock()
+        self.apply_color_preset_for_window = mock.Mock()
+        self.apply_ring_fill_preset_for_window = mock.Mock()
         self.builder = MainWindowContextBarPageBuilder(
             insert_controller_for_window=self.insert_controller_for_window,
             tool_mode_controller_for_window=self.tool_mode_controller_for_window,
             tool_state_service=self.tool_state_service,
             activate_bond_style_for_window=self.activate_bond_style_for_window,
             set_bond_length_for_window=self.set_bond_length_for_window,
+            apply_color_preset_for_window=self.apply_color_preset_for_window,
+            apply_ring_fill_preset_for_window=self.apply_ring_fill_preset_for_window,
         )
 
     def tearDown(self) -> None:
@@ -60,7 +68,10 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
     def test_builder_returns_pages_and_wires_bond_template_arrow_actions(self) -> None:
         pages = self.builder.build(self.window)
 
-        self.assertEqual(set(pages.pages), {"empty", "bond", "template", "arrow", "atom", "ring"})
+        self.assertEqual(
+            set(pages.pages),
+            {"empty", "bond", "template", "arrow", "atom", "ring", "color", "ring_fill"},
+        )
         self.assertIn("Single", pages.bond_buttons)
         self.assertIn("curved_double", pages.arrow_buttons)
         self.assertIsNotNone(pages.bond_group)
@@ -99,13 +110,59 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         self.tool_state_service.set_arrow_type.assert_called_once_with(self.window, "Curved Double")
         self.tool_state_service.set_arrow_preset.assert_called_once_with(self.window, "Bold")
         self.tool_mode_controller_for_window.assert_called_once_with(self.window)
+        self.assertEqual(pages.arrow_buttons["curved_double"].width(), CONTEXT_BAR_BUTTON_HEIGHT)
+        self.assertEqual(pages.arrow_buttons["curved_double"].height(), CONTEXT_BAR_BUTTON_HEIGHT)
+        self.assertEqual(pages.arrow_buttons["curved_double"].iconSize().width(), CONTEXT_BAR_ICON_SIZE)
+        self.assertEqual(preset_button.height(), CONTEXT_BAR_BUTTON_HEIGHT)
+        self.assertEqual(preset_button.width(), CONTEXT_BAR_BUTTON_HEIGHT)
+        self.assertEqual(preset_button.text(), "")
+        self.assertFalse(preset_button.icon().isNull())
+        width_button = next(
+            button
+            for button in pages.pages["arrow"].findChildren(QToolButton)
+            if button.toolTip() == "Arrow line width"
+        )
+        head_button = next(
+            button
+            for button in pages.pages["arrow"].findChildren(QToolButton)
+            if button.toolTip() == "Arrow head size"
+        )
+        self.assertEqual(width_button.size().width(), CONTEXT_BAR_BUTTON_HEIGHT)
+        self.assertEqual(head_button.size().height(), CONTEXT_BAR_BUTTON_HEIGHT)
+        self.assertIsNotNone(width_button.menu())
+        self.assertIsNotNone(head_button.menu())
 
         sliders = pages.pages["arrow"].findChildren(QSlider)
         self.assertEqual([slider.value() for slider in sliders], [2, 40])
+        self.assertEqual([slider.objectName() for slider in sliders], ["arrowCompactSlider", "arrowCompactSlider"])
+        self.assertEqual([slider.height() for slider in sliders], [CONTEXT_BAR_BUTTON_HEIGHT] * 2)
+        self.assertEqual([slider.sizeHint().height() for slider in sliders], [CONTEXT_BAR_BUTTON_HEIGHT] * 2)
+        arrow_labels = [
+            label for label in pages.pages["arrow"].findChildren(QLabel) if label.objectName() == "arrowCompactLabel"
+        ]
+        self.assertEqual(arrow_labels, [])
         sliders[0].setValue(5)
         sliders[1].setValue(25)
         self.tool_mode_controller.set_arrow_line_width.assert_called_once_with(5)
         self.tool_mode_controller.set_arrow_head_scale.assert_called_once_with(0.25)
+
+        color_button = next(
+            button
+            for button in pages.pages["color"].findChildren(QToolButton)
+            if button.toolTip() == "Color: Blue"
+        )
+        self.assertEqual(pages.pages["color"].findChildren(QLabel), [])
+        color_button.click()
+        self.apply_color_preset_for_window.assert_called_once_with(self.window, "#1f5eff")
+
+        ring_fill_button = next(
+            button
+            for button in pages.pages["ring_fill"].findChildren(QToolButton)
+            if button.toolTip() == "Ring Fill: Orange"
+        )
+        self.assertEqual(pages.pages["ring_fill"].findChildren(QLabel), [])
+        ring_fill_button.click()
+        self.apply_ring_fill_preset_for_window.assert_called_once_with(self.window, "#c77c00")
 
 
 if __name__ == "__main__":

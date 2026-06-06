@@ -9,6 +9,7 @@ from ui.main_window_context_bar_page_factories import (
     build_arrow_page,
     build_atom_page,
     build_bond_page,
+    build_color_palette_page,
     build_empty_page,
     build_ring_page,
     build_template_page,
@@ -33,12 +34,16 @@ class MainWindowContextBarPageBuilder:
         tool_state_service,
         activate_bond_style_for_window,
         set_bond_length_for_window,
+        apply_color_preset_for_window,
+        apply_ring_fill_preset_for_window,
     ) -> None:
         self._insert_controller_for_window = insert_controller_for_window
         self._tool_mode_controller_for_window = tool_mode_controller_for_window
         self._tool_state = tool_state_service
         self._activate_bond_style_for_window = activate_bond_style_for_window
         self._set_bond_length_for_window = set_bond_length_for_window
+        self._apply_color_preset_for_window = apply_color_preset_for_window
+        self._apply_ring_fill_preset_for_window = apply_ring_fill_preset_for_window
 
     def build(self, window) -> ContextBarPages:
         bond_page = build_bond_page(
@@ -58,6 +63,14 @@ class MainWindowContextBarPageBuilder:
             "arrow": arrow_page.page,
             "atom": build_atom_page(),
             "ring": build_ring_page(),
+            "color": build_color_palette_page(
+                tooltip_prefix="Color",
+                apply_preset=lambda value: self._apply_color_preset_for_window(window, value),
+            ),
+            "ring_fill": build_color_palette_page(
+                tooltip_prefix="Ring Fill",
+                apply_preset=lambda value: self._apply_ring_fill_preset_for_window(window, value),
+            ),
         }
         return ContextBarPages(
             pages=pages,

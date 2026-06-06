@@ -9,8 +9,10 @@ from PyQt6.QtWidgets import QLineEdit, QToolBar, QToolButton
 
 from ui.main_window_theme import (
     SMILES_RENDER_BUTTON_STYLE,
+    TOOLBAR_BUTTON_SIZE,
     TOOLBAR_BUTTON_STYLE,
-    TOOLBAR_MENU_BUTTON_STYLE,
+    TOOLBAR_ICON_SIZE,
+    TOOLBAR_THICKNESS,
 )
 from ui.main_window_ui_ports import icon_factory_for_window
 
@@ -39,10 +41,6 @@ class MainWindowPanelToolbarCallbacks:
     export_xyz: Callable[[object], None]
     toggle_preview_panel: Callable[[object, bool | None], None]
     setup_sheet: Callable[[object], None]
-    populate_palette_menu: Callable[[object, object, Callable[[str], None]], None]
-    apply_color_preset: Callable[[object, str], None]
-    apply_ring_fill_preset: Callable[[object, str], None]
-    set_bond_length: Callable[[object], None]
 
 
 def build_panel_toolbar(
@@ -61,8 +59,9 @@ def build_panel_toolbar(
     panel_bar.setObjectName("topRoleToolbar")
     panel_bar.setMovable(False)
     panel_bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-    panel_bar.setIconSize(QSize(24, 24))
+    panel_bar.setIconSize(QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE))
     panel_bar.setStyleSheet(TOOLBAR_BUTTON_STYLE)
+    panel_bar.setFixedHeight(TOOLBAR_THICKNESS)
     icon_factory = icon_factory_for_window(window)
 
     save_action = QAction("Save", window)
@@ -154,6 +153,7 @@ def build_panel_toolbar(
     smiles_input.setObjectName("smilesInput")
     smiles_input.setPlaceholderText("SMILES...")
     smiles_input.setFixedWidth(180)
+    smiles_input.setFixedHeight(TOOLBAR_BUTTON_SIZE)
     smiles_input.setToolTip("SMILES")
     smiles_input.setStatusTip("Type a SMILES string to insert")
     insert_controller = insert_controller_for_window(window)
@@ -185,6 +185,7 @@ def build_panel_toolbar(
     atom_input.setObjectName("atomInput")
     atom_input.setPlaceholderText("Atom")
     atom_input.setFixedWidth(60)
+    atom_input.setFixedHeight(TOOLBAR_BUTTON_SIZE)
     atom_input.setMaxLength(4)
     tool_mode_controller = tool_mode_controller_for_window(window)
     atom_input.setText(tool_mode_controller.get_atom_symbol())
@@ -192,45 +193,23 @@ def build_panel_toolbar(
     atom_input.setStatusTip("Set the atom symbol used by atom and bond tools")
     atom_input.textChanged.connect(lambda text: tool_mode_controller.set_atom_symbol(text))
     panel_bar.addWidget(atom_input)
-    panel_bar.addWidget(
-        create_corner_menu_button(
-            icon=icon_factory.icon_color(),
-            tooltip="Color",
-            status_tip="Set the drawing color",
-            style_sheet=TOOLBAR_MENU_BUTTON_STYLE,
-            popup_mode=QToolButton.ToolButtonPopupMode.InstantPopup,
-            menu_builder=lambda menu: callbacks.populate_palette_menu(
-                window,
-                menu,
-                lambda value: callbacks.apply_color_preset(window, value),
-            ),
-        )
-    )
-    panel_bar.addWidget(
-        create_corner_menu_button(
-            icon=icon_factory.icon_ring_fill(),
-            tooltip="Ring Fill",
-            status_tip="Set the ring fill color",
-            style_sheet=TOOLBAR_MENU_BUTTON_STYLE,
-            popup_mode=QToolButton.ToolButtonPopupMode.InstantPopup,
-            menu_builder=lambda menu: callbacks.populate_palette_menu(
-                window,
-                menu,
-                lambda value: callbacks.apply_ring_fill_preset(window, value),
-            ),
-        )
-    )
-    panel_bar.addWidget(
-        create_toolbar_button(
-            icon=icon_factory.icon_bond_length(),
-            tooltip="Bond Length",
-            status_tip="Set the default bond length",
-            callback=lambda _checked=False: callbacks.set_bond_length(window),
-        )
-    )
     panel_bar.addWidget(flip_h_btn)
     panel_bar.addWidget(flip_v_btn)
     panel_bar.addSeparator()
+
+    for button in (
+        save_button,
+        export_xyz_btn,
+        preview_panel_btn,
+        setup_sheet_btn,
+        undo_btn,
+        redo_btn,
+        smiles_button,
+        flip_h_btn,
+        flip_v_btn,
+    ):
+        button.setIconSize(panel_bar.iconSize())
+        button.setFixedHeight(TOOLBAR_BUTTON_SIZE)
 
     return MainWindowPanelToolbarAssembly(
         panel_bar=panel_bar,

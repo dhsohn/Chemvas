@@ -224,6 +224,14 @@ class MainWindowIconGeometryTest(unittest.TestCase):
         for kind in ("reaction", "dotted", "curved_single", "curved_double", "equilibrium", "resonance", "inhibit"):
             bounds = _opaque_bounds(self.factory.icon_arrow_preview(kind).pixmap(30, 30).toImage())
             self.assertIsNotNone(bounds, kind)
+        for icon in (
+            self.factory.icon_arrow_preset("Default"),
+            self.factory.icon_arrow_preset("Bold"),
+            self.factory.icon_arrow_preset("Fine"),
+            self.factory.icon_arrow_width(),
+            self.factory.icon_arrow_head_scale(),
+        ):
+            self.assertIsNotNone(_opaque_bounds(icon.pixmap(30, 30).toImage()))
 
     def test_orbital_preview_matrix_renders_distinct_families(self) -> None:
         for kind in ("s", "p", "sp", "sp2", "sp3", "d", "dz2"):

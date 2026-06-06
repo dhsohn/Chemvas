@@ -8,7 +8,11 @@ from PyQt6.QtGui import QAction, QActionGroup
 from PyQt6.QtWidgets import QToolBar, QToolButton
 
 from ui.main_window_config import LEFT_TOOLBAR_GROUPS
-from ui.main_window_theme import LEFT_TOOLBAR_BUTTON_STYLE
+from ui.main_window_theme import (
+    LEFT_TOOLBAR_BUTTON_STYLE,
+    TOOLBAR_ICON_SIZE,
+    TOOLBAR_THICKNESS,
+)
 
 
 @dataclass(frozen=True)
@@ -41,7 +45,8 @@ def build_left_toolbar(
     left_bar.setOrientation(Qt.Orientation.Vertical)
     left_bar.setMovable(False)
     left_bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-    left_bar.setIconSize(QSize(20, 20))
+    left_bar.setFixedWidth(TOOLBAR_THICKNESS)
+    left_bar.setIconSize(QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE))
     left_bar.setStyleSheet(LEFT_TOOLBAR_BUTTON_STYLE)
 
     tool_actions = build_tool_actions(window, tool_group)

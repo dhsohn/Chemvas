@@ -1096,7 +1096,7 @@ def test_main_window_ui_assembly_delegates_panel_toolbar_to_module() -> None:
     assert "callbacks=self._panel_toolbar_callbacks" in service_source
     assert "MainWindowPanelToolbarCallbacks" in panel_toolbar_source
     assert "icon_factory_for_window" in panel_toolbar_source
-    assert "callbacks.set_bond_length(window)" in panel_toolbar_source
+    assert "callbacks.set_bond_length(window)" not in panel_toolbar_source
     assert "window.set_bond_length" not in panel_toolbar_source
     assert _matching_lines(pattern, [panel_toolbar]) == []
 

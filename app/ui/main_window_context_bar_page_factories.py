@@ -8,14 +8,16 @@ from PyQt6.QtWidgets import QButtonGroup, QSlider, QToolButton, QWidget
 from ui.main_window_config import (
     ARROW_MENU_SPECS,
     ARROW_PRESET_SPECS,
+    COLOR_PALETTE_SPECS,
     TEMPLATE_ENTRY_SPECS,
 )
 from ui.main_window_context_bar_widgets import (
+    color_swatch_button,
     divider,
     hint_label,
     icon_button,
     new_context_page,
-    text_button,
+    slider_dropdown_button,
 )
 from ui.main_window_toolbar_logic import BOND_STYLE_BY_LABEL
 from ui.main_window_ui_ports import icon_factory_for_window
@@ -111,30 +113,25 @@ def build_arrow_page(window, tool_mode_controller, tool_state_service) -> ArrowC
         layout.addWidget(button)
 
     layout.addWidget(divider())
-    layout.addWidget(hint_label("Preset"))
     for label in ARROW_PRESET_SPECS:
-        button = text_button(label, f"{label} arrow preset")
+        button = icon_button(icon_factory.icon_arrow_preset(label), f"{label} arrow preset")
         button.clicked.connect(lambda _checked=False, v=label: tool_state_service.set_arrow_preset(window, v))
         layout.addWidget(button)
 
     layout.addWidget(divider())
-    layout.addWidget(hint_label("Width"))
     width = QSlider(Qt.Orientation.Horizontal)
     width.setMinimum(1)
     width.setMaximum(6)
-    width.setFixedWidth(84)
     width.setValue(int(tool_mode_controller.get_arrow_line_width()))
     width.valueChanged.connect(lambda v: tool_mode_controller.set_arrow_line_width(v))
-    layout.addWidget(width)
+    layout.addWidget(slider_dropdown_button(icon_factory.icon_arrow_width(), "Arrow line width", width))
 
-    layout.addWidget(hint_label("Head"))
     head = QSlider(Qt.Orientation.Horizontal)
     head.setMinimum(10)
     head.setMaximum(60)
-    head.setFixedWidth(84)
     head.setValue(int(tool_mode_controller.get_arrow_head_scale() * 100))
     head.valueChanged.connect(lambda v: tool_mode_controller.set_arrow_head_scale(v / 100.0))
-    layout.addWidget(head)
+    layout.addWidget(slider_dropdown_button(icon_factory.icon_arrow_head_scale(), "Arrow head size", head))
 
     layout.addStretch(1)
     return ArrowContextPage(page=page, group=group, buttons=buttons)
@@ -154,6 +151,20 @@ def build_ring_page() -> QWidget:
     return page
 
 
+def build_color_palette_page(
+    *,
+    tooltip_prefix: str,
+    apply_preset,
+) -> QWidget:
+    page, layout = new_context_page()
+    for label, hex_value in COLOR_PALETTE_SPECS:
+        button = color_swatch_button(label, hex_value, tooltip_prefix)
+        button.clicked.connect(lambda _checked=False, value=hex_value: apply_preset(value))
+        layout.addWidget(button)
+    layout.addStretch(1)
+    return page
+
+
 __all__ = [
     "ArrowContextPage",
     "BondContextPage",
@@ -161,6 +172,7 @@ __all__ = [
     "build_arrow_page",
     "build_atom_page",
     "build_bond_page",
+    "build_color_palette_page",
     "build_empty_page",
     "build_ring_page",
     "build_template_page",

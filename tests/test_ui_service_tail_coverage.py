@@ -51,10 +51,6 @@ def _panel_toolbar_callbacks() -> "MainWindowPanelToolbarCallbacks":
         export_xyz=mock.Mock(),
         toggle_preview_panel=mock.Mock(),
         setup_sheet=mock.Mock(),
-        populate_palette_menu=mock.Mock(),
-        apply_color_preset=mock.Mock(),
-        apply_ring_fill_preset=mock.Mock(),
-        set_bond_length=mock.Mock(),
     )
 
 

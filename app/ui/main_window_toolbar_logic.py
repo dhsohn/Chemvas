@@ -53,6 +53,7 @@ TOOL_DISPLAY_NAMES: dict[str, str] = {
     "orbital": "Orbital",
     "perspective": "Perspective",
     "color": "Color",
+    "ring_fill": "Ring Fill",
     "mark": "Mark",
 }
 

@@ -116,8 +116,11 @@ class MainWindowStatusService:
         return self.zoom_label is not None
 
     def active_tool_status_text(self, window) -> str:
-        if self._context_bar_page_override_for_window(window) == "template":
+        page_override = self._context_bar_page_override_for_window(window)
+        if page_override == "template":
             return "Tool: Template"
+        if page_override == "ring_fill":
+            return "Tool: Ring Fill"
         canvas = self._active_canvas_or_none_for_window(window)
         if canvas is None:
             return "Tool: None"

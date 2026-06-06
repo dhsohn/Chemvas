@@ -62,6 +62,20 @@ def test_active_tool_status_text_respects_template_override_and_missing_canvas()
     active_tool_name_for_window.assert_not_called()
 
 
+def test_active_tool_status_text_respects_ring_fill_override() -> None:
+    active_tool_name_for_window = mock.Mock(return_value="select")
+    active_canvas_or_none_for_window = mock.Mock(return_value=object())
+    service = _service(
+        active_tool_name_for_window=active_tool_name_for_window,
+        active_canvas_or_none_for_window=active_canvas_or_none_for_window,
+        context_bar_page_override_for_window=mock.Mock(return_value="ring_fill"),
+    )
+
+    assert service.active_tool_status_text(SimpleNamespace()) == "Tool: Ring Fill"
+    active_canvas_or_none_for_window.assert_not_called()
+    active_tool_name_for_window.assert_not_called()
+
+
 def test_show_error_message_uses_timer_default_inside_status_service() -> None:
     service = _service()
     bar = mock.Mock()
