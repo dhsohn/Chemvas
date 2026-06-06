@@ -15,6 +15,7 @@ if QApplication is not None:
         SelectionHighlightStyler,
         selection_highlight_styler_for,
     )
+    from ui.selection_style_state import SelectionStyleState
 
 
 def _path_item(color: str = "#111111", width: float = 1.5) -> QGraphicsPathItem:
@@ -38,9 +39,11 @@ class SelectionHighlightStylerTest(unittest.TestCase):
 
     def _make_canvas(self):
         return SimpleNamespace(
-            _selection_color=QColor("#1f5eff"),
-            _selection_stroke_delta=0.6,
-            _selected_items=[],
+            services=SimpleNamespace(),
+            selection_style_state=SelectionStyleState(
+                color=QColor("#1f5eff"),
+                stroke_delta=0.6,
+            ),
         )
 
     def test_apply_selection_style_handles_items_and_groups(self) -> None:
@@ -73,15 +76,15 @@ class SelectionHighlightStylerTest(unittest.TestCase):
         styler = SelectionHighlightStyler(canvas)
 
         styler.apply_selection_style(old_item, True)
-        canvas._selected_items = [old_item]
+        canvas.selection_style_state.selected_items = [old_item]
         styler.set_selection_highlight([new_item])
 
-        self.assertEqual(canvas._selected_items, [new_item])
+        self.assertEqual(canvas.selection_style_state.selected_items, [new_item])
         self.assertEqual(old_item.pen().color().name(), "#333333")
         self.assertEqual(new_item.pen().color().name(), "#1f5eff")
 
         styler.clear_selection_highlight()
-        self.assertEqual(canvas._selected_items, [])
+        self.assertEqual(canvas.selection_style_state.selected_items, [])
         self.assertEqual(new_item.pen().color().name(), "#444444")
 
     def test_apply_selection_style_ignores_items_without_pen(self) -> None:
@@ -92,7 +95,7 @@ class SelectionHighlightStylerTest(unittest.TestCase):
         styler.apply_selection_style(item, True)
         styler.apply_selection_style(item, False)
 
-        self.assertEqual(canvas._selected_items, [])
+        self.assertEqual(canvas.selection_style_state.selected_items, [])
 
     def test_apply_selection_style_ignores_non_pen_restore_data(self) -> None:
         canvas = self._make_canvas()
@@ -108,7 +111,7 @@ class SelectionHighlightStylerTest(unittest.TestCase):
     def test_selection_highlight_styler_for_reuses_matching_or_duck_typed_service(self) -> None:
         canvas = self._make_canvas()
         matching = SelectionHighlightStyler(canvas)
-        canvas._selection_highlight_styler = matching
+        canvas.services.selection_highlight_styler = matching
 
         self.assertIs(selection_highlight_styler_for(canvas), matching)
 
@@ -118,11 +121,11 @@ class SelectionHighlightStylerTest(unittest.TestCase):
             clear_selection_highlight=lambda: None,
             apply_selection_style=lambda item, selected: None,
         )
-        canvas._selection_highlight_styler = duck
+        canvas.services.selection_highlight_styler = duck
         self.assertIs(selection_highlight_styler_for(canvas), duck)
 
         placeholder = object()
-        canvas._selection_highlight_styler = placeholder
+        canvas.services.selection_highlight_styler = placeholder
         self.assertIs(selection_highlight_styler_for(canvas), placeholder)
 
 

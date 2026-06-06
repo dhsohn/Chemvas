@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from PyQt6.QtGui import QAction
+
 from ui.main_window_config import (
     BOND_TOOL_ACTION_SPECS,
     MARK_TOOL_ACTION_SPECS,
@@ -9,9 +11,23 @@ from ui.main_window_config import (
 
 
 class MainWindowToolActionService:
-    @staticmethod
-    def _show_status_message(window, message: str) -> None:
-        window._show_status_message(message)
+    def __init__(
+        self,
+        *,
+        tool_mode_controller_for_window,
+        tool_state_service,
+        context_page_state_service,
+        icon_factory_for_window,
+        status_service,
+    ) -> None:
+        self._tool_mode_controller_for_window = tool_mode_controller_for_window
+        self._tool_state = tool_state_service
+        self._context_page_state = context_page_state_service
+        self._icon_factory_for_window = icon_factory_for_window
+        self._status = status_service
+
+    def _tool_mode_controller(self, window):
+        return self._tool_mode_controller_for_window(window)
 
     def build_checkable_tool_action(
         self,
@@ -23,10 +39,10 @@ class MainWindowToolActionService:
         icon_method: str,
         tooltip: str,
         callback,
-    ) -> tuple[str, object]:
-        action = window._new_tool_action(label)
+    ) -> tuple[str, QAction]:
+        icon = getattr(self._icon_factory_for_window(window), icon_method)()
+        action = QAction(icon, label, window)
         action.setCheckable(True)
-        action.setIcon(getattr(window._icon_factory, icon_method)())
         action.setToolTip(tooltip)
         action.setStatusTip(tooltip)
         action.triggered.connect(lambda checked=False, callback=callback: callback())
@@ -34,20 +50,20 @@ class MainWindowToolActionService:
         return key, action
 
     def activate_bond_style_tool(self, window, value: str) -> None:
-        window._set_tool_with_status("bond", reset_bond_style=False)
-        window._set_bond_style(value)
+        self._context_page_state.set_tool_with_status(window, "bond", reset_bond_style=False)
+        self._tool_state.set_bond_style(window, value)
 
     def activate_mark_tool(self, window, kind: str) -> None:
-        window.canvas.set_mark_kind(kind)
-        self._show_status_message(window, "Mark Tool")
-        window._refresh_status_context()
+        self._tool_mode_controller(window).set_mark_kind(kind)
+        window.statusBar().showMessage("Mark Tool")
+        self._status.refresh_status_context(window)
 
     def activate_template_tool(self, window) -> None:
-        window._show_context_page("template")
-        self._show_status_message(window, "Template Tool")
-        window._refresh_status_context()
+        self._context_page_state.show_context_page(window, "template")
+        window.statusBar().showMessage("Template Tool")
+        self._status.refresh_status_context(window)
 
-    def build_tool_actions(self, window, tool_group) -> dict[str, object]:
+    def build_tool_actions(self, window, tool_group) -> dict[str, QAction]:
         actions = dict(
             self.build_checkable_tool_action(
                 window,
@@ -56,7 +72,7 @@ class MainWindowToolActionService:
                 label=label,
                 icon_method=icon_method,
                 tooltip=tooltip,
-                callback=lambda tool=tool: window._set_tool_with_status(tool),
+                callback=lambda tool=tool: self._context_page_state.set_tool_with_status(window, tool),
             )
             for key, label, tool, icon_method, tooltip in TOOL_ACTION_SPECS
         )

@@ -20,10 +20,21 @@ except ModuleNotFoundError:
     Qt = None
 
 if QApplication is not None:
+    import ui.bond_graphics_build_service as bond_graphics_build_module
+    import ui.bond_renderer as bond_renderer_module
     from core.model import Atom, Bond
     from core.renderer import Renderer
     from core.style_acs1996 import ACS1996Style
+    from ui.bond_geometry_primitives import (
+        bold_out_scale,
+        extend_segment,
+        normalize_3d,
+        scale_segment,
+        trim_segment,
+    )
     from ui.bond_renderer import BondRenderer
+    from ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
+    from ui.canvas_graph_state import CanvasGraphState
     from ui.graphics_items import (
         NoSelectLineItem,
         NoSelectPathItem,
@@ -83,54 +94,47 @@ class _FakeCanvas:
             },
             bonds=[],
         )
-        self.bond_items: dict[int, list] = {}
+        set_bond_items_for(self, {})
         self._trim = (0.0, 1.0)
-        self._offset_unit = None
-        self._coords_3d: dict[int, tuple[float, float, float] | None] = {}
+        self.atom_coords_3d: dict[int, tuple[float, float, float]] = {}
         self._labels: dict[int, object] = {}
         self._ring_center = None
         self._ring_center_3d = None
         self._normal = (0.0, 1.0)
-        self._atom_bond_ids: dict[int, set[int]] = {}
+        self.graph_state = CanvasGraphState()
         self._scene = QGraphicsScene()
         self.selectable_items: list = []
-        self.colored_items: list[tuple[object, QColor]] = []
-        self.offset_targets: list[tuple[int, int, object]] = []
+        self.services = SimpleNamespace(
+            geometry_controller=SimpleNamespace(
+                trim_line_for_labels=self.trim_line_for_labels,
+                label_rect_for_atom=self.label_rect_for_atom,
+                ring_center_for_bond=lambda bond: self._ring_center,
+                ring_center_3d_for_bond=lambda bond: self._ring_center_3d,
+            )
+        )
 
     def scene(self) -> QGraphicsScene:
         return self._scene
 
-    def _trim_line_for_labels(self, a_id, b_id, x1, y1, x2, y2):
+    @property
+    def bond_items(self):
+        return bond_items_for(self)
+
+    @bond_items.setter
+    def bond_items(self, value) -> None:
+        set_bond_items_for(self, value)
+
+    def trim_line_for_labels(self, a_id, b_id, x1, y1, x2, y2):
         return self._trim
 
-    def _bond_offset_unit_3d(self, a_id, b_id, target=None):
-        self.offset_targets.append((a_id, b_id, target))
-        return self._offset_unit
-
-    def _current_atom_coords_3d(self, atom_id: int):
-        return self._coords_3d.get(atom_id)
-
-    def _project_point_3d(self, point):
-        return point[0], point[1]
-
-    def _label_rect_for_atom(self, atom_id: int):
+    def label_rect_for_atom(self, atom_id: int):
         return self._labels.get(atom_id)
-
-    def _ring_center_for_bond(self, bond):
-        return self._ring_center
-
-    def _ring_center_3d_for_bond(self, bond):
-        return self._ring_center_3d
 
     def _line_normal(self, x1, y1, x2, y2, ring_center):
         return self._normal
 
     def _make_selectable(self, item) -> None:
         self.selectable_items.append(item)
-
-    def _apply_color_to_bond_item(self, item, color: QColor) -> None:
-        self.colored_items.append((item, QColor(color)))
-
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for bond renderer tests")
 class BondRendererUnitTest(unittest.TestCase):
@@ -145,7 +149,7 @@ class BondRendererUnitTest(unittest.TestCase):
 
     def _set_bond(self, bond: Bond | None) -> None:
         self.canvas.model.bonds = [bond]
-        self.canvas.bond_items = {}
+        set_bond_items_for(self.canvas, {})
 
     def test_reset_item_origin_and_basic_segment_helpers(self) -> None:
         line = NoSelectLineItem(0.0, 0.0, 1.0, 0.0)
@@ -154,17 +158,115 @@ class BondRendererUnitTest(unittest.TestCase):
         self.renderer._reset_item_origin(line)
 
         self.assertEqual((line.pos().x(), line.pos().y()), (0.0, 0.0))
-        self.assertIsNone(self.renderer._normalize_3d(0.0, 0.0, 0.0))
-        self.assertEqual(self.renderer._normalize_3d(0.0, 3.0, 4.0), (0.0, 0.6, 0.8))
-        self.assertEqual(self.renderer._scale_segment(0.0, 0.0, 10.0, 0.0, 1.0), (0.0, 0.0, 10.0, 0.0))
-        scaled = self.renderer._scale_segment(0.0, 0.0, 10.0, 0.0, 1.2)
+        self.assertIsNone(normalize_3d(0.0, 0.0, 0.0))
+        self.assertEqual(normalize_3d(0.0, 3.0, 4.0), (0.0, 0.6, 0.8))
+        self.assertEqual(scale_segment(0.0, 0.0, 10.0, 0.0, 1.0), (0.0, 0.0, 10.0, 0.0))
+        scaled = scale_segment(0.0, 0.0, 10.0, 0.0, 1.2)
         self.assertAlmostEqual(scaled[0], -1.0)
         self.assertEqual(scaled[1:], (0.0, 11.0, 0.0))
-        self.assertEqual(self.renderer._extend_segment(0.0, 0.0, 10.0, 0.0, 0.0), (0.0, 0.0, 10.0, 0.0))
-        self.assertEqual(self.renderer._extend_segment(0.0, 0.0, 10.0, 0.0, 2.0), (-2.0, 0.0, 12.0, 0.0))
-        self.assertEqual(self.renderer._bold_out_scale(False, QPointF()), 1.0)
-        self.assertEqual(self.renderer._bold_out_scale(True, None), 1.0)
-        self.assertEqual(self.renderer._bold_out_scale(True, QPointF(1.0, 1.0)), 1.1)
+        self.assertEqual(extend_segment(0.0, 0.0, 10.0, 0.0, 0.0), (0.0, 0.0, 10.0, 0.0))
+        self.assertEqual(extend_segment(0.0, 0.0, 10.0, 0.0, 2.0), (-2.0, 0.0, 12.0, 0.0))
+        self.assertEqual(bold_out_scale(False, QPointF()), 1.0)
+        self.assertEqual(bold_out_scale(True, None), 1.0)
+        self.assertEqual(bold_out_scale(True, QPointF(1.0, 1.0)), 1.1)
+        self.assertEqual(bold_out_scale(True, QPointF(), length_scale=1.2), 1.2)
+
+    def test_update_bond_geometry_delegates_to_geometry_updater(self) -> None:
+        updater = SimpleNamespace(update_bond_geometry=mock.Mock())
+        self.renderer.geometry_updater = updater
+
+        self.renderer.update_bond_geometry(12)
+
+        updater.update_bond_geometry.assert_called_once_with(12)
+
+    def test_add_bond_graphics_delegates_to_graphics_builder(self) -> None:
+        builder = SimpleNamespace(add_bond_graphics=mock.Mock())
+        self.renderer.graphics_builder = builder
+
+        self.renderer.add_bond_graphics(7)
+
+        builder.add_bond_graphics.assert_called_once_with(7)
+
+    def test_draw_helpers_delegate_to_graphics_drawer(self) -> None:
+        drawer = SimpleNamespace(
+            draw_ring_double_bond=mock.Mock(return_value=["ring"]),
+            one_sided_bond_strip=mock.Mock(return_value="strip"),
+            draw_parallel_bonds=mock.Mock(return_value=["parallel"]),
+            draw_dotted_bond=mock.Mock(return_value=["dotted"]),
+            draw_dotted_double_bond=mock.Mock(return_value=["dotted-double"]),
+            draw_wedge_bond=mock.Mock(return_value=["wedge"]),
+            draw_hash_bond=mock.Mock(return_value=["hash"]),
+        )
+        self.renderer.graphics_drawer = drawer
+        atom_a = self.canvas.model.atoms[0]
+        atom_b = self.canvas.model.atoms[1]
+        center = QPointF(5.0, 5.0)
+
+        self.assertEqual(self.renderer.draw_ring_double_bond(atom_a, atom_b, center, 0, 1), ["ring"])
+        self.assertEqual(self.renderer.one_sided_bond_strip(1.0, 2.0, 3.0, 4.0, 0.0, 1.0, 2.0, 3.0), "strip")
+        self.assertEqual(self.renderer.draw_parallel_bonds(1.0, 2.0, 3.0, 4.0, 2, 0, 1), ["parallel"])
+        self.assertEqual(self.renderer.draw_dotted_bond(1.0, 2.0, 3.0, 4.0, 0, 1), ["dotted"])
+        self.assertEqual(
+            self.renderer.draw_dotted_double_bond(atom_a, atom_b, style="dotted_double", a_id=0, b_id=1),
+            ["dotted-double"],
+        )
+        self.assertEqual(self.renderer.draw_wedge_bond(1.0, 2.0, 3.0, 4.0, 0, 1), ["wedge"])
+        self.assertEqual(self.renderer.draw_hash_bond(1.0, 2.0, 3.0, 4.0, 0, 1), ["hash"])
+
+        drawer.draw_ring_double_bond.assert_called_once_with(
+            atom_a,
+            atom_b,
+            center,
+            0,
+            1,
+            outer_style="normal",
+            center_3d=None,
+            style="double",
+        )
+        drawer.one_sided_bond_strip.assert_called_once_with(1.0, 2.0, 3.0, 4.0, 0.0, 1.0, 2.0, 3.0)
+        drawer.draw_parallel_bonds.assert_called_once_with(1.0, 2.0, 3.0, 4.0, 2, 0, 1)
+        drawer.draw_dotted_bond.assert_called_once_with(1.0, 2.0, 3.0, 4.0, 0, 1)
+        drawer.draw_dotted_double_bond.assert_called_once_with(
+            atom_a,
+            atom_b,
+            style="dotted_double",
+            a_id=0,
+            b_id=1,
+            ring_center=None,
+            center_3d=None,
+        )
+        drawer.draw_wedge_bond.assert_called_once_with(1.0, 2.0, 3.0, 4.0, 0, 1)
+        drawer.draw_hash_bond.assert_called_once_with(1.0, 2.0, 3.0, 4.0, 0, 1)
+
+    def test_ring_double_segments_delegates_to_ring_geometry_service(self) -> None:
+        service = SimpleNamespace(ring_double_segments=mock.Mock(return_value=("outer", "inner", "normal")))
+        self.renderer.ring_double_geometry = service
+        atom_a = self.canvas.model.atoms[0]
+        atom_b = self.canvas.model.atoms[1]
+        center = QPointF(5.0, 5.0)
+
+        self.assertEqual(
+            self.renderer.ring_double_segments(
+                atom_a,
+                atom_b,
+                center,
+                0,
+                1,
+                (5.0, 5.0, 0.0),
+                "double_outer",
+            ),
+            ("outer", "inner", "normal"),
+        )
+
+        service.ring_double_segments.assert_called_once_with(
+            atom_a,
+            atom_b,
+            center,
+            0,
+            1,
+            (5.0, 5.0, 0.0),
+            "double_outer",
+        )
 
     def test_wedge_polygon_and_parallel_segments_use_trim_and_offset(self) -> None:
         self.canvas._trim = (0.2, 0.8)
@@ -175,7 +277,6 @@ class BondRendererUnitTest(unittest.TestCase):
         self.assertAlmostEqual(polygon[0].y(), 0.0)
         self.assertAlmostEqual((polygon[1].y() + polygon[2].y()) / 2.0, 0.0)
 
-        self.canvas._offset_unit = (0.0, 1.0, 0.0)
         segments = self.renderer.parallel_bond_segments(0.0, 0.0, 10.0, 0.0, 2, 0, 1)
 
         self.assertEqual(len(segments), 2)
@@ -198,22 +299,19 @@ class BondRendererUnitTest(unittest.TestCase):
         )
 
     def test_helper_edge_guards_cover_invalid_ids_and_label_driven_paths(self) -> None:
-        self.canvas._atom_bond_ids = {0: {0, 99}, 1: {0, 1}}
+        self.canvas.graph_state.atom_bond_ids = {0: {0, 99}, 1: {0, 1}}
         self.canvas.model.bonds = [Bond(0, 1, 1), Bond(2, 1, 1)]
         del self.canvas.model.atoms[2]
 
-        trim = self.renderer._junction_trim_for_atom(0, 1)
+        trim = self.renderer.line_geometry._junction_trim_for_atom(0, 1)
         self.assertGreater(trim, 0.0)
-        self.assertEqual(self.renderer._trim_segment((0.0, 0.0, 10.0, 0.0), 0.0), (0.0, 0.0, 10.0, 0.0))
-        self.assertIsNone(self.renderer._double_neighbor_target(0, 1))
+        self.assertEqual(trim_segment((0.0, 0.0, 10.0, 0.0), 0.0), (0.0, 0.0, 10.0, 0.0))
+        self.assertIsNone(self.renderer.line_geometry._double_neighbor_target(0, 1))
 
         self.canvas.model.atoms[2] = Atom("C", 2.0, 6.0)
-        self.canvas._atom_bond_ids = {0: {0, 1}, 1: {0}}
-        self.canvas._line_normal = mock.Mock(return_value=(0.25, 0.75))
-        self.assertEqual(self.renderer._plain_double_normal(0.0, 0.0, 10.0, 0.0, 0, 1), (0.25, 0.75))
-        self.canvas._line_normal.assert_called_once()
-        self.assertIsNotNone(self.canvas._line_normal.call_args.args[4])
-        self.canvas._line_normal = lambda x1, y1, x2, y2, ring_center: self.canvas._normal
+        self.canvas.graph_state.atom_bond_ids = {0: {0, 1}, 1: {0}}
+        self.assertIsNotNone(self.renderer.line_geometry._double_neighbor_target(0, 1))
+        self.assertEqual(self.renderer.line_geometry._plain_double_normal(0.0, 0.0, 10.0, 0.0, 0, 1), (0.0, 1.0))
 
         self.canvas._labels = {0: object(), 1: object()}
         outer, inner, _ = self.renderer.plain_double_segments(
@@ -267,7 +365,7 @@ class BondRendererUnitTest(unittest.TestCase):
         self.assertEqual(inner_outer, (1.2, -4.4, 8.8, -4.4))
 
     def test_ring_double_segments_prefers_3d_projection_when_available(self) -> None:
-        self.canvas._coords_3d = {
+        self.canvas.atom_coords_3d = {
             0: (0.0, 0.0, 0.0),
             1: (10.0, 0.0, 0.0),
         }
@@ -302,12 +400,12 @@ class BondRendererUnitTest(unittest.TestCase):
         self.assertAlmostEqual(inner[3], 2.42)
 
     def test_ring_double_segments_cover_3d_variants_and_fallback_guards(self) -> None:
-        self.canvas._coords_3d = {
+        self.canvas.atom_coords_3d = {
             0: (0.0, 0.0, 0.0),
             1: (10.0, 0.0, 0.0),
         }
         self.canvas._labels = {0: object(), 1: object()}
-        self.canvas._project_point_3d = lambda point: (point[0], point[1] + point[2])
+        self.renderer.project_point_3d = lambda point: (point[0], point[1] + point[2])
 
         default_outer, default_inner, _ = self.renderer.ring_double_segments(
             self.canvas.model.atoms[0],
@@ -345,7 +443,7 @@ class BondRendererUnitTest(unittest.TestCase):
         self.assertAlmostEqual(outer_inner[0], 0.0)
         self.assertAlmostEqual(outer_inner[2], 10.0)
 
-        self.canvas._project_point_3d = lambda point: (point[0], point[1])
+        self.renderer.project_point_3d = lambda point: (point[0], point[1])
         zero_offset_outer, zero_offset_inner, zero_offset_normal = self.renderer.ring_double_segments(
             self.canvas.model.atoms[0],
             self.canvas.model.atoms[1],
@@ -358,7 +456,7 @@ class BondRendererUnitTest(unittest.TestCase):
         self.assertGreater(zero_offset_inner[1], 0.0)
         self.assertEqual(zero_offset_normal, (0.0, 1.0))
 
-        self.canvas._coords_3d = {
+        self.canvas.atom_coords_3d = {
             0: (0.0, 0.0, 0.0),
             1: (0.0, 0.0, 0.0),
         }
@@ -373,7 +471,7 @@ class BondRendererUnitTest(unittest.TestCase):
         self.assertEqual(collapsed_outer, (0.0, 0.0, 10.0, 0.0))
         self.assertEqual(collapsed_normal, (0.0, 1.0))
 
-        self.canvas._coords_3d = {
+        self.canvas.atom_coords_3d = {
             0: (0.0, 0.0, 0.0),
             1: (10.0, 0.0, 0.0),
         }
@@ -388,7 +486,6 @@ class BondRendererUnitTest(unittest.TestCase):
         self.assertEqual(axial_outer, (0.0, 0.0, 10.0, 0.0))
         self.assertEqual(axial_normal, (0.0, 1.0))
 
-        self.canvas._offset_unit = (0.0, 1.0, 0.0)
         centered_outer, centered_inner, centered_normal = self.renderer.ring_double_segments(
             self.canvas.model.atoms[0],
             self.canvas.model.atoms[1],
@@ -427,7 +524,6 @@ class BondRendererUnitTest(unittest.TestCase):
         self.assertEqual(normal, (0.0, -1.0))
 
     def test_ring_double_segments_uses_offset_unit_and_label_trim_in_2d_fallback(self) -> None:
-        self.canvas._offset_unit = (0.0, 1.0, 0.0)
         self.canvas._labels = {0: object(), 1: object()}
 
         outer, inner, normal = self.renderer.ring_double_segments(
@@ -443,12 +539,10 @@ class BondRendererUnitTest(unittest.TestCase):
         self.assertEqual(normal, (0.0, 1.0))
         self.assertAlmostEqual(inner[0], 0.8)
         self.assertAlmostEqual(inner[2], 9.2)
-        self.assertEqual(self.canvas.offset_targets[-1], (0, 1, (0.0, 0.0, 0.0)))
 
     def test_draw_helpers_create_expected_graphics_items(self) -> None:
         line_item = self.renderer.one_sided_bond_strip(0.0, 0.0, 10.0, 0.0, 0.0, 1.0, 2.0, 2.0)
         polygon_item = self.renderer.one_sided_bond_strip(0.0, 0.0, 10.0, 0.0, 0.0, 1.0, 1.0, 3.0)
-        self.canvas._offset_unit = None
         parallel = self.renderer.draw_parallel_bonds(0.0, 0.0, 10.0, 0.0, 3, 0, 1)
         dotted = self.renderer.draw_dotted_bond(0.0, 0.0, 10.0, 0.0, 0, 1)
         wedge = self.renderer.draw_wedge_bond(0.0, 0.0, 10.0, 0.0, 0, 1)
@@ -482,8 +576,6 @@ class BondRendererUnitTest(unittest.TestCase):
         self.assertIsInstance(items[1], NoSelectPathItem)
 
     def test_draw_dotted_double_and_parallel_bonds_cover_ring_center_and_default_offsets(self) -> None:
-        self.canvas._offset_unit = (0.0, 1.0, 0.0)
-
         segments = self.renderer.parallel_bond_segments(0.0, 0.0, 10.0, 0.0, 4, 0, 1)
         items = self.renderer.draw_parallel_bonds(0.0, 0.0, 10.0, 0.0, 4, 0, 1)
         self.assertEqual(segments, [(0.0, 0.0, 10.0, 0.0)])
@@ -509,29 +601,29 @@ class BondRendererUnitTest(unittest.TestCase):
         self.assertIsInstance(dotted_items[1], NoSelectLineItem)
 
     def test_junction_trim_and_dotted_bond_path_cover_guard_scaling_and_midpoint_cases(self) -> None:
-        self.assertEqual(self.renderer._junction_trim_for_atom(None, 1), 0.0)
+        self.assertEqual(self.renderer.line_geometry._junction_trim_for_atom(None, 1), 0.0)
 
-        self.canvas._atom_bond_ids = {0: {0, 1, 2}}
+        self.canvas.graph_state.atom_bond_ids = {0: {0, 1, 2}}
         self.canvas.model.bonds = [Bond(0, 1, 1), None, Bond(0, 2, 1)]
-        self.assertGreater(self.renderer._junction_trim_for_atom(0, 1), 0.0)
+        self.assertGreater(self.renderer.line_geometry._junction_trim_for_atom(0, 1), 0.0)
 
-        self.canvas._atom_bond_ids = {0: {0}}
+        self.canvas.graph_state.atom_bond_ids = {0: {0}}
         self.canvas.model.bonds = [Bond(0, 1, 1)]
-        self.assertEqual(self.renderer._junction_trim_for_atom(0, 1), 0.0)
+        self.assertEqual(self.renderer.line_geometry._junction_trim_for_atom(0, 1), 0.0)
 
         zero_length_path = self.renderer.dotted_bond_path(1.0, 2.0, 1.0, 2.0)
         self.assertFalse(zero_length_path.isEmpty())
 
-        with mock.patch.object(self.renderer, "_junction_trim_for_atom", side_effect=[5.0, 5.0]):
+        with mock.patch.object(self.renderer.line_geometry, "_junction_trim_for_atom", side_effect=[5.0, 5.0]):
             midpoint_path = self.renderer.dotted_bond_path(0.0, 0.0, 0.000002, 0.0, 0, 1)
         self.assertFalse(midpoint_path.isEmpty())
 
     def test_double_neighbor_target_and_plain_double_normal_cover_invalid_and_offset_fallbacks(self) -> None:
-        self.assertIsNone(self.renderer._double_neighbor_target(None, 1))
-        self.assertIsNone(self.renderer._double_neighbor_target(0, None))
+        self.assertIsNone(self.renderer.line_geometry._double_neighbor_target(None, 1))
+        self.assertIsNone(self.renderer.line_geometry._double_neighbor_target(0, None))
 
         self.canvas.model.atoms[3] = Atom("C", 10.0, 10.0)
-        self.canvas._atom_bond_ids = {0: {0, 1, 2, 3}, 1: {0, 4}}
+        self.canvas.graph_state.atom_bond_ids = {0: {0, 1, 2, 3}, 1: {0, 4}}
         self.canvas.model.bonds = [
             Bond(0, 1, 1),
             None,
@@ -539,15 +631,18 @@ class BondRendererUnitTest(unittest.TestCase):
             Bond(3, 0, 1),
             Bond(1, 2, 1),
         ]
-        target = self.renderer._double_neighbor_target(0, 1)
+        target = self.renderer.line_geometry._double_neighbor_target(0, 1)
         self.assertEqual((target.x(), target.y()), (10.0 / 3.0, 10.0))
 
-        self.canvas._atom_bond_ids = {}
-        self.canvas._offset_unit = (0.6, 0.8, 0.0)
-        self.assertEqual(self.renderer._plain_double_normal(0.0, 0.0, 10.0, 0.0, 0, 1), (0.6, 0.8))
+        self.canvas.graph_state.atom_bond_ids = {}
+        self.canvas.model.atoms[1] = Atom("C", 8.0, -6.0)
+        self.assertEqual(self.renderer.line_geometry._plain_double_normal(0.0, 0.0, 10.0, 0.0, 0, 1), (0.6, 0.8))
 
-        self.canvas._offset_unit = None
-        self.assertEqual(self.renderer._plain_double_normal(0.0, 0.0, 10.0, 0.0, 0, 1), self.canvas._normal)
+        self.canvas.model.atoms[1] = Atom("C", 10.0, 0.0)
+        self.assertEqual(
+            self.renderer.line_geometry._plain_double_normal(0.0, 0.0, 10.0, 0.0, 0, 1),
+            self.canvas._normal,
+        )
 
     def test_draw_ring_double_bond_switches_outer_style(self) -> None:
         with mock.patch.object(
@@ -812,6 +907,32 @@ class BondRendererUnitTest(unittest.TestCase):
         self.renderer.add_bond_graphics(0)
         self.assertEqual(self.canvas.bond_items, {})
 
+    def test_redraw_and_add_bond_graphics_use_scene_item_access_helpers(self) -> None:
+        old_item = QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)
+        self._set_bond(Bond(0, 1, 1, style="single"))
+        self.canvas.bond_items[0] = [old_item]
+        removed_items = []
+        added_items = []
+
+        with (
+            mock.patch.object(
+                bond_renderer_module,
+                "remove_item_from_canvas_scene",
+                side_effect=lambda canvas, item: removed_items.append((canvas, item)),
+            ),
+            mock.patch.object(
+                bond_graphics_build_module,
+                "add_item_to_canvas_scene",
+                side_effect=lambda canvas, item: added_items.append((canvas, item)),
+            ),
+        ):
+            self.assertTrue(self.renderer.redraw_bond(0))
+
+        self.assertEqual(removed_items, [(self.canvas, old_item)])
+        self.assertTrue(added_items)
+        self.assertTrue(all(canvas is self.canvas for canvas, _ in added_items))
+        self.assertEqual(self.canvas.bond_items[0], [item for _, item in added_items])
+
     def test_add_bond_graphics_covers_wedge_hash_single_and_dotted_paths(self) -> None:
         for style in ("wedge", "hash", "single", "dotted"):
             self.canvas._scene.clear()
@@ -820,10 +941,9 @@ class BondRendererUnitTest(unittest.TestCase):
             items = self.canvas.bond_items[0]
             self.assertTrue(items)
             self.assertTrue(all(item.data(0) == "bond" and item.data(1) == 0 for item in items))
+            self.assertTrue(any(item.flags() & item.GraphicsItemFlag.ItemIsSelectable for item in items))
             if style == "dotted":
                 self.assertIsInstance(items[0], NoSelectPathItem)
-        self.assertTrue(self.canvas.selectable_items)
-        self.assertTrue(self.canvas.colored_items)
 
     def test_add_bond_graphics_covers_dotted_double_paths(self) -> None:
         self._set_bond(Bond(0, 1, 2, style="dotted_double"))
@@ -887,7 +1007,7 @@ class BondRendererUnitTest(unittest.TestCase):
         self.canvas._scene.clear()
         self._set_bond(Bond(0, 1, 3, style="bold"))
         replacement = NoSelectPolygonItem(QPolygonF())
-        with mock.patch.object(self.renderer, "draw_parallel_bonds", return_value=[replacement]):
+        with mock.patch.object(self.renderer.graphics_drawer, "draw_parallel_bonds", return_value=[replacement]):
             self.renderer.add_bond_graphics(0)
         self.assertIs(self.canvas.bond_items[0][0], replacement)
 

@@ -7,14 +7,25 @@ from core.history import (
     UpdateBondCommand,
 )
 
-from ui.canvas_history_service import history_service_for
+from ui.canvas_model_access import (
+    atom_for_id,
+    bond_count_for,
+    bond_for_id,
+    next_atom_id_for,
+)
+from ui.canvas_smiles_input_state import last_smiles_input_for
 from ui.history_commands import AddSceneItemsCommand
+from ui.scene_item_state import (
+    atom_state_dict_for,
+    bond_state_dict,
+    scene_item_state_for,
+)
 
 
 class CanvasHistoryRecordingService:
     def __init__(self, canvas, history_service=None) -> None:
         self.canvas = canvas
-        self.history = history_service if history_service is not None else history_service_for(canvas)
+        self.history = history_service
 
     def record_additions(
         self,
@@ -24,12 +35,12 @@ class CanvasHistoryRecordingService:
         added_scene_items: list | None = None,
     ) -> None:
         commands = []
-        after_next_atom_id = self.canvas.model.next_atom_id
+        after_next_atom_id = next_atom_id_for(self.canvas)
         if after_next_atom_id > before_next_atom_id:
             atom_states = {
-                atom_id: self.canvas._atom_state_dict(atom_id)
+                atom_id: atom_state_dict_for(self.canvas, atom_id)
                 for atom_id in range(before_next_atom_id, after_next_atom_id)
-                if atom_id in self.canvas.model.atoms
+                if atom_for_id(self.canvas, atom_id) is not None
             }
             if atom_states:
                 commands.append(
@@ -38,25 +49,25 @@ class CanvasHistoryRecordingService:
                         before_next_atom_id=before_next_atom_id,
                         after_next_atom_id=after_next_atom_id,
                         before_smiles_input=before_smiles_input,
-                        after_smiles_input=self.canvas.last_smiles_input,
+                        after_smiles_input=last_smiles_input_for(self.canvas),
                     )
                 )
-        for bond_id in range(before_bond_count, len(self.canvas.model.bonds)):
-            bond = self.canvas.model.bonds[bond_id]
+        for bond_id in range(before_bond_count, bond_count_for(self.canvas)):
+            bond = bond_for_id(self.canvas, bond_id)
             if bond is None:
                 continue
-            bond_state = self.canvas._bond_state_dict(bond)
+            bond_state = bond_state_dict(bond)
             commands.append(
                 AddBondCommand(
                     bond_id=bond_id,
                     bond_state=bond_state,
                     previous_bond_count=bond_id,
                     before_smiles_input=before_smiles_input,
-                    after_smiles_input=self.canvas.last_smiles_input,
+                    after_smiles_input=last_smiles_input_for(self.canvas),
                 )
             )
         if added_scene_items:
-            states = [self.canvas.scene_item_state(item) for item in added_scene_items if item is not None]
+            states = [scene_item_state_for(self.canvas, item) for item in added_scene_items if item is not None]
             if states:
                 commands.append(AddSceneItemsCommand(item_states=states, items=list(added_scene_items)))
         if not commands:

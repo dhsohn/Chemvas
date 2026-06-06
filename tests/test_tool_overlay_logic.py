@@ -65,13 +65,25 @@ class ToolOverlayLogicTest(unittest.TestCase):
         self.assertIsNone(result)
         self.assertEqual(canvas.scene_obj.removed_items, [preview_item])
 
-    def test_clear_temporary_tool_overlay_clears_handles_when_requested(self) -> None:
+    def test_clear_temporary_tool_overlay_clears_handles_through_explicit_callback(self) -> None:
+        canvas = _Canvas()
+
+        result = clear_temporary_tool_overlay(
+            canvas,
+            clear_handles=True,
+            clear_handles_callback=canvas.clear_handles,
+        )
+
+        self.assertIsNone(result)
+        self.assertEqual(canvas.clear_handles_calls, 1)
+
+    def test_clear_temporary_tool_overlay_does_not_call_canvas_handle_alias(self) -> None:
         canvas = _Canvas()
 
         result = clear_temporary_tool_overlay(canvas, clear_handles=True)
 
         self.assertIsNone(result)
-        self.assertEqual(canvas.clear_handles_calls, 1)
+        self.assertEqual(canvas.clear_handles_calls, 0)
 
     def test_clear_temporary_tool_overlay_ignores_preview_item_from_other_scene(self) -> None:
         canvas = _Canvas()

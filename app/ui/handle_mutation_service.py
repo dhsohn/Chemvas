@@ -4,26 +4,35 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
 
-from ui.curved_arrow_path_service import curved_arrow_path_service_for
 from ui.handle_interaction_logic import (
     orbital_rotation_angle as orbital_rotation_angle_helper,
 )
 from ui.handle_interaction_logic import (
     orbital_scale_factor as orbital_scale_factor_helper,
 )
+from ui.handle_mutation_access import (
+    clamp_curved_midpoint_for,
+    control_from_midpoint_for,
+    default_curved_control_for,
+    orbital_snap_enabled_for,
+    orbital_snap_step_for,
+)
+from ui.renderer_style_access import bond_length_px_for
+from ui.selection_service_access import refresh_selection_outline_for
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
 
 
 class HandleMutationService:
-    def __init__(self, canvas: CanvasView) -> None:
+    def __init__(self, canvas: CanvasView, *, curved_arrow_path_service=None) -> None:
         self.canvas = canvas
+        self.curved_arrow_path_service = curved_arrow_path_service
 
     def update_orbital_scale(self, item, pos: QPointF) -> None:
         data = item.data(1) or {}
         center = data.get("center")
-        base_dist = data.get("base_handle_dist", self.canvas.renderer.style.bond_length_px * 0.8)
+        base_dist = data.get("base_handle_dist", bond_length_px_for(self.canvas) * 0.8)
         if not isinstance(center, QPointF):
             center = item.boundingRect().center()
         scale = orbital_scale_factor_helper(center, pos, float(base_dist))
@@ -37,8 +46,8 @@ class HandleMutationService:
         angle = orbital_rotation_angle_helper(
             center,
             pos,
-            snap_enabled=self.canvas._orbital_snap_enabled,
-            snap_step=self.canvas._orbital_snap_step,
+            snap_enabled=orbital_snap_enabled_for(self.canvas),
+            snap_step=orbital_snap_step_for(self.canvas),
         )
         item.setRotation(angle)
 
@@ -49,12 +58,13 @@ class HandleMutationService:
         double = data.get("double", False)
         if not isinstance(start, QPointF) or not isinstance(end, QPointF):
             return
-        mid = self.canvas._clamp_curved_midpoint(start, end, pos)
-        control = self.canvas._control_from_midpoint(start, end, mid)
-        curved_arrow_path_service_for(self.canvas).set_curved_arrow_path(item, start, end, control, double)
+        mid = clamp_curved_midpoint_for(self.canvas, start, end, pos)
+        control = control_from_midpoint_for(self.canvas, start, end, mid)
+        if self.curved_arrow_path_service is not None:
+            self.curved_arrow_path_service.set_curved_arrow_path(item, start, end, control, double)
         data["control"] = control
         item.setData(2, data)
-        self.canvas._update_selection_outline()
+        refresh_selection_outline_for(self.canvas)
 
     def update_curved_endpoint(self, item, pos: QPointF, endpoint: str) -> None:
         data = item.data(2) or {}
@@ -71,17 +81,14 @@ class HandleMutationService:
         else:
             return
         if not isinstance(control, QPointF):
-            control = self.canvas._default_curved_control(start, end)
-        curved_arrow_path_service_for(self.canvas).set_curved_arrow_path(item, start, end, control, double)
+            control = default_curved_control_for(self.canvas, start, end)
+        if self.curved_arrow_path_service is not None:
+            self.curved_arrow_path_service.set_curved_arrow_path(item, start, end, control, double)
         data["start"] = start
         data["end"] = end
         data["control"] = control
         item.setData(2, data)
-        self.canvas._update_selection_outline()
+        refresh_selection_outline_for(self.canvas)
 
 
-def handle_mutation_service_for(canvas) -> HandleMutationService:
-    return canvas._handle_mutation_service
-
-
-__all__ = ["HandleMutationService", "handle_mutation_service_for"]
+__all__ = ["HandleMutationService"]

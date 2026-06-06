@@ -7,12 +7,15 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
     from PyQt6.QtCore import QPoint
+    from PyQt6.QtGui import QTransform
     from PyQt6.QtWidgets import QApplication, QGraphicsView
 except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
     from ui.canvas_view import CanvasView
+    from ui.input_view_state import input_view_state_for
+    from ui.selection_info_state import selection_info_state_for
 
 
 class _FakeWheelEvent:
@@ -37,8 +40,9 @@ class CanvasViewWheelAndScrollTest(unittest.TestCase):
 
     def _new_view(self):
         view = CanvasView()
-        view._touch_interaction = mock.Mock()
-        view._reset_view_transform = mock.Mock()
+        input_view_state_for(view).base_transform = QTransform().translate(3.0, 4.0)
+        view.setTransform(QTransform().scale(2.0, 2.0))
+        selection_info_state_for(view).last_interaction_time = 0.0
         hbar = SimpleNamespace(value=mock.Mock(return_value=120), setValue=mock.Mock())
         vbar = SimpleNamespace(value=mock.Mock(return_value=240), setValue=mock.Mock())
         view.horizontalScrollBar = lambda: hbar
@@ -52,8 +56,9 @@ class CanvasViewWheelAndScrollTest(unittest.TestCase):
 
             CanvasView.wheelEvent(view, event)
 
-            view._touch_interaction.assert_called_once_with()
-            view._reset_view_transform.assert_called_once_with()
+            self.assertGreater(selection_info_state_for(view).last_interaction_time, 0.0)
+            self.assertTrue(input_view_state_for(view).base_transform.isIdentity())
+            self.assertTrue(view.transform().isIdentity())
             hbar.setValue.assert_called_once_with(105)
             vbar.setValue.assert_called_once_with(247)
             event.accept.assert_called_once_with()
@@ -66,8 +71,9 @@ class CanvasViewWheelAndScrollTest(unittest.TestCase):
 
             CanvasView.wheelEvent(view, event)
 
-            view._touch_interaction.assert_called_once_with()
-            view._reset_view_transform.assert_called_once_with()
+            self.assertGreater(selection_info_state_for(view).last_interaction_time, 0.0)
+            self.assertTrue(input_view_state_for(view).base_transform.isIdentity())
+            self.assertTrue(view.transform().isIdentity())
             hbar.setValue.assert_called_once_with(116)
             vbar.setValue.assert_called_once_with(243)
             event.accept.assert_called_once_with()
@@ -80,8 +86,9 @@ class CanvasViewWheelAndScrollTest(unittest.TestCase):
 
             CanvasView.wheelEvent(view, event)
 
-            view._touch_interaction.assert_called_once_with()
-            view._reset_view_transform.assert_called_once_with()
+            self.assertGreater(selection_info_state_for(view).last_interaction_time, 0.0)
+            self.assertTrue(input_view_state_for(view).base_transform.isIdentity())
+            self.assertTrue(view.transform().isIdentity())
             hbar.setValue.assert_not_called()
             vbar.setValue.assert_not_called()
             event.accept.assert_not_called()

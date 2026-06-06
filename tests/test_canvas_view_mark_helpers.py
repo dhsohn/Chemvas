@@ -19,8 +19,19 @@ if QApplication is not None:
     from ui.canvas_scene_decoration_build_service import (
         CanvasSceneDecorationBuildService,
     )
-    from ui.canvas_view import CanvasView
+    from ui.canvas_tool_settings_state import CanvasToolSettingsState
     from ui.graphics_items import AtomDotItem, AtomLabelItem
+    from ui.mark_item_access import (
+        build_mark_item_for,
+        mark_center_for,
+        mark_center_for_pointer_for,
+        mark_offset_from_click_for,
+        mark_selection_radius_for,
+        remove_mark_item_for,
+        remove_marks_for_atom_for,
+        set_mark_center_for,
+    )
+    from ui.scene_decoration_access import add_mark_for, add_mark_for_atom_for
 
 
 class _FakeScene:
@@ -52,47 +63,52 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
     def test_build_mark_item_returns_kind_specific_items_and_hit_metadata(self) -> None:
         view = SimpleNamespace(
             renderer=self._renderer(),
-            _mark_selection_radius=lambda: 7.5,
         )
-        view._scene_decoration_build_service = CanvasSceneDecorationBuildService(view)
+        view.services = SimpleNamespace(
+            scene_decoration_build_service=CanvasSceneDecorationBuildService(view)
+        )
+        selection_radius = mark_selection_radius_for(view)
 
-        radical = CanvasView._build_mark_item(view, "radical")
+        radical = build_mark_item_for(view, "radical")
         self.assertIsInstance(radical, AtomDotItem)
         self.assertAlmostEqual(radical.rect().left(), -1.4)
         self.assertAlmostEqual(radical.rect().width(), 2.8)
         self.assertEqual(radical.brush().color(), QColor(16, 32, 48))
         self.assertEqual(radical.pen().style(), Qt.PenStyle.NoPen)
 
-        plus = CanvasView._build_mark_item(view, "plus")
+        plus = build_mark_item_for(view, "plus")
         self.assertIsInstance(plus, AtomLabelItem)
         self.assertEqual(plus.toPlainText(), "+")
         self.assertEqual(plus.defaultTextColor(), QColor(16, 32, 48))
         self.assertEqual(plus.font().family(), view.renderer.atom_font().family())
-        self.assertEqual(plus._hit_radius, 7.5)
+        self.assertEqual(plus._hit_radius, selection_radius)
 
-        minus = CanvasView._build_mark_item(view, "minus")
+        minus = build_mark_item_for(view, "minus")
         self.assertIsInstance(minus, AtomLabelItem)
         self.assertEqual(minus.toPlainText(), "-")
-        self.assertEqual(minus._hit_radius, 7.5)
+        self.assertEqual(minus._hit_radius, selection_radius)
 
-        self.assertIsNone(CanvasView._build_mark_item(view, "unsupported"))
+        self.assertIsNone(build_mark_item_for(view, "unsupported"))
 
     def test_mark_offset_from_click_handles_zero_length_and_label_aware_target(self) -> None:
         view = SimpleNamespace(
             model=SimpleNamespace(atoms={7: Atom("C", 10.0, 20.0)}),
             renderer=self._renderer(bond_length_px=50.0),
-            mark_kind="plus",
-            _mark_target_distance_for_atom=mock.Mock(return_value=20.0),
+            tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
         )
-        view._canvas_mark_scene_service = CanvasMarkSceneService(view)
+        mark_target_distance = mock.Mock(return_value=20.0)
+        view.services = SimpleNamespace(
+            geometry_controller=SimpleNamespace(mark_target_distance_for_atom=mark_target_distance)
+        )
+        view.services.canvas_mark_scene_service = CanvasMarkSceneService(view)
 
-        offset = CanvasView._mark_offset_from_click(view, 7, QPointF(10.0, 20.0), kind="minus")
+        offset = mark_offset_from_click_for(view, 7, QPointF(10.0, 20.0), kind="minus")
 
         expected = 12.5 / math.sqrt(2.0)
         self.assertAlmostEqual(offset.x(), expected)
         self.assertAlmostEqual(offset.y(), -expected)
 
-        call = view._mark_target_distance_for_atom.call_args
+        call = mark_target_distance.call_args
         self.assertEqual(call.args[0], 7)
         self.assertAlmostEqual(call.args[1], 1.0 / math.sqrt(2.0))
         self.assertAlmostEqual(call.args[2], -1.0 / math.sqrt(2.0))
@@ -102,22 +118,25 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
         view = SimpleNamespace(
             model=SimpleNamespace(atoms={7: Atom("C", 10.0, 20.0)}),
             renderer=self._renderer(bond_length_px=50.0),
-            mark_kind="radical",
-            _mark_target_distance_for_atom=mock.Mock(return_value=0.0),
+            tool_settings_state=CanvasToolSettingsState(mark_kind="radical"),
         )
-        view._canvas_mark_scene_service = CanvasMarkSceneService(view)
+        mark_target_distance = mock.Mock(return_value=0.0)
+        view.services = SimpleNamespace(
+            geometry_controller=SimpleNamespace(mark_target_distance_for_atom=mark_target_distance)
+        )
+        view.services.canvas_mark_scene_service = CanvasMarkSceneService(view)
 
-        offset = CanvasView._mark_offset_from_click(view, 7, QPointF(13.0, 24.0))
+        offset = mark_offset_from_click_for(view, 7, QPointF(13.0, 24.0))
 
         self.assertAlmostEqual(offset.x(), 6.0)
         self.assertAlmostEqual(offset.y(), 8.0)
-        view._mark_target_distance_for_atom.assert_called_once_with(7, 0.6, 0.8, "radical")
+        mark_target_distance.assert_called_once_with(7, 0.6, 0.8, "radical")
 
     def test_add_mark_delegates_to_scene_decoration_service(self) -> None:
         service = mock.Mock(return_value="mark-item")
-        view = SimpleNamespace(_scene_decoration_service=SimpleNamespace(add_mark=service))
+        view = SimpleNamespace(services=SimpleNamespace(scene_decoration_service=SimpleNamespace(add_mark=service)))
 
-        item = CanvasView.add_mark(
+        item = add_mark_for(
             view,
             QPointF(4.0, 5.0),
             kind="minus",
@@ -139,14 +158,14 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
         build_service = mock.Mock()
         mark_item = object()
         center = QPointF(6.0, 7.0)
-        view = SimpleNamespace(_scene_decoration_build_service=build_service)
+        view = SimpleNamespace(services=SimpleNamespace(scene_decoration_build_service=build_service))
 
         build_service.build_mark_item.return_value = mark_item
         build_service.mark_center.return_value = center
 
-        self.assertIs(CanvasView._build_mark_item(view, "plus"), mark_item)
-        self.assertEqual(CanvasView._mark_center(view, mark_item), center)
-        CanvasView._set_mark_center(view, mark_item, QPointF(8.0, 9.0))
+        self.assertIs(build_mark_item_for(view, "plus"), mark_item)
+        self.assertEqual(mark_center_for(view, mark_item), center)
+        set_mark_center_for(view, mark_item, QPointF(8.0, 9.0))
 
         build_service.build_mark_item.assert_called_once_with("plus")
         build_service.mark_center.assert_called_once_with(mark_item)
@@ -157,17 +176,17 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
         mark_item = object()
         center = QPointF(4.0, 5.0)
         offset = QPointF(1.5, -2.5)
-        view = SimpleNamespace(_canvas_mark_scene_service=scene_service)
+        view = SimpleNamespace(services=SimpleNamespace(canvas_mark_scene_service=scene_service))
 
         scene_service.add_mark_for_atom.return_value = mark_item
         scene_service.mark_offset_from_click.return_value = offset
         scene_service.mark_center_for_pointer.return_value = center
 
-        self.assertIs(CanvasView.add_mark_for_atom(view, 7, QPointF(12.0, 13.0), kind="minus", record=False), mark_item)
-        self.assertEqual(CanvasView._mark_offset_from_click(view, 7, QPointF(12.0, 13.0), kind="minus"), offset)
-        CanvasView._remove_mark_item(view, mark_item)
-        CanvasView._remove_marks_for_atom(view, 7)
-        self.assertEqual(CanvasView._mark_center_for_pointer(view, QPointF(12.0, 13.0), 7, kind="minus"), center)
+        self.assertIs(add_mark_for_atom_for(view, 7, QPointF(12.0, 13.0), kind="minus", record=False), mark_item)
+        self.assertEqual(mark_offset_from_click_for(view, 7, QPointF(12.0, 13.0), kind="minus"), offset)
+        remove_mark_item_for(view, mark_item)
+        remove_marks_for_atom_for(view, 7)
+        self.assertEqual(mark_center_for_pointer_for(view, QPointF(12.0, 13.0), 7, kind="minus"), center)
 
         scene_service.add_mark_for_atom.assert_called_once_with(7, QPointF(12.0, 13.0), kind="minus", record=False)
         scene_service.mark_offset_from_click.assert_called_once_with(7, QPointF(12.0, 13.0), kind="minus")

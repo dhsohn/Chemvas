@@ -20,7 +20,31 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from core.model import Atom
-    from ui.canvas_view import CanvasView
+    from ui.canvas_atom_graphics_state import set_atom_dots_for, set_atom_items_for
+    from ui.canvas_callback_state import CanvasCallbackState
+    from ui.canvas_insert_state import CanvasInsertState
+    from ui.canvas_tool_mode_controller import CanvasToolModeController
+    from ui.canvas_tool_settings_state import CanvasToolSettingsState
+    from ui.history_canvas_access import set_ring_polygons_for_history
+    from ui.input_view_access import update_view_transform_for
+    from ui.input_view_state import InputViewState
+    from ui.selection_center_logic import (
+        bounding_box_center_for_atoms,
+        center_for_atoms,
+    )
+    from ui.selection_geometry_access import bounds_for_atoms_for
+    from ui.structure_geometry_access import (
+        _compute_bond_template_geometry_for,
+        cyclohexane_boat_points_for,
+        cyclohexane_chair_points_for,
+        point_pair,
+        point_pairs,
+        qpoints_from_pairs,
+        regular_ring_radius_for,
+        ring_points_for,
+        scale_qpoints_to_bond_length,
+        template_geometry_result,
+    )
 
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas view tests")
@@ -41,23 +65,21 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
             )
         )
 
-        centroid = CanvasView._center_for_atoms(view, {1, 2, 3, 99})
-        bbox_center = CanvasView._bounding_box_center_for_atoms(view, {1, 2, 3, 99})
+        centroid = center_for_atoms({1, 2, 3, 99}, atoms=view.model.atoms)
+        bbox_center = bounding_box_center_for_atoms({1, 2, 3, 99}, atoms=view.model.atoms)
 
         self.assertEqual(centroid, QPointF(3.0, 17.0 / 3.0))
         self.assertEqual(bbox_center, QPointF(3.0, 6.0))
-        self.assertIsNone(CanvasView._center_for_atoms(view, {99}))
-        self.assertIsNone(CanvasView._bounding_box_center_for_atoms(view, {99}))
+        self.assertIsNone(center_for_atoms({99}, atoms=view.model.atoms))
+        self.assertIsNone(bounding_box_center_for_atoms({99}, atoms=view.model.atoms))
 
     def test_update_view_transform_applies_shear_and_scale_over_base_transform(self) -> None:
         plain_view = SimpleNamespace(
-            _base_transform=QTransform().translate(2.0, 3.0),
-            _perspective_shear=0.0,
-            _perspective_scale_y=1.0,
+            input_view_state=InputViewState(base_transform=QTransform().translate(2.0, 3.0)),
             setTransform=mock.Mock(),
         )
 
-        CanvasView._update_view_transform(plain_view)
+        update_view_transform_for(plain_view)
 
         plain_transform = plain_view.setTransform.call_args.args[0]
         self.assertAlmostEqual(plain_transform.dx(), 2.0)
@@ -66,13 +88,15 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         self.assertAlmostEqual(plain_transform.m22(), 1.0)
 
         skewed_view = SimpleNamespace(
-            _base_transform=QTransform().translate(2.0, 3.0),
-            _perspective_shear=0.25,
-            _perspective_scale_y=1.5,
+            input_view_state=InputViewState(
+                base_transform=QTransform().translate(2.0, 3.0),
+                perspective_shear=0.25,
+                perspective_scale_y=1.5,
+            ),
             setTransform=mock.Mock(),
         )
 
-        CanvasView._update_view_transform(skewed_view)
+        update_view_transform_for(skewed_view)
 
         skewed_transform = skewed_view.setTransform.call_args.args[0]
         self.assertAlmostEqual(skewed_transform.dx(), 2.0)
@@ -98,81 +122,87 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
                 },
                 bounds=mock.Mock(return_value=(-5.0, -6.0, 7.0, 8.0)),
             ),
-            atom_items={1: label},
-            atom_dots={1: dot},
-            _extend_bounds_with_item_rect=CanvasView._extend_bounds_with_item_rect,
         )
+        set_atom_items_for(view, {1: label})
+        set_atom_dots_for(view, {1: dot})
 
-        self.assertEqual(CanvasView._bounds_for_atoms(view, {1, 99}), (10.0, 20.0, 10.0, 20.0))
+        self.assertEqual(bounds_for_atoms_for(view, {1, 99}), (10.0, 20.0, 10.0, 20.0))
 
-        bounds_with_labels = CanvasView._bounds_for_atoms(view, {1, 99}, include_labels=True)
+        bounds_with_labels = bounds_for_atoms_for(view, {1, 99}, include_labels=True)
         self.assertLess(bounds_with_labels[0], 10.0)
         self.assertLess(bounds_with_labels[1], 20.0)
         self.assertGreater(bounds_with_labels[2], 14.0)
         self.assertGreater(bounds_with_labels[3], 18.0)
 
-        self.assertEqual(CanvasView._bounds_for_atoms(view, {99}, include_labels=True), (-5.0, -6.0, 7.0, 8.0))
+        self.assertEqual(bounds_for_atoms_for(view, {99}, include_labels=True), (-5.0, -6.0, 7.0, 8.0))
         view.model.bounds.assert_called_once_with()
 
     def test_set_ring_polygons_and_tool_variant_setters_update_canvas_state(self) -> None:
         ring = QGraphicsPolygonItem()
         view = SimpleNamespace(
-            active_bond_style="single",
-            active_bond_order=1,
-            active_arrow_type="reaction",
-            active_orbital_type="p",
-            tools=SimpleNamespace(set_active=mock.Mock()),
-            _update_selection_outline=mock.Mock(),
-            _notify_tool_change=mock.Mock(),
-            _refresh_hover_from_cursor=mock.Mock(),
-            _curved_snap=False,
-            _curved_snap_step=0.25,
+            insert_state=CanvasInsertState(template_active=True),
+            refresh_selection_outline=mock.Mock(),
+            callback_state=CanvasCallbackState(tool_change=mock.Mock()),
+            tool_settings_state=CanvasToolSettingsState(
+                active_bond_style="single",
+                active_bond_order=1,
+                active_arrow_type="reaction",
+                active_orbital_type="p",
+                curved_snap_step=0.25,
+            ),
         )
-        view._activate_tool_variant = lambda tool_name, **state: CanvasView._activate_tool_variant(
-            view,
-            tool_name,
-            **state,
+        view.services = SimpleNamespace(
+            selection_controller=SimpleNamespace(update_selection_outline=view.refresh_selection_outline),
+            hover_scene_service=SimpleNamespace(clear_hover_highlight=mock.Mock()),
+            tools=SimpleNamespace(set_active=mock.Mock()),
         )
 
-        CanvasView.set_ring_polygons(SimpleNamespace(), [ring, None], [[(1.0, 2.0), (3.0, 4.0)], [(9.0, 9.0)]])
+        set_ring_polygons_for_history(
+            SimpleNamespace(),
+            [ring, None],
+            [[(1.0, 2.0), (3.0, 4.0)], [(9.0, 9.0)]],
+        )
         polygon = ring.polygon()
         self.assertEqual(polygon.count(), 2)
         self.assertEqual((polygon[0].x(), polygon[0].y(), polygon[1].x(), polygon[1].y()), (1.0, 2.0, 3.0, 4.0))
 
-        CanvasView.set_bond_style(view, "double", 2)
-        CanvasView.set_arrow_type(view, "curved")
-        CanvasView.set_orbital_type(view, "sp2")
-        CanvasView.set_curved_snap(view, 1)
-        CanvasView.set_curved_snap_step(view, 0.01)
+        tool_mode_controller = CanvasToolModeController(
+            view,
+            hover_refresh=view.services.hover_scene_service.clear_hover_highlight,
+            set_active_tool=view.services.tools.set_active,
+        )
+        tool_mode_controller.set_bond_style("double", 2)
+        tool_mode_controller.set_arrow_type("curved")
+        tool_mode_controller.set_orbital_type("sp2")
+        tool_mode_controller.set_curved_snap(1)
+        tool_mode_controller.set_curved_snap_step(0.01)
 
-        self.assertEqual((view.active_bond_style, view.active_bond_order), ("double", 2))
-        self.assertEqual(view.active_arrow_type, "curved")
-        self.assertEqual(view.active_orbital_type, "sp2")
-        self.assertTrue(CanvasView.get_curved_snap(view))
-        self.assertEqual(CanvasView.get_curved_snap_step(view), 0.05)
-        self.assertEqual(view.tools.set_active.call_args_list, [mock.call("bond"), mock.call("arrow"), mock.call("orbital")])
-        self.assertEqual(view._update_selection_outline.call_count, 3)
-        self.assertEqual(view._notify_tool_change.call_count, 3)
-        self.assertEqual(view._refresh_hover_from_cursor.call_count, 3)
+        settings = view.tool_settings_state
+        self.assertEqual((settings.active_bond_style, settings.active_bond_order), ("double", 2))
+        self.assertEqual(settings.active_arrow_type, "curved")
+        self.assertEqual(settings.active_orbital_type, "sp2")
+        self.assertTrue(tool_mode_controller.get_curved_snap())
+        self.assertEqual(tool_mode_controller.get_curved_snap_step(), 0.05)
+        self.assertEqual(
+            view.services.tools.set_active.call_args_list,
+            [mock.call("bond"), mock.call("arrow"), mock.call("orbital")],
+        )
+        self.assertEqual(view.refresh_selection_outline.call_count, 3)
+        self.assertEqual(view.callback_state.tool_change.call_count, 3)
+        self.assertEqual(view.services.hover_scene_service.clear_hover_highlight.call_count, 3)
 
-    def test_scene_center_and_point_pair_helpers_cover_add_geometry_paths(self) -> None:
-        center_point = QPointF(9.0, 11.0)
+    def test_point_pair_helpers_cover_add_geometry_paths(self) -> None:
         view = SimpleNamespace(
-            viewport=lambda: SimpleNamespace(rect=lambda: SimpleNamespace(center=lambda: QPointF(3.0, 4.0))),
-            mapToScene=mock.Mock(return_value=center_point),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=12.0)),
         )
 
-        self.assertIs(CanvasView._viewport_scene_center(view), center_point)
-        view.mapToScene.assert_called_once()
-
-        pointfs = CanvasView._qpoints_from_pairs([(1.0, 2.0), (3.5, 4.5)])
+        pointfs = qpoints_from_pairs([(1.0, 2.0), (3.5, 4.5)])
         self.assertEqual([(point.x(), point.y()) for point in pointfs], [(1.0, 2.0), (3.5, 4.5)])
 
-        chair_points = CanvasView._cyclohexane_chair_points(view, QPointF(0.0, 0.0))
-        boat_points = CanvasView._cyclohexane_boat_points(view, QPointF(0.0, 0.0))
-        ring_points = CanvasView._ring_points(view, QPointF(0.0, 0.0), 6)
-        scaled_points = CanvasView._scale_points_to_bond_length(
+        chair_points = cyclohexane_chair_points_for(view, QPointF(0.0, 0.0))
+        boat_points = cyclohexane_boat_points_for(view, QPointF(0.0, 0.0))
+        ring_points = ring_points_for(view, QPointF(0.0, 0.0), 6)
+        scaled_points = scale_qpoints_to_bond_length(
             [QPointF(0.0, 0.0), QPointF(10.0, 0.0)],
             QPointF(5.0, 0.0),
             20.0,
@@ -193,43 +223,45 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
                 bonds=[],
             ),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=14.0)),
-            _ring_polygon_points_for_bond=mock.Mock(return_value=[(1.0, 1.0)]),
         )
 
-        self.assertEqual(CanvasView._point_pairs([QPointF(1.0, 2.0), QPointF(3.0, 4.0)]), [(1.0, 2.0), (3.0, 4.0)])
-        self.assertEqual(CanvasView._point_pair(QPointF(5.0, 6.0)), (5.0, 6.0))
-        self.assertIsNone(CanvasView._point_pair(None))
+        self.assertEqual(point_pairs([QPointF(1.0, 2.0), QPointF(3.0, 4.0)]), [(1.0, 2.0), (3.0, 4.0)])
+        self.assertEqual(point_pair(QPointF(5.0, 6.0)), (5.0, 6.0))
+        self.assertIsNone(point_pair(None))
         self.assertEqual(
-            [(point.x(), point.y()) for point in CanvasView._template_points_from_pairs(view, [(7.0, 8.0)])],
+            [(point.x(), point.y()) for point in qpoints_from_pairs([(7.0, 8.0)])],
             [(7.0, 8.0)],
         )
-        self.assertIsNone(CanvasView._template_points_from_pairs(view, None))
         self.assertEqual(
-            CanvasView._template_geometry_result(([(9.0, 10.0)], [(1, 0.0, 0.0)]))[1],
+            template_geometry_result(([(9.0, 10.0)], [(1, 0.0, 0.0)]))[1],
             [(1, 0.0, 0.0)],
         )
-        self.assertIsNone(CanvasView._template_geometry_result(None))
-        self.assertAlmostEqual(CanvasView._regular_ring_radius(view, 6), 14.0)
-        self.assertAlmostEqual(CanvasView._regular_ring_radius(view, 6, bond_length=20.0), 20.0)
+        self.assertIsNone(template_geometry_result(None))
+        self.assertAlmostEqual(regular_ring_radius_for(view, 6), 14.0)
+        self.assertAlmostEqual(regular_ring_radius_for(view, 6, bond_length=20.0), 20.0)
 
         geometry_fn = mock.Mock(side_effect=[None, ([(11.0, 12.0)], [(2, 3.0, 4.0)])])
 
-        self.assertIsNone(
-            CanvasView._compute_bond_template_geometry(
+        with mock.patch(
+            "ui.structure_geometry_access.ring_polygon_points_for_bond",
+            return_value=[(1.0, 1.0)],
+        ):
+            self.assertIsNone(
+                _compute_bond_template_geometry_for(
+                    view,
+                    geometry_fn,
+                    [(0.0, 1.0)],
+                    7,
+                    center_hint=QPointF(2.0, 3.0),
+                )
+            )
+            result = _compute_bond_template_geometry_for(
                 view,
                 geometry_fn,
-                [(0.0, 1.0)],
-                7,
-                center_hint=QPointF(2.0, 3.0),
+                6,
+                8,
+                center_hint=None,
             )
-        )
-        result = CanvasView._compute_bond_template_geometry(
-            view,
-            geometry_fn,
-            6,
-            8,
-            center_hint=None,
-        )
 
         self.assertEqual([(point.x(), point.y()) for point in result[0]], [(11.0, 12.0)])
         self.assertEqual(result[1], [(2, 3.0, 4.0)])

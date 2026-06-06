@@ -5,7 +5,11 @@ import math
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QPen, QPolygonF
 
+from ui.canvas_model_access import atom_for_id
+from ui.canvas_scene_items_state import ring_items_for
 from ui.graphics_items import NoSelectPolygonItem
+from ui.renderer_style_access import bond_length_px_for, ring_fill_brush_for
+from ui.scene_selectability import make_item_selectable
 
 
 class CanvasRingFillSceneService:
@@ -15,7 +19,7 @@ class CanvasRingFillSceneService:
     def update_ring_fills_for_atoms(self, atom_ids: set[int]) -> None:
         if not atom_ids:
             return
-        for ring_item in self.canvas.ring_items:
+        for ring_item in ring_items_for(self.canvas):
             ring_atom_ids = ring_item.data(2)
             if not isinstance(ring_atom_ids, list):
                 continue
@@ -23,7 +27,7 @@ class CanvasRingFillSceneService:
                 continue
             points = []
             for atom_id in ring_atom_ids:
-                atom = self.canvas.model.atoms.get(atom_id)
+                atom = atom_for_id(self.canvas, atom_id)
                 if atom is None:
                     continue
                 points.append(QPointF(atom.x, atom.y))
@@ -44,11 +48,11 @@ class CanvasRingFillSceneService:
         sin_y = math.sin(angle_y)
         cos_x = math.cos(angle_x)
         sin_x = math.sin(angle_x)
-        tol = self.canvas.renderer.style.bond_length_px * 0.25
+        tol = bond_length_px_for(self.canvas) * 0.25
         atom_points = self._ring_fill_atom_points(atom_ids)
         if not atom_points:
             return
-        for ring_item in self.canvas.ring_items:
+        for ring_item in ring_items_for(self.canvas):
             ring_atom_ids = ring_item.data(2)
             if isinstance(ring_atom_ids, list):
                 if not any(atom_id in atom_ids for atom_id in ring_atom_ids):
@@ -74,11 +78,11 @@ class CanvasRingFillSceneService:
     def rotate_ring_fills(self, atom_ids: set[int], center: QPointF, angle_rad: float) -> None:
         cos_a = math.cos(angle_rad)
         sin_a = math.sin(angle_rad)
-        tol = self.canvas.renderer.style.bond_length_px * 0.25
+        tol = bond_length_px_for(self.canvas) * 0.25
         atom_points = self._ring_fill_atom_points(atom_ids)
         if not atom_points:
             return
-        for ring_item in self.canvas.ring_items:
+        for ring_item in ring_items_for(self.canvas):
             ring_atom_ids = ring_item.data(2)
             if isinstance(ring_atom_ids, list):
                 if not any(atom_id in atom_ids for atom_id in ring_atom_ids):
@@ -102,17 +106,17 @@ class CanvasRingFillSceneService:
     def create_ring_fill_item(self, points: list[QPointF], atom_ids: list[int]):
         polygon = QPolygonF(points)
         ring_item = NoSelectPolygonItem(polygon)
-        ring_item.setBrush(self.canvas.renderer.ring_fill_brush())
+        ring_item.setBrush(ring_fill_brush_for(self.canvas))
         ring_item.setPen(QPen(Qt.PenStyle.NoPen))
         ring_item.setData(0, "ring")
         ring_item.setData(2, list(atom_ids))
-        self.canvas._make_selectable(ring_item)
+        make_item_selectable(ring_item)
         return ring_item
 
     def _ring_fill_atom_points(self, atom_ids: set[int]) -> list[QPointF]:
         atom_points: list[QPointF] = []
         for atom_id in atom_ids:
-            atom = self.canvas.model.atoms.get(atom_id)
+            atom = atom_for_id(self.canvas, atom_id)
             if atom is None:
                 continue
             atom_points.append(QPointF(atom.x, atom.y))
@@ -121,7 +125,7 @@ class CanvasRingFillSceneService:
     def _ring_polygon_points_for_atom_ids(self, ring_atom_ids: list[int]) -> list[QPointF]:
         points: list[QPointF] = []
         for atom_id in ring_atom_ids:
-            atom = self.canvas.model.atoms.get(atom_id)
+            atom = atom_for_id(self.canvas, atom_id)
             if atom is None:
                 continue
             points.append(QPointF(atom.x, atom.y))
@@ -136,8 +140,4 @@ class CanvasRingFillSceneService:
         return False
 
 
-def canvas_ring_fill_scene_service_for(canvas) -> CanvasRingFillSceneService:
-    return canvas._canvas_ring_fill_scene_service
-
-
-__all__ = ["CanvasRingFillSceneService", "canvas_ring_fill_scene_service_for"]
+__all__ = ["CanvasRingFillSceneService"]

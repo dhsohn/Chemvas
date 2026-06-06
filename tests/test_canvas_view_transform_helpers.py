@@ -8,16 +8,23 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
     from PyQt6.QtCore import QPointF
-    from PyQt6.QtGui import QTransform
     from PyQt6.QtWidgets import QApplication
 except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
     from core.model import Atom, Bond
+    from ui.canvas_atom_graphics_state import set_atom_dots_for, set_atom_items_for
+    from ui.canvas_bond_graphics_state import set_bond_items_for
     from ui.canvas_graph_service import CanvasGraphService
+    from ui.canvas_graph_state import CanvasGraphState
+    from ui.canvas_ring_fill_scene_access import update_ring_fills_for_atoms_for
     from ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
-    from ui.canvas_view import CanvasView
+    from ui.canvas_scene_items_state import set_scene_item_collection_for
+    from ui.input_view_access import rotate_view_for
+    from ui.input_view_state import InputViewState
+    from ui.selection_rotation_access import rotate_selection_for
+    from ui.selection_style_access import restore_selection_from_ids_for
 
 
 class _FakeSelectableItem:
@@ -44,8 +51,12 @@ class _FakeSelectableItem:
 
 
 class _FakeScene:
-    def __init__(self) -> None:
+    def __init__(self, selected_items=None) -> None:
         self.clearSelection = mock.Mock()
+        self._selected_items = list(selected_items or [])
+
+    def selectedItems(self):
+        return list(self._selected_items)
 
 
 class _FakeRingItem:
@@ -68,106 +79,127 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
 
     def test_rotate_view_updates_base_transform_and_skips_zero_angle(self) -> None:
         view = SimpleNamespace(
-            _base_transform=QTransform(),
-            _update_view_transform=mock.Mock(),
+            input_view_state=InputViewState(),
+            setTransform=mock.Mock(),
         )
 
-        CanvasView.rotate_view(view, 45.0)
+        rotate_view_for(view, 45.0)
 
-        self.assertFalse(view._base_transform.isIdentity())
-        view._update_view_transform.assert_called_once_with()
+        self.assertFalse(view.input_view_state.base_transform.isIdentity())
+        view.setTransform.assert_called_once()
 
         idle_view = SimpleNamespace(
-            _base_transform=QTransform(),
-            _update_view_transform=mock.Mock(),
+            input_view_state=InputViewState(),
+            setTransform=mock.Mock(),
         )
-        CanvasView.rotate_view(idle_view, 0.0)
-        self.assertTrue(idle_view._base_transform.isIdentity())
-        idle_view._update_view_transform.assert_not_called()
+        rotate_view_for(idle_view, 0.0)
+        self.assertTrue(idle_view.input_view_state.base_transform.isIdentity())
+        idle_view.setTransform.assert_not_called()
 
     def test_rotate_selection_rotates_atoms_and_updates_dependent_items(self) -> None:
         label_1 = object()
         label_2 = object()
         atom_1 = Atom("C", 1.0, 0.0)
         atom_2 = Atom("O", 0.0, 1.0)
+        atom_label_service = SimpleNamespace(position_label=mock.Mock())
+        move_controller = SimpleNamespace(redraw_connected_bonds=mock.Mock())
+        ring_fill_service = SimpleNamespace(rotate_ring_fills=mock.Mock())
+        selection_controller = SimpleNamespace(update_selection_outline=mock.Mock())
         view = SimpleNamespace(
             model=SimpleNamespace(
                 atoms={1: atom_1, 2: atom_2},
                 bonds=[Bond(1, 2, 1), None],
             ),
-            atom_items={1: label_1, 2: label_2},
-            _selected_ids=mock.Mock(return_value=(set(), {0, 1, 99})),
-            _center_for_atoms=mock.Mock(return_value=QPointF(0.5, 0.5)),
-            _position_label=mock.Mock(),
-            _redraw_connected_bonds=mock.Mock(),
-            _rotate_ring_fills=mock.Mock(),
-            _update_selection_outline=mock.Mock(),
+            scene=lambda: _FakeScene(
+                [
+                    _FakeSelectableItem("bond", 0),
+                    _FakeSelectableItem("bond", 1),
+                    _FakeSelectableItem("bond", 99),
+                ]
+            ),
+            services=SimpleNamespace(
+                atom_label_service=atom_label_service,
+                canvas_ring_fill_scene_service=ring_fill_service,
+                move_controller=move_controller,
+                selection_controller=selection_controller,
+            ),
         )
+        set_atom_items_for(view, {1: label_1, 2: label_2})
+        set_atom_dots_for(view, {})
 
-        CanvasView.rotate_selection(view, 90.0)
+        rotate_selection_for(view, 90.0)
 
         self.assertAlmostEqual(atom_1.x, 1.0)
         self.assertAlmostEqual(atom_1.y, 1.0)
         self.assertAlmostEqual(atom_2.x, 0.0)
         self.assertAlmostEqual(atom_2.y, 0.0)
-        self.assertAlmostEqual(view._rotate_ring_fills.call_args.args[2], math.pi / 2.0)
-        self.assertEqual(view._rotate_ring_fills.call_args.args[1].x(), 0.5)
-        self.assertEqual(view._rotate_ring_fills.call_args.args[1].y(), 0.5)
-        self.assertEqual(view._selected_ids.call_count, 1)
+        rotate_call = ring_fill_service.rotate_ring_fills.call_args
+        self.assertEqual(rotate_call.args[0], {1, 2})
+        self.assertEqual(rotate_call.args[1], QPointF(0.5, 0.5))
+        self.assertAlmostEqual(rotate_call.args[2], math.pi / 2.0)
         self.assertEqual(
-            {call.args[0] for call in view._position_label.call_args_list},
+            {call.args[0] for call in atom_label_service.position_label.call_args_list},
             {label_1, label_2},
         )
         self.assertEqual(
             {
                 call.args[0]: (round(call.args[1], 6), round(call.args[2], 6))
-                for call in view._position_label.call_args_list
+                for call in atom_label_service.position_label.call_args_list
             },
             {label_1: (1.0, 1.0), label_2: (0.0, 0.0)},
         )
         self.assertEqual(
-            {call.args[0] for call in view._redraw_connected_bonds.call_args_list},
+            {call.args[0] for call in move_controller.redraw_connected_bonds.call_args_list},
             {1, 2},
         )
-        view._update_selection_outline.assert_called_once_with()
+        selection_controller.update_selection_outline.assert_called_once_with()
 
     def test_rotate_selection_skips_when_nothing_can_be_rotated(self) -> None:
+        empty_atom_label_service = SimpleNamespace(position_label=mock.Mock())
+        empty_move_controller = SimpleNamespace(redraw_connected_bonds=mock.Mock())
+        empty_ring_fill_service = SimpleNamespace(rotate_ring_fills=mock.Mock())
+        empty_selection_controller = SimpleNamespace(update_selection_outline=mock.Mock())
         empty_view = SimpleNamespace(
             model=SimpleNamespace(atoms={}, bonds=[]),
-            _selected_ids=mock.Mock(return_value=(set(), set())),
-            _center_for_atoms=mock.Mock(),
-            _position_label=mock.Mock(),
-            _redraw_connected_bonds=mock.Mock(),
-            _rotate_ring_fills=mock.Mock(),
-            _update_selection_outline=mock.Mock(),
+            scene=lambda: _FakeScene(),
+            services=SimpleNamespace(
+                atom_label_service=empty_atom_label_service,
+                canvas_ring_fill_scene_service=empty_ring_fill_service,
+                move_controller=empty_move_controller,
+                selection_controller=empty_selection_controller,
+            ),
         )
 
-        CanvasView.rotate_selection(empty_view, 15.0)
+        rotate_selection_for(empty_view, 15.0)
 
-        empty_view._center_for_atoms.assert_not_called()
-        empty_view._position_label.assert_not_called()
-        empty_view._redraw_connected_bonds.assert_not_called()
-        empty_view._rotate_ring_fills.assert_not_called()
-        empty_view._update_selection_outline.assert_not_called()
+        empty_atom_label_service.position_label.assert_not_called()
+        empty_move_controller.redraw_connected_bonds.assert_not_called()
+        empty_ring_fill_service.rotate_ring_fills.assert_not_called()
+        empty_selection_controller.update_selection_outline.assert_not_called()
 
+        no_center_atom_label_service = SimpleNamespace(position_label=mock.Mock())
+        no_center_move_controller = SimpleNamespace(redraw_connected_bonds=mock.Mock())
+        no_center_ring_fill_service = SimpleNamespace(rotate_ring_fills=mock.Mock())
+        no_center_selection_controller = SimpleNamespace(update_selection_outline=mock.Mock())
         no_center_view = SimpleNamespace(
             model=SimpleNamespace(atoms={1: Atom("C", 2.0, 3.0)}, bonds=[]),
-            atom_items={1: object()},
-            _selected_ids=mock.Mock(return_value=({1}, set())),
-            _center_for_atoms=mock.Mock(return_value=None),
-            _position_label=mock.Mock(),
-            _redraw_connected_bonds=mock.Mock(),
-            _rotate_ring_fills=mock.Mock(),
-            _update_selection_outline=mock.Mock(),
+            scene=lambda: _FakeScene([_FakeSelectableItem("atom", 99)]),
+            services=SimpleNamespace(
+                atom_label_service=no_center_atom_label_service,
+                canvas_ring_fill_scene_service=no_center_ring_fill_service,
+                move_controller=no_center_move_controller,
+                selection_controller=no_center_selection_controller,
+            ),
         )
+        set_atom_items_for(no_center_view, {1: object()})
+        set_atom_dots_for(no_center_view, {})
 
-        CanvasView.rotate_selection(no_center_view, 15.0)
+        rotate_selection_for(no_center_view, 15.0)
 
-        no_center_view._center_for_atoms.assert_called_once_with({1})
-        no_center_view._position_label.assert_not_called()
-        no_center_view._redraw_connected_bonds.assert_not_called()
-        no_center_view._rotate_ring_fills.assert_not_called()
-        no_center_view._update_selection_outline.assert_not_called()
+        no_center_atom_label_service.position_label.assert_not_called()
+        no_center_move_controller.redraw_connected_bonds.assert_not_called()
+        no_center_ring_fill_service.rotate_ring_fills.assert_not_called()
+        no_center_selection_controller.update_selection_outline.assert_not_called()
 
     def test_bond_sets_for_atoms_classifies_internal_boundary_and_falls_back_to_model_scan(self) -> None:
         classified_view = SimpleNamespace(
@@ -179,15 +211,18 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
                     None,
                 ]
             ),
-            _atom_bond_ids={
-                1: {0, 1},
-                2: {0, 1},
-                3: {2},
-            },
+            graph_state=CanvasGraphState(
+                atom_bond_ids={
+                    1: {0, 1},
+                    2: {0, 1},
+                    3: {2},
+                }
+            ),
         )
-        classified_view._canvas_graph_service = CanvasGraphService(classified_view)
+        classified_graph_service = CanvasGraphService(classified_view)
+        classified_view.services = SimpleNamespace(canvas_graph_service=classified_graph_service)
 
-        internal, boundary = CanvasView.bond_sets_for_atoms(classified_view, {1, 2, 3})
+        internal, boundary = classified_graph_service.bond_sets_for_atoms({1, 2, 3})
         self.assertEqual(internal, {0, 1})
         self.assertEqual(boundary, {2})
 
@@ -199,14 +234,15 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
                     None,
                 ]
             ),
-            _atom_bond_ids={},
+            graph_state=CanvasGraphState(),
         )
-        fallback_view._canvas_graph_service = CanvasGraphService(fallback_view)
+        fallback_graph_service = CanvasGraphService(fallback_view)
+        fallback_view.services = SimpleNamespace(canvas_graph_service=fallback_graph_service)
 
-        internal, boundary = CanvasView.bond_sets_for_atoms(fallback_view, {5, 6})
+        internal, boundary = fallback_graph_service.bond_sets_for_atoms({5, 6})
         self.assertEqual(internal, {0})
         self.assertEqual(boundary, {1})
-        self.assertEqual(CanvasView.bond_sets_for_atoms(fallback_view, set()), (set(), set()))
+        self.assertEqual(fallback_graph_service.bond_sets_for_atoms(set()), (set(), set()))
 
     def test_restore_selection_from_ids_selects_atoms_bonds_and_refreshes_outline(self) -> None:
         atom_item = _FakeSelectableItem("atom", 1)
@@ -214,22 +250,38 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
         bond_item_a = _FakeSelectableItem("bond", 7)
         bond_item_b = _FakeSelectableItem("bond", 7)
         scene = _FakeScene()
+        selection_controller = SimpleNamespace(update_selection_outline=mock.Mock())
         view = SimpleNamespace(
             scene=lambda: scene,
-            atom_items={1: atom_item},
-            atom_dots={2: atom_dot},
-            bond_items={7: [bond_item_a, bond_item_b]},
-            _update_selection_outline=mock.Mock(),
+            services=SimpleNamespace(selection_controller=selection_controller),
         )
+        set_atom_items_for(view, {1: atom_item})
+        set_atom_dots_for(view, {2: atom_dot})
+        set_bond_items_for(view, {7: [bond_item_a, bond_item_b]})
 
-        CanvasView._restore_selection_from_ids(view, {1, 2}, {7})
+        restore_selection_from_ids_for(view, {1, 2}, {7})
 
         scene.clearSelection.assert_called_once_with()
         self.assertTrue(atom_item.isSelected())
         self.assertTrue(atom_dot.isSelected())
         self.assertTrue(bond_item_a.isSelected())
         self.assertTrue(bond_item_b.isSelected())
-        view._update_selection_outline.assert_called_once_with()
+        selection_controller.update_selection_outline.assert_called_once_with()
+
+    def test_restore_selection_from_ids_returns_when_scene_is_missing(self) -> None:
+        atom_item = _FakeSelectableItem("atom", 1)
+        selection_controller = SimpleNamespace(update_selection_outline=mock.Mock())
+        view = SimpleNamespace(
+            services=SimpleNamespace(selection_controller=selection_controller),
+        )
+        set_atom_items_for(view, {1: atom_item})
+        set_atom_dots_for(view, {})
+        set_bond_items_for(view, {})
+
+        restore_selection_from_ids_for(view, {1}, set())
+
+        self.assertFalse(atom_item.isSelected())
+        selection_controller.update_selection_outline.assert_not_called()
 
     def test_expand_connected_atoms_returns_transitive_component(self) -> None:
         view = SimpleNamespace(
@@ -242,11 +294,12 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
                 ]
             )
         )
-        view._canvas_graph_service = CanvasGraphService(view)
+        graph_service = CanvasGraphService(view)
+        view.services = SimpleNamespace(canvas_graph_service=graph_service)
 
-        self.assertEqual(CanvasView._expand_connected_atoms(view, {1}), {1, 2, 3})
-        self.assertEqual(CanvasView._expand_connected_atoms(view, {4}), {4, 5})
-        self.assertEqual(CanvasView._expand_connected_atoms(view, set()), set())
+        self.assertEqual(graph_service.expand_connected_atoms({1}), {1, 2, 3})
+        self.assertEqual(graph_service.expand_connected_atoms({4}), {4, 5})
+        self.assertEqual(graph_service.expand_connected_atoms(set()), set())
 
     def test_update_ring_fills_for_atoms_updates_matching_ring_polygons(self) -> None:
         matching_ring = _FakeRingItem([1, 2, 3])
@@ -263,11 +316,11 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
                     6: Atom("O", 9.5, 10.0),
                 }
             ),
-            ring_items=[matching_ring, non_matching_ring, invalid_ring],
         )
-        view._canvas_ring_fill_scene_service = CanvasRingFillSceneService(view)
+        set_scene_item_collection_for(view, "ring_items", [matching_ring, non_matching_ring, invalid_ring])
+        view.services = SimpleNamespace(canvas_ring_fill_scene_service=CanvasRingFillSceneService(view))
 
-        CanvasView._update_ring_fills_for_atoms(view, {1, 2, 3})
+        update_ring_fills_for_atoms_for(view, {1, 2, 3})
 
         matching_ring.setPolygon.assert_called_once()
         polygon = matching_ring.setPolygon.call_args.args[0]
@@ -277,5 +330,5 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
         )
         non_matching_ring.setPolygon.assert_not_called()
         invalid_ring.setPolygon.assert_not_called()
-        CanvasView._update_ring_fills_for_atoms(view, set())
+        update_ring_fills_for_atoms_for(view, set())
         self.assertEqual(matching_ring.setPolygon.call_count, 1)

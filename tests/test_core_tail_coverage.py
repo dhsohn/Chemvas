@@ -14,7 +14,60 @@ from core.model import Atom, Bond, MoleculeModel
 from core.rdkit_adapter import RDKitAdapter
 
 if QApplication is not None:
+    from ui.canvas_tool_settings_state import CanvasToolSettingsState
+    from ui.handle_state import CanvasHandleState
+    from ui.tool_context import ToolContext
     from ui.tools import MoveTool, SelectTool, TextTool
+
+
+def _tool_context_for(canvas):
+    services = getattr(canvas, "services", None)
+    tool_mode_controller = getattr(services, "tool_mode_controller", None)
+
+    def selected_items(*, excluded_kinds):
+        scene = getattr(canvas, "scene", None)
+        if not callable(scene):
+            return []
+        return [item for item in scene().selectedItems() if item.data(0) not in excluded_kinds]
+
+    return ToolContext(
+        canvas,
+        hit_testing_service=getattr(services, "hit_testing_service", None),
+        selection_controller=getattr(services, "selection_controller", None),
+        note_controller=getattr(
+            services,
+            "note_controller",
+            SimpleNamespace(create_text_note=lambda _pos, _text: None, begin_note_edit=lambda _item: None),
+        ),
+        handle_controller=getattr(
+            services,
+            "handle_controller",
+            SimpleNamespace(update_handle_drag=lambda _handle, _pos: None),
+        ),
+        selection_rotation_controller=getattr(
+            services,
+            "selection_rotation_controller",
+            SimpleNamespace(
+                begin_selection_3d_rotation=lambda **_kwargs: False,
+                update_selection_3d_rotation=lambda _delta_x, _delta_y: None,
+                end_selection_3d_rotation=lambda: None,
+            ),
+        ),
+        scene_transform_controller=getattr(
+            services,
+            "scene_transform_controller",
+            SimpleNamespace(
+                apply_bond_style=lambda _bond_id, _style, _order: None,
+                cycle_bond_style=lambda _bond_id: None,
+                flip_bond_direction=lambda _bond_id: None,
+            ),
+        ),
+        selected_scene_items=selected_items,
+        select_single_structure_item=getattr(canvas, "select_structure_for_item", None),
+        atom_symbol_provider=getattr(tool_mode_controller, "get_atom_symbol", None),
+        set_drag_mode=getattr(canvas, "setDragMode", None),
+        rubber_band_drag_mode=getattr(getattr(canvas, "DragMode", None), "RubberBandDrag", None),
+    )
 
 
 class _FakeRDAtom:
@@ -213,6 +266,9 @@ class _Item:
     def data(self, key):
         return self._data.get(key)
 
+    def setData(self, key, value) -> None:
+        self._data[key] = value
+
     def setSelected(self, selected: bool) -> None:
         self.selected = selected
 
@@ -264,24 +320,40 @@ class _SelectCanvas:
         self.atom_items = {}
         self.bond_items = {}
         self.atom_dots = {}
-        self._handle_target = None
-        self._active_handles = []
+        self.handle_state = CanvasHandleState()
         self.clear_handles_calls = 0
         self.curved_handles = []
         self.pushed_commands = []
         self.updated_outline = 0
+        self.services = SimpleNamespace(
+            hit_testing_service=SimpleNamespace(
+                scene_pos_from_event=self.scene_pos_from_event,
+                item_at_event=self.item_at_event,
+            ),
+            selection_controller=SimpleNamespace(
+                preferred_structure_item_at_scene_pos=self.preferred_structure_item_at_scene_pos,
+                selection_hit_test=self.selection_hit_test,
+                select_structure_for_item=self.select_structure_for_item,
+                update_selection_outline=self._update_selection_outline,
+                shift_selection_outlines=self.shift_selection_outlines,
+            ),
+            style_controller=SimpleNamespace(suspend_selection_outline=self.suspend_selection_outline),
+            handle_overlay_service=SimpleNamespace(
+                clear_handles=self.clear_handles,
+                show_curved_handles=self.show_curved_handles,
+            ),
+        )
 
     def scene(self):
         return self.scene_obj
-
-    def _selection_snapshot(self):
-        return self.snapshot
 
     def bond_sets_for_atoms(self, atom_ids):
         return set(), set()
 
     def clear_handles(self) -> None:
         self.clear_handles_calls += 1
+        self.handle_state.active_handles = []
+        self.handle_state.target = None
 
     def show_curved_handles(self, item) -> None:
         self.curved_handles.append(item)
@@ -298,11 +370,33 @@ class _SelectCanvas:
     def selection_hit_test(self, pos, snapshot=None):
         return self.selection_hit
 
-    def _push_command(self, command) -> None:
-        self.pushed_commands.append(command)
+    def select_structure_for_item(self, item) -> bool:
+        self.scene_obj.clearSelection()
+        kind = item.data(0)
+        item_id = item.data(1)
+        if kind == "atom" and isinstance(item_id, int):
+            atom_item = self.atom_items.get(item_id)
+            if atom_item is None:
+                return False
+            atom_item.setSelected(True)
+            self.scene_obj.selected_items = [atom_item]
+            return True
+        if kind == "bond" and isinstance(item_id, int):
+            bond_items = self.bond_items.get(item_id, [])
+            if not bond_items:
+                return False
+            for bond_item in bond_items:
+                bond_item.setSelected(True)
+            self.scene_obj.selected_items = list(bond_items)
+            return True
+        if kind == "ring":
+            item.setSelected(True)
+            self.scene_obj.selected_items = [item]
+            return True
+        return False
 
-    def scene_item_state(self, item):
-        return {"id": id(item)}
+    def push_command(self, command) -> None:
+        self.pushed_commands.append(command)
 
     def suspend_selection_outline(self, suspended: bool) -> None:
         pass
@@ -323,8 +417,18 @@ class _TextCanvas:
         self.nearby_bond_calls = []
         self.nearby_atom_calls = []
         self.label_calls = []
+        self.tool_settings_state = CanvasToolSettingsState(atom_symbol="N")
         self.model = MoleculeModel(atoms={1: Atom("C", 5.0, 6.0)}, bonds=[])
-        self._atom_label_service = SimpleNamespace(add_or_update_atom_label=self.add_or_update_atom_label)
+        self.services = SimpleNamespace(
+            atom_label_service=SimpleNamespace(add_or_update_atom_label=self.add_or_update_atom_label),
+            tool_mode_controller=SimpleNamespace(get_atom_symbol=lambda: self.tool_settings_state.atom_symbol),
+            hit_testing_service=SimpleNamespace(
+                scene_pos_from_event=self.scene_pos_from_event,
+                item_at_event=self.item_at_event,
+                find_atom_near=self.find_atom_near,
+                find_bond_near=self.find_bond_near,
+            ),
+        )
 
     def scene_pos_from_event(self, event):
         return event.position()
@@ -332,16 +436,13 @@ class _TextCanvas:
     def item_at_event(self, event):
         return self.item
 
-    def _find_bond_near(self, pos, radius):
+    def find_bond_near(self, pos, radius):
         self.nearby_bond_calls.append((QPointF(pos), radius))
         return None
 
     def find_atom_near(self, x: float, y: float, radius: float):
         self.nearby_atom_calls.append((x, y, radius))
         return 1
-
-    def get_atom_symbol(self) -> str:
-        return "N"
 
     def add_or_update_atom_label(
         self,
@@ -361,7 +462,7 @@ class _MoveCanvas:
         self.pushed_commands = []
         self.updated_outline = 0
 
-    def _push_command(self, command) -> None:
+    def push_command(self, command) -> None:
         self.pushed_commands.append(command)
 
     def _update_selection_outline(self) -> None:
@@ -377,7 +478,7 @@ class ToolsTailCoverageTest(unittest.TestCase):
 
     def test_select_tool_curved_handle_guards_and_release_edges(self) -> None:
         canvas = _SelectCanvas()
-        tool = SelectTool(canvas)
+        tool = SelectTool(canvas, context=_tool_context_for(canvas))
         curved = _Item("curved_single")
 
         canvas.snapshot = SimpleNamespace(selected_atom_ids=set(), selection_items=[])
@@ -387,13 +488,14 @@ class ToolsTailCoverageTest(unittest.TestCase):
         canvas.scene_obj.selected_items = []
         self.assertIsNone(tool._selected_curved_item_for_handle_toggle(canvas.snapshot))
 
-        canvas._handle_target = object()
+        canvas.handle_state.target = object()
+        canvas.scene_obj.selected_items = [curved]
         self.assertTrue(tool._begin_curved_handle_toggle_or_drag(curved, QPointF(1.0, 1.0)))
         self.assertEqual(canvas.clear_handles_calls, 1)
 
         tool._pending_curved_handle_item = None
-        canvas._handle_target = curved
-        canvas._active_handles = [object()]
+        canvas.handle_state.target = curved
+        canvas.handle_state.active_handles = [object()]
         self.assertTrue(tool._begin_curved_handle_toggle_or_drag(curved, QPointF(1.0, 1.0)))
         self.assertTrue(tool.on_mouse_release(_Event(QPointF(1.0, 1.0))))
         self.assertEqual(canvas.clear_handles_calls, 2)
@@ -406,11 +508,11 @@ class ToolsTailCoverageTest(unittest.TestCase):
         self.assertIs(tool._pending_curved_handle_item, curved)
 
         handle = _Item("handle")
-        target = object()
+        target = _Item("curved_single")
+        target.setData(9, {"state": 1})
         tool._active_handle = handle
         tool._handle_target = target
         tool._handle_before_state = {"state": 1}
-        canvas.scene_item_state = lambda item: {"state": 1}
         self.assertTrue(tool.on_mouse_release(_Event(QPointF(2.0, 2.0))))
         self.assertEqual(canvas.pushed_commands, [])
 
@@ -430,7 +532,7 @@ class ToolsTailCoverageTest(unittest.TestCase):
 
     def test_select_tool_rejects_unselectable_preferred_structure(self) -> None:
         canvas = _SelectCanvas()
-        tool = SelectTool(canvas)
+        tool = SelectTool(canvas, context=_tool_context_for(canvas))
         canvas.preferred_item = _Item("atom", "bad")
 
         self.assertFalse(tool.on_mouse_press(_Event(QPointF(3.0, 4.0))))
@@ -438,7 +540,7 @@ class ToolsTailCoverageTest(unittest.TestCase):
 
     def test_text_tool_ignores_non_integer_item_atom_id_for_nearby_pick(self) -> None:
         canvas = _TextCanvas()
-        tool = TextTool(canvas)
+        tool = TextTool(canvas, context=_tool_context_for(canvas))
 
         self.assertTrue(tool.on_mouse_press(_Event(QPointF(5.0, 6.0))))
 
@@ -448,7 +550,7 @@ class ToolsTailCoverageTest(unittest.TestCase):
 
     def test_move_tool_release_covers_idle_and_moved_without_target_states(self) -> None:
         canvas = _MoveCanvas()
-        tool = MoveTool(canvas)
+        tool = MoveTool(canvas, context=_tool_context_for(canvas))
 
         self.assertTrue(tool.on_mouse_release(_Event(QPointF(1.0, 1.0))))
 

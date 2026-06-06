@@ -12,11 +12,9 @@ except ModuleNotFoundError:
 
 if QPointF is not None:
     from core.model import Atom, Bond
-    from ui.canvas_chemdraw_shortcut_service import (
-        CanvasChemdrawShortcutService,
-        canvas_chemdraw_shortcut_service_for,
-    )
-    from ui.canvas_view import CanvasView
+    from ui.canvas_chemdraw_shortcut_service import CanvasChemdrawShortcutService
+    from ui.canvas_hover_state import set_hover_atom_id_for, set_hover_bond_id_for
+    from ui.input_view_access import shortcut_modifiers_for
 
 
 class _FakeKeyEvent:
@@ -35,18 +33,55 @@ class _FakeKeyEvent:
         return self._text
 
 
+def _shortcut_service(canvas, *, scene_transform_controller=None, tool_mode_controller=None, mark_scene_service=None):
+    services = getattr(canvas, "services", None)
+    if scene_transform_controller is None:
+        scene_transform_controller = getattr(
+            services,
+            "scene_transform_controller",
+            SimpleNamespace(
+                flip_selected_items=mock.Mock(),
+                apply_bond_style=mock.Mock(),
+            ),
+        )
+    if tool_mode_controller is None:
+        tool_mode_controller = getattr(
+            services,
+            "tool_mode_controller",
+            SimpleNamespace(
+                set_tool=mock.Mock(),
+                set_bond_style=mock.Mock(),
+            ),
+        )
+    if mark_scene_service is None:
+        mark_scene_service = getattr(services, "canvas_mark_scene_service", None)
+    return CanvasChemdrawShortcutService(
+        canvas,
+        scene_transform_controller=scene_transform_controller,
+        tool_mode_controller=tool_mode_controller,
+        mark_scene_service=mark_scene_service,
+    )
+
+
 @unittest.skipUnless(QPointF is not None, "PyQt6 is required for ChemDraw shortcut service tests")
 class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
     def test_object_and_generic_shortcuts_dispatch_expected_actions(self) -> None:
         calls: list[tuple] = []
-        canvas = SimpleNamespace(
-            _shortcut_modifiers=lambda event: CanvasView._shortcut_modifiers(event),
-            flip_horizontal=lambda: calls.append(("flip_h",)),
-            flip_vertical=lambda: calls.append(("flip_v",)),
+        scene_transform_controller = SimpleNamespace(
+            flip_selected_items=lambda *, horizontal: calls.append(("flip", horizontal))
+        )
+        tool_mode_controller = SimpleNamespace(
             set_tool=lambda tool: calls.append(("tool", tool)),
             set_bond_style=lambda style, order: calls.append(("bond_style", style, order)),
         )
-        service = CanvasChemdrawShortcutService(canvas)
+        canvas = SimpleNamespace(
+            _shortcut_modifiers=shortcut_modifiers_for,
+            services=SimpleNamespace(
+                scene_transform_controller=scene_transform_controller,
+                tool_mode_controller=tool_mode_controller,
+            ),
+        )
+        service = _shortcut_service(canvas)
 
         self.assertTrue(
             service.handle_object_shortcut(
@@ -66,19 +101,17 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         self.assertTrue(service.handle_generic_hotkey(_FakeKeyEvent(Qt.Key.Key_D, Qt.KeyboardModifier.AltModifier)))
         self.assertFalse(service.handle_generic_hotkey(_FakeKeyEvent(Qt.Key.Key_Z)))
 
-        self.assertIn(("flip_h",), calls)
-        self.assertIn(("flip_v",), calls)
+        self.assertIn(("flip", True), calls)
+        self.assertIn(("flip", False), calls)
         self.assertIn(("tool", "select"), calls)
         self.assertIn(("bond_style", "single", 1), calls)
         self.assertIn(("tool", "ts_bracket"), calls)
         self.assertIn(("tool", "perspective"), calls)
 
     def test_handle_shortcut_routes_between_object_atom_bond_and_generic_paths(self) -> None:
-        canvas = SimpleNamespace(
-            hover_atom_id=4,
-            hover_bond_id=None,
-        )
-        service = CanvasChemdrawShortcutService(canvas)
+        canvas = SimpleNamespace()
+        set_hover_atom_id_for(canvas, 4)
+        service = _shortcut_service(canvas)
         service.handle_object_shortcut = mock.Mock(return_value=False)
         service.handle_atom_hotkey = mock.Mock(return_value=True)
         service.handle_bond_hotkey = mock.Mock(return_value=True)
@@ -88,12 +121,12 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         self.assertTrue(service.handle_shortcut(event))
         service.handle_atom_hotkey.assert_called_once_with(event, 4)
 
-        canvas.hover_atom_id = None
-        canvas.hover_bond_id = 7
+        set_hover_atom_id_for(canvas, None)
+        set_hover_bond_id_for(canvas, 7)
         self.assertTrue(service.handle_shortcut(event))
         service.handle_bond_hotkey.assert_called_once_with(event, 7)
 
-        canvas.hover_bond_id = None
+        set_hover_bond_id_for(canvas, None)
         self.assertTrue(service.handle_shortcut(event))
         service.handle_generic_hotkey.assert_called_once_with(event)
 
@@ -104,23 +137,30 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         calls: list[tuple] = []
         canvas = SimpleNamespace(
             model=SimpleNamespace(atoms={1: Atom("C", 1.0, 2.0)}, bonds=[]),
-            _shortcut_modifiers=lambda event: CanvasView._shortcut_modifiers(event),
-            prompt_atom_label=lambda atom_id: calls.append(("prompt", atom_id)),
-            _atom_point=lambda atom_id: QPointF(1.0, 2.0),
-            add_mark_for_atom=lambda atom_id, pos, kind: calls.append(("mark", atom_id, pos.x(), pos.y(), kind)),
-            _atom_label_service=SimpleNamespace(
-                add_or_update_atom_label=lambda atom_id, text, show_carbon=True: calls.append(
-                    ("label", atom_id, text, show_carbon)
-                )
+            _shortcut_modifiers=shortcut_modifiers_for,
+            services=SimpleNamespace(
+                canvas_mark_scene_service=SimpleNamespace(
+                    add_mark_for_atom=lambda atom_id, pos, kind: calls.append(
+                        ("mark", atom_id, pos.x(), pos.y(), kind)
+                    )
+                ),
+                atom_label_service=SimpleNamespace(
+                    add_or_update_atom_label=lambda atom_id, text, show_carbon=True: calls.append(
+                        ("label", atom_id, text, show_carbon)
+                    ),
+                    prompt_atom_label=lambda atom_id: calls.append(("prompt", atom_id)),
+                ),
+                structure_build_service=SimpleNamespace(
+                    sprout_bond_from_atom=lambda atom_id, style, order, cyclic=False: calls.append(
+                        ("bond", atom_id, style, order, cyclic)
+                    ),
+                    sprout_acetyl_from_atom=lambda atom_id: calls.append(("acetyl", atom_id)),
+                    sprout_benzene_from_atom=lambda atom_id: calls.append(("benzene", atom_id)),
+                    sprout_regular_ring_from_atom=lambda atom_id, n: calls.append(("ring", atom_id, n)),
+                ),
             ),
-            _sprout_bond_from_atom=lambda atom_id, style, order, cyclic=False: calls.append(
-                ("bond", atom_id, style, order, cyclic)
-            ),
-            _sprout_acetyl_from_atom=lambda atom_id: calls.append(("acetyl", atom_id)),
-            _sprout_benzene_from_atom=lambda atom_id: calls.append(("benzene", atom_id)),
-            _sprout_regular_ring_from_atom=lambda atom_id, n: calls.append(("ring", atom_id, n)),
         )
-        service = CanvasChemdrawShortcutService(canvas)
+        service = _shortcut_service(canvas)
 
         self.assertFalse(service.handle_atom_hotkey(_FakeKeyEvent(Qt.Key.Key_C, text="c"), 99))
         self.assertFalse(
@@ -164,18 +204,25 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
 
     def test_bond_hotkey_routes_to_style_and_fusion_actions(self) -> None:
         calls: list[tuple] = []
+        scene_transform_controller = SimpleNamespace(
+            apply_bond_style=lambda bond_id, style, order: calls.append(("style", bond_id, style, order))
+        )
         canvas = SimpleNamespace(
             model=SimpleNamespace(
                 atoms={1: Atom("C", 1.0, 2.0), 2: Atom("O", 4.0, 5.0)},
                 bonds=[Bond(1, 2, 1), None],
             ),
-            _shortcut_modifiers=lambda event: CanvasView._shortcut_modifiers(event),
-            apply_bond_style=lambda bond_id, style, order: calls.append(("style", bond_id, style, order)),
-            _fuse_benzene_to_bond=lambda bond_id: calls.append(("benzene", bond_id)),
-            _fuse_regular_ring_to_bond=lambda bond_id, n: calls.append(("ring", bond_id, n)),
-            _fuse_chair_to_bond=lambda bond_id, mirrored=False: calls.append(("chair", bond_id, mirrored)),
+            _shortcut_modifiers=shortcut_modifiers_for,
+            services=SimpleNamespace(
+                scene_transform_controller=scene_transform_controller,
+                structure_build_service=SimpleNamespace(
+                    fuse_benzene_to_bond=lambda bond_id: calls.append(("benzene", bond_id)),
+                    fuse_regular_ring_to_bond=lambda bond_id, n: calls.append(("ring", bond_id, n)),
+                    fuse_chair_to_bond=lambda bond_id, mirrored=False: calls.append(("chair", bond_id, mirrored)),
+                ),
+            ),
         )
-        service = CanvasChemdrawShortcutService(canvas)
+        service = _shortcut_service(canvas)
 
         self.assertFalse(service.handle_bond_hotkey(_FakeKeyEvent(Qt.Key.Key_1, text="1"), 1))
         self.assertFalse(
@@ -207,27 +254,6 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         self.assertIn(("benzene", 0), calls)
         self.assertIn(("ring", 0, 6), calls)
         self.assertIn(("chair", 0, True), calls)
-
-    def test_service_resolver_returns_bound_service(self) -> None:
-        canvas = SimpleNamespace()
-        bound = CanvasChemdrawShortcutService(canvas)
-        canvas._chemdraw_shortcut_service = bound
-        self.assertIs(canvas_chemdraw_shortcut_service_for(canvas), bound)
-
-        injected = SimpleNamespace(
-            handle_shortcut=mock.Mock(),
-            handle_object_shortcut=mock.Mock(),
-            handle_generic_hotkey=mock.Mock(),
-            handle_atom_hotkey=mock.Mock(),
-            handle_bond_hotkey=mock.Mock(),
-        )
-        other_canvas = SimpleNamespace(_chemdraw_shortcut_service=injected)
-        self.assertIs(canvas_chemdraw_shortcut_service_for(other_canvas), injected)
-
-        placeholder = object()
-        fresh_canvas = SimpleNamespace(_chemdraw_shortcut_service=placeholder)
-        self.assertIs(canvas_chemdraw_shortcut_service_for(fresh_canvas), placeholder)
-
 
 if __name__ == "__main__":
     unittest.main()

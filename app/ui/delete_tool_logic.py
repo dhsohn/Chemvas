@@ -6,6 +6,7 @@ from core.history import CompositeCommand, HistoryCommand, SetSmilesInputCommand
 
 from ui.history_commands import DeleteSceneItemsCommand
 from ui.scene_item_access import remove_scene_item
+from ui.scene_item_state import scene_item_state_for
 
 DELETE_SCENE_ITEM_KINDS = frozenset(
     {
@@ -21,24 +22,27 @@ DELETE_SCENE_ITEM_KINDS = frozenset(
         "note",
     }
 )
-def erase_delete_tool_item(canvas, item):
+
+
+def erase_delete_tool_item(canvas, item, *, scene_ops=None):
     kind = item.data(0)
+    scene_ops = scene_ops or canvas
     if kind == "atom":
         atom_id = item.data(1)
         if not isinstance(atom_id, int):
             return False, None
-        return True, canvas.delete_atom(atom_id, record=False)
+        return True, scene_ops.delete_atom(atom_id, record=False)
 
     if kind == "bond":
         bond_id = item.data(1)
         if not isinstance(bond_id, int):
             return False, None
-        return True, canvas.delete_bond(bond_id, record=False)
+        return True, scene_ops.delete_bond(bond_id, record=False)
 
     if kind == "ring":
-        return True, canvas.delete_ring(item, record=False)
+        return True, scene_ops.delete_ring(item, record=False)
 
-    state = canvas.scene_item_state(item)
+    state = scene_item_state_for(canvas, item)
     remove_scene_item(canvas, item)
     return True, DeleteSceneItemsCommand(item_states=[state], items=[item])
 

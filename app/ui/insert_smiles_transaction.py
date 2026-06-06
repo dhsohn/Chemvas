@@ -13,7 +13,23 @@ from core.history import (
 )
 
 from ui.canvas_mark_registry import mark_registry_for
+from ui.canvas_model_access import atoms_for, bonds_for, next_atom_id_for
+from ui.canvas_scene_items_state import (
+    arrow_items_for,
+    mark_items_for,
+    note_items_for,
+    orbital_items_for,
+    ring_items_for,
+    ts_bracket_items_for,
+)
+from ui.canvas_smiles_input_state import last_smiles_input_for
 from ui.history_commands import DeleteSceneItemsCommand
+from ui.scene_item_state import (
+    atom_state_dict_for,
+    bond_state_dict,
+    mark_state_dict_for,
+    scene_item_state_for,
+)
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
@@ -64,24 +80,24 @@ class SmilesLoadSnapshot:
                     items=list(self.scene_items),
                 )
             )
-        new_atom_states = {atom_id: canvas._atom_state_dict(atom_id) for atom_id in canvas.model.atoms}
+        new_atom_states = {atom_id: atom_state_dict_for(canvas, atom_id) for atom_id in atoms_for(canvas)}
         if new_atom_states:
             commands.append(
                 AddAtomsCommand(
                     atom_states=new_atom_states,
                     before_next_atom_id=after_clear_next_atom_id,
-                    after_next_atom_id=canvas.model.next_atom_id,
+                    after_next_atom_id=next_atom_id_for(canvas),
                     before_smiles_input=self.before_smiles_input,
                     after_smiles_input=after_smiles_input,
                 )
             )
-        for bond_id, bond in enumerate(canvas.model.bonds):
+        for bond_id, bond in enumerate(bonds_for(canvas)):
             if bond is None:
                 continue
             commands.append(
                 AddBondCommand(
                     bond_id=bond_id,
-                    bond_state=canvas._bond_state_dict(bond),
+                    bond_state=bond_state_dict(bond),
                     previous_bond_count=bond_id,
                     before_smiles_input=self.before_smiles_input,
                     after_smiles_input=after_smiles_input,
@@ -100,21 +116,21 @@ class SmilesLoadTransactionBuilder:
         self.marks = mark_registry_for(canvas)
 
     def capture(self) -> SmilesLoadSnapshot:
-        atom_states = {atom_id: self.canvas._atom_state_dict(atom_id) for atom_id in self.canvas.model.atoms}
+        atom_states = {atom_id: atom_state_dict_for(self.canvas, atom_id) for atom_id in atoms_for(self.canvas)}
         bond_states = {
-            bond_id: self.canvas._bond_state_dict(bond)
-            for bond_id, bond in enumerate(self.canvas.model.bonds)
+            bond_id: bond_state_dict(bond)
+            for bond_id, bond in enumerate(bonds_for(self.canvas))
             if bond is not None
         }
         mark_states_for_atoms: list[dict] = []
         for atom_id in atom_states:
             for mark in self.marks.get_for_atom(atom_id) or []:
-                mark_states_for_atoms.append(self.canvas._mark_state_dict(mark))
+                mark_states_for_atoms.append(mark_state_dict_for(self.canvas, mark))
         scene_items = self._scene_items_for_delete(set(atom_states))
-        scene_item_states = [self.canvas.scene_item_state(item) for item in scene_items]
+        scene_item_states = [scene_item_state_for(self.canvas, item) for item in scene_items]
         return SmilesLoadSnapshot(
-            before_smiles_input=self.canvas.last_smiles_input,
-            before_next_atom_id=self.canvas.model.next_atom_id,
+            before_smiles_input=last_smiles_input_for(self.canvas),
+            before_next_atom_id=next_atom_id_for(self.canvas),
             atom_states=atom_states,
             bond_states=bond_states,
             mark_states_for_atoms=mark_states_for_atoms,
@@ -136,17 +152,17 @@ class SmilesLoadTransactionBuilder:
         )
 
     def _scene_items_for_delete(self, atom_ids: set[int]) -> list[object]:
-        scene_items = list(self.canvas.ring_items)
+        scene_items = list(ring_items_for(self.canvas))
         scene_items.extend(self._free_mark_items(atom_ids))
-        scene_items.extend(self.canvas.note_items)
-        scene_items.extend(self.canvas.arrow_items)
-        scene_items.extend(self.canvas.ts_bracket_items)
-        scene_items.extend(self.canvas.orbital_items)
+        scene_items.extend(note_items_for(self.canvas))
+        scene_items.extend(arrow_items_for(self.canvas))
+        scene_items.extend(ts_bracket_items_for(self.canvas))
+        scene_items.extend(orbital_items_for(self.canvas))
         return scene_items
 
     def _free_mark_items(self, atom_ids: set[int]) -> list[object]:
         free_mark_items: list[object] = []
-        for item in self.canvas.mark_items:
+        for item in mark_items_for(self.canvas):
             data = item.data(1) or {}
             atom_id = data.get("atom_id")
             if not isinstance(atom_id, int) or atom_id not in atom_ids:

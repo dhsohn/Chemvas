@@ -12,10 +12,12 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from ui.scene_transform_logic import (
+        bounds_from_points,
         build_flip_atom_position_maps,
         center_for_flip_group,
         flip_bounds_for_item,
         flip_center_for_selection,
+        flip_point,
         flip_scene_item_state,
         group_items_for_flip_transform,
     )
@@ -127,6 +129,15 @@ class SceneTransformLogicTest(unittest.TestCase):
         self.assertEqual(maps.before_positions, {1: (2.0, 1.0), 3: (8.0, 5.0)})
         self.assertEqual(maps.after_positions, {1: (8.0, 1.0), 3: (2.0, 5.0)})
         self.assertEqual(maps.transformed_atom_positions, {1: (8.0, 1.0), 3: (2.0, 5.0)})
+
+    def test_point_flip_and_bounds_from_points_are_canvas_independent(self) -> None:
+        self.assertEqual(flip_point(QPointF(8.0, 4.0), QPointF(2.0, 1.0), True), QPointF(-4.0, 4.0))
+        self.assertEqual(flip_point(QPointF(8.0, 4.0), QPointF(2.0, 1.0), False), QPointF(8.0, -2.0))
+        self.assertIsNone(bounds_from_points([]))
+
+        bounds = bounds_from_points([QPointF(-2.0, 3.0), QPointF(4.0, -1.0)])
+
+        self.assertEqual((bounds.left(), bounds.top(), bounds.right(), bounds.bottom()), (-2.0, -1.0, 4.0, 3.0))
 
     def test_flip_bounds_and_center_helpers_cover_ring_arrow_note_and_bogus_paths(self) -> None:
         canvas = _FakeCanvas()

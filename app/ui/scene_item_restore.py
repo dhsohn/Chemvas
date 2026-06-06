@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.graphics_items import NoSelectPolygonItem
+from ui.note_item_access import set_committed_note_text_for
 from ui.scene_item_state import (
     ARROW_KINDS,
     mark_center_from_state,
@@ -61,7 +62,7 @@ def create_note_item_from_state(
 ) -> QGraphicsTextItem:
     item = note_item_factory()
     item.setPlainText(str(note_state.get("text", "")))
-    item._last_text = item.toPlainText()
+    set_committed_note_text_for(item, item.toPlainText())
     item.setData(0, "note")
     item.setPos(QPointF(float(note_state.get("x", 0.0)), float(note_state.get("y", 0.0))))
     note_style_applier(item)

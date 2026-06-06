@@ -15,6 +15,7 @@ except ModuleNotFoundError:
 if QApplication is not None:
     from ui.main_window import MainWindow
     from ui.main_window_canvas_tab_ui_service import MainWindowCanvasTabUIService
+    from ui.main_window_service_ports import services_for_window
 
 
 class _FakeAction:
@@ -54,57 +55,78 @@ class MainWindowCanvasTabUIServiceTest(unittest.TestCase):
 
     def setUp(self) -> None:
         self.window = MainWindow()
-        self.service = MainWindowCanvasTabUIService()
+        self.active_canvas_ui = mock.Mock()
+        self.service = MainWindowCanvasTabUIService(
+            active_canvas_ui=self.active_canvas_ui,
+            tab_refs_for_window=lambda window: window.tab_references,
+            repositioning_add_tab_for_window=lambda window: window.runtime_state.repositioning_add_tab,
+            set_repositioning_add_tab_for_window=lambda window, value: setattr(
+                window.runtime_state,
+                "repositioning_add_tab",
+                bool(value),
+            ),
+            tab_reactions_suspended_for_window=lambda window: window.runtime_state.tab_reactions_suspended,
+            set_tab_reactions_suspended_for_window=lambda window, value: setattr(
+                window.runtime_state,
+                "tab_reactions_suspended",
+                bool(value),
+            ),
+            set_last_canvas_tab_index_for_window=lambda window, index: setattr(
+                window.runtime_state,
+                "last_canvas_tab_index",
+                index,
+            ),
+        )
 
     def tearDown(self) -> None:
         self.window.close()
         self.app.processEvents()
 
     def test_ensure_add_sheet_tab_recreates_missing_plus_tab_and_keeps_it_last(self) -> None:
-        plus_index = self.window._plus_tab_index()
-        self.window.canvas_tabs.removeTab(plus_index)
-        self.window._sheet_tab_bar.set_add_tab_index(-1)
+        tab_refs = self.window.tab_references
+        plus_index = tab_refs.plus_tab_index()
+        self.window.tab_references.canvas_tabs.removeTab(plus_index)
+        tab_refs.set_sheet_add_tab_index(-1)
 
         self.service.ensure_add_sheet_tab(self.window)
 
-        self.assertEqual(self.window.canvas_tabs.tabText(self.window._plus_tab_index()), "+")
-        self.assertEqual(self.window._plus_tab_index(), self.window.canvas_tabs.count() - 1)
+        self.assertEqual(self.window.tab_references.canvas_tabs.tabText(tab_refs.plus_tab_index()), "+")
+        self.assertEqual(tab_refs.plus_tab_index(), self.window.tab_references.canvas_tabs.count() - 1)
 
-        self.window._repositioning_add_tab = True
-        self.window.canvas_tabs.tabBar().moveTab(self.window._plus_tab_index(), 0)
-        self.window._repositioning_add_tab = False
+        self.window.runtime_state.repositioning_add_tab = True
+        self.window.tab_references.canvas_tabs.tabBar().moveTab(tab_refs.plus_tab_index(), 0)
+        self.window.runtime_state.repositioning_add_tab = False
 
         self.service.keep_add_tab_last(self.window)
 
-        self.assertEqual(self.window._plus_tab_index(), self.window.canvas_tabs.count() - 1)
+        self.assertEqual(tab_refs.plus_tab_index(), self.window.tab_references.canvas_tabs.count() - 1)
 
     def test_can_delete_delete_and_new_canvas_sheet_follow_sheet_guards(self) -> None:
         self.assertFalse(self.service.can_delete_canvas_sheet(self.window, 0))
-        self.assertFalse(self.service.can_delete_canvas_sheet(self.window, self.window._plus_tab_index()))
+        self.assertFalse(self.service.can_delete_canvas_sheet(self.window, self.window.tab_references.plus_tab_index()))
 
-        self.service.new_canvas_sheet(self.window)
+        services_for_window(self.window).canvas_sheet_service.new_canvas_sheet(self.window)
 
-        self.assertEqual(self.window._canvas_sheet_count(), 2)
+        self.assertEqual(self.window.tab_references.canvas_sheet_count(), 2)
         self.assertTrue(self.service.can_delete_canvas_sheet(self.window, 0))
 
-        with mock.patch.object(self.window, "_refresh_active_canvas_ui") as refresh_active_canvas_ui:
-            self.service.delete_canvas_sheet(self.window, 0)
+        self.service.delete_canvas_sheet(self.window, 0)
 
-        refresh_active_canvas_ui.assert_called_once_with()
-        self.assertEqual(self.window._canvas_sheet_count(), 1)
-        self.assertEqual(self.window._plus_tab_index(), self.window.canvas_tabs.count() - 1)
+        self.active_canvas_ui.refresh_active_canvas_ui.assert_called_once_with(self.window)
+        self.assertEqual(self.window.tab_references.canvas_sheet_count(), 1)
+        self.assertEqual(self.window.tab_references.plus_tab_index(), self.window.tab_references.canvas_tabs.count() - 1)
         self.assertFalse(self.service.can_delete_canvas_sheet(self.window, 0))
 
-    def test_new_canvas_sheet_delegates_to_canvas_sheet_service(self) -> None:
-        self.window._canvas_sheet_service = mock.Mock()
+    def test_main_window_new_canvas_sheet_delegates_to_canvas_sheet_service(self) -> None:
+        services_for_window(self.window).canvas_sheet_service = mock.Mock()
 
-        self.service.new_canvas_sheet(self.window)
+        services_for_window(self.window).canvas_sheet_service.new_canvas_sheet(self.window)
 
-        self.window._canvas_sheet_service.new_canvas_sheet.assert_called_once_with(self.window)
+        services_for_window(self.window).canvas_sheet_service.new_canvas_sheet.assert_called_once_with(self.window)
 
     def test_show_canvas_tab_context_menu_routes_delete_only_when_enabled(self) -> None:
-        self.service.new_canvas_sheet(self.window)
-        pos = self.window._sheet_tab_bar.tabRect(0).center() if QPoint is not None else QPoint(1, 1)
+        services_for_window(self.window).canvas_sheet_service.new_canvas_sheet(self.window)
+        pos = self.window.tab_references.canvas_tabs.tabBar().tabRect(0).center() if QPoint is not None else QPoint(1, 1)
 
         with mock.patch.object(self.service, "delete_canvas_sheet") as delete_canvas_sheet:
             menu = _FakeMenu(choose_delete=True)
@@ -119,8 +141,28 @@ class MainWindowCanvasTabUIServiceTest(unittest.TestCase):
 
         single_sheet_window = MainWindow()
         try:
-            single_service = MainWindowCanvasTabUIService()
-            pos = single_sheet_window._sheet_tab_bar.tabRect(0).center() if QPoint is not None else QPoint(1, 1)
+            single_service = MainWindowCanvasTabUIService(
+                active_canvas_ui=mock.Mock(),
+                tab_refs_for_window=lambda window: window.tab_references,
+                repositioning_add_tab_for_window=lambda window: window.runtime_state.repositioning_add_tab,
+                set_repositioning_add_tab_for_window=lambda window, value: setattr(
+                    window.runtime_state,
+                    "repositioning_add_tab",
+                    bool(value),
+                ),
+                tab_reactions_suspended_for_window=lambda window: window.runtime_state.tab_reactions_suspended,
+                set_tab_reactions_suspended_for_window=lambda window, value: setattr(
+                    window.runtime_state,
+                    "tab_reactions_suspended",
+                    bool(value),
+                ),
+                set_last_canvas_tab_index_for_window=lambda window, index: setattr(
+                    window.runtime_state,
+                    "last_canvas_tab_index",
+                    index,
+                ),
+            )
+            pos = single_sheet_window.tab_references.canvas_tabs.tabBar().tabRect(0).center() if QPoint is not None else QPoint(1, 1)
             with mock.patch.object(single_service, "delete_canvas_sheet") as delete_canvas_sheet:
                 menu = _FakeMenu(choose_delete=True)
                 single_service.show_canvas_tab_context_menu(
@@ -135,14 +177,14 @@ class MainWindowCanvasTabUIServiceTest(unittest.TestCase):
             self.app.processEvents()
 
     def test_keep_add_tab_last_and_context_menu_ignore_guard_cases(self) -> None:
-        self.window._repositioning_add_tab = True
-        with mock.patch.object(self.window._sheet_tab_bar, "moveTab") as move_tab:
+        self.window.runtime_state.repositioning_add_tab = True
+        with mock.patch.object(type(self.window.tab_references), "move_sheet_tab") as move_tab:
             self.service.keep_add_tab_last(self.window)
         move_tab.assert_not_called()
         self.assertFalse(self.service.can_delete_canvas_sheet(self.window, -1))
 
         plus_pos = (
-            self.window._sheet_tab_bar.tabRect(self.window._plus_tab_index()).center()
+            self.window.tab_references.canvas_tabs.tabBar().tabRect(self.window.tab_references.plus_tab_index()).center()
             if QPoint is not None
             else QPoint(1, 1)
         )
@@ -165,12 +207,19 @@ class MainWindowCanvasTabUIServiceTest(unittest.TestCase):
             currentWidget=lambda: tabs.fallback_widget,
             setCurrentIndex=mock.Mock(),
         )
-        fake_window = SimpleNamespace(
+        tab_refs = SimpleNamespace(
             canvas_tabs=tabs,
-            _suspend_canvas_tab_reactions=False,
-            _last_canvas_tab_index=None,
-            _plus_tab_index=lambda: 4,
-            _refresh_active_canvas_ui=mock.Mock(),
+            plus_tab_index=lambda: 4,
+        )
+        fake_window = SimpleNamespace(
+            tab_references=tab_refs,
+            runtime_state=SimpleNamespace(
+                tab_reactions_suspended=False,
+                repositioning_add_tab=False,
+                last_canvas_tab_index=None,
+            ),
+            tab_reactions_suspended=False,
+            last_canvas_tab_index=None,
         )
 
         with mock.patch.object(self.service, "can_delete_canvas_sheet", return_value=True), mock.patch.object(
@@ -181,9 +230,9 @@ class MainWindowCanvasTabUIServiceTest(unittest.TestCase):
         ensure_add_sheet_tab.assert_called_once_with(fake_window)
         self.assertEqual(tabs.removed, [2])
         tabs.setCurrentIndex.assert_called_once_with(2)
-        self.assertEqual(fake_window._last_canvas_tab_index, 2)
+        self.assertEqual(fake_window.runtime_state.last_canvas_tab_index, 2)
         widget.deleteLater.assert_called_once_with()
-        fake_window._refresh_active_canvas_ui.assert_called_once_with()
+        self.active_canvas_ui.refresh_active_canvas_ui.assert_called_once_with(fake_window)
 
     def test_on_canvas_tab_moved_and_delete_canvas_sheet_short_circuit_when_guard_blocks(self) -> None:
         with mock.patch.object(self.service, "keep_add_tab_last") as keep_add_tab_last:
@@ -192,11 +241,11 @@ class MainWindowCanvasTabUIServiceTest(unittest.TestCase):
 
         with mock.patch.object(self.service, "can_delete_canvas_sheet", return_value=False), mock.patch.object(
             self.service, "ensure_add_sheet_tab"
-        ) as ensure_add_sheet_tab, mock.patch.object(self.window, "_refresh_active_canvas_ui") as refresh_active_canvas_ui:
+        ) as ensure_add_sheet_tab:
             self.service.delete_canvas_sheet(self.window, 0)
 
         ensure_add_sheet_tab.assert_not_called()
-        refresh_active_canvas_ui.assert_not_called()
+        self.active_canvas_ui.refresh_active_canvas_ui.assert_not_called()
 
 
 if __name__ == "__main__":

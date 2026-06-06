@@ -14,7 +14,7 @@ except ModuleNotFoundError:
 if QApplication is not None:
     from core.model import Atom, Bond
     from ui.canvas_rotation_preview_controller import CanvasRotationPreviewController
-    from ui.canvas_view import CanvasView
+    from ui.canvas_rotation_preview_state import CanvasRotationPreviewState
 
 
 class _FakeRotationGroup:
@@ -32,6 +32,19 @@ class _FakeRotationGroup:
 
     def rotation(self) -> float:
         return self._angle
+
+
+class _FakeSelectedItem:
+    def __init__(self, kind: str, item_id: int) -> None:
+        self.kind = kind
+        self.item_id = item_id
+
+    def data(self, index: int):
+        if index == 0:
+            return self.kind
+        if index == 1:
+            return self.item_id
+        return None
 
 
 class _FakeScene:
@@ -60,32 +73,37 @@ class CanvasViewRotationPreviewHelperTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def test_begin_selection_rotation_rejects_existing_group_empty_selection_and_missing_center(self) -> None:
-        blocked_view = SimpleNamespace(_rotation_group=object())
-        blocked_view._rotation_preview_controller = CanvasRotationPreviewController(blocked_view)
-        self.assertFalse(CanvasView.begin_selection_rotation(blocked_view))
+        blocked_view = SimpleNamespace(rotation_preview_state=CanvasRotationPreviewState(group=object()))
+        blocked_view.services = SimpleNamespace(rotation_preview_controller=CanvasRotationPreviewController(blocked_view))
+        self.assertFalse(blocked_view.services.rotation_preview_controller.begin_selection_rotation())
 
         empty_scene = _FakeScene([])
-        empty_view = SimpleNamespace(_rotation_group=None, scene=lambda: empty_scene)
-        empty_view._rotation_preview_controller = CanvasRotationPreviewController(empty_view)
-        self.assertFalse(CanvasView.begin_selection_rotation(empty_view))
+        empty_view = SimpleNamespace(rotation_preview_state=CanvasRotationPreviewState(), scene=lambda: empty_scene)
+        empty_view.services = SimpleNamespace(rotation_preview_controller=CanvasRotationPreviewController(empty_view))
+        self.assertFalse(empty_view.services.rotation_preview_controller.begin_selection_rotation())
 
-        centerless_scene = _FakeScene([object()])
+        centerless_scene = _FakeScene([_FakeSelectedItem("atom", 1)])
         centerless_view = SimpleNamespace(
-            _rotation_group=None,
+            rotation_preview_state=CanvasRotationPreviewState(),
             scene=lambda: centerless_scene,
-            _selected_ids=mock.Mock(return_value=({1}, set())),
             model=SimpleNamespace(atoms={}, bonds=[]),
         )
-        centerless_view._rotation_preview_controller = CanvasRotationPreviewController(centerless_view)
-        self.assertFalse(CanvasView.begin_selection_rotation(centerless_view))
+        centerless_view.services = SimpleNamespace(
+            rotation_preview_controller=CanvasRotationPreviewController(centerless_view)
+        )
+        self.assertFalse(centerless_view.services.rotation_preview_controller.begin_selection_rotation())
 
     def test_begin_selection_rotation_builds_group_and_includes_atoms_from_selected_bonds(self) -> None:
-        selected_items = [object(), object()]
+        selected_items = [
+            _FakeSelectedItem("atom", 1),
+            _FakeSelectedItem("bond", 0),
+            _FakeSelectedItem("bond", 1),
+            _FakeSelectedItem("bond", 99),
+        ]
         scene = _FakeScene(selected_items)
         view = SimpleNamespace(
-            _rotation_group=None,
+            rotation_preview_state=CanvasRotationPreviewState(),
             scene=lambda: scene,
-            _selected_ids=mock.Mock(return_value=({1}, {0, 1, 99})),
             model=SimpleNamespace(
                 atoms={
                     1: Atom("C", 1.0, 1.0),
@@ -98,72 +116,57 @@ class CanvasViewRotationPreviewHelperTest(unittest.TestCase):
                 ]
             ),
         )
-        view._rotation_preview_controller = CanvasRotationPreviewController(view)
+        view.services = SimpleNamespace(rotation_preview_controller=CanvasRotationPreviewController(view))
 
-        self.assertTrue(CanvasView.begin_selection_rotation(view))
+        self.assertTrue(view.services.rotation_preview_controller.begin_selection_rotation())
 
         self.assertEqual(scene.created_with, selected_items)
         self.assertEqual(scene._group.origin, QPointF(5.0, 6.0))
-        self.assertIs(view._rotation_group, scene._group)
+        self.assertIs(view.rotation_preview_state.group, scene._group)
 
     def test_update_rotation_preview_is_noop_without_group_and_updates_group_angle(self) -> None:
-        idle_view = SimpleNamespace(_rotation_group=None)
-        idle_view._rotation_preview_controller = CanvasRotationPreviewController(idle_view)
-        CanvasView.update_rotation_preview(idle_view, 45.0)
+        idle_view = SimpleNamespace(rotation_preview_state=CanvasRotationPreviewState())
+        idle_view.services = SimpleNamespace(rotation_preview_controller=CanvasRotationPreviewController(idle_view))
+        idle_view.services.rotation_preview_controller.update_rotation_preview(45.0)
 
         group = _FakeRotationGroup()
-        active_view = SimpleNamespace(_rotation_group=group)
-        active_view._rotation_preview_controller = CanvasRotationPreviewController(active_view)
-        CanvasView.update_rotation_preview(active_view, 37.5)
+        active_view = SimpleNamespace(rotation_preview_state=CanvasRotationPreviewState(group=group))
+        active_view.services = SimpleNamespace(rotation_preview_controller=CanvasRotationPreviewController(active_view))
+        active_view.services.rotation_preview_controller.update_rotation_preview(37.5)
         self.assertEqual(group.rotations, [37.5])
 
     def test_commit_selection_rotation_destroys_group_and_only_rotates_for_non_zero_angle(self) -> None:
-        idle_view = SimpleNamespace(_rotation_group=None)
-        idle_view._rotation_preview_controller = CanvasRotationPreviewController(idle_view)
-        CanvasView.commit_selection_rotation(idle_view)
+        idle_view = SimpleNamespace(rotation_preview_state=CanvasRotationPreviewState())
+        idle_view.services = SimpleNamespace(rotation_preview_controller=CanvasRotationPreviewController(idle_view))
+        idle_view.services.rotation_preview_controller.commit_selection_rotation()
 
         zero_group = _FakeRotationGroup(angle=0.0)
         zero_scene = _FakeScene(group=zero_group)
         zero_view = SimpleNamespace(
-            _rotation_group=zero_group,
+            rotation_preview_state=CanvasRotationPreviewState(group=zero_group),
             scene=lambda: zero_scene,
-            rotate_selection=mock.Mock(),
         )
-        zero_view._rotation_preview_controller = CanvasRotationPreviewController(zero_view)
-        CanvasView.commit_selection_rotation(zero_view)
+        zero_view.services = SimpleNamespace(rotation_preview_controller=CanvasRotationPreviewController(zero_view))
+        with mock.patch("ui.canvas_rotation_preview_controller.rotate_selection_for") as rotate_selection:
+            zero_view.services.rotation_preview_controller.commit_selection_rotation()
         self.assertEqual(zero_group.rotations, [0.0])
-        self.assertIsNone(zero_view._rotation_group)
+        self.assertIsNone(zero_view.rotation_preview_state.group)
         self.assertIs(zero_scene.destroyed_group, zero_group)
-        zero_view.rotate_selection.assert_not_called()
+        rotate_selection.assert_not_called()
 
         angle_group = _FakeRotationGroup(angle=22.0)
         angle_scene = _FakeScene(group=angle_group)
         angle_view = SimpleNamespace(
-            _rotation_group=angle_group,
+            rotation_preview_state=CanvasRotationPreviewState(group=angle_group),
             scene=lambda: angle_scene,
-            rotate_selection=mock.Mock(),
         )
-        angle_view._rotation_preview_controller = CanvasRotationPreviewController(angle_view)
-        CanvasView.commit_selection_rotation(angle_view)
+        angle_view.services = SimpleNamespace(rotation_preview_controller=CanvasRotationPreviewController(angle_view))
+        with mock.patch("ui.canvas_rotation_preview_controller.rotate_selection_for") as rotate_selection:
+            angle_view.services.rotation_preview_controller.commit_selection_rotation()
         self.assertEqual(angle_group.rotations, [0.0])
-        self.assertIsNone(angle_view._rotation_group)
+        self.assertIsNone(angle_view.rotation_preview_state.group)
         self.assertIs(angle_scene.destroyed_group, angle_group)
-        angle_view.rotate_selection.assert_called_once_with(22.0)
-
-    def test_rotation_preview_wrappers_delegate_to_controller(self) -> None:
-        view = SimpleNamespace()
-        controller = mock.Mock()
-        controller.begin_selection_rotation.return_value = True
-
-        with mock.patch("ui.canvas_view._rotation_preview_controller_for", return_value=controller):
-            self.assertTrue(CanvasView.begin_selection_rotation(view))
-            CanvasView.update_rotation_preview(view, 18.0)
-            CanvasView.commit_selection_rotation(view)
-
-        controller.begin_selection_rotation.assert_called_once_with()
-        controller.update_rotation_preview.assert_called_once_with(18.0)
-        controller.commit_selection_rotation.assert_called_once_with()
-
+        rotate_selection.assert_called_once_with(angle_view, 22.0)
 
 if __name__ == "__main__":
     unittest.main()

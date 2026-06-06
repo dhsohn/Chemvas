@@ -11,8 +11,19 @@ from core.history import (
     CompositeCommand,
     UpdateBondCommand,
 )
+from core.model import Atom, Bond
 from ui.canvas_history_recording_service import CanvasHistoryRecordingService
+from ui.canvas_history_state import CanvasHistoryState
+from ui.canvas_smiles_input_state import CanvasSmilesInputState
 from ui.history_commands import AddSceneItemsCommand
+
+
+class _SceneItem:
+    def __init__(self, kind: str, state: dict) -> None:
+        self._data = {0: kind, 9: dict(state)}
+
+    def data(self, key: int):
+        return self._data.get(key)
 
 
 def _make_canvas(
@@ -23,46 +34,64 @@ def _make_canvas(
     last_smiles_input="after-smiles",
     history_enabled=True,
 ):
+    push_command = mock.Mock()
+    history_service = SimpleNamespace(
+        push=push_command,
+        is_enabled=mock.Mock(return_value=history_enabled),
+    )
     return SimpleNamespace(
-        _push_command=mock.Mock(),
+        push_command=push_command,
+        services=SimpleNamespace(history_service=history_service),
         _atom_state_dict=mock.Mock(side_effect=lambda atom_id: {"atom_id": atom_id, "kind": "atom"}),
         _bond_state_dict=mock.Mock(side_effect=lambda bond: {"bond": getattr(bond, "name", "bond")}),
-        scene_item_state=mock.Mock(side_effect=lambda item: {"item": getattr(item, "name", "item")}),
         model=SimpleNamespace(
             atoms=dict(atoms or {}),
             bonds=list(bonds or []),
             next_atom_id=next_atom_id,
         ),
-        last_smiles_input=last_smiles_input,
-        _history_enabled=history_enabled,
+        smiles_input_state=CanvasSmilesInputState(last_smiles_input=last_smiles_input),
+        history_state=CanvasHistoryState(enabled=history_enabled),
+    )
+
+
+def _recording_service(canvas) -> CanvasHistoryRecordingService:
+    return CanvasHistoryRecordingService(
+        canvas,
+        history_service=canvas.services.history_service,
     )
 
 
 class CanvasHistoryRecordingServiceTest(unittest.TestCase):
     def test_record_additions_pushes_composite_command_for_atom_bond_and_scene_items(self) -> None:
-        existing_bond = SimpleNamespace(name="existing-bond")
-        new_bond = SimpleNamespace(name="new-bond")
-        scene_item = SimpleNamespace(name="arrow")
+        existing_bond = Bond(0, 1)
+        new_bond = Bond(1, 2, 2, style="double_center", color="#336699")
+        scene_item = _SceneItem("arrow", {"item": "arrow"})
         canvas = _make_canvas(
-            atoms={1: object(), 2: object()},
+            atoms={1: Atom("C", 1.0, 2.0), 2: Atom("O", 3.0, 4.0, color="#112233")},
             bonds=[existing_bond, new_bond],
             next_atom_id=3,
         )
 
-        CanvasHistoryRecordingService(canvas).record_additions(
+        _recording_service(canvas).record_additions(
             before_next_atom_id=1,
             before_bond_count=1,
             before_smiles_input="before-smiles",
             added_scene_items=[scene_item],
         )
 
-        canvas._push_command.assert_called_once()
-        command = canvas._push_command.call_args.args[0]
+        canvas.push_command.assert_called_once()
+        command = canvas.push_command.call_args.args[0]
         self.assertIsInstance(command, CompositeCommand)
         self.assertEqual([type(item) for item in command.commands], [AddAtomsCommand, AddBondCommand, AddSceneItemsCommand])
 
         atom_command = command.commands[0]
-        self.assertEqual(atom_command.atom_states, {1: {"atom_id": 1, "kind": "atom"}, 2: {"atom_id": 2, "kind": "atom"}})
+        self.assertEqual(
+            atom_command.atom_states,
+            {
+                1: {"element": "C", "x": 1.0, "y": 2.0, "color": "#000000", "explicit_label": False},
+                2: {"element": "O", "x": 3.0, "y": 4.0, "color": "#112233", "explicit_label": False},
+            },
+        )
         self.assertEqual(atom_command.before_next_atom_id, 1)
         self.assertEqual(atom_command.after_next_atom_id, 3)
         self.assertEqual(atom_command.before_smiles_input, "before-smiles")
@@ -70,7 +99,10 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
 
         bond_command = command.commands[1]
         self.assertEqual(bond_command.bond_id, 1)
-        self.assertEqual(bond_command.bond_state, {"bond": "new-bond"})
+        self.assertEqual(
+            bond_command.bond_state,
+            {"a": 1, "b": 2, "order": 2, "style": "double_center", "color": "#336699"},
+        )
         self.assertEqual(bond_command.previous_bond_count, 1)
         self.assertEqual(bond_command.before_smiles_input, "before-smiles")
         self.assertEqual(bond_command.after_smiles_input, "after-smiles")
@@ -80,18 +112,18 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         self.assertEqual(scene_item_command.items, [scene_item])
 
     def test_record_additions_pushes_single_scene_item_command_when_only_scene_items_are_added(self) -> None:
-        scene_item = SimpleNamespace(name="label")
+        scene_item = _SceneItem("label", {"item": "label"})
         canvas = _make_canvas()
 
-        CanvasHistoryRecordingService(canvas).record_additions(
+        _recording_service(canvas).record_additions(
             before_next_atom_id=0,
             before_bond_count=0,
             before_smiles_input="before-smiles",
             added_scene_items=[scene_item],
         )
 
-        canvas._push_command.assert_called_once()
-        command = canvas._push_command.call_args.args[0]
+        canvas.push_command.assert_called_once()
+        command = canvas.push_command.call_args.args[0]
         self.assertIsInstance(command, AddSceneItemsCommand)
         self.assertEqual(command.item_states, [{"item": "label"}])
         self.assertEqual(command.items, [scene_item])
@@ -99,14 +131,14 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
     def test_record_additions_skips_push_when_nothing_was_added(self) -> None:
         canvas = _make_canvas()
 
-        CanvasHistoryRecordingService(canvas).record_additions(
+        _recording_service(canvas).record_additions(
             before_next_atom_id=0,
             before_bond_count=0,
             before_smiles_input="before-smiles",
             added_scene_items=None,
         )
 
-        canvas._push_command.assert_not_called()
+        canvas.push_command.assert_not_called()
 
     def test_record_additions_skips_none_new_bonds(self) -> None:
         canvas = _make_canvas(
@@ -114,14 +146,14 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
             next_atom_id=0,
         )
 
-        CanvasHistoryRecordingService(canvas).record_additions(
+        _recording_service(canvas).record_additions(
             before_next_atom_id=0,
             before_bond_count=1,
             before_smiles_input="before-smiles",
             added_scene_items=None,
         )
 
-        canvas._push_command.assert_not_called()
+        canvas.push_command.assert_not_called()
 
     def test_record_additions_skips_empty_sparse_atom_range_and_none_only_scene_items(self) -> None:
         canvas = _make_canvas(
@@ -130,19 +162,19 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
             next_atom_id=3,
         )
 
-        CanvasHistoryRecordingService(canvas).record_additions(
+        _recording_service(canvas).record_additions(
             before_next_atom_id=1,
             before_bond_count=0,
             before_smiles_input="before-smiles",
             added_scene_items=[None],
         )
 
-        canvas._push_command.assert_not_called()
+        canvas.push_command.assert_not_called()
 
     def test_record_bond_update_pushes_update_command_when_state_changes(self) -> None:
         canvas = _make_canvas(history_enabled=True)
 
-        CanvasHistoryRecordingService(canvas).record_bond_update(
+        _recording_service(canvas).record_bond_update(
             bond_id=4,
             before_state={"order": 1},
             after_state={"order": 2},
@@ -150,8 +182,8 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
             after_smiles_input="after-smiles",
         )
 
-        canvas._push_command.assert_called_once()
-        command = canvas._push_command.call_args.args[0]
+        canvas.push_command.assert_called_once()
+        command = canvas.push_command.call_args.args[0]
         self.assertIsInstance(command, UpdateBondCommand)
         self.assertEqual(command.bond_id, 4)
         self.assertEqual(command.before_state, {"order": 1})
@@ -161,24 +193,24 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
 
     def test_record_bond_update_skips_push_when_history_disabled_or_state_is_unchanged(self) -> None:
         disabled_canvas = _make_canvas(history_enabled=False)
-        CanvasHistoryRecordingService(disabled_canvas).record_bond_update(
+        _recording_service(disabled_canvas).record_bond_update(
             bond_id=1,
             before_state={"order": 1},
             after_state={"order": 2},
             before_smiles_input="before-smiles",
             after_smiles_input="after-smiles",
         )
-        disabled_canvas._push_command.assert_not_called()
+        disabled_canvas.push_command.assert_not_called()
 
         unchanged_canvas = _make_canvas(history_enabled=True)
-        CanvasHistoryRecordingService(unchanged_canvas).record_bond_update(
+        _recording_service(unchanged_canvas).record_bond_update(
             bond_id=1,
             before_state={"order": 1},
             after_state={"order": 1},
             before_smiles_input="same-smiles",
             after_smiles_input="same-smiles",
         )
-        unchanged_canvas._push_command.assert_not_called()
+        unchanged_canvas.push_command.assert_not_called()
 
 
 if __name__ == "__main__":

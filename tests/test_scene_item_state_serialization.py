@@ -1,0 +1,70 @@
+import os
+import unittest
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+try:
+    from PyQt6.QtCore import QPointF
+    from PyQt6.QtGui import QPolygonF
+    from PyQt6.QtWidgets import QApplication, QGraphicsPolygonItem, QGraphicsTextItem
+except ModuleNotFoundError:
+    QApplication = None
+    QPointF = None
+    QPolygonF = None
+
+if QApplication is not None:
+    from ui import scene_item_state as facade
+    from ui import scene_item_state_serialization as serialization
+
+
+class EmbeddedStateItem:
+    def __init__(self, state: dict) -> None:
+        self.state = state
+
+    def data(self, role: int):
+        return self.state if role == 9 else None
+
+
+@unittest.skipUnless(QApplication is not None, "PyQt6 is required for scene item state tests")
+class SceneItemStateSerializationTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.app = QApplication.instance() or QApplication([])
+        cls.app.setQuitOnLastWindowClosed(False)
+
+    def test_embedded_scene_item_state_returns_copy_from_role_nine(self) -> None:
+        embedded = {"kind": "note", "text": "memo", "x": 1.0, "y": 2.0}
+        state = serialization.embedded_scene_item_state(EmbeddedStateItem(embedded))
+
+        self.assertEqual(state, embedded)
+
+        state["text"] = "changed"
+        self.assertEqual(embedded["text"], "memo")
+
+    def test_scene_item_state_serializes_supported_qt_items_directly(self) -> None:
+        note = QGraphicsTextItem("direct")
+        note.setData(0, "note")
+        note.setPos(QPointF(4.0, -3.0))
+
+        self.assertEqual(
+            serialization.scene_item_state(note, mark_center_getter=lambda _: QPointF()),
+            {"kind": "note", "text": "direct", "x": 4.0, "y": -3.0},
+        )
+
+    def test_state_dict_for_prefers_embedded_scene_state(self) -> None:
+        ring = QGraphicsPolygonItem(QPolygonF([QPointF(0.0, 0.0), QPointF(3.0, 0.0), QPointF(1.5, 2.0)]))
+        ring.setData(0, "ring")
+        ring.setData(9, {"kind": "ring", "points": [(9.0, 9.0)], "atom_ids": [42]})
+
+        state = serialization.ring_state_dict_for(object(), ring)
+
+        self.assertEqual(state, {"kind": "ring", "points": [(9.0, 9.0)], "atom_ids": [42]})
+
+    def test_scene_item_state_facade_reexports_serialization_contract(self) -> None:
+        self.assertIs(facade.scene_item_state, serialization.scene_item_state)
+        self.assertIs(facade.scene_item_state_for, serialization.scene_item_state_for)
+        self.assertIs(facade.arrow_state_dict, serialization.arrow_state_dict)
+
+
+if __name__ == "__main__":
+    unittest.main()

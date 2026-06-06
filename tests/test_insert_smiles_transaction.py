@@ -2,34 +2,39 @@ import unittest
 
 from core.history import AddAtomsCommand, AddBondCommand, CompositeCommand
 from core.model import Atom, Bond, MoleculeModel
+from ui.canvas_mark_registry import CanvasMarkRegistry
+from ui.canvas_scene_items_state import (
+    SCENE_ITEM_COLLECTION_ATTRS,
+    set_scene_item_collection_for,
+)
+from ui.canvas_smiles_input_state import set_last_smiles_input_for
 from ui.history_commands import DeleteSceneItemsCommand
 from ui.insert_smiles_transaction import SmilesLoadTransactionBuilder
 
 
 class _FakeItem:
-    def __init__(self, kind: str, atom_id=None) -> None:
+    def __init__(self, kind: str, atom_id=None, state: dict | None = None) -> None:
         self.kind = kind
         self._payload = {}
+        self._state = dict(state or {"kind": kind})
         if atom_id is not None:
             self._payload["atom_id"] = atom_id
 
     def data(self, role: int):
-        if role != 1:
-            return None
-        return dict(self._payload)
+        if role == 1:
+            return dict(self._payload)
+        if role == 9:
+            return dict(self._state)
+        return None
 
 
 class _FakeCanvas:
     def __init__(self) -> None:
-        self.last_smiles_input = "before"
+        set_last_smiles_input_for(self, "before")
         self.model = MoleculeModel()
-        self._marks_by_atom = {}
-        self.ring_items = []
-        self.note_items = []
-        self.arrow_items = []
-        self.ts_bracket_items = []
-        self.orbital_items = []
-        self.mark_items = []
+        self.mark_registry = CanvasMarkRegistry()
+        for name in SCENE_ITEM_COLLECTION_ATTRS:
+            set_scene_item_collection_for(self, name, [])
 
     def _atom_state_dict(self, atom_id: int) -> dict:
         atom = self.model.atoms[atom_id]
@@ -49,9 +54,6 @@ class _FakeCanvas:
             "style": bond.style,
             "color": bond.color,
         }
-
-    def _mark_state_dict(self, mark) -> dict:
-        return {"kind": getattr(mark, "kind", "mark")}
 
     def scene_item_state(self, item) -> dict:
         return {"kind": item.kind}
@@ -75,13 +77,13 @@ class SmilesLoadTransactionBuilderTest(unittest.TestCase):
         arrow = _FakeItem("arrow")
         ts_bracket = _FakeItem("ts")
         orbital = _FakeItem("orbital")
-        canvas._marks_by_atom = {1: [bound_mark]}
-        canvas.mark_items = [bound_mark, stale_mark, free_mark]
-        canvas.ring_items = [ring]
-        canvas.note_items = [note]
-        canvas.arrow_items = [arrow]
-        canvas.ts_bracket_items = [ts_bracket]
-        canvas.orbital_items = [orbital]
+        canvas.mark_registry.by_atom = {1: [bound_mark]}
+        set_scene_item_collection_for(canvas, "mark_items", [bound_mark, stale_mark, free_mark])
+        set_scene_item_collection_for(canvas, "ring_items", [ring])
+        set_scene_item_collection_for(canvas, "note_items", [note])
+        set_scene_item_collection_for(canvas, "arrow_items", [arrow])
+        set_scene_item_collection_for(canvas, "ts_bracket_items", [ts_bracket])
+        set_scene_item_collection_for(canvas, "orbital_items", [orbital])
         builder = SmilesLoadTransactionBuilder(canvas)
 
         snapshot = builder.capture()
@@ -145,7 +147,7 @@ class SmilesLoadTransactionBuilderTest(unittest.TestCase):
             bonds=[Bond(0, 0, 1)],
         )
         ring = _FakeItem("ring")
-        canvas.ring_items = [ring]
+        set_scene_item_collection_for(canvas, "ring_items", [ring])
         builder = SmilesLoadTransactionBuilder(canvas)
         snapshot = builder.capture()
         canvas.model = MoleculeModel(

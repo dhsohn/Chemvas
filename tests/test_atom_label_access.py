@@ -1,7 +1,7 @@
 import unittest
 from types import SimpleNamespace
 
-from ui.atom_label_access import add_or_update_atom_label
+from ui.atom_label_access import add_or_update_atom_label, clear_atom_label_for
 
 
 class _FakeCanvas:
@@ -25,8 +25,10 @@ class AtomLabelAccessTest(unittest.TestCase):
     def test_add_or_update_atom_label_prefers_service_when_available(self) -> None:
         service_calls = []
         canvas = _FakeCanvas()
-        canvas._atom_label_service = SimpleNamespace(
-            add_or_update_atom_label=lambda atom_id, text, **kwargs: service_calls.append((atom_id, text, kwargs))
+        canvas.services = SimpleNamespace(
+            atom_label_service=SimpleNamespace(
+                add_or_update_atom_label=lambda atom_id, text, **kwargs: service_calls.append((atom_id, text, kwargs))
+            )
         )
 
         add_or_update_atom_label(
@@ -61,6 +63,24 @@ class AtomLabelAccessTest(unittest.TestCase):
 
         with self.assertRaises(AttributeError):
             add_or_update_atom_label(canvas, 2, "N", record=False)
+
+    def test_clear_atom_label_delegates_to_service_for_existing_atom(self) -> None:
+        service_calls = []
+        canvas = SimpleNamespace(
+            model=SimpleNamespace(atoms={1: object()}),
+            services=SimpleNamespace(
+                atom_label_service=SimpleNamespace(
+                    add_or_update_atom_label=lambda atom_id, text, **kwargs: service_calls.append(
+                        (atom_id, text, kwargs)
+                    )
+                )
+            ),
+        )
+
+        clear_atom_label_for(canvas, 1)
+        clear_atom_label_for(canvas, 99)
+
+        self.assertEqual(service_calls, [(1, "C", {"show_carbon": False})])
 
 
 if __name__ == "__main__":

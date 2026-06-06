@@ -5,9 +5,9 @@ def activate_tool_no_drag(canvas) -> None:
     canvas.setDragMode(canvas.DragMode.NoDrag)
 
 
-def clear_temporary_tool_overlay(canvas, *, preview_item=None, clear_handles: bool = False):
-    if clear_handles:
-        canvas.clear_handles()
+def clear_temporary_tool_overlay(canvas, *, preview_item=None, clear_handles: bool = False, clear_handles_callback=None):
+    if clear_handles and clear_handles_callback is not None:
+        clear_handles_callback()
     if preview_item is None:
         return None
     try:

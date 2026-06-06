@@ -5,26 +5,35 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import QColor, QPen, QPolygonF
+from PyQt6.QtCore import QPointF
+from PyQt6.QtGui import QPen, QPolygonF
 from PyQt6.QtWidgets import (
-    QGraphicsItem,
     QGraphicsLineItem,
     QGraphicsPathItem,
     QGraphicsPolygonItem,
-    QGraphicsScene,
-    QGraphicsTextItem,
 )
 
+from ui.bond_preview_geometry import (
+    LineSegment,
+)
+from ui.bond_preview_geometry import (
+    apply_plain_double_preview_variant as _apply_plain_double_preview_variant,
+)
+from ui.bond_preview_geometry import (
+    expanded_bold_segment as _expanded_bold_segment,
+)
+from ui.bond_preview_geometry import (
+    plain_double_preview_segments as _plain_double_preview_segments,
+)
+from ui.bond_preview_geometry import (
+    trim_segment as _trim_segment,
+)
+from ui.bond_preview_scene_items import add_bond_preview_items, clear_bond_preview_items
 from ui.bond_style_logic import (
-    DOUBLE_STYLE_DEFAULT,
-    DOUBLE_STYLE_OUTER,
     PLAIN_DOUBLE_STYLES,
     normalized_plain_double_style,
 )
 from ui.graphics_items import NoSelectLineItem
-
-LineSegment = tuple[float, float, float, float]
 
 
 @dataclass(frozen=True)
@@ -57,48 +66,6 @@ class BondPreviewUpdateResolvers:
     parallel_bond_segments: Callable[[float, float, float, float, int, int | None, int | None], Sequence[LineSegment]]
     line_normal: Callable[[float, float, float, float, QPointF | None], tuple[float, float]]
     strip_polygon: Callable[[float, float, float, float, float, float, float, float], QPolygonF]
-
-
-def clear_bond_preview_items(
-    scene: QGraphicsScene,
-    items: Sequence[QGraphicsItem],
-) -> list[QGraphicsItem]:
-    for item in items:
-        try:
-            if item.scene() is scene:
-                scene.removeItem(item)
-        except RuntimeError:
-            pass
-    return []
-
-
-def add_bond_preview_items(
-    scene: QGraphicsScene,
-    items: Sequence[QGraphicsItem],
-    *,
-    color: QColor | None = None,
-    opacity: float = 0.5,
-    z_value: float = 4.5,
-) -> list[QGraphicsItem]:
-    preview_color = QColor(120, 120, 120, 140) if color is None else QColor(color)
-    added: list[QGraphicsItem] = []
-    for item in items:
-        if isinstance(item, QGraphicsTextItem):
-            item.setDefaultTextColor(preview_color)
-        if hasattr(item, "pen"):
-            pen = QPen(item.pen())
-            pen.setColor(preview_color)
-            item.setPen(pen)
-        if hasattr(item, "brush"):
-            brush = item.brush()
-            if brush.style() != Qt.BrushStyle.NoBrush:
-                brush.setColor(preview_color)
-                item.setBrush(brush)
-        item.setOpacity(opacity)
-        item.setZValue(z_value)
-        scene.addItem(item)
-        added.append(item)
-    return added
 
 
 def build_bond_preview_items(
@@ -286,107 +253,14 @@ def update_bond_preview_items(
     return True
 
 
-def _expanded_bold_segment(start: QPointF, end: QPointF, bond_length_px: float) -> LineSegment:
-    bx1 = start.x()
-    by1 = start.y()
-    bx2 = end.x()
-    by2 = end.y()
-    dx = bx2 - bx1
-    dy = by2 - by1
-    length = math.hypot(dx, dy) or 1.0
-    pad = bond_length_px * 0.1
-    factor = pad / length
-    bx1 = bx1 - dx * factor
-    by1 = by1 - dy * factor
-    bx2 = bx2 + dx * factor
-    by2 = by2 + dy * factor
-    dx = bx2 - bx1
-    dy = by2 - by1
-    bx1 = bx1 + dx * 0.025
-    by1 = by1 + dy * 0.025
-    bx2 = bx2 - dx * 0.025
-    by2 = by2 - dy * 0.025
-    return bx1, by1, bx2, by2
-
-
-def _trim_segment(segment: LineSegment, trim: float) -> LineSegment:
-    if trim <= 1e-6:
-        return segment
-    x1, y1, x2, y2 = segment
-    dx = x2 - x1
-    dy = y2 - y1
-    length = math.hypot(dx, dy) or 1.0
-    ratio = min(0.45, trim / length)
-    return (
-        x1 + dx * ratio,
-        y1 + dy * ratio,
-        x2 - dx * ratio,
-        y2 - dy * ratio,
-    )
-
-
-def _scale_segment_offset(segment: LineSegment, base: LineSegment, scale: float) -> LineSegment:
-    return (
-        base[0] + (segment[0] - base[0]) * scale,
-        base[1] + (segment[1] - base[1]) * scale,
-        base[2] + (segment[2] - base[2]) * scale,
-        base[3] + (segment[3] - base[3]) * scale,
-    )
-
-
-def _plain_double_preview_segments(
-    segments: Sequence[LineSegment],
-    style: str,
-) -> tuple[LineSegment, ...]:
-    if len(segments) != 2:
-        return tuple(segments)
-    first, second = segments
-    base_length = math.hypot(first[2] - first[0], first[3] - first[1]) or 1.0
-    trim = max(1.0, base_length * 0.12)
-    base = (
-        (first[0] + second[0]) * 0.5,
-        (first[1] + second[1]) * 0.5,
-        (first[2] + second[2]) * 0.5,
-        (first[3] + second[3]) * 0.5,
-    )
-    centered_scale = 1.1
-    side_scale = 2.2
-    if style == DOUBLE_STYLE_DEFAULT:
-        return (base, _trim_segment(_scale_segment_offset(second, base, side_scale), trim))
-    if style == DOUBLE_STYLE_OUTER:
-        return (base, _trim_segment(_scale_segment_offset(first, base, side_scale), trim))
-    return (
-        _scale_segment_offset(first, base, centered_scale),
-        _scale_segment_offset(second, base, centered_scale),
-    )
-
-
-def _apply_plain_double_preview_variant(items: list, style: str) -> list:
-    if len(items) != 2 or not all(isinstance(item, QGraphicsLineItem) for item in items):
-        return items
-    segments = (
-        (
-            items[0].line().x1(),
-            items[0].line().y1(),
-            items[0].line().x2(),
-            items[0].line().y2(),
-        ),
-        (
-            items[1].line().x1(),
-            items[1].line().y1(),
-            items[1].line().x2(),
-            items[1].line().y2(),
-        ),
-    )
-    for item, seg in zip(items, _plain_double_preview_segments(segments, style), strict=False):
-        item.setLine(*seg)
-    return items
-
-
 __all__ = [
     "BondPreviewBuildResolvers",
     "BondPreviewConfig",
     "BondPreviewUpdateResolvers",
+    "_apply_plain_double_preview_variant",
+    "_expanded_bold_segment",
+    "_plain_double_preview_segments",
+    "_trim_segment",
     "add_bond_preview_items",
     "build_bond_preview_items",
     "clear_bond_preview_items",

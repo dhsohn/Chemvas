@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from importlib import import_module
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ui.history_commands import MoveItemsCommand as MoveItemsCommand
 
 
 class HistoryCommand:
@@ -9,6 +14,14 @@ class HistoryCommand:
 
     def redo(self, canvas) -> None:
         raise NotImplementedError
+
+
+def _history_canvas_port(name: str):
+    return getattr(import_module("ui.history_canvas_access"), name)
+
+
+def _set_last_smiles_input(canvas, value: str | None) -> None:
+    _history_canvas_port("set_last_smiles_input_for_history")(canvas, value)
 
 
 @dataclass
@@ -33,7 +46,8 @@ class MoveAtomsCommand(HistoryCommand):
     redraw_bond_ids: set[int] | None = None
 
     def undo(self, canvas) -> None:
-        canvas.move_atoms(
+        _history_canvas_port("move_atoms_for_history")(
+            canvas,
             self.atom_ids,
             -self.dx,
             -self.dy,
@@ -43,7 +57,8 @@ class MoveAtomsCommand(HistoryCommand):
         )
 
     def redo(self, canvas) -> None:
-        canvas.move_atoms(
+        _history_canvas_port("move_atoms_for_history")(
+            canvas,
             self.atom_ids,
             self.dx,
             self.dy,
@@ -51,31 +66,6 @@ class MoveAtomsCommand(HistoryCommand):
             redraw_bond_ids=self.redraw_bond_ids,
             update_selection=True,
         )
-
-
-@dataclass
-class MoveItemsCommand(HistoryCommand):
-    items: list
-    dx: float
-    dy: float
-
-    def _apply(self, canvas, dx: float, dy: float) -> None:
-        for item in self.items:
-            if item is None:
-                continue
-            try:
-                if item.scene() is not canvas.scene():
-                    continue
-            except RuntimeError:
-                continue
-            canvas.move_item(item, dx, dy, update_selection=False)
-        canvas._update_selection_outline()
-
-    def undo(self, canvas) -> None:
-        self._apply(canvas, -self.dx, -self.dy)
-
-    def redo(self, canvas) -> None:
-        self._apply(canvas, self.dx, self.dy)
 
 
 @dataclass
@@ -100,12 +90,20 @@ class SetAtomPositionsCommand(HistoryCommand):
         projection_anchor_2d: tuple[float, float] | None,
     ) -> None:
         if self.restore_projection_state:
-            canvas._projection_center_3d = projection_center_3d
-            canvas._projection_anchor_2d = projection_anchor_2d
+            _history_canvas_port("restore_projection_state_for_history")(
+                canvas,
+                projection_center_3d,
+                projection_anchor_2d,
+            )
         if coords_3d is None:
-            canvas.set_atom_positions(positions, update_selection=self.update_selection)
+            _history_canvas_port("set_atom_positions_for_history")(
+                canvas,
+                positions,
+                update_selection=self.update_selection,
+            )
             return
-        canvas.set_atom_positions(
+        _history_canvas_port("set_atom_positions_for_history")(
+            canvas,
             positions,
             update_selection=self.update_selection,
             coords_3d=coords_3d,
@@ -137,10 +135,10 @@ class SetRingPolygonsCommand(HistoryCommand):
     after_polygons: list[list[tuple[float, float]]]
 
     def undo(self, canvas) -> None:
-        canvas.set_ring_polygons(self.ring_items, self.before_polygons)
+        _history_canvas_port("set_ring_polygons_for_history")(canvas, self.ring_items, self.before_polygons)
 
     def redo(self, canvas) -> None:
-        canvas.set_ring_polygons(self.ring_items, self.after_polygons)
+        _history_canvas_port("set_ring_polygons_for_history")(canvas, self.ring_items, self.after_polygons)
 
 
 @dataclass
@@ -149,14 +147,10 @@ class UpdateBondLengthCommand(HistoryCommand):
     after_length: float
 
     def undo(self, canvas) -> None:
-        canvas.renderer.set_bond_length(self.before_length)
-        canvas._rebuild_graphics()
-        canvas._mark_spatial_index_dirty()
+        _history_canvas_port("restore_bond_length_for_history")(canvas, self.before_length)
 
     def redo(self, canvas) -> None:
-        canvas.renderer.set_bond_length(self.after_length)
-        canvas._rebuild_graphics()
-        canvas._mark_spatial_index_dirty()
+        _history_canvas_port("restore_bond_length_for_history")(canvas, self.after_length)
 
 
 @dataclass
@@ -165,10 +159,10 @@ class SetSmilesInputCommand(HistoryCommand):
     after_value: str | None
 
     def undo(self, canvas) -> None:
-        canvas.last_smiles_input = self.before_value
+        _set_last_smiles_input(canvas, self.before_value)
 
     def redo(self, canvas) -> None:
-        canvas.last_smiles_input = self.after_value
+        _set_last_smiles_input(canvas, self.after_value)
 
 
 @dataclass
@@ -181,15 +175,15 @@ class AddAtomsCommand(HistoryCommand):
 
     def undo(self, canvas) -> None:
         for atom_id in self.atom_states:
-            canvas._remove_atom_only(atom_id)
+            _history_canvas_port("remove_atom_for_history")(canvas, atom_id)
         canvas.model.next_atom_id = self.before_next_atom_id
-        canvas.last_smiles_input = self.before_smiles_input
+        _set_last_smiles_input(canvas, self.before_smiles_input)
 
     def redo(self, canvas) -> None:
         for atom_id, state in self.atom_states.items():
-            canvas._restore_atom_from_state(atom_id, state)
+            _history_canvas_port("restore_atom_from_state_for_history")(canvas, atom_id, state)
         canvas.model.next_atom_id = self.after_next_atom_id
-        canvas.last_smiles_input = self.after_smiles_input
+        _set_last_smiles_input(canvas, self.after_smiles_input)
 
 
 @dataclass
@@ -204,18 +198,18 @@ class DeleteAtomsCommand(HistoryCommand):
 
     def undo(self, canvas) -> None:
         for atom_id, state in self.atom_states.items():
-            canvas._restore_atom_from_state(atom_id, state)
+            _history_canvas_port("restore_atom_from_state_for_history")(canvas, atom_id, state)
         if self.remove_marks:
             for mark_state in self.mark_states:
-                canvas._restore_mark_from_state(mark_state)
+                _history_canvas_port("restore_mark_from_state_for_history")(canvas, mark_state)
         canvas.model.next_atom_id = self.before_next_atom_id
-        canvas.last_smiles_input = self.before_smiles_input
+        _set_last_smiles_input(canvas, self.before_smiles_input)
 
     def redo(self, canvas) -> None:
         for atom_id in self.atom_states:
-            canvas._remove_atom_only(atom_id, remove_marks=self.remove_marks)
+            _history_canvas_port("remove_atom_for_history")(canvas, atom_id, remove_marks=self.remove_marks)
         canvas.model.next_atom_id = self.after_next_atom_id
-        canvas.last_smiles_input = self.after_smiles_input
+        _set_last_smiles_input(canvas, self.after_smiles_input)
 
 
 @dataclass
@@ -225,10 +219,10 @@ class UpdateAtomColorCommand(HistoryCommand):
     after_color: str
 
     def undo(self, canvas) -> None:
-        canvas.apply_atom_color(self.atom_id, self.before_color)
+        _history_canvas_port("apply_atom_color_for_history")(canvas, self.atom_id, self.before_color)
 
     def redo(self, canvas) -> None:
-        canvas.apply_atom_color(self.atom_id, self.after_color)
+        _history_canvas_port("apply_atom_color_for_history")(canvas, self.atom_id, self.after_color)
 
 
 @dataclass
@@ -240,13 +234,13 @@ class AddBondCommand(HistoryCommand):
     after_smiles_input: str | None
 
     def undo(self, canvas) -> None:
-        canvas._remove_bond_by_id(self.bond_id)
-        canvas._trim_bonds_to_length(self.previous_bond_count)
-        canvas.last_smiles_input = self.before_smiles_input
+        _history_canvas_port("remove_bond_for_history")(canvas, self.bond_id)
+        _history_canvas_port("trim_bonds_for_history")(canvas, self.previous_bond_count)
+        _set_last_smiles_input(canvas, self.before_smiles_input)
 
     def redo(self, canvas) -> None:
-        canvas._restore_bond_from_state(self.bond_id, self.bond_state)
-        canvas.last_smiles_input = self.after_smiles_input
+        _history_canvas_port("restore_bond_from_state_for_history")(canvas, self.bond_id, self.bond_state)
+        _set_last_smiles_input(canvas, self.after_smiles_input)
 
 
 @dataclass
@@ -257,12 +251,12 @@ class DeleteBondCommand(HistoryCommand):
     after_smiles_input: str | None
 
     def undo(self, canvas) -> None:
-        canvas._restore_bond_from_state(self.bond_id, self.bond_state)
-        canvas.last_smiles_input = self.before_smiles_input
+        _history_canvas_port("restore_bond_from_state_for_history")(canvas, self.bond_id, self.bond_state)
+        _set_last_smiles_input(canvas, self.before_smiles_input)
 
     def redo(self, canvas) -> None:
-        canvas._remove_bond_by_id(self.bond_id)
-        canvas.last_smiles_input = self.after_smiles_input
+        _history_canvas_port("remove_bond_for_history")(canvas, self.bond_id)
+        _set_last_smiles_input(canvas, self.after_smiles_input)
 
 
 @dataclass
@@ -274,9 +268,35 @@ class UpdateBondCommand(HistoryCommand):
     after_smiles_input: str | None
 
     def undo(self, canvas) -> None:
-        canvas._restore_bond_from_state(self.bond_id, self.before_state)
-        canvas.last_smiles_input = self.before_smiles_input
+        _history_canvas_port("restore_bond_from_state_for_history")(canvas, self.bond_id, self.before_state)
+        _set_last_smiles_input(canvas, self.before_smiles_input)
 
     def redo(self, canvas) -> None:
-        canvas._restore_bond_from_state(self.bond_id, self.after_state)
-        canvas.last_smiles_input = self.after_smiles_input
+        _history_canvas_port("restore_bond_from_state_for_history")(canvas, self.bond_id, self.after_state)
+        _set_last_smiles_input(canvas, self.after_smiles_input)
+
+
+def __getattr__(name: str):
+    if name == "MoveItemsCommand":
+        from ui.history_commands import MoveItemsCommand
+
+        return MoveItemsCommand
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+__all__ = [
+    "AddAtomsCommand",
+    "AddBondCommand",
+    "CompositeCommand",
+    "DeleteAtomsCommand",
+    "DeleteBondCommand",
+    "HistoryCommand",
+    "MoveAtomsCommand",
+    "MoveItemsCommand",
+    "SetAtomPositionsCommand",
+    "SetRingPolygonsCommand",
+    "SetSmilesInputCommand",
+    "UpdateAtomColorCommand",
+    "UpdateBondCommand",
+    "UpdateBondLengthCommand",
+]

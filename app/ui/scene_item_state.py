@@ -12,7 +12,29 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
-MarkCenterGetter = Callable[[Any], QPointF]
+from ui.note_item_access import set_committed_note_text_for
+from ui.scene_item_state_serialization import (
+    ARROW_KINDS,
+    MarkCenterGetter,
+    arrow_state_dict,
+    arrow_state_dict_for,
+    atom_state_dict_for,
+    bond_state_dict,
+    embedded_scene_item_state,
+    mark_state_dict,
+    mark_state_dict_for,
+    note_state_dict,
+    note_state_dict_for,
+    orbital_state_dict,
+    orbital_state_dict_for,
+    ring_state_dict,
+    ring_state_dict_for,
+    scene_item_state,
+    scene_item_state_for,
+    ts_bracket_state_dict,
+    ts_bracket_state_dict_for,
+)
+
 MarkCenterSetter = Callable[[Any, QPointF], None]
 NoteStyleApplier = Callable[[QGraphicsTextItem], None]
 RingFillBrushGetter = Callable[[], QBrush]
@@ -20,82 +42,29 @@ TsBracketPathBuilder = Callable[[QRectF], Any]
 ArrowItemBuilder = Callable[[QPointF, QPointF, str], QGraphicsPathItem]
 CurvedArrowPathSetter = Callable[[QGraphicsPathItem, QPointF, QPointF, QPointF, bool], None]
 
-ARROW_KINDS = {
-    "arrow",
-    "equilibrium",
-    "resonance",
-    "curved_single",
-    "curved_double",
-    "inhibit",
-    "dotted",
-}
+
+def _float_state_value(value: object, default: float) -> float:
+    return float(value) if isinstance(value, (int, float)) else default
 
 
-def ring_state_dict(ring_item: QGraphicsPolygonItem) -> dict:
-    polygon = ring_item.polygon()
-    points = [(point.x(), point.y()) for point in polygon]
-    brush = ring_item.brush()
-    color = brush.color().name() if brush.style() != Qt.BrushStyle.NoBrush else None
-    alpha = brush.color().alphaF() if brush.style() != Qt.BrushStyle.NoBrush else 0.0
-    return {
-        "kind": "ring",
-        "points": points,
-        "atom_ids": ring_item.data(2),
-        "color": color,
-        "alpha": alpha,
-    }
+def _point_from_state(value: object) -> QPointF | None:
+    if not isinstance(value, (list, tuple)) or len(value) != 2:
+        return None
+    x, y = value
+    if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+        return None
+    return QPointF(float(x), float(y))
 
 
-def note_state_dict(item: QGraphicsTextItem) -> dict:
-    return {
-        "kind": "note",
-        "text": item.toPlainText(),
-        "x": item.pos().x(),
-        "y": item.pos().y(),
-    }
-
-
-def mark_state_dict(item, *, mark_center_getter: MarkCenterGetter) -> dict:
-    data = item.data(1) or {}
-    center = mark_center_getter(item)
-    return {
-        "kind": "mark",
-        "mark_kind": data.get("kind"),
-        "text": data.get("text"),
-        "atom_id": data.get("atom_id"),
-        "dx": data.get("dx"),
-        "dy": data.get("dy"),
-        "x": center.x(),
-        "y": center.y(),
-    }
-
-
-def arrow_state_dict(item: QGraphicsPathItem) -> dict:
-    data = item.data(2) or {}
-    start = data.get("start")
-    end = data.get("end")
-    control = data.get("control")
-    return {
-        "kind": item.data(0),
-        "start": (start.x(), start.y()) if isinstance(start, QPointF) else None,
-        "end": (end.x(), end.y()) if isinstance(end, QPointF) else None,
-        "control": (control.x(), control.y()) if isinstance(control, QPointF) else None,
-        "double": bool(data.get("double", False)),
-    }
-
-
-def ts_bracket_state_dict(item: QGraphicsPathItem) -> dict:
-    data = item.data(1) or {}
-    rect = data.get("rect")
-    if not isinstance(rect, QRectF):
-        rect = item.sceneBoundingRect()
-    return {
-        "kind": "ts_bracket",
-        "left": rect.left(),
-        "top": rect.top(),
-        "right": rect.right(),
-        "bottom": rect.bottom(),
-    }
+def _points_from_state(value: object) -> list[QPointF]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    points: list[QPointF] = []
+    for point_value in value:
+        point = _point_from_state(point_value)
+        if point is not None:
+            points.append(point)
+    return points
 
 
 def ts_bracket_rect_from_state(state: Mapping[str, object]) -> QRectF | None:
@@ -105,42 +74,13 @@ def ts_bracket_rect_from_state(state: Mapping[str, object]) -> QRectF | None:
         state.get("right"),
         state.get("bottom"),
     )
-    if not all(isinstance(value, (int, float)) for value in coords):
-        return None
-    left, top, right, bottom = (float(value) for value in coords)
+    numeric_coords: list[float] = []
+    for value in coords:
+        if not isinstance(value, (int, float)):
+            return None
+        numeric_coords.append(float(value))
+    left, top, right, bottom = numeric_coords
     return QRectF(QPointF(left, top), QPointF(right, bottom)).normalized()
-
-
-def orbital_state_dict(item: QGraphicsItemGroup) -> dict:
-    data = item.data(1) or {}
-    center = data.get("center")
-    meta = item.data(2) or {}
-    return {
-        "kind": "orbital",
-        "orbital_kind": meta.get("kind", "s"),
-        "center": (center.x(), center.y()) if isinstance(center, QPointF) else None,
-        "scale": item.scale(),
-        "rotation": item.rotation(),
-    }
-
-
-def scene_item_state(item, *, mark_center_getter: MarkCenterGetter) -> dict:
-    if item is None:
-        return {}
-    kind = item.data(0)
-    if kind == "ring" and isinstance(item, QGraphicsPolygonItem):
-        return ring_state_dict(item)
-    if kind == "note" and isinstance(item, QGraphicsTextItem):
-        return note_state_dict(item)
-    if kind == "mark":
-        return mark_state_dict(item, mark_center_getter=mark_center_getter)
-    if kind == "ts_bracket" and isinstance(item, QGraphicsPathItem):
-        return ts_bracket_state_dict(item)
-    if kind == "orbital" and isinstance(item, QGraphicsItemGroup):
-        return orbital_state_dict(item)
-    if kind in ARROW_KINDS and isinstance(item, QGraphicsPathItem):
-        return arrow_state_dict(item)
-    return {}
 
 
 def apply_scene_item_state(
@@ -162,8 +102,8 @@ def apply_scene_item_state(
     kind = state.get("kind")
     if kind == "note" and isinstance(item, QGraphicsTextItem):
         item.setPlainText(str(state.get("text", "")))
-        item._last_text = item.toPlainText()
-        item.setPos(QPointF(float(state.get("x", 0.0)), float(state.get("y", 0.0))))
+        set_committed_note_text_for(item, item.toPlainText())
+        item.setPos(QPointF(_float_state_value(state.get("x"), 0.0), _float_state_value(state.get("y"), 0.0)))
         note_style_applier(item)
         item.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
         return
@@ -188,7 +128,7 @@ def apply_scene_item_state(
             mark_center_setter(item, center)
         return
     if kind == "ring" and isinstance(item, QGraphicsPolygonItem):
-        points = [QPointF(x, y) for x, y in state.get("points", [])]
+        points = _points_from_state(state.get("points"))
         if len(points) >= 3:
             item.setPolygon(QPolygonF(points))
         color = state.get("color")
@@ -210,25 +150,21 @@ def apply_scene_item_state(
         item.setData(1, {"rect": QRectF(rect)})
         return
     if kind == "orbital" and isinstance(item, QGraphicsItemGroup):
-        center = state.get("center")
-        if center is not None:
-            center_point = QPointF(*center)
+        center_point = _point_from_state(state.get("center"))
+        if center_point is not None:
             item.setData(1, {"center": center_point, "base_handle_dist": orbital_base_handle_dist})
             item.setTransformOriginPoint(center_point)
-        item.setScale(float(state.get("scale", item.scale())))
-        item.setRotation(float(state.get("rotation", item.rotation())))
+        item.setScale(_float_state_value(state.get("scale"), item.scale()))
+        item.setRotation(_float_state_value(state.get("rotation"), item.rotation()))
         return
     if kind in ARROW_KINDS and isinstance(item, QGraphicsPathItem):
-        start = state.get("start")
-        end = state.get("end")
-        if start is None or end is None:
+        start_pt = _point_from_state(state.get("start"))
+        end_pt = _point_from_state(state.get("end"))
+        if start_pt is None or end_pt is None:
             return
-        start_pt = QPointF(*start)
-        end_pt = QPointF(*end)
-        control = state.get("control")
+        control_pt = _point_from_state(state.get("control"))
         double = bool(state.get("double", False))
-        if kind in {"curved_single", "curved_double"} and control is not None:
-            control_pt = QPointF(*control)
+        if kind in {"curved_single", "curved_double"} and control_pt is not None:
             set_curved_arrow_path(item, start_pt, end_pt, control_pt, double)
             data = {"start": start_pt, "end": end_pt, "control": control_pt, "double": double}
         else:
@@ -256,3 +192,29 @@ def mark_center_from_state(state: Mapping[str, object], model_atoms: Mapping[int
         if isinstance(x, (int, float)) and isinstance(y, (int, float)):
             center = QPointF(float(x), float(y))
     return center
+
+
+__all__ = [
+    "ARROW_KINDS",
+    "MarkCenterGetter",
+    "apply_scene_item_state",
+    "arrow_state_dict",
+    "arrow_state_dict_for",
+    "atom_state_dict_for",
+    "bond_state_dict",
+    "embedded_scene_item_state",
+    "mark_center_from_state",
+    "mark_state_dict",
+    "mark_state_dict_for",
+    "note_state_dict",
+    "note_state_dict_for",
+    "orbital_state_dict",
+    "orbital_state_dict_for",
+    "ring_state_dict",
+    "ring_state_dict_for",
+    "scene_item_state",
+    "scene_item_state_for",
+    "ts_bracket_rect_from_state",
+    "ts_bracket_state_dict",
+    "ts_bracket_state_dict_for",
+]

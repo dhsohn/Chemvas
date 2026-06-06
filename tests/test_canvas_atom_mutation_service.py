@@ -7,10 +7,15 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from core.model import Atom, Bond
 from PyQt6.QtGui import QColor
-from ui.canvas_atom_mutation_service import (
-    CanvasAtomMutationService,
-    canvas_atom_mutation_service_for,
+from ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
+from ui.canvas_atom_graphics_state import (
+    atom_dots_for,
+    atom_items_for,
+    set_atom_dots_for,
+    set_atom_items_for,
 )
+from ui.canvas_atom_mutation_service import CanvasAtomMutationService
+from ui.canvas_graph_state import CanvasGraphState
 
 
 class _FakeModel:
@@ -34,43 +39,103 @@ class _FakeScene:
         self.removed_items.append(item)
 
 
+def _graph_service():
+    return SimpleNamespace(
+        ensure_atom_neighbors=mock.Mock(),
+        ensure_atom_bond_ids=mock.Mock(),
+    )
+
+
+def _hit_testing_service():
+    return SimpleNamespace(mark_spatial_index_dirty=mock.Mock())
+
+
+def _services(
+    *,
+    graph=None,
+    atom_label=None,
+    hit_testing=None,
+    mark_scene=None,
+    atom_mutation=None,
+):
+    return SimpleNamespace(
+        canvas_graph_service=graph,
+        atom_label_service=atom_label,
+        hit_testing_service=hit_testing,
+        canvas_mark_scene_service=mark_scene,
+        canvas_atom_mutation_service=atom_mutation,
+    )
+
+
+def _set_atom_graphics(canvas, items=None, dots=None) -> None:
+    set_atom_items_for(canvas, dict(items or {}))
+    set_atom_dots_for(canvas, dict(dots or {}))
+
+
+def _service_for(canvas) -> CanvasAtomMutationService:
+    return CanvasAtomMutationService(
+        canvas,
+        hit_testing_service=canvas.services.hit_testing_service,
+        graph_service=canvas.services.canvas_graph_service,
+    )
+
+
 class CanvasAtomMutationServiceTest(unittest.TestCase):
     def test_add_atom_registers_graph_state_and_implicit_carbon_dot(self) -> None:
         model = _FakeModel(next_atom_id=3)
+        graph = _graph_service()
+        atom_label = mock.Mock()
+        hit_testing = _hit_testing_service()
         canvas = SimpleNamespace(
+            services=_services(graph=graph, atom_label=atom_label, hit_testing=hit_testing),
             model=model,
-            _ensure_atom_neighbors=mock.Mock(),
-            _ensure_atom_bond_ids=mock.Mock(),
-            _ensure_carbon_dot=mock.Mock(),
-            _atom_label_service=mock.Mock(),
-            _mark_spatial_index_dirty=mock.Mock(),
         )
 
-        atom_id = CanvasAtomMutationService(canvas).add_atom("C", 1.0, 2.0)
+        atom_id = _service_for(canvas).add_atom("C", 1.0, 2.0)
 
         self.assertEqual(atom_id, 3)
         self.assertEqual(model.atoms[3].element, "C")
-        canvas._ensure_atom_neighbors.assert_called_once_with(3)
-        canvas._ensure_atom_bond_ids.assert_called_once_with(3)
-        canvas._ensure_carbon_dot.assert_called_once_with(3)
-        canvas._atom_label_service.add_or_update_atom_label.assert_not_called()
-        canvas._mark_spatial_index_dirty.assert_called_once_with()
+        graph.ensure_atom_neighbors.assert_called_once_with(3)
+        graph.ensure_atom_bond_ids.assert_called_once_with(3)
+        atom_label.ensure_carbon_dot.assert_called_once_with(3)
+        atom_label.add_or_update_atom_label.assert_not_called()
+        hit_testing.mark_spatial_index_dirty.assert_called_once_with()
 
-    def test_add_atom_uses_atom_label_service_for_non_carbon(self) -> None:
+    def test_add_atom_uses_injected_hit_testing_service_for_spatial_dirty_mark(self) -> None:
+        model = _FakeModel(next_atom_id=3)
+        graph = _graph_service()
+        atom_label = mock.Mock()
+        injected_hit_testing = _hit_testing_service()
+        registry_hit_testing = SimpleNamespace(
+            mark_spatial_index_dirty=mock.Mock(side_effect=AssertionError("registry service should not be used"))
+        )
         canvas = SimpleNamespace(
-            model=_FakeModel(),
-            _ensure_atom_neighbors=mock.Mock(),
-            _ensure_atom_bond_ids=mock.Mock(),
-            _ensure_carbon_dot=mock.Mock(),
-            _atom_label_service=mock.Mock(),
-            _mark_spatial_index_dirty=mock.Mock(),
+            services=_services(graph=graph, atom_label=atom_label, hit_testing=registry_hit_testing),
+            model=model,
         )
 
-        atom_id = CanvasAtomMutationService(canvas).add_atom("O", -1.5, 3.25)
+        atom_id = CanvasAtomMutationService(
+            canvas,
+            hit_testing_service=injected_hit_testing,
+            graph_service=graph,
+        ).add_atom("C", 1.0, 2.0)
+
+        self.assertEqual(atom_id, 3)
+        injected_hit_testing.mark_spatial_index_dirty.assert_called_once_with()
+        registry_hit_testing.mark_spatial_index_dirty.assert_not_called()
+
+    def test_add_atom_uses_atom_label_service_for_non_carbon(self) -> None:
+        atom_label = mock.Mock()
+        canvas = SimpleNamespace(
+            services=_services(graph=_graph_service(), atom_label=atom_label, hit_testing=_hit_testing_service()),
+            model=_FakeModel(),
+        )
+
+        atom_id = _service_for(canvas).add_atom("O", -1.5, 3.25)
 
         self.assertEqual(atom_id, 0)
-        canvas._ensure_carbon_dot.assert_not_called()
-        canvas._atom_label_service.add_or_update_atom_label.assert_called_once_with(
+        atom_label.ensure_carbon_dot.assert_not_called()
+        atom_label.add_or_update_atom_label.assert_called_once_with(
             0,
             "O",
             clear_smiles=False,
@@ -81,72 +146,69 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
         scene = _FakeScene()
         label_item = object()
         dot_item = object()
+        mark_scene = SimpleNamespace(remove_marks_for_atom=mock.Mock())
+        hit_testing = _hit_testing_service()
         canvas = SimpleNamespace(
-            atom_items={1: label_item},
-            atom_dots={1: dot_item},
+            services=_services(mark_scene=mark_scene, hit_testing=hit_testing),
             model=SimpleNamespace(
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 2.0, 0.0)},
                 bonds=[Bond(1, 2, 1)],
             ),
-            atom_coords_3d={1: (0.0, 0.0, 0.0)},
-            _atom_neighbors={1: {2}, 2: {1}},
-            _graph_version=4,
-            _selection_component_cache_signature="cached",
-            _atom_bond_ids={1: {0}, 2: {0}},
-            _remove_marks_for_atom=mock.Mock(),
-            _mark_spatial_index_dirty=mock.Mock(),
+            graph_state=CanvasGraphState(
+                atom_neighbors={1: {2}, 2: {1}},
+                graph_version=4,
+                selection_component_cache_signature="cached",
+                atom_bond_ids={1: {0}, 2: {0}},
+            ),
             scene=lambda: scene,
         )
+        set_atom_coords_3d_for(canvas, {1: (0.0, 0.0, 0.0)})
+        _set_atom_graphics(canvas, {1: label_item}, {1: dot_item})
 
-        CanvasAtomMutationService(canvas).remove_atom_only(1)
+        _service_for(canvas).remove_atom_only(1)
 
         self.assertEqual(scene.removed_items, [label_item, dot_item])
-        canvas._remove_marks_for_atom.assert_called_once_with(1)
+        mark_scene.remove_marks_for_atom.assert_called_once_with(1)
         self.assertNotIn(1, canvas.model.atoms)
-        self.assertNotIn(1, canvas.atom_coords_3d)
-        self.assertNotIn(1, canvas._atom_neighbors)
-        self.assertEqual(canvas._atom_neighbors[2], set())
-        self.assertEqual(canvas._graph_version, 5)
-        self.assertIsNone(canvas._selection_component_cache_signature)
-        self.assertEqual(canvas._atom_bond_ids[2], set())
-        canvas._mark_spatial_index_dirty.assert_called_once_with()
+        self.assertNotIn(1, atom_coords_3d_for(canvas))
+        self.assertNotIn(1, canvas.graph_state.atom_neighbors)
+        self.assertEqual(canvas.graph_state.atom_neighbors[2], set())
+        self.assertEqual(canvas.graph_state.graph_version, 5)
+        self.assertIsNone(canvas.graph_state.selection_component_cache_signature)
+        self.assertEqual(canvas.graph_state.atom_bond_ids[2], set())
+        hit_testing.mark_spatial_index_dirty.assert_called_once_with()
 
     def test_remove_atom_only_skips_mark_removal_when_requested(self) -> None:
+        mark_scene = SimpleNamespace(remove_marks_for_atom=mock.Mock())
+        hit_testing = _hit_testing_service()
         canvas = SimpleNamespace(
-            atom_items={},
-            atom_dots={},
+            services=_services(mark_scene=mark_scene, hit_testing=hit_testing),
             model=SimpleNamespace(atoms={}, bonds=[]),
             atom_coords_3d={},
-            _atom_neighbors={},
-            _graph_version=0,
-            _selection_component_cache_signature=None,
-            _atom_bond_ids={},
-            _remove_marks_for_atom=mock.Mock(),
-            _mark_spatial_index_dirty=mock.Mock(),
+            graph_state=CanvasGraphState(),
             scene=lambda: _FakeScene(),
         )
+        _set_atom_graphics(canvas)
 
-        CanvasAtomMutationService(canvas).remove_atom_only(3, remove_marks=False)
+        _service_for(canvas).remove_atom_only(3, remove_marks=False)
 
-        canvas._remove_marks_for_atom.assert_not_called()
-        canvas._mark_spatial_index_dirty.assert_called_once_with()
+        mark_scene.remove_marks_for_atom.assert_not_called()
+        hit_testing.mark_spatial_index_dirty.assert_called_once_with()
 
     def test_restore_atom_from_state_replaces_visuals_and_advances_next_atom_id(self) -> None:
         scene = _FakeScene()
         old_label = object()
         old_dot = object()
+        graph = _graph_service()
+        atom_label = mock.Mock()
+        hit_testing = _hit_testing_service()
         canvas = SimpleNamespace(
+            services=_services(graph=graph, atom_label=atom_label, hit_testing=hit_testing),
             model=_FakeModel(next_atom_id=1),
-            atom_items={4: old_label},
-            atom_dots={4: old_dot},
             scene=lambda: scene,
-            _ensure_atom_neighbors=mock.Mock(),
-            _ensure_atom_bond_ids=mock.Mock(),
-            _atom_label_service=mock.Mock(),
-            _ensure_carbon_dot=mock.Mock(),
-            _mark_spatial_index_dirty=mock.Mock(),
         )
-        service = CanvasAtomMutationService(canvas)
+        _set_atom_graphics(canvas, {4: old_label}, {4: old_dot})
+        service = _service_for(canvas)
         service.apply_atom_color = mock.Mock()
 
         service.restore_atom_from_state(
@@ -156,9 +218,9 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
 
         self.assertEqual(scene.removed_items, [old_label, old_dot])
         self.assertEqual(canvas.model.next_atom_id, 5)
-        canvas._ensure_atom_neighbors.assert_called_once_with(4)
-        canvas._ensure_atom_bond_ids.assert_called_once_with(4)
-        canvas._atom_label_service.add_or_update_atom_label.assert_called_once_with(
+        graph.ensure_atom_neighbors.assert_called_once_with(4)
+        graph.ensure_atom_bond_ids.assert_called_once_with(4)
+        atom_label.add_or_update_atom_label.assert_called_once_with(
             4,
             "C",
             clear_smiles=False,
@@ -166,141 +228,119 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
             allow_merge=False,
             show_carbon=True,
         )
-        canvas._ensure_carbon_dot.assert_not_called()
+        atom_label.ensure_carbon_dot.assert_not_called()
         service.apply_atom_color.assert_called_once_with(4, "#00ff00")
-        canvas._mark_spatial_index_dirty.assert_called_once_with()
+        hit_testing.mark_spatial_index_dirty.assert_called_once_with()
 
     def test_restore_atom_from_state_uses_implicit_carbon_dot_when_label_is_not_explicit(self) -> None:
+        atom_label = mock.Mock()
         canvas = SimpleNamespace(
+            services=_services(graph=_graph_service(), atom_label=atom_label, hit_testing=_hit_testing_service()),
             model=_FakeModel(next_atom_id=0),
-            atom_items={},
-            atom_dots={},
             scene=lambda: _FakeScene(),
-            _ensure_atom_neighbors=mock.Mock(),
-            _ensure_atom_bond_ids=mock.Mock(),
-            _atom_label_service=mock.Mock(),
-            _ensure_carbon_dot=mock.Mock(),
-            _mark_spatial_index_dirty=mock.Mock(),
         )
+        _set_atom_graphics(canvas)
 
-        CanvasAtomMutationService(canvas).restore_atom_from_state(
+        _service_for(canvas).restore_atom_from_state(
             2,
             {"element": "C", "x": 0.0, "y": 0.0, "color": "#000000", "explicit_label": False},
         )
 
-        canvas._ensure_carbon_dot.assert_called_once_with(2)
-        canvas._atom_label_service.add_or_update_atom_label.assert_not_called()
+        atom_label.ensure_carbon_dot.assert_called_once_with(2)
+        atom_label.add_or_update_atom_label.assert_not_called()
 
     def test_apply_atom_color_updates_model_and_visible_items_for_valid_color(self) -> None:
+        atom_label = SimpleNamespace(implicit_carbon_dot_brush=mock.Mock(return_value="brush"))
         canvas = SimpleNamespace(
+            services=_services(atom_label=atom_label),
             model=SimpleNamespace(atoms={7: Atom("O", 0.0, 0.0, color="#101010")}),
-            atom_items={7: mock.Mock()},
-            atom_dots={7: mock.Mock()},
-            _implicit_carbon_dot_brush=mock.Mock(return_value="brush"),
         )
+        _set_atom_graphics(canvas, {7: mock.Mock()}, {7: mock.Mock()})
 
-        CanvasAtomMutationService(canvas).apply_atom_color(7, QColor("#aabbcc"))
+        _service_for(canvas).apply_atom_color(7, QColor("#aabbcc"))
 
         self.assertEqual(canvas.model.atoms[7].color, "#aabbcc")
-        canvas.atom_items[7].setDefaultTextColor.assert_called_once()
-        canvas.atom_dots[7].setBrush.assert_called_once_with("brush")
+        atom_items_for(canvas)[7].setDefaultTextColor.assert_called_once()
+        atom_dots_for(canvas)[7].setBrush.assert_called_once_with("brush")
 
     def test_apply_atom_color_ignores_invalid_color_and_missing_atom(self) -> None:
+        atom_label = SimpleNamespace(implicit_carbon_dot_brush=mock.Mock(return_value="brush"))
         canvas = SimpleNamespace(
+            services=_services(atom_label=atom_label),
             model=SimpleNamespace(atoms={7: Atom("O", 0.0, 0.0, color="#101010")}),
-            atom_items={7: mock.Mock()},
-            atom_dots={7: mock.Mock()},
-            _implicit_carbon_dot_brush=mock.Mock(return_value="brush"),
         )
+        _set_atom_graphics(canvas, {7: mock.Mock()}, {7: mock.Mock()})
 
-        service = CanvasAtomMutationService(canvas)
+        service = _service_for(canvas)
         service.apply_atom_color(7, "not-a-color")
         service.apply_atom_color(99, "#ffffff")
 
         self.assertEqual(canvas.model.atoms[7].color, "#101010")
-        canvas.atom_items[7].setDefaultTextColor.assert_not_called()
-        canvas.atom_dots[7].setBrush.assert_not_called()
+        atom_items_for(canvas)[7].setDefaultTextColor.assert_not_called()
+        atom_dots_for(canvas)[7].setBrush.assert_not_called()
 
     def test_remove_atom_only_tolerates_sparse_neighbor_and_bond_indexes(self) -> None:
+        hit_testing = _hit_testing_service()
         canvas = SimpleNamespace(
-            atom_items={},
-            atom_dots={},
+            services=_services(
+                mark_scene=SimpleNamespace(remove_marks_for_atom=mock.Mock()),
+                hit_testing=hit_testing,
+            ),
             model=SimpleNamespace(
                 atoms={1: Atom("C", 0.0, 0.0)},
                 bonds=[None, Bond(1, 9, 1)],
             ),
             atom_coords_3d={},
-            _atom_neighbors={1: {2, 3}, 2: {1}},
-            _graph_version=7,
-            _selection_component_cache_signature="cached",
-            _atom_bond_ids={1: {0, 1, 8}, 2: set()},
-            _remove_marks_for_atom=mock.Mock(),
-            _mark_spatial_index_dirty=mock.Mock(),
+            graph_state=CanvasGraphState(
+                atom_neighbors={1: {2, 3}, 2: {1}},
+                graph_version=7,
+                selection_component_cache_signature="cached",
+                atom_bond_ids={1: {0, 1, 8}, 2: set()},
+            ),
             scene=lambda: _FakeScene(),
         )
+        _set_atom_graphics(canvas)
 
-        CanvasAtomMutationService(canvas).remove_atom_only(1)
+        _service_for(canvas).remove_atom_only(1)
 
-        self.assertEqual(canvas._atom_neighbors[2], set())
-        self.assertEqual(canvas._graph_version, 8)
-        self.assertIsNone(canvas._selection_component_cache_signature)
-        canvas._mark_spatial_index_dirty.assert_called_once_with()
+        self.assertEqual(canvas.graph_state.atom_neighbors[2], set())
+        self.assertEqual(canvas.graph_state.graph_version, 8)
+        self.assertIsNone(canvas.graph_state.selection_component_cache_signature)
+        hit_testing.mark_spatial_index_dirty.assert_called_once_with()
 
     def test_restore_atom_from_state_skips_empty_input_and_labels_noncarbon_atoms(self) -> None:
+        graph = _graph_service()
+        atom_label = mock.Mock()
         canvas = SimpleNamespace(
+            services=_services(graph=graph, atom_label=atom_label, hit_testing=_hit_testing_service()),
             model=_FakeModel(next_atom_id=10),
-            atom_items={},
-            atom_dots={},
             scene=lambda: _FakeScene(),
-            _ensure_atom_neighbors=mock.Mock(),
-            _ensure_atom_bond_ids=mock.Mock(),
-            _atom_label_service=mock.Mock(),
-            _ensure_carbon_dot=mock.Mock(),
-            _mark_spatial_index_dirty=mock.Mock(),
         )
-        service = CanvasAtomMutationService(canvas)
+        _set_atom_graphics(canvas)
+        service = _service_for(canvas)
         service.apply_atom_color = mock.Mock()
 
         service.restore_atom_from_state(5, {})
-        canvas._ensure_atom_neighbors.assert_not_called()
-        canvas._atom_label_service.add_or_update_atom_label.assert_not_called()
+        graph.ensure_atom_neighbors.assert_not_called()
+        atom_label.add_or_update_atom_label.assert_not_called()
 
         service.restore_atom_from_state(
             5,
             {"element": "O", "x": 1.0, "y": 2.0, "color": "#123456", "explicit_label": False},
         )
 
-        canvas._ensure_atom_neighbors.assert_called_once_with(5)
-        canvas._ensure_atom_bond_ids.assert_called_once_with(5)
-        canvas._atom_label_service.add_or_update_atom_label.assert_called_once_with(
+        graph.ensure_atom_neighbors.assert_called_once_with(5)
+        graph.ensure_atom_bond_ids.assert_called_once_with(5)
+        atom_label.add_or_update_atom_label.assert_called_once_with(
             5,
             "O",
             clear_smiles=False,
             record=False,
             allow_merge=False,
         )
-        canvas._ensure_carbon_dot.assert_not_called()
+        atom_label.ensure_carbon_dot.assert_not_called()
         service.apply_atom_color.assert_called_once_with(5, "#123456")
         self.assertEqual(canvas.model.next_atom_id, 10)
-
-    def test_service_factory_returns_bound_service(self) -> None:
-        canvas = SimpleNamespace()
-        real_service = CanvasAtomMutationService(canvas)
-        canvas._canvas_atom_mutation_service = real_service
-        self.assertIs(canvas_atom_mutation_service_for(canvas), real_service)
-
-        duck_service = SimpleNamespace(
-            add_atom=mock.Mock(),
-            remove_atom_only=mock.Mock(),
-            restore_atom_from_state=mock.Mock(),
-            apply_atom_color=mock.Mock(),
-        )
-        canvas._canvas_atom_mutation_service = duck_service
-        self.assertIs(canvas_atom_mutation_service_for(canvas), duck_service)
-
-        placeholder = object()
-        canvas._canvas_atom_mutation_service = placeholder
-        self.assertIs(canvas_atom_mutation_service_for(canvas), placeholder)
 
 
 if __name__ == "__main__":

@@ -20,13 +20,10 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from core.model import Atom
-    from ui.canvas_ring_fill_scene_service import (
-        CanvasRingFillSceneService,
-        canvas_ring_fill_scene_service_for,
-    )
+    from ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
+    from ui.canvas_scene_items_state import set_scene_item_collection_for
 else:
     CanvasRingFillSceneService = None
-    canvas_ring_fill_scene_service_for = None
 
 
 class _FakeRingItem:
@@ -76,8 +73,8 @@ class CanvasRingFillSceneServiceTest(unittest.TestCase):
                     6: Atom("O", 9.5, 10.0),
                 }
             ),
-            ring_items=[matching_ring, non_matching_ring, invalid_ring],
         )
+        set_scene_item_collection_for(canvas, "ring_items", [matching_ring, non_matching_ring, invalid_ring])
 
         service = CanvasRingFillSceneService(canvas)
         service.update_ring_fills_for_atoms({1, 2, 3})
@@ -100,8 +97,8 @@ class CanvasRingFillSceneServiceTest(unittest.TestCase):
                     2: Atom("C", 2.0, 0.0),
                 }
             ),
-            ring_items=[short_ring],
         )
+        set_scene_item_collection_for(canvas, "ring_items", [short_ring])
 
         CanvasRingFillSceneService(canvas).update_ring_fills_for_atoms({1, 2, 99})
 
@@ -111,9 +108,9 @@ class CanvasRingFillSceneServiceTest(unittest.TestCase):
         ring_item = _FakeRingItem([1, 2, 3], [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)])
         canvas = SimpleNamespace(
             model=SimpleNamespace(atoms={99: Atom("C", 9.0, 9.0)}),
-            ring_items=[ring_item],
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=12.0)),
         )
+        set_scene_item_collection_for(canvas, "ring_items", [ring_item])
 
         service = CanvasRingFillSceneService(canvas)
         service.rotate_ring_fills({1, 2}, QPointF(0.0, 0.0), math.pi / 2.0)
@@ -136,9 +133,9 @@ class CanvasRingFillSceneServiceTest(unittest.TestCase):
                     6: Atom("O", 9.5, 10.0),
                 }
             ),
-            ring_items=[matching_ring, short_ring, non_matching_ring],
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=12.0)),
         )
+        set_scene_item_collection_for(canvas, "ring_items", [matching_ring, short_ring, non_matching_ring])
 
         CanvasRingFillSceneService(canvas).rotate_ring_fills({1, 2, 3}, QPointF(0.0, 0.0), math.pi / 2.0)
 
@@ -160,9 +157,9 @@ class CanvasRingFillSceneServiceTest(unittest.TestCase):
                     3: Atom("C", 0.0, 2.0),
                 }
             ),
-            ring_items=[matching_ring, skipped_ring],
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=8.0)),
         )
+        set_scene_item_collection_for(canvas, "ring_items", [matching_ring, skipped_ring])
 
         CanvasRingFillSceneService(canvas).rotate_ring_fills({1, 2, 3}, QPointF(1.0, 1.0), math.pi / 2.0)
 
@@ -183,9 +180,9 @@ class CanvasRingFillSceneServiceTest(unittest.TestCase):
                     3: Atom("C", 0.0, 2.0),
                 }
             ),
-            ring_items=[matching_ring, skipped_ring],
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=8.0)),
         )
+        set_scene_item_collection_for(canvas, "ring_items", [matching_ring, skipped_ring])
 
         CanvasRingFillSceneService(canvas).rotate_ring_fills_3d(
             {1, 2, 3},
@@ -212,9 +209,9 @@ class CanvasRingFillSceneServiceTest(unittest.TestCase):
                     9: Atom("O", 9.0, 10.0),
                 }
             ),
-            ring_items=[short_ring, skipped_ring],
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=8.0)),
         )
+        set_scene_item_collection_for(canvas, "ring_items", [short_ring, skipped_ring])
 
         CanvasRingFillSceneService(canvas).rotate_ring_fills_3d(
             {1, 2, 99},
@@ -243,26 +240,7 @@ class CanvasRingFillSceneServiceTest(unittest.TestCase):
         self.assertEqual(item.data(2), [1, 2, 3])
         self.assertEqual(item.pen().style(), Qt.PenStyle.NoPen)
         self.assertEqual(item.brush().color().name(), brush.color().name())
-        canvas._make_selectable.assert_called_once_with(item)
-
-    def test_service_resolver_returns_bound_service(self) -> None:
-        canvas = SimpleNamespace()
-        bound = CanvasRingFillSceneService(canvas)
-        canvas._canvas_ring_fill_scene_service = bound
-        self.assertIs(canvas_ring_fill_scene_service_for(canvas), bound)
-
-        injected = SimpleNamespace(
-            update_ring_fills_for_atoms=mock.Mock(),
-            rotate_ring_fills_3d=mock.Mock(),
-            rotate_ring_fills=mock.Mock(),
-            create_ring_fill_item=mock.Mock(),
-        )
-        other_canvas = SimpleNamespace(_canvas_ring_fill_scene_service=injected)
-        self.assertIs(canvas_ring_fill_scene_service_for(other_canvas), injected)
-
-        placeholder = object()
-        fresh_canvas = SimpleNamespace(_canvas_ring_fill_scene_service=placeholder)
-        self.assertIs(canvas_ring_fill_scene_service_for(fresh_canvas), placeholder)
+        self.assertTrue(item.flags() & item.GraphicsItemFlag.ItemIsSelectable)
 
 
 if __name__ == "__main__":

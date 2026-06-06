@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
     from PyQt6.QtCore import QEvent, Qt
-    from PyQt6.QtGui import QKeySequence
+    from PyQt6.QtGui import QKeySequence, QTransform
     from PyQt6.QtWidgets import (
         QApplication,
         QGraphicsItem,
@@ -20,7 +20,11 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
+    from core.model import Atom
+    from ui.canvas_hover_state import set_hover_atom_id_for, set_hover_bond_id_for
     from ui.canvas_input_controller import CanvasInputController
+    from ui.canvas_insert_state import CanvasInsertState
+    from ui.input_view_state import input_view_state_for
 
 
 class _Scene(QGraphicsScene):
@@ -76,30 +80,62 @@ class _Canvas(QGraphicsView):
     def __init__(self) -> None:
         self.scene_obj = _Scene()
         super().__init__(self.scene_obj)
-        self._refresh_hover_from_cursor = mock.Mock()
-        self._template_insert_active = False
-        self._smiles_insert_active = False
-        self._cancel_template_insert = mock.Mock()
-        self._cancel_smiles_insert = mock.Mock()
-        self.undo = mock.Mock()
-        self.redo = mock.Mock()
-        self.copy_selection_to_clipboard = mock.Mock(return_value=False)
-        self.paste_selection_from_clipboard = mock.Mock(return_value=False)
-        self.delete_selected_items = mock.Mock()
-        self.hover_atom_id = None
-        self.hover_bond_id = None
-        self._atom_has_visible_label = mock.Mock(return_value=False)
-        self.clear_atom_label = mock.Mock()
-        self.delete_atom = mock.Mock()
-        self._clear_hover_highlight = mock.Mock()
-        self.delete_bond = mock.Mock()
+        self.insert_state = CanvasInsertState()
+        self.insert_state.template_active = False
+        self.insert_state.smiles_active = False
+        insert_controller = SimpleNamespace(
+            cancel_template_insert=mock.Mock(),
+            cancel_smiles_insert=mock.Mock(),
+        )
+        self.history_service = SimpleNamespace(
+            undo=mock.Mock(),
+            redo=mock.Mock(),
+        )
+        scene_clipboard_controller = SimpleNamespace(
+            copy_selection_to_clipboard=mock.Mock(return_value=False),
+            paste_selection_from_clipboard=mock.Mock(return_value=False),
+        )
+        scene_delete_controller = SimpleNamespace(
+            delete_selected_items=mock.Mock(),
+            delete_atom=mock.Mock(),
+            delete_bond=mock.Mock(),
+            delete_ring=mock.Mock(),
+        )
+        atom_label_service = SimpleNamespace(add_or_update_atom_label=mock.Mock())
+        hover_scene_service = SimpleNamespace(clear_hover_highlight=mock.Mock())
+        self.chemdraw_shortcut_service = SimpleNamespace(handle_shortcut=mock.Mock(return_value=False))
+        self.services = SimpleNamespace(
+            history_service=self.history_service,
+            insert_controller=insert_controller,
+            scene_clipboard_controller=scene_clipboard_controller,
+            scene_delete_controller=scene_delete_controller,
+            atom_label_service=atom_label_service,
+            hover_scene_service=hover_scene_service,
+            chemdraw_shortcut_service=self.chemdraw_shortcut_service,
+        )
+        self.hover_refresh = mock.Mock()
+        self.undo = mock.Mock(side_effect=AssertionError("canvas undo wrapper should not run"))
+        self.redo = mock.Mock(side_effect=AssertionError("canvas redo wrapper should not run"))
+        self.copy_selection_to_clipboard = mock.Mock(
+            side_effect=AssertionError("canvas copy wrapper should not run")
+        )
+        self.paste_selection_from_clipboard = mock.Mock(
+            side_effect=AssertionError("canvas paste wrapper should not run")
+        )
+        self.delete_selected_items = mock.Mock(side_effect=AssertionError("canvas delete wrapper should not run"))
+        self.clear_atom_label = mock.Mock(side_effect=AssertionError("canvas label wrapper should not run"))
+        self.delete_atom = mock.Mock(side_effect=AssertionError("canvas atom delete wrapper should not run"))
+        self.delete_bond = mock.Mock(side_effect=AssertionError("canvas bond delete wrapper should not run"))
         self._ring_for_bond = mock.Mock(return_value=None)
         self.delete_ring = mock.Mock()
-        self._handle_chemdraw_shortcut = mock.Mock(return_value=False)
         self._shortcut_modifiers = CanvasInputController.shortcut_modifiers
-        self._should_override_chemdraw_shortcut = mock.Mock(return_value=False)
-        self._reset_view_transform = mock.Mock()
-        self.model = SimpleNamespace(bonds=[object(), object()])
+        self.model = SimpleNamespace(
+            atoms={
+                7: Atom("C", 0.0, 0.0),
+                8: Atom("O", 1.0, 0.0),
+            },
+            bonds=[object(), object()],
+        )
 
     def add_selected_item(self):
         item = QGraphicsRectItem(0.0, 0.0, 4.0, 4.0)
@@ -107,6 +143,17 @@ class _Canvas(QGraphicsView):
         self.scene_obj.addItem(item)
         item.setSelected(True)
         return item
+
+
+def _input_controller(canvas: _Canvas) -> CanvasInputController:
+    return CanvasInputController(
+        canvas,
+        scene_delete_controller=canvas.services.scene_delete_controller,
+        scene_clipboard_controller=canvas.services.scene_clipboard_controller,
+        history_service=canvas.services.history_service,
+        hover_refresh=canvas.hover_refresh,
+        chemdraw_shortcut_service=canvas.chemdraw_shortcut_service,
+    )
 
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas input controller tests")
@@ -118,7 +165,7 @@ class CanvasInputControllerTest(unittest.TestCase):
 
     def test_key_press_event_covers_text_editor_escape_and_standard_shortcuts(self) -> None:
         canvas = _Canvas()
-        controller = CanvasInputController(canvas)
+        controller = _input_controller(canvas)
 
         focus_item = QGraphicsTextItem()
         focus_item.setTextInteractionFlags(Qt.TextInteractionFlag.TextEditorInteraction)
@@ -128,40 +175,44 @@ class CanvasInputControllerTest(unittest.TestCase):
         base_key_press.assert_called_once()
 
         canvas = _Canvas()
-        controller = CanvasInputController(canvas)
+        controller = _input_controller(canvas)
         canvas.scene_obj.focus_item_override = QGraphicsTextItem()
-        canvas._template_insert_active = True
+        canvas.insert_state.template_active = True
         template_event = _FakeEvent(key=Qt.Key.Key_Escape)
         controller.key_press_event(template_event)
-        canvas._cancel_template_insert.assert_called_once_with()
+        canvas.services.insert_controller.cancel_template_insert.assert_called_once_with()
         template_event.accept.assert_called_once_with()
 
         canvas = _Canvas()
-        controller = CanvasInputController(canvas)
-        canvas._smiles_insert_active = True
+        controller = _input_controller(canvas)
+        canvas.insert_state.smiles_active = True
         smiles_event = _FakeEvent(key=Qt.Key.Key_Escape)
         controller.key_press_event(smiles_event)
-        canvas._cancel_smiles_insert.assert_called_once_with()
+        canvas.services.insert_controller.cancel_smiles_insert.assert_called_once_with()
         smiles_event.accept.assert_called_once_with()
 
         canvas = _Canvas()
-        controller = CanvasInputController(canvas)
+        controller = _input_controller(canvas)
         undo_event = _FakeEvent(key=Qt.Key.Key_Z, matches={QKeySequence.StandardKey.Undo})
         redo_event = _FakeEvent(key=Qt.Key.Key_Y, matches={QKeySequence.StandardKey.Redo})
         copy_event = _FakeEvent(key=Qt.Key.Key_C, matches={QKeySequence.StandardKey.Copy})
         paste_event = _FakeEvent(key=Qt.Key.Key_V, matches={QKeySequence.StandardKey.Paste})
-        canvas.copy_selection_to_clipboard.return_value = True
-        canvas.paste_selection_from_clipboard.return_value = True
+        canvas.services.scene_clipboard_controller.copy_selection_to_clipboard.return_value = True
+        canvas.services.scene_clipboard_controller.paste_selection_from_clipboard.return_value = True
 
         controller.key_press_event(undo_event)
         controller.key_press_event(redo_event)
         controller.key_press_event(copy_event)
         controller.key_press_event(paste_event)
 
-        canvas.undo.assert_called_once_with()
-        canvas.redo.assert_called_once_with()
-        canvas.copy_selection_to_clipboard.assert_called_once_with()
-        canvas.paste_selection_from_clipboard.assert_called_once_with()
+        canvas.history_service.undo.assert_called_once_with()
+        canvas.history_service.redo.assert_called_once_with()
+        canvas.services.scene_clipboard_controller.copy_selection_to_clipboard.assert_called_once_with()
+        canvas.services.scene_clipboard_controller.paste_selection_from_clipboard.assert_called_once_with()
+        canvas.undo.assert_not_called()
+        canvas.redo.assert_not_called()
+        canvas.copy_selection_to_clipboard.assert_not_called()
+        canvas.paste_selection_from_clipboard.assert_not_called()
         undo_event.accept.assert_called_once_with()
         redo_event.accept.assert_called_once_with()
         copy_event.accept.assert_called_once_with()
@@ -169,7 +220,7 @@ class CanvasInputControllerTest(unittest.TestCase):
 
     def test_key_press_event_escape_copy_and_paste_false_paths_fall_through(self) -> None:
         canvas = _Canvas()
-        controller = CanvasInputController(canvas)
+        controller = _input_controller(canvas)
 
         escape_event = _FakeEvent(key=Qt.Key.Key_Escape)
         copy_event = _FakeEvent(key=Qt.Key.Key_C, matches={QKeySequence.StandardKey.Copy})
@@ -187,52 +238,64 @@ class CanvasInputControllerTest(unittest.TestCase):
 
     def test_key_press_event_covers_delete_chemdraw_and_fallback_paths(self) -> None:
         canvas = _Canvas()
-        controller = CanvasInputController(canvas)
+        controller = _input_controller(canvas)
         canvas.add_selected_item()
         selected_delete_event = _FakeEvent(key=Qt.Key.Key_Delete)
         controller.key_press_event(selected_delete_event)
-        canvas.delete_selected_items.assert_called_once_with()
+        canvas.services.scene_delete_controller.delete_selected_items.assert_called_once_with()
+        canvas.delete_selected_items.assert_not_called()
         selected_delete_event.accept.assert_called_once_with()
 
         canvas = _Canvas()
-        controller = CanvasInputController(canvas)
-        canvas.hover_atom_id = 7
-        canvas._atom_has_visible_label.return_value = False
+        controller = _input_controller(canvas)
+        set_hover_atom_id_for(canvas, 7)
         atom_delete_event = _FakeEvent(key=Qt.Key.Key_Delete)
         controller.key_press_event(atom_delete_event)
-        canvas._clear_hover_highlight.assert_called_once_with()
-        canvas.delete_atom.assert_called_once_with(7, record=True)
+        canvas.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
+        canvas.services.scene_delete_controller.delete_atom.assert_called_once_with(7, record=True)
+        canvas.delete_atom.assert_not_called()
         atom_delete_event.accept.assert_called_once_with()
 
         canvas = _Canvas()
-        controller = CanvasInputController(canvas)
-        canvas.hover_bond_id = 1
+        controller = _input_controller(canvas)
+        set_hover_atom_id_for(canvas, 8)
+        label_clear_event = _FakeEvent(key=Qt.Key.Key_Backspace)
+        controller.key_press_event(label_clear_event)
+        canvas.services.atom_label_service.add_or_update_atom_label.assert_called_once_with(8, "C", show_carbon=False)
+        canvas.clear_atom_label.assert_not_called()
+        canvas.services.scene_delete_controller.delete_atom.assert_not_called()
+        label_clear_event.accept.assert_called_once_with()
+
+        canvas = _Canvas()
+        controller = _input_controller(canvas)
+        set_hover_bond_id_for(canvas, 1)
         def clear_hover() -> None:
-            canvas.hover_bond_id = None
-        canvas._clear_hover_highlight.side_effect = clear_hover
+            set_hover_bond_id_for(canvas, None)
+        canvas.services.hover_scene_service.clear_hover_highlight.side_effect = clear_hover
         bond_delete_event = _FakeEvent(key=Qt.Key.Key_Delete)
         controller.key_press_event(bond_delete_event)
-        canvas._clear_hover_highlight.assert_called_once_with()
-        canvas.delete_bond.assert_called_once_with(1, record=True)
+        canvas.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
+        canvas.services.scene_delete_controller.delete_bond.assert_called_once_with(1, record=True)
+        canvas.delete_bond.assert_not_called()
         bond_delete_event.accept.assert_called_once_with()
 
         canvas = _Canvas()
-        controller = CanvasInputController(canvas)
+        controller = _input_controller(canvas)
         noop_delete_event = _FakeEvent(key=Qt.Key.Key_Delete)
         controller.key_press_event(noop_delete_event)
         noop_delete_event.accept.assert_called_once_with()
-        canvas.delete_ring.assert_not_called()
+        canvas.services.scene_delete_controller.delete_ring.assert_not_called()
 
         canvas = _Canvas()
-        controller = CanvasInputController(canvas)
-        canvas._handle_chemdraw_shortcut.return_value = True
+        canvas.chemdraw_shortcut_service.handle_shortcut.return_value = True
+        controller = _input_controller(canvas)
         shortcut_event = _FakeEvent(key=Qt.Key.Key_A)
         controller.key_press_event(shortcut_event)
-        canvas._handle_chemdraw_shortcut.assert_called_once_with(shortcut_event)
+        canvas.chemdraw_shortcut_service.handle_shortcut.assert_called_once_with(shortcut_event)
         shortcut_event.accept.assert_called_once_with()
 
         canvas = _Canvas()
-        controller = CanvasInputController(canvas)
+        controller = _input_controller(canvas)
         fallback_event = _FakeEvent(key=Qt.Key.Key_A)
         with mock.patch.object(QGraphicsView, "keyPressEvent", new=mock.Mock(return_value=None)) as base_key_press:
             controller.key_press_event(fallback_event)
@@ -240,21 +303,18 @@ class CanvasInputControllerTest(unittest.TestCase):
 
     def test_shortcut_override_and_event_paths_cover_service_and_native_gesture(self) -> None:
         canvas = _Canvas()
-        controller = CanvasInputController(canvas)
+        canvas.chemdraw_shortcut_service.handle_shortcut.return_value = True
+        controller = _input_controller(canvas)
 
-        with mock.patch(
-            "ui.canvas_input_controller.canvas_chemdraw_shortcut_service_for",
-            return_value=SimpleNamespace(handle_shortcut=mock.Mock(return_value=True)),
-        ) as service_for:
-            event = _FakeEvent(key=Qt.Key.Key_A)
-            self.assertTrue(controller.handle_chemdraw_shortcut(event))
-        service_for.assert_called_once_with(canvas)
+        event = _FakeEvent(key=Qt.Key.Key_A)
+        self.assertTrue(controller.handle_chemdraw_shortcut(event))
+        canvas.chemdraw_shortcut_service.handle_shortcut.assert_called_once_with(event)
 
         atom_event = _FakeEvent(
             key=Qt.Key.Key_Return,
             modifiers=Qt.KeyboardModifier.NoModifier,
         )
-        canvas.hover_atom_id = 3
+        set_hover_atom_id_for(canvas, 3)
         self.assertTrue(controller.should_override_chemdraw_shortcut(atom_event))
 
         bond_event = _FakeEvent(
@@ -262,8 +322,8 @@ class CanvasInputControllerTest(unittest.TestCase):
             text="b",
             modifiers=Qt.KeyboardModifier.ShiftModifier,
         )
-        canvas.hover_atom_id = None
-        canvas.hover_bond_id = 5
+        set_hover_atom_id_for(canvas, None)
+        set_hover_bond_id_for(canvas, 5)
         self.assertTrue(controller.should_override_chemdraw_shortcut(bond_event))
 
         reject_event = _FakeEvent(
@@ -271,16 +331,20 @@ class CanvasInputControllerTest(unittest.TestCase):
             text="c",
             modifiers=Qt.KeyboardModifier.ControlModifier,
         )
-        canvas.hover_bond_id = None
+        set_hover_bond_id_for(canvas, None)
         self.assertFalse(controller.should_override_chemdraw_shortcut(reject_event))
+        self.assertEqual(canvas.hover_refresh.call_count, 3)
 
         canvas = _Canvas()
-        controller = CanvasInputController(canvas)
-        canvas._should_override_chemdraw_shortcut = mock.Mock(return_value=True)
-        shortcut_override_event = _FakeEvent(event_type=QEvent.Type.ShortcutOverride)
+        controller = _input_controller(canvas)
+        set_hover_atom_id_for(canvas, 3)
+        shortcut_override_event = _FakeEvent(
+            event_type=QEvent.Type.ShortcutOverride,
+            key=Qt.Key.Key_Return,
+        )
         with mock.patch.object(QGraphicsView, "event", new=mock.Mock(return_value=False)) as base_event:
             self.assertTrue(controller.event(shortcut_override_event))
-        canvas._should_override_chemdraw_shortcut.assert_called_once_with(shortcut_override_event)
+        canvas.hover_refresh.assert_called_once_with()
         shortcut_override_event.accept.assert_called_once_with()
         base_event.assert_not_called()
 
@@ -288,19 +352,22 @@ class CanvasInputControllerTest(unittest.TestCase):
             pass
 
         canvas = _Canvas()
-        controller = CanvasInputController(canvas)
+        controller = _input_controller(canvas)
+        input_view_state_for(canvas).base_transform = QTransform().translate(3.0, 4.0)
+        canvas.setTransform(QTransform().scale(2.0, 2.0))
         native_event = _FakeNativeGestureEvent(
             event_type=QEvent.Type.NativeGesture,
             gesture_type=Qt.NativeGestureType.ZoomNativeGesture,
         )
         with mock.patch.object(QGraphicsView, "event", new=mock.Mock(return_value=False)) as base_event:
             self.assertTrue(controller.event(native_event, native_gesture_event_type=_FakeNativeGestureEvent))
-        canvas._reset_view_transform.assert_called_once_with()
+        self.assertTrue(input_view_state_for(canvas).base_transform.isIdentity())
+        self.assertTrue(canvas.transform().isIdentity())
         native_event.accept.assert_called_once_with()
         base_event.assert_not_called()
 
         canvas = _Canvas()
-        controller = CanvasInputController(canvas)
+        controller = _input_controller(canvas)
         fallback_event = _FakeNativeGestureEvent(
             event_type=QEvent.Type.NativeGesture,
             gesture_type=object(),

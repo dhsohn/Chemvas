@@ -6,13 +6,10 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtGui import QAction, QIcon
+    from PyQt6.QtGui import QIcon
     from PyQt6.QtWidgets import (
         QApplication,
-        QDockWidget,
-        QLineEdit,
         QMenu,
-        QSplitter,
         QToolBar,
         QToolButton,
     )
@@ -21,22 +18,14 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     try:
+        from ui.canvas_tool_settings_state import tool_settings_state_for
         from ui.main_window import MainWindow
-        from ui.main_window_ui_assembly_service import (
-            CornerMenuButton,
-            MainWindowPanelAssembly,
-            MainWindowToolbarAssembly,
-        )
+        from ui.main_window_canvas_ports import active_canvas_for_window
+        from ui.main_window_service_ports import services_for_window
     except SyntaxError:
         MainWindow = None
-        CornerMenuButton = None
-        MainWindowPanelAssembly = None
-        MainWindowToolbarAssembly = None
 else:
     MainWindow = None
-    CornerMenuButton = None
-    MainWindowPanelAssembly = None
-    MainWindowToolbarAssembly = None
 
 
 class _FakeItem:
@@ -66,9 +55,132 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         self.window.close()
         self.app.processEvents()
 
+    def _dark_pixel_count(
+        self,
+        icon: QIcon,
+        *,
+        center_only: bool = False,
+        mode: QIcon.Mode = QIcon.Mode.Normal,
+        state: QIcon.State = QIcon.State.Off,
+    ) -> int:
+        pixmap = icon.pixmap(30, 30, mode, state)
+        image = pixmap.toImage()
+        count = 0
+        for y in range(image.height()):
+            for x in range(image.width()):
+                if center_only and not (10 <= x <= 20 and 10 <= y <= 20):
+                    continue
+                color = image.pixelColor(x, y)
+                if color.alpha() <= 0:
+                    continue
+                luminance = 0.2126 * color.red() + 0.7152 * color.green() + 0.0722 * color.blue()
+                if luminance < 125:
+                    count += 1
+        return count
+
+    def _dark_pixel_count_in_rect(self, image, rect) -> int:
+        count = 0
+        for y in range(rect.top(), rect.bottom() + 1):
+            for x in range(rect.left(), rect.right() + 1):
+                color = image.pixelColor(x, y)
+                if color.alpha() <= 0:
+                    continue
+                luminance = 0.2126 * color.red() + 0.7152 * color.green() + 0.0722 * color.blue()
+                if luminance < 125:
+                    count += 1
+        return count
+
+    def test_select_and_perspective_toolbar_icons_have_visible_glyphs(self) -> None:
+        for action_key in ("select", "perspective"):
+            with self.subTest(action_key=action_key):
+                icon = self.window.ui_references.tool_actions[action_key].icon()
+                self.assertFalse(icon.isNull())
+                self.assertGreaterEqual(self._dark_pixel_count(icon), 60)
+                self.assertGreaterEqual(self._dark_pixel_count(icon, center_only=True), 10)
+                self.assertGreaterEqual(self._dark_pixel_count(icon, mode=QIcon.Mode.Disabled), 60)
+                self.assertGreaterEqual(
+                    self._dark_pixel_count(icon, mode=QIcon.Mode.Selected, state=QIcon.State.On),
+                    60,
+                )
+
+    def test_left_toolbar_keeps_select_and_perspective_actions_visible(self) -> None:
+        tools_bar = next(
+            toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Tools"
+        )
+        actions = [action for action in tools_bar.actions() if not action.isSeparator()]
+        action_texts = [action.text() for action in actions]
+
+        self.assertEqual(action_texts[0], "Select")
+        self.assertEqual(action_texts[-1], "Perspective")
+        self.assertEqual(tools_bar.iconSize().width(), 20)
+        self.assertEqual(tools_bar.iconSize().height(), 20)
+        for text in ("Select", "Perspective"):
+            with self.subTest(text=text):
+                action = next(action for action in actions if action.text() == text)
+                self.assertFalse(action.icon().isNull())
+
+    def test_left_toolbar_renders_select_and_perspective_button_glyphs(self) -> None:
+        self.window.resize(800, 420)
+        self.window.show()
+        self.app.processEvents()
+        tools_bar = next(
+            toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Tools"
+        )
+        image = tools_bar.grab().toImage()
+
+        for text, min_dark_pixels in (("Select", 95), ("Perspective", 120)):
+            with self.subTest(text=text):
+                action = next(action for action in tools_bar.actions() if action.text() == text)
+                widget = tools_bar.widgetForAction(action)
+                self.assertIsNotNone(widget)
+                self.assertTrue(widget.isVisible())
+                self.assertFalse(widget.icon().isNull())
+                self.assertEqual(widget.iconSize(), tools_bar.iconSize())
+                rect = widget.geometry().intersected(image.rect())
+                self.assertGreaterEqual(self._dark_pixel_count_in_rect(image, rect), min_dark_pixels)
+
+    def test_left_toolbar_renders_select_and_perspective_glyphs_when_checked(self) -> None:
+        self.window.resize(900, 560)
+        self.window.show()
+        self.app.processEvents()
+        tools_bar = next(
+            toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Tools"
+        )
+
+        for action_key, min_dark_pixels in (("select", 95), ("perspective", 120)):
+            with self.subTest(action_key=action_key):
+                action = self.window.ui_references.tool_actions[action_key]
+                action.trigger()
+                self.app.processEvents()
+                image = tools_bar.grab().toImage()
+                widget = tools_bar.widgetForAction(action)
+                self.assertIsNotNone(widget)
+                self.assertTrue(widget.isVisible())
+                self.assertFalse(widget.icon().isNull())
+                self.assertEqual(widget.iconSize(), tools_bar.iconSize())
+                rect = widget.geometry().intersected(image.rect())
+                self.assertGreaterEqual(self._dark_pixel_count_in_rect(image, rect), min_dark_pixels)
+
+    def test_left_toolbar_keeps_all_tool_actions_visible_in_compact_window(self) -> None:
+        self.window.resize(800, 420)
+        self.window.show()
+        self.app.processEvents()
+        tools_bar = next(
+            toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Tools"
+        )
+
+        for action in tools_bar.actions():
+            if action.isSeparator():
+                continue
+            with self.subTest(action=action.text()):
+                widget = tools_bar.widgetForAction(action)
+                self.assertIsNotNone(widget)
+                self.assertTrue(widget.isVisible())
+
     def test_template_entries_and_template_menu_preserve_ring_size_and_style(self) -> None:
-        with mock.patch.object(self.window.canvas, "begin_ring_template_insert") as begin_insert:
-            entries = dict(self.window._template_entries())
+        tool_routing_service = services_for_window(self.window).tool_routing_service
+        with mock.patch.object(active_canvas_for_window(self.window).services.insert_controller, "begin_ring_template_insert") as begin_insert:
+            entries = dict(tool_routing_service.template_entries(self.window))
             entries["Cyclopropane"]()
             entries["Cycloheptane"]()
             entries["Cyclooctane"]()
@@ -84,7 +196,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         self.assertEqual(begin_insert.call_args_list[3].kwargs, {"style": "chair"})
 
         menu = QMenu()
-        self.window._populate_template_menu(menu)
+        tool_routing_service.populate_template_menu(self.window, menu)
         self.assertEqual(
             [action.text() for action in menu.actions()],
             [
@@ -98,296 +210,108 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         )
 
     def test_template_action_shows_context_icon_buttons_and_routes_current_canvas(self) -> None:
-        with mock.patch.object(self.window.canvas, "begin_ring_template_insert") as begin_insert:
-            self.window._tool_actions["template"].trigger()
+        with mock.patch.object(active_canvas_for_window(self.window).services.insert_controller, "begin_ring_template_insert") as begin_insert:
+            self.window.ui_references.tool_actions["template"].trigger()
 
             button = next(
                 widget for widget in self.window.findChildren(QToolButton) if widget.toolTip() == "Cyclopropane"
             )
-            self.assertEqual(self.window._context_bar_page_override, "template")
-            self.assertTrue(self.window._tool_actions["template"].isChecked())
+            self.assertEqual(self.window.runtime_state.context_bar_page_override, "template")
+            self.assertTrue(self.window.ui_references.tool_actions["template"].isChecked())
             self.assertEqual(self.window.statusBar().currentMessage(), "Template Tool")
-            self.assertEqual(self.window._status_tool_label.text(), "Tool: Template")
+            self.assertEqual(
+                services_for_window(self.window).status_service.status_context_texts()["tool"],
+                "Tool: Template",
+            )
 
             button.click()
 
         begin_insert.assert_called_once_with(3, style="regular")
 
     def test_arrow_action_shows_context_icon_buttons_and_routes_type_and_preset(self) -> None:
-        with (
-            mock.patch.object(self.window, "_set_arrow_type") as set_arrow_type,
-            mock.patch.object(self.window, "_set_arrow_preset") as set_arrow_preset,
-        ):
-            self.window._tool_actions["arrow"].trigger()
+        self.window.ui_references.tool_actions["arrow"].trigger()
 
-            arrow_button = next(
-                widget for widget in self.window.findChildren(QToolButton) if widget.toolTip() == "Curved Double"
-            )
-            preset_button = next(
-                widget for widget in self.window.findChildren(QToolButton) if widget.toolTip() == "Bold arrow preset"
-            )
-
-            arrow_button.click()
-            preset_button.click()
-
-        set_arrow_type.assert_called_once_with("Curved Double")
-        set_arrow_preset.assert_called_once_with("Bold")
-
-    def test_ui_assembly_wrappers_delegate_to_service(self) -> None:
-        service = mock.Mock()
-        self.window._ui_assembly_service = service
-
-        toolbar_button = QToolButton()
-        corner_button = CornerMenuButton()
-        save_button = CornerMenuButton()
-        save_action = QAction("Save", self.window)
-        load_action = QAction("Load", self.window)
-        save_as_action = QAction("Save As...", self.window)
-        atom_input = QLineEdit()
-        tool_actions = {"bond": QAction("Bond", self.window)}
-        toolbar_assembly = MainWindowToolbarAssembly(
-            left_bar=QToolBar("Tools", self.window),
-            panel_bar=QToolBar("Panels", self.window),
-            tool_actions=tool_actions,
-            atom_input=atom_input,
-            save_action=save_action,
-            save_as_action=save_as_action,
-            save_button=save_button,
-            load_action=load_action,
+        arrow_button = next(
+            widget for widget in self.window.findChildren(QToolButton) if widget.toolTip() == "Curved Double"
         )
-        panel_assembly = MainWindowPanelAssembly(
-            splitter=QSplitter(),
-            dock=QDockWidget("Panels", self.window),
-        )
-        service.create_toolbar_button.return_value = toolbar_button
-        service.create_corner_menu_button.return_value = corner_button
-        service.create_save_menu_button.return_value = save_button
-        service.create_file_project_menu_button.return_value = save_button
-        service.init_toolbars.return_value = toolbar_assembly
-        service.init_panels.return_value = panel_assembly
-
-        icon = QIcon()
-        callback = mock.Mock()
-        menu_builder = mock.Mock()
-        self.assertIs(
-            self.window._create_toolbar_button(
-                icon=icon,
-                tooltip="Render",
-                callback=callback,
-                shortcut="Ctrl+R",
-                text="Run",
-                object_name="render_button",
-                style_sheet="color: red;",
-                auto_raise=False,
-                cursor=None,
-            ),
-            toolbar_button,
-        )
-        service.create_toolbar_button.assert_called_once_with(
-            icon=icon,
-            tooltip="Render",
-            callback=callback,
-            shortcut="Ctrl+R",
-            text="Run",
-            object_name="render_button",
-            style_sheet="color: red;",
-            auto_raise=False,
-            cursor=None,
+        preset_button = next(
+            widget for widget in self.window.findChildren(QToolButton) if widget.toolTip() == "Bold arrow preset"
         )
 
-        self.assertIs(
-            self.window._create_corner_menu_button(
-                icon=icon,
-                tooltip="Menu",
-                style_sheet="padding: 0;",
-                popup_mode=QToolButton.ToolButtonPopupMode.InstantPopup,
-                menu_builder=menu_builder,
-                default_action=save_action,
-            ),
-            corner_button,
-        )
-        service.create_corner_menu_button.assert_called_once_with(
-            icon=icon,
-            tooltip="Menu",
-            style_sheet="padding: 0;",
-            popup_mode=QToolButton.ToolButtonPopupMode.InstantPopup,
-            menu_builder=menu_builder,
-            default_action=save_action,
-        )
+        arrow_button.click()
+        preset_button.click()
 
-        self.assertIs(self.window._create_save_menu_button(save_action, save_as_action), save_button)
-        service.create_save_menu_button.assert_called_once_with(save_action, save_as_action)
+        settings = tool_settings_state_for(active_canvas_for_window(self.window))
+        self.assertEqual(settings.active_arrow_type, "curved_double")
+        self.assertEqual(settings.arrow_line_width, 2.2)
+        self.assertEqual(settings.arrow_head_scale, 0.4)
 
-        self.assertIs(
-            self.window._create_file_project_menu_button(save_action, load_action, save_as_action),
-            save_button,
-        )
-        service.create_file_project_menu_button.assert_called_once_with(
-            save_action,
-            load_action,
-            save_as_action,
-        )
+    def test_tool_routing_service_surface_stays_off_main_window(self) -> None:
+        self.assertFalse(hasattr(self.window, "template_entries"))
+        self.assertFalse(hasattr(self.window, "acs_color_palette"))
+        self.assertFalse(hasattr(self.window, "populate_template_menu"))
+        self.assertFalse(hasattr(self.window, "populate_arrow_menu"))
+        self.assertFalse(hasattr(self.window, "populate_palette_menu"))
+        self.assertFalse(hasattr(self.window, "activate_arrow_type_from_menu"))
+        self.assertFalse(hasattr(self.window, "activate_arrow_preset_from_menu"))
+        self.assertFalse(hasattr(self.window, "apply_color_preset"))
+        self.assertFalse(hasattr(self.window, "apply_ring_fill_preset"))
 
-        self.window._init_toolbars()
-        service.init_toolbars.assert_called_once_with(self.window)
-        self.assertIs(self.window._tool_actions, tool_actions)
-        self.assertIs(self.window._atom_input, atom_input)
-        self.assertIs(self.window._load_action, load_action)
+    def test_context_page_state_service_surface_stays_off_main_window(self) -> None:
+        self.assertFalse(hasattr(self.window, "sync_tool_actions_from_canvas"))
+        self.assertFalse(hasattr(self.window, "set_tool_with_status"))
+        self.assertFalse(hasattr(self.window, "show_context_page"))
 
-        self.window._init_panels()
-        service.init_panels.assert_called_once_with(self.window)
-        self.assertIs(self.window.panel_splitter, panel_assembly.splitter)
-        self.assertIs(self.window.panel_dock, panel_assembly.dock)
+    def test_tool_state_service_surface_stays_off_main_window(self) -> None:
+        self.assertFalse(hasattr(self.window, "set_bond_style"))
+        self.assertFalse(hasattr(self.window, "set_arrow_type"))
+        self.assertFalse(hasattr(self.window, "set_orbital_type"))
+        self.assertFalse(hasattr(self.window, "set_orbital_phase"))
+        self.assertFalse(hasattr(self.window, "set_arrow_preset"))
 
-        self.window._apply_theme()
-        service.apply_theme.assert_called_once_with(self.window)
-
-    def test_tool_routing_wrappers_delegate_to_service(self) -> None:
-        service = mock.Mock()
-        self.window._tool_routing_service = service
-        menu = QMenu()
-        callback = mock.Mock()
-        icon = QIcon()
-        action = QAction("Action", self.window)
-        service.add_menu_action.return_value = action
-        service.palette_icon.return_value = icon
-        service.template_entries.return_value = [("Cyclopropane", callback)]
-        service.acs_color_palette.return_value = [("Black", "#000000")]
-
-        self.assertIs(self.window._add_menu_action(menu, "Action", callback, icon), action)
-        self.assertIs(self.window._palette_icon("#000000"), icon)
-        self.assertEqual(self.window._template_entries(), [("Cyclopropane", callback)])
-        self.assertEqual(self.window._acs_color_palette(), [("Black", "#000000")])
-
-        self.window._populate_template_menu(menu)
-        self.window._populate_arrow_menu(menu)
-        self.window._populate_palette_menu(menu, callback)
-        self.window._activate_arrow_type_from_menu("Reaction")
-        self.window._activate_arrow_preset_from_menu("Bold")
-        self.window._apply_color_preset("#112233")
-        self.window._apply_ring_fill_preset("#445566")
-
-        service.add_menu_action.assert_called_once_with(menu, "Action", callback, icon)
-        service.palette_icon.assert_called_once_with("#000000")
-        service.template_entries.assert_called_once_with(self.window)
-        service.acs_color_palette.assert_called_once_with()
-        service.populate_template_menu.assert_called_once_with(self.window, menu)
-        service.populate_arrow_menu.assert_called_once_with(self.window, menu)
-        service.populate_palette_menu.assert_called_once_with(self.window, menu, callback)
-        service.activate_arrow_type_from_menu.assert_called_once_with(self.window, "Reaction")
-        service.activate_arrow_preset_from_menu.assert_called_once_with(self.window, "Bold")
-        self.assertEqual(service.apply_color_preset.call_args.args, (self.window, "#112233"))
-        self.assertIn("qtimer", service.apply_color_preset.call_args.kwargs)
-        self.assertEqual(service.apply_ring_fill_preset.call_args.args, (self.window, "#445566"))
-        self.assertIn("qtimer", service.apply_ring_fill_preset.call_args.kwargs)
-
-    def test_tool_state_wrappers_delegate_to_service(self) -> None:
-        service = mock.Mock()
-        self.window._tool_state_service = service
-
-        self.window._sync_tool_actions_from_canvas()
-        self.window._set_tool_with_status("bond", reset_bond_style=False)
-        self.window._set_bond_style("Double")
-        self.window._set_arrow_type("Curved Double")
-        self.window._set_orbital_type("sp2")
-        self.window._set_orbital_phase("Phase On")
-        self.window._set_arrow_preset("Bold")
-
-        service.sync_tool_actions_from_canvas.assert_called_once_with(self.window)
-        service.set_tool_with_status.assert_called_once_with(self.window, "bond", reset_bond_style=False)
-        service.set_bond_style.assert_called_once_with(self.window, "Double")
-        service.set_arrow_type.assert_called_once_with(self.window, "Curved Double")
-        service.set_orbital_type.assert_called_once_with(self.window, "sp2")
-        service.set_orbital_phase.assert_called_once_with(self.window, "Phase On")
-        service.set_arrow_preset.assert_called_once_with(self.window, "Bold")
-
-    def test_text_style_wrappers_delegate_to_service(self) -> None:
-        service = mock.Mock()
-        self.window._text_style_service = service
-
-        self.window._set_text_color()
-        self.window._set_text_align("Center")
-        self.window._set_note_box_color()
-        self.window._set_note_border_color()
-        self.window._set_text_preset("ACS")
-
-        self.assertEqual(service.set_text_color.call_args.args, (self.window,))
-        self.assertIn("get_color", service.set_text_color.call_args.kwargs)
-        service.set_text_align.assert_called_once_with(self.window, "Center")
-        self.assertEqual(service.set_note_box_color.call_args.args, (self.window,))
-        self.assertIn("get_color", service.set_note_box_color.call_args.kwargs)
-        self.assertEqual(service.set_note_border_color.call_args.args, (self.window,))
-        self.assertIn("get_color", service.set_note_border_color.call_args.kwargs)
-        service.set_text_preset.assert_called_once_with(self.window, "ACS")
+    def test_text_style_service_surface_stays_off_main_window(self) -> None:
+        self.assertFalse(hasattr(self.window, "set_text_color"))
+        self.assertFalse(hasattr(self.window, "set_text_align"))
+        self.assertFalse(hasattr(self.window, "set_note_box_color"))
+        self.assertFalse(hasattr(self.window, "set_note_border_color"))
+        self.assertFalse(hasattr(self.window, "set_text_preset"))
 
     def test_main_window_uses_icon_factory_without_icon_wrappers(self) -> None:
         factory = mock.Mock()
-        self.window._icon_factory = factory
+        self.window.ui_references.icon_factory = factory
 
         icon = QIcon()
         factory.icon_select.return_value = icon
 
-        self.assertIs(self.window._icon_factory.icon_select(), icon)
+        self.assertIs(self.window.ui_references.require_icon_factory().icon_select(), icon)
+        self.assertFalse(hasattr(self.window, "icon_factory"))
         self.assertFalse(hasattr(self.window, "_icon_select"))
         factory.icon_select.assert_called_once_with()
 
-    def test_tool_action_wrappers_delegate_to_service(self) -> None:
-        service = mock.Mock()
-        self.window._tool_action_service = service
-        tool_group = mock.Mock()
-        callback = mock.Mock()
-        action = QAction("Select", self.window)
-        service.build_checkable_tool_action.return_value = ("select", action)
-        service.build_tool_actions.return_value = {"select": action}
-
-        self.assertEqual(
-            self.window._build_checkable_tool_action(
-                tool_group,
-                key="select",
-                label="Select",
-                icon_method="icon_select",
-                tooltip="Pick atoms",
-                callback=callback,
-            ),
-            ("select", action),
-        )
-        self.window._activate_bond_style_tool("Hash")
-        self.window._activate_mark_tool("minus")
-        self.window._activate_template_tool()
-        self.assertEqual(self.window._build_tool_actions(tool_group), {"select": action})
-
-        service.build_checkable_tool_action.assert_called_once_with(
-            self.window,
-            tool_group,
-            key="select",
-            label="Select",
-            icon_method="icon_select",
-            tooltip="Pick atoms",
-            callback=callback,
-        )
-        service.activate_bond_style_tool.assert_called_once_with(self.window, "Hash")
-        service.activate_mark_tool.assert_called_once_with(self.window, "minus")
-        service.activate_template_tool.assert_called_once_with(self.window)
-        service.build_tool_actions.assert_called_once_with(self.window, tool_group)
+    def test_tool_action_public_methods_delegate_to_service_without_build_wrapper(self) -> None:
+        self.assertFalse(hasattr(self.window, "activate_bond_style_tool"))
+        self.assertFalse(hasattr(self.window, "build_tool_actions"))
+        self.assertFalse(hasattr(self.window, "new_tool_action"))
 
     def test_arrow_menu_helpers_route_type_and_preset_through_existing_methods(self) -> None:
-        with (
-            mock.patch.object(self.window, "_set_tool_with_status") as set_tool,
-            mock.patch.object(self.window, "_set_arrow_type") as set_type,
-            mock.patch.object(self.window, "_set_arrow_preset") as set_preset,
-        ):
-            self.window._activate_arrow_type_from_menu("Reaction")
-            self.window._activate_arrow_preset_from_menu("Bold")
-            menu = QMenu()
-            self.window._populate_arrow_menu(menu)
-            preset_menu = next(action.menu() for action in menu.actions() if action.menu() is not None)
-            menu.actions()[0].trigger()
-            preset_menu.actions()[0].trigger()
+        tool_routing_service = services_for_window(self.window).tool_routing_service
+        tool_routing_service.activate_arrow_type_from_menu(self.window, "Curved Double")
+        tool_routing_service.activate_arrow_preset_from_menu(self.window, "Bold")
+        settings = tool_settings_state_for(active_canvas_for_window(self.window))
 
-        self.assertEqual(set_tool.call_args_list[0].args, ("arrow",))
-        self.assertEqual(set_tool.call_args_list[1].args, ("arrow",))
-        self.assertTrue(any(call.args == ("Reaction",) for call in set_type.call_args_list))
-        self.assertTrue(any(call.args == ("Default",) for call in set_preset.call_args_list))
+        self.assertEqual(settings.active_arrow_type, "curved_double")
+        self.assertEqual(settings.arrow_line_width, 2.2)
+        self.assertEqual(settings.arrow_head_scale, 0.4)
+
+        menu = QMenu()
+        tool_routing_service.populate_arrow_menu(self.window, menu)
+        preset_menu = next(action.menu() for action in menu.actions() if action.menu() is not None)
+        menu.actions()[0].trigger()
+        preset_menu.actions()[0].trigger()
+
+        self.assertEqual(settings.active_arrow_type, "reaction")
+        self.assertEqual(settings.arrow_line_width, 1.2)
+        self.assertEqual(settings.arrow_head_scale, 0.3)
         self.assertEqual(
             [action.text() for action in menu.actions() if action.menu() is None],
             [
@@ -402,15 +326,22 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         )
 
     def test_text_preset_and_palette_menu_helpers_delegate_correctly(self) -> None:
+        text_style_service = services_for_window(self.window).text_style_service
         with (
-            mock.patch.object(self.window.canvas, "apply_text_preset_acs") as acs,
-            mock.patch.object(self.window.canvas, "apply_text_preset_paper_thin") as paper_thin,
-            mock.patch.object(self.window.canvas, "apply_text_preset_paper_bold") as paper_bold,
+            mock.patch.object(active_canvas_for_window(self.window).services.style_controller, "apply_text_preset_acs") as acs,
+            mock.patch.object(
+                active_canvas_for_window(self.window).services.style_controller,
+                "apply_text_preset_paper_thin",
+            ) as paper_thin,
+            mock.patch.object(
+                active_canvas_for_window(self.window).services.style_controller,
+                "apply_text_preset_paper_bold",
+            ) as paper_bold,
         ):
-            self.window._set_text_preset("ACS")
-            self.window._set_text_preset("Paper Thin")
-            self.window._set_text_preset("Paper Bold")
-            self.window._set_text_preset("Unknown")
+            text_style_service.set_text_preset(self.window, "ACS")
+            text_style_service.set_text_preset(self.window, "Paper Thin")
+            text_style_service.set_text_preset(self.window, "Paper Bold")
+            text_style_service.set_text_preset(self.window, "Unknown")
 
         acs.assert_called_once_with()
         paper_thin.assert_called_once_with()
@@ -418,28 +349,36 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
 
         palette_calls = []
         menu = QMenu()
-        self.window._populate_palette_menu(menu, lambda value: palette_calls.append(value))
-        self.assertEqual([action.text() for action in menu.actions()], [label for label, _ in self.window._acs_color_palette()])
+        tool_routing_service = services_for_window(self.window).tool_routing_service
+        tool_routing_service.populate_palette_menu(self.window, menu, lambda value: palette_calls.append(value))
+        self.assertEqual(
+            [action.text() for action in menu.actions()],
+            [label for label, _ in tool_routing_service.acs_color_palette()],
+        )
         menu.actions()[0].trigger()
         self.assertEqual(palette_calls, ["#000000"])
 
     def test_apply_color_and_ring_fill_presets_filter_selected_items_and_update_color_tool(self) -> None:
-        color_tool = SimpleNamespace(_last_color=None)
-        self.window.canvas.tools.tools["color"] = color_tool
+        color_tool = SimpleNamespace(set_color=mock.Mock())
+        active_canvas_for_window(self.window).services.tools.tools["color"] = color_tool
         selected_items = [_FakeItem("atom"), _FakeItem("ring"), _FakeItem("note")]
         scene = SimpleNamespace(selectedItems=lambda: selected_items)
 
         with (
-            mock.patch("ui.main_window.QTimer.singleShot", side_effect=lambda _delay, callback: callback()),
-            mock.patch.object(self.window.canvas, "scene", return_value=scene),
-            mock.patch.object(self.window.canvas, "set_tool") as set_tool,
-            mock.patch.object(self.window.canvas, "apply_color_to_item") as apply_color,
-            mock.patch.object(self.window.canvas, "apply_ring_fill_color") as apply_fill,
+            mock.patch("ui.main_window_tool_routing_service.QTimer.singleShot", side_effect=lambda _delay, callback: callback()),
+            mock.patch.object(active_canvas_for_window(self.window), "scene", return_value=scene),
+            mock.patch.object(active_canvas_for_window(self.window).services.tool_mode_controller, "set_tool") as set_tool,
+            mock.patch.object(active_canvas_for_window(self.window).services.canvas_color_mutation_service, "apply_color_to_item") as apply_color,
+            mock.patch.object(
+                active_canvas_for_window(self.window).services.canvas_color_mutation_service,
+                "apply_ring_fill_color",
+            ) as apply_fill,
         ):
-            self.window._apply_color_preset("#1f5eff")
-            self.window._apply_ring_fill_preset("#c77c00")
+            services_for_window(self.window).tool_routing_service.apply_color_preset(self.window, "#1f5eff")
+            services_for_window(self.window).tool_routing_service.apply_ring_fill_preset(self.window, "#c77c00")
 
-        self.assertEqual(color_tool._last_color, "#1f5eff")
+        color_tool.set_color.assert_called_once()
+        self.assertEqual(color_tool.set_color.call_args.args[0].name(), "#1f5eff")
         set_tool.assert_called_once_with("color")
         self.assertEqual([call.args[0].data(0) for call in apply_color.call_args_list], ["atom", "ring"])
         self.assertEqual([call.args[1].name() for call in apply_color.call_args_list], ["#1f5eff", "#1f5eff"])

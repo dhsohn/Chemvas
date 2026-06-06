@@ -3,30 +3,48 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import QTransform
+from PyQt6.QtCore import QPointF
+
+from ui.canvas_bond_graphics_state import bond_items_for_id
+from ui.canvas_hit_testing_scene_access import scene_items_at_pos_for_canvas
+from ui.canvas_hover_state import hover_state_for
+from ui.canvas_model_access import (
+    atom_for_id,
+    atoms_for,
+    bond_for_id,
+    bonds_for,
+    has_atoms_for,
+)
+from ui.pick_radius_access import atom_pick_radius_for, bond_pick_radius_for
+from ui.renderer_style_access import bond_length_px_for
+from ui.spatial_index_state import (
+    atom_ids_in_spatial_cell_for,
+    bond_ids_in_spatial_cell_for,
+    has_fresh_spatial_index_for,
+    mark_spatial_index_dirty_for,
+    set_spatial_index_for,
+    spatial_cell_size_or_for,
+)
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
 
 
 class CanvasHitTestingService:
-    def __init__(self, canvas: CanvasView) -> None:
+    def __init__(self, canvas: CanvasView, *, scene_pos_mapper=None) -> None:
         self.canvas = canvas
+        self._scene_pos_mapper = scene_pos_mapper
 
     def scene_pos_from_event(self, event) -> QPointF:
-        return self.canvas.mapToScene(event.position().toPoint())
+        if callable(self._scene_pos_mapper):
+            return self._scene_pos_mapper(event)
+        raise AttributeError("CanvasHitTestingService requires an injected scene_pos_mapper")
 
     def item_at_scene_pos(self, pos: QPointF):
         bond_item = None
         ring_item = None
         other_item = None
-        for item in self.canvas.scene().items(
-            pos,
-            Qt.ItemSelectionMode.IntersectsItemShape,
-            Qt.SortOrder.DescendingOrder,
-            QTransform(),
-        ):
+        for item in scene_items_at_pos_for_canvas(self.canvas, pos):
             if item.data(0) == "selection_outline":
                 continue
             kind = item.data(0)
@@ -43,9 +61,9 @@ class CanvasHitTestingService:
             if other_item is None:
                 other_item = item
         if bond_item is None:
-            nearby_bond_id = self.find_bond_near(pos, self.canvas._bond_pick_radius())
+            nearby_bond_id = self.find_bond_near(pos, bond_pick_radius_for(self.canvas))
             if nearby_bond_id is not None:
-                nearby_items = self.canvas.bond_items.get(nearby_bond_id, [])
+                nearby_items = bond_items_for_id(self.canvas, nearby_bond_id)
                 if nearby_items:
                     return nearby_items[0]
         return bond_item or ring_item or other_item
@@ -54,7 +72,7 @@ class CanvasHitTestingService:
         return self.item_at_scene_pos(self.scene_pos_from_event(event))
 
     def grid_cell_size(self) -> float:
-        return max(8.0, self.canvas.renderer.style.bond_length_px)
+        return max(8.0, bond_length_px_for(self.canvas))
 
     @staticmethod
     def cell_coords(x: float, y: float, cell_size: float) -> tuple[int, int]:
@@ -62,22 +80,22 @@ class CanvasHitTestingService:
 
     def ensure_spatial_index(self) -> None:
         cell_size = self.grid_cell_size()
-        if not self.canvas._spatial_index_dirty and abs(self.canvas._spatial_cell_size - cell_size) < 1e-6:
+        if has_fresh_spatial_index_for(self.canvas, cell_size):
             return
         self.rebuild_spatial_index(cell_size)
 
     def rebuild_spatial_index(self, cell_size: float) -> None:
         atom_grid: dict[tuple[int, int], set[int]] = {}
-        for atom_id, atom in self.canvas.model.atoms.items():
+        for atom_id, atom in atoms_for(self.canvas).items():
             key = self.cell_coords(atom.x, atom.y, cell_size)
             atom_grid.setdefault(key, set()).add(atom_id)
 
         bond_grid: dict[tuple[int, int], set[int]] = {}
-        for bond_id, bond in enumerate(self.canvas.model.bonds):
+        for bond_id, bond in enumerate(bonds_for(self.canvas)):
             if bond is None:
                 continue
-            a = self.canvas.model.atoms.get(bond.a)
-            b = self.canvas.model.atoms.get(bond.b)
+            a = atom_for_id(self.canvas, bond.a)
+            b = atom_for_id(self.canvas, bond.b)
             if a is None or b is None:
                 continue
             min_x = min(a.x, b.x)
@@ -90,16 +108,16 @@ class CanvasHitTestingService:
                 for iy in range(min_iy, max_iy + 1):
                     bond_grid.setdefault((ix, iy), set()).add(bond_id)
 
-        self.canvas._atom_grid = atom_grid
-        self.canvas._bond_grid = bond_grid
-        self.canvas._spatial_cell_size = cell_size
-        self.canvas._spatial_index_dirty = False
+        set_spatial_index_for(self.canvas, atom_grid=atom_grid, bond_grid=bond_grid, cell_size=cell_size)
+
+    def mark_spatial_index_dirty(self) -> None:
+        mark_spatial_index_dirty_for(self.canvas)
 
     def find_atom_near(self, x: float, y: float, max_dist: float) -> int | None:
-        if not self.canvas.model.atoms:
+        if not has_atoms_for(self.canvas):
             return None
         self.ensure_spatial_index()
-        cell_size = self.canvas._spatial_cell_size or self.grid_cell_size()
+        cell_size = spatial_cell_size_or_for(self.canvas, self.grid_cell_size())
         if cell_size <= 0:
             return None
         cell_radius = int(math.ceil(max_dist / cell_size))
@@ -108,8 +126,8 @@ class CanvasHitTestingService:
         nearest_dist_sq = max_dist * max_dist
         for cx in range(ix - cell_radius, ix + cell_radius + 1):
             for cy in range(iy - cell_radius, iy + cell_radius + 1):
-                for atom_id in self.canvas._atom_grid.get((cx, cy), ()):
-                    atom = self.canvas.model.atoms.get(atom_id)
+                for atom_id in atom_ids_in_spatial_cell_for(self.canvas, (cx, cy)):
+                    atom = atom_for_id(self.canvas, atom_id)
                     if atom is None:
                         continue
                     dx = atom.x - x
@@ -121,10 +139,10 @@ class CanvasHitTestingService:
         return nearest_id
 
     def find_bond_near(self, pos: QPointF, max_dist: float) -> int | None:
-        if not self.canvas.model.bonds:
+        if not bonds_for(self.canvas):
             return None
         self.ensure_spatial_index()
-        cell_size = self.canvas._spatial_cell_size or self.grid_cell_size()
+        cell_size = spatial_cell_size_or_for(self.canvas, self.grid_cell_size())
         if cell_size <= 0:
             return None
         cell_radius = int(math.ceil(max_dist / cell_size))
@@ -134,17 +152,15 @@ class CanvasHitTestingService:
         seen: set[int] = set()
         for cx in range(ix - cell_radius, ix + cell_radius + 1):
             for cy in range(iy - cell_radius, iy + cell_radius + 1):
-                for bond_id in self.canvas._bond_grid.get((cx, cy), ()):
+                for bond_id in bond_ids_in_spatial_cell_for(self.canvas, (cx, cy)):
                     if bond_id in seen:
                         continue
                     seen.add(bond_id)
-                    if not (0 <= bond_id < len(self.canvas.model.bonds)):
-                        continue
-                    bond = self.canvas.model.bonds[bond_id]
+                    bond = bond_for_id(self.canvas, bond_id)
                     if bond is None:
                         continue
-                    a = self.canvas.model.atoms.get(bond.a)
-                    b = self.canvas.model.atoms.get(bond.b)
+                    a = atom_for_id(self.canvas, bond.a)
+                    b = atom_for_id(self.canvas, bond.b)
                     if a is None or b is None:
                         continue
                     dist = self.distance_point_to_segment(
@@ -172,23 +188,21 @@ class CanvasHitTestingService:
         return math.hypot(p.x() - cx, p.y() - cy)
 
     def nearest_atom_hit(self, pos: QPointF) -> tuple[int, float] | None:
-        atom_id = self.find_atom_near(pos.x(), pos.y(), self.canvas._atom_pick_radius())
+        atom_id = self.find_atom_near(pos.x(), pos.y(), atom_pick_radius_for(self.canvas))
         if atom_id is None:
             return None
-        atom = self.canvas.model.atoms.get(atom_id)
+        atom = atom_for_id(self.canvas, atom_id)
         if atom is None:
             return None
         return atom_id, math.hypot(atom.x - pos.x(), atom.y - pos.y())
 
     def nearest_bond_hit(self, pos: QPointF) -> tuple[int, float] | None:
-        bond_id = self.find_bond_near(pos, self.canvas._bond_pick_radius())
-        if bond_id is None or not (0 <= bond_id < len(self.canvas.model.bonds)):
-            return None
-        bond = self.canvas.model.bonds[bond_id]
+        bond_id = self.find_bond_near(pos, bond_pick_radius_for(self.canvas))
+        bond = bond_for_id(self.canvas, bond_id)
         if bond is None:
             return None
-        atom_a = self.canvas.model.atoms.get(bond.a)
-        atom_b = self.canvas.model.atoms.get(bond.b)
+        atom_a = atom_for_id(self.canvas, bond.a)
+        atom_b = atom_for_id(self.canvas, bond.b)
         if atom_a is None or atom_b is None:
             return None
         dist = self.distance_point_to_segment(
@@ -199,14 +213,11 @@ class CanvasHitTestingService:
         return bond_id, dist
 
     def bond_id_from_event(self, event) -> int | None:
-        if self.canvas.hover_bond_id is not None:
-            return self.canvas.hover_bond_id
+        hover_bond_id = hover_state_for(self.canvas).bond_id
+        if hover_bond_id is not None:
+            return hover_bond_id
         pos = self.scene_pos_from_event(event)
-        return self.find_bond_near(pos, max(self.canvas.renderer.style.bond_length_px * 0.35, self.canvas._bond_pick_radius()))
+        return self.find_bond_near(pos, max(bond_length_px_for(self.canvas) * 0.35, bond_pick_radius_for(self.canvas)))
 
 
-def canvas_hit_testing_service_for(canvas) -> CanvasHitTestingService:
-    return canvas._hit_testing_service
-
-
-__all__ = ["CanvasHitTestingService", "canvas_hit_testing_service_for"]
+__all__ = ["CanvasHitTestingService"]

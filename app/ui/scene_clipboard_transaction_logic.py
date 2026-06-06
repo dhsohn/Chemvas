@@ -8,6 +8,8 @@ from typing import Callable, Collection, Sequence
 from PyQt6.QtCore import QRectF
 from PyQt6.QtWidgets import QGraphicsItem
 
+from ui.scene_item_state import ARROW_KINDS
+
 
 @dataclass(slots=True)
 class ClipboardCopyPlan:
@@ -64,6 +66,85 @@ def clipboard_copy_cache_values(payload_json: str | None) -> tuple[str | None, i
     if payload_json is None:
         return None, 0
     return payload_json, 0
+
+
+def clipboard_paste_offset(step: int, bond_length_px: float) -> tuple[float, float]:
+    magnitude = max(18.0, bond_length_px * 0.35) * max(1, step)
+    return magnitude, magnitude
+
+
+def translated_point_value(value, dx: float, dy: float):
+    if (
+        isinstance(value, (list, tuple))
+        and len(value) == 2
+        and isinstance(value[0], (int, float))
+        and isinstance(value[1], (int, float))
+    ):
+        return (float(value[0]) + dx, float(value[1]) + dy)
+    return value
+
+
+def translated_scene_item_state(
+    state: dict,
+    *,
+    dx: float,
+    dy: float,
+    atom_id_map: dict[int, int],
+) -> dict | None:
+    if not isinstance(state, dict):
+        return None
+    translated = dict(state)
+    kind = translated.get("kind")
+    if kind == "ring":
+        ring_atom_ids = translated.get("atom_ids")
+        if not isinstance(ring_atom_ids, list) or not ring_atom_ids:
+            return None
+        mapped_atom_ids: list[int] = []
+        for atom_id in ring_atom_ids:
+            if not isinstance(atom_id, int) or atom_id not in atom_id_map:
+                return None
+            mapped_atom_ids.append(atom_id_map[atom_id])
+        points = translated.get("points", [])
+        translated_points = []
+        for point in points:
+            translated_point = translated_point_value(point, dx, dy)
+            if translated_point is None or translated_point is point:
+                continue
+            translated_points.append(translated_point)
+        translated["atom_ids"] = mapped_atom_ids
+        translated["points"] = translated_points
+        return translated
+    if kind == "mark":
+        atom_id = translated.get("atom_id")
+        translated["atom_id"] = atom_id_map.get(atom_id) if isinstance(atom_id, int) else None
+        if isinstance(translated.get("x"), (int, float)):
+            translated["x"] = float(translated["x"]) + dx
+        if isinstance(translated.get("y"), (int, float)):
+            translated["y"] = float(translated["y"]) + dy
+        return translated
+    if kind == "note":
+        if isinstance(translated.get("x"), (int, float)):
+            translated["x"] = float(translated["x"]) + dx
+        if isinstance(translated.get("y"), (int, float)):
+            translated["y"] = float(translated["y"]) + dy
+        return translated
+    if kind in ARROW_KINDS:
+        translated["start"] = translated_point_value(translated.get("start"), dx, dy)
+        translated["end"] = translated_point_value(translated.get("end"), dx, dy)
+        translated["control"] = translated_point_value(translated.get("control"), dx, dy)
+        return translated
+    if kind == "ts_bracket":
+        for key in ("left", "right"):
+            if isinstance(translated.get(key), (int, float)):
+                translated[key] = float(translated[key]) + dx
+        for key in ("top", "bottom"):
+            if isinstance(translated.get(key), (int, float)):
+                translated[key] = float(translated[key]) + dy
+        return translated
+    if kind == "orbital":
+        translated["center"] = translated_point_value(translated.get("center"), dx, dy)
+        return translated
+    return translated
 
 
 def visible_items_to_hide_for_copy(
@@ -128,6 +209,9 @@ __all__ = [
     "ClipboardPastePlan",
     "build_clipboard_copy_plan",
     "build_clipboard_paste_plan",
+    "clipboard_paste_offset",
     "clipboard_copy_cache_values",
+    "translated_point_value",
+    "translated_scene_item_state",
     "visible_items_to_hide_for_copy",
 ]

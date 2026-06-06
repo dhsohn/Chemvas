@@ -16,6 +16,7 @@ if QApplication is not None:
     from ui.canvas_scene_decoration_build_service import (
         CanvasSceneDecorationBuildService,
     )
+    from ui.canvas_tool_settings_state import CanvasToolSettingsState
 
 
 class _RecordingScene:
@@ -33,7 +34,7 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
 
-    def _make_service(self, *, orbital_phase_enabled: bool = True):
+    def _make_service(self, *, orbital_phase_enabled: bool = True, arrow_build_service=None):
         scene = _RecordingScene()
         style = SimpleNamespace(
             bond_length_px=20.0,
@@ -51,17 +52,18 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
         )
         canvas = SimpleNamespace(
             renderer=renderer,
-            arrow_line_width=2.5,
-            arrow_head_scale=0.3,
-            orbital_phase_enabled=orbital_phase_enabled,
+            tool_settings_state=CanvasToolSettingsState(
+                arrow_line_width=2.5,
+                arrow_head_scale=0.3,
+                orbital_phase_enabled=orbital_phase_enabled,
+            ),
             scene=lambda: scene,
         )
-        return CanvasSceneDecorationBuildService(canvas), scene, style
+        return CanvasSceneDecorationBuildService(canvas, arrow_build_service=arrow_build_service), scene, style
 
     def test_build_arrow_item_delegates_to_arrow_build_service(self) -> None:
-        service, _, _ = self._make_service()
         arrow_service = mock.Mock()
-        service._arrow_build_service = arrow_service
+        service, _, _ = self._make_service(arrow_build_service=arrow_service)
         arrow_service.build_arrow_item.return_value = "arrow"
 
         self.assertEqual(service.build_arrow_item(QPointF(1.0, 2.0), QPointF(8.0, 9.0), "equilibrium"), "arrow")
@@ -72,9 +74,8 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
         )
 
     def test_curved_arrow_helpers_delegate_to_arrow_build_service(self) -> None:
-        service, _, _ = self._make_service()
         arrow_service = mock.Mock()
-        service._arrow_build_service = arrow_service
+        service, _, _ = self._make_service(arrow_build_service=arrow_service)
         arrow_service.build_curved_arrow.return_value = "curved"
 
         result = service.build_curved_arrow(QPointF(0.0, 0.0), QPointF(10.0, 0.0), double=True)

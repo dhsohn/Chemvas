@@ -11,6 +11,7 @@ except ModuleNotFoundError:
 if QApplication is not None:
     from core.history import CompositeCommand, DeleteAtomsCommand, DeleteBondCommand
     from core.model import Atom, Bond, MoleculeModel
+    from ui.canvas_smiles_input_state import last_smiles_input_for
     from ui.history_commands import DeleteSceneItemsCommand
     from ui.scene_delete_logic import (
         build_delete_selection_plan,
@@ -18,11 +19,11 @@ if QApplication is not None:
     )
 
     from tests.test_scene_ops_controller import (
-        SceneOpsController,
         _FakeCanvas,
         _make_note_item,
         _make_rect_item,
         _make_ring_item,
+        scene_delete_controller_for,
     )
 
 
@@ -211,7 +212,7 @@ class SceneDeleteLogicTest(unittest.TestCase):
         for item in (bond_item, handle_item, note_box_item, note_select_item):
             canvas.add_item(item, selected=True)
 
-        controller = SceneOpsController(canvas)
+        controller = scene_delete_controller_for(canvas)
 
         self.assertTrue(controller.delete_selected_items())
         self.assertEqual(canvas.delete_bond_calls, [])
@@ -285,9 +286,9 @@ class SceneDeleteLogicTest(unittest.TestCase):
         ):
             canvas.add_item(item, selected=True)
         canvas.add_item(sibling_mark, selected=False)
-        canvas._marks_by_atom[1] = [linked_mark, sibling_mark]
+        canvas.mark_registry.by_atom[1] = [linked_mark, sibling_mark]
 
-        controller = SceneOpsController(canvas)
+        controller = scene_delete_controller_for(canvas)
 
         self.assertTrue(controller.delete_selected_items())
         self.assertEqual(len(canvas.pushed_commands), 1)
@@ -296,7 +297,7 @@ class SceneDeleteLogicTest(unittest.TestCase):
         self.assertEqual(canvas.clear_handles_calls, 1)
         self.assertEqual(canvas.remove_bond_calls, [0])
         self.assertEqual(canvas.remove_atom_calls, [(1, True)])
-        self.assertEqual(canvas.last_smiles_input, None)
+        self.assertIsNone(last_smiles_input_for(canvas))
 
         delete_bond_commands = [child for child in command.commands if isinstance(child, DeleteBondCommand)]
         self.assertEqual(len(delete_bond_commands), 1)
@@ -339,7 +340,7 @@ class SceneDeleteLogicTest(unittest.TestCase):
         for item in (note_item, ring_item, handle_item, note_box_item, note_select_item, other_item):
             canvas.add_item(item, selected=True)
 
-        controller = SceneOpsController(canvas)
+        controller = scene_delete_controller_for(canvas)
 
         self.assertTrue(controller.delete_selected_items())
         self.assertEqual(canvas.clear_handles_calls, 0)

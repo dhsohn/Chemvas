@@ -13,10 +13,11 @@ if QApplication is not None:
     from core.history import CompositeCommand
 
     from tests.test_scene_ops_controller import (
-        SceneOpsController,
         _FakeCanvas,
         _make_rect_item,
         _make_ring_item,
+        scene_delete_controller_for,
+        scene_transform_controller_for,
     )
 
 
@@ -44,7 +45,7 @@ class SceneOpsControllerDeleteFlipEdgesTest(unittest.TestCase):
         for item in (invalid_bond, handle, note_box, note_select):
             canvas.add_item(item, selected=True)
 
-        controller = SceneOpsController(canvas)
+        controller = scene_delete_controller_for(canvas)
 
         self.assertFalse(controller.delete_selected_items())
         self.assertEqual(canvas.delete_bond_calls, [])
@@ -65,14 +66,14 @@ class SceneOpsControllerDeleteFlipEdgesTest(unittest.TestCase):
         canvas.add_item(ring_item, selected=True)
         canvas.add_item(mark_item, selected=True)
 
-        controller = SceneOpsController(canvas)
+        controller = scene_transform_controller_for(canvas)
         controller.flip_selected_items(horizontal=True)
 
         self.assertEqual(len(canvas.pushed_commands), 1)
         self.assertIsInstance(canvas.pushed_commands[0], CompositeCommand)
         self.assertEqual(canvas.update_selection_outline_calls, 1)
         self.assertEqual(ring_item.data(9)["points"], [(12.0, 0.0), (0.0, 0.0), (6.0, 10.0)])
-        self.assertEqual(mark_item.data(9)["x"], 0.0)
+        self.assertEqual(mark_item.data(9)["x"], 8.0)
         self.assertEqual(mark_item.data(9)["y"], 5.0)
 
     def test_flip_selected_items_skips_centerless_items(self) -> None:
@@ -83,7 +84,7 @@ class SceneOpsControllerDeleteFlipEdgesTest(unittest.TestCase):
         note_item.setData(9, {"kind": "note", "text": "skip", "x": 1.0, "y": 2.0})
         canvas.add_item(note_item, selected=True)
 
-        controller = SceneOpsController(canvas)
+        controller = scene_transform_controller_for(canvas)
         controller.flip_selected_items(horizontal=True)
 
         self.assertEqual(canvas.pushed_commands, [])
@@ -96,11 +97,11 @@ class SceneOpsControllerDeleteFlipEdgesTest(unittest.TestCase):
             "mark",
             data1={"atom_id": None},
             state={"kind": "mark", "atom_id": None, "x": 2.0, "y": 2.0},
-            rect=QRectF(0.0, 0.0, 4.0, 4.0),
+            rect=QRectF(-2.0, -2.0, 4.0, 4.0),
         )
         canvas.add_item(mark_item, selected=True)
 
-        controller = SceneOpsController(canvas)
+        controller = scene_transform_controller_for(canvas)
         controller.flip_selected_items(horizontal=True)
 
         self.assertEqual(canvas.pushed_commands, [])

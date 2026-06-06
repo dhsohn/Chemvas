@@ -2,7 +2,7 @@
 
 Format specs, DPI choices, file-filter strings and path normalization live here
 (Qt-free) so they can be unit-tested; the QDialog widget assembly stays in the
-document action service.
+document dialog module.
 """
 
 from __future__ import annotations

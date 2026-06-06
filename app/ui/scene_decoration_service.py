@@ -5,18 +5,29 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtWidgets import QGraphicsTextItem
 
-from ui.canvas_history_service import history_service_for
+from ui.canvas_tool_settings_state import tool_settings_state_for
 from ui.history_commands import AddSceneItemsCommand
+from ui.mark_item_access import build_mark_item_for, set_mark_center_for
+from ui.scene_decoration_build_access import (
+    build_arrow_item_for,
+    build_ts_bracket_item_for,
+)
 from ui.scene_item_access import attach_scene_item, create_scene_item_from_state
+from ui.scene_item_state import (
+    arrow_state_dict_for,
+    mark_state_dict_for,
+    orbital_state_dict_for,
+    ts_bracket_state_dict_for,
+)
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
 
 
 class SceneDecorationService:
-    def __init__(self, canvas: CanvasView) -> None:
+    def __init__(self, canvas: CanvasView, *, history_service=None) -> None:
         self.canvas = canvas
-        self.history = history_service_for(canvas)
+        self.history = history_service
 
     def add_mark(
         self,
@@ -27,8 +38,8 @@ class SceneDecorationService:
         offset: QPointF | None = None,
         record: bool = True,
     ):
-        kind = kind or self.canvas.mark_kind
-        item = self.canvas._build_mark_item(kind)
+        kind = kind or tool_settings_state_for(self.canvas).mark_kind
+        item = build_mark_item_for(self.canvas, kind)
         if item is None:
             return None
         data = {"kind": kind, "atom_id": atom_id}
@@ -40,13 +51,13 @@ class SceneDecorationService:
         item.setData(0, "mark")
         item.setData(1, data)
         attach_scene_item(self.canvas, item)
-        self.canvas._set_mark_center(item, pos)
+        set_mark_center_for(self.canvas, item, pos)
         if record:
-            self._push_add_scene_item(item, self.canvas._mark_state_dict(item))
+            self._push_add_scene_item(item, mark_state_dict_for(self.canvas, item))
         return item
 
     def add_arrow(self, start: QPointF, end: QPointF, kind: str):
-        item = self.canvas._build_arrow_item(start, end, kind)
+        item = build_arrow_item_for(self.canvas, start, end, kind)
         scene_kind = "arrow" if kind == "reaction" else kind
         item.setData(0, scene_kind)
         data = item.data(2) or {}
@@ -62,13 +73,13 @@ class SceneDecorationService:
             data = {"start": start, "end": end, "control": None, "double": False}
         item.setData(2, data)
         attach_scene_item(self.canvas, item)
-        self._push_add_scene_item(item, self.canvas._arrow_state_dict(item))
+        self._push_add_scene_item(item, arrow_state_dict_for(self.canvas, item))
         return item
 
     def add_ts_bracket(self, rect: QRectF):
-        item = self.canvas._build_ts_bracket_item(rect)
+        item = build_ts_bracket_item_for(self.canvas, rect)
         attach_scene_item(self.canvas, item)
-        self._push_add_scene_item(item, self.canvas._ts_bracket_state_dict(item))
+        self._push_add_scene_item(item, ts_bracket_state_dict_for(self.canvas, item))
         return item
 
     def add_orbital(self, center: QPointF):
@@ -76,7 +87,7 @@ class SceneDecorationService:
             self.canvas,
             {
                 "kind": "orbital",
-                "orbital_kind": self.canvas.active_orbital_type,
+                "orbital_kind": tool_settings_state_for(self.canvas).active_orbital_type,
                 "center": (center.x(), center.y()),
                 "scale": 1.0,
                 "rotation": 0.0,
@@ -84,9 +95,12 @@ class SceneDecorationService:
         )
         if group is None:
             return None
-        self._push_add_scene_item(group, self.canvas._orbital_state_dict(group))
+        self._push_add_scene_item(group, orbital_state_dict_for(self.canvas, group))
         return group
 
     def _push_add_scene_item(self, item, state: dict) -> None:
         command = AddSceneItemsCommand(item_states=[state], items=[item])
         self.history.push(command)
+
+
+__all__ = ["SceneDecorationService"]

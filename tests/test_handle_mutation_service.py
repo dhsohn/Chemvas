@@ -13,6 +13,7 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
+    from ui.canvas_tool_settings_state import CanvasToolSettingsState
     from ui.curved_arrow_path_service import CurvedArrowPathService
     from ui.handle_mutation_service import HandleMutationService
 
@@ -65,22 +66,28 @@ class HandleMutationServiceTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def _make_canvas(self, *, bond_length_px: float = 40.0):
+        build_service = SimpleNamespace(add_arrow_head=mock.Mock())
         canvas = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=bond_length_px)),
-            _orbital_snap_enabled=False,
-            _orbital_snap_step=15,
-            _clamp_curved_midpoint=mock.Mock(return_value=QPointF(5.0, 4.0)),
-            _control_from_midpoint=mock.Mock(return_value=QPointF(5.0, 8.0)),
-            _default_curved_control=mock.Mock(return_value=QPointF(4.0, 4.0)),
-            _add_arrow_head=mock.Mock(),
-            _update_selection_outline=mock.Mock(),
+            tool_settings_state=CanvasToolSettingsState(),
+            refresh_selection_outline=mock.Mock(),
         )
-        canvas._curved_arrow_path_service = CurvedArrowPathService(canvas)
+        canvas.services = SimpleNamespace(
+            scene_decoration_build_service=build_service,
+            selection_controller=SimpleNamespace(update_selection_outline=canvas.refresh_selection_outline),
+        )
+        canvas.services.curved_arrow_path_service = CurvedArrowPathService(canvas)
         return canvas
+
+    def _service(self, canvas) -> HandleMutationService:
+        return HandleMutationService(
+            canvas,
+            curved_arrow_path_service=canvas.services.curved_arrow_path_service,
+        )
 
     def test_update_orbital_scale_and_rotate_use_center_or_bounds(self) -> None:
         canvas = self._make_canvas(bond_length_px=40.0)
-        service = HandleMutationService(canvas)
+        service = self._service(canvas)
 
         centered_item = _FakeGraphicsItem(data={1: {"center": QPointF(10.0, 5.0), "base_handle_dist": 10.0}})
         service.update_orbital_scale(centered_item, QPointF(15.0, 5.0))
@@ -88,8 +95,8 @@ class HandleMutationServiceTest(unittest.TestCase):
         self.assertAlmostEqual(centered_item._scale, 0.5)
         self.assertAlmostEqual(centered_item._rotation, 90.0)
 
-        canvas._orbital_snap_enabled = True
-        canvas._orbital_snap_step = 15
+        canvas.tool_settings_state.orbital_snap_enabled = True
+        canvas.tool_settings_state.orbital_snap_step = 15
         fallback_item = _FakeGraphicsItem(rect=QRectF(0.0, 0.0, 20.0, 10.0), data={1: {}})
         service.update_orbital_scale(fallback_item, QPointF(42.0, 5.0))
         service.update_orbital_rotate(fallback_item, QPointF(42.0, 5.0))
@@ -98,7 +105,7 @@ class HandleMutationServiceTest(unittest.TestCase):
 
     def test_update_curved_control_updates_path_and_handles_invalid_input(self) -> None:
         canvas = self._make_canvas()
-        service = HandleMutationService(canvas)
+        service = self._service(canvas)
         curved_item = _FakeGraphicsItem(
             data={2: {"start": QPointF(0.0, 0.0), "end": QPointF(10.0, 0.0), "double": True}}
         )
@@ -109,22 +116,21 @@ class HandleMutationServiceTest(unittest.TestCase):
         self.assertFalse(curved_item.path().isEmpty())
         self.assertEqual(curved_item.data(2)["control"], QPointF(5.0, 8.0))
         self.assertEqual(curved_item.pos(), QPointF())
-        canvas._clamp_curved_midpoint.assert_called_once_with(QPointF(0.0, 0.0), QPointF(10.0, 0.0), QPointF(5.0, 4.0))
-        canvas._control_from_midpoint.assert_called_once_with(QPointF(0.0, 0.0), QPointF(10.0, 0.0), QPointF(5.0, 4.0))
-        self.assertEqual(canvas._add_arrow_head.call_count, 2)
-        canvas._update_selection_outline.assert_called_once_with()
+        add_arrow_head = canvas.services.scene_decoration_build_service.add_arrow_head
+        self.assertEqual(add_arrow_head.call_count, 2)
+        canvas.refresh_selection_outline.assert_called_once_with()
 
         invalid_item = _FakeGraphicsItem(data={2: {"start": QPointF(0.0, 0.0)}})
-        canvas._add_arrow_head.reset_mock()
-        canvas._update_selection_outline.reset_mock()
+        add_arrow_head.reset_mock()
+        canvas.refresh_selection_outline.reset_mock()
         service.update_curved_control(invalid_item, QPointF(3.0, 3.0))
         self.assertTrue(invalid_item.path().isEmpty())
-        canvas._add_arrow_head.assert_not_called()
-        canvas._update_selection_outline.assert_not_called()
+        add_arrow_head.assert_not_called()
+        canvas.refresh_selection_outline.assert_not_called()
 
     def test_update_curved_endpoint_updates_path_and_preserves_existing_control(self) -> None:
         canvas = self._make_canvas()
-        service = HandleMutationService(canvas)
+        service = self._service(canvas)
         curved_item = _FakeGraphicsItem(
             data={2: {"start": QPointF(0.0, 0.0), "end": QPointF(10.0, 0.0), "control": QPointF(5.0, 8.0), "double": False}}
         )
@@ -137,18 +143,17 @@ class HandleMutationServiceTest(unittest.TestCase):
         self.assertEqual(curved_item.data(2)["end"], QPointF(10.0, 0.0))
         self.assertEqual(curved_item.data(2)["control"], QPointF(5.0, 8.0))
         self.assertEqual(curved_item.pos(), QPointF())
-        canvas._default_curved_control.assert_not_called()
-        canvas._update_selection_outline.assert_called_once_with()
+        canvas.refresh_selection_outline.assert_called_once_with()
 
-        canvas._add_arrow_head.reset_mock()
-        canvas._update_selection_outline.reset_mock()
+        add_arrow_head = canvas.services.scene_decoration_build_service.add_arrow_head
+        add_arrow_head.reset_mock()
+        canvas.refresh_selection_outline.reset_mock()
         fallback_item = _FakeGraphicsItem(data={2: {"start": QPointF(0.0, 0.0), "end": QPointF(10.0, 0.0), "double": True}})
         service.update_curved_endpoint(fallback_item, QPointF(12.0, -1.0), "end")
         self.assertEqual(fallback_item.data(2)["end"], QPointF(12.0, -1.0))
-        self.assertEqual(fallback_item.data(2)["control"], QPointF(4.0, 4.0))
-        canvas._default_curved_control.assert_called_once_with(QPointF(0.0, 0.0), QPointF(12.0, -1.0))
-        self.assertEqual(canvas._add_arrow_head.call_count, 2)
-        canvas._update_selection_outline.assert_called_once_with()
+        self.assertEqual(fallback_item.data(2)["control"], QPointF(6.3, 3.1))
+        self.assertEqual(add_arrow_head.call_count, 2)
+        canvas.refresh_selection_outline.assert_called_once_with()
 
 
 if __name__ == "__main__":

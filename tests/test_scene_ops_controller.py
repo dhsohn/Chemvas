@@ -26,14 +26,35 @@ if QApplication is not None:
         DeleteBondCommand,
     )
     from core.model import Atom, Bond, MoleculeModel
+    from ui.canvas_atom_graphics_state import (
+        atom_dots_for,
+        atom_items_for,
+        set_atom_dots_for,
+        set_atom_items_for,
+    )
+    from ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
+    from ui.canvas_graph_state import CanvasGraphState
+    from ui.canvas_mark_registry import CanvasMarkRegistry
+    from ui.canvas_scene_items_state import (
+        SCENE_ITEM_COLLECTION_ATTRS,
+        scene_item_collection_for,
+        set_scene_item_collection_for,
+    )
+    from ui.canvas_smiles_input_state import (
+        last_smiles_input_for,
+        set_last_smiles_input_for,
+    )
     from ui.graphics_items import AtomLabelItem
     from ui.history_commands import DeleteSceneItemsCommand
-    from ui.scene_clipboard_transaction_logic import build_clipboard_copy_plan
-    from ui.scene_ops_controller import (
+    from ui.scene_clipboard_controller import (
         CLIPBOARD_PDF_MIME,
         CLIPBOARD_SVG_MIME,
-        SceneOpsController,
+        SceneClipboardController,
     )
+    from ui.scene_clipboard_state import SceneClipboardState
+    from ui.scene_clipboard_transaction_logic import build_clipboard_copy_plan
+    from ui.scene_delete_controller import SceneDeleteController
+    from ui.scene_transform_controller import SceneTransformController
 
 
 def _set_selectable(item: QGraphicsItem) -> QGraphicsItem:
@@ -54,6 +75,15 @@ def _make_rect_item(
         item.setData(1, data1)
     if state is not None:
         item.setData(9, dict(state))
+        if kind == "mark":
+            mark_data = dict(data1) if isinstance(data1, dict) else {}
+            for key in ("atom_id", "dx", "dy", "text"):
+                if key in state and key not in mark_data:
+                    mark_data[key] = state.get(key)
+            if "mark_kind" in state and "kind" not in mark_data:
+                mark_data["kind"] = state.get("mark_kind")
+            item.setData(1, mark_data)
+            item.setPos(float(state.get("x", 0.0)), float(state.get("y", 0.0)))
     return item
 
 
@@ -73,6 +103,34 @@ def _make_ring_item() -> QGraphicsPolygonItem:
     return item
 
 
+def scene_clipboard_controller_for(canvas) -> SceneClipboardController:
+    return SceneClipboardController(
+        canvas,
+        selection_controller=canvas.services.selection_controller,
+        bond_mutation_service=canvas.services.canvas_bond_mutation_service,
+    )
+
+
+def scene_delete_controller_for(canvas) -> SceneDeleteController:
+    return SceneDeleteController(
+        canvas,
+        move_controller=canvas.services.move_controller,
+        atom_mutation_service=canvas.services.canvas_atom_mutation_service,
+        bond_mutation_service=canvas.services.canvas_bond_mutation_service,
+        style_controller=canvas.services.style_controller,
+        history_service=canvas.history_service,
+    )
+
+
+def scene_transform_controller_for(canvas) -> SceneTransformController:
+    return SceneTransformController(
+        canvas,
+        move_controller=canvas.services.move_controller,
+        graph_service=canvas.services.canvas_graph_service,
+        history_service=canvas.history_service,
+    )
+
+
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for scene ops controller tests")
 class SceneOpsControllerTest(unittest.TestCase):
     @classmethod
@@ -90,7 +148,7 @@ class SceneOpsControllerTest(unittest.TestCase):
 
     def test_delete_selected_items_returns_false_without_selection(self) -> None:
         canvas = _FakeCanvas()
-        controller = SceneOpsController(canvas)
+        controller = scene_delete_controller_for(canvas)
 
         self.assertFalse(controller.delete_selected_items())
         self.assertEqual(canvas.pushed_commands, [])
@@ -105,7 +163,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         bond_item = _make_rect_item("bond", data1=0)
         canvas.add_item(bond_item, selected=True)
 
-        controller = SceneOpsController(canvas)
+        controller = scene_delete_controller_for(canvas)
 
         self.assertTrue(controller.delete_selected_items())
         self.assertEqual(canvas.delete_bond_calls, [])
@@ -175,16 +233,16 @@ class SceneOpsControllerTest(unittest.TestCase):
         ):
             canvas.add_item(item, selected=True)
         canvas.add_item(sibling_mark, selected=False)
-        canvas._marks_by_atom[1] = [linked_mark, sibling_mark]
+        canvas.mark_registry.by_atom[1] = [linked_mark, sibling_mark]
 
-        controller = SceneOpsController(canvas)
+        controller = scene_delete_controller_for(canvas)
 
         self.assertTrue(controller.delete_selected_items())
         self.assertEqual(len(canvas.pushed_commands), 1)
         command = canvas.pushed_commands[0]
         self.assertIsInstance(command, CompositeCommand)
         self.assertEqual(canvas.clear_handles_calls, 1)
-        self.assertEqual(canvas.last_smiles_input, None)
+        self.assertIsNone(last_smiles_input_for(canvas))
         self.assertEqual(canvas.remove_bond_calls, [0])
         self.assertEqual(sorted(canvas.redraw_connected_bonds_calls), [1, 2])
         self.assertEqual(canvas.remove_atom_calls, [(1, True)])
@@ -224,7 +282,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         canvas = _FakeCanvas()
         note_item = _make_note_item("Solo", 12.0, 14.0)
         canvas.add_item(note_item, selected=True)
-        controller = SceneOpsController(canvas)
+        controller = scene_delete_controller_for(canvas)
 
         self.assertTrue(controller.delete_selected_items())
         self.assertEqual(len(canvas.pushed_commands), 1)
@@ -238,9 +296,8 @@ class SceneOpsControllerTest(unittest.TestCase):
         canvas = _FakeCanvas()
         ring_item = _make_ring_item()
         controller_removed_items: list[object] = []
-        canvas._ring_state_dict = lambda item: {"kind": "ring", "points": [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]}
-        canvas._scene_item_controller = SimpleNamespace(remove_scene_item=controller_removed_items.append)
-        controller = SceneOpsController(canvas)
+        canvas.services.scene_item_controller = SimpleNamespace(remove_scene_item=controller_removed_items.append)
+        controller = scene_delete_controller_for(canvas)
 
         command = controller.delete_ring(ring_item, record=False)
 
@@ -251,8 +308,7 @@ class SceneOpsControllerTest(unittest.TestCase):
     def test_delete_ring_records_command_when_enabled(self) -> None:
         canvas = _FakeCanvas()
         ring_item = _make_ring_item()
-        canvas._ring_state_dict = lambda item: {"kind": "ring", "points": [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]}
-        controller = SceneOpsController(canvas)
+        controller = scene_delete_controller_for(canvas)
 
         command = controller.delete_ring(ring_item, record=True)
 
@@ -262,7 +318,7 @@ class SceneOpsControllerTest(unittest.TestCase):
 
     def test_clipboard_selection_payload_rejects_wrong_type_and_version(self) -> None:
         canvas = _FakeCanvas()
-        controller = SceneOpsController(canvas)
+        controller = scene_clipboard_controller_for(canvas)
         clipboard = QApplication.clipboard()
 
         for raw_payload in (
@@ -271,19 +327,19 @@ class SceneOpsControllerTest(unittest.TestCase):
         ):
             mime_data = canvas.new_mime_data(raw_payload)
             clipboard.setMimeData(mime_data)
-            payload, payload_json = controller._clipboard_selection_payload()
+            payload, payload_json = controller.clipboard_selection_payload()
             self.assertIsNone(payload)
             self.assertIsNone(payload_json)
 
     def test_clipboard_selection_payload_rejects_image_only_clipboard(self) -> None:
         canvas = _FakeCanvas()
-        controller = SceneOpsController(canvas)
+        controller = scene_clipboard_controller_for(canvas)
         clipboard = QApplication.clipboard()
         mime_data = QImage(4, 4, QImage.Format.Format_ARGB32)
         image_mime = canvas.new_image_mime_data(mime_data)
         clipboard.setMimeData(image_mime)
 
-        self.assertEqual(controller._clipboard_selection_payload(), (None, None))
+        self.assertEqual(controller.clipboard_selection_payload(), (None, None))
 
     def test_selection_payload_for_clipboard_includes_linked_items(self) -> None:
         canvas = _FakeCanvas()
@@ -302,42 +358,73 @@ class SceneOpsControllerTest(unittest.TestCase):
             data1={"atom_id": None},
             state={"kind": "mark", "atom_id": None, "x": 50.0, "y": 60.0},
         )
+        free_mark.setPos(50.0, 60.0)
         linked_mark = _make_rect_item(
             "mark",
-            data1={"atom_id": 1},
+            data1={"atom_id": 1, "dx": 2.0, "dy": 3.0},
             state={"kind": "mark", "atom_id": 1, "x": 2.0, "y": 3.0},
         )
+        linked_mark.setPos(2.0, 3.0)
         ring_item = _make_ring_item()
         ring_item.setData(2, [1, 2])
         canvas.ring_items.append(ring_item)
-        canvas._marks_by_atom[1] = [linked_mark]
+        canvas.mark_registry.by_atom[1] = [linked_mark]
         for item in (atom_item, bond_item, note_item, free_mark, linked_mark):
             canvas.add_item(item, selected=True)
         canvas.add_item(ring_item, selected=False)
-        controller = SceneOpsController(canvas)
+        controller = scene_clipboard_controller_for(canvas)
 
-        payload = controller._selection_payload_for_clipboard()
+        payload = controller.selection_payload_for_clipboard()
 
         assert payload is not None
         self.assertEqual(payload["format"], "chemvas-selection")
         self.assertEqual(payload["version"], 1)
         self.assertEqual([atom["id"] for atom in payload["atoms"]], [1, 2])
         self.assertEqual(payload["bonds"], [{"a": 1, "b": 2, "order": 2, "style": "double", "color": "#333333"}])
-        self.assertEqual(payload["rings"], [{"kind": "ring", "points": [(0.0, 0.0), (12.0, 0.0), (6.0, 10.0)]}])
+        self.assertEqual(
+            payload["rings"],
+            [
+                {
+                    "kind": "ring",
+                    "points": [(0.0, 0.0), (12.0, 0.0), (6.0, 10.0)],
+                    "atom_ids": [1, 2],
+                    "color": None,
+                    "alpha": 0.0,
+                }
+            ],
+        )
         self.assertEqual(
             payload["marks"],
             [
-                {"kind": "mark", "atom_id": 1, "x": 2.0, "y": 3.0},
-                {"kind": "mark", "atom_id": None, "x": 50.0, "y": 60.0},
+                {
+                    "kind": "mark",
+                    "mark_kind": None,
+                    "text": None,
+                    "atom_id": 1,
+                    "dx": 2.0,
+                    "dy": 3.0,
+                    "x": 2.0,
+                    "y": 3.0,
+                },
+                {
+                    "kind": "mark",
+                    "mark_kind": None,
+                    "text": None,
+                    "atom_id": None,
+                    "dx": None,
+                    "dy": None,
+                    "x": 50.0,
+                    "y": 60.0,
+                },
             ],
         )
         self.assertEqual(payload["scene_items"], [{"kind": "note", "text": "payload", "x": 30.0, "y": 40.0}])
 
     def test_selection_payload_for_clipboard_returns_none_for_empty_selection(self) -> None:
         canvas = _FakeCanvas()
-        controller = SceneOpsController(canvas)
+        controller = scene_clipboard_controller_for(canvas)
 
-        self.assertIsNone(controller._selection_payload_for_clipboard())
+        self.assertIsNone(controller.selection_payload_for_clipboard())
 
     def test_clipboard_copy_plan_uses_union_of_valid_rects(self) -> None:
         first = _make_rect_item("note", rect=QRectF(0.0, 0.0, 10.0, 10.0))
@@ -356,15 +443,15 @@ class SceneOpsControllerTest(unittest.TestCase):
 
     def test_copy_selection_to_clipboard_handles_empty_and_successful_copy(self) -> None:
         canvas = _FakeCanvas()
-        controller = SceneOpsController(canvas)
+        controller = scene_clipboard_controller_for(canvas)
 
         self.assertFalse(controller.copy_selection_to_clipboard())
 
         note_item = _make_note_item("copy", 10.0, 12.0)
         canvas.add_item(note_item, selected=True)
         self.assertTrue(controller.copy_selection_to_clipboard())
-        self.assertIsNotNone(canvas._clipboard_paste_source_json)
-        self.assertEqual(canvas._clipboard_paste_count, 0)
+        self.assertIsNotNone(canvas.scene_clipboard_state.paste_source_json)
+        self.assertEqual(canvas.scene_clipboard_state.paste_count, 0)
         mime_data = QApplication.clipboard().mimeData()
         self.assertTrue(mime_data.hasImage())
         self.assertTrue(mime_data.hasFormat(CLIPBOARD_SVG_MIME))
@@ -375,7 +462,7 @@ class SceneOpsControllerTest(unittest.TestCase):
 
     def test_vector_clipboard_uses_label_ink_bounds_not_hit_bounds(self) -> None:
         canvas = _FakeCanvas()
-        controller = SceneOpsController(canvas)
+        controller = scene_clipboard_controller_for(canvas)
         label = _set_selectable(AtomLabelItem("N", hit_radius=80.0))
         label.setFont(QFont("Arial", 12))
         label.setData(0, "note")
@@ -394,7 +481,7 @@ class SceneOpsControllerTest(unittest.TestCase):
 
     def test_paste_selection_remaps_atom_ids_and_restores_selection(self) -> None:
         canvas = _FakeCanvas()
-        controller = SceneOpsController(canvas)
+        controller = scene_clipboard_controller_for(canvas)
 
         stale_item = _make_rect_item("stale")
         canvas.add_item(stale_item, selected=True)
@@ -417,12 +504,12 @@ class SceneOpsControllerTest(unittest.TestCase):
                 {"kind": "note", "text": "copied", "x": 50.0, "y": 60.0},
             ],
         }
-        controller._clipboard_selection_payload = lambda: (payload, "payload-json")
+        controller.clipboard_selection_payload = lambda: (payload, "payload-json")
 
         self.assertTrue(controller.paste_selection_from_clipboard())
 
-        self.assertEqual(canvas._clipboard_paste_source_json, "payload-json")
-        self.assertEqual(canvas._clipboard_paste_count, 1)
+        self.assertEqual(canvas.scene_clipboard_state.paste_source_json, "payload-json")
+        self.assertEqual(canvas.scene_clipboard_state.paste_count, 1)
         self.assertEqual(set(canvas.model.atoms), {0, 1})
         self.assertEqual(canvas.model.atoms[0].color, "#ff0000")
         self.assertTrue(canvas.model.atoms[0].explicit_label)
@@ -468,12 +555,12 @@ class SceneOpsControllerTest(unittest.TestCase):
 
     def test_paste_selection_from_clipboard_rejects_missing_or_empty_payload(self) -> None:
         canvas = _FakeCanvas()
-        controller = SceneOpsController(canvas)
+        controller = scene_clipboard_controller_for(canvas)
 
-        controller._clipboard_selection_payload = lambda: (None, None)
+        controller.clipboard_selection_payload = lambda: (None, None)
         self.assertFalse(controller.paste_selection_from_clipboard())
 
-        controller._clipboard_selection_payload = lambda: (
+        controller.clipboard_selection_payload = lambda: (
             {"format": "chemvas-selection", "version": 1, "atoms": [], "bonds": [], "rings": [], "marks": [], "scene_items": []},
             "payload-json",
         )
@@ -481,9 +568,9 @@ class SceneOpsControllerTest(unittest.TestCase):
 
     def test_paste_selection_from_clipboard_accepts_scene_item_only_payload_and_resets_source(self) -> None:
         canvas = _FakeCanvas()
-        canvas._clipboard_paste_source_json = "old-source"
-        canvas._clipboard_paste_count = 5
-        controller = SceneOpsController(canvas)
+        canvas.scene_clipboard_state.paste_source_json = "old-source"
+        canvas.scene_clipboard_state.paste_count = 5
+        controller = scene_clipboard_controller_for(canvas)
         payload = {
             "format": "chemvas-selection",
             "version": 1,
@@ -493,17 +580,17 @@ class SceneOpsControllerTest(unittest.TestCase):
             "marks": [],
             "scene_items": [{"kind": "note", "text": "solo", "x": 10.0, "y": 15.0}],
         }
-        controller._clipboard_selection_payload = lambda: (payload, "new-source")
+        controller.clipboard_selection_payload = lambda: (payload, "new-source")
 
         self.assertTrue(controller.paste_selection_from_clipboard())
-        self.assertEqual(canvas._clipboard_paste_source_json, "new-source")
-        self.assertEqual(canvas._clipboard_paste_count, 1)
+        self.assertEqual(canvas.scene_clipboard_state.paste_source_json, "new-source")
+        self.assertEqual(canvas.scene_clipboard_state.paste_count, 1)
         self.assertEqual(canvas.created_scene_item_states, [{"kind": "note", "text": "solo", "x": 28.0, "y": 33.0}])
         self.assertEqual(canvas.record_additions_calls, [(0, 0, None, canvas.created_items)])
 
     def test_flip_selected_items_noop_paths(self) -> None:
         canvas = _FakeCanvas()
-        controller = SceneOpsController(canvas)
+        controller = scene_transform_controller_for(canvas)
 
         controller.flip_selected_items(horizontal=True)
 
@@ -513,7 +600,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         canvas = _FakeCanvas()
         missing_atom_item = _make_rect_item("atom", data1=99)
         canvas.add_item(missing_atom_item, selected=True)
-        controller = SceneOpsController(canvas)
+        controller = scene_transform_controller_for(canvas)
 
         controller.flip_selected_items(horizontal=True)
 
@@ -549,23 +636,26 @@ class _FakeCanvas:
         self._scene = QGraphicsScene()
         self.model = MoleculeModel()
         self.renderer = SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0, bond_line_width=1.0))
-        self.last_smiles_input = None
-        self._marks_by_atom: dict[int, list[QGraphicsItem]] = {}
-        self.ring_items: list[QGraphicsItem] = []
-        self._clipboard_paste_source_json = None
-        self._clipboard_paste_count = 0
+        set_last_smiles_input_for(self, None)
+        self.mark_registry = CanvasMarkRegistry()
+        for name in SCENE_ITEM_COLLECTION_ATTRS:
+            set_scene_item_collection_for(self, name, [])
+        self.scene_clipboard_state = SceneClipboardState()
+        self.scene_clipboard_state.paste_source_json = None
+        self.scene_clipboard_state.paste_count = 0
         self._clipboard_payload = None
-        self._graph_version = 0
-        self._selection_component_cache_signature = None
-        self._selection_component_cache: list[set[int]] = []
+        self.graph_state = CanvasGraphState()
         self.delete_bond_calls: list[tuple[int, bool]] = []
         self.remove_bond_calls: list[int] = []
         self.redraw_connected_bonds_calls: list[int] = []
         self.remove_atom_calls: list[tuple[int, bool]] = []
         self.removed_scene_items: list[QGraphicsItem] = []
         self.pushed_commands: list[object] = []
+        self.history_service = SimpleNamespace(push=self.push_command)
         self.clear_handles_calls = 0
-        self.atom_items: dict[int, QGraphicsItem] = {}
+        set_atom_items_for(self, {})
+        set_atom_dots_for(self, {})
+        set_bond_items_for(self, {})
         self.created_scene_item_states: list[dict] = []
         self.created_items: list[QGraphicsItem] = []
         self.restore_bond_calls: list[tuple[int, dict]] = []
@@ -574,13 +664,86 @@ class _FakeCanvas:
         self.update_selection_outline_calls = 0
         self.suspend_selection_outline_calls: list[bool] = []
         self.record_additions_calls: list[tuple[int, int, str | None, list[QGraphicsItem]]] = []
-        self._scene_item_controller = _FakeSceneItemController(self)
+        self.services = SimpleNamespace(
+            history_service=self.history_service,
+            scene_item_controller=_FakeSceneItemController(self),
+            canvas_graph_service=SimpleNamespace(connected_components=self.connected_components),
+            atom_label_service=SimpleNamespace(
+                add_or_update_atom_label=self.add_or_update_atom_label,
+                position_label=self.position_label,
+            ),
+            canvas_atom_mutation_service=SimpleNamespace(
+                add_atom=self.add_atom,
+                remove_atom_only=self._remove_atom_only,
+                restore_atom_from_state=self.restore_atom_from_state,
+                apply_atom_color=self.apply_atom_color,
+            ),
+            canvas_bond_mutation_service=SimpleNamespace(
+                add_bond=self.add_bond,
+                restore_bond_from_state=self._restore_bond_from_state,
+                remove_bond_by_id=self._remove_bond_by_id,
+                trim_bonds_to_length=self._trim_bonds_to_length,
+            ),
+            scene_decoration_build_service=SimpleNamespace(set_mark_center=self.set_mark_center),
+            hit_testing_service=SimpleNamespace(mark_spatial_index_dirty=self.mark_spatial_index_dirty),
+            canvas_ring_fill_scene_service=SimpleNamespace(update_ring_fills_for_atoms=lambda atom_ids: None),
+            handle_overlay_service=SimpleNamespace(clear_handles=self.clear_handles),
+            canvas_history_recording_service=SimpleNamespace(record_additions=self._record_additions),
+            selection_controller=SimpleNamespace(
+                clear_note_selection=self.clear_note_selection,
+                select_note=self.select_note,
+                update_selection_outline=self.refresh_selection_outline,
+            ),
+            style_controller=SimpleNamespace(suspend_selection_outline=self.suspend_selection_outline),
+            move_controller=SimpleNamespace(
+                redraw_connected_bonds=self.redraw_connected_bonds,
+                redraw_bonds_for_atoms=self.redraw_bonds_for_atoms,
+            ),
+        )
 
     def devicePixelRatioF(self) -> float:
         return 1.0
 
     def scene(self) -> QGraphicsScene:
         return self._scene
+
+    def _scene_items(self, name: str):
+        return scene_item_collection_for(self, name)
+
+    def _set_scene_items(self, name: str, value) -> None:
+        set_scene_item_collection_for(self, name, value)
+
+    selected_notes = property(lambda self: self._scene_items("selected_notes"), lambda self, value: self._set_scene_items("selected_notes", value))
+    ring_items = property(lambda self: self._scene_items("ring_items"), lambda self, value: self._set_scene_items("ring_items", value))
+    note_items = property(lambda self: self._scene_items("note_items"), lambda self, value: self._set_scene_items("note_items", value))
+    mark_items = property(lambda self: self._scene_items("mark_items"), lambda self, value: self._set_scene_items("mark_items", value))
+    arrow_items = property(lambda self: self._scene_items("arrow_items"), lambda self, value: self._set_scene_items("arrow_items", value))
+    ts_bracket_items = property(lambda self: self._scene_items("ts_bracket_items"), lambda self, value: self._set_scene_items("ts_bracket_items", value))
+    orbital_items = property(lambda self: self._scene_items("orbital_items"), lambda self, value: self._set_scene_items("orbital_items", value))
+
+    @property
+    def atom_items(self):
+        return atom_items_for(self)
+
+    @atom_items.setter
+    def atom_items(self, value) -> None:
+        set_atom_items_for(self, value)
+
+    @property
+    def atom_dots(self):
+        return atom_dots_for(self)
+
+    @atom_dots.setter
+    def atom_dots(self, value) -> None:
+        set_atom_dots_for(self, value)
+
+    @property
+    def bond_items(self):
+        return bond_items_for(self)
+
+    @bond_items.setter
+    def bond_items(self, value) -> None:
+        set_bond_items_for(self, value)
 
     def add_item(self, item: QGraphicsItem, *, selected: bool = False) -> None:
         self._scene.addItem(item)
@@ -605,11 +768,18 @@ class _FakeCanvas:
         self.remove_bond_calls.append(bond_id)
         self.model.bonds[bond_id] = None
 
-    def _redraw_connected_bonds(self, atom_id: int) -> None:
+    def _trim_bonds_to_length(self, length: int) -> None:
+        del self.model.bonds[length:]
+
+    def redraw_connected_bonds(self, atom_id: int, skip_bond_id: int | None = None) -> None:
         self.redraw_connected_bonds_calls.append(atom_id)
 
-    def _mark_state_dict(self, mark: QGraphicsItem) -> dict:
-        return self.scene_item_state(mark)
+    def redraw_bonds_for_atoms(self, atom_ids: set[int]) -> None:
+        for atom_id in atom_ids:
+            self.redraw_connected_bonds(atom_id)
+
+    def mark_spatial_index_dirty(self) -> None:
+        return None
 
     def _atom_state_dict(self, atom_id: int) -> dict:
         atom = self.model.atoms[atom_id]
@@ -645,10 +815,10 @@ class _FakeCanvas:
     def suspend_selection_outline(self, suspended: bool) -> None:
         self.suspend_selection_outline_calls.append(bool(suspended))
 
-    def _update_selection_outline(self) -> None:
+    def refresh_selection_outline(self) -> None:
         self.update_selection_outline_calls += 1
 
-    def _push_command(self, command) -> None:
+    def push_command(self, command) -> None:
         self.pushed_commands.append(command)
 
     def new_mime_data(self, payload: bytes):
@@ -675,23 +845,14 @@ class _FakeCanvas:
     def _selection_items_for_copy(self):
         return list(self._scene.selectedItems())
 
-    def _selected_ids(self) -> tuple[set[int], set[int]]:
-        atom_ids: set[int] = set()
-        bond_ids: set[int] = set()
-        for item in self._scene.selectedItems():
-            kind = item.data(0)
-            data = item.data(1)
-            if kind == "atom" and isinstance(data, int):
-                atom_ids.add(data)
-            elif kind == "bond" and isinstance(data, int):
-                bond_ids.add(data)
-        return atom_ids, bond_ids
-
     def _selected_atom_ids_for_transform(self) -> set[int]:
-        atom_ids, _ = self._selected_ids()
+        atom_ids: set[int] = set()
+        for item in self._scene.selectedItems():
+            if item.data(0) == "atom" and isinstance(item.data(1), int):
+                atom_ids.add(item.data(1))
         return atom_ids
 
-    def _connected_components(self, atom_ids: set[int]) -> list[set[int]]:
+    def connected_components(self, atom_ids: set[int]) -> list[set[int]]:
         return [set(atom_ids)] if atom_ids else []
 
     def _bounding_box_center_for_atoms(self, atom_ids: set[int]) -> QPointF | None:
@@ -718,6 +879,15 @@ class _FakeCanvas:
     def apply_atom_color(self, atom_id: int, color: str) -> None:
         self.model.atoms[atom_id].color = color
 
+    def restore_atom_from_state(self, atom_id: int, state: dict) -> None:
+        self.model.atoms[atom_id] = Atom(
+            state.get("element", "C"),
+            float(state.get("x", 0.0)),
+            float(state.get("y", 0.0)),
+            color=state.get("color", "#000000"),
+            explicit_label=bool(state.get("explicit_label", False)),
+        )
+
     def add_or_update_atom_label(
         self,
         atom_id: int,
@@ -729,6 +899,22 @@ class _FakeCanvas:
     ) -> None:
         self.model.atoms[atom_id].element = element
         self.model.atoms[atom_id].explicit_label = show_carbon
+
+    def position_label(self, item: QGraphicsItem, x: float, y: float) -> None:
+        set_rect = getattr(item, "setRect", None)
+        if callable(set_rect):
+            set_rect(QRectF(x - 2.0, y - 2.0, 4.0, 4.0))
+            return
+        item.setPos(x, y)
+
+    def set_mark_center(self, item: QGraphicsItem, center: QPointF) -> None:
+        item.setPos(center)
+        state = item.data(9)
+        if isinstance(state, dict):
+            state = dict(state)
+            state["x"] = center.x()
+            state["y"] = center.y()
+            item.setData(9, state)
 
     def add_bond(self, atom_a: int, atom_b: int, order: int) -> int:
         self.model.bonds.append(Bond(atom_a, atom_b, order))
@@ -795,9 +981,6 @@ class _FakeCanvas:
 
     def select_note(self, item: QGraphicsTextItem, additive: bool = True) -> None:
         self.selected_notes.append(item)
-
-    def _update_selection_outline(self) -> None:
-        self.update_selection_outline_calls += 1
 
     def _record_additions(
         self,

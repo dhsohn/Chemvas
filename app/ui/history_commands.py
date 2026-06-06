@@ -5,6 +5,11 @@ from dataclasses import dataclass, field
 from core.history import HistoryCommand
 
 from ui.atom_label_access import add_or_update_atom_label
+from ui.canvas_smiles_input_state import set_last_smiles_input_for
+from ui.move_access import (
+    move_item_for,
+    refresh_selection_outline_for_canvas,
+)
 from ui.scene_item_access import (
     apply_scene_item_state as _apply_scene_item_state,
 )
@@ -12,11 +17,36 @@ from ui.scene_item_access import (
     create_scene_item_from_state as _create_scene_item_from_state,
 )
 from ui.scene_item_access import (
+    item_is_in_canvas_scene as _item_is_in_canvas_scene,
+)
+from ui.scene_item_access import (
     remove_scene_item as _remove_scene_item,
 )
 from ui.scene_item_access import (
     restore_scene_item as _restore_scene_item,
 )
+
+
+@dataclass
+class MoveItemsCommand(HistoryCommand):
+    items: list
+    dx: float
+    dy: float
+
+    def _apply(self, canvas, dx: float, dy: float) -> None:
+        for item in self.items:
+            if item is None:
+                continue
+            if not _item_is_in_canvas_scene(canvas, item):
+                continue
+            move_item_for(canvas, item, dx, dy, update_selection=False)
+        refresh_selection_outline_for_canvas(canvas)
+
+    def undo(self, canvas) -> None:
+        self._apply(canvas, -self.dx, -self.dy)
+
+    def redo(self, canvas) -> None:
+        self._apply(canvas, self.dx, self.dy)
 
 
 @dataclass
@@ -98,7 +128,7 @@ class ChangeAtomLabelCommand(HistoryCommand):
             allow_merge=False,
             show_carbon=explicit_label,
         )
-        canvas.last_smiles_input = smiles_input
+        set_last_smiles_input_for(canvas, smiles_input)
 
     def undo(self, canvas) -> None:
         self._apply(
@@ -121,5 +151,6 @@ __all__ = [
     "AddSceneItemsCommand",
     "ChangeAtomLabelCommand",
     "DeleteSceneItemsCommand",
+    "MoveItemsCommand",
     "UpdateSceneItemCommand",
 ]

@@ -5,15 +5,40 @@ from typing import TYPE_CHECKING
 from core.model import MoleculeModel
 from PyQt6.QtCore import QPointF
 
-from ui.atom_label_access import add_or_update_atom_label
+from ui.canvas_smiles_input_state import last_smiles_input_for
+from ui.input_view_access import viewport_center_scene_pos_for
+from ui.renderer_style_access import bond_length_px_for
+from ui.structure_insert_access import (
+    add_insert_atom_for,
+    add_insert_bond_for,
+    add_insert_bond_graphics_for,
+    add_or_update_insert_atom_label_for,
+    ensure_insert_carbon_dot_for,
+    insert_atom_for_id,
+    insert_bond_count_for,
+    insert_bond_for_id,
+    insert_next_atom_id_for,
+    new_insert_bond_ids_from,
+    record_insert_additions_for,
+    restore_insert_selection_from_ids_for,
+    set_inserted_atom_metadata_for,
+    set_inserted_bond_metadata_for,
+)
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
 
 
 class StructureInsertService:
-    def __init__(self, canvas: CanvasView) -> None:
+    def __init__(self, canvas: CanvasView, *, note_controller=None) -> None:
         self.canvas = canvas
+        self.note_controller = note_controller
+
+    def _create_text_note(self, pos: QPointF, text: str):
+        note_controller = self.note_controller
+        if note_controller is not None:
+            return note_controller.create_text_note(pos, text)
+        return None
 
     def insert_structure_model(
         self,
@@ -24,12 +49,12 @@ class StructureInsertService:
     ) -> tuple[set[int], set[int]]:
         if not model.atoms:
             return set(), set()
-        before_smiles_input = self.canvas.last_smiles_input
-        before_next_atom_id = self.canvas.model.next_atom_id
-        before_bond_count = len(self.canvas.model.bonds)
+        before_smiles_input = last_smiles_input_for(self.canvas)
+        before_next_atom_id = insert_next_atom_id_for(self.canvas)
+        before_bond_count = insert_bond_count_for(self.canvas)
 
         if center is None:
-            center = self.canvas.mapToScene(self.canvas.viewport().rect().center())
+            center = viewport_center_scene_pos_for(self.canvas)
         left, top, right, bottom = model.bounds()
         model_center = QPointF((left + right) * 0.5, (top + bottom) * 0.5)
         dx = center.x() - model_center.x()
@@ -40,13 +65,17 @@ class StructureInsertService:
         inserted_bond_ids: set[int] = set()
         for old_id in sorted(model.atoms):
             atom = model.atoms[old_id]
-            new_id = self.canvas.add_atom(atom.element, atom.x + dx, atom.y + dy)
-            self.canvas.model.atoms[new_id].color = atom.color
-            self.canvas.model.atoms[new_id].explicit_label = atom.explicit_label
+            new_id = add_insert_atom_for(self.canvas, atom.element, atom.x + dx, atom.y + dy)
+            set_inserted_atom_metadata_for(
+                self.canvas,
+                new_id,
+                color=atom.color,
+                explicit_label=atom.explicit_label,
+            )
             atom_id_map[old_id] = new_id
             inserted_atom_ids.add(new_id)
 
-        bonds_start = len(self.canvas.model.bonds)
+        bonds_start = insert_bond_count_for(self.canvas)
         for bond in model.bonds:
             if bond is None:
                 continue
@@ -54,23 +83,28 @@ class StructureInsertService:
             b_id = atom_id_map.get(bond.b)
             if a_id is None or b_id is None:
                 continue
-            new_bond_id = self.canvas.add_bond(a_id, b_id, bond.order)
-            created_bond = self.canvas.model.bonds[new_bond_id]
-            created_bond.style = bond.style
-            created_bond.color = bond.color
-        for bond_id in range(bonds_start, len(self.canvas.model.bonds)):
-            bond = self.canvas.model.bonds[bond_id]
+            new_bond_id = add_insert_bond_for(self.canvas, a_id, b_id, bond.order)
+            set_inserted_bond_metadata_for(
+                self.canvas,
+                new_bond_id,
+                style=bond.style,
+                color=bond.color,
+            )
+        for bond_id in new_insert_bond_ids_from(self.canvas, bonds_start):
+            bond = insert_bond_for_id(self.canvas, bond_id)
             if bond is None:
                 continue
-            self.canvas._add_bond_graphics(bond_id)
+            add_insert_bond_graphics_for(self.canvas, bond_id)
             inserted_bond_ids.add(bond_id)
 
         for new_id in inserted_atom_ids:
-            atom = self.canvas.model.atoms[new_id]
+            atom = insert_atom_for_id(self.canvas, new_id)
+            if atom is None:
+                continue
             if atom.element == "C" and not atom.explicit_label:
-                self.canvas._ensure_carbon_dot(new_id)
+                ensure_insert_carbon_dot_for(self.canvas, new_id)
             else:
-                add_or_update_atom_label(
+                add_or_update_insert_atom_label_for(
                     self.canvas,
                     new_id,
                     atom.element,
@@ -80,21 +114,31 @@ class StructureInsertService:
 
         added_scene_items = []
         if title:
-            inserted_left = min(self.canvas.model.atoms[atom_id].x for atom_id in inserted_atom_ids)
-            inserted_top = min(self.canvas.model.atoms[atom_id].y for atom_id in inserted_atom_ids)
-            note_pos = QPointF(
-                inserted_left,
-                inserted_top - self.canvas.renderer.style.bond_length_px * 1.4,
-            )
-            added_scene_items.append(self.canvas.add_text_note(note_pos, title))
+            inserted_atoms = [
+                atom
+                for atom_id in inserted_atom_ids
+                for atom in [insert_atom_for_id(self.canvas, atom_id)]
+                if atom is not None
+            ]
+            if inserted_atoms:
+                inserted_left = min(atom.x for atom in inserted_atoms)
+                inserted_top = min(atom.y for atom in inserted_atoms)
+                note_pos = QPointF(
+                    inserted_left,
+                    inserted_top - bond_length_px_for(self.canvas) * 1.4,
+                )
+                note_item = self._create_text_note(note_pos, title)
+                if note_item is not None:
+                    added_scene_items.append(note_item)
 
-        self.canvas._record_additions(
+        record_insert_additions_for(
+            self.canvas,
             before_next_atom_id=before_next_atom_id,
             before_bond_count=before_bond_count,
             before_smiles_input=before_smiles_input,
             added_scene_items=added_scene_items,
         )
-        self.canvas._restore_selection_from_ids(inserted_atom_ids, inserted_bond_ids)
+        restore_insert_selection_from_ids_for(self.canvas, inserted_atom_ids, inserted_bond_ids)
         return inserted_atom_ids, inserted_bond_ids
 
 

@@ -14,6 +14,30 @@ from ui.main_window_toolbar_logic import build_template_entries
 
 
 class MainWindowToolRoutingService:
+    def __init__(
+        self,
+        *,
+        insert_controller_for_window,
+        tool_mode_controller_for_window,
+        color_mutation_service_for_window,
+        color_tool_for_window,
+        selected_scene_items_for_window,
+        icon_factory_for_window,
+        tool_state_service,
+        context_page_state_service,
+    ) -> None:
+        self._insert_controller_for_window = insert_controller_for_window
+        self._tool_mode_controller_for_window = tool_mode_controller_for_window
+        self._color_mutation_service_for_window = color_mutation_service_for_window
+        self._color_tool_for_window = color_tool_for_window
+        self._selected_scene_items_for_window = selected_scene_items_for_window
+        self._icon_factory_for_window = icon_factory_for_window
+        self._tool_state = tool_state_service
+        self._context_page_state = context_page_state_service
+
+    def _selected_scene_items(self, window):
+        return self._selected_scene_items_for_window(window, excluded_kinds=set())
+
     def add_menu_action(
         self,
         menu,
@@ -31,29 +55,32 @@ class MainWindowToolRoutingService:
         return QIcon(pixmap)
 
     def template_entries(self, window) -> list[tuple[str, Callable[[], None]]]:
-        return build_template_entries(window.canvas.begin_ring_template_insert)
+        insert_controller = self._insert_controller_for_window(window)
+        return build_template_entries(insert_controller.begin_ring_template_insert)
 
     def acs_color_palette(self) -> list[tuple[str, str]]:
         return list(COLOR_PALETTE_SPECS)
 
     def populate_template_menu(self, window, menu) -> None:
+        icon_factory = self._icon_factory_for_window(window)
         for label, handler in self.template_entries(window):
-            self.add_menu_action(menu, label, handler, window._icon_factory.icon_template_preview(label))
+            self.add_menu_action(menu, label, handler, icon_factory.icon_template_preview(label))
 
     def populate_arrow_menu(self, window, menu) -> None:
+        icon_factory = self._icon_factory_for_window(window)
         for label, kind in ARROW_MENU_SPECS:
             self.add_menu_action(
                 menu,
                 label,
-                lambda value=label: window._activate_arrow_type_from_menu(value),
-                window._icon_factory.icon_arrow_preview(kind),
+                lambda value=label: self.activate_arrow_type_from_menu(window, value),
+                icon_factory.icon_arrow_preview(kind),
             )
         preset_menu = menu.addMenu("Preset")
         for label in ARROW_PRESET_SPECS:
             self.add_menu_action(
                 preset_menu,
                 label,
-                lambda value=label: window._activate_arrow_preset_from_menu(value),
+                lambda value=label: self.activate_arrow_preset_from_menu(window, value),
             )
 
     def populate_palette_menu(self, window, menu, callback: Callable[[str], None]) -> None:
@@ -66,24 +93,26 @@ class MainWindowToolRoutingService:
             )
 
     def activate_arrow_type_from_menu(self, window, value: str) -> None:
-        window._set_tool_with_status("arrow")
-        window._set_arrow_type(value)
+        self._context_page_state.set_tool_with_status(window, "arrow")
+        self._tool_state.set_arrow_type(window, value)
 
     def activate_arrow_preset_from_menu(self, window, value: str) -> None:
-        window._set_tool_with_status("arrow")
-        window._set_arrow_preset(value)
+        self._context_page_state.set_tool_with_status(window, "arrow")
+        self._tool_state.set_arrow_preset(window, value)
 
     def apply_color_preset(self, window, hex_value: str, *, qtimer=QTimer) -> None:
         color = QColor(hex_value)
-        tool = window.canvas.tools.tools.get("color")
-        if tool is not None:
-            tool._last_color = color.name()
+        tool = self._color_tool_for_window(window)
+        set_color = getattr(tool, "set_color", None)
+        if callable(set_color):
+            set_color(color)
 
         def apply_color() -> None:
-            window.canvas.set_tool("color")
-            for item in window.canvas.scene().selectedItems():
+            self._tool_mode_controller_for_window(window).set_tool("color")
+            color_service = self._color_mutation_service_for_window(window)
+            for item in self._selected_scene_items(window):
                 if item.data(0) in {"bond", "atom", "ring"}:
-                    window.canvas.apply_color_to_item(item, color)
+                    color_service.apply_color_to_item(item, color)
 
         qtimer.singleShot(0, apply_color)
 
@@ -91,9 +120,10 @@ class MainWindowToolRoutingService:
         color = QColor(hex_value)
 
         def apply_fill() -> None:
-            for item in window.canvas.scene().selectedItems():
+            color_service = self._color_mutation_service_for_window(window)
+            for item in self._selected_scene_items(window):
                 if item.data(0) == "ring":
-                    window.canvas.apply_ring_fill_color(item, color)
+                    color_service.apply_ring_fill_color(item, color)
 
         qtimer.singleShot(0, apply_fill)
 

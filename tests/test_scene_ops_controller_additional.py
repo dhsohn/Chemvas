@@ -19,11 +19,12 @@ if QApplication is not None:
     )
 
     from tests.test_scene_ops_controller import (
-        SceneOpsController,
         _FakeCanvas,
         _make_note_item,
         _make_rect_item,
         _make_ring_item,
+        scene_clipboard_controller_for,
+        scene_transform_controller_for,
     )
 
 
@@ -44,20 +45,20 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
 
     def test_selected_atom_components_cache_is_reused_until_graph_version_changes(self) -> None:
         canvas = _FakeCanvas()
-        controller = SceneOpsController(canvas)
+        controller = scene_transform_controller_for(canvas)
         calls: list[set[int]] = []
 
         def connected_components(atom_ids: set[int]) -> list[set[int]]:
             calls.append(set(atom_ids))
             return [{1, 2}]
 
-        canvas._connected_components = connected_components
-        canvas._graph_version = 4
+        canvas.services.canvas_graph_service.connected_components = connected_components
+        canvas.graph_state.graph_version = 4
 
-        first = controller._selected_atom_components_for_transform({1, 2})
-        second = controller._selected_atom_components_for_transform({1, 2})
-        canvas._graph_version = 5
-        third = controller._selected_atom_components_for_transform({1, 2})
+        first = controller.selected_atom_components_for_transform({1, 2})
+        second = controller.selected_atom_components_for_transform({1, 2})
+        canvas.graph_state.graph_version = 5
+        third = controller.selected_atom_components_for_transform({1, 2})
 
         self.assertEqual(first, [{1, 2}])
         self.assertEqual(second, [{1, 2}])
@@ -134,9 +135,10 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
 
         mark_item = _make_rect_item(
             "mark",
-            data1={"atom_id": atom_1_id},
+            data1={"atom_id": atom_1_id, "dx": 2.0, "dy": 3.0},
             state={"kind": "mark", "atom_id": atom_1_id, "x": 2.0, "y": 3.0, "dx": 2.0, "dy": 3.0},
         )
+        mark_item.setPos(2.0, 3.0)
         ring_item = _make_ring_item()
         ring_item.setData(2, [atom_1_id, atom_2_id])
         note_item = _make_note_item("flip me", 40.0, 10.0)
@@ -151,9 +153,9 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
 
         for item in (mark_item, ring_item, note_item, arrow_item, orbital_item):
             canvas.add_item(item, selected=True)
-        canvas._marks_by_atom[atom_1_id] = [mark_item]
+        canvas.mark_registry.by_atom[atom_1_id] = [mark_item]
 
-        controller = SceneOpsController(canvas)
+        controller = scene_transform_controller_for(canvas)
         controller.flip_selected_items(horizontal=True)
 
         self.assertEqual(len(canvas.pushed_commands), 1)
@@ -172,26 +174,26 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
     def test_copy_selection_to_clipboard_without_payload_hides_and_restores_overlapping_items(self) -> None:
         canvas = _FakeCanvas()
         canvas.devicePixelRatioF = lambda: 2.0
-        selected_item = _make_rect_item("handle", rect=QRectF(0.0, 0.0, 10.0, 10.0))
+        selected_item = _make_rect_item("arrow", rect=QRectF(0.0, 0.0, 10.0, 10.0))
         overlapping_item = _make_rect_item("note", rect=QRectF(2.0, 2.0, 8.0, 8.0))
         canvas.add_item(selected_item, selected=True)
         canvas.add_item(overlapping_item, selected=False)
-        controller = SceneOpsController(canvas)
+        controller = scene_clipboard_controller_for(canvas)
 
         self.assertTrue(controller.copy_selection_to_clipboard())
 
         clipboard = QApplication.clipboard().mimeData()
         self.assertTrue(clipboard.hasImage())
         self.assertFalse(clipboard.hasFormat(canvas.CLIPBOARD_SELECTION_MIME))
-        self.assertIsNone(canvas._clipboard_paste_source_json)
-        self.assertEqual(canvas._clipboard_paste_count, 0)
+        self.assertIsNone(canvas.scene_clipboard_state.paste_source_json)
+        self.assertEqual(canvas.scene_clipboard_state.paste_count, 0)
         self.assertTrue(overlapping_item.isVisible())
 
     def test_paste_selection_from_clipboard_repeats_source_and_skips_bad_entries(self) -> None:
         canvas = _FakeCanvas()
-        canvas._clipboard_paste_source_json = "payload-json"
-        canvas._clipboard_paste_count = 3
-        controller = SceneOpsController(canvas)
+        canvas.scene_clipboard_state.paste_source_json = "payload-json"
+        canvas.scene_clipboard_state.paste_count = 3
+        controller = scene_clipboard_controller_for(canvas)
         payload = {
             "format": "chemvas-selection",
             "version": 1,
@@ -219,12 +221,12 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
             return original_create_scene_item_from_state(state)
 
         canvas.create_scene_item_from_state = create_scene_item_from_state
-        controller._clipboard_selection_payload = lambda: (payload, "payload-json")
+        controller.clipboard_selection_payload = lambda: (payload, "payload-json")
 
         self.assertTrue(controller.paste_selection_from_clipboard())
 
-        self.assertEqual(canvas._clipboard_paste_source_json, "payload-json")
-        self.assertEqual(canvas._clipboard_paste_count, 4)
+        self.assertEqual(canvas.scene_clipboard_state.paste_source_json, "payload-json")
+        self.assertEqual(canvas.scene_clipboard_state.paste_count, 4)
         self.assertEqual(set(canvas.model.atoms), {0})
         self.assertEqual(canvas.model.atoms[0].color, "#ff0000")
         self.assertTrue(canvas.model.atoms[0].explicit_label)

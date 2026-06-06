@@ -23,7 +23,13 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from ui.main_window import MainWindow
+    from ui.main_window_canvas_ports import active_canvas_for_window
     from ui.main_window_icon_factory import MainWindowIconFactory
+    from ui.main_window_icon_geometry import (
+        benzene_icon_polygon,
+        chair_icon_points,
+        template_preview_ring_sides,
+    )
 
 
 def _opaque_bounds(image) -> tuple[int, int, int, int] | None:
@@ -39,7 +45,7 @@ def _opaque_bounds(image) -> tuple[int, int, int, int] | None:
     return min(xs), min(ys), max(xs), max(ys)
 
 
-def _render_chair_bounds(factory: "MainWindowIconFactory", rect) -> tuple[int, int, int, int] | None:
+def _render_chair_bounds(rect) -> tuple[int, int, int, int] | None:
     pixmap = QPixmap(26, 26)
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
@@ -47,7 +53,7 @@ def _render_chair_bounds(factory: "MainWindowIconFactory", rect) -> tuple[int, i
     pen = QPen(QColor("#3d3229"))
     pen.setWidthF(1.6)
     painter.setPen(pen)
-    chair = factory.chair_icon_points(rect)
+    chair = chair_icon_points(rect)
     if not chair.isEmpty():
         painter.drawPolygon(chair)
     painter.end()
@@ -71,7 +77,7 @@ class MainWindowIconGeometryTest(unittest.TestCase):
 
     def test_ring_icon_inner_bond_matches_canvas_spacing_and_orientation(self) -> None:
         center = QPointF(15.0, 15.0)
-        outer = self.factory.benzene_icon_polygon(center, 10.0)
+        outer = benzene_icon_polygon(center, 10.0)
         base_segments = self.factory.benzene_icon_inner_segments(outer, center)
         inner_segments = self.factory.benzene_icon_inner_segments(outer, center, spacing_scale=0.92)
 
@@ -89,8 +95,8 @@ class MainWindowIconGeometryTest(unittest.TestCase):
         inner_mid_x = (start.x() + end.x()) / 2.0
         icon_bond_length = math.hypot(outer[1].x() - outer[0].x(), outer[1].y() - outer[0].y())
         expected_base_spacing = icon_bond_length * (
-            self.window.canvas.renderer.style.bond_spacing_px * 1.1
-            / self.window.canvas.renderer.style.bond_length_px
+            active_canvas_for_window(self.window).renderer.style.bond_spacing_px * 1.1
+            / active_canvas_for_window(self.window).renderer.style.bond_length_px
         )
 
         self.assertAlmostEqual(outer_mid_x - base_inner_mid_x, expected_base_spacing, places=2)
@@ -107,7 +113,7 @@ class MainWindowIconGeometryTest(unittest.TestCase):
         self.assertGreaterEqual(max_y - min_y + 1, 24)
 
     def test_chair_template_icons_use_larger_geometry(self) -> None:
-        old_bounds = _render_chair_bounds(self.factory, QRectF(4.0, 7.0, 22.0, 16.0))
+        old_bounds = _render_chair_bounds(QRectF(4.0, 7.0, 22.0, 16.0))
         toolbar_bounds = _opaque_bounds(self.factory.icon_templates().pixmap(26, 26).toImage())
         preview_bounds = _opaque_bounds(
             self.factory.icon_template_preview("Cyclohexane (Chair)").pixmap(26, 26).toImage()
@@ -132,6 +138,44 @@ class MainWindowIconGeometryTest(unittest.TestCase):
         bounds = _opaque_bounds(self.factory.icon_bond_wedge().pixmap(30, 30).toImage())
         self.assertIsNotNone(bounds)
 
+    def test_canvas_dependent_icons_can_render_from_injected_style_port(self) -> None:
+        class _FakeStyle:
+            def bond_length_px(self) -> float:
+                return 20.0
+
+            def bond_pen(self) -> QPen:
+                pen = QPen()
+                pen.setWidthF(1.5)
+                return pen
+
+            def bold_bond_pen(self) -> QPen:
+                pen = QPen()
+                pen.setWidthF(5.0)
+                return pen
+
+            def dotted_bond_pen(self) -> QPen:
+                pen = QPen()
+                pen.setWidthF(2.0)
+                pen.setStyle(Qt.PenStyle.DotLine)
+                return pen
+
+            def hash_spacing_px(self) -> float:
+                return 4.0
+
+            def ring_double_inner_segment(self, start: QPointF, end: QPointF, center: QPointF):
+                return (start.x() + 1.0, start.y(), end.x() + 1.0, end.y())
+
+        factory = MainWindowIconFactory(object(), canvas_style=_FakeStyle())
+
+        for icon in (
+            factory.icon_bond_bold(),
+            factory.icon_bond_wedge(),
+            factory.icon_bond_hash(),
+            factory.icon_bond_dotted(),
+            factory.icon_ring(),
+        ):
+            self.assertIsNotNone(_opaque_bounds(icon.pixmap(30, 30).toImage()))
+
     def test_benzene_inner_segments_handle_short_and_zero_length_polygons(self) -> None:
         center = QPointF(15.0, 15.0)
 
@@ -143,6 +187,7 @@ class MainWindowIconGeometryTest(unittest.TestCase):
 
     def test_basic_toolbar_icons_render_non_empty_bounds(self) -> None:
         for icon in (
+            self.factory.icon_select(),
             self.factory.icon_add_sheet(),
             self.factory.icon_info(),
             self.factory.icon_preview_panel(),
@@ -150,6 +195,7 @@ class MainWindowIconGeometryTest(unittest.TestCase):
             self.factory.icon_bond_triple(),
             self.factory.icon_orbital(),
             self.factory.icon_move(),
+            self.factory.icon_perspective(),
         ):
             self.assertIsNotNone(_opaque_bounds(icon.pixmap(30, 30).toImage()))
 
@@ -161,7 +207,9 @@ class MainWindowIconGeometryTest(unittest.TestCase):
             self.factory.icon_setup_sheet(),
             self.factory.icon_arrow(),
             self.factory.icon_color(),
+            self.factory.icon_select(),
             self.factory.icon_templates(),
+            self.factory.icon_perspective(),
         ):
             self.assertIn(expected_size, icon.availableSizes())
 
@@ -199,11 +247,11 @@ class MainWindowIconGeometryTest(unittest.TestCase):
             bounds = _opaque_bounds(self.factory.icon_template_preview(label).pixmap(30, 30).toImage())
             self.assertIsNotNone(bounds, label)
 
-        self.assertEqual(self.factory.template_preview_ring_sides("Cycloheptane"), 7)
-        self.assertEqual(self.factory.template_preview_ring_sides("Cyclooctane"), 8)
+        self.assertEqual(template_preview_ring_sides("Cycloheptane"), 7)
+        self.assertEqual(template_preview_ring_sides("Cyclooctane"), 8)
 
     def test_template_icons_tolerate_empty_chair_geometry_and_zero_rect(self) -> None:
-        with mock.patch.object(self.factory, "chair_icon_points", return_value=QPolygonF()):
+        with mock.patch("ui.main_window_template_icon_renderer.chair_icon_points", return_value=QPolygonF()):
             self.assertIsNone(_opaque_bounds(self.factory.icon_templates().pixmap(30, 30).toImage()))
             self.assertIsNone(
                 _opaque_bounds(self.factory.icon_template_preview("Cyclohexane (Chair)").pixmap(30, 30).toImage())

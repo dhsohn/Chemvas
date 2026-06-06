@@ -3,34 +3,39 @@ from types import SimpleNamespace
 from unittest import mock
 
 from core.model import Atom, Bond, MoleculeModel
+from ui.canvas_atom_graphics_state import set_atom_items_for
 from ui.canvas_document_state import (
     apply_document_settings,
     restore_document_post_model_items,
     restore_document_pre_model_items,
     snapshot_canvas_document_state,
 )
+from ui.canvas_scene_items_state import CanvasSceneItemsState
+from ui.canvas_smiles_input_state import CanvasSmilesInputState, last_smiles_input_for
+from ui.canvas_text_style_state import text_style_state_for
+from ui.canvas_tool_settings_state import tool_settings_state_for
 
 
 class _Canvas:
     def __init__(self) -> None:
         self.calls = []
 
-    def _restore_ring_from_state(self, ring_state):
+    def restore_ring_from_state(self, ring_state):
         self.calls.append(("canvas_ring", dict(ring_state)))
 
-    def _restore_note_from_state(self, note_state):
+    def restore_note_from_state(self, note_state):
         self.calls.append(("canvas_note", dict(note_state)))
 
-    def _restore_mark_from_state(self, mark_state):
+    def restore_mark_from_state(self, mark_state):
         self.calls.append(("canvas_mark", dict(mark_state)))
 
-    def _restore_arrow_from_state(self, arrow_state):
+    def restore_arrow_from_state(self, arrow_state):
         self.calls.append(("canvas_arrow", dict(arrow_state)))
 
-    def _restore_ts_bracket_from_state(self, ts_bracket_state):
+    def restore_ts_bracket_from_state(self, ts_bracket_state):
         self.calls.append(("canvas_ts", dict(ts_bracket_state)))
 
-    def _restore_orbital_from_state(self, orbital_state):
+    def restore_orbital_from_state(self, orbital_state):
         self.calls.append(("canvas_orbital", dict(orbital_state)))
 
 
@@ -38,31 +43,37 @@ class _Controller:
     def __init__(self, canvas: _Canvas) -> None:
         self.canvas = canvas
 
-    def _restore_ring_from_state(self, ring_state):
+    def restore_ring_from_state(self, ring_state):
         self.canvas.calls.append(("controller_ring", dict(ring_state)))
 
-    def _restore_note_from_state(self, note_state):
+    def restore_note_from_state(self, note_state):
         self.canvas.calls.append(("controller_note", dict(note_state)))
 
-    def _restore_mark_from_state(self, mark_state):
+    def restore_mark_from_state(self, mark_state):
         self.canvas.calls.append(("controller_mark", dict(mark_state)))
 
-    def _restore_arrow_from_state(self, arrow_state):
+    def restore_arrow_from_state(self, arrow_state):
         self.canvas.calls.append(("controller_arrow", dict(arrow_state)))
 
-    def _restore_ts_bracket_from_state(self, ts_bracket_state):
+    def restore_ts_bracket_from_state(self, ts_bracket_state):
         self.canvas.calls.append(("controller_ts", dict(ts_bracket_state)))
 
-    def _restore_orbital_from_state(self, orbital_state):
+    def restore_orbital_from_state(self, orbital_state):
         self.canvas.calls.append(("controller_orbital", dict(orbital_state)))
 
 
 class _SceneItem:
-    def __init__(self, scene_obj) -> None:
+    def __init__(self, scene_obj, state: dict | None = None) -> None:
         self._scene = scene_obj
+        self._state = dict(state or {})
 
     def scene(self):
         return self._scene
+
+    def data(self, key: int):
+        if key == 9:
+            return dict(self._state)
+        return None
 
 
 class _DisposedSceneItem:
@@ -73,19 +84,42 @@ class _DisposedSceneItem:
 class CanvasDocumentStateTest(unittest.TestCase):
     def test_snapshot_canvas_document_state_skips_detached_disposed_and_empty_arrow_state(self) -> None:
         scene_obj = object()
-        attached = _SceneItem(scene_obj)
-        detached = _SceneItem(object())
+        ring_item = _SceneItem(
+            scene_obj,
+            {"points": [(0.0, 0.0)], "atom_ids": [1], "color": "#abcdef", "alpha": 0.25},
+        )
+        note_item = _SceneItem(scene_obj, {"text": "note", "x": 1.0, "y": 2.0})
+        mark_item = _SceneItem(
+            scene_obj,
+            {
+                "mark_kind": "plus",
+                "text": "+",
+                "atom_id": 1,
+                "dx": 0.5,
+                "dy": -0.5,
+                "x": 3.0,
+                "y": 4.0,
+            },
+        )
+        empty_arrow_item = _SceneItem(scene_obj, {})
+        ts_item = _SceneItem(scene_obj, {"kind": "ts_bracket", "rect": (0.0, 0.0, 1.0, 1.0)})
+        orbital_item = _SceneItem(
+            scene_obj,
+            {"orbital_kind": "p", "center": (2.0, 3.0), "scale": 2.0, "rotation": 45.0},
+        )
+        detached = _SceneItem(object(), {"points": [(9.0, 9.0)]})
         disposed = _DisposedSceneItem()
 
         canvas = SimpleNamespace(
             model=MoleculeModel(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[Bond(1, 1, 1)]),
-            atom_items={1: object()},
-            ring_items=[attached, detached, disposed],
-            note_items=[attached, detached],
-            mark_items=[attached],
-            arrow_items=[attached, detached],
-            ts_bracket_items=[attached],
-            orbital_items=[attached],
+            scene_items_state=CanvasSceneItemsState(
+                ring_items=[ring_item, detached, disposed],
+                note_items=[note_item, detached],
+                mark_items=[mark_item],
+                arrow_items=[empty_arrow_item, detached],
+                ts_bracket_items=[ts_item],
+                orbital_items=[orbital_item],
+            ),
             renderer=SimpleNamespace(
                 style=SimpleNamespace(bond_length_px=18.0),
                 set_bond_length=mock.Mock(),
@@ -98,15 +132,10 @@ class CanvasDocumentStateTest(unittest.TestCase):
             text_italic=False,
             sheet_size="A4",
             sheet_orientation="portrait",
-            last_smiles_input="CCO",
+            smiles_input_state=CanvasSmilesInputState(last_smiles_input="CCO"),
             scene=lambda: scene_obj,
-            _ring_state_dict=lambda item: {"points": [(0.0, 0.0)], "atom_ids": [1], "color": "#abcdef", "alpha": 0.25},
-            _note_state_dict=lambda item: {"text": "note", "x": 1.0, "y": 2.0},
-            _mark_state_dict=lambda item: {"mark_kind": "plus", "text": "+", "atom_id": 1, "dx": 0.5, "dy": -0.5, "x": 3.0, "y": 4.0},
-            _arrow_state_dict=lambda item: {} if item is attached else {"kind": "arrow", "start": (0.0, 0.0), "end": (1.0, 1.0)},
-            _ts_bracket_state_dict=lambda item: {"kind": "ts_bracket", "rect": (0.0, 0.0, 1.0, 1.0)},
-            _orbital_state_dict=lambda item: {"orbital_kind": "p", "center": (2.0, 3.0), "scale": 2.0, "rotation": 45.0},
         )
+        set_atom_items_for(canvas, {1: object()})
 
         state = snapshot_canvas_document_state(canvas)
 
@@ -142,8 +171,9 @@ class CanvasDocumentStateTest(unittest.TestCase):
             text_italic=False,
             sheet_size="A4",
             sheet_orientation="landscape",
-            set_sheet_setup=mock.Mock(),
-            last_smiles_input="before",
+            setSceneRect=mock.Mock(),
+            viewport=lambda: SimpleNamespace(update=mock.Mock()),
+            smiles_input_state=CanvasSmilesInputState(last_smiles_input="before"),
         )
 
         apply_document_settings(
@@ -157,7 +187,7 @@ class CanvasDocumentStateTest(unittest.TestCase):
                     "text_font_size": 14,
                     "text_font_weight": 500,
                     "text_italic": True,
-                    "sheet_size": "Letter",
+                    "sheet_size": "A4",
                     "sheet_orientation": "portrait",
                 },
                 "last_smiles_input": "after",
@@ -165,14 +195,18 @@ class CanvasDocumentStateTest(unittest.TestCase):
         )
 
         canvas.renderer.set_bond_length.assert_called_once_with(22.0)
-        canvas.set_sheet_setup.assert_called_once_with("Letter", "portrait")
-        self.assertEqual(canvas.arrow_line_width, 1.7)
-        self.assertEqual(canvas.arrow_head_scale, 0.5)
-        self.assertTrue(canvas.orbital_phase_enabled)
-        self.assertEqual(canvas.text_font_size, 14)
-        self.assertEqual(canvas.text_font_weight, 500)
-        self.assertTrue(canvas.text_italic)
-        self.assertEqual(canvas.last_smiles_input, "after")
+        self.assertEqual(canvas.sheet_size, "A4")
+        self.assertEqual(canvas.sheet_orientation, "portrait")
+        canvas.setSceneRect.assert_called_once()
+        tool_settings = tool_settings_state_for(canvas)
+        self.assertEqual(tool_settings.arrow_line_width, 1.7)
+        self.assertEqual(tool_settings.arrow_head_scale, 0.5)
+        self.assertTrue(tool_settings.orbital_phase_enabled)
+        text_style = text_style_state_for(canvas)
+        self.assertEqual(text_style.text_font_size, 14)
+        self.assertEqual(text_style.text_font_weight, 500)
+        self.assertTrue(text_style.text_italic)
+        self.assertEqual(last_smiles_input_for(canvas), "after")
 
     def test_apply_document_settings_ignores_legacy_style_preset(self) -> None:
         from core.renderer import Renderer
@@ -187,8 +221,9 @@ class CanvasDocumentStateTest(unittest.TestCase):
             text_italic=False,
             sheet_size="A4",
             sheet_orientation="landscape",
-            set_sheet_setup=mock.Mock(),
-            last_smiles_input="x",
+            setSceneRect=mock.Mock(),
+            viewport=lambda: SimpleNamespace(update=mock.Mock()),
+            smiles_input_state=CanvasSmilesInputState(last_smiles_input="x"),
         )
         settings = {
             "bond_length_px": 22.0,
@@ -210,7 +245,7 @@ class CanvasDocumentStateTest(unittest.TestCase):
 
     def test_restore_document_items_prefer_scene_item_controller(self) -> None:
         canvas = _Canvas()
-        canvas._scene_item_controller = _Controller(canvas)
+        canvas.services = SimpleNamespace(scene_item_controller=_Controller(canvas))
         state = {
             "ring_fills": [{"points": [(0.0, 0.0)]}],
             "notes": [{"text": "note", "x": 1.0, "y": 2.0}],

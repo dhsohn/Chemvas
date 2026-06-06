@@ -1,6 +1,8 @@
 import json
 import os
 import unittest
+from types import SimpleNamespace
+from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -20,12 +22,15 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from core.model import Atom, Bond, MoleculeModel
+    from ui.canvas_mark_registry import CanvasMarkRegistry
+    from ui.canvas_scene_items_state import set_scene_item_collection_for
+    from ui.scene_clipboard_controller import SceneClipboardController
     from ui.scene_clipboard_logic import (
         build_selection_clipboard_payload,
         clipboard_payload_candidates,
         decode_clipboard_selection_payload,
     )
-    from ui.scene_ops_controller import SceneOpsController
+    from ui.scene_clipboard_state import SceneClipboardState
 
 
 def _set_selectable(item: QGraphicsItem) -> QGraphicsItem:
@@ -46,6 +51,12 @@ def _make_rect_item(
         item.setData(1, data1)
     if state is not None:
         item.setData(9, dict(state))
+        if kind == "mark":
+            mark_data = {key: state.get(key) for key in ("atom_id", "dx", "dy", "text") if key in state}
+            if "mark_kind" in state:
+                mark_data["kind"] = state.get("mark_kind")
+            item.setData(1, mark_data)
+            item.setPos(float(state.get("x", 0.0)), float(state.get("y", 0.0)))
     return item
 
 
@@ -53,6 +64,15 @@ def _make_text_item(kind: str, text: str, state: dict) -> QGraphicsTextItem:
     item = _set_selectable(QGraphicsTextItem(text))
     item.setData(0, kind)
     item.setData(9, dict(state))
+    if kind == "note" and "text" in state:
+        item.setPlainText(str(state["text"]))
+    if kind == "mark":
+        mark_data = {key: state.get(key) for key in ("atom_id", "dx", "dy", "text") if key in state}
+        if "mark_kind" in state:
+            mark_data["kind"] = state.get("mark_kind")
+        item.setData(1, mark_data)
+    if kind in {"mark", "note"}:
+        item.setPos(float(state.get("x", 0.0)), float(state.get("y", 0.0)))
     return item
 
 
@@ -63,6 +83,10 @@ def _make_ring_item(atom_ids: list[int], *, state: dict | None = None) -> QGraph
     item.setData(2, list(atom_ids))
     item.setData(9, state or {"kind": "ring", "atom_ids": list(atom_ids), "points": [(0.0, 0.0), (12.0, 0.0), (6.0, 10.0)]})
     return item
+
+
+def scene_clipboard_controller_for(canvas) -> SceneClipboardController:
+    return SceneClipboardController(canvas)
 
 
 class _BrokenSceneItem:
@@ -233,15 +257,15 @@ class SceneClipboardLogicTest(unittest.TestCase):
         note_item = _make_text_item("note", "note", {"kind": "note", "text": "note", "x": 80.0, "y": 90.0})
         arrow_item = _make_rect_item("arrow", state={"kind": "arrow", "start": (5.0, 6.0), "end": (7.0, 8.0)})
 
-        canvas._marks_by_atom[2] = [linked_mark]
-        canvas.ring_items = [ring_item]
+        canvas.mark_registry.by_atom[2] = [linked_mark]
+        set_scene_item_collection_for(canvas, "ring_items", [ring_item])
         for item in (atom_item, bond_item, free_mark, note_item, arrow_item):
             canvas.add_item(item, selected=True)
         canvas.add_item(linked_mark, selected=False)
         canvas.add_item(ring_item, selected=False)
 
-        controller = SceneOpsController(canvas)
-        payload = controller._selection_payload_for_clipboard()
+        controller = scene_clipboard_controller_for(canvas)
+        payload = controller.selection_payload_for_clipboard()
 
         self.assertIsNotNone(payload)
         assert payload is not None
@@ -255,12 +279,41 @@ class SceneClipboardLogicTest(unittest.TestCase):
             ],
         )
         self.assertEqual(payload["bonds"], [{"a": 1, "b": 2, "order": 1, "style": "single", "color": "#444444"}])
-        self.assertEqual(payload["rings"], [{"kind": "ring", "atom_ids": [1, 2], "points": [(0.0, 0.0), (12.0, 0.0), (6.0, 10.0)]}])
+        self.assertEqual(
+            payload["rings"],
+            [
+                {
+                    "kind": "ring",
+                    "points": [(0.0, 0.0), (12.0, 0.0), (6.0, 10.0)],
+                    "atom_ids": [1, 2],
+                    "color": None,
+                    "alpha": 0.0,
+                }
+            ],
+        )
         self.assertCountEqual(
             payload["marks"],
             [
-                {"kind": "mark", "atom_id": 2, "x": 3.0, "y": 4.0},
-                {"kind": "mark", "atom_id": None, "x": 50.0, "y": 60.0},
+                {
+                    "kind": "mark",
+                    "mark_kind": None,
+                    "text": None,
+                    "atom_id": 2,
+                    "dx": None,
+                    "dy": None,
+                    "x": 3.0,
+                    "y": 4.0,
+                },
+                {
+                    "kind": "mark",
+                    "mark_kind": None,
+                    "text": None,
+                    "atom_id": None,
+                    "dx": None,
+                    "dy": None,
+                    "x": 50.0,
+                    "y": 60.0,
+                },
             ],
         )
         self.assertCountEqual(
@@ -280,7 +333,7 @@ class SceneClipboardLogicTest(unittest.TestCase):
 
         invalid_atom = _make_rect_item("atom", data1="bad")
         invalid_bond = _make_rect_item("bond", data1=9)
-        invalid_mark = _make_text_item("mark", "mark", {})
+        invalid_mark = _make_text_item("unknown", "mark", {})
         invalid_ring = _make_ring_item([1], state={"kind": "ring", "atom_ids": [], "points": []})
         invalid_ring.setData(2, [])
         empty_scene_item = _make_rect_item("arrow", state={})
@@ -288,10 +341,10 @@ class SceneClipboardLogicTest(unittest.TestCase):
 
         for item in (invalid_atom, invalid_bond, invalid_mark, invalid_ring, empty_scene_item, valid_note):
             canvas.add_item(item, selected=True)
-        canvas.ring_items = [invalid_ring]
+        set_scene_item_collection_for(canvas, "ring_items", [invalid_ring])
 
-        controller = SceneOpsController(canvas)
-        payload = controller._selection_payload_for_clipboard()
+        controller = scene_clipboard_controller_for(canvas)
+        payload = controller.selection_payload_for_clipboard()
 
         self.assertIsNotNone(payload)
         assert payload is not None
@@ -310,42 +363,42 @@ class SceneClipboardLogicTest(unittest.TestCase):
 
         invalid_atom = _make_rect_item("atom", data1="bad")
         invalid_bond = _make_rect_item("bond", data1=99)
-        invalid_mark = _make_text_item("mark", "mark", {})
+        invalid_mark = _make_text_item("unknown", "mark", {})
         invalid_ring = _make_ring_item([1], state={"kind": "ring", "atom_ids": [], "points": []})
         invalid_ring.setData(2, [])
         invalid_scene_item = _make_rect_item("arrow", state={})
 
         for item in (invalid_atom, invalid_bond, invalid_mark, invalid_ring, invalid_scene_item):
             canvas.add_item(item, selected=True)
-        canvas.ring_items = [invalid_ring]
+        set_scene_item_collection_for(canvas, "ring_items", [invalid_ring])
 
-        controller = SceneOpsController(canvas)
+        controller = scene_clipboard_controller_for(canvas)
 
-        self.assertIsNone(controller._selection_payload_for_clipboard())
+        self.assertIsNone(controller.selection_payload_for_clipboard())
 
     def test_clipboard_selection_payload_uses_custom_mime_and_rejects_wrong_format_or_version(self) -> None:
         canvas = _FakeCanvas()
-        controller = SceneOpsController(canvas)
+        controller = scene_clipboard_controller_for(canvas)
         clipboard = QApplication.clipboard()
 
         custom_json = json.dumps({"format": "chemvas-selection", "version": 1, "scene_items": [{"kind": "note"}]}, separators=(",", ":"))
 
         clipboard.setMimeData(canvas.new_mime_data(custom_json.encode("utf-8")))
-        payload, returned_json = controller._clipboard_selection_payload()
+        payload, returned_json = controller.clipboard_selection_payload()
         self.assertEqual(payload, {"format": "chemvas-selection", "version": 1, "scene_items": [{"kind": "note"}]})
         self.assertEqual(returned_json, custom_json)
 
         image = QImage(4, 4, QImage.Format.Format_ARGB32)
         clipboard.setMimeData(canvas.new_image_mime_data(image))
-        self.assertEqual(controller._clipboard_selection_payload(), (None, None))
+        self.assertEqual(controller.clipboard_selection_payload(), (None, None))
 
         clipboard.setMimeData(canvas.new_mime_data(b'{"format":"not-chemvas-selection","version":1}'))
-        self.assertEqual(controller._clipboard_selection_payload(), (None, None))
+        self.assertEqual(controller.clipboard_selection_payload(), (None, None))
 
         invalid_version_mime = canvas.new_mime_data(b'{"format":"chemvas-selection","version":999}')
         invalid_version_mime.setImageData(QImage(4, 4, QImage.Format.Format_ARGB32))
         clipboard.setMimeData(invalid_version_mime)
-        self.assertEqual(controller._clipboard_selection_payload(), (None, None))
+        self.assertEqual(controller.clipboard_selection_payload(), (None, None))
 
 
 class _FakeCanvas:
@@ -356,9 +409,12 @@ class _FakeCanvas:
         self._scene = QGraphicsScene()
         self.model = MoleculeModel()
         self.ring_items: list[QGraphicsItem] = []
-        self._marks_by_atom: dict[int, list[QGraphicsItem]] = {}
-        self._clipboard_paste_source_json = None
-        self._clipboard_paste_count = 0
+        self.mark_registry = CanvasMarkRegistry()
+        self.scene_clipboard_state = SceneClipboardState()
+        self.scene_clipboard_state.paste_source_json = None
+        self.scene_clipboard_state.paste_count = 0
+        self.history_service = SimpleNamespace(push=mock.Mock())
+        self.services = SimpleNamespace(history_service=self.history_service)
 
     def scene(self) -> QGraphicsScene:
         return self._scene
@@ -370,18 +426,6 @@ class _FakeCanvas:
 
     def _selected_items_for_transform(self):
         return list(self._scene.selectedItems())
-
-    def _selected_ids(self) -> tuple[set[int], set[int]]:
-        atom_ids: set[int] = set()
-        bond_ids: set[int] = set()
-        for item in self._scene.selectedItems():
-            kind = item.data(0)
-            data = item.data(1)
-            if kind == "atom" and isinstance(data, int):
-                atom_ids.add(data)
-            elif kind == "bond" and isinstance(data, int):
-                bond_ids.add(data)
-        return atom_ids, bond_ids
 
     def _atom_state_dict(self, atom_id: int) -> dict:
         atom = self.model.atoms[atom_id]

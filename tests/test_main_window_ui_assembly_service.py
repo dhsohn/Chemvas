@@ -10,7 +10,6 @@ try:
     from PyQt6.QtGui import QAction, QIcon, QKeySequence, QPixmap
     from PyQt6.QtWidgets import (
         QApplication,
-        QDockWidget,
         QLabel,
         QLineEdit,
         QMainWindow,
@@ -24,10 +23,10 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from ui.main_window_config import LEFT_TOOLBAR_ACTION_ORDER
+    from ui.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
     from ui.main_window_theme import MAIN_WINDOW_STYLESHEET
+    from ui.main_window_toolbar_buttons import ArrowButton, CornerMenuButton
     from ui.main_window_ui_assembly_service import (
-        ArrowButton,
-        CornerMenuButton,
         MainWindowUIAssemblyService,
     )
 
@@ -39,8 +38,22 @@ class _HarnessCanvas:
         self.flip_horizontal = mock.Mock()
         self.flip_vertical = mock.Mock()
         self.begin_smiles_insert = mock.Mock()
-        self.get_atom_symbol = mock.Mock(return_value="N")
-        self.set_atom_symbol = mock.Mock()
+        self.insert_controller = SimpleNamespace(begin_smiles_insert=mock.Mock())
+        self.scene_transform_controller = SimpleNamespace(flip_selected_items=mock.Mock())
+        self.tool_mode_controller = SimpleNamespace(
+            get_atom_symbol=mock.Mock(return_value="N"),
+            set_atom_symbol=mock.Mock(),
+        )
+        self.history_service = SimpleNamespace(
+            undo=mock.Mock(),
+            redo=mock.Mock(),
+        )
+        self.services = SimpleNamespace(
+            insert_controller=self.insert_controller,
+            scene_transform_controller=self.scene_transform_controller,
+            tool_mode_controller=self.tool_mode_controller,
+            history_service=self.history_service,
+        )
 
 
 class _HarnessWindow(QMainWindow):
@@ -48,16 +61,16 @@ class _HarnessWindow(QMainWindow):
         super().__init__()
         self.canvas = _HarnessCanvas()
         self.preview_3d = QWidget()
-        self._save_canvas = mock.Mock()
-        self._save_canvas_as = mock.Mock()
-        self._load_canvas = mock.Mock()
-        self._export_xyz = mock.Mock()
-        self._export_figure = mock.Mock()
-        self._toggle_preview_panel = mock.Mock()
-        self._set_bond_length = mock.Mock()
-        self._setup_sheet = mock.Mock()
-        self._apply_color_preset = mock.Mock()
-        self._apply_ring_fill_preset = mock.Mock()
+        self.save_canvas = mock.Mock()
+        self.save_canvas_as = mock.Mock()
+        self.load_canvas = mock.Mock()
+        self.export_xyz = mock.Mock()
+        self.export_figure = mock.Mock()
+        self.toggle_preview_panel = mock.Mock()
+        self.set_bond_length = mock.Mock()
+        self.setup_sheet = mock.Mock()
+        self.apply_color_preset = mock.Mock()
+        self.apply_ring_fill_preset = mock.Mock()
         self._icon_factory = SimpleNamespace(
             icon_templates=self._blank_icon,
             icon_bond_length=self._blank_icon,
@@ -73,28 +86,18 @@ class _HarnessWindow(QMainWindow):
             icon_color=self._blank_icon,
             icon_ring_fill=self._blank_icon,
         )
-
-    def _build_tool_actions(self, tool_group) -> dict[str, QAction]:
-        actions: dict[str, QAction] = {}
-        for key in [*LEFT_TOOLBAR_ACTION_ORDER, "arrow", "ts_bracket"]:
-            if key in actions:
-                continue
-            action = QAction(key, self)
-            action.setCheckable(True)
-            tool_group.addAction(action)
-            actions[key] = action
-        return actions
+        self.ui_references = SimpleNamespace(require_icon_factory=lambda: self._icon_factory)
 
     def _blank_icon(self) -> QIcon:
         return QIcon()
 
-    def _populate_template_menu(self, menu: QMenu) -> None:
+    def populate_template_menu(self, menu: QMenu) -> None:
         menu.addAction("Template")
 
-    def _populate_arrow_menu(self, menu: QMenu) -> None:
+    def populate_arrow_menu(self, menu: QMenu) -> None:
         menu.addAction("Arrow")
 
-    def _populate_palette_menu(self, menu: QMenu, callback) -> None:
+    def populate_palette_menu(self, menu: QMenu, callback) -> None:
         action = menu.addAction("Black")
         action.triggered.connect(lambda checked=False: callback("#000000"))
 
@@ -107,10 +110,54 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def setUp(self) -> None:
-        self.service = MainWindowUIAssemblyService()
+        self.scene_transform_controller_for_window = mock.Mock(
+            side_effect=lambda window: window.canvas.services.scene_transform_controller,
+        )
+        self.insert_controller_for_window = mock.Mock(
+            side_effect=lambda window: window.canvas.services.insert_controller,
+        )
+        self.tool_mode_controller_for_window = mock.Mock(
+            side_effect=lambda window: window.canvas.services.tool_mode_controller,
+        )
+        self.history_service_for_window = mock.Mock(
+            side_effect=lambda window: window.canvas.services.history_service,
+        )
+        self.build_tool_actions_for_window = mock.Mock(side_effect=self._build_tool_actions_for_window)
+        self.panel_toolbar_callbacks = MainWindowPanelToolbarCallbacks(
+            save_canvas=mock.Mock(),
+            save_canvas_as=mock.Mock(),
+            load_canvas=mock.Mock(),
+            export_figure=mock.Mock(),
+            export_xyz=mock.Mock(),
+            toggle_preview_panel=mock.Mock(),
+            setup_sheet=mock.Mock(),
+            populate_palette_menu=mock.Mock(),
+            apply_color_preset=mock.Mock(),
+            apply_ring_fill_preset=mock.Mock(),
+            set_bond_length=mock.Mock(),
+        )
+        self.service = MainWindowUIAssemblyService(
+            scene_transform_controller_for_window=self.scene_transform_controller_for_window,
+            insert_controller_for_window=self.insert_controller_for_window,
+            tool_mode_controller_for_window=self.tool_mode_controller_for_window,
+            history_service_for_window=self.history_service_for_window,
+            build_tool_actions_for_window=self.build_tool_actions_for_window,
+            panel_toolbar_callbacks=self.panel_toolbar_callbacks,
+        )
 
     def tearDown(self) -> None:
         self.app.processEvents()
+
+    def _build_tool_actions_for_window(self, window, tool_group) -> dict[str, QAction]:
+        actions: dict[str, QAction] = {}
+        for key in [*LEFT_TOOLBAR_ACTION_ORDER, "arrow", "ts_bracket"]:
+            if key in actions:
+                continue
+            action = QAction(key, window)
+            action.setCheckable(True)
+            tool_group.addAction(action)
+            actions[key] = action
+        return actions
 
     def _filled_icon(self) -> QIcon:
         pixmap = QPixmap(8, 8)
@@ -251,6 +298,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.assertEqual(
             [action.text() for action in assembly.left_bar.actions() if not action.isSeparator()],
             [
+                "select",
                 "bond",
                 "text",
                 "mark_plus",
@@ -260,6 +308,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
                 "template",
                 "arrow",
                 "ts_bracket",
+                "perspective",
             ],
         )
         self.assertEqual(
@@ -304,7 +353,8 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.assertEqual(section_labels, [])
 
         assembly.atom_input.setText("Cl")
-        window.canvas.set_atom_symbol.assert_called_with("Cl")
+        window.canvas.tool_mode_controller.set_atom_symbol.assert_called_with("Cl")
+        self.tool_mode_controller_for_window.assert_called_once_with(window)
 
         smiles_input = next(
             widget for widget in assembly.panel_bar.findChildren(QLineEdit) if widget.placeholderText() == "SMILES..."
@@ -326,30 +376,38 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
 
         smiles_input.setText("CCO")
         smiles_button.click()
-        window.canvas.begin_smiles_insert.assert_called_once_with("CCO")
-        assembly.preview_panel_button.click()
-        window._toggle_preview_panel.assert_called_once_with(False)
-        assembly.setup_sheet_button.click()
-        window._setup_sheet.assert_called_once_with(False)
-
-    def test_init_panels_builds_locked_preview_dock(self) -> None:
-        window = _HarnessWindow()
-        self.addCleanup(window.close)
-
-        assembly = self.service.init_panels(window)
-
-        self.assertIs(assembly.splitter.widget(0), window.preview_3d)
-        self.assertEqual(assembly.splitter.count(), 1)
-        self.assertEqual(assembly.dock.allowedAreas(), Qt.DockWidgetArea.RightDockWidgetArea)
-        self.assertEqual(assembly.dock.minimumWidth(), 320)
-        self.assertEqual(assembly.dock.maximumWidth(), 420)
-        self.assertFalse(
-            bool(
-                assembly.dock.features()
-                & QDockWidget.DockWidgetFeature.DockWidgetClosable
-            )
+        window.canvas.insert_controller.begin_smiles_insert.assert_called_once_with("CCO")
+        self.insert_controller_for_window.assert_called_once_with(window)
+        self.scene_transform_controller_for_window.assert_called_once_with(window)
+        assembly.save_action.trigger()
+        assembly.save_as_action.trigger()
+        assembly.load_action.trigger()
+        export_figure_action = next(
+            action for action in assembly.save_button.menu().actions() if action.text() == "Export Figure..."
         )
-        self.assertEqual(assembly.dock.titleBarWidget().height(), 0)
+        export_figure_action.trigger()
+        self.panel_toolbar_callbacks.save_canvas.assert_called_once_with(window)
+        self.panel_toolbar_callbacks.save_canvas_as.assert_called_once_with(window)
+        self.panel_toolbar_callbacks.load_canvas.assert_called_once_with(window)
+        self.panel_toolbar_callbacks.export_figure.assert_called_once_with(window)
+        window.save_canvas.assert_not_called()
+        window.save_canvas_as.assert_not_called()
+        window.load_canvas.assert_not_called()
+        window.export_figure.assert_not_called()
+        assembly.export_xyz_button.click()
+        assembly.preview_panel_button.click()
+        assembly.setup_sheet_button.click()
+        self.panel_toolbar_callbacks.export_xyz.assert_called_once_with(window)
+        self.panel_toolbar_callbacks.toggle_preview_panel.assert_called_once_with(window, False)
+        self.panel_toolbar_callbacks.setup_sheet.assert_called_once_with(window)
+        window.export_xyz.assert_not_called()
+        window.toggle_preview_panel.assert_not_called()
+        window.setup_sheet.assert_not_called()
+        assembly.undo_button.click()
+        assembly.redo_button.click()
+        window.canvas.history_service.undo.assert_called_once_with()
+        window.canvas.history_service.redo.assert_called_once_with()
+        self.assertEqual(self.history_service_for_window.call_args_list, [mock.call(window), mock.call(window)])
 
     def test_apply_theme_sets_stylesheet(self) -> None:
         window = QMainWindow()

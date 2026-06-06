@@ -8,7 +8,7 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QGraphicsItem
 
 from ui.history_commands import UpdateSceneItemCommand
-from ui.scene_transform_logic import FlipAtomPositionMaps
+from ui.scene_flip_grouping import FlipAtomPositionMaps
 
 
 @dataclass(slots=True)

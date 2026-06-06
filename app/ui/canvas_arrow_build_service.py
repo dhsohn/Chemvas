@@ -5,17 +5,27 @@ import math
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QBrush, QPainterPath
 
+from ui.canvas_tool_settings_state import tool_settings_state_for
 from ui.graphics_items import NoSelectPathItem
+from ui.renderer_style_access import (
+    bond_length_px_for,
+    bond_pen_for,
+    bond_spacing_px_for,
+)
+from ui.scene_item_access import add_item_to_canvas_scene
 
 
 class CanvasArrowBuildService:
     def __init__(self, canvas) -> None:
         self.canvas = canvas
 
+    @property
+    def settings(self):
+        return tool_settings_state_for(self.canvas)
+
     def preview_arrow(self, start: QPointF, end: QPointF, kind: str):
         item = self.build_arrow_item(start, end, kind)
-        self.canvas.scene().addItem(item)
-        return item
+        return add_item_to_canvas_scene(self.canvas, item)
 
     def build_arrow_item(self, start: QPointF, end: QPointF, kind: str):
         if kind == "equilibrium":
@@ -96,7 +106,7 @@ class CanvasArrowBuildService:
         length = math.hypot(dx, dy) or 1.0
         nx = -dy / length
         ny = dx / length
-        bar = self.canvas.renderer.style.bond_length_px * 0.2
+        bar = bond_length_px_for(self.canvas) * 0.2
 
         path = QPainterPath()
         path.moveTo(start)
@@ -117,7 +127,7 @@ class CanvasArrowBuildService:
         length = math.hypot(dx, dy) or 1.0
         nx = -dy / length
         ny = dx / length
-        offset = self.canvas.renderer.style.bond_spacing_px * 1.5
+        offset = bond_spacing_px_for(self.canvas) * 1.5
         start_up = QPointF(start.x() + nx * offset, start.y() + ny * offset)
         end_up = QPointF(end.x() + nx * offset, end.y() + ny * offset)
         start_down = QPointF(start.x() - nx * offset, start.y() - ny * offset)
@@ -135,11 +145,11 @@ class CanvasArrowBuildService:
 
     def add_arrow_head(self, path: QPainterPath, start: QPointF, end: QPointF, double: bool) -> None:
         angle = math.atan2(end.y() - start.y(), end.x() - start.x())
-        head_len = self.canvas.renderer.style.bond_length_px * self.canvas.arrow_head_scale
+        head_len = bond_length_px_for(self.canvas) * self.settings.arrow_head_scale
         head_angle = math.radians(25)
         offsets = [0.0]
         if double:
-            offset_mag = max(1.4, self.canvas.arrow_line_width * 1.2)
+            offset_mag = max(1.4, self.settings.arrow_line_width * 1.2)
             offsets = [-offset_mag, offset_mag]
         for offset in offsets:
             dx = math.cos(angle + math.pi / 2) * offset
@@ -158,8 +168,8 @@ class CanvasArrowBuildService:
             path.lineTo(right)
 
     def arrow_pen(self, dotted: bool = False):
-        pen = self.canvas.renderer.bond_pen()
-        pen.setWidthF(self.canvas.arrow_line_width)
+        pen = bond_pen_for(self.canvas)
+        pen.setWidthF(self.settings.arrow_line_width)
         if dotted:
             pen.setStyle(Qt.PenStyle.DashLine)
         return pen

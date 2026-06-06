@@ -1,10 +1,26 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
-
 from core.document_state import serialize_model_state, serialize_settings
 
+from ui.canvas_atom_graphics_state import atom_items_for
+from ui.canvas_model_access import model_for
+from ui.canvas_scene_items_state import (
+    arrow_items_for,
+    mark_items_for,
+    note_items_for,
+    orbital_items_for,
+    ring_items_for,
+    ts_bracket_items_for,
+)
+from ui.canvas_smiles_input_state import (
+    last_smiles_input_for,
+    set_last_smiles_input_for,
+)
+from ui.canvas_text_style_state import set_text_style_for, text_style_state_for
+from ui.canvas_tool_settings_state import set_tool_setting_for, tool_settings_state_for
+from ui.renderer_style_access import bond_length_px_for, set_bond_length_for
 from ui.scene_item_access import (
+    attached_canvas_scene_items,
     restore_arrow_from_state,
     restore_mark_from_state,
     restore_note_from_state,
@@ -12,13 +28,28 @@ from ui.scene_item_access import (
     restore_ring_from_state,
     restore_ts_bracket_from_state,
 )
+from ui.scene_item_state import (
+    arrow_state_dict_for,
+    mark_state_dict_for,
+    note_state_dict_for,
+    orbital_state_dict_for,
+    ring_state_dict_for,
+    ts_bracket_state_dict_for,
+)
+from ui.sheet_setup_access import (
+    set_sheet_setup_for,
+    sheet_orientation_for,
+    sheet_size_for,
+)
 
 
 def snapshot_canvas_document_state(canvas) -> dict:
+    tool_settings = tool_settings_state_for(canvas)
+    text_style = text_style_state_for(canvas)
     return {
         "model": serialize_model_state(
-            canvas.model,
-            explicit_label_atom_ids=canvas.atom_items.keys(),
+            model_for(canvas),
+            explicit_label_atom_ids=atom_items_for(canvas).keys(),
         ),
         "ring_fills": _snapshot_ring_fills(canvas),
         "notes": _snapshot_notes(canvas),
@@ -27,31 +58,31 @@ def snapshot_canvas_document_state(canvas) -> dict:
         "ts_brackets": _snapshot_ts_brackets(canvas),
         "orbitals": _snapshot_orbitals(canvas),
         "settings": serialize_settings(
-            bond_length_px=canvas.renderer.style.bond_length_px,
-            arrow_line_width=canvas.arrow_line_width,
-            arrow_head_scale=canvas.arrow_head_scale,
-            orbital_phase_enabled=canvas.orbital_phase_enabled,
-            text_font_size=canvas.text_font_size,
-            text_font_weight=int(canvas.text_font_weight),
-            text_italic=canvas.text_italic,
-            sheet_size=canvas.sheet_size,
-            sheet_orientation=canvas.sheet_orientation,
+            bond_length_px=bond_length_px_for(canvas),
+            arrow_line_width=tool_settings.arrow_line_width,
+            arrow_head_scale=tool_settings.arrow_head_scale,
+            orbital_phase_enabled=tool_settings.orbital_phase_enabled,
+            text_font_size=text_style.text_font_size,
+            text_font_weight=int(text_style.text_font_weight),
+            text_italic=text_style.text_italic,
+            sheet_size=sheet_size_for(canvas),
+            sheet_orientation=sheet_orientation_for(canvas),
         ),
-        "last_smiles_input": canvas.last_smiles_input,
+        "last_smiles_input": last_smiles_input_for(canvas),
     }
 
 
 def apply_document_settings(canvas, state: dict) -> None:
     settings = state["settings"]
-    canvas.renderer.set_bond_length(settings["bond_length_px"])
-    canvas.arrow_line_width = settings["arrow_line_width"]
-    canvas.arrow_head_scale = settings["arrow_head_scale"]
-    canvas.orbital_phase_enabled = settings["orbital_phase_enabled"]
-    canvas.text_font_size = settings["text_font_size"]
-    canvas.text_font_weight = settings["text_font_weight"]
-    canvas.text_italic = settings["text_italic"]
-    canvas.set_sheet_setup(settings["sheet_size"], settings["sheet_orientation"])
-    canvas.last_smiles_input = state["last_smiles_input"]
+    set_bond_length_for(canvas, settings["bond_length_px"])
+    set_tool_setting_for(canvas, "arrow_line_width", settings["arrow_line_width"])
+    set_tool_setting_for(canvas, "arrow_head_scale", settings["arrow_head_scale"])
+    set_tool_setting_for(canvas, "orbital_phase_enabled", settings["orbital_phase_enabled"])
+    set_text_style_for(canvas, "text_font_size", settings["text_font_size"])
+    set_text_style_for(canvas, "text_font_weight", settings["text_font_weight"])
+    set_text_style_for(canvas, "text_italic", settings["text_italic"])
+    set_sheet_setup_for(canvas, settings["sheet_size"], settings["sheet_orientation"])
+    set_last_smiles_input_for(canvas, state["last_smiles_input"])
 
 
 def restore_document_pre_model_items(canvas, state: dict) -> None:
@@ -97,22 +128,10 @@ def restore_document_post_model_items(canvas, state: dict) -> None:
         )
 
 
-def _attached_items(items: Iterable, scene) -> list:
-    attached_items = []
-    for item in items:
-        try:
-            if item.scene() is not scene:
-                continue
-        except RuntimeError:
-            continue
-        attached_items.append(item)
-    return attached_items
-
-
 def _snapshot_ring_fills(canvas) -> list[dict]:
     ring_fills: list[dict] = []
-    for ring_item in _attached_items(canvas.ring_items, canvas.scene()):
-        ring_state = canvas._ring_state_dict(ring_item)
+    for ring_item in attached_canvas_scene_items(canvas, ring_items_for(canvas)):
+        ring_state = ring_state_dict_for(canvas, ring_item)
         ring_fills.append(
             {
                 "points": ring_state["points"],
@@ -126,8 +145,8 @@ def _snapshot_ring_fills(canvas) -> list[dict]:
 
 def _snapshot_notes(canvas) -> list[dict]:
     notes: list[dict] = []
-    for item in _attached_items(canvas.note_items, canvas.scene()):
-        note_state = canvas._note_state_dict(item)
+    for item in attached_canvas_scene_items(canvas, note_items_for(canvas)):
+        note_state = note_state_dict_for(canvas, item)
         notes.append(
             {
                 "text": note_state["text"],
@@ -140,8 +159,8 @@ def _snapshot_notes(canvas) -> list[dict]:
 
 def _snapshot_marks(canvas) -> list[dict]:
     marks: list[dict] = []
-    for item in _attached_items(canvas.mark_items, canvas.scene()):
-        mark_state = canvas._mark_state_dict(item)
+    for item in attached_canvas_scene_items(canvas, mark_items_for(canvas)):
+        mark_state = mark_state_dict_for(canvas, item)
         marks.append(
             {
                 "kind": mark_state["mark_kind"],
@@ -158,8 +177,8 @@ def _snapshot_marks(canvas) -> list[dict]:
 
 def _snapshot_arrows(canvas) -> list[dict]:
     arrows: list[dict] = []
-    for item in _attached_items(canvas.arrow_items, canvas.scene()):
-        arrow_state = canvas._arrow_state_dict(item)
+    for item in attached_canvas_scene_items(canvas, arrow_items_for(canvas)):
+        arrow_state = arrow_state_dict_for(canvas, item)
         if not arrow_state:
             continue
         arrows.append(arrow_state)
@@ -168,15 +187,15 @@ def _snapshot_arrows(canvas) -> list[dict]:
 
 def _snapshot_ts_brackets(canvas) -> list[dict]:
     ts_brackets: list[dict] = []
-    for item in _attached_items(canvas.ts_bracket_items, canvas.scene()):
-        ts_brackets.append(canvas._ts_bracket_state_dict(item))
+    for item in attached_canvas_scene_items(canvas, ts_bracket_items_for(canvas)):
+        ts_brackets.append(ts_bracket_state_dict_for(canvas, item))
     return ts_brackets
 
 
 def _snapshot_orbitals(canvas) -> list[dict]:
     orbitals: list[dict] = []
-    for item in _attached_items(canvas.orbital_items, canvas.scene()):
-        orbital_state = canvas._orbital_state_dict(item)
+    for item in attached_canvas_scene_items(canvas, orbital_items_for(canvas)):
+        orbital_state = orbital_state_dict_for(canvas, item)
         orbitals.append(
             {
                 "kind": orbital_state["orbital_kind"],
