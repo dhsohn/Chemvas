@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ui.main_window_toolbar_styles import TOOLBAR_BUTTON_SIZE
+
 
 def main_window_chrome_stylesheet(palette) -> str:
     _P = palette
@@ -12,25 +14,28 @@ def main_window_chrome_stylesheet(palette) -> str:
                 border: none;
                 border-bottom: 1px solid {_P["border"]};
                 spacing: 4px;
-                padding: 5px 6px;
+                padding: 2px 4px;
+            }}
+            QToolBar#topRoleToolbar {{
+                padding: 2px 4px;
             }}
             QToolBar#contextOptionsBar {{
                 background: {_P["surface_context"]};
                 border-bottom: 1px solid {_P["border"]};
-                padding: 3px 8px;
+                padding: 0px 4px;
             }}
             QToolBar::separator {{
                 background: {_P["border"]};
             }}
             QToolBar::separator:horizontal {{
                 width: 1px;
-                height: 18px;
-                margin: 4px 8px;
+                height: {TOOLBAR_BUTTON_SIZE}px;
+                margin: 2px 6px;
             }}
             QToolBar::separator:vertical {{
                 width: 20px;
                 height: 1px;
-                margin: 7px 6px;
+                margin: 4px 5px;
             }}
             QToolBar QLabel#toolbarSectionLabel {{
                 background: transparent;

@@ -27,27 +27,27 @@ class MainWindowArrowIconRenderer:
         painter.setPen(self._icon_pen(self._stroke_thin, style=style))
         if kind in {"curved_single", "curved_double"}:
             path = QPainterPath()
-            path.moveTo(6, 19)
-            path.quadTo(15, 6, 24, 15)
+            path.moveTo(4, 22)
+            path.quadTo(15, 3, 26, 15)
             painter.drawPath(path)
-            self.draw_arrow_head(painter, QPointF(15, 8), QPointF(24, 15))
+            self.draw_arrow_head(painter, QPointF(15, 5), QPointF(26, 15))
             if kind == "curved_double":
-                self.draw_arrow_head(painter, QPointF(15, 8), QPointF(6, 19))
+                self.draw_arrow_head(painter, QPointF(15, 5), QPointF(4, 22))
         elif kind == "equilibrium":
-            painter.drawLine(5, 11, 23, 11)
-            self.draw_arrow_head(painter, QPointF(5, 11), QPointF(23, 11))
-            painter.drawLine(23, 19, 5, 19)
-            self.draw_arrow_head(painter, QPointF(23, 19), QPointF(5, 19))
+            painter.drawLine(3, 10, 27, 10)
+            self.draw_arrow_head(painter, QPointF(3, 10), QPointF(27, 10))
+            painter.drawLine(27, 20, 3, 20)
+            self.draw_arrow_head(painter, QPointF(27, 20), QPointF(3, 20))
         elif kind == "resonance":
-            painter.drawLine(5, 15, 23, 15)
-            self.draw_arrow_head(painter, QPointF(5, 15), QPointF(23, 15))
-            self.draw_arrow_head(painter, QPointF(23, 15), QPointF(5, 15))
+            painter.drawLine(3, 15, 27, 15)
+            self.draw_arrow_head(painter, QPointF(3, 15), QPointF(27, 15))
+            self.draw_arrow_head(painter, QPointF(27, 15), QPointF(3, 15))
         elif kind == "inhibit":
-            painter.drawLine(5, 15, 23, 15)
-            painter.drawLine(23, 10, 23, 20)
+            painter.drawLine(3, 15, 26, 15)
+            painter.drawLine(26, 8, 26, 22)
         else:
-            painter.drawLine(5, 15, 23, 15)
-            self.draw_arrow_head(painter, QPointF(5, 15), QPointF(23, 15))
+            painter.drawLine(3, 15, 27, 15)
+            self.draw_arrow_head(painter, QPointF(3, 15), QPointF(27, 15))
 
     @staticmethod
     def draw_arrow_head(painter, start: QPointF, end: QPointF) -> None:
@@ -70,6 +70,27 @@ class MainWindowArrowIconRenderer:
         painter.drawLine(self._icon_content_min, self._icon_center, 23, self._icon_center)
         painter.drawLine(23, self._icon_center, 18, 11)
         painter.drawLine(23, self._icon_center, 18, 19)
+
+    def draw_arrow_preset(self, painter, label: str) -> None:
+        width = {"Default": self._stroke_thin, "Bold": self._stroke_active + 0.9, "Fine": 1.0}.get(
+            label,
+            self._stroke_thin,
+        )
+        painter.setPen(self._icon_pen(width))
+        painter.drawLine(5, 15, 24, 15)
+        self.draw_arrow_head(painter, QPointF(5, 15), QPointF(24, 15))
+
+    def draw_arrow_width_control(self, painter) -> None:
+        painter.setPen(self._icon_pen(1.2, color="#8c8c87"))
+        painter.drawLine(6, 10, 24, 10)
+        painter.setPen(self._icon_pen(self._stroke_active))
+        painter.drawLine(6, 19, 24, 19)
+
+    def draw_arrow_head_control(self, painter) -> None:
+        painter.setPen(self._icon_pen(self._stroke_thin))
+        painter.drawLine(5, 15, 24, 15)
+        self.draw_arrow_head(painter, QPointF(5, 15), QPointF(24, 15))
+        self.draw_arrow_head(painter, QPointF(9, 15), QPointF(24, 15))
 
 
 __all__ = ["MainWindowArrowIconRenderer"]

@@ -5,6 +5,7 @@ from PyQt6.QtGui import QAction
 from ui.main_window_config import (
     BOND_TOOL_ACTION_SPECS,
     MARK_TOOL_ACTION_SPECS,
+    RING_FILL_TOOL_ACTION_SPEC,
     TEMPLATE_TOOL_ACTION_SPEC,
     TOOL_ACTION_SPECS,
 )
@@ -63,6 +64,11 @@ class MainWindowToolActionService:
         window.statusBar().showMessage("Template Tool")
         self._status.refresh_status_context(window)
 
+    def activate_ring_fill_tool(self, window) -> None:
+        self._context_page_state.show_context_page(window, "ring_fill")
+        window.statusBar().showMessage("Ring Fill Tool")
+        self._status.refresh_status_context(window)
+
     def build_tool_actions(self, window, tool_group) -> dict[str, QAction]:
         actions = dict(
             self.build_checkable_tool_action(
@@ -87,6 +93,17 @@ class MainWindowToolActionService:
             callback=lambda: self.activate_template_tool(window),
         )
         actions[key] = template_action
+        key, label, icon_method, tooltip = RING_FILL_TOOL_ACTION_SPEC
+        _, ring_fill_action = self.build_checkable_tool_action(
+            window,
+            tool_group,
+            key=key,
+            label=label,
+            icon_method=icon_method,
+            tooltip=tooltip,
+            callback=lambda: self.activate_ring_fill_tool(window),
+        )
+        actions[key] = ring_fill_action
         actions.update(
             dict(
                 self.build_checkable_tool_action(

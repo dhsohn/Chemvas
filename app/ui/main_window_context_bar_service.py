@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QSize, Qt
 from PyQt6.QtWidgets import (
     QButtonGroup,
     QStackedWidget,
@@ -11,6 +11,11 @@ from PyQt6.QtWidgets import (
 
 from ui.canvas_tool_settings_state import tool_settings_state_for
 from ui.main_window_context_bar_pages import bond_label_for_state
+from ui.main_window_theme import (
+    CONTEXT_BAR_CONTENT_HEIGHT,
+    TOOLBAR_ICON_SIZE,
+    TOOLBAR_THICKNESS,
+)
 
 # Maps the active canvas tool name to the context page key shown in the bar.
 _TOOL_PAGE_KEYS = {
@@ -19,6 +24,7 @@ _TOOL_PAGE_KEYS = {
     "text": "atom",
     "benzene": "ring",
     "template": "template",
+    "color": "color",
 }
 
 
@@ -49,8 +55,11 @@ class MainWindowContextBarService:
         bar.setObjectName("contextOptionsBar")
         bar.setMovable(False)
         bar.setFloatable(False)
+        bar.setFixedHeight(TOOLBAR_THICKNESS)
+        bar.setIconSize(QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE))
 
         stack = QStackedWidget()
+        stack.setFixedHeight(CONTEXT_BAR_CONTENT_HEIGHT)
         self._stack = stack
         context_pages = self._page_builder.build(window)
         self._pages = context_pages.pages

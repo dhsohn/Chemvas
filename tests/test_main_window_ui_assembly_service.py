@@ -131,10 +131,6 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             export_xyz=mock.Mock(),
             toggle_preview_panel=mock.Mock(),
             setup_sheet=mock.Mock(),
-            populate_palette_menu=mock.Mock(),
-            apply_color_preset=mock.Mock(),
-            apply_ring_fill_preset=mock.Mock(),
-            set_bond_length=mock.Mock(),
         )
         self.service = MainWindowUIAssemblyService(
             scene_transform_controller_for_window=self.scene_transform_controller_for_window,
@@ -297,19 +293,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.assertEqual(assembly.left_bar.orientation(), Qt.Orientation.Vertical)
         self.assertEqual(
             [action.text() for action in assembly.left_bar.actions() if not action.isSeparator()],
-            [
-                "select",
-                "bond",
-                "text",
-                "mark_plus",
-                "mark_minus",
-                "mark_radical",
-                "benzene",
-                "template",
-                "arrow",
-                "ts_bracket",
-                "perspective",
-            ],
+            LEFT_TOOLBAR_ACTION_ORDER,
         )
         self.assertEqual(
             sum(1 for action in assembly.left_bar.actions() if action.isSeparator()),
@@ -338,7 +322,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             "Load",
             [button.toolTip() for button in assembly.panel_bar.findChildren(QToolButton)],
         )
-        self.assertIn(
+        self.assertNotIn(
             "Bond Length",
             [button.toolTip() for button in assembly.panel_bar.findChildren(QToolButton)],
         )

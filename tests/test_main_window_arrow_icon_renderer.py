@@ -72,6 +72,11 @@ class MainWindowArrowIconRendererTest(unittest.TestCase):
 
     def test_arrow_head_and_basic_arrow_render_non_empty_shapes(self) -> None:
         self.assertIsNotNone(self._render(self.renderer.draw_arrow))
+        self.assertIsNotNone(self._render(lambda painter: self.renderer.draw_arrow_preset(painter, "Default")))
+        self.assertIsNotNone(self._render(lambda painter: self.renderer.draw_arrow_preset(painter, "Bold")))
+        self.assertIsNotNone(self._render(lambda painter: self.renderer.draw_arrow_preset(painter, "Fine")))
+        self.assertIsNotNone(self._render(self.renderer.draw_arrow_width_control))
+        self.assertIsNotNone(self._render(self.renderer.draw_arrow_head_control))
         self.assertIsNotNone(
             self._render(
                 lambda painter: self.renderer.draw_arrow_head(

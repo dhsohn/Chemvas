@@ -30,6 +30,8 @@ class _HarnessWindow(QMainWindow):
             icon_arrow=self._blank_icon,
             icon_ts_bracket=self._blank_icon,
             icon_perspective=self._blank_icon,
+            icon_color=self._blank_icon,
+            icon_ring_fill=self._blank_icon,
             icon_bond_bold=self._blank_icon,
             icon_bond_wedge=self._blank_icon,
             icon_bond_hash=self._blank_icon,
@@ -124,21 +126,33 @@ class MainWindowToolActionServiceTest(unittest.TestCase):
         self.assertEqual(self.window.statusBar().currentMessage(), "Template Tool")
         self.status_service.refresh_status_context.assert_called_once_with(self.window)
 
+    def test_activate_ring_fill_tool_shows_ring_fill_context(self) -> None:
+        self.service.activate_ring_fill_tool(self.window)
+
+        self.context_page_state_service.show_context_page.assert_called_once_with(self.window, "ring_fill")
+        self.assertEqual(self.window.statusBar().currentMessage(), "Ring Fill Tool")
+        self.status_service.refresh_status_context.assert_called_once_with(self.window)
+
     def test_build_tool_actions_wires_tool_bond_and_mark_callbacks(self) -> None:
         actions = self.service.build_tool_actions(self.window, QActionGroup(self.window))
 
         actions["select"].trigger()
+        actions["color"].trigger()
+        actions["ring_fill"].trigger()
         actions["template"].trigger()
         actions["bond_hash"].trigger()
         actions["mark_minus"].trigger()
 
         self.context_page_state_service.set_tool_with_status.assert_any_call(self.window, "select")
+        self.context_page_state_service.set_tool_with_status.assert_any_call(self.window, "color")
         self.context_page_state_service.set_tool_with_status.assert_any_call(
             self.window,
             "bond",
             reset_bond_style=False,
         )
-        self.context_page_state_service.show_context_page.assert_called_once_with(self.window, "template")
+        self.context_page_state_service.show_context_page.assert_any_call(self.window, "template")
+        self.context_page_state_service.show_context_page.assert_any_call(self.window, "ring_fill")
+        self.assertEqual(self.context_page_state_service.show_context_page.call_count, 2)
         self.tool_state_service.set_bond_style.assert_called_once_with(self.window, "Hash")
         self.window.tool_mode_controller.set_mark_kind.assert_called_once_with("minus")
         self.tool_mode_controller_for_window.assert_called_once_with(self.window)

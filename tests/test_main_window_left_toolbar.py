@@ -12,6 +12,7 @@ except ModuleNotFoundError:
 if QApplication is not None:
     from ui.main_window_config import LEFT_TOOLBAR_ACTION_ORDER
     from ui.main_window_left_toolbar import build_left_toolbar
+    from ui.main_window_theme import TOOLBAR_THICKNESS
 
 
 class _HarnessWindow(QMainWindow):
@@ -50,8 +51,9 @@ class MainWindowLeftToolbarTest(unittest.TestCase):
             sum(1 for action in assembly.left_bar.actions() if action.isSeparator()),
             3,
         )
-        self.assertEqual(assembly.left_bar.iconSize().width(), 20)
-        self.assertEqual(assembly.left_bar.iconSize().height(), 20)
+        self.assertEqual(assembly.left_bar.iconSize().width(), 18)
+        self.assertEqual(assembly.left_bar.iconSize().height(), 18)
+        self.assertEqual(assembly.left_bar.maximumWidth(), TOOLBAR_THICKNESS)
         self.assertTrue(assembly.tool_actions["bond"].isChecked())
         self.assertTrue(actions[0].actionGroup().isExclusive())
         for action_key in ("select", "perspective"):

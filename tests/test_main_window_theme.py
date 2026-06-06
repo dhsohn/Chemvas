@@ -15,11 +15,17 @@ from ui.main_window_stylesheet import (
     build_main_window_stylesheet,
 )
 from ui.main_window_toolbar_styles import (
+    CONTEXT_BAR_BUTTON_HEIGHT,
+    CONTEXT_BAR_CONTENT_HEIGHT,
+    CONTEXT_BAR_ICON_SIZE,
     CONTEXT_SEGMENT_STYLE,
     LEFT_TOOLBAR_BUTTON_STYLE,
     SMILES_RENDER_BUTTON_STYLE,
+    TOOLBAR_BUTTON_SIZE,
     TOOLBAR_BUTTON_STYLE,
+    TOOLBAR_ICON_SIZE,
     TOOLBAR_MENU_BUTTON_STYLE,
+    TOOLBAR_THICKNESS,
 )
 
 
@@ -31,6 +37,12 @@ def test_theme_module_reexports_split_style_contract() -> None:
     assert main_window_theme.TOOLBAR_MENU_BUTTON_STYLE is TOOLBAR_MENU_BUTTON_STYLE
     assert main_window_theme.CONTEXT_SEGMENT_STYLE is CONTEXT_SEGMENT_STYLE
     assert main_window_theme.SMILES_RENDER_BUTTON_STYLE is SMILES_RENDER_BUTTON_STYLE
+    assert main_window_theme.TOOLBAR_THICKNESS == TOOLBAR_THICKNESS
+    assert main_window_theme.TOOLBAR_BUTTON_SIZE == TOOLBAR_BUTTON_SIZE
+    assert main_window_theme.TOOLBAR_ICON_SIZE == TOOLBAR_ICON_SIZE
+    assert main_window_theme.CONTEXT_BAR_BUTTON_HEIGHT == CONTEXT_BAR_BUTTON_HEIGHT
+    assert main_window_theme.CONTEXT_BAR_CONTENT_HEIGHT == CONTEXT_BAR_CONTENT_HEIGHT
+    assert main_window_theme.CONTEXT_BAR_ICON_SIZE == CONTEXT_BAR_ICON_SIZE
 
 
 def test_stylesheet_uses_shared_palette_values() -> None:

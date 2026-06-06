@@ -22,6 +22,7 @@ if QApplication is not None:
         from ui.main_window import MainWindow
         from ui.main_window_canvas_ports import active_canvas_for_window
         from ui.main_window_service_ports import services_for_window
+        from ui.main_window_theme import TOOLBAR_THICKNESS
     except SyntaxError:
         MainWindow = None
 else:
@@ -112,12 +113,68 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
 
         self.assertEqual(action_texts[0], "Select")
         self.assertEqual(action_texts[-1], "Perspective")
-        self.assertEqual(tools_bar.iconSize().width(), 20)
-        self.assertEqual(tools_bar.iconSize().height(), 20)
+        self.assertEqual(tools_bar.iconSize().width(), 18)
+        self.assertEqual(tools_bar.iconSize().height(), 18)
         for text in ("Select", "Perspective"):
             with self.subTest(text=text):
                 action = next(action for action in actions if action.text() == text)
                 self.assertFalse(action.icon().isNull())
+
+    def test_toolbar_rows_share_left_toolbar_thickness(self) -> None:
+        self.window.resize(900, 560)
+        self.window.show()
+        self.app.processEvents()
+
+        tools_bar = next(
+            toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Tools"
+        )
+        panel_bar = next(
+            toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Panels"
+        )
+        options_bar = next(
+            toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Options"
+        )
+
+        self.assertEqual(tools_bar.width(), TOOLBAR_THICKNESS)
+        self.assertEqual(panel_bar.height(), tools_bar.width())
+        self.assertEqual(options_bar.height(), tools_bar.width())
+
+    def test_color_and_ring_fill_move_to_left_toolbar_and_palette_options_bar(self) -> None:
+        tools_bar = next(
+            toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Tools"
+        )
+        panel_bar = next(
+            toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Panels"
+        )
+
+        self.assertIn("Color", [action.text() for action in tools_bar.actions()])
+        self.assertIn("Ring Fill", [action.text() for action in tools_bar.actions()])
+        self.assertNotIn("Bond Length", [button.toolTip() for button in panel_bar.findChildren(QToolButton)])
+        self.assertNotIn("Color", [button.toolTip() for button in panel_bar.findChildren(QToolButton)])
+        self.assertNotIn("Ring Fill", [button.toolTip() for button in panel_bar.findChildren(QToolButton)])
+
+        self.window.ui_references.tool_actions["color"].trigger()
+        color_button = next(
+            widget for widget in self.window.findChildren(QToolButton) if widget.toolTip() == "Color: Blue"
+        )
+        self.assertEqual(self.window.statusBar().currentMessage(), "Color Tool")
+        self.assertEqual(
+            services_for_window(self.window).status_service.status_context_texts()["tool"],
+            "Tool: Color",
+        )
+        self.assertIsNotNone(color_button)
+
+        self.window.ui_references.tool_actions["ring_fill"].trigger()
+        ring_fill_button = next(
+            widget for widget in self.window.findChildren(QToolButton) if widget.toolTip() == "Ring Fill: Orange"
+        )
+        self.assertEqual(self.window.runtime_state.context_bar_page_override, "ring_fill")
+        self.assertEqual(self.window.statusBar().currentMessage(), "Ring Fill Tool")
+        self.assertEqual(
+            services_for_window(self.window).status_service.status_context_texts()["tool"],
+            "Tool: Ring Fill",
+        )
+        self.assertIsNotNone(ring_fill_button)
 
     def test_left_toolbar_renders_select_and_perspective_button_glyphs(self) -> None:
         self.window.resize(800, 420)
@@ -128,7 +185,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         )
         image = tools_bar.grab().toImage()
 
-        for text, min_dark_pixels in (("Select", 95), ("Perspective", 120)):
+        for text, min_dark_pixels in (("Select", 95), ("Perspective", 105)):
             with self.subTest(text=text):
                 action = next(action for action in tools_bar.actions() if action.text() == text)
                 widget = tools_bar.widgetForAction(action)
@@ -147,7 +204,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
             toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Tools"
         )
 
-        for action_key, min_dark_pixels in (("select", 95), ("perspective", 120)):
+        for action_key, min_dark_pixels in (("select", 95), ("perspective", 105)):
             with self.subTest(action_key=action_key):
                 action = self.window.ui_references.tool_actions[action_key]
                 action.trigger()

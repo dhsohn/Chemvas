@@ -22,6 +22,7 @@ if QApplication is not None:
         MainWindowPanelToolbarCallbacks,
         build_panel_toolbar,
     )
+    from ui.main_window_theme import TOOLBAR_ICON_SIZE
     from ui.main_window_ui_assembly_service import MainWindowUIAssemblyService
 
 
@@ -109,10 +110,6 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
             export_xyz=mock.Mock(),
             toggle_preview_panel=mock.Mock(),
             setup_sheet=mock.Mock(),
-            populate_palette_menu=mock.Mock(),
-            apply_color_preset=mock.Mock(),
-            apply_ring_fill_preset=mock.Mock(),
-            set_bond_length=mock.Mock(),
         )
         self.button_service = MainWindowUIAssemblyService(
             scene_transform_controller_for_window=self.scene_transform_controller_for_window,
@@ -143,7 +140,7 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         )
 
         self.assertEqual(assembly.panel_bar.objectName(), "topRoleToolbar")
-        self.assertEqual(assembly.panel_bar.iconSize().width(), 24)
+        self.assertEqual(assembly.panel_bar.iconSize().width(), TOOLBAR_ICON_SIZE)
         self.assertEqual(assembly.save_button.toolTip(), "File")
         self.assertEqual(assembly.load_action.statusTip(), "Open a drawing or workbook")
         self.assertTrue(assembly.preview_panel_button.isCheckable())
@@ -195,13 +192,10 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         assembly.redo_button.click()
         window.canvas.history_service.undo.assert_called_once_with()
         window.canvas.history_service.redo.assert_called_once_with()
-        bond_length_button = next(
-            button
-            for button in assembly.panel_bar.findChildren(QToolButton)
-            if button.toolTip() == "Bond Length"
+        removed_tooltips = {"Bond Length", "Color", "Ring Fill"}
+        self.assertFalse(
+            any(button.toolTip() in removed_tooltips for button in assembly.panel_bar.findChildren(QToolButton))
         )
-        bond_length_button.click()
-        self.panel_callbacks.set_bond_length.assert_called_once_with(window)
         window.set_bond_length.assert_not_called()
 
         flip_buttons = [
