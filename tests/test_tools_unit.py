@@ -6,16 +6,33 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtCore import QPointF, Qt
+    from PyQt6.QtCore import QPointF, QRectF, Qt
     from PyQt6.QtWidgets import QApplication
 except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    import ui.tools as tools_module
-    from core.history import CompositeCommand, MoveAtomsCommand, MoveItemsCommand
+    import ui.bond_tool as bond_tool_module
+    import ui.move_tool as move_tool_module
+    import ui.rotate_tool as rotate_tool_module
+    import ui.select_tool as select_tool_module
+    from core.history import CompositeCommand, MoveAtomsCommand
     from core.model import Atom, Bond
-    from ui.history_commands import UpdateSceneItemCommand
+    from ui.canvas_atom_graphics_state import (
+        atom_dots_for,
+        atom_items_for,
+        set_atom_dots_for,
+        set_atom_items_for,
+    )
+    from ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
+    from ui.canvas_hover_state import set_hover_bond_id_for
+    from ui.canvas_scene_items_state import selected_notes_for, set_selected_notes_for
+    from ui.canvas_tool_settings_state import set_tool_setting_for
+    from ui.handle_state import CanvasHandleState
+    from ui.history_commands import MoveItemsCommand, UpdateSceneItemCommand
+    from ui.preview_tools import PreviewDragTool
+    from ui.selection_drag_tool import independent_selection_items
+    from ui.tool_context import ToolContext
     from ui.tools import (
         ArrowTool,
         BondTool,
@@ -24,7 +41,75 @@ if QApplication is not None:
         SelectTool,
         Tool,
         TSBracketTool,
-        _independent_selection_items,
+    )
+
+
+def _tool_context_for(canvas):
+    services = getattr(canvas, "services", None)
+    graph_service = getattr(services, "canvas_graph_service", None)
+    color_mutation_service = getattr(services, "canvas_color_mutation_service", None)
+    tool_mode_controller = getattr(services, "tool_mode_controller", None)
+
+    def selected_items(*, excluded_kinds):
+        scene = getattr(canvas, "scene", None)
+        if not callable(scene):
+            return []
+        return [item for item in scene().selectedItems() if item.data(0) not in excluded_kinds]
+
+    return ToolContext(
+        canvas,
+        hit_testing_service=getattr(services, "hit_testing_service", None),
+        selection_controller=getattr(services, "selection_controller", None),
+        note_controller=getattr(
+            services,
+            "note_controller",
+            SimpleNamespace(create_text_note=mock.Mock(), begin_note_edit=mock.Mock()),
+        ),
+        handle_controller=getattr(
+            services,
+            "handle_controller",
+            SimpleNamespace(update_handle_drag=mock.Mock()),
+        ),
+        selection_rotation_controller=getattr(
+            services,
+            "selection_rotation_controller",
+            SimpleNamespace(
+                begin_selection_3d_rotation=mock.Mock(return_value=False),
+                update_selection_3d_rotation=mock.Mock(),
+                end_selection_3d_rotation=mock.Mock(),
+            ),
+        ),
+        scene_delete_controller=getattr(
+            services,
+            "scene_delete_controller",
+            SimpleNamespace(
+                delete_atom=mock.Mock(),
+                delete_bond=mock.Mock(),
+                delete_ring=mock.Mock(),
+            ),
+        ),
+        scene_transform_controller=getattr(
+            services,
+            "scene_transform_controller",
+            SimpleNamespace(
+                apply_bond_style=mock.Mock(),
+                cycle_bond_style=mock.Mock(),
+                flip_bond_direction=mock.Mock(),
+            ),
+        ),
+        style_controller=getattr(
+            services,
+            "style_controller",
+            SimpleNamespace(suspend_selection_outline=mock.Mock()),
+        ),
+        bond_sets_for_atoms=getattr(graph_service, "bond_sets_for_atoms", None),
+        color_mutation_service=color_mutation_service,
+        selected_scene_items=selected_items,
+        select_single_structure_item=getattr(canvas, "select_structure_for_item", None),
+        atom_symbol_provider=getattr(tool_mode_controller, "get_atom_symbol", None),
+        history_service=getattr(services, "history_service", None),
+        set_drag_mode=getattr(canvas, "setDragMode", None),
+        rubber_band_drag_mode=getattr(getattr(canvas, "DragMode", None), "RubberBandDrag", None),
     )
 
 
@@ -88,18 +173,16 @@ class _FakeSelectCanvas:
     def __init__(self) -> None:
         self.drag_mode = None
         self.scene_obj = _FakeScene()
-        self.atom_items = {}
-        self.atom_dots = {}
-        self.bond_items = {}
+        set_atom_items_for(self, {})
+        set_atom_dots_for(self, {})
+        set_bond_items_for(self, {})
         self.snapshot = None
         self.bond_sets = ({1}, {2})
         self.item = None
         self.toggle_result = False
-        self.handle_states = {}
         self.curved_handles_shown = []
         self.clear_handles_calls = 0
-        self._handle_target = None
-        self._active_handles = []
+        self.handle_state = CanvasHandleState()
         self.preferred_item = None
         self.selection_hit = False
         self.suspend_calls = []
@@ -107,8 +190,35 @@ class _FakeSelectCanvas:
         self.moved_items = []
         self.shift_calls = []
         self.pushed_commands = []
+        self.history_service = SimpleNamespace(push=self.push_command)
         self.handle_drags = []
         self.updated_outline = 0
+        self.services = SimpleNamespace(
+            history_service=self.history_service,
+            canvas_graph_service=SimpleNamespace(bond_sets_for_atoms=self.bond_sets_for_atoms),
+            hit_testing_service=SimpleNamespace(
+                scene_pos_from_event=self.scene_pos_from_event,
+                item_at_event=self.item_at_event,
+            ),
+            selection_controller=SimpleNamespace(
+                toggle_item_selection=self.toggle_item_selection,
+                preferred_structure_item_at_scene_pos=self.preferred_structure_item_at_scene_pos,
+                selection_hit_test=self.selection_hit_test,
+                select_structure_for_item=self.select_structure_for_item,
+                update_selection_outline=self.refresh_selection_outline,
+                shift_selection_outlines=self.shift_selection_outlines,
+            ),
+            move_controller=SimpleNamespace(
+                move_atoms=self.move_atoms,
+                move_item=self.move_item,
+            ),
+            style_controller=SimpleNamespace(suspend_selection_outline=self.suspend_selection_outline),
+            handle_overlay_service=SimpleNamespace(
+                clear_handles=self.clear_handles,
+                show_curved_handles=self.show_curved_handles,
+            ),
+            handle_controller=SimpleNamespace(update_handle_drag=self.update_handle_drag),
+        )
 
     def setDragMode(self, mode) -> None:
         self.drag_mode = mode
@@ -116,8 +226,29 @@ class _FakeSelectCanvas:
     def scene(self):
         return self.scene_obj
 
-    def _selection_snapshot(self):
-        return self.snapshot
+    @property
+    def atom_items(self):
+        return atom_items_for(self)
+
+    @atom_items.setter
+    def atom_items(self, value) -> None:
+        set_atom_items_for(self, value)
+
+    @property
+    def atom_dots(self):
+        return atom_dots_for(self)
+
+    @atom_dots.setter
+    def atom_dots(self, value) -> None:
+        set_atom_dots_for(self, value)
+
+    @property
+    def bond_items(self):
+        return bond_items_for(self)
+
+    @bond_items.setter
+    def bond_items(self, value) -> None:
+        set_bond_items_for(self, value)
 
     def bond_sets_for_atoms(self, atom_ids):
         return self.bond_sets
@@ -128,14 +259,38 @@ class _FakeSelectCanvas:
     def toggle_item_selection(self, item):
         return self.toggle_result
 
-    def scene_item_state(self, item):
-        return self.handle_states.get(item, {"id": id(item)})
+    def select_structure_for_item(self, item) -> bool:
+        kind = item.data(0)
+        item_id = item.data(1)
+        self.scene_obj.clearSelection()
+        if kind == "atom" and isinstance(item_id, int):
+            atom_item = self.atom_items.get(item_id)
+            if atom_item is None:
+                return False
+            atom_item.setSelected(True)
+            self.scene_obj.selected_items = [atom_item]
+            return True
+        if kind == "bond" and isinstance(item_id, int):
+            bond_items = self.bond_items.get(item_id, [])
+            if not bond_items:
+                return False
+            for bond_item in bond_items:
+                bond_item.setSelected(True)
+            self.scene_obj.selected_items = list(bond_items)
+            return True
+        if kind == "ring":
+            item.setSelected(True)
+            self.scene_obj.selected_items = [item]
+            return True
+        return False
 
     def show_curved_handles(self, item) -> None:
         self.curved_handles_shown.append(item)
 
     def clear_handles(self) -> None:
         self.clear_handles_calls += 1
+        self.handle_state.active_handles = []
+        self.handle_state.target = None
 
     def scene_pos_from_event(self, event):
         return event.position()
@@ -158,13 +313,13 @@ class _FakeSelectCanvas:
     def shift_selection_outlines(self, dx, dy) -> None:
         self.shift_calls.append((dx, dy))
 
-    def _push_command(self, command) -> None:
+    def push_command(self, command) -> None:
         self.pushed_commands.append(command)
 
     def update_handle_drag(self, handle, pos) -> None:
         self.handle_drags.append((handle, pos))
 
-    def _update_selection_outline(self) -> None:
+    def refresh_selection_outline(self) -> None:
         self.updated_outline += 1
 
 
@@ -178,7 +333,6 @@ class _FakeBondCanvas:
         self.active_bond_order = 1
         self.snap_angle_step = 30
         self.renderer = SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0))
-        self.preview_update_result = False
         self.preview_build_items = ["new-preview"]
         self.atom_near = None
         self.item = None
@@ -193,15 +347,30 @@ class _FakeBondCanvas:
         )
         self.bond_style_calls = []
         self.cycle_calls = []
-        self.bond_preview_updates = []
+        self.services = SimpleNamespace(
+            scene_transform_controller=SimpleNamespace(
+                apply_bond_style=self.apply_bond_style,
+                cycle_bond_style=self.cycle_bond_style,
+            ),
+            hit_testing_service=SimpleNamespace(
+                scene_pos_from_event=self.scene_pos_from_event,
+                item_at_event=self.item_at_event,
+                find_atom_near=self.find_atom_near,
+                find_bond_near=self.find_bond_near,
+            ),
+            selection_controller=SimpleNamespace(
+                preferred_structure_item_at_scene_pos=self.preferred_structure_item_at_scene_pos,
+                clear_note_selection=self.clear_note_selection,
+            ),
+            structure_build_service=SimpleNamespace(add_bond_between_points=self.add_bond_between_points),
+        )
         self.preview_build_calls = []
         self.bond_near = None
         self.default_endpoint = QPointF(15.0, 0.0)
         self.added_bonds = []
         self.scene_positions = []
-        self.selected_notes = []
+        set_selected_notes_for(self, [])
         self.clear_note_selection_calls = 0
-
     def setDragMode(self, mode) -> None:
         self.drag_mode = mode
 
@@ -210,11 +379,7 @@ class _FakeBondCanvas:
 
     def clear_note_selection(self) -> None:
         self.clear_note_selection_calls += 1
-        self.selected_notes = []
-
-    def update_bond_preview_items(self, preview_items, start, end, a_id, b_id, style, order):
-        self.bond_preview_updates.append((list(preview_items), QPointF(start), QPointF(end), a_id, b_id, style, order))
-        return self.preview_update_result
+        set_selected_notes_for(self, [])
 
     def _build_bond_preview_items(self, start, end, a_id, b_id):
         self.preview_build_calls.append((QPointF(start), QPointF(end), a_id, b_id))
@@ -240,11 +405,11 @@ class _FakeBondCanvas:
     def cycle_bond_style(self, bond_id) -> None:
         self.cycle_calls.append(bond_id)
 
-    def _find_bond_near(self, pos, radius):
+    def find_bond_near(self, pos, radius):
         return self.bond_near
 
-    def _default_bond_endpoint(self, start_pos, start_atom_id):
-        return QPointF(self.default_endpoint)
+    def add_bond_between_points(self, start, end, style, order) -> None:
+        self.added_bonds.append((QPointF(start), QPointF(end)))
 
     def add_bond_from_points(self, start, end) -> None:
         self.added_bonds.append((QPointF(start), QPointF(end)))
@@ -267,9 +432,6 @@ class _FakeMoveCanvas(_FakeSelectCanvas):
 
     def _selected_items_for_transform(self):
         return list(self.selected_items_for_transform)
-
-    def _selected_ids(self):
-        return set(self.selected_atom_ids), set(self.selected_bond_ids)
 
 
 class _FakePreviewItem:
@@ -299,6 +461,18 @@ class _FakePreviewCanvas:
         self.preview_ts_bracket_calls = []
         self.add_arrow_calls = []
         self.add_ts_bracket_calls = []
+        self.services = SimpleNamespace(
+            hit_testing_service=SimpleNamespace(scene_pos_from_event=self.scene_pos_from_event),
+            scene_decoration_service=SimpleNamespace(
+                add_arrow=self.add_arrow,
+                add_ts_bracket=lambda rect: self.add_ts_bracket_from_points(rect.topLeft(), rect.bottomRight()),
+            ),
+            scene_decoration_build_service=SimpleNamespace(
+                preview_arrow=self.preview_arrow,
+                preview_ts_bracket=self.preview_ts_bracket,
+                ts_bracket_rect_from_points=lambda start, end: QRectF(start, end).normalized(),
+            ),
+        )
 
     def setDragMode(self, mode) -> None:
         self.drag_mode = mode
@@ -348,7 +522,7 @@ class ToolsUnitTest(unittest.TestCase):
             kept,
         ]
 
-        filtered = _independent_selection_items(items, {3})
+        filtered = independent_selection_items(items, {3})
 
         self.assertEqual(filtered, [mark_free, kept])
 
@@ -361,7 +535,7 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertFalse(base_tool.on_mouse_release(_FakeEvent()))
 
         canvas = _FakeSelectCanvas()
-        tool = SelectTool(canvas)
+        tool = SelectTool(canvas, context=_tool_context_for(canvas))
         tool._apply_drag_delta(QPointF(1.0, 2.0))
         self.assertEqual(canvas.moved_atoms, [])
         self.assertEqual(canvas.moved_items, [])
@@ -382,9 +556,9 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertEqual(canvas.updated_outline, 1)
         self.assertEqual(canvas.pushed_commands, [])
 
-    def test_select_tool_context_begin_and_structure_selection_helpers(self) -> None:
+    def test_select_tool_begin_and_structure_selection_helpers(self) -> None:
         canvas = _FakeSelectCanvas()
-        tool = SelectTool(canvas)
+        tool = SelectTool(canvas, context=_tool_context_for(canvas))
         tool.activate()
 
         self.assertEqual(canvas.drag_mode, canvas.DragMode.RubberBandDrag)
@@ -418,7 +592,7 @@ class ToolsUnitTest(unittest.TestCase):
 
     def test_select_tool_additional_guard_paths_cover_invalid_targets_and_decisions(self) -> None:
         canvas = _FakeSelectCanvas()
-        tool = SelectTool(canvas)
+        tool = SelectTool(canvas, context=_tool_context_for(canvas))
 
         self.assertFalse(tool._select_structure_item(None))
         self.assertFalse(tool._select_structure_item(_FakeItem("atom", 4)))
@@ -437,28 +611,42 @@ class ToolsUnitTest(unittest.TestCase):
         canvas.atom_items[1] = _FakeItem("atom", 1)
         canvas.preferred_item = _FakeItem("atom", 1)
         canvas.item = None
-        with mock.patch.object(tools_module, "plan_selection_press", return_value=SimpleNamespace(action="ignore")):
+        with mock.patch.object(select_tool_module, "plan_selection_press", return_value=SimpleNamespace(action="ignore")):
             self.assertFalse(tool.on_mouse_press(_FakeEvent(QPointF(2.0, 3.0))))
 
-        with mock.patch.object(tools_module, "plan_selection_press", return_value=SimpleNamespace(action="reselect_preferred_and_drag")):
+        with mock.patch.object(
+            select_tool_module,
+            "plan_selection_press",
+            return_value=SimpleNamespace(action="reselect_preferred_and_drag"),
+        ):
             canvas.preferred_item = None
             self.assertFalse(tool.on_mouse_press(_FakeEvent(QPointF(2.0, 3.0))))
 
-        with mock.patch.object(tools_module, "plan_selection_press", return_value=SimpleNamespace(action="reselect_preferred_and_drag")):
+        with mock.patch.object(
+            select_tool_module,
+            "plan_selection_press",
+            return_value=SimpleNamespace(action="reselect_preferred_and_drag"),
+        ):
             canvas.preferred_item = _FakeItem("atom", 4)
             self.assertFalse(tool.on_mouse_press(_FakeEvent(QPointF(2.0, 3.0))))
 
-        with mock.patch.object(tools_module, "plan_selection_press", return_value=SimpleNamespace(action="reselect_preferred_and_drag")):
+        with mock.patch.object(
+            select_tool_module,
+            "plan_selection_press",
+            return_value=SimpleNamespace(action="reselect_preferred_and_drag"),
+        ):
             canvas.preferred_item = _FakeItem("atom", 5)
             canvas.atom_items[5] = _FakeItem("atom", 5)
             canvas.snapshot = SimpleNamespace(selected_atom_ids=set(), selection_items=[])
-            self.assertFalse(tool.on_mouse_press(_FakeEvent(QPointF(2.0, 3.0))))
+            self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(2.0, 3.0))))
 
+        tool._reset_selection_drag_state()
+        tool._start_pos = None
         self.assertFalse(tool.on_mouse_move(_FakeEvent(QPointF(9.0, 9.0))))
 
     def test_select_tool_mouse_press_handles_shift_handle_curve_and_drag_paths(self) -> None:
         canvas = _FakeSelectCanvas()
-        tool = SelectTool(canvas)
+        tool = SelectTool(canvas, context=_tool_context_for(canvas))
         event = _FakeEvent(QPointF(1.0, 2.0), modifiers=Qt.KeyboardModifier.ShiftModifier)
         canvas.item = _FakeItem("note")
         canvas.toggle_result = True
@@ -497,8 +685,8 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertEqual(canvas.curved_handles_shown, [curved, curved])
         canvas.selection_hit = False
 
-        canvas._handle_target = curved
-        canvas._active_handles = [object()]
+        canvas.handle_state.target = curved
+        canvas.handle_state.active_handles = [object()]
         canvas.item = None
         canvas.selection_hit = True
         third_click = _FakeEvent(QPointF(4.0, 5.0))
@@ -512,9 +700,8 @@ class ToolsUnitTest(unittest.TestCase):
         canvas.preferred_item = preferred
         canvas.atom_items[4] = atom_item
         canvas.item = None
-        canvas.scene_obj.selected_items = []
-        canvas.snapshot = SimpleNamespace(selected_atom_ids={4}, selection_items=[_FakeItem("note")])
-        canvas.selection_hit = False
+        canvas.scene_obj.selected_items = [atom_item]
+        canvas.selection_hit = True
         drag_event = _FakeEvent(QPointF(8.0, 9.0))
         self.assertTrue(tool.on_mouse_press(drag_event))
         self.assertTrue(tool._drag_selection)
@@ -522,7 +709,7 @@ class ToolsUnitTest(unittest.TestCase):
 
     def test_select_tool_drag_move_and_release_build_commands(self) -> None:
         canvas = _FakeSelectCanvas()
-        tool = SelectTool(canvas)
+        tool = SelectTool(canvas, context=_tool_context_for(canvas))
         moved_item = _FakeItem("note")
         tool._drag_selection = True
         tool._selection_atom_ids = {1, 2}
@@ -543,13 +730,13 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertIsInstance(move_command.commands[1], MoveItemsCommand)
 
         handle = _FakeItem("handle")
-        target = object()
+        target = _FakeItem("curved_single")
         before_state = {"x": 1}
         after_state = {"x": 2}
         tool._active_handle = handle
         tool._handle_target = target
         tool._handle_before_state = before_state
-        canvas.handle_states[target] = after_state
+        target.setData(9, after_state)
         self.assertTrue(tool.on_mouse_release(_FakeEvent(QPointF(0.0, 0.0))))
         self.assertIsInstance(canvas.pushed_commands[-1], UpdateSceneItemCommand)
 
@@ -570,7 +757,7 @@ class ToolsUnitTest(unittest.TestCase):
 
     def test_select_tool_mouse_move_handles_active_handle_and_drag_throttling(self) -> None:
         canvas = _FakeSelectCanvas()
-        tool = SelectTool(canvas)
+        tool = SelectTool(canvas, context=_tool_context_for(canvas))
         handle = _FakeItem("handle")
         tool._active_handle = handle
         event = _FakeEvent(QPointF(5.0, 6.0))
@@ -583,12 +770,12 @@ class ToolsUnitTest(unittest.TestCase):
         tool._last_drag_time = 100.0
         tool._pending_curved_handle_item = object()
         tool._pending_curved_handle_action = "show"
-        with mock.patch.object(tools_module.time, "monotonic", return_value=100.0 + tool._drag_interval / 2.0):
+        with mock.patch.object(select_tool_module.time, "monotonic", return_value=100.0 + tool._drag_interval / 2.0):
             self.assertTrue(tool.on_mouse_move(_FakeEvent(QPointF(3.0, 4.0))))
         self.assertEqual(canvas.shift_calls, [])
         self.assertIsNotNone(tool._pending_curved_handle_item)
 
-        with mock.patch.object(tools_module.time, "monotonic", return_value=100.0 + tool._drag_interval * 2.0):
+        with mock.patch.object(select_tool_module.time, "monotonic", return_value=100.0 + tool._drag_interval * 2.0):
             self.assertTrue(tool.on_mouse_move(_FakeEvent(QPointF(4.0, 5.0))))
         self.assertTrue(canvas.shift_calls)
         self.assertIsNone(tool._pending_curved_handle_item)
@@ -599,26 +786,31 @@ class ToolsUnitTest(unittest.TestCase):
             drag_mode=None,
             rotations=[],
             setDragMode=lambda mode: setattr(canvas, "drag_mode", mode),
-            rotate_view=lambda amount: canvas.rotations.append(amount),
         )
-        tool = RotateTool(canvas)
+        tool = RotateTool(canvas, context=_tool_context_for(canvas))
         tool.activate()
 
         self.assertEqual(canvas.drag_mode, canvas.DragMode.NoDrag)
         self.assertFalse(tool.on_mouse_press(_FakeEvent(button=Qt.MouseButton.RightButton)))
         self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
-        self.assertTrue(tool.on_mouse_move(_FakeEvent(QPointF(6.0, 1.0))))
+        with mock.patch.object(
+            rotate_tool_module,
+            "rotate_view_for",
+            side_effect=lambda _canvas, amount: canvas.rotations.append(amount),
+        ):
+            self.assertTrue(tool.on_mouse_move(_FakeEvent(QPointF(6.0, 1.0))))
         self.assertEqual(canvas.rotations, [1.5])
         self.assertFalse(tool.on_mouse_release(_FakeEvent()))
         self.assertFalse(tool.on_mouse_move(_FakeEvent(QPointF(8.0, 1.0))))
 
     def test_move_tool_selection_drag_builds_composite_move_command(self) -> None:
         canvas = _FakeMoveCanvas()
-        tool = MoveTool(canvas)
+        tool = MoveTool(canvas, context=_tool_context_for(canvas))
         tool.activate()
 
         selected_note = _FakeItem("note")
         canvas.selected_items_for_transform = [selected_note]
+        canvas.scene_obj.selected_items = [selected_note, _FakeItem("atom", 1), _FakeItem("bond", 1)]
         canvas.selected_atom_ids = {1}
         canvas.selected_bond_ids = {1}
 
@@ -641,7 +833,7 @@ class ToolsUnitTest(unittest.TestCase):
 
     def test_move_tool_item_drag_pushes_move_items_command(self) -> None:
         canvas = _FakeMoveCanvas()
-        tool = MoveTool(canvas)
+        tool = MoveTool(canvas, context=_tool_context_for(canvas))
         moved_item = _FakeItem("arrow")
         canvas.item = moved_item
 
@@ -658,7 +850,7 @@ class ToolsUnitTest(unittest.TestCase):
 
     def test_move_tool_covers_noop_invalid_and_throttled_wrapper_paths(self) -> None:
         canvas = _FakeMoveCanvas()
-        tool = MoveTool(canvas)
+        tool = MoveTool(canvas, context=_tool_context_for(canvas))
 
         self.assertFalse(tool.on_mouse_press(_FakeEvent(button=Qt.MouseButton.RightButton)))
         self.assertFalse(tool.on_mouse_move(_FakeEvent(QPointF(1.0, 1.0))))
@@ -667,6 +859,7 @@ class ToolsUnitTest(unittest.TestCase):
 
         selected_note = _FakeItem("note")
         canvas.selected_items_for_transform = [selected_note]
+        canvas.scene_obj.selected_items = [selected_note, _FakeItem("bond", 1), _FakeItem("bond", 99)]
         canvas.selected_atom_ids = set()
         canvas.selected_bond_ids = {1, 99}
         canvas.model.bonds[1] = None
@@ -674,12 +867,13 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertTrue(tool._drag_selection)
         self.assertEqual(tool._selection_atom_ids, set())
 
-        tool = MoveTool(_FakeMoveCanvas())
+        standalone_canvas = _FakeMoveCanvas()
+        tool = MoveTool(standalone_canvas, context=_tool_context_for(standalone_canvas))
         self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
         self.assertIsNone(tool._drag_item)
 
         canvas = _FakeMoveCanvas()
-        tool = MoveTool(canvas)
+        tool = MoveTool(canvas, context=_tool_context_for(canvas))
         canvas.item = _FakeItem("note")
         self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
         self.assertIsNone(tool._drag_item)
@@ -688,11 +882,11 @@ class ToolsUnitTest(unittest.TestCase):
         canvas.item = moved_item
         self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
         tool._last_drag_time = 100.0
-        with mock.patch.object(tools_module.time, "monotonic", return_value=100.0 + tool._drag_interval / 2.0):
+        with mock.patch.object(move_tool_module.time, "monotonic", return_value=100.0 + tool._drag_interval / 2.0):
             self.assertTrue(tool.on_mouse_move(_FakeEvent(QPointF(4.0, 5.0))))
         self.assertEqual(canvas.moved_items, [])
 
-        with mock.patch.object(tools_module.time, "monotonic", return_value=100.0 + tool._drag_interval * 2.0):
+        with mock.patch.object(move_tool_module.time, "monotonic", return_value=100.0 + tool._drag_interval * 2.0):
             self.assertTrue(tool.on_mouse_move(_FakeEvent(QPointF(4.0, 5.0))))
         self.assertEqual(canvas.moved_items[-1][1:3], (3.0, 4.0))
 
@@ -703,13 +897,13 @@ class ToolsUnitTest(unittest.TestCase):
 
     def test_bond_tool_preview_management_and_snap_helpers(self) -> None:
         canvas = _FakeBondCanvas()
-        tool = BondTool(canvas)
+        tool = BondTool(canvas, context=_tool_context_for(canvas))
 
-        with mock.patch.object(tools_module, "clear_bond_preview_items_helper", return_value=[]) as clear_helper:
+        with mock.patch.object(bond_tool_module, "clear_bond_preview_items_for", return_value=[]) as clear_helper:
             tool._preview_items = ["old"]
             tool._preview_signature = "single:1"
             tool._clear_preview_items()
-            clear_helper.assert_called_once_with(canvas.scene(), ["old"])
+            clear_helper.assert_called_once_with(canvas, ["old"])
             self.assertEqual(tool._preview_items, [])
             self.assertIsNone(tool._preview_signature)
 
@@ -719,14 +913,24 @@ class ToolsUnitTest(unittest.TestCase):
         tool._preview_items = ["existing"]
         tool._preview_signature = "single:1"
         tool._start_atom_id = 5
-        canvas.preview_update_result = True
-        tool._set_preview_items(QPointF(0.0, 0.0), QPointF(10.0, 0.0))
-        self.assertEqual(canvas.bond_preview_updates[-1][3], 5)
+        with mock.patch.object(bond_tool_module, "update_bond_preview_items_for", return_value=True) as update_helper:
+            tool._set_preview_items(QPointF(0.0, 0.0), QPointF(10.0, 0.0))
+        update_helper.assert_called_once_with(
+            canvas,
+            ["existing"],
+            QPointF(0.0, 0.0),
+            QPointF(10.0, 0.0),
+            a_id=5,
+            b_id=None,
+            style="single",
+            order=1,
+        )
 
-        canvas.preview_update_result = False
-        with mock.patch.object(tools_module, "add_bond_preview_items_helper", return_value=["added"]) as add_helper:
-            with mock.patch.object(tools_module, "clear_bond_preview_items_helper", return_value=[]):
-                tool._set_preview_items(QPointF(0.0, 0.0), QPointF(10.0, 0.0))
+        with mock.patch.object(bond_tool_module, "update_bond_preview_items_for", return_value=False), \
+             mock.patch.object(bond_tool_module, "add_bond_preview_items_for", return_value=["added"]) as add_helper, \
+             mock.patch.object(bond_tool_module, "clear_bond_preview_items_for", return_value=[]), \
+             mock.patch.object(bond_tool_module, "build_bond_preview_items_for", return_value=["preview"]):
+            tool._set_preview_items(QPointF(0.0, 0.0), QPointF(10.0, 0.0))
             add_helper.assert_called_once()
         self.assertEqual(tool._preview_items, ["added"])
         self.assertEqual(tool._preview_signature, "single:1")
@@ -749,7 +953,7 @@ class ToolsUnitTest(unittest.TestCase):
 
     def test_bond_tool_additional_guard_and_deactivate_paths(self) -> None:
         canvas = _FakeBondCanvas()
-        tool = BondTool(canvas)
+        tool = BondTool(canvas, context=_tool_context_for(canvas))
         tool._preview_signature = "single:1"
         tool.deactivate()
         self.assertIsNone(tool._start_pos)
@@ -760,9 +964,9 @@ class ToolsUnitTest(unittest.TestCase):
         tool._clear_preview_items()
         self.assertIsNone(tool._preview_signature)
 
-        canvas.preview_build_items = []
-        with mock.patch.object(tools_module, "add_bond_preview_items_helper") as add_helper:
-            tool._set_preview_items(QPointF(0.0, 0.0), QPointF(2.0, 0.0))
+        with mock.patch.object(bond_tool_module, "build_bond_preview_items_for", return_value=[]):
+            with mock.patch.object(bond_tool_module, "add_bond_preview_items_for") as add_helper:
+                tool._set_preview_items(QPointF(0.0, 0.0), QPointF(2.0, 0.0))
         add_helper.assert_not_called()
 
         self.assertFalse(tool._apply_active_style_to_bond(99))
@@ -770,7 +974,7 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertFalse(tool._apply_active_style_to_bond(0))
 
         canvas.model.bonds[0] = Bond(1, 2, 2, style="bold_out")
-        canvas.active_bond_style = "bold"
+        set_tool_setting_for(canvas, "active_bond_style", "bold")
         self.assertTrue(tool._apply_active_style_to_bond(0))
         self.assertEqual(canvas.bond_style_calls[-1], (0, "bold_in", 2))
 
@@ -781,7 +985,12 @@ class ToolsUnitTest(unittest.TestCase):
 
         with mock.patch.object(tool, "_clear_preview_items") as clear_preview, \
              mock.patch.object(tool, "_snap_to_atom", return_value=QPointF(8.0, 8.0)), \
-             mock.patch.object(tool, "_snap_endpoint", return_value=QPointF(9.0, 9.0)):
+             mock.patch.object(tool, "_snap_endpoint", return_value=QPointF(9.0, 9.0)), \
+             mock.patch.object(
+                 bond_tool_module,
+                 "default_bond_endpoint_for",
+                 return_value=QPointF(canvas.default_endpoint),
+             ):
             tool._start_pos = QPointF(1.0, 1.0)
             tool._start_atom_id = 1
             tool._press_scene_pos = None
@@ -801,47 +1010,47 @@ class ToolsUnitTest(unittest.TestCase):
 
     def test_bond_tool_mouse_press_move_release_and_style_dispatch(self) -> None:
         canvas = _FakeBondCanvas()
-        tool = BondTool(canvas)
+        tool = BondTool(canvas, context=_tool_context_for(canvas))
 
         selected_item = _FakeItem("atom", 99)
         selected_item.setSelected(True)
         canvas.scene_obj.selected_items = [selected_item]
-        canvas.selected_notes = ["note"]
+        set_selected_notes_for(canvas, ["note"])
         canvas.atom_near = 1
         with mock.patch.object(tool, "_set_preview_items"):
             self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(2.0, 2.0))))
         self.assertEqual(canvas.scene_obj.clear_selection_calls, 1)
         self.assertEqual(canvas.scene_obj.selectedItems(), [])
-        self.assertEqual(canvas.selected_notes, [])
+        self.assertEqual(selected_notes_for(canvas), [])
         self.assertEqual(canvas.clear_note_selection_calls, 1)
         canvas.atom_near = None
 
         canvas.item = _FakeItem("bond", 0)
-        canvas.active_bond_style = "wedge"
+        set_tool_setting_for(canvas, "active_bond_style", "wedge")
         self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
         self.assertEqual(canvas.bond_style_calls[-1], (0, "wedge", 1))
 
-        canvas.active_bond_style = "bold"
+        set_tool_setting_for(canvas, "active_bond_style", "bold")
         self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
         self.assertEqual(canvas.bond_style_calls[-1], (0, "bold_out", 2))
 
-        canvas.active_bond_style = "single"
+        set_tool_setting_for(canvas, "active_bond_style", "single")
         self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
         self.assertEqual(canvas.cycle_calls[-1], 0)
 
         canvas.model.bonds[0] = Bond(1, 2, 2, style="double")
-        canvas.active_bond_style = "dotted"
+        set_tool_setting_for(canvas, "active_bond_style", "dotted")
         self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
         self.assertEqual(canvas.bond_style_calls[-1], (0, "dotted_double", 2))
 
         canvas.model.bonds[0] = Bond(1, 2, 2, style="bold_in")
         canvas.item = None
-        canvas.hover_bond_id = 0
-        canvas.active_bond_style = "bold"
+        set_hover_bond_id_for(canvas, 0)
+        set_tool_setting_for(canvas, "active_bond_style", "bold")
         self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
         self.assertEqual(canvas.bond_style_calls[-1], (0, "bold_out", 2))
 
-        canvas.hover_bond_id = None
+        set_hover_bond_id_for(canvas, None)
         canvas.atom_near = 1
         with mock.patch.object(tool, "_set_preview_items") as preview:
             self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(2.0, 2.0))))
@@ -850,7 +1059,7 @@ class ToolsUnitTest(unittest.TestCase):
         canvas.atom_near = None
         canvas.item = None
         canvas.preferred_item = _FakeItem("bond", 0)
-        canvas.active_bond_style = "single"
+        set_tool_setting_for(canvas, "active_bond_style", "single")
         self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(3.0, 3.0))))
         self.assertEqual(canvas.cycle_calls[-1], 0)
         canvas.preferred_item = None
@@ -859,7 +1068,12 @@ class ToolsUnitTest(unittest.TestCase):
             self.assertTrue(tool.on_mouse_move(_FakeEvent(QPointF(4.0, 4.0))))
             preview.assert_called_once()
 
-        with mock.patch.object(tool, "_clear_preview_items") as clear_preview:
+        with mock.patch.object(tool, "_clear_preview_items") as clear_preview, \
+             mock.patch.object(
+                 bond_tool_module,
+                 "default_bond_endpoint_for",
+                 return_value=QPointF(canvas.default_endpoint),
+             ):
             tool._press_scene_pos = QPointF(2.0, 2.0)
             tool._start_pos = QPointF(10.0, 0.0)
             tool._start_atom_id = 1
@@ -875,7 +1089,7 @@ class ToolsUnitTest(unittest.TestCase):
 
     def test_arrow_tool_preview_drag_and_deactivate_cleanup(self) -> None:
         canvas = _FakePreviewCanvas()
-        tool = ArrowTool(canvas, mode="auto")
+        tool = ArrowTool(canvas, mode="auto", context=_tool_context_for(canvas))
         tool.activate()
 
         self.assertEqual(canvas.drag_mode, canvas.DragMode.NoDrag)
@@ -898,7 +1112,7 @@ class ToolsUnitTest(unittest.TestCase):
 
     def test_ts_bracket_tool_preview_drag_and_deactivate_cleanup(self) -> None:
         canvas = _FakePreviewCanvas()
-        tool = TSBracketTool(canvas)
+        tool = TSBracketTool(canvas, context=_tool_context_for(canvas))
         tool.activate()
 
         self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(3.0, 4.0))))
@@ -918,13 +1132,13 @@ class ToolsUnitTest(unittest.TestCase):
 
     def test_preview_drag_base_and_inherited_false_paths(self) -> None:
         canvas = _FakePreviewCanvas()
-        preview_tool = tools_module._PreviewDragTool("preview", canvas)
+        preview_tool = PreviewDragTool("preview", canvas, context=_tool_context_for(canvas))
         with self.assertRaises(NotImplementedError):
             preview_tool._build_preview(QPointF(1.0, 2.0))
         with self.assertRaises(NotImplementedError):
             preview_tool._commit_drag(QPointF(3.0, 4.0))
 
-        tool = ArrowTool(canvas)
+        tool = ArrowTool(canvas, context=_tool_context_for(canvas))
         self.assertFalse(tool.on_mouse_press(_FakeEvent(button=Qt.MouseButton.RightButton)))
         self.assertFalse(tool.on_mouse_move(_FakeEvent(QPointF(1.0, 2.0))))
         self.assertFalse(tool.on_mouse_release(_FakeEvent(QPointF(1.0, 2.0))))

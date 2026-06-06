@@ -13,7 +13,10 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from core.model import Atom, Bond
+    from ui.atom_coords_access import CanvasAtomCoords3DState
+    from ui.canvas_atom_graphics_state import set_atom_items_for
     from ui.canvas_geometry_controller import CanvasGeometryController
+    from ui.canvas_scene_items_state import set_scene_item_collection_for
 
 
 class _FakeRingItem:
@@ -43,12 +46,11 @@ class CanvasGeometryControllerTest(unittest.TestCase):
 
     def test_ring_for_bond_handles_invalid_none_missing_and_matching_cases(self) -> None:
         ring_item = _FakeRingItem([1, 2, 3])
-        controller = CanvasGeometryController(
-            SimpleNamespace(
-                model=SimpleNamespace(bonds=[Bond(1, 2, 1), None, Bond(4, 5, 1)]),
-                ring_items=[_FakeRingItem("bad"), ring_item],
-            )
+        canvas = SimpleNamespace(
+            model=SimpleNamespace(bonds=[Bond(1, 2, 1), None, Bond(4, 5, 1)]),
         )
+        set_scene_item_collection_for(canvas, "ring_items", [_FakeRingItem("bad"), ring_item])
+        controller = CanvasGeometryController(canvas)
 
         self.assertIsNone(controller.ring_for_bond(-1))
         self.assertIsNone(controller.ring_for_bond(1))
@@ -58,28 +60,26 @@ class CanvasGeometryControllerTest(unittest.TestCase):
 
     def test_ring_center_helpers_skip_invalid_and_missing_atoms(self) -> None:
         ring_item = _FakeRingItem([1, 2, 3])
-        controller = CanvasGeometryController(
-            SimpleNamespace(
-                model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0), 3: Atom("C", 6.0, 12.0)}),
-                ring_items=[_FakeRingItem("bad"), ring_item, _FakeRingItem([7, 8])],
-                _current_atom_coords_3d=lambda atom_id: {
+        canvas = SimpleNamespace(
+            model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0), 3: Atom("C", 6.0, 12.0)}),
+            atom_coords_3d_state=CanvasAtomCoords3DState(
+                atom_coords_3d={
                     1: (0.0, 0.0, 0.0),
-                    2: None,
                     3: (6.0, 12.0, 9.0),
-                }.get(atom_id),
-            )
+                }
+            ),
+            renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
         )
+        set_scene_item_collection_for(canvas, "ring_items", [_FakeRingItem("bad"), ring_item, _FakeRingItem([7, 8])])
+        controller = CanvasGeometryController(canvas)
 
         center = controller.ring_center_for_bond(Bond(1, 3, 1))
         self.assertEqual(center, QPointF(3.0, 6.0))
         self.assertIsNone(controller.ring_center_for_bond(Bond(7, 8, 1)))
         self.assertIsNone(controller.ring_center_3d_for_bond(Bond(1, 3, 1)))
 
-        controller.canvas._current_atom_coords_3d = lambda atom_id: {
-            1: (0.0, 0.0, 0.0),
-            2: (3.0, 6.0, 3.0),
-            3: (6.0, 12.0, 9.0),
-        }.get(atom_id)
+        controller.canvas.model.atoms[2] = Atom("C", 3.0, 6.0)
+        controller.canvas.atom_coords_3d_state.atom_coords_3d[2] = (3.0, 6.0, 3.0)
         self.assertEqual(controller.ring_center_3d_for_bond(Bond(1, 3, 1)), (3.0, 6.0, 4.0))
 
     def test_label_rect_helpers_return_none_for_missing_items_and_pad_present_items(self) -> None:
@@ -97,7 +97,7 @@ class CanvasGeometryControllerTest(unittest.TestCase):
 
         label_item = QGraphicsTextItem("OH")
         label_item.setPos(1.0, 2.0)
-        controller.canvas.atom_items = {1: label_item}
+        set_atom_items_for(controller.canvas, {1: label_item})
         label_rect = controller.label_rect_for_atom(1)
         visible_rect = controller.visible_label_rect_for_atom(1)
         base_label_rect = label_item.sceneBoundingRect()
@@ -149,9 +149,9 @@ class CanvasGeometryControllerTest(unittest.TestCase):
     def test_trim_line_for_labels_handles_none_radii_and_min_span_clamp(self) -> None:
         canvas = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_line_width=5.0)),
-            _label_cut_radius_for_atom=lambda atom_id: {1: None, 2: 49.6}.get(atom_id),
         )
         controller = CanvasGeometryController(canvas)
+        controller.label_cut_radius_for_atom = lambda atom_id: {1: None, 2: 49.6}.get(atom_id)
 
         self.assertEqual(controller.trim_line_for_labels(1, None, 0.0, 0.0, 100.0, 0.0), (0.0, 1.0))
         self.assertEqual(controller.trim_line_for_labels(None, 1, 0.0, 0.0, 100.0, 0.0), (0.0, 1.0))
@@ -163,9 +163,9 @@ class CanvasGeometryControllerTest(unittest.TestCase):
     def test_trim_line_for_labels_clamps_start_only_and_end_only_min_span(self) -> None:
         canvas = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_line_width=5.0)),
-            _label_cut_radius_for_atom=lambda atom_id: {1: 99.9, 2: 99.9}.get(atom_id),
         )
         controller = CanvasGeometryController(canvas)
+        controller.label_cut_radius_for_atom = lambda atom_id: {1: 99.9, 2: 99.9}.get(atom_id)
 
         self.assertEqual(controller.trim_line_for_labels(1, None, 0.0, 0.0, 100.0, 0.0), (0.98, 1.0))
         self.assertEqual(controller.trim_line_for_labels(None, 2, 0.0, 0.0, 100.0, 0.0), (0.0, 0.02))

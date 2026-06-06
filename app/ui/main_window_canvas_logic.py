@@ -3,15 +3,33 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-CANVAS_TEMPLATE_FIELDS = (
+from ui.canvas_text_style_state import set_text_style_for, text_style_state_for
+from ui.canvas_tool_settings_state import set_tool_setting_for, tool_settings_state_for
+from ui.canvas_window_access import (
+    set_error_callback_for,
+    set_history_change_callback_for,
+    set_selection_info_callback_for,
+    set_tool_change_callback_for,
+    set_zoom_callback_for,
+    snapshot_canvas_state_for,
+)
+from ui.renderer_style_access import bond_length_px_for, set_bond_length_for
+from ui.sheet_setup_access import set_sheet_setup_for
+
+CANVAS_TEMPLATE_TOOL_FIELDS = (
     "arrow_line_width",
     "arrow_head_scale",
     "orbital_phase_enabled",
+    "mark_kind",
+)
+
+CANVAS_TEMPLATE_TEXT_FIELDS = (
     "text_font_size",
     "text_font_weight",
     "text_italic",
-    "mark_kind",
 )
+
+CANVAS_TEMPLATE_FIELDS = CANVAS_TEMPLATE_TOOL_FIELDS + CANVAS_TEMPLATE_TEXT_FIELDS
 
 
 @dataclass(frozen=True)
@@ -63,10 +81,14 @@ def canvas_sheet_name_counter(sheet_names: Sequence[object], prefix: str = "Shee
 def copy_canvas_template_settings(canvas, template) -> None:
     if template is None:
         return
-    canvas.renderer.set_bond_length(template.renderer.style.bond_length_px)
-    canvas.set_sheet_setup(template.sheet_size, template.sheet_orientation)
-    for field_name in CANVAS_TEMPLATE_FIELDS:
-        setattr(canvas, field_name, getattr(template, field_name))
+    set_bond_length_for(canvas, bond_length_px_for(template))
+    set_sheet_setup_for(canvas, template.sheet_size, template.sheet_orientation)
+    tool_settings = tool_settings_state_for(template)
+    for field_name in CANVAS_TEMPLATE_TOOL_FIELDS:
+        set_tool_setting_for(canvas, field_name, getattr(tool_settings, field_name))
+    text_style = text_style_state_for(template)
+    for field_name in CANVAS_TEMPLATE_TEXT_FIELDS:
+        set_text_style_for(canvas, field_name, getattr(text_style, field_name))
 
 
 def bind_active_canvas_callbacks(
@@ -81,11 +103,11 @@ def bind_active_canvas_callbacks(
 ) -> None:
     for canvas in canvases:
         is_active = canvas is active_canvas
-        canvas.set_selection_info_callback(selection_info_callback if is_active else None)
-        canvas.set_error_callback(error_callback if is_active else None)
-        canvas.set_tool_change_callback(tool_change_callback if is_active else None)
-        canvas.set_zoom_callback(zoom_callback if is_active else None)
-        canvas.set_history_change_callback(history_change_callback if is_active else None)
+        set_selection_info_callback_for(canvas, selection_info_callback if is_active else None)
+        set_error_callback_for(canvas, error_callback if is_active else None)
+        set_tool_change_callback_for(canvas, tool_change_callback if is_active else None)
+        set_zoom_callback_for(canvas, zoom_callback if is_active else None)
+        set_history_change_callback_for(canvas, history_change_callback if is_active else None)
 
 
 def build_workbook_sheet_states(
@@ -99,7 +121,7 @@ def build_workbook_sheet_states(
             {
                 "name": tab_text_at(tab_index) or f"Sheet {sheet_index + 1}",
                 "kind": "canvas",
-                "content": canvas.snapshot_state(),
+                "content": snapshot_canvas_state_for(canvas),
             }
         )
     return sheets
@@ -122,6 +144,8 @@ def restorable_canvas_sheets(
 
 __all__ = [
     "CANVAS_TEMPLATE_FIELDS",
+    "CANVAS_TEMPLATE_TEXT_FIELDS",
+    "CANVAS_TEMPLATE_TOOL_FIELDS",
     "RestorableCanvasSheet",
     "active_canvas_sheet_index",
     "active_canvas_tab_index",

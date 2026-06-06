@@ -13,7 +13,19 @@ except ModuleNotFoundError:
     QPointF = None
 
 if QApplication is not None:
+    from ui.canvas_scene_items_state import orbital_items_for
+    from ui.canvas_service_access import canvas_services_for
+    from ui.canvas_tool_settings_state import set_tool_setting_for
+    from ui.handle_overlay_access import (
+        clear_handles_for,
+        show_curved_handles_for,
+        show_orbital_handles_for,
+    )
+    from ui.handle_state import active_handles_for, handle_target_for
     from ui.main_window import MainWindow
+    from ui.main_window_canvas_ports import active_canvas_for_window
+    from ui.move_access import move_item_for
+    from ui.scene_decoration_access import add_arrow_for, add_orbital_for
 
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for GUI handle tests")
@@ -26,7 +38,7 @@ class GuiHandleInteractionTest(unittest.TestCase):
     def setUp(self) -> None:
         self.window = MainWindow()
         self.window.show()
-        self.window.canvas.setFocus()
+        active_canvas_for_window(self.window).setFocus()
         self.app.processEvents()
         QTest.qWait(20)
 
@@ -36,48 +48,48 @@ class GuiHandleInteractionTest(unittest.TestCase):
         QTest.qWait(10)
 
     def test_show_orbital_handles_and_drag_scale_updates_target_and_clears(self) -> None:
-        self.window.canvas.set_bond_length(20.0)
-        self.window.canvas.active_orbital_type = "p"
-        self.window.canvas.add_orbital(QPointF(0.0, 0.0))
-        orbital = self.window.canvas.orbital_items[0]
+        canvas_services_for(active_canvas_for_window(self.window)).geometry_controller.set_bond_length(20.0)
+        set_tool_setting_for(active_canvas_for_window(self.window), "active_orbital_type", "p")
+        add_orbital_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
+        orbital = orbital_items_for(active_canvas_for_window(self.window))[0]
 
-        self.window.canvas.show_orbital_handles(orbital)
+        show_orbital_handles_for(active_canvas_for_window(self.window), orbital)
 
-        self.assertEqual(len(self.window.canvas._active_handles), 2)
-        self.assertIs(self.window.canvas._handle_target, orbital)
+        self.assertEqual(len(active_handles_for(active_canvas_for_window(self.window))), 2)
+        self.assertIs(handle_target_for(active_canvas_for_window(self.window)), orbital)
         scale_handle = next(
-            handle for handle in self.window.canvas._active_handles if handle.data(1) == "orbital_scale"
+            handle for handle in active_handles_for(active_canvas_for_window(self.window)) if handle.data(1) == "orbital_scale"
         )
 
-        self.window.canvas.update_handle_drag(scale_handle, QPointF(40.0, 0.0))
+        active_canvas_for_window(self.window).services.handle_controller.update_handle_drag(scale_handle, QPointF(40.0, 0.0))
 
         self.assertGreater(orbital.scale(), 1.0)
-        self.assertEqual(len(self.window.canvas._active_handles), 2)
-        self.assertIs(self.window.canvas._handle_target, orbital)
+        self.assertEqual(len(active_handles_for(active_canvas_for_window(self.window))), 2)
+        self.assertIs(handle_target_for(active_canvas_for_window(self.window)), orbital)
 
-        self.window.canvas.clear_handles()
+        clear_handles_for(active_canvas_for_window(self.window))
 
-        self.assertEqual(self.window.canvas._active_handles, [])
-        self.assertIsNone(self.window.canvas._handle_target)
+        self.assertEqual(active_handles_for(active_canvas_for_window(self.window)), [])
+        self.assertIsNone(handle_target_for(active_canvas_for_window(self.window)))
 
     def test_show_curved_handles_and_drag_endpoint_updates_arrow_geometry(self) -> None:
-        self.window.canvas.set_bond_length(20.0)
-        curved = self.window.canvas.add_arrow(QPointF(0.0, 0.0), QPointF(30.0, 0.0), "curved_single")
-        self.window.canvas.move_item(curved, 40.0, -15.0)
+        canvas_services_for(active_canvas_for_window(self.window)).geometry_controller.set_bond_length(20.0)
+        curved = add_arrow_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0), QPointF(30.0, 0.0), "curved_single")
+        move_item_for(active_canvas_for_window(self.window), curved, 40.0, -15.0)
 
-        self.window.canvas.show_curved_handles(curved)
+        show_curved_handles_for(active_canvas_for_window(self.window), curved)
 
-        self.assertEqual(len(self.window.canvas._active_handles), 3)
-        start_handle = next(handle for handle in self.window.canvas._active_handles if handle.data(1) == "curved_start")
+        self.assertEqual(len(active_handles_for(active_canvas_for_window(self.window))), 3)
+        start_handle = next(handle for handle in active_handles_for(active_canvas_for_window(self.window)) if handle.data(1) == "curved_start")
 
-        self.window.canvas.update_handle_drag(start_handle, QPointF(30.0, -10.0))
+        active_canvas_for_window(self.window).services.handle_controller.update_handle_drag(start_handle, QPointF(30.0, -10.0))
 
         data = curved.data(2)
         self.assertEqual(data["start"], QPointF(30.0, -10.0))
         self.assertEqual(curved.pos(), QPointF())
         self.assertEqual(start_handle.data(2), curved)
-        self.assertEqual(len(self.window.canvas._active_handles), 3)
-        self.assertIs(self.window.canvas._handle_target, curved)
+        self.assertEqual(len(active_handles_for(active_canvas_for_window(self.window))), 3)
+        self.assertIs(handle_target_for(active_canvas_for_window(self.window)), curved)
 
 
 if __name__ == "__main__":

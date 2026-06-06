@@ -2,50 +2,58 @@ from __future__ import annotations
 
 from core.model import MoleculeModel
 
+from ui.atom_coords_access import clear_atom_coords_3d_for
+from ui.benzene_preview_access import clear_benzene_preview_for
+from ui.canvas_atom_graphics_state import clear_atom_graphics_for
+from ui.canvas_bond_graphics_state import clear_bond_graphics_for
 from ui.canvas_graph_state import graph_state_for
+from ui.canvas_hover_state import (
+    set_hover_atom_id_for,
+    set_hover_bond_id_for,
+    set_hover_items_for,
+)
 from ui.canvas_insert_state import insert_state_for
 from ui.canvas_mark_registry import mark_registry_for
+from ui.canvas_model_access import set_model_for
 from ui.canvas_rotation_state import rotation_state_for
+from ui.canvas_scene_items_state import clear_scene_item_collections_for
 from ui.insert_mode_logic import clear_insert_session
+from ui.insert_session_access import (
+    apply_insert_session_state_for,
+    clear_smiles_preview_for,
+    clear_template_preview_for,
+)
+from ui.scene_item_access import clear_canvas_scene
 
 
 class CanvasSceneResetService:
-    def __init__(self, canvas) -> None:
+    def __init__(self, canvas, *, hit_testing_service) -> None:
         self.canvas = canvas
+        self.hit_testing_service = hit_testing_service
         self.graph = graph_state_for(canvas)
         self.rotation = rotation_state_for(canvas)
         self.insert_state = insert_state_for(canvas)
         self.marks = mark_registry_for(canvas)
 
     def clear_scene(self) -> None:
-        self.canvas.scene().clear()
-        self.canvas.hover_items = []
-        self.canvas.hover_atom_id = None
-        self.canvas.hover_bond_id = None
-        self.canvas.model = MoleculeModel()
-        self.canvas._mark_spatial_index_dirty()
-        self.canvas.atom_coords_3d = {}
+        clear_canvas_scene(self.canvas)
+        set_hover_items_for(self.canvas, [])
+        set_hover_atom_id_for(self.canvas, None)
+        set_hover_bond_id_for(self.canvas, None)
+        set_model_for(self.canvas, MoleculeModel())
+        self.hit_testing_service.mark_spatial_index_dirty()
+        clear_atom_coords_3d_for(self.canvas)
         self.rotation.reset_all()
-        self.canvas.atom_items = {}
-        self.canvas.atom_dots = {}
+        clear_atom_graphics_for(self.canvas)
         self.graph.reset()
-        self.canvas.bond_items = {}
-        self.canvas.ring_items = []
-        self.canvas.note_items = []
-        self.canvas.mark_items = []
-        self.canvas.arrow_items = []
-        self.canvas.ts_bracket_items = []
-        self.canvas.orbital_items = []
+        clear_bond_graphics_for(self.canvas)
+        clear_scene_item_collections_for(self.canvas)
         self.marks.clear()
         self.insert_state.smiles_preview_model = None
-        self.canvas._clear_template_preview()
-        self.canvas._clear_benzene_preview()
-        self.canvas._clear_smiles_preview()
-        self.canvas._apply_insert_session_state(clear_insert_session())
+        clear_template_preview_for(self.canvas)
+        clear_benzene_preview_for(self.canvas)
+        clear_smiles_preview_for(self.canvas)
+        apply_insert_session_state_for(self.canvas, clear_insert_session())
 
 
-def canvas_scene_reset_service_for(canvas) -> CanvasSceneResetService:
-    return canvas._canvas_scene_reset_service
-
-
-__all__ = ["CanvasSceneResetService", "canvas_scene_reset_service_for"]
+__all__ = ["CanvasSceneResetService"]

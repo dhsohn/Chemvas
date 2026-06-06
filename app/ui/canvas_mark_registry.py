@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ui.canvas_state_lookup import canvas_state_object
+
 
 class CanvasMarkRegistry:
     def __init__(self, by_atom: dict[int, list[Any]] | None = None) -> None:
@@ -40,26 +42,13 @@ class CanvasMarkRegistry:
         return self.by_atom.items()
 
 
-class CanvasMarkRegistryAdapter(CanvasMarkRegistry):
-    def __init__(self, canvas: Any) -> None:
-        self.canvas = canvas
-
-    @property
-    def by_atom(self) -> dict[int, list[Any]]:
-        if not hasattr(self.canvas, "_marks_by_atom"):
-            self.canvas._marks_by_atom = {}
-        return self.canvas._marks_by_atom
-
-    @by_atom.setter
-    def by_atom(self, value: dict[int, list[Any]]) -> None:
-        self.canvas._marks_by_atom = value
-
-
 def mark_registry_for(canvas: Any) -> CanvasMarkRegistry:
-    registry = getattr(canvas, "_mark_registry", None)
+    registry = canvas_state_object(canvas, "mark_registry")
     if registry is not None:
         return registry
-    return CanvasMarkRegistryAdapter(canvas)
+    registry = CanvasMarkRegistry()
+    canvas.mark_registry = registry
+    return registry
 
 
-__all__ = ["CanvasMarkRegistry", "CanvasMarkRegistryAdapter", "mark_registry_for"]
+__all__ = ["CanvasMarkRegistry", "mark_registry_for"]

@@ -14,8 +14,39 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from ui.canvas_note_controller import CanvasNoteController
-    from ui.canvas_view import NoteItem
-    from ui.selection_controller import SelectionController
+    from ui.canvas_scene_items_state import selected_notes_for, set_selected_notes_for
+    from ui.canvas_text_style_state import CanvasTextStyleState, set_text_style_for
+    from ui.note_item import NoteItem
+    from ui.note_item_access import committed_note_text_for
+    from ui.selection_service_bundle import build_selection_services
+    from ui.selection_style_state import SelectionStyleState
+
+
+def _history_service(push=None):
+    return SimpleNamespace(push=push if push is not None else mock.Mock())
+
+
+def _attach_history_service(canvas):
+    service = _history_service(getattr(canvas, "push_command", None))
+    services = getattr(canvas, "services", None)
+    if services is None:
+        services = SimpleNamespace()
+        canvas.services = services
+    services.history_service = service
+    return service
+
+
+def _note_controller(canvas, **kwargs) -> CanvasNoteController:
+    history_service = getattr(getattr(canvas, "services", None), "history_service", None)
+    return CanvasNoteController(canvas, history_service=history_service, **kwargs)
+
+
+def _selection_controller_for(canvas):
+    graph_service = SimpleNamespace(
+        expand_connected_atoms=mock.Mock(return_value=set()),
+        connected_components=lambda atom_ids: [set(atom_ids)] if atom_ids else [],
+    )
+    return build_selection_services(canvas, graph_service=graph_service).selection_controller
 
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for note controller tests")
@@ -40,15 +71,16 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
         canvas = SimpleNamespace(
             selected_notes=selected_notes,
-            select_note=mock.Mock(side_effect=_select_note),
+            services=SimpleNamespace(selection_controller=SimpleNamespace(select_note=mock.Mock(side_effect=_select_note))),
             scene=lambda: scene,
             setFocus=mock.Mock(),
         )
-        controller = CanvasNoteController(canvas)
+        _attach_history_service(canvas)
+        controller = _note_controller(canvas)
 
         controller.begin_note_edit(item)
 
-        canvas.select_note.assert_called_once_with(item, additive=False)
+        canvas.services.selection_controller.select_note.assert_called_once_with(item, additive=False)
         self.assertEqual(selected_notes, [item])
         canvas.setFocus.assert_called_once_with(Qt.FocusReason.MouseFocusReason)
         self.assertIs(scene.focusItem(), item)
@@ -58,7 +90,6 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
     def test_create_text_note_registers_scene_item_and_applies_style(self) -> None:
         scene = QGraphicsScene()
-        item = QGraphicsTextItem()
         pos = QPointF(3.0, 4.0)
 
         def _attach(target) -> None:
@@ -69,52 +100,60 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         attach_mock = mock.Mock(side_effect=_attach)
         canvas = SimpleNamespace(
             note_items=[],
-            _scene_item_controller=SimpleNamespace(attach_scene_item=attach_mock),
-            _new_note_item=mock.Mock(return_value=item),
+            services=SimpleNamespace(
+                scene_item_controller=SimpleNamespace(attach_scene_item=attach_mock),
+            ),
             _make_selectable=mock.Mock(),
         )
-        controller = CanvasNoteController(canvas)
+        _attach_history_service(canvas)
+        controller = _note_controller(canvas)
         controller.apply_note_style = mock.Mock()
 
         created = controller.create_text_note(pos, "Mechanism")
 
-        self.assertIs(created, item)
-        self.assertEqual(item.toPlainText(), "Mechanism")
-        self.assertEqual(item._last_text, "Mechanism")
-        self.assertEqual(item.data(0), "note")
-        self.assertEqual(item.pos(), pos)
-        self.assertEqual(canvas.note_items, [item])
-        self.assertIn(item, scene.items())
-        attach_mock.assert_called_once_with(item)
-        canvas._make_selectable.assert_called_once_with(item)
-        controller.apply_note_style.assert_called_once_with(item)
+        self.assertIsInstance(created, NoteItem)
+        self.assertEqual(created.toPlainText(), "Mechanism")
+        self.assertEqual(committed_note_text_for(created), "Mechanism")
+        self.assertEqual(created.data(0), "note")
+        self.assertEqual(created.pos(), pos)
+        self.assertEqual(canvas.note_items, [created])
+        self.assertIn(created, scene.items())
+        attach_mock.assert_called_once_with(created)
+        canvas._make_selectable.assert_called_once_with(created)
+        controller.apply_note_style.assert_called_once_with(created)
 
     def test_apply_text_style_to_selected_and_update_text_note_refresh_note_box(self) -> None:
         scene = QGraphicsScene()
         item = QGraphicsTextItem("Mechanism")
         scene.addItem(item)
 
+        selection_controller = SimpleNamespace(update_note_selection_box=mock.Mock())
         canvas = SimpleNamespace(
-            selected_notes=[item],
-            text_font_family="Arial",
-            text_font_size=13,
-            text_font_weight=QFont.Weight.DemiBold,
-            text_italic=True,
-            text_color=QColor("#334455"),
-            text_alignment=Qt.AlignmentFlag.AlignRight,
-            text_line_spacing=1.25,
-            note_padding=6.0,
-            note_box_enabled=True,
-            note_border_enabled=True,
-            note_box_color=QColor("#ffffff"),
-            note_box_alpha=0.4,
-            note_border_color=QColor("#111111"),
-            note_border_width=1.2,
-            _selection_color=QColor("#1f5eff"),
-            _selection_stroke_delta=0.8,
-            _update_note_selection_box=mock.Mock(),
+            text_style_state=CanvasTextStyleState(
+                text_font_family="Arial",
+                text_font_size=13,
+                text_font_weight=QFont.Weight.DemiBold,
+                text_italic=True,
+                text_color=QColor("#334455"),
+                text_alignment=Qt.AlignmentFlag.AlignRight,
+                text_line_spacing=1.25,
+                note_padding=6.0,
+                note_box_enabled=True,
+                note_border_enabled=True,
+                note_box_color=QColor("#ffffff"),
+                note_box_alpha=0.4,
+                note_border_color=QColor("#111111"),
+                note_border_width=1.2,
+            ),
+            selection_style_state=SelectionStyleState(
+                color=QColor("#1f5eff"),
+                stroke_delta=0.8,
+            ),
+            services=SimpleNamespace(selection_controller=selection_controller),
         )
-        controller = CanvasNoteController(canvas)
+        set_selected_notes_for(canvas, [item])
+        _attach_history_service(canvas)
+        controller = _note_controller(canvas)
 
         controller.apply_text_style_to_selected()
 
@@ -124,34 +163,37 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         self.assertEqual(item.defaultTextColor().name(), "#334455")
         self.assertTrue(item.font().italic())
         self.assertEqual(item.font().pointSize(), 13)
-        canvas._update_note_selection_box.assert_called_once_with(item)
+        selection_controller.update_note_selection_box.assert_called_once_with(item)
 
         controller.update_text_note(item, "Updated")
         self.assertEqual(item.toPlainText(), "Updated")
-        self.assertEqual(canvas._update_note_selection_box.call_count, 2)
+        self.assertEqual(selection_controller.update_note_selection_box.call_count, 2)
 
     def test_update_note_box_hides_existing_box_when_disabled(self) -> None:
         scene = QGraphicsScene()
         item = QGraphicsTextItem("Mechanism")
         scene.addItem(item)
         canvas = SimpleNamespace(
-            note_padding=6.0,
-            note_box_enabled=True,
-            note_border_enabled=True,
-            note_box_color=QColor("#ffffff"),
-            note_box_alpha=0.4,
-            note_border_color=QColor("#111111"),
-            note_border_width=1.2,
+            text_style_state=CanvasTextStyleState(
+                note_padding=6.0,
+                note_box_enabled=True,
+                note_border_enabled=True,
+                note_box_color=QColor("#ffffff"),
+                note_box_alpha=0.4,
+                note_border_color=QColor("#111111"),
+                note_border_width=1.2,
+            ),
         )
-        controller = CanvasNoteController(canvas)
+        _attach_history_service(canvas)
+        controller = _note_controller(canvas)
 
         controller.update_note_box(item)
         box = item.data(20)
         self.assertIsNotNone(box)
         self.assertTrue(box.isVisible())
 
-        canvas.note_box_enabled = False
-        canvas.note_border_enabled = False
+        set_text_style_for(canvas, "note_box_enabled", False)
+        set_text_style_for(canvas, "note_border_enabled", False)
         controller.update_note_box(item)
 
         self.assertFalse(box.isVisible())
@@ -161,19 +203,21 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         item = QGraphicsTextItem("Mechanism")
         scene.addItem(item)
         canvas = SimpleNamespace(
-            selected_notes=[item],
-            note_padding=6.0,
-            _selection_color=QColor("#1f5eff"),
-            _selection_stroke_delta=0.8,
+            text_style_state=CanvasTextStyleState(note_padding=6.0),
+            selection_style_state=SelectionStyleState(
+                color=QColor("#1f5eff"),
+                stroke_delta=0.8,
+            ),
         )
-        controller = SelectionController(canvas)
+        set_selected_notes_for(canvas, [item])
+        controller = _selection_controller_for(canvas)
 
         controller.update_note_selection_box(item)
         selection_box = item.data(21)
         self.assertIsNotNone(selection_box)
         self.assertTrue(selection_box.isVisible())
 
-        canvas.selected_notes = []
+        set_selected_notes_for(canvas, [])
         controller.update_note_selection_box(item)
         self.assertFalse(selection_box.isVisible())
 
@@ -181,9 +225,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         canvas = SimpleNamespace(
             commands=[],
             removed_items=[],
-            selected_notes=[],
             updated_boxes=[],
         )
+        set_selected_notes_for(canvas, [])
 
         def _note_state_dict(item) -> dict:
             return {
@@ -194,46 +238,52 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             }
 
         canvas._note_state_dict = _note_state_dict
-        canvas._push_command = canvas.commands.append
-        canvas._scene_item_controller = SimpleNamespace(remove_scene_item=canvas.removed_items.append)
-        canvas._update_note_selection_box = canvas.updated_boxes.append
-        controller = CanvasNoteController(canvas)
+        canvas.push_command = canvas.commands.append
+        canvas.services = SimpleNamespace(
+            scene_item_controller=SimpleNamespace(remove_scene_item=canvas.removed_items.append),
+            selection_controller=SimpleNamespace(update_note_selection_box=canvas.updated_boxes.append),
+        )
+        _attach_history_service(canvas)
+        controller = _note_controller(canvas)
         item = NoteItem(canvas)
 
         item.setPlainText("Mechanism")
         controller.handle_note_focus_out(item)
         self.assertEqual(type(canvas.commands[-1]).__name__, "AddSceneItemsCommand")
-        self.assertEqual(item._last_text, "Mechanism")
+        self.assertEqual(committed_note_text_for(item), "Mechanism")
 
         item.setPlainText("Mechanism 2")
         controller.handle_note_focus_out(item)
         self.assertEqual(type(canvas.commands[-1]).__name__, "UpdateSceneItemCommand")
-        self.assertEqual(item._last_text, "Mechanism 2")
+        self.assertEqual(committed_note_text_for(item), "Mechanism 2")
 
         item.setPlainText("")
         controller.handle_note_focus_out(item)
         self.assertEqual(type(canvas.commands[-1]).__name__, "DeleteSceneItemsCommand")
         self.assertEqual(canvas.removed_items[-1], item)
-        self.assertEqual(item._last_text, "")
+        self.assertEqual(committed_note_text_for(item), "")
 
     def test_handle_note_focus_out_removes_empty_untracked_note_and_selection_box(self) -> None:
         canvas = SimpleNamespace(
             commands=[],
             removed_items=[],
-            selected_notes=[],
             updated_boxes=[],
             _note_state_dict=lambda item: {},
         )
-        canvas._push_command = canvas.commands.append
-        canvas._scene_item_controller = SimpleNamespace(remove_scene_item=canvas.removed_items.append)
-        canvas._update_note_selection_box = canvas.updated_boxes.append
-        controller = CanvasNoteController(canvas)
+        set_selected_notes_for(canvas, [])
+        canvas.push_command = canvas.commands.append
+        canvas.services = SimpleNamespace(
+            scene_item_controller=SimpleNamespace(remove_scene_item=canvas.removed_items.append),
+            selection_controller=SimpleNamespace(update_note_selection_box=canvas.updated_boxes.append),
+        )
+        _attach_history_service(canvas)
+        controller = _note_controller(canvas)
         item = NoteItem(canvas)
-        canvas.selected_notes.append(item)
+        selected_notes_for(canvas).append(item)
 
         controller.handle_note_focus_out(item)
 
-        self.assertNotIn(item, canvas.selected_notes)
+        self.assertNotIn(item, selected_notes_for(canvas))
         self.assertEqual(canvas.updated_boxes, [item])
         self.assertEqual(canvas.removed_items, [item])
 
@@ -242,14 +292,17 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         canvas = SimpleNamespace(
             commands=[],
             removed_items=[],
-            selected_notes=[],
             updated_boxes=[],
             _note_state_dict=lambda item: {},
-            _scene_item_controller=SimpleNamespace(remove_scene_item=controller_remove),
+            services=SimpleNamespace(
+                scene_item_controller=SimpleNamespace(remove_scene_item=controller_remove),
+            ),
         )
-        canvas._push_command = canvas.commands.append
-        canvas._update_note_selection_box = canvas.updated_boxes.append
-        controller = CanvasNoteController(canvas)
+        set_selected_notes_for(canvas, [])
+        canvas.push_command = canvas.commands.append
+        canvas.services.selection_controller = SimpleNamespace(update_note_selection_box=canvas.updated_boxes.append)
+        _attach_history_service(canvas)
+        controller = _note_controller(canvas)
         item = NoteItem(canvas)
 
         controller.handle_note_focus_out(item)
@@ -262,22 +315,25 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         item = QGraphicsTextItem("Mechanism")
         scene.addItem(item)
         canvas = SimpleNamespace(
-            note_padding=6.0,
-            note_box_enabled=False,
-            note_border_enabled=True,
-            note_box_color=QColor("#ffffff"),
-            note_box_alpha=0.4,
-            note_border_color=QColor("#111111"),
-            note_border_width=1.2,
+            text_style_state=CanvasTextStyleState(
+                note_padding=6.0,
+                note_box_enabled=False,
+                note_border_enabled=True,
+                note_box_color=QColor("#ffffff"),
+                note_box_alpha=0.4,
+                note_border_color=QColor("#111111"),
+                note_border_width=1.2,
+            ),
         )
-        controller = CanvasNoteController(canvas)
+        _attach_history_service(canvas)
+        controller = _note_controller(canvas)
 
         controller.update_note_box(item)
         box = item.data(20)
         self.assertEqual(box.brush().style(), Qt.BrushStyle.NoBrush)
 
-        canvas.note_box_enabled = True
-        canvas.note_border_enabled = False
+        set_text_style_for(canvas, "note_box_enabled", True)
+        set_text_style_for(canvas, "note_border_enabled", False)
         controller.update_note_box(item)
         self.assertEqual(box.pen().style(), Qt.PenStyle.NoPen)
 
@@ -332,17 +388,21 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             setDefaultTextColor=mock.Mock(),
             document=lambda: document,
         )
+        selection_controller = SimpleNamespace(update_note_selection_box=mock.Mock())
         canvas = SimpleNamespace(
-            text_font_family="Arial",
-            text_font_size=13,
-            text_font_weight=QFont.Weight.Bold,
-            text_italic=False,
-            text_color=QColor("#334455"),
-            text_alignment=Qt.AlignmentFlag.AlignHCenter,
-            text_line_spacing=1.25,
-            _update_note_selection_box=mock.Mock(),
+            text_style_state=CanvasTextStyleState(
+                text_font_family="Arial",
+                text_font_size=13,
+                text_font_weight=QFont.Weight.Bold,
+                text_italic=False,
+                text_color=QColor("#334455"),
+                text_alignment=Qt.AlignmentFlag.AlignHCenter,
+                text_line_spacing=1.25,
+            ),
+            services=SimpleNamespace(selection_controller=selection_controller),
         )
-        controller = CanvasNoteController(canvas)
+        _attach_history_service(canvas)
+        controller = _note_controller(canvas)
         controller.update_note_box = mock.Mock()
 
         with mock.patch("ui.canvas_note_controller.QTextBlockFormat", FakeBlockFormat), mock.patch(
@@ -359,7 +419,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             (125, FakeBlockFormat.LineHeightType.ProportionalHeight),
         )
         controller.update_note_box.assert_called_once_with(item)
-        canvas._update_note_selection_box.assert_called_once_with(item)
+        selection_controller.update_note_selection_box.assert_called_once_with(item)
 
 
 if __name__ == "__main__":

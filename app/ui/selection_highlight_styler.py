@@ -5,6 +5,14 @@ from typing import TYPE_CHECKING
 from PyQt6.QtGui import QPen
 from PyQt6.QtWidgets import QGraphicsItemGroup
 
+from ui.selection_highlight_ports import selection_highlight_styler_for_access
+from ui.selection_style_access import (
+    selected_highlight_items_for,
+    selection_color_for,
+    selection_stroke_delta_for,
+    set_selected_highlight_items_for,
+)
+
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
 
@@ -15,14 +23,14 @@ class SelectionHighlightStyler:
 
     def set_selection_highlight(self, items: list) -> None:
         self.clear_selection_highlight()
-        self.canvas._selected_items = items
+        set_selected_highlight_items_for(self.canvas, items)
         for item in items:
             self.apply_selection_style(item, True)
 
     def clear_selection_highlight(self) -> None:
-        for item in self.canvas._selected_items:
+        for item in selected_highlight_items_for(self.canvas):
             self.apply_selection_style(item, False)
-        self.canvas._selected_items = []
+        set_selected_highlight_items_for(self.canvas, [])
 
     def apply_selection_style(self, item, selected: bool) -> None:
         if isinstance(item, QGraphicsItemGroup):
@@ -34,8 +42,8 @@ class SelectionHighlightStyler:
         pen = item.pen()
         if selected:
             item.setData(6, pen)
-            pen.setColor(self.canvas._selection_color)
-            pen.setWidthF(pen.widthF() + self.canvas._selection_stroke_delta)
+            pen.setColor(selection_color_for(self.canvas))
+            pen.setWidthF(pen.widthF() + selection_stroke_delta_for(self.canvas))
             item.setPen(pen)
             return
         original = item.data(6)
@@ -44,7 +52,7 @@ class SelectionHighlightStyler:
 
 
 def selection_highlight_styler_for(canvas) -> SelectionHighlightStyler:
-    return canvas._selection_highlight_styler
+    return selection_highlight_styler_for_access(canvas)
 
 
 __all__ = ["SelectionHighlightStyler", "selection_highlight_styler_for"]

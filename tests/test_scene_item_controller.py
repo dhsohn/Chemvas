@@ -19,6 +19,13 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
+    from ui.canvas_mark_registry import CanvasMarkRegistry
+    from ui.canvas_scene_items_state import (
+        SCENE_ITEM_COLLECTION_ATTRS,
+        scene_item_collection_for,
+        set_scene_item_collection_for,
+    )
+    from ui.handle_state import CanvasHandleState
     from ui.scene_item_controller import SceneItemController
 
 
@@ -29,16 +36,12 @@ class _FakeCanvas:
             style=SimpleNamespace(bond_length_px=20.0, bond_color="#000000"),
             ring_fill_brush=lambda: QBrush(QColor("#AA4400")),
         )
+        self.bond_renderer = SimpleNamespace(update_bond_geometry=self.update_bond_geometry)
         self.model = SimpleNamespace(atoms={})
-        self.ring_items = []
-        self.mark_items = []
-        self.note_items = []
-        self.arrow_items = []
-        self.ts_bracket_items = []
-        self.orbital_items = []
-        self.selected_notes = []
-        self._marks_by_atom = {}
-        self._handle_target = None
+        for name in SCENE_ITEM_COLLECTION_ATTRS:
+            set_scene_item_collection_for(self, name, [])
+        self.mark_registry = CanvasMarkRegistry()
+        self.handle_state = CanvasHandleState()
         self.make_selectable_calls = []
         self.updated_bond_ids = []
         self.bond_lookup = {}
@@ -52,36 +55,63 @@ class _FakeCanvas:
         self.curved_arrow_path_calls = []
         self.built_ts_bracket_rects = []
         self.built_orbital_calls = []
+        self.services = SimpleNamespace(
+            canvas_graph_service=SimpleNamespace(bond_id_between=self.bond_id_between),
+            note_controller=SimpleNamespace(apply_note_style=self.record_note_style_applied),
+            selection_controller=SimpleNamespace(update_note_selection_box=self.record_note_selection_box_updated),
+            scene_decoration_build_service=SimpleNamespace(
+                build_mark_item=self.record_build_mark_item,
+                set_mark_center=self.record_set_mark_center,
+                build_arrow_item=self.record_build_arrow_item,
+                build_ts_bracket_item=self.record_build_ts_bracket_item,
+                build_orbital_items=self.record_build_orbital_items,
+                ts_bracket_path=self.record_ts_bracket_path,
+            ),
+            canvas_mark_scene_service=SimpleNamespace(remove_mark_item=self.record_remove_mark_item),
+            handle_overlay_service=SimpleNamespace(clear_handles=self.clear_handles),
+            curved_arrow_path_service=SimpleNamespace(set_curved_arrow_path=self.record_set_curved_arrow_path),
+        )
 
     def scene(self):
         return self._scene
 
+    def _scene_items(self, name: str):
+        return scene_item_collection_for(self, name)
+
+    def _set_scene_items(self, name: str, value) -> None:
+        set_scene_item_collection_for(self, name, value)
+
+    selected_notes = property(lambda self: self._scene_items("selected_notes"), lambda self, value: self._set_scene_items("selected_notes", value))
+    ring_items = property(lambda self: self._scene_items("ring_items"), lambda self, value: self._set_scene_items("ring_items", value))
+    note_items = property(lambda self: self._scene_items("note_items"), lambda self, value: self._set_scene_items("note_items", value))
+    mark_items = property(lambda self: self._scene_items("mark_items"), lambda self, value: self._set_scene_items("mark_items", value))
+    arrow_items = property(lambda self: self._scene_items("arrow_items"), lambda self, value: self._set_scene_items("arrow_items", value))
+    ts_bracket_items = property(lambda self: self._scene_items("ts_bracket_items"), lambda self, value: self._set_scene_items("ts_bracket_items", value))
+    orbital_items = property(lambda self: self._scene_items("orbital_items"), lambda self, value: self._set_scene_items("orbital_items", value))
+
     def _make_selectable(self, item) -> None:
         self.make_selectable_calls.append(item)
 
-    def _new_note_item(self) -> QGraphicsTextItem:
-        return QGraphicsTextItem()
-
-    def _apply_note_style(self, item: QGraphicsTextItem) -> None:
+    def record_note_style_applied(self, item: QGraphicsTextItem) -> None:
         item._style_applied = True
         self.applied_note_style_items.append(item)
 
-    def _build_mark_item(self, kind: str):
+    def record_build_mark_item(self, kind: str):
         self.built_mark_kinds.append(kind)
         if kind == "missing":
             return None
         return QGraphicsTextItem(kind)
 
-    def _set_mark_center(self, item, center: QPointF) -> None:
+    def record_set_mark_center(self, item, center: QPointF) -> None:
         self.mark_centers[item] = QPointF(center)
         item.setPos(center)
 
-    def _build_arrow_item(self, start: QPointF, end: QPointF, kind: str) -> QGraphicsPathItem:
+    def record_build_arrow_item(self, start: QPointF, end: QPointF, kind: str) -> QGraphicsPathItem:
         item = QGraphicsPathItem(QPainterPath())
         self.built_arrow_calls.append((QPointF(start), QPointF(end), kind, item))
         return item
 
-    def _set_curved_arrow_path(
+    def record_set_curved_arrow_path(
         self,
         item: QGraphicsPathItem,
         start: QPointF,
@@ -91,45 +121,45 @@ class _FakeCanvas:
     ) -> None:
         self.curved_arrow_path_calls.append((item, QPointF(start), QPointF(end), QPointF(control), double))
 
-    def _build_ts_bracket_item(self, rect) -> QGraphicsPathItem:
+    def record_build_ts_bracket_item(self, rect) -> QGraphicsPathItem:
         item = QGraphicsPathItem(QPainterPath())
         item.setData(0, "ts_bracket")
         self.built_ts_bracket_rects.append(rect)
         return item
 
-    def _build_orbital_items(self, center: QPointF, kind: str):
+    def record_build_orbital_items(self, center: QPointF, kind: str):
         self.built_orbital_calls.append((QPointF(center), kind))
         if kind == "missing":
             return []
         return [QGraphicsTextItem(kind)]
 
-    def _ts_bracket_path(self, _rect):
+    def record_ts_bracket_path(self, _rect):
         return QPainterPath()
 
-    def _bond_id_between(self, atom_a: int, atom_b: int):
+    def bond_id_between(self, atom_a: int, atom_b: int):
         return self.bond_lookup.get((atom_a, atom_b))
 
     def update_bond_geometry(self, bond_id: int) -> None:
         self.updated_bond_ids.append(bond_id)
 
-    def _remove_mark_item(self, item) -> None:
+    def record_remove_mark_item(self, item) -> None:
         self.removed_mark_items.append(item)
         if item in self.mark_items:
             self.mark_items.remove(item)
         data = item.data(1) or {}
         atom_id = data.get("atom_id") if isinstance(data, dict) else None
         if isinstance(atom_id, int):
-            marks = self._marks_by_atom.get(atom_id)
+            marks = self.mark_registry.by_atom.get(atom_id)
             if marks and item in marks:
                 marks.remove(item)
         self._scene.removeItem(item)
 
-    def _update_note_selection_box(self, item) -> None:
+    def record_note_selection_box_updated(self, item) -> None:
         self.updated_note_boxes.append(item)
 
     def clear_handles(self) -> None:
         self.clear_handles_calls += 1
-        self._handle_target = None
+        self.handle_state.target = None
 
 
 class _BrokenSceneItem:
@@ -160,7 +190,10 @@ class SceneItemControllerTest(unittest.TestCase):
 
     def setUp(self) -> None:
         self.canvas = _FakeCanvas()
-        self.controller = SceneItemController(self.canvas)
+        self.controller = SceneItemController(
+            self.canvas,
+            graph_service=self.canvas.services.canvas_graph_service,
+        )
 
     def test_attach_scene_item_updates_registries_without_duplicates(self) -> None:
         mark = QGraphicsTextItem("+")
@@ -174,10 +207,11 @@ class SceneItemControllerTest(unittest.TestCase):
         self.controller.restore_scene_item(note)
 
         self.assertEqual(self.canvas.mark_items, [mark])
-        self.assertEqual(self.canvas._marks_by_atom, {7: [mark]})
+        self.assertEqual(self.canvas.mark_registry.by_atom, {7: [mark]})
         self.assertEqual(self.canvas.note_items, [note])
         self.assertEqual(note.textInteractionFlags(), Qt.TextInteractionFlag.NoTextInteraction)
-        self.assertEqual(self.canvas.make_selectable_calls, [mark, note])
+        self.assertTrue(mark.flags() & mark.GraphicsItemFlag.ItemIsSelectable)
+        self.assertTrue(note.flags() & note.GraphicsItemFlag.ItemIsSelectable)
         self.assertIs(mark.scene(), self.canvas.scene())
         self.assertIs(note.scene(), self.canvas.scene())
 
@@ -209,7 +243,9 @@ class SceneItemControllerTest(unittest.TestCase):
         self.assertEqual(self.canvas.arrow_items, [curved])
         self.assertEqual(self.canvas.ts_bracket_items, [ts_bracket])
         self.assertEqual(self.canvas.orbital_items, [orbital])
-        self.assertEqual(self.canvas.make_selectable_calls, [curved, ts_bracket, orbital])
+        self.assertTrue(curved.flags() & curved.GraphicsItemFlag.ItemIsSelectable)
+        self.assertTrue(ts_bracket.flags() & ts_bracket.GraphicsItemFlag.ItemIsSelectable)
+        self.assertTrue(orbital.flags() & orbital.GraphicsItemFlag.ItemIsSelectable)
         self.assertIs(curved.scene(), self.canvas.scene())
         self.assertIs(ts_bracket.scene(), self.canvas.scene())
         self.assertIs(orbital.scene(), self.canvas.scene())
@@ -246,8 +282,9 @@ class SceneItemControllerTest(unittest.TestCase):
         self.assertEqual(self.canvas.arrow_items, [curved])
         self.assertEqual(self.canvas.ts_bracket_items, [ts_bracket])
         self.assertEqual(self.canvas.orbital_items, [orbital])
-        self.assertEqual(self.canvas._marks_by_atom, {})
-        self.assertEqual(self.canvas.make_selectable_calls, [ring, note, free_mark, curved, ts_bracket, orbital])
+        self.assertEqual(self.canvas.mark_registry.by_atom, {})
+        for item in (ring, note, free_mark, curved, ts_bracket, orbital):
+            self.assertTrue(item.flags() & item.GraphicsItemFlag.ItemIsSelectable)
         self.assertIs(ring.scene(), self.canvas.scene())
         self.assertIs(note.scene(), self.canvas.scene())
         self.assertIs(free_mark.scene(), self.canvas.scene())
@@ -258,14 +295,14 @@ class SceneItemControllerTest(unittest.TestCase):
     def test_restore_helper_methods_create_and_register_supported_items(self) -> None:
         self.canvas.model.atoms[7] = SimpleNamespace(x=10.0, y=20.0)
 
-        ring = self.controller._restore_ring_from_state(
+        ring = self.controller.restore_ring_from_state(
             {"points": [(0.0, 0.0), (6.0, 0.0), (3.0, 4.0)], "atom_ids": [1, 2, 3]}
         )
-        note = self.controller._restore_note_from_state({"text": "Mechanism", "x": 3.0, "y": -4.0})
-        mark = self.controller._restore_mark_from_state(
+        note = self.controller.restore_note_from_state({"text": "Mechanism", "x": 3.0, "y": -4.0})
+        mark = self.controller.restore_mark_from_state(
             {"mark_kind": "plus", "atom_id": 7, "dx": 5.0, "dy": -2.0, "text": "m"}
         )
-        arrow = self.controller._restore_arrow_from_state(
+        arrow = self.controller.restore_arrow_from_state(
             {
                 "kind": "curved_double",
                 "start": (1.0, 2.0),
@@ -274,10 +311,10 @@ class SceneItemControllerTest(unittest.TestCase):
                 "double": True,
             }
         )
-        ts_bracket = self.controller._restore_ts_bracket_from_state(
+        ts_bracket = self.controller.restore_ts_bracket_from_state(
             {"left": -5.0, "top": -2.0, "right": 8.0, "bottom": 6.0}
         )
-        orbital = self.controller._restore_orbital_from_state(
+        orbital = self.controller.restore_orbital_from_state(
             {"orbital_kind": "sp2", "center": (2.0, 3.0), "scale": 1.2, "rotation": 15.0}
         )
 
@@ -289,7 +326,7 @@ class SceneItemControllerTest(unittest.TestCase):
         self.assertEqual(note.toPlainText(), "Mechanism")
         self.assertIsNotNone(mark)
         self.assertIn(mark, self.canvas.mark_items)
-        self.assertIn(mark, self.canvas._marks_by_atom[7])
+        self.assertIn(mark, self.canvas.mark_registry.by_atom[7])
         self.assertEqual(self.canvas.built_mark_kinds, ["plus"])
         self.assertAlmostEqual(self.canvas.mark_centers[mark].x(), 15.0)
         self.assertAlmostEqual(self.canvas.mark_centers[mark].y(), 18.0)
@@ -305,15 +342,15 @@ class SceneItemControllerTest(unittest.TestCase):
         self.assertEqual(self.canvas.built_orbital_calls[0][1], "sp2")
 
     def test_restore_helper_methods_return_none_for_invalid_state(self) -> None:
-        self.assertIsNone(self.controller._restore_ring_from_state({"points": [(0.0, 0.0), (1.0, 1.0)]}))
+        self.assertIsNone(self.controller.restore_ring_from_state({"points": [(0.0, 0.0), (1.0, 1.0)]}))
         self.assertIsNone(
-            self.controller._restore_mark_from_state({"mark_kind": "plus", "atom_id": 99, "dx": 1.0, "dy": 2.0})
+            self.controller.restore_mark_from_state({"mark_kind": "plus", "atom_id": 99, "dx": 1.0, "dy": 2.0})
         )
         self.assertIsNone(
-            self.controller._restore_arrow_from_state({"kind": "curved_double", "start": (1.0, 2.0)})
+            self.controller.restore_arrow_from_state({"kind": "curved_double", "start": (1.0, 2.0)})
         )
-        self.assertIsNone(self.controller._restore_ts_bracket_from_state({"left": 1.0, "top": 2.0}))
-        self.assertIsNone(self.controller._restore_orbital_from_state({"orbital_kind": "p"}))
+        self.assertIsNone(self.controller.restore_ts_bracket_from_state({"left": 1.0, "top": 2.0}))
+        self.assertIsNone(self.controller.restore_orbital_from_state({"orbital_kind": "p"}))
         self.assertEqual(self.canvas.make_selectable_calls, [])
         self.assertEqual(self.canvas.ring_items, [])
         self.assertEqual(self.canvas.mark_items, [])
@@ -353,8 +390,8 @@ class SceneItemControllerTest(unittest.TestCase):
         mixed_ring.setData(2, [1, "bad", 2])
         self.canvas.bond_lookup = {(2, 1): 17}
 
-        self.assertEqual(self.controller._bond_ids_for_ring_item(short_ring), set())
-        self.assertEqual(self.controller._bond_ids_for_ring_item(mixed_ring), {17})
+        self.assertEqual(self.controller.bond_ids_for_ring_item(short_ring), set())
+        self.assertEqual(self.controller.bond_ids_for_ring_item(mixed_ring), {17})
 
     def test_remove_scene_item_cleans_note_selection_and_handle_targets(self) -> None:
         note = QGraphicsTextItem("Label")
@@ -367,7 +404,7 @@ class SceneItemControllerTest(unittest.TestCase):
         self.canvas.selected_notes.append(note)
         self.canvas.scene().addItem(curved)
         self.canvas.arrow_items.append(curved)
-        self.canvas._handle_target = curved
+        self.canvas.handle_state.target = curved
 
         self.controller.remove_scene_item(note)
         self.controller.remove_scene_item(curved)
@@ -379,7 +416,7 @@ class SceneItemControllerTest(unittest.TestCase):
         self.assertNotIn(curved, self.canvas.arrow_items)
         self.assertIsNone(curved.scene())
         self.assertEqual(self.canvas.clear_handles_calls, 1)
-        self.assertIsNone(self.canvas._handle_target)
+        self.assertIsNone(self.canvas.handle_state.target)
 
     def test_remove_scene_item_cleans_registries_even_if_scene_lookup_raises(self) -> None:
         broken_note = _BrokenSceneItem("note")
@@ -408,7 +445,7 @@ class SceneItemControllerTest(unittest.TestCase):
         orbital = QGraphicsItemGroup()
         orbital.setData(0, "orbital")
         self.canvas.scene().addItem(orbital)
-        self.canvas._handle_target = orbital
+        self.canvas.handle_state.target = orbital
 
         self.controller.remove_scene_item(note)
         self.controller.remove_scene_item(curved)
@@ -429,13 +466,13 @@ class SceneItemControllerTest(unittest.TestCase):
         mark.setData(1, {"atom_id": 11})
         self.canvas.scene().addItem(mark)
         self.canvas.mark_items.append(mark)
-        self.canvas._marks_by_atom[11] = [mark]
+        self.canvas.mark_registry.by_atom[11] = [mark]
 
         self.controller.remove_scene_item(mark)
 
         self.assertEqual(self.canvas.removed_mark_items, [mark])
         self.assertNotIn(mark, self.canvas.mark_items)
-        self.assertNotIn(11, self.canvas._marks_by_atom)
+        self.assertNotIn(11, self.canvas.mark_registry.by_atom)
         self.assertIsNone(mark.scene())
 
     def test_remove_scene_item_keeps_atom_mark_registry_when_sibling_remains_and_refreshes_detached_ring(self) -> None:
@@ -447,7 +484,7 @@ class SceneItemControllerTest(unittest.TestCase):
         second_mark.setData(1, {"atom_id": 11})
         self.canvas.scene().addItem(first_mark)
         self.canvas.mark_items.extend([first_mark, second_mark])
-        self.canvas._marks_by_atom[11] = [first_mark, second_mark]
+        self.canvas.mark_registry.by_atom[11] = [first_mark, second_mark]
 
         ring = QGraphicsPolygonItem(QPolygonF([QPointF(0.0, 0.0), QPointF(4.0, 0.0), QPointF(2.0, 3.0)]))
         ring.setData(0, "ring")
@@ -461,7 +498,7 @@ class SceneItemControllerTest(unittest.TestCase):
         self.controller.remove_scene_item(first_mark)
         self.controller.remove_scene_item(ring)
 
-        self.assertEqual(self.canvas._marks_by_atom[11], [second_mark])
+        self.assertEqual(self.canvas.mark_registry.by_atom[11], [second_mark])
         self.assertEqual(self.canvas.removed_mark_items, [first_mark])
         self.assertCountEqual(self.canvas.updated_bond_ids, [101, 102, 103])
 
@@ -496,7 +533,7 @@ class SceneItemControllerTest(unittest.TestCase):
         orbital.setData(0, "orbital")
         self.canvas.scene().addItem(orbital)
         self.canvas.orbital_items.append(orbital)
-        self.canvas._handle_target = orbital
+        self.canvas.handle_state.target = orbital
 
         self.controller.remove_scene_item(orbital)
 

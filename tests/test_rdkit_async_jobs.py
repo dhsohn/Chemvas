@@ -15,6 +15,7 @@ except ModuleNotFoundError:
 if QObject is not None:
     from ui import rdkit_async_jobs
     from ui.rdkit_async_jobs import XYZExportWorker, export_xyz_in_thread
+    from ui.rdkit_export_job_state import rdkit_export_jobs_for
 
 
 @unittest.skipUnless(QObject is not None, "PyQt6 is required for async RDKit export tests")
@@ -157,7 +158,7 @@ class ExportXYZInThreadTest(unittest.TestCase):
         _FakeWorker.instances.clear()
 
     def test_export_xyz_in_thread_wires_worker_and_cleans_finished_jobs(self) -> None:
-        owner = SimpleNamespace()
+        owner = QObject()
         succeeded = []
         failed = []
 
@@ -183,7 +184,7 @@ class ExportXYZInThreadTest(unittest.TestCase):
         self.assertEqual(worker.atom_annotations, {"a": 1})
         self.assertEqual(worker.path, "/tmp/export.xyz")
         self.assertIs(worker.moved_to, thread)
-        self.assertEqual(owner._rdkit_export_jobs, [(thread, worker)])
+        self.assertEqual(rdkit_export_jobs_for(owner), [(thread, worker)])
         self.assertTrue(thread.start_called)
 
         thread.started.emit()
@@ -197,15 +198,16 @@ class ExportXYZInThreadTest(unittest.TestCase):
         worker.finished.emit()
         self.assertTrue(thread.quit_called)
         self.assertTrue(worker.delete_later_called)
-        self.assertEqual(owner._rdkit_export_jobs, [(thread, worker)])
+        self.assertEqual(rdkit_export_jobs_for(owner), [(thread, worker)])
 
         thread.finished.emit()
         self.assertTrue(thread.delete_later_called)
-        self.assertEqual(owner._rdkit_export_jobs, [])
+        self.assertEqual(rdkit_export_jobs_for(owner), [])
 
     def test_export_xyz_in_thread_reuses_existing_job_list(self) -> None:
         existing_job = ("old-thread", "old-worker")
-        owner = SimpleNamespace(_rdkit_export_jobs=[existing_job])
+        owner = QObject()
+        rdkit_export_jobs_for(owner).append(existing_job)
 
         with (
             mock.patch.object(rdkit_async_jobs, "QThread", new=_FakeThread),
@@ -223,7 +225,7 @@ class ExportXYZInThreadTest(unittest.TestCase):
 
         thread = _FakeThread.instances[-1]
         worker = _FakeWorker.instances[-1]
-        self.assertEqual(owner._rdkit_export_jobs, [existing_job, (thread, worker)])
+        self.assertEqual(rdkit_export_jobs_for(owner), [existing_job, (thread, worker)])
 
 
 if __name__ == "__main__":

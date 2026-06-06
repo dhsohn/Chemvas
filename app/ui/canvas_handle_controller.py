@@ -14,26 +14,32 @@ from ui.handle_interaction_logic import (
 from ui.handle_interaction_logic import (
     default_curved_control as default_curved_control_helper,
 )
-from ui.handle_mutation_service import handle_mutation_service_for
-from ui.handle_overlay_service import handle_overlay_service_for
+from ui.handle_mutation_access import curved_snap_distance_for, curved_snap_enabled_for
 from ui.selection_highlight_styler import selection_highlight_styler_for
 
 
 class CanvasHandleController:
-    def __init__(self, canvas) -> None:
+    def __init__(self, canvas, *, handle_overlay_service=None, handle_mutation_service=None) -> None:
         self.canvas = canvas
+        self.handle_overlay_service = handle_overlay_service
+        self.handle_mutation_service = handle_mutation_service
 
     def clear_handles(self) -> None:
-        handle_overlay_service_for(self.canvas).clear_handles()
+        if self.handle_overlay_service is not None:
+            self.handle_overlay_service.clear_handles()
 
     def show_orbital_handles(self, item) -> None:
-        handle_overlay_service_for(self.canvas).show_orbital_handles(item)
+        if self.handle_overlay_service is not None:
+            self.handle_overlay_service.show_orbital_handles(item)
 
     def show_curved_handles(self, item) -> None:
-        handle_overlay_service_for(self.canvas).show_curved_handles(item)
+        if self.handle_overlay_service is not None:
+            self.handle_overlay_service.show_curved_handles(item)
 
     def create_handle(self, pos: QPointF, handle_type: str, target):
-        return handle_overlay_service_for(self.canvas).create_handle(pos, handle_type, target)
+        if self.handle_overlay_service is None:
+            return None
+        return self.handle_overlay_service.create_handle(pos, handle_type, target)
 
     def update_handle_drag(self, handle, scene_pos: QPointF) -> None:
         handle_type = handle.data(1)
@@ -41,32 +47,36 @@ class CanvasHandleController:
         if target is None:
             return
         if handle_type == "orbital_scale":
-            self.canvas._update_orbital_scale(target, scene_pos)
-            self.canvas.show_orbital_handles(target)
+            self.update_orbital_scale(target, scene_pos)
+            self.show_orbital_handles(target)
         elif handle_type == "orbital_rotate":
-            self.canvas._update_orbital_rotate(target, scene_pos)
-            self.canvas.show_orbital_handles(target)
+            self.update_orbital_rotate(target, scene_pos)
+            self.show_orbital_handles(target)
         elif handle_type == "curved_control":
-            self.canvas._update_curved_control(target, scene_pos)
-            self.canvas.show_curved_handles(target)
+            self.update_curved_control(target, scene_pos)
+            self.show_curved_handles(target)
         elif handle_type == "curved_start":
-            self.canvas._update_curved_endpoint(target, scene_pos, "start")
-            self.canvas.show_curved_handles(target)
+            self.update_curved_endpoint(target, scene_pos, "start")
+            self.show_curved_handles(target)
         elif handle_type == "curved_end":
-            self.canvas._update_curved_endpoint(target, scene_pos, "end")
-            self.canvas.show_curved_handles(target)
+            self.update_curved_endpoint(target, scene_pos, "end")
+            self.show_curved_handles(target)
 
     def update_orbital_scale(self, item, pos: QPointF) -> None:
-        handle_mutation_service_for(self.canvas).update_orbital_scale(item, pos)
+        if self.handle_mutation_service is not None:
+            self.handle_mutation_service.update_orbital_scale(item, pos)
 
     def update_orbital_rotate(self, item, pos: QPointF) -> None:
-        handle_mutation_service_for(self.canvas).update_orbital_rotate(item, pos)
+        if self.handle_mutation_service is not None:
+            self.handle_mutation_service.update_orbital_rotate(item, pos)
 
     def update_curved_control(self, item, pos: QPointF) -> None:
-        handle_mutation_service_for(self.canvas).update_curved_control(item, pos)
+        if self.handle_mutation_service is not None:
+            self.handle_mutation_service.update_curved_control(item, pos)
 
     def update_curved_endpoint(self, item, pos: QPointF, endpoint: str) -> None:
-        handle_mutation_service_for(self.canvas).update_curved_endpoint(item, pos, endpoint)
+        if self.handle_mutation_service is not None:
+            self.handle_mutation_service.update_curved_endpoint(item, pos, endpoint)
 
     def default_curved_control(self, start: QPointF, end: QPointF) -> QPointF:
         return default_curved_control_helper(start, end)
@@ -78,14 +88,15 @@ class CanvasHandleController:
         return control_from_midpoint_helper(start, end, mid)
 
     def clamp_curved_midpoint(self, start: QPointF, end: QPointF, mid: QPointF) -> QPointF:
+        snap_enabled = curved_snap_enabled_for(self.canvas)
         snap_distance = None
-        if self.canvas._curved_snap:
-            snap_distance = self.canvas.renderer.style.bond_length_px * self.canvas._curved_snap_step
+        if snap_enabled:
+            snap_distance = curved_snap_distance_for(self.canvas)
         return clamp_curved_midpoint_helper(
             start,
             end,
             mid,
-            snap_enabled=self.canvas._curved_snap,
+            snap_enabled=snap_enabled,
             snap_distance=snap_distance,
         )
 
@@ -97,3 +108,6 @@ class CanvasHandleController:
 
     def apply_selection_style(self, item, selected: bool) -> None:
         selection_highlight_styler_for(self.canvas).apply_selection_style(item, selected)
+
+
+__all__ = ["CanvasHandleController"]

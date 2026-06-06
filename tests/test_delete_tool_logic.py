@@ -27,8 +27,10 @@ class _Command(HistoryCommand):
 
 
 class _Item:
-    def __init__(self, kind=None, item_id=None) -> None:
+    def __init__(self, kind=None, item_id=None, state=None) -> None:
         self._data = {0: kind, 1: item_id}
+        if state is not None:
+            self._data[9] = state
 
     def data(self, key):
         return self._data.get(key)
@@ -40,7 +42,14 @@ class _Canvas:
         self.deleted_bonds = []
         self.deleted_rings = []
         self.removed_items = []
-        self._scene_item_controller = SimpleNamespace(remove_scene_item=self.remove_scene_item)
+        self.services = SimpleNamespace(
+            scene_delete_controller=SimpleNamespace(
+                delete_atom=self.delete_atom,
+                delete_bond=self.delete_bond,
+                delete_ring=self.delete_ring,
+            ),
+            scene_item_controller=SimpleNamespace(remove_scene_item=self.remove_scene_item),
+        )
 
     def delete_atom(self, atom_id: int, record: bool = True):
         self.deleted_atoms.append((atom_id, record))
@@ -53,9 +62,6 @@ class _Canvas:
     def delete_ring(self, item, record: bool = True):
         self.deleted_rings.append((item, record))
         return "ring"
-
-    def scene_item_state(self, item) -> dict:
-        return {"kind": item.data(0), "id": item.data(1)}
 
     def remove_scene_item(self, item) -> None:
         self.removed_items.append(item)
@@ -91,7 +97,7 @@ class DeleteToolLogicTest(unittest.TestCase):
         self.assertEqual(command, "ring")
         self.assertEqual(canvas.deleted_rings, [(ring_item, False)])
 
-        note_item = _Item("note", 9)
+        note_item = _Item("note", 9, state={"kind": "note", "id": 9})
         changed, command = erase_delete_tool_item(canvas, note_item)
         self.assertTrue(changed)
         self.assertIsInstance(command, DeleteSceneItemsCommand)
@@ -99,7 +105,7 @@ class DeleteToolLogicTest(unittest.TestCase):
         self.assertEqual(command.items, [note_item])
         self.assertEqual(canvas.removed_items, [note_item])
 
-        weird_item = _Item("weird", 11)
+        weird_item = _Item("weird", 11, state={"kind": "weird", "id": 11})
         changed, command = erase_delete_tool_item(canvas, weird_item)
         self.assertTrue(changed)
         self.assertIsInstance(command, DeleteSceneItemsCommand)
@@ -116,14 +122,14 @@ class DeleteToolLogicTest(unittest.TestCase):
 
     def test_erase_delete_tool_item_prefers_scene_item_controller_when_available(self) -> None:
         canvas = _Canvas()
-        canvas._scene_item_controller = _SceneItemController(canvas)
-        note_item = _Item("note", 9)
+        canvas.services.scene_item_controller = _SceneItemController(canvas)
+        note_item = _Item("note", 9, state={"kind": "note", "id": 9})
 
         changed, command = erase_delete_tool_item(canvas, note_item)
 
         self.assertTrue(changed)
         self.assertIsInstance(command, DeleteSceneItemsCommand)
-        self.assertEqual(canvas._scene_item_controller.calls, [note_item])
+        self.assertEqual(canvas.services.scene_item_controller.calls, [note_item])
         self.assertEqual(canvas.removed_items, [("controller", note_item)])
 
     def test_build_delete_tool_history_command_wraps_single_command_and_multiple(self) -> None:

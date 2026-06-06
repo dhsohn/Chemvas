@@ -15,8 +15,12 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from core.model import Atom
+    from ui.canvas_ring_fill_scene_access import (
+        rotate_ring_fills_3d_for,
+        rotate_ring_fills_for,
+    )
     from ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
-    from ui.canvas_view import CanvasView
+    from ui.canvas_scene_items_state import set_scene_item_collection_for
 
 
 class _FakeRingItem:
@@ -41,6 +45,10 @@ def _polygon_points(polygon) -> list[tuple[float, float]]:
     return [(round(point.x(), 6), round(point.y(), 6)) for point in polygon]
 
 
+def _attach_ring_fill_service(view) -> None:
+    view.services = SimpleNamespace(canvas_ring_fill_scene_service=CanvasRingFillSceneService(view))
+
+
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas view tests")
 class CanvasViewRingFillRotationTest(unittest.TestCase):
     @classmethod
@@ -52,13 +60,13 @@ class CanvasViewRingFillRotationTest(unittest.TestCase):
         ring_item = _FakeRingItem([1, 2, 3], [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)])
         view = SimpleNamespace(
             model=SimpleNamespace(atoms={99: Atom("C", 9.0, 9.0)}),
-            ring_items=[ring_item],
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=12.0)),
         )
-        view._canvas_ring_fill_scene_service = CanvasRingFillSceneService(view)
+        set_scene_item_collection_for(view, "ring_items", [ring_item])
+        _attach_ring_fill_service(view)
 
-        CanvasView._rotate_ring_fills(view, {1, 2}, QPointF(0.0, 0.0), math.pi / 2.0)
-        CanvasView._rotate_ring_fills_3d(view, {1, 2}, (0.0, 0.0, 0.0), math.pi / 4.0, math.pi / 4.0, 1.0)
+        rotate_ring_fills_for(view, {1, 2}, QPointF(0.0, 0.0), math.pi / 2.0)
+        rotate_ring_fills_3d_for(view, {1, 2}, (0.0, 0.0, 0.0), math.pi / 4.0, math.pi / 4.0, 1.0)
 
         ring_item.setPolygon.assert_not_called()
 
@@ -77,12 +85,12 @@ class CanvasViewRingFillRotationTest(unittest.TestCase):
                     6: Atom("O", 9.5, 10.0),
                 }
             ),
-            ring_items=[matching_ring, short_ring, non_matching_ring],
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=12.0)),
         )
-        view._canvas_ring_fill_scene_service = CanvasRingFillSceneService(view)
+        set_scene_item_collection_for(view, "ring_items", [matching_ring, short_ring, non_matching_ring])
+        _attach_ring_fill_service(view)
 
-        CanvasView._rotate_ring_fills(view, {1, 2, 3}, QPointF(0.0, 0.0), math.pi / 2.0)
+        rotate_ring_fills_for(view, {1, 2, 3}, QPointF(0.0, 0.0), math.pi / 2.0)
 
         self.assertEqual(
             _polygon_points(matching_ring.setPolygon.call_args.args[0]),
@@ -102,12 +110,12 @@ class CanvasViewRingFillRotationTest(unittest.TestCase):
                     3: Atom("C", 0.0, 2.0),
                 }
             ),
-            ring_items=[matching_ring, skipped_ring],
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=8.0)),
         )
-        view._canvas_ring_fill_scene_service = CanvasRingFillSceneService(view)
+        set_scene_item_collection_for(view, "ring_items", [matching_ring, skipped_ring])
+        _attach_ring_fill_service(view)
 
-        CanvasView._rotate_ring_fills(view, {1, 2, 3}, QPointF(1.0, 1.0), math.pi / 2.0)
+        rotate_ring_fills_for(view, {1, 2, 3}, QPointF(1.0, 1.0), math.pi / 2.0)
 
         self.assertEqual(
             _polygon_points(matching_ring.setPolygon.call_args.args[0]),
@@ -126,12 +134,12 @@ class CanvasViewRingFillRotationTest(unittest.TestCase):
                     3: Atom("C", 0.0, 2.0),
                 }
             ),
-            ring_items=[matching_ring, skipped_ring],
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=8.0)),
         )
-        view._canvas_ring_fill_scene_service = CanvasRingFillSceneService(view)
+        set_scene_item_collection_for(view, "ring_items", [matching_ring, skipped_ring])
+        _attach_ring_fill_service(view)
 
-        CanvasView._rotate_ring_fills_3d(view, {1, 2, 3}, (1.0, 1.0, 0.0), 0.0, math.pi / 2.0, 1.0)
+        rotate_ring_fills_3d_for(view, {1, 2, 3}, (1.0, 1.0, 0.0), 0.0, math.pi / 2.0, 1.0)
 
         self.assertEqual(len(matching_ring.setPolygon.call_args.args[0]), 3)
         self.assertNotEqual(_polygon_points(matching_ring.polygon()), [(0.0, 0.0), (2.0, 0.0), (0.0, 2.0)])

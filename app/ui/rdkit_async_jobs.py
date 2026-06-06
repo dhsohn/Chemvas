@@ -4,6 +4,8 @@ from pathlib import Path
 
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
+from ui.rdkit_export_job_state import rdkit_export_jobs_for
+
 
 class XYZExportWorker(QObject):
     succeeded = pyqtSignal(str)
@@ -44,11 +46,7 @@ def export_xyz_in_thread(
     on_success,
     on_error,
 ) -> None:
-    jobs = getattr(owner, "_rdkit_export_jobs", None)
-    if jobs is None:
-        jobs = []
-        owner._rdkit_export_jobs = jobs
-
+    jobs = rdkit_export_jobs_for(owner)
     thread = QThread(owner)
     worker = XYZExportWorker(rdkit_adapter, model, atom_annotations, path)
     worker.moveToThread(thread)

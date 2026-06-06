@@ -1,185 +1,170 @@
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING
 
-from core.history import SetAtomPositionsCommand
 from PyQt6.QtCore import QPointF
 
-from ui.canvas_history_service import history_service_for
+from ui.atom_coords_access import (
+    atom_coords_3d_for,
+    current_atom_coords_3d_for,
+)
+from ui.canvas_model_access import atom_for_id, atoms_for, bond_for_id, bonds_for
 from ui.canvas_rotation_state import rotation_state_for
-from ui.selection_center_logic import bounding_box_center_for_atoms
-from ui.selection_rotation_logic import selected_rotation_atom_ids
+from ui.selection_collection_access import selected_ids_for
+from ui.selection_rotation_access import (
+    apply_projected_atom_positions_for,
+    average_bond_length_for_atoms_for,
+    flatten_planar_fragments_for,
+    rotate_point_around_axis_for,
+    unproject_scene_point_3d_for,
+    update_ring_fills_for_atoms_for,
+)
+from ui.selection_rotation_geometry import (
+    axis_rotated_coords,
+    dominant_axis_angle_from_drag,
+    rigid_rotated_coords,
+    rigid_rotation_angles_from_drag,
+)
+from ui.selection_rotation_history import build_selection_rotation_command
+from ui.selection_rotation_session import begin_selection_rotation_session
+from ui.selection_scene_access import scene_selected_items_for
+from ui.selection_service_access import refresh_selection_outline_for
+from ui.selection_style_access import (
+    emit_selection_info_for,
+    restore_selection_from_ids_for,
+)
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
 
 
 class SelectionRotationController:
-    def __init__(self, canvas: CanvasView) -> None:
+    def __init__(self, canvas: CanvasView, *, move_controller=None, graph_service, history_service=None) -> None:
         self.canvas = canvas
+        self.move_controller = move_controller
+        self.graph_service = graph_service
         self.rotation = rotation_state_for(canvas)
-        self.history = history_service_for(canvas)
+        self.history = history_service
+
+    def selected_ids(self):
+        return selected_ids_for(self.canvas)
+
+    def selected_scene_items(self):
+        return scene_selected_items_for(self.canvas)
+
+    @property
+    def atoms(self):
+        return atoms_for(self.canvas)
+
+    @property
+    def bonds(self):
+        return bonds_for(self.canvas)
+
+    def atom(self, atom_id: int):
+        return atom_for_id(self.canvas, atom_id)
+
+    def bond(self, bond_id: int):
+        return bond_for_id(self.canvas, bond_id)
+
+    def atom_positions(self, atom_ids: set[int]) -> dict[int, tuple[float, float]]:
+        positions = {}
+        for atom_id in atom_ids:
+            atom = self.atom(atom_id)
+            if atom is not None:
+                positions[atom_id] = (atom.x, atom.y)
+        return positions
+
+    def axis_from_rotation_hint(
+        self,
+        axis_hint: int,
+        rotation_atom_ids: set[int],
+        *,
+        press_pos: QPointF | None = None,
+    ):
+        return self.graph_service.axis_from_rotation_hint(
+            axis_hint,
+            rotation_atom_ids,
+            press_pos=press_pos,
+        )
+
+    def current_atom_coords_3d(self, atom_id: int):
+        return current_atom_coords_3d_for(self.canvas, atom_id)
+
+    def flatten_planar_fragments(
+        self,
+        atom_ids: set[int],
+        coords: dict[int, tuple[float, float, float]],
+    ) -> dict[int, tuple[float, float, float]]:
+        return flatten_planar_fragments_for(
+            self.canvas,
+            atom_ids,
+            coords,
+            bond_in_cycle=self.graph_service.bond_in_cycle,
+        )
+
+    def average_bond_length_for_atoms(
+        self,
+        atom_ids: set[int],
+        coords: dict[int, tuple[float, float, float]],
+    ) -> float | None:
+        return average_bond_length_for_atoms_for(self.canvas, atom_ids, coords)
+
+    def unproject_scene_point_3d(
+        self,
+        point: QPointF,
+        z: float,
+        *,
+        center_3d: tuple[float, float, float],
+        anchor_2d: tuple[float, float],
+    ) -> tuple[float, float, float]:
+        return unproject_scene_point_3d_for(
+            self.canvas,
+            point,
+            z,
+            center_3d=center_3d,
+            anchor_2d=anchor_2d,
+        )
+
+    def apply_projected_atom_positions(
+        self,
+        atom_ids: set[int],
+        coords: dict[int, tuple[float, float, float]],
+    ) -> None:
+        apply_projected_atom_positions_for(self.canvas, atom_ids, coords)
+
+    def refresh_atom_geometry(self, atom_ids: set[int]) -> None:
+        if self.move_controller is not None:
+            self.move_controller.redraw_bonds_for_atoms(atom_ids)
+        update_ring_fills_for_atoms_for(self.canvas, atom_ids)
+        refresh_selection_outline_for(self.canvas)
+
+    def rotate_point_around_axis(self, coords, axis_start, axis_end, angle: float):
+        return rotate_point_around_axis_for(self.canvas, coords, axis_start, axis_end, angle)
+
+    def restore_selection_from_ids(self, atom_ids: set[int], bond_ids: set[int]) -> None:
+        restore_selection_from_ids_for(self.canvas, atom_ids, bond_ids)
+
+    def emit_selection_info(self) -> None:
+        emit_selection_info_for(self.canvas)
 
     def begin_selection_3d_rotation(
         self,
         axis_hint: int | None = None,
         press_pos: QPointF | None = None,
     ) -> bool:
-        state = self.rotation
-        start_projection_center_3d = state.projection_center_3d
-        start_projection_anchor_2d = state.projection_anchor_2d
-        state.start_coords_3d = {}
-        state.coord_atom_ids = set()
-        atom_ids, bond_ids = self.canvas._selected_ids()
-        explicit_atom_ids = set(atom_ids)
-        for item in self.canvas.scene().selectedItems():
-            if item.data(0) != "mark":
-                continue
-            data = item.data(1) or {}
-            atom_id = data.get("atom_id")
-            if isinstance(atom_id, int):
-                explicit_atom_ids.add(atom_id)
-        rotation_atom_ids = selected_rotation_atom_ids(
-            explicit_atom_ids,
-            bond_ids,
-            bonds=self.canvas.model.bonds,
+        return begin_selection_rotation_session(
+            self,
+            self.rotation,
+            axis_hint=axis_hint,
+            press_pos=press_pos,
         )
-        if not rotation_atom_ids and not bond_ids:
-            return False
-        axis = None
-        if isinstance(axis_hint, int):
-            axis = self.canvas._axis_from_rotation_hint(axis_hint, rotation_atom_ids, press_pos=press_pos)
-        if axis is not None:
-            bond_id, rotate_ids = axis
-            bond = self.canvas.model.bonds[bond_id]
-            if bond is None:
-                return False
-            axis_a = bond.a
-            axis_b = bond.b
-            state.selection_ids = (set(atom_ids), set(bond_ids))
-            state.base_coords = {}
-            for atom_id in rotate_ids | {axis_a, axis_b}:
-                coords = self.canvas._current_atom_coords_3d(atom_id)
-                if coords is None:
-                    continue
-                state.base_coords[atom_id] = coords
-                state.start_coords_3d[atom_id] = coords
-            relevant_atom_ids = rotate_ids | {axis_a, axis_b}
-            state.coord_atom_ids = set(state.base_coords)
-            state.base_coords = self.canvas._flatten_planar_fragments(
-                relevant_atom_ids,
-                state.base_coords,
-            )
-            for atom_id in relevant_atom_ids:
-                coords = state.base_coords.get(atom_id)
-                if coords is not None:
-                    self.canvas.atom_coords_3d[atom_id] = coords
-            if not state.base_coords:
-                return False
-            axis_center = (
-                (state.base_coords[axis_a][0] + state.base_coords[axis_b][0]) * 0.5,
-                (state.base_coords[axis_a][1] + state.base_coords[axis_b][1]) * 0.5,
-                (state.base_coords[axis_a][2] + state.base_coords[axis_b][2]) * 0.5,
-            )
-            state.axis_bond_id = bond_id
-            state.axis_atoms = (axis_a, axis_b)
-            state.total_angle = 0.0
-            state.mode = "bond"
-            state.free_angle_x = 0.0
-            state.free_angle_y = 0.0
-            state.atom_ids = set(rotate_ids)
-            state.start_positions = {
-                atom_id: (self.canvas.model.atoms[atom_id].x, self.canvas.model.atoms[atom_id].y)
-                for atom_id in state.atom_ids
-                if atom_id in self.canvas.model.atoms
-            }
-            state.center_3d = axis_center
-            state.projection_center_3d = state.center_3d
-            atom_a = self.canvas.model.atoms.get(axis_a)
-            atom_b = self.canvas.model.atoms.get(axis_b)
-            if atom_a is not None and atom_b is not None:
-                state.projection_anchor_2d = (
-                    (atom_a.x + atom_b.x) * 0.5,
-                    (atom_a.y + atom_b.y) * 0.5,
-                )
-            else:
-                state.projection_anchor_2d = (axis_center[0], axis_center[1])
-            state.start_projection_center_3d = start_projection_center_3d
-            state.start_projection_anchor_2d = start_projection_anchor_2d
-            scale_atom_ids = set(state.atom_ids)
-            scale_atom_ids.update((axis_a, axis_b))
-            state.base_bond_length = self.canvas._average_bond_length_for_atoms(
-                scale_atom_ids,
-                state.base_coords,
-            )
-            return True
-        state.selection_ids = (set(atom_ids), set(bond_ids))
-        screen_center = bounding_box_center_for_atoms(rotation_atom_ids, atoms=self.canvas.model.atoms)
-        if screen_center is None:
-            return False
-        anchor_2d = (screen_center.x(), screen_center.y())
-        raw_coords: dict[int, tuple[float, float, float]] = {}
-        for atom_id in rotation_atom_ids:
-            coords = self.canvas._current_atom_coords_3d(atom_id)
-            if coords is None:
-                continue
-            raw_coords[atom_id] = coords
-        if not raw_coords:
-            return False
-        state.start_coords_3d = dict(raw_coords)
-        state.coord_atom_ids = set(raw_coords)
-        center_z = sum(coords[2] for coords in raw_coords.values()) / len(raw_coords)
-        center = (screen_center.x(), screen_center.y(), center_z)
-        state.base_coords = {}
-        for atom_id, coords in raw_coords.items():
-            atom = self.canvas.model.atoms.get(atom_id)
-            if atom is None:
-                continue
-            state.base_coords[atom_id] = self.canvas._unproject_scene_point_3d(
-                QPointF(atom.x, atom.y),
-                coords[2],
-                center_3d=center,
-                anchor_2d=anchor_2d,
-            )
-        state.base_coords = self.canvas._flatten_planar_fragments(
-            rotation_atom_ids,
-            state.base_coords,
-        )
-        for atom_id, coords in state.base_coords.items():
-            self.canvas.atom_coords_3d[atom_id] = coords
-        state.axis_bond_id = None
-        state.axis_atoms = None
-        state.total_angle = 0.0
-        state.mode = "rigid"
-        state.free_angle_x = 0.0
-        state.free_angle_y = 0.0
-        state.atom_ids = set(rotation_atom_ids)
-        state.start_positions = {
-            atom_id: (self.canvas.model.atoms[atom_id].x, self.canvas.model.atoms[atom_id].y)
-            for atom_id in state.atom_ids
-            if atom_id in self.canvas.model.atoms
-        }
-        state.center_3d = center
-        state.projection_center_3d = center
-        state.projection_anchor_2d = anchor_2d
-        state.start_projection_center_3d = start_projection_center_3d
-        state.start_projection_anchor_2d = start_projection_anchor_2d
-        scale_atom_ids = set(state.atom_ids)
-        state.base_bond_length = self.canvas._average_bond_length_for_atoms(
-            scale_atom_ids,
-            state.base_coords,
-        )
-        return True
 
     def update_selection_3d_rotation(self, delta_x: float, delta_y: float) -> None:
         state = self.rotation
         if not state.atom_ids:
             return
-        sensitivity = 0.005
         if state.mode == "rigid":
-            angle_x = delta_y * sensitivity
-            angle_y = delta_x * sensitivity
+            angle_x, angle_y = rigid_rotation_angles_from_drag(delta_x, delta_y)
             if abs(angle_x) < 1e-9 and abs(angle_y) < 1e-9:
                 return
             state.free_angle_x += angle_x
@@ -187,37 +172,19 @@ class SelectionRotationController:
             center = state.center_3d
             if center is None:
                 return
-            cx, cy, cz = center
-            cos_y = math.cos(state.free_angle_y)
-            sin_y = math.sin(state.free_angle_y)
-            cos_x = math.cos(state.free_angle_x)
-            sin_x = math.sin(state.free_angle_x)
-            rotated_coords: dict[int, tuple[float, float, float]] = {}
-            for atom_id in state.atom_ids:
-                coords = state.base_coords.get(atom_id)
-                if coords is None:
-                    continue
-                x, y, z = coords
-                x -= cx
-                y -= cy
-                z -= cz
-                rx = x * cos_y + z * sin_y
-                rz = -x * sin_y + z * cos_y
-                ry = y * cos_x - rz * sin_x
-                rz2 = y * sin_x + rz * cos_x
-                x = rx + cx
-                y = ry + cy
-                z = rz2 + cz
-                rotated_coords[atom_id] = (x, y, z)
-            self.canvas._apply_projected_atom_positions(state.atom_ids, rotated_coords)
-            self.canvas._redraw_bonds_for_atoms(state.atom_ids)
-            self.canvas._update_ring_fills_for_atoms(state.atom_ids)
-            self.canvas._update_selection_outline()
+            rotated_coords = rigid_rotated_coords(
+                state.atom_ids,
+                state.base_coords,
+                center,
+                angle_x=state.free_angle_x,
+                angle_y=state.free_angle_y,
+            )
+            self.apply_projected_atom_positions(state.atom_ids, rotated_coords)
+            self.refresh_atom_geometry(state.atom_ids)
             return
         if state.axis_atoms is None:
             return
-        angle_delta = delta_x if abs(delta_x) >= abs(delta_y) else delta_y
-        angle_delta *= sensitivity
+        angle_delta = dominant_axis_angle_from_drag(delta_x, delta_y)
         if abs(angle_delta) < 1e-9:
             return
         state.total_angle += angle_delta
@@ -226,22 +193,16 @@ class SelectionRotationController:
         axis_end = state.base_coords.get(axis_b)
         if axis_start is None or axis_end is None:
             return
-        rotated_coords = {}
-        for atom_id in state.atom_ids:
-            coords = state.base_coords.get(atom_id)
-            if coords is None:
-                continue
-            rotated = self.canvas._rotate_point_around_axis(
-                coords,
-                axis_start,
-                axis_end,
-                state.total_angle,
-            )
-            rotated_coords[atom_id] = rotated
-        self.canvas._apply_projected_atom_positions(state.atom_ids, rotated_coords)
-        self.canvas._redraw_bonds_for_atoms(state.atom_ids)
-        self.canvas._update_ring_fills_for_atoms(state.atom_ids)
-        self.canvas._update_selection_outline()
+        rotated_coords = axis_rotated_coords(
+            state.atom_ids,
+            state.base_coords,
+            axis_start,
+            axis_end,
+            state.total_angle,
+            rotate_point=self.rotate_point_around_axis,
+        )
+        self.apply_projected_atom_positions(state.atom_ids, rotated_coords)
+        self.refresh_atom_geometry(state.atom_ids)
 
     def end_selection_3d_rotation(self) -> None:
         state = self.rotation
@@ -251,37 +212,31 @@ class SelectionRotationController:
         before_coords_3d = dict(state.start_coords_3d)
         before_projection_center_3d = state.start_projection_center_3d
         before_projection_anchor_2d = state.start_projection_anchor_2d
+        current_coords_3d = atom_coords_3d_for(self.canvas)
         after_coords_3d = {
-            atom_id: self.canvas.atom_coords_3d[atom_id]
+            atom_id: current_coords_3d[atom_id]
             for atom_id in state.coord_atom_ids
-            if atom_id in self.canvas.atom_coords_3d
+            if atom_id in current_coords_3d
         }
         after_projection_center_3d = state.projection_center_3d
         after_projection_anchor_2d = state.projection_anchor_2d
         state.clear_session()
-        after_positions = {
-            atom_id: (self.canvas.model.atoms[atom_id].x, self.canvas.model.atoms[atom_id].y)
-            for atom_id in rotated_atoms
-            if atom_id in self.canvas.model.atoms
-        }
-        positions_changed = bool(before_positions and after_positions and before_positions != after_positions)
-        coords_changed = bool(before_coords_3d and after_coords_3d and before_coords_3d != after_coords_3d)
-        if positions_changed or coords_changed:
-            command = SetAtomPositionsCommand(
-                before_positions=before_positions,
-                after_positions=after_positions,
-                before_coords_3d=before_coords_3d or None,
-                after_coords_3d=after_coords_3d or None,
-                restore_projection_state=True,
-                before_projection_center_3d=before_projection_center_3d,
-                after_projection_center_3d=after_projection_center_3d,
-                before_projection_anchor_2d=before_projection_anchor_2d,
-                after_projection_anchor_2d=after_projection_anchor_2d,
-            )
+        after_positions = self.atom_positions(rotated_atoms)
+        command = build_selection_rotation_command(
+            before_positions=before_positions,
+            after_positions=after_positions,
+            before_coords_3d=before_coords_3d,
+            after_coords_3d=after_coords_3d,
+            before_projection_center_3d=before_projection_center_3d,
+            after_projection_center_3d=after_projection_center_3d,
+            before_projection_anchor_2d=before_projection_anchor_2d,
+            after_projection_anchor_2d=after_projection_anchor_2d,
+        )
+        if command is not None:
             self.history.push(command)
         if selection_ids is not None:
-            self.canvas._restore_selection_from_ids(*selection_ids)
-        self.canvas._emit_selection_info()
+            self.restore_selection_from_ids(*selection_ids)
+        self.emit_selection_info()
 
 
 __all__ = ["SelectionRotationController"]

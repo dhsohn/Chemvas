@@ -4,16 +4,19 @@ from unittest import mock
 
 from core.model import Atom, Bond, MoleculeModel
 from PyQt6.QtCore import QPointF
-from ui.insert_commit_service import (
-    InsertCommitService,
-    apply_smiles_commit_plan,
-    apply_template_commit_resolution,
+from ui.canvas_smiles_input_state import (
+    last_smiles_input_for,
+    set_last_smiles_input_for,
 )
+from ui.insert_commit_service import InsertCommitService
+from ui.insert_smiles_commit_service import apply_smiles_commit_plan
+from ui.insert_template_commit_service import apply_template_commit_resolution
 from ui.smiles_insert_logic import (
     SmilesAtomPlacement,
     SmilesBondPlacement,
     SmilesCommitPlan,
 )
+from ui.structure_insert_access import add_insert_ring_from_points_for
 from ui.template_insert_logic import (
     TemplateInsertPlan,
     TemplateInsertRequest,
@@ -24,7 +27,7 @@ from ui.template_insert_logic import (
 class _FakeCanvas:
     def __init__(self) -> None:
         self.model = MoleculeModel()
-        self.last_smiles_input = "before"
+        set_last_smiles_input_for(self, "before")
         self.record_calls: list[dict] = []
         self.add_atom_calls: list[tuple[str, float, float]] = []
         self.add_bond_calls: list[tuple[int, int, int]] = []
@@ -33,7 +36,22 @@ class _FakeCanvas:
         self.carbon_dots: list[int] = []
         self.ring_calls: list[list[tuple[float, float]]] = []
         self.benzene_calls: list[tuple[float, float, int | None]] = []
-        self._atom_label_service = SimpleNamespace(add_or_update_atom_label=self.add_or_update_atom_label)
+        self.bond_renderer = SimpleNamespace(add_bond_graphics=self._add_bond_graphics)
+        self.services = SimpleNamespace(
+            atom_label_service=SimpleNamespace(
+                add_or_update_atom_label=self.add_or_update_atom_label,
+                ensure_carbon_dot=self.ensure_carbon_dot,
+            ),
+            canvas_atom_mutation_service=SimpleNamespace(add_atom=self.add_atom),
+            canvas_bond_mutation_service=SimpleNamespace(add_bond=self.add_bond),
+            canvas_graph_service=SimpleNamespace(bond_exists=self.bond_exists),
+            canvas_history_recording_service=SimpleNamespace(record_additions=self._record_additions),
+            structure_build_service=SimpleNamespace(
+                add_atom_with_merge=self.add_atom_with_merge,
+                add_ring_from_points=self.add_ring_from_points,
+                add_benzene_ring=self.add_benzene_ring,
+            ),
+        )
 
     def add_atom(self, element: str, x: float, y: float) -> int:
         self.add_atom_calls.append((element, x, y))
@@ -46,7 +64,7 @@ class _FakeCanvas:
     def _add_bond_graphics(self, bond_id: int) -> None:
         self.added_graphics.append(bond_id)
 
-    def _ensure_carbon_dot(self, atom_id: int) -> None:
+    def ensure_carbon_dot(self, atom_id: int) -> None:
         self.carbon_dots.append(atom_id)
 
     def add_or_update_atom_label(
@@ -64,17 +82,17 @@ class _FakeCanvas:
     def _record_additions(self, **kwargs) -> None:
         self.record_calls.append(kwargs)
 
-    def _bond_exists(self, a_id: int, b_id: int) -> bool:
+    def bond_exists(self, a_id: int, b_id: int) -> bool:
         return any(
             (bond.a == a_id and bond.b == b_id) or (bond.a == b_id and bond.b == a_id)
             for bond in self.model.bonds
         )
 
-    def _add_atom_with_merge(self, point, element: str, merge: list) -> int:
+    def add_atom_with_merge(self, point, element: str, merge: list) -> int:
         self.ring_calls.append(list(merge))
         return self.add_atom(element, point.x(), point.y())
 
-    def _add_ring_from_points(self, points, elements=None, merge=None):
+    def add_ring_from_points(self, points, elements=None, merge=None):
         self.ring_calls.append([tuple(entry) for entry in (merge or [])])
         atom_ids = []
         for point in points:
@@ -90,7 +108,7 @@ class _FakeCanvas:
         return [(center.x() + 1.0, center.y() + 1.0)] * 6, []
 
     def add_benzene_ring(self, center, attach_atom_id=None, attach_bond_id=None, before_smiles_input=None):
-        self.last_smiles_input = None
+        set_last_smiles_input_for(self, None)
         points = [(center.x() + 1.0, center.y() + 1.0)] * 6
         atom_ids = []
         for point_x, point_y in points:
@@ -151,6 +169,18 @@ class _DetachingCanvas(_FakeCanvas):
 
 
 class InsertCommitServiceTest(unittest.TestCase):
+    def test_structure_insert_access_routes_ring_build_to_structure_service(self) -> None:
+        structure_build_service = SimpleNamespace(add_ring_from_points=mock.Mock(return_value=[7]))
+        canvas = SimpleNamespace(
+            services=SimpleNamespace(structure_build_service=structure_build_service),
+        )
+        points = [QPointF(1.0, 2.0), QPointF(3.0, 4.0)]
+
+        atom_ids = add_insert_ring_from_points_for(canvas, points)
+
+        self.assertEqual(atom_ids, [7])
+        structure_build_service.add_ring_from_points.assert_called_once_with(points)
+
     def test_apply_smiles_commit_plan_builds_atoms_bonds_and_history(self) -> None:
         canvas = _FakeCanvas()
         plan = SmilesCommitPlan(
@@ -177,7 +207,7 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertEqual(canvas.added_graphics, [0])
         self.assertEqual(canvas.carbon_dots, [0])
         self.assertEqual(canvas.labels, [(1, "N", False, False)])
-        self.assertEqual(canvas.last_smiles_input, "new")
+        self.assertEqual(last_smiles_input_for(canvas), "new")
         self.assertEqual(
             canvas.record_calls,
             [
@@ -214,7 +244,7 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertEqual(free_canvas.add_atom_calls, [("C", 1.0, 2.0), ("C", 3.0, 4.0)])
         self.assertEqual(free_canvas.add_bond_calls, [(0, 1, 1), (1, 0, 1)])
         self.assertEqual(free_canvas.record_calls[0]["before_smiles_input"], "before-free")
-        self.assertIsNone(free_canvas.last_smiles_input)
+        self.assertIsNone(last_smiles_input_for(free_canvas))
 
         bond_canvas = _FakeCanvas()
         bond_canvas.model.atoms = {
@@ -269,10 +299,10 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertTrue(applied)
         self.assertEqual(canvas.add_atom_calls, [("C", 8.0, 9.0)] * 6)
         self.assertEqual(len(canvas.add_bond_calls), 6)
-        self.assertIsNone(canvas.last_smiles_input)
+        self.assertIsNone(last_smiles_input_for(canvas))
 
         blocked = _FakeCanvas()
-        blocked.add_benzene_ring = lambda *args, **kwargs: None
+        blocked.services.structure_build_service.add_benzene_ring = lambda *args, **kwargs: None
         self.assertFalse(
             apply_template_commit_resolution(
                 blocked,
@@ -286,7 +316,7 @@ class InsertCommitServiceTest(unittest.TestCase):
     def test_apply_smiles_commit_plan_prefers_atom_label_service_over_canvas_wrapper(self) -> None:
         canvas = _FakeCanvas()
         service_calls = []
-        canvas._atom_label_service = SimpleNamespace(
+        canvas.services.atom_label_service = SimpleNamespace(
             add_or_update_atom_label=lambda atom_id, text, **kwargs: service_calls.append((atom_id, text, kwargs))
         )
         plan = SmilesCommitPlan(
@@ -348,7 +378,7 @@ class InsertCommitServiceTest(unittest.TestCase):
         called_request = patched.call_args.args[1]
         self.assertEqual(called_request.cursor_pos, (9.0, 10.0))
         self.assertEqual(patched.call_args.kwargs["before_smiles_input"], "before")
-        self.assertEqual(service._bond_merge_seed(None), [])
+        self.assertEqual(service.bond_merge_seed(None), [])
 
         with mock.patch("ui.insert_commit_service.apply_template_commit_resolution", return_value=False) as patched:
             self.assertFalse(
@@ -425,7 +455,7 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(canvas.model.bonds, [])
         self.assertEqual(canvas.model.next_atom_id, 0)
-        self.assertEqual(canvas.last_smiles_input, "before")
+        self.assertEqual(last_smiles_input_for(canvas), "before")
         self.assertEqual(canvas.record_calls, [])
 
     def test_apply_template_commit_resolution_rejects_bond_generators_without_bond_id(self) -> None:

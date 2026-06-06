@@ -18,6 +18,20 @@ if QApplication is not None:
     from core.model import MoleculeModel
     from core.rdkit_adapter import Molecule3DAtom, Molecule3DBond, Molecule3DScene
     from ui.preview_3d import Preview3D
+    from ui.preview_3d_layout import preview_footer_item_rects
+    from ui.preview_3d_painter import (
+        preview_footer_height_for_lines,
+        preview_layout_for_widget,
+        project_preview_paint_scene,
+    )
+    from ui.preview_3d_state import (
+        preview_empty_state_text,
+        preview_info_items,
+        preview_info_lines,
+        preview_metadata_summary,
+        preview_payload_signature,
+        preview_status_badge,
+    )
 
 
 class _FakeMouseEvent:
@@ -119,6 +133,17 @@ class Preview3DRecoveryTest(unittest.TestCase):
         QTest.qWait(10)
         self.app.processEvents()
 
+    def test_rdkit_adapter_can_be_rebound_without_private_access(self) -> None:
+        adapter_a = SequencedAdapter([])
+        adapter_b = SequencedAdapter([])
+        preview = self._create_preview(adapter_a)
+
+        self.assertIs(preview.rdkit_adapter, adapter_a)
+
+        preview.set_rdkit_adapter(adapter_b)
+
+        self.assertIs(preview.rdkit_adapter, adapter_b)
+
     def test_preview_recovers_after_payload_failure_with_same_structure(self) -> None:
         model = self._make_model()
         scene = self._make_scene()
@@ -132,28 +157,32 @@ class Preview3DRecoveryTest(unittest.TestCase):
         )
         preview = self._create_preview(adapter)
 
-        preview.refresh_from_canvas(canvas)
-        self._wait_for_rebuild()
+        with mock.patch(
+            "ui.preview_3d.build_3d_conversion_payload_for",
+            side_effect=lambda canvas: canvas.build_3d_conversion_payload(),
+        ):
+            preview.refresh_from_canvas(canvas)
+            self._wait_for_rebuild()
 
-        self.assertEqual(len(adapter.calls), 1)
-        self.assertEqual(preview._scene, scene)
-        self.assertEqual(preview._formula_text, "")
-        self.assertEqual(preview._mw_text, "")
+            self.assertEqual(len(adapter.calls), 1)
+            self.assertEqual(preview._scene, scene)
+            self.assertEqual(preview._formula_text, "")
+            self.assertEqual(preview._mw_text, "")
 
-        preview.refresh_from_canvas(canvas)
+            preview.refresh_from_canvas(canvas)
 
-        self.assertIsNone(preview._scene)
-        self.assertEqual(preview._message, "No structure selected")
-        self.assertIsNone(preview._current_signature)
-        self.assertEqual(preview._formula_text, "")
-        self.assertEqual(preview._mw_text, "")
+            self.assertIsNone(preview._scene)
+            self.assertEqual(preview._message, "No structure selected")
+            self.assertIsNone(preview._current_signature)
+            self.assertEqual(preview._formula_text, "")
+            self.assertEqual(preview._mw_text, "")
 
-        preview.refresh_from_canvas(canvas)
-        self._wait_for_rebuild()
+            preview.refresh_from_canvas(canvas)
+            self._wait_for_rebuild()
 
-        self.assertEqual(len(adapter.calls), 2)
-        self.assertEqual(preview._scene, scene)
-        self.assertEqual(preview._message, "")
+            self.assertEqual(len(adapter.calls), 2)
+            self.assertEqual(preview._scene, scene)
+            self.assertEqual(preview._message, "")
 
     def test_preview_retries_same_structure_after_build_failure(self) -> None:
         model = self._make_model()
@@ -162,20 +191,24 @@ class Preview3DRecoveryTest(unittest.TestCase):
         canvas = SequencedCanvas([(model, None), (model, None)])
         preview = self._create_preview(adapter)
 
-        preview.refresh_from_canvas(canvas)
-        self._wait_for_rebuild()
+        with mock.patch(
+            "ui.preview_3d.build_3d_conversion_payload_for",
+            side_effect=lambda canvas: canvas.build_3d_conversion_payload(),
+        ):
+            preview.refresh_from_canvas(canvas)
+            self._wait_for_rebuild()
 
-        self.assertEqual(len(adapter.calls), 1)
-        self.assertIsNone(preview._scene)
-        self.assertEqual(preview._message, "Temporary 3D failure")
-        self.assertIsNone(preview._current_signature)
+            self.assertEqual(len(adapter.calls), 1)
+            self.assertIsNone(preview._scene)
+            self.assertEqual(preview._message, "Temporary 3D failure")
+            self.assertIsNone(preview._current_signature)
 
-        preview.refresh_from_canvas(canvas)
-        self._wait_for_rebuild()
+            preview.refresh_from_canvas(canvas)
+            self._wait_for_rebuild()
 
-        self.assertEqual(len(adapter.calls), 2)
-        self.assertEqual(preview._scene, scene)
-        self.assertEqual(preview._message, "")
+            self.assertEqual(len(adapter.calls), 2)
+            self.assertEqual(preview._scene, scene)
+            self.assertEqual(preview._message, "")
 
     def test_rebuild_scene_handles_disposed_missing_pending_and_empty_project_scene(self) -> None:
         preview = self._create_preview(SequencedAdapter([]))
@@ -194,7 +227,16 @@ class Preview3DRecoveryTest(unittest.TestCase):
         self.assertEqual(preview._message, "3D preview unavailable")
         safe_update.assert_called_once_with()
 
-        self.assertEqual(preview._project_scene(Molecule3DScene(atoms=(), bonds=())), [])
+        self.assertEqual(
+            project_preview_paint_scene(
+                Molecule3DScene(atoms=(), bonds=()),
+                rotation_x=preview._rotation_x,
+                rotation_y=preview._rotation_y,
+                zoom=preview._zoom,
+                widget_rect=QRectF(preview.rect()),
+            ),
+            [],
+        )
 
     def test_mouse_and_wheel_events_update_rotation_zoom_and_last_pos(self) -> None:
         preview = self._create_preview(SequencedAdapter([]))
@@ -253,10 +295,13 @@ class Preview3DRecoveryTest(unittest.TestCase):
             bonds=(Molecule3DBond(0, 99, 1),),
         )
         preview._message = "No projection"
-        with mock.patch.object(preview, "_project_scene", return_value=[]):
+        with mock.patch("ui.preview_3d_painter.project_preview_paint_scene", return_value=[]):
             preview.paintEvent(None)
 
-        with mock.patch.object(preview, "_project_scene", return_value=[(40.0, 50.0, 0.0, 8.0)]):
+        with mock.patch(
+            "ui.preview_3d_painter.project_preview_paint_scene",
+            return_value=[(40.0, 50.0, 0.0, 8.0)],
+        ):
             preview.paintEvent(None)
 
     def test_set_structure_set_info_and_footer_helpers_cover_signature_info_and_overlay_paths(self) -> None:
@@ -272,15 +317,23 @@ class Preview3DRecoveryTest(unittest.TestCase):
             preview.set_info("C2H6O", "46.07")
             preview.set_info("C2H6O", "46.07")
 
-        self.assertEqual(preview._current_signature, preview._payload_signature(model, {0: {"formal_charge": 1}}))
+        self.assertEqual(preview._current_signature, preview_payload_signature(model, {0: {"formal_charge": 1}}))
         self.assertEqual(preview._pending_model, model)
         self.assertEqual(preview._pending_annotations, {0: {"formal_charge": 1}})
-        self.assertEqual(preview._info_lines(), ["Formula: C2H6O", "MW: 46.07"])
-        self.assertGreater(preview._footer_height(preview._info_lines()), 0.0)
+        info_lines = preview_info_lines("C2H6O", "46.07")
+        self.assertEqual(info_lines, ["Formula: C2H6O", "MW: 46.07"])
+        self.assertGreater(preview_footer_height_for_lines(info_lines, preview.font()), 0.0)
         self.assertEqual(start.call_count, 1)
         self.assertEqual(safe_update.call_count, 2)
 
-        projected = preview._project_scene(self._make_scene(), footer_height=80.0)
+        projected = project_preview_paint_scene(
+            self._make_scene(),
+            rotation_x=preview._rotation_x,
+            rotation_y=preview._rotation_y,
+            zoom=preview._zoom,
+            widget_rect=QRectF(preview.rect()),
+            footer_height=80.0,
+        )
         self.assertEqual(len(projected), 2)
 
         preview._scene = self._make_scene()
@@ -290,46 +343,60 @@ class Preview3DRecoveryTest(unittest.TestCase):
         preview = self._create_preview(SequencedAdapter([]))
         preview.resize(320, 260)
 
-        self.assertEqual(preview._metadata_summary(), "")
-        self.assertEqual(preview._status_badge()[0], "Empty")
-        self.assertEqual(preview._empty_state_text(), ("No molecule yet", "Draw or paste a structure to preview it in 3D."))
+        self.assertEqual(preview_metadata_summary(preview._scene, preview._message), "")
+        self.assertEqual(preview_status_badge(preview._scene, preview._message)[0], "Empty")
+        self.assertEqual(
+            preview_empty_state_text(preview._message),
+            ("No molecule yet", "Draw or paste a structure to preview it in 3D."),
+        )
 
         preview._message = "There is no chemical structure to export."
-        self.assertEqual(preview._metadata_summary(), "")
-        self.assertEqual(preview._status_badge()[0], "Empty")
-        self.assertEqual(preview._empty_state_text(), ("No molecule yet", "Draw or paste a structure to preview it in 3D."))
+        self.assertEqual(preview_metadata_summary(preview._scene, preview._message), "")
+        self.assertEqual(preview_status_badge(preview._scene, preview._message)[0], "Empty")
+        self.assertEqual(
+            preview_empty_state_text(preview._message),
+            ("No molecule yet", "Draw or paste a structure to preview it in 3D."),
+        )
 
         preview._message = "Updating 3D preview..."
-        self.assertEqual(preview._metadata_summary(), "Preparing coordinates")
-        self.assertEqual(preview._status_badge()[0], "Building")
-        self.assertEqual(preview._empty_state_text(), ("Building preview", "Preparing coordinates"))
+        self.assertEqual(preview_metadata_summary(preview._scene, preview._message), "Preparing coordinates")
+        self.assertEqual(preview_status_badge(preview._scene, preview._message)[0], "Building")
+        self.assertEqual(preview_empty_state_text(preview._message), ("Building preview", "Preparing coordinates"))
 
         preview._message = "Temporary 3D failure while preparing the selected structure"
-        self.assertEqual(preview._metadata_summary(), "Preview needs attention")
-        self.assertEqual(preview._status_badge()[0], "Issue")
+        self.assertEqual(preview_metadata_summary(preview._scene, preview._message), "Preview needs attention")
+        self.assertEqual(preview_status_badge(preview._scene, preview._message)[0], "Issue")
         self.assertEqual(
-            preview._empty_state_text(),
+            preview_empty_state_text(preview._message),
             ("Preview unavailable", "Temporary 3D failure while preparing the selected structure"),
         )
 
         preview._scene = self._make_scene()
         preview.set_info("C2H6O", "46.07")
-        self.assertEqual(preview._metadata_summary(), "2 atoms / 1 bond")
-        self.assertEqual(preview._status_badge()[0], "Ready")
-        self.assertEqual(preview._info_items(), [("FORMULA", "C2H6O"), ("MW", "46.07")])
-        self.assertGreaterEqual(preview._footer_height(preview._info_lines()), 68.0)
+        self.assertEqual(preview_metadata_summary(preview._scene, preview._message), "2 atoms / 1 bond")
+        self.assertEqual(preview_status_badge(preview._scene, preview._message)[0], "Ready")
+        self.assertEqual(preview_info_items("C2H6O", "46.07"), [("FORMULA", "C2H6O"), ("MW", "46.07")])
+        info_lines = preview_info_lines("C2H6O", "46.07")
+        self.assertGreaterEqual(preview_footer_height_for_lines(info_lines, preview.font()), 68.0)
 
-        layout = preview._layout_rects(preview._info_lines())
+        layout = preview_layout_for_widget(QRectF(preview.rect()), info_lines, preview.font())
         self.assertFalse(layout["footer"].isNull())
         self.assertLess(layout["header"].bottom(), layout["viewport"].top())
         self.assertLess(layout["viewport"].bottom(), layout["footer"].top())
         self.assertTrue(layout["viewport"].contains(layout["molecule"]))
-        footer_items = preview._footer_item_rects(layout["footer"], 2)
+        footer_items = preview_footer_item_rects(layout["footer"], 2)
         self.assertEqual(len(footer_items), 2)
         self.assertGreater(footer_items[0].width(), layout["footer"].width() * 0.9)
         self.assertLess(footer_items[0].bottom(), footer_items[1].top())
 
-        projected = preview._project_scene(preview._scene, viewport_rect=QRectF(40.0, 70.0, 220.0, 120.0))
+        projected = project_preview_paint_scene(
+            preview._scene,
+            rotation_x=preview._rotation_x,
+            rotation_y=preview._rotation_y,
+            zoom=preview._zoom,
+            widget_rect=QRectF(preview.rect()),
+            viewport_rect=QRectF(40.0, 70.0, 220.0, 120.0),
+        )
         self.assertEqual(len(projected), 2)
         self.assertTrue(all(40.0 <= atom[0] <= 260.0 for atom in projected))
 

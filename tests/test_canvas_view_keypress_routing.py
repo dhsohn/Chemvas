@@ -1,6 +1,5 @@
 import os
 import unittest
-from types import SimpleNamespace
 from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -44,7 +43,8 @@ class CanvasViewKeyPressRoutingTest(unittest.TestCase):
     def test_key_press_event_delegates_to_input_controller(self) -> None:
         event = _FakeKeyEvent(Qt.Key.Key_A)
         input_controller = mock.Mock()
-        view = SimpleNamespace(_input_controller=input_controller)
+        view = CanvasView()
+        view.services.input_controller = input_controller
 
         CanvasView.keyPressEvent(view, event)
 

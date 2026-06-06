@@ -78,7 +78,7 @@ class SceneDeleteApplyLogicTest(unittest.TestCase):
             "next_atom_id": canvas.model.next_atom_id,
             "remove_bond_by_id": canvas._remove_bond_by_id,
             "bond_state_getter": canvas._bond_state_dict,
-            "redraw_connected_bonds": canvas._redraw_connected_bonds,
+            "redraw_connected_bonds": canvas.redraw_connected_bonds,
             "remove_atom_only": canvas._remove_atom_only,
             "atom_state_getter": canvas._atom_state_dict,
             "remove_scene_item": canvas.remove_scene_item,
@@ -228,7 +228,7 @@ class _FakeDeleteCanvas:
             self.model.bonds[bond_id] = None
         self.last_smiles_input = None
 
-    def _redraw_connected_bonds(self, atom_id: int) -> None:
+    def redraw_connected_bonds(self, atom_id: int) -> None:
         self.redraw_connected_bonds_calls.append(atom_id)
 
     def _atom_state_dict(self, atom_id: int) -> dict:

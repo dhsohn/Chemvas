@@ -23,14 +23,44 @@ if QApplication is not None:
     from ui.canvas_color_mutation_service import CanvasColorMutationService
     from ui.canvas_note_controller import CanvasNoteController
     from ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
-    from ui.handle_mutation_service import HandleMutationService
-    from ui.main_window_ui_assembly_service import (
-        ArrowButton,
-        MainWindowUIAssemblyService,
+    from ui.canvas_scene_items_state import (
+        set_scene_item_collection_for,
+        set_selected_notes_for,
     )
+    from ui.canvas_text_style_state import CanvasTextStyleState
+    from ui.handle_mutation_service import HandleMutationService
+    from ui.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
+    from ui.main_window_toolbar_buttons import ArrowButton
+    from ui.main_window_ui_assembly_service import MainWindowUIAssemblyService
+    from ui.note_item_access import set_committed_note_text_for
     from ui.scene_item_restore import create_orbital_item_from_state
     from ui.scene_paste_apply_logic import apply_paste_payload
     from ui.scene_transform_logic import flip_scene_item_state
+
+
+def _history_service(push=None):
+    return SimpleNamespace(push=push if push is not None else mock.Mock())
+
+
+def _panel_toolbar_callbacks() -> "MainWindowPanelToolbarCallbacks":
+    return MainWindowPanelToolbarCallbacks(
+        save_canvas=mock.Mock(),
+        save_canvas_as=mock.Mock(),
+        load_canvas=mock.Mock(),
+        export_figure=mock.Mock(),
+        export_xyz=mock.Mock(),
+        toggle_preview_panel=mock.Mock(),
+        setup_sheet=mock.Mock(),
+        populate_palette_menu=mock.Mock(),
+        apply_color_preset=mock.Mock(),
+        apply_ring_fill_preset=mock.Mock(),
+        set_bond_length=mock.Mock(),
+    )
+
+
+def _color_service_for(canvas) -> CanvasColorMutationService:
+    graph_service = SimpleNamespace(bond_sets_for_atoms=mock.Mock(return_value=(set(), set())))
+    return CanvasColorMutationService(canvas, graph_service=graph_service)
 
 
 class _FakeRingItem:
@@ -112,9 +142,9 @@ class UIServiceTailCoverageTest(unittest.TestCase):
                     6: SimpleNamespace(x=10.5, y=11.0),
                 }
             ),
-            ring_items=[ring_item, skipped_item],
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=12.0)),
         )
+        set_scene_item_collection_for(canvas, "ring_items", [ring_item, skipped_item])
 
         CanvasRingFillSceneService(canvas).rotate_ring_fills_3d(
             {1, 2, 3},
@@ -133,17 +163,13 @@ class UIServiceTailCoverageTest(unittest.TestCase):
 
     def test_update_curved_endpoint_ignores_unknown_endpoint_name(self) -> None:
         canvas = SimpleNamespace(
-            _default_curved_control=mock.Mock(),
             _update_selection_outline=mock.Mock(),
         )
         item = _CurvedEndpointItem()
 
-        with mock.patch("ui.handle_mutation_service.curved_arrow_path_service_for") as service_for:
-            HandleMutationService(canvas).update_curved_endpoint(item, QPointF(2.0, 3.0), "middle")
+        HandleMutationService(canvas).update_curved_endpoint(item, QPointF(2.0, 3.0), "middle")
 
-        service_for.assert_not_called()
         item.setData.assert_not_called()
-        canvas._default_curved_control.assert_not_called()
         canvas._update_selection_outline.assert_not_called()
 
     def test_arrow_button_paints_up_triangle_when_rect_is_large_enough(self) -> None:
@@ -175,7 +201,15 @@ class UIServiceTailCoverageTest(unittest.TestCase):
         self.assertFalse(pixmap.isNull())
 
     def test_corner_menu_button_allows_menu_without_default_action_or_icon(self) -> None:
-        button = MainWindowUIAssemblyService().create_corner_menu_button(
+        service = MainWindowUIAssemblyService(
+            scene_transform_controller_for_window=mock.Mock(),
+            insert_controller_for_window=mock.Mock(),
+            tool_mode_controller_for_window=mock.Mock(),
+            history_service_for_window=mock.Mock(),
+            build_tool_actions_for_window=mock.Mock(),
+            panel_toolbar_callbacks=_panel_toolbar_callbacks(),
+        )
+        button = service.create_corner_menu_button(
             icon=None,
             tooltip="More",
             style_sheet="padding: 0;",
@@ -222,10 +256,10 @@ class UIServiceTailCoverageTest(unittest.TestCase):
         fill_pushes = []
         fill_canvas = SimpleNamespace(
             _ring_state_dict=mock.Mock(),
-            _push_command=fill_pushes.append,
+            services=SimpleNamespace(history_service=_history_service(fill_pushes.append)),
         )
 
-        CanvasColorMutationService(fill_canvas).apply_ring_fill_color(ring_item, QColor())
+        _color_service_for(fill_canvas).apply_ring_fill_color(ring_item, QColor())
 
         fill_canvas._ring_state_dict.assert_not_called()
         self.assertEqual(fill_pushes, [])
@@ -237,33 +271,40 @@ class UIServiceTailCoverageTest(unittest.TestCase):
             model=SimpleNamespace(atoms={7: SimpleNamespace(color="#112233")}),
             atom_items={7: atom_item},
             atom_dots={7: atom_item},
-            _implicit_carbon_dot_brush=mock.Mock(),
-            _push_command=mock.Mock(),
+            services=SimpleNamespace(
+                history_service=_history_service(),
+                atom_label_service=SimpleNamespace(implicit_carbon_dot_brush=mock.Mock()),
+            ),
+            push_command=mock.Mock(),
         )
 
-        CanvasColorMutationService(atom_canvas)._apply_atom_color(atom_item, QColor("#112233"))
+        _color_service_for(atom_canvas)._apply_atom_color(atom_item, QColor("#112233"))
 
-        atom_canvas._implicit_carbon_dot_brush.assert_not_called()
-        atom_canvas._push_command.assert_not_called()
+        atom_canvas.services.atom_label_service.implicit_carbon_dot_brush.assert_not_called()
+        atom_canvas.push_command.assert_not_called()
 
     def test_note_controller_skips_noop_focus_out_and_selected_note_reselection(self) -> None:
         item = QGraphicsTextItem("Stable")
-        item._last_text = "Stable"
+        set_committed_note_text_for(item, "Stable")
         canvas = SimpleNamespace(
-            selected_notes=[item],
             select_note=mock.Mock(),
             scene=mock.Mock(return_value=QGraphicsScene()),
             setFocus=mock.Mock(),
-            _push_command=mock.Mock(),
+            push_command=mock.Mock(),
+            services=SimpleNamespace(
+                history_service=_history_service(),
+                selection_controller=SimpleNamespace(select_note=mock.Mock()),
+            ),
         )
+        set_selected_notes_for(canvas, [item])
         canvas.scene().addItem(item)
         controller = CanvasNoteController(canvas)
 
         controller.handle_note_focus_out(item)
         controller.begin_note_edit(item)
 
-        canvas._push_command.assert_not_called()
-        canvas.select_note.assert_not_called()
+        canvas.push_command.assert_not_called()
+        canvas.services.selection_controller.select_note.assert_not_called()
         canvas.setFocus.assert_called_once_with(Qt.FocusReason.MouseFocusReason)
 
     def test_apply_note_style_uses_legacy_line_height_value_when_enum_value_is_wrapped(self) -> None:
@@ -312,14 +353,19 @@ class UIServiceTailCoverageTest(unittest.TestCase):
             document=mock.Mock(return_value=document),
         )
         canvas = SimpleNamespace(
-            text_font_family="Arial",
-            text_font_size=12,
-            text_font_weight=QFont.Weight.Bold,
-            text_italic=False,
-            text_color=QColor("#123456"),
-            text_alignment=Qt.AlignmentFlag.AlignLeft,
-            text_line_spacing=1.4,
-            _update_note_selection_box=mock.Mock(),
+            text_style_state=CanvasTextStyleState(
+                text_font_family="Arial",
+                text_font_size=12,
+                text_font_weight=QFont.Weight.Bold,
+                text_italic=False,
+                text_color=QColor("#123456"),
+                text_alignment=Qt.AlignmentFlag.AlignLeft,
+                text_line_spacing=1.4,
+            ),
+            services=SimpleNamespace(
+                history_service=_history_service(),
+                selection_controller=SimpleNamespace(update_note_selection_box=mock.Mock()),
+            ),
         )
         controller = CanvasNoteController(canvas)
         controller.update_note_box = mock.Mock()
@@ -332,7 +378,7 @@ class UIServiceTailCoverageTest(unittest.TestCase):
 
         self.assertEqual(_FakeCursor.last_instance.block_format.height, (140, 42))
         controller.update_note_box.assert_called_once_with(item)
-        canvas._update_note_selection_box.assert_called_once_with(item)
+        canvas.services.selection_controller.update_note_selection_box.assert_called_once_with(item)
 
     def test_apply_note_style_accepts_legacy_line_height_constant_without_value(self) -> None:
         class _FakeDocument:
@@ -368,14 +414,19 @@ class UIServiceTailCoverageTest(unittest.TestCase):
             document=mock.Mock(return_value=_FakeDocument()),
         )
         canvas = SimpleNamespace(
-            text_font_family="Arial",
-            text_font_size=12,
-            text_font_weight=QFont.Weight.Bold,
-            text_italic=False,
-            text_color=QColor("#123456"),
-            text_alignment=Qt.AlignmentFlag.AlignLeft,
-            text_line_spacing=1.4,
-            _update_note_selection_box=mock.Mock(),
+            text_style_state=CanvasTextStyleState(
+                text_font_family="Arial",
+                text_font_size=12,
+                text_font_weight=QFont.Weight.Bold,
+                text_italic=False,
+                text_color=QColor("#123456"),
+                text_alignment=Qt.AlignmentFlag.AlignLeft,
+                text_line_spacing=1.4,
+            ),
+            services=SimpleNamespace(
+                history_service=_history_service(),
+                selection_controller=SimpleNamespace(update_note_selection_box=mock.Mock()),
+            ),
         )
         controller = CanvasNoteController(canvas)
         controller.update_note_box = mock.Mock()

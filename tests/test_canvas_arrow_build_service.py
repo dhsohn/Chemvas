@@ -19,6 +19,7 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from ui.canvas_arrow_build_service import CanvasArrowBuildService
+    from ui.canvas_tool_settings_state import CanvasToolSettingsState
 
 
 class _RecordingScene:
@@ -48,8 +49,10 @@ class CanvasArrowBuildServiceTest(unittest.TestCase):
         )
         canvas = SimpleNamespace(
             renderer=renderer,
-            arrow_line_width=2.5,
-            arrow_head_scale=0.3,
+            tool_settings_state=CanvasToolSettingsState(
+                arrow_line_width=2.5,
+                arrow_head_scale=0.3,
+            ),
             scene=lambda: scene,
         )
         return CanvasArrowBuildService(canvas), scene

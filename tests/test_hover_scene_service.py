@@ -20,6 +20,14 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from core.model import Atom, Bond
+    from ui.canvas_hover_state import (
+        HoverPreviewState,
+        hover_preview_state_for,
+        hover_state_for,
+        set_hover_atom_id_for,
+        set_hover_bond_id_for,
+        set_hover_items_for,
+    )
     from ui.hover_scene_service import HoverSceneService
 
 
@@ -31,10 +39,7 @@ class _CanvasStub:
             bonds=[] if bonds is None else bonds,
         )
         self.renderer = SimpleNamespace(style=SimpleNamespace(bond_length_px=bond_length_px))
-        self.hover_items = []
-        self.hover_atom_id = None
-        self.hover_bond_id = None
-        self._hover_preview_style = None
+        self.hover_preview_state = HoverPreviewState()
 
     def scene(self):
         return self._scene
@@ -58,17 +63,17 @@ class HoverSceneServiceTest(unittest.TestCase):
         self.scene.addItem(hover_text)
         self.scene.addItem(hover_dot)
         canvas = _CanvasStub(self.scene)
-        canvas.hover_items = [hover_text, hover_dot]
-        canvas.hover_atom_id = 7
-        canvas.hover_bond_id = 3
-        canvas._hover_preview_style = "hash"
+        set_hover_items_for(canvas, [hover_text, hover_dot])
+        set_hover_atom_id_for(canvas, 7)
+        set_hover_bond_id_for(canvas, 3)
+        hover_preview_state_for(canvas).style = "hash"
 
         HoverSceneService(canvas).clear_hover_highlight()
 
-        self.assertEqual(canvas.hover_items, [])
-        self.assertIsNone(canvas.hover_atom_id)
-        self.assertIsNone(canvas.hover_bond_id)
-        self.assertIsNone(canvas._hover_preview_style)
+        self.assertEqual(hover_state_for(canvas).items, [])
+        self.assertIsNone(hover_state_for(canvas).atom_id)
+        self.assertIsNone(hover_state_for(canvas).bond_id)
+        self.assertIsNone(hover_preview_state_for(canvas).style)
         self.assertIs(keep.scene(), self.scene)
         self.assertIsNone(hover_text.scene())
         self.assertIsNone(hover_dot.scene())
@@ -80,12 +85,12 @@ class HoverSceneServiceTest(unittest.TestCase):
         dot.setBrush(QColor("#ff0000"))
         text = QGraphicsTextItem("preview")
         canvas = _CanvasStub(self.scene)
-        canvas.hover_items = [existing]
+        set_hover_items_for(canvas, [existing])
 
         HoverSceneService(canvas).add_hover_preview_items([dot, text])
 
         preview_color = QColor(120, 120, 120, 140)
-        self.assertEqual(canvas.hover_items, [existing, dot, text])
+        self.assertEqual(hover_state_for(canvas).items, [existing, dot, text])
         self.assertIs(dot.scene(), self.scene)
         self.assertIs(text.scene(), self.scene)
         self.assertEqual(dot.pen().color(), preview_color)
@@ -105,8 +110,8 @@ class HoverSceneServiceTest(unittest.TestCase):
 
         HoverSceneService(canvas).add_atom_hover_indicator(3)
 
-        self.assertEqual(len(canvas.hover_items), 1)
-        indicator = canvas.hover_items[0]
+        self.assertEqual(len(hover_state_for(canvas).items), 1)
+        indicator = hover_state_for(canvas).items[0]
         self.assertIsInstance(indicator, QGraphicsEllipseItem)
         self.assertIs(indicator.scene(), self.scene)
         rect = indicator.rect()
@@ -128,8 +133,8 @@ class HoverSceneServiceTest(unittest.TestCase):
 
         HoverSceneService(canvas).add_bond_hover_indicator(0)
 
-        self.assertEqual(len(canvas.hover_items), 1)
-        indicator = canvas.hover_items[0]
+        self.assertEqual(len(hover_state_for(canvas).items), 1)
+        indicator = hover_state_for(canvas).items[0]
         self.assertIsInstance(indicator, QGraphicsEllipseItem)
         self.assertIs(indicator.scene(), self.scene)
         rect = indicator.rect()
@@ -153,7 +158,7 @@ class HoverSceneServiceTest(unittest.TestCase):
         service.add_bond_hover_indicator(0)
         service.add_bond_hover_indicator(1)
 
-        self.assertEqual(canvas.hover_items, [])
+        self.assertEqual(hover_state_for(canvas).items, [])
         self.assertEqual(len(self.scene.items()), 0)
 
 

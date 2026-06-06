@@ -11,7 +11,19 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.canvas_view import CanvasView
+    from ui.canvas_atom_graphics_state import (
+        atom_dots_for,
+        atom_items_for,
+        set_atom_dots_for,
+        set_atom_items_for,
+    )
+    from ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
+    from ui.canvas_model_access import rebuild_graphics_for
+    from ui.scene_item_access import (
+        clear_scene_item_list_map,
+        clear_scene_item_map,
+        remove_scene_items,
+    )
 
 
 class _FakeScene:
@@ -34,19 +46,19 @@ class CanvasViewSceneOpsRebuildTest(unittest.TestCase):
         scene = _FakeScene()
         view = SimpleNamespace(
             scene=lambda: scene,
-            bond_items={1: [bond_a, bond_b], 2: []},
-            atom_items={3: atom_label},
-            atom_dots={4: atom_dot},
-            _render_model=mock.Mock(),
+            services=SimpleNamespace(structure_build_service=SimpleNamespace(render_model=mock.Mock())),
         )
+        set_atom_items_for(view, {3: atom_label})
+        set_atom_dots_for(view, {4: atom_dot})
+        set_bond_items_for(view, {1: [bond_a, bond_b], 2: []})
 
-        CanvasView._rebuild_graphics(view)
+        rebuild_graphics_for(view)
 
         self.assertEqual(scene.removeItem.call_args_list, [mock.call(bond_a), mock.call(bond_b), mock.call(atom_label), mock.call(atom_dot)])
-        self.assertEqual(view.bond_items, {})
-        self.assertEqual(view.atom_items, {})
-        self.assertEqual(view.atom_dots, {})
-        view._render_model.assert_called_once_with()
+        self.assertEqual(bond_items_for(view), {})
+        self.assertEqual(atom_items_for(view), {})
+        self.assertEqual(atom_dots_for(view), {})
+        view.services.structure_build_service.render_model.assert_called_once_with()
 
     def test_scene_item_clear_helpers_remove_items_and_return_empty_maps(self) -> None:
         scene = _FakeScene()
@@ -55,7 +67,7 @@ class CanvasViewSceneOpsRebuildTest(unittest.TestCase):
         atom_label = object()
 
         self.assertEqual(
-            CanvasView._clear_scene_item_list_map(scene, {1: [bond_a], 2: [bond_b]}),
+            clear_scene_item_list_map(scene, {1: [bond_a], 2: [bond_b]}),
             {},
         )
         self.assertEqual(
@@ -64,11 +76,11 @@ class CanvasViewSceneOpsRebuildTest(unittest.TestCase):
         )
 
         scene.removeItem.reset_mock()
-        self.assertEqual(CanvasView._clear_scene_item_map(scene, {3: atom_label}), {})
+        self.assertEqual(clear_scene_item_map(scene, {3: atom_label}), {})
         scene.removeItem.assert_called_once_with(atom_label)
 
         scene.removeItem.reset_mock()
-        CanvasView._remove_scene_items(scene, [])
+        remove_scene_items(scene, [])
         scene.removeItem.assert_not_called()
 
 

@@ -13,7 +13,22 @@ except ModuleNotFoundError:
     Qt = None
 
 if QApplication is not None:
+    from ui.canvas_mark_registry import mark_registry_for
+    from ui.canvas_scene_items_state import (
+        arrow_items_for,
+        mark_items_for,
+        note_items_for,
+        orbital_items_for,
+        ts_bracket_items_for,
+    )
+    from ui.canvas_service_access import canvas_services_for
     from ui.main_window import MainWindow
+    from ui.main_window_canvas_ports import active_canvas_for_window
+    from ui.mark_item_access import mark_center_for
+    from ui.note_item_access import committed_note_text_for
+    from ui.scene_item_access import create_scene_item_from_state
+    from ui.scene_item_state import scene_item_state_for
+    from ui.structure_mutation_access import add_atom_for
 
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for GUI tests")
@@ -26,7 +41,7 @@ class SceneItemRestoreTest(unittest.TestCase):
     def setUp(self) -> None:
         self.window = MainWindow()
         self.window.show()
-        self.window.canvas.setFocus()
+        active_canvas_for_window(self.window).setFocus()
         self.app.processEvents()
         QTest.qWait(20)
 
@@ -36,7 +51,7 @@ class SceneItemRestoreTest(unittest.TestCase):
         QTest.qWait(10)
 
     def test_create_scene_item_from_state_restores_atom_bound_mark_registration(self) -> None:
-        atom_id = self.window.canvas.add_atom("C", 12.0, -8.0)
+        atom_id = add_atom_for(active_canvas_for_window(self.window), "C", 12.0, -8.0)
         state = {
             "kind": "mark",
             "mark_kind": "minus",
@@ -47,27 +62,28 @@ class SceneItemRestoreTest(unittest.TestCase):
             "y": -500.0,
         }
 
-        item = self.window.canvas.create_scene_item_from_state(state)
+        item = create_scene_item_from_state(active_canvas_for_window(self.window), state)
 
         self.assertIsNotNone(item)
-        self.assertIn(item, self.window.canvas.mark_items)
-        self.assertIn(item, self.window.canvas._marks_by_atom[atom_id])
-        center = self.window.canvas._mark_center(item)
+        self.assertIn(item, mark_items_for(active_canvas_for_window(self.window)))
+        self.assertIn(item, mark_registry_for(active_canvas_for_window(self.window)).by_atom[atom_id])
+        center = mark_center_for(active_canvas_for_window(self.window), item)
         self.assertAlmostEqual(center.x(), 28.0)
         self.assertAlmostEqual(center.y(), -14.0)
 
     def test_create_scene_item_from_state_restores_note_style_and_last_text(self) -> None:
-        self.window.canvas.set_text_size(19)
-        self.window.canvas.set_text_weight(63)
-        self.window.canvas.set_text_italic(True)
+        style_controller = canvas_services_for(active_canvas_for_window(self.window)).style_controller
+        style_controller.set_text_size(19)
+        style_controller.set_text_weight(63)
+        style_controller.set_text_italic(True)
         state = {"kind": "note", "text": "Mechanism", "x": 18.0, "y": -12.0}
 
-        item = self.window.canvas.create_scene_item_from_state(state)
+        item = create_scene_item_from_state(active_canvas_for_window(self.window), state)
 
         self.assertIsNotNone(item)
-        self.assertIn(item, self.window.canvas.note_items)
+        self.assertIn(item, note_items_for(active_canvas_for_window(self.window)))
         self.assertEqual(item.toPlainText(), "Mechanism")
-        self.assertEqual(item._last_text, "Mechanism")
+        self.assertEqual(committed_note_text_for(item), "Mechanism")
         self.assertEqual(item.textInteractionFlags(), Qt.TextInteractionFlag.NoTextInteraction)
         self.assertEqual(item.font().pointSize(), 19)
         self.assertEqual(item.font().weight(), 63)
@@ -82,10 +98,10 @@ class SceneItemRestoreTest(unittest.TestCase):
             "double": True,
         }
 
-        item = self.window.canvas.create_scene_item_from_state(state)
+        item = create_scene_item_from_state(active_canvas_for_window(self.window), state)
 
         self.assertIsNotNone(item)
-        self.assertIn(item, self.window.canvas.arrow_items)
+        self.assertIn(item, arrow_items_for(active_canvas_for_window(self.window)))
         data = item.data(2) or {}
         self.assertEqual((data["start"].x(), data["start"].y()), state["start"])
         self.assertEqual((data["end"].x(), data["end"].y()), state["end"])
@@ -101,11 +117,11 @@ class SceneItemRestoreTest(unittest.TestCase):
             "bottom": 14.0,
         }
 
-        item = self.window.canvas.create_scene_item_from_state(state)
-        restored_state = self.window.canvas.scene_item_state(item)
+        item = create_scene_item_from_state(active_canvas_for_window(self.window), state)
+        restored_state = scene_item_state_for(active_canvas_for_window(self.window), item)
 
         self.assertIsNotNone(item)
-        self.assertIn(item, self.window.canvas.ts_bracket_items)
+        self.assertIn(item, ts_bracket_items_for(active_canvas_for_window(self.window)))
         self.assertEqual(restored_state["kind"], "ts_bracket")
         self.assertAlmostEqual(restored_state["left"], state["left"])
         self.assertAlmostEqual(restored_state["top"], state["top"])
@@ -113,7 +129,7 @@ class SceneItemRestoreTest(unittest.TestCase):
         self.assertAlmostEqual(restored_state["bottom"], state["bottom"])
 
     def test_create_scene_item_from_state_restores_orbital_with_registry_metadata(self) -> None:
-        self.window.canvas.set_bond_length(30.0)
+        canvas_services_for(active_canvas_for_window(self.window)).geometry_controller.set_bond_length(30.0)
         state = {
             "kind": "orbital",
             "orbital_kind": "sp2",
@@ -122,11 +138,11 @@ class SceneItemRestoreTest(unittest.TestCase):
             "rotation": 27.0,
         }
 
-        item = self.window.canvas.create_scene_item_from_state(state)
+        item = create_scene_item_from_state(active_canvas_for_window(self.window), state)
 
         self.assertIsNotNone(item)
-        self.assertIn(item, self.window.canvas.orbital_items)
-        self.assertIs(item.scene(), self.window.canvas.scene())
+        self.assertIn(item, orbital_items_for(active_canvas_for_window(self.window)))
+        self.assertIs(item.scene(), active_canvas_for_window(self.window).scene())
         data = item.data(1) or {}
         meta = item.data(2) or {}
         center = data.get("center")

@@ -14,6 +14,9 @@ if QApplication is not None:
         build_clipboard_copy_plan,
         build_clipboard_paste_plan,
         clipboard_copy_cache_values,
+        clipboard_paste_offset,
+        translated_point_value,
+        translated_scene_item_state,
         visible_items_to_hide_for_copy,
     )
 
@@ -175,6 +178,57 @@ class SceneClipboardTransactionLogicTest(unittest.TestCase):
                 before_smiles_input=None,
             )
         )
+
+    def test_clipboard_offset_and_translated_scene_item_state_cover_supported_kinds(self) -> None:
+        self.assertEqual(clipboard_paste_offset(2, 20.0), (36.0, 36.0))
+        self.assertEqual(translated_point_value((1, 2), 3.0, -4.0), (4.0, -2.0))
+        self.assertEqual(translated_point_value("bad", 3.0, -4.0), "bad")
+
+        self.assertEqual(
+            translated_scene_item_state(
+                {"kind": "ring", "atom_ids": [1, 2], "points": [(0.0, 0.0), (1.0, 2.0)]},
+                dx=2.0,
+                dy=3.0,
+                atom_id_map={1: 10, 2: 20},
+            ),
+            {"kind": "ring", "atom_ids": [10, 20], "points": [(2.0, 3.0), (3.0, 5.0)]},
+        )
+        self.assertIsNone(
+            translated_scene_item_state(
+                {"kind": "ring", "atom_ids": [1, "bad"], "points": []},
+                dx=0.0,
+                dy=0.0,
+                atom_id_map={1: 10},
+            )
+        )
+        self.assertEqual(
+            translated_scene_item_state(
+                {"kind": "mark", "atom_id": 1, "x": 2.0, "y": 3.0},
+                dx=4.0,
+                dy=-1.0,
+                atom_id_map={1: 9},
+            ),
+            {"kind": "mark", "atom_id": 9, "x": 6.0, "y": 2.0},
+        )
+        self.assertEqual(
+            translated_scene_item_state(
+                {"kind": "ts_bracket", "left": 1.0, "right": 3.0, "top": 2.0, "bottom": 4.0},
+                dx=2.0,
+                dy=-1.0,
+                atom_id_map={},
+            ),
+            {"kind": "ts_bracket", "left": 3.0, "right": 5.0, "top": 1.0, "bottom": 3.0},
+        )
+        self.assertEqual(
+            translated_scene_item_state(
+                {"kind": "orbital", "center": (1.0, 2.0)},
+                dx=5.0,
+                dy=6.0,
+                atom_id_map={},
+            ),
+            {"kind": "orbital", "center": (6.0, 8.0)},
+        )
+        self.assertIsNone(translated_scene_item_state("bad", dx=0.0, dy=0.0, atom_id_map={}))
 
 
 if __name__ == "__main__":

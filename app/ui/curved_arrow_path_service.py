@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QPainterPath
 
+from ui.scene_decoration_build_access import add_arrow_head_for
+
 if TYPE_CHECKING:
     from PyQt6.QtWidgets import QGraphicsPathItem
 
@@ -31,15 +33,11 @@ class CurvedArrowPathService:
         path.moveTo(start)
         path.quadTo(control, end)
         if double:
-            self.canvas._add_arrow_head(path, control, end, double=False)
-            self.canvas._add_arrow_head(path, control, start, double=False)
+            add_arrow_head_for(self.canvas, path, control, end, double=False)
+            add_arrow_head_for(self.canvas, path, control, start, double=False)
         else:
-            self.canvas._add_arrow_head(path, control, end, double=False)
+            add_arrow_head_for(self.canvas, path, control, end, double=False)
         item.setPath(path)
 
 
-def curved_arrow_path_service_for(canvas) -> CurvedArrowPathService:
-    return canvas._curved_arrow_path_service
-
-
-__all__ = ["CurvedArrowPathService", "curved_arrow_path_service_for"]
+__all__ = ["CurvedArrowPathService"]

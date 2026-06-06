@@ -1,6 +1,5 @@
 import os
 import unittest
-from types import SimpleNamespace
 from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -20,8 +19,8 @@ if QApplication is not None:
     try:
         from ui.canvas_scene_decoration_build_service import (
             CanvasSceneDecorationBuildService,
-            canvas_scene_decoration_build_service_for,
         )
+        from ui.canvas_tool_settings_state import set_tool_setting_for
         from ui.canvas_view import CanvasView
     except SyntaxError:
         CanvasSceneDecorationBuildService = None
@@ -51,17 +50,17 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
 
     def test_build_arrow_item_delegates_to_arrow_build_service(self) -> None:
         arrow_service = mock.Mock()
-        self.service._arrow_build_service = arrow_service
+        service = CanvasSceneDecorationBuildService(self.canvas, arrow_build_service=arrow_service)
         arrow_service.build_arrow_item.return_value = "arrow"
 
-        result = self.service.build_arrow_item(QPointF(1.0, 2.0), QPointF(7.0, 8.0), "dotted")
+        result = service.build_arrow_item(QPointF(1.0, 2.0), QPointF(7.0, 8.0), "dotted")
 
         self.assertEqual(result, "arrow")
         arrow_service.build_arrow_item.assert_called_once_with(QPointF(1.0, 2.0), QPointF(7.0, 8.0), "dotted")
 
     def test_arrow_helpers_delegate_to_arrow_build_service(self) -> None:
         arrow_service = mock.Mock()
-        self.service._arrow_build_service = arrow_service
+        service = CanvasSceneDecorationBuildService(self.canvas, arrow_build_service=arrow_service)
         path = object()
         item = object()
 
@@ -75,16 +74,16 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
         arrow_service.build_equilibrium_item.return_value = item
         arrow_service.arrow_pen.return_value = "pen"
 
-        self.assertIs(self.service.preview_arrow(QPointF(1.0, 2.0), QPointF(3.0, 4.0), "reaction"), item)
-        self.assertIs(self.service.build_arrow_item(QPointF(5.0, 6.0), QPointF(7.0, 8.0), "dotted"), item)
-        self.assertIs(self.service.build_single_head_arrow(QPointF(1.0, 1.0), QPointF(2.0, 2.0)), item)
-        self.assertIs(self.service.build_double_head_arrow(QPointF(1.0, 1.0), QPointF(2.0, 2.0)), item)
-        self.assertIs(self.service.build_dotted_arrow(QPointF(1.0, 1.0), QPointF(2.0, 2.0)), item)
-        self.assertIs(self.service.build_curved_arrow(QPointF(1.0, 1.0), QPointF(2.0, 2.0), double=True), item)
-        self.assertIs(self.service.build_inhibition_arrow(QPointF(1.0, 1.0), QPointF(2.0, 2.0)), item)
-        self.assertIs(self.service.build_equilibrium_item(QPointF(1.0, 1.0), QPointF(2.0, 2.0)), item)
-        self.service.add_arrow_head(path, QPointF(3.0, 3.0), QPointF(4.0, 4.0), double=False)
-        self.assertEqual(self.service._arrow_pen(dotted=True), "pen")
+        self.assertIs(service.preview_arrow(QPointF(1.0, 2.0), QPointF(3.0, 4.0), "reaction"), item)
+        self.assertIs(service.build_arrow_item(QPointF(5.0, 6.0), QPointF(7.0, 8.0), "dotted"), item)
+        self.assertIs(service.build_single_head_arrow(QPointF(1.0, 1.0), QPointF(2.0, 2.0)), item)
+        self.assertIs(service.build_double_head_arrow(QPointF(1.0, 1.0), QPointF(2.0, 2.0)), item)
+        self.assertIs(service.build_dotted_arrow(QPointF(1.0, 1.0), QPointF(2.0, 2.0)), item)
+        self.assertIs(service.build_curved_arrow(QPointF(1.0, 1.0), QPointF(2.0, 2.0), double=True), item)
+        self.assertIs(service.build_inhibition_arrow(QPointF(1.0, 1.0), QPointF(2.0, 2.0)), item)
+        self.assertIs(service.build_equilibrium_item(QPointF(1.0, 1.0), QPointF(2.0, 2.0)), item)
+        service.add_arrow_head(path, QPointF(3.0, 3.0), QPointF(4.0, 4.0), double=False)
+        self.assertEqual(service.arrow_pen(dotted=True), "pen")
 
         arrow_service.preview_arrow.assert_called_once_with(QPointF(1.0, 2.0), QPointF(3.0, 4.0), "reaction")
         arrow_service.build_arrow_item.assert_called_once_with(QPointF(5.0, 6.0), QPointF(7.0, 8.0), "dotted")
@@ -122,13 +121,13 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
         self.assertEqual(item.brush().color().name(), QColor(self.canvas.renderer.style.bond_color).name())
 
     def test_build_orbital_items_respects_phase_fill_and_supported_shapes(self) -> None:
-        self.canvas.orbital_phase_enabled = False
+        set_tool_setting_for(self.canvas, "orbital_phase_enabled", False)
         s_items = self.service.build_orbital_items(QPointF(0.0, 0.0), "s")
 
         self.assertEqual(len(s_items), 1)
         self.assertEqual(s_items[0].brush().style(), Qt.BrushStyle.NoBrush)
 
-        self.canvas.orbital_phase_enabled = True
+        set_tool_setting_for(self.canvas, "orbital_phase_enabled", True)
         p_items = self.service.build_orbital_items(QPointF(0.0, 0.0), "p")
         antibonding_items = self.service.build_orbital_items(QPointF(0.0, 0.0), "mo_antibonding")
 
@@ -140,7 +139,7 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
         self.assertEqual(antibonding_items[-1].line().x1(), antibonding_items[-1].line().x2())
 
     def test_build_orbital_items_covers_remaining_orbital_variants_and_unknown_kind(self) -> None:
-        self.canvas.orbital_phase_enabled = True
+        set_tool_setting_for(self.canvas, "orbital_phase_enabled", True)
 
         sp_items = self.service.build_orbital_items(QPointF(0.0, 0.0), "sp")
         sp2_items = self.service.build_orbital_items(QPointF(0.0, 0.0), "sp2")
@@ -171,37 +170,6 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
         self.assertEqual(len(bonding_items), 2)
         self.assertEqual(bonding_items[0].brush().color(), bonding_items[1].brush().color())
         self.assertEqual(unknown_items, [])
-
-    def test_scene_decoration_build_service_factory_returns_bound_service(self) -> None:
-        self.canvas._scene_decoration_build_service = self.service
-        self.assertIs(canvas_scene_decoration_build_service_for(self.canvas), self.service)
-
-        duck_service = SimpleNamespace(
-            build_mark_item=mock.Mock(),
-            mark_center=mock.Mock(),
-            set_mark_center=mock.Mock(),
-            preview_arrow=mock.Mock(),
-            build_arrow_item=mock.Mock(),
-            build_single_head_arrow=mock.Mock(),
-            build_double_head_arrow=mock.Mock(),
-            build_dotted_arrow=mock.Mock(),
-            build_curved_arrow=mock.Mock(),
-            build_inhibition_arrow=mock.Mock(),
-            build_equilibrium_item=mock.Mock(),
-            add_arrow_head=mock.Mock(),
-            ts_bracket_rect_from_points=mock.Mock(),
-            ts_bracket_stroke_width=mock.Mock(),
-            ts_bracket_path=mock.Mock(),
-            build_ts_bracket_item=mock.Mock(),
-            preview_ts_bracket=mock.Mock(),
-            build_orbital_items=mock.Mock(),
-        )
-        self.canvas._scene_decoration_build_service = duck_service
-        self.assertIs(canvas_scene_decoration_build_service_for(self.canvas), duck_service)
-
-        placeholder = object()
-        self.canvas._scene_decoration_build_service = placeholder
-        self.assertIs(canvas_scene_decoration_build_service_for(self.canvas), placeholder)
 
     def test_mark_helpers_build_supported_items_and_center_text(self) -> None:
         radical = self.service.build_mark_item("radical")

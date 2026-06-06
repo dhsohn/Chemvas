@@ -22,6 +22,7 @@ except ModuleNotFoundError:
     Qt = None
 
 if QApplication is not None:
+    from ui.note_item_access import committed_note_text_for
     from ui.scene_item_state import (
         apply_scene_item_state,
         arrow_state_dict,
@@ -125,7 +126,7 @@ class SceneItemStateUnitTest(unittest.TestCase):
         )
 
         self.assertEqual(note.toPlainText(), "Mechanism")
-        self.assertEqual(note._last_text, "Mechanism")
+        self.assertEqual(committed_note_text_for(note), "Mechanism")
         self.assertEqual((note.pos().x(), note.pos().y()), (14.0, -9.0))
         self.assertEqual(note.textInteractionFlags(), Qt.TextInteractionFlag.NoTextInteraction)
         style_applier.assert_called_once_with(note)

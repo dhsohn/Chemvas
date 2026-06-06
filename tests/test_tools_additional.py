@@ -12,15 +12,21 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    import ui.tools as tools_module
+    import ui.edit_tools as edit_tools_module
+    import ui.perspective_tool as perspective_tool_module
+    import ui.text_tool as text_tool_module
     from core.history import (
         AddAtomsCommand,
         CompositeCommand,
-        MoveItemsCommand,
         SetSmilesInputCommand,
     )
     from core.model import Atom, Bond, MoleculeModel
-    from ui.history_commands import DeleteSceneItemsCommand
+    from ui.canvas_hover_state import set_hover_atom_id_for, set_hover_bond_id_for
+    from ui.canvas_rotation_state import CanvasRotationState
+    from ui.canvas_smiles_input_state import set_last_smiles_input_for
+    from ui.canvas_tool_settings_state import CanvasToolSettingsState
+    from ui.history_commands import DeleteSceneItemsCommand, MoveItemsCommand
+    from ui.tool_context import ToolContext
     from ui.tools import (
         BenzeneTool,
         ColorTool,
@@ -35,6 +41,70 @@ if QApplication is not None:
         TextTool,
         ToolController,
         TransformTool,
+    )
+
+
+def _tool_context_for(canvas):
+    services = getattr(canvas, "services", None)
+    graph_service = getattr(services, "canvas_graph_service", None)
+    color_mutation_service = getattr(services, "canvas_color_mutation_service", None)
+    tool_mode_controller = getattr(services, "tool_mode_controller", None)
+    return ToolContext(
+        canvas,
+        hit_testing_service=getattr(services, "hit_testing_service", None),
+        selection_controller=getattr(services, "selection_controller", None),
+        note_controller=getattr(
+            services,
+            "note_controller",
+            SimpleNamespace(create_text_note=mock.Mock(), begin_note_edit=mock.Mock()),
+        ),
+        handle_controller=getattr(
+            services,
+            "handle_controller",
+            SimpleNamespace(update_handle_drag=mock.Mock()),
+        ),
+        selection_rotation_controller=getattr(
+            services,
+            "selection_rotation_controller",
+            SimpleNamespace(
+                begin_selection_3d_rotation=mock.Mock(return_value=False),
+                update_selection_3d_rotation=mock.Mock(),
+                end_selection_3d_rotation=mock.Mock(),
+            ),
+        ),
+        scene_delete_controller=getattr(
+            services,
+            "scene_delete_controller",
+            SimpleNamespace(
+                delete_atom=mock.Mock(),
+                delete_bond=mock.Mock(),
+                delete_ring=mock.Mock(),
+            ),
+        ),
+        scene_transform_controller=getattr(
+            services,
+            "scene_transform_controller",
+            SimpleNamespace(
+                apply_bond_style=mock.Mock(),
+                cycle_bond_style=mock.Mock(),
+                flip_bond_direction=mock.Mock(),
+            ),
+        ),
+        style_controller=getattr(
+            services,
+            "style_controller",
+            SimpleNamespace(suspend_selection_outline=mock.Mock()),
+        ),
+        bond_sets_for_atoms=getattr(graph_service, "bond_sets_for_atoms", None),
+        color_mutation_service=color_mutation_service,
+        selected_scene_items=lambda *, excluded_kinds: [
+            item for item in canvas.scene().selectedItems() if item.data(0) not in excluded_kinds
+        ],
+        select_single_structure_item=getattr(canvas, "select_structure_for_item", None),
+        atom_symbol_provider=getattr(tool_mode_controller, "get_atom_symbol", None),
+        history_service=getattr(services, "history_service", None),
+        set_drag_mode=getattr(canvas, "setDragMode", None),
+        rubber_band_drag_mode=getattr(getattr(canvas, "DragMode", None), "RubberBandDrag", None),
     )
 
 
@@ -110,7 +180,7 @@ class _TextCanvas:
         self.item = None
         self.bond_near = None
         self.find_atom_result = None
-        self.symbol = ""
+        self.tool_settings_state = CanvasToolSettingsState(atom_symbol="")
         self.model = MoleculeModel(
             atoms={
                 1: Atom("C", 0.0, 0.0),
@@ -118,11 +188,23 @@ class _TextCanvas:
             },
             bonds=[Bond(1, 2, 1)],
         )
-        self.last_smiles_input = "before"
+        set_last_smiles_input_for(self, "before")
         self.added_atoms = []
         self.label_calls = []
         self.pushed_commands = []
-        self._atom_label_service = SimpleNamespace(add_or_update_atom_label=self.add_or_update_atom_label)
+        self.history_service = SimpleNamespace(push=self.push_command)
+        self.services = SimpleNamespace(
+            history_service=self.history_service,
+            canvas_atom_mutation_service=SimpleNamespace(add_atom=self.add_atom),
+            atom_label_service=SimpleNamespace(add_or_update_atom_label=self.add_or_update_atom_label),
+            tool_mode_controller=SimpleNamespace(get_atom_symbol=lambda: self.tool_settings_state.atom_symbol),
+            hit_testing_service=SimpleNamespace(
+                scene_pos_from_event=self.scene_pos_from_event,
+                item_at_event=self.item_at_event,
+                find_atom_near=self.find_atom_near,
+                find_bond_near=self.find_bond_near,
+            ),
+        )
 
     def setDragMode(self, mode) -> None:
         self.drag_mode = mode
@@ -133,14 +215,11 @@ class _TextCanvas:
     def item_at_event(self, event):
         return self.item
 
-    def _find_bond_near(self, pos, radius):
+    def find_bond_near(self, pos, radius):
         return self.bond_near
 
     def find_atom_near(self, x, y, radius):
         return self.find_atom_result
-
-    def get_atom_symbol(self):
-        return self.symbol
 
     def add_atom(self, element: str, x: float, y: float) -> int:
         self.added_atoms.append((element, x, y))
@@ -163,7 +242,7 @@ class _TextCanvas:
         atom = self.model.atoms[atom_id]
         return {"element": atom.element, "x": atom.x, "y": atom.y}
 
-    def _push_command(self, command) -> None:
+    def push_command(self, command) -> None:
         self.pushed_commands.append(command)
 
 
@@ -179,6 +258,17 @@ class _MiscCanvas:
         self.flipped = []
         self.cycled = []
         self.bond_id = None
+        self.services = SimpleNamespace(
+            canvas_color_mutation_service=SimpleNamespace(apply_color_to_item=self.apply_color_to_item),
+            scene_transform_controller=SimpleNamespace(
+                flip_bond_direction=self.flip_bond_direction,
+                cycle_bond_style=self.cycle_bond_style,
+            ),
+            hit_testing_service=SimpleNamespace(
+                item_at_event=self.item_at_event,
+                bond_id_from_event=self.bond_id_from_event,
+            ),
+        )
 
     def setDragMode(self, mode) -> None:
         self.drag_mode = mode
@@ -209,13 +299,23 @@ class _DeleteCanvas:
         self.drag_mode = None
         self.scene_obj = object()
         self.item = None
-        self.last_smiles_input = "before"
+        set_last_smiles_input_for(self, "before")
         self.deleted_atoms = []
         self.deleted_bonds = []
         self.deleted_rings = []
         self.removed_items = []
         self.pushed_commands = []
-        self._scene_item_controller = SimpleNamespace(remove_scene_item=self.remove_scene_item)
+        self.history_service = SimpleNamespace(push=self.push_command)
+        self.services = SimpleNamespace(
+            history_service=self.history_service,
+            scene_delete_controller=SimpleNamespace(
+                delete_atom=self.delete_atom,
+                delete_bond=self.delete_bond,
+                delete_ring=self.delete_ring,
+            ),
+            scene_item_controller=SimpleNamespace(remove_scene_item=self.remove_scene_item),
+            hit_testing_service=SimpleNamespace(item_at_event=self.item_at_event),
+        )
 
     def setDragMode(self, mode) -> None:
         self.drag_mode = mode
@@ -238,13 +338,10 @@ class _DeleteCanvas:
         self.deleted_rings.append((item, record))
         return "ring"
 
-    def scene_item_state(self, item) -> dict:
-        return {"kind": item.data(0), "id": item.data(1)}
-
     def remove_scene_item(self, item) -> None:
         self.removed_items.append(item)
 
-    def _push_command(self, command) -> None:
+    def push_command(self, command) -> None:
         self.pushed_commands.append(command)
 
 
@@ -259,16 +356,21 @@ class _MoveCanvas:
         self.model = SimpleNamespace(bonds=[Bond(1, 2, 1)])
         self.item = None
         self.pushed_commands = []
+        self.history_service = SimpleNamespace(push=self.push_command)
         self.selection_outline_updates = 0
+        self.services = SimpleNamespace(
+            history_service=self.history_service,
+            hit_testing_service=SimpleNamespace(
+                item_at_event=self.item_at_event,
+                scene_pos_from_event=lambda event: event.position(),
+            ),
+        )
 
     def setDragMode(self, mode) -> None:
         self.drag_mode = mode
 
     def _selected_items_for_transform(self):
         return list(self.selected_items_for_transform)
-
-    def _selected_ids(self):
-        return set(self.selected_atom_ids), set(self.selected_bond_ids)
 
     def item_at_event(self, event):
         return self.item
@@ -279,7 +381,7 @@ class _MoveCanvas:
     def _update_selection_outline(self) -> None:
         self.selection_outline_updates += 1
 
-    def _push_command(self, command) -> None:
+    def push_command(self, command) -> None:
         self.pushed_commands.append(command)
 
 
@@ -302,6 +404,32 @@ class _OrbitalMarkNoteCanvas:
         self.edited_notes = []
         self.clear_note_selection_calls = 0
         self.added_notes = []
+        self.services = SimpleNamespace(
+            hit_testing_service=SimpleNamespace(
+                scene_pos_from_event=self.scene_pos_from_event,
+                item_at_event=self.item_at_event,
+                find_atom_near=self.find_atom_near,
+            ),
+            scene_decoration_service=SimpleNamespace(
+                add_mark=self.add_mark,
+                add_orbital=self.add_orbital,
+            ),
+            canvas_mark_scene_service=SimpleNamespace(add_mark_for_atom=self.add_mark_for_atom),
+            note_controller=SimpleNamespace(
+                create_text_note=self.add_text_note,
+                begin_note_edit=self.begin_note_edit,
+            ),
+            selection_controller=SimpleNamespace(
+                toggle_note_selection=self.toggle_note_selection,
+                select_note=self.select_note,
+                clear_note_selection=self.clear_note_selection,
+            ),
+            handle_overlay_service=SimpleNamespace(
+                clear_handles=self.clear_handles,
+                show_orbital_handles=self.show_orbital_handles,
+                show_curved_handles=self.show_curved_handles,
+            ),
+        )
 
     def setDragMode(self, mode) -> None:
         self.drag_mode = mode
@@ -327,10 +455,18 @@ class _OrbitalMarkNoteCanvas:
     def find_atom_near(self, x, y, radius):
         return self.atom_near
 
-    def add_mark_for_atom(self, atom_id: int, pos) -> None:
+    def add_mark_for_atom(self, atom_id: int, pos, *, kind: str | None = None, record: bool = True) -> None:
         self.added_atom_marks.append((atom_id, QPointF(pos)))
 
-    def add_mark(self, pos) -> None:
+    def add_mark(
+        self,
+        pos,
+        *,
+        kind: str | None = None,
+        atom_id: int | None = None,
+        offset=None,
+        record: bool = True,
+    ) -> None:
         self.added_marks.append(QPointF(pos))
 
     def toggle_note_selection(self, item) -> None:
@@ -362,12 +498,31 @@ class _PerspectiveCanvas:
         self.toggle_result = False
         self.select_result = True
         self.begin_rotation_result = True
-        self._rotation_mode = "rigid"
+        self.rotation_state = CanvasRotationState(mode="rigid")
         self.clear_handles_calls = 0
         self.selection_targets = []
         self.begin_calls = []
         self.update_calls = []
         self.end_calls = 0
+        self.services = SimpleNamespace(
+            hit_testing_service=SimpleNamespace(
+                scene_pos_from_event=lambda event: event.position(),
+                item_at_event=lambda event: self.item,
+                bond_id_from_event=lambda event: None,
+            ),
+            selection_controller=SimpleNamespace(
+                toggle_item_selection=self.toggle_item_selection,
+                preferred_structure_item_at_scene_pos=lambda pos: self.preferred_item,
+                selection_hit_test=lambda pos, snapshot=None: self.selection_hit,
+                select_structure_for_item=self.select_structure_for_item,
+            ),
+            handle_overlay_service=SimpleNamespace(clear_handles=self.clear_handles),
+            selection_rotation_controller=SimpleNamespace(
+                begin_selection_3d_rotation=self.begin_selection_3d_rotation,
+                update_selection_3d_rotation=self.update_selection_3d_rotation,
+                end_selection_3d_rotation=self.end_selection_3d_rotation,
+            ),
+        )
 
     def setDragMode(self, mode) -> None:
         self.drag_mode = mode
@@ -411,11 +566,14 @@ class _ControllerCanvas:
     def __init__(self) -> None:
         self.drag_mode = None
         self.clear_benzene_preview_calls = 0
+        self.services = SimpleNamespace(
+            benzene_preview_service=SimpleNamespace(clear_preview=self.clear_benzene_preview)
+        )
 
     def setDragMode(self, mode) -> None:
         self.drag_mode = mode
 
-    def _clear_benzene_preview(self) -> None:
+    def clear_benzene_preview(self) -> None:
         self.clear_benzene_preview_calls += 1
 
     def scene(self):
@@ -449,6 +607,12 @@ class _ToolControllerPreviewCanvas:
         self.clear_benzene_preview_calls = 0
         self.preview_arrow_calls = []
         self.add_arrow_calls = []
+        self.services = SimpleNamespace(
+            hit_testing_service=SimpleNamespace(scene_pos_from_event=self.scene_pos_from_event),
+            benzene_preview_service=SimpleNamespace(clear_preview=self.clear_benzene_preview),
+            scene_decoration_service=SimpleNamespace(add_arrow=self.add_arrow),
+            scene_decoration_build_service=SimpleNamespace(preview_arrow=self.preview_arrow),
+        )
 
     def setDragMode(self, mode) -> None:
         self.drag_mode = mode
@@ -469,7 +633,7 @@ class _ToolControllerPreviewCanvas:
     def clear_handles(self) -> None:
         self.clear_handles_calls += 1
 
-    def _clear_benzene_preview(self) -> None:
+    def clear_benzene_preview(self) -> None:
         self.clear_benzene_preview_calls += 1
 
 
@@ -482,26 +646,26 @@ class ToolsAdditionalTest(unittest.TestCase):
 
     def test_text_tool_updates_existing_atom_and_creates_atom_from_dialog(self) -> None:
         canvas = _TextCanvas()
-        tool = TextTool(canvas)
+        tool = TextTool(canvas, context=_tool_context_for(canvas))
         tool.activate()
 
         self.assertEqual(canvas.drag_mode, canvas.DragMode.NoDrag)
 
-        canvas.hover_atom_id = 1
-        canvas.symbol = "N"
+        set_hover_atom_id_for(canvas, 1)
+        canvas.tool_settings_state.atom_symbol = "N"
         self.assertTrue(tool.on_mouse_press(_Event(QPointF(1.0, 1.0))))
         self.assertEqual(canvas.label_calls[-1], (1, "N", True, True))
 
-        canvas.hover_atom_id = None
-        canvas.hover_bond_id = 0
-        canvas.symbol = "O"
+        set_hover_atom_id_for(canvas, None)
+        set_hover_bond_id_for(canvas, 0)
+        canvas.tool_settings_state.atom_symbol = "O"
         self.assertTrue(tool.on_mouse_press(_Event(QPointF(9.0, 0.0))))
         self.assertEqual(canvas.label_calls[-1], (2, "O", True, True))
 
-        canvas.hover_bond_id = None
-        canvas.symbol = " "
+        set_hover_bond_id_for(canvas, None)
+        canvas.tool_settings_state.atom_symbol = " "
         canvas.find_atom_result = None
-        with mock.patch.object(tools_module.QInputDialog, "getText", return_value=("Cl", True)):
+        with mock.patch.object(text_tool_module.QInputDialog, "getText", return_value=("Cl", True)):
             self.assertTrue(tool.on_mouse_press(_Event(QPointF(15.0, 25.0))))
         self.assertEqual(canvas.added_atoms[-1], ("Cl", 15.0, 25.0))
         self.assertEqual(canvas.label_calls[-1], (3, "Cl", True, False))
@@ -514,36 +678,36 @@ class ToolsAdditionalTest(unittest.TestCase):
 
     def test_text_tool_handles_dialog_cancel_and_invalid_hover_bond_fallback(self) -> None:
         canvas = _TextCanvas()
-        tool = TextTool(canvas)
+        tool = TextTool(canvas, context=_tool_context_for(canvas))
 
-        canvas.symbol = " "
-        with mock.patch.object(tools_module.QInputDialog, "getText", return_value=("ignored", False)):
+        canvas.tool_settings_state.atom_symbol = " "
+        with mock.patch.object(text_tool_module.QInputDialog, "getText", return_value=("ignored", False)):
             self.assertTrue(tool.on_mouse_press(_Event(QPointF(4.0, 5.0))))
         self.assertEqual(canvas.added_atoms, [])
         self.assertEqual(canvas.label_calls, [])
         self.assertEqual(canvas.pushed_commands, [])
 
-        canvas.hover_bond_id = 99
+        set_hover_bond_id_for(canvas, 99)
         canvas.bond_near = 0
-        canvas.symbol = "S"
+        canvas.tool_settings_state.atom_symbol = "S"
         self.assertTrue(tool.on_mouse_press(_Event(QPointF(9.0, 0.0))))
         self.assertEqual(canvas.label_calls[-1], (2, "S", True, True))
 
-        canvas.hover_bond_id = None
-        canvas.hover_atom_id = 1
-        canvas.symbol = " "
-        with mock.patch.object(tools_module.QInputDialog, "getText", return_value=("   ", True)):
+        set_hover_bond_id_for(canvas, None)
+        set_hover_atom_id_for(canvas, 1)
+        canvas.tool_settings_state.atom_symbol = " "
+        with mock.patch.object(text_tool_module.QInputDialog, "getText", return_value=("   ", True)):
             self.assertTrue(tool.on_mouse_press(_Event(QPointF(2.0, 2.0))))
         self.assertEqual(canvas.label_calls[-1], (1, "", True, True))
 
-        canvas.hover_atom_id = None
+        set_hover_atom_id_for(canvas, None)
         canvas.bond_near = None
         canvas.find_atom_result = None
-        canvas.symbol = " "
+        canvas.tool_settings_state.atom_symbol = " "
         added_atoms_before = len(canvas.added_atoms)
         label_calls_before = len(canvas.label_calls)
         pushed_before = len(canvas.pushed_commands)
-        with mock.patch.object(tools_module.QInputDialog, "getText", return_value=("   ", True)):
+        with mock.patch.object(text_tool_module.QInputDialog, "getText", return_value=("   ", True)):
             self.assertTrue(tool.on_mouse_press(_Event(QPointF(20.0, 21.0))))
         self.assertEqual(len(canvas.added_atoms), added_atoms_before)
         self.assertEqual(len(canvas.label_calls), label_calls_before)
@@ -557,17 +721,17 @@ class ToolsAdditionalTest(unittest.TestCase):
             service_calls.append((atom_id, text, kwargs))
             canvas.model.atoms[atom_id].element = text
 
-        canvas._atom_label_service = SimpleNamespace(add_or_update_atom_label=service_add_or_update)
-        tool = TextTool(canvas)
+        canvas.services.atom_label_service = SimpleNamespace(add_or_update_atom_label=service_add_or_update)
+        tool = TextTool(canvas, context=_tool_context_for(canvas))
 
-        canvas.hover_atom_id = 1
-        canvas.symbol = "N"
+        set_hover_atom_id_for(canvas, 1)
+        canvas.tool_settings_state.atom_symbol = "N"
         self.assertTrue(tool.on_mouse_press(_Event(QPointF(1.0, 1.0))))
 
-        canvas.hover_atom_id = None
-        canvas.symbol = " "
+        set_hover_atom_id_for(canvas, None)
+        canvas.tool_settings_state.atom_symbol = " "
         canvas.find_atom_result = None
-        with mock.patch.object(tools_module.QInputDialog, "getText", return_value=("Cl", True)):
+        with mock.patch.object(text_tool_module.QInputDialog, "getText", return_value=("Cl", True)):
             self.assertTrue(tool.on_mouse_press(_Event(QPointF(15.0, 25.0))))
 
         self.assertEqual(canvas.label_calls, [])
@@ -581,21 +745,21 @@ class ToolsAdditionalTest(unittest.TestCase):
 
     def test_wrapper_only_tools_cover_false_and_noop_branches(self) -> None:
         text_canvas = _TextCanvas()
-        text_tool = TextTool(text_canvas)
+        text_tool = TextTool(text_canvas, context=_tool_context_for(text_canvas))
         self.assertFalse(text_tool.on_mouse_press(_Event(button=Qt.MouseButton.RightButton)))
         self.assertEqual(text_tool._normalized_symbol(" cl "), "cl")
 
         misc_canvas = _MiscCanvas()
-        color_tool = ColorTool(misc_canvas)
-        flip_tool = FlipTool(misc_canvas)
-        edit_tool = EditBondTool(misc_canvas)
+        color_tool = ColorTool(misc_canvas, context=_tool_context_for(misc_canvas))
+        flip_tool = FlipTool(misc_canvas, context=_tool_context_for(misc_canvas))
+        edit_tool = EditBondTool(misc_canvas, context=_tool_context_for(misc_canvas))
 
         self.assertFalse(color_tool.on_mouse_press(_Event(button=Qt.MouseButton.RightButton)))
         color_tool.activate()
         self.assertTrue(color_tool.on_mouse_press(_Event(QPointF())))
         self.assertEqual(misc_canvas.colored, [])
         misc_canvas.scene_obj._selected_items = [_DataItem("atom", 1)]
-        color_tool._last_color = "not-a-color"
+        color_tool.set_color("not-a-color")
         self.assertTrue(color_tool.on_mouse_press(_Event(QPointF())))
         self.assertEqual(misc_canvas.colored, [])
 
@@ -614,10 +778,22 @@ class ToolsAdditionalTest(unittest.TestCase):
         self.assertEqual(misc_canvas.cycled, [])
 
         note_canvas = _OrbitalMarkNoteCanvas()
-        self.assertFalse(OrbitalTool(note_canvas).on_mouse_press(_Event(button=Qt.MouseButton.RightButton)))
-        self.assertFalse(TransformTool(note_canvas).on_mouse_press(_Event(button=Qt.MouseButton.RightButton)))
-        self.assertFalse(MarkTool(note_canvas).on_mouse_press(_Event(button=Qt.MouseButton.RightButton)))
-        note_tool = NoteTool(note_canvas)
+        self.assertFalse(
+            OrbitalTool(note_canvas, context=_tool_context_for(note_canvas)).on_mouse_press(
+                _Event(button=Qt.MouseButton.RightButton)
+            )
+        )
+        self.assertFalse(
+            TransformTool(note_canvas, context=_tool_context_for(note_canvas)).on_mouse_press(
+                _Event(button=Qt.MouseButton.RightButton)
+            )
+        )
+        self.assertFalse(
+            MarkTool(note_canvas, context=_tool_context_for(note_canvas)).on_mouse_press(
+                _Event(button=Qt.MouseButton.RightButton)
+            )
+        )
+        note_tool = NoteTool(note_canvas, context=_tool_context_for(note_canvas))
         self.assertFalse(note_tool.on_mouse_press(_Event(button=Qt.MouseButton.RightButton)))
         self.assertFalse(note_tool.on_mouse_move(_Event(QPointF())))
 
@@ -625,35 +801,45 @@ class ToolsAdditionalTest(unittest.TestCase):
         benzene_canvas = SimpleNamespace(
             DragMode=SimpleNamespace(NoDrag="none"),
             drag_mode=None,
-            hover_bond_id=4,
-            hover_atom_id=7,
             preview_calls=[],
             add_calls=[],
             setDragMode=lambda mode: setattr(benzene_canvas, "drag_mode", mode),
-            _clear_benzene_preview=lambda: benzene_canvas.add_calls.append(("clear", None, None)),
             scene_pos_from_event=lambda event: event.position(),
             add_benzene_ring=lambda pos, attach_bond_id=None, attach_atom_id=None: benzene_canvas.add_calls.append(
                 ("add", QPointF(pos), attach_bond_id if attach_bond_id is not None else attach_atom_id)
             ),
-            _render_benzene_preview=lambda pos, attach_atom_id=None, attach_bond_id=None: benzene_canvas.preview_calls.append(
-                (QPointF(pos), attach_atom_id, attach_bond_id)
+            services=SimpleNamespace(
+                hit_testing_service=SimpleNamespace(scene_pos_from_event=lambda event: event.position()),
+                structure_build_service=SimpleNamespace(
+                    add_benzene_ring=lambda pos, *, attach_atom_id=None, attach_bond_id=None, before_smiles_input=None: benzene_canvas.add_calls.append(
+                        ("add", QPointF(pos), attach_bond_id if attach_bond_id is not None else attach_atom_id)
+                    )
+                ),
+                benzene_preview_service=SimpleNamespace(
+                    clear_preview=lambda: benzene_canvas.add_calls.append(("clear", None, None)),
+                    render_preview=lambda pos, attach_atom_id=None, attach_bond_id=None: benzene_canvas.preview_calls.append(
+                        (QPointF(pos), attach_atom_id, attach_bond_id)
+                    ),
+                ),
             ),
         )
-        benzene_tool = BenzeneTool(benzene_canvas)
+        set_hover_bond_id_for(benzene_canvas, 4)
+        set_hover_atom_id_for(benzene_canvas, 7)
+        benzene_tool = BenzeneTool(benzene_canvas, context=_tool_context_for(benzene_canvas))
         benzene_tool.activate()
         self.assertEqual(benzene_canvas.drag_mode, benzene_canvas.DragMode.NoDrag)
         self.assertFalse(benzene_tool.on_mouse_press(_Event(button=Qt.MouseButton.RightButton)))
         self.assertTrue(benzene_tool.on_mouse_press(_Event(QPointF(2.0, 3.0))))
         self.assertEqual(benzene_canvas.add_calls[-2][2], 4)
-        benzene_canvas.hover_bond_id = None
+        set_hover_bond_id_for(benzene_canvas, None)
         self.assertTrue(benzene_tool.on_mouse_move(_Event(QPointF(5.0, 6.0), buttons=Qt.MouseButton.NoButton)))
         self.assertEqual(benzene_canvas.preview_calls[-1][1], 7)
         self.assertFalse(benzene_tool.on_mouse_move(_Event(QPointF(5.0, 6.0), buttons=Qt.MouseButton.LeftButton)))
 
         misc_canvas = _MiscCanvas()
-        color_tool = ColorTool(misc_canvas)
-        flip_tool = FlipTool(misc_canvas)
-        edit_tool = EditBondTool(misc_canvas)
+        color_tool = ColorTool(misc_canvas, context=_tool_context_for(misc_canvas))
+        flip_tool = FlipTool(misc_canvas, context=_tool_context_for(misc_canvas))
+        edit_tool = EditBondTool(misc_canvas, context=_tool_context_for(misc_canvas))
         target = _DataItem("bond", 11)
         misc_canvas.item = target
         misc_canvas.scene_obj._selected_items = [_DataItem("atom", 1), _DataItem("ring", 2), _DataItem("note", 3)]
@@ -680,13 +866,14 @@ class ToolsAdditionalTest(unittest.TestCase):
 
     def test_delete_tool_builds_composite_and_scene_item_delete_command(self) -> None:
         canvas = _DeleteCanvas()
-        tool = DeleteTool(canvas)
+        tool = DeleteTool(canvas, context=_tool_context_for(canvas))
         tool.activate()
         self.assertEqual(canvas.drag_mode, canvas.DragMode.NoDrag)
         self.assertFalse(tool.on_mouse_press(_Event(button=Qt.MouseButton.RightButton)))
 
         atom_item = _DataItem("atom", 3, scene_obj=canvas.scene())
         note_item = _DataItem("note", 7, scene_obj=canvas.scene())
+        note_item.setData(9, {"kind": "note", "id": 7})
         canvas.item = atom_item
         self.assertTrue(tool.on_mouse_press(_Event(QPointF(1.0, 1.0))))
         canvas.item = note_item
@@ -701,7 +888,7 @@ class ToolsAdditionalTest(unittest.TestCase):
 
     def test_delete_tool_release_noops_without_changes_and_wraps_single_delete(self) -> None:
         canvas = _DeleteCanvas()
-        tool = DeleteTool(canvas)
+        tool = DeleteTool(canvas, context=_tool_context_for(canvas))
 
         canvas.item = None
         self.assertTrue(tool.on_mouse_press(_Event(QPointF(1.0, 1.0))))
@@ -723,25 +910,34 @@ class ToolsAdditionalTest(unittest.TestCase):
         benzene_canvas = SimpleNamespace(
             DragMode=SimpleNamespace(NoDrag="none"),
             drag_mode=None,
-            hover_bond_id=None,
-            hover_atom_id=5,
             setDragMode=lambda mode: setattr(benzene_canvas, "drag_mode", mode),
             scene_pos_from_event=lambda event: event.position(),
             add_benzene_ring=lambda pos, attach_atom_id=None, attach_bond_id=None: benzene_calls.append(
                 (QPointF(pos), attach_atom_id, attach_bond_id)
             ),
-            _clear_benzene_preview=lambda: clear_calls.append(True),
-            _render_benzene_preview=lambda pos, attach_atom_id=None, attach_bond_id=None: preview_calls.append(
-                (QPointF(pos), attach_atom_id, attach_bond_id)
+            services=SimpleNamespace(
+                hit_testing_service=SimpleNamespace(scene_pos_from_event=lambda event: event.position()),
+                structure_build_service=SimpleNamespace(
+                    add_benzene_ring=lambda pos, *, attach_atom_id=None, attach_bond_id=None, before_smiles_input=None: benzene_calls.append(
+                        (QPointF(pos), attach_atom_id, attach_bond_id)
+                    )
+                ),
+                benzene_preview_service=SimpleNamespace(
+                    clear_preview=lambda: clear_calls.append(True),
+                    render_preview=lambda pos, attach_atom_id=None, attach_bond_id=None: preview_calls.append(
+                        (QPointF(pos), attach_atom_id, attach_bond_id)
+                    ),
+                ),
             ),
         )
-        benzene_tool = BenzeneTool(benzene_canvas)
+        set_hover_atom_id_for(benzene_canvas, 5)
+        benzene_tool = BenzeneTool(benzene_canvas, context=_tool_context_for(benzene_canvas))
         benzene_tool.activate()
         self.assertFalse(benzene_tool.on_mouse_press(_Event(button=Qt.MouseButton.RightButton)))
         self.assertTrue(benzene_tool.on_mouse_press(_Event(QPointF(1.0, 2.0))))
-        benzene_canvas.hover_atom_id = None
+        set_hover_atom_id_for(benzene_canvas, None)
         self.assertTrue(benzene_tool.on_mouse_press(_Event(QPointF(3.0, 4.0))))
-        benzene_canvas.hover_bond_id = 9
+        set_hover_bond_id_for(benzene_canvas, 9)
         self.assertFalse(benzene_tool.on_mouse_move(_Event(QPointF(5.0, 6.0), buttons=Qt.MouseButton.LeftButton)))
         self.assertTrue(benzene_tool.on_mouse_move(_Event(QPointF(5.0, 6.0), buttons=Qt.MouseButton.NoButton)))
         self.assertEqual(benzene_calls[0][1:], (5, None))
@@ -749,14 +945,14 @@ class ToolsAdditionalTest(unittest.TestCase):
         self.assertEqual(preview_calls[-1][1:], (None, 9))
 
         misc_canvas = _MiscCanvas()
-        color_tool = ColorTool(misc_canvas)
-        flip_tool = FlipTool(misc_canvas)
-        edit_tool = EditBondTool(misc_canvas)
+        color_tool = ColorTool(misc_canvas, context=_tool_context_for(misc_canvas))
+        flip_tool = FlipTool(misc_canvas, context=_tool_context_for(misc_canvas))
+        edit_tool = EditBondTool(misc_canvas, context=_tool_context_for(misc_canvas))
         self.assertFalse(color_tool.on_mouse_press(_Event(button=Qt.MouseButton.RightButton)))
         misc_canvas.scene_obj._selected_items = []
         self.assertTrue(color_tool.on_mouse_press(_Event(QPointF())))
         misc_canvas.item = _DataItem("atom", 1)
-        color_tool._last_color = "not-a-color"
+        color_tool.set_color("not-a-color")
         self.assertTrue(color_tool.on_mouse_press(_Event(QPointF())))
         self.assertEqual(misc_canvas.colored, [])
 
@@ -769,7 +965,7 @@ class ToolsAdditionalTest(unittest.TestCase):
         self.assertEqual(misc_canvas.cycled, [])
 
         move_canvas = _MoveCanvas()
-        move_tool = MoveTool(move_canvas)
+        move_tool = MoveTool(move_canvas, context=_tool_context_for(move_canvas))
         self.assertFalse(move_tool.on_mouse_press(_Event(button=Qt.MouseButton.RightButton)))
         move_canvas.selected_items_for_transform = [_DataItem("note", 1)]
         move_canvas.item = None
@@ -785,18 +981,19 @@ class ToolsAdditionalTest(unittest.TestCase):
         self.assertIsInstance(move_canvas.pushed_commands[-1], MoveItemsCommand)
 
         delete_canvas = _DeleteCanvas()
-        delete_tool = DeleteTool(delete_canvas)
+        delete_tool = DeleteTool(delete_canvas, context=_tool_context_for(delete_canvas))
         self.assertFalse(delete_tool.on_mouse_move(_Event(QPointF())))
         delete_tool._erasing = True
         self.assertFalse(delete_tool.on_mouse_move(_Event(QPointF(), buttons=Qt.MouseButton.NoButton)))
         delete_tool._changed = True
         delete_tool._commands = ["cmd"]
         delete_tool._before_smiles_input = "before"
-        with mock.patch.object(tools_module, "build_delete_tool_history_command", return_value=None):
+        with mock.patch.object(edit_tools_module, "build_delete_tool_history_command", return_value=None):
             self.assertTrue(delete_tool.on_mouse_release(_Event(QPointF())))
         self.assertEqual(delete_canvas.pushed_commands, [])
 
         delete_canvas.item = _DataItem("note", 1, scene_obj=object())
+        delete_canvas.item.setData(9, {"kind": "note", "id": 1})
         delete_tool._erase_at_event(_Event(QPointF()))
         self.assertEqual(delete_canvas.removed_items, [])
 
@@ -808,29 +1005,29 @@ class ToolsAdditionalTest(unittest.TestCase):
         delete_tool._erase_at_event(_Event(QPointF()))
 
         delete_canvas.item = _DataItem("atom", 2, scene_obj=delete_canvas.scene())
-        with mock.patch.object(tools_module, "erase_delete_tool_item", return_value=(False, None)):
+        with mock.patch.object(edit_tools_module, "erase_delete_tool_item", return_value=(False, None)):
             delete_tool._erase_at_event(_Event(QPointF()))
         self.assertFalse(delete_tool._changed)
 
-        with mock.patch.object(tools_module, "erase_delete_tool_item", return_value=(True, None)):
+        with mock.patch.object(edit_tools_module, "erase_delete_tool_item", return_value=(True, None)):
             delete_tool._erase_at_event(_Event(QPointF()))
         self.assertTrue(delete_tool._changed)
         self.assertEqual(delete_tool._commands, [])
 
         perspective_canvas = _PerspectiveCanvas()
-        perspective_tool = PerspectiveTool(perspective_canvas)
+        perspective_tool = PerspectiveTool(perspective_canvas, context=_tool_context_for(perspective_canvas))
         self.assertTrue(perspective_tool.on_mouse_release(_Event(QPointF())))
         self.assertEqual(perspective_canvas.end_calls, 0)
 
     def test_orbital_transform_mark_and_note_tools_cover_mouse_press_paths(self) -> None:
         canvas = _OrbitalMarkNoteCanvas()
 
-        orbital_tool = OrbitalTool(canvas)
+        orbital_tool = OrbitalTool(canvas, context=_tool_context_for(canvas))
         orbital_tool.activate()
         self.assertTrue(orbital_tool.on_mouse_press(_Event(QPointF(3.0, 4.0))))
         self.assertEqual(canvas.added_orbitals[-1], QPointF(3.0, 4.0))
 
-        transform_tool = TransformTool(canvas)
+        transform_tool = TransformTool(canvas, context=_tool_context_for(canvas))
         transform_tool.activate()
         canvas.item = None
         self.assertTrue(transform_tool.on_mouse_press(_Event(QPointF())))
@@ -856,7 +1053,7 @@ class ToolsAdditionalTest(unittest.TestCase):
         self.assertIsNone(transform_tool._active_handle)
         self.assertEqual(canvas.clear_handles_calls, 3)
 
-        mark_tool = MarkTool(canvas)
+        mark_tool = MarkTool(canvas, context=_tool_context_for(canvas))
         mark_tool.activate()
         canvas.atom_near = 5
         self.assertTrue(mark_tool.on_mouse_press(_Event(QPointF(8.0, 9.0))))
@@ -865,7 +1062,7 @@ class ToolsAdditionalTest(unittest.TestCase):
         self.assertEqual(canvas.added_atom_marks[0][0], 5)
         self.assertEqual(canvas.added_marks[0], QPointF(1.0, 2.0))
 
-        note_tool = NoteTool(canvas)
+        note_tool = NoteTool(canvas, context=_tool_context_for(canvas))
         note_tool.activate()
         note = _DataItem("note", 9)
         canvas.item = note
@@ -882,12 +1079,12 @@ class ToolsAdditionalTest(unittest.TestCase):
 
     def test_perspective_tool_rotation_entry_updates_state_on_success_and_failure(self) -> None:
         canvas = _PerspectiveCanvas()
-        tool = PerspectiveTool(canvas)
+        tool = PerspectiveTool(canvas, context=_tool_context_for(canvas))
         tool.activate()
         self.assertEqual(canvas.drag_mode, canvas.DragMode.RubberBandDrag)
 
-        controller = tools_module._perspective_tool_controller_for(canvas)
-        self.assertIsInstance(controller, tools_module.PerspectiveToolController)
+        controller = perspective_tool_module._perspective_tool_controller_for(canvas, context=tool.context)
+        self.assertIsInstance(controller, perspective_tool_module.PerspectiveToolController)
         self.assertIs(controller.canvas, canvas)
 
         canvas.toggle_result = True
@@ -929,7 +1126,25 @@ class ToolsAdditionalTest(unittest.TestCase):
         self.assertFalse(tool._rotating)
 
         controller_canvas = _ControllerCanvas()
-        controller = ToolController(controller_canvas)
+        controller = ToolController(
+            controller_canvas,
+            hit_testing_service=SimpleNamespace(),
+            selection_controller=SimpleNamespace(),
+            note_controller=SimpleNamespace(create_text_note=mock.Mock(), begin_note_edit=mock.Mock()),
+            handle_controller=SimpleNamespace(update_handle_drag=mock.Mock()),
+            selection_rotation_controller=SimpleNamespace(
+                begin_selection_3d_rotation=mock.Mock(return_value=False),
+                update_selection_3d_rotation=mock.Mock(),
+                end_selection_3d_rotation=mock.Mock(),
+            ),
+            scene_transform_controller=SimpleNamespace(
+                apply_bond_style=mock.Mock(),
+                cycle_bond_style=mock.Mock(),
+                flip_bond_direction=mock.Mock(),
+            ),
+            set_drag_mode=controller_canvas.setDragMode,
+            rubber_band_drag_mode=controller_canvas.DragMode.RubberBandDrag,
+        )
         controller.set_active("benzene")
         controller.set_active("missing")
         self.assertEqual(controller_canvas.clear_benzene_preview_calls, 2)
@@ -937,7 +1152,25 @@ class ToolsAdditionalTest(unittest.TestCase):
 
     def test_tool_controller_switch_cleans_arrow_preview(self) -> None:
         canvas = _ToolControllerPreviewCanvas()
-        controller = ToolController(canvas)
+        controller = ToolController(
+            canvas,
+            hit_testing_service=canvas.services.hit_testing_service,
+            selection_controller=SimpleNamespace(),
+            note_controller=SimpleNamespace(create_text_note=mock.Mock(), begin_note_edit=mock.Mock()),
+            handle_controller=SimpleNamespace(update_handle_drag=mock.Mock()),
+            selection_rotation_controller=SimpleNamespace(
+                begin_selection_3d_rotation=mock.Mock(return_value=False),
+                update_selection_3d_rotation=mock.Mock(),
+                end_selection_3d_rotation=mock.Mock(),
+            ),
+            scene_transform_controller=SimpleNamespace(
+                apply_bond_style=mock.Mock(),
+                cycle_bond_style=mock.Mock(),
+                flip_bond_direction=mock.Mock(),
+            ),
+            set_drag_mode=canvas.setDragMode,
+            rubber_band_drag_mode=canvas.DragMode.RubberBandDrag,
+        )
 
         controller.set_active("arrow")
         arrow_tool = controller.tools["arrow"]

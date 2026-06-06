@@ -12,6 +12,7 @@ except ModuleNotFoundError:
 
 if QPointF is not None:
     from ui.canvas_handle_controller import CanvasHandleController
+    from ui.canvas_tool_settings_state import CanvasToolSettingsState
 
 
 class _Handle:
@@ -26,8 +27,7 @@ class _Handle:
 class CanvasHandleControllerTest(unittest.TestCase):
     def test_overlay_and_selection_wrappers_delegate_to_services(self) -> None:
         canvas = SimpleNamespace(
-            _curved_snap=False,
-            _curved_snap_step=0.25,
+            tool_settings_state=CanvasToolSettingsState(curved_snap_step=0.25),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
         )
         overlay = SimpleNamespace(
@@ -42,14 +42,11 @@ class CanvasHandleControllerTest(unittest.TestCase):
             apply_selection_style=mock.Mock(),
         )
 
-        with (
-            mock.patch("ui.canvas_handle_controller.handle_overlay_service_for", return_value=overlay) as overlay_for,
-            mock.patch(
-                "ui.canvas_handle_controller.selection_highlight_styler_for",
-                return_value=styler,
-            ) as styler_for,
-        ):
-            controller = CanvasHandleController(canvas)
+        with mock.patch(
+            "ui.canvas_handle_controller.selection_highlight_styler_for",
+            return_value=styler,
+        ) as styler_for:
+            controller = CanvasHandleController(canvas, handle_overlay_service=overlay)
             controller.clear_handles()
             controller.show_orbital_handles("orbital")
             controller.show_curved_handles("curved")
@@ -58,7 +55,6 @@ class CanvasHandleControllerTest(unittest.TestCase):
             controller.clear_selection_highlight()
             controller.apply_selection_style("item", True)
 
-        self.assertEqual(overlay_for.call_count, 4)
         overlay.clear_handles.assert_called_once_with()
         overlay.show_orbital_handles.assert_called_once_with("orbital")
         overlay.show_curved_handles.assert_called_once_with("curved")
@@ -69,18 +65,25 @@ class CanvasHandleControllerTest(unittest.TestCase):
         styler.apply_selection_style.assert_called_once_with("item", True)
 
     def test_update_handle_drag_mutation_wrappers_and_snap_distance(self) -> None:
-        canvas = SimpleNamespace(
-            _update_orbital_scale=mock.Mock(),
-            _update_orbital_rotate=mock.Mock(),
-            _update_curved_control=mock.Mock(),
-            _update_curved_endpoint=mock.Mock(),
+        mutation_service = SimpleNamespace(
+            update_orbital_scale=mock.Mock(),
+            update_orbital_rotate=mock.Mock(),
+            update_curved_control=mock.Mock(),
+            update_curved_endpoint=mock.Mock(),
+        )
+        overlay_service = SimpleNamespace(
             show_orbital_handles=mock.Mock(),
             show_curved_handles=mock.Mock(),
-            _curved_snap=True,
-            _curved_snap_step=0.25,
+        )
+        canvas = SimpleNamespace(
+            tool_settings_state=CanvasToolSettingsState(curved_snap=True, curved_snap_step=0.25),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
         )
-        controller = CanvasHandleController(canvas)
+        controller = CanvasHandleController(
+            canvas,
+            handle_overlay_service=overlay_service,
+            handle_mutation_service=mutation_service,
+        )
         scene_pos = QPointF(4.0, 5.0)
 
         controller.update_handle_drag(_Handle("orbital_scale", "orbital"), scene_pos)
@@ -91,16 +94,16 @@ class CanvasHandleControllerTest(unittest.TestCase):
         controller.update_handle_drag(_Handle("unknown", "mystery"), scene_pos)
         controller.update_handle_drag(_Handle("orbital_scale", None), scene_pos)
 
-        canvas._update_orbital_scale.assert_called_once_with("orbital", scene_pos)
-        canvas._update_orbital_rotate.assert_called_once_with("orbital", scene_pos)
-        canvas._update_curved_control.assert_called_once_with("curve", scene_pos)
-        canvas._update_curved_endpoint.assert_has_calls(
+        mutation_service.update_orbital_scale.assert_called_once_with("orbital", scene_pos)
+        mutation_service.update_orbital_rotate.assert_called_once_with("orbital", scene_pos)
+        mutation_service.update_curved_control.assert_called_once_with("curve", scene_pos)
+        mutation_service.update_curved_endpoint.assert_has_calls(
             [mock.call("curve", scene_pos, "start"), mock.call("curve", scene_pos, "end")]
         )
-        self.assertEqual(canvas.show_orbital_handles.call_count, 2)
-        canvas.show_orbital_handles.assert_has_calls([mock.call("orbital"), mock.call("orbital")])
-        self.assertEqual(canvas.show_curved_handles.call_count, 3)
-        canvas.show_curved_handles.assert_has_calls([mock.call("curve"), mock.call("curve"), mock.call("curve")])
+        self.assertEqual(overlay_service.show_orbital_handles.call_count, 2)
+        overlay_service.show_orbital_handles.assert_has_calls([mock.call("orbital"), mock.call("orbital")])
+        self.assertEqual(overlay_service.show_curved_handles.call_count, 3)
+        overlay_service.show_curved_handles.assert_has_calls([mock.call("curve"), mock.call("curve"), mock.call("curve")])
 
         mutation = SimpleNamespace(
             update_orbital_scale=mock.Mock(),
@@ -108,12 +111,11 @@ class CanvasHandleControllerTest(unittest.TestCase):
             update_curved_control=mock.Mock(),
             update_curved_endpoint=mock.Mock(),
         )
-        with mock.patch("ui.canvas_handle_controller.handle_mutation_service_for", return_value=mutation) as mutation_for:
-            controller.update_orbital_scale("item", QPointF(1.0, 1.0))
-            controller.update_orbital_rotate("item", QPointF(2.0, 2.0))
-            controller.update_curved_control("item", QPointF(3.0, 3.0))
-            controller.update_curved_endpoint("item", QPointF(4.0, 4.0), "start")
-        self.assertEqual(mutation_for.call_count, 4)
+        controller = CanvasHandleController(canvas, handle_mutation_service=mutation)
+        controller.update_orbital_scale("item", QPointF(1.0, 1.0))
+        controller.update_orbital_rotate("item", QPointF(2.0, 2.0))
+        controller.update_curved_control("item", QPointF(3.0, 3.0))
+        controller.update_curved_endpoint("item", QPointF(4.0, 4.0), "start")
         mutation.update_orbital_scale.assert_called_once_with("item", QPointF(1.0, 1.0))
         mutation.update_orbital_rotate.assert_called_once_with("item", QPointF(2.0, 2.0))
         mutation.update_curved_control.assert_called_once_with("item", QPointF(3.0, 3.0))

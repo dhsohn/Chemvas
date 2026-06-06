@@ -2,6 +2,11 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from ui.canvas_callback_state import callback_state_for
+from ui.canvas_history_service import CanvasHistoryService
+from ui.canvas_history_state import history_state_for
+from ui.canvas_text_style_state import set_text_style_for, text_style_state_for
+from ui.canvas_tool_settings_state import set_tool_setting_for, tool_settings_state_for
 from ui.main_window_canvas_logic import (
     RestorableCanvasSheet,
     active_canvas_sheet_index,
@@ -13,9 +18,16 @@ from ui.main_window_canvas_logic import (
     resolve_active_canvas,
     restorable_canvas_sheets,
 )
+from ui.selection_info_state import selection_info_state_for
 
 
 class MainWindowCanvasLogicTest(unittest.TestCase):
+    @staticmethod
+    def _canvas_with_history() -> SimpleNamespace:
+        canvas = SimpleNamespace()
+        canvas.runtime_state = SimpleNamespace(history_service=CanvasHistoryService(canvas, history_state_for(canvas)))
+        return canvas
+
     def test_resolve_active_canvas_prefers_current_then_last_then_first(self) -> None:
         canvas_a = object()
         canvas_b = object()
@@ -41,49 +53,44 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
     def test_copy_canvas_template_settings_copies_known_fields(self) -> None:
         target = SimpleNamespace(
             renderer=SimpleNamespace(set_bond_length=mock.Mock()),
-            set_sheet_setup=mock.Mock(),
+            sheet_size="Letter",
+            sheet_orientation="landscape",
+            setSceneRect=mock.Mock(),
+            viewport=lambda: SimpleNamespace(update=mock.Mock()),
         )
         template = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=24.0)),
             sheet_size="A4",
             sheet_orientation="portrait",
-            arrow_line_width=2.5,
-            arrow_head_scale=0.35,
-            orbital_phase_enabled=True,
-            text_font_size=14,
-            text_font_weight=600,
-            text_italic=True,
-            mark_kind="minus",
         )
+        set_tool_setting_for(template, "arrow_line_width", 2.5)
+        set_tool_setting_for(template, "arrow_head_scale", 0.35)
+        set_tool_setting_for(template, "orbital_phase_enabled", True)
+        set_tool_setting_for(template, "mark_kind", "minus")
+        set_text_style_for(template, "text_font_size", 14)
+        set_text_style_for(template, "text_font_weight", 600)
+        set_text_style_for(template, "text_italic", True)
 
         copy_canvas_template_settings(target, template)
         copy_canvas_template_settings(target, None)
 
         target.renderer.set_bond_length.assert_called_once_with(24.0)
-        target.set_sheet_setup.assert_called_once_with("A4", "portrait")
-        self.assertEqual(target.arrow_line_width, 2.5)
-        self.assertEqual(target.arrow_head_scale, 0.35)
-        self.assertTrue(target.orbital_phase_enabled)
-        self.assertEqual(target.text_font_size, 14)
-        self.assertEqual(target.text_font_weight, 600)
-        self.assertTrue(target.text_italic)
-        self.assertEqual(target.mark_kind, "minus")
+        self.assertEqual(target.sheet_size, "A4")
+        self.assertEqual(target.sheet_orientation, "portrait")
+        target.setSceneRect.assert_called_once()
+        tool_settings = tool_settings_state_for(target)
+        self.assertEqual(tool_settings.arrow_line_width, 2.5)
+        self.assertEqual(tool_settings.arrow_head_scale, 0.35)
+        self.assertTrue(tool_settings.orbital_phase_enabled)
+        text_style = text_style_state_for(target)
+        self.assertEqual(text_style.text_font_size, 14)
+        self.assertEqual(text_style.text_font_weight, 600)
+        self.assertTrue(text_style.text_italic)
+        self.assertEqual(tool_settings.mark_kind, "minus")
 
     def test_bind_active_canvas_callbacks_assigns_only_active_canvas(self) -> None:
-        active_canvas = SimpleNamespace(
-            set_selection_info_callback=mock.Mock(),
-            set_error_callback=mock.Mock(),
-            set_tool_change_callback=mock.Mock(),
-            set_zoom_callback=mock.Mock(),
-            set_history_change_callback=mock.Mock(),
-        )
-        inactive_canvas = SimpleNamespace(
-            set_selection_info_callback=mock.Mock(),
-            set_error_callback=mock.Mock(),
-            set_tool_change_callback=mock.Mock(),
-            set_zoom_callback=mock.Mock(),
-            set_history_change_callback=mock.Mock(),
-        )
+        active_canvas = self._canvas_with_history()
+        inactive_canvas = self._canvas_with_history()
         selection_info_callback = object()
         tool_change_callback = object()
         zoom_callback = object()
@@ -98,20 +105,26 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
             history_change_callback=history_change_callback,
         )
 
-        active_canvas.set_selection_info_callback.assert_called_once_with(selection_info_callback)
-        active_canvas.set_error_callback.assert_called_once_with(None)
-        active_canvas.set_tool_change_callback.assert_called_once_with(tool_change_callback)
-        active_canvas.set_zoom_callback.assert_called_once_with(zoom_callback)
-        active_canvas.set_history_change_callback.assert_called_once_with(history_change_callback)
-        inactive_canvas.set_selection_info_callback.assert_called_once_with(None)
-        inactive_canvas.set_error_callback.assert_called_once_with(None)
-        inactive_canvas.set_tool_change_callback.assert_called_once_with(None)
-        inactive_canvas.set_zoom_callback.assert_called_once_with(None)
-        inactive_canvas.set_history_change_callback.assert_called_once_with(None)
+        self.assertIs(selection_info_state_for(active_canvas).callback, selection_info_callback)
+        self.assertIsNone(callback_state_for(active_canvas).error)
+        self.assertIs(callback_state_for(active_canvas).tool_change, tool_change_callback)
+        self.assertIs(callback_state_for(active_canvas).zoom, zoom_callback)
+        self.assertIs(history_state_for(active_canvas).change_callback, history_change_callback)
+        self.assertIsNone(selection_info_state_for(inactive_canvas).callback)
+        self.assertIsNone(callback_state_for(inactive_canvas).error)
+        self.assertIsNone(callback_state_for(inactive_canvas).tool_change)
+        self.assertIsNone(callback_state_for(inactive_canvas).zoom)
+        self.assertIsNone(history_state_for(inactive_canvas).change_callback)
 
     def test_build_workbook_sheet_states_uses_tab_names_or_sheet_fallback(self) -> None:
-        canvas_a = SimpleNamespace(snapshot_state=mock.Mock(return_value={"atoms": [1]}))
-        canvas_b = SimpleNamespace(snapshot_state=mock.Mock(return_value={"atoms": [2]}))
+        snapshot_a = mock.Mock(return_value={"atoms": [1]})
+        snapshot_b = mock.Mock(return_value={"atoms": [2]})
+        canvas_a = SimpleNamespace(
+            services=SimpleNamespace(canvas_document_session_service=SimpleNamespace(snapshot_state=snapshot_a))
+        )
+        canvas_b = SimpleNamespace(
+            services=SimpleNamespace(canvas_document_session_service=SimpleNamespace(snapshot_state=snapshot_b))
+        )
 
         sheets = build_workbook_sheet_states(
             [(0, canvas_a), (4, canvas_b)],
@@ -125,6 +138,8 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
                 {"name": "Sheet 2", "kind": "canvas", "content": {"atoms": [2]}},
             ],
         )
+        snapshot_a.assert_called_once_with()
+        snapshot_b.assert_called_once_with()
 
     def test_restorable_canvas_sheets_returns_canvas_payloads(self) -> None:
         sheets = restorable_canvas_sheets(
