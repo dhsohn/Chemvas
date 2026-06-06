@@ -7,8 +7,6 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    env:
-      QT_QPA_PLATFORM: offscreen
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -22,6 +20,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            xvfb \
+            xauth \
             libegl1 \
             libgl1 \
             libxkbcommon-x11-0 \
@@ -45,7 +45,9 @@ jobs:
         run: python -m mypy
 
       - name: Run tests
-        run: python -m coverage run -m pytest
+        env:
+          QT_QPA_PLATFORM: xcb
+        run: xvfb-run -a --server-args="-screen 0 1920x1080x24" python -m coverage run -m pytest
 
       - name: Report coverage
         if: always()
