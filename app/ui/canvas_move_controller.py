@@ -7,6 +7,7 @@ from ui.atom_coords_access import atom_coords_3d_for_id, set_atom_coords_3d_for_
 from ui.bond_renderer import bond_renderer_for
 from ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
 from ui.canvas_bond_graphics_state import bond_items_for_id
+from ui.canvas_bond_renderer_state import update_bond_geometry_for
 from ui.canvas_graph_state import graph_state_for
 from ui.canvas_mark_registry import mark_registry_for
 from ui.canvas_model_access import atom_for_id, bond_for_id, bonds_for
@@ -120,7 +121,7 @@ class CanvasMoveController:
                         item.moveBy(dx, dy)
             if redraw_bond_ids:
                 for bond_id in redraw_bond_ids:
-                    self._update_bond_geometry(bond_id)
+                    update_bond_geometry_for(self.canvas, bond_id)
         else:
             self.redraw_bonds_for_atoms(atom_ids)
         self.move_rings_for_atoms(atom_ids, dx, dy)
@@ -133,12 +134,6 @@ class CanvasMoveController:
 
     def redraw_bond(self, bond_id: int) -> bool:
         return bond_renderer_for(self.canvas).redraw_bond(bond_id)
-
-    def _update_bond_geometry(self, bond_id: int) -> None:
-        renderer = bond_renderer_for(self.canvas)
-        update = getattr(renderer, "update_bond_geometry", None)
-        if callable(update):
-            update(bond_id)
 
     def redraw_connected_bonds(self, atom_id: int, skip_bond_id: int | None = None) -> None:
         bond_renderer_for(self.canvas).redraw_connected_bonds(atom_id, skip_bond_id=skip_bond_id)

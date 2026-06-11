@@ -6,9 +6,8 @@ from collections.abc import Sequence
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QGraphicsLineItem
 
+from ui.bond_geometry_primitives import LineSegment, trim_segment
 from ui.bond_style_logic import DOUBLE_STYLE_DEFAULT, DOUBLE_STYLE_OUTER
-
-LineSegment = tuple[float, float, float, float]
 
 
 def expanded_bold_segment(start: QPointF, end: QPointF, bond_length_px: float) -> LineSegment:
@@ -32,22 +31,6 @@ def expanded_bold_segment(start: QPointF, end: QPointF, bond_length_px: float) -
     bx2 = bx2 - dx * 0.025
     by2 = by2 - dy * 0.025
     return bx1, by1, bx2, by2
-
-
-def trim_segment(segment: LineSegment, trim: float) -> LineSegment:
-    if trim <= 1e-6:
-        return segment
-    x1, y1, x2, y2 = segment
-    dx = x2 - x1
-    dy = y2 - y1
-    length = math.hypot(dx, dy) or 1.0
-    ratio = min(0.45, trim / length)
-    return (
-        x1 + dx * ratio,
-        y1 + dy * ratio,
-        x2 - dx * ratio,
-        y2 - dy * ratio,
-    )
 
 
 def scale_segment_offset(segment: LineSegment, base: LineSegment, scale: float) -> LineSegment:

@@ -97,9 +97,5 @@ class TextTool(Tool):
             add_or_update_atom_label(self.canvas, atom_id, text, show_carbon=True)
         return True
 
-    @staticmethod
-    def _normalized_symbol(text: str) -> str:
-        return normalize_text_symbol(text)
-
 
 __all__ = ["TextTool"]

@@ -747,7 +747,6 @@ class ToolsAdditionalTest(unittest.TestCase):
         text_canvas = _TextCanvas()
         text_tool = TextTool(text_canvas, context=_tool_context_for(text_canvas))
         self.assertFalse(text_tool.on_mouse_press(_Event(button=Qt.MouseButton.RightButton)))
-        self.assertEqual(text_tool._normalized_symbol(" cl "), "cl")
 
         misc_canvas = _MiscCanvas()
         color_tool = ColorTool(misc_canvas, context=_tool_context_for(misc_canvas))

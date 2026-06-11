@@ -90,7 +90,7 @@ def _build_smiles_preview_geometry(
     base_pen: QPen,
     existing_items: list[QGraphicsItem],
 ) -> tuple[list[QGraphicsItem], dict[int, list[QGraphicsItem]], dict[int, QGraphicsEllipseItem]]:
-    preview_color = _preview_color()
+    color = preview_color()
     bond_items: dict[int, list[QGraphicsItem]] = {}
     atom_items: dict[int, QGraphicsEllipseItem] = {}
     items = list(existing_items)
@@ -98,7 +98,7 @@ def _build_smiles_preview_geometry(
         created_items: list[QGraphicsItem] = []
         for segment in segments:
             line = NoSelectLineItem(*segment)
-            line.setPen(_preview_pen(base_pen, preview_color))
+            line.setPen(preview_pen(base_pen, color))
             line.setOpacity(0.5)
             scene.addItem(line)
             items.append(line)
@@ -106,7 +106,7 @@ def _build_smiles_preview_geometry(
         bond_items[bond_id] = created_items
     for atom_id, rect in geometry.atom_rects.items():
         dot = QGraphicsEllipseItem(*rect)
-        dot.setBrush(preview_color)
+        dot.setBrush(color)
         dot.setPen(QPen(Qt.PenStyle.NoPen))
         dot.setOpacity(0.5)
         scene.addItem(dot)
@@ -143,20 +143,20 @@ def _build_template_preview_geometry(
     base_pen: QPen,
     existing_items: list[QGraphicsItem],
 ) -> tuple[list[QGraphicsItem], list[QGraphicsLineItem], list[QGraphicsEllipseItem]]:
-    preview_color = _preview_color()
+    color = preview_color()
     items = list(existing_items)
     lines: list[QGraphicsLineItem] = []
     dots: list[QGraphicsEllipseItem] = []
     for x1, y1, x2, y2 in geometry.line_segments:
         line = NoSelectLineItem(x1, y1, x2, y2)
-        line.setPen(_preview_pen(base_pen, preview_color))
+        line.setPen(preview_pen(base_pen, color))
         line.setOpacity(0.5)
         scene.addItem(line)
         lines.append(line)
         items.append(line)
     for x, y, width, height in geometry.dot_rects:
         dot = QGraphicsEllipseItem(x, y, width, height)
-        dot.setBrush(preview_color)
+        dot.setBrush(color)
         dot.setPen(QPen(Qt.PenStyle.NoPen))
         dot.setOpacity(0.5)
         scene.addItem(dot)
@@ -179,12 +179,12 @@ def _update_template_preview_geometry(
     return True
 
 
-def _preview_pen(base_pen: QPen, color: QColor) -> QPen:
+def preview_pen(base_pen: QPen, color: QColor) -> QPen:
     pen = QPen(base_pen)
     pen.setColor(color)
     return pen
 
 
-def _preview_color() -> QColor:
+def preview_color() -> QColor:
     return QColor(120, 120, 120, 140)
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PyQt6.QtCore import Qt
 
-from ui.bond_renderer import bond_renderer_for
+from ui.canvas_bond_renderer_state import update_bond_geometry_for
 from ui.canvas_mark_registry import mark_registry_for
 from ui.canvas_scene_items_state import (
     append_scene_item_for,
@@ -28,12 +28,6 @@ class SceneItemLifecycleService:
         self.graph_service = graph_service
         self.marks = mark_registry_for(canvas)
 
-    def _update_bond_geometry(self, bond_id: int) -> None:
-        renderer = bond_renderer_for(self.canvas)
-        update = getattr(renderer, "update_bond_geometry", None)
-        if callable(update):
-            update(bond_id)
-
     def bond_ids_for_ring_item(self, item) -> set[int]:
         ring_atom_ids = item.data(2)
         if not isinstance(ring_atom_ids, list) or len(ring_atom_ids) < 2:
@@ -50,7 +44,7 @@ class SceneItemLifecycleService:
 
     def refresh_bond_geometry_for_ring_item(self, item) -> None:
         for bond_id in self.bond_ids_for_ring_item(item):
-            self._update_bond_geometry(bond_id)
+            update_bond_geometry_for(self.canvas, bond_id)
 
     def attach_scene_item(self, item) -> None:
         if not item_can_be_added_to_canvas_scene(self.canvas, item):

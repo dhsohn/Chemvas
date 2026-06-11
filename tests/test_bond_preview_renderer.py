@@ -26,14 +26,16 @@ except ModuleNotFoundError:
     QGraphicsTextItem = None
 
 if QApplication is not None:
+    from ui.bond_preview_geometry import (
+        apply_plain_double_preview_variant,
+        expanded_bold_segment,
+        plain_double_preview_segments,
+        trim_segment,
+    )
     from ui.bond_preview_renderer import (
         BondPreviewBuildResolvers,
         BondPreviewConfig,
         BondPreviewUpdateResolvers,
-        _apply_plain_double_preview_variant,
-        _expanded_bold_segment,
-        _plain_double_preview_segments,
-        _trim_segment,
         add_bond_preview_items,
         build_bond_preview_items,
         clear_bond_preview_items,
@@ -252,7 +254,7 @@ class BondPreviewRendererTest(unittest.TestCase):
             resolvers=resolvers,
         )
 
-        bx1, by1, bx2, by2 = _expanded_bold_segment(start, end, 20.0)
+        bx1, by1, bx2, by2 = expanded_bold_segment(start, end, 20.0)
         self.assertEqual(items, [strip])
         line_normal.assert_called_once_with(bx1, by1, bx2, by2, None)
         one_sided.assert_called_once_with(bx1, by1, bx2, by2, -0.25, -0.75, 1.2, 3.5999999999999996)
@@ -547,7 +549,7 @@ class BondPreviewRendererTest(unittest.TestCase):
             resolvers=_update_resolvers(),
         )
 
-        bx1, by1, bx2, by2 = _expanded_bold_segment(QPointF(0.0, 0.0), QPointF(10.0, 0.0), 20.0)
+        bx1, by1, bx2, by2 = expanded_bold_segment(QPointF(0.0, 0.0), QPointF(10.0, 0.0), 20.0)
         self.assertTrue(updated)
         self.assertEqual((item.line().x1(), item.line().y1(), item.line().x2(), item.line().y2()), (bx1, by1, bx2, by2))
 
@@ -697,10 +699,10 @@ class BondPreviewRendererTest(unittest.TestCase):
 
     def test_plain_double_helper_tails_cover_trim_len_and_passthrough_paths(self) -> None:
         segment = (0.0, 0.0, 10.0, 0.0)
-        self.assertEqual(_trim_segment(segment, 0.0), segment)
-        self.assertEqual(_plain_double_preview_segments((segment,), "double"), (segment,))
+        self.assertEqual(trim_segment(segment, 0.0), segment)
+        self.assertEqual(plain_double_preview_segments((segment,), "double"), (segment,))
 
-        centered = _plain_double_preview_segments(
+        centered = plain_double_preview_segments(
             ((0.0, -2.0, 10.0, -2.0), (0.0, 2.0, 10.0, 2.0)),
             "double_centered",
         )
@@ -708,7 +710,7 @@ class BondPreviewRendererTest(unittest.TestCase):
 
         first = QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)
         items = [first]
-        self.assertIs(_apply_plain_double_preview_variant(items, "double"), items)
+        self.assertIs(apply_plain_double_preview_variant(items, "double"), items)
 
     def test_update_single_preview_returns_false_for_wrong_item_shape(self) -> None:
         updated = update_bond_preview_items(
