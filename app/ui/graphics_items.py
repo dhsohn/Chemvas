@@ -27,39 +27,33 @@ def _scaled_font(base: QFont, scale: float) -> QFont:
     return font
 
 
-class NoSelectLineItem(QGraphicsLineItem):
+class _NoSelectPaintMixin:
+    """Paint without the dashed selection rectangle Qt draws for selected items."""
+
     def paint(self, painter, option, widget=None) -> None:
         option = QStyleOptionGraphicsItem(option)
         option.state &= ~QStyle.StateFlag.State_Selected
         super().paint(painter, option, widget)
 
 
-class NoSelectPathItem(QGraphicsPathItem):
-    def paint(self, painter, option, widget=None) -> None:
-        option = QStyleOptionGraphicsItem(option)
-        option.state &= ~QStyle.StateFlag.State_Selected
-        super().paint(painter, option, widget)
+class NoSelectLineItem(_NoSelectPaintMixin, QGraphicsLineItem):
+    pass
 
 
-class NoSelectPolygonItem(QGraphicsPolygonItem):
-    def paint(self, painter, option, widget=None) -> None:
-        option = QStyleOptionGraphicsItem(option)
-        option.state &= ~QStyle.StateFlag.State_Selected
-        super().paint(painter, option, widget)
+class NoSelectPathItem(_NoSelectPaintMixin, QGraphicsPathItem):
+    pass
 
 
-class NoSelectRectItem(QGraphicsRectItem):
-    def paint(self, painter, option, widget=None) -> None:
-        option = QStyleOptionGraphicsItem(option)
-        option.state &= ~QStyle.StateFlag.State_Selected
-        super().paint(painter, option, widget)
+class NoSelectPolygonItem(_NoSelectPaintMixin, QGraphicsPolygonItem):
+    pass
 
 
-class NoSelectEllipseItem(QGraphicsEllipseItem):
-    def paint(self, painter, option, widget=None) -> None:
-        option = QStyleOptionGraphicsItem(option)
-        option.state &= ~QStyle.StateFlag.State_Selected
-        super().paint(painter, option, widget)
+class NoSelectRectItem(_NoSelectPaintMixin, QGraphicsRectItem):
+    pass
+
+
+class NoSelectEllipseItem(_NoSelectPaintMixin, QGraphicsEllipseItem):
+    pass
 
 
 class AtomDotItem(NoSelectEllipseItem):
@@ -101,11 +95,8 @@ class AtomDotItem(NoSelectEllipseItem):
         return self.mapRectToScene(super().boundingRect())
 
 
-class NoSelectTextItem(QGraphicsTextItem):
-    def paint(self, painter, option, widget=None) -> None:
-        option = QStyleOptionGraphicsItem(option)
-        option.state &= ~QStyle.StateFlag.State_Selected
-        super().paint(painter, option, widget)
+class NoSelectTextItem(_NoSelectPaintMixin, QGraphicsTextItem):
+    pass
 
 
 class AtomLabelItem(NoSelectTextItem):

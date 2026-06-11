@@ -54,17 +54,7 @@ def set_history_change_callback_for(canvas, callback) -> None:
     history_service_for_canvas(canvas).set_change_callback(callback)
 
 
-def can_undo_for(canvas) -> bool:
-    return history_service_for_canvas(canvas).can_undo()
-
-
-def can_redo_for(canvas) -> bool:
-    return history_service_for_canvas(canvas).can_redo()
-
-
 __all__ = [
-    "can_redo_for",
-    "can_undo_for",
     "history_service_for_canvas",
     "notify_error_for",
     "restore_canvas_state_for",

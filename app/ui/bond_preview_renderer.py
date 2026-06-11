@@ -15,18 +15,9 @@ from PyQt6.QtWidgets import (
 
 from ui.bond_preview_geometry import (
     LineSegment,
-)
-from ui.bond_preview_geometry import (
-    apply_plain_double_preview_variant as _apply_plain_double_preview_variant,
-)
-from ui.bond_preview_geometry import (
-    expanded_bold_segment as _expanded_bold_segment,
-)
-from ui.bond_preview_geometry import (
-    plain_double_preview_segments as _plain_double_preview_segments,
-)
-from ui.bond_preview_geometry import (
-    trim_segment as _trim_segment,
+    apply_plain_double_preview_variant,
+    expanded_bold_segment,
+    plain_double_preview_segments,
 )
 from ui.bond_preview_scene_items import add_bond_preview_items, clear_bond_preview_items
 from ui.bond_style_logic import (
@@ -105,7 +96,7 @@ def build_bond_preview_items(
                     config.bold_bond_width * 1.5,
                 )
             return items
-        bx1, by1, bx2, by2 = _expanded_bold_segment(start, end, config.bond_length_px)
+        bx1, by1, bx2, by2 = expanded_bold_segment(start, end, config.bond_length_px)
         nx, ny = resolvers.line_normal(bx1, by1, bx2, by2, None)
         if bold_outward:
             nx, ny = -nx, -ny
@@ -123,7 +114,7 @@ def build_bond_preview_items(
         ]
     if order == 2 and style in PLAIN_DOUBLE_STYLES:
         items = resolvers.draw_parallel_bonds(start.x(), start.y(), end.x(), end.y(), order, a_id, b_id)
-        return _apply_plain_double_preview_variant(
+        return apply_plain_double_preview_variant(
             items,
             normalized_plain_double_style(style, order),
         )
@@ -202,7 +193,7 @@ def update_bond_preview_items(
                     return False
                 item.setLine(*seg)
             return True
-        bx1, by1, bx2, by2 = _expanded_bold_segment(start, end, config.bond_length_px)
+        bx1, by1, bx2, by2 = expanded_bold_segment(start, end, config.bond_length_px)
         nx, ny = resolvers.line_normal(bx1, by1, bx2, by2, None)
         if bold_outward:
             nx, ny = -nx, -ny
@@ -229,7 +220,7 @@ def update_bond_preview_items(
         segments = tuple(resolvers.parallel_bond_segments(start.x(), start.y(), end.x(), end.y(), order, a_id, b_id))
         if len(items) != len(segments):
             return False
-        updated_segments = _plain_double_preview_segments(
+        updated_segments = plain_double_preview_segments(
             segments,
             normalized_plain_double_style(style, order),
         )
@@ -257,10 +248,6 @@ __all__ = [
     "BondPreviewBuildResolvers",
     "BondPreviewConfig",
     "BondPreviewUpdateResolvers",
-    "_apply_plain_double_preview_variant",
-    "_expanded_bold_segment",
-    "_plain_double_preview_segments",
-    "_trim_segment",
     "add_bond_preview_items",
     "build_bond_preview_items",
     "clear_bond_preview_items",

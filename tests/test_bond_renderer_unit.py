@@ -154,8 +154,8 @@ class BondRendererUnitTest(unittest.TestCase):
     def test_reset_item_origin_and_basic_segment_helpers(self) -> None:
         line = NoSelectLineItem(0.0, 0.0, 1.0, 0.0)
         line.setPos(3.0, -2.0)
-        self.renderer._reset_item_origin(None)
-        self.renderer._reset_item_origin(line)
+        self.renderer.geometry_updater._reset_item_origin(None)
+        self.renderer.geometry_updater._reset_item_origin(line)
 
         self.assertEqual((line.pos().x(), line.pos().y()), (0.0, 0.0))
         self.assertIsNone(normalize_3d(0.0, 0.0, 0.0))

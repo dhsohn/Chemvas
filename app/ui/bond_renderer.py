@@ -84,15 +84,6 @@ class BondRenderer:
     ) -> QPainterPath:
         return self.line_geometry.dotted_bond_path(x1, y1, x2, y2, a_id, b_id)
 
-    @staticmethod
-    def _reset_item_origin(item) -> None:
-        if item is None:
-            return
-        pos = item.pos()
-        if abs(pos.x()) <= 1e-6 and abs(pos.y()) <= 1e-6:
-            return
-        item.setPos(0.0, 0.0)
-
     def parallel_bond_segments(
         self,
         x1: float,

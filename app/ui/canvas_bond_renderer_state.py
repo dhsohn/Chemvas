@@ -20,4 +20,11 @@ def set_bond_renderer_for(canvas: Any, renderer) -> None:
     canvas.bond_renderer = renderer
 
 
-__all__ = ["bond_renderer_for", "set_bond_renderer_for"]
+def update_bond_geometry_for(canvas: Any, bond_id: int) -> None:
+    """Refresh one bond's geometry; tolerates stub renderers without the hook."""
+    update = getattr(bond_renderer_for(canvas), "update_bond_geometry", None)
+    if callable(update):
+        update(bond_id)
+
+
+__all__ = ["bond_renderer_for", "set_bond_renderer_for", "update_bond_geometry_for"]

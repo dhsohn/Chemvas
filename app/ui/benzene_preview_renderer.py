@@ -7,6 +7,7 @@ from PyQt6.QtGui import QColor, QPen
 from PyQt6.QtWidgets import QGraphicsEllipseItem, QGraphicsItem, QGraphicsScene
 
 from ui.graphics_items import NoSelectLineItem
+from ui.preview_scene_renderer import preview_color, preview_pen
 
 InnerBondItemFactory = Callable[[QPointF, QPointF, QPointF], QGraphicsItem | None]
 
@@ -38,14 +39,14 @@ def rebuild_benzene_preview(
     if not ring_points:
         return []
 
-    preview_color = _preview_color()
+    color = preview_color()
     center = _ring_center(ring_points)
     items: list[QGraphicsItem] = []
 
     for index, point in enumerate(ring_points):
         next_point = ring_points[(index + 1) % len(ring_points)]
         line = NoSelectLineItem(point.x(), point.y(), next_point.x(), next_point.y())
-        line.setPen(_preview_pen(base_pen, preview_color))
+        line.setPen(preview_pen(base_pen, color))
         line.setOpacity(0.5)
         scene.addItem(line)
         items.append(line)
@@ -56,7 +57,7 @@ def rebuild_benzene_preview(
         inner_item = create_inner_bond_item(point, next_point, center)
         if inner_item is None:
             continue
-        _apply_preview_style(inner_item, preview_color)
+        _apply_preview_style(inner_item, color)
         inner_item.setOpacity(0.5)
         scene.addItem(inner_item)
         items.append(inner_item)
@@ -69,7 +70,7 @@ def rebuild_benzene_preview(
             dot_radius * 2.0,
             dot_radius * 2.0,
         )
-        dot.setBrush(preview_color)
+        dot.setBrush(color)
         dot.setPen(QPen(Qt.PenStyle.NoPen))
         dot.setOpacity(0.5)
         scene.addItem(dot)
@@ -88,16 +89,6 @@ def _apply_preview_style(item: QGraphicsItem, color: QColor) -> None:
         if brush.style() != Qt.BrushStyle.NoBrush:
             brush.setColor(color)
             item.setBrush(brush)
-
-
-def _preview_pen(base_pen: QPen, color: QColor) -> QPen:
-    pen = QPen(base_pen)
-    pen.setColor(color)
-    return pen
-
-
-def _preview_color() -> QColor:
-    return QColor(120, 120, 120, 140)
 
 
 def _ring_center(ring_points: Sequence[QPointF]) -> QPointF:
