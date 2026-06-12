@@ -364,33 +364,29 @@ class RDKitConversionHelper:
             atom_offset += len(shifted_scene.atoms)
         return Molecule3DScene(atoms=tuple(combined_atoms), bonds=tuple(combined_bonds))
 
-    def _build_alias_fragment(
+    def _parse_alias_fragment(
         self,
         label: str,
         *,
         atom_id: int,
-        atom,
         neighbors: list[int],
-        model: MoleculeModel,
-        formal_charge: int,
-        radical_electrons: int,
-        rw,
         Chem,
         AllChem,
-    ) -> tuple[int | None, dict[int, tuple[float, float]] | None]:
+    ) -> tuple[object, int, int] | None:
+        """Expand the alias SMILES; (fragment, dummy_idx, attachment_idx) or None."""
         alias_smiles = self.adapter._alias_smiles.get(label)
         if alias_smiles is None:
-            return None, None
+            return None
         if len(neighbors) != 1:
             self.adapter.last_error = (
                 f"Alias label '{label}' on atom {atom_id} requires exactly one attachment bond "
                 f"for 3D conversion, but found {len(neighbors)}."
             )
-            return None, None
+            return None
         fragment = Chem.MolFromSmiles(alias_smiles)
         if fragment is None:
             self.adapter.last_error = f"Failed to expand alias label '{label}' for 3D conversion."
-            return None, None
+            return None
         if hasattr(AllChem, "Compute2DCoords"):
             try:
                 AllChem.Compute2DCoords(fragment)
@@ -399,16 +395,27 @@ class RDKitConversionHelper:
         dummy_atoms = [frag_atom for frag_atom in fragment.GetAtoms() if frag_atom.GetAtomicNum() == 0]
         if len(dummy_atoms) != 1:
             self.adapter.last_error = f"Alias label '{label}' has an invalid attachment definition."
-            return None, None
+            return None
         dummy_atom = dummy_atoms[0]
-        dummy_idx = dummy_atom.GetIdx()
         dummy_neighbors = list(dummy_atom.GetNeighbors())
         if len(dummy_neighbors) != 1:
             self.adapter.last_error = f"Alias label '{label}' has an invalid attachment topology."
-            return None, None
-        attachment_idx = dummy_neighbors[0].GetIdx()
+            return None
+        return fragment, dummy_atom.GetIdx(), dummy_neighbors[0].GetIdx()
+
+    def _copy_alias_fragment_into(
+        self,
+        fragment,
+        *,
+        dummy_idx: int,
+        attachment_idx: int,
+        formal_charge: int,
+        radical_electrons: int,
+        rw,
+        Chem,
+    ) -> tuple[dict[int, int], int | None]:
+        """Copy fragment atoms/bonds (minus the dummy) into ``rw``."""
         fragment_map: dict[int, int] = {}
-        coord_map: dict[int, tuple[float, float]] = {}
         attachment_new_idx = None
         for frag_atom in fragment.GetAtoms():
             if frag_atom.GetIdx() == dummy_idx:
@@ -430,14 +437,25 @@ class RDKitConversionHelper:
             if dummy_idx in {begin_idx, end_idx}:
                 continue
             rw.AddBond(fragment_map[begin_idx], fragment_map[end_idx], frag_bond.GetBondType())
-        if attachment_new_idx is None:
-            self.adapter.last_error = f"Alias label '{label}' could not be attached."
-            return None, None
+        return fragment_map, attachment_new_idx
 
+    def _alias_fragment_coords(
+        self,
+        fragment,
+        *,
+        label: str,
+        atom,
+        neighbors: list[int],
+        model: MoleculeModel,
+        dummy_idx: int,
+        attachment_idx: int,
+        fragment_map: dict[int, int],
+        attachment_new_idx: int,
+    ) -> dict[int, tuple[float, float]] | None:
+        """Place fragment atoms around ``atom``, aligned toward its neighbor."""
         conf = fragment.GetConformer() if fragment.GetNumConformers() else None
         if conf is None:
-            coord_map[attachment_new_idx] = (atom.x, atom.y)
-            return attachment_new_idx, coord_map
+            return {attachment_new_idx: (atom.x, atom.y)}
 
         dummy_pos = conf.GetAtomPosition(dummy_idx)
         attach_pos = conf.GetAtomPosition(attachment_idx)
@@ -446,7 +464,7 @@ class RDKitConversionHelper:
         neighbor_atom = model.atoms.get(neighbors[0])
         if neighbor_atom is None:
             self.adapter.last_error = f"Alias label '{label}' is attached to a missing atom."
-            return None, None
+            return None
         target_dx = neighbor_atom.x - atom.x
         target_dy = neighbor_atom.y - atom.y
         source_angle = math.atan2(source_dy, source_dx) if abs(source_dx) > 1e-6 or abs(source_dy) > 1e-6 else 0.0
@@ -454,6 +472,7 @@ class RDKitConversionHelper:
         rotation = target_angle - source_angle
         cos_theta = math.cos(rotation)
         sin_theta = math.sin(rotation)
+        coord_map: dict[int, tuple[float, float]] = {}
         for frag_atom in fragment.GetAtoms():
             if frag_atom.GetIdx() == dummy_idx:
                 continue
@@ -463,21 +482,60 @@ class RDKitConversionHelper:
             rot_x = rel_x * cos_theta - rel_y * sin_theta
             rot_y = rel_x * sin_theta + rel_y * cos_theta
             coord_map[fragment_map[frag_atom.GetIdx()]] = (atom.x + rot_x, atom.y + rot_y)
+        return coord_map
+
+    def _build_alias_fragment(
+        self,
+        label: str,
+        *,
+        atom_id: int,
+        atom,
+        neighbors: list[int],
+        model: MoleculeModel,
+        formal_charge: int,
+        radical_electrons: int,
+        rw,
+        Chem,
+        AllChem,
+    ) -> tuple[int | None, dict[int, tuple[float, float]] | None]:
+        parsed = self._parse_alias_fragment(
+            label,
+            atom_id=atom_id,
+            neighbors=neighbors,
+            Chem=Chem,
+            AllChem=AllChem,
+        )
+        if parsed is None:
+            return None, None
+        fragment, dummy_idx, attachment_idx = parsed
+        fragment_map, attachment_new_idx = self._copy_alias_fragment_into(
+            fragment,
+            dummy_idx=dummy_idx,
+            attachment_idx=attachment_idx,
+            formal_charge=formal_charge,
+            radical_electrons=radical_electrons,
+            rw=rw,
+            Chem=Chem,
+        )
+        if attachment_new_idx is None:
+            self.adapter.last_error = f"Alias label '{label}' could not be attached."
+            return None, None
+        coord_map = self._alias_fragment_coords(
+            fragment,
+            label=label,
+            atom=atom,
+            neighbors=neighbors,
+            model=model,
+            dummy_idx=dummy_idx,
+            attachment_idx=attachment_idx,
+            fragment_map=fragment_map,
+            attachment_new_idx=attachment_new_idx,
+        )
+        if coord_map is None:
+            return None, None
         return attachment_new_idx, coord_map
 
-    def _build_conversion_rdkit_mol(
-        self,
-        model: MoleculeModel,
-        *,
-        atom_annotations: Mapping[int, Mapping[str, int]] | None = None,
-    ):
-        rdkit = self.adapter._load_rdkit()
-        if rdkit == (None, None):
-            self.adapter.last_error = "RDKit is not available in this environment."
-            return None
-        Chem, AllChem = rdkit
-        rw = Chem.RWMol()
-        adjacency = self._build_model_adjacency(model)
+    def _valid_conversion_bonds(self, model: MoleculeModel) -> list[tuple[int, Bond]]:
         valid_bonds: list[tuple[int, Bond]] = []
         for bond_id, bond in enumerate(model.bonds):
             if bond is None or bond.a == bond.b:
@@ -485,7 +543,19 @@ class RDKitConversionHelper:
             if bond.a not in model.atoms or bond.b not in model.atoms:
                 continue
             valid_bonds.append((bond_id, bond))
+        return valid_bonds
 
+    def _add_conversion_atoms(
+        self,
+        model: MoleculeModel,
+        *,
+        atom_annotations: Mapping[int, Mapping[str, int]] | None,
+        adjacency: Mapping[int, list[int]],
+        rw,
+        Chem,
+        AllChem,
+    ) -> tuple[dict[int, int], dict[int, tuple[float, float]]] | None:
+        """Add model atoms (expanding aliases) to ``rw``; None with last_error on failure."""
         atom_map: dict[int, int] = {}
         coord_map: dict[int, tuple[float, float]] = {}
         invalid_labels: list[str] = []
@@ -540,7 +610,17 @@ class RDKitConversionHelper:
                 f"Supported aliases: {supported_aliases}."
             )
             return None
+        return atom_map, coord_map
 
+    def _add_conversion_bonds(
+        self,
+        valid_bonds: list[tuple[int, Bond]],
+        *,
+        atom_map: dict[int, int],
+        rw,
+        Chem,
+    ) -> bool:
+        """Add bonds with stereo directions to ``rw``; False with last_error on failure."""
         seen_bonds: set[tuple[int, int]] = set()
         for bond_id, bond in valid_bonds:
             if bond.a not in atom_map or bond.b not in atom_map:
@@ -556,7 +636,7 @@ class RDKitConversionHelper:
                     f"Bond {bond_id} uses style '{bond.style}' with order {bond.order}. "
                     "Stereo export currently supports wedge/hash on single bonds only."
                 )
-                return None
+                return False
             rw.AddBond(rd_a, rd_b, self._bond_type(Chem, bond.order))
             rd_bond = rw.GetBondBetweenAtoms(rd_a, rd_b) if hasattr(rw, "GetBondBetweenAtoms") else None
             if rd_bond is None:
@@ -565,17 +645,21 @@ class RDKitConversionHelper:
                 rd_bond.SetBondDir(Chem.BondDir.BEGINWEDGE)
             elif bond.style == "hash":
                 rd_bond.SetBondDir(Chem.BondDir.BEGINDASH)
+        return True
 
-        mol = rw.GetMol()
-        if hasattr(Chem, "Conformer"):
-            try:
-                conf = Chem.Conformer(mol.GetNumAtoms())
-                for atom_idx in range(mol.GetNumAtoms()):
-                    x, y = coord_map.get(atom_idx, (0.0, 0.0))
-                    conf.SetAtomPosition(atom_idx, (x, y, 0.0))
-                mol.AddConformer(conf, assignId=True)
-            except Exception:
-                pass
+    def _attach_conversion_conformer(self, mol, coord_map: dict[int, tuple[float, float]], Chem) -> None:
+        if not hasattr(Chem, "Conformer"):
+            return
+        try:
+            conf = Chem.Conformer(mol.GetNumAtoms())
+            for atom_idx in range(mol.GetNumAtoms()):
+                x, y = coord_map.get(atom_idx, (0.0, 0.0))
+                conf.SetAtomPosition(atom_idx, (x, y, 0.0))
+            mol.AddConformer(conf, assignId=True)
+        except Exception:
+            pass
+
+    def _assign_conversion_stereo(self, mol, Chem) -> None:
         try:
             if hasattr(Chem, "AssignChiralTypesFromBondDirs"):
                 Chem.AssignChiralTypesFromBondDirs(mol)
@@ -585,6 +669,40 @@ class RDKitConversionHelper:
                 Chem.AssignStereochemistry(mol, force=True, cleanIt=True)
         except Exception:
             pass
+
+    def _build_conversion_rdkit_mol(
+        self,
+        model: MoleculeModel,
+        *,
+        atom_annotations: Mapping[int, Mapping[str, int]] | None = None,
+    ):
+        rdkit = self.adapter._load_rdkit()
+        if rdkit == (None, None):
+            self.adapter.last_error = "RDKit is not available in this environment."
+            return None
+        Chem, AllChem = rdkit
+        rw = Chem.RWMol()
+        adjacency = self._build_model_adjacency(model)
+        valid_bonds = self._valid_conversion_bonds(model)
+
+        atom_result = self._add_conversion_atoms(
+            model,
+            atom_annotations=atom_annotations,
+            adjacency=adjacency,
+            rw=rw,
+            Chem=Chem,
+            AllChem=AllChem,
+        )
+        if atom_result is None:
+            return None
+        atom_map, coord_map = atom_result
+
+        if not self._add_conversion_bonds(valid_bonds, atom_map=atom_map, rw=rw, Chem=Chem):
+            return None
+
+        mol = rw.GetMol()
+        self._attach_conversion_conformer(mol, coord_map, Chem)
+        self._assign_conversion_stereo(mol, Chem)
         try:
             Chem.SanitizeMol(mol)
         except Exception as exc:
