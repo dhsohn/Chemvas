@@ -4,9 +4,7 @@ from PyQt6.QtGui import QAction
 
 from ui.main_window_config import (
     BOND_TOOL_ACTION_SPECS,
-    MARK_TOOL_ACTION_SPECS,
     RING_FILL_TOOL_ACTION_SPEC,
-    TEMPLATE_TOOL_ACTION_SPEC,
     TOOL_ACTION_SPECS,
 )
 
@@ -54,16 +52,6 @@ class MainWindowToolActionService:
         self._context_page_state.set_tool_with_status(window, "bond", reset_bond_style=False)
         self._tool_state.set_bond_style(window, value)
 
-    def activate_mark_tool(self, window, kind: str) -> None:
-        self._tool_mode_controller(window).set_mark_kind(kind)
-        window.statusBar().showMessage("Mark Tool")
-        self._status.refresh_status_context(window)
-
-    def activate_template_tool(self, window) -> None:
-        self._context_page_state.show_context_page(window, "template")
-        window.statusBar().showMessage("Template Tool")
-        self._status.refresh_status_context(window)
-
     def activate_ring_fill_tool(self, window) -> None:
         self._context_page_state.show_context_page(window, "ring_fill")
         window.statusBar().showMessage("Ring Fill Tool")
@@ -82,17 +70,6 @@ class MainWindowToolActionService:
             )
             for key, label, tool, icon_method, tooltip in TOOL_ACTION_SPECS
         )
-        key, label, icon_method, tooltip = TEMPLATE_TOOL_ACTION_SPEC
-        _, template_action = self.build_checkable_tool_action(
-            window,
-            tool_group,
-            key=key,
-            label=label,
-            icon_method=icon_method,
-            tooltip=tooltip,
-            callback=lambda: self.activate_template_tool(window),
-        )
-        actions[key] = template_action
         key, label, icon_method, tooltip = RING_FILL_TOOL_ACTION_SPEC
         _, ring_fill_action = self.build_checkable_tool_action(
             window,
@@ -116,20 +93,6 @@ class MainWindowToolActionService:
                     callback=lambda value=value: self.activate_bond_style_tool(window, value),
                 )
                 for key, label, value, icon_method, tooltip in BOND_TOOL_ACTION_SPECS
-            )
-        )
-        actions.update(
-            dict(
-                self.build_checkable_tool_action(
-                    window,
-                    tool_group,
-                    key=key,
-                    label=label,
-                    icon_method=icon_method,
-                    tooltip=tooltip,
-                    callback=lambda kind=kind: self.activate_mark_tool(window, kind),
-                )
-                for key, label, kind, icon_method, tooltip in MARK_TOOL_ACTION_SPECS
             )
         )
         return actions

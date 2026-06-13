@@ -44,10 +44,10 @@ def test_active_tool_status_text_uses_injected_active_tool_port() -> None:
     active_tool_name_for_window.assert_called_once_with(window)
 
 
-def test_active_tool_status_text_respects_template_override_and_missing_canvas() -> None:
+def test_active_tool_status_text_ignores_unknown_override_and_handles_missing_canvas() -> None:
     active_tool_name_for_window = mock.Mock(return_value="bond")
     context_bar_page_override_for_window = mock.Mock(side_effect=["template", None])
-    active_canvas_or_none_for_window = mock.Mock(return_value=None)
+    active_canvas_or_none_for_window = mock.Mock(side_effect=[object(), None])
     service = _service(
         active_tool_name_for_window=active_tool_name_for_window,
         active_canvas_or_none_for_window=active_canvas_or_none_for_window,
@@ -56,10 +56,13 @@ def test_active_tool_status_text_respects_template_override_and_missing_canvas()
     template_window = SimpleNamespace()
     canvasless_window = SimpleNamespace()
 
-    assert service.active_tool_status_text(template_window) == "Tool: Template"
+    assert service.active_tool_status_text(template_window) == "Tool: Bond"
     assert service.active_tool_status_text(canvasless_window) == "Tool: None"
-    active_canvas_or_none_for_window.assert_called_once_with(canvasless_window)
-    active_tool_name_for_window.assert_not_called()
+    assert active_canvas_or_none_for_window.call_args_list == [
+        mock.call(template_window),
+        mock.call(canvasless_window),
+    ]
+    active_tool_name_for_window.assert_called_once_with(template_window)
 
 
 def test_active_tool_status_text_respects_ring_fill_override() -> None:

@@ -10,7 +10,7 @@ from core.history import (
     DeleteBondCommand,
 )
 from core.model import Atom, Bond, MoleculeModel
-from PyQt6.QtCore import QPointF
+from PyQt6.QtCore import QPointF, QRectF
 from ui.canvas_insert_state import CanvasInsertState
 from ui.canvas_mark_registry import CanvasMarkRegistry
 from ui.canvas_scene_items_state import (
@@ -23,6 +23,7 @@ from ui.canvas_smiles_input_state import (
 )
 from ui.history_commands import DeleteSceneItemsCommand
 from ui.insert_controller import InsertController
+from ui.sheet_setup_state import sheet_setup_state_for
 from ui.template_insert_logic import (
     TemplateInsertRequest,
     TemplateInsertResolution,
@@ -268,6 +269,30 @@ class InsertControllerTest(unittest.TestCase):
         self.assertIsNone(canvas.insert_state.smiles_preview_center)
         controller.clear_template_preview.assert_called_once_with()
         controller.clear_smiles_preview.assert_called_once_with()
+
+    def test_insert_preview_and_commit_skip_positions_outside_sheet(self) -> None:
+        canvas = _FakeCanvas()
+        sheet_setup_state_for(canvas).rect = QRectF(-10.0, -10.0, 20.0, 20.0)
+        controller = _controller_for(canvas)
+        controller.clear_template_preview = Mock()
+        controller.clear_smiles_preview = Mock()
+        controller.template_service.commit_template_request = Mock()
+        controller.template_service.render_template_request_preview = Mock()
+        controller.smiles_service.commit_smiles_insert = Mock()
+        controller.smiles_service.render_smiles_preview = Mock()
+        outside = QPointF(999.0, 999.0)
+
+        controller.commit_template_insert(outside)
+        controller.render_template_preview(outside)
+        controller.commit_smiles_insert(outside)
+        controller.render_smiles_preview(outside)
+
+        self.assertEqual(controller.clear_template_preview.call_count, 2)
+        self.assertEqual(controller.clear_smiles_preview.call_count, 2)
+        controller.template_service.commit_template_request.assert_not_called()
+        controller.template_service.render_template_request_preview.assert_not_called()
+        controller.smiles_service.commit_smiles_insert.assert_not_called()
+        controller.smiles_service.render_smiles_preview.assert_not_called()
 
     def test_load_smiles_blank_is_no_op(self) -> None:
         canvas = _FakeCanvas()
@@ -594,7 +619,6 @@ class InsertControllerTest(unittest.TestCase):
         canvas.insert_state.template_ring_style = "regular"
         set_last_smiles_input_for(canvas, "before")
         controller = _controller_for(canvas)
-        controller.clear_template_preview = Mock()
 
         request = TemplateInsertRequest(ring_size=5, cursor_pos=(12.0, 18.0), ring_style="regular")
         plan = plan_template_commit(request)
@@ -614,7 +638,10 @@ class InsertControllerTest(unittest.TestCase):
         )
         canvas.add_benzene_ring.assert_not_called()
         canvas.services.structure_build_service.add_atom_with_merge.assert_not_called()
-        self.assertFalse(canvas.insert_state.template_active)
+        self.assertTrue(canvas.insert_state.template_active)
+        self.assertEqual(canvas.insert_state.template_ring_size, 5)
+        self.assertEqual(canvas.insert_state.template_ring_style, "regular")
+        self.assertEqual(canvas.insert_state.template_preview_items, [])
         self.assertIsNone(last_smiles_input_for(canvas))
         canvas._record_additions.assert_called_once_with(
             before_next_atom_id=0,
@@ -629,11 +656,13 @@ class InsertControllerTest(unittest.TestCase):
         canvas.insert_state.template_ring_style = "benzene"
         set_last_smiles_input_for(canvas, "before")
         controller = _controller_for(canvas)
-        controller.clear_template_preview = Mock()
 
         request = TemplateInsertRequest(ring_size=6, cursor_pos=(8.0, 9.0), bond_id=4, ring_style="benzene")
 
-        with patch.object(controller, "template_insert_request", return_value=request):
+        with patch.object(controller, "template_insert_request", return_value=request), patch(
+            "ui.insert_template_commit_service.has_insert_mutation_since_for",
+            return_value=True,
+        ):
             controller.commit_template_insert(QPointF(*request.cursor_pos))
 
         canvas.add_benzene_ring.assert_called_once()
@@ -643,8 +672,11 @@ class InsertControllerTest(unittest.TestCase):
         self.assertEqual(args.kwargs["before_smiles_input"], "before")
         canvas.services.structure_build_service.add_ring_from_points.assert_not_called()
         canvas._record_additions.assert_not_called()
-        self.assertFalse(canvas.insert_state.template_active)
-        self.assertEqual(last_smiles_input_for(canvas), "before")
+        self.assertTrue(canvas.insert_state.template_active)
+        self.assertEqual(canvas.insert_state.template_ring_size, 6)
+        self.assertEqual(canvas.insert_state.template_ring_style, "benzene")
+        self.assertEqual(canvas.insert_state.template_preview_items, [])
+        self.assertIsNone(last_smiles_input_for(canvas))
 
     def test_commit_template_insert_merges_against_selected_bond_seed(self) -> None:
         canvas = _FakeCanvas()
@@ -662,7 +694,6 @@ class InsertControllerTest(unittest.TestCase):
         canvas.services.structure_build_service.add_atom_with_merge.side_effect = [10, 11, 12]
         canvas.bond_exists.side_effect = lambda a_id, b_id: {a_id, b_id} == {10, 11}
         controller = _controller_for(canvas)
-        controller.clear_template_preview = Mock()
 
         request = TemplateInsertRequest(ring_size=6, cursor_pos=(20.0, 30.0), bond_id=0, ring_style="chair")
         plan = plan_template_commit(request)
@@ -693,7 +724,10 @@ class InsertControllerTest(unittest.TestCase):
             [1, 2],
         )
         canvas.services.structure_build_service.add_ring_from_points.assert_not_called()
-        self.assertFalse(canvas.insert_state.template_active)
+        self.assertTrue(canvas.insert_state.template_active)
+        self.assertEqual(canvas.insert_state.template_ring_size, 6)
+        self.assertEqual(canvas.insert_state.template_ring_style, "chair")
+        self.assertEqual(canvas.insert_state.template_preview_items, [])
         self.assertIsNone(last_smiles_input_for(canvas))
         canvas._record_additions.assert_called_once_with(
             before_next_atom_id=3,

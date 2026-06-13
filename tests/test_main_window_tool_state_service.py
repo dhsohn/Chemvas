@@ -81,6 +81,10 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
     def test_set_tool_with_status_updates_canvas_status_and_optional_bond_reset(self) -> None:
         with (
             mock.patch.object(active_canvas_for_window(self.window).services.tool_mode_controller, "set_tool") as set_tool,
+            mock.patch.object(
+                active_canvas_for_window(self.window).services.tool_mode_controller,
+                "set_mark_kind",
+            ) as set_mark_kind,
             mock.patch.object(self.service, "set_bond_style") as set_bond_style,
         ):
             self.service.set_tool_with_status(self.window, "bond")
@@ -92,10 +96,14 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
             self.service.set_tool_with_status(self.window, "select")
             self.assertEqual(self.window.statusBar().currentMessage(), "Select Tool")
 
+            self.service.set_tool_with_status(self.window, "mark")
+            self.assertEqual(self.window.statusBar().currentMessage(), "Mark Tool")
+
         self.assertEqual([call.args for call in set_tool.call_args_list], [("bond",), ("bond",), ("select",)])
+        set_mark_kind.assert_called_once_with("plus")
         set_bond_style.assert_called_once_with(self.window, "Single")
-        self.assertEqual(self.tool_mode_controller_for_window.call_count, 3)
-        self.assertEqual(self.status_service.refresh_status_context.call_count, 3)
+        self.assertEqual(self.tool_mode_controller_for_window.call_count, 4)
+        self.assertEqual(self.status_service.refresh_status_context.call_count, 4)
 
     def test_set_tool_with_status_refreshes_structured_tool_state(self) -> None:
         self.service.set_tool_with_status(self.window, "select")
@@ -114,7 +122,7 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         active_canvas_for_window(self.window).services.tools.active = SimpleNamespace(name="mark")
         set_tool_setting_for(active_canvas_for_window(self.window), "mark_kind", "minus")
         self.service.sync_tool_actions_from_canvas(self.window)
-        self.assertTrue(self.window.ui_references.tool_actions["mark_minus"].isChecked())
+        self.assertTrue(self.window.ui_references.tool_actions["mark"].isChecked())
 
         self._reset_tool_checks()
         active_canvas_for_window(self.window).services.tools.active = SimpleNamespace(name="perspective")
@@ -132,6 +140,18 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
 
         self.assertEqual([call.args for call in set_bond_style.call_args_list], [("double", 2), ("single", 1)])
         self.assertEqual(self.tool_mode_controller_for_window.call_count, 2)
+
+    def test_set_mark_kind_routes_option_bar_choice_to_canvas(self) -> None:
+        with mock.patch.object(
+            active_canvas_for_window(self.window).services.tool_mode_controller,
+            "set_mark_kind",
+        ) as set_mark_kind:
+            self.service.set_mark_kind(self.window, "radical")
+
+        set_mark_kind.assert_called_once_with("radical")
+        self.assertEqual(self.window.statusBar().currentMessage(), "Mark Tool")
+        self.status_service.refresh_status_context.assert_called_once_with(self.window)
+        self.tool_mode_controller_for_window.assert_called_once_with(self.window)
 
     def test_set_arrow_and_orbital_variants_route_mapped_values(self) -> None:
         with (

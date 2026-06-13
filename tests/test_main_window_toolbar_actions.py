@@ -18,6 +18,7 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     try:
+        from ui.canvas_insert_state import insert_state_for
         from ui.canvas_tool_settings_state import tool_settings_state_for
         from ui.main_window import MainWindow
         from ui.main_window_canvas_ports import active_canvas_for_window
@@ -149,6 +150,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
 
         self.assertIn("Color", [action.text() for action in tools_bar.actions()])
         self.assertIn("Ring Fill", [action.text() for action in tools_bar.actions()])
+        self.assertNotIn("Template", [action.text() for action in tools_bar.actions()])
         self.assertNotIn("Bond Length", [button.toolTip() for button in panel_bar.findChildren(QToolButton)])
         self.assertNotIn("Color", [button.toolTip() for button in panel_bar.findChildren(QToolButton)])
         self.assertNotIn("Ring Fill", [button.toolTip() for button in panel_bar.findChildren(QToolButton)])
@@ -238,25 +240,29 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         tool_routing_service = services_for_window(self.window).tool_routing_service
         with mock.patch.object(active_canvas_for_window(self.window).services.insert_controller, "begin_ring_template_insert") as begin_insert:
             entries = dict(tool_routing_service.template_entries(self.window))
+            entries["Benzene"]()
             entries["Cyclopropane"]()
             entries["Cycloheptane"]()
             entries["Cyclooctane"]()
             entries["Cyclohexane (Chair)"]()
 
-        self.assertEqual(begin_insert.call_args_list[0].args, (3,))
-        self.assertEqual(begin_insert.call_args_list[0].kwargs, {"style": "regular"})
-        self.assertEqual(begin_insert.call_args_list[1].args, (7,))
+        self.assertEqual(begin_insert.call_args_list[0].args, (6,))
+        self.assertEqual(begin_insert.call_args_list[0].kwargs, {"style": "benzene"})
+        self.assertEqual(begin_insert.call_args_list[1].args, (3,))
         self.assertEqual(begin_insert.call_args_list[1].kwargs, {"style": "regular"})
-        self.assertEqual(begin_insert.call_args_list[2].args, (8,))
+        self.assertEqual(begin_insert.call_args_list[2].args, (7,))
         self.assertEqual(begin_insert.call_args_list[2].kwargs, {"style": "regular"})
-        self.assertEqual(begin_insert.call_args_list[3].args, (6,))
-        self.assertEqual(begin_insert.call_args_list[3].kwargs, {"style": "chair"})
+        self.assertEqual(begin_insert.call_args_list[3].args, (8,))
+        self.assertEqual(begin_insert.call_args_list[3].kwargs, {"style": "regular"})
+        self.assertEqual(begin_insert.call_args_list[4].args, (6,))
+        self.assertEqual(begin_insert.call_args_list[4].kwargs, {"style": "chair"})
 
         menu = QMenu()
         tool_routing_service.populate_template_menu(self.window, menu)
         self.assertEqual(
             [action.text() for action in menu.actions()],
             [
+                "Benzene",
                 "Cyclopropane",
                 "Cyclobutane",
                 "Cyclopentane",
@@ -266,24 +272,35 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
             ],
         )
 
-    def test_template_action_shows_context_icon_buttons_and_routes_current_canvas(self) -> None:
-        with mock.patch.object(active_canvas_for_window(self.window).services.insert_controller, "begin_ring_template_insert") as begin_insert:
-            self.window.ui_references.tool_actions["template"].trigger()
+    def test_ring_action_shows_template_icon_buttons_and_routes_current_canvas(self) -> None:
+        insert_controller = active_canvas_for_window(self.window).services.insert_controller
+        with mock.patch.object(
+            insert_controller,
+            "begin_ring_template_insert",
+            wraps=insert_controller.begin_ring_template_insert,
+        ) as begin_insert:
+            self.window.ui_references.tool_actions["benzene"].trigger()
 
             button = next(
-                widget for widget in self.window.findChildren(QToolButton) if widget.toolTip() == "Cyclopropane"
+                widget for widget in self.window.findChildren(QToolButton) if widget.toolTip() == "Benzene"
             )
-            self.assertEqual(self.window.runtime_state.context_bar_page_override, "template")
-            self.assertTrue(self.window.ui_references.tool_actions["template"].isChecked())
-            self.assertEqual(self.window.statusBar().currentMessage(), "Template Tool")
+            self.assertIsNone(self.window.runtime_state.context_bar_page_override)
+            self.assertTrue(self.window.ui_references.tool_actions["benzene"].isChecked())
+            self.assertTrue(button.isChecked())
+            self.assertTrue(insert_state_for(active_canvas_for_window(self.window)).template_active)
+            self.assertEqual(insert_state_for(active_canvas_for_window(self.window)).template_ring_size, 6)
+            self.assertEqual(insert_state_for(active_canvas_for_window(self.window)).template_ring_style, "benzene")
+            self.assertEqual(self.window.statusBar().currentMessage(), "Ring Tool")
             self.assertEqual(
                 services_for_window(self.window).status_service.status_context_texts()["tool"],
-                "Tool: Template",
+                "Tool: Ring",
             )
 
-            button.click()
+            self.window.ui_references.tool_actions["select"].trigger()
+            self.app.processEvents()
+            self.assertFalse(button.isChecked())
 
-        begin_insert.assert_called_once_with(3, style="regular")
+        begin_insert.assert_called_once_with(6, "benzene")
 
     def test_arrow_action_shows_context_icon_buttons_and_routes_type_and_preset(self) -> None:
         self.window.ui_references.tool_actions["arrow"].trigger()

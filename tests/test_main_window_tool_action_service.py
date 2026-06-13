@@ -25,8 +25,8 @@ class _HarnessWindow(QMainWindow):
             icon_select=self._blank_icon,
             icon_bond=self._blank_icon,
             icon_text=self._blank_icon,
+            icon_mark=self._blank_icon,
             icon_ring=self._blank_icon,
-            icon_templates=self._blank_icon,
             icon_arrow=self._blank_icon,
             icon_ts_bracket=self._blank_icon,
             icon_perspective=self._blank_icon,
@@ -111,21 +111,6 @@ class MainWindowToolActionServiceTest(unittest.TestCase):
         )
         self.tool_state_service.set_bond_style.assert_called_once_with(self.window, "Hash")
 
-    def test_activate_mark_tool_updates_canvas_and_status_message(self) -> None:
-        self.service.activate_mark_tool(self.window, "minus")
-
-        self.window.tool_mode_controller.set_mark_kind.assert_called_once_with("minus")
-        self.assertEqual(self.window.statusBar().currentMessage(), "Mark Tool")
-        self.tool_mode_controller_for_window.assert_called_once_with(self.window)
-        self.status_service.refresh_status_context.assert_called_once_with(self.window)
-
-    def test_activate_template_tool_shows_template_context(self) -> None:
-        self.service.activate_template_tool(self.window)
-
-        self.context_page_state_service.show_context_page.assert_called_once_with(self.window, "template")
-        self.assertEqual(self.window.statusBar().currentMessage(), "Template Tool")
-        self.status_service.refresh_status_context.assert_called_once_with(self.window)
-
     def test_activate_ring_fill_tool_shows_ring_fill_context(self) -> None:
         self.service.activate_ring_fill_tool(self.window)
 
@@ -139,23 +124,24 @@ class MainWindowToolActionServiceTest(unittest.TestCase):
         actions["select"].trigger()
         actions["color"].trigger()
         actions["ring_fill"].trigger()
-        actions["template"].trigger()
         actions["bond_hash"].trigger()
-        actions["mark_minus"].trigger()
+        actions["mark"].trigger()
 
+        self.assertNotIn("template", actions)
+        self.assertNotIn("mark_plus", actions)
+        self.assertNotIn("mark_minus", actions)
+        self.assertNotIn("mark_radical", actions)
         self.context_page_state_service.set_tool_with_status.assert_any_call(self.window, "select")
         self.context_page_state_service.set_tool_with_status.assert_any_call(self.window, "color")
+        self.context_page_state_service.set_tool_with_status.assert_any_call(self.window, "mark")
         self.context_page_state_service.set_tool_with_status.assert_any_call(
             self.window,
             "bond",
             reset_bond_style=False,
         )
-        self.context_page_state_service.show_context_page.assert_any_call(self.window, "template")
         self.context_page_state_service.show_context_page.assert_any_call(self.window, "ring_fill")
-        self.assertEqual(self.context_page_state_service.show_context_page.call_count, 2)
+        self.assertEqual(self.context_page_state_service.show_context_page.call_count, 1)
         self.tool_state_service.set_bond_style.assert_called_once_with(self.window, "Hash")
-        self.window.tool_mode_controller.set_mark_kind.assert_called_once_with("minus")
-        self.tool_mode_controller_for_window.assert_called_once_with(self.window)
 
 
 if __name__ == "__main__":

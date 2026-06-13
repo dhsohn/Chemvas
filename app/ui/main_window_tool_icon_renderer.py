@@ -68,6 +68,21 @@ class MainWindowToolIconRenderer:
         painter.drawLine(15, 7, 15, 23)
         painter.drawLine(7, 15, 23, 15)
 
+    def draw_mark(self, painter) -> None:
+        painter.setPen(self._icon_pen(self._stroke_active))
+        painter.setBrush(self._icon_brush(self._accent_fill_color))
+        bolt = QPolygonF(
+            [
+                QPointF(17.5, 4.5),
+                QPointF(8.0, 16.0),
+                QPointF(14.0, 16.0),
+                QPointF(12.0, 25.5),
+                QPointF(22.5, 12.8),
+                QPointF(16.5, 12.8),
+            ]
+        )
+        painter.drawPolygon(bolt)
+
     def draw_mark_minus(self, painter) -> None:
         painter.setPen(self._icon_pen(self._stroke_active))
         painter.drawLine(7, 15, 23, 15)

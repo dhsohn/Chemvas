@@ -69,25 +69,29 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
     def test_template_entries_and_template_menu_preserve_ring_size_and_style(self) -> None:
         with mock.patch.object(active_canvas_for_window(self.window).services.insert_controller, "begin_ring_template_insert") as begin_insert:
             entries = dict(self.service.template_entries(self.window))
+            entries["Benzene"]()
             entries["Cyclopropane"]()
             entries["Cycloheptane"]()
             entries["Cyclooctane"]()
             entries["Cyclohexane (Chair)"]()
 
-        self.assertEqual(begin_insert.call_args_list[0].args, (3,))
-        self.assertEqual(begin_insert.call_args_list[0].kwargs, {"style": "regular"})
-        self.assertEqual(begin_insert.call_args_list[1].args, (7,))
+        self.assertEqual(begin_insert.call_args_list[0].args, (6,))
+        self.assertEqual(begin_insert.call_args_list[0].kwargs, {"style": "benzene"})
+        self.assertEqual(begin_insert.call_args_list[1].args, (3,))
         self.assertEqual(begin_insert.call_args_list[1].kwargs, {"style": "regular"})
-        self.assertEqual(begin_insert.call_args_list[2].args, (8,))
+        self.assertEqual(begin_insert.call_args_list[2].args, (7,))
         self.assertEqual(begin_insert.call_args_list[2].kwargs, {"style": "regular"})
-        self.assertEqual(begin_insert.call_args_list[3].args, (6,))
-        self.assertEqual(begin_insert.call_args_list[3].kwargs, {"style": "chair"})
+        self.assertEqual(begin_insert.call_args_list[3].args, (8,))
+        self.assertEqual(begin_insert.call_args_list[3].kwargs, {"style": "regular"})
+        self.assertEqual(begin_insert.call_args_list[4].args, (6,))
+        self.assertEqual(begin_insert.call_args_list[4].kwargs, {"style": "chair"})
 
         menu = QMenu()
         self.service.populate_template_menu(self.window, menu)
         self.assertEqual(
             [action.text() for action in menu.actions()],
             [
+                "Benzene",
                 "Cyclopropane",
                 "Cyclobutane",
                 "Cyclopentane",

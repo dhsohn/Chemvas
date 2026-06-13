@@ -50,10 +50,19 @@ class MainWindowToolStateService:
             action.setChecked(True)
 
     def set_tool_with_status(self, window, tool: str, reset_bond_style: bool = True) -> None:
-        self._tool_mode_controller(window).set_tool(tool)
+        controller = self._tool_mode_controller(window)
+        if tool == "mark":
+            controller.set_mark_kind("plus")
+        else:
+            controller.set_tool(tool)
         if tool == "bond" and reset_bond_style:
             self.set_bond_style(window, "Single")
         window.statusBar().showMessage(f"{tool_display_name(tool)} Tool")
+        self._status.refresh_status_context(window)
+
+    def set_mark_kind(self, window, kind: str) -> None:
+        self._tool_mode_controller(window).set_mark_kind(kind)
+        window.statusBar().showMessage("Mark Tool")
         self._status.refresh_status_context(window)
 
     def set_arrow_type(self, window, value: str) -> None:

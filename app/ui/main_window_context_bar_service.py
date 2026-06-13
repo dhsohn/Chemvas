@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.canvas_tool_settings_state import tool_settings_state_for
+from ui.canvas_insert_state import insert_state_for
 from ui.main_window_context_bar_pages import bond_label_for_state
 from ui.main_window_theme import (
     CONTEXT_BAR_CONTENT_HEIGHT,
@@ -22,8 +23,8 @@ _TOOL_PAGE_KEYS = {
     "bond": "bond",
     "arrow": "arrow",
     "text": "atom",
+    "mark": "mark",
     "benzene": "ring",
-    "template": "template",
     "color": "color",
 }
 
@@ -47,6 +48,10 @@ class MainWindowContextBarService:
         self._pages: dict[str, QWidget] = {}
         self._bond_group: QButtonGroup | None = None
         self._bond_buttons: dict[str, QToolButton] = {}
+        self._ring_group: QButtonGroup | None = None
+        self._ring_buttons: dict[tuple[int, str], QToolButton] = {}
+        self._mark_group: QButtonGroup | None = None
+        self._mark_buttons: dict[str, QToolButton] = {}
         self._arrow_group: QButtonGroup | None = None
         self._arrow_buttons: dict[str, QToolButton] = {}
 
@@ -65,6 +70,10 @@ class MainWindowContextBarService:
         self._pages = context_pages.pages
         self._bond_group = context_pages.bond_group
         self._bond_buttons = context_pages.bond_buttons
+        self._ring_group = context_pages.ring_group
+        self._ring_buttons = context_pages.ring_buttons
+        self._mark_group = context_pages.mark_group
+        self._mark_buttons = context_pages.mark_buttons
         self._arrow_group = context_pages.arrow_group
         self._arrow_buttons = context_pages.arrow_buttons
         for page in self._pages.values():
@@ -82,8 +91,11 @@ class MainWindowContextBarService:
         key = page_key or _TOOL_PAGE_KEYS.get(tool or "", "empty")
         page = self._pages.get(key, self._pages["empty"])
         self._stack.setCurrentWidget(page)
+        self.reflect_ring_state(window)
         if key == "bond":
             self.reflect_state(window)
+        elif key == "mark":
+            self.reflect_mark_state(window)
         elif key == "arrow":
             self.reflect_arrow_state(window)
 
@@ -116,6 +128,41 @@ class MainWindowContextBarService:
             button.setChecked(button is target)
             button.blockSignals(blocked)
         self._bond_group.setExclusive(True)
+
+    def reflect_ring_state(self, window) -> None:
+        if not self._ring_buttons or self._ring_group is None:
+            return
+        canvas = self._active_canvas_or_none_for_window(window)
+        target = None
+        if canvas is not None:
+            insert_state = insert_state_for(canvas)
+            if insert_state.template_active and insert_state.template_ring_size is not None:
+                target = self._ring_buttons.get(
+                    (
+                        insert_state.template_ring_size,
+                        insert_state.template_ring_style or "regular",
+                    )
+                )
+        self._ring_group.setExclusive(False)
+        for button in self._ring_buttons.values():
+            blocked = button.blockSignals(True)
+            button.setChecked(button is target)
+            button.blockSignals(blocked)
+        self._ring_group.setExclusive(True)
+
+    def reflect_mark_state(self, window) -> None:
+        if not self._mark_buttons or self._mark_group is None:
+            return
+        canvas = self._active_canvas_or_none_for_window(window)
+        if canvas is None:
+            return
+        target = self._mark_buttons.get(tool_settings_state_for(canvas).mark_kind)
+        self._mark_group.setExclusive(False)
+        for button in self._mark_buttons.values():
+            blocked = button.blockSignals(True)
+            button.setChecked(button is target)
+            button.blockSignals(blocked)
+        self._mark_group.setExclusive(True)
 
     def reflect_arrow_state(self, window) -> None:
         if not self._arrow_buttons or self._arrow_group is None:

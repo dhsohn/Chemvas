@@ -3248,6 +3248,7 @@ def test_main_window_icon_factory_delegates_tool_drawing_to_renderer() -> None:
     assert "self._tool_icons = MainWindowToolIconRenderer(" in factory_source
     for icon_name in (
         "select",
+        "mark",
         "mark_plus",
         "mark_minus",
         "mark_radical",

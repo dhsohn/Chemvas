@@ -40,6 +40,21 @@ def _icon_pen(width: float | None = None, *, color=None, style=None) -> QPen:
     return pen
 
 
+class _FakePainter:
+    def __init__(self) -> None:
+        self.polygons = 0
+        self.lines = 0
+
+    def setPen(self, _pen) -> None:
+        pass
+
+    def drawPolygon(self, _polygon) -> None:
+        self.polygons += 1
+
+    def drawLine(self, *_args) -> None:
+        self.lines += 1
+
+
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for main window template icon renderer tests")
 class MainWindowTemplateIconRendererTest(unittest.TestCase):
     @classmethod
@@ -80,6 +95,18 @@ class MainWindowTemplateIconRendererTest(unittest.TestCase):
             with self.subTest(label=label):
                 bounds = self._render(lambda painter, label=label: self.renderer.draw_template_preview(painter, label))
                 self.assertIsNotNone(bounds)
+
+    def test_benzene_preview_icon_draws_aromatic_inner_bonds(self) -> None:
+        benzene = _FakePainter()
+        cyclopentane = _FakePainter()
+
+        self.renderer.draw_template_preview(benzene, "Benzene")
+        self.renderer.draw_template_preview(cyclopentane, "Cyclopentane")
+
+        self.assertEqual(benzene.polygons, 1)
+        self.assertEqual(benzene.lines, 3)
+        self.assertEqual(cyclopentane.polygons, 1)
+        self.assertEqual(cyclopentane.lines, 0)
 
     def test_templates_and_chair_preview_tolerate_empty_chair_geometry(self) -> None:
         with mock.patch("ui.main_window_template_icon_renderer.chair_icon_points", return_value=QPolygonF()):
