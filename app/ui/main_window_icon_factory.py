@@ -122,6 +122,9 @@ class MainWindowIconFactory:
     def icon_bond_bold(self) -> QIcon:
         return self.make_icon(self._bond_icons.draw_bold_bond)
 
+    def icon_mark(self) -> QIcon:
+        return self.make_icon(self._tool_icons.draw_mark)
+
     def icon_mark_plus(self) -> QIcon:
         return self.make_icon(self._tool_icons.draw_mark_plus)
 

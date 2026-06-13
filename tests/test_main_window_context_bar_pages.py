@@ -65,16 +65,20 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         self.assertEqual(bond_label_for_state("hash", 1), "Hash")
         self.assertIsNone(bond_label_for_state("unknown", 1))
 
-    def test_builder_returns_pages_and_wires_bond_template_arrow_actions(self) -> None:
+    def test_builder_returns_pages_and_wires_bond_ring_template_arrow_actions(self) -> None:
         pages = self.builder.build(self.window)
 
         self.assertEqual(
             set(pages.pages),
-            {"empty", "bond", "template", "arrow", "atom", "ring", "color", "ring_fill"},
+            {"empty", "bond", "arrow", "atom", "ring", "mark", "color", "ring_fill"},
         )
         self.assertIn("Single", pages.bond_buttons)
         self.assertIn("curved_double", pages.arrow_buttons)
+        self.assertIn("minus", pages.mark_buttons)
         self.assertIsNotNone(pages.bond_group)
+        self.assertIsNotNone(pages.ring_group)
+        self.assertIn((6, "benzene"), pages.ring_buttons)
+        self.assertIsNotNone(pages.mark_group)
         self.assertIsNotNone(pages.arrow_group)
 
         pages.bond_buttons["Hash"].click()
@@ -90,14 +94,21 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
 
         template_button = next(
             button
-            for button in pages.pages["template"].findChildren(QToolButton)
-            if button.toolTip() == "Cyclopropane"
+            for button in pages.pages["ring"].findChildren(QToolButton)
+            if button.toolTip() == "Benzene"
         )
         with mock.patch.object(self.insert_controller, "begin_ring_template_insert") as insert:
+            self.assertTrue(template_button.isCheckable())
+            self.assertFalse(template_button.isChecked())
             template_button.click()
 
-        insert.assert_called_once_with(3, style="regular")
+        insert.assert_called_once_with(6, style="benzene")
+        self.assertTrue(template_button.isChecked())
         self.insert_controller_for_window.assert_called_once_with(self.window)
+
+        pages.mark_buttons["minus"].click()
+        self.tool_state_service.set_mark_kind.assert_called_once_with(self.window, "minus")
+        self.assertTrue(pages.mark_buttons["minus"].isChecked())
 
         pages.arrow_buttons["curved_double"].click()
         preset_button = next(

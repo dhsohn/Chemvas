@@ -254,9 +254,9 @@ class CanvasViewUnitTest(unittest.TestCase):
 
         canvas_services_for(canvas).tool_mode_controller.set_tool("benzene")
 
-        self.assertFalse(insert_state_for(canvas).template_active)
-        self.assertIsNone(insert_state_for(canvas).template_ring_size)
-        self.assertIsNone(insert_state_for(canvas).template_ring_style)
+        self.assertTrue(insert_state_for(canvas).template_active)
+        self.assertEqual(insert_state_for(canvas).template_ring_size, 6)
+        self.assertEqual(insert_state_for(canvas).template_ring_style, "benzene")
         self.assertFalse(insert_state_for(canvas).smiles_active)
         self.assertIsNone(insert_state_for(canvas).smiles_preview_smiles)
         self.assertIsNone(insert_state_for(canvas).smiles_preview_center)

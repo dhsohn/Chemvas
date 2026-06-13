@@ -52,6 +52,8 @@ class CanvasToolModeController:
     def set_tool(self, tool_name: str) -> None:
         self._cancel_active_insert_modes()
         self._set_active_tool(tool_name)
+        if tool_name == "benzene" and self.insert_controller is not None:
+            self.insert_controller.begin_ring_template_insert(6, "benzene")
         self._refresh_tool_mode()
 
     def set_mark_kind(self, kind: str) -> None:

@@ -9,6 +9,7 @@ from ui.insert_commit_service import InsertCommitService
 from ui.insert_mode_logic import InsertSessionState
 from ui.insert_smiles_service import InsertSmilesService
 from ui.insert_template_service import InsertTemplateService
+from ui.sheet_setup_access import scene_pos_in_sheet_for
 from ui.template_insert_logic import (
     TemplateInsertRequest,
     TemplatePointResolvers,
@@ -109,6 +110,9 @@ class InsertController:
         self.smiles_service.cancel_smiles_insert()
 
     def commit_smiles_insert(self, pos: QPointF) -> None:
+        if not scene_pos_in_sheet_for(self.canvas, pos):
+            self.clear_smiles_preview()
+            return
         self.smiles_service.commit_smiles_insert(pos)
 
     def clear_smiles_preview(self) -> None:
@@ -118,6 +122,9 @@ class InsertController:
         return self.smiles_service.smiles_preview_snapshot()
 
     def render_smiles_preview(self, pos: QPointF) -> None:
+        if not scene_pos_in_sheet_for(self.canvas, pos):
+            self.clear_smiles_preview()
+            return
         self.smiles_service.render_smiles_preview(pos)
 
     def cancel_template_insert(self) -> None:
@@ -163,12 +170,18 @@ class InsertController:
         return self.insert_commit_service.bond_merge_seed(bond_id)
 
     def commit_template_insert(self, pos: QPointF) -> None:
+        if not scene_pos_in_sheet_for(self.canvas, pos):
+            self.clear_template_preview()
+            return
         self.template_service.commit_template_request(pos, self.template_insert_request(pos))
 
     def clear_template_preview(self) -> None:
         self.template_service.clear_template_preview()
 
     def render_template_preview(self, pos: QPointF) -> None:
+        if not scene_pos_in_sheet_for(self.canvas, pos):
+            self.clear_template_preview()
+            return
         self.template_service.render_template_request_preview(
             pos,
             self.template_insert_request(pos),

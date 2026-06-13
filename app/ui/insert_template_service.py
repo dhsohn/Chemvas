@@ -155,7 +155,7 @@ class InsertTemplateService:
         ):
             self.cancel_template_insert()
             return
-        self.cancel_template_insert()
+        self.clear_template_preview()
 
     def clear_template_preview(self) -> None:
         (
@@ -196,6 +196,7 @@ class InsertTemplateService:
             atom_radius,
             len(self.insert_state.template_preview_lines),
             len(self.insert_state.template_preview_dots),
+            aromatic=getattr(plan, "ring_style", None) == "benzene" and getattr(plan, "ring_size", None) == 6,
         )
         if preview_plan.action == "clear" or preview_plan.geometry is None:
             clear_preview()

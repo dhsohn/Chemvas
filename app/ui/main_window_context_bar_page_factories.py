@@ -9,6 +9,7 @@ from ui.main_window_config import (
     ARROW_MENU_SPECS,
     ARROW_PRESET_SPECS,
     COLOR_PALETTE_SPECS,
+    MARK_TOOL_ACTION_SPECS,
     TEMPLATE_ENTRY_SPECS,
 )
 from ui.main_window_context_bar_widgets import (
@@ -49,6 +50,20 @@ class ArrowContextPage:
     buttons: dict[str, QToolButton]
 
 
+@dataclass(frozen=True)
+class TemplateContextPage:
+    page: QWidget
+    group: QButtonGroup
+    buttons: dict[tuple[int, str], QToolButton]
+
+
+@dataclass(frozen=True)
+class MarkContextPage:
+    page: QWidget
+    group: QButtonGroup
+    buttons: dict[str, QToolButton]
+
+
 def bond_label_for_state(style: str, order: int) -> str | None:
     return _LABEL_BY_STYLE.get((style, order))
 
@@ -82,20 +97,43 @@ def build_bond_page(window, activate_bond_style_for_window, set_bond_length_for_
     return BondContextPage(page=page, group=group, buttons=buttons)
 
 
-def build_template_page(window, insert_controller) -> QWidget:
+def build_template_page(window, insert_controller) -> TemplateContextPage:
     page, layout = new_context_page()
     icon_factory = icon_factory_for_window(window)
+    group = QButtonGroup(page)
+    group.setExclusive(True)
+    buttons: dict[tuple[int, str], QToolButton] = {}
     for label, ring_size, style in TEMPLATE_ENTRY_SPECS:
-        button = icon_button(icon_factory.icon_template_preview(label), label)
+        button = icon_button(icon_factory.icon_template_preview(label), label, checkable=True)
         button.clicked.connect(
             lambda _checked=False, n=ring_size, s=style: insert_controller.begin_ring_template_insert(
                 n,
                 style=s,
             )
         )
+        group.addButton(button)
+        buttons[(ring_size, style)] = button
         layout.addWidget(button)
     layout.addStretch(1)
-    return page
+    return TemplateContextPage(page=page, group=group, buttons=buttons)
+
+
+def build_mark_page(window, tool_state_service) -> MarkContextPage:
+    page, layout = new_context_page()
+    icon_factory = icon_factory_for_window(window)
+
+    group = QButtonGroup(page)
+    group.setExclusive(True)
+    buttons: dict[str, QToolButton] = {}
+    for _key, _label, kind, icon_method, tooltip in MARK_TOOL_ACTION_SPECS:
+        button = icon_button(getattr(icon_factory, icon_method)(), tooltip, checkable=True)
+        button.clicked.connect(lambda _checked=False, value=kind: tool_state_service.set_mark_kind(window, value))
+        group.addButton(button)
+        buttons[kind] = button
+        layout.addWidget(button)
+
+    layout.addStretch(1)
+    return MarkContextPage(page=page, group=group, buttons=buttons)
 
 
 def build_arrow_page(window, tool_mode_controller, tool_state_service) -> ArrowContextPage:
@@ -144,13 +182,6 @@ def build_atom_page() -> QWidget:
     return page
 
 
-def build_ring_page() -> QWidget:
-    page, layout = new_context_page()
-    layout.addWidget(hint_label("Benzene ring"))
-    layout.addStretch(1)
-    return page
-
-
 def build_color_palette_page(
     *,
     tooltip_prefix: str,
@@ -168,12 +199,14 @@ def build_color_palette_page(
 __all__ = [
     "ArrowContextPage",
     "BondContextPage",
+    "MarkContextPage",
+    "TemplateContextPage",
     "bond_label_for_state",
     "build_arrow_page",
     "build_atom_page",
     "build_bond_page",
     "build_color_palette_page",
     "build_empty_page",
-    "build_ring_page",
+    "build_mark_page",
     "build_template_page",
 ]

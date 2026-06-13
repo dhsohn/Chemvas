@@ -23,6 +23,7 @@ COLOR_PALETTE_SPECS: list[tuple[str, str]] = [
 ]
 
 TEMPLATE_ENTRY_SPECS: list[tuple[str, int, str]] = [
+    ("Benzene", 6, "benzene"),
     ("Cyclopropane", 3, "regular"),
     ("Cyclobutane", 4, "regular"),
     ("Cyclopentane", 5, "regular"),
@@ -35,6 +36,7 @@ TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
     ("select", "Select", "select", "icon_select", "Select / Marquee (ChemDraw: Space)"),
     ("bond", "Bond", "bond", "icon_bond", "Bond (ChemDraw: X)"),
     ("text", "Atom", "text", "icon_text", "Atom / Text (ChemDraw: T)"),
+    ("mark", "Mark", "mark", "icon_mark", "Charge / Radical"),
     ("benzene", "Ring", "benzene", "icon_ring", "Ring / Benzene (ChemDraw: J)"),
     ("color", "Color", "color", "icon_color", "Color"),
     ("arrow", "Arrow", "arrow", "icon_arrow", "Arrow (ChemDraw: E)"),
@@ -47,13 +49,6 @@ TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
         "Perspective Rotation (ChemDraw: Alt+D, Shift+drag locks X/Y)",
     ),
 ]
-
-TEMPLATE_TOOL_ACTION_SPEC: tuple[str, str, str, str] = (
-    "template",
-    "Template",
-    "icon_templates",
-    "Templates",
-)
 
 RING_FILL_TOOL_ACTION_SPEC: tuple[str, str, str, str] = (
     "ring_fill",
@@ -77,8 +72,8 @@ MARK_TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
 
 LEFT_TOOLBAR_GROUPS: list[tuple[str, ...]] = [
     ("select", "bond", "text"),
-    ("mark_plus", "mark_minus", "mark_radical"),
-    ("benzene", "template", "color", "ring_fill"),
+    ("mark",),
+    ("benzene", "color", "ring_fill"),
     ("arrow", "ts_bracket", "perspective"),
 ]
 
@@ -101,7 +96,6 @@ __all__ = [
     "LEFT_TOOLBAR_GROUPS",
     "MARK_TOOL_ACTION_SPECS",
     "RING_FILL_TOOL_ACTION_SPEC",
-    "TEMPLATE_TOOL_ACTION_SPEC",
     "TEMPLATE_ENTRY_SPECS",
     "TOOL_ACTION_SPECS",
 ]

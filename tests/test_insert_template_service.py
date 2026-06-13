@@ -81,9 +81,11 @@ def test_insert_template_service_template_request_uses_injected_hit_testing() ->
     hit_testing.find_bond_near.assert_called_once_with(QPointF(1.0, 2.0), 7.0)
 
 
-def test_insert_template_service_commit_resolves_plan_and_cancels_session() -> None:
+def test_insert_template_service_commit_resolves_plan_and_keeps_session_active() -> None:
     canvas = _FakeCanvas()
     canvas.insert_state.template_active = True
+    canvas.insert_state.template_ring_size = 5
+    canvas.insert_state.template_ring_style = "regular"
     commit_service = mock.Mock()
     commit_service.apply_template_commit.return_value = True
     service = _service_for(canvas, insert_commit_service=commit_service)
@@ -105,7 +107,9 @@ def test_insert_template_service_commit_resolves_plan_and_cancels_session() -> N
         plan=plan,
         resolution=resolution,
     )
-    assert not canvas.insert_state.template_active
+    assert canvas.insert_state.template_active
+    assert canvas.insert_state.template_ring_size == 5
+    assert canvas.insert_state.template_ring_style == "regular"
 
 
 def test_insert_template_service_render_preview_routes_clear_and_apply_paths() -> None:
@@ -136,7 +140,7 @@ def test_insert_template_service_render_preview_routes_clear_and_apply_paths() -
         mock.patch(
             "ui.insert_template_service.plan_template_preview_update",
             return_value=SimpleNamespace(action="update", geometry={"segments": 2}),
-        ),
+        ) as plan_update,
         mock.patch(
             "ui.insert_template_service.apply_template_preview_geometry_helper",
             return_value=(["items"], ["lines"], ["dots"]),
@@ -149,7 +153,40 @@ def test_insert_template_service_render_preview_routes_clear_and_apply_paths() -
         )
 
     clear_preview.assert_not_called()
+    self_args = plan_update.call_args
+    assert self_args.kwargs == {"aromatic": False}
     apply_helper.assert_called_once()
     assert canvas.insert_state.template_preview_items == ["items"]
     assert canvas.insert_state.template_preview_lines == ["lines"]
     assert canvas.insert_state.template_preview_dots == ["dots"]
+
+
+def test_insert_template_service_render_benzene_preview_requests_aromatic_geometry() -> None:
+    canvas = _FakeCanvas()
+    service = _service_for(canvas)
+    request = TemplateInsertRequest(6, (4.0, 5.0), ring_style="benzene")
+    plan = plan_template_preview(request)
+    assert plan is not None
+    resolution = TemplateInsertResolution(
+        plan=plan,
+        points=[(1.0, 0.0), (2.0, 0.0), (3.0, 1.0), (2.0, 2.0), (1.0, 2.0), (0.0, 1.0)],
+    )
+
+    with (
+        mock.patch("ui.insert_template_service.plan_template_preview", return_value=plan),
+        mock.patch(
+            "ui.template_geometry_resolver_service.resolve_template_insert",
+            return_value=resolution,
+        ),
+        mock.patch(
+            "ui.insert_template_service.plan_template_preview_update",
+            return_value=SimpleNamespace(action="update", geometry={"segments": 9}),
+        ) as plan_update,
+        mock.patch(
+            "ui.insert_template_service.apply_template_preview_geometry_helper",
+            return_value=(["items"], ["lines"], ["dots"]),
+        ),
+    ):
+        service.render_template_request_preview(QPointF(4.0, 5.0), request)
+
+    assert plan_update.call_args.kwargs == {"aromatic": True}

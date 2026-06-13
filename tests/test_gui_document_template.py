@@ -596,7 +596,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
         self._click_scene_point(QPointF(0.0, 0.0))
 
-        self.assertFalse(insert_state_for(active_canvas_for_window(self.window)).template_active)
+        self.assertTrue(insert_state_for(active_canvas_for_window(self.window)).template_active)
+        self.assertEqual(insert_state_for(active_canvas_for_window(self.window)).template_ring_size, 4)
+        self.assertEqual(insert_state_for(active_canvas_for_window(self.window)).template_ring_style, "regular")
         self.assertEqual(insert_state_for(active_canvas_for_window(self.window)).template_preview_lines, [])
         self.assertEqual(insert_state_for(active_canvas_for_window(self.window)).template_preview_dots, [])
         self.assertEqual(len(active_canvas_for_window(self.window).model.atoms), before_atom_count + 2)
@@ -624,7 +626,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
         self._click_scene_point(midpoint)
 
-        self.assertFalse(insert_state_for(active_canvas_for_window(self.window)).template_active)
+        self.assertTrue(insert_state_for(active_canvas_for_window(self.window)).template_active)
+        self.assertEqual(insert_state_for(active_canvas_for_window(self.window)).template_ring_size, 6)
+        self.assertEqual(insert_state_for(active_canvas_for_window(self.window)).template_ring_style, "chair")
         new_atom_ids = set(active_canvas_for_window(self.window).model.atoms) - original_atom_ids
         self.assertEqual(len(new_atom_ids), 4)
         for atom_id in new_atom_ids:

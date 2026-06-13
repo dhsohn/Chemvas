@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from PyQt6.QtCore import QPointF
+
 from ui.main_window_icon_geometry import (
     chair_icon_points,
     chair_icon_rect,
@@ -30,8 +32,20 @@ class MainWindowTemplateIconRenderer:
         def draw_ring(sides: int) -> None:
             painter.drawPolygon(template_preview_ring_polygon(sides))
 
+        def draw_benzene() -> None:
+            center = QPointF(15.0, 15.0)
+            polygon = template_preview_ring_polygon(6)
+            painter.drawPolygon(polygon)
+            for index in range(0, polygon.count(), 2):
+                start = polygon[index]
+                end = polygon[(index + 1) % polygon.count()]
+                painter.drawLine(_toward_center(start, center), _toward_center(end, center))
+
         painter.setPen(self._icon_pen(self._stroke_thin))
         lower = label.lower()
+        if "benzene" in lower:
+            draw_benzene()
+            return
         ring_sides = template_preview_ring_sides(label)
         if ring_sides is not None:
             draw_ring(ring_sides)
@@ -58,6 +72,13 @@ class MainWindowTemplateIconRenderer:
             painter.drawText(16, 18, "NO2" if label == "Nitro" else "SO2")
         else:
             draw_ring(6)
+
+
+def _toward_center(point: QPointF, center: QPointF, amount: float = 0.22) -> QPointF:
+    return QPointF(
+        point.x() + (center.x() - point.x()) * amount,
+        point.y() + (center.y() - point.y()) * amount,
+    )
 
 
 __all__ = ["MainWindowTemplateIconRenderer"]

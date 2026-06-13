@@ -480,17 +480,18 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertEqual(hover_state_for(active_canvas_for_window(self.window)).atom_id, atom_id)
         self.assertEqual(len(hover_state_for(active_canvas_for_window(self.window)).items), 1)
 
-    def test_benzene_tool_hover_preview_clears_on_tool_change_and_deactivate(self) -> None:
+    def test_benzene_tool_category_selects_default_benzene_template(self) -> None:
         hover_pos = QPointF(24.0, 18.0)
 
         canvas_services_for(active_canvas_for_window(self.window)).tool_mode_controller.set_tool("benzene")
         self._hover_scene_point(hover_pos)
 
         self.assertEqual(active_canvas_for_window(self.window).services.tools.active.name, "benzene")
-        self.assertTrue(insert_state_for(active_canvas_for_window(self.window)).benzene_preview_items)
-        self.assertTrue(
-            all(item.scene() is active_canvas_for_window(self.window).scene() for item in insert_state_for(active_canvas_for_window(self.window)).benzene_preview_items)
-        )
+        self.assertEqual(insert_state_for(active_canvas_for_window(self.window)).benzene_preview_items, [])
+        self.assertTrue(insert_state_for(active_canvas_for_window(self.window)).template_active)
+        self.assertEqual(insert_state_for(active_canvas_for_window(self.window)).template_ring_size, 6)
+        self.assertEqual(insert_state_for(active_canvas_for_window(self.window)).template_ring_style, "benzene")
+        self.assertEqual(len(insert_state_for(active_canvas_for_window(self.window)).template_preview_lines), 9)
 
         canvas_services_for(active_canvas_for_window(self.window)).tool_mode_controller.set_tool("select")
         self.app.processEvents()
@@ -498,10 +499,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
         self.assertEqual(active_canvas_for_window(self.window).services.tools.active.name, "select")
         self.assertEqual(insert_state_for(active_canvas_for_window(self.window)).benzene_preview_items, [])
-
-        canvas_services_for(active_canvas_for_window(self.window)).tool_mode_controller.set_tool("benzene")
-        self._hover_scene_point(QPointF(-12.0, 33.0))
-        self.assertTrue(insert_state_for(active_canvas_for_window(self.window)).benzene_preview_items)
+        self.assertFalse(insert_state_for(active_canvas_for_window(self.window)).template_active)
 
         active_canvas_for_window(self.window).services.tools.active.deactivate()
         self.app.processEvents()

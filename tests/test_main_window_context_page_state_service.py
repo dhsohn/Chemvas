@@ -90,10 +90,10 @@ def test_show_context_page_sets_override_checks_action_and_refreshes() -> None:
     tool_action_for_window.return_value = action
     window = SimpleNamespace()
 
-    service.show_context_page(window, "template")
+    service.show_context_page(window, "ring_fill")
 
-    set_context_bar_page_override_for_window.assert_called_once_with(window, "template")
-    tool_action_for_window.assert_called_once_with(window, "template")
+    set_context_bar_page_override_for_window.assert_called_once_with(window, "ring_fill")
+    tool_action_for_window.assert_called_once_with(window, "ring_fill")
     action.setChecked.assert_called_once_with(True)
     context_bar_service.refresh_window.assert_called_once_with(window)
 
@@ -111,7 +111,7 @@ def test_show_context_page_allows_missing_action() -> None:
     tool_action_for_window.return_value = None
     window = SimpleNamespace()
 
-    service.show_context_page(window, "template")
+    service.show_context_page(window, "ring_fill")
 
-    set_context_bar_page_override_for_window.assert_called_once_with(window, "template")
+    set_context_bar_page_override_for_window.assert_called_once_with(window, "ring_fill")
     context_bar_service.refresh_window.assert_called_once_with(window)

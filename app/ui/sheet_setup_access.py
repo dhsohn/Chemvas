@@ -45,6 +45,13 @@ def sheet_rect_for(canvas) -> QRectF:
     return QRectF(sheet_setup_state_for(canvas).rect)
 
 
+def scene_pos_in_sheet_for(canvas, pos) -> bool:
+    rect = sheet_rect_for(canvas)
+    if rect.isNull() or rect.isEmpty():
+        return True
+    return rect.contains(pos)
+
+
 def set_sheet_setup_for(canvas, size_name: str, orientation: str) -> None:
     set_sheet_setup_state_for(canvas, size_name, orientation)
     apply_sheet_scene_rect_for(canvas)
@@ -53,6 +60,7 @@ def set_sheet_setup_for(canvas, size_name: str, orientation: str) -> None:
 
 __all__ = [
     "apply_sheet_scene_rect_for",
+    "scene_pos_in_sheet_for",
     "set_sheet_setup_for",
     "sheet_orientation_for",
     "sheet_rect_for",

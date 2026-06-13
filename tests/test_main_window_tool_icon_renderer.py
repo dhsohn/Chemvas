@@ -78,6 +78,7 @@ class MainWindowToolIconRendererTest(unittest.TestCase):
     def test_tool_icon_matrix_renders_non_empty_bounds(self) -> None:
         draw_methods = (
             self.renderer.draw_select,
+            self.renderer.draw_mark,
             self.renderer.draw_mark_plus,
             self.renderer.draw_mark_minus,
             self.renderer.draw_mark_radical,

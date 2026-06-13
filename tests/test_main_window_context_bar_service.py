@@ -34,7 +34,7 @@ def test_active_tool_name_uses_injected_window_port() -> None:
 
 def test_refresh_window_uses_injected_active_tool_name() -> None:
     active_tool_name_for_window = mock.Mock(return_value="bond")
-    context_bar_page_override_for_window = mock.Mock(return_value="template")
+    context_bar_page_override_for_window = mock.Mock(return_value="ring_fill")
     service = _context_bar_service(
         active_tool_name_for_window=active_tool_name_for_window,
         context_bar_page_override_for_window=context_bar_page_override_for_window,
@@ -46,4 +46,4 @@ def test_refresh_window_uses_injected_active_tool_name() -> None:
 
     active_tool_name_for_window.assert_called_once_with(window)
     context_bar_page_override_for_window.assert_called_once_with(window)
-    service.refresh.assert_called_once_with(window, "bond", page_key="template")
+    service.refresh.assert_called_once_with(window, "bond", page_key="ring_fill")

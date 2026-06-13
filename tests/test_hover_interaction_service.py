@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from core.model import Atom, Bond
-from PyQt6.QtCore import QPointF
+from PyQt6.QtCore import QPointF, QRectF
 from ui.canvas_hover_state import (
     HoverPreviewState,
     hover_preview_state_for,
@@ -73,6 +73,15 @@ class HoverInteractionServiceTest(unittest.TestCase):
 
         canvas.services.mark_hover_preview_service.add_mark_hover_preview.assert_called_once_with(QPointF(1.0, 2.0))
         canvas.services.hover_scene_service.clear_hover_highlight.assert_not_called()
+
+    def test_update_hover_highlight_clears_without_preview_outside_sheet(self) -> None:
+        canvas = self._make_canvas(active_tool="mark")
+        canvas.sheet_setup_state = SimpleNamespace(rect=QRectF(-10.0, -10.0, 20.0, 20.0))
+
+        self._hover_service(canvas).update_hover_highlight(QPointF(999.0, 999.0))
+
+        canvas.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
+        canvas.services.mark_hover_preview_service.add_mark_hover_preview.assert_not_called()
 
     def test_update_hover_highlight_handles_no_atom_clear_and_preview_paths(self) -> None:
         clear_canvas = self._make_canvas(atoms={}, bonds=[], active_tool="select")

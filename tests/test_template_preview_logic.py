@@ -1,6 +1,7 @@
 import unittest
 
 from ui.template_preview_logic import (
+    build_benzene_template_preview_geometry,
     build_template_preview_geometry,
     plan_template_preview_update,
 )
@@ -61,6 +62,32 @@ class TemplatePreviewLogicTest(unittest.TestCase):
         assert plan.geometry is not None
         self.assertEqual(len(plan.geometry.line_segments), 3)
         self.assertEqual(len(plan.geometry.dot_rects), 3)
+
+    def test_benzene_template_preview_adds_aromatic_inner_segments(self) -> None:
+        points = [
+            (0.0, 0.0),
+            (10.0, 0.0),
+            (15.0, 8.0),
+            (10.0, 16.0),
+            (0.0, 16.0),
+            (-5.0, 8.0),
+        ]
+
+        geometry = build_benzene_template_preview_geometry(points, atom_radius=1.0)
+        plan = plan_template_preview_update(
+            points,
+            atom_radius=1.0,
+            existing_line_count=6,
+            existing_dot_count=6,
+            aromatic=True,
+        )
+
+        self.assertEqual(len(geometry.line_segments), 9)
+        self.assertEqual(len(geometry.dot_rects), 6)
+        self.assertEqual(geometry.line_segments[:6], build_template_preview_geometry(points, 1.0).line_segments)
+        self.assertEqual(plan.action, "rebuild")
+        assert plan.geometry is not None
+        self.assertEqual(len(plan.geometry.line_segments), 9)
 
     def test_plan_template_preview_update_updates_when_counts_match(self) -> None:
         plan = plan_template_preview_update(

@@ -20,12 +20,16 @@ class MainWindowToolbarLogicTest(unittest.TestCase):
             )
         )
 
+        entries["Benzene"]()
         entries["Cyclopropane"]()
         entries["Cycloheptane"]()
         entries["Cyclooctane"]()
         entries["Cyclohexane (Chair)"]()
 
-        self.assertEqual(calls, [(3, "regular"), (7, "regular"), (8, "regular"), (6, "chair")])
+        self.assertEqual(
+            calls,
+            [(6, "benzene"), (3, "regular"), (7, "regular"), (8, "regular"), (6, "chair")],
+        )
 
     def test_mapping_helpers_use_expected_defaults(self) -> None:
         self.assertEqual(bond_style_from_label("Bold"), ("bold_in", 1))
@@ -37,7 +41,7 @@ class MainWindowToolbarLogicTest(unittest.TestCase):
         self.assertEqual(arrow_preset_from_label("Bold"), (2.2, 0.4))
         self.assertEqual(arrow_preset_from_label("Unknown"), (1.2, 0.3))
         self.assertEqual(tool_display_name("text"), "Atom / Text")
-        self.assertEqual(tool_display_name("template"), "Template")
+        self.assertEqual(tool_display_name("benzene"), "Ring")
         self.assertEqual(tool_display_name("mystery"), "Mystery")
 
     def test_tool_action_key_for_canvas_state_handles_bond_mark_and_regular_tools(self) -> None:
@@ -63,7 +67,7 @@ class MainWindowToolbarLogicTest(unittest.TestCase):
                 active_bond_style="single",
                 mark_kind="minus",
             ),
-            "mark_minus",
+            "mark",
         )
         self.assertEqual(
             tool_action_key_for_canvas_state(

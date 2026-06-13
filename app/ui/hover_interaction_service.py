@@ -24,6 +24,7 @@ from ui.hover_interaction_access import (
     add_mark_hover_preview_for,
     bond_preview_signature_for,
 )
+from ui.sheet_setup_access import scene_pos_in_sheet_for
 
 if TYPE_CHECKING:
     from core.model import Bond
@@ -48,6 +49,10 @@ class HoverInteractionService:
         return str(name) if name else None
 
     def update_hover_highlight(self, pos: QPointF) -> None:
+        if not scene_pos_in_sheet_for(self.canvas, pos):
+            clear_hover_highlight_for(self.canvas)
+            return
+
         active_tool = self._active_tool()
         if active_tool is not None and active_tool.name == "mark":
             add_mark_hover_preview_for(self.canvas, pos)

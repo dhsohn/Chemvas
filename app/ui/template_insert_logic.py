@@ -56,8 +56,8 @@ def plan_template_commit(request: TemplateInsertRequest) -> TemplateInsertPlan |
 
 
 def plan_template_preview(request: TemplateInsertRequest) -> TemplateInsertPlan | None:
-    # Mirror the current canvas_view behavior exactly. Preview keeps benzene on the
-    # generic ring path, while commit dispatches to the dedicated benzene flow.
+    # Preview keeps benzene on the generic point-resolution path so fused/free
+    # placement can be resolved before aromatic preview segments are added.
     return _plan_template_insert(request, benzene_special_case=False)
 
 

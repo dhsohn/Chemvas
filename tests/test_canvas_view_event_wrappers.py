@@ -79,6 +79,8 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             render_smiles_preview=mock.Mock(),
             commit_template_insert=mock.Mock(),
             commit_smiles_insert=mock.Mock(),
+            clear_template_preview=mock.Mock(),
+            clear_smiles_preview=mock.Mock(),
         )
         view.services.insert_controller = insert_controller
         hover_interaction_service = SimpleNamespace(update_hover_highlight=mock.Mock())
@@ -143,6 +145,40 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         self.assertEqual(tool_view.services.insert_controller.commit_template_insert.call_count, 0)
         self.assertEqual(tool_view.services.insert_controller.commit_smiles_insert.call_count, 0)
 
+    def test_mouse_press_event_blocks_insert_and_drawing_tools_outside_sheet(self) -> None:
+        press_event = _FakeEvent(button=Qt.MouseButton.LeftButton)
+        outside_pos = QPointF(999.0, 999.0)
+
+        template_tool = SimpleNamespace(
+            name="bond",
+            on_mouse_press=mock.Mock(side_effect=AssertionError("tool should not run outside sheet")),
+        )
+        template_view = self._new_view(tool_active=template_tool)
+        template_view.services.hit_testing_service.scene_pos_from_event.return_value = outside_pos
+        insert_state_for(template_view).template_active = True
+
+        CanvasView.mousePressEvent(template_view, press_event)
+
+        template_view.services.insert_controller.commit_template_insert.assert_not_called()
+        template_view.services.insert_controller.clear_template_preview.assert_called_once_with()
+        template_tool.on_mouse_press.assert_not_called()
+        template_view.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
+        press_event.accept.assert_called_once_with()
+
+        tool_event = _FakeEvent(button=Qt.MouseButton.LeftButton)
+        drawing_tool = SimpleNamespace(
+            name="mark",
+            on_mouse_press=mock.Mock(side_effect=AssertionError("drawing tool should not run outside sheet")),
+        )
+        tool_view = self._new_view(tool_active=drawing_tool)
+        tool_view.services.hit_testing_service.scene_pos_from_event.return_value = outside_pos
+
+        CanvasView.mousePressEvent(tool_view, tool_event)
+
+        drawing_tool.on_mouse_press.assert_not_called()
+        tool_view.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
+        tool_event.accept.assert_called_once_with()
+
     def test_mouse_move_event_handles_preview_hover_and_tool_branches(self) -> None:
         move_event = _FakeEvent(buttons=Qt.MouseButton.NoButton)
 
@@ -182,6 +218,26 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         self.assertEqual(tool_view.services.hover_scene_service.clear_hover_highlight.call_count, 1)
         tool_view.services.hover_interaction_service.update_hover_highlight.assert_not_called()
 
+    def test_mouse_move_event_clears_previews_and_hover_outside_sheet(self) -> None:
+        outside_pos = QPointF(999.0, 999.0)
+        move_event = _FakeEvent(buttons=Qt.MouseButton.NoButton)
+
+        template_view = self._new_view()
+        template_view.services.hit_testing_service.scene_pos_from_event.return_value = outside_pos
+        insert_state_for(template_view).template_active = True
+        CanvasView.mouseMoveEvent(template_view, move_event)
+
+        template_view.services.insert_controller.render_template_preview.assert_not_called()
+        template_view.services.insert_controller.clear_template_preview.assert_called_once_with()
+        template_view.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
+
+        hover_view = self._new_view()
+        hover_view.services.hit_testing_service.scene_pos_from_event.return_value = outside_pos
+        CanvasView.mouseMoveEvent(hover_view, move_event)
+
+        hover_view.services.hover_interaction_service.update_hover_highlight.assert_not_called()
+        hover_view.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
+
     def test_mouse_release_event_refreshes_hover_after_tool_handler(self) -> None:
         tool = SimpleNamespace(on_mouse_release=mock.Mock(return_value=True))
         view = self._new_view(tool_active=tool)
@@ -192,6 +248,26 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         tool.on_mouse_release.assert_called_once_with(release_event)
         view.hover_refresh.assert_called_once_with()
         view.services.hover_interaction_service.update_hover_highlight.assert_not_called()
+
+    def test_mouse_release_event_cancels_drawing_tool_outside_sheet(self) -> None:
+        tool = SimpleNamespace(
+            name="arrow",
+            deactivate=mock.Mock(),
+            activate=mock.Mock(),
+            on_mouse_release=mock.Mock(side_effect=AssertionError("release should not commit outside sheet")),
+        )
+        view = self._new_view(tool_active=tool)
+        view.services.hit_testing_service.scene_pos_from_event.return_value = QPointF(999.0, 999.0)
+        release_event = _FakeEvent(button=Qt.MouseButton.LeftButton, buttons=Qt.MouseButton.NoButton)
+
+        CanvasView.mouseReleaseEvent(view, release_event)
+
+        tool.deactivate.assert_called_once_with()
+        tool.activate.assert_called_once_with()
+        tool.on_mouse_release.assert_not_called()
+        view.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
+        view.hover_refresh.assert_called_once_with()
+        release_event.accept.assert_called_once_with()
 
     def test_viewport_event_clears_or_refreshes_hover_on_enter_leave_and_hide(self) -> None:
         with mock.patch("ui.canvas_view_event_router.QTimer.singleShot") as single_shot, mock.patch.object(
