@@ -191,6 +191,17 @@ class SceneItemStateUnitTest(unittest.TestCase):
         self.assertLess(state["top"], state["bottom"])
         self.assertIsNone(ts_bracket_rect_from_state({"left": "bad", "top": 0, "right": 1, "bottom": 2}))
 
+    def test_ts_bracket_rect_from_state_restores_legacy_rect_payload(self) -> None:
+        rect = ts_bracket_rect_from_state(
+            {"kind": "ts_bracket", "rect": (12.0, 8.0, -4.0, -10.0)}
+        )
+
+        self.assertIsNotNone(rect)
+        self.assertEqual(
+            (rect.left(), rect.top(), rect.right(), rect.bottom()),
+            (8.0, -2.0, 12.0, 8.0),
+        )
+
     def test_apply_ts_bracket_state_sets_path_pen_brush_and_metadata(self) -> None:
         item = QGraphicsPathItem()
         built_paths: list[QPainterPath] = []

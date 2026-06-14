@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import Mock
 
-from core.model import MoleculeModel
+from core.model import Bond, MoleculeModel
 from ui.smiles_insert_logic import (
     SmilesPreviewResolvers,
     build_smiles_preview_geometry,
@@ -22,7 +22,7 @@ def _build_model(*, include_dangling_bond: bool = False) -> MoleculeModel:
     model.bonds[0].style = "double"
     model.bonds[0].color = "#123456"
     if include_dangling_bond:
-        model.add_bond(right, 999, 1)
+        model.bonds.append(Bond(right, 999, 1))
     return model
 
 

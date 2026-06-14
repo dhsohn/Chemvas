@@ -10,6 +10,7 @@ from ui.canvas_model_access import atoms_for, bonds_for
 from ui.canvas_smiles_input_state import (
     clear_last_smiles_input_for,
     last_smiles_input_for,
+    set_last_smiles_input_for,
 )
 from ui.renderer_style_access import bond_length_px_for
 from ui.structure_insert_access import (
@@ -18,10 +19,12 @@ from ui.structure_insert_access import (
     add_insert_bond_graphics_for,
     ensure_insert_carbon_dot_for,
     insert_atom_for_id,
+    insert_bond_for_id,
     insert_bond_count_for,
     insert_next_atom_id_for,
     new_insert_bond_ids_from,
     record_insert_additions_for,
+    rollback_insert_mutation_for,
 )
 
 if TYPE_CHECKING:
@@ -69,14 +72,26 @@ class StructureBuildCommitter:
             kwargs["added_scene_items"] = added_scene_items
         record_insert_additions_for(self.canvas, **kwargs)
 
+    def abort_recorded_change(self, snapshot: StructureBuildHistorySnapshot) -> None:
+        rollback_insert_mutation_for(
+            self.canvas,
+            before_next_atom_id=snapshot.before_next_atom_id,
+            before_bond_count=snapshot.before_bond_count,
+        )
+        set_last_smiles_input_for(self.canvas, snapshot.before_smiles_input)
+
     def add_bond_graphics(self, bond_id: int) -> None:
         add_insert_bond_graphics_for(self.canvas, bond_id)
 
     def add_atom(self, element: str, x: float, y: float) -> int:
         return add_insert_atom_for(self.canvas, element, x, y)
 
-    def add_bond(self, a_id: int, b_id: int, order: int = 1) -> int:
-        return add_insert_bond_for(self.canvas, a_id, b_id, order)
+    def add_bond(self, a_id: int, b_id: int, order: int = 1, *, style: str = "single") -> int:
+        bond_id = add_insert_bond_for(self.canvas, a_id, b_id, order)
+        bond = insert_bond_for_id(self.canvas, bond_id)
+        if bond is not None:
+            bond.style = style
+        return bond_id
 
     def add_bond_graphics_range(self, start_bond_id: int) -> None:
         for bond_id in new_insert_bond_ids_from(self.canvas, start_bond_id):

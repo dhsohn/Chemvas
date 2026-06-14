@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 from PyQt6.QtCore import QPointF
 
 from ui.bond_style_logic import style_for_existing_bond_overlay
@@ -35,21 +37,27 @@ class StructureBondBuildService:
         order: int,
     ) -> tuple[int, int] | None:
         snap_tol = bond_length_px_for(self.canvas) * 0.1
-        if start == end or (start - end).manhattanLength() <= snap_tol:
+        if start == end or math.hypot(start.x() - end.x(), start.y() - end.y()) <= snap_tol:
             return None
         start_id = self.hit_testing_service.find_atom_near(start.x(), start.y(), snap_tol)
         end_id = self.hit_testing_service.find_atom_near(end.x(), end.y(), snap_tol)
         if start_id is not None and start_id == end_id:
             return None
+        existing_bond_id = None
+        if start_id is not None and end_id is not None:
+            existing_bond_id = self.graph_service.bond_id_between(start_id, end_id)
+            if existing_bond_id is not None and bond_for_id(self.canvas, existing_bond_id) is None:
+                return None
         snapshot = self.committer.begin_recorded_change()
         before_smiles_input = snapshot.before_smiles_input
         if start_id is None:
             start_id = self.committer.add_atom("C", start.x(), start.y())
         if end_id is None:
             end_id = self.committer.add_atom("C", end.x(), end.y())
-        existing_bond_id = self.graph_service.bond_id_between(start_id, end_id)
+        if existing_bond_id is None:
+            existing_bond_id = self.graph_service.bond_id_between(start_id, end_id)
         if existing_bond_id is not None:
-            return self._update_existing_bond(
+            result = self._update_existing_bond(
                 existing_bond_id,
                 style,
                 order,
@@ -57,6 +65,9 @@ class StructureBondBuildService:
                 start_id,
                 end_id,
             )
+            if result is None:
+                self.committer.abort_recorded_change(snapshot)
+            return result
         return self._add_new_bond(snapshot, start_id, end_id, style, order)
 
     def _update_existing_bond(
@@ -105,6 +116,7 @@ class StructureBondBuildService:
         bond_id = self.committer.add_bond(start_id, end_id, order)
         bond = bond_for_id(self.canvas, bond_id)
         if bond is None:
+            self.committer.abort_recorded_change(snapshot)
             return None
         bond.style = style
         self.committer.add_bond_graphics(bond_id)

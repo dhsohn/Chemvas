@@ -220,7 +220,7 @@ class StructureInsertServiceTest(unittest.TestCase):
         canvas = _FakeCanvas()
         existing_atom_id = canvas.model.add_atom("N", -20.0, -10.0)
         canvas.model.atoms[existing_atom_id].explicit_label = True
-        canvas.model.add_bond(existing_atom_id, existing_atom_id, 1)
+        canvas.model.bonds.append(Bond(existing_atom_id, existing_atom_id, 1))
         service = _structure_insert_service(canvas)
         model = MoleculeModel(
             atoms={

@@ -636,6 +636,8 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertFalse(loaded)
         self.assertEqual(adapter.last_error, "RDKit is not available in this environment.")
         self.assertFalse(adapter.is_loaded())
+        self.assertTrue(adapter.is_unavailable())
+        self.assertEqual(adapter._rdkit, (None, None))
 
     def test_preload_loads_and_caches_rdkit_modules(self) -> None:
         adapter = RDKitAdapter()
@@ -761,7 +763,7 @@ class RDKitAdapterTest(unittest.TestCase):
         a1 = model.add_atom("Xx", 1.0, 0.0)
         model.add_bond(a0, a1, 1)
         model.add_bond(a1, a0, 2)
-        model.add_bond(a0, a0, 3)
+        model.bonds.append(Bond(a0, a0, 3))
 
         mol, atom_map = adapter.model_to_rdkit_with_map(model)
 
@@ -836,8 +838,8 @@ class RDKitAdapterTest(unittest.TestCase):
         a0 = model.add_atom("C", 0.0, 0.0)
         a1 = model.add_atom("O", 1.0, 0.0)
         model.bonds.append(None)
-        model.add_bond(a0, 99, 2)
-        model.add_bond(a0, a1, 99)
+        model.bonds.append(Bond(a0, 99, 2))
+        model.bonds.append(Bond(a0, a1, 99))
 
         mol, atom_map = adapter.model_to_rdkit_with_map(model)
 

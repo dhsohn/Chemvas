@@ -38,6 +38,14 @@ class MoleculeModel:
         return atom_id
 
     def add_bond(self, a: int, b: int, order: int = 1) -> int:
+        if type(a) is not int or type(b) is not int:
+            raise ValueError("Bond endpoints must be atom ids.")
+        if a not in self.atoms or b not in self.atoms:
+            raise ValueError("Bond endpoints must reference existing atoms.")
+        if a == b:
+            raise ValueError("Bond endpoints must be distinct.")
+        if type(order) is not int or order not in (1, 2, 3):
+            raise ValueError("Bond order must be 1, 2, or 3.")
         bond_id = len(self.bonds)
         self.bonds.append(Bond(a=a, b=b, order=order))
         return bond_id

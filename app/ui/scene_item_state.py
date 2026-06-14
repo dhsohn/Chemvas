@@ -68,6 +68,16 @@ def _points_from_state(value: object) -> list[QPointF]:
 
 
 def ts_bracket_rect_from_state(state: Mapping[str, object]) -> QRectF | None:
+    rect = state.get("rect")
+    if isinstance(rect, (list, tuple)) and len(rect) == 4:
+        numeric_rect: list[float] = []
+        for value in rect:
+            if not isinstance(value, (int, float)):
+                return None
+            numeric_rect.append(float(value))
+        x, y, width, height = numeric_rect
+        return QRectF(float(x), float(y), float(width), float(height)).normalized()
+
     coords = (
         state.get("left"),
         state.get("top"),

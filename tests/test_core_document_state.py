@@ -228,6 +228,38 @@ class DocumentStateTest(unittest.TestCase):
 
         build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
 
+    def test_build_document_payload_accepts_legacy_ts_bracket_rect_state(self) -> None:
+        state = _single_sheet_state()
+        state["ts_brackets"] = [{"kind": "ts_bracket", "rect": (0.0, 0.0, 12.0, 8.0)}]
+
+        build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
+
+    def test_build_document_payload_rejects_unsupported_mark_and_orbital_kinds(self) -> None:
+        cases = [
+            (
+                "marks",
+                [
+                    {
+                        "kind": "unknown",
+                        "text": "?",
+                        "atom_id": None,
+                        "dx": None,
+                        "dy": None,
+                        "x": 0.0,
+                        "y": 0.0,
+                    }
+                ],
+            ),
+            ("orbitals", [{"kind": "f", "center": (0.0, 0.0), "scale": 1.0, "rotation": 0.0}]),
+        ]
+
+        for key, value in cases:
+            with self.subTest(key=key):
+                state = _single_sheet_state()
+                state[key] = value
+                with self.assertRaises(ValueError):
+                    build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
+
     def test_build_document_payload_rejects_malformed_nested_scene_items(self) -> None:
         cases = [
             ("ring_fills", [{}]),
