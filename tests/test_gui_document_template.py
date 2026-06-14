@@ -943,8 +943,8 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         )
 
         with (
-            patch.object(active_canvas_for_window(self.window).rdkit, "compute_props", return_value=("NH4", 18.04, "[NH4+]")),
-            patch.object(active_canvas_for_window(self.window).rdkit, "model_to_3d_scene", return_value=scene),
+            patch.object(preview.rdkit_adapter, "compute_props", return_value=("NH4", 18.04, "[NH4+]")),
+            patch.object(preview.rdkit_adapter, "model_to_3d_scene_result", return_value=RDKitResult(scene)),
         ):
             preview.refresh_from_canvas(active_canvas_for_window(self.window))
             self.app.processEvents()
