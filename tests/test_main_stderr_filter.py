@@ -96,17 +96,21 @@ class MainStderrFilterTest(unittest.TestCase):
             yield
             events.append(("exit", None))
 
-        with mock.patch.dict(
-            sys.modules,
-            {
-                "PyQt6.QtWidgets": qt_widgets_module,
-                "ui.main_window": main_window_module,
-            },
+        argv = ["chemvas", "--style", "Fusion"]
+        with (
+            mock.patch.dict(
+                sys.modules,
+                {
+                    "PyQt6.QtWidgets": qt_widgets_module,
+                    "ui.main_window": main_window_module,
+                },
+            ),
+            mock.patch.object(sys, "argv", argv),
         ):
             with mock.patch.object(app_main, "_filtered_stderr", fake_filtered_stderr):
                 app_main.main()
 
-        self.assertEqual(FakeApplication.instances[0].args, [])
+        self.assertEqual(FakeApplication.instances[0].args, argv)
         self.assertTrue(FakeApplication.instances[0].exec_called)
         self.assertTrue(FakeMainWindow.instances[0].shown)
         self.assertEqual([event[0] for event in events], ["enter", "show", "exec", "exit"])
@@ -147,7 +151,10 @@ class MainStderrFilterTest(unittest.TestCase):
                 "ui.main_window": main_window_module,
             },
         ):
-            with mock.patch.object(sys, "platform", "linux"):
+            with (
+                mock.patch.object(sys, "platform", "linux"),
+                mock.patch.object(sys, "argv", ["python", "app/main.py"]),
+            ):
                 runpy.run_module("main", run_name="__main__")
 
         self.assertEqual(events, ["app", "show", "exec"])

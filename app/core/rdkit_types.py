@@ -1,6 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Generic, TypeVar
+
+T = TypeVar("T")
+
+
+@dataclass(frozen=True)
+class RDKitResult(Generic[T]):
+    value: T | None
+    error: str | None = None
 
 
 @dataclass(frozen=True)
@@ -24,4 +33,4 @@ class Molecule3DScene:
     bonds: tuple[Molecule3DBond, ...]
 
 
-__all__ = ["Molecule3DAtom", "Molecule3DBond", "Molecule3DScene"]
+__all__ = ["Molecule3DAtom", "Molecule3DBond", "Molecule3DScene", "RDKitResult"]

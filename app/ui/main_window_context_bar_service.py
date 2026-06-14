@@ -9,8 +9,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.canvas_tool_settings_state import tool_settings_state_for
 from ui.canvas_insert_state import insert_state_for
+from ui.canvas_tool_settings_state import tool_settings_state_for
 from ui.main_window_context_bar_pages import bond_label_for_state
 from ui.main_window_theme import (
     CONTEXT_BAR_CONTENT_HEIGHT,

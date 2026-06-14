@@ -26,17 +26,19 @@ class CanvasHistoryService:
     def undo(self) -> None:
         if not self.state.history:
             return
-        command = self.state.history.pop()
-        self.state.redo_stack.append(command)
+        command = self.state.history[-1]
         command.undo(self.canvas)
+        self.state.history.pop()
+        self.state.redo_stack.append(command)
         self.notify_change()
 
     def redo(self) -> None:
         if not self.state.redo_stack:
             return
-        command = self.state.redo_stack.pop()
-        self.state.history.append(command)
+        command = self.state.redo_stack[-1]
         command.redo(self.canvas)
+        self.state.redo_stack.pop()
+        self.state.history.append(command)
         self.notify_change()
 
     def set_change_callback(self, callback) -> None:

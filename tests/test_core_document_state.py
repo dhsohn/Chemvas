@@ -1,3 +1,4 @@
+import math
 import unittest
 
 from core.document_state import (
@@ -53,6 +54,10 @@ def _single_sheet_state(model: dict | None = None) -> dict:
         "settings": _settings(),
         "last_smiles_input": None,
     }
+
+
+def _atom_state() -> dict:
+    return {"element": "C", "x": 0.0, "y": 0.0, "color": "#000000", "explicit_label": False}
 
 
 class DocumentStateTest(unittest.TestCase):
@@ -206,6 +211,54 @@ class DocumentStateTest(unittest.TestCase):
         state["settings"] = settings
         with self.assertRaises(ValueError):
             build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
+
+    def test_build_document_payload_accepts_valid_nested_scene_items(self) -> None:
+        state = _single_sheet_state(
+            _model_state(
+                atoms={"0": _atom_state()},
+                next_atom_id=1,
+            )
+        )
+        state["ring_fills"] = [{"points": [(0.0, 0.0), (1.0, 0.0)], "atom_ids": [0], "color": "#abcdef", "alpha": 0.25}]
+        state["notes"] = [{"text": "note", "x": 1.0, "y": 2.0}]
+        state["marks"] = [{"kind": "plus", "text": "+", "atom_id": 0, "dx": 1.0, "dy": 0.0, "x": 1.0, "y": 0.0}]
+        state["arrows"] = [{"kind": "arrow", "start": (0.0, 0.0), "end": (1.0, 1.0), "control": None, "double": False}]
+        state["ts_brackets"] = [{"kind": "ts_bracket", "left": 0.0, "top": 0.0, "right": 2.0, "bottom": 3.0}]
+        state["orbitals"] = [{"kind": "p", "center": (0.0, 0.0), "scale": 1.5, "rotation": 45.0}]
+
+        build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
+
+    def test_build_document_payload_rejects_malformed_nested_scene_items(self) -> None:
+        cases = [
+            ("ring_fills", [{}]),
+            ("ring_fills", [{"points": [(0.0, 0.0)], "atom_ids": [99], "color": "#abcdef", "alpha": 0.25}]),
+            ("ring_fills", [{"points": [(0.0, 0.0)], "atom_ids": [], "color": "red", "alpha": 0.25}]),
+            ("notes", [{"text": "note", "x": 0.0, "y": math.inf}]),
+            ("marks", [{}]),
+            ("marks", [{"kind": "plus", "text": "+", "atom_id": 99, "dx": 1.0, "dy": 0.0, "x": 1.0, "y": 0.0}]),
+            ("arrows", [{"kind": "unexpected", "start": (0.0, 0.0), "end": (1.0, 1.0)}]),
+            ("arrows", [{"kind": "arrow", "start": (0.0, 0.0), "end": ("x", 1.0)}]),
+            ("ts_brackets", [{"kind": "ts_bracket", "rect": (0.0, 0.0, 1.0)}]),
+            ("orbitals", [{"center": (0.0, 0.0)}]),
+        ]
+
+        for key, value in cases:
+            with self.subTest(key=key, value=value):
+                state = _single_sheet_state(_model_state(atoms={"0": _atom_state()}, next_atom_id=1))
+                state[key] = value
+                with self.assertRaises(ValueError):
+                    build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
+
+    def test_build_workbook_payload_rejects_malformed_nested_scene_items(self) -> None:
+        content = _single_sheet_state(_model_state(atoms={"0": _atom_state()}, next_atom_id=1))
+        content["marks"] = [{}]
+        workbook_state = {
+            "active_sheet_index": 0,
+            "sheets": [{"name": "Sheet 1", "kind": "canvas", "content": content}],
+        }
+
+        with self.assertRaises(ValueError):
+            build_document_payload(workbook_state, version=WORKBOOK_FILE_VERSION)
 
     def test_extract_document_state_accepts_workbook_state(self) -> None:
         sheet_state = _single_sheet_state()

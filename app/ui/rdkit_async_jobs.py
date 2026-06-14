@@ -12,21 +12,30 @@ class XYZExportWorker(QObject):
     failed = pyqtSignal(str)
     finished = pyqtSignal()
 
-    def __init__(self, rdkit_adapter, model, atom_annotations, path: str) -> None:
+    def __init__(self, rdkit_adapter, model, atom_annotations, path: str, *, rdkit_adapter_factory=None) -> None:
         super().__init__()
         self._rdkit = rdkit_adapter
         self._model = model
         self._atom_annotations = atom_annotations
         self._path = path
+        self._rdkit_adapter_factory = rdkit_adapter_factory
 
     def run(self) -> None:
+        rdkit = self._rdkit_adapter_factory() if self._rdkit_adapter_factory is not None else self._rdkit
         try:
-            xyz_block = self._rdkit.model_to_xyz_block(
-                self._model,
-                atom_annotations=self._atom_annotations,
-            )
+            result_method = getattr(rdkit, "model_to_xyz_block_result", None)
+            if callable(result_method):
+                result = result_method(self._model, atom_annotations=self._atom_annotations)
+                xyz_block = result.value
+                error = result.error
+            else:
+                xyz_block = rdkit.model_to_xyz_block(
+                    self._model,
+                    atom_annotations=self._atom_annotations,
+                )
+                error = getattr(rdkit, "last_error", None)
             if xyz_block is None:
-                self.failed.emit(self._rdkit.last_error or "Failed to export 3D XYZ.")
+                self.failed.emit(error or "Failed to export 3D XYZ.")
                 return
             Path(self._path).write_text(xyz_block, encoding="utf-8")
             self.succeeded.emit(self._path)
@@ -45,10 +54,11 @@ def export_xyz_in_thread(
     path: str,
     on_success,
     on_error,
+    rdkit_adapter_factory=None,
 ) -> None:
     jobs = rdkit_export_jobs_for(owner)
     thread = QThread(owner)
-    worker = XYZExportWorker(rdkit_adapter, model, atom_annotations, path)
+    worker = XYZExportWorker(rdkit_adapter, model, atom_annotations, path, rdkit_adapter_factory=rdkit_adapter_factory)
     worker.moveToThread(thread)
     job = (thread, worker)
     jobs.append(job)

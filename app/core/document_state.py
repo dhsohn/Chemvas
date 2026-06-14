@@ -57,6 +57,17 @@ VALID_BOND_STYLES = frozenset(
         "bold_out",
     )
 )
+VALID_ARROW_KINDS = frozenset(
+    (
+        "arrow",
+        "equilibrium",
+        "resonance",
+        "curved_single",
+        "curved_double",
+        "inhibit",
+        "dotted",
+    )
+)
 
 
 def atom_to_state(atom: Atom, explicit_label: bool) -> dict:
@@ -220,10 +231,13 @@ def _validate_single_sheet_state(state: Mapping[str, object]) -> None:
     model_state = state.get("model")
     if not isinstance(model_state, Mapping):
         raise ValueError("Invalid Chemvas file.")
-    _validate_model_state(model_state)
-    for key in ("ring_fills", "notes", "marks", "arrows", "ts_brackets", "orbitals"):
-        if not isinstance(state.get(key), list):
-            raise ValueError("Invalid Chemvas file.")
+    atom_ids = _validate_model_state(model_state)
+    _validate_ring_fill_states(state.get("ring_fills"), atom_ids)
+    _validate_note_states(state.get("notes"))
+    _validate_mark_states(state.get("marks"), atom_ids)
+    _validate_arrow_states(state.get("arrows"))
+    _validate_ts_bracket_states(state.get("ts_brackets"))
+    _validate_orbital_states(state.get("orbitals"))
     settings = state.get("settings")
     if not isinstance(settings, Mapping):
         raise ValueError("Invalid Chemvas file.")
@@ -261,7 +275,7 @@ def _validate_workbook_state(state: Mapping[str, object]) -> None:
         _validate_single_sheet_state(content)
 
 
-def _validate_model_state(model_state: Mapping[str, object]) -> None:
+def _validate_model_state(model_state: Mapping[str, object]) -> set[int]:
     atoms_state = model_state.get("atoms")
     bonds_state = model_state.get("bonds")
     if set(model_state) != {"atoms", "bonds", "next_atom_id"}:
@@ -287,6 +301,7 @@ def _validate_model_state(model_state: Mapping[str, object]) -> None:
         if not isinstance(bond_state, Mapping):
             raise ValueError("Invalid Chemvas file.")
         _validate_bond_state(bond_state, atom_ids)
+    return atom_ids
 
 
 def _validate_atom_state(atom_state: Mapping[str, object]) -> None:
@@ -321,6 +336,118 @@ def _validate_bond_state(bond_state: Mapping[str, object], atom_ids: set[int]) -
     color = bond_state.get("color")
     if not _is_hex_color(color):
         raise ValueError("Invalid Chemvas file.")
+
+
+def _validate_ring_fill_states(states: object, atom_ids: set[int]) -> None:
+    for ring_state in _validated_scene_state_list(states):
+        if set(ring_state) != {"points", "atom_ids", "color", "alpha"}:
+            raise ValueError("Invalid Chemvas file.")
+        points = ring_state.get("points")
+        if not isinstance(points, (list, tuple)) or any(not _is_point(point) for point in points):
+            raise ValueError("Invalid Chemvas file.")
+        ring_atom_ids = ring_state.get("atom_ids")
+        if ring_atom_ids is not None and not _is_atom_id_sequence(ring_atom_ids, atom_ids):
+            raise ValueError("Invalid Chemvas file.")
+        color = ring_state.get("color")
+        if color is not None and not _is_hex_color(color):
+            raise ValueError("Invalid Chemvas file.")
+        if not _is_number(ring_state.get("alpha")):
+            raise ValueError("Invalid Chemvas file.")
+
+
+def _validate_note_states(states: object) -> None:
+    for note_state in _validated_scene_state_list(states):
+        if set(note_state) != {"text", "x", "y"}:
+            raise ValueError("Invalid Chemvas file.")
+        if not isinstance(note_state.get("text"), str):
+            raise ValueError("Invalid Chemvas file.")
+        if not _is_number(note_state.get("x")) or not _is_number(note_state.get("y")):
+            raise ValueError("Invalid Chemvas file.")
+
+
+def _validate_mark_states(states: object, atom_ids: set[int]) -> None:
+    for mark_state in _validated_scene_state_list(states):
+        if set(mark_state) != {"kind", "text", "atom_id", "dx", "dy", "x", "y"}:
+            raise ValueError("Invalid Chemvas file.")
+        if not _is_nonempty_string(mark_state.get("kind")):
+            raise ValueError("Invalid Chemvas file.")
+        text = mark_state.get("text")
+        if text is not None and not isinstance(text, str):
+            raise ValueError("Invalid Chemvas file.")
+        if not _is_number(mark_state.get("x")) or not _is_number(mark_state.get("y")):
+            raise ValueError("Invalid Chemvas file.")
+        atom_id = mark_state.get("atom_id")
+        if atom_id is None:
+            if mark_state.get("dx") is not None or mark_state.get("dy") is not None:
+                raise ValueError("Invalid Chemvas file.")
+            continue
+        parsed_atom_id = _validated_id(atom_id)
+        if parsed_atom_id not in atom_ids:
+            raise ValueError("Invalid Chemvas file.")
+        dx = mark_state.get("dx")
+        dy = mark_state.get("dy")
+        if (dx is None and dy is None) or (_is_number(dx) and _is_number(dy)):
+            continue
+        raise ValueError("Invalid Chemvas file.")
+
+
+def _validate_arrow_states(states: object) -> None:
+    required_keys = {"kind", "start", "end"}
+    allowed_keys = required_keys | {"control", "double"}
+    for arrow_state in _validated_scene_state_list(states):
+        keys = set(arrow_state)
+        if not required_keys <= keys or not keys <= allowed_keys:
+            raise ValueError("Invalid Chemvas file.")
+        if arrow_state.get("kind") not in VALID_ARROW_KINDS:
+            raise ValueError("Invalid Chemvas file.")
+        if not _is_point(arrow_state.get("start")) or not _is_point(arrow_state.get("end")):
+            raise ValueError("Invalid Chemvas file.")
+        control = arrow_state.get("control")
+        if control is not None and not _is_point(control):
+            raise ValueError("Invalid Chemvas file.")
+        double = arrow_state.get("double")
+        if double is not None and type(double) is not bool:
+            raise ValueError("Invalid Chemvas file.")
+
+
+def _validate_ts_bracket_states(states: object) -> None:
+    for ts_bracket_state in _validated_scene_state_list(states):
+        keys = set(ts_bracket_state)
+        if ts_bracket_state.get("kind") != "ts_bracket":
+            raise ValueError("Invalid Chemvas file.")
+        if keys == {"kind", "rect"}:
+            rect = ts_bracket_state.get("rect")
+            if not isinstance(rect, (list, tuple)) or len(rect) != 4 or any(not _is_number(value) for value in rect):
+                raise ValueError("Invalid Chemvas file.")
+            continue
+        if keys != {"kind", "left", "top", "right", "bottom"}:
+            raise ValueError("Invalid Chemvas file.")
+        for key in ("left", "top", "right", "bottom"):
+            if not _is_number(ts_bracket_state.get(key)):
+                raise ValueError("Invalid Chemvas file.")
+
+
+def _validate_orbital_states(states: object) -> None:
+    for orbital_state in _validated_scene_state_list(states):
+        if set(orbital_state) != {"kind", "center", "scale", "rotation"}:
+            raise ValueError("Invalid Chemvas file.")
+        if not _is_nonempty_string(orbital_state.get("kind")):
+            raise ValueError("Invalid Chemvas file.")
+        if not _is_point(orbital_state.get("center")):
+            raise ValueError("Invalid Chemvas file.")
+        if not _is_number(orbital_state.get("scale")) or not _is_number(orbital_state.get("rotation")):
+            raise ValueError("Invalid Chemvas file.")
+
+
+def _validated_scene_state_list(states: object) -> list[Mapping[str, object]]:
+    if not isinstance(states, list):
+        raise ValueError("Invalid Chemvas file.")
+    validated: list[Mapping[str, object]] = []
+    for state in states:
+        if not isinstance(state, Mapping):
+            raise ValueError("Invalid Chemvas file.")
+        validated.append(state)
+    return validated
 
 
 def _validate_settings_state(settings: Mapping[str, object]) -> None:
@@ -371,6 +498,27 @@ def _is_number(value: object) -> bool:
     if type(value) not in (int, float):
         return False
     return math.isfinite(cast(float, value))
+
+
+def _is_point(value: object) -> bool:
+    if not isinstance(value, (list, tuple)) or len(value) != 2:
+        return False
+    x, y = value
+    return _is_number(x) and _is_number(y)
+
+
+def _is_atom_id_sequence(value: object, atom_ids: set[int]) -> bool:
+    if not isinstance(value, (list, tuple)):
+        return False
+    try:
+        parsed_ids = [_validated_id(atom_id) for atom_id in value]
+    except ValueError:
+        return False
+    return all(atom_id in atom_ids for atom_id in parsed_ids)
+
+
+def _is_nonempty_string(value: object) -> bool:
+    return isinstance(value, str) and bool(value)
 
 
 def _is_hex_color(value: object) -> bool:

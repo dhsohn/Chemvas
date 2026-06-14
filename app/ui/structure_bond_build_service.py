@@ -34,19 +34,19 @@ class StructureBondBuildService:
         style: str,
         order: int,
     ) -> tuple[int, int] | None:
-        if start == end:
+        snap_tol = bond_length_px_for(self.canvas) * 0.1
+        if start == end or (start - end).manhattanLength() <= snap_tol:
+            return None
+        start_id = self.hit_testing_service.find_atom_near(start.x(), start.y(), snap_tol)
+        end_id = self.hit_testing_service.find_atom_near(end.x(), end.y(), snap_tol)
+        if start_id is not None and start_id == end_id:
             return None
         snapshot = self.committer.begin_recorded_change()
         before_smiles_input = snapshot.before_smiles_input
-        snap_tol = bond_length_px_for(self.canvas) * 0.1
-        start_id = self.hit_testing_service.find_atom_near(start.x(), start.y(), snap_tol)
         if start_id is None:
             start_id = self.committer.add_atom("C", start.x(), start.y())
-        end_id = self.hit_testing_service.find_atom_near(end.x(), end.y(), snap_tol)
         if end_id is None:
             end_id = self.committer.add_atom("C", end.x(), end.y())
-        if start_id == end_id:
-            return None
         existing_bond_id = self.graph_service.bond_id_between(start_id, end_id)
         if existing_bond_id is not None:
             return self._update_existing_bond(

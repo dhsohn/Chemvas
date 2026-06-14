@@ -1013,6 +1013,34 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertIsNone(scene)
         self.assertEqual(adapter.last_error, "RDKit is not available in this environment.")
 
+    def test_model_to_3d_scene_result_returns_local_error(self) -> None:
+        adapter = RDKitAdapter()
+        adapter._rdkit = (None, None)
+        adapter.last_error = "stale error"
+
+        result = adapter.model_to_3d_scene_result(self._simple_model())
+
+        self.assertIsNone(result.value)
+        self.assertEqual(result.error, "RDKit is not available in this environment.")
+
+    def test_result_helpers_clear_stale_error_on_success_and_use_fallbacks(self) -> None:
+        adapter = RDKitAdapter()
+        adapter.last_error = "stale error"
+        scene = object()
+        with mock.patch.object(adapter._conversion_helper, "model_to_3d_scene", return_value=scene):
+            scene_result = adapter.model_to_3d_scene_result(self._simple_model())
+
+        self.assertIs(scene_result.value, scene)
+        self.assertIsNone(scene_result.error)
+        self.assertIsNone(adapter.last_error)
+
+        adapter.last_error = "stale error"
+        with mock.patch.object(adapter._conversion_helper, "model_to_xyz_block", return_value=None):
+            xyz_result = adapter.model_to_xyz_block_result(self._simple_model())
+
+        self.assertIsNone(xyz_result.value)
+        self.assertEqual(xyz_result.error, "Failed to export 3D XYZ.")
+
     def test_model_to_3d_scene_returns_none_for_empty_model(self) -> None:
         adapter = RDKitAdapter()
         adapter._rdkit = (_FakeChem({}), _FakeAllChem3D())
@@ -1757,9 +1785,12 @@ class RDKitConversionEdgeTest(unittest.TestCase):
     def test_model_to_3d_scene_preserves_specific_component_build_errors(self) -> None:
         adapter = RDKitAdapter()
         adapter._rdkit = (_FakeDirectionalChem({}), _FakeAllChem3D())
-        adapter.last_error = "Alias expansion failed."
 
-        with mock.patch.object(adapter, "_build_conversion_rdkit_mol", return_value=None):
+        def fail_build(*args, **kwargs):
+            adapter.last_error = "Alias expansion failed."
+            return None
+
+        with mock.patch.object(adapter, "_build_conversion_rdkit_mol", side_effect=fail_build):
             self.assertIsNone(adapter.model_to_3d_scene(RDKitAdapterTest()._simple_model()))
 
         self.assertEqual(adapter.last_error, "Alias expansion failed.")

@@ -17,6 +17,7 @@ from ui.canvas_model_access import set_model_for
 from ui.canvas_scene_reset_access import clear_scene_for
 from ui.rdkit_adapter_access import (
     model_to_xyz_block_for,
+    new_rdkit_adapter,
     preload_rdkit_for,
     rdkit_adapter_for,
     rdkit_is_loaded_for,
@@ -105,6 +106,7 @@ class CanvasDocumentSessionService:
             path=path,
             on_success=on_success,
             on_error=on_error,
+            rdkit_adapter_factory=new_rdkit_adapter,
         )
 
     def export_figure(
