@@ -145,9 +145,24 @@ class StructureBuildService:
         before_smiles_input: str | None = None,
     ) -> list:
         snapshot = self.committer.begin_recorded_change(before_smiles_input=before_smiles_input)
-        added_scene_items = action() or []
+        added_scene_items = action()
+        if added_scene_items is None:
+            self.committer.abort_recorded_change(snapshot)
+            return []
         self.committer.record_additions(snapshot, added_scene_items=added_scene_items)
         return added_scene_items
+
+    def _run_fragment_recorded_build(
+        self,
+        action: Callable[[], list | None],
+        *,
+        before_smiles_input: str | None = None,
+    ) -> list:
+        def _action() -> list | None:
+            added_scene_items = action()
+            return [] if added_scene_items is None else added_scene_items
+
+        return self.run_recorded_build(_action, before_smiles_input=before_smiles_input)
 
     def _run_recorded_additions_action(
         self,
@@ -157,6 +172,7 @@ class StructureBuildService:
     ) -> bool:
         snapshot = self.committer.begin_recorded_change(before_smiles_input=before_smiles_input)
         if not action():
+            self.committer.abort_recorded_change(snapshot)
             return False
         self.committer.record_additions(snapshot)
         return True
@@ -170,7 +186,7 @@ class StructureBuildService:
             cyclohexane_boat_points=self.cyclohexane_boat_points,
             add_ring_from_points=self.add_ring_from_points,
             add_linear_chain=self.add_linear_chain,
-            run_recorded_build=self.run_recorded_build,
+            run_recorded_build=self._run_fragment_recorded_build,
             latest_bond_id=self.latest_bond_id,
         )
 

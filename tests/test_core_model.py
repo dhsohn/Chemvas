@@ -26,6 +26,28 @@ class MoleculeModelTest(unittest.TestCase):
         self.assertEqual(model.bonds[0].b, a1)
         self.assertEqual(model.bonds[0].order, 2)
 
+    def test_add_bond_rejects_invalid_endpoints_and_orders(self) -> None:
+        model = MoleculeModel()
+        a0 = model.add_atom("C", 0.0, 0.0)
+        a1 = model.add_atom("O", 2.0, 0.0)
+
+        cases = [
+            (float(a0), a1, 1),
+            (True, a1, 1),
+            (a0, 99, 1),
+            (99, a1, 1),
+            (a0, a0, 1),
+            (a0, a1, 0),
+            (a0, a1, 4),
+            (a0, a1, "1"),
+        ]
+
+        for a, b, order in cases:
+            with self.subTest(a=a, b=b, order=order):
+                with self.assertRaises(ValueError):
+                    model.add_bond(a, b, order)
+                self.assertEqual(model.bonds, [])
+
     def test_bounds_returns_zeroes_for_empty_model(self) -> None:
         model = MoleculeModel()
         self.assertEqual(model.bounds(), (0.0, 0.0, 0.0, 0.0))

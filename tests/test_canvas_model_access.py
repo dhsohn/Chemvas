@@ -84,6 +84,7 @@ def test_model_mutation_helpers_trim_remove_and_restore_next_atom_id() -> None:
 
 def test_bond_mutation_helpers_add_extend_set_and_validate_slots() -> None:
     canvas = SimpleNamespace(model=MoleculeModel())
+    canvas.model.atoms = {1: Atom("C", 0.0, 0.0), 2: Atom("O", 1.0, 0.0)}
 
     bond_id = add_bond_to_model_for(canvas, 1, 2, 2)
     set_bond_for_id(canvas, 3, Bond(4, 5, 1))

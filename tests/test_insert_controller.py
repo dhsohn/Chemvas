@@ -322,7 +322,7 @@ class InsertControllerTest(unittest.TestCase):
         canvas = _FakeCanvas()
         set_last_smiles_input_for(canvas, "before")
         canvas.model.add_atom("N", -5.0, -5.0)
-        canvas.model.add_bond(0, 0, 1)
+        canvas.model.bonds.append(Bond(0, 0, 1))
         bound_mark = _FakeSceneItem("bound-mark", atom_id=0, state={"kind": "mark"})
         free_mark = _FakeSceneItem("free-mark")
         note = _FakeSceneItem("note")
@@ -330,8 +330,8 @@ class InsertControllerTest(unittest.TestCase):
         set_scene_item_collection_for(canvas, "mark_items", [bound_mark, free_mark])
         set_scene_item_collection_for(canvas, "note_items", [note])
         canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(
-            atoms={0: Atom("C", 1.0, 2.0)},
-            bonds=[Bond(0, 0, 1)],
+            atoms={0: Atom("C", 1.0, 2.0), 1: Atom("C", 3.0, 2.0)},
+            bonds=[Bond(0, 1, 1)],
         )
 
         def _clear_scene() -> None:
@@ -364,7 +364,7 @@ class InsertControllerTest(unittest.TestCase):
         self.assertEqual(delete_atoms.mark_states, [{"kind": "mark"}])
         self.assertEqual(delete_scene_items.item_states, [{"kind": "free-mark"}, {"kind": "note"}])
         self.assertEqual(add_atoms.before_next_atom_id, 0)
-        self.assertEqual(add_atoms.after_next_atom_id, 1)
+        self.assertEqual(add_atoms.after_next_atom_id, 2)
         self.assertEqual(add_bond.previous_bond_count, 0)
 
     def test_load_smiles_skips_push_when_history_builder_returns_none(self) -> None:
@@ -525,7 +525,7 @@ class InsertControllerTest(unittest.TestCase):
         canvas = _FakeCanvas()
         set_last_smiles_input_for(canvas, "before")
         canvas.model.add_atom("N", -5.0, -5.0)
-        canvas.model.add_bond(0, 0, 1)
+        canvas.model.bonds.append(Bond(0, 0, 1))
         canvas.insert_state.smiles_preview_smiles = "CO"
         canvas.insert_state.smiles_preview_center = QPointF(5.0, 0.0)
         canvas.insert_state.smiles_preview_model = MoleculeModel(
@@ -691,7 +691,16 @@ class InsertControllerTest(unittest.TestCase):
         canvas.insert_state.template_ring_size = 6
         canvas.insert_state.template_ring_style = "chair"
         set_last_smiles_input_for(canvas, "before")
-        canvas.services.structure_build_service.add_atom_with_merge.side_effect = [10, 11, 12]
+
+        atom_ids = iter([10, 11, 12])
+
+        def add_atom_with_merge(point: QPointF, element: str, merge: list) -> int:
+            atom_id = next(atom_ids)
+            canvas.model.atoms[atom_id] = Atom(element, point.x(), point.y())
+            canvas.model.next_atom_id = max(canvas.model.next_atom_id, atom_id + 1)
+            return atom_id
+
+        canvas.services.structure_build_service.add_atom_with_merge.side_effect = add_atom_with_merge
         canvas.bond_exists.side_effect = lambda a_id, b_id: {a_id, b_id} == {10, 11}
         controller = _controller_for(canvas)
 

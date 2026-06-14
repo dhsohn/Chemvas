@@ -68,6 +68,10 @@ VALID_ARROW_KINDS = frozenset(
         "dotted",
     )
 )
+VALID_MARK_KINDS = frozenset(("plus", "minus", "radical"))
+VALID_ORBITAL_KINDS = frozenset(
+    ("s", "p", "sp", "sp2", "sp3", "d", "mo_bonding", "mo_antibonding")
+)
 
 
 def atom_to_state(atom: Atom, explicit_label: bool) -> dict:
@@ -369,7 +373,7 @@ def _validate_mark_states(states: object, atom_ids: set[int]) -> None:
     for mark_state in _validated_scene_state_list(states):
         if set(mark_state) != {"kind", "text", "atom_id", "dx", "dy", "x", "y"}:
             raise ValueError("Invalid Chemvas file.")
-        if not _is_nonempty_string(mark_state.get("kind")):
+        if mark_state.get("kind") not in VALID_MARK_KINDS:
             raise ValueError("Invalid Chemvas file.")
         text = mark_state.get("text")
         if text is not None and not isinstance(text, str):
@@ -431,7 +435,7 @@ def _validate_orbital_states(states: object) -> None:
     for orbital_state in _validated_scene_state_list(states):
         if set(orbital_state) != {"kind", "center", "scale", "rotation"}:
             raise ValueError("Invalid Chemvas file.")
-        if not _is_nonempty_string(orbital_state.get("kind")):
+        if orbital_state.get("kind") not in VALID_ORBITAL_KINDS:
             raise ValueError("Invalid Chemvas file.")
         if not _is_point(orbital_state.get("center")):
             raise ValueError("Invalid Chemvas file.")

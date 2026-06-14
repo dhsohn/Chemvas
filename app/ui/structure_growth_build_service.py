@@ -27,6 +27,9 @@ class StructureGrowthBuildActions:
     add_ring_from_points: Callable[..., list[int]]
     bond_placement_context: Callable[[int], object | None]
     run_recorded_additions_action: Callable[[Callable[[], bool]], bool]
+    add_atom: Callable[[str, float, float], int] | None = None
+    add_bond: Callable[..., int] | None = None
+    add_bond_graphics: Callable[[int], None] | None = None
 
 
 class StructureGrowthBuildService:
@@ -55,6 +58,42 @@ class StructureGrowthBuildService:
         carbon_end = self.actions.sprout_bond_endpoint(atom_id, cyclic=False)
         if carbon_end is None:
             return
+        if (
+            self.actions.add_atom is None
+            or self.actions.add_bond is None
+            or self.actions.add_bond_graphics is None
+        ):
+            self._sprout_acetyl_with_bond_builder(atom_id, start, carbon_end)
+            return
+
+        def _build() -> bool:
+            assert self.actions.add_atom is not None
+            assert self.actions.add_bond is not None
+            assert self.actions.add_bond_graphics is not None
+            carbon_id = self.actions.add_atom("C", carbon_end.x(), carbon_end.y())
+            anchor_bond_id = self.actions.add_bond(atom_id, carbon_id, 1, style="single")
+            self.actions.add_bond_graphics(anchor_bond_id)
+            carbon_point = self.actions.atom_point(carbon_id)
+
+            oxygen_end = self.actions.default_bond_endpoint(carbon_point, carbon_id)
+            if oxygen_end is None:
+                return False
+            oxygen_id = self.actions.add_atom("O", oxygen_end.x(), oxygen_end.y())
+            oxygen_bond_id = self.actions.add_bond(carbon_id, oxygen_id, 2, style="double")
+            self.actions.add_bond_graphics(oxygen_bond_id)
+            self.actions.add_atom_label(oxygen_id, "O", record=False, show_carbon=True)
+
+            methyl_end = self.actions.default_bond_endpoint(carbon_point, carbon_id)
+            if methyl_end is None:
+                return False
+            methyl_id = self.actions.add_atom("C", methyl_end.x(), methyl_end.y())
+            methyl_bond_id = self.actions.add_bond(carbon_id, methyl_id, 1, style="single")
+            self.actions.add_bond_graphics(methyl_bond_id)
+            return True
+
+        self.actions.run_recorded_additions_action(_build)
+
+    def _sprout_acetyl_with_bond_builder(self, atom_id: int, start: QPointF, carbon_end: QPointF) -> None:
         result = self.actions.add_bond_between_points(start, carbon_end, "single", 1)
         carbon_id = other_atom_id_from_bond_result(atom_id, result)
         if carbon_id is None or not self.actions.has_atom(carbon_id):

@@ -39,6 +39,14 @@ def structure_growth_build_actions_for(service) -> StructureGrowthBuildActions:
         add_ring_from_points=lambda points, **kwargs: service.add_ring_from_points(points, **kwargs),
         bond_placement_context=lambda bond_id: service.bond_placement_context(bond_id),
         run_recorded_additions_action=lambda action: service._run_recorded_additions_action(action),
+        add_atom=lambda element, x, y: service.committer.add_atom(element, x, y),
+        add_bond=lambda a_id, b_id, order, **kwargs: service.committer.add_bond(
+            a_id,
+            b_id,
+            order,
+            **kwargs,
+        ),
+        add_bond_graphics=lambda bond_id: service.committer.add_bond_graphics(bond_id),
     )
 
 

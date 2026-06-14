@@ -6,10 +6,18 @@ import unittest
 from contextlib import contextmanager
 from unittest import mock
 
+import chemvas.main as chemvas_main
 import main as app_main
 
 
 class MainStderrFilterTest(unittest.TestCase):
+    def test_app_main_reexports_chemvas_main_symbols(self) -> None:
+        self.assertIs(app_main.IGNORED_STDERR_SUBSTRINGS, chemvas_main.IGNORED_STDERR_SUBSTRINGS)
+        self.assertIs(app_main._filtered_stderr, chemvas_main._filtered_stderr)
+        self.assertIs(app_main._should_filter_stderr, chemvas_main._should_filter_stderr)
+        self.assertIs(app_main._stderr_filter_loop, chemvas_main._stderr_filter_loop)
+        self.assertIs(app_main.main, chemvas_main.main)
+
     def _capture_stderr_output(self, platform: str, lines: list[str]) -> str:
         original_stderr_fd = os.dup(2)
         capture_read_fd, capture_write_fd = os.pipe()
@@ -54,9 +62,9 @@ class MainStderrFilterTest(unittest.TestCase):
         self.assertIn("qt.qpa.keymapper: Mismatch between Cocoa should remain visible", output)
 
     def test_should_filter_stderr_uses_current_platform_by_default(self) -> None:
-        with mock.patch.object(app_main.sys, "platform", "darwin"):
+        with mock.patch.object(chemvas_main.sys, "platform", "darwin"):
             self.assertTrue(app_main._should_filter_stderr())
-        with mock.patch.object(app_main.sys, "platform", "linux"):
+        with mock.patch.object(chemvas_main.sys, "platform", "linux"):
             self.assertFalse(app_main._should_filter_stderr())
 
     def test_main_constructs_window_and_executes_application(self) -> None:
@@ -107,7 +115,7 @@ class MainStderrFilterTest(unittest.TestCase):
             ),
             mock.patch.object(sys, "argv", argv),
         ):
-            with mock.patch.object(app_main, "_filtered_stderr", fake_filtered_stderr):
+            with mock.patch.object(chemvas_main, "_filtered_stderr", fake_filtered_stderr):
                 app_main.main()
 
         self.assertEqual(FakeApplication.instances[0].args, argv)
