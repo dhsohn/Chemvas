@@ -108,12 +108,19 @@ class Preview3D(QWidget):
                 return
             self._start_preview_worker()
             return
-        scene = self._rdkit.model_to_3d_scene(
-            self._pending_model,
-            atom_annotations=self._pending_annotations,
-        )
+        result_method = getattr(self._rdkit, "model_to_3d_scene_result", None)
+        if callable(result_method):
+            result = result_method(self._pending_model, atom_annotations=self._pending_annotations)
+            scene = result.value
+            error = result.error
+        else:
+            scene = self._rdkit.model_to_3d_scene(
+                self._pending_model,
+                atom_annotations=self._pending_annotations,
+            )
+            error = getattr(self._rdkit, "last_error", None)
         if scene is None:
-            self.clear_preview(self._rdkit.last_error or "Failed to build 3D preview.")
+            self.clear_preview(error or "Failed to build 3D preview.")
             return
         self._scene = scene
         self._message = ""
@@ -133,9 +140,10 @@ class Preview3D(QWidget):
         thread = QThread(self)
         worker = Preview3DWorker(
             request_id,
-            self._rdkit,
+            None,
             self._pending_model,
             self._pending_annotations,
+            rdkit_adapter_factory=RDKitAdapter,
         )
         worker.moveToThread(thread)
         self._preview_jobs[request_id] = (thread, worker)

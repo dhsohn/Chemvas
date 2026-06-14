@@ -519,6 +519,18 @@ class StructureBuildServiceTest(unittest.TestCase):
         direct_alias_hit_testing_service.find_atom_near.assert_not_called()
         canvas.find_atom_near.assert_not_called()
 
+    def test_add_bond_between_points_ignores_short_drag_before_mutation(self) -> None:
+        canvas = _FakeCanvas()
+        service = _service_for(canvas)
+
+        result = service.add_bond_between_points(QPointF(0.0, 0.0), QPointF(1.0, 0.0), "single", 1)
+
+        self.assertIsNone(result)
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertEqual(canvas.model.bonds, [])
+        self.assertEqual(canvas.record_calls, [])
+        canvas.hit_testing_find_atom_near.assert_not_called()
+
     def test_add_benzene_ring_builds_ring_item_and_records_scene_item(self) -> None:
         canvas = _FakeCanvas()
         service = _service_for(canvas)

@@ -5,7 +5,12 @@ from typing import Mapping, Optional
 from core.model import MoleculeModel
 from core.rdkit_conversion import RDKitConversionHelper
 from core.rdkit_import import RDKitImportHelper
-from core.rdkit_types import Molecule3DAtom, Molecule3DBond, Molecule3DScene
+from core.rdkit_types import (
+    Molecule3DAtom,
+    Molecule3DBond,
+    Molecule3DScene,
+    RDKitResult,
+)
 
 
 class RDKitAdapter:
@@ -102,14 +107,38 @@ class RDKitAdapter:
         model: MoleculeModel,
         atom_annotations: Mapping[int, Mapping[str, int]] | None = None,
     ) -> Molecule3DScene | None:
-        return self._conversion_helper.model_to_3d_scene(model, atom_annotations=atom_annotations)
+        result = self.model_to_3d_scene_result(model, atom_annotations=atom_annotations)
+        self.last_error = result.error
+        return result.value
+
+    def model_to_3d_scene_result(
+        self,
+        model: MoleculeModel,
+        atom_annotations: Mapping[int, Mapping[str, int]] | None = None,
+    ) -> RDKitResult[Molecule3DScene]:
+        return self._call_with_result(
+            lambda: self._conversion_helper.model_to_3d_scene(model, atom_annotations=atom_annotations),
+            fallback_error="Failed to build 3D preview.",
+        )
 
     def model_to_xyz_block(
         self,
         model: MoleculeModel,
         atom_annotations: Mapping[int, Mapping[str, int]] | None = None,
     ) -> str | None:
-        return self._conversion_helper.model_to_xyz_block(model, atom_annotations=atom_annotations)
+        result = self.model_to_xyz_block_result(model, atom_annotations=atom_annotations)
+        self.last_error = result.error
+        return result.value
+
+    def model_to_xyz_block_result(
+        self,
+        model: MoleculeModel,
+        atom_annotations: Mapping[int, Mapping[str, int]] | None = None,
+    ) -> RDKitResult[str]:
+        return self._call_with_result(
+            lambda: self._conversion_helper.model_to_xyz_block(model, atom_annotations=atom_annotations),
+            fallback_error="Failed to export 3D XYZ.",
+        )
 
     def get_name_from_smiles(self, smiles: str) -> str | None:
         return self._import_helper.get_name_from_smiles(smiles)
@@ -117,10 +146,20 @@ class RDKitAdapter:
     def model_to_3d(self, model: MoleculeModel):
         return self.model_to_3d_coords(model)
 
+    def _call_with_result(self, callback, *, fallback_error: str):
+        self.last_error = None
+        try:
+            value = callback()
+        except Exception as exc:
+            return RDKitResult(None, str(exc) or fallback_error)
+        error = None if value is not None else self.last_error or fallback_error
+        return RDKitResult(value, error)
+
 
 __all__ = [
     "Molecule3DAtom",
     "Molecule3DBond",
     "Molecule3DScene",
+    "RDKitResult",
     "RDKitAdapter",
 ]

@@ -190,14 +190,14 @@ class MainWindowDocumentActionService:
             return
         try:
             document = read_document(path)
+            state = document.state
+            if "sheets" in state:
+                self._workbook_document.restore_workbook_document(window, state)
+            else:
+                self._workbook_document.restore_single_sheet_document(window, state)
         except Exception as exc:
             message_box.warning(window, "Load Error", f"Failed to load file:\n{exc}")
             return
-        state = document.state
-        if "sheets" in state:
-            self._workbook_document.restore_workbook_document(window, state)
-        else:
-            self._workbook_document.restore_single_sheet_document(window, state)
         self._set_current_file_path_for_window(window, path)
         window.statusBar().showMessage(f"Loaded: {path}", 4000)
 

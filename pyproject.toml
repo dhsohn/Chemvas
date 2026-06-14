@@ -24,6 +24,9 @@ rdkit = [
     "rdkit>=2024.9",
 ]
 
+[project.scripts]
+chemvas = "chemvas.main:main"
+
 [tool.setuptools.packages.find]
 where = ["app"]
 

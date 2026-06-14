@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ui.canvas_rdkit_state import rdkit_adapter_for
+from ui.canvas_rdkit_state import new_rdkit_adapter, rdkit_adapter_for
 
 
 def rdkit_last_error_for(canvas: Any) -> str | None:
@@ -36,6 +36,7 @@ def compute_props_for(canvas: Any, model):
 __all__ = [
     "compute_props_for",
     "model_to_xyz_block_for",
+    "new_rdkit_adapter",
     "preload_rdkit_for",
     "rdkit_adapter_for",
     "rdkit_is_loaded_for",

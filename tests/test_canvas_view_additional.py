@@ -345,6 +345,30 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         self.assertEqual(history_state_for(undo_redo_view).history, [first])
         self.assertEqual(history_state_for(undo_redo_view).redo_stack, [])
 
+        failing_undo = _FakeCommand()
+        failing_undo.undo = mock.Mock(side_effect=RuntimeError("undo failed"))
+        failing_undo_view = SimpleNamespace(history_state=CanvasHistoryState(history=[failing_undo]))
+        failing_undo_history = CanvasHistoryService(
+            failing_undo_view,
+            history_state_for(failing_undo_view),
+        )
+        with self.assertRaisesRegex(RuntimeError, "undo failed"):
+            failing_undo_history.undo()
+        self.assertEqual(history_state_for(failing_undo_view).history, [failing_undo])
+        self.assertEqual(history_state_for(failing_undo_view).redo_stack, [])
+
+        failing_redo = _FakeCommand()
+        failing_redo.redo = mock.Mock(side_effect=RuntimeError("redo failed"))
+        failing_redo_view = SimpleNamespace(history_state=CanvasHistoryState(redo_stack=[failing_redo]))
+        failing_redo_history = CanvasHistoryService(
+            failing_redo_view,
+            history_state_for(failing_redo_view),
+        )
+        with self.assertRaisesRegex(RuntimeError, "redo failed"):
+            failing_redo_history.redo()
+        self.assertEqual(history_state_for(failing_redo_view).history, [])
+        self.assertEqual(history_state_for(failing_redo_view).redo_stack, [failing_redo])
+
         noop_view = SimpleNamespace(history_state=CanvasHistoryState())
         noop_view.runtime_state = SimpleNamespace(
             history_service=CanvasHistoryService(noop_view, history_state_for(noop_view))

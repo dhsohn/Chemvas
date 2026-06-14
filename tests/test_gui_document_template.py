@@ -21,6 +21,7 @@ if QApplication is not None:
     from core.document_io import read_document, write_document
     from core.model import MoleculeModel
     from core.rdkit_adapter import Molecule3DAtom, Molecule3DBond, Molecule3DScene
+    from core.rdkit_types import RDKitResult
     from ui.bond_graphics_access import add_bond_graphics_for
     from ui.canvas_atom_graphics_state import atom_items_for
     from ui.canvas_bond_graphics_state import bond_items_for_id
@@ -996,7 +997,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             bonds=(Molecule3DBond(0, 1, 1),),
         )
 
-        with patch.object(preview.rdkit_adapter, "model_to_3d_scene", return_value=scene) as mocked:
+        with patch.object(preview.rdkit_adapter, "model_to_3d_scene_result", return_value=RDKitResult(scene)) as mocked:
             preview.refresh_from_canvas(active_canvas_for_window(self.window))
             self.app.processEvents()
             QTest.qWait(150)

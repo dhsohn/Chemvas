@@ -13,7 +13,9 @@ except ModuleNotFoundError:
     QObject = None
 
 if QObject is not None:
+    from core.rdkit_types import RDKitResult
     from ui import rdkit_async_jobs
+    from ui.preview_3d_worker import Preview3DWorker
     from ui.rdkit_async_jobs import XYZExportWorker, export_xyz_in_thread
     from ui.rdkit_export_job_state import rdkit_export_jobs_for
 
@@ -59,6 +61,25 @@ class XYZExportWorkerTest(unittest.TestCase):
 
         self.assertEqual(signals["succeeded"], [])
         self.assertEqual(signals["failed"], ["unsupported label"])
+        self.assertEqual(signals["finished"], 1)
+
+    def test_run_prefers_result_error_over_stale_adapter_error(self) -> None:
+        rdkit = SimpleNamespace(
+            model_to_xyz_block_result=mock.Mock(return_value=RDKitResult(None, "local error")),
+            last_error="stale error",
+        )
+        signals = {"succeeded": [], "failed": [], "finished": 0}
+
+        worker = XYZExportWorker(rdkit, "model", {}, "/tmp/not-written.xyz")
+        worker.succeeded.connect(signals["succeeded"].append)
+        worker.failed.connect(signals["failed"].append)
+        worker.finished.connect(lambda: signals.__setitem__("finished", signals["finished"] + 1))
+
+        worker.run()
+
+        rdkit.model_to_xyz_block_result.assert_called_once_with("model", atom_annotations={})
+        self.assertEqual(signals["succeeded"], [])
+        self.assertEqual(signals["failed"], ["local error"])
         self.assertEqual(signals["finished"], 1)
 
     def test_run_emits_fallback_error_messages(self) -> None:
@@ -128,8 +149,9 @@ class _FakeThread:
 class _FakeWorker:
     instances = []
 
-    def __init__(self, rdkit_adapter, model, atom_annotations, path: str) -> None:
+    def __init__(self, rdkit_adapter, model, atom_annotations, path: str, *, rdkit_adapter_factory=None) -> None:
         self.rdkit_adapter = rdkit_adapter
+        self.rdkit_adapter_factory = rdkit_adapter_factory
         self.model = model
         self.atom_annotations = atom_annotations
         self.path = path
@@ -180,6 +202,7 @@ class ExportXYZInThreadTest(unittest.TestCase):
         worker = _FakeWorker.instances[-1]
         self.assertIs(thread.parent, owner)
         self.assertEqual(worker.rdkit_adapter, "rdkit")
+        self.assertIsNone(worker.rdkit_adapter_factory)
         self.assertEqual(worker.model, "model")
         self.assertEqual(worker.atom_annotations, {"a": 1})
         self.assertEqual(worker.path, "/tmp/export.xyz")
@@ -226,6 +249,25 @@ class ExportXYZInThreadTest(unittest.TestCase):
         thread = _FakeThread.instances[-1]
         worker = _FakeWorker.instances[-1]
         self.assertEqual(rdkit_export_jobs_for(owner), [existing_job, (thread, worker)])
+
+
+@unittest.skipUnless(QObject is not None, "PyQt6 is required for async RDKit preview tests")
+class Preview3DWorkerTest(unittest.TestCase):
+    def test_run_prefers_result_error_over_stale_adapter_error(self) -> None:
+        rdkit = SimpleNamespace(
+            compute_props=mock.Mock(return_value=("C", 12.01, "C")),
+            model_to_3d_scene_result=mock.Mock(return_value=RDKitResult(None, "local preview error")),
+            last_error="stale preview error",
+        )
+        emitted = []
+        worker = Preview3DWorker(7, rdkit, "model", {"annotations": True})
+        worker.finished.connect(lambda *args: emitted.append(args))
+
+        worker.run()
+
+        rdkit.compute_props.assert_called_once_with("model")
+        rdkit.model_to_3d_scene_result.assert_called_once_with("model", atom_annotations={"annotations": True})
+        self.assertEqual(emitted, [(7, "C", 12.01, None, "local preview error")])
 
 
 if __name__ == "__main__":

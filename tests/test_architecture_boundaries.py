@@ -2763,8 +2763,9 @@ def test_rdkit_adapter_access_delegates_storage_to_rdkit_state() -> None:
     state_source = state.read_text()
     forbidden = re.compile(r"\bcanvas\.rdkit\b")
 
-    assert "from ui.canvas_rdkit_state import rdkit_adapter_for" in source
+    assert "from ui.canvas_rdkit_state import new_rdkit_adapter, rdkit_adapter_for" in source
     assert "RDKitAdapter()" in state_source
+    assert "def new_rdkit_adapter" in state_source
     assert "canvas.rdkit" in state_source
     assert _matching_lines(forbidden, [access]) == []
 

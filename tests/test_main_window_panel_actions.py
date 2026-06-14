@@ -153,6 +153,25 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         warning.assert_called_once_with(self.window, "Load Error", "Failed to load file:\nbad file")
         self.assertEqual(self.window.runtime_state.current_file_path, "/tmp/previous.chemvas")
 
+        restore_failure = mock.Mock(side_effect=RuntimeError("bad restore"))
+        with (
+            mock.patch(
+                "ui.main_window_document_action_service.QFileDialog.getOpenFileName",
+                return_value=("/tmp/restore-broken.chemvas", ""),
+            ),
+            mock.patch(
+                "ui.main_window_document_action_service.default_read_document",
+                return_value=SimpleNamespace(state={"atoms": []}),
+            ),
+            mock.patch("ui.main_window_document_action_service.QMessageBox.warning") as warning,
+        ):
+            workbook_service.restore_single_sheet_document = restore_failure
+            self.window.runtime_state.current_file_path = "/tmp/previous.chemvas"
+            load_action.trigger()
+
+        warning.assert_called_once_with(self.window, "Load Error", "Failed to load file:\nbad restore")
+        self.assertEqual(self.window.runtime_state.current_file_path, "/tmp/previous.chemvas")
+
     def test_export_button_normalizes_path_and_reports_success_and_failure(self) -> None:
         export_button = self._find_button(tool_tip="Export 3D XYZ")
         self.assertFalse(export_button.isEnabled())
