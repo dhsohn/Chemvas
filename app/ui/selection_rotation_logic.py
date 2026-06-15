@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable, Mapping, Sequence
 
+from core.model import Atom, Bond
 from PyQt6.QtCore import QPointF
 
 
@@ -10,7 +11,7 @@ def selected_rotation_atom_ids(
     atom_ids: Iterable[int],
     bond_ids: Iterable[int],
     *,
-    bonds: Sequence[object | None],
+    bonds: Sequence[Bond | None],
 ) -> set[int]:
     expanded = set(atom_ids)
     for bond_id in bond_ids:
@@ -27,7 +28,7 @@ def selected_rotation_atom_ids(
 def rotated_atom_positions(
     atom_ids: Iterable[int],
     *,
-    atoms: Mapping[int, object],
+    atoms: Mapping[int, Atom],
     center: QPointF,
     angle_radians: float,
 ) -> dict[int, tuple[float, float]]:

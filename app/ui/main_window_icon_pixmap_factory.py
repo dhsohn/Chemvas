@@ -3,8 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QIcon, QPainter, QPixmap
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtGui import QGuiApplication, QIcon, QPainter, QPixmap
 
 
 class MainWindowIconPixmapFactory:
@@ -19,11 +18,9 @@ class MainWindowIconPixmapFactory:
 
     @staticmethod
     def _screen_device_pixel_ratio() -> float:
-        app = QApplication.instance()
-        if app is not None:
-            screen = app.primaryScreen()
-            if screen is not None:
-                return max(1.0, screen.devicePixelRatio())
+        screen = QGuiApplication.primaryScreen()
+        if screen is not None:
+            return max(1.0, screen.devicePixelRatio())
         return 2.0
 
     def make_icon(self, painter_fn, size: int | None = None) -> QIcon:

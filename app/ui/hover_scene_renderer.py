@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any
 
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor, QPen
@@ -88,15 +89,16 @@ def add_hover_preview_items(
 def _apply_preview_style(item: QGraphicsItem, color: QColor) -> None:
     if isinstance(item, QGraphicsTextItem):
         item.setDefaultTextColor(color)
+    styleable: Any = item
     if hasattr(item, "pen"):
-        pen = QPen(item.pen())
+        pen = QPen(styleable.pen())
         pen.setColor(color)
-        item.setPen(pen)
+        styleable.setPen(pen)
     if hasattr(item, "brush"):
-        brush = item.brush()
+        brush = styleable.brush()
         if brush.style() != Qt.BrushStyle.NoBrush:
             brush.setColor(color)
-            item.setBrush(brush)
+            styleable.setBrush(brush)
 
 
 def _indicator_pen_color() -> QColor:

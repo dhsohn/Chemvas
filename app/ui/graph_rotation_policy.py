@@ -144,7 +144,7 @@ def rotatable_axis_from_selection_policy(
                 continue
             has_unselected_bond[other.a] = True
             has_unselected_bond[other.b] = True
-        candidates = []
+        leaf_candidates = []
         for bond_id in selected_bonds:
             bond = bond_for_id(bond_id)
             if bond is None:
@@ -152,9 +152,9 @@ def rotatable_axis_from_selection_policy(
             a_leaf = selected_degree.get(bond.a, 0) == 1 and has_unselected_bond.get(bond.a, False)
             b_leaf = selected_degree.get(bond.b, 0) == 1 and has_unselected_bond.get(bond.b, False)
             if a_leaf ^ b_leaf:
-                candidates.append(bond_id)
-        if len(candidates) == 1:
-            bond_id = candidates[0]
+                leaf_candidates.append(bond_id)
+        if len(leaf_candidates) == 1:
+            bond_id = leaf_candidates[0]
             if bond_is_rotatable(bond_id):
                 rotating = rotation_side_for_bond(
                     bond_id,

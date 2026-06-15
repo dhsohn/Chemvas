@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Collection, Mapping, Sequence
 from typing import Callable
 
+from core.model import Bond
 from PyQt6.QtCore import QRectF
 from PyQt6.QtWidgets import QGraphicsItem
 
@@ -38,7 +39,7 @@ def build_selection_clipboard_payload_for_canvas(
     selected_items: Sequence[QGraphicsItem],
     explicit_atom_ids: set[int],
     selected_bond_ids: set[int],
-    bonds: Sequence[object | None],
+    bonds: Sequence[Bond | None],
     ring_items: Sequence[QGraphicsItem],
     marks_by_atom: Mapping[int, Sequence[QGraphicsItem]],
     atom_state_getter: Callable[[int], dict],

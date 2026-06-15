@@ -30,7 +30,9 @@ class CanvasView(QGraphicsView):
         super().__init__()
         initialize_canvas_view(self)
 
-    def drawBackground(self, painter: QPainter, rect: QRectF) -> None:
+    def drawBackground(self, painter: QPainter | None, rect: QRectF) -> None:
+        if painter is None:
+            return
         draw_canvas_background_for(self, painter, rect)
 
     def keyPressEvent(self, event) -> None:

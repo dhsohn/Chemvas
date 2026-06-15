@@ -127,8 +127,8 @@ def build_bond_adjacency_index(
     atom_ids: Iterable[int],
     bonds: Iterable[Any],
 ) -> tuple[dict[int, set[int]], dict[int, set[int]]]:
-    atom_neighbors = {atom_id: set() for atom_id in atom_ids}
-    atom_bond_ids = {atom_id: set() for atom_id in atom_ids}
+    atom_neighbors: dict[int, set[int]] = {atom_id: set() for atom_id in atom_ids}
+    atom_bond_ids: dict[int, set[int]] = {atom_id: set() for atom_id in atom_ids}
     for bond_id, bond in enumerate(bonds):
         if bond is None:
             continue

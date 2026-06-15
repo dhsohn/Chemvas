@@ -121,7 +121,7 @@ class MainWindowContextBarService:
             settings.active_bond_order,
         )
         label = bond_label_for_state(*key)
-        target = self._bond_buttons.get(label)
+        target = self._bond_buttons.get(label) if label is not None else None
         self._bond_group.setExclusive(False)
         for button in self._bond_buttons.values():
             blocked = button.blockSignals(True)

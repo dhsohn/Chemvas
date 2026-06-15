@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Callable, Mapping, Sequence
 
+from core.model import Bond
 from PyQt6.QtCore import QMimeData
 from PyQt6.QtWidgets import QGraphicsItem
 
@@ -20,7 +21,7 @@ def _item_in_scene(item: QGraphicsItem, scene) -> bool:
 def _selection_atom_ids(
     explicit_atom_ids: set[int],
     selected_bond_ids: set[int],
-    bonds: Sequence[object | None],
+    bonds: Sequence[Bond | None],
 ) -> set[int]:
     atom_ids = set(explicit_atom_ids)
     for bond_id in selected_bond_ids:
@@ -45,7 +46,7 @@ def _serialize_atoms(atom_ids: set[int], atom_state_getter: Callable[[int], dict
 
 def _serialize_bonds(
     atom_ids: set[int],
-    bonds: Sequence[object | None],
+    bonds: Sequence[Bond | None],
     bond_state_getter: Callable[[object], dict],
 ) -> list[dict]:
     if not atom_ids:
@@ -128,7 +129,7 @@ def build_selection_clipboard_payload(
     selected_items: Sequence[QGraphicsItem],
     explicit_atom_ids: set[int],
     selected_bond_ids: set[int],
-    bonds: Sequence[object | None],
+    bonds: Sequence[Bond | None],
     ring_items: Sequence[QGraphicsItem],
     marks_by_atom: Mapping[int, Sequence[QGraphicsItem]],
     scene,
@@ -165,7 +166,7 @@ def clipboard_payload_candidates(
     payload_candidates: list[str] = []
     if mime_data is not None and mime_data.hasFormat(mime_type):
         try:
-            payload_candidates.append(bytes(mime_data.data(mime_type)).decode("utf-8"))
+            payload_candidates.append(mime_data.data(mime_type).data().decode("utf-8"))
         except UnicodeDecodeError:
             pass
     return payload_candidates

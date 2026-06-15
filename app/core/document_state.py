@@ -521,10 +521,6 @@ def _is_atom_id_sequence(value: object, atom_ids: set[int]) -> bool:
     return all(atom_id in atom_ids for atom_id in parsed_ids)
 
 
-def _is_nonempty_string(value: object) -> bool:
-    return isinstance(value, str) and bool(value)
-
-
 def _is_hex_color(value: object) -> bool:
     if not isinstance(value, str) or not value.startswith("#"):
         return False

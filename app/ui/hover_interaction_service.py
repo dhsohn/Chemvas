@@ -53,8 +53,7 @@ class HoverInteractionService:
             clear_hover_highlight_for(self.canvas)
             return
 
-        active_tool = self._active_tool()
-        if active_tool is not None and active_tool.name == "mark":
+        if self._active_tool_name() == "mark":
             add_mark_hover_preview_for(self.canvas, pos)
             return
 

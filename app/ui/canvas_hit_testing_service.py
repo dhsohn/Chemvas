@@ -198,6 +198,8 @@ class CanvasHitTestingService:
 
     def nearest_bond_hit(self, pos: QPointF) -> tuple[int, float] | None:
         bond_id = self.find_bond_near(pos, bond_pick_radius_for(self.canvas))
+        if bond_id is None:
+            return None
         bond = bond_for_id(self.canvas, bond_id)
         if bond is None:
             return None

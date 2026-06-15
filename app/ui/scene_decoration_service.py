@@ -42,7 +42,7 @@ class SceneDecorationService:
         item = build_mark_item_for(self.canvas, kind)
         if item is None:
             return None
-        data = {"kind": kind, "atom_id": atom_id}
+        data: dict[str, object] = {"kind": kind, "atom_id": atom_id}
         if offset is not None:
             data["dx"] = offset.x()
             data["dy"] = offset.y()

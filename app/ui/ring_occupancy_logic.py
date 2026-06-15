@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any, cast
 
 from core.model import Bond
 from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtWidgets import QGraphicsPolygonItem
 
 Point = tuple[float, float]
 
@@ -12,7 +14,7 @@ def ring_polygon_points_for_bond(
     bond_id: int,
     *,
     bonds: Sequence[Bond | None],
-    ring_items: Sequence[object],
+    ring_items: Sequence[QGraphicsPolygonItem],
 ) -> list[Point] | None:
     if not (0 <= bond_id < len(bonds)):
         return None
@@ -26,7 +28,7 @@ def ring_polygon_points_for_atoms(
     atom_a: int,
     atom_b: int,
     *,
-    ring_items: Sequence[object],
+    ring_items: Sequence[QGraphicsPolygonItem],
 ) -> list[Point] | None:
     for ring_item in ring_items:
         try:
@@ -38,14 +40,14 @@ def ring_polygon_points_for_atoms(
             polygon = ring_item.polygon()
         except RuntimeError:
             continue
-        return [(point.x(), point.y()) for point in polygon]
+        return [(point.x(), point.y()) for point in cast(Any, polygon)]
     return None
 
 
 def point_inside_any_ring(
     point: QPointF,
     *,
-    ring_items: Sequence[object],
+    ring_items: Sequence[QGraphicsPolygonItem],
 ) -> bool:
     for ring_item in ring_items:
         try:

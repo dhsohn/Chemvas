@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
+from core.model import Atom
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QGraphicsItem
 
@@ -70,8 +71,8 @@ def group_items_for_flip_transform(
                 continue
         if kind == "mark":
             data = item.data(1) or {}
-            atom_id = data.get("atom_id")
-            component_index = component_by_atom.get(atom_id) if isinstance(atom_id, int) else None
+            mark_atom_id = data.get("atom_id")
+            component_index = component_by_atom.get(mark_atom_id) if isinstance(mark_atom_id, int) else None
             if component_index is not None:
                 assign_to_component(component_index, item)
             else:
@@ -88,7 +89,7 @@ def group_items_for_flip_transform(
 def build_flip_atom_position_maps(
     atom_ids: Sequence[int],
     *,
-    atoms: Mapping[int, object],
+    atoms: Mapping[int, Atom],
     center: QPointF,
     flip_point: Callable[[QPointF, QPointF], QPointF],
 ) -> FlipAtomPositionMaps:

@@ -35,9 +35,9 @@ from ui.tool_base import Tool
 class BondTool(Tool):
     def __init__(self, canvas, *, context=None) -> None:
         super().__init__("bond", canvas, context=context)
-        self._start_pos = None
-        self._start_atom_id = None
-        self._press_scene_pos = None
+        self._start_pos: QPointF | None = None
+        self._start_atom_id: int | None = None
+        self._press_scene_pos: QPointF | None = None
         self._preview_items: list = []
         self._preview_signature: str | None = None
 

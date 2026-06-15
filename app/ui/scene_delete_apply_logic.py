@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Callable, Sequence
 
 from core.history import DeleteAtomsCommand, DeleteBondCommand, HistoryCommand
+from core.model import Bond
 
 from ui.history_commands import DeleteSceneItemsCommand
 from ui.scene_delete_logic import DeleteSelectionPlan
@@ -11,9 +12,9 @@ from ui.scene_delete_logic import DeleteSelectionPlan
 def apply_delete_selection_plan(
     plan: DeleteSelectionPlan,
     *,
-    bonds: Sequence[object | None],
+    bonds: Sequence[Bond | None],
     before_smiles_input,
-    current_smiles_input_getter: Callable[[], object],
+    current_smiles_input_getter: Callable[[], str | None],
     bond_state_getter: Callable[[object], dict],
     remove_bond_by_id: Callable[[int], None],
     redraw_connected_bonds: Callable[[int], None],
