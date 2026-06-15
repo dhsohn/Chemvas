@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from core.tool_overlay_logic import activate_tool_no_drag, clear_temporary_tool_overlay
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QPointF, Qt
 
 from ui.canvas_tool_settings_state import tool_settings_state_for
 from ui.scene_decoration_access import (
@@ -17,7 +17,7 @@ from ui.tool_base import Tool
 class PreviewDragTool(Tool):
     def __init__(self, name: str, canvas, *, context=None) -> None:
         super().__init__(name, canvas, context=context)
-        self._start_pos = None
+        self._start_pos: QPointF | None = None
         self._preview_item = None
 
     def activate(self) -> None:

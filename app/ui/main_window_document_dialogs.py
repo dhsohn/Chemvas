@@ -91,8 +91,8 @@ def prompt_export_options(window) -> FigureExportOptions | None:
     layout.addWidget(dpi_label)
     dpi_combo = QComboBox()
     dpi_combo.setObjectName("exportDpiCombo")
-    for value in DPI_OPTIONS:
-        dpi_combo.addItem(str(value), value)
+    for dpi_value in DPI_OPTIONS:
+        dpi_combo.addItem(str(dpi_value), dpi_value)
     dpi_combo.setCurrentIndex(DPI_OPTIONS.index(DEFAULT_DPI))
     layout.addWidget(dpi_combo)
 

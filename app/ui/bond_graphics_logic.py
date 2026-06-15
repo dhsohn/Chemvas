@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from typing import Callable, MutableMapping, Sequence
 
+from core.model import Bond
+
 
 def refresh_bond_graphics(
     bond_id: int,
     *,
-    bonds: Sequence[object | None],
+    bonds: Sequence[Bond | None],
     bond_items: MutableMapping[int, list[object]],
     remove_scene_item: Callable[[object], None],
     add_bond_graphics: Callable[[int], None],

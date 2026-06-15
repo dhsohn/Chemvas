@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from collections.abc import Collection, Mapping
 
+from core.model import Atom
 from PyQt6.QtCore import QPointF
 
 
 def center_for_atoms(
     atom_ids: Collection[int],
     *,
-    atoms: Mapping[int, object],
+    atoms: Mapping[int, Atom],
 ) -> QPointF | None:
     xs: list[float] = []
     ys: list[float] = []
@@ -26,7 +27,7 @@ def center_for_atoms(
 def bounding_box_center_for_atoms(
     atom_ids: Collection[int],
     *,
-    atoms: Mapping[int, object],
+    atoms: Mapping[int, Atom],
 ) -> QPointF | None:
     xs: list[float] = []
     ys: list[float] = []

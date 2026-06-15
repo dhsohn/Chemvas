@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 
+from core.model import Atom
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtWidgets import QGraphicsItem
 
@@ -15,7 +16,7 @@ def flip_scene_item_state(
     center: QPointF,
     horizontal: bool,
     transformed_atom_positions: Mapping[int, tuple[float, float]],
-    atoms: Mapping[int, object],
+    atoms: Mapping[int, Atom],
     flip_point: Callable[[QPointF, QPointF, bool], QPointF],
     ts_bracket_rect_from_state: Callable[[dict], QRectF | None],
 ) -> dict:
@@ -78,12 +79,12 @@ def flip_scene_item_state(
         after_state["rotation"] = 180.0 - rotation if horizontal else -rotation
         return after_state
     if kind == "ts_bracket":
-        rect = ts_bracket_rect_from_state(before_state)
-        if rect is None:
+        bracket_rect = ts_bracket_rect_from_state(before_state)
+        if bracket_rect is None:
             return after_state
         flipped_rect = QRectF(
-            flip_point(rect.topLeft(), center, horizontal),
-            flip_point(rect.bottomRight(), center, horizontal),
+            flip_point(bracket_rect.topLeft(), center, horizontal),
+            flip_point(bracket_rect.bottomRight(), center, horizontal),
         ).normalized()
         after_state["left"] = flipped_rect.left()
         after_state["top"] = flipped_rect.top()

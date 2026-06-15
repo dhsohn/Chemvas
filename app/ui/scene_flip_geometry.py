@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 
+from core.model import Atom
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtWidgets import QGraphicsItem
 
@@ -44,12 +45,12 @@ def flip_bounds_for_item(
         points = [QPointF(x, y) for x, y in state.get("points", [])]
         return bounds_from_points(points)
     if kind in ARROW_KINDS:
-        points: list[QPointF] = []
+        arrow_points: list[QPointF] = []
         for key in ("start", "end", "control"):
             point = state.get(key)
             if point is not None:
-                points.append(QPointF(*point))
-        return bounds_from_points(points)
+                arrow_points.append(QPointF(*point))
+        return bounds_from_points(arrow_points)
     rect = item.sceneBoundingRect()
     return rect if rect.isValid() else None
 
@@ -58,7 +59,7 @@ def flip_center_for_selection(
     atom_ids: set[int],
     items: Sequence[QGraphicsItem],
     *,
-    atoms: Mapping[int, object],
+    atoms: Mapping[int, Atom],
     flip_bounds_getter: Callable[[QGraphicsItem], QRectF | None],
 ) -> QPointF | None:
     xs: list[float] = []

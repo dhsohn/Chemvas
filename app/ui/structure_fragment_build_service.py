@@ -44,7 +44,7 @@ class StructureFragmentBuildService:
     def add_fused_benzenes(self, count: int, mode: str, actions: StructureFragmentBuildActions) -> None:
         center = actions.viewport_center()
         step = bond_length_px_for(self.canvas) * 1.5
-        merge = []
+        merge: list = []
         for ring_center in fused_benzene_centers(center, step, count, mode):
             actions.add_ring_from_points(actions.ring_points(ring_center, 6), merge=merge)
 

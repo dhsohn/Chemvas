@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable, Mapping, Sequence
 
+from core.model import Bond
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsPolygonItem, QGraphicsTextItem
 
 from ui.scene_item_state import ARROW_KINDS
@@ -86,7 +87,7 @@ def classify_delete_selection(items: Sequence[QGraphicsItem]) -> DeleteSelection
 def build_delete_selection_plan(
     selection: DeleteSelectionBuckets,
     *,
-    bonds: Sequence[object | None],
+    bonds: Sequence[Bond | None],
     marks_by_atom: Mapping[int, Sequence[QGraphicsItem]],
     mark_state_getter: Callable[[QGraphicsItem], dict],
 ) -> DeleteSelectionPlan:
