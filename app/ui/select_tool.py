@@ -20,9 +20,9 @@ class SelectTool(SelectionDragMixin, Tool):
         super().__init__("select", canvas, context=context)
         self._active_handle = None
         self._handle_target = None
-        self._handle_before_state = None
+        self._handle_before_state: dict | None = None
         self._pending_curved_handle_item = None
-        self._pending_curved_handle_action = None
+        self._pending_curved_handle_action: str | None = None
         self._reset_selection_drag_state()
         self._start_pos = None
         self._moved = False

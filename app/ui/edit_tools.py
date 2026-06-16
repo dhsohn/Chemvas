@@ -15,7 +15,7 @@ from ui.tool_base import Tool
 class ColorTool(Tool):
     def __init__(self, canvas, *, context=None) -> None:
         super().__init__("color", canvas, context=context)
-        self._last_color = None
+        self._last_color: str | None = None
 
     def activate(self) -> None:
         activate_tool_no_drag(self.canvas)
@@ -95,8 +95,8 @@ class DeleteTool(Tool):
         super().__init__("delete", canvas, context=context)
         self._erasing = False
         self._changed = False
-        self._commands = []
-        self._before_smiles_input = None
+        self._commands: list = []
+        self._before_smiles_input: str | None = None
 
     def activate(self) -> None:
         activate_tool_no_drag(self.canvas)

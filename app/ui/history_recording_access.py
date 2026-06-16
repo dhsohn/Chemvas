@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from ui.history_recording_ports import history_recording_service_for_access
 
 
@@ -11,7 +13,7 @@ def record_additions_for(
     *,
     added_scene_items: list | None = None,
 ) -> None:
-    kwargs = {
+    kwargs: dict[str, Any] = {
         "before_next_atom_id": before_next_atom_id,
         "before_bond_count": before_bond_count,
         "before_smiles_input": before_smiles_input,

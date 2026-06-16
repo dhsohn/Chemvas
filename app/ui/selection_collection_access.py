@@ -135,8 +135,8 @@ def append_unique_scene_item(items: list, seen: set, item, *, excluded_kinds: se
 
 
 def selected_scene_items_for(canvas, *, excluded_kinds: set[str]) -> list:
-    items = []
-    seen = set()
+    items: list = []
+    seen: set = set()
     for item in scene_selected_items_for(canvas):
         append_unique_scene_item(items, seen, item, excluded_kinds=excluded_kinds)
     for note in selected_scene_notes_for(canvas):
@@ -175,8 +175,8 @@ def selection_items_for_copy_for(canvas) -> list:
     selected = selected_scene_items_for(canvas, excluded_kinds=COPY_SELECTION_EXCLUDED_KINDS)
     if not selected:
         return []
-    items = []
-    seen = set()
+    items: list = []
+    seen: set = set()
 
     def add_with_children(item) -> None:
         if not append_unique_scene_item(items, seen, item, excluded_kinds=COPY_SELECTION_EXCLUDED_KINDS):

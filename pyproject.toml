@@ -72,13 +72,10 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = [
     "ui.bond_graphics_draw_service", "ui.bond_renderer", "ui.canvas_history_recording_service",
-    "ui.canvas_note_controller", "ui.canvas_rotation_preview_controller", "ui.edit_tools",
-    "ui.graphics_items", "ui.history_recording_access", "ui.hover_service_bundle",
+    "ui.canvas_note_controller", "ui.graphics_items", "ui.hover_service_bundle",
     "ui.main_window_tool_routing_service", "ui.main_window_toolbar_logic", "ui.scene_item_restore",
-    "ui.scene_single_item_mutation_logic", "ui.scene_transform_apply_logic", "ui.scene_transform_controller",
-    "ui.select_tool", "ui.selection_collection_access", "ui.selection_drag_tool",
-    "ui.selection_info_access", "ui.structure_build_committer", "ui.structure_growth_build_service",
-    "ui.structure_insert_access", "ui.structure_payload_access", "ui.template_geometry_resolver_service",
-    "ui.template_insert_logic", "ui.text_tool",
+    "ui.scene_transform_apply_logic", "ui.scene_transform_controller", "ui.selection_info_access",
+    "ui.structure_payload_access", "ui.template_geometry_resolver_service", "ui.template_insert_logic",
+    "ui.text_tool",
 ]
 ignore_errors = true
