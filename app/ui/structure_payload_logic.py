@@ -5,7 +5,7 @@ from core.model import Bond, MoleculeModel
 Bounds = tuple[float, float, float, float]
 AtomAnnotations = dict[int, dict[str, int]]
 MarkKindsByAtom = Mapping[int, Iterable[str]]
-BoundsGetter = Callable[[set[int]], Bounds]
+BoundsGetter = Callable[..., Bounds]
 
 
 def expand_atom_ids_for_structure(

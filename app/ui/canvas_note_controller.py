@@ -57,18 +57,15 @@ class CanvasNoteController:
                 before_state["text"] = committed_text
                 after_state = note_state_dict_for(self.canvas, item)
                 if not committed_text:
-                    command = AddSceneItemsCommand(item_states=[after_state], items=[item])
-                    self.history.push(command)
+                    self.history.push(AddSceneItemsCommand(item_states=[after_state], items=[item]))
                 else:
-                    command = UpdateSceneItemCommand(item, before_state, after_state)
-                    self.history.push(command)
+                    self.history.push(UpdateSceneItemCommand(item, before_state, after_state))
                 set_committed_note_text_for(item, text)
             return
         if committed_text:
             before_state = note_state_dict_for(self.canvas, item)
-            command = DeleteSceneItemsCommand(item_states=[before_state], items=[item])
             remove_scene_item(self.canvas, item)
-            self.history.push(command)
+            self.history.push(DeleteSceneItemsCommand(item_states=[before_state], items=[item]))
             set_committed_note_text_for(item, "")
             return
         if item in selected_notes_for(self.canvas):
@@ -106,17 +103,17 @@ class CanvasNoteController:
         item.setFont(font)
         item.setDefaultTextColor(style.text_color)
         doc = item.document()
+        if doc is None:
+            return
         option = doc.defaultTextOption()
         option.setAlignment(style.text_alignment)
         doc.setDefaultTextOption(option)
         cursor = QTextCursor(doc)
         cursor.select(QTextCursor.SelectionType.Document)
         block_format = QTextBlockFormat()
-        if hasattr(QTextBlockFormat, "LineHeightType") and hasattr(
-            QTextBlockFormat.LineHeightType,
-            "ProportionalHeight",
-        ):
-            height_type = QTextBlockFormat.LineHeightType.ProportionalHeight
+        line_height_type = getattr(QTextBlockFormat, "LineHeightType", None)
+        if line_height_type is not None and hasattr(line_height_type, "ProportionalHeight"):
+            height_type = line_height_type.ProportionalHeight
         else:
             height_type = QTextBlockFormat.LineHeightTypes.ProportionalHeight
             if hasattr(height_type, "value"):

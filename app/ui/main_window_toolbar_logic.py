@@ -58,8 +58,8 @@ TOOL_DISPLAY_NAMES: dict[str, str] = {
 
 
 def build_template_entries(
-    begin_ring_template_insert: Callable[[int], None],
-) -> list[tuple[str, Callable[[], None]]]:
+    begin_ring_template_insert: Callable[..., None],
+) -> list[tuple[str, Callable[..., None]]]:
     return [
         (
             label,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QCursor
 
 from ui.canvas_insert_state import insert_state_for
@@ -11,7 +12,7 @@ from ui.input_view_access import scene_pos_from_global_pos_for
 def refresh_hover_from_cursor_for(
     canvas,
     *,
-    update_hover_highlight: Callable[[object], None] | None = None,
+    update_hover_highlight: Callable[[QPointF], None] | None = None,
     clear_hover_highlight: Callable[[], None] | None = None,
     hover_enabled: bool = True,
 ) -> None:

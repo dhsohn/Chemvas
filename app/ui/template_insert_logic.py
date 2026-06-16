@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, cast
 
 Point2D = tuple[float, float]
 TemplateRingStyle = Literal["regular", "benzene", "chair", "boat"]
@@ -112,7 +112,7 @@ def _plan_template_insert(
             bond_id=request.bond_id,
         )
 
-    if ring_style in {"chair", "boat"}:
+    if ring_style == "chair" or ring_style == "boat":
         return TemplateInsertPlan(
             generator="bond_template_shape" if request.bond_id is not None else "free_template_shape",
             ring_size=request.ring_size,
@@ -141,7 +141,7 @@ def _plan_template_insert(
 def normalize_template_ring_style(ring_style: str | None) -> TemplateRingStyle | None:
     normalized = (ring_style or "regular").strip().lower()
     if normalized in {"regular", "benzene", "chair", "boat"}:
-        return normalized
+        return cast(TemplateRingStyle, normalized)
     return None
 
 

@@ -4,6 +4,7 @@ from core.history import (
     AddAtomsCommand,
     AddBondCommand,
     CompositeCommand,
+    HistoryCommand,
     UpdateBondCommand,
 )
 
@@ -34,7 +35,7 @@ class CanvasHistoryRecordingService:
         before_smiles_input: str | None,
         added_scene_items: list | None = None,
     ) -> None:
-        commands = []
+        commands: list[HistoryCommand] = []
         after_next_atom_id = next_atom_id_for(self.canvas)
         if after_next_atom_id > before_next_atom_id:
             atom_states = {

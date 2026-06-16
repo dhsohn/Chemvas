@@ -54,8 +54,12 @@ class BondGraphicsDrawService:
         )
         if outer_style in {"bold_inward", "bold_outward"}:
             use_nx, use_ny = (nx, ny) if outer_style == "bold_inward" else (-nx, -ny)
+            ox1, oy1, ox2, oy2 = outer_seg
             outer_item = self.one_sided_bond_strip(
-                *outer_seg,
+                ox1,
+                oy1,
+                ox2,
+                oy2,
                 use_nx,
                 use_ny,
                 self._bond_line_width(),
