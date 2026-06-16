@@ -65,17 +65,3 @@ warn_unused_ignores = true
 [[tool.mypy.overrides]]
 module = ["rdkit", "rdkit.*"]
 ignore_missing_imports = true
-
-# Incremental typing backlog. Every other app/ui module is type-checked and
-# enforced; these are the not-yet-clean modules. Shrink this list as modules
-# are fixed — do not add to it.
-[[tool.mypy.overrides]]
-module = [
-    "ui.bond_graphics_draw_service", "ui.bond_renderer", "ui.canvas_history_recording_service",
-    "ui.canvas_note_controller", "ui.graphics_items", "ui.hover_service_bundle",
-    "ui.main_window_tool_routing_service", "ui.main_window_toolbar_logic", "ui.scene_item_restore",
-    "ui.scene_transform_apply_logic", "ui.scene_transform_controller", "ui.selection_info_access",
-    "ui.structure_payload_access", "ui.template_geometry_resolver_service", "ui.template_insert_logic",
-    "ui.text_tool",
-]
-ignore_errors = true

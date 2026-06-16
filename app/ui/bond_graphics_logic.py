@@ -10,7 +10,7 @@ def refresh_bond_graphics(
     *,
     bonds: Sequence[Bond | None],
     bond_items: MutableMapping[int, list[object]],
-    remove_scene_item: Callable[[object], None],
+    remove_scene_item: Callable[[object], object],
     add_bond_graphics: Callable[[int], None],
     redraw_connected: bool = False,
     redraw_connected_bonds: Callable[[int, int | None], None] | None = None,

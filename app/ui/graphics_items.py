@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
     QStyleOptionGraphicsItem,
 )
 
-from ui.label_layout_logic import SUB_SCALE, parse_atom_label, place_runs
+from ui.label_layout_logic import SUB_SCALE, LabelLayout, parse_atom_label, place_runs
 
 
 def _scaled_font(base: QFont, scale: float) -> QFont:
@@ -33,7 +33,7 @@ class _NoSelectPaintMixin:
     def paint(self, painter, option, widget=None) -> None:
         option = QStyleOptionGraphicsItem(option)
         option.state &= ~QStyle.StateFlag.State_Selected
-        super().paint(painter, option, widget)
+        super().paint(painter, option, widget)  # type: ignore[misc]
 
 
 class NoSelectLineItem(_NoSelectPaintMixin, QGraphicsLineItem):
@@ -114,7 +114,7 @@ class AtomLabelItem(NoSelectTextItem):
         self._hit_padding = max(0.0, float(hit_padding))
         self._hit_radius = None if hit_radius is None else max(0.0, float(hit_radius))
         self._raw_text = self.toPlainText()
-        self._layout = None
+        self._layout: LabelLayout | None = None
         self._typographic = False
         self._outline_mode = False
         self._relayout()
@@ -145,7 +145,8 @@ class AtomLabelItem(NoSelectTextItem):
         self._relayout()
 
     def _doc_margin(self) -> float:
-        return float(self.document().documentMargin())
+        doc = self.document()
+        return float(doc.documentMargin()) if doc is not None else 0.0
 
     def _relayout(self) -> None:
         self.prepareGeometryChange()

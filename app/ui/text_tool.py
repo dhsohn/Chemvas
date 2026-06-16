@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 from core.text_tool_logic import (
     build_created_atom_command,
     normalize_text_symbol,
@@ -82,7 +84,7 @@ class TextTool(Tool):
             atom_id = add_atom_for(self.canvas, text, pos.x(), pos.y())
             created_atom = True
         if created_atom:
-            add_or_update_atom_label(self.canvas, atom_id, text, show_carbon=True, record=False)
+            add_or_update_atom_label(self.canvas, atom_id, cast(str, text), show_carbon=True, record=False)
             atom_state = atom_state_dict_for(self.canvas, atom_id)
             command = build_created_atom_command(
                 atom_id=atom_id,
@@ -94,7 +96,7 @@ class TextTool(Tool):
             )
             self.context.push_history(command)
         else:
-            add_or_update_atom_label(self.canvas, atom_id, text, show_carbon=True)
+            add_or_update_atom_label(self.canvas, atom_id, cast(str, text), show_carbon=True)
         return True
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from PyQt6.QtCore import QPointF
 
 from ui.structure_geometry_access import (
@@ -70,7 +72,7 @@ class TemplateGeometryResolverService:
 
     def resolve_template_points_for_bond(
         self,
-        points_local: list[tuple[float, float]],
+        points_local: Sequence[tuple[float, float]],
         bond_id: int,
         center: tuple[float, float],
     ) -> list[tuple[float, float]] | None:

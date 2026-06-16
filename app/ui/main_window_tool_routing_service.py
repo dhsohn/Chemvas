@@ -42,7 +42,7 @@ class MainWindowToolRoutingService:
         self,
         menu,
         label: str,
-        callback: Callable[[], None],
+        callback: Callable[..., None],
         icon: QIcon | None = None,
     ):
         action = menu.addAction(icon, label) if icon is not None else menu.addAction(label)

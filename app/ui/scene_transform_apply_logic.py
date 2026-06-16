@@ -55,7 +55,7 @@ def apply_component_flip_transform(
     center: QPointF,
     horizontal: bool,
     flip_state_getter: Callable[[QGraphicsItem, dict, QPointF, bool, Mapping[int, tuple[float, float]]], dict],
-    set_atom_positions: Callable[[dict[int, tuple[float, float]], bool], None],
+    set_atom_positions: Callable[..., None],
     apply_scene_item_state: Callable[[QGraphicsItem, dict], None],
 ) -> list[HistoryCommand]:
     commands: list[HistoryCommand] = []
