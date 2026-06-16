@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtCore import QPointF
 
@@ -63,7 +63,7 @@ class StructureBuildCommitter:
         *,
         added_scene_items: list | None = None,
     ) -> None:
-        kwargs = {
+        kwargs: dict[str, Any] = {
             "before_next_atom_id": snapshot.before_next_atom_id,
             "before_bond_count": snapshot.before_bond_count,
             "before_smiles_input": snapshot.before_smiles_input,

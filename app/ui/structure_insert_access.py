@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from ui.atom_label_access import add_or_update_atom_label, atom_label_service
 from ui.bond_graphics_access import add_bond_graphics_for
 from ui.canvas_model_access import (
@@ -112,7 +114,7 @@ def record_insert_additions_for(
     before_smiles_input: str | None,
     added_scene_items: list | None = None,
 ) -> None:
-    kwargs = {
+    kwargs: dict[str, Any] = {
         "before_next_atom_id": before_next_atom_id,
         "before_bond_count": before_bond_count,
         "before_smiles_input": before_smiles_input,

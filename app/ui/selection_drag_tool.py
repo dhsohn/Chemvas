@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from core.history import CompositeCommand, MoveAtomsCommand
 from PyQt6.QtCore import QPointF
 
@@ -7,6 +9,7 @@ from ui.canvas_model_access import bond_for_id
 from ui.history_commands import MoveItemsCommand
 from ui.move_access import move_atoms_for, move_item_for, shift_selection_outlines_for
 from ui.selection_service_access import refresh_selection_outline_for
+from ui.tool_context import ToolContext
 
 
 def independent_selection_items(selection_items: list, atom_ids: set[int]) -> list:
@@ -39,6 +42,10 @@ def atom_ids_with_bonds(canvas, atom_ids: set[int], bond_ids: set[int]) -> set[i
 
 
 class SelectionDragMixin:
+    # Provided by the host Tool subclass (SelectTool, MoveTool).
+    context: ToolContext
+    canvas: Any
+
     def _reset_selection_drag_state(self) -> None:
         self._drag_selection = False
         self._selection_atom_ids: set[int] = set()

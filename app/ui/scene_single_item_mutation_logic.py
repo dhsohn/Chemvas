@@ -8,6 +8,7 @@ from core.history import (
     DeleteBondCommand,
     HistoryCommand,
 )
+from core.model import Bond
 
 from ui.bond_style_logic import cycle_plain_bond_style
 from ui.history_commands import DeleteSceneItemsCommand
@@ -16,10 +17,10 @@ from ui.history_commands import DeleteSceneItemsCommand
 def delete_atom_with_history(
     atom_id: int,
     *,
-    bonds: Sequence[object | None],
+    bonds: Sequence[Bond | None],
     marks_by_atom: Mapping[int, Sequence[object]],
     before_smiles_input,
-    current_smiles_input_getter: Callable[[], object],
+    current_smiles_input_getter: Callable[[], str | None],
     clear_smiles_input: Callable[[], None],
     mark_state_getter: Callable[[object], dict],
     bond_state_getter: Callable[[object], dict],
@@ -40,6 +41,8 @@ def delete_atom_with_history(
     commands: list[HistoryCommand] = []
     for bond_id in sorted(bonds_to_remove, reverse=True):
         bond = bonds[bond_id]
+        if bond is None:
+            continue
         bond_state = bond_state_getter(bond)
         remove_bond_by_id(bond_id)
         redraw_connected_bonds(bond.a)
@@ -70,9 +73,9 @@ def delete_atom_with_history(
 def delete_bond_with_history(
     bond_id: int,
     *,
-    bonds: Sequence[object | None],
+    bonds: Sequence[Bond | None],
     before_smiles_input,
-    current_smiles_input_getter: Callable[[], object],
+    current_smiles_input_getter: Callable[[], str | None],
     clear_smiles_input: Callable[[], None],
     bond_state_getter: Callable[[object], dict],
     remove_bond_by_id: Callable[[int], None],
@@ -110,11 +113,11 @@ def delete_ring_with_history(
 def flip_bond_direction_with_history(
     bond_id: int,
     *,
-    bonds: Sequence[object | None],
+    bonds: Sequence[Bond | None],
     before_smiles_input,
-    current_smiles_input_getter: Callable[[], object],
+    current_smiles_input_getter: Callable[[], str | None],
     bond_state_getter: Callable[[object], dict],
-    rebuild_bond_graphics: Callable[[int, bool], None],
+    rebuild_bond_graphics: Callable[..., None],
     record_bond_update: Callable[[int, dict, dict, object, object], None],
 ) -> bool:
     bond = _valid_bond(bond_id, bonds)
@@ -140,13 +143,13 @@ def flip_bond_direction_with_history(
 def apply_bond_style_with_history(
     bond_id: int,
     *,
-    bonds: Sequence[object | None],
+    bonds: Sequence[Bond | None],
     style: str,
     order: int,
     before_smiles_input,
-    current_smiles_input_getter: Callable[[], object],
+    current_smiles_input_getter: Callable[[], str | None],
     bond_state_getter: Callable[[object], dict],
-    rebuild_bond_graphics: Callable[[int, bool], None],
+    rebuild_bond_graphics: Callable[..., None],
     record_bond_update: Callable[[int, dict, dict, object, object], None],
 ) -> bool:
     bond = _valid_bond(bond_id, bonds)
@@ -173,11 +176,11 @@ def apply_bond_style_with_history(
 def cycle_bond_style_with_history(
     bond_id: int,
     *,
-    bonds: Sequence[object | None],
+    bonds: Sequence[Bond | None],
     before_smiles_input,
-    current_smiles_input_getter: Callable[[], object],
+    current_smiles_input_getter: Callable[[], str | None],
     bond_state_getter: Callable[[object], dict],
-    rebuild_bond_graphics: Callable[[int, bool], None],
+    rebuild_bond_graphics: Callable[..., None],
     record_bond_update: Callable[[int, dict, dict, object, object], None],
 ) -> bool:
     bond = _valid_bond(bond_id, bonds)
@@ -206,7 +209,7 @@ def cycle_bond_style_with_history(
     )
 
 
-def _valid_bond(bond_id: int, bonds: Sequence[object | None]):
+def _valid_bond(bond_id: int, bonds: Sequence[Bond | None]):
     if not (0 <= bond_id < len(bonds)):
         return None
     return bonds[bond_id]
@@ -217,9 +220,9 @@ def _mutate_bond_and_record(
     *,
     bond,
     before_smiles_input,
-    current_smiles_input_getter: Callable[[], object],
+    current_smiles_input_getter: Callable[[], str | None],
     bond_state_getter: Callable[[object], dict],
-    rebuild_bond_graphics: Callable[[int, bool], None],
+    rebuild_bond_graphics: Callable[..., None],
     record_bond_update: Callable[[int, dict, dict, object, object], None],
     redraw_connected: bool,
     mutate: Callable[[object], None],

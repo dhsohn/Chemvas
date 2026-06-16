@@ -6,9 +6,12 @@ from dataclasses import dataclass
 from PyQt6.QtCore import QPointF
 
 from ui.structure_growth_logic import (
+    BondPlacementContext,
     mirrored_local_points,
     other_atom_id_from_bond_result,
 )
+
+RingPoints = tuple[list[QPointF], list[tuple[int, float, float]]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,12 +23,12 @@ class StructureGrowthBuildActions:
     has_atom: Callable[[int], bool]
     default_bond_endpoint: Callable[[QPointF, int | None], QPointF]
     add_atom_label: Callable[..., None]
-    regular_ring_points_for_atom: Callable[[int, int], object | None]
-    regular_ring_points_for_bond: Callable[[int, int, QPointF], object | None]
+    regular_ring_points_for_atom: Callable[[int, int], RingPoints | None]
+    regular_ring_points_for_bond: Callable[[int, int, QPointF], RingPoints | None]
     cyclohexane_chair_points: Callable[[QPointF], list[QPointF]]
-    template_points_for_bond: Callable[[list[QPointF], int, QPointF], object | None]
+    template_points_for_bond: Callable[[list[QPointF], int, QPointF], RingPoints | None]
     add_ring_from_points: Callable[..., list[int]]
-    bond_placement_context: Callable[[int], object | None]
+    bond_placement_context: Callable[[int], BondPlacementContext | None]
     run_recorded_additions_action: Callable[[Callable[[], bool]], bool]
     add_atom: Callable[[str, float, float], int] | None = None
     add_bond: Callable[..., int] | None = None

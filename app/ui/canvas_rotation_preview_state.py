@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from PyQt6.QtWidgets import QGraphicsItemGroup
+
 from ui.canvas_state_lookup import canvas_state_object
 
 
 @dataclass(slots=True)
 class CanvasRotationPreviewState:
-    group: object | None = None
+    group: QGraphicsItemGroup | None = None
 
 
 def rotation_preview_state_for(canvas) -> CanvasRotationPreviewState:
