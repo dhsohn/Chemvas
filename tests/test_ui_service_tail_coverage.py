@@ -50,7 +50,6 @@ def _panel_toolbar_callbacks() -> "MainWindowPanelToolbarCallbacks":
         export_figure=mock.Mock(),
         export_xyz=mock.Mock(),
         toggle_preview_panel=mock.Mock(),
-        setup_sheet=mock.Mock(),
     )
 
 
@@ -200,7 +199,6 @@ class UIServiceTailCoverageTest(unittest.TestCase):
         service = MainWindowUIAssemblyService(
             scene_transform_controller_for_window=mock.Mock(),
             insert_controller_for_window=mock.Mock(),
-            tool_mode_controller_for_window=mock.Mock(),
             history_service_for_window=mock.Mock(),
             build_tool_actions_for_window=mock.Mock(),
             panel_toolbar_callbacks=_panel_toolbar_callbacks(),

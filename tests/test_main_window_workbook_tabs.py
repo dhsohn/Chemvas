@@ -23,6 +23,7 @@ if QApplication is not None:
         from ui.canvas_window_access import snapshot_canvas_state_for
         from ui.main_window import MainWindow
         from ui.main_window_canvas_ports import active_canvas_for_window
+        from ui.main_window_document_dialogs import SheetSetupSelection
         from ui.main_window_preview_ports import preview_for_window
         from ui.main_window_service_ports import services_for_window
         from ui.structure_mutation_access import (
@@ -51,6 +52,12 @@ class MainWindowWorkbookTabsTest(unittest.TestCase):
         self.window = MainWindow()
         self.window.show()
         active_canvas_for_window(self.window).setFocus()
+        services_for_window(self.window).canvas_sheet_service._sheet_setup_prompt = (
+            lambda window, *, current_size, current_orientation: SheetSetupSelection(
+                size=current_size,
+                orientation=current_orientation,
+            )
+        )
         self.app.processEvents()
         QTest.qWait(20)
 

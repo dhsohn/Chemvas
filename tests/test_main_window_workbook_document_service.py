@@ -18,6 +18,7 @@ if QApplication is not None:
         from ui.canvas_window_access import snapshot_canvas_state_for
         from ui.main_window import MainWindow
         from ui.main_window_canvas_ports import active_canvas_for_window
+        from ui.main_window_document_dialogs import SheetSetupSelection
         from ui.main_window_service_ports import services_for_window
         from ui.main_window_workbook_document_service import (
             MainWindowWorkbookDocumentService,
@@ -49,6 +50,12 @@ class MainWindowWorkbookDocumentServiceTest(unittest.TestCase):
         self.window.show()
         self.app.processEvents()
         QTest.qWait(20)
+        services_for_window(self.window).canvas_sheet_service._sheet_setup_prompt = (
+            lambda window, *, current_size, current_orientation: SheetSetupSelection(
+                size=current_size,
+                orientation=current_orientation,
+            )
+        )
         self.active_canvas_ui = mock.Mock()
         self.save_active_canvas_to_file_for_window = mock.Mock()
         self.service = MainWindowWorkbookDocumentService(

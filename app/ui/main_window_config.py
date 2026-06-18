@@ -70,14 +70,17 @@ MARK_TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
     ("mark_radical", "Radical", "radical", "icon_mark_radical", "Radical"),
 ]
 
-LEFT_TOOLBAR_GROUPS: list[tuple[str, ...]] = [
-    ("select", "bond", "text"),
-    ("mark",),
-    ("benzene", "color", "ring_fill"),
-    ("arrow", "ts_bracket", "perspective"),
+TOOLBAR_TRANSFORM_TOOL_GROUP: tuple[str, ...] = ("select", "perspective")
+
+TOOLBAR_TOOL_GROUPS: list[tuple[str, ...]] = [
+    ("text", "bond", "mark", "benzene", "arrow", "ts_bracket"),
+    ("color", "ring_fill"),
 ]
 
-LEFT_TOOLBAR_ACTION_ORDER: list[str] = [action_key for group in LEFT_TOOLBAR_GROUPS for action_key in group]
+TOOLBAR_TOOL_ACTION_ORDER: list[str] = [
+    *TOOLBAR_TRANSFORM_TOOL_GROUP,
+    *(action_key for group in TOOLBAR_TOOL_GROUPS for action_key in group),
+]
 
 ARROW_MENU_ITEMS = ARROW_MENU_SPECS
 ARROW_PRESET_ITEMS = ARROW_PRESET_SPECS
@@ -92,10 +95,11 @@ __all__ = [
     "ARROW_MENU_SPECS",
     "ARROW_PRESET_SPECS",
     "COLOR_PALETTE_SPECS",
-    "LEFT_TOOLBAR_ACTION_ORDER",
-    "LEFT_TOOLBAR_GROUPS",
     "MARK_TOOL_ACTION_SPECS",
     "RING_FILL_TOOL_ACTION_SPEC",
     "TEMPLATE_ENTRY_SPECS",
     "TOOL_ACTION_SPECS",
+    "TOOLBAR_TOOL_ACTION_ORDER",
+    "TOOLBAR_TOOL_GROUPS",
+    "TOOLBAR_TRANSFORM_TOOL_GROUP",
 ]

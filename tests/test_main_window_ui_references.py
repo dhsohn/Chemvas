@@ -43,7 +43,6 @@ def test_main_window_ui_references_apply_toolbar_assembly() -> None:
     redo_button = QToolButton()
     assembly = SimpleNamespace(
         tool_actions={"select": action},
-        atom_input=atom_input,
         load_action=QAction("Load", owner),
         export_xyz_button=export_button,
         preview_panel_button=preview_button,
@@ -56,11 +55,13 @@ def test_main_window_ui_references_apply_toolbar_assembly() -> None:
 
     assert refs.tool_action_for_key("select") is action
     assert refs.tool_action_for_key("missing") is None
-    assert refs.atom_input is atom_input
+    assert refs.atom_input is None
     assert refs.export_xyz_button is export_button
     assert refs.preview_panel_button is preview_button
     assert refs.undo_button is undo_button
     assert refs.redo_button is redo_button
+    refs.set_atom_input(atom_input)
+    assert refs.atom_input is atom_input
 
     owner.close()
     app.processEvents()

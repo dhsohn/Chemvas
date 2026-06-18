@@ -1,6 +1,7 @@
 import math
 import os
 import unittest
+from unittest import mock
 from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -57,6 +58,7 @@ if QApplication is not None:
     from ui.hover_interaction_access import update_hover_highlight_for
     from ui.main_window import MainWindow
     from ui.main_window_canvas_ports import active_canvas_for_window
+    from ui.main_window_document_dialogs import SheetSetupSelection
     from ui.main_window_service_ports import services_for_window
     from ui.mark_item_access import mark_center_for
     from ui.move_access import move_atoms_for
@@ -102,6 +104,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.window = MainWindow()
         self.window.show()
         active_canvas_for_window(self.window).setFocus()
+        services_for_window(self.window).canvas_sheet_service._sheet_setup_prompt = mock.Mock(
+            return_value=SheetSetupSelection(size="A4", orientation="portrait")
+        )
         self.app.processEvents()
         QTest.qWait(20)
 
@@ -283,6 +288,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertEqual(self.window.tab_references.canvas_sheet_count(), before_count + 1)
         self.assertEqual(self.window.tab_references.canvas_tabs.currentIndex(), before_count)
         self.assertEqual(self.window.tab_references.canvas_tabs.tabText(before_count), f"Sheet {before_count + 1}")
+        self.assertEqual(active_canvas_for_window(self.window).sheet_orientation, "portrait")
 
     def test_sheet_tab_context_menu_deletes_target_canvas_sheet(self) -> None:
         services_for_window(self.window).canvas_sheet_service.new_canvas_sheet(self.window)

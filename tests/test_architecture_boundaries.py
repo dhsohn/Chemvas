@@ -1048,26 +1048,26 @@ def test_main_window_ui_assembly_service_uses_injected_canvas_service_ports() ->
 
     assert "scene_transform_controller_for_window" in source
     assert "insert_controller_for_window" in source
-    assert "tool_mode_controller_for_window" in source
     assert "history_service_for_window" in source
     assert "build_tool_actions_for_window" in source
     assert "panel_toolbar_callbacks" in source
     assert _matching_lines(pattern, [service]) == []
 
 
-def test_main_window_ui_assembly_delegates_left_toolbar_to_module() -> None:
+def test_main_window_ui_assembly_moves_tool_actions_into_panel_toolbar() -> None:
     service = APP_ROOT / "ui" / "main_window_ui_assembly_service.py"
-    left_toolbar = APP_ROOT / "ui" / "main_window_left_toolbar.py"
+    panel_toolbar = APP_ROOT / "ui" / "main_window_panel_toolbar.py"
     service_source = service.read_text()
-    left_toolbar_source = left_toolbar.read_text()
+    panel_toolbar_source = panel_toolbar.read_text()
 
-    assert "from ui.main_window_left_toolbar import build_left_toolbar" in service_source
-    assert "left_toolbar = build_left_toolbar(window, build_tool_actions=self._build_tool_actions_for_window)" in service_source
-    assert "build_tool_actions(window, tool_group)" in left_toolbar_source
-    assert "LEFT_TOOLBAR_GROUPS" not in service_source
-    assert "QActionGroup" not in service_source
-    assert "LEFT_TOOLBAR_GROUPS" in left_toolbar_source
-    assert "QActionGroup" in left_toolbar_source
+    assert not (APP_ROOT / "ui" / "main_window_left_toolbar.py").exists()
+    assert "from ui.main_window_left_toolbar import" not in service_source
+    assert "LeftToolBarArea" not in service_source
+    assert "build_tool_actions=self._build_tool_actions_for_window" in service_source
+    assert "TOOLBAR_TOOL_GROUPS" not in service_source
+    assert "TOOLBAR_TOOL_GROUPS" in panel_toolbar_source
+    assert "QActionGroup" in panel_toolbar_source
+    assert "toolButton_" in panel_toolbar_source
 
 
 def test_main_window_ui_assembly_delegates_panel_toolbar_to_module() -> None:
@@ -1123,14 +1123,18 @@ def test_main_window_ui_assembly_delegates_toolbar_buttons_to_module() -> None:
 
 def test_main_window_document_action_service_delegates_dialog_assembly_to_module() -> None:
     service = APP_ROOT / "ui" / "main_window_document_action_service.py"
+    sheet_service = APP_ROOT / "ui" / "main_window_canvas_sheet_service.py"
     dialogs = APP_ROOT / "ui" / "main_window_document_dialogs.py"
     service_source = service.read_text()
+    sheet_service_source = sheet_service.read_text()
     dialogs_source = dialogs.read_text()
 
     assert "from ui.main_window_document_dialogs import" in service_source
     assert "prompt_export_options(window)" in service_source
     assert "prompt_bond_length(window, current)" in service_source
-    assert "prompt_sheet_setup(" in service_source
+    assert "prompt_sheet_setup(" not in service_source
+    assert "from ui.main_window_document_dialogs import prompt_sheet_setup" in sheet_service_source
+    assert "sheet_setup_prompt=prompt_sheet_setup" in sheet_service_source
     assert "QDialog" not in service_source
     assert "QComboBox" not in service_source
     assert "QDoubleSpinBox" not in service_source
@@ -1240,9 +1244,9 @@ def test_main_window_document_action_service_uses_injected_canvas_service_ports(
     assert "document_session_service_for_window" in source
     assert "geometry_controller_for_window" in source
     assert "bond_length_px_for_window" in source
-    assert "sheet_size_for_window" in source
-    assert "sheet_orientation_for_window" in source
-    assert "set_sheet_setup_for_window" in source
+    assert "sheet_size_for_window" not in source
+    assert "sheet_orientation_for_window" not in source
+    assert "set_sheet_setup_for_window" not in source
     assert "current_file_path_for_window" in source
     assert "set_current_file_path_for_window" in source
     assert "workbook_document_service" in source
@@ -1251,12 +1255,23 @@ def test_main_window_document_action_service_uses_injected_canvas_service_ports(
     assert "self.save_canvas_to_path(window, path)" in source
     assert "workbook_document_service=workbook_document_service" in services.read_text()
     assert "bond_length_px_for_window=bond_length_px_for_window" in services.read_text()
-    assert "sheet_size_for_window=sheet_size_for_window" in services.read_text()
-    assert "sheet_orientation_for_window=sheet_orientation_for_window" in services.read_text()
-    assert "set_sheet_setup_for_window=set_sheet_setup_for_window" in services.read_text()
+    assert "sheet_size_for_window=sheet_size_for_window" not in services.read_text()
+    assert "sheet_orientation_for_window=sheet_orientation_for_window" not in services.read_text()
+    assert "set_sheet_setup_for_window=set_sheet_setup_for_window" not in services.read_text()
     assert "current_file_path_for_window=current_file_path_for_window" in services.read_text()
     assert "set_current_file_path_for_window=set_current_file_path_for_window" in services.read_text()
     assert _matching_lines(pattern, [service]) == []
+
+
+def test_main_window_canvas_sheet_service_owns_new_sheet_setup_prompt() -> None:
+    service = APP_ROOT / "ui" / "main_window_canvas_sheet_service.py"
+    source = service.read_text()
+
+    assert "from ui.main_window_document_dialogs import prompt_sheet_setup" in source
+    assert "sheet_setup_prompt=prompt_sheet_setup" in source
+    assert "sheet_size_for(template)" in source
+    assert "sheet_orientation_for(template)" in source
+    assert "set_sheet_setup_for(canvas, *sheet_setup)" in source
 
 
 def test_canvas_controller_access_module_removed() -> None:

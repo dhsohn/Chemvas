@@ -47,7 +47,6 @@ def test_bootstrap_main_window_initializes_runtime_references_and_services() -> 
     )
     toolbar_assembly = SimpleNamespace(
         tool_actions={"bond": object()},
-        atom_input=object(),
         load_action=object(),
         export_xyz_button=object(),
         preview_panel_button=object(),

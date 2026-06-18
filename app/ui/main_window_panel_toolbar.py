@@ -4,9 +4,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from PyQt6.QtCore import QSize, Qt
-from PyQt6.QtGui import QAction, QKeySequence
+from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
 from PyQt6.QtWidgets import QLineEdit, QToolBar, QToolButton
 
+from ui.main_window_config import TOOLBAR_TOOL_GROUPS, TOOLBAR_TRANSFORM_TOOL_GROUP
 from ui.main_window_theme import (
     SMILES_RENDER_BUTTON_STYLE,
     TOOLBAR_BUTTON_SIZE,
@@ -20,13 +21,12 @@ from ui.main_window_ui_ports import icon_factory_for_window
 @dataclass(frozen=True)
 class MainWindowPanelToolbarAssembly:
     panel_bar: QToolBar
-    atom_input: QLineEdit
+    tool_actions: dict[str, QAction]
     save_action: QAction
     save_as_action: QAction
     save_button: QToolButton
     load_action: QAction | None = None
     export_xyz_button: QToolButton | None = None
-    setup_sheet_button: QToolButton | None = None
     preview_panel_button: QToolButton | None = None
     undo_button: QToolButton | None = None
     redo_button: QToolButton | None = None
@@ -40,7 +40,19 @@ class MainWindowPanelToolbarCallbacks:
     export_figure: Callable[[object], None]
     export_xyz: Callable[[object], None]
     toggle_preview_panel: Callable[[object, bool | None], None]
-    setup_sheet: Callable[[object], None]
+
+
+def _normalize_tool_action_button(panel_bar: QToolBar, action: QAction, action_key: str) -> None:
+    widget = panel_bar.widgetForAction(action)
+    if not isinstance(widget, QToolButton):
+        return
+    widget.setObjectName(f"toolButton_{action_key}")
+    widget.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+    widget.setIcon(action.icon())
+    widget.setIconSize(panel_bar.iconSize())
+    widget.setAutoRaise(True)
+    widget.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+    widget.setFixedHeight(TOOLBAR_BUTTON_SIZE)
 
 
 def build_panel_toolbar(
@@ -49,9 +61,9 @@ def build_panel_toolbar(
     create_toolbar_button: Callable[..., QToolButton],
     create_file_project_menu_button: Callable[..., QToolButton],
     create_corner_menu_button: Callable[..., QToolButton],
+    build_tool_actions: Callable[[object, QActionGroup], dict[str, QAction]],
     scene_transform_controller_for_window,
     insert_controller_for_window,
-    tool_mode_controller_for_window,
     history_service_for_window,
     callbacks: MainWindowPanelToolbarCallbacks,
 ) -> MainWindowPanelToolbarAssembly:
@@ -63,6 +75,9 @@ def build_panel_toolbar(
     panel_bar.setStyleSheet(TOOLBAR_BUTTON_STYLE)
     panel_bar.setFixedHeight(TOOLBAR_THICKNESS)
     icon_factory = icon_factory_for_window(window)
+    tool_group = QActionGroup(window)
+    tool_group.setExclusive(True)
+    tool_actions = build_tool_actions(window, tool_group)
 
     save_action = QAction("Save", window)
     save_action.setIcon(icon_factory.icon_save())
@@ -112,13 +127,6 @@ def build_panel_toolbar(
     )
     preview_panel_btn.setCheckable(True)
     preview_panel_btn.setChecked(True)
-    setup_sheet_btn = create_toolbar_button(
-        icon=icon_factory.icon_setup_sheet(),
-        tooltip="Setup Sheet",
-        status_tip="Set the current sheet size and orientation",
-        callback=lambda _checked=False: callbacks.setup_sheet(window),
-        object_name="setup_sheet_button",
-    )
     undo_btn = create_toolbar_button(
         icon=icon_factory.icon_undo(),
         tooltip="Undo",
@@ -141,12 +149,14 @@ def build_panel_toolbar(
         tooltip="Flip Horizontal (Ctrl+Shift+H)",
         status_tip="Flip the current selection horizontally",
         callback=lambda: scene_transform_controller.flip_selected_items(horizontal=True),
+        object_name="flip_horizontal_button",
     )
     flip_v_btn = create_toolbar_button(
         icon=icon_factory.icon_flip_v(),
         tooltip="Flip Vertical (Ctrl+Shift+V)",
         status_tip="Flip the current selection vertically",
         callback=lambda: scene_transform_controller.flip_selected_items(horizontal=False),
+        object_name="flip_vertical_button",
     )
 
     smiles_input = QLineEdit()
@@ -170,38 +180,35 @@ def build_panel_toolbar(
     smiles_input.returnPressed.connect(lambda: insert_controller.begin_smiles_insert(smiles_input.text()))
 
     panel_bar.addWidget(save_button)
-    panel_bar.addWidget(export_xyz_btn)
-    panel_bar.addWidget(preview_panel_btn)
-    panel_bar.addWidget(setup_sheet_btn)
-    panel_bar.addSeparator()
     panel_bar.addWidget(undo_btn)
     panel_bar.addWidget(redo_btn)
     panel_bar.addSeparator()
-    panel_bar.addWidget(smiles_input)
-    panel_bar.addWidget(smiles_button)
-    panel_bar.addSeparator()
-
-    atom_input = QLineEdit()
-    atom_input.setObjectName("atomInput")
-    atom_input.setPlaceholderText("Atom")
-    atom_input.setFixedWidth(60)
-    atom_input.setFixedHeight(TOOLBAR_BUTTON_SIZE)
-    atom_input.setMaxLength(4)
-    tool_mode_controller = tool_mode_controller_for_window(window)
-    atom_input.setText(tool_mode_controller.get_atom_symbol())
-    atom_input.setToolTip("Atom Symbol")
-    atom_input.setStatusTip("Set the atom symbol used by atom and bond tools")
-    atom_input.textChanged.connect(lambda text: tool_mode_controller.set_atom_symbol(text))
-    panel_bar.addWidget(atom_input)
+    for action_key in TOOLBAR_TRANSFORM_TOOL_GROUP:
+        action = tool_actions[action_key]
+        panel_bar.addAction(action)
+        _normalize_tool_action_button(panel_bar, action, action_key)
     panel_bar.addWidget(flip_h_btn)
     panel_bar.addWidget(flip_v_btn)
+    panel_bar.addSeparator()
+    for group_index, action_keys in enumerate(TOOLBAR_TOOL_GROUPS):
+        if group_index:
+            panel_bar.addSeparator()
+        for action_key in action_keys:
+            action = tool_actions[action_key]
+            panel_bar.addAction(action)
+            _normalize_tool_action_button(panel_bar, action, action_key)
+    tool_actions["bond"].setChecked(True)
+    panel_bar.addSeparator()
+    panel_bar.addWidget(smiles_input)
+    panel_bar.addWidget(smiles_button)
+    panel_bar.addWidget(export_xyz_btn)
+    panel_bar.addWidget(preview_panel_btn)
     panel_bar.addSeparator()
 
     for button in (
         save_button,
         export_xyz_btn,
         preview_panel_btn,
-        setup_sheet_btn,
         undo_btn,
         redo_btn,
         smiles_button,
@@ -213,13 +220,12 @@ def build_panel_toolbar(
 
     return MainWindowPanelToolbarAssembly(
         panel_bar=panel_bar,
-        atom_input=atom_input,
+        tool_actions=tool_actions,
         save_action=save_action,
         save_as_action=save_as_action,
         save_button=save_button,
         load_action=load_action,
         export_xyz_button=export_xyz_btn,
-        setup_sheet_button=setup_sheet_btn,
         preview_panel_button=preview_panel_btn,
         undo_button=undo_btn,
         redo_button=redo_btn,
