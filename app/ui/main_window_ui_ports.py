@@ -18,6 +18,10 @@ def atom_input_for_window(window):
     return ui_references_for_window(window).atom_input
 
 
+def set_atom_input_for_window(window, atom_input) -> None:
+    ui_references_for_window(window).set_atom_input(atom_input)
+
+
 def tool_actions_for_window(window):
     return ui_references_for_window(window).tool_actions
 
@@ -63,6 +67,7 @@ __all__ = [
     "panel_splitter_for_window",
     "preview_panel_button_for_window",
     "redo_button_for_window",
+    "set_atom_input_for_window",
     "tool_action_for_window",
     "tool_actions_for_window",
     "ui_references_for_window",

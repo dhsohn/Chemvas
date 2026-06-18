@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMenu,
     QSizePolicy,
     QSlider,
@@ -131,6 +132,20 @@ def slider_dropdown_button(icon, tooltip: str, slider: QSlider) -> QToolButton:
     return button
 
 
+def atom_symbol_input(current_symbol: str, set_symbol) -> QLineEdit:
+    input_box = QLineEdit()
+    input_box.setObjectName("atomInput")
+    input_box.setPlaceholderText("Atom")
+    input_box.setFixedWidth(60)
+    input_box.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT)
+    input_box.setMaxLength(4)
+    input_box.setText(current_symbol)
+    input_box.setToolTip("Atom Symbol")
+    input_box.setStatusTip("Set the atom symbol used by atom and bond tools")
+    input_box.textChanged.connect(set_symbol)
+    return input_box
+
+
 def color_swatch_button(label: str, hex_value: str, tooltip_prefix: str) -> QToolButton:
     button = QToolButton()
     button.setObjectName(f"{tooltip_prefix.lower().replace(' ', '_')}_swatch_{label.lower()}")
@@ -153,6 +168,7 @@ def color_swatch_button(label: str, hex_value: str, tooltip_prefix: str) -> QToo
 
 
 __all__ = [
+    "atom_symbol_input",
     "color_swatch_button",
     "divider",
     "hint_label",

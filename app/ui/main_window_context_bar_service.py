@@ -39,11 +39,13 @@ class MainWindowContextBarService:
         active_tool_name_for_window,
         active_canvas_or_none_for_window,
         context_bar_page_override_for_window,
+        set_atom_input_for_window,
     ) -> None:
         self._page_builder = page_builder
         self._active_tool_name_for_window = active_tool_name_for_window
         self._active_canvas_or_none_for_window = active_canvas_or_none_for_window
         self._context_bar_page_override_for_window = context_bar_page_override_for_window
+        self._set_atom_input_for_window = set_atom_input_for_window
         self._stack: QStackedWidget | None = None
         self._pages: dict[str, QWidget] = {}
         self._bond_group: QButtonGroup | None = None
@@ -76,6 +78,7 @@ class MainWindowContextBarService:
         self._mark_buttons = context_pages.mark_buttons
         self._arrow_group = context_pages.arrow_group
         self._arrow_buttons = context_pages.arrow_buttons
+        self._set_atom_input_for_window(window, context_pages.atom_input)
         for page in self._pages.values():
             stack.addWidget(page)
         stack.setCurrentWidget(self._pages["empty"])

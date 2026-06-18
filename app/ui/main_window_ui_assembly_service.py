@@ -6,13 +6,11 @@ from dataclasses import dataclass
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction, QIcon
 from PyQt6.QtWidgets import (
-    QLineEdit,
     QMenu,
     QToolBar,
     QToolButton,
 )
 
-from ui.main_window_left_toolbar import build_left_toolbar
 from ui.main_window_panel_toolbar import (
     MainWindowPanelToolbarCallbacks,
     build_panel_toolbar,
@@ -28,16 +26,13 @@ from ui.main_window_toolbar_buttons import (
 
 @dataclass(frozen=True)
 class MainWindowToolbarAssembly:
-    left_bar: QToolBar
     panel_bar: QToolBar
     tool_actions: dict[str, QAction]
-    atom_input: QLineEdit
     save_action: QAction
     save_as_action: QAction
     save_button: QToolButton
     load_action: QAction | None = None
     export_xyz_button: QToolButton | None = None
-    setup_sheet_button: QToolButton | None = None
     preview_panel_button: QToolButton | None = None
     undo_button: QToolButton | None = None
     redo_button: QToolButton | None = None
@@ -49,14 +44,12 @@ class MainWindowUIAssemblyService:
         *,
         scene_transform_controller_for_window,
         insert_controller_for_window,
-        tool_mode_controller_for_window,
         history_service_for_window,
         build_tool_actions_for_window,
         panel_toolbar_callbacks: MainWindowPanelToolbarCallbacks,
     ) -> None:
         self._scene_transform_controller_for_window = scene_transform_controller_for_window
         self._insert_controller_for_window = insert_controller_for_window
-        self._tool_mode_controller_for_window = tool_mode_controller_for_window
         self._history_service_for_window = history_service_for_window
         self._build_tool_actions_for_window = build_tool_actions_for_window
         self._panel_toolbar_callbacks = panel_toolbar_callbacks
@@ -128,35 +121,27 @@ class MainWindowUIAssemblyService:
         )
 
     def init_toolbars(self, window) -> MainWindowToolbarAssembly:
-        left_toolbar = build_left_toolbar(window, build_tool_actions=self._build_tool_actions_for_window)
-        left_bar = left_toolbar.left_bar
-        tool_actions = left_toolbar.tool_actions
-        window.addToolBar(Qt.ToolBarArea.LeftToolBarArea, left_bar)
-
         panel_toolbar = build_panel_toolbar(
             window,
             create_toolbar_button=self.create_toolbar_button,
             create_file_project_menu_button=self.create_file_project_menu_button,
             create_corner_menu_button=self.create_corner_menu_button,
+            build_tool_actions=self._build_tool_actions_for_window,
             scene_transform_controller_for_window=self._scene_transform_controller_for_window,
             insert_controller_for_window=self._insert_controller_for_window,
-            tool_mode_controller_for_window=self._tool_mode_controller_for_window,
             history_service_for_window=self._history_service_for_window,
             callbacks=self._panel_toolbar_callbacks,
         )
         panel_bar = panel_toolbar.panel_bar
         window.addToolBar(Qt.ToolBarArea.TopToolBarArea, panel_bar)
         return MainWindowToolbarAssembly(
-            left_bar=left_bar,
             panel_bar=panel_bar,
-            tool_actions=tool_actions,
-            atom_input=panel_toolbar.atom_input,
+            tool_actions=panel_toolbar.tool_actions,
             save_action=panel_toolbar.save_action,
             save_as_action=panel_toolbar.save_as_action,
             save_button=panel_toolbar.save_button,
             load_action=panel_toolbar.load_action,
             export_xyz_button=panel_toolbar.export_xyz_button,
-            setup_sheet_button=panel_toolbar.setup_sheet_button,
             preview_panel_button=panel_toolbar.preview_panel_button,
             undo_button=panel_toolbar.undo_button,
             redo_button=panel_toolbar.redo_button,

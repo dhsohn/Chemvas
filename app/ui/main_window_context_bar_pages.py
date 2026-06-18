@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PyQt6.QtWidgets import QButtonGroup, QToolButton, QWidget
+from PyQt6.QtWidgets import QButtonGroup, QLineEdit, QToolButton, QWidget
 
 from ui.main_window_context_bar_page_factories import (
     bond_label_for_state,
@@ -27,6 +27,7 @@ class ContextBarPages:
     mark_buttons: dict[str, QToolButton]
     arrow_group: QButtonGroup | None
     arrow_buttons: dict[str, QToolButton]
+    atom_input: QLineEdit | None
 
 
 class MainWindowContextBarPageBuilder:
@@ -50,6 +51,7 @@ class MainWindowContextBarPageBuilder:
         self._apply_ring_fill_preset_for_window = apply_ring_fill_preset_for_window
 
     def build(self, window) -> ContextBarPages:
+        tool_mode_controller = self._tool_mode_controller_for_window(window)
         bond_page = build_bond_page(
             window,
             self._activate_bond_style_for_window,
@@ -57,8 +59,12 @@ class MainWindowContextBarPageBuilder:
         )
         arrow_page = build_arrow_page(
             window,
-            self._tool_mode_controller_for_window(window),
+            tool_mode_controller,
             self._tool_state,
+        )
+        atom_page = build_atom_page(
+            tool_mode_controller.get_atom_symbol(),
+            lambda text: self._tool_mode_controller_for_window(window).set_atom_symbol(text),
         )
         ring_page = build_template_page(window, self._insert_controller_for_window(window))
         mark_page = build_mark_page(window, self._tool_state)
@@ -66,7 +72,7 @@ class MainWindowContextBarPageBuilder:
             "empty": build_empty_page(),
             "bond": bond_page.page,
             "arrow": arrow_page.page,
-            "atom": build_atom_page(),
+            "atom": atom_page.page,
             "ring": ring_page.page,
             "mark": mark_page.page,
             "color": build_color_palette_page(
@@ -88,6 +94,7 @@ class MainWindowContextBarPageBuilder:
             mark_buttons=mark_page.buttons,
             arrow_group=arrow_page.group,
             arrow_buttons=arrow_page.buttons,
+            atom_input=atom_page.atom_input,
         )
 
 

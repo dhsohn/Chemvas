@@ -13,7 +13,6 @@ from ui.export_dialog_logic import (
 from ui.main_window_document_dialogs import (
     prompt_bond_length,
     prompt_export_options,
-    prompt_sheet_setup,
 )
 from ui.main_window_path_logic import (
     resolve_load_path as default_resolve_load_path,
@@ -33,9 +32,6 @@ class MainWindowDocumentActionService:
         document_session_service_for_window,
         geometry_controller_for_window,
         bond_length_px_for_window,
-        sheet_size_for_window,
-        sheet_orientation_for_window,
-        set_sheet_setup_for_window,
         current_file_path_for_window,
         set_current_file_path_for_window,
         workbook_document_service,
@@ -43,9 +39,6 @@ class MainWindowDocumentActionService:
         self._document_session_service_for_window = document_session_service_for_window
         self._geometry_controller_for_window = geometry_controller_for_window
         self._bond_length_px_for_window = bond_length_px_for_window
-        self._sheet_size_for_window = sheet_size_for_window
-        self._sheet_orientation_for_window = sheet_orientation_for_window
-        self._set_sheet_setup_for_window = set_sheet_setup_for_window
         self._current_file_path_for_window = current_file_path_for_window
         self._set_current_file_path_for_window = set_current_file_path_for_window
         self._workbook_document = workbook_document_service
@@ -206,17 +199,6 @@ class MainWindowDocumentActionService:
         selected = prompt_bond_length(window, current)
         if selected is not None:
             self._geometry_controller_for_window(window).set_bond_length(selected)
-
-    def setup_sheet(self, window) -> None:
-        current_size = self._sheet_size_for_window(window)
-        current_orientation = self._sheet_orientation_for_window(window)
-        selected = prompt_sheet_setup(
-            window,
-            current_size=current_size,
-            current_orientation=current_orientation,
-        )
-        if selected is not None:
-            self._set_sheet_setup_for_window(window, selected.size, selected.orientation)
 
 
 __all__ = ["MainWindowDocumentActionService"]

@@ -26,6 +26,7 @@ if QApplication is not None:
         from ui.main_window import MainWindow
         from ui.main_window_canvas_ports import active_canvas_for_window
         from ui.main_window_canvas_sheet_service import MainWindowCanvasSheetService
+        from ui.main_window_document_dialogs import SheetSetupSelection
         from ui.main_window_service_ports import services_for_window
         from ui.sheet_setup_access import set_sheet_setup_for
         from ui.structure_mutation_access import add_bond_between_points_for
@@ -54,6 +55,7 @@ class MainWindowCanvasSheetServiceTest(unittest.TestCase):
         QTest.qWait(20)
         self.tab_ui = mock.Mock(wraps=services_for_window(self.window).canvas_tab_ui_service)
         self.active_canvas_ui = mock.Mock(wraps=services_for_window(self.window).active_canvas_ui_service)
+        self.sheet_setup_prompt = mock.Mock(return_value=SheetSetupSelection(size="A4", orientation="landscape"))
         self.service = MainWindowCanvasSheetService(
             tab_ui=self.tab_ui,
             active_canvas_ui=self.active_canvas_ui,
@@ -62,6 +64,7 @@ class MainWindowCanvasSheetServiceTest(unittest.TestCase):
             next_canvas_sheet_name_for_window=lambda window, prefix="Sheet": window.runtime_state.next_canvas_sheet_name(
                 prefix
             ),
+            sheet_setup_prompt=self.sheet_setup_prompt,
         )
         self._extra_canvases = []
 
@@ -142,14 +145,45 @@ class MainWindowCanvasSheetServiceTest(unittest.TestCase):
         self.assertEqual(tool_settings_state_for(prefixed_canvas).arrow_line_width, 4.5)
         self.assertEqual(self.window.tab_references.canvas_tabs.tabText(self.window.tab_references.canvas_tabs.count() - 1), "+")
 
-    def test_new_canvas_sheet_uses_active_canvas_template_and_next_sheet_name(self) -> None:
+    def test_new_canvas_sheet_uses_active_canvas_template_next_sheet_name_and_selected_setup(self) -> None:
         set_tool_setting_for(active_canvas_for_window(self.window), "mark_kind", "radical")
+        set_sheet_setup_for(active_canvas_for_window(self.window), "A4", "landscape")
+        self.sheet_setup_prompt.return_value = SheetSetupSelection(size="A4", orientation="portrait")
 
         canvas = self.service.new_canvas_sheet(self.window)
 
         self.assertEqual(self.window.tab_references.canvas_tabs.tabText(1), "Sheet 2")
+        self.sheet_setup_prompt.assert_called_once_with(
+            self.window,
+            current_size="A4",
+            current_orientation="landscape",
+        )
         self.assertEqual(tool_settings_state_for(canvas).mark_kind, "radical")
+        self.assertEqual(canvas.sheet_size, "A4")
+        self.assertEqual(canvas.sheet_orientation, "portrait")
         self.assertIs(self.window.tab_references.canvas_tabs.currentWidget(), canvas)
+
+    def test_new_canvas_sheet_cancel_restores_previous_canvas_without_adding_sheet(self) -> None:
+        tabs = self.window.tab_references.canvas_tabs
+        previous_index = tabs.currentIndex()
+        plus_index = self.window.tab_references.plus_tab_index()
+        tabs.blockSignals(True)
+        tabs.setCurrentIndex(plus_index)
+        tabs.blockSignals(False)
+
+        def cancel_prompt(window, *, current_size, current_orientation):
+            del window, current_size, current_orientation
+            self.assertEqual(tabs.currentIndex(), previous_index)
+            self.assertIs(tabs.currentWidget(), active_canvas_for_window(self.window))
+            return None
+
+        self.sheet_setup_prompt.side_effect = cancel_prompt
+
+        canvas = self.service.new_canvas_sheet(self.window)
+
+        self.assertIsNone(canvas)
+        self.assertEqual(self.window.tab_references.canvas_sheet_count(), 1)
+        self.assertEqual(tabs.currentIndex(), previous_index)
 
 
 if __name__ == "__main__":

@@ -32,12 +32,14 @@ class MainWindowUiReferences:
 
     def apply_toolbar_assembly(self, assembly: MainWindowToolbarAssembly) -> None:
         self.tool_actions = assembly.tool_actions
-        self.atom_input = assembly.atom_input
         self.load_action = assembly.load_action
         self.export_xyz_button = assembly.export_xyz_button
         self.preview_panel_button = assembly.preview_panel_button
         self.undo_button = assembly.undo_button
         self.redo_button = assembly.redo_button
+
+    def set_atom_input(self, atom_input: QLineEdit | None) -> None:
+        self.atom_input = atom_input
 
     def tool_action_for_key(self, action_key: str) -> QAction | None:
         return self.tool_actions.get(action_key)

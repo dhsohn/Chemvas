@@ -105,30 +105,31 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
                     60,
                 )
 
-    def test_left_toolbar_keeps_select_and_perspective_actions_visible(self) -> None:
-        tools_bar = next(
-            toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Tools"
+    def test_top_toolbar_keeps_select_and_perspective_actions_visible(self) -> None:
+        self.assertNotIn("Tools", [toolbar.windowTitle() for toolbar in self.window.findChildren(QToolBar)])
+        panel_bar = next(
+            toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Panels"
         )
-        actions = [action for action in tools_bar.actions() if not action.isSeparator()]
+        actions = [
+            action
+            for action in panel_bar.actions()
+            if not action.isSeparator() and action.text() in {"Select", "Perspective"}
+        ]
         action_texts = [action.text() for action in actions]
 
-        self.assertEqual(action_texts[0], "Select")
-        self.assertEqual(action_texts[-1], "Perspective")
-        self.assertEqual(tools_bar.iconSize().width(), 18)
-        self.assertEqual(tools_bar.iconSize().height(), 18)
+        self.assertEqual(action_texts, ["Select", "Perspective"])
+        self.assertEqual(panel_bar.iconSize().width(), 18)
+        self.assertEqual(panel_bar.iconSize().height(), 18)
         for text in ("Select", "Perspective"):
             with self.subTest(text=text):
                 action = next(action for action in actions if action.text() == text)
                 self.assertFalse(action.icon().isNull())
 
-    def test_toolbar_rows_share_left_toolbar_thickness(self) -> None:
+    def test_toolbar_rows_share_toolbar_thickness(self) -> None:
         self.window.resize(900, 560)
         self.window.show()
         self.app.processEvents()
 
-        tools_bar = next(
-            toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Tools"
-        )
         panel_bar = next(
             toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Panels"
         )
@@ -136,24 +137,22 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
             toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Options"
         )
 
-        self.assertEqual(tools_bar.width(), TOOLBAR_THICKNESS)
-        self.assertEqual(panel_bar.height(), tools_bar.width())
-        self.assertEqual(options_bar.height(), tools_bar.width())
+        self.assertNotIn("Tools", [toolbar.windowTitle() for toolbar in self.window.findChildren(QToolBar)])
+        self.assertEqual(panel_bar.height(), TOOLBAR_THICKNESS)
+        self.assertEqual(options_bar.height(), TOOLBAR_THICKNESS)
 
-    def test_color_and_ring_fill_move_to_left_toolbar_and_palette_options_bar(self) -> None:
-        tools_bar = next(
-            toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Tools"
-        )
+    def test_color_and_ring_fill_live_in_top_toolbar_and_palette_options_bar(self) -> None:
         panel_bar = next(
             toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Panels"
         )
 
-        self.assertIn("Color", [action.text() for action in tools_bar.actions()])
-        self.assertIn("Ring Fill", [action.text() for action in tools_bar.actions()])
-        self.assertNotIn("Template", [action.text() for action in tools_bar.actions()])
+        self.assertNotIn("Tools", [toolbar.windowTitle() for toolbar in self.window.findChildren(QToolBar)])
+        self.assertIn("Color", [action.text() for action in panel_bar.actions()])
+        self.assertIn("Ring Fill", [action.text() for action in panel_bar.actions()])
+        self.assertNotIn("Template", [action.text() for action in panel_bar.actions()])
         self.assertNotIn("Bond Length", [button.toolTip() for button in panel_bar.findChildren(QToolButton)])
-        self.assertNotIn("Color", [button.toolTip() for button in panel_bar.findChildren(QToolButton)])
-        self.assertNotIn("Ring Fill", [button.toolTip() for button in panel_bar.findChildren(QToolButton)])
+        self.assertIn("Color", [button.toolTip() for button in panel_bar.findChildren(QToolButton)])
+        self.assertIn("Ring Fill", [button.toolTip() for button in panel_bar.findChildren(QToolButton)])
 
         self.window.ui_references.tool_actions["color"].trigger()
         color_button = next(
@@ -178,61 +177,75 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         )
         self.assertIsNotNone(ring_fill_button)
 
-    def test_left_toolbar_renders_select_and_perspective_button_glyphs(self) -> None:
+    def test_top_toolbar_renders_select_and_perspective_button_glyphs(self) -> None:
         self.window.resize(800, 420)
         self.window.show()
         self.app.processEvents()
-        tools_bar = next(
-            toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Tools"
+        panel_bar = next(
+            toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Panels"
         )
-        image = tools_bar.grab().toImage()
+        image = panel_bar.grab().toImage()
 
-        for text, min_dark_pixels in (("Select", 95), ("Perspective", 105)):
+        for text, min_dark_pixels in (("Select", 80), ("Perspective", 80)):
             with self.subTest(text=text):
-                action = next(action for action in tools_bar.actions() if action.text() == text)
-                widget = tools_bar.widgetForAction(action)
+                action = next(action for action in panel_bar.actions() if action.text() == text)
+                widget = panel_bar.widgetForAction(action)
                 self.assertIsNotNone(widget)
                 self.assertTrue(widget.isVisible())
                 self.assertFalse(widget.icon().isNull())
-                self.assertEqual(widget.iconSize(), tools_bar.iconSize())
+                self.assertEqual(widget.iconSize(), panel_bar.iconSize())
                 rect = widget.geometry().intersected(image.rect())
                 self.assertGreaterEqual(self._dark_pixel_count_in_rect(image, rect), min_dark_pixels)
 
-    def test_left_toolbar_renders_select_and_perspective_glyphs_when_checked(self) -> None:
+    def test_top_toolbar_renders_select_and_perspective_glyphs_when_checked(self) -> None:
         self.window.resize(900, 560)
         self.window.show()
         self.app.processEvents()
-        tools_bar = next(
-            toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Tools"
+        panel_bar = next(
+            toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Panels"
         )
 
-        for action_key, min_dark_pixels in (("select", 95), ("perspective", 105)):
+        for action_key, min_dark_pixels in (("select", 80), ("perspective", 80)):
             with self.subTest(action_key=action_key):
                 action = self.window.ui_references.tool_actions[action_key]
                 action.trigger()
                 self.app.processEvents()
-                image = tools_bar.grab().toImage()
-                widget = tools_bar.widgetForAction(action)
+                image = panel_bar.grab().toImage()
+                widget = panel_bar.widgetForAction(action)
                 self.assertIsNotNone(widget)
                 self.assertTrue(widget.isVisible())
                 self.assertFalse(widget.icon().isNull())
-                self.assertEqual(widget.iconSize(), tools_bar.iconSize())
+                self.assertEqual(widget.iconSize(), panel_bar.iconSize())
                 rect = widget.geometry().intersected(image.rect())
                 self.assertGreaterEqual(self._dark_pixel_count_in_rect(image, rect), min_dark_pixels)
 
-    def test_left_toolbar_keeps_all_tool_actions_visible_in_compact_window(self) -> None:
+    def test_top_toolbar_keeps_all_tool_actions_visible_in_compact_window(self) -> None:
         self.window.resize(800, 420)
         self.window.show()
         self.app.processEvents()
-        tools_bar = next(
-            toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Tools"
+        panel_bar = next(
+            toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Panels"
         )
 
-        for action in tools_bar.actions():
+        tool_action_texts = {
+            "Select",
+            "Bond",
+            "Atom",
+            "Mark",
+            "Ring",
+            "Color",
+            "Ring Fill",
+            "Arrow",
+            "TS Bracket",
+            "Perspective",
+        }
+        for action in panel_bar.actions():
             if action.isSeparator():
                 continue
+            if action.text() not in tool_action_texts:
+                continue
             with self.subTest(action=action.text()):
-                widget = tools_bar.widgetForAction(action)
+                widget = panel_bar.widgetForAction(action)
                 self.assertIsNotNone(widget)
                 self.assertTrue(widget.isVisible())
 

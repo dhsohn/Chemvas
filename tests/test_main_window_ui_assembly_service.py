@@ -22,7 +22,7 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.main_window_config import LEFT_TOOLBAR_ACTION_ORDER
+    from ui.main_window_config import TOOLBAR_TOOL_ACTION_ORDER
     from ui.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
     from ui.main_window_theme import MAIN_WINDOW_STYLESHEET
     from ui.main_window_toolbar_buttons import ArrowButton, CornerMenuButton
@@ -116,9 +116,6 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.insert_controller_for_window = mock.Mock(
             side_effect=lambda window: window.canvas.services.insert_controller,
         )
-        self.tool_mode_controller_for_window = mock.Mock(
-            side_effect=lambda window: window.canvas.services.tool_mode_controller,
-        )
         self.history_service_for_window = mock.Mock(
             side_effect=lambda window: window.canvas.services.history_service,
         )
@@ -130,12 +127,10 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             export_figure=mock.Mock(),
             export_xyz=mock.Mock(),
             toggle_preview_panel=mock.Mock(),
-            setup_sheet=mock.Mock(),
         )
         self.service = MainWindowUIAssemblyService(
             scene_transform_controller_for_window=self.scene_transform_controller_for_window,
             insert_controller_for_window=self.insert_controller_for_window,
-            tool_mode_controller_for_window=self.tool_mode_controller_for_window,
             history_service_for_window=self.history_service_for_window,
             build_tool_actions_for_window=self.build_tool_actions_for_window,
             panel_toolbar_callbacks=self.panel_toolbar_callbacks,
@@ -146,7 +141,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
 
     def _build_tool_actions_for_window(self, window, tool_group) -> dict[str, QAction]:
         actions: dict[str, QAction] = {}
-        for key in [*LEFT_TOOLBAR_ACTION_ORDER, "arrow", "ts_bracket"]:
+        for key in TOOLBAR_TOOL_ACTION_ORDER:
             if key in actions:
                 continue
             action = QAction(key, window)
@@ -289,18 +284,18 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
 
         assembly = self.service.init_toolbars(window)
 
-        self.assertEqual(len(window.findChildren(QToolBar)), 2)
-        self.assertEqual(assembly.left_bar.orientation(), Qt.Orientation.Vertical)
+        self.assertEqual(len(window.findChildren(QToolBar)), 1)
+        tool_action_texts = [
+            action.text()
+            for action in assembly.panel_bar.actions()
+            if not action.isSeparator() and action.text() in TOOLBAR_TOOL_ACTION_ORDER
+        ]
+        self.assertEqual(tool_action_texts, TOOLBAR_TOOL_ACTION_ORDER)
         self.assertEqual(
-            [action.text() for action in assembly.left_bar.actions() if not action.isSeparator()],
-            LEFT_TOOLBAR_ACTION_ORDER,
-        )
-        self.assertEqual(
-            sum(1 for action in assembly.left_bar.actions() if action.isSeparator()),
-            3,
+            sum(1 for action in assembly.panel_bar.actions() if action.isSeparator()),
+            5,
         )
         self.assertTrue(assembly.tool_actions["bond"].isChecked())
-        self.assertEqual(assembly.atom_input.text(), "N")
         self.assertIs(assembly.save_button.defaultAction(), assembly.save_action)
         menu_actions = [
             action for action in assembly.save_button.menu().actions() if not action.isSeparator()
@@ -314,10 +309,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.assertEqual(assembly.load_action.statusTip(), "Open a drawing or workbook")
         self.assertEqual(assembly.save_action.statusTip(), "Save the current drawing")
         self.assertEqual(assembly.save_as_action.statusTip(), "Save the current drawing to a new file")
-        self.assertNotIn(
-            "Bond Length",
-            [button.toolTip() for button in assembly.left_bar.findChildren(QToolButton)],
-        )
+        self.assertNotIn("Tools", [toolbar.windowTitle() for toolbar in window.findChildren(QToolBar)])
         self.assertNotIn(
             "Load",
             [button.toolTip() for button in assembly.panel_bar.findChildren(QToolButton)],
@@ -336,12 +328,14 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         # separators + tooltips instead.
         self.assertEqual(section_labels, [])
 
-        assembly.atom_input.setText("Cl")
-        window.canvas.tool_mode_controller.set_atom_symbol.assert_called_with("Cl")
-        self.tool_mode_controller_for_window.assert_called_once_with(window)
+        self.assertIsNone(assembly.panel_bar.findChild(QLineEdit, "atomInput"))
 
         smiles_input = next(
             widget for widget in assembly.panel_bar.findChildren(QLineEdit) if widget.placeholderText() == "SMILES..."
+        )
+        self.assertEqual(
+            [widget.placeholderText() for widget in assembly.panel_bar.findChildren(QLineEdit)],
+            ["SMILES..."],
         )
         smiles_button = assembly.panel_bar.findChild(QToolButton, "smiles_render_button")
         self.assertIsNotNone(smiles_button)
@@ -354,7 +348,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         )
         self.assertTrue(assembly.preview_panel_button.isCheckable())
         self.assertTrue(assembly.preview_panel_button.isChecked())
-        self.assertIs(assembly.setup_sheet_button, assembly.panel_bar.findChild(QToolButton, "setup_sheet_button"))
+        self.assertIsNone(assembly.panel_bar.findChild(QToolButton, "setup_sheet_button"))
         self.assertIs(assembly.undo_button, assembly.panel_bar.findChild(QToolButton, "undo_button"))
         self.assertIs(assembly.redo_button, assembly.panel_bar.findChild(QToolButton, "redo_button"))
 
@@ -380,10 +374,8 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         window.export_figure.assert_not_called()
         assembly.export_xyz_button.click()
         assembly.preview_panel_button.click()
-        assembly.setup_sheet_button.click()
         self.panel_toolbar_callbacks.export_xyz.assert_called_once_with(window)
         self.panel_toolbar_callbacks.toggle_preview_panel.assert_called_once_with(window, False)
-        self.panel_toolbar_callbacks.setup_sheet.assert_called_once_with(window)
         window.export_xyz.assert_not_called()
         window.toggle_preview_panel.assert_not_called()
         window.setup_sheet.assert_not_called()

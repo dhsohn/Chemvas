@@ -6,7 +6,7 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtWidgets import QApplication, QLabel, QSlider, QToolButton
+    from PyQt6.QtWidgets import QApplication, QLabel, QLineEdit, QSlider, QToolButton
 except ModuleNotFoundError:
     QApplication = None
 
@@ -38,6 +38,8 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
             get_arrow_head_scale=mock.Mock(return_value=0.4),
             set_arrow_line_width=mock.Mock(),
             set_arrow_head_scale=mock.Mock(),
+            get_atom_symbol=mock.Mock(return_value="N"),
+            set_atom_symbol=mock.Mock(),
         )
         self.insert_controller_for_window = mock.Mock(return_value=self.insert_controller)
         self.tool_mode_controller_for_window = mock.Mock(return_value=self.tool_mode_controller)
@@ -80,6 +82,11 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         self.assertIn((6, "benzene"), pages.ring_buttons)
         self.assertIsNotNone(pages.mark_group)
         self.assertIsNotNone(pages.arrow_group)
+        self.assertIsInstance(pages.atom_input, QLineEdit)
+        self.assertIs(pages.atom_input, pages.pages["atom"].findChild(QLineEdit, "atomInput"))
+        self.assertEqual(pages.atom_input.placeholderText(), "Atom")
+        self.assertEqual(pages.atom_input.text(), "N")
+        self.assertEqual(pages.atom_input.maxLength(), 4)
 
         pages.bond_buttons["Hash"].click()
 
@@ -156,6 +163,8 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         sliders[1].setValue(25)
         self.tool_mode_controller.set_arrow_line_width.assert_called_once_with(5)
         self.tool_mode_controller.set_arrow_head_scale.assert_called_once_with(0.25)
+        pages.atom_input.setText("Cl")
+        self.tool_mode_controller.set_atom_symbol.assert_called_once_with("Cl")
 
         color_button = next(
             button

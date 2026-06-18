@@ -14,14 +14,13 @@ if QApplication is not None:
     from ui.main_window import MainWindow
     from ui.main_window_canvas_ports import active_canvas_for_window
     from ui.main_window_document_action_service import MainWindowDocumentActionService
-    from ui.main_window_document_dialogs import FigureExportOptions, SheetSetupSelection
+    from ui.main_window_document_dialogs import FigureExportOptions
     from ui.main_window_path_logic import (
         resolve_load_path,
         resolve_save_as_path,
         resolve_save_path,
     )
     from ui.main_window_service_ports import services_for_window
-    from ui.sheet_setup_access import set_sheet_setup_for
 
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for main window document action tests")
@@ -40,15 +39,6 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             side_effect=lambda window: active_canvas_for_window(window).services.geometry_controller,
         )
         self.bond_length_px_for_window = mock.Mock(return_value=24.0)
-        self.sheet_size_for_window = mock.Mock(return_value="A4")
-        self.sheet_orientation_for_window = mock.Mock(return_value="landscape")
-        self.set_sheet_setup_for_window = mock.Mock(
-            side_effect=lambda window, size, orientation: set_sheet_setup_for(
-                active_canvas_for_window(window),
-                size,
-                orientation,
-            )
-        )
         self.current_file_path_for_window = mock.Mock(
             side_effect=lambda window: window.runtime_state.current_file_path,
         )
@@ -60,9 +50,6 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             document_session_service_for_window=self.document_session_service_for_window,
             geometry_controller_for_window=self.geometry_controller_for_window,
             bond_length_px_for_window=self.bond_length_px_for_window,
-            sheet_size_for_window=self.sheet_size_for_window,
-            sheet_orientation_for_window=self.sheet_orientation_for_window,
-            set_sheet_setup_for_window=self.set_sheet_setup_for_window,
             current_file_path_for_window=self.current_file_path_for_window,
             set_current_file_path_for_window=self.set_current_file_path_for_window,
             workbook_document_service=self.workbook_document_service,
@@ -360,39 +347,6 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         self.bond_length_px_for_window.assert_called_once_with(self.window)
         controller_set_bond_length.assert_not_called()
         self.geometry_controller_for_window.assert_not_called()
-
-    def test_setup_sheet_uses_current_canvas_settings_and_applies_confirmed_value(self) -> None:
-        set_sheet_setup_for(active_canvas_for_window(self.window), "A4", "landscape")
-
-        with mock.patch(
-            "ui.main_window_document_action_service.prompt_sheet_setup",
-            return_value=SheetSetupSelection(size="A4", orientation="portrait"),
-        ) as prompt:
-            self.assertFalse(hasattr(active_canvas_for_window(self.window), "set_sheet_setup"))
-            self.service.setup_sheet(self.window)
-
-        prompt.assert_called_once_with(
-            self.window,
-            current_size="A4",
-            current_orientation="landscape",
-        )
-        self.sheet_size_for_window.assert_called_once_with(self.window)
-        self.sheet_orientation_for_window.assert_called_once_with(self.window)
-        self.set_sheet_setup_for_window.assert_called_once_with(self.window, "A4", "portrait")
-        self.assertEqual(active_canvas_for_window(self.window).sheet_size, "A4")
-        self.assertEqual(active_canvas_for_window(self.window).sheet_orientation, "portrait")
-
-    def test_setup_sheet_cancel_keeps_current_canvas_settings(self) -> None:
-        set_sheet_setup_for(active_canvas_for_window(self.window), "A4", "landscape")
-
-        with mock.patch("ui.main_window_document_action_service.prompt_sheet_setup", return_value=None):
-            self.service.setup_sheet(self.window)
-
-        self.sheet_size_for_window.assert_called_once_with(self.window)
-        self.sheet_orientation_for_window.assert_called_once_with(self.window)
-        self.set_sheet_setup_for_window.assert_not_called()
-        self.assertEqual(active_canvas_for_window(self.window).sheet_size, "A4")
-        self.assertEqual(active_canvas_for_window(self.window).sheet_orientation, "landscape")
 
 
 if __name__ == "__main__":

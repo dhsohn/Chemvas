@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QButtonGroup, QSlider, QToolButton, QWidget
+from PyQt6.QtWidgets import QButtonGroup, QLineEdit, QSlider, QToolButton, QWidget
 
 from ui.main_window_config import (
     ARROW_MENU_SPECS,
@@ -13,6 +13,7 @@ from ui.main_window_config import (
     TEMPLATE_ENTRY_SPECS,
 )
 from ui.main_window_context_bar_widgets import (
+    atom_symbol_input,
     color_swatch_button,
     divider,
     hint_label,
@@ -62,6 +63,12 @@ class MarkContextPage:
     page: QWidget
     group: QButtonGroup
     buttons: dict[str, QToolButton]
+
+
+@dataclass(frozen=True)
+class AtomContextPage:
+    page: QWidget
+    atom_input: QLineEdit
 
 
 def bond_label_for_state(style: str, order: int) -> str | None:
@@ -175,11 +182,15 @@ def build_arrow_page(window, tool_mode_controller, tool_state_service) -> ArrowC
     return ArrowContextPage(page=page, group=group, buttons=buttons)
 
 
-def build_atom_page() -> QWidget:
+def build_atom_page(current_symbol: str, set_atom_symbol) -> AtomContextPage:
     page, layout = new_context_page()
-    layout.addWidget(hint_label("Element hotkeys: c n o s p f h · edit label Enter · charge +/-"))
+    atom_input = atom_symbol_input(
+        current_symbol,
+        set_atom_symbol,
+    )
+    layout.addWidget(atom_input)
     layout.addStretch(1)
-    return page
+    return AtomContextPage(page=page, atom_input=atom_input)
 
 
 def build_color_palette_page(
@@ -198,6 +209,7 @@ def build_color_palette_page(
 
 __all__ = [
     "ArrowContextPage",
+    "AtomContextPage",
     "BondContextPage",
     "MarkContextPage",
     "TemplateContextPage",

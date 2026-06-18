@@ -44,35 +44,6 @@ def _flat_toolbutton_style(*, extra: str = "") -> str:
 
 TOOLBAR_BUTTON_STYLE = _flat_toolbutton_style()
 
-LEFT_TOOLBAR_BUTTON_STYLE = _flat_toolbutton_style(
-    extra=(
-        "QToolBar {"
-        f" background: {_P['surface_bar']};"
-        " border: none;"
-        f" border-bottom: 1px solid {_P['border']};"
-        " spacing: 0px;"
-        " padding: 2px 4px;"
-        "}"
-        "QToolButton {"
-        " padding: 0px;"
-        " margin: 0px;"
-        " border-radius: 6px;"
-        f" min-width: {TOOLBAR_BUTTON_SIZE - 2}px;"
-        f" max-width: {TOOLBAR_BUTTON_SIZE - 2}px;"
-        f" min-height: {TOOLBAR_BUTTON_SIZE - 2}px;"
-        f" max-height: {TOOLBAR_BUTTON_SIZE - 2}px;"
-        "}"
-        "QToolBar::separator {"
-        " background: transparent;"
-        "}"
-        "QToolBar::separator:vertical {"
-        " width: 10px;"
-        " height: 1px;"
-        " margin: 0px 3px;"
-        "}"
-    )
-)
-
 TOOLBAR_MENU_BUTTON_STYLE = _flat_toolbutton_style(
     extra=(
         "QToolButton { padding-right: 8px; }"
@@ -129,7 +100,6 @@ __all__ = [
     "CONTEXT_BAR_BUTTON_HEIGHT",
     "CONTEXT_BAR_CONTENT_HEIGHT",
     "CONTEXT_BAR_ICON_SIZE",
-    "LEFT_TOOLBAR_BUTTON_STYLE",
     "SMILES_RENDER_BUTTON_STYLE",
     "TOOLBAR_BUTTON_SIZE",
     "TOOLBAR_BUTTON_STYLE",

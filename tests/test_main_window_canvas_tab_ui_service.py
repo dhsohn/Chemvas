@@ -15,6 +15,7 @@ except ModuleNotFoundError:
 if QApplication is not None:
     from ui.main_window import MainWindow
     from ui.main_window_canvas_tab_ui_service import MainWindowCanvasTabUIService
+    from ui.main_window_document_dialogs import SheetSetupSelection
     from ui.main_window_service_ports import services_for_window
 
 
@@ -55,6 +56,12 @@ class MainWindowCanvasTabUIServiceTest(unittest.TestCase):
 
     def setUp(self) -> None:
         self.window = MainWindow()
+        services_for_window(self.window).canvas_sheet_service._sheet_setup_prompt = (
+            lambda window, *, current_size, current_orientation: SheetSetupSelection(
+                size=current_size,
+                orientation=current_orientation,
+            )
+        )
         self.active_canvas_ui = mock.Mock()
         self.service = MainWindowCanvasTabUIService(
             active_canvas_ui=self.active_canvas_ui,
