@@ -37,19 +37,8 @@ class MainWindowToolIconRenderer:
         self._accent_fill_color = accent_fill_color
 
     def draw_select(self, painter) -> None:
-        painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.setPen(self._icon_pen(self._stroke_active))
-        left, top, right, bottom = 4.5, 4.5, 25.5, 24.5
-        corner = 5.5
-        painter.drawLine(QPointF(left, top), QPointF(left + corner, top))
-        painter.drawLine(QPointF(left, top), QPointF(left, top + corner))
-        painter.drawLine(QPointF(right, top), QPointF(right - corner, top))
-        painter.drawLine(QPointF(right, top), QPointF(right, top + corner))
-        painter.drawLine(QPointF(left, bottom), QPointF(left + corner, bottom))
-        painter.drawLine(QPointF(left, bottom), QPointF(left, bottom - corner))
-        painter.drawLine(QPointF(right, bottom), QPointF(right - corner, bottom))
-        painter.drawLine(QPointF(right, bottom), QPointF(right, bottom - corner))
-
+        # A single clean pointer; the old selection-marquee corner brackets are
+        # dropped to match the cursor in the design mock-up.
         cursor = QPainterPath()
         cursor.moveTo(7.2, 6.7)
         cursor.lineTo(7.2, 26.7)
@@ -150,20 +139,24 @@ class MainWindowToolIconRenderer:
             painter.drawLine(15, 9, 15, 21)
 
     def draw_flip_h(self, painter) -> None:
-        painter.setPen(self._icon_pen(self._stroke_thin))
-        painter.drawLine(15, 5, 15, 25)
-        painter.drawLine(7, 9, 13, 9)
-        painter.drawLine(7, 21, 13, 21)
-        painter.drawLine(17, 9, 23, 9)
-        painter.drawLine(17, 21, 23, 21)
+        # Dashed vertical mirror axis with a chevron pointing out each side.
+        painter.setPen(self._icon_pen(self._stroke_thin, style=Qt.PenStyle.DashLine))
+        painter.drawLine(QPointF(15.0, 4.5), QPointF(15.0, 25.5))
+        painter.setPen(self._icon_pen(self._stroke_regular))
+        painter.drawLine(QPointF(10.6, 10.0), QPointF(5.6, 15.0))
+        painter.drawLine(QPointF(5.6, 15.0), QPointF(10.6, 20.0))
+        painter.drawLine(QPointF(19.4, 10.0), QPointF(24.4, 15.0))
+        painter.drawLine(QPointF(24.4, 15.0), QPointF(19.4, 20.0))
 
     def draw_flip_v(self, painter) -> None:
-        painter.setPen(self._icon_pen(self._stroke_thin))
-        painter.drawLine(5, 15, 25, 15)
-        painter.drawLine(9, 7, 9, 13)
-        painter.drawLine(21, 7, 21, 13)
-        painter.drawLine(9, 17, 9, 23)
-        painter.drawLine(21, 17, 21, 23)
+        # Dashed horizontal mirror axis with a chevron above and below.
+        painter.setPen(self._icon_pen(self._stroke_thin, style=Qt.PenStyle.DashLine))
+        painter.drawLine(QPointF(4.5, 15.0), QPointF(25.5, 15.0))
+        painter.setPen(self._icon_pen(self._stroke_regular))
+        painter.drawLine(QPointF(10.0, 10.6), QPointF(15.0, 5.6))
+        painter.drawLine(QPointF(15.0, 5.6), QPointF(20.0, 10.6))
+        painter.drawLine(QPointF(10.0, 19.4), QPointF(15.0, 24.4))
+        painter.drawLine(QPointF(15.0, 24.4), QPointF(20.0, 19.4))
 
     def draw_ts_bracket(self, painter) -> None:
         painter.setPen(self._icon_pen(self._stroke_fine))
@@ -190,17 +183,18 @@ class MainWindowToolIconRenderer:
         painter.drawEllipse(QPointF(15.0, 15.0), 1.4, 1.4)
 
     def draw_move(self, painter) -> None:
+        # Cross with a symmetric chevron arrowhead on each of the four ends.
         painter.setPen(self._icon_pen(self._stroke_thin))
-        painter.drawLine(self._icon_center, self._icon_content_min, self._icon_center, self._icon_content_max)
-        painter.drawLine(self._icon_content_min, self._icon_center, self._icon_content_max, self._icon_center)
-        painter.drawLine(self._icon_center, self._icon_content_min, 12, 8)
-        painter.drawLine(self._icon_center, self._icon_content_min, 18, 8)
-        painter.drawLine(self._icon_center, self._icon_content_max, 12, 22)
-        painter.drawLine(self._icon_center, self._icon_content_max, 18, 22)
-        painter.drawLine(self._icon_content_min, self._icon_center, 8, 12)
-        painter.drawLine(self._icon_content_min, self._icon_center, 8, 18)
-        painter.drawLine(self._icon_content_max, self._icon_center, 22, 12)
-        painter.drawLine(self._icon_content_max, self._icon_center, 22, 18)
+        painter.drawLine(QPointF(15.0, 5.0), QPointF(15.0, 25.0))
+        painter.drawLine(QPointF(5.0, 15.0), QPointF(25.0, 15.0))
+        painter.drawLine(QPointF(11.9, 8.1), QPointF(15.0, 5.0))
+        painter.drawLine(QPointF(15.0, 5.0), QPointF(18.1, 8.1))
+        painter.drawLine(QPointF(11.9, 21.9), QPointF(15.0, 25.0))
+        painter.drawLine(QPointF(15.0, 25.0), QPointF(18.1, 21.9))
+        painter.drawLine(QPointF(8.1, 11.9), QPointF(5.0, 15.0))
+        painter.drawLine(QPointF(5.0, 15.0), QPointF(8.1, 18.1))
+        painter.drawLine(QPointF(21.9, 11.9), QPointF(25.0, 15.0))
+        painter.drawLine(QPointF(25.0, 15.0), QPointF(21.9, 18.1))
 
     def draw_color(self, painter) -> None:
         # Line-art palette: an outlined body with a thumb hole and three small

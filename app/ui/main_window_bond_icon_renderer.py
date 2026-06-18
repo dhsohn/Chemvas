@@ -106,19 +106,20 @@ class MainWindowBondIconRenderer:
         painter.setPen(self._icon_pen(self._stroke_molecule))
         outer = benzene_icon_polygon(center, radius)
         painter.drawPolygon(outer)
-        for start, end in self.benzene_icon_inner_segments(outer, center, spacing_scale=0.92):
-            painter.drawLine(start, end)
+        # Aromatic ring: a delocalised inner circle rather than Kekule bonds.
+        painter.drawEllipse(center, 8.0, 8.0)
 
     def draw_double_bond(self, painter) -> None:
+        # Parallel diagonals so double/triple share the single bond's slope.
         painter.setPen(self._icon_pen(self._stroke_regular))
-        painter.drawLine(5, 11, 25, 11)
-        painter.drawLine(5, 19, 25, 19)
+        painter.drawLine(QPointF(6.2, 20.2), QPointF(20.2, 6.2))
+        painter.drawLine(QPointF(9.8, 23.8), QPointF(23.8, 9.8))
 
     def draw_triple_bond(self, painter) -> None:
         painter.setPen(self._icon_pen(self._stroke_thin))
-        painter.drawLine(5, 10, 25, 10)
-        painter.drawLine(5, 15, 25, 15)
-        painter.drawLine(5, 20, 25, 20)
+        painter.drawLine(QPointF(5.7, 19.7), QPointF(19.7, 5.7))
+        painter.drawLine(QPointF(8.0, 22.0), QPointF(22.0, 8.0))
+        painter.drawLine(QPointF(10.3, 24.3), QPointF(24.3, 10.3))
 
     def draw_wedge_bond(self, painter) -> None:
         start = QPointF(7, 23)
@@ -164,7 +165,7 @@ class MainWindowBondIconRenderer:
 
     def draw_dotted_bond(self, painter) -> None:
         painter.setPen(self._renderer_icon_pen(self._canvas_style.dotted_bond_pen()))
-        painter.drawLine(5, 15, 25, 15)
+        painter.drawLine(QPointF(7.0, 23.0), QPointF(23.0, 7.0))
 
     def draw_bond_length(self, painter) -> None:
         painter.setPen(self._icon_pen(self._stroke_thin))

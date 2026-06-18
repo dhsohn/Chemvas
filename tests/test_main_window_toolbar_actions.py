@@ -186,10 +186,11 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         )
         image = panel_bar.grab().toImage()
 
-        # Perspective is now a clean isometric-cube line glyph (lighter than the
-        # old filled slab-plus-arc), so it has fewer dark pixels at toolbar size;
-        # the 30px native-size guard above still asserts a substantial glyph.
-        for text, min_dark_pixels in (("Select", 80), ("Perspective", 20)):
+        # Both glyphs were redrawn lighter than before (select dropped its
+        # selection-marquee brackets; perspective is now a clean isometric cube),
+        # so they have fewer dark pixels at toolbar size; the 30px native-size
+        # guard above still asserts a substantial glyph.
+        for text, min_dark_pixels in (("Select", 50), ("Perspective", 20)):
             with self.subTest(text=text):
                 action = next(action for action in panel_bar.actions() if action.text() == text)
                 widget = panel_bar.widgetForAction(action)
@@ -208,7 +209,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
             toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Panels"
         )
 
-        for action_key, min_dark_pixels in (("select", 80), ("perspective", 20)):
+        for action_key, min_dark_pixels in (("select", 50), ("perspective", 20)):
             with self.subTest(action_key=action_key):
                 action = self.window.ui_references.tool_actions[action_key]
                 action.trigger()

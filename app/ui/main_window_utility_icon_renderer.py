@@ -19,25 +19,45 @@ class MainWindowUtilityIconRenderer:
         self._stroke_regular = stroke_regular
 
     def draw_undo(self, painter) -> None:
+        # Back-pointing chevron, flat top bar, then a curl down the right side.
         painter.setPen(self._icon_pen(self._stroke_regular))
-        painter.drawArc(5, 8, 18, 18, 90 * 16, 270 * 16)
-        painter.drawLine(8, 10, 5, 15)
-        painter.drawLine(8, 10, 11, 10)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawLine(QPointF(10.4, 6.1), QPointF(5.2, 11.3))
+        painter.drawLine(QPointF(5.2, 11.3), QPointF(10.4, 16.4))
+        body = QPainterPath()
+        body.moveTo(5.2, 11.3)
+        body.lineTo(18.4, 11.3)
+        body.arcTo(12.1, 11.3, 12.6, 12.6, 90.0, -180.0)
+        body.lineTo(16.1, 23.9)
+        painter.drawPath(body)
 
     def draw_redo(self, painter) -> None:
         painter.setPen(self._icon_pen(self._stroke_regular))
-        painter.drawArc(8, 8, 18, 18, 180 * 16, 270 * 16)
-        painter.drawLine(23, 10, 25, 15)
-        painter.drawLine(23, 10, 19, 10)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawLine(QPointF(19.6, 6.1), QPointF(24.8, 11.3))
+        painter.drawLine(QPointF(24.8, 11.3), QPointF(19.6, 16.4))
+        body = QPainterPath()
+        body.moveTo(24.8, 11.3)
+        body.lineTo(11.6, 11.3)
+        body.arcTo(5.3, 11.3, 12.6, 12.6, 90.0, 180.0)
+        body.lineTo(13.9, 23.9)
+        painter.drawPath(body)
 
     def draw_save(self, painter) -> None:
+        # Download arrow dropping into a tray with softly rounded corners.
         painter.setPen(self._icon_pen(self._stroke_thin))
-        painter.drawLine(QPointF(15.0, 5.0), QPointF(15.0, 17.5))
-        painter.drawLine(QPointF(10.0, 12.5), QPointF(15.0, 17.5))
-        painter.drawLine(QPointF(20.0, 12.5), QPointF(15.0, 17.5))
-        painter.drawLine(QPointF(6.0, 19.0), QPointF(6.0, 24.0))
-        painter.drawLine(QPointF(6.0, 24.0), QPointF(24.0, 24.0))
-        painter.drawLine(QPointF(24.0, 24.0), QPointF(24.0, 19.0))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawLine(QPointF(15.0, 4.0), QPointF(15.0, 17.5))
+        painter.drawLine(QPointF(10.3, 12.8), QPointF(15.0, 17.5))
+        painter.drawLine(QPointF(19.7, 12.8), QPointF(15.0, 17.5))
+        tray = QPainterPath()
+        tray.moveTo(5.6, 19.5)
+        tray.lineTo(5.6, 22.8)
+        tray.quadTo(5.6, 24.8, 7.6, 24.8)
+        tray.lineTo(22.4, 24.8)
+        tray.quadTo(24.4, 24.8, 24.4, 22.8)
+        tray.lineTo(24.4, 19.5)
+        painter.drawPath(tray)
 
     def draw_open(self, painter) -> None:
         painter.setPen(self._icon_pen(self._stroke_thin))
