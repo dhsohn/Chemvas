@@ -69,8 +69,10 @@ class MainWindowToolIconRenderer:
         painter.drawLine(7, 15, 23, 15)
 
     def draw_mark(self, painter) -> None:
-        painter.setPen(self._icon_pen(self._stroke_active))
-        painter.setBrush(self._icon_brush(self._accent_fill_color))
+        # Outlined bolt so it sits in the same line-art language as the rest
+        # of the set instead of a flat filled glyph.
+        painter.setPen(self._icon_pen(self._stroke_regular))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
         bolt = QPolygonF(
             [
                 QPointF(17.5, 4.5),
@@ -177,9 +179,15 @@ class MainWindowToolIconRenderer:
         painter.drawText(QRectF(10.0, 8.0, 12.0, 8.0), Qt.AlignmentFlag.AlignCenter, "TS")
 
     def draw_orbital(self, painter) -> None:
+        # Two lobes meeting at a central nucleus so it reads as a p-orbital
+        # dumbbell rather than two detached circles.
         painter.setPen(self._icon_pen(self._stroke_thin))
-        painter.drawEllipse(6, 10, 8, 10)
-        painter.drawEllipse(16, 10, 8, 10)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawEllipse(3, 11, 12, 8)
+        painter.drawEllipse(15, 11, 12, 8)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(self._icon_brush())
+        painter.drawEllipse(QPointF(15.0, 15.0), 1.4, 1.4)
 
     def draw_move(self, painter) -> None:
         painter.setPen(self._icon_pen(self._stroke_thin))
@@ -195,74 +203,39 @@ class MainWindowToolIconRenderer:
         painter.drawLine(self._icon_content_max, self._icon_center, 22, 18)
 
     def draw_color(self, painter) -> None:
+        # Line-art palette: an outlined body with a thumb hole and three small
+        # solid paint wells, instead of a flat filled blob.
         painter.setPen(self._icon_pen(self._stroke_thin))
-        painter.setBrush(self._icon_brush(self._accent_fill_color))
-        palette = QPainterPath()
-        palette.moveTo(4, 18)
-        palette.cubicTo(4, 8, 15, 6, 25, 9)
-        palette.cubicTo(29, 10, 29, 20, 23, 24)
-        palette.cubicTo(18, 26, 11, 25, 9, 21)
-        palette.cubicTo(14, 23, 15, 20, 14, 18)
-        palette.cubicTo(11, 20, 6, 20, 4, 18)
-        painter.drawPath(palette)
-        painter.setBrush(self._icon_brush(Qt.GlobalColor.white))
-        painter.drawEllipse(9, 13, 4, 4)
-        painter.drawEllipse(14, 11, 4, 4)
-        painter.drawEllipse(19, 15, 4, 4)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawEllipse(4, 7, 22, 18)
+        painter.drawEllipse(QPointF(10.5, 19.0), 2.1, 2.1)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(self._icon_brush())
+        painter.drawEllipse(QPointF(13.5, 12.0), 1.5, 1.5)
+        painter.drawEllipse(QPointF(18.5, 11.5), 1.5, 1.5)
+        painter.drawEllipse(QPointF(21.5, 15.5), 1.5, 1.5)
 
     def draw_perspective(self, painter) -> None:
-        painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.setPen(self._icon_pen(self._stroke_active))
-        front = QPolygonF(
+        # A clean isometric cube with a lightly shaded top face. Stays legible
+        # at toolbar size, where the old wireframe-slab-plus-rotation-arc
+        # collapsed into an unreadable blob.
+        painter.setPen(self._icon_pen(self._stroke_thin))
+        top = QPolygonF(
             [
-                QPointF(7.0, 10.5),
-                QPointF(16.0, 6.0),
+                QPointF(15.0, 5.5),
                 QPointF(24.5, 11.0),
-                QPointF(14.8, 15.8),
-            ]
-        )
-        back = QPolygonF(
-            [
-                QPointF(5.5, 18.8),
-                QPointF(14.8, 24.0),
-                QPointF(24.8, 19.0),
-                QPointF(14.8, 14.2),
+                QPointF(15.0, 16.5),
+                QPointF(5.5, 11.0),
             ]
         )
         painter.setBrush(self._icon_brush(self._pale_fill_color))
-        painter.drawPolygon(front)
+        painter.drawPolygon(top)
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawPolygon(back)
-        painter.drawLine(QPointF(7.0, 10.5), QPointF(5.5, 18.8))
-        painter.drawLine(QPointF(16.0, 6.0), QPointF(14.8, 14.2))
-        painter.drawLine(QPointF(24.5, 11.0), QPointF(24.8, 19.0))
-
-        painter.setPen(self._icon_pen(self._stroke_active + 0.2))
-        cx, cy = 15.0, 15.0
-        radius = 11.8
-        start_deg = 210.0
-        span_deg = 245.0
-        end_deg = (start_deg + span_deg) % 360.0
-        painter.drawArc(
-            QRectF(3.2, 3.2, 23.6, 23.6),
-            int(start_deg * 16),
-            int(span_deg * 16),
-        )
-        rad = math.radians(end_deg)
-        end = QPointF(cx + radius * math.cos(rad), cy - radius * math.sin(rad))
-        tangent = rad + math.pi / 2.0
-        head_len = 3.0
-        head_angle = math.radians(25.0)
-        left = QPointF(
-            end.x() + head_len * math.cos(tangent + math.pi + head_angle),
-            end.y() - head_len * math.sin(tangent + math.pi + head_angle),
-        )
-        right = QPointF(
-            end.x() + head_len * math.cos(tangent + math.pi - head_angle),
-            end.y() - head_len * math.sin(tangent + math.pi - head_angle),
-        )
-        painter.drawLine(end, left)
-        painter.drawLine(end, right)
+        painter.drawLine(QPointF(5.5, 11.0), QPointF(5.5, 20.0))
+        painter.drawLine(QPointF(24.5, 11.0), QPointF(24.5, 20.0))
+        painter.drawLine(QPointF(15.0, 16.5), QPointF(15.0, 25.5))
+        painter.drawLine(QPointF(5.5, 20.0), QPointF(15.0, 25.5))
+        painter.drawLine(QPointF(24.5, 20.0), QPointF(15.0, 25.5))
 
 
 __all__ = ["MainWindowToolIconRenderer"]
