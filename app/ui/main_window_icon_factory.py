@@ -29,11 +29,14 @@ class MainWindowIconFactory:
     PALE_FILL_COLOR = "#ededeb"
     ACCENT_FILL_COLOR = "#d3d3ce"
 
-    STROKE_FINE = 1.2
-    STROKE_THIN = 1.6
+    # Stroke weights are kept in a tight band so every icon reads as one set.
+    # Line work converges on ~1.8; only bond/ring glyphs stay a touch heavier
+    # (molecule) so they echo the canvas bond weight.
+    STROKE_FINE = 1.7
+    STROKE_THIN = 1.8
     STROKE_REGULAR = 1.8
     STROKE_MOLECULE = 2.0
-    STROKE_ACTIVE = 2.2
+    STROKE_ACTIVE = 2.0
 
     def __init__(self, window, *, canvas_style=None) -> None:
         self._pixmap_icons = MainWindowIconPixmapFactory(default_size=self.ICON_SIZE)

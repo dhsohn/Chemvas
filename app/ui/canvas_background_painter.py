@@ -10,9 +10,11 @@ def draw_canvas_background_for(canvas, painter, rect) -> None:
     painter.save()
     painter.fillRect(rect, QColor("#e7e7e4"))
     sheet_rect = sheet_rect_for(canvas)
-    # Layered soft drop shadow so the page reads as paper floating above
-    # the workspace rather than blending into it.
-    for offset, alpha in ((6.0, 5), (4.0, 9), (2.0, 16)):
+    # Layered soft drop shadow (light from top-left) so the page clearly reads
+    # as paper floating above the workspace rather than blending into it. The
+    # tight, darker inner layer gives a crisp contact edge; the wider, fainter
+    # outer layers fall off into a soft ambient halo.
+    for offset, alpha in ((11.0, 6), (6.5, 11), (3.0, 17), (1.4, 26)):
         painter.fillRect(
             sheet_rect.adjusted(-offset * 0.4, offset * 0.3, offset, offset + 1.0),
             QColor(0, 0, 0, alpha),
