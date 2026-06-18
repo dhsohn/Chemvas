@@ -20,7 +20,8 @@ def test_draw_canvas_background_paints_workspace_shadow_and_sheet(monkeypatch) -
     painter.save.assert_called_once_with()
     painter.restore.assert_called_once_with()
     background_painter.sheet_rect_for.assert_called_once_with(canvas)
-    assert painter.fillRect.call_count == 5
+    # 1 workspace fill + 4 layered drop-shadow rects + 1 white sheet fill.
+    assert painter.fillRect.call_count == 6
     assert painter.fillRect.call_args_list[0].args == (viewport_rect, QColor("#e7e7e4"))
     assert painter.fillRect.call_args_list[-1].args == (sheet_rect, QColor("#ffffff"))
     painter.setBrush.assert_called_once_with(Qt.BrushStyle.NoBrush)

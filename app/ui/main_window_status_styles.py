@@ -23,6 +23,8 @@ def main_window_status_stylesheet(palette) -> str:
                 padding: 0 8px;
             }}
             QStatusBar QLabel#statusZoomLabel {{
+                color: {_P["text"]};
+                font-weight: 500;
                 padding: 0 8px 0 4px;
             }}
 """

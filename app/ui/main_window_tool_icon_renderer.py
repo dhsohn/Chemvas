@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
-from PyQt6.QtGui import QFont, QPainter, QPainterPath, QPolygonF
+from PyQt6.QtGui import QPainter, QPainterPath, QPolygonF
 
 
 class MainWindowToolIconRenderer:
@@ -93,12 +93,16 @@ class MainWindowToolIconRenderer:
         painter.drawEllipse(12, 12, 6, 6)
 
     def draw_text(self, painter) -> None:
-        font = QFont("Arial")
-        font.setBold(True)
-        font.setPointSize(22)
-        painter.setFont(font)
+        # Stroked letterform so the text tool matches the line-art icon set
+        # instead of reading as a heavy filled glyph.
+        painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.setPen(self._icon_pen(self._stroke_active))
-        painter.drawText(7, 21, "A")
+        legs = QPainterPath()
+        legs.moveTo(7.5, 24.0)
+        legs.lineTo(15.0, 6.0)
+        legs.lineTo(22.5, 24.0)
+        painter.drawPath(legs)
+        painter.drawLine(QPointF(10.0, 18.0), QPointF(20.0, 18.0))
 
     def draw_ring_fill(self, painter) -> None:
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)

@@ -29,8 +29,8 @@ def main_window_chrome_stylesheet(palette) -> str:
             }}
             QToolBar::separator:horizontal {{
                 width: 1px;
-                height: {TOOLBAR_BUTTON_SIZE}px;
-                margin: 2px 6px;
+                height: {TOOLBAR_BUTTON_SIZE - 4}px;
+                margin: 3px 9px;
             }}
             QToolBar::separator:vertical {{
                 width: 20px;
@@ -42,8 +42,8 @@ def main_window_chrome_stylesheet(palette) -> str:
                 border: none;
                 color: {_P["text_faint"]};
                 font-size: 10px;
-                font-weight: 700;
-                letter-spacing: 0.6px;
+                font-weight: 600;
+                letter-spacing: 0.8px;
                 margin: 0 2px;
                 padding: 2px 4px;
                 text-transform: uppercase;
