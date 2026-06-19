@@ -267,6 +267,10 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         with mock.patch.object(self.window.canvas_b.services.tool_mode_controller, "get_atom_symbol", return_value="N"):
             self.service.refresh_active_canvas_ui(self.window)
 
+        # selection-derived UI (preview / chemical label / action availability)
+        # is emitted on the next event-loop turn; flush it before asserting.
+        self.app.processEvents()
+
         self.assertEqual(
             self.window._atom_input.method_calls,
             [mock.call.blockSignals(True), mock.call.setText("N"), mock.call.blockSignals(False)],

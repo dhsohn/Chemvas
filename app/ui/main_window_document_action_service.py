@@ -96,11 +96,21 @@ class MainWindowDocumentActionService:
             return
         self.save_canvas_to_path(window, path)
 
-    def export_xyz(self, window, *, file_dialog=None, message_box=None, selected_only: bool = False) -> None:
+    def export_xyz(
+        self,
+        window,
+        *,
+        file_dialog=None,
+        message_box=None,
+        selected_only: bool = False,
+        dialog_parent=None,
+        status_sink=None,
+    ) -> None:
         file_dialog = QFileDialog if file_dialog is None else file_dialog
         message_box = QMessageBox if message_box is None else message_box
+        dialog_parent = window if dialog_parent is None else dialog_parent
         dialog_path, _ = file_dialog.getSaveFileName(
-            window,
+            dialog_parent,
             "Export 3D XYZ",
             self.default_xyz_export_path(window),
             "XYZ (*.xyz);;All Files (*)",
@@ -110,19 +120,29 @@ class MainWindowDocumentActionService:
             return
         previous_status = window.statusBar().currentMessage()
 
+        def report(message: str) -> None:
+            if status_sink is not None:
+                status_sink(message)
+
+        def on_success(export_path: str) -> None:
+            window.statusBar().showMessage(f"Exported XYZ: {export_path}", 4000)
+            report(f"Exported XYZ: {export_path}")
+
         def handle_error(message: str) -> None:
             message_box.warning(
-                window,
+                dialog_parent,
                 "Export Error",
                 f"Failed to export XYZ:\n{message}",
             )
             window.statusBar().showMessage(previous_status)
+            report(f"Export failed: {message}")
 
         window.statusBar().showMessage(f"Exporting XYZ: {path}")
+        report(f"Exporting XYZ: {path}")
         export_kwargs = {"selected_only": True} if selected_only else {}
         self._document_session_service_for_window(window).export_xyz_async(
             path,
-            on_success=lambda export_path: window.statusBar().showMessage(f"Exported XYZ: {export_path}", 4000),
+            on_success=on_success,
             on_error=handle_error,
             **export_kwargs,
         )

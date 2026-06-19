@@ -1194,7 +1194,9 @@ def test_main_window_panel_service_owns_preview_window_assembly() -> None:
     assert "preview = self._preview_for_window(window)" in panel_service_source
     assert "preview_widget=preview" in panel_service_source
     assert "set_export_action(" in panel_service_source
-    assert "lambda: self._export_xyz_for_window(window, selected_only=True)" in panel_service_source
+    assert "self._export_xyz_for_window(" in panel_service_source
+    assert "selected_only=True" in panel_service_source
+    assert "dialog_parent=preview_window" in panel_service_source
     assert "icon_export_xyz" not in panel_service_source
     assert "self._apply_preview_window_assembly_for_window(window, assembly)" in panel_service_source
     assert "preview_window = self._preview_window_for_window(window)" in panel_service_source

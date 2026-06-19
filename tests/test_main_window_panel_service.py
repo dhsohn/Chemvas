@@ -60,7 +60,12 @@ class MainWindowPanelServiceTest(unittest.TestCase):
         self.assertFalse(preview_window.isVisible())
         export_callback = preview_3d.set_export_xyz_action.call_args.args[0]
         export_callback()
-        export_xyz_for_window.assert_called_once_with(window, selected_only=True)
+        export_xyz_for_window.assert_called_once_with(
+            window,
+            selected_only=True,
+            dialog_parent=preview_window,
+            status_sink=preview_window.show_export_status,
+        )
 
     def test_open_preview_window_handles_missing_window_and_refreshes_selected_canvas(self) -> None:
         preview = mock.Mock()

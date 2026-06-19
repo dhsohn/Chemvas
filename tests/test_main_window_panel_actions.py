@@ -183,6 +183,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         self._find_button(object_name="preview_panel_button").click()
         self.app.processEvents()
         preview = preview_for_window(self.window)
+        preview_window = preview_window_for_window(self.window)
         preview._scene = object()
         preview._sync_export_xyz_button()
         export_button = self._find_button(object_name="preview_export_xyz_button")
@@ -221,7 +222,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         ):
             export_button.click()
 
-        warning.assert_called_once_with(self.window, "Export Error", "Failed to export XYZ:\nno exporter")
+        warning.assert_called_once_with(preview_window, "Export Error", "Failed to export XYZ:\nno exporter")
 
     def test_preview_panel_button_opens_preview_window(self) -> None:
         preview_button = self._find_button(object_name="preview_panel_button")
