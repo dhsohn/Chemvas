@@ -9,7 +9,6 @@ try:
     from PyQt6.QtWidgets import (
         QApplication,
         QMainWindow,
-        QToolButton,
         QWidget,
     )
 except ModuleNotFoundError:
@@ -39,12 +38,11 @@ class MainWindowPanelServiceTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.app.processEvents()
 
-    def test_init_panels_installs_hidden_preview_window_and_syncs_button(self) -> None:
+    def test_init_panels_installs_hidden_preview_window(self) -> None:
         window = QMainWindow()
         window.ui_references = MainWindowUiReferences()
         self.addCleanup(window.close)
         preview_3d = _PreviewWidget()
-        preview_panel_button = QToolButton()
         export_xyz_for_window = mock.Mock()
         service = MainWindowPanelService(
             preview_for_window=mock.Mock(return_value=preview_3d),
@@ -52,7 +50,6 @@ class MainWindowPanelServiceTest(unittest.TestCase):
             export_xyz_for_window=export_xyz_for_window,
             apply_preview_window_assembly_for_window=apply_preview_window_assembly_for_window,
             preview_window_for_window=preview_window_for_window,
-            preview_panel_button_for_window=mock.Mock(return_value=preview_panel_button),
         )
 
         service.init_panels(window)
@@ -61,30 +58,26 @@ class MainWindowPanelServiceTest(unittest.TestCase):
         self.assertIsNotNone(preview_window)
         self.assertIs(preview_3d.parent(), preview_window)
         self.assertFalse(preview_window.isVisible())
-        self.assertFalse(preview_panel_button.isChecked())
         export_callback = preview_3d.set_export_xyz_action.call_args.args[0]
         export_callback()
         export_xyz_for_window.assert_called_once_with(window, selected_only=True)
 
     def test_open_preview_window_handles_missing_window_and_refreshes_selected_canvas(self) -> None:
-        button = mock.Mock()
         preview = mock.Mock()
         preview_for_window = mock.Mock(return_value=preview)
         active_canvas_for_window = mock.Mock(return_value=SimpleNamespace(rdkit=object()))
-        preview_panel_button_for_window = mock.Mock(return_value=button)
         service = MainWindowPanelService(
             preview_for_window=preview_for_window,
             active_canvas_for_window=active_canvas_for_window,
             export_xyz_for_window=mock.Mock(),
             apply_preview_window_assembly_for_window=mock.Mock(),
             preview_window_for_window=preview_window_for_window,
-            preview_panel_button_for_window=preview_panel_button_for_window,
         )
         missing_window = SimpleNamespace(ui_references=MainWindowUiReferences())
 
         service.open_preview_window(missing_window)
 
-        button.setChecked.assert_not_called()
+        preview.set_rdkit_adapter.assert_not_called()
 
         preview_window = mock.Mock()
         window = SimpleNamespace(ui_references=SimpleNamespace(preview_window=preview_window))
@@ -96,8 +89,6 @@ class MainWindowPanelServiceTest(unittest.TestCase):
         preview_window.show.assert_called_once_with()
         preview_window.raise_.assert_called_once_with()
         preview_window.activateWindow.assert_called_once_with()
-        button.blockSignals.assert_has_calls([mock.call(True), mock.call(button.blockSignals.return_value)])
-        button.setChecked.assert_called_once_with(False)
 
 
 if __name__ == "__main__":

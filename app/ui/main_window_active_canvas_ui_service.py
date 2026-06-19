@@ -3,6 +3,7 @@ from __future__ import annotations
 from ui.canvas_view import CanvasView
 from ui.main_window_canvas_logic import bind_active_canvas_callbacks
 from ui.rdkit_adapter_access import rdkit_adapter_for
+from ui.selection_info_access import emit_selection_info_for
 
 
 class MainWindowActiveCanvasUIService:
@@ -77,8 +78,19 @@ class MainWindowActiveCanvasUIService:
         if self._status.has_zoom_label():
             self._status.update_zoom_label(self.current_zoom_percent(window))
         self._context_page_state.sync_tool_actions_from_canvas(window)
-        self._action_availability.update_action_availability(window)
-        self._preview_for_window(window).refresh_selected_from_canvas(self._active_canvas_for_window(window))
+        self._refresh_selection_derived_ui(window)
+
+    def _refresh_selection_derived_ui(self, window) -> None:
+        # Re-emit the active canvas's selection info so the 3D preview, the
+        # selection/chemical status labels and action availability all refresh
+        # through the same path as a live selection change. Without this the
+        # Formula/MW status label keeps the previous canvas's value when the
+        # active canvas switches without a selection event firing.
+        try:
+            canvas = self._active_canvas_for_window(window)
+        except RuntimeError:
+            return
+        emit_selection_info_for(canvas)
 
     def on_canvas_tab_changed(self, window, index: int) -> None:
         self._on_canvas_tab_changed(window, index)

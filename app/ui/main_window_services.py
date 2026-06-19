@@ -67,7 +67,6 @@ from ui.main_window_ui_ports import (
     atom_input_for_window,
     export_xyz_button_for_window,
     icon_factory_for_window,
-    preview_panel_button_for_window,
     preview_window_for_window,
     redo_button_for_window,
     set_atom_input_for_window,
@@ -254,7 +253,6 @@ def build_main_window_services() -> MainWindowServices:
         export_xyz_for_window=document_action_service.export_xyz,
         apply_preview_window_assembly_for_window=apply_preview_window_assembly_for_window,
         preview_window_for_window=preview_window_for_window,
-        preview_panel_button_for_window=preview_panel_button_for_window,
     )
     panel_toolbar_callbacks = MainWindowPanelToolbarCallbacks(
         save_canvas=document_action_service.save_canvas,
