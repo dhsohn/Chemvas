@@ -80,7 +80,7 @@ def selected_chemical_ids_for(canvas) -> tuple[set[int], set[int]]:
     atom_ids, bond_ids = selected_ids_for(canvas)
     if atom_ids or bond_ids:
         return atom_ids, bond_ids
-    # Scene-only items such as arrows, notes, and TS brackets should not
+    # Scene-only items such as arrows, notes, and bracket annotations should not
     # suppress a real atom-bound annotation selection from the 3D/export path.
     atom_ids.update(selected_mark_atom_ids_for(canvas))
     return atom_ids, bond_ids

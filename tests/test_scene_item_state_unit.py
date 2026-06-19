@@ -179,6 +179,7 @@ class SceneItemStateUnitTest(unittest.TestCase):
     def test_ts_bracket_helpers_use_fallback_bounds_and_validate_state(self) -> None:
         item = QGraphicsPathItem()
         item.setData(0, "ts_bracket")
+        item.setData(1, {"rect": QRectF(-6.0, -4.0, 12.0, 10.0), "bracket_kind": "brace_left"})
         path = QPainterPath()
         path.addRect(QRectF(-6.0, -4.0, 12.0, 10.0))
         item.setPath(path)
@@ -187,6 +188,7 @@ class SceneItemStateUnitTest(unittest.TestCase):
         state = scene_item_state(item, mark_center_getter=lambda _: QPointF())
 
         self.assertEqual(state["kind"], "ts_bracket")
+        self.assertEqual(state["bracket_kind"], "brace_left")
         self.assertLess(state["left"], state["right"])
         self.assertLess(state["top"], state["bottom"])
         self.assertIsNone(ts_bracket_rect_from_state({"left": "bad", "top": 0, "right": 1, "bottom": 2}))
@@ -206,15 +208,25 @@ class SceneItemStateUnitTest(unittest.TestCase):
         item = QGraphicsPathItem()
         built_paths: list[QPainterPath] = []
 
-        def build_path(rect: QRectF) -> QPainterPath:
+        built_kinds: list[str] = []
+
+        def build_path(rect: QRectF, bracket_kind: str) -> QPainterPath:
             path = QPainterPath()
             path.addRect(rect)
             built_paths.append(path)
+            built_kinds.append(bracket_kind)
             return path
 
         apply_scene_item_state(
             item,
-            {"kind": "ts_bracket", "left": -8.0, "top": -3.0, "right": 9.0, "bottom": 6.0},
+            {
+                "kind": "ts_bracket",
+                "left": -8.0,
+                "top": -3.0,
+                "right": 9.0,
+                "bottom": 6.0,
+                "bracket_kind": "parentheses_pair",
+            },
             model_atoms={},
             note_style_applier=lambda item: None,
             mark_center_setter=lambda item, center: None,
@@ -228,9 +240,11 @@ class SceneItemStateUnitTest(unittest.TestCase):
 
         rect = item.data(1)["rect"]
         self.assertEqual((rect.left(), rect.top(), rect.right(), rect.bottom()), (-8.0, -3.0, 9.0, 6.0))
+        self.assertEqual(item.data(1)["bracket_kind"], "parentheses_pair")
         self.assertEqual(item.pen().style(), Qt.PenStyle.NoPen)
         self.assertEqual(item.brush().color().name(), "#123456")
         self.assertTrue(built_paths)
+        self.assertEqual(built_kinds, ["parentheses_pair"])
 
     def test_orbital_state_dict_and_apply_restore_transform_metadata(self) -> None:
         item = QGraphicsItemGroup()

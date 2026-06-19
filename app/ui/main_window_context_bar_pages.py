@@ -9,6 +9,7 @@ from ui.main_window_context_bar_page_factories import (
     build_arrow_page,
     build_atom_page,
     build_bond_page,
+    build_bracket_page,
     build_color_palette_page,
     build_empty_page,
     build_mark_page,
@@ -27,6 +28,8 @@ class ContextBarPages:
     mark_buttons: dict[str, QToolButton]
     arrow_group: QButtonGroup | None
     arrow_buttons: dict[str, QToolButton]
+    bracket_group: QButtonGroup | None
+    bracket_buttons: dict[str, QToolButton]
     atom_input: QLineEdit | None
 
 
@@ -62,6 +65,7 @@ class MainWindowContextBarPageBuilder:
             tool_mode_controller,
             self._tool_state,
         )
+        bracket_page = build_bracket_page(window, self._tool_state)
         atom_page = build_atom_page(
             tool_mode_controller.get_atom_symbol(),
             lambda text: self._tool_mode_controller_for_window(window).set_atom_symbol(text),
@@ -72,6 +76,7 @@ class MainWindowContextBarPageBuilder:
             "empty": build_empty_page(),
             "bond": bond_page.page,
             "arrow": arrow_page.page,
+            "bracket": bracket_page.page,
             "atom": atom_page.page,
             "ring": ring_page.page,
             "mark": mark_page.page,
@@ -94,6 +99,8 @@ class MainWindowContextBarPageBuilder:
             mark_buttons=mark_page.buttons,
             arrow_group=arrow_page.group,
             arrow_buttons=arrow_page.buttons,
+            bracket_group=bracket_page.group,
+            bracket_buttons=bracket_page.buttons,
             atom_input=atom_page.atom_input,
         )
 

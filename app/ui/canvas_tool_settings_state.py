@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from ui.bracket_types import DEFAULT_BRACKET_KIND
 from ui.canvas_state_lookup import canvas_state_object
 
 
@@ -14,6 +15,7 @@ class CanvasToolSettingsState:
     snap_angle_step: int = 30
     mark_kind: str = "plus"
     active_arrow_type: str = "reaction"
+    active_bracket_type: str = DEFAULT_BRACKET_KIND
     active_orbital_type: str = "s"
     orbital_phase_enabled: bool = False
     arrow_line_width: float = 1.0
@@ -32,6 +34,7 @@ TOOL_SETTING_ATTRS = (
     "snap_angle_step",
     "mark_kind",
     "active_arrow_type",
+    "active_bracket_type",
     "active_orbital_type",
     "orbital_phase_enabled",
     "arrow_line_width",

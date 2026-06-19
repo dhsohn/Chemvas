@@ -103,6 +103,22 @@ class MainWindowToolIconRendererTest(unittest.TestCase):
                     self._render(lambda painter, kind=kind: self.renderer.draw_orbital_preview(painter, kind))
                 )
 
+    def test_bracket_preview_matrix_renders_palette_variants(self) -> None:
+        for kind in (
+            "square_pair",
+            "parentheses_pair",
+            "braces_pair",
+            "double_dagger",
+            "square_left",
+            "parenthesis_left",
+            "brace_left",
+            "dagger",
+        ):
+            with self.subTest(kind=kind):
+                self.assertIsNotNone(
+                    self._render(lambda painter, kind=kind: self.renderer.draw_bracket_preview(painter, kind))
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

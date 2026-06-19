@@ -153,6 +153,18 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         self.status_service.refresh_status_context.assert_called_once_with(self.window)
         self.tool_mode_controller_for_window.assert_called_once_with(self.window)
 
+    def test_set_bracket_type_routes_option_bar_choice_to_canvas(self) -> None:
+        with mock.patch.object(
+            active_canvas_for_window(self.window).services.tool_mode_controller,
+            "set_bracket_type",
+        ) as set_bracket_type:
+            self.service.set_bracket_type(self.window, "double_dagger")
+
+        set_bracket_type.assert_called_once_with("double_dagger")
+        self.assertEqual(self.window.statusBar().currentMessage(), "Brackets Tool")
+        self.status_service.refresh_status_context.assert_called_once_with(self.window)
+        self.tool_mode_controller_for_window.assert_called_once_with(self.window)
+
     def test_set_arrow_and_orbital_variants_route_mapped_values(self) -> None:
         with (
             mock.patch.object(active_canvas_for_window(self.window).services.tool_mode_controller, "set_arrow_type") as set_arrow_type,

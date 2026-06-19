@@ -223,7 +223,16 @@ class DocumentStateTest(unittest.TestCase):
         state["notes"] = [{"text": "note", "x": 1.0, "y": 2.0}]
         state["marks"] = [{"kind": "plus", "text": "+", "atom_id": 0, "dx": 1.0, "dy": 0.0, "x": 1.0, "y": 0.0}]
         state["arrows"] = [{"kind": "arrow", "start": (0.0, 0.0), "end": (1.0, 1.0), "control": None, "double": False}]
-        state["ts_brackets"] = [{"kind": "ts_bracket", "left": 0.0, "top": 0.0, "right": 2.0, "bottom": 3.0}]
+        state["ts_brackets"] = [
+            {
+                "kind": "ts_bracket",
+                "left": 0.0,
+                "top": 0.0,
+                "right": 2.0,
+                "bottom": 3.0,
+                "bracket_kind": "double_dagger",
+            }
+        ]
         state["orbitals"] = [{"kind": "p", "center": (0.0, 0.0), "scale": 1.5, "rotation": 45.0}]
 
         build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
@@ -271,6 +280,10 @@ class DocumentStateTest(unittest.TestCase):
             ("arrows", [{"kind": "unexpected", "start": (0.0, 0.0), "end": (1.0, 1.0)}]),
             ("arrows", [{"kind": "arrow", "start": (0.0, 0.0), "end": ("x", 1.0)}]),
             ("ts_brackets", [{"kind": "ts_bracket", "rect": (0.0, 0.0, 1.0)}]),
+            (
+                "ts_brackets",
+                [{"kind": "ts_bracket", "left": 0.0, "top": 0.0, "right": 1.0, "bottom": 1.0, "bracket_kind": "bad"}],
+            ),
             ("orbitals", [{"center": (0.0, 0.0)}]),
         ]
 

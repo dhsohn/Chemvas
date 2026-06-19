@@ -72,23 +72,33 @@ def preview_arrow_for(canvas, start, end, kind: str):
     return None
 
 
-def add_ts_bracket_for(canvas, rect):
+def add_ts_bracket_for(canvas, rect, bracket_kind: str | None = None):
     method = _decoration_service_method(canvas, "add_ts_bracket")
     if method is not None:
+        if bracket_kind is not None:
+            try:
+                return method(rect, bracket_kind=bracket_kind)
+            except TypeError:
+                return method(rect)
         return method(rect)
     return None
 
 
-def add_ts_bracket_from_points_for(canvas, start, end):
+def add_ts_bracket_from_points_for(canvas, start, end, bracket_kind: str | None = None):
     rect_from_points = _build_service_method(canvas, "ts_bracket_rect_from_points")
     if rect_from_points is not None:
-        return add_ts_bracket_for(canvas, rect_from_points(start, end))
+        return add_ts_bracket_for(canvas, rect_from_points(start, end), bracket_kind=bracket_kind)
     return None
 
 
-def preview_ts_bracket_for(canvas, start, end):
+def preview_ts_bracket_for(canvas, start, end, bracket_kind: str | None = None):
     method = _build_service_method(canvas, "preview_ts_bracket")
     if method is not None:
+        if bracket_kind is not None:
+            try:
+                return method(start, end, bracket_kind)
+            except TypeError:
+                return method(start, end)
         return method(start, end)
     return None
 

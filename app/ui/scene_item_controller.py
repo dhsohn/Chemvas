@@ -82,14 +82,14 @@ class SceneItemController:
     def _set_curved_arrow_path(self, item, start, end, control, double: bool) -> None:
         set_curved_arrow_path_for(self.canvas, item, start, end, control, double)
 
-    def _build_ts_bracket_item(self, rect):
-        return build_ts_bracket_item_for(self.canvas, rect)
+    def _build_ts_bracket_item(self, rect, bracket_kind: str | None = None):
+        return build_ts_bracket_item_for(self.canvas, rect, bracket_kind)
 
     def _build_orbital_items(self, center, kind: str):
         return build_orbital_items_for(self.canvas, center, kind)
 
-    def _ts_bracket_path(self, rect):
-        return ts_bracket_path_for(self.canvas, rect)
+    def _ts_bracket_path(self, rect, bracket_kind: str | None = None):
+        return ts_bracket_path_for(self.canvas, rect, bracket_kind)
 
     def restore_ring_from_state(self, ring_state: dict):
         item = create_ring_item_from_state_helper(

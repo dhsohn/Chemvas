@@ -19,16 +19,26 @@ def build_arrow_item_for(canvas, start, end, kind: str):
     return None
 
 
-def ts_bracket_path_for(canvas, rect):
+def ts_bracket_path_for(canvas, rect, bracket_kind: str | None = None):
     method = _service_method(canvas, "ts_bracket_path")
     if method is not None:
+        if bracket_kind is not None:
+            try:
+                return method(rect, bracket_kind)
+            except TypeError:
+                return method(rect)
         return method(rect)
     return None
 
 
-def build_ts_bracket_item_for(canvas, rect):
+def build_ts_bracket_item_for(canvas, rect, bracket_kind: str | None = None):
     method = _service_method(canvas, "build_ts_bracket_item")
     if method is not None:
+        if bracket_kind is not None:
+            try:
+                return method(rect, bracket_kind)
+            except TypeError:
+                return method(rect)
         return method(rect)
     return None
 

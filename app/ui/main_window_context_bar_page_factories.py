@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import QButtonGroup, QLineEdit, QSlider, QToolButton, QWidg
 from ui.main_window_config import (
     ARROW_MENU_SPECS,
     ARROW_PRESET_SPECS,
+    BRACKET_MENU_SPECS,
     COLOR_PALETTE_SPECS,
     MARK_TOOL_ACTION_SPECS,
     TEMPLATE_ENTRY_SPECS,
@@ -46,6 +47,13 @@ class BondContextPage:
 
 @dataclass(frozen=True)
 class ArrowContextPage:
+    page: QWidget
+    group: QButtonGroup
+    buttons: dict[str, QToolButton]
+
+
+@dataclass(frozen=True)
+class BracketContextPage:
     page: QWidget
     group: QButtonGroup
     buttons: dict[str, QToolButton]
@@ -182,6 +190,24 @@ def build_arrow_page(window, tool_mode_controller, tool_state_service) -> ArrowC
     return ArrowContextPage(page=page, group=group, buttons=buttons)
 
 
+def build_bracket_page(window, tool_state_service) -> BracketContextPage:
+    page, layout = new_context_page()
+    icon_factory = icon_factory_for_window(window)
+
+    group = QButtonGroup(page)
+    group.setExclusive(True)
+    buttons: dict[str, QToolButton] = {}
+    for label, value in BRACKET_MENU_SPECS:
+        button = icon_button(icon_factory.icon_bracket_preview(value), label, checkable=True)
+        button.clicked.connect(lambda _checked=False, v=value: tool_state_service.set_bracket_type(window, v))
+        group.addButton(button)
+        buttons[value] = button
+        layout.addWidget(button)
+
+    layout.addStretch(1)
+    return BracketContextPage(page=page, group=group, buttons=buttons)
+
+
 def build_atom_page(current_symbol: str, set_atom_symbol) -> AtomContextPage:
     page, layout = new_context_page()
     atom_input = atom_symbol_input(
@@ -211,12 +237,14 @@ __all__ = [
     "ArrowContextPage",
     "AtomContextPage",
     "BondContextPage",
+    "BracketContextPage",
     "MarkContextPage",
     "TemplateContextPage",
     "bond_label_for_state",
     "build_arrow_page",
     "build_atom_page",
     "build_bond_page",
+    "build_bracket_page",
     "build_color_palette_page",
     "build_empty_page",
     "build_mark_page",

@@ -240,7 +240,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
             "Color",
             "Ring Fill",
             "Arrow",
-            "TS Bracket",
+            "Brackets",
             "Perspective",
         }
         for action in panel_bar.actions():
@@ -337,6 +337,18 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         self.assertEqual(settings.arrow_line_width, 2.2)
         self.assertEqual(settings.arrow_head_scale, 0.4)
 
+    def test_brackets_action_shows_context_icon_buttons_and_routes_type(self) -> None:
+        self.window.ui_references.tool_actions["ts_bracket"].trigger()
+
+        dagger_button = next(
+            widget for widget in self.window.findChildren(QToolButton) if widget.toolTip() == "Dagger"
+        )
+        dagger_button.click()
+
+        settings = tool_settings_state_for(active_canvas_for_window(self.window))
+        self.assertEqual(settings.active_bracket_type, "dagger")
+        self.assertEqual(active_canvas_for_window(self.window).services.tools.active.name, "ts_bracket")
+
     def test_tool_routing_service_surface_stays_off_main_window(self) -> None:
         self.assertFalse(hasattr(self.window, "template_entries"))
         self.assertFalse(hasattr(self.window, "acs_color_palette"))
@@ -356,6 +368,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
     def test_tool_state_service_surface_stays_off_main_window(self) -> None:
         self.assertFalse(hasattr(self.window, "set_bond_style"))
         self.assertFalse(hasattr(self.window, "set_arrow_type"))
+        self.assertFalse(hasattr(self.window, "set_bracket_type"))
         self.assertFalse(hasattr(self.window, "set_orbital_type"))
         self.assertFalse(hasattr(self.window, "set_orbital_phase"))
         self.assertFalse(hasattr(self.window, "set_arrow_preset"))

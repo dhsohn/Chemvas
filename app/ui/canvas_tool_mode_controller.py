@@ -6,6 +6,7 @@ from typing import Any
 from ui.canvas_callback_state import callback_state_for
 from ui.canvas_insert_state import insert_state_for
 from ui.canvas_tool_settings_state import set_tool_setting_for, tool_settings_state_for
+from ui.bracket_types import BRACKET_KIND_VALUES
 from ui.selection_service_access import refresh_selection_outline_for
 
 
@@ -73,6 +74,14 @@ class CanvasToolModeController:
     def set_arrow_type(self, arrow_type: str) -> None:
         set_tool_setting_for(self.canvas, "active_arrow_type", arrow_type)
         self._set_active_tool("arrow")
+        self._refresh_tool_mode()
+
+    def set_bracket_type(self, bracket_type: str) -> None:
+        if bracket_type not in BRACKET_KIND_VALUES:
+            return
+        self._cancel_active_insert_modes()
+        set_tool_setting_for(self.canvas, "active_bracket_type", bracket_type)
+        self._set_active_tool("ts_bracket")
         self._refresh_tool_mode()
 
     def set_orbital_type(self, orbital_type: str) -> None:
