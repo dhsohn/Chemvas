@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
-from PyQt6.QtGui import QPainter, QPainterPath, QPolygonF
+from PyQt6.QtGui import QBrush, QColor, QPainter, QPainterPath, QPolygonF, QRadialGradient
 
 
 class MainWindowToolIconRenderer:
@@ -58,21 +58,7 @@ class MainWindowToolIconRenderer:
         painter.drawLine(7, 15, 23, 15)
 
     def draw_mark(self, painter) -> None:
-        # Outlined bolt so it sits in the same line-art language as the rest
-        # of the set instead of a flat filled glyph.
-        painter.setPen(self._icon_pen(self._stroke_regular))
-        painter.setBrush(Qt.BrushStyle.NoBrush)
-        bolt = QPolygonF(
-            [
-                QPointF(17.5, 4.5),
-                QPointF(8.0, 16.0),
-                QPointF(14.0, 16.0),
-                QPointF(12.0, 25.5),
-                QPointF(22.5, 12.8),
-                QPointF(16.5, 12.8),
-            ]
-        )
-        painter.drawPolygon(bolt)
+        self._draw_atomic_mark_icon(painter)
 
     def draw_mark_minus(self, painter) -> None:
         painter.setPen(self._icon_pen(self._stroke_active))
@@ -82,6 +68,65 @@ class MainWindowToolIconRenderer:
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(self._icon_brush())
         painter.drawEllipse(12, 12, 6, 6)
+
+    def _alpha_color(self, color: str | None, alpha: float) -> QColor:
+        base = self._icon_pen(self._stroke_thin).color() if color is None else QColor(color)
+        base.setAlphaF(max(0.0, min(1.0, alpha)))
+        return base
+
+    def _alpha_pen(self, width: float, *, color: str | None = None, alpha: float = 1.0):
+        pen = self._icon_pen(width, color=color)
+        pen.setColor(self._alpha_color(color, alpha))
+        return pen
+
+    def _draw_glow_dot(self, painter, center: QPointF, radius: float, *, alpha: float = 0.82) -> None:
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(self._alpha_color(self._pale_fill_color, min(1.0, alpha * 0.62))))
+        painter.drawEllipse(center, radius + 1.6, radius + 1.6)
+        painter.setBrush(QBrush(self._alpha_color(None, alpha)))
+        painter.drawEllipse(center, radius, radius)
+
+    def _draw_atomic_mark_icon(self, painter) -> None:
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        center = QPointF(15.0, 15.0)
+
+        glow = QRadialGradient(center, 10.5)
+        glow.setColorAt(0.0, self._alpha_color(self._pale_fill_color, 0.9))
+        glow.setColorAt(0.42, self._alpha_color(self._accent_fill_color, 0.36))
+        glow.setColorAt(1.0, self._alpha_color(self._accent_fill_color, 0.0))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(glow))
+        painter.drawEllipse(center, 10.5, 10.5)
+
+        painter.setPen(self._alpha_pen(self._stroke_fine, alpha=0.16))
+        painter.drawLine(QPointF(4.8, 15.0), QPointF(25.2, 15.0))
+        painter.drawLine(QPointF(7.2, 7.2), QPointF(22.8, 22.8))
+
+        for angle, alpha, width in ((-27.0, 0.42, 1.05), (32.0, 0.5, 1.15), (82.0, 0.34, 1.0)):
+            painter.save()
+            painter.translate(center)
+            painter.rotate(angle)
+            painter.setPen(self._alpha_pen(width, alpha=alpha))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(QRectF(-10.9, -3.45, 21.8, 6.9))
+            painter.restore()
+
+        core = QRadialGradient(center, 4.6)
+        core.setColorAt(0.0, self._alpha_color("#ffffff", 0.95))
+        core.setColorAt(0.48, self._alpha_color(self._pale_fill_color, 0.84))
+        core.setColorAt(1.0, self._alpha_color(None, 0.34))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(core))
+        painter.drawEllipse(center, 4.6, 4.6)
+        painter.setBrush(QBrush(self._alpha_color(None, 0.58)))
+        painter.drawEllipse(center, 1.15, 1.15)
+
+        self._draw_glow_dot(painter, QPointF(6.8, 22.0), 1.6, alpha=0.8)
+        self._draw_glow_dot(painter, QPointF(9.7, 9.2), 0.9, alpha=0.45)
+        self._draw_glow_dot(painter, QPointF(22.4, 17.8), 0.85, alpha=0.42)
+
+        painter.restore()
 
     def draw_text(self, painter) -> None:
         # Stroked letterform so the text tool matches the line-art icon set

@@ -1575,8 +1575,8 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.app.processEvents()
         QTest.qWait(10)
 
-        fill_color = "#c77c00"
-        stroke_color = "#1f5eff"
+        fill_color = "#f4d06f"
+        stroke_color = "#2f6ed3"
         services_for_window(self.window).tool_routing_service.apply_ring_fill_preset(self.window, fill_color)
         self.app.processEvents()
         QTest.qWait(10)
