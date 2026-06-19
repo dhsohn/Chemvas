@@ -8,7 +8,10 @@ from PyQt6.QtWidgets import QLineEdit, QToolButton
 
 if TYPE_CHECKING:
     from ui.main_window_icon_factory import MainWindowIconFactory
-    from ui.main_window_preview_window import MainWindowPreviewWindowAssembly
+    from ui.main_window_preview_window import (
+        MainWindowPreviewWindowAssembly,
+        Preview3DWindow,
+    )
     from ui.main_window_ui_assembly_service import MainWindowToolbarAssembly
 
 
@@ -22,7 +25,7 @@ class MainWindowUiReferences:
     preview_panel_button: QToolButton | None = None
     undo_button: QToolButton | None = None
     redo_button: QToolButton | None = None
-    preview_window: object | None = None
+    preview_window: Preview3DWindow | None = None
 
     def require_icon_factory(self) -> MainWindowIconFactory:
         if self.icon_factory is None:
