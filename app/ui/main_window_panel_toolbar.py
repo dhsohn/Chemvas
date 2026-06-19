@@ -38,8 +38,7 @@ class MainWindowPanelToolbarCallbacks:
     save_canvas_as: Callable[[object], None]
     load_canvas: Callable[[object], None]
     export_figure: Callable[[object], None]
-    export_xyz: Callable[[object], None]
-    toggle_preview_panel: Callable[[object, bool | None], None]
+    open_preview_window: Callable[[object], None]
 
 
 def _normalize_tool_action_button(panel_bar: QToolBar, action: QAction, action_key: str) -> None:
@@ -111,22 +110,13 @@ def build_panel_toolbar(
     save_button = create_file_project_menu_button(
         save_action, load_action, save_as_action, export_figure_action
     )
-    export_xyz_btn = create_toolbar_button(
-        icon=icon_factory.icon_export_xyz(),
-        tooltip="Export 3D XYZ",
-        status_tip="Export the current structure as 3D XYZ",
-        callback=lambda _checked=False: callbacks.export_xyz(window),
-        object_name="export_xyz_button",
-    )
     preview_panel_btn = create_toolbar_button(
         icon=icon_factory.icon_preview_panel(),
-        tooltip="3D Preview Panel",
-        status_tip="Show or hide the right-side 3D preview panel",
-        callback=lambda checked=False: callbacks.toggle_preview_panel(window, checked),
+        tooltip="Open 3D Preview",
+        status_tip="Open the selected molecule in a separate 3D preview window",
+        callback=lambda _checked=False: callbacks.open_preview_window(window),
         object_name="preview_panel_button",
     )
-    preview_panel_btn.setCheckable(True)
-    preview_panel_btn.setChecked(True)
     undo_btn = create_toolbar_button(
         icon=icon_factory.icon_undo(),
         tooltip="Undo",
@@ -201,13 +191,11 @@ def build_panel_toolbar(
     panel_bar.addSeparator()
     panel_bar.addWidget(smiles_input)
     panel_bar.addWidget(smiles_button)
-    panel_bar.addWidget(export_xyz_btn)
     panel_bar.addWidget(preview_panel_btn)
     panel_bar.addSeparator()
 
     for button in (
         save_button,
-        export_xyz_btn,
         preview_panel_btn,
         undo_btn,
         redo_btn,
@@ -225,7 +213,7 @@ def build_panel_toolbar(
         save_as_action=save_as_action,
         save_button=save_button,
         load_action=load_action,
-        export_xyz_button=export_xyz_btn,
+        export_xyz_button=None,
         preview_panel_button=preview_panel_btn,
         undo_button=undo_btn,
         redo_button=redo_btn,

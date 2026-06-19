@@ -29,6 +29,26 @@ def build_3d_conversion_payload_for(canvas) -> tuple[MoleculeModel, dict[int, di
     )
 
 
+def build_selected_3d_conversion_payload_for(
+    canvas,
+) -> tuple[MoleculeModel, dict[int, dict[str, int]]]:
+    try:
+        atom_ids, bond_ids = selected_structure_ids_for(canvas, require_non_empty=True)
+    except ValueError as exc:
+        raise ValueError("No chemical structure selected.") from exc
+    return build_3d_conversion_payload_state(
+        model_for(canvas),
+        atom_ids,
+        bond_ids,
+        mark_kinds_by_atom_for(canvas),
+        bounds_getter=lambda ids, include_labels=False: bounds_for_atoms_for(
+            canvas,
+            ids,
+            include_labels=include_labels,
+        ),
+    )
+
+
 def build_selected_structure_payload_for(
     canvas,
 ) -> tuple[MoleculeModel, dict[int, dict[str, int]], tuple[float, float, float, float]]:
@@ -56,6 +76,7 @@ def build_structure_payload_for(
 
 __all__ = [
     "build_3d_conversion_payload_for",
+    "build_selected_3d_conversion_payload_for",
     "build_selected_structure_payload_for",
     "build_structure_payload_for",
 ]

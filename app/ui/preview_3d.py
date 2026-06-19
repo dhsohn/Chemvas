@@ -1,21 +1,30 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 import math
 from typing import Any
 
 from core.rdkit_adapter import Molecule3DScene, RDKitAdapter
 from PyQt6.QtCore import QPointF, QRectF, Qt, QThread, QTimer
-from PyQt6.QtGui import QPainter
-from PyQt6.QtWidgets import QWidget
+from PyQt6.QtGui import QFont, QFontMetricsF, QIcon, QPainter
+from PyQt6.QtWidgets import QToolButton, QWidget
 
 from ui.preview_3d_interaction import (
     preview_drag_rotation,
     preview_zoom_for_wheel_delta,
 )
-from ui.preview_3d_painter import Preview3DPaintState, paint_preview_3d_panel
+from ui.preview_3d_painter import (
+    Preview3DPaintState,
+    paint_preview_3d_panel,
+    preview_caption_font,
+    preview_layout_for_widget,
+)
 from ui.preview_3d_state import preview_payload_signature
 from ui.preview_3d_worker import Preview3DWorker
-from ui.structure_payload_access import build_3d_conversion_payload_for
+from ui.structure_payload_access import (
+    build_3d_conversion_payload_for,
+    build_selected_3d_conversion_payload_for,
+)
 
 
 class Preview3D(QWidget):
@@ -37,6 +46,8 @@ class Preview3D(QWidget):
         self._rotation_y = math.radians(22.0)
         self._zoom = 1.0
         self._last_pos: QPointF | None = None
+        self._export_xyz_callback: Callable[[], None] | None = None
+        self._export_xyz_button: QToolButton | None = None
         self._update_timer = QTimer(self)
         self._update_timer.setSingleShot(True)
         self._update_timer.setInterval(120)
@@ -51,12 +62,36 @@ class Preview3D(QWidget):
     def set_rdkit_adapter(self, rdkit_adapter: Any) -> None:
         self._rdkit = rdkit_adapter
 
+    @property
+    def export_xyz_button(self) -> QToolButton | None:
+        return self._export_xyz_button
+
+    def set_export_xyz_action(
+        self,
+        callback: Callable[[], None],
+    ) -> None:
+        self._export_xyz_callback = callback
+        button = self._ensure_export_xyz_button()
+        button.setIcon(QIcon())
+        self._sync_export_xyz_button()
+
     def refresh_from_canvas(self, canvas) -> None:
         try:
             model, atom_annotations = build_3d_conversion_payload_for(canvas)
         except Exception as exc:
             self.clear_preview(str(exc))
             return
+        self._set_canvas_structure(model, atom_annotations)
+
+    def refresh_selected_from_canvas(self, canvas) -> None:
+        try:
+            model, atom_annotations = build_selected_3d_conversion_payload_for(canvas)
+        except Exception as exc:
+            self.clear_preview(str(exc))
+            return
+        self._set_canvas_structure(model, atom_annotations)
+
+    def _set_canvas_structure(self, model, atom_annotations) -> None:
         if not self._async_enabled:
             formula, mw, _ = self._rdkit.compute_props(model)
             self.set_info(formula or "", "" if mw is None else f"{mw:.2f}")
@@ -83,6 +118,7 @@ class Preview3D(QWidget):
         self._message = message
         self._formula_text = ""
         self._mw_text = ""
+        self._sync_export_xyz_button()
         self._safe_update()
 
     def set_info(self, formula: str, mw: str) -> None:
@@ -101,6 +137,7 @@ class Preview3D(QWidget):
         if self._pending_model is None:
             self._scene = None
             self._message = "3D preview unavailable"
+            self._sync_export_xyz_button()
             self._safe_update()
             return
         if self._async_enabled:
@@ -124,6 +161,7 @@ class Preview3D(QWidget):
             return
         self._scene = scene
         self._message = ""
+        self._sync_export_xyz_button()
         self._safe_update()
 
     def _ensure_rdkit_loaded_for_worker(self) -> bool:
@@ -171,13 +209,19 @@ class Preview3D(QWidget):
             self._formula_text = ""
             self._mw_text = ""
             self._message = error or "Failed to build 3D preview."
+            self._sync_export_xyz_button()
             self._safe_update()
             return
         self._formula_text = formula or ""
         self._mw_text = "" if mw is None else f"{mw:.2f}"
         self._scene = scene
         self._message = ""
+        self._sync_export_xyz_button()
         self._safe_update()
+
+    def resizeEvent(self, event) -> None:
+        self._sync_export_xyz_button()
+        super().resizeEvent(event)
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
@@ -232,6 +276,76 @@ class Preview3D(QWidget):
             self.update()
         except RuntimeError:
             self._disposed = True
+
+    def _ensure_export_xyz_button(self) -> QToolButton:
+        if self._export_xyz_button is not None:
+            return self._export_xyz_button
+        button = QToolButton(self)
+        button.setObjectName("preview_export_xyz_button")
+        button.setText("Export 3D")
+        button.setToolTip("Export 3D XYZ")
+        button.setStatusTip("Export the selected molecule as 3D XYZ")
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        button.clicked.connect(lambda _checked=False: self._handle_export_xyz_clicked())
+        button.setStyleSheet(
+            """
+            QToolButton#preview_export_xyz_button {
+                background: #ffffff;
+                border: 1px solid #c3c9c2;
+                border-radius: 11px;
+                color: #41514a;
+                padding: 0;
+                text-align: center;
+            }
+            QToolButton#preview_export_xyz_button:hover {
+                background: #ffffff;
+                border-color: #aeb7ad;
+            }
+            QToolButton#preview_export_xyz_button:pressed {
+                background: #f4f6f4;
+                border-color: #9fa99e;
+            }
+            """
+        )
+        self._export_xyz_button = button
+        return button
+
+    def _handle_export_xyz_clicked(self) -> None:
+        if self._export_xyz_callback is not None:
+            self._export_xyz_callback()
+
+    def _sync_export_xyz_button(self) -> None:
+        button = self._export_xyz_button
+        if button is None:
+            return
+        self._apply_export_xyz_button_font()
+        button.setVisible(self._scene is not None)
+        button.setEnabled(self._scene is not None)
+        if self._scene is None:
+            return
+        self._position_export_xyz_button()
+
+    def _apply_export_xyz_button_font(self) -> None:
+        button = self._export_xyz_button
+        if button is None:
+            return
+        font = preview_caption_font(self.font())
+        font.setWeight(QFont.Weight.DemiBold)
+        button.setFont(font)
+
+    def _position_export_xyz_button(self) -> None:
+        button = self._export_xyz_button
+        if button is None:
+            return
+        layout = preview_layout_for_widget(QRectF(self.rect()), [], self.font())
+        header = layout["header"]
+        metrics = QFontMetricsF(button.font())
+        width = max(112.0, metrics.horizontalAdvance(button.text()) + 36.0)
+        height = 22.0
+        x = header.right() - width
+        y = header.top() + 4.0
+        button.setGeometry(round(x), round(y), round(width), round(height))
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)

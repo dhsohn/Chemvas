@@ -29,7 +29,10 @@ from ui.renderer_style_access import (
     bond_line_width_for,
 )
 from ui.selection_collection_access import selection_items_for_copy_for
-from ui.structure_payload_access import build_3d_conversion_payload_for
+from ui.structure_payload_access import (
+    build_3d_conversion_payload_for,
+    build_selected_3d_conversion_payload_for,
+)
 
 
 class CanvasDocumentSessionService:
@@ -78,17 +81,22 @@ class CanvasDocumentSessionService:
         document = read_document(path)
         self.restore_state(document.state)
 
-    def export_xyz(self, path: str) -> None:
-        export_model, atom_annotations = build_3d_conversion_payload_for(self.canvas)
+    def _build_xyz_payload(self, *, selected_only: bool = False):
+        if selected_only:
+            return build_selected_3d_conversion_payload_for(self.canvas)
+        return build_3d_conversion_payload_for(self.canvas)
+
+    def export_xyz(self, path: str, *, selected_only: bool = False) -> None:
+        export_model, atom_annotations = self._build_xyz_payload(selected_only=selected_only)
         xyz_block = model_to_xyz_block_for(self.canvas, export_model, atom_annotations=atom_annotations)
         if xyz_block is None:
             message = rdkit_last_error_for(self.canvas) or "Failed to export 3D XYZ."
             raise ValueError(message)
         Path(path).write_text(xyz_block, encoding="utf-8")
 
-    def export_xyz_async(self, path: str, *, on_success, on_error) -> None:
+    def export_xyz_async(self, path: str, *, on_success, on_error, selected_only: bool = False) -> None:
         try:
-            export_model, atom_annotations = build_3d_conversion_payload_for(self.canvas)
+            export_model, atom_annotations = self._build_xyz_payload(selected_only=selected_only)
         except Exception as exc:
             on_error(str(exc) or "Failed to export 3D XYZ.")
             return

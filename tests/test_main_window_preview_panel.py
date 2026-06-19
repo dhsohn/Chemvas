@@ -4,13 +4,12 @@ import unittest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtCore import Qt
-    from PyQt6.QtWidgets import QApplication, QDockWidget, QMainWindow, QWidget
+    from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget
 except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.main_window_preview_panel import build_preview_panel_dock
+    from ui.main_window_preview_window import build_preview_window
 
 
 class _HarnessWindow(QMainWindow):
@@ -29,24 +28,26 @@ class MainWindowPreviewPanelTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.app.processEvents()
 
-    def test_build_preview_panel_dock_creates_locked_right_dock(self) -> None:
+    def test_build_preview_window_wraps_preview_widget_and_hides_on_close(self) -> None:
         window = _HarnessWindow()
         self.addCleanup(window.close)
 
-        assembly = build_preview_panel_dock(window, preview_widget=window.preview_widget)
-
-        self.assertIs(assembly.splitter.widget(0), window.preview_widget)
-        self.assertEqual(assembly.splitter.count(), 1)
-        self.assertEqual(assembly.dock.allowedAreas(), Qt.DockWidgetArea.RightDockWidgetArea)
-        self.assertEqual(assembly.dock.minimumWidth(), 320)
-        self.assertEqual(assembly.dock.maximumWidth(), 420)
-        self.assertFalse(
-            bool(
-                assembly.dock.features()
-                & QDockWidget.DockWidgetFeature.DockWidgetClosable
-            )
+        assembly = build_preview_window(
+            window,
+            preview_widget=window.preview_widget,
         )
-        self.assertEqual(assembly.dock.titleBarWidget().height(), 0)
+
+        self.assertIs(window.preview_widget.parent(), assembly.preview_window)
+        self.assertEqual(assembly.preview_window.windowTitle(), "3D Preview")
+        self.assertGreaterEqual(assembly.preview_window.minimumWidth(), 420)
+        self.assertIsNone(assembly.preview_window.findChild(QWidget, "preview_export_xyz_button"))
+        assembly.preview_window.show()
+        self.app.processEvents()
+        self.assertTrue(assembly.preview_window.isVisible())
+
+        assembly.preview_window.close()
+        self.app.processEvents()
+        self.assertFalse(assembly.preview_window.isVisible())
 
 
 if __name__ == "__main__":

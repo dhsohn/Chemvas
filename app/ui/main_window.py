@@ -38,6 +38,9 @@ class MainWindow(QMainWindow):
         return self._state
 
     def closeEvent(self, event) -> None:
+        preview_window = self._ui_refs.preview_window
+        if preview_window is not None:
+            preview_window.hide()
         shutdown_preview = getattr(self._preview_3d, "shutdown", None)
         if callable(shutdown_preview):
             shutdown_preview()

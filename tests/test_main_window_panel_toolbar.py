@@ -54,7 +54,7 @@ class _HarnessWindow(QMainWindow):
         self.load_canvas = mock.Mock()
         self.export_xyz = mock.Mock()
         self.export_figure = mock.Mock()
-        self.toggle_preview_panel = mock.Mock()
+        self.open_preview_window = mock.Mock()
         self.set_bond_length = mock.Mock()
         self.setup_sheet = mock.Mock()
         self.apply_color_preset = mock.Mock()
@@ -116,8 +116,7 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
             save_canvas_as=mock.Mock(),
             load_canvas=mock.Mock(),
             export_figure=mock.Mock(),
-            export_xyz=mock.Mock(),
-            toggle_preview_panel=mock.Mock(),
+            open_preview_window=mock.Mock(),
         )
         self.button_service = MainWindowUIAssemblyService(
             scene_transform_controller_for_window=self.scene_transform_controller_for_window,
@@ -172,9 +171,10 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         self.assertEqual(assembly.load_action.statusTip(), "Open a drawing or workbook")
         self.assertEqual(list(assembly.tool_actions), TOOLBAR_TOOL_ACTION_ORDER)
         self.assertTrue(assembly.tool_actions["bond"].isChecked())
-        self.assertTrue(assembly.preview_panel_button.isCheckable())
-        self.assertTrue(assembly.preview_panel_button.isChecked())
-        self.assertIs(assembly.export_xyz_button, assembly.panel_bar.findChild(QToolButton, "export_xyz_button"))
+        self.assertFalse(assembly.preview_panel_button.isCheckable())
+        self.assertEqual(assembly.preview_panel_button.toolTip(), "Open 3D Preview")
+        self.assertIsNone(assembly.export_xyz_button)
+        self.assertIsNone(assembly.panel_bar.findChild(QToolButton, "export_xyz_button"))
         self.assertIsNone(assembly.panel_bar.findChild(QToolButton, "setup_sheet_button"))
         self.assertIs(assembly.undo_button, assembly.panel_bar.findChild(QToolButton, "undo_button"))
         self.assertIs(assembly.redo_button, assembly.panel_bar.findChild(QToolButton, "redo_button"))
@@ -207,7 +207,7 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
             self._toolbar_widget_groups(assembly.panel_bar),
         )
         self.assertIn(
-            ["SMILES...", "smiles_render_button", "export_xyz_button", "preview_panel_button"],
+            ["SMILES...", "smiles_render_button", "preview_panel_button"],
             self._toolbar_widget_groups(assembly.panel_bar),
         )
         line_edits = assembly.panel_bar.findChildren(QLineEdit)
@@ -240,12 +240,10 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         smiles_button.click()
         window.canvas.insert_controller.begin_smiles_insert.assert_called_once_with("CCO")
 
-        assembly.export_xyz_button.click()
         assembly.preview_panel_button.click()
-        self.panel_callbacks.export_xyz.assert_called_once_with(window)
-        self.panel_callbacks.toggle_preview_panel.assert_called_once_with(window, False)
+        self.panel_callbacks.open_preview_window.assert_called_once_with(window)
         window.export_xyz.assert_not_called()
-        window.toggle_preview_panel.assert_not_called()
+        window.open_preview_window.assert_not_called()
         window.setup_sheet.assert_not_called()
         assembly.undo_button.click()
         assembly.redo_button.click()

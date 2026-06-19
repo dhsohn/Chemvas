@@ -55,7 +55,7 @@ if QApplication is not None:
     from ui.main_window_document_dialogs import SheetSetupSelection
     from ui.main_window_preview_ports import preview_for_window
     from ui.main_window_service_ports import services_for_window
-    from ui.main_window_ui_ports import panel_dock_for_window, panel_splitter_for_window
+    from ui.main_window_ui_ports import preview_window_for_window
     from ui.mark_item_access import mark_center_for
     from ui.preview_3d_painter import preview_overlay_font
     from ui.scene_decoration_access import (
@@ -946,6 +946,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         preview._async_enabled = False
         atom_id = add_atom_for(active_canvas_for_window(self.window), "N", 0.0, 0.0)
         add_mark_for_atom_for(active_canvas_for_window(self.window), atom_id, QPointF(10.0, -10.0), kind="plus", record=False)
+        atom_items_for(active_canvas_for_window(self.window))[atom_id].setSelected(True)
 
         scene = Molecule3DScene(
             atoms=(
@@ -959,7 +960,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             patch.object(preview.rdkit_adapter, "compute_props", return_value=("NH4", 18.04, "[NH4+]")),
             patch.object(preview.rdkit_adapter, "model_to_3d_scene_result", return_value=RDKitResult(scene)),
         ):
-            preview.refresh_from_canvas(active_canvas_for_window(self.window))
+            preview.refresh_selected_from_canvas(active_canvas_for_window(self.window))
             self.app.processEvents()
             QTest.qWait(150)
             self.app.processEvents()
@@ -967,18 +968,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertIsNotNone(preview._scene)
         self.assertEqual(preview._formula_text, "NH4")
         self.assertEqual(preview._mw_text, "18.04")
-        panel_splitter = panel_splitter_for_window(self.window)
-        panel_dock = panel_dock_for_window(self.window)
-        self.assertIsNotNone(panel_splitter)
-        self.assertIsNotNone(panel_dock)
-        self.assertIs(panel_splitter.widget(0), preview)
-        self.assertEqual(panel_splitter.count(), 1)
-        self.assertFalse(
-            bool(
-                panel_dock.features()
-                & panel_dock.DockWidgetFeature.DockWidgetClosable
-            )
-        )
+        preview_window = preview_window_for_window(self.window)
+        self.assertIsNotNone(preview_window)
+        self.assertIs(preview.parent(), preview_window)
 
     def test_preview_panel_uses_selected_structure_when_scene_only_items_are_also_selected(self) -> None:
         preview = preview_for_window(self.window)
@@ -1011,7 +1003,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         )
 
         with patch.object(preview.rdkit_adapter, "model_to_3d_scene_result", return_value=RDKitResult(scene)) as mocked:
-            preview.refresh_from_canvas(active_canvas_for_window(self.window))
+            preview.refresh_selected_from_canvas(active_canvas_for_window(self.window))
             self.app.processEvents()
             QTest.qWait(150)
             self.app.processEvents()

@@ -149,6 +149,6 @@ def test_bootstrap_main_window_initializes_runtime_references_and_services() -> 
     services.panel_service.init_panels.assert_called_once_with(window)
     services.ui_assembly_service.apply_theme.assert_called_once_with(window)
     services.active_canvas_ui_service.bind_active_canvas.assert_called_once_with(window)
-    preview.refresh_from_canvas.assert_called_once_with(window.canvas)
+    preview.refresh_from_canvas.assert_not_called()
     services.status_service.init_status_bar.assert_called_once_with(window)
     services.context_bar_service.refresh_window.assert_called_once_with(window)

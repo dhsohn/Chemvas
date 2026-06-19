@@ -731,21 +731,26 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertEqual(len(ts_bracket_items_for(canvas)), 0)
 
     def test_scroll_refresh_clears_stale_hover_preview(self) -> None:
-        atom_id = add_atom_for(active_canvas_for_window(self.window), "C", 0.0, 0.0)
-        viewport_pos = active_canvas_for_window(self.window).mapFromScene(QPointF(0.0, 0.0))
-        global_pos = active_canvas_for_window(self.window).viewport().mapToGlobal(viewport_pos)
+        canvas = active_canvas_for_window(self.window)
+        canvas.setSceneRect(QRectF(-2000.0, -2000.0, 4000.0, 4000.0))
+        self.app.processEvents()
+        atom_id = add_atom_for(canvas, "C", 0.0, 0.0)
+        viewport_pos = canvas.mapFromScene(QPointF(0.0, 0.0))
+        global_pos = canvas.viewport().mapToGlobal(viewport_pos)
 
         with patch("ui.canvas_hover_refresh.QCursor.pos", return_value=global_pos):
-            refresh_hover_from_cursor_for_canvas(active_canvas_for_window(self.window))
-            self.assertEqual(hover_state_for(active_canvas_for_window(self.window)).atom_id, atom_id)
+            refresh_hover_from_cursor_for_canvas(canvas)
+            self.assertEqual(hover_state_for(canvas).atom_id, atom_id)
 
-            h_scroll = active_canvas_for_window(self.window).horizontalScrollBar()
-            h_scroll.setValue(h_scroll.value() + 240)
+            h_scroll = canvas.horizontalScrollBar()
+            start_value = h_scroll.value()
+            h_scroll.setValue(min(h_scroll.maximum(), start_value + 240))
+            self.assertNotEqual(h_scroll.value(), start_value)
             self.app.processEvents()
             QTest.qWait(10)
 
-        self.assertIsNone(hover_state_for(active_canvas_for_window(self.window)).atom_id)
-        self.assertEqual(hover_state_for(active_canvas_for_window(self.window)).items, [])
+        self.assertIsNone(hover_state_for(canvas).atom_id)
+        self.assertEqual(hover_state_for(canvas).items, [])
 
     def test_legacy_tool_shortcuts_do_not_switch_active_tool(self) -> None:
         canvas_services_for(active_canvas_for_window(self.window)).tool_mode_controller.set_tool("text")

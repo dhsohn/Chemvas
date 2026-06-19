@@ -54,11 +54,12 @@ class MainWindowActiveCanvasUIService:
             error_callback=lambda message: self._status.show_error_message(window, message, timeout=6000),
         )
 
-    def handle_selection_info(self, window, _formula: str, _mw: str) -> None:
+    def handle_selection_info(self, window, formula: str, mw: str) -> None:
         try:
             canvas = self._active_canvas_for_window(window)
-            self._preview_for_window(window).refresh_from_canvas(canvas)
+            self._preview_for_window(window).refresh_selected_from_canvas(canvas)
             self._status.update_selection_status_label(window)
+            self._status.update_chemical_status_label(formula, mw)
             self._action_availability.update_action_availability(window)
         except RuntimeError:
             return
@@ -77,7 +78,7 @@ class MainWindowActiveCanvasUIService:
             self._status.update_zoom_label(self.current_zoom_percent(window))
         self._context_page_state.sync_tool_actions_from_canvas(window)
         self._action_availability.update_action_availability(window)
-        self._preview_for_window(window).refresh_from_canvas(self._active_canvas_for_window(window))
+        self._preview_for_window(window).refresh_selected_from_canvas(self._active_canvas_for_window(window))
 
     def on_canvas_tab_changed(self, window, index: int) -> None:
         self._on_canvas_tab_changed(window, index)

@@ -72,12 +72,8 @@ def main_window_chrome_stylesheet(palette) -> str:
                 background: transparent;
                 border-color: transparent;
             }}
-            QLabel, QCheckBox, QGroupBox, QTabBar, QDockWidget, QToolButton {{
+            QLabel, QCheckBox, QGroupBox, QTabBar, QToolButton {{
                 color: {_P["text"]};
-            }}
-            QDockWidget {{
-                background: {_P["surface_panel"]};
-                border: 1px solid {_P["border"]};
             }}
             QTabWidget::pane {{
                 border: 1px solid {_P["border"]};

@@ -86,6 +86,8 @@ def preview_empty_state_text(message: str) -> tuple[str, str]:
     if normalized.startswith("Updating"):
         return "Building preview", "Preparing coordinates"
     if is_empty_preview_message(normalized):
+        if "selected" in normalized.lower():
+            return "No selected molecule", "Select a molecule to preview it in 3D."
         return "No molecule yet", "Draw or paste a structure to preview it in 3D."
     if len(normalized) > 96:
         normalized = f"{normalized[:93]}..."

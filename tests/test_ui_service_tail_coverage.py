@@ -48,8 +48,7 @@ def _panel_toolbar_callbacks() -> "MainWindowPanelToolbarCallbacks":
         save_canvas_as=mock.Mock(),
         load_canvas=mock.Mock(),
         export_figure=mock.Mock(),
-        export_xyz=mock.Mock(),
-        toggle_preview_panel=mock.Mock(),
+        open_preview_window=mock.Mock(),
     )
 
 

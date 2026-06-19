@@ -11,11 +11,14 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
+    from ui.canvas_atom_graphics_state import atom_items_for
     from ui.canvas_history_state import history_state_for
     from ui.main_window import MainWindow
     from ui.main_window_canvas_ports import active_canvas_for_window
+    from ui.main_window_preview_ports import preview_for_window
     from ui.main_window_service_ports import services_for_window
-    from ui.main_window_ui_ports import panel_dock_for_window
+    from ui.main_window_ui_ports import preview_window_for_window
+    from ui.structure_mutation_access import add_atom_for
 
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for main window tests")
@@ -172,22 +175,27 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         warning.assert_called_once_with(self.window, "Load Error", "Failed to load file:\nbad restore")
         self.assertEqual(self.window.runtime_state.current_file_path, "/tmp/previous.chemvas")
 
-    def test_export_button_normalizes_path_and_reports_success_and_failure(self) -> None:
-        export_button = self._find_button(tool_tip="Export 3D XYZ")
-        self.assertFalse(export_button.isEnabled())
-        active_canvas_for_window(self.window).model.add_atom("C", 0.0, 0.0)
-        services_for_window(self.window).action_availability_service.update_action_availability(self.window)
-        self.assertTrue(export_button.isEnabled())
+    def test_preview_window_export_button_normalizes_path_and_reports_success_and_failure(self) -> None:
+        self.assertIsNone(self.window.findChild(QToolButton, "export_xyz_button"))
+        canvas = active_canvas_for_window(self.window)
+        atom_id = add_atom_for(canvas, "N", 0.0, 0.0)
+        atom_items_for(canvas)[atom_id].setSelected(True)
+        self._find_button(object_name="preview_panel_button").click()
+        self.app.processEvents()
+        preview = preview_for_window(self.window)
+        preview._scene = object()
+        preview._sync_export_xyz_button()
+        export_button = self._find_button(object_name="preview_export_xyz_button")
 
         with mock.patch(
             "ui.main_window_document_action_service.QFileDialog.getSaveFileName",
             return_value=("/tmp/output", ""),
         ) as dialog:
-            doc_service = active_canvas_for_window(self.window).services.canvas_document_session_service
+            doc_service = canvas.services.canvas_document_session_service
             doc_service.export_xyz_async = mock.Mock(
-                side_effect=lambda path, *, on_success, on_error: on_success(path)
+                side_effect=lambda path, *, on_success, on_error, selected_only=False: on_success(path)
             )
-            active_canvas_for_window(self.window).export_xyz_async = mock.Mock(
+            canvas.export_xyz_async = mock.Mock(
                 side_effect=AssertionError("canvas export_xyz_async wrapper should not run")
             )
             export_button.click()
@@ -195,7 +203,8 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         dialog.assert_called_once()
         self.assertEqual(dialog.call_args.args[2], "")
         self.assertEqual(doc_service.export_xyz_async.call_args.args, ("/tmp/output.xyz",))
-        active_canvas_for_window(self.window).export_xyz_async.assert_not_called()
+        self.assertEqual(doc_service.export_xyz_async.call_args.kwargs["selected_only"], True)
+        canvas.export_xyz_async.assert_not_called()
         self.assertEqual(self.window.statusBar().currentMessage(), "Exported XYZ: /tmp/output.xyz")
 
         with (
@@ -204,9 +213,9 @@ class MainWindowPanelActionsTest(unittest.TestCase):
                 return_value=("/tmp/output", ""),
             ),
             mock.patch.object(
-                active_canvas_for_window(self.window).services.canvas_document_session_service,
+                canvas.services.canvas_document_session_service,
                 "export_xyz_async",
-                side_effect=lambda path, *, on_success, on_error: on_error("no exporter"),
+                side_effect=lambda path, *, on_success, on_error, selected_only=False: on_error("no exporter"),
             ),
             mock.patch("ui.main_window_document_action_service.QMessageBox.warning") as warning,
         ):
@@ -214,23 +223,18 @@ class MainWindowPanelActionsTest(unittest.TestCase):
 
         warning.assert_called_once_with(self.window, "Export Error", "Failed to export XYZ:\nno exporter")
 
-    def test_preview_panel_button_hides_and_shows_right_dock(self) -> None:
+    def test_preview_panel_button_opens_preview_window(self) -> None:
         preview_button = self._find_button(object_name="preview_panel_button")
-        panel_dock = panel_dock_for_window(self.window)
-        self.assertIsNotNone(panel_dock)
-        self.assertTrue(preview_button.isCheckable())
-        self.assertTrue(preview_button.isChecked())
-        self.assertFalse(panel_dock.isHidden())
+        preview_window = preview_window_for_window(self.window)
+        self.assertIsNotNone(preview_window)
+        self.assertFalse(preview_button.isCheckable())
+        self.assertFalse(preview_window.isVisible())
 
         preview_button.click()
+        self.app.processEvents()
 
-        self.assertTrue(panel_dock.isHidden())
         self.assertFalse(preview_button.isChecked())
-
-        preview_button.click()
-
-        self.assertFalse(panel_dock.isHidden())
-        self.assertTrue(preview_button.isChecked())
+        self.assertTrue(preview_window.isVisible())
 
     def test_undo_redo_smiles_and_flip_buttons_call_canvas_and_controllers(self) -> None:
         undo_button = self._find_button(tool_tip="Undo")
