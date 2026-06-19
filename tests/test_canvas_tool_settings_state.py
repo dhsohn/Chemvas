@@ -21,6 +21,7 @@ def test_tool_settings_state_for_does_not_read_legacy_fake_canvas_attrs() -> Non
         active_bond_order=1,
         mark_kind="minus",
         active_arrow_type="equilibrium",
+        active_bracket_type="dagger",
         arrow_line_width=2.5,
     )
 
@@ -30,6 +31,7 @@ def test_tool_settings_state_for_does_not_read_legacy_fake_canvas_attrs() -> Non
     assert state.active_bond_order == 1
     assert state.mark_kind == "plus"
     assert state.active_arrow_type == "reaction"
+    assert state.active_bracket_type == "square_pair"
     assert state.arrow_line_width == 1.0
 
 

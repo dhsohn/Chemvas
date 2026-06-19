@@ -16,6 +16,7 @@ from ui.graphics_items import NoSelectPolygonItem
 from ui.note_item_access import set_committed_note_text_for
 from ui.scene_item_state import (
     ARROW_KINDS,
+    ts_bracket_kind_from_state,
     mark_center_from_state,
     ts_bracket_rect_from_state,
 )
@@ -27,7 +28,7 @@ MarkItemBuilder = Callable[[str], Any | None]
 MarkCenterSetter = Callable[[Any, QPointF], None]
 ArrowItemBuilder = Callable[[QPointF, QPointF, str], QGraphicsPathItem]
 CurvedArrowPathSetter = Callable[[QGraphicsPathItem, QPointF, QPointF, QPointF, bool], None]
-TsBracketItemBuilder = Callable[[Any], QGraphicsPathItem]
+TsBracketItemBuilder = Callable[..., QGraphicsPathItem]
 OrbitalItemsBuilder = Callable[[QPointF, str], list[Any]]
 
 
@@ -137,7 +138,11 @@ def create_ts_bracket_item_from_state(
     rect = ts_bracket_rect_from_state(ts_bracket_state)
     if rect is None:
         return None
-    return build_ts_bracket_item(rect)
+    bracket_kind = ts_bracket_kind_from_state(ts_bracket_state)
+    try:
+        return build_ts_bracket_item(rect, bracket_kind)
+    except TypeError:
+        return build_ts_bracket_item(rect)
 
 
 def create_orbital_item_from_state(

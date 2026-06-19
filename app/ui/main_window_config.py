@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ui.bracket_types import BRACKET_MENU_SPECS
+
 ARROW_MENU_SPECS: list[tuple[str, str]] = [
     ("Reaction", "reaction"),
     ("Equilibrium", "equilibrium"),
@@ -40,7 +42,7 @@ TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
     ("benzene", "Ring", "benzene", "icon_ring", "Ring / Benzene (ChemDraw: J)"),
     ("color", "Color", "color", "icon_color", "Color"),
     ("arrow", "Arrow", "arrow", "icon_arrow", "Arrow (ChemDraw: E)"),
-    ("ts_bracket", "TS Bracket", "ts_bracket", "icon_ts_bracket", "TS Bracket (ChemDraw: Shift+G)"),
+    ("ts_bracket", "Brackets", "ts_bracket", "icon_ts_bracket", "Brackets (ChemDraw: Shift+G)"),
     (
         "perspective",
         "Perspective",
@@ -90,6 +92,7 @@ ACS_COLOR_PALETTE = COLOR_PALETTE_SPECS
 __all__ = [
     "ACS_COLOR_PALETTE",
     "BOND_TOOL_ACTION_SPECS",
+    "BRACKET_MENU_SPECS",
     "ARROW_MENU_ITEMS",
     "ARROW_PRESET_ITEMS",
     "ARROW_MENU_SPECS",

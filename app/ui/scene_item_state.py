@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
+from ui.bracket_types import restored_bracket_kind
 from ui.note_item_access import set_committed_note_text_for
 from ui.scene_item_state_serialization import (
     ARROW_KINDS,
@@ -38,7 +39,7 @@ from ui.scene_item_state_serialization import (
 MarkCenterSetter = Callable[[Any, QPointF], None]
 NoteStyleApplier = Callable[[QGraphicsTextItem], None]
 RingFillBrushGetter = Callable[[], QBrush]
-TsBracketPathBuilder = Callable[[QRectF], Any]
+TsBracketPathBuilder = Callable[..., Any]
 ArrowItemBuilder = Callable[[QPointF, QPointF, str], QGraphicsPathItem]
 CurvedArrowPathSetter = Callable[[QGraphicsPathItem, QPointF, QPointF, QPointF, bool], None]
 
@@ -91,6 +92,17 @@ def ts_bracket_rect_from_state(state: Mapping[str, object]) -> QRectF | None:
         numeric_coords.append(float(value))
     left, top, right, bottom = numeric_coords
     return QRectF(QPointF(left, top), QPointF(right, bottom)).normalized()
+
+
+def ts_bracket_kind_from_state(state: Mapping[str, object]) -> str:
+    return restored_bracket_kind(state.get("bracket_kind"))
+
+
+def _build_ts_bracket_path(builder: TsBracketPathBuilder, rect: QRectF, bracket_kind: str):
+    try:
+        return builder(rect, bracket_kind)
+    except TypeError:
+        return builder(rect)
 
 
 def apply_scene_item_state(
@@ -154,10 +166,11 @@ def apply_scene_item_state(
         rect = ts_bracket_rect_from_state(state)
         if rect is None:
             return
-        item.setPath(ts_bracket_path_builder(rect))
+        bracket_kind = ts_bracket_kind_from_state(state)
+        item.setPath(_build_ts_bracket_path(ts_bracket_path_builder, rect, bracket_kind))
         item.setPen(QPen(Qt.PenStyle.NoPen))
         item.setBrush(QBrush(QColor(bond_color)))
-        item.setData(1, {"rect": QRectF(rect)})
+        item.setData(1, {"rect": QRectF(rect), "bracket_kind": bracket_kind})
         return
     if kind == "orbital" and isinstance(item, QGraphicsItemGroup):
         center_point = _point_from_state(state.get("center"))
@@ -225,6 +238,7 @@ __all__ = [
     "scene_item_state",
     "scene_item_state_for",
     "ts_bracket_rect_from_state",
+    "ts_bracket_kind_from_state",
     "ts_bracket_state_dict",
     "ts_bracket_state_dict_for",
 ]

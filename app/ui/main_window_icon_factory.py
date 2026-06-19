@@ -234,6 +234,9 @@ class MainWindowIconFactory:
     def icon_ts_bracket(self) -> QIcon:
         return self.make_icon(self._tool_icons.draw_ts_bracket)
 
+    def icon_bracket_preview(self, kind: str) -> QIcon:
+        return self.make_icon(lambda painter: self._tool_icons.draw_bracket_preview(painter, kind))
+
     def icon_orbital(self) -> QIcon:
         return self.make_icon(self._tool_icons.draw_orbital)
 

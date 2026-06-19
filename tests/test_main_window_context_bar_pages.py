@@ -72,16 +72,18 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
 
         self.assertEqual(
             set(pages.pages),
-            {"empty", "bond", "arrow", "atom", "ring", "mark", "color", "ring_fill"},
+            {"empty", "bond", "arrow", "bracket", "atom", "ring", "mark", "color", "ring_fill"},
         )
         self.assertIn("Single", pages.bond_buttons)
         self.assertIn("curved_double", pages.arrow_buttons)
+        self.assertIn("double_dagger", pages.bracket_buttons)
         self.assertIn("minus", pages.mark_buttons)
         self.assertIsNotNone(pages.bond_group)
         self.assertIsNotNone(pages.ring_group)
         self.assertIn((6, "benzene"), pages.ring_buttons)
         self.assertIsNotNone(pages.mark_group)
         self.assertIsNotNone(pages.arrow_group)
+        self.assertIsNotNone(pages.bracket_group)
         self.assertIsInstance(pages.atom_input, QLineEdit)
         self.assertIs(pages.atom_input, pages.pages["atom"].findChild(QLineEdit, "atomInput"))
         self.assertEqual(pages.atom_input.placeholderText(), "Atom")
@@ -165,6 +167,10 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         self.tool_mode_controller.set_arrow_head_scale.assert_called_once_with(0.25)
         pages.atom_input.setText("Cl")
         self.tool_mode_controller.set_atom_symbol.assert_called_once_with("Cl")
+
+        pages.bracket_buttons["dagger"].click()
+        self.tool_state_service.set_bracket_type.assert_called_once_with(self.window, "dagger")
+        self.assertTrue(pages.bracket_buttons["dagger"].isChecked())
 
         color_button = next(
             button

@@ -6,6 +6,7 @@ from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QBrush, QColor, QFont, QPainterPath, QPainterPathStroker, QPen
 from PyQt6.QtWidgets import QGraphicsEllipseItem, QGraphicsPathItem, QGraphicsTextItem
 
+from ui.bracket_types import LEGACY_TS_BRACKET_KIND, normalized_bracket_kind
 from ui.canvas_arrow_build_service import CanvasArrowBuildService
 from ui.canvas_tool_settings_state import tool_settings_state_for
 from ui.graphics_items import (
@@ -111,52 +112,132 @@ class CanvasSceneDecorationBuildService:
     def ts_bracket_stroke_width(self) -> float:
         return max(0.8, bond_line_width_for(self.canvas) * 0.58)
 
-    def ts_bracket_path(self, rect: QRectF) -> QPainterPath:
+    def _add_square_bracket_lines(self, path: QPainterPath, rect: QRectF, hook: float, *, left: bool) -> None:
+        if left:
+            x = rect.left()
+            path.moveTo(x + hook, rect.top())
+            path.lineTo(x, rect.top())
+            path.lineTo(x, rect.bottom())
+            path.lineTo(x + hook, rect.bottom())
+            return
+        x = rect.right()
+        path.moveTo(x - hook, rect.top())
+        path.lineTo(x, rect.top())
+        path.lineTo(x, rect.bottom())
+        path.lineTo(x - hook, rect.bottom())
+
+    def _add_parenthesis_lines(self, path: QPainterPath, rect: QRectF, hook: float, *, left: bool) -> None:
+        top = rect.top()
+        bottom = rect.bottom()
+        middle = rect.center().y()
+        control = rect.height() * 0.22
+        if left:
+            outer_x = rect.left()
+            inner_x = outer_x + hook
+            path.moveTo(inner_x, top)
+            path.cubicTo(outer_x, top + control, outer_x, middle - control, outer_x, middle)
+            path.cubicTo(outer_x, middle + control, outer_x, bottom - control, inner_x, bottom)
+            return
+        outer_x = rect.right()
+        inner_x = outer_x - hook
+        path.moveTo(inner_x, top)
+        path.cubicTo(outer_x, top + control, outer_x, middle - control, outer_x, middle)
+        path.cubicTo(outer_x, middle + control, outer_x, bottom - control, inner_x, bottom)
+
+    def _add_brace_lines(self, path: QPainterPath, rect: QRectF, hook: float, *, left: bool) -> None:
+        top = rect.top()
+        bottom = rect.bottom()
+        mid = rect.center().y()
+        quarter = rect.height() / 4.0
+        sign = 1.0 if left else -1.0
+        outer_x = rect.left() if left else rect.right()
+        inner_x = outer_x + sign * hook
+        waist_x = outer_x + sign * hook * 0.18
+        shoulder_x = outer_x + sign * hook * 0.62
+        path.moveTo(inner_x, top)
+        path.cubicTo(outer_x, top, outer_x, top + quarter * 0.55, waist_x, top + quarter)
+        path.cubicTo(shoulder_x, top + quarter * 1.32, shoulder_x, mid - quarter * 0.35, outer_x, mid)
+        path.cubicTo(shoulder_x, mid + quarter * 0.35, shoulder_x, bottom - quarter * 1.32, waist_x, bottom - quarter)
+        path.cubicTo(outer_x, bottom - quarter * 0.55, outer_x, bottom, inner_x, bottom)
+
+    def _stroked_bracket_lines(self, rect: QRectF, bracket_kind: str) -> QPainterPath:
         rect = QRectF(rect).normalized()
         hook = min(rect.width() * 0.18, bond_length_px_for(self.canvas) * 0.55)
         hook = max(hook, bond_length_px_for(self.canvas) * 0.28)
         bracket_lines = QPainterPath()
-        bracket_lines.moveTo(rect.left() + hook, rect.top())
-        bracket_lines.lineTo(rect.left(), rect.top())
-        bracket_lines.lineTo(rect.left(), rect.bottom())
-        bracket_lines.lineTo(rect.left() + hook, rect.bottom())
-        bracket_lines.moveTo(rect.right() - hook, rect.top())
-        bracket_lines.lineTo(rect.right(), rect.top())
-        bracket_lines.lineTo(rect.right(), rect.bottom())
-        bracket_lines.lineTo(rect.right() - hook, rect.bottom())
+        if bracket_kind in {"square_pair", LEGACY_TS_BRACKET_KIND, "square_left"}:
+            self._add_square_bracket_lines(bracket_lines, rect, hook, left=True)
+            if bracket_kind in {"square_pair", LEGACY_TS_BRACKET_KIND}:
+                self._add_square_bracket_lines(bracket_lines, rect, hook, left=False)
+        elif bracket_kind in {"parentheses_pair", "parenthesis_left"}:
+            self._add_parenthesis_lines(bracket_lines, rect, hook, left=True)
+            if bracket_kind == "parentheses_pair":
+                self._add_parenthesis_lines(bracket_lines, rect, hook, left=False)
+        elif bracket_kind in {"braces_pair", "brace_left"}:
+            self._add_brace_lines(bracket_lines, rect, hook, left=True)
+            if bracket_kind == "braces_pair":
+                self._add_brace_lines(bracket_lines, rect, hook, left=False)
 
         stroker = QPainterPathStroker()
         stroker.setWidth(self.ts_bracket_stroke_width())
         stroker.setCapStyle(Qt.PenCapStyle.FlatCap)
         stroker.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
-        path = stroker.createStroke(bracket_lines)
+        return stroker.createStroke(bracket_lines)
 
+    def _add_bracket_symbol(self, path: QPainterPath, rect: QRectF, symbol: str, *, align_right: bool) -> None:
         font = QFont(font_family_for(self.canvas))
         font.setPixelSize(
             max(
                 10,
-                round(min(rect.height() * 0.22, bond_length_px_for(self.canvas) * 0.95)),
+                round(min(rect.height() * 0.62, bond_length_px_for(self.canvas) * 1.35)),
             )
         )
+        x = rect.right() + rect.width() * 0.035 if align_right else rect.center().x() - font.pixelSize() * 0.2
+        y = rect.center().y() + font.pixelSize() * 0.36
         path.addText(
-            rect.right() + hook * 0.18,
-            rect.top() + font.pixelSize() * 0.18,
+            x,
+            y,
             font,
-            "\u2021",
+            symbol,
         )
         return path
 
-    def build_ts_bracket_item(self, rect: QRectF) -> QGraphicsPathItem:
+    def ts_bracket_path(self, rect: QRectF, bracket_kind: str = LEGACY_TS_BRACKET_KIND) -> QPainterPath:
+        rect = QRectF(rect).normalized()
+        bracket_kind = normalized_bracket_kind(bracket_kind, default=LEGACY_TS_BRACKET_KIND)
+        if bracket_kind == "dagger":
+            path = QPainterPath()
+            return self._add_bracket_symbol(path, rect, "\u2020", align_right=False)
+        if bracket_kind == "double_dagger":
+            path = QPainterPath()
+            return self._add_bracket_symbol(path, rect, "\u2021", align_right=False)
+
+        path = self._stroked_bracket_lines(rect, bracket_kind)
+        if bracket_kind == LEGACY_TS_BRACKET_KIND:
+            self._add_bracket_symbol(path, rect, "\u2021", align_right=True)
+        return path
+
+    def build_ts_bracket_item(
+        self,
+        rect: QRectF,
+        bracket_kind: str = LEGACY_TS_BRACKET_KIND,
+    ) -> QGraphicsPathItem:
         normalized = QRectF(rect).normalized()
-        item = NoSelectPathItem(self.ts_bracket_path(normalized))
+        bracket_kind = normalized_bracket_kind(bracket_kind, default=LEGACY_TS_BRACKET_KIND)
+        item = NoSelectPathItem(self.ts_bracket_path(normalized, bracket_kind))
         item.setPen(QPen(Qt.PenStyle.NoPen))
         item.setBrush(QBrush(QColor(bond_color_for(self.canvas))))
         item.setData(0, "ts_bracket")
-        item.setData(1, {"rect": normalized})
+        item.setData(1, {"rect": normalized, "bracket_kind": bracket_kind})
         return item
 
-    def preview_ts_bracket(self, start: QPointF, end: QPointF):
-        item = self.build_ts_bracket_item(self.ts_bracket_rect_from_points(start, end))
+    def preview_ts_bracket(
+        self,
+        start: QPointF,
+        end: QPointF,
+        bracket_kind: str = LEGACY_TS_BRACKET_KIND,
+    ):
+        item = self.build_ts_bracket_item(self.ts_bracket_rect_from_points(start, end), bracket_kind)
         preview_color = QColor(120, 120, 120, 140)
         item.setBrush(QBrush(preview_color))
         return add_item_to_canvas_scene(self.canvas, item)

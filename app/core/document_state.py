@@ -69,6 +69,19 @@ VALID_ARROW_KINDS = frozenset(
     )
 )
 VALID_MARK_KINDS = frozenset(("plus", "minus", "radical"))
+VALID_TS_BRACKET_KINDS = frozenset(
+    (
+        "square_pair",
+        "square_pair_double_dagger",
+        "parentheses_pair",
+        "braces_pair",
+        "double_dagger",
+        "square_left",
+        "parenthesis_left",
+        "brace_left",
+        "dagger",
+    )
+)
 VALID_ORBITAL_KINDS = frozenset(
     ("s", "p", "sp", "sp2", "sp3", "d", "mo_bonding", "mo_antibonding")
 )
@@ -419,12 +432,18 @@ def _validate_ts_bracket_states(states: object) -> None:
         keys = set(ts_bracket_state)
         if ts_bracket_state.get("kind") != "ts_bracket":
             raise ValueError("Invalid Chemvas file.")
-        if keys == {"kind", "rect"}:
+        bracket_kind = ts_bracket_state.get("bracket_kind")
+        if bracket_kind is not None and bracket_kind not in VALID_TS_BRACKET_KINDS:
+            raise ValueError("Invalid Chemvas file.")
+        if keys in ({"kind", "rect"}, {"kind", "rect", "bracket_kind"}):
             rect = ts_bracket_state.get("rect")
             if not isinstance(rect, (list, tuple)) or len(rect) != 4 or any(not _is_number(value) for value in rect):
                 raise ValueError("Invalid Chemvas file.")
             continue
-        if keys != {"kind", "left", "top", "right", "bottom"}:
+        if keys not in (
+            {"kind", "left", "top", "right", "bottom"},
+            {"kind", "left", "top", "right", "bottom", "bracket_kind"},
+        ):
             raise ValueError("Invalid Chemvas file.")
         for key in ("left", "top", "right", "bottom"):
             if not _is_number(ts_bracket_state.get(key)):

@@ -160,16 +160,94 @@ class MainWindowToolIconRenderer:
 
     def draw_ts_bracket(self, painter) -> None:
         painter.setPen(self._icon_pen(self._stroke_fine))
-        painter.drawLine(8, 7, 5, 7)
-        painter.drawLine(5, 7, 5, 23)
-        painter.drawLine(5, 23, 8, 23)
-        painter.drawLine(22, 7, 25, 7)
-        painter.drawLine(25, 7, 25, 23)
-        painter.drawLine(25, 23, 22, 23)
+        self._draw_square_bracket_icon(painter, QRectF(4.0, 6.0, 8.0, 18.0), left=True)
+        self._draw_square_bracket_icon(painter, QRectF(18.0, 6.0, 8.0, 18.0), left=False)
+        self._draw_parenthesis_icon(painter, QRectF(9.0, 8.0, 5.0, 14.0), left=True)
+        self._draw_parenthesis_icon(painter, QRectF(16.0, 8.0, 5.0, 14.0), left=False)
+
+    def _draw_square_bracket_icon(self, painter, rect: QRectF, *, left: bool) -> None:
+        hook = rect.width() * 0.55
+        if left:
+            x = rect.left()
+            painter.drawLine(QPointF(x + hook, rect.top()), QPointF(x, rect.top()))
+            painter.drawLine(QPointF(x, rect.top()), QPointF(x, rect.bottom()))
+            painter.drawLine(QPointF(x, rect.bottom()), QPointF(x + hook, rect.bottom()))
+            return
+        x = rect.right()
+        painter.drawLine(QPointF(x - hook, rect.top()), QPointF(x, rect.top()))
+        painter.drawLine(QPointF(x, rect.top()), QPointF(x, rect.bottom()))
+        painter.drawLine(QPointF(x, rect.bottom()), QPointF(x - hook, rect.bottom()))
+
+    def _draw_parenthesis_icon(self, painter, rect: QRectF, *, left: bool) -> None:
+        path = QPainterPath()
+        top = rect.top()
+        bottom = rect.bottom()
+        middle = rect.center().y()
+        control = rect.height() * 0.22
+        if left:
+            outer_x = rect.left()
+            inner_x = rect.right()
+            path.moveTo(inner_x, top)
+            path.cubicTo(outer_x, top + control, outer_x, middle - control, outer_x, middle)
+            path.cubicTo(outer_x, middle + control, outer_x, bottom - control, inner_x, bottom)
+        else:
+            outer_x = rect.right()
+            inner_x = rect.left()
+            path.moveTo(inner_x, top)
+            path.cubicTo(outer_x, top + control, outer_x, middle - control, outer_x, middle)
+            path.cubicTo(outer_x, middle + control, outer_x, bottom - control, inner_x, bottom)
+        painter.drawPath(path)
+
+    def _draw_brace_icon(self, painter, rect: QRectF, *, left: bool) -> None:
+        path = QPainterPath()
+        top = rect.top()
+        bottom = rect.bottom()
+        middle = rect.center().y()
+        quarter = rect.height() / 4.0
+        sign = 1.0 if left else -1.0
+        outer_x = rect.left() if left else rect.right()
+        inner_x = outer_x + sign * rect.width()
+        waist_x = outer_x + sign * rect.width() * 0.18
+        shoulder_x = outer_x + sign * rect.width() * 0.62
+        path.moveTo(inner_x, top)
+        path.cubicTo(outer_x, top, outer_x, top + quarter * 0.55, waist_x, top + quarter)
+        path.cubicTo(shoulder_x, top + quarter * 1.32, shoulder_x, middle - quarter * 0.35, outer_x, middle)
+        path.cubicTo(shoulder_x, middle + quarter * 0.35, shoulder_x, bottom - quarter * 1.32, waist_x, bottom - quarter)
+        path.cubicTo(outer_x, bottom - quarter * 0.55, outer_x, bottom, inner_x, bottom)
+        painter.drawPath(path)
+
+    def _draw_dagger_icon(self, painter, symbol: str) -> None:
         font = painter.font()
-        font.setPixelSize(8)
+        font.setPixelSize(22)
         painter.setFont(font)
-        painter.drawText(QRectF(10.0, 8.0, 12.0, 8.0), Qt.AlignmentFlag.AlignCenter, "TS")
+        painter.drawText(QRectF(6.0, 4.5, 18.0, 21.0), Qt.AlignmentFlag.AlignCenter, symbol)
+
+    def draw_bracket_preview(self, painter, kind: str) -> None:
+        painter.setPen(self._icon_pen(self._stroke_fine))
+        top = 5.5
+        height = 19.0
+        left_pair = QRectF(4.8, top, 7.2, height)
+        right_pair = QRectF(18.0, top, 7.2, height)
+        single_left = QRectF(8.2, top, 8.2, height)
+        if kind == "square_left":
+            self._draw_square_bracket_icon(painter, single_left, left=True)
+        elif kind == "parenthesis_left":
+            self._draw_parenthesis_icon(painter, single_left, left=True)
+        elif kind == "brace_left":
+            self._draw_brace_icon(painter, single_left, left=True)
+        elif kind == "parentheses_pair":
+            self._draw_parenthesis_icon(painter, left_pair, left=True)
+            self._draw_parenthesis_icon(painter, right_pair, left=False)
+        elif kind == "braces_pair":
+            self._draw_brace_icon(painter, left_pair, left=True)
+            self._draw_brace_icon(painter, right_pair, left=False)
+        elif kind == "dagger":
+            self._draw_dagger_icon(painter, "\u2020")
+        elif kind == "double_dagger":
+            self._draw_dagger_icon(painter, "\u2021")
+        else:
+            self._draw_square_bracket_icon(painter, left_pair, left=True)
+            self._draw_square_bracket_icon(painter, right_pair, left=False)
 
     def draw_orbital(self, painter) -> None:
         # Two lobes meeting at a central nucleus so it reads as a p-orbital

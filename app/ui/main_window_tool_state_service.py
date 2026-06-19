@@ -68,6 +68,11 @@ class MainWindowToolStateService:
     def set_arrow_type(self, window, value: str) -> None:
         self._tool_mode_controller(window).set_arrow_type(arrow_type_from_label(value))
 
+    def set_bracket_type(self, window, value: str) -> None:
+        self._tool_mode_controller(window).set_bracket_type(value)
+        window.statusBar().showMessage("Brackets Tool")
+        self._status.refresh_status_context(window)
+
     def set_orbital_type(self, window, value: str) -> None:
         self._tool_mode_controller(window).set_orbital_type(orbital_type_from_label(value))
 

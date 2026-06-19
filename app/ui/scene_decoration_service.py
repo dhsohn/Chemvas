@@ -76,8 +76,9 @@ class SceneDecorationService:
         self._push_add_scene_item(item, arrow_state_dict_for(self.canvas, item))
         return item
 
-    def add_ts_bracket(self, rect: QRectF):
-        item = build_ts_bracket_item_for(self.canvas, rect)
+    def add_ts_bracket(self, rect: QRectF, *, bracket_kind: str | None = None):
+        bracket_kind = bracket_kind or tool_settings_state_for(self.canvas).active_bracket_type
+        item = build_ts_bracket_item_for(self.canvas, rect, bracket_kind)
         attach_scene_item(self.canvas, item)
         self._push_add_scene_item(item, ts_bracket_state_dict_for(self.canvas, item))
         return item

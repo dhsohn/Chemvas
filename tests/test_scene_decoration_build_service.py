@@ -102,13 +102,31 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
         service, _, _ = self._make_service()
         rect = QRectF(QPointF(24.0, 18.0), QPointF(6.0, -2.0))
 
-        item = service.build_ts_bracket_item(rect)
+        item = service.build_ts_bracket_item(rect, "braces_pair")
 
         self.assertFalse(item.path().isEmpty())
         self.assertEqual(item.data(0), "ts_bracket")
         self.assertEqual(item.data(1)["rect"], QRectF(rect).normalized())
+        self.assertEqual(item.data(1)["bracket_kind"], "braces_pair")
         self.assertEqual(item.pen().style(), Qt.PenStyle.NoPen)
         self.assertEqual(item.brush().color().name(), "#123456")
+
+    def test_ts_bracket_path_renders_all_bracket_palette_variants(self) -> None:
+        service, _, _ = self._make_service()
+        rect = QRectF(0.0, 0.0, 36.0, 48.0)
+
+        for kind in (
+            "square_pair",
+            "parentheses_pair",
+            "braces_pair",
+            "double_dagger",
+            "square_left",
+            "parenthesis_left",
+            "brace_left",
+            "dagger",
+        ):
+            with self.subTest(kind=kind):
+                self.assertFalse(service.ts_bracket_path(rect, kind).isEmpty())
 
     def test_build_orbital_items_are_phase_aware_for_mo_antibonding(self) -> None:
         phase_service, _, phase_style = self._make_service(orbital_phase_enabled=True)

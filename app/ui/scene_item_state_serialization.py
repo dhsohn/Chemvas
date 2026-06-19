@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
+from ui.bracket_types import LEGACY_TS_BRACKET_KIND, normalized_bracket_kind
 from ui.canvas_atom_graphics_state import atom_items_for
 from ui.canvas_model_access import atom_for_id
 
@@ -158,13 +159,17 @@ def ts_bracket_state_dict(item: QGraphicsPathItem) -> dict:
     rect = data.get("rect")
     if not isinstance(rect, QRectF):
         rect = item.sceneBoundingRect()
-    return {
+    state = {
         "kind": "ts_bracket",
         "left": rect.left(),
         "top": rect.top(),
         "right": rect.right(),
         "bottom": rect.bottom(),
     }
+    bracket_kind = normalized_bracket_kind(data.get("bracket_kind"), default=LEGACY_TS_BRACKET_KIND)
+    if bracket_kind != LEGACY_TS_BRACKET_KIND:
+        state["bracket_kind"] = bracket_kind
+    return state
 
 
 def ts_bracket_state_dict_for(canvas, item) -> dict:

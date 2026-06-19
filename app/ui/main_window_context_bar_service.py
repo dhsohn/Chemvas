@@ -22,6 +22,7 @@ from ui.main_window_theme import (
 _TOOL_PAGE_KEYS = {
     "bond": "bond",
     "arrow": "arrow",
+    "ts_bracket": "bracket",
     "text": "atom",
     "mark": "mark",
     "benzene": "ring",
@@ -56,6 +57,8 @@ class MainWindowContextBarService:
         self._mark_buttons: dict[str, QToolButton] = {}
         self._arrow_group: QButtonGroup | None = None
         self._arrow_buttons: dict[str, QToolButton] = {}
+        self._bracket_group: QButtonGroup | None = None
+        self._bracket_buttons: dict[str, QToolButton] = {}
 
     def init_context_bar(self, window) -> QToolBar:
         bar = QToolBar("Options", window)
@@ -78,6 +81,8 @@ class MainWindowContextBarService:
         self._mark_buttons = context_pages.mark_buttons
         self._arrow_group = context_pages.arrow_group
         self._arrow_buttons = context_pages.arrow_buttons
+        self._bracket_group = context_pages.bracket_group
+        self._bracket_buttons = context_pages.bracket_buttons
         self._set_atom_input_for_window(window, context_pages.atom_input)
         for page in self._pages.values():
             stack.addWidget(page)
@@ -101,6 +106,8 @@ class MainWindowContextBarService:
             self.reflect_mark_state(window)
         elif key == "arrow":
             self.reflect_arrow_state(window)
+        elif key == "bracket":
+            self.reflect_bracket_state(window)
 
     def refresh_window(self, window) -> None:
         self.refresh(
@@ -180,6 +187,20 @@ class MainWindowContextBarService:
             button.setChecked(button is target)
             button.blockSignals(blocked)
         self._arrow_group.setExclusive(True)
+
+    def reflect_bracket_state(self, window) -> None:
+        if not self._bracket_buttons or self._bracket_group is None:
+            return
+        canvas = self._active_canvas_or_none_for_window(window)
+        if canvas is None:
+            return
+        target = self._bracket_buttons.get(tool_settings_state_for(canvas).active_bracket_type)
+        self._bracket_group.setExclusive(False)
+        for button in self._bracket_buttons.values():
+            blocked = button.blockSignals(True)
+            button.setChecked(button is target)
+            button.blockSignals(blocked)
+        self._bracket_group.setExclusive(True)
 
 
 __all__ = ["MainWindowContextBarService"]

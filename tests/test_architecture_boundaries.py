@@ -21,6 +21,7 @@ CANVAS_STATE_PROPERTIES = (
     "snap_angle_step",
     "mark_kind",
     "active_arrow_type",
+    "active_bracket_type",
     "active_orbital_type",
     "orbital_phase_enabled",
     "arrow_line_width",
@@ -56,6 +57,7 @@ REMOVED_CANVAS_VIEW_SETTING_PROPERTIES = (
     "snap_angle_step",
     "mark_kind",
     "active_arrow_type",
+    "active_bracket_type",
     "active_orbital_type",
     "orbital_phase_enabled",
     "arrow_line_width",
@@ -3972,6 +3974,7 @@ def test_tool_context_is_not_reintroduced_with_canvas_state_attr_fallbacks() -> 
         "active_bond_order",
         "snap_angle_step",
         "active_arrow_type",
+        "active_bracket_type",
     )
     attr_names = "|".join(re.escape(name) for name in state_attr_names)
     pattern = re.compile(

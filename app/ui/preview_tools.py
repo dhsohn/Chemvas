@@ -79,11 +79,14 @@ class TSBracketTool(PreviewDragTool):
     def __init__(self, canvas, *, context=None) -> None:
         super().__init__("ts_bracket", canvas, context=context)
 
+    def _bracket_type(self) -> str:
+        return tool_settings_state_for(self.canvas).active_bracket_type
+
     def _build_preview(self, current_pos):
-        return preview_ts_bracket_for(self.canvas, self._start_pos, current_pos)
+        return preview_ts_bracket_for(self.canvas, self._start_pos, current_pos, self._bracket_type())
 
     def _commit_drag(self, end_pos) -> None:
-        add_ts_bracket_from_points_for(self.canvas, self._start_pos, end_pos)
+        add_ts_bracket_from_points_for(self.canvas, self._start_pos, end_pos, self._bracket_type())
 
 
 class OrbitalTool(Tool):
