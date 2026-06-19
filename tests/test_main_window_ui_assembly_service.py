@@ -66,7 +66,7 @@ class _HarnessWindow(QMainWindow):
         self.load_canvas = mock.Mock()
         self.export_xyz = mock.Mock()
         self.export_figure = mock.Mock()
-        self.toggle_preview_panel = mock.Mock()
+        self.open_preview_window = mock.Mock()
         self.set_bond_length = mock.Mock()
         self.setup_sheet = mock.Mock()
         self.apply_color_preset = mock.Mock()
@@ -125,8 +125,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             save_canvas_as=mock.Mock(),
             load_canvas=mock.Mock(),
             export_figure=mock.Mock(),
-            export_xyz=mock.Mock(),
-            toggle_preview_panel=mock.Mock(),
+            open_preview_window=mock.Mock(),
         )
         self.service = MainWindowUIAssemblyService(
             scene_transform_controller_for_window=self.scene_transform_controller_for_window,
@@ -341,13 +340,14 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.assertIsNotNone(smiles_button)
         self.assertEqual(smiles_button.text(), "Insert")
         self.assertEqual(smiles_button.statusTip(), "Insert the typed SMILES structure")
-        self.assertIs(assembly.export_xyz_button, assembly.panel_bar.findChild(QToolButton, "export_xyz_button"))
+        self.assertIsNone(assembly.export_xyz_button)
+        self.assertIsNone(assembly.panel_bar.findChild(QToolButton, "export_xyz_button"))
         self.assertIs(
             assembly.preview_panel_button,
             assembly.panel_bar.findChild(QToolButton, "preview_panel_button"),
         )
-        self.assertTrue(assembly.preview_panel_button.isCheckable())
-        self.assertTrue(assembly.preview_panel_button.isChecked())
+        self.assertFalse(assembly.preview_panel_button.isCheckable())
+        self.assertEqual(assembly.preview_panel_button.toolTip(), "Open 3D Preview")
         self.assertIsNone(assembly.panel_bar.findChild(QToolButton, "setup_sheet_button"))
         self.assertIs(assembly.undo_button, assembly.panel_bar.findChild(QToolButton, "undo_button"))
         self.assertIs(assembly.redo_button, assembly.panel_bar.findChild(QToolButton, "redo_button"))
@@ -372,12 +372,10 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         window.save_canvas_as.assert_not_called()
         window.load_canvas.assert_not_called()
         window.export_figure.assert_not_called()
-        assembly.export_xyz_button.click()
         assembly.preview_panel_button.click()
-        self.panel_toolbar_callbacks.export_xyz.assert_called_once_with(window)
-        self.panel_toolbar_callbacks.toggle_preview_panel.assert_called_once_with(window, False)
+        self.panel_toolbar_callbacks.open_preview_window.assert_called_once_with(window)
         window.export_xyz.assert_not_called()
-        window.toggle_preview_panel.assert_not_called()
+        window.open_preview_window.assert_not_called()
         window.setup_sheet.assert_not_called()
         assembly.undo_button.click()
         assembly.redo_button.click()

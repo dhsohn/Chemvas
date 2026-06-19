@@ -95,6 +95,7 @@ class MainWindowDialogActionsTest(unittest.TestCase):
                 "tool": "Tool: Bond",
                 "sheet": "Sheet: Sheet 1 (1/1)",
                 "selection": "Selection: 0",
+                "chemical": "",
                 "zoom_caption": "Zoom",
                 "zoom": "100%",
             },

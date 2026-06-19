@@ -8,6 +8,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
     from PyQt6.QtCore import QPoint, QPointF, QRectF, Qt
+    from PyQt6.QtGui import QFont
     from PyQt6.QtTest import QTest
     from PyQt6.QtWidgets import QApplication, QWidget
 except ModuleNotFoundError:
@@ -18,7 +19,6 @@ if QApplication is not None:
     from core.model import MoleculeModel
     from core.rdkit_adapter import Molecule3DAtom, Molecule3DBond, Molecule3DScene
     from ui.preview_3d import Preview3D
-    from ui.preview_3d_layout import preview_footer_item_rects
     from ui.preview_3d_painter import (
         preview_footer_height_for_lines,
         preview_layout_for_widget,
@@ -383,11 +383,44 @@ class Preview3DRecoveryTest(unittest.TestCase):
         self.assertFalse(layout["footer"].isNull())
         self.assertLess(layout["header"].bottom(), layout["viewport"].top())
         self.assertLess(layout["viewport"].bottom(), layout["footer"].top())
+
+    def test_export_button_overlays_ready_badge_position(self) -> None:
+        preview = self._create_preview(SequencedAdapter([]))
+        preview.resize(420, 320)
+        export_callback = mock.Mock()
+
+        preview.set_export_xyz_action(export_callback)
+
+        button = preview.export_xyz_button
+        self.assertIsNotNone(button)
+        assert button is not None
+        self.assertFalse(button.isVisible())
+
+        preview._scene = self._make_scene()
+        preview.set_info("CO", "28.01")
+        preview._sync_export_xyz_button()
+
+        layout = preview_layout_for_widget(
+            QRectF(preview.rect()),
+            [],
+            preview.font(),
+        )
+        self.assertTrue(button.isVisible())
+        self.assertEqual(button.objectName(), "preview_export_xyz_button")
+        self.assertEqual(button.text(), "Export 3D")
+        self.assertTrue(button.icon().isNull())
+        self.assertEqual(button.toolButtonStyle(), Qt.ToolButtonStyle.ToolButtonTextOnly)
+        self.assertEqual(button.font().pixelSize(), 11)
+        self.assertEqual(button.font().weight(), QFont.Weight.DemiBold)
+        self.assertIn("background: #ffffff", button.styleSheet())
+        self.assertIn("text-align: center", button.styleSheet())
+        self.assertAlmostEqual(button.geometry().right(), round(layout["header"].right()), delta=2)
+        self.assertAlmostEqual(button.geometry().top(), round(layout["header"].top() + 4.0), delta=1)
+
+        button.click()
+        export_callback.assert_called_once_with()
         self.assertTrue(layout["viewport"].contains(layout["molecule"]))
-        footer_items = preview_footer_item_rects(layout["footer"], 2)
-        self.assertEqual(len(footer_items), 2)
-        self.assertGreater(footer_items[0].width(), layout["footer"].width() * 0.9)
-        self.assertLess(footer_items[0].bottom(), footer_items[1].top())
+        self.assertTrue(layout["footer"].isNull())
 
         projected = project_preview_paint_scene(
             preview._scene,

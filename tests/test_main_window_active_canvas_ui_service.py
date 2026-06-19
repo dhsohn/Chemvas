@@ -89,6 +89,7 @@ class _FakePreview3D:
     def __init__(self) -> None:
         self.rdkit_adapter = None
         self.refresh_from_canvas = mock.Mock()
+        self.refresh_selected_from_canvas = mock.Mock()
 
     def set_rdkit_adapter(self, adapter) -> None:
         self.rdkit_adapter = adapter
@@ -184,7 +185,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.status_service.reset_mock()
         self.context_page_state_service.reset_mock()
         self.action_availability_service.reset_mock()
-        self.window.preview_3d.refresh_from_canvas.reset_mock()
+        self.window.preview_3d.refresh_selected_from_canvas.reset_mock()
 
         selection_info_state_for(self.window.canvas_b).callback("H2O", "18.0")
         callback_state_for(self.window.canvas_b).tool_change()
@@ -192,8 +193,9 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.window.canvas_b.runtime_state.history_service.state.change_callback()
         callback_state_for(self.window.canvas_b).error("Invalid molecule")
 
-        self.window.preview_3d.refresh_from_canvas.assert_called_once_with(self.window.canvas_b)
+        self.window.preview_3d.refresh_selected_from_canvas.assert_called_once_with(self.window.canvas_b)
         self.status_service.update_selection_status_label.assert_called_once_with(self.window)
+        self.status_service.update_chemical_status_label.assert_called_once_with("H2O", "18.0")
         self.context_page_state_service.sync_tool_actions_from_canvas.assert_called_once_with(self.window)
         self.status_service.update_zoom_label.assert_called_once_with(175)
         self.action_availability_service.update_action_availability.assert_has_calls(
@@ -215,14 +217,15 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
 
         self.service.handle_selection_info(self.window, "H2O", "18.0")
 
-        self.window.preview_3d.refresh_from_canvas.assert_called_once_with(self.window.canvas_b)
+        self.window.preview_3d.refresh_selected_from_canvas.assert_called_once_with(self.window.canvas_b)
         self.status_service.update_selection_status_label.assert_called_once_with(self.window)
+        self.status_service.update_chemical_status_label.assert_called_once_with("H2O", "18.0")
         self.action_availability_service.update_action_availability.assert_called_once_with(self.window)
 
     def test_handle_selection_info_ignores_deleted_window_canvas(self) -> None:
         class _DeletedWindow:
             def __init__(self) -> None:
-                self.preview_3d = SimpleNamespace(refresh_from_canvas=mock.Mock())
+                self.preview_3d = SimpleNamespace(refresh_selected_from_canvas=mock.Mock())
 
             @property
             def canvas(self):
@@ -232,8 +235,9 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
 
         self.service.handle_selection_info(window, "", "")
 
-        window.preview_3d.refresh_from_canvas.assert_not_called()
+        window.preview_3d.refresh_selected_from_canvas.assert_not_called()
         self.status_service.update_selection_status_label.assert_not_called()
+        self.status_service.update_chemical_status_label.assert_not_called()
         self.action_availability_service.update_action_availability.assert_not_called()
 
     def test_handle_selection_info_ignores_deleted_qt_callback_state(self) -> None:
@@ -241,8 +245,9 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
 
         self.service.handle_selection_info(self.window, "", "")
 
-        self.window.preview_3d.refresh_from_canvas.assert_called_once_with(self.window.canvas_a)
+        self.window.preview_3d.refresh_selected_from_canvas.assert_called_once_with(self.window.canvas_a)
         self.status_service.update_selection_status_label.assert_called_once_with(self.window)
+        self.status_service.update_chemical_status_label.assert_not_called()
         self.action_availability_service.update_action_availability.assert_not_called()
 
     def test_current_zoom_percent_rounds_scale_and_clamps_minimum(self) -> None:
@@ -273,7 +278,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.window.sync_tool_actions_from_canvas.assert_not_called()
         self.action_availability_service.update_action_availability.assert_called_once_with(self.window)
         self.window.update_action_availability.assert_not_called()
-        self.window.preview_3d.refresh_from_canvas.assert_called_once_with(self.window.canvas_b)
+        self.window.preview_3d.refresh_selected_from_canvas.assert_called_once_with(self.window.canvas_b)
         self.assertIs(self.window.preview_3d.rdkit_adapter, self.window.canvas_b.rdkit)
         self.tool_mode_controller_for_window.assert_called_once_with(self.window)
         self._assert_canvas_callbacks(self.window.canvas_a, active=False)

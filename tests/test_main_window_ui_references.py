@@ -62,6 +62,9 @@ def test_main_window_ui_references_apply_toolbar_assembly() -> None:
     assert refs.redo_button is redo_button
     refs.set_atom_input(atom_input)
     assert refs.atom_input is atom_input
+    preview_window = object()
+    refs.apply_preview_window_assembly(SimpleNamespace(preview_window=preview_window))
+    assert refs.preview_window is preview_window
 
     owner.close()
     app.processEvents()

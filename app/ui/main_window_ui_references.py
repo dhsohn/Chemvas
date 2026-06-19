@@ -4,11 +4,11 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from PyQt6.QtGui import QAction
-from PyQt6.QtWidgets import QDockWidget, QLineEdit, QSplitter, QToolButton
+from PyQt6.QtWidgets import QLineEdit, QToolButton
 
 if TYPE_CHECKING:
     from ui.main_window_icon_factory import MainWindowIconFactory
-    from ui.main_window_preview_panel import MainWindowPanelAssembly
+    from ui.main_window_preview_window import MainWindowPreviewWindowAssembly
     from ui.main_window_ui_assembly_service import MainWindowToolbarAssembly
 
 
@@ -22,8 +22,7 @@ class MainWindowUiReferences:
     preview_panel_button: QToolButton | None = None
     undo_button: QToolButton | None = None
     redo_button: QToolButton | None = None
-    panel_splitter: QSplitter | None = None
-    panel_dock: QDockWidget | None = None
+    preview_window: object | None = None
 
     def require_icon_factory(self) -> MainWindowIconFactory:
         if self.icon_factory is None:
@@ -44,9 +43,8 @@ class MainWindowUiReferences:
     def tool_action_for_key(self, action_key: str) -> QAction | None:
         return self.tool_actions.get(action_key)
 
-    def apply_panel_assembly(self, assembly: MainWindowPanelAssembly) -> None:
-        self.panel_splitter = assembly.splitter
-        self.panel_dock = assembly.dock
+    def apply_preview_window_assembly(self, assembly: MainWindowPreviewWindowAssembly) -> None:
+        self.preview_window = assembly.preview_window
 
 
 __all__ = ["MainWindowUiReferences"]

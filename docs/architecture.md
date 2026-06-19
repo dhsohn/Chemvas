@@ -26,8 +26,8 @@ When an operation touches multiple entity types at once (ex: atom creation plus 
 - Supported aliases (`Me`, `Et`, `OH`, `Ph`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `i-Pr`) should be expanded into explicit fragments at conversion time. Unsupported abbreviations must still fail loudly instead of guessing.
 - Wedge/hash bonds should be translated into RDKit bond directions on single bonds only. Invalid stereo usage should fail with a precise message.
 - `.xyz` is coordinate-only. Bond order and reaction semantics are not preserved in the output format and should not be treated as round-trippable state.
-- The preview panel should reuse the same conversion path as `.xyz` export to avoid divergence between what the user sees and what gets exported.
-- The right-side dock is a toggleable core workspace region for 3D preview. It stays on the same conversion path as `.xyz` export, but users can hide it when they do not need live 3D inspection.
+- The preview window should reuse the same conversion path as `.xyz` export to avoid divergence between what the user sees and what gets exported.
+- The 3D preview opens as a separate modeless window from the toolbar. It uses the selected-structure conversion path, owns the `Export 3D XYZ` action for the selected molecule, and shows an empty preview when no chemical structure is selected.
 - All workbook sheets are canvas sheets. Non-canvas workbook payloads are rejected during document validation.
 
 ## Planned Next Slices

@@ -34,16 +34,12 @@ def preview_panel_button_for_window(window):
     return ui_references_for_window(window).preview_panel_button
 
 
-def panel_splitter_for_window(window):
-    return ui_references_for_window(window).panel_splitter
+def preview_window_for_window(window):
+    return ui_references_for_window(window).preview_window
 
 
-def panel_dock_for_window(window):
-    return ui_references_for_window(window).panel_dock
-
-
-def apply_panel_assembly_for_window(window, assembly) -> None:
-    ui_references_for_window(window).apply_panel_assembly(assembly)
+def apply_preview_window_assembly_for_window(window, assembly) -> None:
+    ui_references_for_window(window).apply_preview_window_assembly(assembly)
 
 
 def undo_button_for_window(window):
@@ -60,12 +56,11 @@ def export_xyz_button_for_window(window):
 
 __all__ = [
     "atom_input_for_window",
-    "apply_panel_assembly_for_window",
+    "apply_preview_window_assembly_for_window",
     "export_xyz_button_for_window",
     "icon_factory_for_window",
-    "panel_dock_for_window",
-    "panel_splitter_for_window",
     "preview_panel_button_for_window",
+    "preview_window_for_window",
     "redo_button_for_window",
     "set_atom_input_for_window",
     "tool_action_for_window",

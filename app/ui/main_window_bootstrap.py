@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from ui.main_window_canvas_ports import active_canvas_for_window
 from ui.main_window_icon_factory import MainWindowIconFactory
 from ui.main_window_services import MainWindowServices, build_main_window_services
 from ui.main_window_state import MainWindowState
@@ -81,7 +80,6 @@ def bootstrap_main_window(window, runtime: MainWindowBootstrapRuntime) -> None:
     runtime.services.panel_service.init_panels(window)
     runtime.services.ui_assembly_service.apply_theme(window)
     runtime.services.active_canvas_ui_service.bind_active_canvas(window)
-    runtime.preview_3d.refresh_from_canvas(active_canvas_for_window(window))
     runtime.services.status_service.init_status_bar(window)
     runtime.services.context_bar_service.refresh_window(window)
 

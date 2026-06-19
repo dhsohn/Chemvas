@@ -274,7 +274,6 @@ def test_main_window_bootstrap_uses_runtime_services_without_window_service_wrap
         "window.on_canvas_tab_changed",
     )
 
-    assert "from ui.main_window_canvas_ports import active_canvas_for_window" in source
     assert "services = build_services()" in source
     assert "services.canvas_tab_ui_service.show_canvas_tab_context_menu(window, pos)" in source
     assert "services.canvas_tab_ui_service.on_canvas_tab_moved(window, from_index, to_index)" in source
@@ -283,7 +282,7 @@ def test_main_window_bootstrap_uses_runtime_services_without_window_service_wrap
     assert "runtime.services.canvas_tab_ui_service.ensure_add_sheet_tab(window)" in source
     assert "runtime.services.action_availability_service.update_action_availability(window)" in source
     assert "runtime.services.active_canvas_ui_service.bind_active_canvas(window)" in source
-    assert "runtime.preview_3d.refresh_from_canvas(active_canvas_for_window(window))" in source
+    assert "runtime.preview_3d.refresh_from_canvas(" not in source
     assert "window.services" not in source
     assert "window.preview_3d" not in source
     assert re.search(r"\bwindow\.canvas\b", source) is None
@@ -465,8 +464,7 @@ def test_main_window_delegates_toolbar_ui_references_to_reference_object() -> No
         "_preview_panel_button",
         "_undo_button",
         "_redo_button",
-        "_panel_splitter",
-        "_panel_dock",
+        "_preview_window",
         "_tool_actions",
         "_icon_factory",
     }
@@ -479,7 +477,7 @@ def test_main_window_delegates_toolbar_ui_references_to_reference_object() -> No
 
     assert "class MainWindowUiReferences" in refs_source
     assert "def apply_toolbar_assembly" in refs_source
-    assert "def apply_panel_assembly" in refs_source
+    assert "def apply_preview_window_assembly" in refs_source
     assert "def tool_action_for_key" in refs_source
     removed_ui_forwarders = {
         "atom_input",
@@ -487,8 +485,7 @@ def test_main_window_delegates_toolbar_ui_references_to_reference_object() -> No
         "export_xyz_button",
         "undo_button",
         "redo_button",
-        "panel_splitter",
-        "panel_dock",
+        "preview_window",
         "tool_actions",
         "icon_factory",
     }
@@ -501,8 +498,8 @@ def test_main_window_delegates_toolbar_ui_references_to_reference_object() -> No
     ui_ports_source = (APP_ROOT / "ui" / "main_window_ui_ports.py").read_text()
     assert "window.ui_references" in ui_ports_source
     assert "icon_factory_for_window" in ui_ports_source
-    assert "panel_dock_for_window" in ui_ports_source
-    assert "apply_panel_assembly_for_window" in ui_ports_source
+    assert "preview_window_for_window" in ui_ports_source
+    assert "apply_preview_window_assembly_for_window" in ui_ports_source
 
 
 def test_main_window_delegates_sheet_tab_references_to_reference_object() -> None:
@@ -1179,26 +1176,34 @@ def test_main_window_keeps_dialog_defaults_inside_action_services() -> None:
     assert "qtimer=QTimer" in tool_routing_service_source
 
 
-def test_main_window_panel_service_owns_preview_panel_dock_assembly() -> None:
+def test_main_window_panel_service_owns_preview_window_assembly() -> None:
     ui_assembly = APP_ROOT / "ui" / "main_window_ui_assembly_service.py"
     panel_service = APP_ROOT / "ui" / "main_window_panel_service.py"
-    preview_panel = APP_ROOT / "ui" / "main_window_preview_panel.py"
+    preview_window = APP_ROOT / "ui" / "main_window_preview_window.py"
+    preview_widget = APP_ROOT / "ui" / "preview_3d.py"
     ui_source = ui_assembly.read_text()
     panel_service_source = panel_service.read_text()
-    preview_panel_source = preview_panel.read_text()
+    preview_window_source = preview_window.read_text()
+    preview_widget_source = preview_widget.read_text()
 
     assert "init_panels" not in ui_source
     assert "QDockWidget" not in ui_source
     assert "QSplitter" not in ui_source
-    assert "from ui.main_window_preview_panel import build_preview_panel_dock" in panel_service_source
-    assert "assembly = build_preview_panel_dock(" in panel_service_source
-    assert "preview_widget=self._preview_for_window(window)" in panel_service_source
-    assert "self._apply_panel_assembly_for_window(window, assembly)" in panel_service_source
-    assert "dock = self._panel_dock_for_window(window)" in panel_service_source
+    assert "from ui.main_window_preview_window import build_preview_window" in panel_service_source
+    assert "assembly = build_preview_window(" in panel_service_source
+    assert "preview = self._preview_for_window(window)" in panel_service_source
+    assert "preview_widget=preview" in panel_service_source
+    assert "set_export_action(" in panel_service_source
+    assert "lambda: self._export_xyz_for_window(window, selected_only=True)" in panel_service_source
+    assert "icon_export_xyz" not in panel_service_source
+    assert "self._apply_preview_window_assembly_for_window(window, assembly)" in panel_service_source
+    assert "preview_window = self._preview_window_for_window(window)" in panel_service_source
     assert re.search(r"\bwindow\.panel_(?:splitter|dock)\b", panel_service_source) is None
-    assert "splitter.addWidget(preview_widget)" in preview_panel_source
-    assert "QDockWidget" in preview_panel_source
-    assert "QSplitter" in preview_panel_source
+    assert "preview_export_xyz_button" not in preview_window_source
+    assert "preview_export_xyz_button" in preview_widget_source
+    assert "layout.addWidget(preview_widget)" in preview_window_source
+    assert "QDockWidget" not in preview_window_source
+    assert "QSplitter" not in preview_window_source
 
 
 def test_main_window_action_availability_service_uses_injected_ports_and_public_buttons() -> None:

@@ -106,3 +106,12 @@ def test_refresh_status_context_uses_injected_zoom_port() -> None:
 
     current_zoom_percent_for_window.assert_called_once_with(window)
     service.update_zoom_label.assert_called_once_with(175)
+
+
+def test_chemical_status_text_skips_empty_fields() -> None:
+    service = _service()
+
+    assert service.chemical_status_text("C6H6", "78.11") == "Formula: C6H6   MW: 78.11"
+    assert service.chemical_status_text("C6H6", "") == "Formula: C6H6"
+    assert service.chemical_status_text("", "78.11") == "MW: 78.11"
+    assert service.chemical_status_text("", "") == ""

@@ -153,6 +153,26 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         message_box.warning.assert_called_once_with(self.window, "Export Error", "Failed to export XYZ:\nno exporter")
         self.assertEqual(self.document_session_service_for_window.call_count, 2)
 
+    def test_export_xyz_can_request_selected_structure_only(self) -> None:
+        file_dialog = mock.Mock()
+        file_dialog.getSaveFileName.return_value = ("/tmp/selected", "")
+        message_box = mock.Mock()
+        doc_service = active_canvas_for_window(self.window).services.canvas_document_session_service
+        doc_service.export_xyz_async = mock.Mock(
+            side_effect=lambda path, *, on_success, on_error, selected_only=False: on_success(path)
+        )
+
+        self.service.export_xyz(
+            self.window,
+            file_dialog=file_dialog,
+            message_box=message_box,
+            selected_only=True,
+        )
+
+        self.assertEqual(doc_service.export_xyz_async.call_args.args, ("/tmp/selected.xyz",))
+        self.assertEqual(doc_service.export_xyz_async.call_args.kwargs["selected_only"], True)
+        message_box.warning.assert_not_called()
+
     def test_export_figure_uses_options_without_style_preset_side_effect(self) -> None:
         file_dialog = mock.Mock()
         file_dialog.getSaveFileName.return_value = ("/tmp/figure", "")

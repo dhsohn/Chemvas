@@ -96,7 +96,7 @@ class MainWindowDocumentActionService:
             return
         self.save_canvas_to_path(window, path)
 
-    def export_xyz(self, window, *, file_dialog=None, message_box=None) -> None:
+    def export_xyz(self, window, *, file_dialog=None, message_box=None, selected_only: bool = False) -> None:
         file_dialog = QFileDialog if file_dialog is None else file_dialog
         message_box = QMessageBox if message_box is None else message_box
         dialog_path, _ = file_dialog.getSaveFileName(
@@ -119,10 +119,12 @@ class MainWindowDocumentActionService:
             window.statusBar().showMessage(previous_status)
 
         window.statusBar().showMessage(f"Exporting XYZ: {path}")
+        export_kwargs = {"selected_only": True} if selected_only else {}
         self._document_session_service_for_window(window).export_xyz_async(
             path,
             on_success=lambda export_path: window.statusBar().showMessage(f"Exported XYZ: {export_path}", 4000),
             on_error=handle_error,
+            **export_kwargs,
         )
 
     def export_figure(self, window, *, file_dialog=None, message_box=None) -> None:

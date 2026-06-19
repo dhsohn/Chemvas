@@ -63,12 +63,12 @@ from ui.main_window_tool_routing_service import MainWindowToolRoutingService
 from ui.main_window_tool_state_service import MainWindowToolStateService
 from ui.main_window_ui_assembly_service import MainWindowUIAssemblyService
 from ui.main_window_ui_ports import (
-    apply_panel_assembly_for_window,
+    apply_preview_window_assembly_for_window,
     atom_input_for_window,
     export_xyz_button_for_window,
     icon_factory_for_window,
-    panel_dock_for_window,
     preview_panel_button_for_window,
+    preview_window_for_window,
     redo_button_for_window,
     set_atom_input_for_window,
     tool_action_for_window,
@@ -250,8 +250,10 @@ def build_main_window_services() -> MainWindowServices:
     )
     panel_service = MainWindowPanelService(
         preview_for_window=preview_for_window,
-        apply_panel_assembly_for_window=apply_panel_assembly_for_window,
-        panel_dock_for_window=panel_dock_for_window,
+        active_canvas_for_window=active_canvas_for_window,
+        export_xyz_for_window=document_action_service.export_xyz,
+        apply_preview_window_assembly_for_window=apply_preview_window_assembly_for_window,
+        preview_window_for_window=preview_window_for_window,
         preview_panel_button_for_window=preview_panel_button_for_window,
     )
     panel_toolbar_callbacks = MainWindowPanelToolbarCallbacks(
@@ -259,8 +261,7 @@ def build_main_window_services() -> MainWindowServices:
         save_canvas_as=document_action_service.save_canvas_as,
         load_canvas=document_action_service.load_canvas,
         export_figure=document_action_service.export_figure,
-        export_xyz=document_action_service.export_xyz,
-        toggle_preview_panel=panel_service.toggle_preview_panel,
+        open_preview_window=panel_service.open_preview_window,
     )
     ui_assembly_service = MainWindowUIAssemblyService(
         scene_transform_controller_for_window=scene_transform_controller_for_window,
