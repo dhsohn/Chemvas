@@ -716,6 +716,12 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertTrue(insert_state_for(active_canvas_for_window(self.window)).template_active)
         self.assertEqual(insert_state_for(active_canvas_for_window(self.window)).template_ring_size, 4)
         self.assertEqual(insert_state_for(active_canvas_for_window(self.window)).template_ring_style, "regular")
+        self.assertEqual(insert_state_for(active_canvas_for_window(self.window)).template_preview_items, [])
+        self.assertEqual(insert_state_for(active_canvas_for_window(self.window)).template_preview_lines, [])
+        self.assertEqual(insert_state_for(active_canvas_for_window(self.window)).template_preview_dots, [])
+
+        self._hover_scene_point(QPointF(15.0, 15.0))
+
         self.assertGreater(len(insert_state_for(active_canvas_for_window(self.window)).template_preview_items), 0)
         self.assertGreater(len(insert_state_for(active_canvas_for_window(self.window)).template_preview_lines), 0)
         self.assertGreater(len(insert_state_for(active_canvas_for_window(self.window)).template_preview_dots), 0)

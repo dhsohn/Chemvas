@@ -6,7 +6,6 @@ from PyQt6.QtCore import QPointF
 
 from ui.benzene_preview_access import clear_benzene_preview_for
 from ui.canvas_insert_state import CanvasInsertState
-from ui.input_view_access import viewport_center_scene_pos_for
 from ui.insert_commit_service import InsertCommitService
 from ui.insert_mode_logic import (
     InsertSessionState,
@@ -51,7 +50,6 @@ class InsertTemplateService:
         session_state: Callable[[], InsertSessionState],
         apply_session_state: Callable[[InsertSessionState], None],
         cancel_smiles_insert: Callable[[], None],
-        render_template_preview: Callable[[QPointF], None] | None = None,
         template_geometry: TemplateGeometryResolverService | None = None,
     ) -> None:
         self.canvas = canvas
@@ -62,7 +60,6 @@ class InsertTemplateService:
         self._session_state = session_state
         self._apply_session_state = apply_session_state
         self._cancel_smiles_insert = cancel_smiles_insert
-        self._render_template_preview_callback = render_template_preview
 
     def begin_ring_template_insert(self, ring_size: int, style: str = "regular") -> None:
         next_state = begin_template_insert_state(self._session_state(), ring_size, style)
@@ -72,13 +69,6 @@ class InsertTemplateService:
             self._cancel_smiles_insert()
         clear_benzene_preview_for(self.canvas)
         self._apply_session_state(next_state)
-        self._render_template_preview(viewport_center_scene_pos_for(self.canvas))
-
-    def _render_template_preview(self, pos: QPointF) -> None:
-        if self._render_template_preview_callback is not None:
-            self._render_template_preview_callback(pos)
-            return
-        self.render_template_preview(pos)
 
     def cancel_template_insert(self) -> None:
         next_state = cancel_template_insert_state(self._session_state())

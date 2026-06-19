@@ -49,7 +49,6 @@ class InsertController:
             session_state=self.insert_session_state,
             apply_session_state=self.apply_insert_session_state,
             cancel_smiles_insert=lambda: self.cancel_smiles_insert(),
-            render_template_preview=lambda pos: self.render_template_preview(pos),
         )
         self.template_geometry = self.template_service.template_geometry
         self.smiles_service = InsertSmilesService(

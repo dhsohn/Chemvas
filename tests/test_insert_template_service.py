@@ -46,17 +46,16 @@ def _service_for(canvas: _FakeCanvas, **overrides) -> InsertTemplateService:
         session_state=lambda: _session_state(canvas),
         apply_session_state=lambda state: _apply_state(canvas, state),
         cancel_smiles_insert=overrides.pop("cancel_smiles_insert", mock.Mock()),
-        render_template_preview=overrides.pop("render_template_preview", None),
         **overrides,
     )
 
 
-def test_insert_template_service_begin_template_uses_callbacks_and_preview_state() -> None:
+def test_insert_template_service_begin_template_activates_state_without_initial_preview() -> None:
     canvas = _FakeCanvas()
     canvas.insert_state.smiles_active = True
     cancel_smiles = mock.Mock()
-    render_preview = mock.Mock()
-    service = _service_for(canvas, cancel_smiles_insert=cancel_smiles, render_template_preview=render_preview)
+    service = _service_for(canvas, cancel_smiles_insert=cancel_smiles)
+    service.render_template_preview = mock.Mock()
 
     service.begin_ring_template_insert(6, "benzene")
 
@@ -65,7 +64,7 @@ def test_insert_template_service_begin_template_uses_callbacks_and_preview_state
     assert canvas.insert_state.template_active
     assert canvas.insert_state.template_ring_size == 6
     assert canvas.insert_state.template_ring_style == "benzene"
-    assert (render_preview.call_args.args[0].x(), render_preview.call_args.args[0].y()) == (60.0, 40.0)
+    service.render_template_preview.assert_not_called()
 
 
 def test_insert_template_service_template_request_uses_injected_hit_testing() -> None:
