@@ -89,6 +89,10 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
             refresh_selection_outline=mock.Mock(),
         )
         self._bind_move_controller(view)
+        # The atom branch delegates to move_atom, which repositions the atom's
+        # registered label/dot by id (rather than moving the grabbed item
+        # directly) and marks the hit-test spatial index dirty.
+        set_atom_items_for(view, {1: atom_item})
 
         move_item_for(view, missing_item, 2.0, 3.0)
         move_item_for(view, missing_atom_item, 2.0, 3.0)
@@ -98,6 +102,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         self.assertEqual(atom_item.moves, [(2.0, 3.0)])
         view.bond_renderer.redraw_bond.assert_called_once_with(0)
         view.refresh_selection_outline.assert_not_called()
+        view.services.hit_testing_service.mark_spatial_index_dirty.assert_called_once_with()
 
     def test_move_item_updates_bond_mark_and_scene_item_payloads(self) -> None:
         bond_item = _FakeItem("bond", data1=0)

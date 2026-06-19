@@ -67,17 +67,27 @@ def apply_paste_payload(
             continue
         if atom_a not in result.atom_id_map or atom_b not in result.atom_id_map:
             continue
-        new_bond_id = add_bond(
-            result.atom_id_map[atom_a],
-            result.atom_id_map[atom_b],
-            int(bond_state.get("order", 1)),
-        )
+        new_a = result.atom_id_map[atom_a]
+        new_b = result.atom_id_map[atom_b]
+        # Defensively skip bonds a foreign/corrupt payload could contain rather
+        # than letting add_bond raise mid-paste (which would leave the document
+        # with atoms added but no bonds and no undo grouping). Mirrors the
+        # isinstance guards used for atoms above.
+        if new_a == new_b:
+            continue
+        try:
+            order = int(bond_state.get("order", 1))
+        except (TypeError, ValueError):
+            continue
+        if order not in (1, 2, 3):
+            continue
+        new_bond_id = add_bond(new_a, new_b, order)
         restore_bond_from_state(
             new_bond_id,
             {
-                "a": result.atom_id_map[atom_a],
-                "b": result.atom_id_map[atom_b],
-                "order": int(bond_state.get("order", 1)),
+                "a": new_a,
+                "b": new_b,
+                "order": order,
                 "style": bond_state.get("style", "single"),
                 "color": bond_state.get("color", "#000000"),
             },

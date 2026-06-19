@@ -77,6 +77,13 @@ class RDKitConversionHelper:
             )
             return None, None
         mol = rw.GetMol()
+        # Sanitization is best-effort here: this export/round-trip path tolerates
+        # structures RDKit cannot fully sanitize (e.g. unusual valences from a
+        # work-in-progress drawing) and lets the caller's downstream embedding
+        # surface any real failure. This deliberately differs from
+        # ``_build_conversion_rdkit_mol``, which is strict and aborts on a
+        # sanitize error. Keep the tolerant behavior (see
+        # test_model_to_rdkit_with_map_ignores_invalid_bonds_and_sanitize_errors).
         try:
             Chem.SanitizeMol(mol)
         except Exception:

@@ -353,6 +353,16 @@ class DocumentStateTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     build_document_payload(_single_sheet_state(model), version=SINGLE_SHEET_FILE_VERSION)
 
+    def test_extract_document_state_rejects_self_bond(self) -> None:
+        valid_atoms = {"0": {"element": "C", "x": 0.0, "y": 0.0, "color": "#000000", "explicit_label": False}}
+        self_bond_model = _model_state(
+            valid_atoms,
+            [{"a": 0, "b": 0, "order": 1, "style": "single", "color": "#000000"}],
+            1,
+        )
+        with self.assertRaises(ValueError):
+            build_document_payload(_single_sheet_state(self_bond_model), version=SINGLE_SHEET_FILE_VERSION)
+
     def test_extract_document_state_rejects_invalid_workbook_schema(self) -> None:
         valid_content = _single_sheet_state()
         invalid_states = [

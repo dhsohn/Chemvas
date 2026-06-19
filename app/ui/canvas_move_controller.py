@@ -28,12 +28,16 @@ class CanvasMoveController:
             atom_id = item.data(1)
             if not isinstance(atom_id, int):
                 return
-            atom = atom_for_id(self.canvas, atom_id)
-            if atom is None:
+            if atom_for_id(self.canvas, atom_id) is None:
                 return
-            atom.x += dx
-            atom.y += dy
-            item.moveBy(dx, dy)
+            # Delegate to move_atom so the atom's companions move together:
+            # its label/dot, attached marks, 3D coordinates, and the hit-test
+            # spatial index. The grabbed ``item`` is the registered label or
+            # dot, which move_atom repositions by id, so we must not also call
+            # item.moveBy here (that would double-move it). This mirrors the
+            # multi-atom move_atoms path and fixes single-atom drags that
+            # previously left marks behind and the spatial index stale.
+            self.move_atom(atom_id, dx, dy)
             for bond_id, bond in enumerate(bonds_for(self.canvas)):
                 if bond is None:
                     continue
