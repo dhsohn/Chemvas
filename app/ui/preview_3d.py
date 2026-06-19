@@ -21,10 +21,7 @@ from ui.preview_3d_painter import (
 )
 from ui.preview_3d_state import preview_payload_signature
 from ui.preview_3d_worker import Preview3DWorker
-from ui.structure_payload_access import (
-    build_3d_conversion_payload_for,
-    build_selected_3d_conversion_payload_for,
-)
+from ui.structure_payload_access import build_selected_3d_conversion_payload_for
 
 
 class Preview3D(QWidget):
@@ -74,14 +71,6 @@ class Preview3D(QWidget):
         button = self._ensure_export_xyz_button()
         button.setIcon(QIcon())
         self._sync_export_xyz_button()
-
-    def refresh_from_canvas(self, canvas) -> None:
-        try:
-            model, atom_annotations = build_3d_conversion_payload_for(canvas)
-        except Exception as exc:
-            self.clear_preview(str(exc))
-            return
-        self._set_canvas_structure(model, atom_annotations)
 
     def refresh_selected_from_canvas(self, canvas) -> None:
         try:

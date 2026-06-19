@@ -80,7 +80,7 @@ def test_bootstrap_main_window_initializes_runtime_references_and_services() -> 
             show_canvas_tab_context_menu=mock.Mock(),
         ),
     )
-    preview = SimpleNamespace(refresh_from_canvas=mock.Mock())
+    preview = SimpleNamespace(refresh_selected_from_canvas=mock.Mock())
     icon_factory_instance = object()
     build_tabs = mock.Mock(return_value=tab_assembly)
     build_services = mock.Mock(return_value=services)
@@ -149,6 +149,6 @@ def test_bootstrap_main_window_initializes_runtime_references_and_services() -> 
     services.panel_service.init_panels.assert_called_once_with(window)
     services.ui_assembly_service.apply_theme.assert_called_once_with(window)
     services.active_canvas_ui_service.bind_active_canvas.assert_called_once_with(window)
-    preview.refresh_from_canvas.assert_not_called()
+    preview.refresh_selected_from_canvas.assert_not_called()
     services.status_service.init_status_bar.assert_called_once_with(window)
     services.context_bar_service.refresh_window.assert_called_once_with(window)

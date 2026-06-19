@@ -3245,7 +3245,6 @@ def test_main_window_icon_factory_delegates_utility_drawing_to_renderer() -> Non
         "redo",
         "save",
         "open",
-        "export_xyz",
         "preview_panel",
         "add_sheet",
         "setup_sheet",

@@ -171,9 +171,6 @@ class MainWindowIconFactory:
     def icon_open(self) -> QIcon:
         return self.make_icon(self._utility_icons.draw_open)
 
-    def icon_export_xyz(self) -> QIcon:
-        return self.make_icon(self._utility_icons.draw_export_xyz)
-
     def icon_preview_panel(self) -> QIcon:
         return self.make_icon(self._utility_icons.draw_preview_panel)
 

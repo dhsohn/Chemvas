@@ -71,17 +71,6 @@ class MainWindowUtilityIconRenderer:
         path.closeSubpath()
         painter.drawPath(path)
 
-    def draw_export_xyz(self, painter) -> None:
-        painter.setPen(self._icon_pen(self._stroke_thin))
-        painter.drawRect(7, 8, 10, 12)
-        painter.drawLine(17, 8, 23, 12)
-        painter.drawLine(17, 20, 23, 24)
-        painter.drawLine(23, 12, 23, 24)
-        painter.drawLine(7, 8, 13, 12)
-        painter.drawLine(13, 12, 23, 12)
-        painter.drawLine(7, 20, 13, 24)
-        painter.drawLine(13, 24, 23, 24)
-
     def draw_preview_panel(self, painter) -> None:
         painter.setPen(self._icon_pen(self._stroke_thin))
         painter.setBrush(Qt.BrushStyle.NoBrush)

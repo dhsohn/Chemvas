@@ -158,10 +158,10 @@ class Preview3DRecoveryTest(unittest.TestCase):
         preview = self._create_preview(adapter)
 
         with mock.patch(
-            "ui.preview_3d.build_3d_conversion_payload_for",
+            "ui.preview_3d.build_selected_3d_conversion_payload_for",
             side_effect=lambda canvas: canvas.build_3d_conversion_payload(),
         ):
-            preview.refresh_from_canvas(canvas)
+            preview.refresh_selected_from_canvas(canvas)
             self._wait_for_rebuild()
 
             self.assertEqual(len(adapter.calls), 1)
@@ -169,7 +169,7 @@ class Preview3DRecoveryTest(unittest.TestCase):
             self.assertEqual(preview._formula_text, "")
             self.assertEqual(preview._mw_text, "")
 
-            preview.refresh_from_canvas(canvas)
+            preview.refresh_selected_from_canvas(canvas)
 
             self.assertIsNone(preview._scene)
             self.assertEqual(preview._message, "No structure selected")
@@ -177,7 +177,7 @@ class Preview3DRecoveryTest(unittest.TestCase):
             self.assertEqual(preview._formula_text, "")
             self.assertEqual(preview._mw_text, "")
 
-            preview.refresh_from_canvas(canvas)
+            preview.refresh_selected_from_canvas(canvas)
             self._wait_for_rebuild()
 
             self.assertEqual(len(adapter.calls), 2)
@@ -192,10 +192,10 @@ class Preview3DRecoveryTest(unittest.TestCase):
         preview = self._create_preview(adapter)
 
         with mock.patch(
-            "ui.preview_3d.build_3d_conversion_payload_for",
+            "ui.preview_3d.build_selected_3d_conversion_payload_for",
             side_effect=lambda canvas: canvas.build_3d_conversion_payload(),
         ):
-            preview.refresh_from_canvas(canvas)
+            preview.refresh_selected_from_canvas(canvas)
             self._wait_for_rebuild()
 
             self.assertEqual(len(adapter.calls), 1)
@@ -203,7 +203,7 @@ class Preview3DRecoveryTest(unittest.TestCase):
             self.assertEqual(preview._message, "Temporary 3D failure")
             self.assertIsNone(preview._current_signature)
 
-            preview.refresh_from_canvas(canvas)
+            preview.refresh_selected_from_canvas(canvas)
             self._wait_for_rebuild()
 
             self.assertEqual(len(adapter.calls), 2)

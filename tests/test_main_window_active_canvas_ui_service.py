@@ -88,7 +88,6 @@ class _FakeWindow:
 class _FakePreview3D:
     def __init__(self) -> None:
         self.rdkit_adapter = None
-        self.refresh_from_canvas = mock.Mock()
         self.refresh_selected_from_canvas = mock.Mock()
 
     def set_rdkit_adapter(self, adapter) -> None:
@@ -279,6 +278,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.action_availability_service.update_action_availability.assert_called_once_with(self.window)
         self.window.update_action_availability.assert_not_called()
         self.window.preview_3d.refresh_selected_from_canvas.assert_called_once_with(self.window.canvas_b)
+        self.status_service.update_chemical_status_label.assert_called_once_with("", "")
         self.assertIs(self.window.preview_3d.rdkit_adapter, self.window.canvas_b.rdkit)
         self.tool_mode_controller_for_window.assert_called_once_with(self.window)
         self._assert_canvas_callbacks(self.window.canvas_a, active=False)

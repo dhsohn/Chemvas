@@ -78,7 +78,6 @@ class _HarnessWindow(QMainWindow):
             icon_flip_v=self._blank_icon,
             icon_save=self._blank_icon,
             icon_open=self._blank_icon,
-            icon_export_xyz=self._blank_icon,
             icon_preview_panel=self._blank_icon,
             icon_setup_sheet=self._blank_icon,
             icon_undo=self._blank_icon,
