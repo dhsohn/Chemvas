@@ -179,7 +179,7 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         self.assertIs(assembly.redo_button, assembly.panel_bar.findChild(QToolButton, "redo_button"))
         self.assertEqual(
             self._toolbar_widget_groups(assembly.panel_bar)[0],
-            ["File", "undo_button", "redo_button"],
+            ["File", "preview_panel_button", "undo_button", "redo_button"],
         )
         self.assertEqual(
             self._toolbar_widget_groups(assembly.panel_bar)[1],
@@ -206,7 +206,7 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
             self._toolbar_widget_groups(assembly.panel_bar),
         )
         self.assertIn(
-            ["SMILES...", "smiles_render_button", "preview_panel_button"],
+            ["SMILES...", "smiles_render_button"],
             self._toolbar_widget_groups(assembly.panel_bar),
         )
         line_edits = assembly.panel_bar.findChildren(QLineEdit)

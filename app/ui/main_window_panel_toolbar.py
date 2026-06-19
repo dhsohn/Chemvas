@@ -170,6 +170,7 @@ def build_panel_toolbar(
     smiles_input.returnPressed.connect(lambda: insert_controller.begin_smiles_insert(smiles_input.text()))
 
     panel_bar.addWidget(save_button)
+    panel_bar.addWidget(preview_panel_btn)
     panel_bar.addWidget(undo_btn)
     panel_bar.addWidget(redo_btn)
     panel_bar.addSeparator()
@@ -191,7 +192,6 @@ def build_panel_toolbar(
     panel_bar.addSeparator()
     panel_bar.addWidget(smiles_input)
     panel_bar.addWidget(smiles_button)
-    panel_bar.addWidget(preview_panel_btn)
     panel_bar.addSeparator()
 
     for button in (
