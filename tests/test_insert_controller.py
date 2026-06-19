@@ -402,7 +402,7 @@ class InsertControllerTest(unittest.TestCase):
         controller.cancel_smiles_insert.assert_not_called()
         controller.render_template_preview.assert_not_called()
 
-    def test_begin_ring_template_insert_cancels_smiles_and_renders_preview(self) -> None:
+    def test_begin_ring_template_insert_cancels_smiles_without_rendering_initial_preview(self) -> None:
         canvas = _FakeCanvas()
         canvas.insert_state.smiles_active = True
         controller = _controller_for(canvas)
@@ -416,8 +416,7 @@ class InsertControllerTest(unittest.TestCase):
         self.assertTrue(canvas.insert_state.template_active)
         self.assertEqual(canvas.insert_state.template_ring_size, 6)
         self.assertEqual(canvas.insert_state.template_ring_style, "benzene")
-        preview_pos = controller.render_template_preview.call_args.args[0]
-        self.assertEqual((preview_pos.x(), preview_pos.y()), (60.0, 40.0))
+        controller.render_template_preview.assert_not_called()
 
     def test_begin_smiles_insert_blank_is_noop(self) -> None:
         canvas = _FakeCanvas()
