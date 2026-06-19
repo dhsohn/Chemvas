@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from PyQt6.QtCore import QTimer
+
 from ui.canvas_view import CanvasView
 from ui.main_window_canvas_logic import bind_active_canvas_callbacks
 from ui.rdkit_adapter_access import rdkit_adapter_for
@@ -86,6 +88,13 @@ class MainWindowActiveCanvasUIService:
         # through the same path as a live selection change. Without this the
         # Formula/MW status label keeps the previous canvas's value when the
         # active canvas switches without a selection event firing.
+        #
+        # Defer to the next event-loop turn: emit_selection_info_for can run a
+        # synchronous RDKit formula/MW computation, which we keep off the
+        # canvas-switch critical path so switching tabs stays responsive.
+        QTimer.singleShot(0, lambda: self._emit_active_selection_info(window))
+
+    def _emit_active_selection_info(self, window) -> None:
         try:
             canvas = self._active_canvas_for_window(window)
         except RuntimeError:
