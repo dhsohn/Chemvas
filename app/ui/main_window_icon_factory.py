@@ -11,8 +11,10 @@ from PyQt6.QtGui import (
 
 from ui.main_window_arrow_icon_renderer import MainWindowArrowIconRenderer
 from ui.main_window_bond_icon_renderer import MainWindowBondIconRenderer
+from ui.main_window_design_icon_renderer import draw_design_icon
 from ui.main_window_icon_canvas_style import MainWindowIconCanvasStyle
 from ui.main_window_icon_pixmap_factory import MainWindowIconPixmapFactory
+from ui.main_window_palette import PALETTE
 from ui.main_window_template_icon_renderer import MainWindowTemplateIconRenderer
 from ui.main_window_tool_icon_renderer import MainWindowToolIconRenderer
 from ui.main_window_utility_icon_renderer import MainWindowUtilityIconRenderer
@@ -24,10 +26,10 @@ class MainWindowIconFactory:
     ICON_CONTENT_MAX = 25
     ICON_CENTER = ICON_SIZE // 2
 
-    STROKE_COLOR = "#2f2f2c"
-    MUTED_STROKE_COLOR = "#8c8c87"
-    PALE_FILL_COLOR = "#ededeb"
-    ACCENT_FILL_COLOR = "#d3d3ce"
+    STROKE_COLOR = PALETTE["icon"]
+    MUTED_STROKE_COLOR = PALETTE["icon_muted"]
+    PALE_FILL_COLOR = PALETTE["icon_pale_fill"]
+    ACCENT_FILL_COLOR = PALETTE["icon_accent_fill"]
 
     # Stroke weights are kept in a tight band so every icon reads as one set.
     # Line work converges on ~1.8; only bond/ring glyphs stay a touch heavier
@@ -116,11 +118,14 @@ class MainWindowIconFactory:
     def make_icon(self, painter_fn, size: int | None = None) -> QIcon:
         return self._pixmap_icons.make_icon(painter_fn, size=size)
 
+    def make_design_icon(self, name: str) -> QIcon:
+        return self.make_icon(lambda painter: draw_design_icon(painter, name), size=self.ICON_SIZE)
+
     def icon_select(self) -> QIcon:
-        return self.make_icon(self._tool_icons.draw_select)
+        return self.make_design_icon("move")
 
     def icon_bond(self) -> QIcon:
-        return self.make_icon(self._bond_icons.draw_bond)
+        return self.make_design_icon("bond")
 
     def icon_bond_bold(self) -> QIcon:
         return self.make_icon(self._bond_icons.draw_bold_bond)
@@ -134,11 +139,17 @@ class MainWindowIconFactory:
     def icon_mark_minus(self) -> QIcon:
         return self.make_icon(self._tool_icons.draw_mark_minus)
 
+    def icon_mark_circled_plus(self) -> QIcon:
+        return self.make_design_icon("circled_plus")
+
+    def icon_mark_circled_minus(self) -> QIcon:
+        return self.make_design_icon("circled_minus")
+
     def icon_mark_radical(self) -> QIcon:
         return self.make_icon(self._tool_icons.draw_mark_radical)
 
     def icon_text(self) -> QIcon:
-        return self.make_icon(self._tool_icons.draw_text)
+        return self.make_design_icon("atom")
 
     def benzene_icon_inner_segments(
         self,
@@ -154,49 +165,49 @@ class MainWindowIconFactory:
         )
 
     def icon_ring(self) -> QIcon:
-        return self.make_icon(self._bond_icons.draw_ring, size=self.ICON_SIZE)
+        return self.make_design_icon("benzene")
 
     def icon_ring_fill(self) -> QIcon:
         return self.make_icon(self._tool_icons.draw_ring_fill)
 
     def icon_undo(self) -> QIcon:
-        return self.make_icon(self._utility_icons.draw_undo)
+        return self.make_design_icon("undo")
 
     def icon_redo(self) -> QIcon:
-        return self.make_icon(self._utility_icons.draw_redo)
+        return self.make_design_icon("redo")
 
     def icon_save(self) -> QIcon:
-        return self.make_icon(self._utility_icons.draw_save)
+        return self.make_design_icon("save")
 
     def icon_open(self) -> QIcon:
-        return self.make_icon(self._utility_icons.draw_open)
+        return self.make_design_icon("open")
 
     def icon_preview_panel(self) -> QIcon:
-        return self.make_icon(self._utility_icons.draw_preview_panel)
+        return self.make_design_icon("panel_right")
 
     def icon_add_sheet(self) -> QIcon:
-        return self.make_icon(self._utility_icons.draw_add_sheet)
+        return self.make_design_icon("sheet")
 
     def icon_setup_sheet(self) -> QIcon:
-        return self.make_icon(self._utility_icons.draw_setup_sheet)
+        return self.make_design_icon("sheet")
 
     def icon_templates(self) -> QIcon:
         return self.make_icon(self._template_icons.draw_templates)
 
     def icon_info(self) -> QIcon:
-        return self.make_icon(self._utility_icons.draw_info)
+        return self.make_design_icon("info")
 
     def icon_bond_double(self) -> QIcon:
-        return self.make_icon(self._bond_icons.draw_double_bond)
+        return self.make_design_icon("bond_double")
 
     def icon_bond_triple(self) -> QIcon:
-        return self.make_icon(self._bond_icons.draw_triple_bond)
+        return self.make_design_icon("bond_triple")
 
     def icon_bond_wedge(self) -> QIcon:
-        return self.make_icon(self._bond_icons.draw_wedge_bond)
+        return self.make_design_icon("wedge")
 
     def icon_bond_hash(self) -> QIcon:
-        return self.make_icon(self._bond_icons.draw_hash_bond)
+        return self.make_design_icon("hash")
 
     def icon_bond_dotted(self) -> QIcon:
         return self.make_icon(self._bond_icons.draw_dotted_bond)
@@ -223,31 +234,31 @@ class MainWindowIconFactory:
         return self.make_icon(lambda painter: self._template_icons.draw_template_preview(painter, label))
 
     def icon_flip_h(self) -> QIcon:
-        return self.make_icon(self._tool_icons.draw_flip_h)
+        return self.make_design_icon("flip_h")
 
     def icon_flip_v(self) -> QIcon:
-        return self.make_icon(self._tool_icons.draw_flip_v)
+        return self.make_design_icon("flip_v")
 
     def icon_arrow(self) -> QIcon:
-        return self.make_icon(self._arrow_icons.draw_arrow)
+        return self.make_design_icon("arrow")
 
     def icon_ts_bracket(self) -> QIcon:
-        return self.make_icon(self._tool_icons.draw_ts_bracket)
+        return self.make_design_icon("bracket")
 
     def icon_bracket_preview(self, kind: str) -> QIcon:
         return self.make_icon(lambda painter: self._tool_icons.draw_bracket_preview(painter, kind))
 
     def icon_orbital(self) -> QIcon:
-        return self.make_icon(self._tool_icons.draw_orbital)
+        return self.make_design_icon("orbital")
 
     def icon_move(self) -> QIcon:
-        return self.make_icon(self._tool_icons.draw_move)
+        return self.make_design_icon("move")
 
     def icon_color(self) -> QIcon:
-        return self.make_icon(self._tool_icons.draw_color)
+        return self.make_design_icon("color")
 
     def icon_perspective(self) -> QIcon:
-        return self.make_icon(self._tool_icons.draw_perspective)
+        return self.make_design_icon("perspective")
 
 
 __all__ = ["MainWindowIconFactory"]

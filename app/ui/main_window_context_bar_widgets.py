@@ -18,6 +18,7 @@ from ui.main_window_palette import PALETTE
 from ui.main_window_theme import (
     CONTEXT_BAR_BUTTON_HEIGHT,
     CONTEXT_BAR_ICON_SIZE,
+    CONTEXT_SEGMENT_STYLE,
     TOOLBAR_BUTTON_SIZE,
     TOOLBAR_BUTTON_STYLE,
 )
@@ -47,7 +48,7 @@ _ARROW_COMPACT_SLIDER_STYLE = (
     " height: 12px;"
     f" background: {_P['accent']};"
     " border: none;"
-    " border-radius: 0px;"
+    " border-radius: 6px;"
     " margin: -4px 0px;"
     "}"
     "QSlider#arrowCompactSlider::handle:horizontal:hover {"
@@ -82,7 +83,7 @@ def divider() -> QFrame:
     line = QFrame()
     line.setFrameShape(QFrame.Shape.VLine)
     line.setFixedHeight(18)
-    line.setStyleSheet("color: #e0e0dd;")
+    line.setStyleSheet(f"color: {_P['border_soft']};")
     return line
 
 
@@ -101,6 +102,39 @@ def icon_button(
     button.setCheckable(checkable)
     button.setStyleSheet(_ICON_BUTTON_STYLE)
     button.setCursor(Qt.CursorShape.PointingHandCursor)
+    return button
+
+
+def segment_button(
+    text: str,
+    tooltip: str,
+    *,
+    checkable: bool = False,
+) -> QToolButton:
+    button = QToolButton()
+    button.setText(text)
+    button.setToolTip(tooltip)
+    button.setStatusTip(tooltip)
+    button.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT)
+    button.setCheckable(checkable)
+    button.setAutoRaise(True)
+    button.setCursor(Qt.CursorShape.PointingHandCursor)
+    button.setStyleSheet(CONTEXT_SEGMENT_STYLE)
+    return button
+
+
+def length_field_button(text: str, tooltip: str) -> QToolButton:
+    button = segment_button(text, tooltip)
+    button.setObjectName("bondLengthField")
+    button.setStyleSheet(
+        CONTEXT_SEGMENT_STYLE
+        + "QToolButton#bondLengthField {"
+        f" background: {_P['surface_input']};"
+        f" border-color: {_P['border_strong']};"
+        " font-family: Menlo, Monaco, Consolas, monospace;"
+        " padding: 0px 7px;"
+        "}"
+    )
     return button
 
 
@@ -157,12 +191,12 @@ def color_swatch_button(label: str, hex_value: str, tooltip_prefix: str) -> QToo
     button.setStyleSheet(
         "QToolButton {"
         f" background-color: {hex_value};"
-        " border: 1px solid #8a8a84;"
+        f" border: 1px solid {_P['icon_muted']};"
         " border-radius: 5px;"
         " padding: 0px;"
         "}"
-        "QToolButton:hover { border: 2px solid #0d9488; }"
-        "QToolButton:pressed { border: 2px solid #075f57; }"
+        f"QToolButton:hover {{ border: 2px solid {_P['accent']}; }}"
+        f"QToolButton:pressed {{ border: 2px solid {_P['accent_pressed']}; }}"
     )
     return button
 
@@ -173,6 +207,8 @@ __all__ = [
     "divider",
     "hint_label",
     "icon_button",
+    "length_field_button",
     "new_context_page",
+    "segment_button",
     "slider_dropdown_button",
 ]

@@ -32,6 +32,7 @@ class _HarnessWindow(QMainWindow):
             icon_perspective=self._blank_icon,
             icon_color=self._blank_icon,
             icon_ring_fill=self._blank_icon,
+            icon_orbital=self._blank_icon,
             icon_bond_bold=self._blank_icon,
             icon_bond_wedge=self._blank_icon,
             icon_bond_hash=self._blank_icon,
@@ -115,7 +116,6 @@ class MainWindowToolActionServiceTest(unittest.TestCase):
         self.service.activate_ring_fill_tool(self.window)
 
         self.context_page_state_service.show_context_page.assert_called_once_with(self.window, "ring_fill")
-        self.assertEqual(self.window.statusBar().currentMessage(), "Ring Fill Tool")
         self.status_service.refresh_status_context.assert_called_once_with(self.window)
 
     def test_build_tool_actions_wires_tool_bond_and_mark_callbacks(self) -> None:

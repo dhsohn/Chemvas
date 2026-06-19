@@ -159,6 +159,9 @@ class CanvasGeometryController:
             rect = metrics.boundingRect("+" if kind == "plus" else "-")
             half_diagonal = math.hypot(rect.width(), rect.height()) * 0.5
             return max(half_diagonal, metrics.height() * 0.35) + gap
+        if kind in {"circled_plus", "circled_minus"}:
+            radius = max(4.0, QFontMetricsF(atom_font_for(self.canvas)).height() * 0.26)
+            return radius + max(0.9, bond_line_width_for(self.canvas) * 0.65) + gap
         return gap
 
     def mark_target_distance_for_atom(

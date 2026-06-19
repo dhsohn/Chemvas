@@ -9,6 +9,7 @@ from PyQt6.QtCore import QPointF, QRectF, Qt, QThread, QTimer
 from PyQt6.QtGui import QFont, QFontMetricsF, QIcon, QPainter
 from PyQt6.QtWidgets import QToolButton, QWidget
 
+from ui.main_window_palette import PALETTE
 from ui.preview_3d_interaction import (
     preview_drag_rotation,
     preview_zoom_for_wheel_delta,
@@ -278,23 +279,23 @@ class Preview3D(QWidget):
         button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         button.clicked.connect(lambda _checked=False: self._handle_export_xyz_clicked())
         button.setStyleSheet(
-            """
-            QToolButton#preview_export_xyz_button {
-                background: #ffffff;
-                border: 1px solid #c3c9c2;
-                border-radius: 11px;
-                color: #41514a;
+            f"""
+            QToolButton#preview_export_xyz_button {{
+                background: {PALETTE["surface_input"]};
+                border: 1px solid {PALETTE["border_strong"]};
+                border-radius: 8px;
+                color: {PALETTE["text"]};
                 padding: 0;
                 text-align: center;
-            }
-            QToolButton#preview_export_xyz_button:hover {
-                background: #ffffff;
-                border-color: #aeb7ad;
-            }
-            QToolButton#preview_export_xyz_button:pressed {
-                background: #f4f6f4;
-                border-color: #9fa99e;
-            }
+            }}
+            QToolButton#preview_export_xyz_button:hover {{
+                background: {PALETTE["surface_input"]};
+                border-color: {PALETTE["checked_border"]};
+            }}
+            QToolButton#preview_export_xyz_button:pressed {{
+                background: {PALETTE["pressed"]};
+                border-color: {PALETTE["accent_pressed"]};
+            }}
             """
         )
         self._export_xyz_button = button

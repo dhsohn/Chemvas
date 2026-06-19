@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 try:
     from PyQt6.QtCore import QPointF, QRectF, Qt
     from PyQt6.QtGui import QColor
-    from PyQt6.QtWidgets import QApplication
+    from PyQt6.QtWidgets import QApplication, QGraphicsPathItem
 except ModuleNotFoundError:
     QApplication = None
     QPointF = None
@@ -174,18 +174,27 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
     def test_mark_helpers_build_supported_items_and_center_text(self) -> None:
         radical = self.service.build_mark_item("radical")
         plus = self.service.build_mark_item("plus")
+        circled_plus = self.service.build_mark_item("circled_plus")
+        circled_minus = self.service.build_mark_item("circled_minus")
 
         self.assertIsNotNone(radical)
         self.assertIsNotNone(plus)
+        self.assertIsInstance(circled_plus, QGraphicsPathItem)
+        self.assertIsInstance(circled_minus, QGraphicsPathItem)
         self.assertIsNone(self.service.build_mark_item("unsupported"))
         self.assertEqual(plus.toPlainText(), "+")
         self.assertEqual(radical.pen().style(), Qt.PenStyle.NoPen)
+        self.assertEqual(circled_plus.brush().style(), Qt.BrushStyle.NoBrush)
+        self.assertEqual(circled_minus.brush().style(), Qt.BrushStyle.NoBrush)
+        self.assertGreater(circled_plus.path().elementCount(), circled_minus.path().elementCount())
 
         self.service.set_mark_center(plus, QPointF(10.0, 12.0))
         self.service.set_mark_center(radical, QPointF(14.0, 16.0))
+        self.service.set_mark_center(circled_plus, QPointF(18.0, 20.0))
 
         self.assertEqual(self.service.mark_center(plus), QPointF(10.0, 12.0))
         self.assertEqual(self.service.mark_center(radical), QPointF(14.0, 16.0))
+        self.assertEqual(self.service.mark_center(circled_plus), QPointF(18.0, 20.0))
 
 
 if __name__ == "__main__":

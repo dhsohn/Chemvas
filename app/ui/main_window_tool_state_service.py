@@ -6,7 +6,6 @@ from ui.main_window_toolbar_logic import (
     bond_style_from_label,
     orbital_type_from_label,
     tool_action_key_for_canvas_state,
-    tool_display_name,
 )
 
 
@@ -57,12 +56,10 @@ class MainWindowToolStateService:
             controller.set_tool(tool)
         if tool == "bond" and reset_bond_style:
             self.set_bond_style(window, "Single")
-        window.statusBar().showMessage(f"{tool_display_name(tool)} Tool")
         self._status.refresh_status_context(window)
 
     def set_mark_kind(self, window, kind: str) -> None:
         self._tool_mode_controller(window).set_mark_kind(kind)
-        window.statusBar().showMessage("Mark Tool")
         self._status.refresh_status_context(window)
 
     def set_arrow_type(self, window, value: str) -> None:
@@ -70,7 +67,6 @@ class MainWindowToolStateService:
 
     def set_bracket_type(self, window, value: str) -> None:
         self._tool_mode_controller(window).set_bracket_type(value)
-        window.statusBar().showMessage("Brackets Tool")
         self._status.refresh_status_context(window)
 
     def set_orbital_type(self, window, value: str) -> None:

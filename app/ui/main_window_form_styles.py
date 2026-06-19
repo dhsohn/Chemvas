@@ -13,7 +13,7 @@ def main_window_form_stylesheet(palette) -> str:
                 selection-background-color: {_P["checked_bg"]};
                 selection-color: {_P["checked_text"]};
             }}
-            QLineEdit:focus, QComboBox:focus {{
+            QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {{
                 border-color: {_P["accent"]};
             }}
             QSpinBox, QDoubleSpinBox {{
@@ -119,6 +119,10 @@ def main_window_form_stylesheet(palette) -> str:
             }}
             QDialog QPushButton:hover, QMessageBox QPushButton:hover {{
                 background: {_P["hover"]};
+                border-color: {_P["checked_border"]};
+            }}
+            QDialog QPushButton:pressed, QMessageBox QPushButton:pressed {{
+                background: {_P["pressed"]};
             }}
             QSlider::groove:horizontal {{
                 height: 4px;

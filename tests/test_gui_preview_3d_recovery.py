@@ -18,6 +18,7 @@ except ModuleNotFoundError:
 if QApplication is not None:
     from core.model import MoleculeModel
     from core.rdkit_adapter import Molecule3DAtom, Molecule3DBond, Molecule3DScene
+    from ui.main_window_palette import PALETTE
     from ui.preview_3d import Preview3D
     from ui.preview_3d_painter import (
         preview_footer_height_for_lines,
@@ -412,7 +413,9 @@ class Preview3DRecoveryTest(unittest.TestCase):
         self.assertEqual(button.toolButtonStyle(), Qt.ToolButtonStyle.ToolButtonTextOnly)
         self.assertEqual(button.font().pixelSize(), 11)
         self.assertEqual(button.font().weight(), QFont.Weight.DemiBold)
-        self.assertIn("background: #ffffff", button.styleSheet())
+        self.assertIn(f"background: {PALETTE['surface_input']}", button.styleSheet())
+        self.assertIn(f"border: 1px solid {PALETTE['border_strong']}", button.styleSheet())
+        self.assertIn(f"border-color: {PALETTE['checked_border']}", button.styleSheet())
         self.assertIn("text-align: center", button.styleSheet())
         self.assertAlmostEqual(button.geometry().right(), round(layout["header"].right()), delta=2)
         self.assertAlmostEqual(button.geometry().top(), round(layout["header"].top() + 4.0), delta=1)

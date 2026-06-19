@@ -79,6 +79,44 @@ def test_active_tool_status_text_respects_ring_fill_override() -> None:
     active_tool_name_for_window.assert_not_called()
 
 
+def test_active_tool_hint_text_describes_visible_status_message() -> None:
+    service = _service(
+        active_tool_name_for_window=mock.Mock(return_value="bond"),
+        active_canvas_or_none_for_window=mock.Mock(return_value=object()),
+        context_bar_page_override_for_window=mock.Mock(return_value=None),
+    )
+
+    assert service.active_tool_hint_text(SimpleNamespace()) == "Bond: click-drag to draw"
+
+
+def test_active_tool_hint_text_respects_ring_fill_override_without_canvas_lookup() -> None:
+    active_tool_name_for_window = mock.Mock(return_value="select")
+    active_canvas_or_none_for_window = mock.Mock(return_value=object())
+    service = _service(
+        active_tool_name_for_window=active_tool_name_for_window,
+        active_canvas_or_none_for_window=active_canvas_or_none_for_window,
+        context_bar_page_override_for_window=mock.Mock(return_value="ring_fill"),
+    )
+
+    assert service.active_tool_hint_text(SimpleNamespace()) == "Ring Fill: choose fill color"
+    active_canvas_or_none_for_window.assert_not_called()
+    active_tool_name_for_window.assert_not_called()
+
+
+def test_show_active_tool_hint_updates_status_bar_message() -> None:
+    service = _service(
+        active_tool_name_for_window=mock.Mock(return_value="select"),
+        active_canvas_or_none_for_window=mock.Mock(return_value=object()),
+        context_bar_page_override_for_window=mock.Mock(return_value=None),
+    )
+    bar = mock.Mock()
+    window = SimpleNamespace(statusBar=mock.Mock(return_value=bar))
+
+    service.show_active_tool_hint(window)
+
+    bar.showMessage.assert_called_once_with("Select: click or drag marquee")
+
+
 def test_show_error_message_uses_timer_default_inside_status_service() -> None:
     service = _service()
     bar = mock.Mock()

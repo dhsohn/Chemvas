@@ -3,7 +3,15 @@ from __future__ import annotations
 import math
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
-from PyQt6.QtGui import QBrush, QColor, QFont, QPainterPath, QPainterPathStroker, QPen
+from PyQt6.QtGui import (
+    QBrush,
+    QColor,
+    QFont,
+    QFontMetricsF,
+    QPainterPath,
+    QPainterPathStroker,
+    QPen,
+)
 from PyQt6.QtWidgets import QGraphicsEllipseItem, QGraphicsPathItem, QGraphicsTextItem
 
 from ui.bracket_types import LEGACY_TS_BRACKET_KIND, normalized_bracket_kind
@@ -31,6 +39,30 @@ from ui.renderer_style_access import (
 from ui.scene_item_access import add_item_to_canvas_scene
 
 
+class _ChargeCircleMarkItem(NoSelectPathItem):
+    def __init__(self, path: QPainterPath, *, hit_padding: float = 0.0) -> None:
+        super().__init__(path)
+        self._hit_padding = max(0.0, float(hit_padding))
+
+    def boundingRect(self):
+        rect = super().boundingRect()
+        if self._hit_padding <= 0.0:
+            return rect
+        return rect.adjusted(
+            -self._hit_padding,
+            -self._hit_padding,
+            self._hit_padding,
+            self._hit_padding,
+        )
+
+    def shape(self) -> QPainterPath:
+        stroker = QPainterPathStroker()
+        stroker.setWidth(max(self.pen().widthF(), self._hit_padding * 2.0))
+        stroker.setCapStyle(Qt.PenCapStyle.RoundCap)
+        stroker.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        return stroker.createStroke(self.path())
+
+
 class CanvasSceneDecorationBuildService:
     def __init__(self, canvas, *, arrow_build_service=None) -> None:
         self.canvas = canvas
@@ -51,7 +83,28 @@ class CanvasSceneDecorationBuildService:
             text_item.setDefaultTextColor(QColor(atom_color_for(self.canvas)))
             text_item.setPlainText("+" if kind == "plus" else "-")
             return text_item
+        if kind in {"circled_plus", "circled_minus"}:
+            return self._build_circled_charge_mark(kind, selection_radius)
         return None
+
+    def _build_circled_charge_mark(self, kind: str, selection_radius: float):
+        radius = max(4.0, QFontMetricsF(atom_font_for(self.canvas)).height() * 0.26)
+        stroke_width = max(0.9, bond_line_width_for(self.canvas) * 0.65)
+        symbol_extent = radius * 0.48
+        path = QPainterPath()
+        path.addEllipse(QRectF(-radius, -radius, radius * 2.0, radius * 2.0))
+        path.moveTo(-symbol_extent, 0.0)
+        path.lineTo(symbol_extent, 0.0)
+        if kind == "circled_plus":
+            path.moveTo(0.0, -symbol_extent)
+            path.lineTo(0.0, symbol_extent)
+        item = _ChargeCircleMarkItem(path, hit_padding=max(0.0, selection_radius - radius))
+        pen = QPen(QColor(atom_color_for(self.canvas)), stroke_width, Qt.PenStyle.SolidLine)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        item.setPen(pen)
+        item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+        return item
 
     def mark_center(self, item) -> QPointF:
         if isinstance(item, QGraphicsTextItem):

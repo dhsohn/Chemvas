@@ -3,6 +3,9 @@ from __future__ import annotations
 from PyQt6.QtCore import QSize, Qt
 from PyQt6.QtWidgets import (
     QButtonGroup,
+    QLabel,
+    QLineEdit,
+    QSizePolicy,
     QStackedWidget,
     QToolBar,
     QToolButton,
@@ -13,7 +16,9 @@ from ui.canvas_insert_state import insert_state_for
 from ui.canvas_tool_settings_state import tool_settings_state_for
 from ui.main_window_context_bar_pages import bond_label_for_state
 from ui.main_window_theme import (
+    CONTEXT_BAR_BUTTON_HEIGHT,
     CONTEXT_BAR_CONTENT_HEIGHT,
+    SMILES_RENDER_BUTTON_STYLE,
     TOOLBAR_ICON_SIZE,
     TOOLBAR_THICKNESS,
 )
@@ -27,6 +32,7 @@ _TOOL_PAGE_KEYS = {
     "mark": "mark",
     "benzene": "ring",
     "color": "color",
+    "orbital": "orbital",
 }
 
 
@@ -40,12 +46,14 @@ class MainWindowContextBarService:
         active_tool_name_for_window,
         active_canvas_or_none_for_window,
         context_bar_page_override_for_window,
+        insert_controller_for_window,
         set_atom_input_for_window,
     ) -> None:
         self._page_builder = page_builder
         self._active_tool_name_for_window = active_tool_name_for_window
         self._active_canvas_or_none_for_window = active_canvas_or_none_for_window
         self._context_bar_page_override_for_window = context_bar_page_override_for_window
+        self._insert_controller_for_window = insert_controller_for_window
         self._set_atom_input_for_window = set_atom_input_for_window
         self._stack: QStackedWidget | None = None
         self._pages: dict[str, QWidget] = {}
@@ -70,6 +78,7 @@ class MainWindowContextBarService:
 
         stack = QStackedWidget()
         stack.setFixedHeight(CONTEXT_BAR_CONTENT_HEIGHT)
+        stack.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._stack = stack
         context_pages = self._page_builder.build(window)
         self._pages = context_pages.pages
@@ -88,10 +97,36 @@ class MainWindowContextBarService:
             stack.addWidget(page)
         stack.setCurrentWidget(self._pages["empty"])
         bar.addWidget(stack)
+        self._add_smiles_controls(bar, window)
 
         window.addToolBarBreak(Qt.ToolBarArea.TopToolBarArea)
         window.addToolBar(Qt.ToolBarArea.TopToolBarArea, bar)
         return bar
+
+    def _add_smiles_controls(self, bar: QToolBar, window) -> None:
+        label = QLabel("SMILES")
+        label.setObjectName("toolbarSectionLabel")
+        bar.addWidget(label)
+        smiles_input = QLineEdit()
+        smiles_input.setObjectName("contextSmilesInput")
+        smiles_input.setPlaceholderText("CC(=O)Oc1ccccc1C(=O)O")
+        smiles_input.setFixedWidth(250)
+        smiles_input.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT)
+        smiles_input.setToolTip("SMILES")
+        smiles_input.setStatusTip("Type a SMILES string to insert")
+        render_button = QToolButton()
+        render_button.setObjectName("smiles_render_button")
+        render_button.setText("Render")
+        render_button.setToolTip("Insert SMILES")
+        render_button.setStatusTip("Insert the typed SMILES structure")
+        render_button.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT)
+        render_button.setStyleSheet(SMILES_RENDER_BUTTON_STYLE)
+        render_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        insert_controller = self._insert_controller_for_window(window)
+        render_button.clicked.connect(lambda _checked=False: insert_controller.begin_smiles_insert(smiles_input.text()))
+        smiles_input.returnPressed.connect(lambda: insert_controller.begin_smiles_insert(smiles_input.text()))
+        bar.addWidget(smiles_input)
+        bar.addWidget(render_button)
 
     def refresh(self, window, tool: str | None, *, page_key: str | None = None) -> None:
         if self._stack is None:

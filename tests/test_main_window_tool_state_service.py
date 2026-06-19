@@ -88,16 +88,9 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
             mock.patch.object(self.service, "set_bond_style") as set_bond_style,
         ):
             self.service.set_tool_with_status(self.window, "bond")
-            self.assertEqual(self.window.statusBar().currentMessage(), "Bond Tool")
-
             self.service.set_tool_with_status(self.window, "bond", reset_bond_style=False)
-            self.assertEqual(self.window.statusBar().currentMessage(), "Bond Tool")
-
             self.service.set_tool_with_status(self.window, "select")
-            self.assertEqual(self.window.statusBar().currentMessage(), "Select Tool")
-
             self.service.set_tool_with_status(self.window, "mark")
-            self.assertEqual(self.window.statusBar().currentMessage(), "Mark Tool")
 
         self.assertEqual([call.args for call in set_tool.call_args_list], [("bond",), ("bond",), ("select",)])
         set_mark_kind.assert_called_once_with("plus")
@@ -108,7 +101,7 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
     def test_set_tool_with_status_refreshes_structured_tool_state(self) -> None:
         self.service.set_tool_with_status(self.window, "select")
 
-        self.assertEqual(self.window.statusBar().currentMessage(), "Select Tool")
+        self.assertEqual(self.window.statusBar().currentMessage(), "Select: click or drag marquee")
         self.assertEqual(self.status_service.status_context_texts()["tool"], "Tool: Select")
 
     def test_sync_tool_actions_from_canvas_follows_active_tool_variants(self) -> None:
@@ -142,6 +135,7 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         self.assertEqual(self.tool_mode_controller_for_window.call_count, 2)
 
     def test_set_mark_kind_routes_option_bar_choice_to_canvas(self) -> None:
+        active_canvas_for_window(self.window).services.tools.active = SimpleNamespace(name="mark")
         with mock.patch.object(
             active_canvas_for_window(self.window).services.tool_mode_controller,
             "set_mark_kind",
@@ -149,11 +143,12 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
             self.service.set_mark_kind(self.window, "radical")
 
         set_mark_kind.assert_called_once_with("radical")
-        self.assertEqual(self.window.statusBar().currentMessage(), "Mark Tool")
+        self.assertEqual(self.window.statusBar().currentMessage(), "Mark: click atom or label")
         self.status_service.refresh_status_context.assert_called_once_with(self.window)
         self.tool_mode_controller_for_window.assert_called_once_with(self.window)
 
     def test_set_bracket_type_routes_option_bar_choice_to_canvas(self) -> None:
+        active_canvas_for_window(self.window).services.tools.active = SimpleNamespace(name="ts_bracket")
         with mock.patch.object(
             active_canvas_for_window(self.window).services.tool_mode_controller,
             "set_bracket_type",
@@ -161,7 +156,7 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
             self.service.set_bracket_type(self.window, "double_dagger")
 
         set_bracket_type.assert_called_once_with("double_dagger")
-        self.assertEqual(self.window.statusBar().currentMessage(), "Brackets Tool")
+        self.assertEqual(self.window.statusBar().currentMessage(), "Brackets: drag around selection")
         self.status_service.refresh_status_context.assert_called_once_with(self.window)
         self.tool_mode_controller_for_window.assert_called_once_with(self.window)
 

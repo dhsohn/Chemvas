@@ -56,8 +56,8 @@ class StructurePayloadLogicTest(unittest.TestCase):
     def test_build_structure_payload_remaps_annotation_ids(self) -> None:
         model = self._example_model()
         mark_kinds_by_atom = {
-            1: ["plus", "plus"],
-            2: ["radical"],
+            1: ["plus", "circled_plus"],
+            2: ["radical", "circled_minus"],
         }
 
         export_model, atom_annotations, bounds = build_structure_payload(
@@ -76,7 +76,7 @@ class StructurePayloadLogicTest(unittest.TestCase):
             atom_annotations,
             {
                 0: {"formal_charge": 2},
-                1: {"radical_electrons": 1},
+                1: {"formal_charge": -1, "radical_electrons": 1},
             },
         )
 

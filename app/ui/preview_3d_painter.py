@@ -6,14 +6,17 @@ from core.rdkit_adapter import Molecule3DScene
 from PyQt6.QtCore import QRectF
 from PyQt6.QtGui import QColor, QFont, QFontMetricsF, QPainter
 
+from ui.main_window_palette import PALETTE
 from ui.preview_3d_layout import (
     preview_footer_height,
+    preview_footer_item_rects,
     preview_layout_rects,
 )
 from ui.preview_3d_molecule_renderer import draw_projected_scene
 from ui.preview_3d_projection import project_preview_scene
 from ui.preview_3d_renderer import (
     draw_empty_state,
+    draw_footer,
     draw_header,
     draw_interaction_hints,
     draw_panel,
@@ -21,6 +24,7 @@ from ui.preview_3d_renderer import (
 )
 from ui.preview_3d_state import (
     preview_empty_state_text,
+    preview_info_items,
     preview_metadata_summary,
     preview_status_badge,
 )
@@ -100,9 +104,10 @@ def paint_preview_3d_panel(
     state: Preview3DPaintState,
 ) -> None:
     painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-    painter.fillRect(widget_rect, QColor("#f1f1f0"))
+    painter.fillRect(widget_rect, QColor(PALETTE["surface_app"]))
 
-    info_lines: list[str] = []
+    info_items = preview_info_items(state.formula_text, state.mw_text) if state.scene is not None else []
+    info_lines = [f"{label}: {value}" for label, value in info_items]
     layout = preview_layout_for_widget(widget_rect, info_lines, base_font)
     caption_font = preview_caption_font(base_font)
     overlay_font = preview_overlay_font(base_font)
@@ -152,6 +157,14 @@ def paint_preview_3d_panel(
 
     draw_projected_scene(painter, state.scene, projected_atoms)
     draw_interaction_hints(painter, layout["viewport"], font=caption_font)
+    draw_footer(
+        painter,
+        layout["footer"],
+        items=info_items,
+        item_rects=preview_footer_item_rects(layout["footer"], len(info_items)),
+        label_font=caption_font,
+        value_font=overlay_font,
+    )
 
 
 __all__ = [

@@ -4,12 +4,12 @@ from ui.main_window_palette import PALETTE
 
 _P = PALETTE
 
-TOOLBAR_THICKNESS = 30
-TOOLBAR_BUTTON_SIZE = 22
+TOOLBAR_THICKNESS = 38
+TOOLBAR_BUTTON_SIZE = 30
 TOOLBAR_ICON_SIZE = 18
-CONTEXT_BAR_CONTENT_HEIGHT = 22
-CONTEXT_BAR_BUTTON_HEIGHT = 22
-CONTEXT_BAR_ICON_SIZE = 22
+CONTEXT_BAR_CONTENT_HEIGHT = 30
+CONTEXT_BAR_BUTTON_HEIGHT = 24
+CONTEXT_BAR_ICON_SIZE = 16
 
 
 def _flat_toolbutton_style(*, extra: str = "") -> str:
@@ -17,9 +17,13 @@ def _flat_toolbutton_style(*, extra: str = "") -> str:
         "QToolButton {"
         " border: 1px solid transparent;"
         " border-radius: 6px;"
-        " padding: 2px;"
+        " padding: 0px 9px;"
         f" color: {_P['text']};"
+        " font-size: 13px;"
+        " font-weight: 500;"
         "}"
+        "QToolButton[iconOnly=\"true\"] { padding: 0px; }"
+        "QToolButton[primaryTool=\"true\"] { padding: 0px; }"
         "QToolButton:hover {"
         f" background-color: {_P['hover']};"
         " border-color: transparent;"
@@ -66,8 +70,8 @@ TOOLBAR_MENU_BUTTON_STYLE = _flat_toolbutton_style(
 CONTEXT_SEGMENT_STYLE = _flat_toolbutton_style(
     extra=(
         "QToolButton {"
-        " padding: 2px 8px;"
-        " font-size: 12px;"
+        " padding: 0px 10px;"
+        " font-size: 13px;"
         "}"
     )
 )
@@ -76,7 +80,7 @@ SMILES_RENDER_BUTTON_STYLE = (
     "QToolButton#smiles_render_button {"
     " border: 1px solid transparent;"
     " border-radius: 6px;"
-    " padding: 1px 10px;"
+    " padding: 0px 14px;"
     f" background-color: {_P['accent_hover']};"
     f" color: {_P['accent_contrast']};"
     " font-weight: 500;"
