@@ -17,8 +17,9 @@ ARROW_PRESET_SPECS: list[str] = ["Default", "Bold", "Fine"]
 COLOR_PALETTE_SPECS: list[tuple[str, str]] = [
     ("Black", "#000000"),
     ("Gray", "#4a4a4a"),
-    ("Red", "#c00000"),
-    ("Blue", "#1f5eff"),
+    ("Yellow", "#f4d06f"),
+    ("Blue", "#2f6ed3"),
+    ("Red", "#d84a3a"),
     ("Green", "#2e8b57"),
     ("Purple", "#6a2ea6"),
     ("Orange", "#c77c00"),

@@ -140,7 +140,11 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
         palette_calls = []
         menu = QMenu()
         self.service.populate_palette_menu(self.window, menu, lambda value: palette_calls.append(value))
-        self.assertEqual([action.text() for action in menu.actions()], [label for label, _ in self.service.acs_color_palette()])
+        palette = self.service.acs_color_palette()
+        self.assertEqual([action.text() for action in menu.actions()], [label for label, _ in palette])
+        self.assertIn(("Yellow", "#f4d06f"), palette)
+        self.assertIn(("Blue", "#2f6ed3"), palette)
+        self.assertIn(("Red", "#d84a3a"), palette)
         menu.actions()[0].trigger()
         self.assertEqual(palette_calls, ["#000000"])
 
@@ -158,16 +162,16 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
                 "apply_ring_fill_color",
             ) as apply_fill,
         ):
-            self.service.apply_color_preset(self.window, "#1f5eff")
-            self.service.apply_ring_fill_preset(self.window, "#c77c00")
+            self.service.apply_color_preset(self.window, "#2f6ed3")
+            self.service.apply_ring_fill_preset(self.window, "#f4d06f")
 
         color_tool.set_color.assert_called_once()
-        self.assertEqual(color_tool.set_color.call_args.args[0].name(), "#1f5eff")
+        self.assertEqual(color_tool.set_color.call_args.args[0].name(), "#2f6ed3")
         set_tool.assert_called_once_with("color")
         self.assertEqual([call.args[0].data(0) for call in apply_color.call_args_list], ["atom", "ring"])
-        self.assertEqual([call.args[1].name() for call in apply_color.call_args_list], ["#1f5eff", "#1f5eff"])
+        self.assertEqual([call.args[1].name() for call in apply_color.call_args_list], ["#2f6ed3", "#2f6ed3"])
         self.assertEqual([call.args[0].data(0) for call in apply_fill.call_args_list], ["ring"])
-        self.assertEqual([call.args[1].name() for call in apply_fill.call_args_list], ["#c77c00"])
+        self.assertEqual([call.args[1].name() for call in apply_fill.call_args_list], ["#f4d06f"])
         self.color_tool_for_window.assert_called_once_with(self.window)
         self.tool_mode_controller_for_window.assert_called_once_with(self.window)
         self.assertEqual(self.color_mutation_service_for_window.call_count, 2)

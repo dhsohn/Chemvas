@@ -167,7 +167,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
 
         self.window.ui_references.tool_actions["ring_fill"].trigger()
         ring_fill_button = next(
-            widget for widget in self.window.findChildren(QToolButton) if widget.toolTip() == "Ring Fill: Orange"
+            widget for widget in self.window.findChildren(QToolButton) if widget.toolTip() == "Ring Fill: Yellow"
         )
         self.assertEqual(self.window.runtime_state.context_bar_page_override, "ring_fill")
         self.assertEqual(self.window.statusBar().currentMessage(), "Ring Fill: choose fill color")
@@ -477,16 +477,16 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
                 "apply_ring_fill_color",
             ) as apply_fill,
         ):
-            services_for_window(self.window).tool_routing_service.apply_color_preset(self.window, "#1f5eff")
-            services_for_window(self.window).tool_routing_service.apply_ring_fill_preset(self.window, "#c77c00")
+            services_for_window(self.window).tool_routing_service.apply_color_preset(self.window, "#2f6ed3")
+            services_for_window(self.window).tool_routing_service.apply_ring_fill_preset(self.window, "#f4d06f")
 
         color_tool.set_color.assert_called_once()
-        self.assertEqual(color_tool.set_color.call_args.args[0].name(), "#1f5eff")
+        self.assertEqual(color_tool.set_color.call_args.args[0].name(), "#2f6ed3")
         set_tool.assert_called_once_with("color")
         self.assertEqual([call.args[0].data(0) for call in apply_color.call_args_list], ["atom", "ring"])
-        self.assertEqual([call.args[1].name() for call in apply_color.call_args_list], ["#1f5eff", "#1f5eff"])
+        self.assertEqual([call.args[1].name() for call in apply_color.call_args_list], ["#2f6ed3", "#2f6ed3"])
         self.assertEqual([call.args[0].data(0) for call in apply_fill.call_args_list], ["ring"])
-        self.assertEqual([call.args[1].name() for call in apply_fill.call_args_list], ["#c77c00"])
+        self.assertEqual([call.args[1].name() for call in apply_fill.call_args_list], ["#f4d06f"])
 
 
 if __name__ == "__main__":

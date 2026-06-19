@@ -205,15 +205,15 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
             if button.toolTip() == "Color: Blue"
         )
         color_button.click()
-        self.apply_color_preset_for_window.assert_called_once_with(self.window, "#1f5eff")
+        self.apply_color_preset_for_window.assert_called_once_with(self.window, "#2f6ed3")
 
         ring_fill_button = next(
             button
             for button in pages.pages["ring_fill"].findChildren(QToolButton)
-            if button.toolTip() == "Ring Fill: Orange"
+            if button.toolTip() == "Ring Fill: Yellow"
         )
         ring_fill_button.click()
-        self.apply_ring_fill_preset_for_window.assert_called_once_with(self.window, "#c77c00")
+        self.apply_ring_fill_preset_for_window.assert_called_once_with(self.window, "#f4d06f")
 
 
 if __name__ == "__main__":
