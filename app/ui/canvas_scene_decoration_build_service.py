@@ -237,7 +237,7 @@ class CanvasSceneDecorationBuildService:
         stroker.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
         return stroker.createStroke(bracket_lines)
 
-    def _add_bracket_symbol(self, path: QPainterPath, rect: QRectF, symbol: str, *, align_right: bool) -> None:
+    def _add_bracket_symbol(self, path: QPainterPath, rect: QRectF, symbol: str, *, align_right: bool) -> QPainterPath:
         font = QFont(font_family_for(self.canvas))
         font.setPixelSize(
             max(
