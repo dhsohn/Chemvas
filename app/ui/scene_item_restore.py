@@ -16,8 +16,8 @@ from ui.graphics_items import NoSelectPolygonItem
 from ui.note_item_access import set_committed_note_text_for
 from ui.scene_item_state import (
     ARROW_KINDS,
-    ts_bracket_kind_from_state,
     mark_center_from_state,
+    ts_bracket_kind_from_state,
     ts_bracket_rect_from_state,
 )
 

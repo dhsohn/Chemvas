@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 from PyQt6.QtCore import QSize, Qt
 from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
@@ -42,7 +43,7 @@ class MainWindowPanelToolbarCallbacks:
     load_canvas: Callable[[object], None]
     export_figure: Callable[[object], None]
     open_preview_window: Callable[[object], None]
-    new_canvas_sheet: Callable[[object], None]
+    new_canvas_sheet: Callable[[object], Any]
 
 
 def _normalize_tool_action_button(
