@@ -5,6 +5,8 @@ from typing import Any
 from core.rdkit_types import Molecule3DScene
 from PyQt6.QtGui import QColor
 
+from ui.main_window_palette import PALETTE
+
 PreviewStatusBadge = tuple[str, QColor, QColor, QColor]
 
 
@@ -73,12 +75,12 @@ def preview_metadata_summary(scene: Molecule3DScene | None, message: str) -> str
 
 def preview_status_badge(scene: Molecule3DScene | None, message: str) -> PreviewStatusBadge:
     if scene is not None:
-        return "Ready", QColor("#eef0ee"), QColor("#c3c9c2"), QColor("#41514a")
+        return "Ready", QColor(PALETTE["checked_bg"]), QColor(PALETTE["checked_border"]), QColor(PALETTE["checked_text"])
     if message.startswith("Updating"):
-        return "Building", QColor("#eeeeec"), QColor("#cfcfca"), QColor("#55555a")
+        return "Building", QColor(PALETTE["surface_context"]), QColor(PALETTE["border_strong"]), QColor(PALETTE["text_muted"])
     if is_empty_preview_message(message):
-        return "Empty", QColor("#ededeb"), QColor("#cfcfca"), QColor("#6f6f6c")
-    return "Issue", QColor("#f6eded"), QColor("#dbbcbc"), QColor("#8a2020")
+        return "Empty", QColor(PALETTE["hover"]), QColor(PALETTE["border_strong"]), QColor(PALETTE["text_muted"])
+    return "Issue", QColor(PALETTE["danger_bg"]), QColor(PALETTE["danger_border"]), QColor(PALETTE["danger_text"])
 
 
 def preview_empty_state_text(message: str) -> tuple[str, str]:

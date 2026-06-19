@@ -50,8 +50,8 @@ def main_window_chrome_stylesheet(palette) -> str:
             }}
             QToolButton {{
                 border: 1px solid transparent;
-                border-radius: 8px;
-                padding: 5px;
+                border-radius: 6px;
+                padding: 2px;
                 color: {_P["text"]};
             }}
             QToolButton:hover {{

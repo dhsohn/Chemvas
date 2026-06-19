@@ -37,12 +37,12 @@ TEMPLATE_ENTRY_SPECS: list[tuple[str, int, str]] = [
 TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
     ("select", "Select", "select", "icon_select", "Select / Marquee (ChemDraw: Space)"),
     ("bond", "Bond", "bond", "icon_bond", "Bond (ChemDraw: X)"),
+    ("benzene", "Ring", "benzene", "icon_ring", "Ring / Benzene (ChemDraw: J)"),
+    ("arrow", "Arrow", "arrow", "icon_arrow", "Arrow (ChemDraw: E)"),
     ("text", "Atom", "text", "icon_text", "Atom / Text (ChemDraw: T)"),
     ("mark", "Mark", "mark", "icon_mark", "Charge / Radical"),
-    ("benzene", "Ring", "benzene", "icon_ring", "Ring / Benzene (ChemDraw: J)"),
-    ("color", "Color", "color", "icon_color", "Color"),
-    ("arrow", "Arrow", "arrow", "icon_arrow", "Arrow (ChemDraw: E)"),
     ("ts_bracket", "Brackets", "ts_bracket", "icon_ts_bracket", "Brackets (ChemDraw: Shift+G)"),
+    ("orbital", "Orbital", "orbital", "icon_orbital", "Orbital"),
     (
         "perspective",
         "Perspective",
@@ -50,6 +50,7 @@ TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
         "icon_perspective",
         "Perspective Rotation (ChemDraw: Alt+D, Shift+drag locks X/Y)",
     ),
+    ("color", "Color", "color", "icon_color", "Color"),
 ]
 
 RING_FILL_TOOL_ACTION_SPEC: tuple[str, str, str, str] = (
@@ -69,18 +70,28 @@ BOND_TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
 MARK_TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
     ("mark_plus", "Charge +", "plus", "icon_mark_plus", "Charge + (Atom Hotkey: +)"),
     ("mark_minus", "Charge -", "minus", "icon_mark_minus", "Charge - (Atom Hotkey: -)"),
+    ("mark_circled_plus", "Circled Charge +", "circled_plus", "icon_mark_circled_plus", "Circled charge +"),
+    ("mark_circled_minus", "Circled Charge -", "circled_minus", "icon_mark_circled_minus", "Circled charge -"),
     ("mark_radical", "Radical", "radical", "icon_mark_radical", "Radical"),
 ]
 
-TOOLBAR_TRANSFORM_TOOL_GROUP: tuple[str, ...] = ("select", "perspective")
+TOOLBAR_PRIMARY_TOOL_GROUP: tuple[str, ...] = (
+    "select",
+    "perspective",
+    "text",
+    "bond",
+    "benzene",
+    "arrow",
+    "ts_bracket",
+)
 
 TOOLBAR_TOOL_GROUPS: list[tuple[str, ...]] = [
-    ("text", "bond", "mark", "benzene", "arrow", "ts_bracket"),
+    TOOLBAR_PRIMARY_TOOL_GROUP,
+    ("mark", "orbital"),
     ("color", "ring_fill"),
 ]
 
 TOOLBAR_TOOL_ACTION_ORDER: list[str] = [
-    *TOOLBAR_TRANSFORM_TOOL_GROUP,
     *(action_key for group in TOOLBAR_TOOL_GROUPS for action_key in group),
 ]
 
@@ -102,7 +113,7 @@ __all__ = [
     "RING_FILL_TOOL_ACTION_SPEC",
     "TEMPLATE_ENTRY_SPECS",
     "TOOL_ACTION_SPECS",
+    "TOOLBAR_PRIMARY_TOOL_GROUP",
     "TOOLBAR_TOOL_ACTION_ORDER",
     "TOOLBAR_TOOL_GROUPS",
-    "TOOLBAR_TRANSFORM_TOOL_GROUP",
 ]

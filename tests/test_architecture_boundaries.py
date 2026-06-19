@@ -1072,8 +1072,10 @@ def test_main_window_ui_assembly_moves_tool_actions_into_panel_toolbar() -> None
 def test_main_window_ui_assembly_delegates_panel_toolbar_to_module() -> None:
     service = APP_ROOT / "ui" / "main_window_ui_assembly_service.py"
     panel_toolbar = APP_ROOT / "ui" / "main_window_panel_toolbar.py"
+    context_bar_service = APP_ROOT / "ui" / "main_window_context_bar_service.py"
     service_source = service.read_text()
     panel_toolbar_source = panel_toolbar.read_text()
+    context_bar_source = context_bar_service.read_text()
     pattern = re.compile(
         r"triggered\.connect\(window\."
         r"|callback=window\."
@@ -1089,7 +1091,9 @@ def test_main_window_ui_assembly_delegates_panel_toolbar_to_module() -> None:
     assert "smiles_render_button" not in service_source
     assert "QKeySequence" not in service_source
     assert "topRoleToolbar" in panel_toolbar_source
-    assert "smiles_render_button" in panel_toolbar_source
+    assert "smiles_render_button" not in panel_toolbar_source
+    assert "smiles_render_button" in context_bar_source
+    assert "contextSmilesInput" in context_bar_source
     assert "QKeySequence" in panel_toolbar_source
     assert "panel_toolbar_callbacks" in service_source
     assert "callbacks=self._panel_toolbar_callbacks" in service_source
@@ -3189,9 +3193,12 @@ def test_main_window_icon_factory_delegates_bond_drawing_to_renderer() -> None:
     bond_icons_source = bond_icons.read_text()
 
     assert "from ui.main_window_bond_icon_renderer import MainWindowBondIconRenderer" in factory_source
+    assert "from ui.main_window_design_icon_renderer import draw_design_icon" in factory_source
     assert "self._bond_icons = MainWindowBondIconRenderer(" in factory_source
-    assert "self.make_icon(self._bond_icons.draw_bond)" in factory_source
-    assert "self.make_icon(self._bond_icons.draw_wedge_bond)" in factory_source
+    for icon_name in ("bond", "bond_double", "bond_triple", "wedge", "hash", "benzene"):
+        assert f'self.make_design_icon("{icon_name}")' in factory_source
+    assert "self.make_icon(self._bond_icons.draw_bold_bond)" in factory_source
+    assert "self.make_icon(self._bond_icons.draw_dotted_bond)" in factory_source
     assert "self._bond_icons.benzene_icon_inner_segments(" in factory_source
     assert "bold_bond_pen()" not in factory_source
     assert "hash_spacing_px()" not in factory_source
@@ -3210,7 +3217,7 @@ def test_main_window_icon_factory_delegates_arrow_drawing_to_renderer() -> None:
     assert "from ui.main_window_arrow_icon_renderer import MainWindowArrowIconRenderer" in factory_source
     assert "self._arrow_icons = MainWindowArrowIconRenderer(" in factory_source
     assert "self._arrow_icons.draw_arrow_preview(painter, kind)" in factory_source
-    assert "self.make_icon(self._arrow_icons.draw_arrow)" in factory_source
+    assert 'self.make_design_icon("arrow")' in factory_source
     assert "def draw_arrow_head" not in factory_source
     assert "quadTo(15, 6, 24, 15)" not in factory_source
     assert "def draw_arrow_preview" in arrow_icons_source
@@ -3244,17 +3251,9 @@ def test_main_window_icon_factory_delegates_utility_drawing_to_renderer() -> Non
 
     assert "from ui.main_window_utility_icon_renderer import MainWindowUtilityIconRenderer" in factory_source
     assert "self._utility_icons = MainWindowUtilityIconRenderer(" in factory_source
-    for icon_name in (
-        "undo",
-        "redo",
-        "save",
-        "open",
-        "preview_panel",
-        "add_sheet",
-        "setup_sheet",
-        "info",
-    ):
-        assert f"self.make_icon(self._utility_icons.draw_{icon_name})" in factory_source
+    for icon_name in ("undo", "redo", "save", "open", "panel_right", "sheet", "info"):
+        assert f'self.make_design_icon("{icon_name}")' in factory_source
+    for icon_name in ("undo", "redo", "save", "open", "preview_panel", "add_sheet", "setup_sheet", "info"):
         assert f"def draw_{icon_name}" in utility_icons_source
 
     assert "drawRect(7, 8, 10, 12)" not in factory_source
@@ -3271,23 +3270,29 @@ def test_main_window_icon_factory_delegates_tool_drawing_to_renderer() -> None:
     assert "from ui.main_window_tool_icon_renderer import MainWindowToolIconRenderer" in factory_source
     assert "self._tool_icons = MainWindowToolIconRenderer(" in factory_source
     for icon_name in (
-        "select",
+        "atom",
+        "flip_h",
+        "flip_v",
+        "bracket",
+        "orbital",
+        "color",
+        "perspective",
+        "circled_plus",
+        "circled_minus",
+    ):
+        assert f'self.make_design_icon("{icon_name}")' in factory_source
+    assert factory_source.count('self.make_design_icon("move")') >= 2
+    for icon_name in (
         "mark",
         "mark_plus",
         "mark_minus",
         "mark_radical",
-        "text",
         "ring_fill",
-        "flip_h",
-        "flip_v",
-        "ts_bracket",
-        "orbital",
-        "move",
-        "color",
-        "perspective",
     ):
         assert f"self.make_icon(self._tool_icons.draw_{icon_name})" in factory_source
         assert f"def draw_{icon_name}" in tool_icons_source
+    assert 'self.make_design_icon("move")' in factory_source
+    assert "def draw_move" in tool_icons_source
     assert "self._tool_icons.draw_orbital_preview(painter, kind)" in factory_source
     assert "def draw_orbital_preview" in tool_icons_source
 

@@ -243,7 +243,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         flip_h_button = self._find_button(tool_tip="Flip Horizontal (Ctrl+Shift+H)")
         flip_v_button = self._find_button(tool_tip="Flip Vertical (Ctrl+Shift+V)")
         smiles_button = self._find_button(object_name="smiles_render_button")
-        smiles_input = self._find_line_edit("SMILES...")
+        smiles_input = self._find_line_edit("CC(=O)Oc1ccccc1C(=O)O")
 
         active_canvas_for_window(self.window).undo = mock.Mock(side_effect=AssertionError("canvas undo wrapper should not run"))
         active_canvas_for_window(self.window).redo = mock.Mock(side_effect=AssertionError("canvas redo wrapper should not run"))

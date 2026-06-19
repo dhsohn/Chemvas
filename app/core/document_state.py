@@ -68,7 +68,7 @@ VALID_ARROW_KINDS = frozenset(
         "dotted",
     )
 )
-VALID_MARK_KINDS = frozenset(("plus", "minus", "radical"))
+VALID_MARK_KINDS = frozenset(("plus", "minus", "circled_plus", "circled_minus", "radical"))
 VALID_TS_BRACKET_KINDS = frozenset(
     (
         "square_pair",

@@ -3,15 +3,15 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from ui.bracket_types import BRACKET_KIND_VALUES
 from ui.canvas_callback_state import callback_state_for
 from ui.canvas_insert_state import insert_state_for
 from ui.canvas_tool_settings_state import set_tool_setting_for, tool_settings_state_for
-from ui.bracket_types import BRACKET_KIND_VALUES
 from ui.selection_service_access import refresh_selection_outline_for
 
 
 class CanvasToolModeController:
-    MARK_KINDS = {"plus", "minus", "radical"}
+    MARK_KINDS = {"plus", "minus", "circled_plus", "circled_minus", "radical"}
 
     def __init__(
         self,

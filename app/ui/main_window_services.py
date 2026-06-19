@@ -161,6 +161,7 @@ def build_main_window_services() -> MainWindowServices:
         active_tool_name_for_window=active_tool_name_for_window,
         active_canvas_or_none_for_window=active_canvas_or_none_for_window,
         context_bar_page_override_for_window=context_bar_page_override_for_window,
+        insert_controller_for_window=insert_controller_for_window,
         set_atom_input_for_window=set_atom_input_for_window,
     )
     context_page_state_service = MainWindowContextPageStateService(
@@ -260,6 +261,7 @@ def build_main_window_services() -> MainWindowServices:
         load_canvas=document_action_service.load_canvas,
         export_figure=document_action_service.export_figure,
         open_preview_window=panel_service.open_preview_window,
+        new_canvas_sheet=canvas_sheet_service.new_canvas_sheet,
     )
     ui_assembly_service = MainWindowUIAssemblyService(
         scene_transform_controller_for_window=scene_transform_controller_for_window,

@@ -402,16 +402,17 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         canvas_services_for(tool_view).tool_mode_controller.set_tool("bond")
         canvas_services_for(tool_view).tool_mode_controller.set_mark_kind("minus")
+        canvas_services_for(tool_view).tool_mode_controller.set_mark_kind("circled_plus")
         canvas_services_for(tool_view).tool_mode_controller.set_mark_kind("unsupported")
 
         tool_view.services.tools.set_active.assert_any_call("bond")
         tool_view.services.tools.set_active.assert_any_call("mark")
-        self.assertEqual(tool_view.services.insert_controller.cancel_template_insert.call_count, 2)
-        self.assertEqual(tool_view.services.insert_controller.cancel_smiles_insert.call_count, 2)
-        self.assertEqual(tool_settings_state_for(tool_view).mark_kind, "minus")
-        self.assertEqual(tool_view.refresh_selection_outline.call_count, 2)
-        self.assertEqual(tool_view.callback_state.tool_change.call_count, 2)
-        self.assertEqual(tool_view.services.hover_scene_service.clear_hover_highlight.call_count, 2)
+        self.assertEqual(tool_view.services.insert_controller.cancel_template_insert.call_count, 3)
+        self.assertEqual(tool_view.services.insert_controller.cancel_smiles_insert.call_count, 3)
+        self.assertEqual(tool_settings_state_for(tool_view).mark_kind, "circled_plus")
+        self.assertEqual(tool_view.refresh_selection_outline.call_count, 3)
+        self.assertEqual(tool_view.callback_state.tool_change.call_count, 3)
+        self.assertEqual(tool_view.services.hover_scene_service.clear_hover_highlight.call_count, 3)
 
     def test_document_session_wrappers_delegate_to_service(self) -> None:
         document_session_service = mock.Mock()

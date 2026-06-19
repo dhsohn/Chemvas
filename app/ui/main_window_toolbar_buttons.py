@@ -6,6 +6,7 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QAction, QColor, QIcon, QPainter, QPolygonF
 from PyQt6.QtWidgets import QMenu, QToolButton
 
+from ui.main_window_palette import PALETTE
 from ui.main_window_theme import TOOLBAR_MENU_BUTTON_STYLE
 
 
@@ -21,7 +22,7 @@ class ArrowButton(QToolButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor("#5a5a56"))
+        painter.setBrush(QColor(PALETTE["text_muted"]))
         rect = self.rect().adjusted(6, 4, -6, -4)
         if rect.width() <= 0 or rect.height() <= 0:
             return
@@ -46,7 +47,7 @@ class CornerMenuButton(QToolButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor("#9b9b95"))
+        painter.setBrush(QColor(PALETTE["text_faint"]))
         rect = self.rect()
         size = 6
         right = rect.right() - 2

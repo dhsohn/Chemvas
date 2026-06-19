@@ -54,7 +54,6 @@ class MainWindowToolActionService:
 
     def activate_ring_fill_tool(self, window) -> None:
         self._context_page_state.show_context_page(window, "ring_fill")
-        window.statusBar().showMessage("Ring Fill Tool")
         self._status.refresh_status_context(window)
 
     def build_tool_actions(self, window, tool_group) -> dict[str, QAction]:

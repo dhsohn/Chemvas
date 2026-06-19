@@ -19,7 +19,6 @@ if QApplication is not None:
     )
     from ui.main_window_theme import (
         CONTEXT_BAR_BUTTON_HEIGHT,
-        CONTEXT_BAR_ICON_SIZE,
     )
 
 
@@ -72,20 +71,44 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
 
         self.assertEqual(
             set(pages.pages),
-            {"empty", "bond", "arrow", "bracket", "atom", "ring", "mark", "color", "ring_fill"},
+            {"empty", "bond", "arrow", "bracket", "atom", "ring", "mark", "orbital", "color", "ring_fill"},
         )
         self.assertIn("Single", pages.bond_buttons)
+        self.assertEqual(pages.bond_buttons["Single"].text(), "")
+        self.assertFalse(pages.bond_buttons["Single"].icon().isNull())
         self.assertIn("curved_double", pages.arrow_buttons)
         self.assertIn("double_dagger", pages.bracket_buttons)
         self.assertIn("minus", pages.mark_buttons)
+        self.assertIn("circled_plus", pages.mark_buttons)
+        self.assertIn("circled_minus", pages.mark_buttons)
         self.assertIsNotNone(pages.bond_group)
         self.assertIsNotNone(pages.ring_group)
         self.assertIn((6, "benzene"), pages.ring_buttons)
+        self.assertEqual(pages.ring_buttons[(6, "benzene")].text(), "")
+        self.assertFalse(pages.ring_buttons[(6, "benzene")].icon().isNull())
         self.assertIsNotNone(pages.mark_group)
         self.assertIsNotNone(pages.arrow_group)
+        self.assertEqual(pages.arrow_buttons["curved_double"].text(), "")
+        self.assertFalse(pages.arrow_buttons["curved_double"].icon().isNull())
         self.assertIsNotNone(pages.bracket_group)
         self.assertIsInstance(pages.atom_input, QLineEdit)
         self.assertIs(pages.atom_input, pages.pages["atom"].findChild(QLineEdit, "atomInput"))
+        page_labels = {
+            key: [
+                label.text()
+                for label in page.findChildren(QLabel)
+                if label.objectName() == "toolbarSectionLabel"
+            ]
+            for key, page in pages.pages.items()
+        }
+        self.assertEqual(page_labels["bond"], ["Bond"])
+        self.assertEqual(page_labels["ring"], ["Ring"])
+        self.assertEqual(page_labels["arrow"], ["Arrow"])
+        self.assertEqual(page_labels["bracket"], ["Bracket"])
+        self.assertEqual(page_labels["atom"], ["Atom"])
+        self.assertEqual(page_labels["orbital"], ["Orbital"])
+        self.assertEqual(page_labels["color"], ["Color"])
+        self.assertEqual(page_labels["ring_fill"], ["Ring Fill"])
         self.assertEqual(pages.atom_input.placeholderText(), "Atom")
         self.assertEqual(pages.atom_input.text(), "N")
         self.assertEqual(pages.atom_input.maxLength(), 4)
@@ -116,8 +139,13 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         self.insert_controller_for_window.assert_called_once_with(self.window)
 
         pages.mark_buttons["minus"].click()
-        self.tool_state_service.set_mark_kind.assert_called_once_with(self.window, "minus")
         self.assertTrue(pages.mark_buttons["minus"].isChecked())
+        pages.mark_buttons["circled_plus"].click()
+        self.tool_state_service.set_mark_kind.assert_any_call(self.window, "minus")
+        self.tool_state_service.set_mark_kind.assert_any_call(self.window, "circled_plus")
+        self.assertTrue(pages.mark_buttons["circled_plus"].isChecked())
+        self.assertEqual(pages.mark_buttons["circled_plus"].text(), "")
+        self.assertFalse(pages.mark_buttons["circled_plus"].icon().isNull())
 
         pages.arrow_buttons["curved_double"].click()
         preset_button = next(
@@ -132,7 +160,6 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         self.tool_mode_controller_for_window.assert_called_once_with(self.window)
         self.assertEqual(pages.arrow_buttons["curved_double"].width(), CONTEXT_BAR_BUTTON_HEIGHT)
         self.assertEqual(pages.arrow_buttons["curved_double"].height(), CONTEXT_BAR_BUTTON_HEIGHT)
-        self.assertEqual(pages.arrow_buttons["curved_double"].iconSize().width(), CONTEXT_BAR_ICON_SIZE)
         self.assertEqual(preset_button.height(), CONTEXT_BAR_BUTTON_HEIGHT)
         self.assertEqual(preset_button.width(), CONTEXT_BAR_BUTTON_HEIGHT)
         self.assertEqual(preset_button.text(), "")
@@ -177,7 +204,6 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
             for button in pages.pages["color"].findChildren(QToolButton)
             if button.toolTip() == "Color: Blue"
         )
-        self.assertEqual(pages.pages["color"].findChildren(QLabel), [])
         color_button.click()
         self.apply_color_preset_for_window.assert_called_once_with(self.window, "#1f5eff")
 
@@ -186,7 +212,6 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
             for button in pages.pages["ring_fill"].findChildren(QToolButton)
             if button.toolTip() == "Ring Fill: Orange"
         )
-        self.assertEqual(pages.pages["ring_fill"].findChildren(QLabel), [])
         ring_fill_button.click()
         self.apply_ring_fill_preset_for_window.assert_called_once_with(self.window, "#c77c00")
 

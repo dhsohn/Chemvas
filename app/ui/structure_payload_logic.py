@@ -164,9 +164,9 @@ def _annotation_totals(mark_kinds: Iterable[str]) -> tuple[int, int]:
     formal_charge = 0
     radical_electrons = 0
     for kind in mark_kinds:
-        if kind == "plus":
+        if kind in {"plus", "circled_plus"}:
             formal_charge += 1
-        elif kind == "minus":
+        elif kind in {"minus", "circled_minus"}:
             formal_charge -= 1
         elif kind == "radical":
             radical_electrons += 1

@@ -5,6 +5,8 @@ import math
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QPainterPath
 
+from ui.main_window_palette import PALETTE
+
 
 class MainWindowArrowIconRenderer:
     def __init__(
@@ -81,7 +83,7 @@ class MainWindowArrowIconRenderer:
         self.draw_arrow_head(painter, QPointF(5, 15), QPointF(24, 15))
 
     def draw_arrow_width_control(self, painter) -> None:
-        painter.setPen(self._icon_pen(1.2, color="#8c8c87"))
+        painter.setPen(self._icon_pen(1.2, color=PALETTE["icon_muted"]))
         painter.drawLine(6, 10, 24, 10)
         painter.setPen(self._icon_pen(self._stroke_active))
         painter.drawLine(6, 19, 24, 19)

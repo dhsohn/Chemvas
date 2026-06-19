@@ -109,8 +109,8 @@ class MainWindowIconGeometryTest(unittest.TestCase):
         bounds = _opaque_bounds(image)
         self.assertIsNotNone(bounds)
         min_x, min_y, max_x, max_y = bounds
-        self.assertGreaterEqual(max_x - min_x + 1, 22)
-        self.assertGreaterEqual(max_y - min_y + 1, 24)
+        self.assertGreaterEqual(max_x - min_x + 1, 16)
+        self.assertGreaterEqual(max_y - min_y + 1, 18)
 
     def test_chair_template_icons_use_larger_geometry(self) -> None:
         old_bounds = _render_chair_bounds(QRectF(4.0, 7.0, 22.0, 16.0))

@@ -158,7 +158,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         color_button = next(
             widget for widget in self.window.findChildren(QToolButton) if widget.toolTip() == "Color: Blue"
         )
-        self.assertEqual(self.window.statusBar().currentMessage(), "Color Tool")
+        self.assertEqual(self.window.statusBar().currentMessage(), "Color: choose a swatch")
         self.assertEqual(
             services_for_window(self.window).status_service.status_context_texts()["tool"],
             "Tool: Color",
@@ -170,7 +170,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
             widget for widget in self.window.findChildren(QToolButton) if widget.toolTip() == "Ring Fill: Orange"
         )
         self.assertEqual(self.window.runtime_state.context_bar_page_override, "ring_fill")
-        self.assertEqual(self.window.statusBar().currentMessage(), "Ring Fill Tool")
+        self.assertEqual(self.window.statusBar().currentMessage(), "Ring Fill: choose fill color")
         self.assertEqual(
             services_for_window(self.window).status_service.status_context_texts()["tool"],
             "Tool: Ring Fill",
@@ -186,11 +186,10 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         )
         image = panel_bar.grab().toImage()
 
-        # Both glyphs were redrawn lighter than before (select dropped its
-        # selection-marquee brackets; perspective is now a clean isometric cube),
-        # so they have fewer dark pixels at toolbar size; the 30px native-size
-        # guard above still asserts a substantial glyph.
-        for text, min_dark_pixels in (("Select", 50), ("Perspective", 20)):
+        # The visible toolbar uses 18px Lucide-style line icons, so the
+        # move/select glyph has fewer dark pixels than the previous label
+        # button while the native-size guard above still catches blank icons.
+        for text, min_dark_pixels in (("Select", 24), ("Perspective", 20)):
             with self.subTest(text=text):
                 action = next(action for action in panel_bar.actions() if action.text() == text)
                 widget = panel_bar.widgetForAction(action)
@@ -209,7 +208,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
             toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Panels"
         )
 
-        for action_key, min_dark_pixels in (("select", 50), ("perspective", 20)):
+        for action_key, min_dark_pixels in (("select", 24), ("perspective", 20)):
             with self.subTest(action_key=action_key):
                 action = self.window.ui_references.tool_actions[action_key]
                 action.trigger()
@@ -307,7 +306,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
             self.assertTrue(insert_state_for(active_canvas_for_window(self.window)).template_active)
             self.assertEqual(insert_state_for(active_canvas_for_window(self.window)).template_ring_size, 6)
             self.assertEqual(insert_state_for(active_canvas_for_window(self.window)).template_ring_style, "benzene")
-            self.assertEqual(self.window.statusBar().currentMessage(), "Ring Tool")
+            self.assertEqual(self.window.statusBar().currentMessage(), "Ring: click to place template")
             self.assertEqual(
                 services_for_window(self.window).status_service.status_context_texts()["tool"],
                 "Tool: Ring",

@@ -1,9 +1,19 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
-from PyQt6.QtGui import QColor, QFont, QFontMetricsF, QLinearGradient, QPainter, QPen
+from PyQt6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPen
 
+from ui.main_window_palette import PALETTE
 from ui.preview_3d_molecule_renderer import draw_projected_scene, preview_element_color
+
+_P = PALETTE
+
+
+def _palette_color(key: str, *, alpha: int | None = None) -> QColor:
+    color = QColor(_P[key])
+    if alpha is not None:
+        color.setAlpha(alpha)
+    return color
 
 
 def draw_card_shadow(painter: QPainter, rect: QRectF, radius: float, *, layers=None) -> None:
@@ -22,14 +32,10 @@ def draw_card_shadow(painter: QPainter, rect: QRectF, radius: float, *, layers=N
 
 def draw_panel(painter: QPainter, rect: QRectF) -> None:
     painter.save()
-    draw_card_shadow(painter, rect, 9.0)
-
-    gradient = QLinearGradient(rect.topLeft(), rect.bottomLeft())
-    gradient.setColorAt(0.0, QColor("#ffffff"))
-    gradient.setColorAt(1.0, QColor("#f4f4f3"))
-    painter.setBrush(gradient)
-    painter.setPen(QPen(QColor("#e0e0dd"), 1.0))
-    painter.drawRoundedRect(rect, 9.0, 9.0)
+    draw_card_shadow(painter, rect, 8.0)
+    painter.setBrush(_palette_color("surface_panel"))
+    painter.setPen(QPen(_palette_color("border"), 1.0))
+    painter.drawRoundedRect(rect, 8.0, 8.0)
     painter.restore()
 
 
@@ -55,12 +61,12 @@ def draw_header(
     painter.drawText(badge, int(Qt.AlignmentFlag.AlignCenter), status_text)
 
     title_rect = QRectF(rect.left(), rect.top() + 1.0, max(20.0, rect.width() - badge_width - 10.0), 20.0)
-    painter.setPen(QColor("#232322"))
+    painter.setPen(_palette_color("text"))
     painter.setFont(title_font)
     painter.drawText(title_rect, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), "3D Preview")
 
     subtitle_rect = QRectF(rect.left(), title_rect.bottom() + 1.0, rect.width(), 17.0)
-    painter.setPen(QColor("#6f6f6c"))
+    painter.setPen(_palette_color("text_muted"))
     painter.setFont(caption_font)
     painter.drawText(subtitle_rect, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), subtitle)
     painter.restore()
@@ -69,16 +75,16 @@ def draw_header(
 def draw_viewport(painter: QPainter, rect: QRectF) -> None:
     painter.save()
     draw_card_shadow(painter, rect, 7.0, layers=((4.0, 4), (2.0, 7)))
-    painter.setPen(QPen(QColor("#e0e0dd"), 1.0))
-    painter.setBrush(QColor("#fbfbfa"))
+    painter.setPen(QPen(_palette_color("border"), 1.0))
+    painter.setBrush(_palette_color("surface_canvas"))
     painter.drawRoundedRect(rect, 7.0, 7.0)
 
     inner = rect.adjusted(6.0, 6.0, -6.0, -6.0)
-    painter.setPen(QPen(QColor(210, 210, 206, 90), 1.0))
+    painter.setPen(QPen(_palette_color("border_strong", alpha=90), 1.0))
     painter.setBrush(Qt.BrushStyle.NoBrush)
     painter.drawRoundedRect(inner, 5.0, 5.0)
 
-    tick_pen = QPen(QColor(160, 160, 154, 80), 1.0)
+    tick_pen = QPen(_palette_color("icon_muted", alpha=80), 1.0)
     painter.setPen(tick_pen)
     tick = 12.0
     corners = (
@@ -105,29 +111,29 @@ def draw_empty_state(
     painter.save()
     center = rect.center()
     icon_center = QPointF(center.x(), center.y() - 24.0)
-    line_pen = QPen(QColor("#b0b0ab"), 1.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+    line_pen = QPen(_palette_color("border_strong"), 1.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
     painter.setPen(line_pen)
     painter.drawLine(icon_center + QPointF(-18.0, 3.0), icon_center + QPointF(0.0, -9.0))
     painter.drawLine(icon_center + QPointF(0.0, -9.0), icon_center + QPointF(19.0, 5.0))
     painter.drawLine(icon_center + QPointF(-18.0, 3.0), icon_center + QPointF(14.0, 18.0))
 
     for point, radius, color in (
-        (icon_center + QPointF(-18.0, 3.0), 5.0, QColor("#5a5a56")),
-        (icon_center + QPointF(0.0, -9.0), 6.0, QColor("#cc584d")),
-        (icon_center + QPointF(19.0, 5.0), 4.5, QColor("#4b73c4")),
-        (icon_center + QPointF(14.0, 18.0), 4.0, QColor("#ededeb")),
+        (icon_center + QPointF(-18.0, 3.0), 5.0, _palette_color("text_muted")),
+        (icon_center + QPointF(0.0, -9.0), 6.0, preview_element_color("O")),
+        (icon_center + QPointF(19.0, 5.0), 4.5, preview_element_color("N")),
+        (icon_center + QPointF(14.0, 18.0), 4.0, _palette_color("hover")),
     ):
         painter.setBrush(color)
-        painter.setPen(QPen(QColor("#4a4a48"), 1.0))
+        painter.setPen(QPen(_palette_color("icon"), 1.0))
         painter.drawEllipse(point, radius, radius)
 
     title_rect = QRectF(rect.left() + 18.0, center.y() + 6.0, rect.width() - 36.0, 18.0)
     detail_rect = QRectF(rect.left() + 22.0, title_rect.bottom() + 3.0, rect.width() - 44.0, 34.0)
 
-    painter.setPen(QColor("#232322"))
+    painter.setPen(_palette_color("text"))
     painter.setFont(title_font)
     painter.drawText(title_rect, int(Qt.AlignmentFlag.AlignCenter), title)
-    painter.setPen(QColor("#6f6f6c"))
+    painter.setPen(_palette_color("text_muted"))
     painter.setFont(detail_font)
     painter.drawText(
         detail_rect,
@@ -149,10 +155,10 @@ def draw_interaction_hints(painter: QPainter, viewport: QRectF, *, font: QFont) 
     y = viewport.top() + 10.0
     for label, width in zip(labels, widths, strict=False):
         pill = QRectF(x, y, width, 22.0)
-        painter.setPen(QPen(QColor("#e0e0dd"), 1.0))
-        painter.setBrush(QColor("#ffffff"))
+        painter.setPen(QPen(_palette_color("border"), 1.0))
+        painter.setBrush(_palette_color("surface_input"))
         painter.drawRoundedRect(pill, 11.0, 11.0)
-        painter.setPen(QColor("#6f6f6c"))
+        painter.setPen(_palette_color("text_muted"))
         painter.drawText(pill, int(Qt.AlignmentFlag.AlignCenter), label)
         x += width + gap
     painter.restore()
@@ -170,8 +176,8 @@ def draw_footer(
     if rect.isNull():
         return
     painter.save()
-    painter.setPen(QPen(QColor("#e0e0dd"), 1.0))
-    painter.setBrush(QColor("#f4f4f3"))
+    painter.setPen(QPen(_palette_color("border"), 1.0))
+    painter.setBrush(_palette_color("surface_context"))
     painter.drawRoundedRect(rect, 7.0, 7.0)
 
     if not items:
@@ -192,8 +198,8 @@ def draw_info_chip(
     value_font: QFont,
 ) -> None:
     painter.save()
-    painter.setPen(QPen(QColor("#e4e4e1"), 1.0))
-    painter.setBrush(QColor("#ffffff"))
+    painter.setPen(QPen(_palette_color("border"), 1.0))
+    painter.setBrush(_palette_color("surface_input"))
     painter.drawRoundedRect(rect, 6.0, 6.0)
 
     value_font = QFont(value_font)
@@ -210,10 +216,10 @@ def draw_info_chip(
     )
 
     painter.setFont(label_font)
-    painter.setPen(QColor("#8c8c87"))
+    painter.setPen(_palette_color("icon_muted"))
     painter.drawText(label_rect, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), label)
     painter.setFont(value_font)
-    painter.setPen(QColor("#232322"))
+    painter.setPen(_palette_color("text"))
     painter.drawText(
         value_rect,
         int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter),

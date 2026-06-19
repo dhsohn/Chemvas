@@ -19,16 +19,21 @@ from ui.main_window_context_bar_widgets import (
     divider,
     hint_label,
     icon_button,
+    length_field_button,
     new_context_page,
+    segment_button,
     slider_dropdown_button,
 )
 from ui.main_window_toolbar_logic import BOND_STYLE_BY_LABEL
 from ui.main_window_ui_ports import icon_factory_for_window
 
-_BOND_SEGMENTS = [
+_BOND_ORDER_SEGMENTS = [
     ("Single", "icon_bond", "Single bond (1)"),
     ("Double", "icon_bond_double", "Double bond (2)"),
     ("Triple", "icon_bond_triple", "Triple bond (3)"),
+]
+
+_BOND_MODIFIERS = [
     ("Bold", "icon_bond_bold", "Bold bond (B)"),
     ("Wedge", "icon_bond_wedge", "Wedge bond (W)"),
     ("Hash", "icon_bond_hash", "Hash bond (Shift+H)"),
@@ -94,10 +99,11 @@ def build_bond_page(window, activate_bond_style_for_window, set_bond_length_for_
     page, layout = new_context_page()
     icon_factory = icon_factory_for_window(window)
 
+    layout.addWidget(hint_label("Bond"))
     group = QButtonGroup(page)
     group.setExclusive(True)
     buttons: dict[str, QToolButton] = {}
-    for label, icon_method, tip in _BOND_SEGMENTS:
+    for label, icon_method, tip in _BOND_ORDER_SEGMENTS:
         button = icon_button(getattr(icon_factory, icon_method)(), tip, checkable=True)
         button.clicked.connect(lambda _checked, v=label: activate_bond_style_for_window(window, v))
         group.addButton(button)
@@ -105,7 +111,15 @@ def build_bond_page(window, activate_bond_style_for_window, set_bond_length_for_
         layout.addWidget(button)
 
     layout.addWidget(divider())
-    length_button = icon_button(icon_factory.icon_bond_length(), "Set the default bond length")
+    for label, icon_method, tip in _BOND_MODIFIERS:
+        button = icon_button(getattr(icon_factory, icon_method)(), tip, checkable=True)
+        button.clicked.connect(lambda _checked, v=label: activate_bond_style_for_window(window, v))
+        group.addButton(button)
+        buttons[label] = button
+        layout.addWidget(button)
+
+    layout.addWidget(divider())
+    length_button = length_field_button("20 px", "Set the default bond length")
     length_button.clicked.connect(lambda _checked=False: set_bond_length_for_window(window))
     layout.addWidget(length_button)
     layout.addStretch(1)
@@ -115,6 +129,7 @@ def build_bond_page(window, activate_bond_style_for_window, set_bond_length_for_
 def build_template_page(window, insert_controller) -> TemplateContextPage:
     page, layout = new_context_page()
     icon_factory = icon_factory_for_window(window)
+    layout.addWidget(hint_label("Ring"))
     group = QButtonGroup(page)
     group.setExclusive(True)
     buttons: dict[tuple[int, str], QToolButton] = {}
@@ -137,6 +152,7 @@ def build_mark_page(window, tool_state_service) -> MarkContextPage:
     page, layout = new_context_page()
     icon_factory = icon_factory_for_window(window)
 
+    layout.addWidget(hint_label("Mark"))
     group = QButtonGroup(page)
     group.setExclusive(True)
     buttons: dict[str, QToolButton] = {}
@@ -155,6 +171,7 @@ def build_arrow_page(window, tool_mode_controller, tool_state_service) -> ArrowC
     page, layout = new_context_page()
     icon_factory = icon_factory_for_window(window)
 
+    layout.addWidget(hint_label("Arrow"))
     group = QButtonGroup(page)
     group.setExclusive(True)
     buttons: dict[str, QToolButton] = {}
@@ -194,6 +211,7 @@ def build_bracket_page(window, tool_state_service) -> BracketContextPage:
     page, layout = new_context_page()
     icon_factory = icon_factory_for_window(window)
 
+    layout.addWidget(hint_label("Bracket"))
     group = QButtonGroup(page)
     group.setExclusive(True)
     buttons: dict[str, QToolButton] = {}
@@ -210,6 +228,7 @@ def build_bracket_page(window, tool_state_service) -> BracketContextPage:
 
 def build_atom_page(current_symbol: str, set_atom_symbol) -> AtomContextPage:
     page, layout = new_context_page()
+    layout.addWidget(hint_label("Atom"))
     atom_input = atom_symbol_input(
         current_symbol,
         set_atom_symbol,
@@ -219,12 +238,29 @@ def build_atom_page(current_symbol: str, set_atom_symbol) -> AtomContextPage:
     return AtomContextPage(page=page, atom_input=atom_input)
 
 
+def build_orbital_page(window, tool_state_service) -> QWidget:
+    page, layout = new_context_page()
+    layout.addWidget(hint_label("Orbital"))
+    for label in ("s", "p", "sp", "sp2", "sp3", "d"):
+        button = segment_button(label, f"Orbital: {label}")
+        button.clicked.connect(lambda _checked=False, value=label: tool_state_service.set_orbital_type(window, value))
+        layout.addWidget(button)
+    layout.addWidget(divider())
+    for label in ("Phase Off", "Phase On"):
+        button = segment_button(label, label)
+        button.clicked.connect(lambda _checked=False, value=label: tool_state_service.set_orbital_phase(window, value))
+        layout.addWidget(button)
+    layout.addStretch(1)
+    return page
+
+
 def build_color_palette_page(
     *,
     tooltip_prefix: str,
     apply_preset,
 ) -> QWidget:
     page, layout = new_context_page()
+    layout.addWidget(hint_label(tooltip_prefix))
     for label, hex_value in COLOR_PALETTE_SPECS:
         button = color_swatch_button(label, hex_value, tooltip_prefix)
         button.clicked.connect(lambda _checked=False, value=hex_value: apply_preset(value))
@@ -248,5 +284,6 @@ __all__ = [
     "build_color_palette_page",
     "build_empty_page",
     "build_mark_page",
+    "build_orbital_page",
     "build_template_page",
 ]

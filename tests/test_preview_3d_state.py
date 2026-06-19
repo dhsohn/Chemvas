@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from core.model import MoleculeModel
 from core.rdkit_types import Molecule3DAtom, Molecule3DBond, Molecule3DScene
+from PyQt6.QtGui import QColor
+from ui.main_window_palette import PALETTE
 from ui.preview_3d_state import (
     is_empty_preview_message,
     preview_empty_state_text,
@@ -51,6 +53,11 @@ def test_preview_status_text_helpers_cover_empty_building_issue_and_ready_states
     assert is_empty_preview_message("No chemical structure selected")
     assert preview_metadata_summary(None, "3D preview unavailable") == ""
     assert preview_status_badge(None, "3D preview unavailable")[0] == "Empty"
+    assert preview_status_badge(None, "3D preview unavailable")[1:] == (
+        QColor(PALETTE["hover"]),
+        QColor(PALETTE["border_strong"]),
+        QColor(PALETTE["text_muted"]),
+    )
     assert preview_empty_state_text("3D preview unavailable") == (
         "No molecule yet",
         "Draw or paste a structure to preview it in 3D.",
@@ -58,6 +65,11 @@ def test_preview_status_text_helpers_cover_empty_building_issue_and_ready_states
 
     assert preview_metadata_summary(None, "Updating 3D preview...") == "Preparing coordinates"
     assert preview_status_badge(None, "Updating 3D preview...")[0] == "Building"
+    assert preview_status_badge(None, "Updating 3D preview...")[1:] == (
+        QColor(PALETTE["surface_context"]),
+        QColor(PALETTE["border_strong"]),
+        QColor(PALETTE["text_muted"]),
+    )
     assert preview_empty_state_text("Updating 3D preview...") == (
         "Building preview",
         "Preparing coordinates",
@@ -65,7 +77,17 @@ def test_preview_status_text_helpers_cover_empty_building_issue_and_ready_states
 
     assert preview_metadata_summary(None, "RDKit missing") == "Preview needs attention"
     assert preview_status_badge(None, "RDKit missing")[0] == "Issue"
+    assert preview_status_badge(None, "RDKit missing")[1:] == (
+        QColor(PALETTE["danger_bg"]),
+        QColor(PALETTE["danger_border"]),
+        QColor(PALETTE["danger_text"]),
+    )
     assert preview_empty_state_text("RDKit missing") == ("Preview unavailable", "RDKit missing")
 
     assert preview_metadata_summary(scene, "") == "2 atoms / 1 bond"
     assert preview_status_badge(scene, "")[0] == "Ready"
+    assert preview_status_badge(scene, "")[1:] == (
+        QColor(PALETTE["checked_bg"]),
+        QColor(PALETTE["checked_border"]),
+        QColor(PALETTE["checked_text"]),
+    )

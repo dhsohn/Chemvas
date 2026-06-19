@@ -9,7 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 try:
     from PyQt6.QtCore import QPointF, Qt
     from PyQt6.QtGui import QColor, QFont
-    from PyQt6.QtWidgets import QApplication
+    from PyQt6.QtWidgets import QApplication, QGraphicsPathItem
 except ModuleNotFoundError:
     QApplication = None
 
@@ -87,6 +87,14 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
         self.assertIsInstance(minus, AtomLabelItem)
         self.assertEqual(minus.toPlainText(), "-")
         self.assertEqual(minus._hit_radius, selection_radius)
+
+        circled_plus = build_mark_item_for(view, "circled_plus")
+        circled_minus = build_mark_item_for(view, "circled_minus")
+        self.assertIsInstance(circled_plus, QGraphicsPathItem)
+        self.assertIsInstance(circled_minus, QGraphicsPathItem)
+        self.assertEqual(circled_plus.pen().color(), QColor(16, 32, 48))
+        self.assertEqual(circled_minus.pen().color(), QColor(16, 32, 48))
+        self.assertGreater(circled_plus.boundingRect().width(), circled_plus.path().boundingRect().width())
 
         self.assertIsNone(build_mark_item_for(view, "unsupported"))
 

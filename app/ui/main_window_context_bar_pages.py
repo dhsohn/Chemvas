@@ -13,6 +13,7 @@ from ui.main_window_context_bar_page_factories import (
     build_color_palette_page,
     build_empty_page,
     build_mark_page,
+    build_orbital_page,
     build_template_page,
 )
 
@@ -80,6 +81,7 @@ class MainWindowContextBarPageBuilder:
             "atom": atom_page.page,
             "ring": ring_page.page,
             "mark": mark_page.page,
+            "orbital": build_orbital_page(window, self._tool_state),
             "color": build_color_palette_page(
                 tooltip_prefix="Color",
                 apply_preset=lambda value: self._apply_color_preset_for_window(window, value),

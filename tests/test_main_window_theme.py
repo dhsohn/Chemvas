@@ -47,6 +47,20 @@ def test_stylesheet_uses_shared_palette_values() -> None:
     assert PALETTE["surface_app"] in MAIN_WINDOW_STYLESHEET
     assert PALETTE["surface_canvas"] in MAIN_WINDOW_STYLESHEET
     assert PALETTE["accent"] in MAIN_WINDOW_STYLESHEET
+    assert PALETTE["danger_bg"] in MAIN_WINDOW_STYLESHEET
+    assert PALETTE["danger_text"] in MAIN_WINDOW_STYLESHEET
+
+
+def test_palette_exposes_design_system_shell_tokens() -> None:
+    assert PALETTE["icon"] == "#2f2f2c"
+    assert PALETTE["icon_muted"] == "#8c8c87"
+    assert PALETTE["icon_pale_fill"] == "#ededeb"
+    assert PALETTE["checked_bg"] == "#d6ece7"
+    assert PALETTE["checked_border"] == "#5fb3a6"
+    assert PALETTE["checked_text"] == "#0b5750"
+    assert PALETTE["danger_bg"] == "#f6eded"
+    assert PALETTE["danger_border"] == "#dbbcbc"
+    assert PALETTE["danger_text"] == "#8a2020"
 
 
 def test_main_window_stylesheet_composes_section_modules() -> None:
@@ -73,7 +87,11 @@ def test_main_window_stylesheet_composes_section_modules() -> None:
 
 
 def test_toolbar_styles_keep_expected_selectors() -> None:
+    assert "border-radius: 6px" in main_window_chrome_stylesheet(PALETTE)
+    assert "padding: 2px" in main_window_chrome_stylesheet(PALETTE)
     assert "QToolButton:checked" in TOOLBAR_BUTTON_STYLE
     assert "QToolButton::menu-button" in TOOLBAR_MENU_BUTTON_STYLE
-    assert "font-size: 12px" in CONTEXT_SEGMENT_STYLE
+    assert "font-size: 13px" in CONTEXT_SEGMENT_STYLE
     assert "QToolButton#smiles_render_button" in SMILES_RENDER_BUTTON_STYLE
+    assert PALETTE["checked_bg"] in TOOLBAR_BUTTON_STYLE
+    assert PALETTE["accent_pressed"] in SMILES_RENDER_BUTTON_STYLE

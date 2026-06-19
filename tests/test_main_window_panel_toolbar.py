@@ -66,11 +66,13 @@ class _HarnessWindow(QMainWindow):
             icon_save=self._blank_icon,
             icon_open=self._blank_icon,
             icon_preview_panel=self._blank_icon,
+            icon_add_sheet=self._blank_icon,
             icon_setup_sheet=self._blank_icon,
             icon_undo=self._blank_icon,
             icon_redo=self._blank_icon,
             icon_color=self._blank_icon,
             icon_ring_fill=self._blank_icon,
+            icon_orbital=self._blank_icon,
         )
         self.ui_references = SimpleNamespace(require_icon_factory=lambda: self._icon_factory)
 
@@ -116,6 +118,7 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
             load_canvas=mock.Mock(),
             export_figure=mock.Mock(),
             open_preview_window=mock.Mock(),
+            new_canvas_sheet=mock.Mock(),
         )
         self.button_service = MainWindowUIAssemblyService(
             scene_transform_controller_for_window=self.scene_transform_controller_for_window,
@@ -171,34 +174,28 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         self.assertEqual(list(assembly.tool_actions), TOOLBAR_TOOL_ACTION_ORDER)
         self.assertTrue(assembly.tool_actions["bond"].isChecked())
         self.assertFalse(assembly.preview_panel_button.isCheckable())
-        self.assertEqual(assembly.preview_panel_button.toolTip(), "Open 3D Preview")
+        self.assertEqual(assembly.preview_panel_button.toolTip(), "3D Preview")
         self.assertIsNone(assembly.export_xyz_button)
         self.assertIsNone(assembly.panel_bar.findChild(QToolButton, "export_xyz_button"))
         self.assertIsNone(assembly.panel_bar.findChild(QToolButton, "setup_sheet_button"))
+        self.assertIsNotNone(assembly.panel_bar.findChild(QToolButton, "new_sheet_button"))
+        self.assertIsNotNone(assembly.panel_bar.findChild(QToolButton, "open_button"))
         self.assertIs(assembly.undo_button, assembly.panel_bar.findChild(QToolButton, "undo_button"))
         self.assertIs(assembly.redo_button, assembly.panel_bar.findChild(QToolButton, "redo_button"))
         self.assertEqual(
             self._toolbar_widget_groups(assembly.panel_bar)[0],
-            ["File", "preview_panel_button", "undo_button", "redo_button"],
-        )
-        self.assertEqual(
-            self._toolbar_widget_groups(assembly.panel_bar)[1],
             [
                 "toolButton_select",
                 "toolButton_perspective",
-                "flip_horizontal_button",
-                "flip_vertical_button",
-            ],
-        )
-        self.assertIn(
-            [
                 "toolButton_text",
                 "toolButton_bond",
-                "toolButton_mark",
                 "toolButton_benzene",
                 "toolButton_arrow",
                 "toolButton_ts_bracket",
             ],
+        )
+        self.assertIn(
+            ["toolButton_mark", "toolButton_orbital"],
             self._toolbar_widget_groups(assembly.panel_bar),
         )
         self.assertIn(
@@ -206,11 +203,32 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
             self._toolbar_widget_groups(assembly.panel_bar),
         )
         self.assertIn(
-            ["SMILES...", "smiles_render_button"],
+            ["flip_horizontal_button", "flip_vertical_button"],
             self._toolbar_widget_groups(assembly.panel_bar),
         )
+        self.assertEqual(
+            self._toolbar_widget_groups(assembly.panel_bar)[-1],
+            ["preview_panel_button", "open_button", "File", "new_sheet_button"],
+        )
+        primary_buttons = [
+            assembly.panel_bar.findChild(QToolButton, name)
+            for name in (
+                "toolButton_select",
+                "toolButton_perspective",
+                "toolButton_text",
+                "toolButton_bond",
+                "toolButton_benzene",
+                "toolButton_arrow",
+                "toolButton_ts_bracket",
+            )
+        ]
+        self.assertEqual(
+            [button.text() for button in primary_buttons],
+            ["", "", "", "", "", "", ""],
+        )
+        self.assertTrue(all(button.width() == button.height() for button in primary_buttons))
         line_edits = assembly.panel_bar.findChildren(QLineEdit)
-        self.assertEqual([line_edit.placeholderText() for line_edit in line_edits], ["SMILES..."])
+        self.assertEqual(line_edits, [])
         self.assertIsNone(assembly.panel_bar.findChild(QLineEdit, "atomInput"))
 
         assembly.save_action.trigger()
@@ -229,18 +247,14 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         window.load_canvas.assert_not_called()
         window.export_figure.assert_not_called()
 
-        smiles_input = next(
-            widget
-            for widget in assembly.panel_bar.findChildren(QLineEdit)
-            if widget.placeholderText() == "SMILES..."
-        )
-        smiles_button = assembly.panel_bar.findChild(QToolButton, "smiles_render_button")
-        smiles_input.setText("CCO")
-        smiles_button.click()
-        window.canvas.insert_controller.begin_smiles_insert.assert_called_once_with("CCO")
+        window.canvas.insert_controller.begin_smiles_insert.assert_not_called()
 
         assembly.preview_panel_button.click()
         self.panel_callbacks.open_preview_window.assert_called_once_with(window)
+        assembly.panel_bar.findChild(QToolButton, "open_button").click()
+        self.panel_callbacks.load_canvas.assert_called_with(window)
+        assembly.new_sheet_button.click()
+        self.panel_callbacks.new_canvas_sheet.assert_called_once_with(window)
         window.export_xyz.assert_not_called()
         window.open_preview_window.assert_not_called()
         window.setup_sheet.assert_not_called()

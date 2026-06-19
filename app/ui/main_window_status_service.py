@@ -6,6 +6,20 @@ from PyQt6.QtWidgets import QLabel
 from ui.main_window_toolbar_logic import tool_display_name
 from ui.selection_collection_access import selection_status_count_for
 
+TOOL_HINTS: dict[str, str] = {
+    "select": "Select: click or drag marquee",
+    "bond": "Bond: click-drag to draw",
+    "text": "Atom / Text: click to place label",
+    "mark": "Mark: click atom or label",
+    "benzene": "Ring: click to place template",
+    "arrow": "Arrow: drag to draw",
+    "ts_bracket": "Brackets: drag around selection",
+    "orbital": "Orbital: click to place",
+    "perspective": "Perspective: drag selection to rotate",
+    "color": "Color: choose a swatch",
+    "ring_fill": "Ring Fill: choose fill color",
+}
+
 
 class MainWindowStatusService:
     def __init__(
@@ -63,7 +77,7 @@ class MainWindowStatusService:
         window.statusBar().addPermanentWidget(self.zoom_label)
         self.refresh_status_context(window)
         self.update_chemical_status_label("", "")
-        window.statusBar().showMessage("Ready")
+        self.show_active_tool_hint(window)
 
     def refresh_status_context(self, window, *, update_zoom: bool = True) -> None:
         self.update_tool_status_label(window)
@@ -71,6 +85,7 @@ class MainWindowStatusService:
         self.update_selection_status_label(window)
         if update_zoom:
             self.update_zoom_label(self._current_zoom_percent_for_window(window))
+        self.show_active_tool_hint(window)
 
     def update_tool_status_label(self, window) -> None:
         if self.tool_label is not None:
@@ -144,6 +159,25 @@ class MainWindowStatusService:
         if not tool_name:
             return "Tool: None"
         return f"Tool: {tool_display_name(str(tool_name))}"
+
+    def active_tool_hint_text(self, window) -> str:
+        page_override = self._context_bar_page_override_for_window(window)
+        if page_override == "ring_fill":
+            return TOOL_HINTS["ring_fill"]
+        canvas = self._active_canvas_or_none_for_window(window)
+        if canvas is None:
+            return "No active sheet"
+        tool_name = self._active_tool_name_for_window(window)
+        if not tool_name:
+            return "Choose a drawing tool"
+        key = str(tool_name)
+        return TOOL_HINTS.get(key, f"{tool_display_name(key)}: ready")
+
+    def show_active_tool_hint(self, window) -> None:
+        status_bar = window.statusBar() if hasattr(window, "statusBar") else None
+        if status_bar is None:
+            return
+        status_bar.showMessage(self.active_tool_hint_text(window))
 
     def active_sheet_status_text(self, window) -> str:
         sheet_count = self._canvas_sheet_count_for_window(window)

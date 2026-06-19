@@ -11,9 +11,9 @@ def main_window_status_stylesheet(palette) -> str:
                 padding: 2px 8px;
             }}
             QStatusBar[statusState="error"] {{
-                background: #f6eded;
-                border-top: 1px solid {_P["border_strong"]};
-                color: #8a2020;
+                background: {_P["danger_bg"]};
+                border-top: 1px solid {_P["danger_border"]};
+                color: {_P["danger_text"]};
             }}
             QStatusBar QLabel {{
                 color: {_P["text_muted"]};
