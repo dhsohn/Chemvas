@@ -344,6 +344,8 @@ def _validate_bond_state(bond_state: Mapping[str, object], atom_ids: set[int]) -
     b = _validated_id(bond_state.get("b"))
     if a not in atom_ids or b not in atom_ids:
         raise ValueError("Invalid Chemvas file.")
+    if a == b:
+        raise ValueError("Invalid Chemvas file.")
     order = bond_state.get("order")
     if not _is_int(order) or order not in VALID_BOND_ORDERS:
         raise ValueError("Invalid Chemvas file.")
