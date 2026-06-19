@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from ui.canvas_view import CanvasView
 from ui.canvas_window_access import restore_canvas_state_for
-from ui.main_window_document_dialogs import prompt_sheet_setup
 from ui.main_window_canvas_logic import copy_canvas_template_settings
-from ui.sheet_setup_access import set_sheet_setup_for, sheet_orientation_for, sheet_size_for
+from ui.main_window_document_dialogs import prompt_sheet_setup
+from ui.sheet_setup_access import (
+    set_sheet_setup_for,
+    sheet_orientation_for,
+    sheet_size_for,
+)
 
 
 class MainWindowCanvasSheetService:
