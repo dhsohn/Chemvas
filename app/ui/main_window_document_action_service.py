@@ -3,6 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from core.document_io import read_document as default_read_document
+from core.svg_roundtrip import (
+    extract_chemvas_document_from_svg as default_read_editable_svg,
+)
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
 from ui.export_dialog_logic import (
@@ -188,22 +191,29 @@ class MainWindowDocumentActionService:
         file_dialog=None,
         message_box=None,
         read_document=None,
+        read_editable_svg=None,
         resolve_load_path=None,
     ) -> None:
         file_dialog = QFileDialog if file_dialog is None else file_dialog
         message_box = QMessageBox if message_box is None else message_box
         read_document = default_read_document if read_document is None else read_document
+        read_editable_svg = default_read_editable_svg if read_editable_svg is None else read_editable_svg
         resolve_load_path = default_resolve_load_path if resolve_load_path is None else resolve_load_path
         dialog_path, _ = file_dialog.getOpenFileName(
             window,
             "Load Drawing",
             "",
-            "Chemvas (*.chemvas);;JSON (*.json);;All Files (*)",
+            "Chemvas / Editable SVG (*.chemvas *.json *.svg);;Chemvas (*.chemvas);;Editable SVG (*.svg);;JSON (*.json);;All Files (*)",
         )
         path = resolve_load_path(dialog_path)
         if path is None:
             return
         try:
+            if Path(path).suffix.lower() == ".svg":
+                document = read_editable_svg(path)
+                self._workbook_document.restore_single_sheet_document(window, document.state)
+                window.statusBar().showMessage(f"Loaded editable SVG: {path}", 4000)
+                return
             document = read_document(path)
             state = document.state
             if "sheets" in state:

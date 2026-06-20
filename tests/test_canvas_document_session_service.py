@@ -1,10 +1,14 @@
 import os
+import tempfile
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from core.document_state import serialize_settings
+from core.svg_roundtrip import extract_chemvas_document_from_svg
 from ui.canvas_document_session_service import CanvasDocumentSessionService
 from ui.canvas_history_service import CanvasHistoryService
 from ui.canvas_history_state import CanvasHistoryState, history_state_for
@@ -80,6 +84,34 @@ def _session_service(canvas):
         structure_build_service=structure_build_service,
         history_service=services.history_service,
     )
+
+
+def _settings() -> dict:
+    return serialize_settings(
+        bond_length_px=18.0,
+        arrow_line_width=1.5,
+        arrow_head_scale=0.4,
+        orbital_phase_enabled=True,
+        text_font_size=13,
+        text_font_weight=600,
+        text_italic=False,
+        sheet_size="A4",
+        sheet_orientation="portrait",
+    )
+
+
+def _single_sheet_state() -> dict:
+    return {
+        "model": {"atoms": {}, "bonds": [], "next_atom_id": 0},
+        "ring_fills": [],
+        "notes": [{"text": "editable", "x": 1.0, "y": 2.0}],
+        "marks": [],
+        "arrows": [],
+        "ts_brackets": [],
+        "orbitals": [],
+        "settings": _settings(),
+        "last_smiles_input": None,
+    }
 
 
 class CanvasDocumentSessionServiceTest(unittest.TestCase):
@@ -203,7 +235,10 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         _attach_history_service(canvas)
         service = _session_service(canvas)
 
-        with mock.patch("ui.canvas_document_session_service.export_canvas_scene_for") as export_canvas_scene:
+        with (
+            mock.patch("ui.canvas_document_session_service.export_canvas_scene_for") as export_canvas_scene,
+            mock.patch.object(service, "_embed_editable_svg_payload") as embed_editable_svg,
+        ):
             service.export_figure(
                 "/tmp/out.svg",
                 fmt="svg",
@@ -225,6 +260,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             unit_scale=0.5,
             target_width_pt=None,
         )
+        embed_editable_svg.assert_called_once_with("/tmp/out.svg", fmt="svg", scope="selection")
         self.assertEqual(canvas.scene.call_count, 2)
 
     def test_export_figure_selection_scope_requires_selected_items(self) -> None:
@@ -269,6 +305,86 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertIsNone(export_canvas_scene.call_args.kwargs["items"])
         self.assertEqual(export_canvas_scene.call_args.kwargs["unit_scale"], 1.0)
         self.assertAlmostEqual(export_canvas_scene.call_args.kwargs["target_width_pt"], 84.0 / 25.4 * 72.0)
+
+    def test_export_figure_embeds_sheet_payload_in_svg_file(self) -> None:
+        canvas = SimpleNamespace(
+            FILE_FORMAT_VERSION=1,
+            renderer=SimpleNamespace(
+                style=SimpleNamespace(
+                    bond_line_width=1.0,
+                    bond_length_px=30.0,
+                    bond_length_pt=15.0,
+                )
+            ),
+        )
+        _attach_history_service(canvas)
+        service = _session_service(canvas)
+        state = _single_sheet_state()
+        service.snapshot_state = mock.Mock(return_value=state)
+
+        def write_svg(_canvas, path, **_kwargs) -> None:
+            Path(path).write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" />',
+                encoding="utf-8",
+            )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / "figure.svg")
+            with mock.patch("ui.canvas_document_session_service.export_canvas_scene_for", side_effect=write_svg):
+                service.export_figure(path, fmt="svg", scope="sheet")
+
+            self.assertEqual(extract_chemvas_document_from_svg(path).state, state)
+
+    def test_embed_editable_svg_payload_uses_sheet_state_for_svg_only(self) -> None:
+        state = {
+            "model": {"atoms": {}, "bonds": [], "next_atom_id": 0},
+            "ring_fills": [],
+            "notes": [],
+            "marks": [],
+            "arrows": [],
+            "ts_brackets": [],
+            "orbitals": [],
+            "settings": {},
+            "last_smiles_input": None,
+        }
+        canvas = SimpleNamespace(FILE_FORMAT_VERSION=7)
+        _attach_history_service(canvas)
+        service = _session_service(canvas)
+        service.snapshot_state = mock.Mock(return_value=state)
+
+        with (
+            mock.patch(
+                "ui.canvas_document_session_service.create_editable_svg_payload",
+                return_value={"payload": 1},
+            ) as create_payload,
+            mock.patch("ui.canvas_document_session_service.embed_chemvas_document_in_svg") as embed_svg,
+        ):
+            service._embed_editable_svg_payload("/tmp/out.svg", fmt="svg", scope="sheet")
+            service._embed_editable_svg_payload("/tmp/out.png", fmt="png", scope="sheet")
+
+        create_payload.assert_called_once_with(state, document_version=7, scope="sheet")
+        embed_svg.assert_called_once_with("/tmp/out.svg", {"payload": 1})
+        service.snapshot_state.assert_called_once_with()
+
+    def test_embed_editable_svg_payload_uses_selection_state_for_selection_scope(self) -> None:
+        state = {"selection": "state"}
+        canvas = SimpleNamespace(FILE_FORMAT_VERSION=7)
+        _attach_history_service(canvas)
+        service = _session_service(canvas)
+        service._selection_document_state = mock.Mock(return_value=state)
+
+        with (
+            mock.patch(
+                "ui.canvas_document_session_service.create_editable_svg_payload",
+                return_value={"payload": 1},
+            ) as create_payload,
+            mock.patch("ui.canvas_document_session_service.embed_chemvas_document_in_svg") as embed_svg,
+        ):
+            service._embed_editable_svg_payload("/tmp/out.svg", fmt="svg", scope="selection")
+
+        create_payload.assert_called_once_with(state, document_version=7, scope="selection")
+        embed_svg.assert_called_once_with("/tmp/out.svg", {"payload": 1})
+        service._selection_document_state.assert_called_once_with()
 
 
 if __name__ == "__main__":

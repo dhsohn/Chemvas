@@ -10,6 +10,7 @@ from core.document_state import (
     build_document_payload,
     deserialize_model_state,
     extract_document_state,
+    selection_payload_to_single_sheet_state,
     serialize_model_state,
     serialize_settings,
 )
@@ -211,6 +212,65 @@ class DocumentStateTest(unittest.TestCase):
         state["settings"] = settings
         with self.assertRaises(ValueError):
             build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
+
+    def test_selection_payload_to_single_sheet_state_maps_supported_items(self) -> None:
+        settings = _settings()
+        selection_payload = {
+            "format": "chemvas-selection",
+            "version": 1,
+            "atoms": [
+                {"id": 3, "element": "C", "x": 10.0, "y": 20.0, "color": "#111111", "explicit_label": True},
+                {"id": 7, "element": "O", "x": 30.0, "y": 40.0, "color": "#222222", "explicit_label": False},
+            ],
+            "bonds": [{"a": 3, "b": 7, "order": 2, "style": "double", "color": "#333333"}],
+            "rings": [
+                {
+                    "kind": "ring",
+                    "points": [(0.0, 0.0), (1.0, 0.0), (0.5, 1.0)],
+                    "atom_ids": [3, 7],
+                    "color": "#abcdef",
+                    "alpha": 0.2,
+                }
+            ],
+            "marks": [
+                {
+                    "kind": "mark",
+                    "mark_kind": "plus",
+                    "text": "+",
+                    "atom_id": 3,
+                    "dx": 1.0,
+                    "dy": 2.0,
+                    "x": 11.0,
+                    "y": 22.0,
+                }
+            ],
+            "scene_items": [
+                {"kind": "note", "text": "selected", "x": 5.0, "y": 6.0},
+                {"kind": "arrow", "start": (1.0, 2.0), "end": (3.0, 4.0), "control": None, "double": False},
+                {"kind": "ts_bracket", "left": 1.0, "top": 2.0, "right": 3.0, "bottom": 4.0},
+                {"kind": "orbital", "orbital_kind": "p", "center": (8.0, 9.0), "scale": 1.2, "rotation": 30.0},
+            ],
+        }
+
+        state = selection_payload_to_single_sheet_state(selection_payload, settings)
+
+        self.assertEqual(set(state["model"]["atoms"]), {3, 7})
+        self.assertEqual(state["model"]["atoms"][3]["element"], "C")
+        self.assertEqual(state["model"]["bonds"], selection_payload["bonds"])
+        self.assertEqual(state["model"]["next_atom_id"], 8)
+        self.assertEqual(state["ring_fills"][0]["atom_ids"], [3, 7])
+        self.assertEqual(state["marks"][0]["kind"], "plus")
+        self.assertEqual(state["notes"][0]["text"], "selected")
+        self.assertEqual(state["arrows"][0]["kind"], "arrow")
+        self.assertEqual(state["ts_brackets"][0]["kind"], "ts_bracket")
+        self.assertEqual(state["orbitals"][0]["kind"], "p")
+        self.assertEqual(state["settings"], settings)
+        self.assertIsNone(state["last_smiles_input"])
+        build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
+
+    def test_selection_payload_to_single_sheet_state_rejects_invalid_payload(self) -> None:
+        with self.assertRaises(ValueError):
+            selection_payload_to_single_sheet_state({"atoms": "bad"}, _settings())
 
     def test_build_document_payload_accepts_valid_nested_scene_items(self) -> None:
         state = _single_sheet_state(
