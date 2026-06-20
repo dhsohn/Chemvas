@@ -43,7 +43,6 @@ class MainWindowStatusService:
         self.tool_label: QLabel | None = None
         self.sheet_label: QLabel | None = None
         self.selection_label: QLabel | None = None
-        self.chemical_label: QLabel | None = None
         self.zoom_caption: QLabel | None = None
         self.zoom_label: QLabel | None = None
 
@@ -51,7 +50,6 @@ class MainWindowStatusService:
         self.tool_label = QLabel()
         self.sheet_label = QLabel()
         self.selection_label = QLabel()
-        self.chemical_label = QLabel()
         self.zoom_caption = QLabel("Zoom")
         self.zoom_label = QLabel("100%")
 
@@ -59,7 +57,6 @@ class MainWindowStatusService:
             self.tool_label,
             self.sheet_label,
             self.selection_label,
-            self.chemical_label,
             self.zoom_caption,
         ):
             label.setObjectName("statusContextLabel")
@@ -72,11 +69,9 @@ class MainWindowStatusService:
         window.statusBar().addPermanentWidget(self.tool_label)
         window.statusBar().addPermanentWidget(self.sheet_label)
         window.statusBar().addPermanentWidget(self.selection_label)
-        window.statusBar().addPermanentWidget(self.chemical_label)
         window.statusBar().addPermanentWidget(self.zoom_caption)
         window.statusBar().addPermanentWidget(self.zoom_label)
         self.refresh_status_context(window)
-        self.update_chemical_status_label("", "")
         self.show_active_tool_hint(window)
 
     def refresh_status_context(self, window, *, update_zoom: bool = True) -> None:
@@ -99,17 +94,6 @@ class MainWindowStatusService:
         selection_count = self.current_selection_count(window)
         if self.selection_label is not None:
             self.selection_label.setText(f"Selection: {selection_count}")
-        if selection_count == 0:
-            self.update_chemical_status_label("", "")
-
-    def update_chemical_status_label(self, formula: str, mw: str) -> None:
-        if self.chemical_label is None:
-            return
-        text = self.chemical_status_text(formula, mw)
-        self.chemical_label.setText(text)
-        self.chemical_label.setVisible(bool(text))
-        self.chemical_label.setToolTip(text)
-        self.chemical_label.setStatusTip(text)
 
     def update_zoom_label(self, zoom_percent: int) -> None:
         if self.zoom_label is None:
@@ -137,7 +121,6 @@ class MainWindowStatusService:
             "tool": self.tool_label.text() if self.tool_label is not None else "",
             "sheet": self.sheet_label.text() if self.sheet_label is not None else "",
             "selection": self.selection_label.text() if self.selection_label is not None else "",
-            "chemical": self.chemical_label.text() if self.chemical_label is not None else "",
             "zoom_caption": self.zoom_caption.text() if self.zoom_caption is not None else "",
             "zoom": self.zoom_label.text() if self.zoom_label is not None else "",
         }
@@ -186,14 +169,6 @@ class MainWindowStatusService:
         sheet_name = self._active_canvas_sheet_name_for_window(window) or "Untitled"
         sheet_index = self._active_canvas_sheet_index_for_window(window) + 1
         return f"Sheet: {sheet_name} ({sheet_index}/{sheet_count})"
-
-    def chemical_status_text(self, formula: str, mw: str) -> str:
-        parts: list[str] = []
-        if formula:
-            parts.append(f"Formula: {formula}")
-        if mw:
-            parts.append(f"MW: {mw}")
-        return "   ".join(parts)
 
     def current_selection_count(self, window) -> int:
         canvas = self._active_canvas_or_none_for_window(window)

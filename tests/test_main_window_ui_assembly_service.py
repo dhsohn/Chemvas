@@ -337,7 +337,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             assembly.panel_bar.findChild(QToolButton, "preview_panel_button"),
         )
         self.assertFalse(assembly.preview_panel_button.isCheckable())
-        self.assertEqual(assembly.preview_panel_button.toolTip(), "3D Preview")
+        self.assertEqual(assembly.preview_panel_button.toolTip(), "Molecule Info")
         self.assertIsNone(assembly.panel_bar.findChild(QToolButton, "setup_sheet_button"))
         self.assertIs(assembly.new_sheet_button, assembly.panel_bar.findChild(QToolButton, "new_sheet_button"))
         self.assertIs(assembly.undo_button, assembly.panel_bar.findChild(QToolButton, "undo_button"))

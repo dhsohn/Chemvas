@@ -63,7 +63,7 @@ def draw_header(
     title_rect = QRectF(rect.left(), rect.top() + 1.0, max(20.0, rect.width() - badge_width - 10.0), 20.0)
     painter.setPen(_palette_color("text"))
     painter.setFont(title_font)
-    painter.drawText(title_rect, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), "3D Preview")
+    painter.drawText(title_rect, int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), "Molecule Info")
 
     subtitle_rect = QRectF(rect.left(), title_rect.bottom() + 1.0, rect.width(), 17.0)
     painter.setPen(_palette_color("text_muted"))

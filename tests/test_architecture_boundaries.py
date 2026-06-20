@@ -959,7 +959,7 @@ def test_main_window_active_canvas_ui_service_uses_injected_collaborators() -> N
     assert "self._tab_refs_for_window = tab_refs_for_window" in source
     assert "self._preview_for_window = preview_for_window" in source
     assert "tab_refs = self._tab_refs_for_window(window)" in source
-    assert "selection_info_callback=lambda formula, mw: self.handle_selection_info(window, formula, mw)" in source
+    assert "selection_info_callback=lambda _formula, _mw: self.handle_selection_info(window)" in source
     assert "tool_change_callback=lambda: self._context_page_state.sync_tool_actions_from_canvas(window)" in source
     assert "zoom_callback=self._status.update_zoom_label" in source
     assert "history_change_callback=lambda: self._action_availability.update_action_availability(window)" in source

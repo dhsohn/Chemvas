@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
 class Preview3DWindow(QWidget):
     def __init__(self, parent, *, preview_widget) -> None:
         super().__init__(parent, Qt.WindowType.Window)
-        self.setWindowTitle("3D Preview")
+        self.setWindowTitle("Molecule Info")
         self.setMinimumSize(420, 360)
         self.resize(560, 520)
         layout = QVBoxLayout(self)
