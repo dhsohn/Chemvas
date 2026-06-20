@@ -503,6 +503,157 @@ def _validate_settings_state(settings: Mapping[str, object]) -> None:
         raise ValueError("Invalid Chemvas file.")
 
 
+def validate_clipboard_selection_payload(payload: Mapping[str, object]) -> bool:
+    """Whitelist-validate a decoded clipboard selection payload.
+
+    Clipboard MIME data sits outside the application's trust boundary (any other
+    app or script can inject it), so paste input is held to the same standard as
+    ``.chemvas`` file loading. ``format``/``version`` are checked by the decoder;
+    this verifies the structural content. Returns ``True`` only when every
+    section is well-formed, otherwise ``False`` so the caller can reject the
+    whole paste rather than build invalid scene state.
+    """
+    try:
+        atom_ids = _validate_clipboard_atoms(payload.get("atoms"))
+        _validate_clipboard_bonds(payload.get("bonds"), atom_ids)
+        for ring_state in _validated_scene_state_list(payload.get("rings", [])):
+            _validate_clipboard_ring(ring_state, atom_ids)
+        for mark_state in _validated_scene_state_list(payload.get("marks", [])):
+            _validate_clipboard_mark(mark_state)
+        for item_state in _validated_scene_state_list(payload.get("scene_items", [])):
+            _validate_clipboard_scene_item(item_state)
+    except ValueError:
+        return False
+    return True
+
+
+def _validate_clipboard_atoms(atoms: object) -> set[int]:
+    if not isinstance(atoms, list):
+        raise ValueError("Invalid clipboard payload.")
+    atom_ids: set[int] = set()
+    for atom_state in atoms:
+        if not isinstance(atom_state, Mapping):
+            raise ValueError("Invalid clipboard payload.")
+        if set(atom_state) != {"id", "element", "x", "y", "color", "explicit_label"}:
+            raise ValueError("Invalid clipboard payload.")
+        atom_id = _validated_id(atom_state.get("id"))
+        if atom_id in atom_ids:
+            raise ValueError("Invalid clipboard payload.")
+        element = atom_state.get("element")
+        if not isinstance(element, str) or not element.strip():
+            raise ValueError("Invalid clipboard payload.")
+        if not _is_number(atom_state.get("x")) or not _is_number(atom_state.get("y")):
+            raise ValueError("Invalid clipboard payload.")
+        if not _is_hex_color(atom_state.get("color")):
+            raise ValueError("Invalid clipboard payload.")
+        if type(atom_state.get("explicit_label")) is not bool:
+            raise ValueError("Invalid clipboard payload.")
+        atom_ids.add(atom_id)
+    return atom_ids
+
+
+def _validate_clipboard_bonds(bonds: object, atom_ids: set[int]) -> None:
+    if not isinstance(bonds, list):
+        raise ValueError("Invalid clipboard payload.")
+    for bond_state in bonds:
+        if not isinstance(bond_state, Mapping):
+            raise ValueError("Invalid clipboard payload.")
+        if set(bond_state) != {"a", "b", "order", "style", "color"}:
+            raise ValueError("Invalid clipboard payload.")
+        a = _validated_id(bond_state.get("a"))
+        b = _validated_id(bond_state.get("b"))
+        if a == b or a not in atom_ids or b not in atom_ids:
+            raise ValueError("Invalid clipboard payload.")
+        order = bond_state.get("order")
+        if not _is_int(order) or order not in VALID_BOND_ORDERS:
+            raise ValueError("Invalid clipboard payload.")
+        if bond_state.get("style") not in VALID_BOND_STYLES:
+            raise ValueError("Invalid clipboard payload.")
+        if not _is_hex_color(bond_state.get("color")):
+            raise ValueError("Invalid clipboard payload.")
+
+
+def _validate_clipboard_ring(ring_state: Mapping[str, object], atom_ids: set[int]) -> None:
+    if ring_state.get("kind") != "ring":
+        raise ValueError("Invalid clipboard payload.")
+    if set(ring_state) != {"kind", "points", "atom_ids", "color", "alpha"}:
+        raise ValueError("Invalid clipboard payload.")
+    points = ring_state.get("points")
+    if not isinstance(points, (list, tuple)) or any(not _is_point(point) for point in points):
+        raise ValueError("Invalid clipboard payload.")
+    ring_atom_ids = ring_state.get("atom_ids")
+    if not isinstance(ring_atom_ids, (list, tuple)) or not ring_atom_ids:
+        raise ValueError("Invalid clipboard payload.")
+    if not _is_atom_id_sequence(ring_atom_ids, atom_ids):
+        raise ValueError("Invalid clipboard payload.")
+    color = ring_state.get("color")
+    if color is not None and not _is_hex_color(color):
+        raise ValueError("Invalid clipboard payload.")
+    if not _is_number(ring_state.get("alpha")):
+        raise ValueError("Invalid clipboard payload.")
+
+
+def _validate_clipboard_mark(mark_state: Mapping[str, object]) -> None:
+    if mark_state.get("kind") != "mark":
+        raise ValueError("Invalid clipboard payload.")
+    if set(mark_state) != {"kind", "mark_kind", "text", "atom_id", "dx", "dy", "x", "y"}:
+        raise ValueError("Invalid clipboard payload.")
+    mark_kind = mark_state.get("mark_kind")
+    if mark_kind is not None and mark_kind not in VALID_MARK_KINDS:
+        raise ValueError("Invalid clipboard payload.")
+    text = mark_state.get("text")
+    if text is not None and not isinstance(text, str):
+        raise ValueError("Invalid clipboard payload.")
+    if not _is_number(mark_state.get("x")) or not _is_number(mark_state.get("y")):
+        raise ValueError("Invalid clipboard payload.")
+    atom_id = mark_state.get("atom_id")
+    if atom_id is not None and type(atom_id) is not int:
+        raise ValueError("Invalid clipboard payload.")
+    for offset_key in ("dx", "dy"):
+        offset = mark_state.get(offset_key)
+        if offset is not None and not _is_number(offset):
+            raise ValueError("Invalid clipboard payload.")
+
+
+def _validate_clipboard_scene_item(item_state: Mapping[str, object]) -> None:
+    kind = item_state.get("kind")
+    if kind == "note":
+        if not isinstance(item_state.get("text"), str):
+            raise ValueError("Invalid clipboard payload.")
+        if not _is_number(item_state.get("x")) or not _is_number(item_state.get("y")):
+            raise ValueError("Invalid clipboard payload.")
+        return
+    if kind in VALID_ARROW_KINDS:
+        if not _is_point(item_state.get("start")) or not _is_point(item_state.get("end")):
+            raise ValueError("Invalid clipboard payload.")
+        control = item_state.get("control")
+        if control is not None and not _is_point(control):
+            raise ValueError("Invalid clipboard payload.")
+        return
+    if kind == "ts_bracket":
+        bracket_kind = item_state.get("bracket_kind")
+        if bracket_kind is not None and bracket_kind not in VALID_TS_BRACKET_KINDS:
+            raise ValueError("Invalid clipboard payload.")
+        rect = item_state.get("rect")
+        if rect is not None:
+            if not isinstance(rect, (list, tuple)) or len(rect) != 4 or any(not _is_number(v) for v in rect):
+                raise ValueError("Invalid clipboard payload.")
+            return
+        for edge_key in ("left", "top", "right", "bottom"):
+            if not _is_number(item_state.get(edge_key)):
+                raise ValueError("Invalid clipboard payload.")
+        return
+    if kind == "orbital":
+        if item_state.get("orbital_kind") not in VALID_ORBITAL_KINDS:
+            raise ValueError("Invalid clipboard payload.")
+        if not _is_point(item_state.get("center")):
+            raise ValueError("Invalid clipboard payload.")
+        if not _is_number(item_state.get("scale")) or not _is_number(item_state.get("rotation")):
+            raise ValueError("Invalid clipboard payload.")
+        return
+    raise ValueError("Invalid clipboard payload.")
+
+
 def _validated_id(value: object) -> int:
     if type(value) is int:
         parsed = value

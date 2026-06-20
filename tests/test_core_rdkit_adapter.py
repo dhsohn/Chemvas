@@ -966,6 +966,27 @@ class RDKitAdapterTest(unittest.TestCase):
         with mock.patch.object(adapter, "model_to_rdkit", return_value=None):
             self.assertEqual(adapter.compute_props(self._simple_model()), (None, None, None))
 
+    def test_compute_props_blanks_unsupported_labels_instead_of_carbon(self) -> None:
+        # An abbreviation label (e.g. "Me") must not be silently treated as
+        # Carbon and produce a misleading formula/MW. Strict label handling
+        # leaves the properties blank.
+        chem = _FakeChem({}, add_hs_result=SimpleNamespace())
+        adapter = RDKitAdapter()
+        adapter._rdkit = (chem, _FakeAllChem())
+        model = MoleculeModel()
+        model.add_atom("Me", 0.0, 0.0)
+
+        self.assertEqual(adapter.compute_props(model), (None, None, None))
+
+    def test_compute_props_uses_strict_labels(self) -> None:
+        adapter = RDKitAdapter()
+        adapter._rdkit = (_FakeChem({}), _FakeAllChem())
+
+        with mock.patch.object(adapter, "model_to_rdkit", return_value=None) as model_to_rdkit:
+            adapter.compute_props(self._simple_model())
+
+        self.assertTrue(model_to_rdkit.call_args.kwargs.get("strict_labels"))
+
     def test_compute_props_returns_formula_mass_and_smiles(self) -> None:
         chem = _FakeChem({}, add_hs_result=SimpleNamespace())
         adapter = RDKitAdapter()

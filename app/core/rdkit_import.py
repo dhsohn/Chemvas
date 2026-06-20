@@ -77,7 +77,12 @@ class RDKitImportHelper:
         if rdkit == (None, None):
             return None, None, None
         Chem, _ = rdkit
-        mol = self.adapter.model_to_rdkit(model)
+        # Use strict label handling so abbreviation/unsupported atom labels
+        # (e.g. Me, Ph, Boc) are not silently substituted with Carbon, which
+        # would report a formula/MW that does not match the drawn structure.
+        # When such a label is present the conversion returns ``None`` and we
+        # leave formula/MW blank instead of showing a misleading value.
+        mol = self.adapter.model_to_rdkit(model, strict_labels=True)
         if mol is None:
             return None, None, None
         try:
