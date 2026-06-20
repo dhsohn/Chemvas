@@ -84,8 +84,6 @@ class HoverInteractionService:
         return selection.preferred_structure_hit_at_scene_pos(pos)
 
     def _free_preview_key(self, pos: QPointF) -> str | None:
-        if has_atoms_for(self.canvas):
-            return None
         preview_style = bond_preview_signature_for(
             self.canvas,
             active_tool_name=self._active_tool_name(),

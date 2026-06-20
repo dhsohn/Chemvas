@@ -558,6 +558,28 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         template_view.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
 
+        template_render_viewport = SimpleNamespace(
+            mapFromGlobal=mock.Mock(return_value=QPointF(2.0, 3.0)),
+            rect=lambda: SimpleNamespace(contains=lambda _pos: True),
+        )
+        template_render_view = SimpleNamespace(
+            insert_state=CanvasInsertState(template_active=True),
+            viewport=lambda: template_render_viewport,
+            mapToScene=mock.Mock(return_value=QPointF(12.0, 13.0)),
+            services=SimpleNamespace(
+                hover_scene_service=SimpleNamespace(clear_hover_highlight=mock.Mock()),
+                insert_controller=SimpleNamespace(render_template_preview=mock.Mock()),
+            ),
+        )
+        with mock.patch("ui.canvas_hover_refresh.QCursor.pos", return_value=QPointF(1.0, 2.0)):
+            refresh_hover_from_cursor_for(
+                template_render_view,
+                clear_hover_highlight=template_render_view.services.hover_scene_service.clear_hover_highlight,
+                render_template_preview=template_render_view.services.insert_controller.render_template_preview,
+            )
+        template_render_view.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
+        template_render_view.services.insert_controller.render_template_preview.assert_called_once_with(QPointF(12.0, 13.0))
+
         viewport = SimpleNamespace(
             mapFromGlobal=mock.Mock(return_value=QPointF(4.0, 5.0)),
             rect=lambda: SimpleNamespace(contains=lambda _pos: True),
@@ -654,7 +676,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         canvas_services_for(view).tool_mode_controller.set_tool("bond")
 
         callback.assert_called_once_with()
-        view.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
+        view.services.hover_scene_service.clear_hover_highlight.assert_called_once_with(render_insert_preview=True)
 
     def test_structure_build_wrappers_delegate(self) -> None:
         structure_build_service = mock.Mock()

@@ -18,12 +18,12 @@ class CanvasToolModeController:
         canvas: Any,
         *,
         insert_controller=None,
-        hover_refresh: Callable[[], None] | None = None,
+        hover_refresh: Callable[..., None] | None = None,
         set_active_tool: Callable[[str], None] | None = None,
     ) -> None:
         self.canvas = canvas
         self.insert_controller = insert_controller
-        self._hover_refresh = hover_refresh or (lambda: None)
+        self._hover_refresh = hover_refresh or (lambda **_kwargs: None)
         self._set_active_tool = set_active_tool or (lambda _name: None)
 
     @property
@@ -48,7 +48,15 @@ class CanvasToolModeController:
     def _refresh_tool_mode(self) -> None:
         refresh_selection_outline_for(self.canvas)
         self._emit_tool_changed()
-        self._hover_refresh()
+        self._refresh_hover_for_tool_change()
+
+    def _refresh_hover_for_tool_change(self) -> None:
+        try:
+            self._hover_refresh(render_insert_preview=True)
+        except TypeError as exc:
+            if "render_insert_preview" not in str(exc):
+                raise
+            self._hover_refresh()
 
     def set_tool(self, tool_name: str) -> None:
         self._cancel_active_insert_modes()
@@ -66,12 +74,14 @@ class CanvasToolModeController:
         self._refresh_tool_mode()
 
     def set_bond_style(self, style: str, order: int) -> None:
+        self._cancel_active_insert_modes()
         set_tool_setting_for(self.canvas, "active_bond_style", style)
         set_tool_setting_for(self.canvas, "active_bond_order", order)
         self._set_active_tool("bond")
         self._refresh_tool_mode()
 
     def set_arrow_type(self, arrow_type: str) -> None:
+        self._cancel_active_insert_modes()
         set_tool_setting_for(self.canvas, "active_arrow_type", arrow_type)
         self._set_active_tool("arrow")
         self._refresh_tool_mode()
@@ -85,6 +95,7 @@ class CanvasToolModeController:
         self._refresh_tool_mode()
 
     def set_orbital_type(self, orbital_type: str) -> None:
+        self._cancel_active_insert_modes()
         set_tool_setting_for(self.canvas, "active_orbital_type", orbital_type)
         self._set_active_tool("orbital")
         self._refresh_tool_mode()
@@ -141,6 +152,7 @@ class CanvasToolModeController:
         return self.settings.atom_symbol
 
     def set_snap_angle_step(self, step: int) -> None:
+        self._cancel_active_insert_modes()
         set_tool_setting_for(self.canvas, "snap_angle_step", step)
         self._set_active_tool("bond")
         refresh_selection_outline_for(self.canvas)

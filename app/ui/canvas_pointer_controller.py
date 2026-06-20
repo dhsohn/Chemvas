@@ -42,7 +42,7 @@ class CanvasPointerController:
         hover_interaction_service,
         tool_controller,
         scene_transform_controller,
-        hover_refresh: Callable[[], None] | None = None,
+        hover_refresh: Callable[..., None] | None = None,
     ) -> None:
         self.canvas = canvas
         self.insert_state = insert_state_for(canvas)
@@ -264,4 +264,4 @@ class CanvasPointerController:
     def scroll_contents_by(self, dx: int, dy: int, *, base_scroll_contents_by) -> None:
         base_scroll_contents_by(dx, dy)
         reset_view_transform_for(self.canvas)
-        self._hover_refresh()
+        clear_hover_highlight_for(self.canvas)

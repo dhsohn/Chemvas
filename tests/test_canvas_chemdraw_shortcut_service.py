@@ -73,6 +73,8 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         tool_mode_controller = SimpleNamespace(
             set_tool=lambda tool: calls.append(("tool", tool)),
             set_bond_style=lambda style, order: calls.append(("bond_style", style, order)),
+            set_arrow_type=lambda arrow_type: calls.append(("arrow_type", arrow_type)),
+            set_bracket_type=lambda bracket_type: calls.append(("bracket_type", bracket_type)),
         )
         canvas = SimpleNamespace(
             _shortcut_modifiers=shortcut_modifiers_for,
@@ -97,6 +99,7 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
 
         self.assertTrue(service.handle_generic_hotkey(_FakeKeyEvent(Qt.Key.Key_Space)))
         self.assertTrue(service.handle_generic_hotkey(_FakeKeyEvent(Qt.Key.Key_X)))
+        self.assertTrue(service.handle_generic_hotkey(_FakeKeyEvent(Qt.Key.Key_E)))
         self.assertTrue(service.handle_generic_hotkey(_FakeKeyEvent(Qt.Key.Key_G, Qt.KeyboardModifier.ShiftModifier)))
         self.assertTrue(service.handle_generic_hotkey(_FakeKeyEvent(Qt.Key.Key_D, Qt.KeyboardModifier.AltModifier)))
         self.assertFalse(service.handle_generic_hotkey(_FakeKeyEvent(Qt.Key.Key_Z)))
@@ -105,7 +108,8 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         self.assertIn(("flip", False), calls)
         self.assertIn(("tool", "select"), calls)
         self.assertIn(("bond_style", "single", 1), calls)
-        self.assertIn(("tool", "ts_bracket"), calls)
+        self.assertIn(("arrow_type", "reaction"), calls)
+        self.assertIn(("bracket_type", "square_pair"), calls)
         self.assertIn(("tool", "perspective"), calls)
 
     def test_handle_shortcut_routes_between_object_atom_bond_and_generic_paths(self) -> None:

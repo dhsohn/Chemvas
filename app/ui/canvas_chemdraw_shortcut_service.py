@@ -3,6 +3,7 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt
 
 from ui.atom_label_access import add_or_update_atom_label, prompt_atom_label_for
+from ui.bracket_types import DEFAULT_BRACKET_KIND
 from ui.canvas_hover_state import hover_state_for
 from ui.canvas_model_access import atom_for_id, bond_for_id
 from ui.input_view_access import shortcut_modifiers_for
@@ -19,6 +20,8 @@ from ui.structure_geometry_access import atom_point_for
 
 
 class CanvasChemdrawShortcutService:
+    DEFAULT_ARROW_TYPE = "reaction"
+
     LABEL_HOTKEYS = {
         "f": "F",
         "F": "CF3",
@@ -103,13 +106,13 @@ class CanvasChemdrawShortcutService:
                 self.tool_mode.set_tool("text")
                 return True
             if event.key() == Qt.Key.Key_E:
-                self.tool_mode.set_tool("arrow")
+                self.tool_mode.set_arrow_type(self.DEFAULT_ARROW_TYPE)
                 return True
             if event.key() == Qt.Key.Key_J:
                 self.tool_mode.set_tool("benzene")
                 return True
         if modifiers == Qt.KeyboardModifier.ShiftModifier and event.key() == Qt.Key.Key_G:
-            self.tool_mode.set_tool("ts_bracket")
+            self.tool_mode.set_bracket_type(DEFAULT_BRACKET_KIND)
             return True
         if modifiers == Qt.KeyboardModifier.AltModifier and event.key() == Qt.Key.Key_D:
             self.tool_mode.set_tool("perspective")

@@ -58,6 +58,50 @@ class HoverHighlightLogicTest(unittest.TestCase):
                 current_hover_bond_id=None,
                 current_preview_key=None,
                 preferred_hit=StructureHit(kind="other", id=None),
+                free_preview_key="single:1:8.0:9.0",
+            ),
+            HoverUpdatePlan(action="free_bond_preview", preview_key="single:1:8.0:9.0"),
+        )
+        self.assertEqual(
+            plan_structure_hover_update(
+                has_atoms=True,
+                current_hover_atom_id=None,
+                current_hover_bond_id=None,
+                current_preview_key="single:1:8.0:9.0",
+                preferred_hit=StructureHit(kind="ring", id=None),
+                free_preview_key="single:1:8.0:9.0",
+            ),
+            HoverUpdatePlan(action="noop"),
+        )
+        self.assertEqual(
+            plan_structure_hover_update(
+                has_atoms=True,
+                current_hover_atom_id=None,
+                current_hover_bond_id=None,
+                current_preview_key=None,
+                preferred_hit=None,
+                free_preview_key="single:1:8.0:9.0",
+            ),
+            HoverUpdatePlan(action="free_bond_preview", preview_key="single:1:8.0:9.0"),
+        )
+        self.assertEqual(
+            plan_structure_hover_update(
+                has_atoms=True,
+                current_hover_atom_id=None,
+                current_hover_bond_id=None,
+                current_preview_key="single:1:8.0:9.0",
+                preferred_hit=None,
+                free_preview_key="single:1:8.0:9.0",
+            ),
+            HoverUpdatePlan(action="noop"),
+        )
+        self.assertEqual(
+            plan_structure_hover_update(
+                has_atoms=True,
+                current_hover_atom_id=None,
+                current_hover_bond_id=None,
+                current_preview_key=None,
+                preferred_hit=StructureHit(kind="other", id=None),
             ),
             HoverUpdatePlan(action="clear"),
         )
