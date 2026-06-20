@@ -73,6 +73,7 @@ def build_template_insert_request(
     state: InsertSessionState,
     cursor_pos: Point2D,
     bond_id: int | None,
+    atom_id: int | None = None,
 ) -> TemplateInsertRequest | None:
     if not state.template_active or state.template_ring_size is None:
         return None
@@ -81,6 +82,7 @@ def build_template_insert_request(
         cursor_pos=cursor_pos,
         bond_id=bond_id,
         ring_style=state.template_ring_style or "regular",
+        atom_id=atom_id,
     )
 
 

@@ -7,6 +7,7 @@ from PyQt6.QtCore import QPointF
 from ui.structure_geometry_access import (
     cyclohexane_boat_points_for,
     cyclohexane_chair_points_for,
+    regular_ring_points_for_atom_for,
     regular_ring_points_for_bond_for,
     regular_ring_radius_for,
     ring_points_for,
@@ -29,6 +30,7 @@ class TemplateGeometryResolverService:
         return TemplatePointResolvers(
             regular_ring_radius=lambda n: regular_ring_radius_for(self.canvas, n),
             ring_points=self.resolve_ring_points,
+            regular_ring_points_for_atom=self.resolve_regular_ring_points_for_atom,
             regular_ring_points_for_bond=self.resolve_regular_ring_points_for_bond,
             chair_points=self.resolve_chair_points,
             boat_points=self.resolve_boat_points,
@@ -58,6 +60,16 @@ class TemplateGeometryResolverService:
         center: tuple[float, float],
     ) -> list[tuple[float, float]] | None:
         result = regular_ring_points_for_bond_for(self.canvas, n, bond_id, QPointF(*center))
+        if result is None:
+            return None
+        return [(point.x(), point.y()) for point in result[0]]
+
+    def resolve_regular_ring_points_for_atom(
+        self,
+        n: int,
+        atom_id: int,
+    ) -> list[tuple[float, float]] | None:
+        result = regular_ring_points_for_atom_for(self.canvas, n, atom_id)
         if result is None:
             return None
         return [(point.x(), point.y()) for point in result[0]]

@@ -4,8 +4,10 @@ from collections.abc import Callable
 
 from PyQt6.QtCore import QPointF
 
+from ui.atom_label_access import atom_has_visible_label_for
 from ui.benzene_preview_access import clear_benzene_preview_for
 from ui.canvas_insert_state import CanvasInsertState
+from ui.canvas_model_access import atom_for_id, bond_for_id
 from ui.insert_commit_service import InsertCommitService
 from ui.insert_mode_logic import (
     InsertSessionState,
@@ -17,6 +19,7 @@ from ui.insert_mode_logic import (
 from ui.insert_mode_logic import (
     cancel_template_insert as cancel_template_insert_state,
 )
+from ui.pick_radius_access import atom_pick_radius_for, bond_pick_radius_for
 from ui.preview_scene_access import (
     apply_template_preview_geometry_for as apply_template_preview_geometry_helper,
 )
@@ -27,6 +30,12 @@ from ui.renderer_style_access import (
     bond_length_px_for,
     bond_line_width_for,
     bond_pen_for,
+)
+from ui.selection_hit_logic import (
+    AtomHitCandidate,
+    BondHitCandidate,
+    StructureHit,
+    choose_preferred_structure_hit,
 )
 from ui.template_geometry_resolver_service import TemplateGeometryResolverService
 from ui.template_insert_logic import (
@@ -75,14 +84,97 @@ class InsertTemplateService:
         self._apply_session_state(next_state)
 
     def template_insert_request(self, pos: QPointF) -> TemplateInsertRequest | None:
+        atom_id, bond_id = self._template_structure_target_ids(pos)
         return build_template_insert_request(
             self._session_state(),
             cursor_pos=(pos.x(), pos.y()),
-            bond_id=self.hit_testing_service.find_bond_near(
-                pos,
-                bond_length_px_for(self.canvas) * 0.35,
-            ),
+            bond_id=bond_id,
+            atom_id=atom_id,
         )
+
+    def _template_structure_target_ids(self, pos: QPointF) -> tuple[int | None, int | None]:
+        direct_hit = self._direct_structure_hit(pos)
+        if direct_hit is not None:
+            if direct_hit.kind == "atom" and isinstance(direct_hit.id, int):
+                return direct_hit.id, None
+
+        preferred_hit = self._preferred_nearby_structure_hit(pos)
+        if preferred_hit is not None:
+            if preferred_hit.kind == "atom" and isinstance(preferred_hit.id, int):
+                return preferred_hit.id, None
+            if preferred_hit.kind == "bond" and isinstance(preferred_hit.id, int):
+                return None, preferred_hit.id
+
+        find_bond_near = getattr(self.hit_testing_service, "find_bond_near", None)
+        if not callable(find_bond_near):
+            return None, None
+        return None, find_bond_near(
+            pos,
+            bond_length_px_for(self.canvas) * 0.35,
+        )
+
+    def _direct_structure_hit(self, pos: QPointF) -> StructureHit | None:
+        item_at_scene_pos = getattr(self.hit_testing_service, "item_at_scene_pos", None)
+        if not callable(item_at_scene_pos):
+            return None
+        item = item_at_scene_pos(pos)
+        if item is None:
+            return None
+        kind = item.data(0)
+        if kind == "atom":
+            atom_id = item.data(1)
+            if isinstance(atom_id, int):
+                return StructureHit(kind="atom", id=atom_id)
+        return None
+
+    def _preferred_nearby_structure_hit(self, pos: QPointF) -> StructureHit | None:
+        nearest_atom_hit = getattr(self.hit_testing_service, "nearest_atom_hit", None)
+        if not callable(nearest_atom_hit):
+            return None
+        atom_hit = nearest_atom_hit(pos)
+        bond_hit = self._template_nearby_bond_hit(pos)
+        return choose_preferred_structure_hit(
+            AtomHitCandidate(
+                atom_id=atom_hit[0],
+                distance=atom_hit[1],
+                has_visible_label=atom_has_visible_label_for(self.canvas, atom_hit[0]),
+            )
+            if atom_hit is not None
+            else None,
+            BondHitCandidate(bond_id=bond_hit[0], distance=bond_hit[1]) if bond_hit is not None else None,
+            atom_pick_radius=atom_pick_radius_for(self.canvas),
+            bond_pick_radius=bond_pick_radius_for(self.canvas),
+        )
+
+    def _template_nearby_bond_hit(self, pos: QPointF) -> tuple[int, float] | None:
+        find_bond_near = getattr(self.hit_testing_service, "find_bond_near", None)
+        if not callable(find_bond_near):
+            return None
+        bond_id = find_bond_near(
+            pos,
+            bond_length_px_for(self.canvas) * 0.35,
+        )
+        if bond_id is None:
+            return None
+        distance_point_to_segment = getattr(self.hit_testing_service, "distance_point_to_segment", None)
+        bond = bond_for_id(self.canvas, bond_id)
+        if bond is None:
+            return None
+        atom_a = atom_for_id(self.canvas, bond.a)
+        atom_b = atom_for_id(self.canvas, bond.b)
+        if atom_a is None or atom_b is None:
+            return None
+        if callable(distance_point_to_segment):
+            distance = distance_point_to_segment(
+                pos,
+                QPointF(atom_a.x, atom_a.y),
+                QPointF(atom_b.x, atom_b.y),
+            )
+        else:
+            nearest_bond_hit = getattr(self.hit_testing_service, "nearest_bond_hit", None)
+            nearest_hit = nearest_bond_hit(pos) if callable(nearest_bond_hit) else None
+            distance = nearest_hit[1] if nearest_hit is not None and nearest_hit[0] == bond_id else 0.0
+        return bond_id, distance
 
     def template_point_resolvers(self) -> TemplatePointResolvers:
         return self.template_geometry.point_resolvers()

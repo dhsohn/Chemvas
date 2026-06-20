@@ -59,10 +59,16 @@ def apply_template_commit_resolution(
     before_bond_count = insert_bond_count_for(canvas)
 
     try:
-        if plan.generator in {"bond_regular_ring", "bond_template_shape"}:
-            if plan.bond_id is None:
+        if plan.generator in {"atom_regular_ring", "bond_regular_ring", "bond_template_shape"}:
+            merge = []
+            if plan.generator == "atom_regular_ring":
+                if plan.atom_id is None:
+                    return False
+                merge = atom_merge_seed(canvas, plan.atom_id)
+            elif plan.bond_id is not None:
+                merge = bond_merge_seed(canvas, plan.bond_id)
+            else:
                 return False
-            merge = bond_merge_seed(canvas, plan.bond_id)
             if not merge:
                 return False
             set_last_smiles_input_for(canvas, after_smiles_input)
@@ -115,6 +121,7 @@ def _apply_benzene_template_commit(
         add_insert_benzene_ring_for(
             canvas,
             center,
+            attach_atom_id=plan.atom_id,
             attach_bond_id=plan.bond_id,
             before_smiles_input=before_smiles_input,
         )
@@ -149,4 +156,11 @@ def bond_merge_seed(canvas: CanvasView, bond_id: int) -> list[tuple[int, float, 
     return [(bond.a, atom_a.x, atom_a.y), (bond.b, atom_b.x, atom_b.y)]
 
 
-__all__ = ["apply_template_commit_resolution", "bond_merge_seed"]
+def atom_merge_seed(canvas: CanvasView, atom_id: int) -> list[tuple[int, float, float]]:
+    atom = insert_atom_for_id(canvas, atom_id)
+    if atom is None:
+        return []
+    return [(atom_id, atom.x, atom.y)]
+
+
+__all__ = ["apply_template_commit_resolution", "atom_merge_seed", "bond_merge_seed"]

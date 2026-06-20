@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import mock
 
+from core.model import Atom, Bond
 from PyQt6.QtCore import QPointF
 from ui.insert_mode_logic import InsertSessionState
 from ui.insert_template_service import InsertTemplateService
@@ -14,6 +15,14 @@ from ui.template_insert_logic import (
 )
 
 from tests.test_insert_controller import _FakeCanvas
+
+
+class _FakeStructureItem:
+    def __init__(self, kind: str, item_id: int) -> None:
+        self._data = {0: kind, 1: item_id}
+
+    def data(self, key):
+        return self._data.get(key)
 
 
 def _session_state(canvas: _FakeCanvas) -> InsertSessionState:
@@ -78,6 +87,43 @@ def test_insert_template_service_template_request_uses_injected_hit_testing() ->
 
     assert request == TemplateInsertRequest(5, (1.0, 2.0), 7, "regular")
     hit_testing.find_bond_near.assert_called_once_with(QPointF(1.0, 2.0), 7.0)
+
+
+def test_insert_template_service_template_request_uses_direct_atom_hit() -> None:
+    canvas = _FakeCanvas()
+    canvas.insert_state.template_active = True
+    canvas.insert_state.template_ring_size = 5
+    hit_testing = SimpleNamespace(
+        item_at_scene_pos=mock.Mock(return_value=_FakeStructureItem("atom", 3)),
+        find_bond_near=mock.Mock(return_value=7),
+    )
+    service = _service_for(canvas, hit_testing_service=hit_testing)
+
+    request = service.template_insert_request(QPointF(1.0, 2.0))
+
+    assert request == TemplateInsertRequest(5, (1.0, 2.0), None, "regular", 3)
+    hit_testing.item_at_scene_pos.assert_called_once_with(QPointF(1.0, 2.0))
+    hit_testing.find_bond_near.assert_not_called()
+
+
+def test_insert_template_service_template_request_prefers_endpoint_atom_over_bond() -> None:
+    canvas = _FakeCanvas()
+    canvas.model.atoms = {1: Atom("N", 0.0, 0.0), 2: Atom("C", 10.0, 0.0)}
+    canvas.model.bonds = [Bond(1, 2)]
+    canvas.insert_state.template_active = True
+    canvas.insert_state.template_ring_size = 6
+    hit_testing = SimpleNamespace(
+        item_at_scene_pos=mock.Mock(return_value=None),
+        nearest_atom_hit=mock.Mock(return_value=(1, 0.0)),
+        nearest_bond_hit=mock.Mock(return_value=(0, 0.0)),
+        find_bond_near=mock.Mock(return_value=0),
+    )
+    service = _service_for(canvas, hit_testing_service=hit_testing)
+
+    request = service.template_insert_request(QPointF(0.0, 0.0))
+
+    assert request == TemplateInsertRequest(6, (0.0, 0.0), None, "regular", 1)
+    hit_testing.find_bond_near.assert_called_once_with(QPointF(0.0, 0.0), 7.0)
 
 
 def test_insert_template_service_commit_resolves_plan_and_keeps_session_active() -> None:

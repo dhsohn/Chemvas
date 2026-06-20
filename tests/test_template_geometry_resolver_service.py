@@ -19,6 +19,10 @@ def test_template_geometry_resolver_service_builds_template_resolvers() -> None:
             return_value=[QPointF(1.0, 2.0), QPointF(3.0, 4.0)],
         ) as ring_points,
         mock.patch(
+            "ui.template_geometry_resolver_service.regular_ring_points_for_atom_for",
+            return_value=([QPointF(13.0, 14.0)], "unused"),
+        ) as ring_points_for_atom,
+        mock.patch(
             "ui.template_geometry_resolver_service.regular_ring_points_for_bond_for",
             return_value=([QPointF(5.0, 6.0)], "unused"),
         ) as ring_points_for_bond,
@@ -39,6 +43,7 @@ def test_template_geometry_resolver_service_builds_template_resolvers() -> None:
 
         assert resolvers.regular_ring_radius(6) == 12.0
         assert list(resolvers.ring_points((1.0, 2.0), 6, 12.0)) == [(1.0, 2.0), (3.0, 4.0)]
+        assert list(resolvers.regular_ring_points_for_atom(6, 7) or []) == [(13.0, 14.0)]
         assert list(resolvers.regular_ring_points_for_bond(6, 3, (4.0, 5.0)) or []) == [(5.0, 6.0)]
         assert list(resolvers.chair_points((0.0, 0.0))) == [(7.0, 8.0)]
         assert list(resolvers.boat_points((0.0, 0.0))) == [(9.0, 10.0)]
@@ -48,6 +53,7 @@ def test_template_geometry_resolver_service_builds_template_resolvers() -> None:
 
     regular_radius.assert_called_once_with(canvas, 6)
     ring_points.assert_called_once()
+    ring_points_for_atom.assert_called_once_with(canvas, 6, 7)
     ring_points_for_bond.assert_called_once()
     chair_points.assert_called_once()
     boat_points.assert_called_once()
