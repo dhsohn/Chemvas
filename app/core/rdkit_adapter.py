@@ -77,11 +77,11 @@ class RDKitAdapter:
     def smiles_to_2d(self, smiles: str, scale: float = 40.0) -> Optional[MoleculeModel]:
         return self._import_helper.smiles_to_2d(smiles, scale=scale)
 
-    def model_to_rdkit_with_map(self, model: MoleculeModel):
-        return self._conversion_helper.model_to_rdkit_with_map(model)
+    def model_to_rdkit_with_map(self, model: MoleculeModel, *, strict_labels: bool = False):
+        return self._conversion_helper.model_to_rdkit_with_map(model, strict_labels=strict_labels)
 
-    def model_to_rdkit(self, model: MoleculeModel):
-        return self._conversion_helper.model_to_rdkit(model)
+    def model_to_rdkit(self, model: MoleculeModel, *, strict_labels: bool = False):
+        return self._conversion_helper.model_to_rdkit(model, strict_labels=strict_labels)
 
     def compute_props(self, model: MoleculeModel) -> tuple[str | None, float | None, str | None]:
         return self._import_helper.compute_props(model)

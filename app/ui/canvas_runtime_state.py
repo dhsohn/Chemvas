@@ -26,7 +26,7 @@ from ui.handle_state import CanvasHandleState
 from ui.input_view_state import InputViewState
 from ui.scene_clipboard_state import SceneClipboardState
 from ui.selection_info_access import maybe_warm_rdkit_for
-from ui.selection_info_state import SelectionInfoState
+from ui.selection_info_state import SelectionInfoState, selection_info_state_for
 from ui.selection_outline_state import SelectionOutlineState
 from ui.selection_style_state import SelectionStyleState
 from ui.sheet_setup_state import SheetSetupState
@@ -37,12 +37,20 @@ class RdkitIdleWarmupBridge(QObject):
     def __init__(self, canvas: Any) -> None:
         super().__init__(canvas)
         self._canvas_ref = ref(canvas)
+        self.timer: QTimer | None = None
 
     @pyqtSlot()
     def warm_when_idle(self) -> None:
         canvas = self._canvas_ref()
-        if canvas is not None:
-            maybe_warm_rdkit_for(canvas)
+        if canvas is None:
+            return
+        maybe_warm_rdkit_for(canvas)
+        # Stop polling once no warmup is outstanding. The timer is re-armed on
+        # demand when a new selection needs RDKit (see
+        # ``selection_info_access.emit_selection_info_for``), so idle sheets do
+        # not keep firing timers.
+        if self.timer is not None and not selection_info_state_for(canvas).rdkit_warmup_pending:
+            self.timer.stop()
 
 
 @dataclass(slots=True)
@@ -82,7 +90,8 @@ class CanvasRuntimeState:
         rdkit_idle_timer = QTimer(rdkit_idle_warmup_bridge)
         rdkit_idle_timer.setInterval(250)
         rdkit_idle_timer.timeout.connect(rdkit_idle_warmup_bridge.warm_when_idle)
-        rdkit_idle_timer.start()
+        rdkit_idle_warmup_bridge.timer = rdkit_idle_timer
+        # Armed on demand instead of running continuously for every canvas.
         return cls(
             sheet_setup_state=SheetSetupState(),
             selection_info_state=SelectionInfoState.create(),
