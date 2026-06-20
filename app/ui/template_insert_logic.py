@@ -10,6 +10,7 @@ TemplateGenerator = Literal[
     "benzene",
     "free_regular_ring",
     "free_template_shape",
+    "atom_regular_ring",
     "bond_regular_ring",
     "bond_template_shape",
 ]
@@ -23,6 +24,7 @@ class TemplateInsertRequest:
     cursor_pos: Point2D
     bond_id: int | None = None
     ring_style: str | None = None
+    atom_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -31,6 +33,7 @@ class TemplateInsertPlan:
     ring_size: int
     ring_style: TemplateRingStyle
     bond_id: int | None
+    atom_id: int | None = None
     radius_mode: TemplateRadiusMode | None = None
     template_shape: TemplateShape | None = None
 
@@ -45,6 +48,7 @@ class TemplateInsertResolution:
 class TemplatePointResolvers:
     regular_ring_radius: Callable[[int], float]
     ring_points: Callable[[Point2D, int, float | None], Sequence[Point2D]]
+    regular_ring_points_for_atom: Callable[[int, int], Sequence[Point2D] | None]
     regular_ring_points_for_bond: Callable[[int, int, Point2D], Sequence[Point2D] | None]
     chair_points: Callable[[Point2D], Sequence[Point2D]]
     boat_points: Callable[[Point2D], Sequence[Point2D]]
@@ -77,6 +81,10 @@ def resolve_template_insert(
         if plan.radius_mode == "regular_polygon":
             radius = resolvers.regular_ring_radius(plan.ring_size)
         points = resolvers.ring_points(cursor_pos, plan.ring_size, radius)
+    elif plan.generator == "atom_regular_ring":
+        if plan.atom_id is None:
+            return None
+        points = resolvers.regular_ring_points_for_atom(plan.ring_size, plan.atom_id)
     elif plan.generator == "free_template_shape":
         points = _template_shape_points(plan, cursor_pos, resolvers)
     elif plan.generator == "bond_regular_ring":
@@ -110,6 +118,7 @@ def _plan_template_insert(
             ring_size=request.ring_size,
             ring_style=ring_style,
             bond_id=request.bond_id,
+            atom_id=request.atom_id,
         )
 
     if ring_style == "chair" or ring_style == "boat":
@@ -127,6 +136,15 @@ def _plan_template_insert(
             ring_size=request.ring_size,
             ring_style=ring_style,
             bond_id=request.bond_id,
+        )
+
+    if request.atom_id is not None:
+        return TemplateInsertPlan(
+            generator="atom_regular_ring",
+            ring_size=request.ring_size,
+            ring_style=ring_style,
+            bond_id=None,
+            atom_id=request.atom_id,
         )
 
     return TemplateInsertPlan(

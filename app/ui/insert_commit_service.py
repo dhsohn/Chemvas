@@ -76,6 +76,7 @@ class InsertCommitService:
                 cursor_pos=(pos.x(), pos.y()),
                 bond_id=request.bond_id,
                 ring_style=request.ring_style,
+                atom_id=request.atom_id,
             )
         return apply_template_commit_resolution(
             self.canvas,

@@ -15,6 +15,7 @@ def _make_resolvers(**overrides) -> TemplatePointResolvers:
     resolvers = TemplatePointResolvers(
         regular_ring_radius=Mock(return_value=12.5),
         ring_points=Mock(return_value=[(1.0, 2.0), (3.0, 4.0)]),
+        regular_ring_points_for_atom=Mock(return_value=[(12.0, 13.0), (14.0, 15.0)]),
         regular_ring_points_for_bond=Mock(return_value=[(5.0, 6.0), (7.0, 8.0)]),
         chair_points=Mock(return_value=[(-1.0, -1.0), (1.0, 1.0)]),
         boat_points=Mock(return_value=[(-2.0, -2.0), (2.0, 2.0)]),
@@ -67,6 +68,16 @@ class TemplateInsertLogicTest(unittest.TestCase):
         self.assertEqual(free_plan.radius_mode, "bond_length")
         self.assertEqual(bond_plan.generator, "bond_regular_ring")
 
+    def test_plan_preview_routes_atom_ring_to_atom_regular_path(self) -> None:
+        plan = plan_template_preview(
+            TemplateInsertRequest(ring_size=6, cursor_pos=(0.0, 0.0), ring_style="benzene", atom_id=4)
+        )
+
+        assert plan is not None
+        self.assertEqual(plan.generator, "atom_regular_ring")
+        self.assertEqual(plan.atom_id, 4)
+        self.assertIsNone(plan.bond_id)
+
     def test_plan_commit_routes_template_shapes_by_bond_presence(self) -> None:
         chair_plan = plan_template_commit(
             TemplateInsertRequest(ring_size=6, cursor_pos=(0.0, 0.0), bond_id=2, ring_style="chair")
@@ -94,6 +105,19 @@ class TemplateInsertLogicTest(unittest.TestCase):
         self.assertEqual(resolution.points, [(1.0, 2.0), (3.0, 4.0)])
         resolvers.regular_ring_radius.assert_called_once_with(5)
         resolvers.ring_points.assert_called_once_with((4.0, 5.0), 5, 12.5)
+
+    def test_resolve_atom_regular_ring_delegates_to_atom_resolver(self) -> None:
+        request = TemplateInsertRequest(ring_size=6, cursor_pos=(4.0, 5.0), ring_style="regular", atom_id=3)
+        plan = plan_template_commit(request)
+        regular_ring_points_for_atom = Mock(return_value=[(40.0, 41.0), (42.0, 43.0)])
+        resolvers = _make_resolvers(regular_ring_points_for_atom=regular_ring_points_for_atom)
+
+        assert plan is not None
+        resolution = resolve_template_insert(request, plan, resolvers)
+
+        assert resolution is not None
+        self.assertEqual(resolution.points, [(40.0, 41.0), (42.0, 43.0)])
+        regular_ring_points_for_atom.assert_called_once_with(6, 3)
 
     def test_resolve_free_non_regular_ring_uses_default_radius(self) -> None:
         request = TemplateInsertRequest(ring_size=6, cursor_pos=(1.0, 2.0), ring_style="benzene")
@@ -179,6 +203,19 @@ class TemplateInsertLogicTest(unittest.TestCase):
             resolve_template_insert(
                 request,
                 TemplateInsertPlan(
+                    generator="atom_regular_ring",
+                    ring_size=6,
+                    ring_style="regular",
+                    bond_id=None,
+                    atom_id=None,
+                ),
+                resolvers,
+            )
+        )
+        self.assertIsNone(
+            resolve_template_insert(
+                request,
+                TemplateInsertPlan(
                     generator="bond_template_shape",
                     ring_size=6,
                     ring_style="chair",
@@ -230,6 +267,7 @@ class TemplateInsertLogicTest(unittest.TestCase):
         self.assertIsNone(resolution.points)
         resolvers.regular_ring_radius.assert_not_called()
         resolvers.ring_points.assert_not_called()
+        resolvers.regular_ring_points_for_atom.assert_not_called()
         resolvers.regular_ring_points_for_bond.assert_not_called()
         resolvers.chair_points.assert_not_called()
         resolvers.boat_points.assert_not_called()

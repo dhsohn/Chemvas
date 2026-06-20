@@ -677,6 +677,25 @@ class InsertControllerTest(unittest.TestCase):
         self.assertEqual(canvas.insert_state.template_preview_items, [])
         self.assertIsNone(last_smiles_input_for(canvas))
 
+    def test_commit_template_insert_routes_atom_benzene_plan_to_canvas_helper(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.insert_state.template_active = True
+        canvas.insert_state.template_ring_size = 6
+        canvas.insert_state.template_ring_style = "benzene"
+        controller = _controller_for(canvas)
+        request = TemplateInsertRequest(ring_size=6, cursor_pos=(8.0, 9.0), ring_style="benzene", atom_id=3)
+
+        with patch.object(controller, "template_insert_request", return_value=request), patch(
+            "ui.insert_template_commit_service.has_insert_mutation_since_for",
+            return_value=True,
+        ):
+            controller.commit_template_insert(QPointF(*request.cursor_pos))
+
+        canvas.add_benzene_ring.assert_called_once()
+        args = canvas.add_benzene_ring.call_args
+        self.assertEqual(args.kwargs["attach_atom_id"], 3)
+        self.assertIsNone(args.kwargs["attach_bond_id"])
+
     def test_commit_template_insert_merges_against_selected_bond_seed(self) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
@@ -740,6 +759,55 @@ class InsertControllerTest(unittest.TestCase):
         canvas._record_additions.assert_called_once_with(
             before_next_atom_id=3,
             before_bond_count=1,
+            before_smiles_input="before",
+        )
+
+    def test_commit_template_insert_merges_against_selected_atom_seed(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(atoms={1: Atom("C", 1.0, 2.0)}, bonds=[])
+        canvas.insert_state.template_active = True
+        canvas.insert_state.template_ring_size = 5
+        canvas.insert_state.template_ring_style = "regular"
+        set_last_smiles_input_for(canvas, "before")
+
+        atom_ids = iter([10, 11])
+
+        def add_atom_with_merge(point: QPointF, element: str, merge: list) -> int:
+            if (point.x(), point.y()) == (1.0, 2.0):
+                return 1
+            atom_id = next(atom_ids)
+            canvas.model.atoms[atom_id] = Atom(element, point.x(), point.y())
+            canvas.model.next_atom_id = max(canvas.model.next_atom_id, atom_id + 1)
+            return atom_id
+
+        canvas.services.structure_build_service.add_atom_with_merge.side_effect = add_atom_with_merge
+        controller = _controller_for(canvas)
+        request = TemplateInsertRequest(
+            ring_size=5,
+            cursor_pos=(20.0, 30.0),
+            ring_style="regular",
+            atom_id=1,
+        )
+        plan = plan_template_commit(request)
+        assert plan is not None
+        resolution = TemplateInsertResolution(plan=plan, points=[(1.0, 2.0), (7.0, 6.0), (5.0, 4.0)])
+
+        with patch.object(controller, "template_insert_request", return_value=request), patch(
+            "ui.template_geometry_resolver_service.resolve_template_insert",
+            return_value=resolution,
+        ):
+            controller.commit_template_insert(QPointF(*request.cursor_pos))
+
+        expected_merge = [(1, 1.0, 2.0)]
+        self.assertEqual(canvas.services.structure_build_service.add_atom_with_merge.call_count, 3)
+        for call in canvas.services.structure_build_service.add_atom_with_merge.call_args_list:
+            self.assertEqual(call.args[1], "C")
+            self.assertEqual(call.args[2], expected_merge)
+        self.assertEqual(canvas.add_bond_calls, [(1, 10, 1), (10, 11, 1), (11, 1, 1)])
+        self.assertEqual([call.args[0] for call in canvas._add_bond_graphics.call_args_list], [0, 1, 2])
+        canvas._record_additions.assert_called_once_with(
+            before_next_atom_id=2,
+            before_bond_count=0,
             before_smiles_input="before",
         )
 

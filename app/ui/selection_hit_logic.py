@@ -89,7 +89,7 @@ def choose_preferred_structure_hit(
     if atom_hit is not None:
         atom_radius = max(atom_pick_radius, 1e-6)
         atom_score = atom_hit.distance / atom_radius
-        if atom_hit.distance <= atom_radius * atom_hard_pick_ratio and not atom_hit.has_visible_label:
+        if atom_hit.distance <= atom_radius * atom_hard_pick_ratio:
             return StructureHit(kind="atom", id=atom_hit.atom_id)
 
     if bond_hit is not None:

@@ -60,6 +60,16 @@ class SelectionHitLogicTest(unittest.TestCase):
 
         self.assertEqual(hit, StructureHit(kind="atom", id=1))
 
+    def test_labeled_atom_in_hard_pick_zone_beats_endpoint_bond(self) -> None:
+        hit = choose_preferred_structure_hit(
+            AtomHitCandidate(atom_id=1, distance=0.0, has_visible_label=True),
+            BondHitCandidate(bond_id=2, distance=0.0),
+            atom_pick_radius=10.0,
+            bond_pick_radius=10.0,
+        )
+
+        self.assertEqual(hit, StructureHit(kind="atom", id=1))
+
     def test_bond_wins_when_normalized_scores_are_close_for_labeled_atom(self) -> None:
         hit = choose_preferred_structure_hit(
             AtomHitCandidate(atom_id=1, distance=6.0, has_visible_label=True),
