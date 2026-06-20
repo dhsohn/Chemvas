@@ -54,13 +54,10 @@ def paste_selection_from_clipboard_for_canvas(
     )
     if plan is None:
         return False
-    # Only advance the paste offset bookkeeping once we know the payload is
-    # actually applicable; an empty/invalid payload must not perturb the
-    # cascade offset for the next real paste.
-    if not plan.has_payload_content():
-        return False
     set_clipboard_paste_source_json_for(canvas, plan.paste_source_json)
     set_clipboard_paste_count_for(canvas, plan.paste_count)
+    if not plan.has_payload_content():
+        return False
 
     result = apply_paste_payload(
         atoms=plan.atoms,

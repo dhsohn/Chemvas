@@ -60,15 +60,12 @@ class MainWindowWorkbookDocumentService:
         }
 
     def restore_single_sheet_document(self, window, state: dict) -> None:
-        previous = self._tab_reactions_suspended_for_window(window)
         self._set_tab_reactions_suspended_for_window(window, True)
-        try:
-            self.clear_canvas_sheets(window)
-            self._canvas_sheet.add_canvas_sheet(window, name="Sheet 1", state=state, select=True)
-            self._reset_canvas_name_counter_for_window(window, ["Sheet 1"])
-            self._set_last_canvas_tab_index_for_window(window, self._active_canvas_tab_index_for_window(window))
-        finally:
-            self._set_tab_reactions_suspended_for_window(window, previous)
+        self.clear_canvas_sheets(window)
+        self._canvas_sheet.add_canvas_sheet(window, name="Sheet 1", state=state, select=True)
+        self._reset_canvas_name_counter_for_window(window, ["Sheet 1"])
+        self._set_last_canvas_tab_index_for_window(window, self._active_canvas_tab_index_for_window(window))
+        self._set_tab_reactions_suspended_for_window(window, False)
         self._active_canvas_ui.refresh_active_canvas_ui(window)
 
     def restore_workbook_document(self, window, state: dict) -> None:
@@ -81,28 +78,25 @@ class MainWindowWorkbookDocumentService:
         ):
             raise ValueError("Invalid Chemvas file.")
 
-        previous = self._tab_reactions_suspended_for_window(window)
         self._set_tab_reactions_suspended_for_window(window, True)
-        try:
-            self.clear_canvas_sheets(window)
-            for sheet in sheets:
-                self._canvas_sheet.add_canvas_sheet(
-                    window,
-                    name=sheet.name,
-                    state=sheet.content,
-                    select=False,
-                )
-            tab_refs = self._tab_refs_for_window(window)
-            canvas_entries = tab_refs.canvas_tab_entries()
-            self._reset_canvas_name_counter_for_window(
+        self.clear_canvas_sheets(window)
+        for sheet in sheets:
+            self._canvas_sheet.add_canvas_sheet(
                 window,
-                [tab_refs.canvas_tabs.tabText(tab_index) for tab_index, _ in canvas_entries],
+                name=sheet.name,
+                state=sheet.content,
+                select=False,
             )
-            active_tab_index = canvas_entries[active_sheet_index][0]
-            tab_refs.canvas_tabs.setCurrentIndex(active_tab_index)
-            self._set_last_canvas_tab_index_for_window(window, active_tab_index)
-        finally:
-            self._set_tab_reactions_suspended_for_window(window, previous)
+        tab_refs = self._tab_refs_for_window(window)
+        canvas_entries = tab_refs.canvas_tab_entries()
+        self._reset_canvas_name_counter_for_window(
+            window,
+            [tab_refs.canvas_tabs.tabText(tab_index) for tab_index, _ in canvas_entries],
+        )
+        active_tab_index = canvas_entries[active_sheet_index][0]
+        tab_refs.canvas_tabs.setCurrentIndex(active_tab_index)
+        self._set_last_canvas_tab_index_for_window(window, active_tab_index)
+        self._set_tab_reactions_suspended_for_window(window, False)
         self._active_canvas_ui.refresh_active_canvas_ui(window)
 
     def save_document_state(self, window, path: str, *, write_document_fn=write_document) -> None:
