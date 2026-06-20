@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-from ui.canvas_document_metadata_state import (
-    document_file_path_for,
-    set_document_file_path_for,
-)
 from ui.canvas_model_access import has_atoms_for
 from ui.canvas_service_access import canvas_services_for
 from ui.canvas_tool_settings_state import tool_settings_state_for
-from ui.canvas_window_access import history_service_for_canvas, save_canvas_to_file_for
+from ui.canvas_window_access import history_service_for_canvas
 from ui.input_view_access import view_scale_for
 from ui.renderer_style_access import bond_length_px_for
 from ui.selection_collection_access import selected_scene_items_for
@@ -114,23 +110,8 @@ def active_canvas_index_for_window(window) -> int:
     return window.tab_references.active_canvas_index(active_canvas_or_none_for_window(window))
 
 
-def active_canvas_tab_index_for_window(window) -> int:
-    return window.tab_references.active_canvas_tab_index(active_canvas_or_none_for_window(window))
-
-
 def context_bar_page_override_for_window(window) -> str | None:
     return window.runtime_state.context_bar_page_override
-
-
-def current_file_path_for_window(window) -> str | None:
-    canvas = active_canvas_or_none_for_window(window)
-    if canvas is None:
-        return None
-    return document_file_path_for(canvas)
-
-
-def set_current_file_path_for_window(window, path: str | None) -> None:
-    set_document_file_path_for(active_canvas_for_window(window), path)
 
 
 def clear_context_bar_page_override_for_window(window) -> None:
@@ -157,14 +138,6 @@ def set_sheet_setup_for_window(window, size: str, orientation: str) -> None:
     set_sheet_setup_for(active_canvas_for_window(window), size, orientation)
 
 
-def save_active_canvas_to_file_for_window(window, path: str) -> None:
-    save_canvas_to_file_for(active_canvas_for_window(window), path)
-
-
-def reset_canvas_name_counter_for_window(window, canvas_names) -> None:
-    window.runtime_state.reset_canvas_name_counter(canvas_names)
-
-
 def next_canvas_name_for_window(window, prefix: str = "Canvas") -> str:
     return window.runtime_state.next_canvas_name(prefix)
 
@@ -186,7 +159,6 @@ __all__ = [
     "active_canvas_or_none_for_window",
     "active_canvas_index_for_window",
     "active_canvas_name_for_window",
-    "active_canvas_tab_index_for_window",
     "active_tool_name_for_window",
     "all_canvases_for_window",
     "bond_length_px_for_window",
@@ -195,7 +167,6 @@ __all__ = [
     "color_mutation_service_for_window",
     "color_tool_for_window",
     "context_bar_page_override_for_window",
-    "current_file_path_for_window",
     "current_zoom_percent_for_window",
     "document_session_service_for_window",
     "geometry_controller_for_window",
@@ -203,13 +174,10 @@ __all__ = [
     "history_service_for_window",
     "insert_controller_for_window",
     "next_canvas_name_for_window",
-    "reset_canvas_name_counter_for_window",
     "scene_transform_controller_for_window",
     "selected_scene_items_for_window",
     "set_context_bar_page_override_for_window",
-    "set_current_file_path_for_window",
     "set_last_canvas_tab_index_for_window",
-    "save_active_canvas_to_file_for_window",
     "set_sheet_setup_for_window",
     "set_tab_reactions_suspended_for_window",
     "sheet_orientation_for_window",
