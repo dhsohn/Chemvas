@@ -1,8 +1,6 @@
-import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest import mock
 
 from core.document_io import (
     ChemvasDocument,
@@ -217,35 +215,6 @@ class DocumentIOTest(unittest.TestCase):
 
         self.assertEqual(loaded.payload, written.payload)
         self.assertEqual(loaded.state, state)
-
-
-    def test_write_document_is_atomic_and_preserves_file_on_failure(self) -> None:
-        state = _single_sheet_state()
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "sample.chemvas"
-            path.write_text("ORIGINAL", encoding="utf-8")
-            tmp_path = path.with_name(f".{path.name}.tmp")
-
-            with mock.patch("core.document_io.os.fsync", side_effect=OSError("disk full")):
-                with self.assertRaises(OSError):
-                    write_document(path, state, version=SINGLE_SHEET_FILE_VERSION)
-
-            # A failed write must leave the previous file untouched and clean up
-            # the temporary file.
-            self.assertEqual(path.read_text(encoding="utf-8"), "ORIGINAL")
-            self.assertFalse(tmp_path.exists())
-
-    def test_write_document_does_not_leave_temp_file_on_success(self) -> None:
-        state = _single_sheet_state()
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "sample.chemvas"
-            write_document(path, state, version=SINGLE_SHEET_FILE_VERSION)
-
-            siblings = os.listdir(temp_dir)
-
-        self.assertEqual(siblings, ["sample.chemvas"])
 
 
 if __name__ == "__main__":

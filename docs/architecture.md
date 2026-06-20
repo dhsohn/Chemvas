@@ -5,7 +5,7 @@
 - MoleculeModel (`app/core/model.py`): pure atom/bond data and IDs. No Qt dependencies.
 - RDKitAdapter (`app/core/rdkit_adapter.py`): optional chemistry backend for SMILES import, property calculation, 3D coordinate generation, alias expansion, and preview scene building. UI code should treat it as a best-effort service, not a required startup dependency.
 - Renderer (`app/core/renderer.py`): style, pens/brushes, font settings.
-- HistoryCommand (`app/core/history.py`): delta-based undo/redo. Multi-entity operations are grouped with `CompositeCommand`, which applies its child delta commands in order on redo and in reverse on undo.
+- HistoryCommand (`app/core/history.py`): delta-based undo/redo with `SnapshotCommand` as a fallback.
 - BondRenderer (`app/ui/bond_renderer.py`): bond QGraphicsItem creation/updates and geometry helpers, driven by CanvasView context.
 - Graphics items (`app/ui/graphics_items.py`): non-selectable QGraphicsItem wrappers.
 - Label layout (`app/ui/label_layout_logic.py`): pure, Qt-free parsing of a raw atom-label string into typographic runs (subscripts) plus their placement. It is the single source of truth for label typography: `AtomLabelItem` consumes it for on-screen painting, and vector export consumes the same placement when outlining glyphs, so screen and export never diverge. It operates on display text only and never mutates the stored `element` string.
@@ -16,8 +16,8 @@ Tools -> CanvasView -> MoleculeModel mutation -> Renderer/BondRenderer -> QGraph
 
 3D flow: export command or preview refresh -> current molecule / active atom-bond selection -> MoleculeModel subgraph + atom mark annotations -> RDKitAdapter conversion graph build -> RDKit 3D embedding -> `.xyz` writer or preview scene.
 
-## Composite Grouping
-When an operation touches multiple entity types at once (ex: atom creation plus bond creation), CanvasView groups the individual delta commands into a single `CompositeCommand` so the whole operation undoes/redoes atomically.
+## Snapshot Fallback
+When an operation touches multiple entity types at once (ex: atom creation plus bond creation), CanvasView falls back to `SnapshotCommand` to keep undo/redo safe until a dedicated delta command exists.
 
 ## 3D Conversion Constraints
 - Export scope is limited to chemical graph data. Arrows, bracket annotations, free text, and other scene-only annotations must be ignored when building the export payload.
