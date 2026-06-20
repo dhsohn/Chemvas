@@ -124,7 +124,7 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
         self.assertEqual(canvas.update_selection_outline_calls, 1)
         self.assertTrue(note_item.isSelected())
 
-    def test_paste_selection_from_clipboard_filters_invalid_entries_and_returns_false_when_everything_is_dropped(self) -> None:
+    def test_paste_selection_from_clipboard_keeps_paste_state_when_everything_is_dropped(self) -> None:
         canvas = _RecordingFakeCanvas()
         canvas.scene_clipboard_state.paste_source_json = "old-source"
         canvas.scene_clipboard_state.paste_count = 7
@@ -151,8 +151,8 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
         controller.clipboard_selection_payload = lambda: (payload, "new-source")
 
         self.assertFalse(controller.paste_selection_from_clipboard())
-        self.assertEqual(canvas.scene_clipboard_state.paste_source_json, "new-source")
-        self.assertEqual(canvas.scene_clipboard_state.paste_count, 1)
+        self.assertEqual(canvas.scene_clipboard_state.paste_source_json, "old-source")
+        self.assertEqual(canvas.scene_clipboard_state.paste_count, 7)
         self.assertEqual(canvas.atom_color_calls, [])
         self.assertEqual(canvas.atom_label_calls, [])
         self.assertEqual(canvas.created_scene_item_states, [])

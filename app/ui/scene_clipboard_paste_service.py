@@ -59,9 +59,6 @@ def paste_selection_from_clipboard_for_canvas(
     # cascade offset for the next real paste.
     if not plan.has_payload_content():
         return False
-    set_clipboard_paste_source_json_for(canvas, plan.paste_source_json)
-    set_clipboard_paste_count_for(canvas, plan.paste_count)
-
     result = apply_paste_payload(
         atoms=plan.atoms,
         bonds=plan.bonds,
@@ -81,6 +78,9 @@ def paste_selection_from_clipboard_for_canvas(
 
     if not result.has_changes():
         return False
+
+    set_clipboard_paste_source_json_for(canvas, plan.paste_source_json)
+    set_clipboard_paste_count_for(canvas, plan.paste_count)
 
     added_scene_items = [item for item in result.added_scene_items if isinstance(item, QGraphicsItem)]
     callbacks.select_pasted_content(result.new_atom_ids, added_scene_items)
