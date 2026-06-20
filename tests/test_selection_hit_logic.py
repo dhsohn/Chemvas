@@ -50,9 +50,9 @@ class SelectionHitLogicTest(unittest.TestCase):
             ),
         )
 
-    def test_unlabeled_atom_in_hard_pick_zone_beats_bond(self) -> None:
+    def test_atom_in_hard_pick_zone_beats_bond(self) -> None:
         hit = choose_preferred_structure_hit(
-            AtomHitCandidate(atom_id=1, distance=1.0, has_visible_label=False),
+            AtomHitCandidate(atom_id=1, distance=1.0),
             BondHitCandidate(bond_id=2, distance=0.1),
             atom_pick_radius=10.0,
             bond_pick_radius=10.0,
@@ -60,9 +60,9 @@ class SelectionHitLogicTest(unittest.TestCase):
 
         self.assertEqual(hit, StructureHit(kind="atom", id=1))
 
-    def test_labeled_atom_in_hard_pick_zone_beats_endpoint_bond(self) -> None:
+    def test_atom_coincident_with_bond_endpoint_is_hard_picked(self) -> None:
         hit = choose_preferred_structure_hit(
-            AtomHitCandidate(atom_id=1, distance=0.0, has_visible_label=True),
+            AtomHitCandidate(atom_id=1, distance=0.0),
             BondHitCandidate(bond_id=2, distance=0.0),
             atom_pick_radius=10.0,
             bond_pick_radius=10.0,
@@ -70,9 +70,9 @@ class SelectionHitLogicTest(unittest.TestCase):
 
         self.assertEqual(hit, StructureHit(kind="atom", id=1))
 
-    def test_bond_wins_when_normalized_scores_are_close_for_labeled_atom(self) -> None:
+    def test_bond_wins_when_normalized_scores_are_close(self) -> None:
         hit = choose_preferred_structure_hit(
-            AtomHitCandidate(atom_id=1, distance=6.0, has_visible_label=True),
+            AtomHitCandidate(atom_id=1, distance=6.0),
             BondHitCandidate(bond_id=2, distance=5.0),
             atom_pick_radius=10.0,
             bond_pick_radius=10.0,
@@ -82,7 +82,7 @@ class SelectionHitLogicTest(unittest.TestCase):
 
     def test_atom_wins_when_bond_score_is_materially_worse(self) -> None:
         hit = choose_preferred_structure_hit(
-            AtomHitCandidate(atom_id=1, distance=6.0, has_visible_label=True),
+            AtomHitCandidate(atom_id=1, distance=6.0),
             BondHitCandidate(bond_id=2, distance=9.0),
             atom_pick_radius=10.0,
             bond_pick_radius=10.0,
@@ -93,7 +93,7 @@ class SelectionHitLogicTest(unittest.TestCase):
     def test_single_candidate_and_no_candidate_cases(self) -> None:
         self.assertEqual(
             choose_preferred_structure_hit(
-                AtomHitCandidate(atom_id=4, distance=7.0, has_visible_label=True),
+                AtomHitCandidate(atom_id=4, distance=7.0),
                 None,
                 atom_pick_radius=10.0,
                 bond_pick_radius=10.0,

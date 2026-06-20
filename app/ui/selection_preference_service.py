@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
 
-from ui.atom_label_access import atom_has_visible_label_for
 from ui.canvas_atom_graphics_state import visible_atom_item_for
 from ui.canvas_model_access import atom_for_id
 from ui.pick_radius_access import atom_pick_radius_for, bond_pick_radius_for
@@ -56,7 +55,6 @@ class SelectionPreferenceService:
             AtomHitCandidate(
                 atom_id=atom_hit[0],
                 distance=atom_hit[1],
-                has_visible_label=atom_has_visible_label_for(self.canvas, atom_hit[0]),
             )
             if atom_hit is not None
             else None,
