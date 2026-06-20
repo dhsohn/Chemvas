@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, cast
 
 from core.document_io import read_document as default_read_document
 from core.svg_roundtrip import (
@@ -10,6 +9,7 @@ from core.svg_roundtrip import (
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
 from ui.canvas_view import CanvasView
+from ui.canvas_window_access import save_canvas_to_file_for
 from ui.export_dialog_logic import (
     default_export_path,
     file_filter_for_format,
@@ -81,7 +81,7 @@ class MainWindowDocumentActionService:
         message_box = QMessageBox if message_box is None else message_box
         target = self._active_canvas_for_window(window) if canvas is None else canvas
         try:
-            cast(Any, target).services.canvas_document_session_service.save_to_file(path)
+            save_canvas_to_file_for(target, path)
         except Exception as exc:
             message_box.warning(window, "Save Error", f"Failed to save file:\n{exc}")
             return False
