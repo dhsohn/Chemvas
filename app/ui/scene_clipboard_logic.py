@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Callable, Mapping, Sequence
 
+from core.document_state import validate_clipboard_selection_payload
 from core.model import Bond
 from PyQt6.QtCore import QMimeData
 from PyQt6.QtWidgets import QGraphicsItem
@@ -187,6 +188,10 @@ def decode_clipboard_selection_payload(
         if payload.get("format") != CLIPBOARD_SELECTION_FORMAT:
             continue
         if payload.get("version") != version:
+            continue
+        # Clipboard MIME is outside the trust boundary: reject any payload whose
+        # content does not pass the same whitelist used for .chemvas files.
+        if not validate_clipboard_selection_payload(payload):
             continue
         return payload, payload_json
     return None, None

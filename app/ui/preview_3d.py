@@ -32,6 +32,10 @@ class Preview3D(QWidget):
         self._async_enabled = rdkit_adapter is None
         self._preview_request_id = 0
         self._preview_jobs: dict[int, tuple[QThread, Preview3DWorker]] = {}
+        # Single-flight guard: at most one preview worker runs at a time. If a
+        # newer structure arrives while one is in flight, we remember to rebuild
+        # once it finishes instead of spawning parallel RDKit embeddings.
+        self._preview_restart_pending = False
         self._disposed = False
         self._pending_model: Any | None = None
         self._pending_annotations: Any | None = None
@@ -101,6 +105,7 @@ class Preview3D(QWidget):
     def clear_preview(self, message: str = "3D preview unavailable") -> None:
         self._update_timer.stop()
         self._preview_request_id += 1
+        self._preview_restart_pending = False
         self._pending_model = None
         self._pending_annotations = None
         self._current_signature = None
@@ -163,6 +168,12 @@ class Preview3D(QWidget):
         return False
 
     def _start_preview_worker(self) -> None:
+        if self._preview_jobs:
+            # A worker is already running. Defer: rebuild with the latest pending
+            # payload once it finishes, keeping at most one job alive.
+            self._preview_restart_pending = True
+            return
+        self._preview_restart_pending = False
         self._preview_request_id += 1
         request_id = self._preview_request_id
         thread = QThread(self)
@@ -180,8 +191,16 @@ class Preview3D(QWidget):
         worker.finished.connect(thread.quit)
         worker.finished.connect(worker.deleteLater)
         thread.finished.connect(thread.deleteLater)
-        thread.finished.connect(lambda request_id=request_id: self._preview_jobs.pop(request_id, None))
+        thread.finished.connect(lambda request_id=request_id: self._on_preview_thread_finished(request_id))
         thread.start()
+
+    def _on_preview_thread_finished(self, request_id: int) -> None:
+        self._preview_jobs.pop(request_id, None)
+        if self._disposed or self._preview_jobs:
+            return
+        if self._preview_restart_pending and self._pending_model is not None:
+            self._preview_restart_pending = False
+            self._rebuild_scene()
 
     def _handle_preview_worker_finished(
         self,
@@ -249,6 +268,7 @@ class Preview3D(QWidget):
     def shutdown(self) -> None:
         self._disposed = True
         self._preview_request_id += 1
+        self._preview_restart_pending = False
         self._update_timer.stop()
         self._stop_preview_jobs()
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import math
 from typing import TYPE_CHECKING, Mapping
 
@@ -8,6 +9,8 @@ from core.rdkit_types import Molecule3DAtom, Molecule3DBond, Molecule3DScene
 
 if TYPE_CHECKING:
     from core.rdkit_adapter import RDKitAdapter
+
+logger = logging.getLogger(__name__)
 
 
 class RDKitConversionHelper:
@@ -87,14 +90,14 @@ class RDKitConversionHelper:
         try:
             Chem.SanitizeMol(mol)
         except Exception:
-            pass
+            logger.debug("SanitizeMol failed for tolerant round-trip build; continuing.", exc_info=True)
         return mol, atom_map
 
-    def model_to_rdkit_with_map(self, model: MoleculeModel):
-        return self._build_rdkit_mol_with_map(model)
+    def model_to_rdkit_with_map(self, model: MoleculeModel, *, strict_labels: bool = False):
+        return self._build_rdkit_mol_with_map(model, strict_labels=strict_labels)
 
-    def model_to_rdkit(self, model: MoleculeModel):
-        mol, _ = self.adapter.model_to_rdkit_with_map(model)
+    def model_to_rdkit(self, model: MoleculeModel, *, strict_labels: bool = False):
+        mol, _ = self.adapter.model_to_rdkit_with_map(model, strict_labels=strict_labels)
         return mol
 
     def _embed_3d_molecule(self, mol, Chem, AllChem):
@@ -115,10 +118,11 @@ class RDKitConversionHelper:
                 else:
                     AllChem.UFFOptimizeMolecule(mol_h, maxIters=50)
             except Exception:
+                logger.debug("MMFF optimization failed; falling back to UFF.", exc_info=True)
                 try:
                     AllChem.UFFOptimizeMolecule(mol_h, maxIters=50)
                 except Exception:
-                    pass
+                    logger.debug("UFF optimization fallback failed; using unoptimized geometry.", exc_info=True)
         except Exception as exc:
             self.adapter.last_error = f"3D coordinate generation failed: {exc}"
             return None
@@ -398,7 +402,7 @@ class RDKitConversionHelper:
             try:
                 AllChem.Compute2DCoords(fragment)
             except Exception:
-                pass
+                logger.debug("Compute2DCoords for alias fragment '%s' failed; continuing.", label, exc_info=True)
         dummy_atoms = [frag_atom for frag_atom in fragment.GetAtoms() if frag_atom.GetAtomicNum() == 0]
         if len(dummy_atoms) != 1:
             self.adapter.last_error = f"Alias label '{label}' has an invalid attachment definition."
@@ -664,7 +668,7 @@ class RDKitConversionHelper:
                 conf.SetAtomPosition(atom_idx, (x, y, 0.0))
             mol.AddConformer(conf, assignId=True)
         except Exception:
-            pass
+            logger.debug("Attaching 2D conformer for conversion failed; continuing.", exc_info=True)
 
     def _assign_conversion_stereo(self, mol, Chem) -> None:
         try:
@@ -675,7 +679,7 @@ class RDKitConversionHelper:
             if hasattr(Chem, "AssignStereochemistry"):
                 Chem.AssignStereochemistry(mol, force=True, cleanIt=True)
         except Exception:
-            pass
+            logger.debug("Stereochemistry assignment for conversion failed; continuing.", exc_info=True)
 
     def _build_conversion_rdkit_mol(
         self,

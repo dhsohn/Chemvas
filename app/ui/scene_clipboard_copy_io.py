@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 
 from PyQt6.QtCore import QMimeData, Qt
@@ -12,6 +13,8 @@ from ui.scene_clipboard_access import (
     render_canvas_selection_vector_bytes,
 )
 from ui.scene_clipboard_transaction_logic import ClipboardCopyPlan
+
+logger = logging.getLogger(__name__)
 
 CLIPBOARD_SVG_MIME = "image/svg+xml"
 CLIPBOARD_PDF_MIME = "application/pdf"
@@ -51,6 +54,10 @@ def set_vector_clipboard_data(
             title="Chemvas selection",
         )
     except Exception:
+        # The raster image is already on the clipboard; vector flavors are a
+        # best-effort enhancement for Illustrator/Office. Log for debugging
+        # paste-fidelity issues rather than failing the whole copy.
+        logger.debug("Vector clipboard rendering (SVG/PDF) failed; raster only.", exc_info=True)
         return
     if svg_data:
         mime_data.setData(CLIPBOARD_SVG_MIME, svg_data)
