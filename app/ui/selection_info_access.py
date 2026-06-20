@@ -21,6 +21,17 @@ def _selection_ids_for_info(canvas) -> tuple[set[int], set[int]]:
     return selected_chemical_ids_for(canvas)
 
 
+def _arm_rdkit_idle_timer(canvas) -> None:
+    """Start the per-canvas idle warmup timer if one is attached and stopped.
+
+    The timer self-stops once no warmup is pending, so it must be re-armed
+    whenever a new selection needs RDKit properties.
+    """
+    timer = getattr(getattr(canvas, "runtime_state", None), "rdkit_idle_timer", None)
+    if timer is not None and not timer.isActive():
+        timer.start()
+
+
 def _selection_signature(atom_ids: set[int], bond_ids: set[int]) -> tuple[frozenset[int], frozenset[int]]:
     return frozenset(atom_ids), frozenset(bond_ids)
 
@@ -60,6 +71,7 @@ def emit_selection_info_for(canvas) -> None:
             state.cache = ("", "")
             callback("", "")
         state.rdkit_warmup_pending = True
+        _arm_rdkit_idle_timer(canvas)
         return
     submodel, _, _ = build_submodel_state(
         model_for(canvas),

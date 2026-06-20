@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
@@ -29,8 +30,24 @@ def parse_document(payload: object) -> ChemvasDocument:
 
 def write_document(path: PathType, state: dict[str, Any], version: int) -> ChemvasDocument:
     document = create_document(state, version)
-    with Path(path).open("w", encoding="utf-8") as handle:
-        json.dump(document.payload, handle, indent=2)
+    target = Path(path)
+    # Atomic write: render to a sibling temp file, flush to disk, then replace.
+    # A crash/IO error mid-write leaves the previous file intact instead of a
+    # truncated document.
+    tmp = target.with_name(f".{target.name}.tmp")
+    try:
+        with tmp.open("w", encoding="utf-8") as handle:
+            json.dump(document.payload, handle, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, target)
+    except BaseException:
+        # Never leave a stray temp file behind on failure.
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
     return document
 
 
