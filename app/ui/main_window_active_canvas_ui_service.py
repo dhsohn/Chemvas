@@ -50,19 +50,18 @@ class MainWindowActiveCanvasUIService:
         bind_active_canvas_callbacks(
             self._all_canvases_for_window(window),
             active_canvas,
-            selection_info_callback=lambda formula, mw: self.handle_selection_info(window, formula, mw),
+            selection_info_callback=lambda _formula, _mw: self.handle_selection_info(window),
             tool_change_callback=lambda: self._context_page_state.sync_tool_actions_from_canvas(window),
             zoom_callback=self._status.update_zoom_label,
             history_change_callback=lambda: self._action_availability.update_action_availability(window),
             error_callback=lambda message: self._status.show_error_message(window, message, timeout=6000),
         )
 
-    def handle_selection_info(self, window, formula: str, mw: str) -> None:
+    def handle_selection_info(self, window) -> None:
         try:
             canvas = self._active_canvas_for_window(window)
             self._preview_for_window(window).refresh_selected_from_canvas(canvas)
             self._status.update_selection_status_label(window)
-            self._status.update_chemical_status_label(formula, mw)
             self._action_availability.update_action_availability(window)
         except RuntimeError:
             return
@@ -83,15 +82,12 @@ class MainWindowActiveCanvasUIService:
         self._refresh_selection_derived_ui(window)
 
     def _refresh_selection_derived_ui(self, window) -> None:
-        # Re-emit the active canvas's selection info so the 3D preview, the
-        # selection/chemical status labels and action availability all refresh
+        # Re-emit the active canvas's selection info so the molecule info panel,
+        # selection status label and action availability all refresh
         # through the same path as a live selection change. Without this the
-        # Formula/MW status label keeps the previous canvas's value when the
-        # active canvas switches without a selection event firing.
-        #
-        # Defer to the next event-loop turn: emit_selection_info_for can run a
-        # synchronous RDKit formula/MW computation, which we keep off the
-        # canvas-switch critical path so switching tabs stays responsive.
+        # preview could keep the previous canvas's structure when the active
+        # canvas switches without a selection event firing. Defer to the next
+        # event-loop turn so switching tabs stays responsive.
         QTimer.singleShot(0, lambda: self._emit_active_selection_info(window))
 
     def _emit_active_selection_info(self, window) -> None:

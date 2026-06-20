@@ -138,8 +138,8 @@ def build_panel_toolbar(
     )
     preview_panel_btn = create_toolbar_button(
         icon=icon_factory.icon_preview_panel(),
-        tooltip="3D Preview",
-        status_tip="Open the selected molecule in a separate 3D preview window",
+        tooltip="Molecule Info",
+        status_tip="Open the selected molecule in a separate molecule info window",
         callback=lambda _checked=False: callbacks.open_preview_window(window),
         object_name="preview_panel_button",
     )

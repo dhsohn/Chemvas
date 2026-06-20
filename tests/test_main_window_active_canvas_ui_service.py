@@ -194,7 +194,6 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
 
         self.window.preview_3d.refresh_selected_from_canvas.assert_called_once_with(self.window.canvas_b)
         self.status_service.update_selection_status_label.assert_called_once_with(self.window)
-        self.status_service.update_chemical_status_label.assert_called_once_with("H2O", "18.0")
         self.context_page_state_service.sync_tool_actions_from_canvas.assert_called_once_with(self.window)
         self.status_service.update_zoom_label.assert_called_once_with(175)
         self.action_availability_service.update_action_availability.assert_has_calls(
@@ -214,11 +213,10 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
     def test_handle_selection_info_refreshes_preview_from_active_canvas(self) -> None:
         self.window.canvas_tabs.setCurrentWidget(self.window.canvas_b)
 
-        self.service.handle_selection_info(self.window, "H2O", "18.0")
+        self.service.handle_selection_info(self.window)
 
         self.window.preview_3d.refresh_selected_from_canvas.assert_called_once_with(self.window.canvas_b)
         self.status_service.update_selection_status_label.assert_called_once_with(self.window)
-        self.status_service.update_chemical_status_label.assert_called_once_with("H2O", "18.0")
         self.action_availability_service.update_action_availability.assert_called_once_with(self.window)
 
     def test_handle_selection_info_ignores_deleted_window_canvas(self) -> None:
@@ -232,21 +230,19 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
 
         window = _DeletedWindow()
 
-        self.service.handle_selection_info(window, "", "")
+        self.service.handle_selection_info(window)
 
         window.preview_3d.refresh_selected_from_canvas.assert_not_called()
         self.status_service.update_selection_status_label.assert_not_called()
-        self.status_service.update_chemical_status_label.assert_not_called()
         self.action_availability_service.update_action_availability.assert_not_called()
 
     def test_handle_selection_info_ignores_deleted_qt_callback_state(self) -> None:
         self.status_service.update_selection_status_label.side_effect = RuntimeError("deleted")
 
-        self.service.handle_selection_info(self.window, "", "")
+        self.service.handle_selection_info(self.window)
 
         self.window.preview_3d.refresh_selected_from_canvas.assert_called_once_with(self.window.canvas_a)
         self.status_service.update_selection_status_label.assert_called_once_with(self.window)
-        self.status_service.update_chemical_status_label.assert_not_called()
         self.action_availability_service.update_action_availability.assert_not_called()
 
     def test_current_zoom_percent_rounds_scale_and_clamps_minimum(self) -> None:
@@ -267,7 +263,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         with mock.patch.object(self.window.canvas_b.services.tool_mode_controller, "get_atom_symbol", return_value="N"):
             self.service.refresh_active_canvas_ui(self.window)
 
-        # selection-derived UI (preview / chemical label / action availability)
+        # selection-derived UI (preview / selection status / action availability)
         # is emitted on the next event-loop turn; flush it before asserting.
         self.app.processEvents()
 
@@ -282,7 +278,6 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.action_availability_service.update_action_availability.assert_called_once_with(self.window)
         self.window.update_action_availability.assert_not_called()
         self.window.preview_3d.refresh_selected_from_canvas.assert_called_once_with(self.window.canvas_b)
-        self.status_service.update_chemical_status_label.assert_called_once_with("", "")
         self.assertIs(self.window.preview_3d.rdkit_adapter, self.window.canvas_b.rdkit)
         self.tool_mode_controller_for_window.assert_called_once_with(self.window)
         self._assert_canvas_callbacks(self.window.canvas_a, active=False)

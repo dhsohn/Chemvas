@@ -174,7 +174,7 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         self.assertEqual(list(assembly.tool_actions), TOOLBAR_TOOL_ACTION_ORDER)
         self.assertTrue(assembly.tool_actions["bond"].isChecked())
         self.assertFalse(assembly.preview_panel_button.isCheckable())
-        self.assertEqual(assembly.preview_panel_button.toolTip(), "3D Preview")
+        self.assertEqual(assembly.preview_panel_button.toolTip(), "Molecule Info")
         self.assertIsNone(assembly.export_xyz_button)
         self.assertIsNone(assembly.panel_bar.findChild(QToolButton, "export_xyz_button"))
         self.assertIsNone(assembly.panel_bar.findChild(QToolButton, "setup_sheet_button"))

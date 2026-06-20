@@ -38,7 +38,7 @@ class MainWindowPreviewPanelTest(unittest.TestCase):
         )
 
         self.assertIs(window.preview_widget.parent(), assembly.preview_window)
-        self.assertEqual(assembly.preview_window.windowTitle(), "3D Preview")
+        self.assertEqual(assembly.preview_window.windowTitle(), "Molecule Info")
         self.assertGreaterEqual(assembly.preview_window.minimumWidth(), 420)
         self.assertIsNone(assembly.preview_window.findChild(QWidget, "preview_export_xyz_button"))
         assembly.preview_window.show()
