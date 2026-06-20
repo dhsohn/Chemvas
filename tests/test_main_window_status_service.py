@@ -11,18 +11,18 @@ def _service(
     active_tool_name_for_window=None,
     current_zoom_percent_for_window=None,
     active_canvas_or_none_for_window=None,
-    canvas_sheet_count_for_window=None,
-    active_canvas_sheet_name_for_window=None,
-    active_canvas_sheet_index_for_window=None,
+    canvas_count_for_window=None,
+    active_canvas_name_for_window=None,
+    active_canvas_index_for_window=None,
     context_bar_page_override_for_window=None,
 ):
     return MainWindowStatusService(
         active_tool_name_for_window=active_tool_name_for_window or mock.Mock(),
         current_zoom_percent_for_window=current_zoom_percent_for_window or mock.Mock(return_value=100),
         active_canvas_or_none_for_window=active_canvas_or_none_for_window or mock.Mock(return_value=object()),
-        canvas_sheet_count_for_window=canvas_sheet_count_for_window or mock.Mock(return_value=1),
-        active_canvas_sheet_name_for_window=active_canvas_sheet_name_for_window or mock.Mock(return_value="Sheet 1"),
-        active_canvas_sheet_index_for_window=active_canvas_sheet_index_for_window or mock.Mock(return_value=0),
+        canvas_count_for_window=canvas_count_for_window or mock.Mock(return_value=1),
+        active_canvas_name_for_window=active_canvas_name_for_window or mock.Mock(return_value="Canvas 1"),
+        active_canvas_index_for_window=active_canvas_index_for_window or mock.Mock(return_value=0),
         context_bar_page_override_for_window=context_bar_page_override_for_window or mock.Mock(return_value=None),
     )
 

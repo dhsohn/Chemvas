@@ -33,26 +33,19 @@ class _FakeWindow:
         self.canvas_tabs = QTabWidget()
         self.canvas_a = CanvasView()
         self.canvas_b = CanvasView()
-        self._sheet_add_tab = QWidget()
-        self.canvas_tabs.addTab(self.canvas_a, "Sheet 1")
-        self.canvas_tabs.addTab(self.canvas_b, "Sheet 2")
-        self.canvas_tabs.addTab(self._sheet_add_tab, "+")
+        self.canvas_tabs.addTab(self.canvas_a, "Canvas 1")
+        self.canvas_tabs.addTab(self.canvas_b, "Canvas 2")
         self.canvas_tabs.setCurrentIndex(0)
         self._last_canvas_tab_index = 0
         self._suspend_canvas_tab_reactions = False
         self.preview_3d = _FakePreview3D()
         self._atom_input = mock.Mock()
         self.sync_tool_actions_from_canvas = mock.Mock()
-        self.new_canvas_sheet = mock.Mock()
         self.refresh_active_canvas_ui = mock.Mock()
         self.update_zoom_label = mock.Mock()
         self.update_action_availability = mock.Mock()
         self.handle_selection_info = mock.Mock()
         self.show_error_message = mock.Mock()
-
-    @property
-    def sheet_add_tab(self):
-        return self._sheet_add_tab
 
     @property
     def atom_input(self):
@@ -117,13 +110,11 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.context_bar_service = mock.Mock()
         self.action_availability_service = mock.Mock()
         self.context_page_state_service = mock.Mock()
-        self.new_canvas_sheet_for_window = mock.Mock()
         self.tab_refs_for_window = mock.Mock(
             side_effect=lambda window: SimpleNamespace(canvas_tabs=window.canvas_tabs)
         )
         self.preview_for_window = mock.Mock(side_effect=lambda window: window.preview_3d)
         self.atom_input_for_window = mock.Mock(side_effect=lambda window: window.atom_input)
-        self.sheet_add_tab_for_window = mock.Mock(side_effect=lambda window: window.sheet_add_tab)
         self.tab_reactions_suspended_for_window = mock.Mock(side_effect=lambda window: window.tab_reactions_suspended)
         self.set_last_canvas_tab_index_for_window = mock.Mock(
             side_effect=lambda window, index: setattr(window, "last_canvas_tab_index", index)
@@ -137,11 +128,9 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
             context_bar_service=self.context_bar_service,
             action_availability_service=self.action_availability_service,
             context_page_state_service=self.context_page_state_service,
-            new_canvas_sheet_for_window=self.new_canvas_sheet_for_window,
             tab_refs_for_window=self.tab_refs_for_window,
             preview_for_window=self.preview_for_window,
             atom_input_for_window=self.atom_input_for_window,
-            sheet_add_tab_for_window=self.sheet_add_tab_for_window,
             tab_reactions_suspended_for_window=self.tab_reactions_suspended_for_window,
             set_last_canvas_tab_index_for_window=self.set_last_canvas_tab_index_for_window,
         )
@@ -293,22 +282,10 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.window.tab_reactions_suspended = False
         self.service.on_canvas_tab_changed(self.window, other_index)
 
-        self.window.new_canvas_sheet.assert_not_called()
         self.window.refresh_active_canvas_ui.assert_not_called()
         self.assertEqual(self.window.last_canvas_tab_index, 0)
         self.assertEqual(self.status_service.refresh_status_context.call_count, 3)
         self.assertEqual(self.context_bar_service.refresh_window.call_count, 3)
-
-    def test_on_canvas_tab_changed_creates_new_sheet_for_plus_tab(self) -> None:
-        plus_index = self.window.canvas_tabs.indexOf(self.window.sheet_add_tab)
-
-        self.service.on_canvas_tab_changed(self.window, plus_index)
-
-        self.new_canvas_sheet_for_window.assert_called_once_with(self.window)
-        self.window.new_canvas_sheet.assert_not_called()
-        self.window.refresh_active_canvas_ui.assert_not_called()
-        self.status_service.refresh_status_context.assert_called_once_with(self.window, update_zoom=False)
-        self.context_bar_service.refresh_window.assert_called_once_with(self.window)
 
     def test_on_canvas_tab_changed_tracks_last_canvas_tab_index_and_refreshes_ui(self) -> None:
         with mock.patch.object(self.service, "refresh_active_canvas_ui") as refresh_active_canvas_ui:

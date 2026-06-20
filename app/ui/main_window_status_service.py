@@ -28,17 +28,17 @@ class MainWindowStatusService:
         active_tool_name_for_window,
         current_zoom_percent_for_window,
         active_canvas_or_none_for_window,
-        canvas_sheet_count_for_window,
-        active_canvas_sheet_name_for_window,
-        active_canvas_sheet_index_for_window,
+        canvas_count_for_window,
+        active_canvas_name_for_window,
+        active_canvas_index_for_window,
         context_bar_page_override_for_window,
     ) -> None:
         self._active_tool_name_for_window = active_tool_name_for_window
         self._current_zoom_percent_for_window = current_zoom_percent_for_window
         self._active_canvas_or_none_for_window = active_canvas_or_none_for_window
-        self._canvas_sheet_count_for_window = canvas_sheet_count_for_window
-        self._active_canvas_sheet_name_for_window = active_canvas_sheet_name_for_window
-        self._active_canvas_sheet_index_for_window = active_canvas_sheet_index_for_window
+        self._canvas_count_for_window = canvas_count_for_window
+        self._active_canvas_name_for_window = active_canvas_name_for_window
+        self._active_canvas_index_for_window = active_canvas_index_for_window
         self._context_bar_page_override_for_window = context_bar_page_override_for_window
         self.tool_label: QLabel | None = None
         self.sheet_label: QLabel | None = None
@@ -149,7 +149,7 @@ class MainWindowStatusService:
             return TOOL_HINTS["ring_fill"]
         canvas = self._active_canvas_or_none_for_window(window)
         if canvas is None:
-            return "No active sheet"
+            return "No active canvas"
         tool_name = self._active_tool_name_for_window(window)
         if not tool_name:
             return "Choose a drawing tool"
@@ -163,12 +163,12 @@ class MainWindowStatusService:
         status_bar.showMessage(self.active_tool_hint_text(window))
 
     def active_sheet_status_text(self, window) -> str:
-        sheet_count = self._canvas_sheet_count_for_window(window)
-        if sheet_count <= 0:
-            return "Sheet: None"
-        sheet_name = self._active_canvas_sheet_name_for_window(window) or "Untitled"
-        sheet_index = self._active_canvas_sheet_index_for_window(window) + 1
-        return f"Sheet: {sheet_name} ({sheet_index}/{sheet_count})"
+        canvas_count = self._canvas_count_for_window(window)
+        if canvas_count <= 0:
+            return "Canvas: None"
+        canvas_name = self._active_canvas_name_for_window(window) or "Untitled"
+        canvas_index = self._active_canvas_index_for_window(window) + 1
+        return f"Canvas: {canvas_name} ({canvas_index}/{canvas_count})"
 
     def current_selection_count(self, window) -> int:
         canvas = self._active_canvas_or_none_for_window(window)

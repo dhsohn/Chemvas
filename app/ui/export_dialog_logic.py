@@ -21,7 +21,7 @@ DPI_OPTIONS: tuple[int, ...] = (150, 300, 600, 1200)
 DEFAULT_DPI = 300
 
 EXPORT_SCOPES: tuple[tuple[str, str], ...] = (
-    ("Whole sheet", "sheet"),
+    ("Whole canvas", "sheet"),
     ("Selection only", "selection"),
 )
 

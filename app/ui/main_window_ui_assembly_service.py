@@ -34,7 +34,7 @@ class MainWindowToolbarAssembly:
     load_action: QAction | None = None
     export_xyz_button: QToolButton | None = None
     preview_panel_button: QToolButton | None = None
-    new_sheet_button: QToolButton | None = None
+    new_canvas_button: QToolButton | None = None
     undo_button: QToolButton | None = None
     redo_button: QToolButton | None = None
 
@@ -144,7 +144,7 @@ class MainWindowUIAssemblyService:
             load_action=panel_toolbar.load_action,
             export_xyz_button=panel_toolbar.export_xyz_button,
             preview_panel_button=panel_toolbar.preview_panel_button,
-            new_sheet_button=panel_toolbar.new_sheet_button,
+            new_canvas_button=panel_toolbar.new_canvas_button,
             undo_button=panel_toolbar.undo_button,
             redo_button=panel_toolbar.redo_button,
         )

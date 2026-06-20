@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from core.document_state import SINGLE_SHEET_FILE_VERSION, serialize_settings
+from core.document_state import CANVAS_FILE_VERSION, serialize_settings
 from core.svg_roundtrip import (
     CHEMVAS_SVG_NAMESPACE,
     CHEMVAS_SVG_SCOPE_SHEET,
@@ -59,7 +59,7 @@ class SvgRoundtripTest(unittest.TestCase):
             state = _sheet_state()
             payload = create_editable_svg_payload(
                 state,
-                document_version=SINGLE_SHEET_FILE_VERSION,
+                document_version=CANVAS_FILE_VERSION,
                 scope=CHEMVAS_SVG_SCOPE_SHEET,
             )
 
@@ -76,13 +76,13 @@ class SvgRoundtripTest(unittest.TestCase):
             path = self._svg_path(tmp)
             first = create_editable_svg_payload(
                 _sheet_state("first"),
-                document_version=SINGLE_SHEET_FILE_VERSION,
+                document_version=CANVAS_FILE_VERSION,
                 scope=CHEMVAS_SVG_SCOPE_SHEET,
             )
             second_state = _sheet_state("second")
             second = create_editable_svg_payload(
                 second_state,
-                document_version=SINGLE_SHEET_FILE_VERSION,
+                document_version=CANVAS_FILE_VERSION,
                 scope=CHEMVAS_SVG_SCOPE_SHEET,
             )
 

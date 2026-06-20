@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, cast
 
 from core.document_io import read_document as default_read_document
 from core.svg_roundtrip import (
@@ -8,6 +9,7 @@ from core.svg_roundtrip import (
 )
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
+from ui.canvas_view import CanvasView
 from ui.export_dialog_logic import (
     default_export_path,
     file_filter_for_format,
@@ -35,16 +37,16 @@ class MainWindowDocumentActionService:
         document_session_service_for_window,
         geometry_controller_for_window,
         bond_length_px_for_window,
-        current_file_path_for_window,
-        set_current_file_path_for_window,
-        workbook_document_service,
+        active_canvas_for_window,
+        active_canvas_or_none_for_window,
+        canvas_document_service,
     ) -> None:
         self._document_session_service_for_window = document_session_service_for_window
         self._geometry_controller_for_window = geometry_controller_for_window
         self._bond_length_px_for_window = bond_length_px_for_window
-        self._current_file_path_for_window = current_file_path_for_window
-        self._set_current_file_path_for_window = set_current_file_path_for_window
-        self._workbook_document = workbook_document_service
+        self._active_canvas_for_window = active_canvas_for_window
+        self._active_canvas_or_none_for_window = active_canvas_or_none_for_window
+        self._canvas_documents = canvas_document_service
 
     @staticmethod
     def normalize_xyz_export_path(dialog_path: str | None) -> str | None:
@@ -55,35 +57,62 @@ class MainWindowDocumentActionService:
             return str(path)
         return str(path.with_suffix(".xyz"))
 
+    def current_file_path(self, window, *, canvas: CanvasView | None = None) -> str | None:
+        target = self._active_canvas_for_window(window) if canvas is None else canvas
+        return self._canvas_documents.file_path(target)
+
     def default_xyz_export_path(self, window) -> str:
-        current_path = self._current_file_path_for_window(window)
+        current_path = self.current_file_path(window)
         if current_path:
             return str(Path(current_path).with_suffix(".xyz"))
         return ""
 
-    def default_save_dialog_path(self, window) -> str:
-        return self._current_file_path_for_window(window) or ""
+    def default_save_dialog_path(self, window, *, canvas: CanvasView | None = None) -> str:
+        return self.current_file_path(window, canvas=canvas) or ""
 
-    def save_canvas_to_path(self, window, path: str, *, message_box=None) -> bool:
+    def save_canvas_to_path(
+        self,
+        window,
+        path: str,
+        *,
+        canvas: CanvasView | None = None,
+        message_box=None,
+    ) -> bool:
         message_box = QMessageBox if message_box is None else message_box
+        target = self._active_canvas_for_window(window) if canvas is None else canvas
         try:
-            self._workbook_document.save_document_state(window, path)
+            cast(Any, target).services.canvas_document_session_service.save_to_file(path)
         except Exception as exc:
             message_box.warning(window, "Save Error", f"Failed to save file:\n{exc}")
             return False
-        self._set_current_file_path_for_window(window, path)
+        self._canvas_documents.set_file_path(target, path)
+        self._canvas_documents.set_display_name(target, self._canvas_documents.display_name_for_path(path) or path)
+        self._canvas_documents.mark_clean(target)
+        self._canvas_documents.refresh_tab_title(window, target)
         window.statusBar().showMessage(f"Saved: {path}", 4000)
         return True
 
-    def save_canvas(self, window, *, resolve_save_path=None) -> None:
+    def save_canvas(
+        self,
+        window,
+        *,
+        canvas: CanvasView | None = None,
+        resolve_save_path=None,
+    ) -> bool:
         resolve_save_path = default_resolve_save_path if resolve_save_path is None else resolve_save_path
-        path = resolve_save_path(current_path=self._current_file_path_for_window(window))
+        path = resolve_save_path(current_path=self.current_file_path(window, canvas=canvas))
         if path is None:
-            self.save_canvas_as(window)
-            return
-        self.save_canvas_to_path(window, path)
+            return self.save_canvas_as(window, canvas=canvas)
+        return self.save_canvas_to_path(window, path, canvas=canvas)
 
-    def save_canvas_as(self, window, *, file_dialog=None, resolve_save_as_path=None) -> None:
+    def save_canvas_as(
+        self,
+        window,
+        *,
+        canvas: CanvasView | None = None,
+        file_dialog=None,
+        resolve_save_as_path=None,
+    ) -> bool:
         file_dialog = QFileDialog if file_dialog is None else file_dialog
         resolve_save_as_path = (
             default_resolve_save_as_path if resolve_save_as_path is None else resolve_save_as_path
@@ -91,13 +120,13 @@ class MainWindowDocumentActionService:
         dialog_path, _ = file_dialog.getSaveFileName(
             window,
             "Save Drawing As",
-            self.default_save_dialog_path(window),
+            self.default_save_dialog_path(window, canvas=canvas),
             "Chemvas (*.chemvas);;JSON (*.json);;All Files (*)",
         )
         path = resolve_save_as_path(dialog_path)
         if path is None:
-            return
-        self.save_canvas_to_path(window, path)
+            return False
+        return self.save_canvas_to_path(window, path, canvas=canvas)
 
     def export_xyz(
         self,
@@ -160,7 +189,7 @@ class MainWindowDocumentActionService:
         dialog_path, _ = file_dialog.getSaveFileName(
             window,
             "Export Figure",
-            default_export_path(self._current_file_path_for_window(window), fmt),
+            default_export_path(self.current_file_path(window), fmt),
             file_filter_for_format(fmt),
         )
         path = normalize_export_path(dialog_path, fmt)
@@ -193,38 +222,96 @@ class MainWindowDocumentActionService:
         read_document=None,
         read_editable_svg=None,
         resolve_load_path=None,
-    ) -> None:
+    ) -> bool:
         file_dialog = QFileDialog if file_dialog is None else file_dialog
-        message_box = QMessageBox if message_box is None else message_box
-        read_document = default_read_document if read_document is None else read_document
-        read_editable_svg = default_read_editable_svg if read_editable_svg is None else read_editable_svg
-        resolve_load_path = default_resolve_load_path if resolve_load_path is None else resolve_load_path
         dialog_path, _ = file_dialog.getOpenFileName(
             window,
             "Load Drawing",
             "",
             "Chemvas / Editable SVG (*.chemvas *.json *.svg);;Chemvas (*.chemvas);;Editable SVG (*.svg);;JSON (*.json);;All Files (*)",
         )
-        path = resolve_load_path(dialog_path)
+        path = resolve_load_path(dialog_path) if resolve_load_path is not None else default_resolve_load_path(dialog_path)
         if path is None:
-            return
+            return False
+        return self.load_canvas_from_path(
+            window,
+            path,
+            message_box=message_box,
+            read_document=read_document,
+            read_editable_svg=read_editable_svg,
+        )
+
+    def load_canvas_from_path(
+        self,
+        window,
+        path: str,
+        *,
+        message_box=None,
+        read_document=None,
+        read_editable_svg=None,
+    ) -> bool:
+        message_box = QMessageBox if message_box is None else message_box
+        read_document = default_read_document if read_document is None else read_document
+        read_editable_svg = default_read_editable_svg if read_editable_svg is None else read_editable_svg
         try:
             if Path(path).suffix.lower() == ".svg":
                 document = read_editable_svg(path)
-                self._workbook_document.restore_single_sheet_document(window, document.state)
+                self._canvas_documents.open_state(
+                    window,
+                    state=document.state,
+                    file_path=None,
+                    display_name=Path(path).name,
+                )
                 window.statusBar().showMessage(f"Loaded editable SVG: {path}", 4000)
-                return
+                return True
             document = read_document(path)
-            state = document.state
-            if "sheets" in state:
-                self._workbook_document.restore_workbook_document(window, state)
-            else:
-                self._workbook_document.restore_single_sheet_document(window, state)
+            self._canvas_documents.open_state(window, state=document.state, file_path=path)
         except Exception as exc:
             message_box.warning(window, "Load Error", f"Failed to load file:\n{exc}")
-            return
-        self._set_current_file_path_for_window(window, path)
+            return False
         window.statusBar().showMessage(f"Loaded: {path}", 4000)
+        return True
+
+    def close_canvas_tab(self, window, index: int) -> bool:
+        tab_refs = window.tab_references
+        widget = tab_refs.canvas_tabs.widget(index)
+        if not isinstance(widget, CanvasView):
+            return False
+        if not self.confirm_close_canvas(window, widget):
+            return False
+        self._canvas_documents.remove_canvas(window, widget)
+        return True
+
+    def confirm_close_window(self, window) -> bool:
+        for canvas in list(window.tab_references.all_canvases()):
+            index = window.tab_references.active_canvas_tab_index(canvas)
+            if index >= 0:
+                window.tab_references.canvas_tabs.setCurrentIndex(index)
+            if not self.confirm_close_canvas(window, canvas):
+                return False
+        return True
+
+    def confirm_close_canvas(self, window, canvas: CanvasView, *, message_box=None) -> bool:
+        if not self._canvas_documents.is_dirty(canvas):
+            return True
+        message_box = QMessageBox if message_box is None else message_box
+        name = self._canvas_documents.display_name(canvas)
+        choice = message_box.question(
+            window,
+            "Save Changes",
+            f"Save changes to {name} before closing?",
+            (
+                QMessageBox.StandardButton.Save
+                | QMessageBox.StandardButton.Discard
+                | QMessageBox.StandardButton.Cancel
+            ),
+            QMessageBox.StandardButton.Save,
+        )
+        if choice == QMessageBox.StandardButton.Save:
+            return self.save_canvas(window, canvas=canvas)
+        if choice == QMessageBox.StandardButton.Discard:
+            return True
+        return False
 
     def set_bond_length(self, window) -> None:
         current = self._bond_length_px_for_window(window)

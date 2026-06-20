@@ -54,6 +54,9 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         self.window = MainWindow()
 
     def tearDown(self) -> None:
+        document_service = services_for_window(self.window).canvas_document_service
+        for canvas in self.window.tab_references.all_canvases():
+            document_service.mark_clean(canvas)
         self.window.close()
         self.app.processEvents()
 

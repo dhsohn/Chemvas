@@ -9,7 +9,7 @@ from typing import Any
 from xml.etree import ElementTree as ET
 
 from core.document_io import ChemvasDocument, create_document, parse_document
-from core.document_state import CHEMVAS_FILE_TYPE, SINGLE_SHEET_FILE_VERSION
+from core.document_state import CANVAS_FILE_VERSION, CHEMVAS_FILE_TYPE
 
 PathType = str | PathLike[str]
 
@@ -130,7 +130,7 @@ def _validated_editable_svg_payload(payload: dict[str, Any]) -> dict[str, Any]:
     document = payload.get("document")
     if not isinstance(document, dict):
         raise ValueError("Invalid editable Chemvas SVG payload.")
-    if document.get("type") != CHEMVAS_FILE_TYPE or document.get("version") != SINGLE_SHEET_FILE_VERSION:
+    if document.get("type") != CHEMVAS_FILE_TYPE or document.get("version") != CANVAS_FILE_VERSION:
         raise ValueError("Invalid editable Chemvas SVG payload.")
     parse_document(document)
     return payload

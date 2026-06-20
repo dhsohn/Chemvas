@@ -12,9 +12,8 @@ from core.document_io import (
     write_document,
 )
 from core.document_state import (
+    CANVAS_FILE_VERSION,
     CHEMVAS_FILE_TYPE,
-    SINGLE_SHEET_FILE_VERSION,
-    WORKBOOK_FILE_VERSION,
     serialize_settings,
 )
 
@@ -45,7 +44,7 @@ def _model_state(
     }
 
 
-def _single_sheet_state(model: dict | None = None) -> dict:
+def _canvas_state(model: dict | None = None) -> dict:
     return {
         "model": model or _model_state(),
         "ring_fills": [],
@@ -61,99 +60,77 @@ def _single_sheet_state(model: dict | None = None) -> dict:
 
 class DocumentIOTest(unittest.TestCase):
     def test_create_document_wraps_state_in_chemvas_payload(self) -> None:
-        state = _single_sheet_state()
+        state = _canvas_state()
         state["last_smiles_input"] = "CCO"
 
-        document = create_document(state, version=SINGLE_SHEET_FILE_VERSION)
+        document = create_document(state, version=CANVAS_FILE_VERSION)
 
         self.assertIsInstance(document, ChemvasDocument)
         self.assertEqual(
             document.payload,
             {
                 "type": CHEMVAS_FILE_TYPE,
-                "version": SINGLE_SHEET_FILE_VERSION,
+                "version": CANVAS_FILE_VERSION,
                 "state": state,
             },
         )
         self.assertIs(document.state, state)
 
-    def test_parse_document_accepts_wrapped_payloads(self) -> None:
-        state = _single_sheet_state()
-        workbook_state = {
-            "active_sheet_index": 0,
-            "sheets": [
-                {
-                    "name": "Sheet 1",
-                    "kind": "canvas",
-                    "content": state,
-                }
-            ],
-        }
+    def test_parse_document_accepts_single_canvas_wrapped_payload(self) -> None:
+        state = _canvas_state()
         payload = {
             "type": CHEMVAS_FILE_TYPE,
-            "version": SINGLE_SHEET_FILE_VERSION,
+            "version": CANVAS_FILE_VERSION,
             "state": state,
-        }
-        workbook_payload = {
-            "type": CHEMVAS_FILE_TYPE,
-            "version": WORKBOOK_FILE_VERSION,
-            "state": workbook_state,
         }
 
         wrapped = parse_document(payload)
-        workbook = parse_document(workbook_payload)
 
         self.assertIs(wrapped.payload, payload)
         self.assertIs(wrapped.state, state)
-        self.assertIs(workbook.state, workbook_state)
 
     def test_parse_document_rejects_invalid_state_like_document_state(self) -> None:
+        cases = (
+            None,
+            {},
+            {"type": CHEMVAS_FILE_TYPE, "version": CANVAS_FILE_VERSION, "state": {}},
+            {"type": "unexpected", "version": CANVAS_FILE_VERSION, "state": _canvas_state()},
+            {"type": CHEMVAS_FILE_TYPE, "version": 3, "state": _canvas_state()},
+            {
+                "type": CHEMVAS_FILE_TYPE,
+                "version": CANVAS_FILE_VERSION,
+                "state": {"active_sheet_index": 0, "sheets": []},
+            },
+            {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}, "version": CANVAS_FILE_VERSION},
+        )
+        for payload in cases:
+            with self.subTest(payload=payload):
+                with self.assertRaises(ValueError):
+                    parse_document(payload)
+
+    def test_workbook_version_two_payloads_are_invalid(self) -> None:
+        workbook_payload = {
+            "type": CHEMVAS_FILE_TYPE,
+            "version": 2,
+            "state": {
+                "active_sheet_index": 0,
+                "sheets": [{"name": "Canvas 1", "kind": "canvas", "content": _canvas_state()}],
+            },
+        }
+
         with self.assertRaises(ValueError):
-            parse_document(None)
+            parse_document(workbook_payload)
         with self.assertRaises(ValueError):
-            parse_document({})
-        with self.assertRaises(ValueError):
-            parse_document({"type": CHEMVAS_FILE_TYPE, "version": SINGLE_SHEET_FILE_VERSION, "state": {}})
-        with self.assertRaises(ValueError):
-            parse_document(
-                {
-                    "type": "unexpected",
-                    "version": SINGLE_SHEET_FILE_VERSION,
-                    "state": _single_sheet_state(),
-                }
-            )
-        with self.assertRaises(ValueError):
-            parse_document(
-                {
-                    "type": CHEMVAS_FILE_TYPE,
-                    "version": 3,
-                    "state": _single_sheet_state(),
-                }
-            )
-        with self.assertRaises(ValueError):
-            parse_document(
-                {
-                    "type": CHEMVAS_FILE_TYPE,
-                    "version": SINGLE_SHEET_FILE_VERSION,
-                    "state": {"active_sheet_index": 0, "sheets": []},
-                }
-            )
-        with self.assertRaises(ValueError):
-            parse_document(
-                {
-                    "model": {"atoms": {}, "bonds": [], "next_atom_id": 0},
-                    "version": SINGLE_SHEET_FILE_VERSION,
-                }
-            )
+            create_document(_canvas_state(), version=2)
 
     def test_create_document_rejects_unsupported_or_mismatched_versions(self) -> None:
         with self.assertRaises(ValueError):
-            create_document(_single_sheet_state(), version=9)
+            create_document(_canvas_state(), version=9)
         with self.assertRaises(ValueError):
-            create_document({"active_sheet_index": 0, "sheets": []}, version=SINGLE_SHEET_FILE_VERSION)
+            create_document({"active_sheet_index": 0, "sheets": []}, version=CANVAS_FILE_VERSION)
 
     def test_write_and_read_document_round_trip_wrapped_payload(self) -> None:
-        state = _single_sheet_state(
+        state = _canvas_state(
             _model_state(
                 {"0": {"element": "C", "x": 0.0, "y": 0.0, "color": "#000000", "explicit_label": False}},
                 [],
@@ -164,63 +141,22 @@ class DocumentIOTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "sample.chemvas"
 
-            written = write_document(path, state, version=SINGLE_SHEET_FILE_VERSION)
+            written = write_document(path, state, version=CANVAS_FILE_VERSION)
             loaded = read_document(path)
 
         self.assertEqual(
             written.payload,
             {
                 "type": CHEMVAS_FILE_TYPE,
-                "version": SINGLE_SHEET_FILE_VERSION,
+                "version": CANVAS_FILE_VERSION,
                 "state": state,
             },
         )
         self.assertEqual(loaded.payload, written.payload)
         self.assertEqual(loaded.state, state)
 
-    def test_write_and_read_document_round_trip_workbook_payload(self) -> None:
-        state = {
-            "active_sheet_index": 1,
-            "sheets": [
-                {
-                    "name": "Sheet 1",
-                    "kind": "canvas",
-                    "content": _single_sheet_state(),
-                },
-                {
-                    "name": "Sheet 2",
-                    "kind": "canvas",
-                    "content": _single_sheet_state(
-                        _model_state(
-                            {
-                                "0": {
-                                    "element": "O",
-                                    "x": 0.0,
-                                    "y": 0.0,
-                                    "color": "#000000",
-                                    "explicit_label": False,
-                                }
-                            },
-                            [],
-                            1,
-                        )
-                    ),
-                },
-            ],
-        }
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "workbook.chemvas"
-
-            written = write_document(path, state, version=WORKBOOK_FILE_VERSION)
-            loaded = read_document(path)
-
-        self.assertEqual(loaded.payload, written.payload)
-        self.assertEqual(loaded.state, state)
-
-
     def test_write_document_is_atomic_and_preserves_file_on_failure(self) -> None:
-        state = _single_sheet_state()
+        state = _canvas_state()
 
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "sample.chemvas"
@@ -229,19 +165,17 @@ class DocumentIOTest(unittest.TestCase):
 
             with mock.patch("core.document_io.os.fsync", side_effect=OSError("disk full")):
                 with self.assertRaises(OSError):
-                    write_document(path, state, version=SINGLE_SHEET_FILE_VERSION)
+                    write_document(path, state, version=CANVAS_FILE_VERSION)
 
-            # A failed write must leave the previous file untouched and clean up
-            # the temporary file.
             self.assertEqual(path.read_text(encoding="utf-8"), "ORIGINAL")
             self.assertFalse(tmp_path.exists())
 
     def test_write_document_does_not_leave_temp_file_on_success(self) -> None:
-        state = _single_sheet_state()
+        state = _canvas_state()
 
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "sample.chemvas"
-            write_document(path, state, version=SINGLE_SHEET_FILE_VERSION)
+            write_document(path, state, version=CANVAS_FILE_VERSION)
 
             siblings = os.listdir(temp_dir)
 

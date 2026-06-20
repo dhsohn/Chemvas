@@ -26,6 +26,7 @@ if QApplication is not None:
         prompt_export_options,
         prompt_sheet_setup,
     )
+    from ui.main_window_service_ports import services_for_window
     from ui.sheet_setup_access import set_sheet_setup_for
 
 
@@ -40,6 +41,9 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
         self.window = MainWindow()
 
     def tearDown(self) -> None:
+        document_service = services_for_window(self.window).canvas_document_service
+        for canvas in self.window.tab_references.all_canvases():
+            document_service.mark_clean(canvas)
         self.window.close()
         self.app.processEvents()
 
@@ -136,7 +140,7 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
         set_sheet_setup_for(active_canvas_for_window(self.window), "A4", "landscape")
 
         def drive_dialog(dialog: QDialog):
-            self.assertEqual(dialog.windowTitle(), "Setup Sheet")
+            self.assertEqual(dialog.windowTitle(), "Canvas Size")
 
             size_combo = dialog.findChild(QComboBox, "sheetSizeCombo")
             orientation_combo = dialog.findChild(QComboBox, "sheetOrientationCombo")

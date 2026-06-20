@@ -10,6 +10,7 @@ from ui.atom_coords_access import CanvasAtomCoords3DState
 from ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from ui.canvas_bond_graphics_state import CanvasBondGraphicsState
 from ui.canvas_callback_state import CanvasCallbackState
+from ui.canvas_document_metadata_state import CanvasDocumentMetadataState
 from ui.canvas_graph_state import CanvasGraphState
 from ui.canvas_history_service import CanvasHistoryService
 from ui.canvas_history_state import CanvasHistoryState
@@ -47,7 +48,7 @@ class RdkitIdleWarmupBridge(QObject):
         maybe_warm_rdkit_for(canvas)
         # Stop polling once no warmup is outstanding. The timer is re-armed on
         # demand when a new selection needs RDKit (see
-        # ``selection_info_access.emit_selection_info_for``), so idle sheets do
+        # ``selection_info_access.emit_selection_info_for``), so idle canvases do
         # not keep firing timers.
         if self.timer is not None and not selection_info_state_for(canvas).rdkit_warmup_pending:
             self.timer.stop()
@@ -55,6 +56,7 @@ class RdkitIdleWarmupBridge(QObject):
 
 @dataclass(slots=True)
 class CanvasRuntimeState:
+    document_metadata_state: CanvasDocumentMetadataState
     sheet_setup_state: SheetSetupState
     selection_info_state: SelectionInfoState
     rdkit_idle_timer: QTimer
@@ -93,6 +95,7 @@ class CanvasRuntimeState:
         rdkit_idle_warmup_bridge.timer = rdkit_idle_timer
         # Armed on demand instead of running continuously for every canvas.
         return cls(
+            document_metadata_state=CanvasDocumentMetadataState(),
             sheet_setup_state=SheetSetupState(),
             selection_info_state=SelectionInfoState.create(),
             rdkit_idle_timer=rdkit_idle_timer,

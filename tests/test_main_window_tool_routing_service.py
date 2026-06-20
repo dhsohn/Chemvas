@@ -13,6 +13,7 @@ except ModuleNotFoundError:
 if QApplication is not None:
     from ui.main_window import MainWindow
     from ui.main_window_canvas_ports import active_canvas_for_window
+    from ui.main_window_service_ports import services_for_window
     from ui.main_window_tool_routing_service import MainWindowToolRoutingService
 
 
@@ -63,6 +64,9 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
         )
 
     def tearDown(self) -> None:
+        document_service = services_for_window(self.window).canvas_document_service
+        for canvas in self.window.tab_references.all_canvases():
+            document_service.mark_clean(canvas)
         self.window.close()
         self.app.processEvents()
 

@@ -267,21 +267,19 @@ def test_main_window_bootstrap_uses_runtime_services_without_window_service_wrap
     bootstrap = APP_ROOT / "ui" / "main_window_bootstrap.py"
     source = bootstrap.read_text()
     removed_wrappers = (
-        "window.add_canvas_sheet(",
-        "window.ensure_add_sheet_tab()",
+        "window.add_canvas(",
         "window.update_action_availability()",
         "window.bind_active_canvas()",
-        "window.show_canvas_tab_context_menu",
         "window.on_canvas_tab_moved",
         "window.on_canvas_tab_changed",
+        "window.close_canvas_tab",
     )
 
     assert "services = build_services()" in source
-    assert "services.canvas_tab_ui_service.show_canvas_tab_context_menu(window, pos)" in source
     assert "services.canvas_tab_ui_service.on_canvas_tab_moved(window, from_index, to_index)" in source
     assert "services.active_canvas_ui_service.on_canvas_tab_changed(window, index)" in source
-    assert "runtime.services.canvas_sheet_service.add_canvas_sheet(" in source
-    assert "runtime.services.canvas_tab_ui_service.ensure_add_sheet_tab(window)" in source
+    assert "services.canvas_tab_ui_service.close_canvas_tab(window, index)" in source
+    assert "runtime.services.canvas_document_service.add_canvas(" in source
     assert "runtime.services.action_availability_service.update_action_availability(window)" in source
     assert "runtime.services.active_canvas_ui_service.bind_active_canvas(window)" in source
     assert "runtime.preview_3d.refresh_from_canvas(" not in source
@@ -504,7 +502,7 @@ def test_main_window_delegates_toolbar_ui_references_to_reference_object() -> No
     assert "apply_preview_window_assembly_for_window" in ui_ports_source
 
 
-def test_main_window_delegates_sheet_tab_references_to_reference_object() -> None:
+def test_main_window_delegates_canvas_tab_references_to_reference_object() -> None:
     source = (APP_ROOT / "ui" / "main_window.py").read_text()
     bootstrap_source = (APP_ROOT / "ui" / "main_window_bootstrap.py").read_text()
     refs_source = (APP_ROOT / "ui" / "main_window_tab_references.py").read_text()
@@ -527,26 +525,19 @@ def test_main_window_delegates_sheet_tab_references_to_reference_object() -> Non
         assert node.attr not in private_tab_attrs
 
     assert "class MainWindowTabReferences" in refs_source
-    assert "def recreate_sheet_add_tab" in refs_source
-    assert "def sheet_tab_global_pos" in refs_source
     assert "def canvas_tab_entries" in refs_source
     assert "def active_canvas_or_none" in refs_source
+    assert "def canvas_count" in refs_source
+    assert "def active_canvas_name" in refs_source
     removed_tab_forwarders = {
         "canvas",
         "active_canvas_or_none",
         "canvas_tab_entries",
         "all_canvases",
         "active_canvas_tab_index",
-        "active_canvas_sheet_index",
-        "plus_tab_index",
-        "recreate_sheet_add_tab",
-        "set_sheet_add_tab_index",
-        "move_sheet_tab",
-        "sheet_tab_at",
-        "sheet_tab_global_pos",
-        "sheet_add_tab",
-        "canvas_sheet_count",
-        "active_canvas_sheet_name",
+        "active_canvas_index",
+        "canvas_count",
+        "active_canvas_name",
     }
     method_names = {
         node.name
@@ -688,39 +679,40 @@ def test_main_window_services_delegates_canvas_port_lookup_to_ports_module() -> 
     assert _matching_lines(pattern, [path]) == []
 
 
-def test_main_window_canvas_sheet_service_uses_injected_tab_collaborators() -> None:
-    service = APP_ROOT / "ui" / "main_window_canvas_sheet_service.py"
+def test_main_window_canvas_document_service_uses_injected_tab_collaborators() -> None:
+    service = APP_ROOT / "ui" / "main_window_canvas_document_service.py"
     services = APP_ROOT / "ui" / "main_window_services.py"
     source = service.read_text()
     pattern = re.compile(
         r"\bwindow\.plus_tab_index\("
         r"|\bwindow\.canvas_tabs\b"
         r"|\bwindow\.active_canvas_or_none\("
-        r"|\bwindow\.next_canvas_sheet_name\("
-        r"|(?:tab_refs_for_window|active_canvas_for_window)=None"
+        r"|\bwindow\.next_canvas_name\("
+        r"|(?:tab_refs_for_window|active_canvas_or_none_for_window)=None"
     )
 
-    assert "next_canvas_sheet_name_for_window" in source
+    assert "class MainWindowCanvasDocumentService" in source
+    assert "next_canvas_name_for_window" in source
     assert "self._tab_refs_for_window = tab_refs_for_window" in source
-    assert "self._active_canvas_for_window = active_canvas_for_window" in source
-    assert "self._next_canvas_sheet_name_for_window = next_canvas_sheet_name_for_window" in source
-    assert "self._tab_ui.ensure_add_sheet_tab(window)" in source
+    assert "self._active_canvas_or_none_for_window = active_canvas_or_none_for_window" in source
+    assert "self._next_canvas_name_for_window = next_canvas_name_for_window" in source
     assert "self._active_canvas_ui.bind_active_canvas(window)" in source
-    assert "template=self._active_canvas_for_window(window)" in source
-    assert "self._next_canvas_sheet_name_for_window(window" in source
-    assert "window.ensure_add_sheet_tab()" not in source
+    assert "self._active_canvas_ui.refresh_active_canvas_ui(window)" in source
+    assert "template = self._active_canvas_or_none_for_window(window)" in source
+    assert "self._next_canvas_name_for_window(window" in source
+    assert "document_file_path_for" in source
+    assert "mark_document_clean_for" in source
     assert "window.bind_active_canvas()" not in source
-    assert "tab_ui=canvas_tab_ui_service" in services.read_text()
     assert "active_canvas_ui=active_canvas_ui_service" in services.read_text()
+    assert "canvas_document_service = MainWindowCanvasDocumentService(" in services.read_text()
     assert "tab_refs_for_window=tab_references_for_window" in services.read_text()
-    assert "active_canvas_for_window=active_canvas_for_window" in services.read_text()
-    assert "next_canvas_sheet_name_for_window=next_canvas_sheet_name_for_window" in services.read_text()
+    assert "active_canvas_or_none_for_window=active_canvas_or_none_for_window" in services.read_text()
+    assert "next_canvas_name_for_window=next_canvas_name_for_window" in services.read_text()
     assert _matching_lines(pattern, [service]) == []
 
 
-def test_main_window_canvas_tab_ui_service_uses_injected_active_canvas_and_tab_refs() -> None:
+def test_main_window_canvas_tab_ui_service_uses_injected_close_port() -> None:
     service = APP_ROOT / "ui" / "main_window_canvas_tab_ui_service.py"
-    main_window = APP_ROOT / "ui" / "main_window.py"
     services = APP_ROOT / "ui" / "main_window_services.py"
     source = service.read_text()
     pattern = re.compile(
@@ -741,14 +733,12 @@ def test_main_window_canvas_tab_ui_service_uses_injected_active_canvas_and_tab_r
     )
     init_arg_names = {arg.arg for arg in init_method.args.kwonlyargs}
 
-    assert {"active_canvas_ui", "tab_refs_for_window"}.issubset(init_arg_names)
-    assert "self._tab_refs_for_window = tab_refs_for_window" in source
-    assert "self._active_canvas_ui.refresh_active_canvas_ui(window)" in source
+    assert init_arg_names == {"close_canvas_tab_for_window"}
+    assert "self._close_canvas_tab_for_window = close_canvas_tab_for_window" in source
+    assert "self._close_canvas_tab_for_window(window, index)" in source
     assert "window.refresh_active_canvas_ui()" not in source
     assert "window.add_canvas_sheet_from_service()" not in source
-    assert "add_canvas_sheet_from_service" not in main_window.read_text()
-    assert "active_canvas_ui=active_canvas_ui_service" in services.read_text()
-    assert "tab_refs_for_window=tab_references_for_window" in services.read_text()
+    assert "close_canvas_tab_for_window=document_action_service.close_canvas_tab" in services.read_text()
     assert _matching_lines(pattern, [service]) == []
 
 
@@ -903,16 +893,16 @@ def test_main_window_status_and_context_bar_use_active_tool_port() -> None:
     )
     window_helper_pattern = re.compile(
         r"\bwindow\.active_canvas_or_none\("
-        r"|\bwindow\.canvas_sheet_count\("
-        r"|\bwindow\.active_canvas_sheet_name\("
-        r"|\bwindow\.active_canvas_sheet_index\("
+        r"|\bwindow\.canvas_count\("
+        r"|\bwindow\.active_canvas_name\("
+        r"|\bwindow\.active_canvas_index\("
         r"|\bwindow\.context_bar_page_override\b"
     )
 
     assert "active_tool_name_for_window" in source
     assert "current_zoom_percent_for_window" in source
     assert "active_canvas_or_none_for_window" in source
-    assert "canvas_sheet_count_for_window" in source
+    assert "canvas_count_for_window" in source
     assert "context_bar_page_override_for_window" in source
     assert _matching_lines(pattern, paths) == []
     assert _matching_lines(window_helper_pattern, paths) == []
@@ -932,7 +922,6 @@ def test_main_window_active_canvas_ui_service_uses_injected_collaborators() -> N
         r"|zoom_callback=window\.update_zoom_label"
         r"|history_change_callback=window\.update_action_availability"
         r"|error_callback=window\.show_error_message"
-        r"|\bwindow\.new_canvas_sheet\(\)"
         r"|\bwindow\.canvas_tabs\b"
         r"|\bwindow\.preview_3d\b"
         r"|tool_mode_controller=None"
@@ -940,7 +929,6 @@ def test_main_window_active_canvas_ui_service_uses_injected_collaborators() -> N
         r"|context_bar_service=None"
         r"|action_availability_service=None"
         r"|context_page_state_service=None"
-        r"|new_canvas_sheet_for_window=None"
         r"|tab_refs_for_window=None"
         r"|preview_for_window=None"
     )
@@ -953,7 +941,6 @@ def test_main_window_active_canvas_ui_service_uses_injected_collaborators() -> N
     assert "context_bar_service" in source
     assert "action_availability_service" in source
     assert "context_page_state_service" in source
-    assert "new_canvas_sheet_for_window" in source
     assert "tab_refs_for_window" in source
     assert "preview_for_window" in source
     assert "self._tab_refs_for_window = tab_refs_for_window" in source
@@ -965,9 +952,7 @@ def test_main_window_active_canvas_ui_service_uses_injected_collaborators() -> N
     assert "history_change_callback=lambda: self._action_availability.update_action_availability(window)" in source
     assert "error_callback=lambda message: self._status.show_error_message(window, message, timeout=6000)" in source
     assert "self._context_page_state.sync_tool_actions_from_canvas(window)" in source
-    assert "self._new_canvas_sheet_for_window(window)" in source
     assert "context_page_state_service=context_page_state_service" in services.read_text()
-    assert "new_canvas_sheet_for_window=new_canvas_sheet_for_window" in services.read_text()
     assert "tab_refs_for_window=tab_references_for_window" in services.read_text()
     assert "preview_for_window=preview_for_window" in services.read_text()
     assert "active_canvas_for_window=active_canvas_for_window" in services.read_text()
@@ -1126,18 +1111,14 @@ def test_main_window_ui_assembly_delegates_toolbar_buttons_to_module() -> None:
 
 def test_main_window_document_action_service_delegates_dialog_assembly_to_module() -> None:
     service = APP_ROOT / "ui" / "main_window_document_action_service.py"
-    sheet_service = APP_ROOT / "ui" / "main_window_canvas_sheet_service.py"
     dialogs = APP_ROOT / "ui" / "main_window_document_dialogs.py"
     service_source = service.read_text()
-    sheet_service_source = sheet_service.read_text()
     dialogs_source = dialogs.read_text()
 
     assert "from ui.main_window_document_dialogs import" in service_source
     assert "prompt_export_options(window)" in service_source
     assert "prompt_bond_length(window, current)" in service_source
     assert "prompt_sheet_setup(" not in service_source
-    assert "from ui.main_window_document_dialogs import prompt_sheet_setup" in sheet_service_source
-    assert "sheet_setup_prompt=prompt_sheet_setup" in sheet_service_source
     assert "QDialog" not in service_source
     assert "QComboBox" not in service_source
     assert "QDoubleSpinBox" not in service_source
@@ -1246,7 +1227,6 @@ def test_main_window_document_action_service_uses_injected_canvas_service_ports(
         r"\bcanvas_service_for\b"
         r"|(?:document_session_service|geometry_controller)=None"
         r"|\bwindow\.canvas\b"
-        r"|\bwindow\.workbook_document_service\b"
         r"|\bwindow\.save_canvas_as\("
         r"|\bwindow\.save_canvas_to_path\("
         r"|\bwindow\.default_save_dialog_path\("
@@ -1257,34 +1237,32 @@ def test_main_window_document_action_service_uses_injected_canvas_service_ports(
     assert "document_session_service_for_window" in source
     assert "geometry_controller_for_window" in source
     assert "bond_length_px_for_window" in source
+    assert "active_canvas_for_window" in source
+    assert "canvas_document_service" in source
     assert "sheet_size_for_window" not in source
     assert "sheet_orientation_for_window" not in source
     assert "set_sheet_setup_for_window" not in source
-    assert "current_file_path_for_window" in source
-    assert "set_current_file_path_for_window" in source
-    assert "workbook_document_service" in source
-    assert "self._workbook_document.save_document_state(window, path)" in source
-    assert "self.save_canvas_as(window)" in source
-    assert "self.save_canvas_to_path(window, path)" in source
-    assert "workbook_document_service=workbook_document_service" in services.read_text()
+    assert "workbook_document_service" not in source
+    assert "save_document_state" not in source
+    assert "self.save_canvas_as(window, canvas=canvas)" in source
+    assert "self.save_canvas_to_path(window, path, canvas=canvas)" in source
     assert "bond_length_px_for_window=bond_length_px_for_window" in services.read_text()
     assert "sheet_size_for_window=sheet_size_for_window" not in services.read_text()
     assert "sheet_orientation_for_window=sheet_orientation_for_window" not in services.read_text()
     assert "set_sheet_setup_for_window=set_sheet_setup_for_window" not in services.read_text()
-    assert "current_file_path_for_window=current_file_path_for_window" in services.read_text()
-    assert "set_current_file_path_for_window=set_current_file_path_for_window" in services.read_text()
+    assert "canvas_document_service=canvas_document_service" in services.read_text()
     assert _matching_lines(pattern, [service]) == []
 
 
-def test_main_window_canvas_sheet_service_owns_new_sheet_setup_prompt() -> None:
-    service = APP_ROOT / "ui" / "main_window_canvas_sheet_service.py"
+def test_main_window_canvas_document_service_owns_new_canvas_creation() -> None:
+    service = APP_ROOT / "ui" / "main_window_canvas_document_service.py"
     source = service.read_text()
 
-    assert "from ui.main_window_document_dialogs import prompt_sheet_setup" in source
-    assert "sheet_setup_prompt=prompt_sheet_setup" in source
-    assert "sheet_size_for(template)" in source
-    assert "sheet_orientation_for(template)" in source
-    assert "set_sheet_setup_for(canvas, *sheet_setup)" in source
+    assert "class MainWindowCanvasDocumentService" in source
+    assert "def new_canvas(self, window)" in source
+    assert "document_file_path_for" in source
+    assert "mark_document_clean_for" in source
+    assert "copy_canvas_template_settings(canvas, template)" in source
 
 
 def test_canvas_controller_access_module_removed() -> None:
@@ -3069,47 +3047,36 @@ def test_insert_controller_does_not_use_context_facade() -> None:
     assert _matching_lines(pattern, [controller]) == []
 
 
-def test_main_window_workbook_document_service_does_not_use_context_facade() -> None:
+def test_main_window_canvas_document_service_does_not_use_context_facade() -> None:
     removed_context = APP_ROOT / "ui" / "main_window_workbook_context.py"
-    service = APP_ROOT / "ui" / "main_window_workbook_document_service.py"
+    service = APP_ROOT / "ui" / "main_window_canvas_document_service.py"
     services = APP_ROOT / "ui" / "main_window_services.py"
     source = service.read_text()
     pattern = re.compile(
         r"\bMainWindowWorkbookContext\b"
         r"|\bmain_window_workbook_context_for\b"
         r"|self\.context\b"
-        r"|\bwindow\.add_canvas_sheet\("
+        r"|\bwindow\.add_canvas\("
         r"|\bwindow\.canvas_tabs\b"
-        r"|\bwindow\.sheet_add_tab\b"
-        r"|\bwindow\.recreate_sheet_add_tab\("
-        r"|\bwindow\.set_sheet_add_tab_index\("
-        r"|\bwindow\.active_canvas_sheet_index\("
         r"|\bwindow\.canvas_tab_entries\("
         r"|\bwindow\.reset_canvas_name_counter\("
         r"|\bwindow\.active_canvas_tab_index\("
-        r"|\bwindow\.canvas_sheet_count\("
+        r"|\bwindow\.canvas_count\("
     )
 
     assert not removed_context.exists()
     assert "tab_refs_for_window" in source
-    assert "active_canvas_sheet_index_for_window" in source
-    assert "active_canvas_tab_index_for_window" in source
-    assert "canvas_sheet_count_for_window" in source
-    assert "reset_canvas_name_counter_for_window" in source
+    assert "next_canvas_name_for_window" in source
     assert "tab_refs = self._tab_refs_for_window(window)" in source
-    assert "self._canvas_sheet.add_canvas_sheet(" in source
-    assert "self._save_active_canvas_to_file_for_window(window, path)" in source
+    assert "def add_canvas(" in source
+    assert "def new_canvas(self, window)" in source
     assert "self._active_canvas_ui.refresh_active_canvas_ui(window)" in source
     assert "window.refresh_active_canvas_ui()" not in source
     assert re.search(r"\bwindow\.canvas\b", source) is None
     assert "active_canvas_ui=active_canvas_ui_service" in services.read_text()
-    assert "canvas_sheet=canvas_sheet_service" in services.read_text()
-    assert "save_active_canvas_to_file_for_window=save_active_canvas_to_file_for_window" in services.read_text()
+    assert "canvas_document_service = MainWindowCanvasDocumentService(" in services.read_text()
     assert "tab_refs_for_window=tab_references_for_window" in services.read_text()
-    assert "active_canvas_sheet_index_for_window=active_canvas_sheet_index_for_window" in services.read_text()
-    assert "active_canvas_tab_index_for_window=active_canvas_tab_index_for_window" in services.read_text()
-    assert "canvas_sheet_count_for_window=canvas_sheet_count_for_window" in services.read_text()
-    assert "reset_canvas_name_counter_for_window=reset_canvas_name_counter_for_window" in services.read_text()
+    assert "next_canvas_name_for_window=next_canvas_name_for_window" in services.read_text()
     assert _matching_lines(pattern, [service]) == []
 
 
@@ -3263,9 +3230,9 @@ def test_main_window_icon_factory_delegates_utility_drawing_to_renderer() -> Non
 
     assert "from ui.main_window_utility_icon_renderer import MainWindowUtilityIconRenderer" in factory_source
     assert "self._utility_icons = MainWindowUtilityIconRenderer(" in factory_source
-    for icon_name in ("undo", "redo", "save", "open", "panel_right", "sheet", "info"):
+    for icon_name in ("undo", "redo", "save", "open", "panel_right", "canvas", "sheet", "info"):
         assert f'self.make_design_icon("{icon_name}")' in factory_source
-    for icon_name in ("undo", "redo", "save", "open", "preview_panel", "add_sheet", "setup_sheet", "info"):
+    for icon_name in ("undo", "redo", "save", "open", "preview_panel", "add_canvas", "setup_sheet", "info"):
         assert f"def draw_{icon_name}" in utility_icons_source
 
     assert "drawRect(7, 8, 10, 12)" not in factory_source
@@ -3316,7 +3283,7 @@ def test_main_window_icon_factory_delegates_tool_drawing_to_renderer() -> None:
 def test_main_window_canvas_tab_services_do_not_use_context_facade() -> None:
     removed_context = APP_ROOT / "ui" / "main_window_canvas_tab_context.py"
     paths = [
-        APP_ROOT / "ui" / "main_window_canvas_sheet_service.py",
+        APP_ROOT / "ui" / "main_window_canvas_document_service.py",
         APP_ROOT / "ui" / "main_window_canvas_tab_ui_service.py",
         APP_ROOT / "ui" / "main_window_active_canvas_ui_service.py",
     ]

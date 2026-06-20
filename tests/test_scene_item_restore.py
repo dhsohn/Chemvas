@@ -24,6 +24,7 @@ if QApplication is not None:
     from ui.canvas_service_access import canvas_services_for
     from ui.main_window import MainWindow
     from ui.main_window_canvas_ports import active_canvas_for_window
+    from ui.main_window_service_ports import services_for_window
     from ui.mark_item_access import mark_center_for
     from ui.note_item_access import committed_note_text_for
     from ui.scene_item_access import create_scene_item_from_state
@@ -46,6 +47,9 @@ class SceneItemRestoreTest(unittest.TestCase):
         QTest.qWait(20)
 
     def tearDown(self) -> None:
+        document_service = services_for_window(self.window).canvas_document_service
+        for canvas in self.window.tab_references.all_canvases():
+            document_service.mark_clean(canvas)
         self.window.close()
         self.app.processEvents()
         QTest.qWait(10)

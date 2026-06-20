@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from ui.canvas_document_metadata_state import (
+    document_file_path_for,
+    set_document_file_path_for,
+)
 from ui.canvas_model_access import has_atoms_for
 from ui.canvas_service_access import canvas_services_for
 from ui.canvas_tool_settings_state import tool_settings_state_for
@@ -18,7 +22,7 @@ def active_canvas_for_window(window):
     canvas = active_canvas_or_none_for_window(window)
     if canvas is not None:
         return canvas
-    raise RuntimeError("No active canvas sheet.")
+    raise RuntimeError("No active canvas.")
 
 
 def active_canvas_or_none_for_window(window):
@@ -29,24 +33,12 @@ def all_canvases_for_window(window):
     return window.tab_references.all_canvases()
 
 
-def sheet_add_tab_for_window(window):
-    return window.tab_references.sheet_add_tab
-
-
 def tab_reactions_suspended_for_window(window) -> bool:
     return bool(window.runtime_state.tab_reactions_suspended)
 
 
 def set_tab_reactions_suspended_for_window(window, suspended: bool) -> None:
     window.runtime_state.tab_reactions_suspended = bool(suspended)
-
-
-def repositioning_add_tab_for_window(window) -> bool:
-    return bool(window.runtime_state.repositioning_add_tab)
-
-
-def set_repositioning_add_tab_for_window(window, repositioning: bool) -> None:
-    window.runtime_state.repositioning_add_tab = bool(repositioning)
 
 
 def set_last_canvas_tab_index_for_window(window, index: int) -> None:
@@ -110,16 +102,16 @@ def current_zoom_percent_for_window(window) -> int:
     return max(1, int(round(view_scale_for(canvas) * 100)))
 
 
-def canvas_sheet_count_for_window(window) -> int:
-    return window.tab_references.canvas_sheet_count()
+def canvas_count_for_window(window) -> int:
+    return window.tab_references.canvas_count()
 
 
-def active_canvas_sheet_name_for_window(window) -> str:
-    return window.tab_references.active_canvas_sheet_name(active_canvas_or_none_for_window(window))
+def active_canvas_name_for_window(window) -> str:
+    return window.tab_references.active_canvas_name(active_canvas_or_none_for_window(window))
 
 
-def active_canvas_sheet_index_for_window(window) -> int:
-    return window.tab_references.active_canvas_sheet_index(active_canvas_or_none_for_window(window))
+def active_canvas_index_for_window(window) -> int:
+    return window.tab_references.active_canvas_index(active_canvas_or_none_for_window(window))
 
 
 def active_canvas_tab_index_for_window(window) -> int:
@@ -131,11 +123,14 @@ def context_bar_page_override_for_window(window) -> str | None:
 
 
 def current_file_path_for_window(window) -> str | None:
-    return window.runtime_state.current_file_path
+    canvas = active_canvas_or_none_for_window(window)
+    if canvas is None:
+        return None
+    return document_file_path_for(canvas)
 
 
 def set_current_file_path_for_window(window, path: str | None) -> None:
-    window.runtime_state.current_file_path = path
+    set_document_file_path_for(active_canvas_for_window(window), path)
 
 
 def clear_context_bar_page_override_for_window(window) -> None:
@@ -166,12 +161,12 @@ def save_active_canvas_to_file_for_window(window, path: str) -> None:
     save_canvas_to_file_for(active_canvas_for_window(window), path)
 
 
-def reset_canvas_name_counter_for_window(window, sheet_names) -> None:
-    window.runtime_state.reset_canvas_name_counter(sheet_names)
+def reset_canvas_name_counter_for_window(window, canvas_names) -> None:
+    window.runtime_state.reset_canvas_name_counter(canvas_names)
 
 
-def next_canvas_sheet_name_for_window(window, prefix: str = "Sheet") -> str:
-    return window.runtime_state.next_canvas_sheet_name(prefix)
+def next_canvas_name_for_window(window, prefix: str = "Canvas") -> str:
+    return window.runtime_state.next_canvas_name(prefix)
 
 
 def tool_settings_for_window(window):
@@ -189,13 +184,13 @@ def selected_scene_items_for_window(window, *, excluded_kinds):
 __all__ = [
     "active_canvas_for_window",
     "active_canvas_or_none_for_window",
-    "active_canvas_sheet_index_for_window",
-    "active_canvas_sheet_name_for_window",
+    "active_canvas_index_for_window",
+    "active_canvas_name_for_window",
     "active_canvas_tab_index_for_window",
     "active_tool_name_for_window",
     "all_canvases_for_window",
     "bond_length_px_for_window",
-    "canvas_sheet_count_for_window",
+    "canvas_count_for_window",
     "clear_context_bar_page_override_for_window",
     "color_mutation_service_for_window",
     "color_tool_for_window",
@@ -207,7 +202,7 @@ __all__ = [
     "has_exportable_atoms_for_window",
     "history_service_for_window",
     "insert_controller_for_window",
-    "next_canvas_sheet_name_for_window",
+    "next_canvas_name_for_window",
     "reset_canvas_name_counter_for_window",
     "scene_transform_controller_for_window",
     "selected_scene_items_for_window",
@@ -216,13 +211,10 @@ __all__ = [
     "set_last_canvas_tab_index_for_window",
     "save_active_canvas_to_file_for_window",
     "set_sheet_setup_for_window",
-    "set_repositioning_add_tab_for_window",
     "set_tab_reactions_suspended_for_window",
-    "sheet_add_tab_for_window",
     "sheet_orientation_for_window",
     "sheet_size_for_window",
     "style_controller_for_window",
-    "repositioning_add_tab_for_window",
     "tab_reactions_suspended_for_window",
     "tool_mode_controller_for_window",
     "tool_settings_for_window",

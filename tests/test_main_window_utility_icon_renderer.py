@@ -74,7 +74,7 @@ class MainWindowUtilityIconRendererTest(unittest.TestCase):
             self.renderer.draw_save,
             self.renderer.draw_open,
             self.renderer.draw_preview_panel,
-            self.renderer.draw_add_sheet,
+            self.renderer.draw_add_canvas,
             self.renderer.draw_setup_sheet,
             self.renderer.draw_info,
         )

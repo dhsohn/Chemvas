@@ -37,20 +37,20 @@ def build_main_window_runtime(
     ui_refs = MainWindowUiReferences()
     services = build_services()
 
-    def show_canvas_tab_context_menu(pos) -> None:
-        services.canvas_tab_ui_service.show_canvas_tab_context_menu(window, pos)
-
     def on_canvas_tab_moved(from_index: int, to_index: int) -> None:
         services.canvas_tab_ui_service.on_canvas_tab_moved(window, from_index, to_index)
 
     def on_canvas_tab_changed(index: int) -> None:
         services.active_canvas_ui_service.on_canvas_tab_changed(window, index)
 
+    def on_canvas_tab_close_requested(index: int) -> None:
+        services.canvas_tab_ui_service.close_canvas_tab(window, index)
+
     tab_assembly = build_tabs(
         window,
-        show_canvas_tab_context_menu=show_canvas_tab_context_menu,
         on_canvas_tab_moved=on_canvas_tab_moved,
         on_canvas_tab_changed=on_canvas_tab_changed,
+        on_canvas_tab_close_requested=on_canvas_tab_close_requested,
     )
     tab_refs = MainWindowTabReferences.from_assembly(tab_assembly)
     preview_3d = preview_factory()
@@ -66,13 +66,12 @@ def build_main_window_runtime(
 
 
 def bootstrap_main_window(window, runtime: MainWindowBootstrapRuntime) -> None:
-    runtime.services.canvas_sheet_service.add_canvas_sheet(
+    runtime.services.canvas_document_service.add_canvas(
         window,
-        name=runtime.state.next_canvas_sheet_name(),
+        name=runtime.state.next_canvas_name(),
         select=True,
     )
     runtime.ui_refs.icon_factory = runtime.icon_factory(window)
-    runtime.services.canvas_tab_ui_service.ensure_add_sheet_tab(window)
     toolbar_assembly = runtime.services.ui_assembly_service.init_toolbars(window)
     runtime.ui_refs.apply_toolbar_assembly(toolbar_assembly)
     runtime.services.action_availability_service.update_action_availability(window)

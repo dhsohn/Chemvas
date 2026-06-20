@@ -171,11 +171,11 @@ def prompt_bond_length(window, current: float) -> float | None:
 
 def prompt_sheet_setup(window, *, current_size: str, current_orientation: str) -> SheetSetupSelection | None:
     dialog = QDialog(window)
-    dialog.setWindowTitle("Setup Sheet")
+    dialog.setWindowTitle("Canvas Size")
     dialog.setStyleSheet(window.styleSheet())
     layout = QVBoxLayout(dialog)
 
-    layout.addWidget(QLabel("Sheet size:"))
+    layout.addWidget(QLabel("Canvas size:"))
 
     size_combo = QComboBox()
     size_combo.setObjectName("sheetSizeCombo")

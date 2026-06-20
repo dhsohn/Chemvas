@@ -20,11 +20,9 @@ class MainWindowActiveCanvasUIService:
         context_bar_service,
         action_availability_service,
         context_page_state_service,
-        new_canvas_sheet_for_window,
         tab_refs_for_window,
         preview_for_window,
         atom_input_for_window,
-        sheet_add_tab_for_window,
         tab_reactions_suspended_for_window,
         set_last_canvas_tab_index_for_window,
     ) -> None:
@@ -36,11 +34,9 @@ class MainWindowActiveCanvasUIService:
         self._context_bar = context_bar_service
         self._action_availability = action_availability_service
         self._context_page_state = context_page_state_service
-        self._new_canvas_sheet_for_window = new_canvas_sheet_for_window
         self._tab_refs_for_window = tab_refs_for_window
         self._preview_for_window = preview_for_window
         self._atom_input_for_window = atom_input_for_window
-        self._sheet_add_tab_for_window = sheet_add_tab_for_window
         self._tab_reactions_suspended_for_window = tab_reactions_suspended_for_window
         self._set_last_canvas_tab_index_for_window = set_last_canvas_tab_index_for_window
 
@@ -109,9 +105,6 @@ class MainWindowActiveCanvasUIService:
             return
         tab_refs = self._tab_refs_for_window(window)
         widget = tab_refs.canvas_tabs.widget(index)
-        if widget is self._sheet_add_tab_for_window(window):
-            self._new_canvas_sheet_for_window(window)
-            return
         if not isinstance(widget, CanvasView):
             return
         self._set_last_canvas_tab_index_for_window(window, index)

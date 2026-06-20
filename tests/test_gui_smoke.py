@@ -1,7 +1,6 @@
 import math
 import os
 import unittest
-from unittest import mock
 from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -63,7 +62,6 @@ if QApplication is not None:
     from ui.hover_interaction_access import update_hover_highlight_for
     from ui.main_window import MainWindow
     from ui.main_window_canvas_ports import active_canvas_for_window
-    from ui.main_window_document_dialogs import SheetSetupSelection
     from ui.main_window_service_ports import services_for_window
     from ui.mark_item_access import mark_center_for
     from ui.move_access import move_atoms_for
@@ -109,13 +107,13 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.window = MainWindow()
         self.window.show()
         active_canvas_for_window(self.window).setFocus()
-        services_for_window(self.window).canvas_sheet_service._sheet_setup_prompt = mock.Mock(
-            return_value=SheetSetupSelection(size="A4", orientation="portrait")
-        )
         self.app.processEvents()
         QTest.qWait(20)
 
     def tearDown(self) -> None:
+        document_service = services_for_window(self.window).canvas_document_service
+        for canvas in self.window.tab_references.all_canvases():
+            document_service.mark_clean(canvas)
         self.window.close()
         self.app.processEvents()
         QTest.qWait(10)
@@ -301,57 +299,48 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self._press_key(Qt.Key.Key_Space)
         self.assertEqual(active_canvas_for_window(self.window).services.tools.active.name, "select")
 
-    def test_sheet_tab_plus_button_creates_new_canvas_sheet(self) -> None:
-        before_count = self.window.tab_references.canvas_sheet_count()
-        plus_index = self.window.tab_references.canvas_tabs.count() - 1
-        plus_center = self.window.tab_references.canvas_tabs.tabBar().tabRect(plus_index).center()
+    def test_new_canvas_button_creates_independent_canvas_tab(self) -> None:
+        before_count = self.window.tab_references.canvas_count()
+        button = self.window.findChild(QToolButton, "new_canvas_button")
+        self.assertIsNotNone(button)
+        assert button is not None
 
         QTest.mouseClick(
-            self.window.tab_references.canvas_tabs.tabBar(),
+            button,
             Qt.MouseButton.LeftButton,
             Qt.KeyboardModifier.NoModifier,
-            plus_center,
         )
         self.app.processEvents()
         QTest.qWait(10)
 
-        self.assertEqual(self.window.tab_references.canvas_sheet_count(), before_count + 1)
+        self.assertEqual(self.window.tab_references.canvas_count(), before_count + 1)
         self.assertEqual(self.window.tab_references.canvas_tabs.currentIndex(), before_count)
-        self.assertEqual(self.window.tab_references.canvas_tabs.tabText(before_count), f"Sheet {before_count + 1}")
-        self.assertEqual(active_canvas_for_window(self.window).sheet_orientation, "portrait")
+        self.assertEqual(self.window.tab_references.canvas_tabs.tabText(before_count), f"Canvas {before_count + 1}")
+        self.assertEqual(active_canvas_for_window(self.window).sheet_orientation, "landscape")
 
-    def test_sheet_tab_context_menu_deletes_target_canvas_sheet(self) -> None:
-        services_for_window(self.window).canvas_sheet_service.new_canvas_sheet(self.window)
-        target_center = self.window.tab_references.canvas_tabs.tabBar().tabRect(0).center()
+    def test_close_canvas_tab_removes_clean_target_canvas(self) -> None:
+        services_for_window(self.window).canvas_document_service.new_canvas(self.window)
 
-        with patch(
-            "ui.main_window_canvas_tab_ui_service.QMenu.exec",
-            new=lambda menu, *args, **kwargs: menu.actions()[0],
-        ):
-            services_for_window(self.window).canvas_tab_ui_service.show_canvas_tab_context_menu(self.window, target_center)
-            self.app.processEvents()
-            QTest.qWait(10)
+        closed = services_for_window(self.window).canvas_tab_ui_service.close_canvas_tab(self.window, 0)
+        self.app.processEvents()
+        QTest.qWait(10)
 
-        self.assertEqual(self.window.tab_references.canvas_sheet_count(), 1)
-        self.assertEqual(self.window.tab_references.canvas_tabs.count(), 2)
-        self.assertEqual(self.window.tab_references.canvas_tabs.tabText(0), "Sheet 2")
-        self.assertEqual(self.window.tab_references.canvas_tabs.tabText(1), "+")
+        self.assertIsNone(closed)
+        self.assertEqual(self.window.tab_references.canvas_count(), 1)
+        self.assertEqual(self.window.tab_references.canvas_tabs.count(), 1)
+        self.assertEqual(self.window.tab_references.canvas_tabs.tabText(0), "Canvas 2")
 
-    def test_sheet_tab_context_menu_keeps_last_canvas_sheet(self) -> None:
-        target_center = self.window.tab_references.canvas_tabs.tabBar().tabRect(0).center()
+    def test_close_last_canvas_tab_creates_replacement_canvas(self) -> None:
+        first_canvas = active_canvas_for_window(self.window)
 
-        with patch(
-            "ui.main_window_canvas_tab_ui_service.QMenu.exec",
-            new=lambda menu, *args, **kwargs: menu.actions()[0],
-        ):
-            services_for_window(self.window).canvas_tab_ui_service.show_canvas_tab_context_menu(self.window, target_center)
-            self.app.processEvents()
-            QTest.qWait(10)
+        closed = services_for_window(self.window).canvas_tab_ui_service.close_canvas_tab(self.window, 0)
+        self.app.processEvents()
+        QTest.qWait(10)
 
-        self.assertEqual(self.window.tab_references.canvas_sheet_count(), 1)
-        self.assertEqual(self.window.tab_references.canvas_tabs.count(), 2)
-        self.assertEqual(self.window.tab_references.canvas_tabs.tabText(0), "Sheet 1")
-        self.assertEqual(self.window.tab_references.canvas_tabs.tabText(1), "+")
+        self.assertIsNone(closed)
+        self.assertEqual(self.window.tab_references.canvas_count(), 1)
+        self.assertIsNot(active_canvas_for_window(self.window), first_canvas)
+        self.assertEqual(self.window.tab_references.canvas_tabs.tabText(0), "Canvas 2")
 
     def test_shift_click_toggles_atom_selection(self) -> None:
         atom_a = add_atom_for(active_canvas_for_window(self.window), "C", -40.0, 0.0)

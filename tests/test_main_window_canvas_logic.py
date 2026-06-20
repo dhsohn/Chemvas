@@ -8,15 +8,12 @@ from ui.canvas_history_state import history_state_for
 from ui.canvas_text_style_state import set_text_style_for, text_style_state_for
 from ui.canvas_tool_settings_state import set_tool_setting_for, tool_settings_state_for
 from ui.main_window_canvas_logic import (
-    RestorableCanvasSheet,
-    active_canvas_sheet_index,
+    active_canvas_index,
     active_canvas_tab_index,
     bind_active_canvas_callbacks,
-    build_workbook_sheet_states,
-    canvas_sheet_name_counter,
+    canvas_name_counter,
     copy_canvas_template_settings,
     resolve_active_canvas,
-    restorable_canvas_sheets,
 )
 from ui.selection_info_state import selection_info_state_for
 
@@ -46,9 +43,9 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
         self.assertEqual(active_canvas_tab_index(entries, None), -1)
         self.assertEqual(active_canvas_tab_index(entries, canvas_b), 3)
         self.assertEqual(active_canvas_tab_index(entries, object()), -1)
-        self.assertEqual(active_canvas_sheet_index(entries, None), 0)
-        self.assertEqual(active_canvas_sheet_index(entries, canvas_b), 1)
-        self.assertEqual(active_canvas_sheet_index(entries, object()), 0)
+        self.assertEqual(active_canvas_index(entries, None), 0)
+        self.assertEqual(active_canvas_index(entries, canvas_b), 1)
+        self.assertEqual(active_canvas_index(entries, object()), 0)
 
     def test_copy_canvas_template_settings_copies_known_fields(self) -> None:
         target = SimpleNamespace(
@@ -116,65 +113,11 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
         self.assertIsNone(callback_state_for(inactive_canvas).zoom)
         self.assertIsNone(history_state_for(inactive_canvas).change_callback)
 
-    def test_build_workbook_sheet_states_uses_tab_names_or_sheet_fallback(self) -> None:
-        snapshot_a = mock.Mock(return_value={"atoms": [1]})
-        snapshot_b = mock.Mock(return_value={"atoms": [2]})
-        canvas_a = SimpleNamespace(
-            services=SimpleNamespace(canvas_document_session_service=SimpleNamespace(snapshot_state=snapshot_a))
-        )
-        canvas_b = SimpleNamespace(
-            services=SimpleNamespace(canvas_document_session_service=SimpleNamespace(snapshot_state=snapshot_b))
-        )
-
-        sheets = build_workbook_sheet_states(
-            [(0, canvas_a), (4, canvas_b)],
-            tab_text_at=lambda index: {0: "Reactant", 4: ""}[index],
-        )
-
-        self.assertEqual(
-            sheets,
-            [
-                {"name": "Reactant", "kind": "canvas", "content": {"atoms": [1]}},
-                {"name": "Sheet 2", "kind": "canvas", "content": {"atoms": [2]}},
-            ],
-        )
-        snapshot_a.assert_called_once_with()
-        snapshot_b.assert_called_once_with()
-
-    def test_restorable_canvas_sheets_returns_canvas_payloads(self) -> None:
-        sheets = restorable_canvas_sheets(
-            [
-                {"name": "Reactant", "kind": "canvas", "content": {"atoms": [1]}},
-                {"name": "Product", "kind": "canvas", "content": {"atoms": [2]}},
-            ],
-        )
-
-        self.assertEqual(
-            sheets,
-            [
-                RestorableCanvasSheet(name="Reactant", content={"atoms": [1]}),
-                RestorableCanvasSheet(name="Product", content={"atoms": [2]}),
-            ],
-        )
-
-    def test_restorable_canvas_sheets_rejects_invalid_entries(self) -> None:
-        invalid_sheet_groups = (
-            ["skip-me"],
-            [{"name": "Summary", "kind": "result", "content": {"atoms": [9]}}],
-            [{"kind": "canvas", "content": {"atoms": [2]}}],
-            [{"name": "Broken", "kind": "canvas", "content": "not-a-dict"}],
-        )
-
-        for sheet_states in invalid_sheet_groups:
-            with self.subTest(sheet_states=sheet_states):
-                with self.assertRaises((KeyError, ValueError)):
-                    restorable_canvas_sheets(sheet_states)
-
-    def test_canvas_sheet_name_counter_tracks_default_sheet_names(self) -> None:
-        self.assertEqual(canvas_sheet_name_counter([]), 0)
-        self.assertEqual(canvas_sheet_name_counter(["Sheet draft", "Sheet 2", "Sheet 9"]), 9)
-        self.assertEqual(canvas_sheet_name_counter(["Reactant", "Sheet 2", "Sheet 9"]), 9)
-        self.assertEqual(canvas_sheet_name_counter(["Result 1"], prefix="Result"), 1)
+    def test_canvas_name_counter_tracks_default_canvas_names(self) -> None:
+        self.assertEqual(canvas_name_counter([]), 0)
+        self.assertEqual(canvas_name_counter(["Canvas draft", "Canvas 2", "Canvas 9"]), 9)
+        self.assertEqual(canvas_name_counter(["Reactant", "Canvas 2", "Canvas 9"]), 9)
+        self.assertEqual(canvas_name_counter(["Result 1"], prefix="Result"), 1)
 
 
 if __name__ == "__main__":
