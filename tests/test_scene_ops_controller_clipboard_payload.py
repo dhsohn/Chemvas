@@ -89,6 +89,18 @@ def scene_clipboard_controller_for(canvas) -> SceneClipboardController:
     return SceneClipboardController(canvas)
 
 
+def _valid_note_clipboard_payload() -> dict:
+    return {
+        "format": "chemvas-selection",
+        "version": 1,
+        "atoms": [],
+        "bonds": [],
+        "rings": [],
+        "marks": [],
+        "scene_items": [{"kind": "note", "text": "note", "x": 1.0, "y": 2.0}],
+    }
+
+
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for scene ops controller clipboard payload tests")
 class SceneOpsControllerClipboardPayloadTest(unittest.TestCase):
     @classmethod
@@ -271,13 +283,14 @@ class SceneOpsControllerClipboardPayloadTest(unittest.TestCase):
         canvas = _FakeCanvas()
         controller = scene_clipboard_controller_for(canvas)
         clipboard = QApplication.clipboard()
-        payload_json = json.dumps({"format": "chemvas-selection", "version": 1, "scene_items": [{"kind": "note"}]}, separators=(",", ":"))
+        valid_payload = _valid_note_clipboard_payload()
+        payload_json = json.dumps(valid_payload, separators=(",", ":"))
 
         clipboard.setMimeData(canvas.new_mime_data(payload_json.encode("utf-8")))
 
         payload, returned_json = controller.clipboard_selection_payload()
 
-        self.assertEqual(payload, {"format": "chemvas-selection", "version": 1, "scene_items": [{"kind": "note"}]})
+        self.assertEqual(payload, valid_payload)
         self.assertEqual(returned_json, payload_json)
 
     def test_clipboard_selection_payload_rejects_image_only_clipboard(self) -> None:

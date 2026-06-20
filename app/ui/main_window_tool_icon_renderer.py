@@ -3,7 +3,14 @@ from __future__ import annotations
 import math
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
-from PyQt6.QtGui import QBrush, QColor, QPainter, QPainterPath, QPolygonF, QRadialGradient
+from PyQt6.QtGui import (
+    QBrush,
+    QColor,
+    QPainter,
+    QPainterPath,
+    QPolygonF,
+    QRadialGradient,
+)
 
 
 class MainWindowToolIconRenderer:
