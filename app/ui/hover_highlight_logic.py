@@ -36,7 +36,11 @@ def plan_structure_hover_update(
         return HoverUpdatePlan(action="free_bond_preview", preview_key=free_preview_key)
 
     if preferred_hit is None:
-        return HoverUpdatePlan(action="clear")
+        if free_preview_key is None:
+            return HoverUpdatePlan(action="clear")
+        if free_preview_key == current_preview_key:
+            return HoverUpdatePlan(action="noop")
+        return HoverUpdatePlan(action="free_bond_preview", preview_key=free_preview_key)
 
     if preferred_hit.kind == "atom" and isinstance(preferred_hit.id, int):
         if atom_preview_signature is not None and atom_preview_key is None:
@@ -50,7 +54,11 @@ def plan_structure_hover_update(
         )
 
     if preferred_hit.kind != "bond" or not isinstance(preferred_hit.id, int):
-        return HoverUpdatePlan(action="clear")
+        if free_preview_key is None:
+            return HoverUpdatePlan(action="clear")
+        if free_preview_key == current_preview_key:
+            return HoverUpdatePlan(action="noop")
+        return HoverUpdatePlan(action="free_bond_preview", preview_key=free_preview_key)
 
     if preferred_hit.id == current_hover_bond_id and bond_preview_key == current_preview_key:
         return HoverUpdatePlan(action="noop")

@@ -371,7 +371,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             self.assertTrue(native_view.transform().isIdentity())
             self.assertEqual(base_event.call_count, 0)
 
-    def test_scroll_contents_by_resets_transform_and_refreshes_hover(self) -> None:
+    def test_scroll_contents_by_resets_transform_and_clears_hover(self) -> None:
         with mock.patch.object(
             QGraphicsView,
             "scrollContentsBy",
@@ -384,5 +384,6 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             base_scroll.assert_called_once_with(12, -4)
             self.assertTrue(input_view_state_for(view).base_transform.isIdentity())
             self.assertTrue(view.transform().isIdentity())
-            view.hover_refresh.assert_called_once_with()
+            view.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
+            view.hover_refresh.assert_not_called()
             view.services.hover_interaction_service.update_hover_highlight.assert_not_called()

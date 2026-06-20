@@ -21,7 +21,7 @@ class HoverServiceBundle:
     hover_scene_service: HoverSceneService
     mark_hover_preview_service: MarkHoverPreviewService
     bond_hover_preview_service: BondHoverPreviewService
-    hover_refresh: Callable[[], None]
+    hover_refresh: Callable[..., None]
 
 
 def build_hover_services(
@@ -49,11 +49,21 @@ def build_hover_services(
         active_tool_name_provider=active_tool_name_provider,
     )
 
-    def hover_refresh() -> None:
+    def insert_controller_method(name: str):
+        services = getattr(canvas, "services", None)
+        insert_controller = getattr(services, "insert_controller", None)
+        method = getattr(insert_controller, name, None)
+        return method if callable(method) else None
+
+    def hover_refresh(*, render_insert_preview: bool = False) -> None:
         refresh_hover_from_cursor_for(
             canvas,
             update_hover_highlight=hover_interaction_service.update_hover_highlight,
             clear_hover_highlight=hover_scene_service.clear_hover_highlight,
+            render_template_preview=(
+                insert_controller_method("render_template_preview") if render_insert_preview else None
+            ),
+            render_smiles_preview=insert_controller_method("render_smiles_preview") if render_insert_preview else None,
         )
 
     return HoverServiceBundle(

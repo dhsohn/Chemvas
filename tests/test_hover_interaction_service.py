@@ -101,6 +101,22 @@ class HoverInteractionServiceTest(unittest.TestCase):
         )
         self.assertEqual(hover_preview_state_for(preview_canvas).style, "wedge:1:8.0:9.0")
 
+        populated_preview_canvas = self._make_canvas(
+            atoms={1: Atom("C", 0.0, 0.0)},
+            bonds=[],
+            active_tool="bond",
+            active_bond_style="single",
+        )
+        self._set_preferred_hit(populated_preview_canvas, None)
+
+        self._hover_service(populated_preview_canvas).update_hover_highlight(QPointF(12.0, 13.0))
+
+        populated_preview_canvas.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
+        populated_preview_canvas.services.bond_hover_preview_service.add_free_bond_hover_preview.assert_called_once_with(
+            QPointF(12.0, 13.0)
+        )
+        self.assertEqual(hover_preview_state_for(populated_preview_canvas).style, "single:1:12.0:13.0")
+
     def test_update_hover_highlight_handles_atom_bond_and_invalid_hits(self) -> None:
         atoms = {1: Atom("C", 10.0, 20.0), 2: Atom("C", 30.0, 20.0)}
         bonds = [Bond(1, 2)]
@@ -137,6 +153,10 @@ class HoverInteractionServiceTest(unittest.TestCase):
         invalid_canvas.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
         invalid_canvas.services.hover_scene_service.add_atom_hover_indicator.assert_not_called()
         invalid_canvas.services.hover_scene_service.add_bond_hover_indicator.assert_not_called()
+        invalid_canvas.services.bond_hover_preview_service.add_free_bond_hover_preview.assert_called_once_with(
+            QPointF(9.0, 9.0)
+        )
+        self.assertEqual(hover_preview_state_for(invalid_canvas).style, "wedge:1:9.0:9.0")
 
     def test_update_hover_highlight_uses_selection_controller_when_available(self) -> None:
         atoms = {1: Atom("C", 10.0, 20.0)}

@@ -9,7 +9,12 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 try:
     from PyQt6.QtCore import QEvent, QPointF, QRectF, Qt
     from PyQt6.QtTest import QTest
-    from PyQt6.QtWidgets import QApplication, QGraphicsPathItem, QGraphicsTextItem
+    from PyQt6.QtWidgets import (
+        QApplication,
+        QGraphicsPathItem,
+        QGraphicsTextItem,
+        QToolButton,
+    )
 except ModuleNotFoundError:
     QApplication = None
     QTest = None
@@ -256,14 +261,39 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self._press_key(Qt.Key.Key_T)
         self.assertEqual(active_canvas_for_window(self.window).services.tools.active.name, "text")
 
+        active_canvas_for_window(self.window).services.tool_mode_controller.set_arrow_type("curved_double")
         self._press_key(Qt.Key.Key_E)
         self.assertEqual(active_canvas_for_window(self.window).services.tools.active.name, "arrow")
+        self.assertEqual(tool_settings_state_for(active_canvas_for_window(self.window)).active_arrow_type, "reaction")
+        reaction_button = next(
+            widget for widget in self.window.findChildren(QToolButton) if widget.toolTip() == "Reaction"
+        )
+        self.assertTrue(reaction_button.isChecked())
 
         self._press_key(Qt.Key.Key_J)
         self.assertEqual(active_canvas_for_window(self.window).services.tools.active.name, "benzene")
+        hover_pos = QPointF(24.0, 18.0)
+        self._hover_scene_point(hover_pos)
+        self.assertTrue(insert_state_for(active_canvas_for_window(self.window)).template_active)
+        self.assertTrue(insert_state_for(active_canvas_for_window(self.window)).template_preview_items)
 
+        ring_count_before = len(ring_items_for(active_canvas_for_window(self.window)))
+        self._press_key(Qt.Key.Key_X)
+        self.assertEqual(active_canvas_for_window(self.window).services.tools.active.name, "bond")
+        self.assertFalse(insert_state_for(active_canvas_for_window(self.window)).template_active)
+        self.assertEqual(insert_state_for(active_canvas_for_window(self.window)).template_preview_items, [])
+        self._click_scene_point(hover_pos)
+        self.assertEqual(len(ring_items_for(active_canvas_for_window(self.window))), ring_count_before)
+
+        tool_settings_state_for(active_canvas_for_window(self.window)).active_bracket_type = "dagger"
+        self._hover_scene_point(QPointF(200.0, 200.0))
         self._press_key(Qt.Key.Key_G, Qt.KeyboardModifier.ShiftModifier)
         self.assertEqual(active_canvas_for_window(self.window).services.tools.active.name, "ts_bracket")
+        self.assertEqual(tool_settings_state_for(active_canvas_for_window(self.window)).active_bracket_type, "square_pair")
+        square_bracket_button = next(
+            widget for widget in self.window.findChildren(QToolButton) if widget.toolTip() == "Square Brackets"
+        )
+        self.assertTrue(square_bracket_button.isChecked())
 
         self._press_key(Qt.Key.Key_D, Qt.KeyboardModifier.AltModifier)
         self.assertEqual(active_canvas_for_window(self.window).services.tools.active.name, "perspective")
@@ -485,6 +515,38 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
         self.assertEqual(hover_state_for(active_canvas_for_window(self.window)).atom_id, atom_id)
         self.assertEqual(len(hover_state_for(active_canvas_for_window(self.window)).items), 1)
+
+    def test_tool_shortcuts_refresh_cursor_preview_without_mouse_move(self) -> None:
+        canvas = active_canvas_for_window(self.window)
+        add_benzene_ring_for(canvas, QPointF(-80.0, -60.0))
+        hover_pos = QPointF(24.0, 18.0)
+        global_pos = canvas.viewport().mapToGlobal(canvas.mapFromScene(hover_pos))
+
+        canvas_services_for(canvas).tool_mode_controller.set_tool("select")
+        self.app.processEvents()
+
+        with patch("ui.canvas_hover_refresh.QCursor.pos", return_value=global_pos):
+            self._press_key(Qt.Key.Key_X)
+
+        self.assertEqual(canvas.services.tools.active.name, "bond")
+        self.assertTrue(hover_state_for(canvas).items)
+        self.assertTrue((hover_state_for(canvas).style or "").startswith("single:1"))
+
+        QTest.mouseMove(canvas.viewport(), canvas.mapFromScene(QPointF(25.0, 18.0)))
+        self.app.processEvents()
+        QTest.qWait(10)
+
+        self.assertTrue(hover_state_for(canvas).items)
+        self.assertTrue((hover_state_for(canvas).style or "").startswith("single:1"))
+
+        with patch("ui.canvas_hover_refresh.QCursor.pos", return_value=global_pos):
+            self._press_key(Qt.Key.Key_J)
+
+        self.assertEqual(canvas.services.tools.active.name, "benzene")
+        self.assertTrue(insert_state_for(canvas).template_active)
+        self.assertEqual(insert_state_for(canvas).template_ring_size, 6)
+        self.assertEqual(insert_state_for(canvas).template_ring_style, "benzene")
+        self.assertEqual(len(insert_state_for(canvas).template_preview_lines), 9)
 
     def test_benzene_tool_category_selects_default_benzene_template(self) -> None:
         hover_pos = QPointF(24.0, 18.0)

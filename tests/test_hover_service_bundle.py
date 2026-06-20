@@ -84,4 +84,38 @@ def test_hover_refresh_uses_injected_hover_ports(monkeypatch) -> None:
         canvas,
         update_hover_highlight=services.hover_interaction_service.update_hover_highlight,
         clear_hover_highlight=services.hover_scene_service.clear_hover_highlight,
+        render_template_preview=None,
+        render_smiles_preview=None,
+    )
+
+
+def test_hover_refresh_uses_canvas_insert_controller_when_available(monkeypatch) -> None:
+    refresh_hover_from_cursor_for = mock.Mock()
+    monkeypatch.setattr(
+        hover_service_bundle,
+        "refresh_hover_from_cursor_for",
+        refresh_hover_from_cursor_for,
+    )
+    canvas = SimpleNamespace()
+    services = build_hover_services(
+        canvas,
+        selection_controller=object(),
+        hit_testing_service=object(),
+        active_tool_provider=lambda: None,
+        active_tool_name_provider=lambda: None,
+    )
+    insert_controller = SimpleNamespace(
+        render_template_preview=mock.Mock(),
+        render_smiles_preview=mock.Mock(),
+    )
+    canvas.services = SimpleNamespace(insert_controller=insert_controller)
+
+    services.hover_refresh(render_insert_preview=True)
+
+    refresh_hover_from_cursor_for.assert_called_once_with(
+        canvas,
+        update_hover_highlight=services.hover_interaction_service.update_hover_highlight,
+        clear_hover_highlight=services.hover_scene_service.clear_hover_highlight,
+        render_template_preview=insert_controller.render_template_preview,
+        render_smiles_preview=insert_controller.render_smiles_preview,
     )

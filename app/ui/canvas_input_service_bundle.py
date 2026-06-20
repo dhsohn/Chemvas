@@ -32,7 +32,7 @@ def build_canvas_input_services(
     scene_clipboard_controller: Any,
     scene_transform_controller: Any,
     mark_scene_service: Any,
-    hover_refresh: Callable[[], None],
+    hover_refresh: Callable[..., None],
     history_service: Any,
 ) -> CanvasInputServiceBundle:
     tool_mode_controller = CanvasToolModeController(
