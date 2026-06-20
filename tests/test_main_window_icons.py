@@ -258,9 +258,11 @@ class MainWindowIconGeometryTest(unittest.TestCase):
         self.assertEqual(template_preview_ring_sides("Cycloheptane"), 7)
         self.assertEqual(template_preview_ring_sides("Cyclooctane"), 8)
 
-    def test_template_icons_tolerate_empty_chair_geometry_and_zero_rect(self) -> None:
+    def test_template_icons_render_independently_of_chair_geometry(self) -> None:
+        # The templates button and the chair preview now use static SVG design
+        # icons, so a degenerate chair polygon no longer blanks them out.
         with mock.patch("ui.main_window_template_icon_renderer.chair_icon_points", return_value=QPolygonF()):
-            self.assertIsNone(_opaque_bounds(self.factory.icon_templates().pixmap(30, 30).toImage()))
-            self.assertIsNone(
+            self.assertIsNotNone(_opaque_bounds(self.factory.icon_templates().pixmap(30, 30).toImage()))
+            self.assertIsNotNone(
                 _opaque_bounds(self.factory.icon_template_preview("Cyclohexane (Chair)").pixmap(30, 30).toImage())
             )
