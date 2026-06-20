@@ -89,6 +89,18 @@ def scene_clipboard_controller_for(canvas) -> SceneClipboardController:
     return SceneClipboardController(canvas)
 
 
+def _valid_note_clipboard_payload() -> dict:
+    return {
+        "format": "chemvas-selection",
+        "version": 1,
+        "atoms": [],
+        "bonds": [],
+        "rings": [],
+        "marks": [],
+        "scene_items": [{"kind": "note", "text": "note", "x": 1.0, "y": 2.0}],
+    }
+
+
 class _BrokenSceneItem:
     def __init__(
         self,
@@ -221,19 +233,21 @@ class SceneClipboardLogicTest(unittest.TestCase):
         self.assertEqual(candidates, [])
 
     def test_decode_clipboard_selection_payload_skips_invalid_candidates_until_valid_dict(self) -> None:
+        valid_payload = _valid_note_clipboard_payload()
+        valid_payload_json = json.dumps(valid_payload, separators=(",", ":"))
         payload, payload_json = decode_clipboard_selection_payload(
             [
                 "not-json",
                 "[]",
                 '{"format":"wrong","version":1}',
                 '{"format":"chemvas-selection","version":999}',
-                '{"format":"chemvas-selection","version":1,"scene_items":[{"kind":"note"}]}',
+                valid_payload_json,
             ],
             version=1,
         )
 
-        self.assertEqual(payload, {"format": "chemvas-selection", "version": 1, "scene_items": [{"kind": "note"}]})
-        self.assertEqual(payload_json, '{"format":"chemvas-selection","version":1,"scene_items":[{"kind":"note"}]}')
+        self.assertEqual(payload, valid_payload)
+        self.assertEqual(payload_json, valid_payload_json)
 
     def test_selection_payload_extends_atom_and_bond_selection_and_keeps_related_scene_items(self) -> None:
         canvas = _FakeCanvas()
@@ -381,11 +395,12 @@ class SceneClipboardLogicTest(unittest.TestCase):
         controller = scene_clipboard_controller_for(canvas)
         clipboard = QApplication.clipboard()
 
-        custom_json = json.dumps({"format": "chemvas-selection", "version": 1, "scene_items": [{"kind": "note"}]}, separators=(",", ":"))
+        valid_payload = _valid_note_clipboard_payload()
+        custom_json = json.dumps(valid_payload, separators=(",", ":"))
 
         clipboard.setMimeData(canvas.new_mime_data(custom_json.encode("utf-8")))
         payload, returned_json = controller.clipboard_selection_payload()
-        self.assertEqual(payload, {"format": "chemvas-selection", "version": 1, "scene_items": [{"kind": "note"}]})
+        self.assertEqual(payload, valid_payload)
         self.assertEqual(returned_json, custom_json)
 
         image = QImage(4, 4, QImage.Format.Format_ARGB32)
