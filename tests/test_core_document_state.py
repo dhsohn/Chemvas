@@ -2,15 +2,14 @@ import math
 import unittest
 
 from core.document_state import (
+    CANVAS_FILE_VERSION,
     CHEMVAS_FILE_TYPE,
-    SINGLE_SHEET_FILE_VERSION,
-    WORKBOOK_FILE_VERSION,
     atom_to_state,
     bond_to_state,
     build_document_payload,
     deserialize_model_state,
     extract_document_state,
-    selection_payload_to_single_sheet_state,
+    selection_payload_to_canvas_state,
     serialize_model_state,
     serialize_settings,
 )
@@ -43,7 +42,7 @@ def _model_state(
     }
 
 
-def _single_sheet_state(model: dict | None = None) -> dict:
+def _canvas_state(model: dict | None = None) -> dict:
     return {
         "model": model or _model_state(),
         "ring_fills": [],
@@ -172,12 +171,12 @@ class DocumentStateTest(unittest.TestCase):
             sheet_size="A4",
             sheet_orientation="portrait",
         )
-        state = _single_sheet_state()
+        state = _canvas_state()
         state["settings"] = settings
-        payload = build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
+        payload = build_document_payload(state, version=CANVAS_FILE_VERSION)
 
         self.assertEqual(payload["type"], CHEMVAS_FILE_TYPE)
-        self.assertEqual(payload["version"], SINGLE_SHEET_FILE_VERSION)
+        self.assertEqual(payload["version"], CANVAS_FILE_VERSION)
         self.assertIs(extract_document_state(payload), state)
 
     def test_settings_serialize_omits_legacy_style_preset(self) -> None:
@@ -193,27 +192,19 @@ class DocumentStateTest(unittest.TestCase):
             sheet_orientation="portrait",
         )
         self.assertNotIn("style_preset", settings)
-        state = _single_sheet_state()
+        state = _canvas_state()
         state["settings"] = settings
-        build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
+        build_document_payload(state, version=CANVAS_FILE_VERSION)
 
-    def test_settings_with_legacy_style_preset_still_valid(self) -> None:
-        # Files written while journal presets existed may carry this key.
+    def test_settings_reject_extra_style_preset_key(self) -> None:
         settings = _settings()
         settings["style_preset"] = "Presentation"
-        state = _single_sheet_state()
-        state["settings"] = settings
-        build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
-
-    def test_settings_reject_non_string_style_preset(self) -> None:
-        settings = _settings()
-        settings["style_preset"] = 123
-        state = _single_sheet_state()
+        state = _canvas_state()
         state["settings"] = settings
         with self.assertRaises(ValueError):
-            build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
+            build_document_payload(state, version=CANVAS_FILE_VERSION)
 
-    def test_selection_payload_to_single_sheet_state_maps_supported_items(self) -> None:
+    def test_selection_payload_to_canvas_state_maps_supported_items(self) -> None:
         settings = _settings()
         selection_payload = {
             "format": "chemvas-selection",
@@ -252,7 +243,7 @@ class DocumentStateTest(unittest.TestCase):
             ],
         }
 
-        state = selection_payload_to_single_sheet_state(selection_payload, settings)
+        state = selection_payload_to_canvas_state(selection_payload, settings)
 
         self.assertEqual(set(state["model"]["atoms"]), {3, 7})
         self.assertEqual(state["model"]["atoms"][3]["element"], "C")
@@ -266,14 +257,14 @@ class DocumentStateTest(unittest.TestCase):
         self.assertEqual(state["orbitals"][0]["kind"], "p")
         self.assertEqual(state["settings"], settings)
         self.assertIsNone(state["last_smiles_input"])
-        build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
+        build_document_payload(state, version=CANVAS_FILE_VERSION)
 
-    def test_selection_payload_to_single_sheet_state_rejects_invalid_payload(self) -> None:
+    def test_selection_payload_to_canvas_state_rejects_invalid_payload(self) -> None:
         with self.assertRaises(ValueError):
-            selection_payload_to_single_sheet_state({"atoms": "bad"}, _settings())
+            selection_payload_to_canvas_state({"atoms": "bad"}, _settings())
 
     def test_build_document_payload_accepts_valid_nested_scene_items(self) -> None:
-        state = _single_sheet_state(
+        state = _canvas_state(
             _model_state(
                 atoms={"0": _atom_state()},
                 next_atom_id=1,
@@ -295,13 +286,13 @@ class DocumentStateTest(unittest.TestCase):
         ]
         state["orbitals"] = [{"kind": "p", "center": (0.0, 0.0), "scale": 1.5, "rotation": 45.0}]
 
-        build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
+        build_document_payload(state, version=CANVAS_FILE_VERSION)
 
     def test_build_document_payload_accepts_legacy_ts_bracket_rect_state(self) -> None:
-        state = _single_sheet_state()
+        state = _canvas_state()
         state["ts_brackets"] = [{"kind": "ts_bracket", "rect": (0.0, 0.0, 12.0, 8.0)}]
 
-        build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
+        build_document_payload(state, version=CANVAS_FILE_VERSION)
 
     def test_build_document_payload_rejects_unsupported_mark_and_orbital_kinds(self) -> None:
         cases = [
@@ -324,10 +315,10 @@ class DocumentStateTest(unittest.TestCase):
 
         for key, value in cases:
             with self.subTest(key=key):
-                state = _single_sheet_state()
+                state = _canvas_state()
                 state[key] = value
                 with self.assertRaises(ValueError):
-                    build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
+                    build_document_payload(state, version=CANVAS_FILE_VERSION)
 
     def test_build_document_payload_rejects_malformed_nested_scene_items(self) -> None:
         cases = [
@@ -349,47 +340,16 @@ class DocumentStateTest(unittest.TestCase):
 
         for key, value in cases:
             with self.subTest(key=key, value=value):
-                state = _single_sheet_state(_model_state(atoms={"0": _atom_state()}, next_atom_id=1))
+                state = _canvas_state(_model_state(atoms={"0": _atom_state()}, next_atom_id=1))
                 state[key] = value
                 with self.assertRaises(ValueError):
-                    build_document_payload(state, version=SINGLE_SHEET_FILE_VERSION)
-
-    def test_build_workbook_payload_rejects_malformed_nested_scene_items(self) -> None:
-        content = _single_sheet_state(_model_state(atoms={"0": _atom_state()}, next_atom_id=1))
-        content["marks"] = [{}]
-        workbook_state = {
-            "active_sheet_index": 0,
-            "sheets": [{"name": "Sheet 1", "kind": "canvas", "content": content}],
-        }
-
-        with self.assertRaises(ValueError):
-            build_document_payload(workbook_state, version=WORKBOOK_FILE_VERSION)
-
-    def test_extract_document_state_accepts_workbook_state(self) -> None:
-        sheet_state = _single_sheet_state()
-        workbook_state = {
-            "active_sheet_index": 0,
-            "sheets": [
-                {
-                    "name": "Sheet 1",
-                    "kind": "canvas",
-                    "content": sheet_state,
-                }
-            ],
-        }
-        payload = {
-            "type": CHEMVAS_FILE_TYPE,
-            "version": WORKBOOK_FILE_VERSION,
-            "state": workbook_state,
-        }
-
-        self.assertIs(extract_document_state(payload), workbook_state)
+                    build_document_payload(state, version=CANVAS_FILE_VERSION)
 
     def test_extract_document_state_rejects_legacy_wrapped_file_type(self) -> None:
-        state = _single_sheet_state()
+        state = _canvas_state()
         payload = {
             "type": "litedraw",
-            "version": SINGLE_SHEET_FILE_VERSION,
+            "version": CANVAS_FILE_VERSION,
             "state": state,
         }
 
@@ -411,7 +371,7 @@ class DocumentStateTest(unittest.TestCase):
         for model in invalid_models:
             with self.subTest(model=model):
                 with self.assertRaises(ValueError):
-                    build_document_payload(_single_sheet_state(model), version=SINGLE_SHEET_FILE_VERSION)
+                    build_document_payload(_canvas_state(model), version=CANVAS_FILE_VERSION)
 
     def test_extract_document_state_rejects_self_bond(self) -> None:
         valid_atoms = {"0": {"element": "C", "x": 0.0, "y": 0.0, "color": "#000000", "explicit_label": False}}
@@ -421,41 +381,30 @@ class DocumentStateTest(unittest.TestCase):
             1,
         )
         with self.assertRaises(ValueError):
-            build_document_payload(_single_sheet_state(self_bond_model), version=SINGLE_SHEET_FILE_VERSION)
-
-    def test_extract_document_state_rejects_invalid_workbook_schema(self) -> None:
-        valid_content = _single_sheet_state()
-        invalid_states = [
-            {"active_sheet_index": 2, "sheets": [{"kind": "canvas", "content": valid_content}]},
-            {"active_sheet_index": 0, "sheets": ["not-a-sheet"]},
-            {"active_sheet_index": 0, "sheets": [{"kind": "canvas", "content": {}}]},
-            {"active_sheet_index": 0, "sheets": []},
-            {"active_sheet_index": 0, "sheets": [{"name": "Result", "kind": "result", "content": valid_content}]},
-            {
-                "active_sheet_index": 0,
-                "sheets": [{"name": "Sheet 1", "kind": "canvas", "content": valid_content}],
-                "result_sheets": {"sheets": [], "active_index": 0},
-            },
-        ]
-
-        for state in invalid_states:
-            with self.subTest(state=state):
-                with self.assertRaises(ValueError):
-                    build_document_payload(state, version=WORKBOOK_FILE_VERSION)
+            build_document_payload(_canvas_state(self_bond_model), version=CANVAS_FILE_VERSION)
 
     def test_build_document_payload_rejects_unsupported_or_mismatched_versions(self) -> None:
-        single_sheet_state = _single_sheet_state()
-        workbook_state = {
-            "active_sheet_index": 0,
-            "sheets": [{"name": "Sheet 1", "kind": "canvas", "content": single_sheet_state}],
+        canvas_state = _canvas_state()
+
+        with self.assertRaises(ValueError):
+            build_document_payload(canvas_state, version=3)
+        with self.assertRaises(ValueError):
+            build_document_payload({"active_sheet_index": 0, "sheets": []}, version=CANVAS_FILE_VERSION)
+        with self.assertRaises(ValueError):
+            build_document_payload(canvas_state, version=2)
+
+    def test_extract_document_state_rejects_version_two_workbook_payload(self) -> None:
+        payload = {
+            "type": CHEMVAS_FILE_TYPE,
+            "version": 2,
+            "state": {
+                "active_sheet_index": 0,
+                "sheets": [{"name": "Canvas 1", "kind": "canvas", "content": _canvas_state()}],
+            },
         }
 
         with self.assertRaises(ValueError):
-            build_document_payload(single_sheet_state, version=3)
-        with self.assertRaises(ValueError):
-            build_document_payload(workbook_state, version=SINGLE_SHEET_FILE_VERSION)
-        with self.assertRaises(ValueError):
-            build_document_payload(single_sheet_state, version=WORKBOOK_FILE_VERSION)
+            extract_document_state(payload)
 
     def test_extract_document_state_rejects_invalid_payloads(self) -> None:
         with self.assertRaises(ValueError):
@@ -470,8 +419,8 @@ class DocumentStateTest(unittest.TestCase):
             extract_document_state(
                 {
                     "type": "unexpected",
-                    "version": SINGLE_SHEET_FILE_VERSION,
-                    "state": _single_sheet_state(),
+                    "version": CANVAS_FILE_VERSION,
+                    "state": _canvas_state(),
                 }
             )
         with self.assertRaises(ValueError):
@@ -479,14 +428,14 @@ class DocumentStateTest(unittest.TestCase):
                 {
                     "type": CHEMVAS_FILE_TYPE,
                     "version": "1",
-                    "state": _single_sheet_state(),
+                    "state": _canvas_state(),
                 }
             )
         with self.assertRaises(ValueError):
             extract_document_state(
                 {
                     "type": CHEMVAS_FILE_TYPE,
-                    "version": SINGLE_SHEET_FILE_VERSION,
+                    "version": CANVAS_FILE_VERSION,
                     "state": {"active_sheet_index": 0, "sheets": []},
                 }
             )
@@ -494,14 +443,14 @@ class DocumentStateTest(unittest.TestCase):
             extract_document_state(
                 {
                     "model": {"atoms": {}, "bonds": [], "next_atom_id": 0},
-                    "version": SINGLE_SHEET_FILE_VERSION,
+                    "version": CANVAS_FILE_VERSION,
                 }
             )
         with self.assertRaises(ValueError):
             extract_document_state(
                 {
                     "type": CHEMVAS_FILE_TYPE,
-                    "version": SINGLE_SHEET_FILE_VERSION,
+                    "version": CANVAS_FILE_VERSION,
                     "state": [],
                 }
             )

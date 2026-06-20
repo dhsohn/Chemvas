@@ -12,7 +12,9 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from ui.canvas_atom_graphics_state import atom_items_for
+    from ui.canvas_document_metadata_state import document_file_path_for
     from ui.canvas_history_state import history_state_for
+    from ui.canvas_window_access import snapshot_canvas_state_for
     from ui.main_window import MainWindow
     from ui.main_window_canvas_ports import active_canvas_for_window
     from ui.main_window_preview_ports import preview_for_window
@@ -32,6 +34,8 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         self.window = MainWindow()
 
     def tearDown(self) -> None:
+        for canvas in self.window.tab_references.all_canvases():
+            services_for_window(self.window).canvas_document_service.mark_clean(canvas)
         self.window.close()
         self.app.processEvents()
 
@@ -57,7 +61,10 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         raise AssertionError(f"Could not find line edit with placeholder={placeholder!r}")
 
     def test_xyz_path_helpers_follow_current_file_and_suffix_rules(self) -> None:
-        self.window.runtime_state.current_file_path = "/tmp/current.chemvas"
+        services_for_window(self.window).canvas_document_service.set_file_path(
+            active_canvas_for_window(self.window),
+            "/tmp/current.chemvas",
+        )
         service = services_for_window(self.window).document_action_service
 
         self.assertFalse(hasattr(self.window, "default_save_dialog_path"))
@@ -84,23 +91,29 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         save_path = mock.Mock()
         document_service = services_for_window(self.window).document_action_service
 
-        self.window.runtime_state.current_file_path = "/tmp/existing.chemvas"
+        services_for_window(self.window).canvas_document_service.set_file_path(
+            active_canvas_for_window(self.window),
+            "/tmp/existing.chemvas",
+        )
         document_service.save_canvas_to_path = save_path
         document_service.save_canvas_as = save_as_called
         save_action.trigger()
-        save_path.assert_called_once_with(self.window, "/tmp/existing.chemvas")
+        save_path.assert_called_once_with(self.window, "/tmp/existing.chemvas", canvas=None)
         save_as_called.assert_not_called()
 
         save_path.reset_mock()
         save_as_called.reset_mock()
-        self.window.runtime_state.current_file_path = None
+        services_for_window(self.window).canvas_document_service.set_file_path(active_canvas_for_window(self.window), None)
         save_action.trigger()
-        save_as_called.assert_called_once_with(self.window)
+        save_as_called.assert_called_once_with(self.window, canvas=None)
         save_path.assert_not_called()
 
     def test_save_as_action_uses_default_dialog_path_and_normalizes_extension(self) -> None:
         save_as_action = self._find_action("Save As...")
-        self.window.runtime_state.current_file_path = "/tmp/current.chemvas"
+        services_for_window(self.window).canvas_document_service.set_file_path(
+            active_canvas_for_window(self.window),
+            "/tmp/current.chemvas",
+        )
         save_path = mock.Mock()
         document_service = services_for_window(self.window).document_action_service
 
@@ -113,12 +126,11 @@ class MainWindowPanelActionsTest(unittest.TestCase):
 
         dialog.assert_called_once()
         self.assertEqual(dialog.call_args.args[2], "/tmp/current.chemvas")
-        save_path.assert_called_once_with(self.window, "/tmp/new-drawing.chemvas")
+        save_path.assert_called_once_with(self.window, "/tmp/new-drawing.chemvas", canvas=None)
 
     def test_load_menu_action_uses_dialog_path_and_handles_failure(self) -> None:
         load_action = self._find_action("Load")
-        restore = mock.Mock()
-        workbook_service = services_for_window(self.window).workbook_document_service
+        state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
 
         with (
             mock.patch(
@@ -127,16 +139,14 @@ class MainWindowPanelActionsTest(unittest.TestCase):
             ) as dialog,
             mock.patch(
                 "ui.main_window_document_action_service.default_read_document",
-                return_value=SimpleNamespace(state={"atoms": []}),
+                return_value=SimpleNamespace(state=state),
             ) as read_document,
         ):
-            workbook_service.restore_single_sheet_document = restore
             load_action.trigger()
 
         dialog.assert_called_once()
         read_document.assert_called_once_with("/tmp/input.chemvas")
-        restore.assert_called_once_with(self.window, {"atoms": []})
-        self.assertEqual(self.window.runtime_state.current_file_path, "/tmp/input.chemvas")
+        self.assertEqual(document_file_path_for(active_canvas_for_window(self.window)), "/tmp/input.chemvas")
         self.assertEqual(self.window.statusBar().currentMessage(), "Loaded: /tmp/input.chemvas")
 
         with (
@@ -150,13 +160,15 @@ class MainWindowPanelActionsTest(unittest.TestCase):
             ),
             mock.patch("ui.main_window_document_action_service.QMessageBox.warning") as warning,
         ):
-            self.window.runtime_state.current_file_path = "/tmp/previous.chemvas"
+            services_for_window(self.window).canvas_document_service.set_file_path(
+                active_canvas_for_window(self.window),
+                "/tmp/previous.chemvas",
+            )
             load_action.trigger()
 
         warning.assert_called_once_with(self.window, "Load Error", "Failed to load file:\nbad file")
-        self.assertEqual(self.window.runtime_state.current_file_path, "/tmp/previous.chemvas")
+        self.assertEqual(document_file_path_for(active_canvas_for_window(self.window)), "/tmp/previous.chemvas")
 
-        restore_failure = mock.Mock(side_effect=RuntimeError("bad restore"))
         with (
             mock.patch(
                 "ui.main_window_document_action_service.QFileDialog.getOpenFileName",
@@ -164,16 +176,18 @@ class MainWindowPanelActionsTest(unittest.TestCase):
             ),
             mock.patch(
                 "ui.main_window_document_action_service.default_read_document",
-                return_value=SimpleNamespace(state={"atoms": []}),
+                return_value=SimpleNamespace(state={"model": {}}),
             ),
             mock.patch("ui.main_window_document_action_service.QMessageBox.warning") as warning,
         ):
-            workbook_service.restore_single_sheet_document = restore_failure
-            self.window.runtime_state.current_file_path = "/tmp/previous.chemvas"
+            services_for_window(self.window).canvas_document_service.set_file_path(
+                active_canvas_for_window(self.window),
+                "/tmp/previous.chemvas",
+            )
             load_action.trigger()
 
-        warning.assert_called_once_with(self.window, "Load Error", "Failed to load file:\nbad restore")
-        self.assertEqual(self.window.runtime_state.current_file_path, "/tmp/previous.chemvas")
+        warning.assert_called_once()
+        self.assertEqual(document_file_path_for(active_canvas_for_window(self.window)), "/tmp/previous.chemvas")
 
     def test_preview_window_export_button_normalizes_path_and_reports_success_and_failure(self) -> None:
         self.assertIsNone(self.window.findChild(QToolButton, "export_xyz_button"))

@@ -6,45 +6,36 @@ from ui.main_window_action_availability_service import (
     MainWindowActionAvailabilityService,
 )
 from ui.main_window_active_canvas_ui_service import MainWindowActiveCanvasUIService
+from ui.main_window_canvas_document_service import MainWindowCanvasDocumentService
 from ui.main_window_canvas_ports import (
     active_canvas_for_window,
+    active_canvas_index_for_window,
+    active_canvas_name_for_window,
     active_canvas_or_none_for_window,
-    active_canvas_sheet_index_for_window,
-    active_canvas_sheet_name_for_window,
-    active_canvas_tab_index_for_window,
     active_tool_name_for_window,
     all_canvases_for_window,
     bond_length_px_for_window,
-    canvas_sheet_count_for_window,
+    canvas_count_for_window,
     clear_context_bar_page_override_for_window,
     color_mutation_service_for_window,
     color_tool_for_window,
     context_bar_page_override_for_window,
-    current_file_path_for_window,
     current_zoom_percent_for_window,
     document_session_service_for_window,
     geometry_controller_for_window,
     has_exportable_atoms_for_window,
     history_service_for_window,
     insert_controller_for_window,
-    next_canvas_sheet_name_for_window,
-    repositioning_add_tab_for_window,
-    reset_canvas_name_counter_for_window,
-    save_active_canvas_to_file_for_window,
+    next_canvas_name_for_window,
     scene_transform_controller_for_window,
     selected_scene_items_for_window,
     set_context_bar_page_override_for_window,
-    set_current_file_path_for_window,
     set_last_canvas_tab_index_for_window,
-    set_repositioning_add_tab_for_window,
-    set_tab_reactions_suspended_for_window,
-    sheet_add_tab_for_window,
     style_controller_for_window,
     tab_reactions_suspended_for_window,
     tool_mode_controller_for_window,
     tool_settings_for_window,
 )
-from ui.main_window_canvas_sheet_service import MainWindowCanvasSheetService
 from ui.main_window_canvas_tab_ui_service import MainWindowCanvasTabUIService
 from ui.main_window_context_bar_pages import MainWindowContextBarPageBuilder
 from ui.main_window_context_bar_service import MainWindowContextBarService
@@ -74,7 +65,6 @@ from ui.main_window_ui_ports import (
     tool_actions_for_window,
     undo_button_for_window,
 )
-from ui.main_window_workbook_document_service import MainWindowWorkbookDocumentService
 
 
 @dataclass(slots=True)
@@ -87,9 +77,8 @@ class MainWindowServices:
     tool_routing_service: MainWindowToolRoutingService
     text_style_service: MainWindowTextStyleService
     canvas_tab_ui_service: MainWindowCanvasTabUIService
-    canvas_sheet_service: MainWindowCanvasSheetService
+    canvas_document_service: MainWindowCanvasDocumentService
     active_canvas_ui_service: MainWindowActiveCanvasUIService
-    workbook_document_service: MainWindowWorkbookDocumentService
     ui_assembly_service: MainWindowUIAssemblyService
     context_bar_service: MainWindowContextBarService
     status_service: MainWindowStatusService
@@ -113,9 +102,9 @@ def build_main_window_services() -> MainWindowServices:
         active_tool_name_for_window=active_tool_name_for_window,
         current_zoom_percent_for_window=current_zoom_percent_for_window,
         active_canvas_or_none_for_window=active_canvas_or_none_for_window,
-        canvas_sheet_count_for_window=canvas_sheet_count_for_window,
-        active_canvas_sheet_name_for_window=active_canvas_sheet_name_for_window,
-        active_canvas_sheet_index_for_window=active_canvas_sheet_index_for_window,
+        canvas_count_for_window=canvas_count_for_window,
+        active_canvas_name_for_window=active_canvas_name_for_window,
+        active_canvas_index_for_window=active_canvas_index_for_window,
         context_bar_page_override_for_window=context_bar_page_override_for_window,
     )
     tool_state_service = MainWindowToolStateService(
@@ -172,11 +161,6 @@ def build_main_window_services() -> MainWindowServices:
         set_context_bar_page_override_for_window=set_context_bar_page_override_for_window,
         tool_action_for_window=tool_action_for_window,
     )
-    canvas_sheet_service: MainWindowCanvasSheetService
-
-    def new_canvas_sheet_for_window(window):
-        return canvas_sheet_service.new_canvas_sheet(window)
-
     active_canvas_ui_service = MainWindowActiveCanvasUIService(
         tool_mode_controller_for_window=tool_mode_controller_for_window,
         active_canvas_for_window=active_canvas_for_window,
@@ -186,50 +170,29 @@ def build_main_window_services() -> MainWindowServices:
         context_bar_service=context_bar_service,
         action_availability_service=action_availability_service,
         context_page_state_service=context_page_state_service,
-        new_canvas_sheet_for_window=new_canvas_sheet_for_window,
         tab_refs_for_window=tab_references_for_window,
         preview_for_window=preview_for_window,
         atom_input_for_window=atom_input_for_window,
-        sheet_add_tab_for_window=sheet_add_tab_for_window,
         tab_reactions_suspended_for_window=tab_reactions_suspended_for_window,
         set_last_canvas_tab_index_for_window=set_last_canvas_tab_index_for_window,
     )
-    canvas_tab_ui_service = MainWindowCanvasTabUIService(
+    canvas_document_service = MainWindowCanvasDocumentService(
         active_canvas_ui=active_canvas_ui_service,
         tab_refs_for_window=tab_references_for_window,
-        repositioning_add_tab_for_window=repositioning_add_tab_for_window,
-        set_repositioning_add_tab_for_window=set_repositioning_add_tab_for_window,
-        tab_reactions_suspended_for_window=tab_reactions_suspended_for_window,
-        set_tab_reactions_suspended_for_window=set_tab_reactions_suspended_for_window,
-        set_last_canvas_tab_index_for_window=set_last_canvas_tab_index_for_window,
-    )
-    canvas_sheet_service = MainWindowCanvasSheetService(
-        tab_ui=canvas_tab_ui_service,
-        active_canvas_ui=active_canvas_ui_service,
-        tab_refs_for_window=tab_references_for_window,
-        active_canvas_for_window=active_canvas_for_window,
-        next_canvas_sheet_name_for_window=next_canvas_sheet_name_for_window,
-    )
-    workbook_document_service = MainWindowWorkbookDocumentService(
-        active_canvas_ui=active_canvas_ui_service,
-        canvas_sheet=canvas_sheet_service,
-        save_active_canvas_to_file_for_window=save_active_canvas_to_file_for_window,
-        tab_refs_for_window=tab_references_for_window,
-        active_canvas_sheet_index_for_window=active_canvas_sheet_index_for_window,
-        active_canvas_tab_index_for_window=active_canvas_tab_index_for_window,
-        canvas_sheet_count_for_window=canvas_sheet_count_for_window,
-        reset_canvas_name_counter_for_window=reset_canvas_name_counter_for_window,
-        tab_reactions_suspended_for_window=tab_reactions_suspended_for_window,
-        set_tab_reactions_suspended_for_window=set_tab_reactions_suspended_for_window,
+        active_canvas_or_none_for_window=active_canvas_or_none_for_window,
+        next_canvas_name_for_window=next_canvas_name_for_window,
         set_last_canvas_tab_index_for_window=set_last_canvas_tab_index_for_window,
     )
     document_action_service = MainWindowDocumentActionService(
         document_session_service_for_window=document_session_service_for_window,
         geometry_controller_for_window=geometry_controller_for_window,
         bond_length_px_for_window=bond_length_px_for_window,
-        current_file_path_for_window=current_file_path_for_window,
-        set_current_file_path_for_window=set_current_file_path_for_window,
-        workbook_document_service=workbook_document_service,
+        active_canvas_for_window=active_canvas_for_window,
+        active_canvas_or_none_for_window=active_canvas_or_none_for_window,
+        canvas_document_service=canvas_document_service,
+    )
+    canvas_tab_ui_service = MainWindowCanvasTabUIService(
+        close_canvas_tab_for_window=document_action_service.close_canvas_tab,
     )
     tool_routing_service = MainWindowToolRoutingService(
         insert_controller_for_window=insert_controller_for_window,
@@ -261,7 +224,7 @@ def build_main_window_services() -> MainWindowServices:
         load_canvas=document_action_service.load_canvas,
         export_figure=document_action_service.export_figure,
         open_preview_window=panel_service.open_preview_window,
-        new_canvas_sheet=canvas_sheet_service.new_canvas_sheet,
+        new_canvas=canvas_document_service.new_canvas,
     )
     ui_assembly_service = MainWindowUIAssemblyService(
         scene_transform_controller_for_window=scene_transform_controller_for_window,
@@ -279,9 +242,8 @@ def build_main_window_services() -> MainWindowServices:
         tool_routing_service=tool_routing_service,
         text_style_service=text_style_service,
         canvas_tab_ui_service=canvas_tab_ui_service,
-        canvas_sheet_service=canvas_sheet_service,
+        canvas_document_service=canvas_document_service,
         active_canvas_ui_service=active_canvas_ui_service,
-        workbook_document_service=workbook_document_service,
         ui_assembly_service=ui_assembly_service,
         context_bar_service=context_bar_service,
         status_service=status_service,

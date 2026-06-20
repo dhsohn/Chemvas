@@ -16,6 +16,7 @@ if QApplication is not None:
     from ui.handle_mutation_access import update_curved_control_for
     from ui.main_window import MainWindow
     from ui.main_window_canvas_ports import active_canvas_for_window
+    from ui.main_window_service_ports import services_for_window
     from ui.mark_item_access import mark_center_for
     from ui.scene_decoration_access import add_arrow_for, add_mark_for_atom_for
     from ui.scene_item_access import apply_scene_item_state
@@ -38,6 +39,9 @@ class SceneItemStateCodecTest(unittest.TestCase):
         QTest.qWait(20)
 
     def tearDown(self) -> None:
+        document_service = services_for_window(self.window).canvas_document_service
+        for canvas in self.window.tab_references.all_canvases():
+            document_service.mark_clean(canvas)
         self.window.close()
         self.app.processEvents()
         QTest.qWait(10)

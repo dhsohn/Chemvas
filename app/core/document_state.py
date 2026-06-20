@@ -7,10 +7,9 @@ from typing import Any, TypeGuard, cast
 from core.model import Atom, Bond, MoleculeModel
 
 CHEMVAS_FILE_TYPE = "chemvas"
-SINGLE_SHEET_FILE_VERSION = 1
-WORKBOOK_FILE_VERSION = 2
-SUPPORTED_FILE_VERSIONS = frozenset((SINGLE_SHEET_FILE_VERSION, WORKBOOK_FILE_VERSION))
-SINGLE_SHEET_STATE_KEYS = frozenset(
+CANVAS_FILE_VERSION = 1
+SUPPORTED_FILE_VERSIONS = frozenset((CANVAS_FILE_VERSION,))
+CANVAS_STATE_KEYS = frozenset(
     (
         "model",
         "ring_fills",
@@ -36,9 +35,6 @@ SETTINGS_KEYS = frozenset(
         "sheet_orientation",
     )
 )
-# Legacy keys accepted for files written while journal presets existed. New
-# saves do not emit these keys.
-OPTIONAL_SETTINGS_KEYS = frozenset(("style_preset",))
 VALID_BOND_ORDERS = frozenset((1, 2, 3))
 VALID_BOND_STYLES = frozenset(
     (
@@ -187,11 +183,11 @@ def serialize_settings(
     }
 
 
-def selection_payload_to_single_sheet_state(
+def selection_payload_to_canvas_state(
     selection_payload: Mapping[str, object],
     template_settings: Mapping[str, object],
 ) -> dict:
-    """Convert a validated clipboard-style selection payload into a sheet state."""
+    """Convert a validated clipboard-style selection payload into a canvas state."""
     if not validate_clipboard_selection_payload(selection_payload):
         raise ValueError("Invalid clipboard payload.")
 
@@ -280,7 +276,7 @@ def selection_payload_to_single_sheet_state(
         "settings": dict(template_settings),
         "last_smiles_input": None,
     }
-    _validate_single_sheet_state(state)
+    _validate_canvas_state(state)
     return state
 
 
@@ -316,31 +312,20 @@ def _validate_document_state(state: Mapping[str, object], version: int) -> None:
     if type(version) is not int or version not in SUPPORTED_FILE_VERSIONS:
         raise ValueError("Invalid Chemvas file.")
     state_kind = _state_kind(state)
-    expected_kind = (
-        "single_sheet"
-        if version == SINGLE_SHEET_FILE_VERSION
-        else "workbook"
-    )
-    if state_kind != expected_kind:
+    if state_kind != "canvas":
         raise ValueError("Invalid Chemvas file.")
-    if state_kind == "single_sheet":
-        _validate_single_sheet_state(state)
-    else:
-        _validate_workbook_state(state)
+    _validate_canvas_state(state)
 
 
 def _state_kind(state: Mapping[str, object]) -> str | None:
     model_state = state.get("model")
     if isinstance(model_state, Mapping):
-        return "single_sheet"
-    sheets_state = state.get("sheets")
-    if isinstance(sheets_state, list):
-        return "workbook"
+        return "canvas"
     return None
 
 
-def _validate_single_sheet_state(state: Mapping[str, object]) -> None:
-    if set(state) != SINGLE_SHEET_STATE_KEYS:
+def _validate_canvas_state(state: Mapping[str, object]) -> None:
+    if set(state) != CANVAS_STATE_KEYS:
         raise ValueError("Invalid Chemvas file.")
     model_state = state.get("model")
     if not isinstance(model_state, Mapping):
@@ -359,34 +344,6 @@ def _validate_single_sheet_state(state: Mapping[str, object]) -> None:
     last_smiles_input = state.get("last_smiles_input")
     if last_smiles_input is not None and not isinstance(last_smiles_input, str):
         raise ValueError("Invalid Chemvas file.")
-
-
-def _validate_workbook_state(state: Mapping[str, object]) -> None:
-    if set(state) != {"active_sheet_index", "sheets"}:
-        raise ValueError("Invalid Chemvas file.")
-    sheets_state = state.get("sheets")
-    if not isinstance(sheets_state, list) or not sheets_state:
-        raise ValueError("Invalid Chemvas file.")
-    active_sheet_index = state.get("active_sheet_index")
-    if not _is_int(active_sheet_index) or active_sheet_index < 0:
-        raise ValueError("Invalid Chemvas file.")
-    if active_sheet_index >= len(sheets_state):
-        raise ValueError("Invalid Chemvas file.")
-    for sheet_state in sheets_state:
-        if not isinstance(sheet_state, Mapping):
-            raise ValueError("Invalid Chemvas file.")
-        if set(sheet_state) != {"name", "kind", "content"}:
-            raise ValueError("Invalid Chemvas file.")
-        name = sheet_state.get("name")
-        if not isinstance(name, str) or not name:
-            raise ValueError("Invalid Chemvas file.")
-        sheet_kind = sheet_state.get("kind")
-        if sheet_kind != "canvas":
-            raise ValueError("Invalid Chemvas file.")
-        content = sheet_state.get("content")
-        if not isinstance(content, Mapping):
-            raise ValueError("Invalid Chemvas file.")
-        _validate_single_sheet_state(content)
 
 
 def _validate_model_state(model_state: Mapping[str, object]) -> set[int]:
@@ -574,11 +531,7 @@ def _validated_scene_state_list(states: object) -> list[Mapping[str, object]]:
 
 def _validate_settings_state(settings: Mapping[str, object]) -> None:
     keys = set(settings)
-    # Required keys must all be present; only known optional keys may be added.
-    if not SETTINGS_KEYS <= keys or not keys <= (SETTINGS_KEYS | OPTIONAL_SETTINGS_KEYS):
-        raise ValueError("Invalid Chemvas file.")
-    style_preset = settings.get("style_preset")
-    if style_preset is not None and not isinstance(style_preset, str):
+    if keys != SETTINGS_KEYS:
         raise ValueError("Invalid Chemvas file.")
     if not _is_number(settings.get("bond_length_px")):
         raise ValueError("Invalid Chemvas file.")

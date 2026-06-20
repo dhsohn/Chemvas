@@ -87,7 +87,7 @@ class MainWindowUtilityIconRenderer:
         painter.drawLine(20, 15, 22, 15)
         painter.drawLine(20, 19, 22, 19)
 
-    def draw_add_sheet(self, painter) -> None:
+    def draw_add_canvas(self, painter) -> None:
         painter.setPen(self._icon_pen(self._stroke_thin))
         painter.drawRect(6, 7, 18, 16)
         painter.drawLine(15, 10, 15, 20)

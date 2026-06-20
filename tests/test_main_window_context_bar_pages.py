@@ -17,6 +17,7 @@ if QApplication is not None:
         MainWindowContextBarPageBuilder,
         bond_label_for_state,
     )
+    from ui.main_window_service_ports import services_for_window
     from ui.main_window_theme import (
         CONTEXT_BAR_BUTTON_HEIGHT,
     )
@@ -58,6 +59,9 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         )
 
     def tearDown(self) -> None:
+        document_service = services_for_window(self.window).canvas_document_service
+        for canvas in self.window.tab_references.all_canvases():
+            document_service.mark_clean(canvas)
         self.window.close()
         self.app.processEvents()
 

@@ -66,7 +66,7 @@ class _HarnessWindow(QMainWindow):
             icon_save=self._blank_icon,
             icon_open=self._blank_icon,
             icon_preview_panel=self._blank_icon,
-            icon_add_sheet=self._blank_icon,
+            icon_add_canvas=self._blank_icon,
             icon_setup_sheet=self._blank_icon,
             icon_undo=self._blank_icon,
             icon_redo=self._blank_icon,
@@ -118,7 +118,7 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
             load_canvas=mock.Mock(),
             export_figure=mock.Mock(),
             open_preview_window=mock.Mock(),
-            new_canvas_sheet=mock.Mock(),
+            new_canvas=mock.Mock(),
         )
         self.button_service = MainWindowUIAssemblyService(
             scene_transform_controller_for_window=self.scene_transform_controller_for_window,
@@ -170,7 +170,7 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         self.assertEqual(assembly.panel_bar.objectName(), "topRoleToolbar")
         self.assertEqual(assembly.panel_bar.iconSize().width(), TOOLBAR_ICON_SIZE)
         self.assertEqual(assembly.save_button.toolTip(), "File")
-        self.assertEqual(assembly.load_action.statusTip(), "Open a drawing or workbook")
+        self.assertEqual(assembly.load_action.statusTip(), "Open a drawing")
         self.assertEqual(list(assembly.tool_actions), TOOLBAR_TOOL_ACTION_ORDER)
         self.assertTrue(assembly.tool_actions["bond"].isChecked())
         self.assertFalse(assembly.preview_panel_button.isCheckable())
@@ -178,7 +178,7 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         self.assertIsNone(assembly.export_xyz_button)
         self.assertIsNone(assembly.panel_bar.findChild(QToolButton, "export_xyz_button"))
         self.assertIsNone(assembly.panel_bar.findChild(QToolButton, "setup_sheet_button"))
-        self.assertIsNotNone(assembly.panel_bar.findChild(QToolButton, "new_sheet_button"))
+        self.assertIsNotNone(assembly.panel_bar.findChild(QToolButton, "new_canvas_button"))
         self.assertIsNotNone(assembly.panel_bar.findChild(QToolButton, "open_button"))
         self.assertIs(assembly.undo_button, assembly.panel_bar.findChild(QToolButton, "undo_button"))
         self.assertIs(assembly.redo_button, assembly.panel_bar.findChild(QToolButton, "redo_button"))
@@ -208,7 +208,7 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         )
         self.assertEqual(
             self._toolbar_widget_groups(assembly.panel_bar)[-1],
-            ["preview_panel_button", "open_button", "File", "new_sheet_button"],
+            ["preview_panel_button", "open_button", "File", "new_canvas_button"],
         )
         primary_buttons = [
             assembly.panel_bar.findChild(QToolButton, name)
@@ -253,8 +253,8 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         self.panel_callbacks.open_preview_window.assert_called_once_with(window)
         assembly.panel_bar.findChild(QToolButton, "open_button").click()
         self.panel_callbacks.load_canvas.assert_called_with(window)
-        assembly.new_sheet_button.click()
-        self.panel_callbacks.new_canvas_sheet.assert_called_once_with(window)
+        assembly.new_canvas_button.click()
+        self.panel_callbacks.new_canvas.assert_called_once_with(window)
         window.export_xyz.assert_not_called()
         window.open_preview_window.assert_not_called()
         window.setup_sheet.assert_not_called()

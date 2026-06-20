@@ -198,8 +198,8 @@ class MainWindowIconFactory:
     def icon_preview_panel(self) -> QIcon:
         return self.make_design_icon("panel_right")
 
-    def icon_add_sheet(self) -> QIcon:
-        return self.make_design_icon("sheet")
+    def icon_add_canvas(self) -> QIcon:
+        return self.make_design_icon("canvas")
 
     def icon_setup_sheet(self) -> QIcon:
         return self.make_design_icon("sheet")

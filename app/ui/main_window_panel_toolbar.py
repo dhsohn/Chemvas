@@ -31,19 +31,19 @@ class MainWindowPanelToolbarAssembly:
     load_action: QAction | None = None
     export_xyz_button: QToolButton | None = None
     preview_panel_button: QToolButton | None = None
-    new_sheet_button: QToolButton | None = None
+    new_canvas_button: QToolButton | None = None
     undo_button: QToolButton | None = None
     redo_button: QToolButton | None = None
 
 
 @dataclass(frozen=True)
 class MainWindowPanelToolbarCallbacks:
-    save_canvas: Callable[[object], None]
-    save_canvas_as: Callable[[object], None]
-    load_canvas: Callable[[object], None]
+    save_canvas: Callable[[object], Any]
+    save_canvas_as: Callable[[object], Any]
+    load_canvas: Callable[[object], Any]
     export_figure: Callable[[object], None]
     open_preview_window: Callable[[object], None]
-    new_canvas_sheet: Callable[[object], Any]
+    new_canvas: Callable[[object], Any]
 
 
 def _normalize_tool_action_button(
@@ -122,7 +122,7 @@ def build_panel_toolbar(
     load_action = QAction("Load", window)
     load_action.setIcon(icon_factory.icon_open())
     load_action.setToolTip("Load")
-    load_action.setStatusTip("Open a drawing or workbook")
+    load_action.setStatusTip("Open a drawing")
     load_action.setShortcut(QKeySequence.StandardKey.Open)
     load_action.triggered.connect(lambda _checked=False: callbacks.load_canvas(window))
     window.addAction(load_action)
@@ -146,16 +146,16 @@ def build_panel_toolbar(
     load_btn = create_toolbar_button(
         icon=icon_factory.icon_open(),
         tooltip="Open",
-        status_tip="Open a drawing or workbook",
+        status_tip="Open a drawing",
         callback=lambda _checked=False: callbacks.load_canvas(window),
         object_name="open_button",
     )
-    new_sheet_btn = create_toolbar_button(
-        icon=icon_factory.icon_add_sheet(),
-        tooltip="New Sheet",
-        status_tip="Add a new sheet",
-        callback=lambda _checked=False: callbacks.new_canvas_sheet(window),
-        object_name="new_sheet_button",
+    new_canvas_btn = create_toolbar_button(
+        icon=icon_factory.icon_add_canvas(),
+        tooltip="New Canvas",
+        status_tip="Create a new canvas",
+        callback=lambda _checked=False: callbacks.new_canvas(window),
+        object_name="new_canvas_button",
     )
     undo_btn = create_toolbar_button(
         icon=icon_factory.icon_undo(),
@@ -212,13 +212,13 @@ def build_panel_toolbar(
     panel_bar.addWidget(preview_panel_btn)
     panel_bar.addWidget(load_btn)
     panel_bar.addWidget(save_button)
-    panel_bar.addWidget(new_sheet_btn)
+    panel_bar.addWidget(new_canvas_btn)
 
     for button in (
         save_button,
         preview_panel_btn,
         load_btn,
-        new_sheet_btn,
+        new_canvas_btn,
         undo_btn,
         redo_btn,
         flip_h_btn,
@@ -239,7 +239,7 @@ def build_panel_toolbar(
         load_action=load_action,
         export_xyz_button=None,
         preview_panel_button=preview_panel_btn,
-        new_sheet_button=new_sheet_btn,
+        new_canvas_button=new_canvas_btn,
         undo_button=undo_btn,
         redo_button=redo_btn,
     )

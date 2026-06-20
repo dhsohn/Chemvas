@@ -33,16 +33,15 @@ class MainWindowDialogActionsTest(unittest.TestCase):
         self.assertFalse(hasattr(self.window, "set_bond_length"))
         self.assertFalse(hasattr(self.window, "setup_sheet"))
 
-    def test_canvas_and_sheet_name_helpers_cover_missing_active_canvas_paths(self) -> None:
+    def test_canvas_name_helpers_cover_missing_active_canvas_paths(self) -> None:
         with mock.patch.object(type(self.window.tab_references), "active_canvas_or_none", return_value=None):
-            with self.assertRaisesRegex(RuntimeError, "No active canvas sheet."):
+            with self.assertRaisesRegex(RuntimeError, "No active canvas."):
                 _ = active_canvas_for_window(self.window)
 
         with mock.patch.object(type(self.window.tab_references), "active_canvas_tab_index", return_value=-1):
-            self.assertEqual(self.window.tab_references.active_canvas_sheet_name(active_canvas_for_window(self.window)), "")
+            self.assertEqual(self.window.tab_references.active_canvas_name(active_canvas_for_window(self.window)), "")
 
-        self.assertEqual(self.window.runtime_state.next_result_canvas_name("Result"), "Result 1")
-        self.assertEqual(self.window.runtime_state.next_result_canvas_name("Result"), "Result 2")
+        self.assertFalse(hasattr(self.window.runtime_state, "next_result_canvas_name"))
 
     def test_zoom_and_icon_factory_cover_residual_main_window_helpers(self) -> None:
         status_service = services_for_window(self.window).status_service
@@ -53,7 +52,7 @@ class MainWindowDialogActionsTest(unittest.TestCase):
         self.assertEqual(status_service.status_context_texts()["zoom"], "275%")
 
         icon_factory = mock.Mock()
-        add_sheet_icon = object()
+        add_canvas_icon = object()
         setup_sheet_icon = object()
         preview_panel_icon = object()
         info_icon = object()
@@ -62,7 +61,7 @@ class MainWindowDialogActionsTest(unittest.TestCase):
         preview_icon = object()
         orbital_icon = object()
         move_icon = object()
-        icon_factory.icon_add_sheet.return_value = add_sheet_icon
+        icon_factory.icon_add_canvas.return_value = add_canvas_icon
         icon_factory.icon_setup_sheet.return_value = setup_sheet_icon
         icon_factory.icon_preview_panel.return_value = preview_panel_icon
         icon_factory.icon_info.return_value = info_icon
@@ -73,10 +72,10 @@ class MainWindowDialogActionsTest(unittest.TestCase):
         icon_factory.icon_move.return_value = move_icon
         self.window.ui_references.icon_factory = icon_factory
 
-        self.assertFalse(hasattr(self.window, "_icon_add_sheet"))
+        self.assertFalse(hasattr(self.window, "_icon_add_canvas"))
         self.assertFalse(hasattr(self.window, "icon_factory"))
         factory = self.window.ui_references.require_icon_factory()
-        self.assertIs(factory.icon_add_sheet(), add_sheet_icon)
+        self.assertIs(factory.icon_add_canvas(), add_canvas_icon)
         self.assertIs(factory.icon_setup_sheet(), setup_sheet_icon)
         self.assertIs(factory.icon_preview_panel(), preview_panel_icon)
         self.assertIs(factory.icon_info(), info_icon)
@@ -93,7 +92,7 @@ class MainWindowDialogActionsTest(unittest.TestCase):
             status_service.status_context_texts(),
             {
                 "tool": "Tool: Bond",
-                "sheet": "Sheet: Sheet 1 (1/1)",
+                "sheet": "Canvas: Canvas 1 (1/1)",
                 "selection": "Selection: 0",
                 "zoom_caption": "Zoom",
                 "zoom": "100%",

@@ -18,13 +18,14 @@ except ModuleNotFoundError:
     QPointF = None
 
 if QApplication is not None:
-    from core.document_io import read_document, write_document
+    from core.document_io import read_document
     from core.model import MoleculeModel
     from core.rdkit_adapter import Molecule3DAtom, Molecule3DBond, Molecule3DScene
     from core.rdkit_types import RDKitResult
     from ui.bond_graphics_access import add_bond_graphics_for
     from ui.canvas_atom_graphics_state import atom_items_for
     from ui.canvas_bond_graphics_state import bond_items_for_id
+    from ui.canvas_document_metadata_state import document_file_path_for
     from ui.canvas_history_state import history_state_for
     from ui.canvas_insert_state import insert_state_for
     from ui.canvas_mark_registry import mark_registry_for
@@ -52,7 +53,6 @@ if QApplication is not None:
     )
     from ui.main_window import MainWindow
     from ui.main_window_canvas_ports import active_canvas_for_window
-    from ui.main_window_document_dialogs import SheetSetupSelection
     from ui.main_window_preview_ports import preview_for_window
     from ui.main_window_service_ports import services_for_window
     from ui.main_window_ui_ports import preview_window_for_window
@@ -85,19 +85,24 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.window = MainWindow()
         self.window.show()
         active_canvas_for_window(self.window).setFocus()
-        services_for_window(self.window).canvas_sheet_service._sheet_setup_prompt = (
-            lambda window, *, current_size, current_orientation: SheetSetupSelection(
-                size=current_size,
-                orientation=current_orientation,
-            )
-        )
         self.app.processEvents()
         QTest.qWait(20)
 
     def tearDown(self) -> None:
+        for canvas in self.window.tab_references.all_canvases():
+            services_for_window(self.window).canvas_document_service.mark_clean(canvas)
         self.window.close()
         self.app.processEvents()
         QTest.qWait(10)
+
+    def _set_current_file_path(self, path: str | None) -> None:
+        services_for_window(self.window).canvas_document_service.set_file_path(
+            active_canvas_for_window(self.window),
+            path,
+        )
+
+    def _current_file_path(self) -> str | None:
+        return document_file_path_for(active_canvas_for_window(self.window))
 
     def _hover_scene_point(self, point: QPointF) -> None:
         viewport_pos = active_canvas_for_window(self.window).mapFromScene(point)
@@ -155,7 +160,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             self.assertTrue(saved_path.exists())
             document = read_document(saved_path)
 
-        self.assertEqual(self.window.runtime_state.current_file_path, str(saved_path))
+        self.assertEqual(self._current_file_path(), str(saved_path))
         self.assertEqual(self.window.statusBar().currentMessage(), f"Saved: {saved_path}")
         self.assertEqual(len(document.state["ring_fills"]), 1)
         self.assertEqual(len(document.state["notes"]), 1)
@@ -189,7 +194,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             with patch("ui.main_window_document_action_service.QFileDialog.getOpenFileName", return_value=(str(path), "")):
                 self._document_actions().load_canvas(self.window)
 
-        self.assertEqual(self.window.runtime_state.current_file_path, str(path))
+        self.assertEqual(self._current_file_path(), str(path))
         self.assertEqual(self.window.statusBar().currentMessage(), f"Loaded: {path}")
         self.assertEqual(len(ring_items_for(active_canvas_for_window(self.window))), 1)
         self.assertEqual(len(note_items_for(active_canvas_for_window(self.window))), 1)
@@ -305,83 +310,70 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertAlmostEqual(restored.rotation(), 22.0)
         self.assertIs(restored.scene(), active_canvas_for_window(self.window).scene())
 
-    def test_save_canvas_writes_workbook_state_for_multiple_canvas_sheets(self) -> None:
+    def test_save_canvas_writes_only_active_canvas_state(self) -> None:
         add_bond_between_points_for(active_canvas_for_window(self.window), QPointF(-20.0, 0.0), QPointF(20.0, 0.0))
-        first_sheet_state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
+        first_canvas_state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
 
-        services_for_window(self.window).canvas_sheet_service.new_canvas_sheet(self.window)
+        services_for_window(self.window).canvas_document_service.new_canvas(self.window)
         add_benzene_ring_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
-        second_sheet_state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
+        active_state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            raw_path = Path(temp_dir) / "workbook"
+            raw_path = Path(temp_dir) / "canvas"
             saved_path = Path(f"{raw_path}.chemvas")
             with patch("ui.main_window_document_action_service.QFileDialog.getSaveFileName", return_value=(str(raw_path), "")):
                 self._document_actions().save_canvas(self.window)
 
             document = read_document(saved_path)
 
-        self.assertEqual(document.state["active_sheet_index"], 1)
-        self.assertEqual(len(document.state["sheets"]), 2)
-        self.assertEqual(
-            len(document.state["sheets"][0]["content"]["model"]["atoms"]),
-            len(first_sheet_state["model"]["atoms"]),
-        )
-        self.assertEqual(
-            len(document.state["sheets"][0]["content"]["model"]["bonds"]),
-            len(first_sheet_state["model"]["bonds"]),
-        )
-        self.assertEqual(
-            len(document.state["sheets"][1]["content"]["ring_fills"]),
-            len(second_sheet_state["ring_fills"]),
-        )
-        self.assertEqual(
-            document.state["sheets"][1]["content"]["model"]["next_atom_id"],
-            second_sheet_state["model"]["next_atom_id"],
-        )
-        self.assertNotIn("result_sheets", document.state)
+        self.assertNotIn("sheets", document.state)
+        self.assertEqual(len(document.state["ring_fills"]), len(active_state["ring_fills"]))
+        self.assertNotEqual(document.state["model"], first_canvas_state["model"])
 
-    def test_load_canvas_restores_workbook_sheets(self) -> None:
+    def test_load_canvas_rejects_workbook_payload(self) -> None:
         add_bond_between_points_for(active_canvas_for_window(self.window), QPointF(-20.0, 0.0), QPointF(20.0, 0.0))
-        first_sheet_state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
-
-        services_for_window(self.window).canvas_sheet_service.new_canvas_sheet(self.window)
-        add_benzene_ring_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
-        second_sheet_state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
-
-        workbook_state = {
-            "active_sheet_index": 1,
-            "sheets": [
-                {"name": "Reactant Sheet", "kind": "canvas", "content": first_sheet_state},
-                {"name": "Product Sheet", "kind": "canvas", "content": second_sheet_state},
-            ],
-        }
+        original_state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
 
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "workbook.chemvas"
-            write_document(path, workbook_state, version=2)
-
-            with patch("ui.main_window_document_action_service.QFileDialog.getOpenFileName", return_value=(str(path), "")):
+            path.write_text(
+                dumps(
+                    {
+                        "type": "chemvas",
+                        "version": 2,
+                        "state": {
+                            "active_sheet_index": 1,
+                            "sheets": [
+                                {"name": "Reactant Canvas", "kind": "canvas", "content": original_state},
+                                {"name": "Product Canvas", "kind": "canvas", "content": original_state},
+                            ],
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with (
+                patch("ui.main_window_document_action_service.QFileDialog.getOpenFileName", return_value=(str(path), "")),
+                patch("ui.main_window_document_action_service.QMessageBox.warning") as warning,
+            ):
                 self._document_actions().load_canvas(self.window)
 
-        self.assertEqual(self.window.tab_references.canvas_sheet_count(), 2)
-        self.assertEqual(self.window.tab_references.canvas_tabs.tabText(0), "Reactant Sheet")
-        self.assertEqual(self.window.tab_references.canvas_tabs.tabText(1), "Product Sheet")
-        self.assertEqual(self.window.tab_references.canvas_tabs.currentIndex(), 1)
-        self.assertEqual(len(ring_items_for(active_canvas_for_window(self.window))), 1)
+        warning.assert_called_once()
+        self.assertEqual(self.window.tab_references.canvas_count(), 1)
+        self.assertEqual(snapshot_canvas_state_for(active_canvas_for_window(self.window)), original_state)
 
     def test_save_canvas_cancel_keeps_current_path_and_status_message(self) -> None:
-        self.window.runtime_state.current_file_path = None
+        self._set_current_file_path(None)
         self.window.statusBar().showMessage("Idle")
 
         with patch("ui.main_window_document_action_service.QFileDialog.getSaveFileName", return_value=("", "")):
             self._document_actions().save_canvas(self.window)
 
-        self.assertIsNone(self.window.runtime_state.current_file_path)
+        self.assertIsNone(self._current_file_path())
         self.assertEqual(self.window.statusBar().currentMessage(), "Idle")
 
     def test_save_canvas_reuses_current_path_without_opening_dialog(self) -> None:
-        self.window.runtime_state.current_file_path = "/tmp/existing.chemvas"
+        self._set_current_file_path("/tmp/existing.chemvas")
         doc_service = active_canvas_for_window(self.window).services.canvas_document_session_service
 
         with (
@@ -393,12 +385,12 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
         save_mock.assert_called_once_with("/tmp/existing.chemvas")
         dialog_mock.assert_not_called()
-        self.assertEqual(self.window.runtime_state.current_file_path, "/tmp/existing.chemvas")
+        self.assertEqual(self._current_file_path(), "/tmp/existing.chemvas")
         self.assertEqual(self.window.statusBar().currentMessage(), "Saved: /tmp/existing.chemvas")
 
     def test_save_canvas_as_updates_current_path_and_status_message(self) -> None:
         add_bond_between_points_for(active_canvas_for_window(self.window), QPointF(-20.0, 0.0), QPointF(20.0, 0.0))
-        self.window.runtime_state.current_file_path = "/tmp/original.chemvas"
+        self._set_current_file_path("/tmp/original.chemvas")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             raw_path = Path(temp_dir) / "renamed"
@@ -408,21 +400,21 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
             self.assertTrue(saved_path.exists())
 
-        self.assertEqual(self.window.runtime_state.current_file_path, str(saved_path))
+        self.assertEqual(self._current_file_path(), str(saved_path))
         self.assertEqual(self.window.statusBar().currentMessage(), f"Saved: {saved_path}")
 
     def test_save_canvas_as_cancel_keeps_current_path_and_status_message(self) -> None:
-        self.window.runtime_state.current_file_path = "/tmp/original.chemvas"
+        self._set_current_file_path("/tmp/original.chemvas")
         self.window.statusBar().showMessage("Idle")
 
         with patch("ui.main_window_document_action_service.QFileDialog.getSaveFileName", return_value=("", "")):
             self._document_actions().save_canvas_as(self.window)
 
-        self.assertEqual(self.window.runtime_state.current_file_path, "/tmp/original.chemvas")
+        self.assertEqual(self._current_file_path(), "/tmp/original.chemvas")
         self.assertEqual(self.window.statusBar().currentMessage(), "Idle")
 
     def test_save_canvas_as_failure_warns_and_preserves_current_path(self) -> None:
-        self.window.runtime_state.current_file_path = "/tmp/original.chemvas"
+        self._set_current_file_path("/tmp/original.chemvas")
         self.window.statusBar().showMessage("Before save as")
         doc_service = active_canvas_for_window(self.window).services.canvas_document_session_service
 
@@ -440,11 +432,11 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             "Save Error",
             "Failed to save file:\ndisk full",
         )
-        self.assertEqual(self.window.runtime_state.current_file_path, "/tmp/original.chemvas")
+        self.assertEqual(self._current_file_path(), "/tmp/original.chemvas")
         self.assertEqual(self.window.statusBar().currentMessage(), "Before save as")
 
     def test_export_xyz_appends_extension_and_updates_status_message(self) -> None:
-        self.window.runtime_state.current_file_path = "/tmp/example.chemvas"
+        self._set_current_file_path("/tmp/example.chemvas")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             raw_path = Path(temp_dir) / "exported_structure"
@@ -461,21 +453,21 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
                 self._document_actions().export_xyz(self.window)
 
         self.assertEqual(export_mock.call_args.args, (str(expected_path),))
-        self.assertEqual(self.window.runtime_state.current_file_path, "/tmp/example.chemvas")
+        self.assertEqual(self._current_file_path(), "/tmp/example.chemvas")
         self.assertEqual(self.window.statusBar().currentMessage(), f"Exported XYZ: {expected_path}")
 
     def test_export_xyz_cancel_keeps_current_path_and_status_message(self) -> None:
-        self.window.runtime_state.current_file_path = "/tmp/original.chemvas"
+        self._set_current_file_path("/tmp/original.chemvas")
         self.window.statusBar().showMessage("Idle")
 
         with patch("ui.main_window_document_action_service.QFileDialog.getSaveFileName", return_value=("", "")):
             self._document_actions().export_xyz(self.window)
 
-        self.assertEqual(self.window.runtime_state.current_file_path, "/tmp/original.chemvas")
+        self.assertEqual(self._current_file_path(), "/tmp/original.chemvas")
         self.assertEqual(self.window.statusBar().currentMessage(), "Idle")
 
     def test_export_xyz_failure_warns_and_preserves_status_message(self) -> None:
-        self.window.runtime_state.current_file_path = "/tmp/original.chemvas"
+        self._set_current_file_path("/tmp/original.chemvas")
         self.window.statusBar().showMessage("Before export")
 
         with (
@@ -496,21 +488,21 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             "Export Error",
             "Failed to export XYZ:\nRDKit missing",
         )
-        self.assertEqual(self.window.runtime_state.current_file_path, "/tmp/original.chemvas")
+        self.assertEqual(self._current_file_path(), "/tmp/original.chemvas")
         self.assertEqual(self.window.statusBar().currentMessage(), "Before export")
 
     def test_load_canvas_cancel_keeps_current_path_and_status_message(self) -> None:
-        self.window.runtime_state.current_file_path = "/tmp/original.chemvas"
+        self._set_current_file_path("/tmp/original.chemvas")
         self.window.statusBar().showMessage("Idle")
 
         with patch("ui.main_window_document_action_service.QFileDialog.getOpenFileName", return_value=("", "")):
             self._document_actions().load_canvas(self.window)
 
-        self.assertEqual(self.window.runtime_state.current_file_path, "/tmp/original.chemvas")
+        self.assertEqual(self._current_file_path(), "/tmp/original.chemvas")
         self.assertEqual(self.window.statusBar().currentMessage(), "Idle")
 
     def test_save_canvas_failure_warns_and_preserves_current_path(self) -> None:
-        self.window.runtime_state.current_file_path = "/tmp/original.chemvas"
+        self._set_current_file_path("/tmp/original.chemvas")
         self.window.statusBar().showMessage("Before save")
         doc_service = active_canvas_for_window(self.window).services.canvas_document_session_service
 
@@ -527,7 +519,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             "Save Error",
             "Failed to save file:\ndisk full",
         )
-        self.assertEqual(self.window.runtime_state.current_file_path, "/tmp/original.chemvas")
+        self.assertEqual(self._current_file_path(), "/tmp/original.chemvas")
         self.assertEqual(self.window.statusBar().currentMessage(), "Before save")
 
     def test_load_canvas_failure_warns_and_preserves_existing_scene(self) -> None:
@@ -536,7 +528,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         set_last_smiles_input_for(active_canvas_for_window(self.window), "CCO")
         history_state_for(active_canvas_for_window(self.window)).history = ["keep-history"]
         history_state_for(active_canvas_for_window(self.window)).redo_stack = ["keep-redo"]
-        self.window.runtime_state.current_file_path = "/tmp/original.chemvas"
+        self._set_current_file_path("/tmp/original.chemvas")
         self.window.statusBar().showMessage("Before load")
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -554,7 +546,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             "Load Error",
             "Failed to load file:\nInvalid Chemvas file.",
         )
-        self.assertEqual(self.window.runtime_state.current_file_path, "/tmp/original.chemvas")
+        self.assertEqual(self._current_file_path(), "/tmp/original.chemvas")
         self.assertEqual(self.window.statusBar().currentMessage(), "Before load")
         self.assertEqual(len(ring_items_for(active_canvas_for_window(self.window))), 1)
         self.assertEqual(len(note_items_for(active_canvas_for_window(self.window))), 1)

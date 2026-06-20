@@ -4,6 +4,7 @@ import os
 import sys
 import threading
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Iterator
 
 IGNORED_STDERR_SUBSTRINGS = (
@@ -12,9 +13,20 @@ IGNORED_STDERR_SUBSTRINGS = (
     "qt.qpa.keymapper: Mismatch between Cocoa",
 )
 
+STARTUP_DOCUMENT_SUFFIXES = frozenset((".chemvas", ".json", ".svg"))
+
 
 def _should_filter_stderr(platform: str | None = None) -> bool:
     return (platform or sys.platform) == "darwin"
+
+
+def _startup_document_path(argv: list[str]) -> str | None:
+    for argument in argv[1:]:
+        if argument.startswith("-"):
+            continue
+        if Path(argument).suffix.lower() in STARTUP_DOCUMENT_SUFFIXES:
+            return argument
+    return None
 
 
 def _stderr_filter_loop(
@@ -58,6 +70,10 @@ def main() -> None:
 
         app = QApplication(sys.argv)
         window = MainWindow()
+        startup_document_path = _startup_document_path(sys.argv)
+        if startup_document_path is not None:
+            from ui.main_window_service_ports import services_for_window
+
+            services_for_window(window).document_action_service.load_canvas_from_path(window, startup_document_path)
         window.show()
         app.exec()
-

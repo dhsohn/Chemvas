@@ -13,8 +13,6 @@ if TYPE_CHECKING:
 
 
 class MainWindow(QMainWindow):
-    WORKBOOK_FILE_VERSION = 2
-
     def __init__(self) -> None:
         super().__init__()
         runtime = build_main_window_runtime(self)
@@ -38,6 +36,9 @@ class MainWindow(QMainWindow):
         return self._state
 
     def closeEvent(self, event) -> None:
+        if not self._services.document_action_service.confirm_close_window(self):
+            event.ignore()
+            return
         preview_window = self._ui_refs.preview_window
         if preview_window is not None:
             preview_window.hide()

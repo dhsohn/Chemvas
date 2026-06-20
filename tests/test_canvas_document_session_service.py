@@ -100,7 +100,7 @@ def _settings() -> dict:
     )
 
 
-def _single_sheet_state() -> dict:
+def _canvas_state() -> dict:
     return {
         "model": {"atoms": {}, "bonds": [], "next_atom_id": 0},
         "ring_fills": [],
@@ -319,7 +319,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         )
         _attach_history_service(canvas)
         service = _session_service(canvas)
-        state = _single_sheet_state()
+        state = _canvas_state()
         service.snapshot_state = mock.Mock(return_value=state)
 
         def write_svg(_canvas, path, **_kwargs) -> None:

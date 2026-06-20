@@ -5,7 +5,7 @@ from pathlib import Path
 from core.document_io import read_document, write_document
 from core.document_state import (
     deserialize_model_state,
-    selection_payload_to_single_sheet_state,
+    selection_payload_to_canvas_state,
 )
 from core.svg_roundtrip import (
     CHEMVAS_SVG_SCOPE_SELECTION,
@@ -157,7 +157,7 @@ class CanvasDocumentSessionService:
         if scope == "selection":
             items = selection_items_for_copy_for(self.canvas)
             if not items:
-                raise ValueError("Select something to export, or choose Whole sheet.")
+                raise ValueError("Select something to export, or choose Whole canvas.")
 
         unit_scale = 1.0
         target_width_pt = None
@@ -217,8 +217,8 @@ class CanvasDocumentSessionService:
             version=clipboard_selection_version_for(self.canvas),
         )
         if selection_payload is None:
-            raise ValueError("Select something to export, or choose Whole sheet.")
-        return selection_payload_to_single_sheet_state(
+            raise ValueError("Select something to export, or choose Whole canvas.")
+        return selection_payload_to_canvas_state(
             selection_payload,
             self.snapshot_state()["settings"],
         )

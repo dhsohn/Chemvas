@@ -79,7 +79,7 @@ class _HarnessWindow(QMainWindow):
             icon_save=self._blank_icon,
             icon_open=self._blank_icon,
             icon_preview_panel=self._blank_icon,
-            icon_add_sheet=self._blank_icon,
+            icon_add_canvas=self._blank_icon,
             icon_setup_sheet=self._blank_icon,
             icon_undo=self._blank_icon,
             icon_redo=self._blank_icon,
@@ -127,7 +127,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             load_canvas=mock.Mock(),
             export_figure=mock.Mock(),
             open_preview_window=mock.Mock(),
-            new_canvas_sheet=mock.Mock(),
+            new_canvas=mock.Mock(),
         )
         self.service = MainWindowUIAssemblyService(
             scene_transform_controller_for_window=self.scene_transform_controller_for_window,
@@ -307,7 +307,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         )
         self.assertEqual(menu_actions[3].text(), "Export Figure...")
         self.assertEqual(assembly.save_button.toolTip(), "File")
-        self.assertEqual(assembly.load_action.statusTip(), "Open a drawing or workbook")
+        self.assertEqual(assembly.load_action.statusTip(), "Open a drawing")
         self.assertEqual(assembly.save_action.statusTip(), "Save the current drawing")
         self.assertEqual(assembly.save_as_action.statusTip(), "Save the current drawing to a new file")
         self.assertNotIn("Tools", [toolbar.windowTitle() for toolbar in window.findChildren(QToolBar)])
@@ -339,7 +339,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.assertFalse(assembly.preview_panel_button.isCheckable())
         self.assertEqual(assembly.preview_panel_button.toolTip(), "Molecule Info")
         self.assertIsNone(assembly.panel_bar.findChild(QToolButton, "setup_sheet_button"))
-        self.assertIs(assembly.new_sheet_button, assembly.panel_bar.findChild(QToolButton, "new_sheet_button"))
+        self.assertIs(assembly.new_canvas_button, assembly.panel_bar.findChild(QToolButton, "new_canvas_button"))
         self.assertIs(assembly.undo_button, assembly.panel_bar.findChild(QToolButton, "undo_button"))
         self.assertIs(assembly.redo_button, assembly.panel_bar.findChild(QToolButton, "redo_button"))
 
@@ -363,8 +363,8 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         window.export_figure.assert_not_called()
         assembly.preview_panel_button.click()
         self.panel_toolbar_callbacks.open_preview_window.assert_called_once_with(window)
-        assembly.new_sheet_button.click()
-        self.panel_toolbar_callbacks.new_canvas_sheet.assert_called_once_with(window)
+        assembly.new_canvas_button.click()
+        self.panel_toolbar_callbacks.new_canvas.assert_called_once_with(window)
         window.export_xyz.assert_not_called()
         window.open_preview_window.assert_not_called()
         window.setup_sheet.assert_not_called()

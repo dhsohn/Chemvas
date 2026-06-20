@@ -188,7 +188,7 @@ class MainWindowIconGeometryTest(unittest.TestCase):
     def test_basic_toolbar_icons_render_non_empty_bounds(self) -> None:
         for icon in (
             self.factory.icon_select(),
-            self.factory.icon_add_sheet(),
+            self.factory.icon_add_canvas(),
             self.factory.icon_info(),
             self.factory.icon_preview_panel(),
             self.factory.icon_bond_double(),

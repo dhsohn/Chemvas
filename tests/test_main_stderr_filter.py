@@ -123,6 +123,53 @@ class MainStderrFilterTest(unittest.TestCase):
         self.assertTrue(FakeMainWindow.instances[0].shown)
         self.assertEqual([event[0] for event in events], ["enter", "show", "exec", "exit"])
 
+    def test_main_loads_startup_canvas_file_argument(self) -> None:
+        events: list[tuple[str, object]] = []
+
+        class FakeApplication:
+            def __init__(self, args) -> None:
+                self.args = args
+
+            def exec(self) -> None:
+                events.append(("exec", self.args))
+
+        class FakeMainWindow:
+            def __init__(self) -> None:
+                document_action_service = types.SimpleNamespace(
+                    load_canvas_from_path=lambda window, path: events.append(("load", path))
+                )
+                self._services = types.SimpleNamespace(document_action_service=document_action_service)
+
+            def show(self) -> None:
+                events.append(("show", None))
+
+        qt_widgets_module = types.ModuleType("PyQt6.QtWidgets")
+        qt_widgets_module.QApplication = FakeApplication
+        main_window_module = types.ModuleType("ui.main_window")
+        main_window_module.MainWindow = FakeMainWindow
+
+        @contextmanager
+        def fake_filtered_stderr(*args, **kwargs):
+            events.append(("enter", kwargs))
+            yield
+            events.append(("exit", None))
+
+        argv = ["chemvas", "--style", "Fusion", "/tmp/start.chemvas"]
+        with (
+            mock.patch.dict(
+                sys.modules,
+                {
+                    "PyQt6.QtWidgets": qt_widgets_module,
+                    "ui.main_window": main_window_module,
+                },
+            ),
+            mock.patch.object(sys, "argv", argv),
+            mock.patch.object(chemvas_main, "_filtered_stderr", fake_filtered_stderr),
+        ):
+            app_main.main()
+
+        self.assertEqual(events, [("enter", {}), ("load", "/tmp/start.chemvas"), ("show", None), ("exec", argv), ("exit", None)])
+
     def test_main_module_executes_main_when_run_as_script(self) -> None:
         events: list[str] = []
 
