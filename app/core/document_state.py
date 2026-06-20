@@ -187,6 +187,103 @@ def serialize_settings(
     }
 
 
+def selection_payload_to_single_sheet_state(
+    selection_payload: Mapping[str, object],
+    template_settings: Mapping[str, object],
+) -> dict:
+    """Convert a validated clipboard-style selection payload into a sheet state."""
+    if not validate_clipboard_selection_payload(selection_payload):
+        raise ValueError("Invalid clipboard payload.")
+
+    atoms = cast(list[Mapping[str, object]], selection_payload.get("atoms", []))
+    bonds = cast(list[Mapping[str, object]], selection_payload.get("bonds", []))
+    rings = cast(list[Mapping[str, object]], selection_payload.get("rings", []))
+    marks = cast(list[Mapping[str, object]], selection_payload.get("marks", []))
+    scene_items = cast(list[Mapping[str, object]], selection_payload.get("scene_items", []))
+
+    atom_states: dict[int, dict] = {}
+    for atom_state in atoms:
+        atom_id = _validated_id(atom_state.get("id"))
+        atom_states[atom_id] = {
+            "element": atom_state["element"],
+            "x": atom_state["x"],
+            "y": atom_state["y"],
+            "color": atom_state["color"],
+            "explicit_label": atom_state["explicit_label"],
+        }
+
+    ring_fills: list[dict] = []
+    note_states: list[dict] = []
+    arrow_states: list[dict] = []
+    ts_bracket_states: list[dict] = []
+    orbital_states: list[dict] = []
+
+    for ring_state in rings:
+        ring_fills.append(
+            {
+                "points": ring_state["points"],
+                "atom_ids": ring_state["atom_ids"],
+                "color": ring_state["color"],
+                "alpha": ring_state["alpha"],
+            }
+        )
+
+    mark_states = [
+        {
+            "kind": mark_state["mark_kind"],
+            "text": mark_state["text"],
+            "atom_id": mark_state["atom_id"],
+            "dx": mark_state["dx"],
+            "dy": mark_state["dy"],
+            "x": mark_state["x"],
+            "y": mark_state["y"],
+        }
+        for mark_state in marks
+    ]
+
+    for item_state in scene_items:
+        kind = item_state.get("kind")
+        if kind == "note":
+            note_states.append(
+                {
+                    "text": item_state["text"],
+                    "x": item_state["x"],
+                    "y": item_state["y"],
+                }
+            )
+        elif kind in VALID_ARROW_KINDS:
+            arrow_states.append(dict(item_state))
+        elif kind == "ts_bracket":
+            ts_bracket_states.append(dict(item_state))
+        elif kind == "orbital":
+            orbital_states.append(
+                {
+                    "kind": item_state["orbital_kind"],
+                    "center": item_state["center"],
+                    "scale": item_state["scale"],
+                    "rotation": item_state["rotation"],
+                }
+            )
+
+    state = {
+        "model": {
+            "atoms": atom_states,
+            "bonds": [dict(bond_state) for bond_state in bonds],
+            "next_atom_id": max(atom_states, default=-1) + 1,
+        },
+        "ring_fills": ring_fills,
+        "notes": note_states,
+        "marks": mark_states,
+        "arrows": arrow_states,
+        "ts_brackets": ts_bracket_states,
+        "orbitals": orbital_states,
+        "settings": dict(template_settings),
+        "last_smiles_input": None,
+    }
+    _validate_single_sheet_state(state)
+    return state
+
+
 def build_document_payload(state: dict, version: int) -> dict:
     _validate_document_state(state, version)
     return {

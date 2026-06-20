@@ -321,6 +321,57 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         )
         self.workbook_document_service.restore_single_sheet_document.assert_not_called()
 
+    def test_load_canvas_restores_editable_svg_without_updating_current_path(self) -> None:
+        file_dialog = mock.Mock()
+        file_dialog.getOpenFileName.return_value = ("/tmp/editable.svg", "")
+        message_box = mock.Mock()
+        self.window.runtime_state.current_file_path = "/tmp/current.chemvas"
+        self.workbook_document_service.restore_single_sheet_document = mock.Mock()
+        self.workbook_document_service.restore_workbook_document = mock.Mock()
+        read_document = mock.Mock(side_effect=AssertionError("JSON reader should not read SVG"))
+        read_editable_svg = mock.Mock(return_value=SimpleNamespace(state={"model": {"atoms": {}}}))
+
+        self.service.load_canvas(
+            self.window,
+            file_dialog=file_dialog,
+            message_box=message_box,
+            read_document=read_document,
+            read_editable_svg=read_editable_svg,
+            resolve_load_path=resolve_load_path,
+        )
+
+        read_editable_svg.assert_called_once_with("/tmp/editable.svg")
+        read_document.assert_not_called()
+        self.workbook_document_service.restore_single_sheet_document.assert_called_once_with(
+            self.window,
+            {"model": {"atoms": {}}},
+        )
+        self.workbook_document_service.restore_workbook_document.assert_not_called()
+        self.assertEqual(self.window.runtime_state.current_file_path, "/tmp/current.chemvas")
+        self.assertEqual(self.window.statusBar().currentMessage(), "Loaded editable SVG: /tmp/editable.svg")
+        message_box.warning.assert_not_called()
+
+    def test_load_canvas_warns_when_editable_svg_metadata_is_missing(self) -> None:
+        file_dialog = mock.Mock()
+        file_dialog.getOpenFileName.return_value = ("/tmp/plain.svg", "")
+        message_box = mock.Mock()
+        self.window.runtime_state.current_file_path = "/tmp/current.chemvas"
+
+        self.service.load_canvas(
+            self.window,
+            file_dialog=file_dialog,
+            message_box=message_box,
+            read_editable_svg=mock.Mock(side_effect=ValueError("No editable Chemvas metadata found in SVG.")),
+            resolve_load_path=resolve_load_path,
+        )
+
+        message_box.warning.assert_called_once_with(
+            self.window,
+            "Load Error",
+            "Failed to load file:\nNo editable Chemvas metadata found in SVG.",
+        )
+        self.assertEqual(self.window.runtime_state.current_file_path, "/tmp/current.chemvas")
+
     def test_load_canvas_warns_on_read_failure(self) -> None:
         file_dialog = mock.Mock()
         file_dialog.getOpenFileName.return_value = ("/tmp/broken.chemvas", "")

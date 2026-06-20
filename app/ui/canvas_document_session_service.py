@@ -3,7 +3,16 @@ from __future__ import annotations
 from pathlib import Path
 
 from core.document_io import read_document, write_document
-from core.document_state import deserialize_model_state
+from core.document_state import (
+    deserialize_model_state,
+    selection_payload_to_single_sheet_state,
+)
+from core.svg_roundtrip import (
+    CHEMVAS_SVG_SCOPE_SELECTION,
+    CHEMVAS_SVG_SCOPE_SHEET,
+    create_editable_svg_payload,
+    embed_chemvas_document_in_svg,
+)
 
 from ui.canvas_document_export_access import export_canvas_scene_for
 from ui.canvas_document_state import (
@@ -12,8 +21,13 @@ from ui.canvas_document_state import (
     restore_document_pre_model_items,
     snapshot_canvas_document_state,
 )
-from ui.canvas_format_access import file_format_version_for
-from ui.canvas_model_access import set_model_for
+from ui.canvas_format_access import (
+    clipboard_selection_version_for,
+    file_format_version_for,
+)
+from ui.canvas_mark_registry import mark_registry_for
+from ui.canvas_model_access import bonds_for, set_model_for
+from ui.canvas_scene_items_state import ring_items_for
 from ui.canvas_scene_reset_access import clear_scene_for
 from ui.rdkit_adapter_access import (
     model_to_xyz_block_for,
@@ -28,7 +42,16 @@ from ui.renderer_style_access import (
     bond_length_px_for,
     bond_line_width_for,
 )
-from ui.selection_collection_access import selection_items_for_copy_for
+from ui.scene_clipboard_access import build_selection_clipboard_payload_for_canvas
+from ui.scene_item_state import (
+    atom_state_dict_for,
+    bond_state_dict,
+    scene_item_state_for,
+)
+from ui.selection_collection_access import (
+    selected_ids_for,
+    selection_items_for_copy_for,
+)
 from ui.structure_payload_access import (
     build_3d_conversion_payload_for,
     build_selected_3d_conversion_payload_for,
@@ -158,6 +181,46 @@ class CanvasDocumentSessionService:
             title="Chemvas drawing",
             unit_scale=unit_scale,
             target_width_pt=target_width_pt,
+        )
+        self._embed_editable_svg_payload(path, fmt=fmt, scope=scope)
+
+    def _embed_editable_svg_payload(self, path: str, *, fmt: str, scope: str) -> None:
+        if fmt.lower() != "svg":
+            return
+        if scope == "selection":
+            state = self._selection_document_state()
+            svg_scope = CHEMVAS_SVG_SCOPE_SELECTION
+        else:
+            state = self.snapshot_state()
+            svg_scope = CHEMVAS_SVG_SCOPE_SHEET
+        payload = create_editable_svg_payload(
+            state,
+            document_version=file_format_version_for(self.canvas),
+            scope=svg_scope,
+        )
+        embed_chemvas_document_in_svg(path, payload)
+
+    def _selection_document_state(self) -> dict:
+        selected_items = selection_items_for_copy_for(self.canvas)
+        explicit_atom_ids, bond_ids = selected_ids_for(self.canvas)
+        selection_payload = build_selection_clipboard_payload_for_canvas(
+            self.canvas,
+            selected_items=selected_items,
+            explicit_atom_ids=explicit_atom_ids,
+            selected_bond_ids=bond_ids,
+            bonds=bonds_for(self.canvas),
+            ring_items=ring_items_for(self.canvas),
+            marks_by_atom=mark_registry_for(self.canvas).by_atom,
+            atom_state_getter=lambda atom_id: atom_state_dict_for(self.canvas, atom_id),
+            bond_state_getter=bond_state_dict,
+            scene_item_state_getter=lambda item: scene_item_state_for(self.canvas, item),
+            version=clipboard_selection_version_for(self.canvas),
+        )
+        if selection_payload is None:
+            raise ValueError("Select something to export, or choose Whole sheet.")
+        return selection_payload_to_single_sheet_state(
+            selection_payload,
+            self.snapshot_state()["settings"],
         )
 
 
