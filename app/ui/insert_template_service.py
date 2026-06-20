@@ -4,7 +4,6 @@ from collections.abc import Callable
 
 from PyQt6.QtCore import QPointF
 
-from ui.atom_label_access import atom_has_visible_label_for
 from ui.benzene_preview_access import clear_benzene_preview_for
 from ui.canvas_insert_state import CanvasInsertState
 from ui.canvas_model_access import atom_for_id, bond_for_id
@@ -94,9 +93,8 @@ class InsertTemplateService:
 
     def _template_structure_target_ids(self, pos: QPointF) -> tuple[int | None, int | None]:
         direct_hit = self._direct_structure_hit(pos)
-        if direct_hit is not None:
-            if direct_hit.kind == "atom" and isinstance(direct_hit.id, int):
-                return direct_hit.id, None
+        if direct_hit is not None and direct_hit.kind == "atom" and isinstance(direct_hit.id, int):
+            return direct_hit.id, None
 
         preferred_hit = self._preferred_nearby_structure_hit(pos)
         if preferred_hit is not None:
@@ -137,7 +135,6 @@ class InsertTemplateService:
             AtomHitCandidate(
                 atom_id=atom_hit[0],
                 distance=atom_hit[1],
-                has_visible_label=atom_has_visible_label_for(self.canvas, atom_hit[0]),
             )
             if atom_hit is not None
             else None,
@@ -150,10 +147,8 @@ class InsertTemplateService:
         find_bond_near = getattr(self.hit_testing_service, "find_bond_near", None)
         if not callable(find_bond_near):
             return None
-        bond_id = find_bond_near(
-            pos,
-            bond_length_px_for(self.canvas) * 0.35,
-        )
+        gate = bond_length_px_for(self.canvas) * 0.35
+        bond_id = find_bond_near(pos, gate)
         if bond_id is None:
             return None
         distance_point_to_segment = getattr(self.hit_testing_service, "distance_point_to_segment", None)
@@ -173,7 +168,7 @@ class InsertTemplateService:
         else:
             nearest_bond_hit = getattr(self.hit_testing_service, "nearest_bond_hit", None)
             nearest_hit = nearest_bond_hit(pos) if callable(nearest_bond_hit) else None
-            distance = nearest_hit[1] if nearest_hit is not None and nearest_hit[0] == bond_id else 0.0
+            distance = nearest_hit[1] if nearest_hit is not None and nearest_hit[0] == bond_id else gate
         return bond_id, distance
 
     def template_point_resolvers(self) -> TemplatePointResolvers:

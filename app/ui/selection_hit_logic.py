@@ -12,7 +12,6 @@ Point2D = tuple[float, float]
 class AtomHitCandidate:
     atom_id: int
     distance: float
-    has_visible_label: bool
 
 
 @dataclass(frozen=True)

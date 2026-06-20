@@ -60,7 +60,6 @@ def apply_template_commit_resolution(
 
     try:
         if plan.generator in {"atom_regular_ring", "bond_regular_ring", "bond_template_shape"}:
-            merge = []
             if plan.generator == "atom_regular_ring":
                 if plan.atom_id is None:
                     return False
