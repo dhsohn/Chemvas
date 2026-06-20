@@ -32,6 +32,11 @@ _SVG_BY_NAME: dict[str, str] = {
     "bracket": '<path d="M9 4 H6 V20 H9"/><path d="M15 4 H18 V20 H15"/>',
     "orbital": '<ellipse cx="8" cy="12" rx="5" ry="7"/><ellipse cx="16" cy="12" rx="5" ry="7"/>',
     "atom": '<path d="M6 6 H18 M12 6 V19 M9 19 H15"/>',
+    "atom_orbit": (
+        '<circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>'
+        '<ellipse cx="12" cy="12" rx="9.5" ry="4" transform="rotate(45 12 12)"/>'
+        '<ellipse cx="12" cy="12" rx="9.5" ry="4" transform="rotate(-45 12 12)"/>'
+    ),
     "undo": '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/>',
     "redo": '<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13"/>',
     "save": (
@@ -74,8 +79,62 @@ _SVG_BY_NAME: dict[str, str] = {
         '<path d="M2 12h20"/><path d="m5 9-3 3 3 3"/><path d="m9 5 3-3 3 3"/>'
     ),
     "plus": '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+    "minus": '<line x1="5" y1="12" x2="19" y2="12"/>',
+    "radical": '<circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"/>',
     "circled_plus": '<circle cx="12" cy="12" r="9"/><path d="M12 7.2v9.6"/><path d="M7.2 12h9.6"/>',
     "circled_minus": '<circle cx="12" cy="12" r="9"/><path d="M7.2 12h9.6"/>',
+    "ring_fill": (
+        '<polygon points="12,3 20.56,9.22 17.29,19.28 6.71,19.28 3.44,9.22" '
+        'fill="#ededeb" stroke-width="2"/>'
+    ),
+    "templates": '<polygon points="0.04,19.08 3.97,9.35 14.46,9.35 23.96,4.92 20.03,14.65 9.54,14.65"/>',
+    "bond_bold": '<line x1="5" y1="17" x2="19" y2="7" stroke-width="3.6"/>',
+    "bond_dotted": '<line x1="5" y1="17" x2="19" y2="7" stroke-dasharray="0.1 3.4"/>',
+    "bond_length": (
+        '<line x1="3" y1="12" x2="21" y2="12"/>'
+        '<line x1="3" y1="8" x2="3" y2="16"/>'
+        '<line x1="21" y1="8" x2="21" y2="16"/>'
+    ),
+    # --- Arrow previews ---
+    "arrow_reaction": '<line x1="0" y1="12" x2="24" y2="12"/><line x1="19.92" y1="13.9" x2="24" y2="12"/><line x1="19.92" y1="10.1" x2="24" y2="12"/>',
+    "arrow_equilibrium": '<line x1="0" y1="7" x2="24" y2="7"/><line x1="19.92" y1="8.9" x2="24" y2="7"/><line x1="19.92" y1="5.1" x2="24" y2="7"/><line x1="24" y1="17" x2="0" y2="17"/><line x1="4.08" y1="15.1" x2="0" y2="17"/><line x1="4.08" y1="18.9" x2="0" y2="17"/>',
+    "arrow_resonance": '<line x1="0" y1="12" x2="24" y2="12"/><line x1="19.92" y1="13.9" x2="24" y2="12"/><line x1="19.92" y1="10.1" x2="24" y2="12"/><line x1="4.08" y1="10.1" x2="0" y2="12"/><line x1="4.08" y1="13.9" x2="0" y2="12"/>',
+    "arrow_curved_single": '<path d="M1 19 Q12 0 23 12"/><line x1="18.7" y1="10.66" x2="23" y2="12"/><line x1="21.26" y1="7.85" x2="23" y2="12"/>',
+    "arrow_curved_double": '<path d="M1 19 Q12 0 23 12"/><line x1="18.7" y1="10.66" x2="23" y2="12"/><line x1="21.26" y1="7.85" x2="23" y2="12"/><line x1="1.62" y1="14.54" x2="1" y2="19"/><line x1="4.81" y1="16.61" x2="1" y2="19"/>',
+    "arrow_inhibit": '<line x1="0" y1="12" x2="23" y2="12"/><line x1="23" y1="5" x2="23" y2="19"/>',
+    "arrow_dotted": '<line x1="0" y1="12" x2="24" y2="12" stroke-dasharray="3 3"/><line x1="19.92" y1="13.9" x2="24" y2="12"/><line x1="19.92" y1="10.1" x2="24" y2="12"/>',
+    # --- Arrow presets ---
+    "arrow_preset_default": '<line x1="2" y1="12" x2="21" y2="12" stroke-width="1.8"/><line x1="16.92" y1="13.9" x2="21" y2="12"/><line x1="16.92" y1="10.1" x2="21" y2="12"/>',
+    "arrow_preset_bold": '<line x1="2" y1="12" x2="21" y2="12" stroke-width="2.9"/><line x1="16.92" y1="13.9" x2="21" y2="12"/><line x1="16.92" y1="10.1" x2="21" y2="12"/>',
+    "arrow_preset_fine": '<line x1="2" y1="12" x2="21" y2="12" stroke-width="1.0"/><line x1="16.92" y1="13.9" x2="21" y2="12"/><line x1="16.92" y1="10.1" x2="21" y2="12"/>',
+    # --- Arrow controls ---
+    "arrow_width": '<line x1="3" y1="7" x2="21" y2="7" stroke="#8c8c87" stroke-width="1.2"/><line x1="3" y1="16" x2="21" y2="16" stroke-width="2.4"/>',
+    "arrow_head_scale": '<line x1="2" y1="12" x2="21" y2="12"/><line x1="16.92" y1="13.9" x2="21" y2="12"/><line x1="16.92" y1="10.1" x2="21" y2="12"/>',
+    # --- Orbital previews ---
+    "orbital_s": '<circle cx="12" cy="12" r="6"/>',
+    "orbital_p": '<circle cx="8" cy="13" r="5"/><circle cx="16" cy="11" r="5"/>',
+    "orbital_sp": '<circle cx="8" cy="14" r="5"/><circle cx="18" cy="10" r="5"/><line x1="2" y1="15" x2="22" y2="9"/>',
+    "orbital_sp2": '<circle cx="8" cy="8" r="4"/><circle cx="16" cy="8" r="4"/><circle cx="12" cy="16" r="4"/>',
+    "orbital_sp3": '<circle cx="8" cy="8" r="4"/><circle cx="16" cy="8" r="4"/><circle cx="12" cy="16" r="4"/><circle cx="12" cy="3" r="4"/>',
+    "orbital_d": '<circle cx="7" cy="11" r="4"/><circle cx="17" cy="11" r="4"/><circle cx="12" cy="6" r="4"/><circle cx="12" cy="16" r="4"/>',
+    # --- Template previews ---
+    "template_benzene": '<polygon points="12.0,2.0 20.66,7.0 20.66,17.0 12.0,22.0 3.34,17.0 3.34,7.0"/><line x1="12.0" y1="4.2" x2="18.75" y2="8.1"/><line x1="18.75" y1="15.9" x2="12.0" y2="19.8"/><line x1="5.25" y1="15.9" x2="5.25" y2="8.1"/>',
+    "template_ring3": '<polygon points="12.0,2.0 20.66,17.0 3.34,17.0"/>',
+    "template_ring4": '<polygon points="12.0,2.0 22.0,12.0 12.0,22.0 2.0,12.0"/>',
+    "template_ring5": '<polygon points="12.0,2.0 21.51,8.91 17.88,20.09 6.12,20.09 2.49,8.91"/>',
+    "template_ring6": '<polygon points="12.0,2.0 20.66,7.0 20.66,17.0 12.0,22.0 3.34,17.0 3.34,7.0"/>',
+    "template_ring7": '<polygon points="12.0,2.0 19.82,5.77 21.75,14.23 16.34,21.01 7.66,21.01 2.25,14.23 4.18,5.77"/>',
+    "template_ring8": '<polygon points="12.0,2.0 19.07,4.93 22.0,12.0 19.07,19.07 12.0,22.0 4.93,19.07 2.0,12.0 4.93,4.93"/>',
+    "template_chair": '<polygon points="0.04,19.08 3.97,9.35 14.46,9.35 23.96,4.92 20.03,14.65 9.54,14.65"/>',
+    # --- Bracket previews ---
+    "bracket_square_pair": '<line x1="5.76" y1="2.5" x2="1.8" y2="2.5"/><line x1="1.8" y1="2.5" x2="1.8" y2="21.5"/><line x1="1.8" y1="21.5" x2="5.76" y2="21.5"/><line x1="18.24" y1="2.5" x2="22.2" y2="2.5"/><line x1="22.2" y1="2.5" x2="22.2" y2="21.5"/><line x1="22.2" y1="21.5" x2="18.24" y2="21.5"/>',
+    "bracket_parentheses_pair": '<path d="M9.0 2.5 C1.8 6.68 1.8 7.82 1.8 12.0 C1.8 16.18 1.8 17.32 9.0 21.5"/><path d="M15.0 2.5 C22.2 6.68 22.2 7.82 22.2 12.0 C22.2 16.18 22.2 17.32 15.0 21.5"/>',
+    "bracket_braces_pair": '<path d="M9.0 2.5 C1.8 2.5 1.8 5.11 3.1 7.25 C6.26 8.77 6.26 10.34 1.8 12.0 C6.26 13.66 6.26 15.23 3.1 16.75 C1.8 18.89 1.8 21.5 9.0 21.5"/><path d="M15.0 2.5 C22.2 2.5 22.2 5.11 20.9 7.25 C17.74 8.77 17.74 10.34 22.2 12.0 C17.74 13.66 17.74 15.23 20.9 16.75 C22.2 18.89 22.2 21.5 15.0 21.5"/>',
+    "bracket_square_left": '<line x1="9.71" y1="2.5" x2="5.2" y2="2.5"/><line x1="5.2" y1="2.5" x2="5.2" y2="21.5"/><line x1="5.2" y1="21.5" x2="9.71" y2="21.5"/>',
+    "bracket_parenthesis_left": '<path d="M13.4 2.5 C5.2 6.68 5.2 7.82 5.2 12.0 C5.2 16.18 5.2 17.32 13.4 21.5"/>',
+    "bracket_brace_left": '<path d="M13.4 2.5 C5.2 2.5 5.2 5.11 6.68 7.25 C10.28 8.77 10.28 10.34 5.2 12.0 C10.28 13.66 10.28 15.23 6.68 16.75 C5.2 18.89 5.2 21.5 13.4 21.5"/>',
+    "bracket_dagger": '<line x1="12" y1="4" x2="12" y2="20"/><line x1="8" y1="8.5" x2="16" y2="8.5"/>',
+    "bracket_double_dagger": '<line x1="12" y1="4" x2="12" y2="20"/><line x1="8" y1="7.5" x2="16" y2="7.5"/><line x1="8" y1="16.5" x2="16" y2="16.5"/>',
 }
 
 
@@ -90,9 +149,16 @@ def _svg_document(name: str, color: str) -> str:
     )
 
 
+DESIGN_ICON_NAMES = frozenset(_SVG_BY_NAME)
+
+
+def has_design_icon(name: str) -> bool:
+    return name in _SVG_BY_NAME
+
+
 def draw_design_icon(painter: QPainter, name: str, *, color: str | None = None) -> None:
     renderer = QSvgRenderer(QByteArray(_svg_document(name, color or _ICON_COLOR).encode("utf-8")))
     renderer.render(painter, QRectF(3.0, 3.0, 24.0, 24.0))
 
 
-__all__ = ["draw_design_icon"]
+__all__ = ["DESIGN_ICON_NAMES", "draw_design_icon", "has_design_icon"]

@@ -3195,10 +3195,18 @@ def test_main_window_icon_factory_delegates_bond_drawing_to_renderer() -> None:
     assert "from ui.main_window_bond_icon_renderer import MainWindowBondIconRenderer" in factory_source
     assert "from ui.main_window_design_icon_renderer import draw_design_icon" in factory_source
     assert "self._bond_icons = MainWindowBondIconRenderer(" in factory_source
-    for icon_name in ("bond", "bond_double", "bond_triple", "wedge", "hash", "benzene"):
+    for icon_name in (
+        "bond",
+        "bond_double",
+        "bond_triple",
+        "wedge",
+        "hash",
+        "benzene",
+        "bond_bold",
+        "bond_dotted",
+        "bond_length",
+    ):
         assert f'self.make_design_icon("{icon_name}")' in factory_source
-    assert "self.make_icon(self._bond_icons.draw_bold_bond)" in factory_source
-    assert "self.make_icon(self._bond_icons.draw_dotted_bond)" in factory_source
     assert "self._bond_icons.benzene_icon_inner_segments(" in factory_source
     assert "bold_bond_pen()" not in factory_source
     assert "hash_spacing_px()" not in factory_source
@@ -3216,12 +3224,15 @@ def test_main_window_icon_factory_delegates_arrow_drawing_to_renderer() -> None:
 
     assert "from ui.main_window_arrow_icon_renderer import MainWindowArrowIconRenderer" in factory_source
     assert "self._arrow_icons = MainWindowArrowIconRenderer(" in factory_source
-    assert "self._arrow_icons.draw_arrow_preview(painter, kind)" in factory_source
+    # Arrow previews/presets/controls now render through the shared SVG design
+    # icon set rather than the per-shape QPainter renderer.
+    assert 'self._design_icon(f"arrow_{kind}", "arrow_reaction")' in factory_source
+    assert 'self._design_icon(f"arrow_preset_{label.lower()}", "arrow_preset_default")' in factory_source
+    assert 'self.make_design_icon("arrow_width")' in factory_source
+    assert 'self.make_design_icon("arrow_head_scale")' in factory_source
     assert 'self.make_design_icon("arrow")' in factory_source
     assert "def draw_arrow_head" not in factory_source
     assert "quadTo(15, 6, 24, 15)" not in factory_source
-    assert "def draw_arrow_preview" in arrow_icons_source
-    assert "def draw_arrow_head" in arrow_icons_source
     assert "def draw_arrow" in arrow_icons_source
 
 
@@ -3233,8 +3244,9 @@ def test_main_window_icon_factory_delegates_template_drawing_to_renderer() -> No
 
     assert "from ui.main_window_template_icon_renderer import MainWindowTemplateIconRenderer" in factory_source
     assert "self._template_icons = MainWindowTemplateIconRenderer(" in factory_source
-    assert "self.make_icon(self._template_icons.draw_templates)" in factory_source
-    assert "self._template_icons.draw_template_preview(painter, label)" in factory_source
+    assert 'self.make_design_icon("templates")' in factory_source
+    # Template ring previews now resolve to shared SVG design icons by label.
+    assert "_TEMPLATE_ICON_BY_LABEL" in factory_source
     assert "template_preview_ring_polygon" not in factory_source
     assert "template_preview_ring_sides" not in factory_source
     assert "chair_icon_points" not in factory_source
@@ -3279,21 +3291,19 @@ def test_main_window_icon_factory_delegates_tool_drawing_to_renderer() -> None:
         "perspective",
         "circled_plus",
         "circled_minus",
+        "atom_orbit",
+        "plus",
+        "minus",
+        "radical",
+        "ring_fill",
     ):
         assert f'self.make_design_icon("{icon_name}")' in factory_source
     assert factory_source.count('self.make_design_icon("move")') >= 2
-    for icon_name in (
-        "mark",
-        "mark_plus",
-        "mark_minus",
-        "mark_radical",
-        "ring_fill",
-    ):
-        assert f"self.make_icon(self._tool_icons.draw_{icon_name})" in factory_source
-        assert f"def draw_{icon_name}" in tool_icons_source
     assert 'self.make_design_icon("move")' in factory_source
     assert "def draw_move" in tool_icons_source
-    assert "self._tool_icons.draw_orbital_preview(painter, kind)" in factory_source
+    # Orbital and bracket previews now resolve to shared SVG design icons.
+    assert 'self._design_icon(f"orbital_{kind}", "orbital_s")' in factory_source
+    assert 'self._design_icon(f"bracket_{kind}", "bracket_square_pair")' in factory_source
     assert "def draw_orbital_preview" in tool_icons_source
 
     assert "QPainterPath" not in factory_source
