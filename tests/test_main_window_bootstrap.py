@@ -37,8 +37,10 @@ class _FakeWindow:
 def test_bootstrap_main_window_initializes_runtime_references_and_services() -> None:
     window = _FakeWindow()
     canvas_tabs = object()
+    close_affordance = object()
     tab_assembly = SimpleNamespace(
         canvas_tabs=canvas_tabs,
+        close_affordance=close_affordance,
     )
     toolbar_assembly = SimpleNamespace(
         tool_actions={"bond": object()},
@@ -110,6 +112,7 @@ def test_bootstrap_main_window_initializes_runtime_references_and_services() -> 
     assert not hasattr(window, "_tab_refs")
     assert not hasattr(window, "canvas_tabs")
     assert runtime.tab_refs.canvas_tabs is canvas_tabs
+    assert runtime.tab_refs.close_affordance is close_affordance
     window.setCentralWidget.assert_called_once_with(canvas_tabs)
     build_services.assert_called_once_with()
     preview_factory.assert_called_once_with()

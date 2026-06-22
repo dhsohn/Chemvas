@@ -47,6 +47,11 @@ class MainWindowTabSetupTest(unittest.TestCase):
         self.assertFalse(assembly.canvas_tabs.tabBar().expanding())
         self.assertFalse(assembly.canvas_tabs.tabBar().drawBase())
 
+        from ui.main_window_tab_close_affordance import CanvasTabCloseAffordance
+
+        self.assertIsInstance(assembly.close_affordance, CanvasTabCloseAffordance)
+        self.assertIs(assembly.close_affordance.parent(), assembly.canvas_tabs.tabBar())
+
 
 if __name__ == "__main__":
     unittest.main()
