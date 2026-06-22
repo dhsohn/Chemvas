@@ -29,10 +29,6 @@ def main_window_canvas_tab_stylesheet(palette) -> str:
                 padding: 4px 14px 5px 14px;
                 margin: 0 2px 0 0;
             }}
-            QTabWidget#canvasTabs QTabBar::tab:last {{
-                padding: 4px 8px 5px 8px;
-                min-width: 20px;
-            }}
             QTabWidget#canvasTabs QTabBar::tab:hover:!selected {{
                 background: {_P["hover"]};
             }}
@@ -51,25 +47,6 @@ def main_window_canvas_tab_stylesheet(palette) -> str:
             }}
             QTabWidget#canvasTabs QTabBar QToolButton:hover {{
                 background: {_P["hover"]};
-            }}
-            QTabWidget#canvasTabs QToolButton#sheetAddButton {{
-                background: transparent;
-                border: 1px solid transparent;
-                border-bottom-left-radius: 6px;
-                border-bottom-right-radius: 6px;
-                color: {_P["text_muted"]};
-                font-size: 18px;
-                font-weight: 500;
-                margin: 0 4px 0 0;
-                min-width: 26px;
-                padding: 1px 6px 5px 6px;
-            }}
-            QTabWidget#canvasTabs QToolButton#sheetAddButton:hover {{
-                background: {_P["hover"]};
-                border-color: {_P["border"]};
-            }}
-            QTabWidget#canvasTabs QToolButton#sheetAddButton:pressed {{
-                background: {_P["pressed"]};
             }}
 """
 

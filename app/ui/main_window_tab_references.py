@@ -12,17 +12,22 @@ from ui.main_window_canvas_logic import (
     active_canvas_tab_index as active_canvas_tab_index_for,
 )
 from ui.main_window_canvas_logic import resolve_active_canvas
+from ui.main_window_tab_close_affordance import CanvasTabCloseAffordance
 from ui.main_window_tab_setup import MainWindowTabAssembly
 
 
 @dataclass(slots=True)
 class MainWindowTabReferences:
     canvas_tabs: QTabWidget
+    # Retained so the close-button affordance (a QObject subclass with an
+    # overridden eventFilter) is not garbage-collected for the window's life.
+    close_affordance: CanvasTabCloseAffordance
 
     @classmethod
     def from_assembly(cls, assembly: MainWindowTabAssembly) -> MainWindowTabReferences:
         return cls(
             canvas_tabs=assembly.canvas_tabs,
+            close_affordance=assembly.close_affordance,
         )
 
     def canvas_tab_entries(self) -> list[tuple[int, CanvasView]]:
