@@ -285,6 +285,42 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 service.export_mol("/tmp/should-not-be-written.mol")
 
+    def test_export_mol_falls_back_to_rdkit_for_abbreviation_labels(self) -> None:
+        model = MoleculeModel()
+        carbon = model.add_atom("C", 0.0, 0.0)
+        ph = model.add_atom("Ph", 40.0, 0.0)  # abbreviation -> pure writer rejects
+        model.add_bond(carbon, ph, 1)
+        service = _session_service(_attach_history_service(SimpleNamespace()))
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = str(Path(temp_dir) / "out.mol")
+            with (
+                mock.patch.object(service, "_build_xyz_payload", return_value=(model, {})),
+                mock.patch(
+                    "ui.canvas_document_session_service.model_to_mol_block_for",
+                    return_value="expanded\n\n\n  0  0  0  0  0  0  0  0999 V2000\nM  END\n",
+                ) as fallback,
+            ):
+                service.export_mol(path)
+            content = Path(path).read_text()
+        fallback.assert_called_once()
+        self.assertIn("M  END", content)
+
+    def test_export_mol_reports_install_rdkit_when_abbreviation_cannot_expand(self) -> None:
+        model = MoleculeModel()
+        model.add_atom("Ph", 0.0, 0.0)
+        service = _session_service(_attach_history_service(SimpleNamespace()))
+        with (
+            mock.patch.object(service, "_build_xyz_payload", return_value=(model, {})),
+            mock.patch("ui.canvas_document_session_service.model_to_mol_block_for", return_value=None),
+            mock.patch(
+                "ui.canvas_document_session_service.rdkit_last_error_for",
+                return_value="RDKit is not available in this environment.",
+            ),
+        ):
+            with self.assertRaises(ValueError) as ctx:
+                service.export_mol("/tmp/should-not-be-written.mol")
+        self.assertIn("Install RDKit", str(ctx.exception))
+
     def test_export_figure_selection_scope_requires_selected_items(self) -> None:
         scene = _Scene()
         canvas = SimpleNamespace(

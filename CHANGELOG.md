@@ -30,8 +30,9 @@ On the first tagged release, rename the "Unreleased" section below to
   the Molecule Info window gained **Copy SMILES** / **Copy InChIKey** buttons that
   place the value on the clipboard (requires RDKit).
 - **Export MOL** (File menu): write the current structure to an MDL Molfile (`.mol`,
-  V2000), preserving 2D coordinates, bond orders, and wedge/hash stereo. Works
-  without RDKit.
+  V2000), preserving 2D coordinates, bond orders, and wedge/hash stereo. Plain-element
+  structures need no RDKit; abbreviation labels (`Ph`, `CF3`, `tBu`, …) are expanded
+  into explicit atoms via RDKit when it is installed.
 - Figure export to SVG / PDF / PNG / TIFF with outlined glyphs and deterministic
   physical sizing (bond-length or 84/174 mm column fit).
 - 2D→3D `.xyz` export of the current molecule or atom/bond selection, carrying

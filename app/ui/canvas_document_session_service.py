@@ -7,7 +7,7 @@ from core.document_state import (
     deserialize_model_state,
     selection_payload_to_canvas_state,
 )
-from core.molfile import write_molfile
+from core.molfile import MolfileError, write_molfile
 from core.svg_roundtrip import (
     CHEMVAS_SVG_SCOPE_SELECTION,
     CHEMVAS_SVG_SCOPE_SHEET,
@@ -31,6 +31,7 @@ from ui.canvas_model_access import bonds_for, set_model_for
 from ui.canvas_scene_items_state import ring_items_for
 from ui.canvas_scene_reset_access import clear_scene_for
 from ui.rdkit_adapter_access import (
+    model_to_mol_block_for,
     model_to_xyz_block_for,
     new_rdkit_adapter,
     preload_rdkit_for,
@@ -122,10 +123,21 @@ class CanvasDocumentSessionService:
         export_model, atom_annotations = self._build_xyz_payload(selected_only=selected_only)
         if not export_model.atoms:
             raise ValueError("There is no molecular structure to export.")
-        Path(path).write_text(
-            write_molfile(export_model, atom_annotations=atom_annotations),
-            encoding="utf-8",
-        )
+        try:
+            block = write_molfile(export_model, atom_annotations=atom_annotations)
+        except MolfileError as exc:
+            # The structure uses abbreviation labels (Ph, CF3, ...) that are not
+            # single elements. Fall back to RDKit, which expands them into explicit
+            # atoms; without RDKit there is no way to expand them.
+            block = model_to_mol_block_for(self.canvas, export_model, atom_annotations=atom_annotations)
+            if block is None:
+                reason = rdkit_last_error_for(self.canvas)
+                if not reason or "not available" in reason.lower():
+                    raise ValueError(
+                        f"{exc} Install RDKit to expand these abbreviations automatically."
+                    ) from exc
+                raise ValueError(reason) from exc
+        Path(path).write_text(block, encoding="utf-8")
 
     def export_xyz_async(self, path: str, *, on_success, on_error, selected_only: bool = False) -> None:
         try:

@@ -17,6 +17,10 @@ def model_to_xyz_block_for(canvas: Any, model, *, atom_annotations):
     return rdkit_adapter_for(canvas).model_to_xyz_block(model, atom_annotations=atom_annotations)
 
 
+def model_to_mol_block_for(canvas: Any, model, *, atom_annotations):
+    return rdkit_adapter_for(canvas).model_to_mol_block(model, atom_annotations=atom_annotations)
+
+
 def rdkit_is_loaded_for(canvas: Any) -> bool:
     return bool(rdkit_adapter_for(canvas).is_loaded())
 
@@ -40,6 +44,7 @@ def compute_identifiers_for(canvas: Any, model):
 __all__ = [
     "compute_identifiers_for",
     "compute_props_for",
+    "model_to_mol_block_for",
     "model_to_xyz_block_for",
     "new_rdkit_adapter",
     "preload_rdkit_for",
