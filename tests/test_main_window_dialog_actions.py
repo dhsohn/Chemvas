@@ -92,7 +92,7 @@ class MainWindowDialogActionsTest(unittest.TestCase):
             status_service.status_context_texts(),
             {
                 "tool": "Tool: Bond",
-                "sheet": "Canvas: Canvas 1 (1/1)",
+                "sheet": "Canvas: Canvas 1",
                 "selection": "Selection: 0",
                 "zoom_caption": "Zoom",
                 "zoom": "100%",

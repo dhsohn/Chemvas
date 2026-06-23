@@ -129,8 +129,11 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         save_path.assert_called_once_with(self.window, "/tmp/new-drawing.chemvas", canvas=None)
 
     def test_load_menu_action_uses_dialog_path_and_handles_failure(self) -> None:
+        from ui.main_window_app import open_windows
+
         load_action = self._find_action("Load")
         state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
+        existing = set(open_windows())
 
         with (
             mock.patch(
@@ -144,10 +147,18 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         ):
             load_action.trigger()
 
+        spawned = [window for window in open_windows() if window not in existing]
+        for window in spawned:
+            self.addCleanup(window.close)
+
         dialog.assert_called_once()
         read_document.assert_called_once_with("/tmp/input.chemvas")
-        self.assertEqual(document_file_path_for(active_canvas_for_window(self.window)), "/tmp/input.chemvas")
-        self.assertEqual(self.window.statusBar().currentMessage(), "Loaded: /tmp/input.chemvas")
+        # The file opens in its own window; the triggering window keeps its document.
+        self.assertEqual(len(spawned), 1)
+        loaded_window = spawned[0]
+        self.assertEqual(document_file_path_for(active_canvas_for_window(loaded_window)), "/tmp/input.chemvas")
+        self.assertEqual(loaded_window.statusBar().currentMessage(), "Loaded: /tmp/input.chemvas")
+        self.assertIsNone(document_file_path_for(active_canvas_for_window(self.window)))
 
         with (
             mock.patch(

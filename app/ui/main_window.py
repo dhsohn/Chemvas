@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtWidgets import QMainWindow
 
+from ui.main_window_app import forget_window
 from ui.main_window_bootstrap import bootstrap_main_window, build_main_window_runtime
 
 if TYPE_CHECKING:
@@ -45,4 +46,5 @@ class MainWindow(QMainWindow):
         shutdown_preview = getattr(self._preview_3d, "shutdown", None)
         if callable(shutdown_preview):
             shutdown_preview()
+        forget_window(self)
         super().closeEvent(event)
