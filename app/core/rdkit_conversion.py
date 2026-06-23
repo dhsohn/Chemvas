@@ -788,5 +788,24 @@ class RDKitConversionHelper:
             lines.append(f"{atom.symbol:<2} {atom.x:.6f} {atom.y:.6f} {atom.z:.6f}")
         return "\n".join(lines) + "\n"
 
+    def model_to_mol_block(
+        self,
+        model: MoleculeModel,
+        atom_annotations: Mapping[int, Mapping[str, int]] | None = None,
+    ) -> str | None:
+        rdkit = self.adapter._load_rdkit()
+        if rdkit == (None, None):
+            self.adapter.last_error = "RDKit is not available in this environment."
+            return None
+        Chem, AllChem = rdkit
+        # Reuse the 3D conversion builder so abbreviation labels (Ph, CF3, ...) are
+        # expanded into explicit atoms and charge/stereo are applied. Then lay the
+        # heavy-atom graph out in 2D for a conventional MDL depiction.
+        mol = self.adapter._build_conversion_rdkit_mol(model, atom_annotations=atom_annotations)
+        if mol is None:
+            return None
+        AllChem.Compute2DCoords(mol)
+        return Chem.MolToMolBlock(mol)
+
 
 __all__ = ["RDKitConversionHelper"]

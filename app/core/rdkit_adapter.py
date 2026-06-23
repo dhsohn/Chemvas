@@ -47,7 +47,9 @@ class RDKitAdapter:
             "Boc": "[*:1]C(=O)OC(C)(C)C",
             "CO2Me": "[*:1]C(=O)OC",
             "t-Bu": "[*:1]C(C)(C)C",
+            "tBu": "[*:1]C(C)(C)C",
             "i-Pr": "[*:1]C(C)C",
+            "CF3": "[*:1]C(F)(F)F",
         }
         self._import_helper = RDKitImportHelper(self)
         self._conversion_helper = RDKitConversionHelper(self)
@@ -143,6 +145,25 @@ class RDKitAdapter:
         return self._call_with_result(
             lambda: self._conversion_helper.model_to_xyz_block(model, atom_annotations=atom_annotations),
             fallback_error="Failed to export 3D XYZ.",
+        )
+
+    def model_to_mol_block(
+        self,
+        model: MoleculeModel,
+        atom_annotations: Mapping[int, Mapping[str, int]] | None = None,
+    ) -> str | None:
+        result = self.model_to_mol_block_result(model, atom_annotations=atom_annotations)
+        self.last_error = result.error
+        return result.value
+
+    def model_to_mol_block_result(
+        self,
+        model: MoleculeModel,
+        atom_annotations: Mapping[int, Mapping[str, int]] | None = None,
+    ) -> RDKitResult[str]:
+        return self._call_with_result(
+            lambda: self._conversion_helper.model_to_mol_block(model, atom_annotations=atom_annotations),
+            fallback_error="Failed to export MOL.",
         )
 
     def get_name_from_smiles(self, smiles: str) -> str | None:

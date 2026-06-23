@@ -914,7 +914,7 @@ class RDKitAdapterTest(unittest.TestCase):
             adapter.last_error,
             "Unsupported atom labels for 3D conversion: "
             "Bad0 (atom 0), Bad1 (atom 1), Bad2 (atom 2), Bad3 (atom 3), Bad4 (atom 4), .... "
-            "Supported aliases: Boc, CO2Me, Et, Me, OH, OMe, Ph, i-Pr, t-Bu.",
+            "Supported aliases: Boc, CF3, CO2Me, Et, Me, OH, OMe, Ph, i-Pr, t-Bu, tBu.",
         )
 
     def test_build_conversion_rdkit_mol_rejects_wedge_on_non_single_bond(self) -> None:
@@ -1082,6 +1082,29 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertEqual(identifiers.smiles, "CCO")
         self.assertEqual(identifiers.inchikey, "LFQSCWFLJHTTHZ-UHFFFAOYSA-N")
         self.assertTrue((identifiers.inchi or "").startswith("InChI=1S/C2H6O"))
+
+    def test_model_to_mol_block_returns_none_when_rdkit_is_unavailable(self) -> None:
+        adapter = RDKitAdapter()
+        adapter._rdkit = (None, None)
+
+        self.assertIsNone(adapter.model_to_mol_block(self._simple_model()))
+        self.assertEqual(adapter.last_error, "RDKit is not available in this environment.")
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for MOL export")
+    def test_model_to_mol_block_expands_abbreviation_into_valid_molfile(self) -> None:
+        model = MoleculeModel()
+        carbon = model.add_atom("C", 0.0, 0.0)
+        cf3 = model.add_atom("CF3", 40.0, 0.0)
+        model.add_bond(carbon, cf3, 1)
+
+        block = RDKitAdapter().model_to_mol_block(model)
+
+        self.assertIsNotNone(block)
+        assert block is not None
+        self.assertIn("V2000", block)
+        mol = _RealChem.MolFromMolBlock(block)
+        self.assertIsNotNone(mol)
+        self.assertEqual(_RealChem.MolToSmiles(mol), "CC(F)(F)F")
 
     def test_model_to_3d_coords_returns_none_when_rdkit_is_unavailable(self) -> None:
         adapter = RDKitAdapter()
