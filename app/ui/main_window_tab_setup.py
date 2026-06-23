@@ -5,13 +5,10 @@ from dataclasses import dataclass
 
 from PyQt6.QtWidgets import QTabWidget
 
-from ui.main_window_tab_close_affordance import CanvasTabCloseAffordance
-
 
 @dataclass(frozen=True, slots=True)
 class MainWindowTabAssembly:
     canvas_tabs: QTabWidget
-    close_affordance: CanvasTabCloseAffordance
 
 
 def build_canvas_tab_assembly(
@@ -31,14 +28,15 @@ def build_canvas_tab_assembly(
     assert tab_bar is not None
     tab_bar.setExpanding(False)
     tab_bar.setDrawBase(False)
+    # Single-document-per-window model: each window holds one canvas and the tab
+    # strip is hidden. "New canvas" / "open" spawn separate windows instead.
+    tab_bar.setVisible(False)
     tab_bar.tabMoved.connect(on_canvas_tab_moved)
     canvas_tabs.currentChanged.connect(on_canvas_tab_changed)
     canvas_tabs.tabCloseRequested.connect(on_canvas_tab_close_requested)
-    close_affordance = CanvasTabCloseAffordance(tab_bar)
     canvas_tabs.setParent(parent)
     return MainWindowTabAssembly(
         canvas_tabs=canvas_tabs,
-        close_affordance=close_affordance,
     )
 
 

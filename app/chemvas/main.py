@@ -66,14 +66,13 @@ def _filtered_stderr(stderr_fd: int = 2, platform: str | None = None) -> Iterato
 def main() -> None:
     with _filtered_stderr():
         from PyQt6.QtWidgets import QApplication
-        from ui.main_window import MainWindow
+        from ui.main_window_app import open_new_window
 
         app = QApplication(sys.argv)
-        window = MainWindow()
+        window = open_new_window()
         startup_document_path = _startup_document_path(sys.argv)
         if startup_document_path is not None:
             from ui.main_window_service_ports import services_for_window
 
             services_for_window(window).document_action_service.load_canvas_from_path(window, startup_document_path)
-        window.show()
         app.exec()

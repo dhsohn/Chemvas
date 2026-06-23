@@ -6,6 +6,7 @@ from ui.main_window_action_availability_service import (
     MainWindowActionAvailabilityService,
 )
 from ui.main_window_active_canvas_ui_service import MainWindowActiveCanvasUIService
+from ui.main_window_app import open_new_window
 from ui.main_window_canvas_document_service import MainWindowCanvasDocumentService
 from ui.main_window_canvas_ports import (
     active_canvas_for_window,
@@ -221,10 +222,12 @@ def build_main_window_services() -> MainWindowServices:
     panel_toolbar_callbacks = MainWindowPanelToolbarCallbacks(
         save_canvas=document_action_service.save_canvas,
         save_canvas_as=document_action_service.save_canvas_as,
-        load_canvas=document_action_service.load_canvas,
+        load_canvas=lambda window: document_action_service.load_canvas(
+            window, target_provider=lambda: open_new_window(window)
+        ),
         export_figure=document_action_service.export_figure,
         open_preview_window=panel_service.open_preview_window,
-        new_canvas=canvas_document_service.new_canvas,
+        new_canvas=open_new_window,
     )
     ui_assembly_service = MainWindowUIAssemblyService(
         scene_transform_controller_for_window=scene_transform_controller_for_window,

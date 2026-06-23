@@ -168,7 +168,7 @@ class MainStderrFilterTest(unittest.TestCase):
         ):
             app_main.main()
 
-        self.assertEqual(events, [("enter", {}), ("load", "/tmp/start.chemvas"), ("show", None), ("exec", argv), ("exit", None)])
+        self.assertEqual(events, [("enter", {}), ("show", None), ("load", "/tmp/start.chemvas"), ("exec", argv), ("exit", None)])
 
     def test_main_module_executes_main_when_run_as_script(self) -> None:
         events: list[str] = []

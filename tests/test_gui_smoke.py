@@ -299,8 +299,11 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self._press_key(Qt.Key.Key_Space)
         self.assertEqual(active_canvas_for_window(self.window).services.tools.active.name, "select")
 
-    def test_new_canvas_button_creates_independent_canvas_tab(self) -> None:
+    def test_new_canvas_button_opens_a_separate_window(self) -> None:
+        from ui.main_window_app import open_windows
+
         before_count = self.window.tab_references.canvas_count()
+        existing = set(open_windows())
         button = self.window.findChild(QToolButton, "new_canvas_button")
         self.assertIsNotNone(button)
         assert button is not None
@@ -313,10 +316,15 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.app.processEvents()
         QTest.qWait(10)
 
-        self.assertEqual(self.window.tab_references.canvas_count(), before_count + 1)
-        self.assertEqual(self.window.tab_references.canvas_tabs.currentIndex(), before_count)
-        self.assertEqual(self.window.tab_references.canvas_tabs.tabText(before_count), f"Canvas {before_count + 1}")
-        self.assertEqual(active_canvas_for_window(self.window).sheet_orientation, "landscape")
+        spawned = [window for window in open_windows() if window not in existing]
+        for window in spawned:
+            self.addCleanup(window.close)
+
+        self.assertEqual(len(spawned), 1)
+        # The current window keeps its single document; the new canvas is its own window.
+        self.assertEqual(self.window.tab_references.canvas_count(), before_count)
+        self.assertEqual(spawned[0].tab_references.canvas_count(), 1)
+        self.assertTrue(spawned[0].windowTitle().endswith("— Chemvas"))
 
     def test_close_canvas_tab_removes_clean_target_canvas(self) -> None:
         services_for_window(self.window).canvas_document_service.new_canvas(self.window)

@@ -222,6 +222,7 @@ class MainWindowDocumentActionService:
         read_document=None,
         read_editable_svg=None,
         resolve_load_path=None,
+        target_provider=None,
     ) -> bool:
         file_dialog = QFileDialog if file_dialog is None else file_dialog
         dialog_path, _ = file_dialog.getOpenFileName(
@@ -239,6 +240,7 @@ class MainWindowDocumentActionService:
             message_box=message_box,
             read_document=read_document,
             read_editable_svg=read_editable_svg,
+            target_provider=target_provider,
         )
 
     def load_canvas_from_path(
@@ -249,27 +251,33 @@ class MainWindowDocumentActionService:
         message_box=None,
         read_document=None,
         read_editable_svg=None,
+        target_provider=None,
     ) -> bool:
         message_box = QMessageBox if message_box is None else message_box
         read_document = default_read_document if read_document is None else read_document
         read_editable_svg = default_read_editable_svg if read_editable_svg is None else read_editable_svg
+        # Resolve the destination window only after the file reads successfully so
+        # a missing or unreadable file never spawns an empty window.
+        target = window
         try:
             if Path(path).suffix.lower() == ".svg":
                 document = read_editable_svg(path)
+                target = target_provider() if target_provider is not None else window
                 self._canvas_documents.open_state(
-                    window,
+                    target,
                     state=document.state,
                     file_path=None,
                     display_name=Path(path).name,
                 )
-                window.statusBar().showMessage(f"Loaded editable SVG: {path}", 4000)
+                target.statusBar().showMessage(f"Loaded editable SVG: {path}", 4000)
                 return True
             document = read_document(path)
-            self._canvas_documents.open_state(window, state=document.state, file_path=path)
+            target = target_provider() if target_provider is not None else window
+            self._canvas_documents.open_state(target, state=document.state, file_path=path)
         except Exception as exc:
             message_box.warning(window, "Load Error", f"Failed to load file:\n{exc}")
             return False
-        window.statusBar().showMessage(f"Loaded: {path}", 4000)
+        target.statusBar().showMessage(f"Loaded: {path}", 4000)
         return True
 
     def close_canvas_tab(self, window, index: int) -> bool:

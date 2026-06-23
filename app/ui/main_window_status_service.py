@@ -167,8 +167,7 @@ class MainWindowStatusService:
         if canvas_count <= 0:
             return "Canvas: None"
         canvas_name = self._active_canvas_name_for_window(window) or "Untitled"
-        canvas_index = self._active_canvas_index_for_window(window) + 1
-        return f"Canvas: {canvas_name} ({canvas_index}/{canvas_count})"
+        return f"Canvas: {canvas_name}"
 
     def current_selection_count(self, window) -> int:
         canvas = self._active_canvas_or_none_for_window(window)

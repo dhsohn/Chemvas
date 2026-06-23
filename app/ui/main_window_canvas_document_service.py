@@ -173,6 +173,12 @@ class MainWindowCanvasDocumentService:
         index = tab_refs.active_canvas_tab_index(canvas)
         if index >= 0:
             tab_refs.canvas_tabs.setTabText(index, self.display_name(canvas))
+        self._refresh_window_title(window, canvas)
+
+    def _refresh_window_title(self, window, canvas: CanvasView) -> None:
+        set_title = getattr(window, "setWindowTitle", None)
+        if callable(set_title):
+            set_title(f"{self.display_name(canvas)} — Chemvas")
 
     @staticmethod
     def display_name_for_path(path: str | None) -> str | None:
