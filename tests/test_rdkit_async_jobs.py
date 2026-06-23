@@ -13,7 +13,7 @@ except ModuleNotFoundError:
     QObject = None
 
 if QObject is not None:
-    from core.rdkit_types import RDKitResult
+    from core.rdkit_types import MoleculeIdentifiers, RDKitResult
     from ui import rdkit_async_jobs
     from ui.preview_3d_worker import Preview3DWorker
     from ui.rdkit_async_jobs import XYZExportWorker, export_xyz_in_thread
@@ -255,7 +255,9 @@ class ExportXYZInThreadTest(unittest.TestCase):
 class Preview3DWorkerTest(unittest.TestCase):
     def test_run_prefers_result_error_over_stale_adapter_error(self) -> None:
         rdkit = SimpleNamespace(
-            compute_props=mock.Mock(return_value=("C", 12.01, "C")),
+            compute_identifiers=mock.Mock(
+                return_value=MoleculeIdentifiers(formula="C", mw=12.01, smiles="C", inchikey="KEY")
+            ),
             model_to_3d_scene_result=mock.Mock(return_value=RDKitResult(None, "local preview error")),
             last_error="stale preview error",
         )
@@ -265,9 +267,9 @@ class Preview3DWorkerTest(unittest.TestCase):
 
         worker.run()
 
-        rdkit.compute_props.assert_called_once_with("model")
+        rdkit.compute_identifiers.assert_called_once_with("model")
         rdkit.model_to_3d_scene_result.assert_called_once_with("model", atom_annotations={"annotations": True})
-        self.assertEqual(emitted, [(7, "C", 12.01, None, "local preview error")])
+        self.assertEqual(emitted, [(7, "C", 12.01, "C", "KEY", None, "local preview error")])
 
 
 if __name__ == "__main__":

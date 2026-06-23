@@ -6,7 +6,7 @@ from PyQt6.QtCore import QObject, pyqtSignal
 
 
 class Preview3DWorker(QObject):
-    finished = pyqtSignal(int, object, object, object, object)
+    finished = pyqtSignal(int, object, object, object, object, object, object)
 
     def __init__(
         self,
@@ -27,11 +27,17 @@ class Preview3DWorker(QObject):
     def run(self) -> None:
         formula = None
         mw = None
+        smiles = None
+        inchikey = None
         scene = None
         error = None
         rdkit = self._rdkit_adapter_factory() if self._rdkit_adapter_factory is not None else self._rdkit
         try:
-            formula, mw, _ = rdkit.compute_props(self._model)
+            identifiers = rdkit.compute_identifiers(self._model)
+            formula = identifiers.formula
+            mw = identifiers.mw
+            smiles = identifiers.smiles
+            inchikey = identifiers.inchikey
             result_method = getattr(rdkit, "model_to_3d_scene_result", None)
             if callable(result_method):
                 result = result_method(self._model, atom_annotations=self._atom_annotations)
@@ -46,7 +52,7 @@ class Preview3DWorker(QObject):
                     error = getattr(rdkit, "last_error", None) or "Failed to build 3D preview."
         except Exception as exc:
             error = str(exc) or "Failed to build 3D preview."
-        self.finished.emit(self._request_id, formula, mw, scene, error)
+        self.finished.emit(self._request_id, formula, mw, smiles, inchikey, scene, error)
 
 
 __all__ = ["Preview3DWorker"]

@@ -20,7 +20,12 @@ except ModuleNotFoundError:
 if QApplication is not None:
     from core.document_io import read_document
     from core.model import MoleculeModel
-    from core.rdkit_adapter import Molecule3DAtom, Molecule3DBond, Molecule3DScene
+    from core.rdkit_adapter import (
+        Molecule3DAtom,
+        Molecule3DBond,
+        Molecule3DScene,
+        MoleculeIdentifiers,
+    )
     from core.rdkit_types import RDKitResult
     from ui.bond_graphics_access import add_bond_graphics_for
     from ui.canvas_atom_graphics_state import atom_items_for
@@ -949,7 +954,11 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         )
 
         with (
-            patch.object(preview.rdkit_adapter, "compute_props", return_value=("NH4", 18.04, "[NH4+]")),
+            patch.object(
+                preview.rdkit_adapter,
+                "compute_identifiers",
+                return_value=MoleculeIdentifiers(formula="NH4", mw=18.04, smiles="[NH4+]"),
+            ),
             patch.object(preview.rdkit_adapter, "model_to_3d_scene_result", return_value=RDKitResult(scene)),
         ):
             preview.refresh_selected_from_canvas(active_canvas_for_window(self.window))
