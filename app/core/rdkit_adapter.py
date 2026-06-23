@@ -9,6 +9,7 @@ from core.rdkit_types import (
     Molecule3DAtom,
     Molecule3DBond,
     Molecule3DScene,
+    MoleculeIdentifiers,
     RDKitResult,
 )
 
@@ -86,6 +87,9 @@ class RDKitAdapter:
     def compute_props(self, model: MoleculeModel) -> tuple[str | None, float | None, str | None]:
         return self._import_helper.compute_props(model)
 
+    def compute_identifiers(self, model: MoleculeModel) -> MoleculeIdentifiers:
+        return self._import_helper.compute_identifiers(model)
+
     def _embed_3d_molecule(self, mol, Chem, AllChem):
         return self._conversion_helper._embed_3d_molecule(mol, Chem, AllChem)
 
@@ -161,6 +165,7 @@ __all__ = [
     "Molecule3DAtom",
     "Molecule3DBond",
     "Molecule3DScene",
+    "MoleculeIdentifiers",
     "RDKitResult",
     "RDKitAdapter",
 ]

@@ -1018,6 +1018,71 @@ class RDKitAdapterTest(unittest.TestCase):
             with _patch_descriptor_modules(mw_error=RuntimeError("descriptor failure")):
                 self.assertEqual(adapter.compute_props(self._simple_model()), (None, None, None))
 
+    def test_compute_identifiers_returns_blank_when_rdkit_is_unavailable(self) -> None:
+        adapter = RDKitAdapter()
+        adapter._rdkit = (None, None)
+
+        identifiers = adapter.compute_identifiers(self._simple_model())
+
+        self.assertEqual(
+            (
+                identifiers.formula,
+                identifiers.mw,
+                identifiers.smiles,
+                identifiers.inchi,
+                identifiers.inchikey,
+            ),
+            (None, None, None, None, None),
+        )
+
+    def test_compute_identifiers_returns_blank_when_model_conversion_fails(self) -> None:
+        adapter = RDKitAdapter()
+        adapter._rdkit = (_FakeChem({}), _FakeAllChem())
+
+        with mock.patch.object(adapter, "model_to_rdkit", return_value=None):
+            identifiers = adapter.compute_identifiers(self._simple_model())
+
+        self.assertIsNone(identifiers.formula)
+        self.assertIsNone(identifiers.inchikey)
+
+    def test_compute_identifiers_keeps_formula_when_inchi_backend_is_missing(self) -> None:
+        # The fake Chem has no MolToInchi/MolToInchiKey, mirroring an
+        # environment where the InChI backend is unavailable. Formula/MW/SMILES
+        # must still be returned, with only the InChI fields left blank.
+        chem = _FakeChem({}, add_hs_result=SimpleNamespace())
+        adapter = RDKitAdapter()
+        adapter._rdkit = (chem, _FakeAllChem())
+
+        with mock.patch.object(
+            adapter,
+            "model_to_rdkit",
+            return_value=SimpleNamespace(canonical_smiles="CO"),
+        ):
+            with _patch_descriptor_modules(formula="CH4O", mw=32.042):
+                identifiers = adapter.compute_identifiers(self._simple_model())
+
+        self.assertEqual(identifiers.formula, "CH4O")
+        self.assertEqual(identifiers.mw, 32.042)
+        self.assertEqual(identifiers.smiles, "CO")
+        self.assertIsNone(identifiers.inchi)
+        self.assertIsNone(identifiers.inchikey)
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for InChI computation")
+    def test_compute_identifiers_computes_inchi_for_ethanol(self) -> None:
+        model = MoleculeModel()
+        a = model.add_atom("C", 0.0, 0.0)
+        b = model.add_atom("C", 1.0, 0.0)
+        c = model.add_atom("O", 2.0, 0.0)
+        model.add_bond(a, b, 1)
+        model.add_bond(b, c, 1)
+
+        identifiers = RDKitAdapter().compute_identifiers(model)
+
+        self.assertEqual(identifiers.formula, "C2H6O")
+        self.assertEqual(identifiers.smiles, "CCO")
+        self.assertEqual(identifiers.inchikey, "LFQSCWFLJHTTHZ-UHFFFAOYSA-N")
+        self.assertTrue((identifiers.inchi or "").startswith("InChI=1S/C2H6O"))
+
     def test_model_to_3d_coords_returns_none_when_rdkit_is_unavailable(self) -> None:
         adapter = RDKitAdapter()
         adapter._rdkit = (None, None)
