@@ -279,6 +279,18 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertIn("M  END", content)
         self.assertTrue(content.splitlines()[3].startswith("  2  1"))
 
+    def test_export_mol_forwards_selected_only_flag(self) -> None:
+        model = MoleculeModel()
+        model.add_atom("C", 0.0, 0.0)
+        service = _session_service(_attach_history_service(SimpleNamespace()))
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = str(Path(temp_dir) / "out.mol")
+            with mock.patch.object(
+                service, "_build_xyz_payload", return_value=(model, {})
+            ) as build_payload:
+                service.export_mol(path, selected_only=True)
+        build_payload.assert_called_once_with(selected_only=True)
+
     def test_export_mol_raises_when_there_is_no_structure(self) -> None:
         service = _session_service(_attach_history_service(SimpleNamespace()))
         with mock.patch.object(service, "_build_xyz_payload", return_value=(MoleculeModel(), {})):

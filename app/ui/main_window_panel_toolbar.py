@@ -136,7 +136,7 @@ def build_panel_toolbar(
 
     export_mol_action = QAction("Export MOL...", window)
     export_mol_action.setToolTip("Export MOL")
-    export_mol_action.setStatusTip("Export the current structure as an MDL Molfile (.mol)")
+    export_mol_action.setStatusTip("Export the selected structure as an MDL Molfile (.mol)")
     export_mol_action.triggered.connect(lambda _checked=False: callbacks.export_mol(window))
     window.addAction(export_mol_action)
 
