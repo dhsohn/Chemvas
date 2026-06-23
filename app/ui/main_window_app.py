@@ -62,7 +62,9 @@ def _name_window_document(window) -> None:
 
         services = services_for_window(window)
         canvas = window.tab_references.canvas_tabs.currentWidget()
-    except (AttributeError, RuntimeError):
+    except (AttributeError, ImportError, RuntimeError):
+        # Best-effort: naming is cosmetic and must never break window creation
+        # (e.g. when a test double lacks services or the ui package is sandboxed).
         return
     if canvas is None:
         return
