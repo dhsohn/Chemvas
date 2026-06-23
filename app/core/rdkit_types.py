@@ -33,4 +33,19 @@ class Molecule3DScene:
     bonds: tuple[Molecule3DBond, ...]
 
 
-__all__ = ["Molecule3DAtom", "Molecule3DBond", "Molecule3DScene", "RDKitResult"]
+@dataclass(frozen=True)
+class MoleculeIdentifiers:
+    formula: str | None = None
+    mw: float | None = None
+    smiles: str | None = None
+    inchi: str | None = None
+    inchikey: str | None = None
+
+
+__all__ = [
+    "Molecule3DAtom",
+    "Molecule3DBond",
+    "Molecule3DScene",
+    "MoleculeIdentifiers",
+    "RDKitResult",
+]

@@ -4,6 +4,7 @@ import math
 from typing import TYPE_CHECKING, Any, Optional, cast
 
 from core.model import MoleculeModel
+from core.rdkit_types import MoleculeIdentifiers
 
 if TYPE_CHECKING:
     from core.rdkit_adapter import RDKitAdapter
@@ -73,18 +74,22 @@ class RDKitImportHelper:
         return model
 
     def compute_props(self, model: MoleculeModel) -> tuple[str | None, float | None, str | None]:
+        identifiers = self.compute_identifiers(model)
+        return identifiers.formula, identifiers.mw, identifiers.smiles
+
+    def compute_identifiers(self, model: MoleculeModel) -> MoleculeIdentifiers:
         rdkit = self.adapter._load_rdkit()
         if rdkit == (None, None):
-            return None, None, None
+            return MoleculeIdentifiers()
         Chem, _ = rdkit
         # Use strict label handling so abbreviation/unsupported atom labels
         # (e.g. Me, Ph, Boc) are not silently substituted with Carbon, which
-        # would report a formula/MW that does not match the drawn structure.
-        # When such a label is present the conversion returns ``None`` and we
-        # leave formula/MW blank instead of showing a misleading value.
+        # would report identifiers that do not match the drawn structure. When
+        # such a label is present the conversion returns ``None`` and we leave
+        # the identifiers blank instead of showing a misleading value.
         mol = self.adapter.model_to_rdkit(model, strict_labels=True)
         if mol is None:
-            return None, None, None
+            return MoleculeIdentifiers()
         try:
             mol_h = Chem.AddHs(mol)
             from rdkit.Chem import Descriptors, rdMolDescriptors
@@ -92,9 +97,23 @@ class RDKitImportHelper:
             formula = rdMolDescriptors.CalcMolFormula(mol_h)
             mw = cast(Any, Descriptors).MolWt(mol_h)
             smiles = Chem.MolToSmiles(mol, canonical=True)
-            return formula, mw, smiles
         except Exception:
-            return None, None, None
+            return MoleculeIdentifiers()
+        # InChI is computed separately so that a failure in the InChI backend
+        # cannot blank out the formula/MW/SMILES we already have.
+        try:
+            inchi = Chem.MolToInchi(mol) or None
+            inchikey = Chem.MolToInchiKey(mol) or None
+        except Exception:
+            inchi = None
+            inchikey = None
+        return MoleculeIdentifiers(
+            formula=formula,
+            mw=mw,
+            smiles=smiles,
+            inchi=inchi,
+            inchikey=inchikey,
+        )
 
     def get_name_from_smiles(self, smiles: str) -> str | None:
         rdkit = self.adapter._load_rdkit()
