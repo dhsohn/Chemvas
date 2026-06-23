@@ -433,7 +433,12 @@ class Preview3D(QWidget):
             (self._copy_inchikey_button, "Copy InChIKey", self._inchikey_text),
             (self._copy_smiles_button, "Copy canonical SMILES", self._smiles_text),
         ]
-        if self._scene is None or export is None or not export.isVisible():
+        # Gate on scene presence (mirroring the Export button's own visibility
+        # flag), NOT on export.isVisible(): the preview can be refreshed while
+        # the Molecule Info window is still closed, and isVisible() is False
+        # then. The Export button's geometry is set even while hidden, so the
+        # copy buttons can still be positioned and will appear with it on show.
+        if self._scene is None or export is None:
             for button, _tooltip, _value in specs:
                 if button is not None:
                     button.setVisible(False)

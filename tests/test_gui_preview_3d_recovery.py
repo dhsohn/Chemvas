@@ -484,6 +484,34 @@ class Preview3DRecoveryTest(unittest.TestCase):
         self.assertFalse(preview._copy_smiles_button.isVisible())
         self.assertFalse(preview._copy_inchikey_button.isVisible())
 
+    def test_copy_buttons_appear_when_window_shown_after_building_while_hidden(self) -> None:
+        # Regression: the Molecule Info preview is refreshed when the selection
+        # changes, which can happen while its window is still closed. The copy
+        # buttons must still appear once the window is shown — their visibility
+        # must not depend on the Export button being visible at sync time.
+        container = QWidget()
+        container.resize(560, 520)
+        self.addCleanup(container.close)
+        preview = Preview3D(rdkit_adapter=SequencedAdapter([]))
+        preview.setParent(container)
+        preview.resize(560, 520)
+        preview.set_export_xyz_action(mock.Mock())
+        preview._scene = self._make_scene()
+        preview.set_info("C2H4O", "44.05", "CC=O", "IKHGUXGNUITLKF-UHFFFAOYSA-N")
+        preview._sync_export_xyz_button()
+
+        assert preview._copy_smiles_button is not None
+        assert preview._copy_inchikey_button is not None
+        self.assertFalse(preview._copy_smiles_button.isVisible())
+
+        container.show()
+        self.app.processEvents()
+
+        assert preview.export_xyz_button is not None
+        self.assertTrue(preview.export_xyz_button.isVisible())
+        self.assertTrue(preview._copy_smiles_button.isVisible())
+        self.assertTrue(preview._copy_inchikey_button.isVisible())
+
 
 if __name__ == "__main__":
     unittest.main()
