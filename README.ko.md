@@ -89,8 +89,7 @@ python -m pip install -e ".[rdkit]"
 
 ## 로드맵 / 아직 미지원
 버그가 아니라 알려진 빈칸입니다 — 기여를 환영합니다:
-- **Bond-aware 상호운용:** MOL/SDF import·export, SMILES **export**("copy as SMILES"). 현재 SMILES는 import 전용이고 3D export는 좌표만 저장합니다.
-- **동일성:** InChI / InChIKey
+- **Bond-aware 상호운용:** MOL/SDF **import**, SDF(다중 분자) export. `.mol` export, SMILES export("copy as SMILES"), InChI/InChIKey는 완료됨.
 - **벡터 클립보드:** `Ctrl+C`는 현재 PNG만 복사합니다. PDF/SVG 클립보드(Illustrator/Office에 벡터로 붙여넣기)는 예정.
 - **배포:** PyPI 릴리스 및 단일 파일 데스크톱 바이너리
 - **다중 분자 / 반응 스킴 전체 3D export**, 더 풍부한 템플릿 라이브러리

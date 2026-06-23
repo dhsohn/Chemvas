@@ -8,6 +8,7 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from core.document_state import serialize_settings
+from core.model import MoleculeModel
 from core.svg_roundtrip import extract_chemvas_document_from_svg
 from ui.canvas_document_session_service import CanvasDocumentSessionService
 from ui.canvas_history_service import CanvasHistoryService
@@ -262,6 +263,27 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         )
         embed_editable_svg.assert_called_once_with("/tmp/out.svg", fmt="svg", scope="selection")
         self.assertEqual(canvas.scene.call_count, 2)
+
+    def test_export_mol_writes_molfile_from_payload(self) -> None:
+        model = MoleculeModel()
+        a = model.add_atom("C", 0.0, 0.0)
+        b = model.add_atom("O", 30.0, 0.0)
+        model.add_bond(a, b, 1)
+        service = _session_service(_attach_history_service(SimpleNamespace()))
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = str(Path(temp_dir) / "out.mol")
+            with mock.patch.object(service, "_build_xyz_payload", return_value=(model, {})):
+                service.export_mol(path)
+            content = Path(path).read_text()
+        self.assertIn("V2000", content)
+        self.assertIn("M  END", content)
+        self.assertTrue(content.splitlines()[3].startswith("  2  1"))
+
+    def test_export_mol_raises_when_there_is_no_structure(self) -> None:
+        service = _session_service(_attach_history_service(SimpleNamespace()))
+        with mock.patch.object(service, "_build_xyz_payload", return_value=(MoleculeModel(), {})):
+            with self.assertRaises(ValueError):
+                service.export_mol("/tmp/should-not-be-written.mol")
 
     def test_export_figure_selection_scope_requires_selected_items(self) -> None:
         scene = _Scene()

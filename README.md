@@ -128,9 +128,8 @@ The high-level design is in [docs/architecture.md](docs/architecture.md).
 
 These are known gaps, not bugs — contributions welcome:
 
-- **Bond-aware interchange:** MOL / SDF import & export, and SMILES **export**
-  ("copy as SMILES"). Today SMILES is import-only and 3D export is coordinate-only.
-- **Identity:** InChI / InChIKey.
+- **Bond-aware interchange:** MOL / SDF **import**, and SDF (multi-molecule) export.
+  `.mol` export, SMILES export ("copy as SMILES"), and InChI / InChIKey have landed.
 - **Vector clipboard:** `Ctrl+C` currently copies a PNG only; PDF/SVG clipboard
   flavors (for pasting into Illustrator / Office as vector) are planned.
 - **Distribution:** PyPI release and one-file desktop binaries.

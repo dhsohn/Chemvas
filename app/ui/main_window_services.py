@@ -226,6 +226,7 @@ def build_main_window_services() -> MainWindowServices:
             window, target_provider=lambda: open_new_window(window)
         ),
         export_figure=document_action_service.export_figure,
+        export_mol=document_action_service.export_mol,
         open_preview_window=panel_service.open_preview_window,
         new_canvas=open_new_window,
     )

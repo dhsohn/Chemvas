@@ -112,13 +112,13 @@ class MainWindowUIAssemblyService:
         save_action: QAction,
         load_action: QAction,
         save_as_action: QAction,
-        export_action: QAction | None = None,
+        *export_actions: QAction,
     ) -> CornerMenuButton:
         return self._buttons.create_file_project_menu_button(
             save_action,
             load_action,
             save_as_action,
-            export_action,
+            *export_actions,
         )
 
     def init_toolbars(self, window) -> MainWindowToolbarAssembly:

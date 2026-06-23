@@ -126,6 +126,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             save_canvas_as=mock.Mock(),
             load_canvas=mock.Mock(),
             export_figure=mock.Mock(),
+            export_mol=mock.Mock(),
             open_preview_window=mock.Mock(),
             new_canvas=mock.Mock(),
         )

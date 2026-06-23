@@ -7,6 +7,7 @@ from core.document_state import (
     deserialize_model_state,
     selection_payload_to_canvas_state,
 )
+from core.molfile import write_molfile
 from core.svg_roundtrip import (
     CHEMVAS_SVG_SCOPE_SELECTION,
     CHEMVAS_SVG_SCOPE_SHEET,
@@ -116,6 +117,15 @@ class CanvasDocumentSessionService:
             message = rdkit_last_error_for(self.canvas) or "Failed to export 3D XYZ."
             raise ValueError(message)
         Path(path).write_text(xyz_block, encoding="utf-8")
+
+    def export_mol(self, path: str, *, selected_only: bool = False) -> None:
+        export_model, atom_annotations = self._build_xyz_payload(selected_only=selected_only)
+        if not export_model.atoms:
+            raise ValueError("There is no molecular structure to export.")
+        Path(path).write_text(
+            write_molfile(export_model, atom_annotations=atom_annotations),
+            encoding="utf-8",
+        )
 
     def export_xyz_async(self, path: str, *, on_success, on_error, selected_only: bool = False) -> None:
         try:
