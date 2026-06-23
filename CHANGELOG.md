@@ -26,6 +26,9 @@ On the first tagged release, rename the "Unreleased" section below to
 - SMILES import with cursor preview and click-to-place (requires RDKit).
 - Molecule Info window with interactive 3D preview and molecular formula/weight
   (requires RDKit).
+- Canonical SMILES, InChI, and InChIKey computation for the current structure;
+  the Molecule Info window gained **Copy SMILES** / **Copy InChIKey** buttons that
+  place the value on the clipboard (requires RDKit).
 - Figure export to SVG / PDF / PNG / TIFF with outlined glyphs and deterministic
   physical sizing (bond-length or 84/174 mm column fit).
 - 2D→3D `.xyz` export of the current molecule or atom/bond selection, carrying

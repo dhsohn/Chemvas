@@ -7,7 +7,7 @@ from typing import Any
 from core.rdkit_adapter import Molecule3DScene, RDKitAdapter
 from PyQt6.QtCore import QPointF, QRectF, Qt, QThread, QTimer
 from PyQt6.QtGui import QFont, QFontMetricsF, QIcon, QPainter
-from PyQt6.QtWidgets import QToolButton, QWidget
+from PyQt6.QtWidgets import QApplication, QToolButton, QWidget
 
 from ui.main_window_palette import PALETTE
 from ui.preview_3d_interaction import (
@@ -44,6 +44,10 @@ class Preview3D(QWidget):
         self._message = "3D preview unavailable"
         self._formula_text = ""
         self._mw_text = ""
+        self._smiles_text = ""
+        self._inchikey_text = ""
+        self._copy_smiles_button: QToolButton | None = None
+        self._copy_inchikey_button: QToolButton | None = None
         self._rotation_x = math.radians(-18.0)
         self._rotation_y = math.radians(22.0)
         self._zoom = 1.0
@@ -87,8 +91,13 @@ class Preview3D(QWidget):
 
     def _set_canvas_structure(self, model, atom_annotations) -> None:
         if not self._async_enabled:
-            formula, mw, _ = self._rdkit.compute_props(model)
-            self.set_info(formula or "", "" if mw is None else f"{mw:.2f}")
+            identifiers = self._rdkit.compute_identifiers(model)
+            self.set_info(
+                identifiers.formula or "",
+                "" if identifiers.mw is None else f"{identifiers.mw:.2f}",
+                identifiers.smiles or "",
+                identifiers.inchikey or "",
+            )
         self.set_structure(model, atom_annotations)
 
     def set_structure(self, model, atom_annotations=None) -> None:
@@ -113,14 +122,24 @@ class Preview3D(QWidget):
         self._message = message
         self._formula_text = ""
         self._mw_text = ""
+        self._smiles_text = ""
+        self._inchikey_text = ""
         self._sync_export_xyz_button()
         self._safe_update()
 
-    def set_info(self, formula: str, mw: str) -> None:
-        if formula == self._formula_text and mw == self._mw_text:
+    def set_info(self, formula: str, mw: str, smiles: str = "", inchikey: str = "") -> None:
+        if (
+            formula == self._formula_text
+            and mw == self._mw_text
+            and smiles == self._smiles_text
+            and inchikey == self._inchikey_text
+        ):
             return
         self._formula_text = formula
         self._mw_text = mw
+        self._smiles_text = smiles
+        self._inchikey_text = inchikey
+        self._sync_export_xyz_button()
         self._safe_update()
 
     def _payload_signature(self, model, atom_annotations) -> tuple:
@@ -207,6 +226,8 @@ class Preview3D(QWidget):
         request_id: int,
         formula: str | None,
         mw: float | None,
+        smiles: str | None,
+        inchikey: str | None,
         scene: Molecule3DScene | None,
         error: str | None,
     ) -> None:
@@ -217,12 +238,16 @@ class Preview3D(QWidget):
             self._current_signature = None
             self._formula_text = ""
             self._mw_text = ""
+            self._smiles_text = ""
+            self._inchikey_text = ""
             self._message = error or "Failed to build 3D preview."
             self._sync_export_xyz_button()
             self._safe_update()
             return
         self._formula_text = formula or ""
         self._mw_text = "" if mw is None else f"{mw:.2f}"
+        self._smiles_text = smiles or ""
+        self._inchikey_text = inchikey or ""
         self._scene = scene
         self._message = ""
         self._sync_export_xyz_button()
@@ -327,14 +352,13 @@ class Preview3D(QWidget):
 
     def _sync_export_xyz_button(self) -> None:
         button = self._export_xyz_button
-        if button is None:
-            return
-        self._apply_export_xyz_button_font()
-        button.setVisible(self._scene is not None)
-        button.setEnabled(self._scene is not None)
-        if self._scene is None:
-            return
-        self._position_export_xyz_button()
+        if button is not None:
+            self._apply_export_xyz_button_font()
+            button.setVisible(self._scene is not None)
+            button.setEnabled(self._scene is not None)
+            if self._scene is not None:
+                self._position_export_xyz_button()
+        self._sync_copy_buttons()
 
     def _apply_export_xyz_button_font(self) -> None:
         button = self._export_xyz_button
@@ -356,6 +380,92 @@ class Preview3D(QWidget):
         x = header.right() - width
         y = header.top() + 4.0
         button.setGeometry(round(x), round(y), round(width), round(height))
+
+    def _header_button_style(self, object_name: str) -> str:
+        return (
+            f"QToolButton#{object_name} {{"
+            f"  background: {PALETTE['surface_input']};"
+            f"  border: 1px solid {PALETTE['border_strong']};"
+            f"  border-radius: 8px;"
+            f"  color: {PALETTE['text']};"
+            f"  padding: 0;"
+            f"  text-align: center;"
+            f"}}"
+            f"QToolButton#{object_name}:hover {{"
+            f"  background: {PALETTE['surface_input']};"
+            f"  border-color: {PALETTE['checked_border']};"
+            f"}}"
+            f"QToolButton#{object_name}:pressed {{"
+            f"  background: {PALETTE['pressed']};"
+            f"  border-color: {PALETTE['accent_pressed']};"
+            f"}}"
+        )
+
+    def _build_copy_button(self, object_name: str, text: str, value_getter) -> QToolButton:
+        button = QToolButton(self)
+        button.setObjectName(object_name)
+        button.setText(text)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        button.setStyleSheet(self._header_button_style(object_name))
+        button.clicked.connect(
+            lambda _checked=False, b=button, g=value_getter, t=text: self._handle_copy_clicked(g(), b, t)
+        )
+        return button
+
+    def _ensure_copy_buttons(self) -> None:
+        if self._copy_smiles_button is None:
+            self._copy_smiles_button = self._build_copy_button(
+                "preview_copy_smiles_button", "SMILES", lambda: self._smiles_text
+            )
+        if self._copy_inchikey_button is None:
+            self._copy_inchikey_button = self._build_copy_button(
+                "preview_copy_inchikey_button", "InChIKey", lambda: self._inchikey_text
+            )
+
+    def _sync_copy_buttons(self) -> None:
+        self._ensure_copy_buttons()
+        export = self._export_xyz_button
+        # Lay out [SMILES] [InChIKey] [Export] right-aligned: each copy button is
+        # anchored to the left edge of the one to its right. They only appear when
+        # a structure is present and the identifier value exists.
+        specs = [
+            (self._copy_inchikey_button, "Copy InChIKey", self._inchikey_text),
+            (self._copy_smiles_button, "Copy canonical SMILES", self._smiles_text),
+        ]
+        if self._scene is None or export is None or not export.isVisible():
+            for button, _tooltip, _value in specs:
+                if button is not None:
+                    button.setVisible(False)
+                    button.setEnabled(False)
+            return
+        geometry = export.geometry()
+        right_edge = float(geometry.x())
+        gap = 6
+        for button, base_tooltip, value in specs:
+            if button is None:
+                continue
+            has_value = bool(value)
+            button.setVisible(has_value)
+            button.setEnabled(has_value)
+            if not has_value:
+                continue
+            button.setFont(export.font())
+            button.setToolTip(f"{base_tooltip}\n{value}")
+            metrics = QFontMetricsF(button.font())
+            width = max(96.0, metrics.horizontalAdvance(button.text()) + 28.0)
+            x = right_edge - gap - width
+            button.setGeometry(round(x), geometry.y(), round(width), geometry.height())
+            right_edge = x
+
+    def _handle_copy_clicked(self, value: str, button: QToolButton, label: str) -> None:
+        if not value:
+            return
+        clipboard = QApplication.clipboard()
+        if clipboard is not None:
+            clipboard.setText(value)
+        button.setText("Copied")
+        QTimer.singleShot(1200, lambda b=button, t=label: b.setText(t))
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)

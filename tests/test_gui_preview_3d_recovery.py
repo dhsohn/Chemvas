@@ -17,7 +17,12 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from core.model import MoleculeModel
-    from core.rdkit_adapter import Molecule3DAtom, Molecule3DBond, Molecule3DScene
+    from core.rdkit_adapter import (
+        Molecule3DAtom,
+        Molecule3DBond,
+        Molecule3DScene,
+        MoleculeIdentifiers,
+    )
     from ui.main_window_palette import PALETTE
     from ui.preview_3d import Preview3D
     from ui.preview_3d_painter import (
@@ -84,6 +89,9 @@ class SequencedAdapter:
 
     def compute_props(self, model):
         return None, None, None
+
+    def compute_identifiers(self, model):
+        return MoleculeIdentifiers()
 
     def model_to_3d_scene(self, model, atom_annotations=None):
         self.calls.append((model, atom_annotations))
@@ -435,6 +443,46 @@ class Preview3DRecoveryTest(unittest.TestCase):
         )
         self.assertEqual(len(projected), 2)
         self.assertTrue(all(40.0 <= atom[0] <= 260.0 for atom in projected))
+
+    def test_copy_buttons_appear_and_copy_identifiers_to_clipboard(self) -> None:
+        preview = self._create_preview(SequencedAdapter([]))
+        preview.resize(560, 360)
+        preview.set_export_xyz_action(mock.Mock())
+        preview._scene = self._make_scene()
+        preview.set_info("C2H4O", "44.05", "CC=O", "IKHGUXGNUITLKF-UHFFFAOYSA-N")
+        preview._sync_export_xyz_button()
+
+        smiles_button = preview._copy_smiles_button
+        inchikey_button = preview._copy_inchikey_button
+        export_button = preview.export_xyz_button
+        assert smiles_button is not None
+        assert inchikey_button is not None
+        assert export_button is not None
+        self.assertTrue(smiles_button.isVisible())
+        self.assertTrue(inchikey_button.isVisible())
+        self.assertEqual(smiles_button.objectName(), "preview_copy_smiles_button")
+        # Copy buttons sit to the left of the Export 3D button.
+        self.assertLessEqual(smiles_button.geometry().right(), inchikey_button.geometry().left())
+        self.assertLessEqual(inchikey_button.geometry().right(), export_button.geometry().left())
+
+        smiles_button.click()
+        self.assertEqual(QApplication.clipboard().text(), "CC=O")
+        self.assertEqual(smiles_button.text(), "Copied")
+
+        inchikey_button.click()
+        self.assertEqual(QApplication.clipboard().text(), "IKHGUXGNUITLKF-UHFFFAOYSA-N")
+
+    def test_copy_buttons_hidden_when_identifiers_absent(self) -> None:
+        preview = self._create_preview(SequencedAdapter([]))
+        preview.set_export_xyz_action(mock.Mock())
+        preview._scene = self._make_scene()
+        preview.set_info("C2H4O", "44.05")
+        preview._sync_export_xyz_button()
+
+        assert preview._copy_smiles_button is not None
+        assert preview._copy_inchikey_button is not None
+        self.assertFalse(preview._copy_smiles_button.isVisible())
+        self.assertFalse(preview._copy_inchikey_button.isVisible())
 
 
 if __name__ == "__main__":
