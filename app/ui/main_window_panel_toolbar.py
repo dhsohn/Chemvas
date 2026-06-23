@@ -42,6 +42,7 @@ class MainWindowPanelToolbarCallbacks:
     save_canvas_as: Callable[[object], Any]
     load_canvas: Callable[[object], Any]
     export_figure: Callable[[object], None]
+    export_mol: Callable[[object], None]
     open_preview_window: Callable[[object], None]
     new_canvas: Callable[[object], Any]
 
@@ -133,8 +134,14 @@ def build_panel_toolbar(
     export_figure_action.triggered.connect(lambda _checked=False: callbacks.export_figure(window))
     window.addAction(export_figure_action)
 
+    export_mol_action = QAction("Export MOL...", window)
+    export_mol_action.setToolTip("Export MOL")
+    export_mol_action.setStatusTip("Export the current structure as an MDL Molfile (.mol)")
+    export_mol_action.triggered.connect(lambda _checked=False: callbacks.export_mol(window))
+    window.addAction(export_mol_action)
+
     save_button = create_file_project_menu_button(
-        save_action, load_action, save_as_action, export_figure_action
+        save_action, load_action, save_as_action, export_figure_action, export_mol_action
     )
     preview_panel_btn = create_toolbar_button(
         icon=icon_factory.icon_preview_panel(),

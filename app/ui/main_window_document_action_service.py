@@ -67,6 +67,21 @@ class MainWindowDocumentActionService:
             return str(Path(current_path).with_suffix(".xyz"))
         return ""
 
+    @staticmethod
+    def normalize_mol_export_path(dialog_path: str | None) -> str | None:
+        if not dialog_path:
+            return None
+        path = Path(dialog_path)
+        if path.suffix:
+            return str(path)
+        return str(path.with_suffix(".mol"))
+
+    def default_mol_export_path(self, window) -> str:
+        current_path = self.current_file_path(window)
+        if current_path:
+            return str(Path(current_path).with_suffix(".mol"))
+        return ""
+
     def default_save_dialog_path(self, window, *, canvas: CanvasView | None = None) -> str:
         return self.current_file_path(window, canvas=canvas) or ""
 
@@ -178,6 +193,45 @@ class MainWindowDocumentActionService:
             on_error=handle_error,
             **export_kwargs,
         )
+
+    def export_mol(
+        self,
+        window,
+        *,
+        file_dialog=None,
+        message_box=None,
+        selected_only: bool = False,
+        dialog_parent=None,
+        status_sink=None,
+    ) -> None:
+        file_dialog = QFileDialog if file_dialog is None else file_dialog
+        message_box = QMessageBox if message_box is None else message_box
+        dialog_parent = window if dialog_parent is None else dialog_parent
+        dialog_path, _ = file_dialog.getSaveFileName(
+            dialog_parent,
+            "Export MOL",
+            self.default_mol_export_path(window),
+            "MDL Molfile (*.mol);;All Files (*)",
+        )
+        path = self.normalize_mol_export_path(dialog_path)
+        if path is None:
+            return
+
+        def report(message: str) -> None:
+            if status_sink is not None:
+                status_sink(message)
+
+        try:
+            self._document_session_service_for_window(window).export_mol(
+                path, selected_only=selected_only
+            )
+        except Exception as exc:
+            message = str(exc) or "Failed to export MOL."
+            message_box.warning(dialog_parent, "Export Error", f"Failed to export MOL:\n{message}")
+            report(f"Export failed: {message}")
+            return
+        window.statusBar().showMessage(f"Exported MOL: {path}", 4000)
+        report(f"Exported MOL: {path}")
 
     def export_figure(self, window, *, file_dialog=None, message_box=None) -> None:
         file_dialog = QFileDialog if file_dialog is None else file_dialog

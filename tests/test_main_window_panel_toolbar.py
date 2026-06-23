@@ -117,6 +117,7 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
             save_canvas_as=mock.Mock(),
             load_canvas=mock.Mock(),
             export_figure=mock.Mock(),
+            export_mol=mock.Mock(),
             open_preview_window=mock.Mock(),
             new_canvas=mock.Mock(),
         )
@@ -238,10 +239,15 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
             action for action in assembly.save_button.menu().actions() if action.text() == "Export Figure..."
         )
         export_figure_action.trigger()
+        export_mol_action = next(
+            action for action in assembly.save_button.menu().actions() if action.text() == "Export MOL..."
+        )
+        export_mol_action.trigger()
         self.panel_callbacks.save_canvas.assert_called_once_with(window)
         self.panel_callbacks.save_canvas_as.assert_called_once_with(window)
         self.panel_callbacks.load_canvas.assert_called_once_with(window)
         self.panel_callbacks.export_figure.assert_called_once_with(window)
+        self.panel_callbacks.export_mol.assert_called_once_with(window)
         window.save_canvas.assert_not_called()
         window.save_canvas_as.assert_not_called()
         window.load_canvas.assert_not_called()

@@ -143,15 +143,16 @@ class MainWindowToolbarButtonFactory:
         save_action: QAction,
         load_action: QAction,
         save_as_action: QAction,
-        export_action: QAction | None = None,
+        *export_actions: QAction,
     ) -> CornerMenuButton:
         def build_menu(menu: QMenu) -> None:
             menu.addAction(load_action)
             menu.addAction(save_action)
             menu.addAction(save_as_action)
-            if export_action is not None:
+            if export_actions:
                 menu.addSeparator()
-                menu.addAction(export_action)
+                for export_action in export_actions:
+                    menu.addAction(export_action)
 
         return self.create_corner_menu_button(
             tooltip="File",
