@@ -9,14 +9,14 @@ from ui.atom_label_access import add_or_update_atom_label, atom_label_service
 from ui.canvas_model_access import atom_for_id, atoms_for, bonds_for
 from ui.canvas_ring_fill_scene_access import create_ring_fill_item_for
 from ui.canvas_scene_items_state import ring_items_for
-from ui.graph_algorithms import find_rings
-from ui.scene_item_access import attach_scene_item
 from ui.canvas_smiles_input_state import (
     clear_last_smiles_input_for,
     last_smiles_input_for,
     set_last_smiles_input_for,
 )
+from ui.graph_algorithms import find_rings
 from ui.renderer_style_access import bond_length_px_for
+from ui.scene_item_access import attach_scene_item
 from ui.structure_insert_access import (
     add_insert_atom_for,
     add_insert_bond_for,
