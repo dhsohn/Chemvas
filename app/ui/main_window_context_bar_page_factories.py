@@ -268,7 +268,9 @@ def build_rotate_page(window, rotate_selection) -> QWidget:
     apply_button = action_button("Apply", "Rotate the selection by the entered angle")
     apply_button.setObjectName("rotateApplyButton")
     apply_button.clicked.connect(lambda _checked=False: apply_rotation())
-    angle_input.lineEdit().returnPressed.connect(apply_rotation)
+    line_edit = angle_input.lineEdit()
+    if line_edit is not None:
+        line_edit.returnPressed.connect(apply_rotation)
     layout.addWidget(apply_button)
     layout.addStretch(1)
     return page
