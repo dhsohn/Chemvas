@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QRectF
 
-from ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for, visible_atom_item_for
+from ui.canvas_atom_graphics_state import (
+    atom_dots_for,
+    atom_items_for,
+    visible_atom_item_for,
+)
 from ui.canvas_bond_graphics_state import bond_items_for
 from ui.canvas_model_access import atom_for_id
 from ui.pick_radius_access import atom_pick_radius_for
