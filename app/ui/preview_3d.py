@@ -20,7 +20,8 @@ from ui.preview_3d_painter import (
     preview_caption_font,
     preview_layout_for_widget,
 )
-from ui.preview_3d_state import preview_payload_signature
+from ui.preview_3d_renderer import status_badge_width
+from ui.preview_3d_state import preview_payload_signature, preview_status_badge
 from ui.preview_3d_worker import Preview3DWorker
 from ui.structure_payload_access import build_selected_3d_conversion_payload_for
 
@@ -377,7 +378,12 @@ class Preview3D(QWidget):
         metrics = QFontMetricsF(button.font())
         width = max(112.0, metrics.horizontalAdvance(button.text()) + 36.0)
         height = 22.0
-        x = header.right() - width
+        # The status badge (e.g. "Ready") is painted at the header's right edge.
+        # Anchor the Export button to the left of it so they never overlap.
+        badge_text = preview_status_badge(self._scene, self._message)[0]
+        badge_width = status_badge_width(badge_text, QFontMetricsF(preview_caption_font(self.font())))
+        badge_gap = 8.0
+        x = header.right() - badge_width - badge_gap - width
         y = header.top() + 4.0
         button.setGeometry(round(x), round(y), round(width), round(height))
 

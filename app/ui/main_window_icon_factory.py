@@ -252,6 +252,9 @@ class MainWindowIconFactory:
     def icon_flip_v(self) -> QIcon:
         return self.make_design_icon("flip_v")
 
+    def icon_rotate(self) -> QIcon:
+        return self.make_design_icon("rotate")
+
     def icon_arrow(self) -> QIcon:
         return self.make_design_icon("arrow")
 

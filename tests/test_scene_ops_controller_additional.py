@@ -10,7 +10,7 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from core.history import CompositeCommand
+    from core.history import CompositeCommand, SetAtomPositionsCommand
     from core.model import Atom
     from ui.scene_transform_logic import (
         center_for_flip_group,
@@ -170,6 +170,43 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
         self.assertEqual(arrow_item.data(9)["end"], (30.0, 10.0))
         self.assertEqual(arrow_item.data(9)["control"], (40.0, 20.0))
         self.assertEqual(orbital_item.data(9)["rotation"], 165.0)
+
+    def test_rotate_selected_items_rotates_atoms_around_center(self) -> None:
+        canvas = _FakeCanvas()
+        atom_1_id = canvas.add_atom("C", 0.0, 0.0)
+        atom_2_id = canvas.add_atom("O", 20.0, 0.0)
+        atom_1_item = canvas._atom_item_for_id(atom_1_id)
+        atom_2_item = canvas._atom_item_for_id(atom_2_id)
+        assert atom_1_item is not None
+        assert atom_2_item is not None
+        atom_1_item.setSelected(True)
+        atom_2_item.setSelected(True)
+
+        controller = scene_transform_controller_for(canvas)
+        controller.rotate_selected_items(90.0)
+
+        self.assertEqual(len(canvas.pushed_commands), 1)
+        self.assertIsInstance(canvas.pushed_commands[0], SetAtomPositionsCommand)
+        self.assertEqual(canvas.update_selection_outline_calls, 1)
+        # Rotating (0,0) and (20,0) by 90deg around their center (10,0).
+        self.assertAlmostEqual(canvas.model.atoms[atom_1_id].x, 10.0)
+        self.assertAlmostEqual(canvas.model.atoms[atom_1_id].y, -10.0)
+        self.assertAlmostEqual(canvas.model.atoms[atom_2_id].x, 10.0)
+        self.assertAlmostEqual(canvas.model.atoms[atom_2_id].y, 10.0)
+
+    def test_rotate_selected_items_noop_for_zero_angle_or_empty_selection(self) -> None:
+        canvas = _FakeCanvas()
+        controller = scene_transform_controller_for(canvas)
+
+        controller.rotate_selected_items(0.0)
+        self.assertEqual(canvas.pushed_commands, [])
+
+        atom_id = canvas.add_atom("C", 0.0, 0.0)
+        atom_item = canvas._atom_item_for_id(atom_id)
+        assert atom_item is not None
+        atom_item.setSelected(True)
+        controller.rotate_selected_items(0.0)
+        self.assertEqual(canvas.pushed_commands, [])
 
     def test_copy_selection_to_clipboard_without_payload_hides_and_restores_overlapping_items(self) -> None:
         canvas = _FakeCanvas()

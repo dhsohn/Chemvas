@@ -39,6 +39,10 @@ def draw_panel(painter: QPainter, rect: QRectF) -> None:
     painter.restore()
 
 
+def status_badge_width(text: str, metrics: QFontMetricsF) -> float:
+    return max(50.0, metrics.horizontalAdvance(text) + 20.0)
+
+
 def draw_header(
     painter: QPainter,
     rect: QRectF,
@@ -51,7 +55,7 @@ def draw_header(
     painter.save()
     status_text, status_fill, status_border, status_pen = status_badge
     metrics = QFontMetricsF(caption_font)
-    badge_width = max(50.0, metrics.horizontalAdvance(status_text) + 20.0)
+    badge_width = status_badge_width(status_text, metrics)
     badge = QRectF(rect.right() - badge_width, rect.top() + 4.0, badge_width, 22.0)
     painter.setPen(QPen(status_border, 1.0))
     painter.setBrush(status_fill)

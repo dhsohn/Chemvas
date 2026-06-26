@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
-from core.history import CompositeCommand, HistoryCommand
+from core.history import CompositeCommand, HistoryCommand, SetAtomPositionsCommand
 
 from ui.bond_graphics_access import add_bond_graphics_for
 from ui.bond_graphics_logic import refresh_bond_graphics
@@ -55,6 +56,7 @@ from ui.selection_collection_access import (
     selected_atom_ids_for_transform_for,
     selected_items_for_transform_for,
 )
+from ui.selection_rotation_logic import rotated_atom_positions
 from ui.selection_service_access import refresh_selection_outline_for
 
 if TYPE_CHECKING:
@@ -268,6 +270,37 @@ class SceneTransformController:
             self.history.push(commands[0])
             return
         self.history.push(CompositeCommand(commands))
+
+    def rotate_selected_items(self, angle_degrees: float) -> None:
+        if not angle_degrees:
+            return
+        atom_ids = selected_atom_ids_for_transform_for(self.canvas)
+        if not atom_ids:
+            return
+        center = self._bounding_box_center_for_atoms(atom_ids)
+        if center is None:
+            return
+        before_positions: dict[int, tuple[float, float]] = {}
+        for atom_id in atom_ids:
+            atom = self._atoms.get(atom_id)
+            if atom is None:
+                continue
+            before_positions[atom_id] = (atom.x, atom.y)
+        after_positions = rotated_atom_positions(
+            before_positions.keys(),
+            atoms=self._atoms,
+            center=center,
+            angle_radians=math.radians(angle_degrees),
+        )
+        if not after_positions or before_positions == after_positions:
+            return
+        self._set_atom_positions(after_positions)
+        self.history.push(
+            SetAtomPositionsCommand(
+                before_positions=before_positions,
+                after_positions=after_positions,
+            )
+        )
 
 
 __all__ = ["SceneTransformController"]

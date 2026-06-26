@@ -14,6 +14,7 @@ from ui.main_window_context_bar_page_factories import (
     build_empty_page,
     build_mark_page,
     build_orbital_page,
+    build_rotate_page,
     build_template_page,
 )
 
@@ -45,6 +46,7 @@ class MainWindowContextBarPageBuilder:
         set_bond_length_for_window,
         apply_color_preset_for_window,
         apply_ring_fill_preset_for_window,
+        rotate_selection_for_window,
     ) -> None:
         self._insert_controller_for_window = insert_controller_for_window
         self._tool_mode_controller_for_window = tool_mode_controller_for_window
@@ -53,6 +55,7 @@ class MainWindowContextBarPageBuilder:
         self._set_bond_length_for_window = set_bond_length_for_window
         self._apply_color_preset_for_window = apply_color_preset_for_window
         self._apply_ring_fill_preset_for_window = apply_ring_fill_preset_for_window
+        self._rotate_selection_for_window = rotate_selection_for_window
 
     def build(self, window) -> ContextBarPages:
         tool_mode_controller = self._tool_mode_controller_for_window(window)
@@ -81,6 +84,7 @@ class MainWindowContextBarPageBuilder:
             "atom": atom_page.page,
             "ring": ring_page.page,
             "mark": mark_page.page,
+            "rotate": build_rotate_page(window, self._rotate_selection_for_window),
             "orbital": build_orbital_page(window, self._tool_state),
             "color": build_color_palette_page(
                 tooltip_prefix="Color",
