@@ -138,6 +138,12 @@ class StructureBuildService:
     def create_ring_fill_item(self, points, atom_ids):
         return create_ring_fill_item_for(self.canvas, points, atom_ids)
 
+    def ensure_ring_fills_for_model(self) -> list:
+        """Make sure every ring in the model has a fill polygon so it can be
+        selected and colored. Existing fills (saved or freshly built) are left
+        untouched; new fills are invisible (default alpha) until colored."""
+        return self.committer.ensure_ring_fills_for_model()
+
     def run_recorded_build(
         self,
         action: Callable[[], list | None],

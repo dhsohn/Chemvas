@@ -90,6 +90,7 @@ class CanvasDocumentSessionService:
             self.graph_service.rebuild_bond_adjacency()
             restore_document_pre_model_items(self.canvas, state)
             self.structure_build_service.render_model()
+            self.structure_build_service.ensure_ring_fills_for_model()
             restore_document_post_model_items(self.canvas, state)
             self.hit_testing_service.mark_spatial_index_dirty()
         finally:

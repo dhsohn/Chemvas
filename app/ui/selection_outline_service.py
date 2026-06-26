@@ -247,7 +247,9 @@ class SelectionOutlineService:
             rect = selection_indicator_rect_for_atom_for(self.canvas, atom_id)
             if rect is None:
                 continue
-            component_path.addEllipse(rect.adjusted(-atom_pad, -atom_pad, atom_pad, atom_pad))
+            padded = rect.adjusted(-atom_pad, -atom_pad, atom_pad, atom_pad)
+            corner = min(padded.width(), padded.height()) / 2.0
+            component_path.addRoundedRect(padded, corner, corner)
         for bond_id in bond_ids:
             bond_path = self.selection_path_for_bond(bond_id)
             if not bond_path.isEmpty():

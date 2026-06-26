@@ -4,9 +4,45 @@ from ui.graph_algorithms import (
     adjacency_for_bonds,
     connected_components_for_nodes,
     edge_has_reachable_alternative_path,
+    find_rings,
     reachable_component_without_edge,
     reachable_from,
 )
+
+
+def _bond(a: int, b: int) -> SimpleNamespace:
+    return SimpleNamespace(a=a, b=b)
+
+
+def test_find_rings_returns_ordered_single_ring_for_simple_cycle() -> None:
+    bonds = [_bond(0, 1), _bond(1, 2), _bond(2, 3), _bond(3, 4), _bond(4, 5), _bond(5, 0)]
+
+    rings = find_rings(bonds)
+
+    assert len(rings) == 1
+    assert frozenset(rings[0]) == {0, 1, 2, 3, 4, 5}
+    # consecutive entries (and wrap-around) must be bonded
+    edges = {frozenset((b.a, b.b)) for b in bonds}
+    ring = rings[0]
+    for index in range(len(ring)):
+        assert frozenset((ring[index], ring[(index + 1) % len(ring)])) in edges
+
+
+def test_find_rings_finds_both_fused_rings_and_ignores_substituents() -> None:
+    naphthalene = [
+        _bond(0, 1), _bond(1, 2), _bond(2, 3), _bond(3, 4), _bond(4, 5), _bond(5, 0),
+        _bond(5, 6), _bond(6, 7), _bond(7, 8), _bond(8, 9), _bond(9, 0),
+        _bond(2, 10),  # exocyclic substituent
+    ]
+
+    rings = find_rings(naphthalene)
+
+    assert sorted(sorted(r) for r in rings) == [[0, 1, 2, 3, 4, 5], [0, 5, 6, 7, 8, 9]]
+
+
+def test_find_rings_returns_empty_for_acyclic_graph() -> None:
+    assert find_rings([_bond(0, 1), _bond(1, 2), _bond(2, 3)]) == []
+    assert find_rings([]) == []
 
 
 def test_connected_components_for_nodes_filters_to_requested_atom_ids() -> None:

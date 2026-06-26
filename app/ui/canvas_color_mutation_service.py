@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from core.history import UpdateAtomColorCommand, UpdateBondCommand
+from core.history import CompositeCommand, UpdateAtomColorCommand, UpdateBondCommand
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QGraphicsEllipseItem, QGraphicsTextItem
 
@@ -23,6 +23,17 @@ from ui.scene_item_state import bond_state_dict, ring_state_dict_for
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
+
+
+class _CollectingHistory:
+    """Drop-in for the history service that captures pushed commands instead of
+    recording them, so a multi-element mutation can be bundled into one command."""
+
+    def __init__(self, sink) -> None:
+        self._sink = sink
+
+    def push(self, command) -> None:
+        self._sink(command)
 
 
 class CanvasColorMutationService:
@@ -123,14 +134,25 @@ class CanvasColorMutationService:
         if not atom_ids:
             return
         bond_ids, _ = self.graph_service.bond_sets_for_atoms(atom_ids)
-        for atom_id in sorted(atom_ids):
-            atom_item = visible_atom_item_for(self.canvas, atom_id)
-            if atom_item is not None:
-                self.apply_color_to_item(atom_item, color)
-        for bond_id in sorted(bond_ids):
-            bond_items = bond_items_for_id(self.canvas, bond_id)
-            if bond_items:
-                self.apply_color_to_item(bond_items[0], color)
+        # Coloring a ring touches every ring atom and bond. Collect the per-element
+        # commands and push them as a single CompositeCommand so one undo reverts
+        # the whole ring rather than peeling off one atom/bond at a time.
+        real_history = self.history
+        collected: list = []
+        self.history = _CollectingHistory(collected.append)
+        try:
+            for atom_id in sorted(atom_ids):
+                atom_item = visible_atom_item_for(self.canvas, atom_id)
+                if atom_item is not None:
+                    self.apply_color_to_item(atom_item, color)
+            for bond_id in sorted(bond_ids):
+                bond_items = bond_items_for_id(self.canvas, bond_id)
+                if bond_items:
+                    self.apply_color_to_item(bond_items[0], color)
+        finally:
+            self.history = real_history
+        if collected:
+            self.history.push(CompositeCommand(commands=collected))
 
 
 __all__ = ["CanvasColorMutationService"]
