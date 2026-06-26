@@ -8,7 +8,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
     from PyQt6.QtCore import QPoint, QPointF, QRectF, Qt
-    from PyQt6.QtGui import QFont
+    from PyQt6.QtGui import QFont, QFontMetricsF
     from PyQt6.QtTest import QTest
     from PyQt6.QtWidgets import QApplication, QWidget
 except ModuleNotFoundError:
@@ -26,10 +26,12 @@ if QApplication is not None:
     from ui.main_window_palette import PALETTE
     from ui.preview_3d import Preview3D
     from ui.preview_3d_painter import (
+        preview_caption_font,
         preview_footer_height_for_lines,
         preview_layout_for_widget,
         project_preview_paint_scene,
     )
+    from ui.preview_3d_renderer import status_badge_width
     from ui.preview_3d_state import (
         preview_empty_state_text,
         preview_info_items,
@@ -393,7 +395,7 @@ class Preview3DRecoveryTest(unittest.TestCase):
         self.assertLess(layout["header"].bottom(), layout["viewport"].top())
         self.assertLess(layout["viewport"].bottom(), layout["footer"].top())
 
-    def test_export_button_overlays_ready_badge_position(self) -> None:
+    def test_export_button_sits_left_of_ready_badge(self) -> None:
         preview = self._create_preview(SequencedAdapter([]))
         preview.resize(420, 320)
         export_callback = mock.Mock()
@@ -425,7 +427,13 @@ class Preview3DRecoveryTest(unittest.TestCase):
         self.assertIn(f"border: 1px solid {PALETTE['border_strong']}", button.styleSheet())
         self.assertIn(f"border-color: {PALETTE['checked_border']}", button.styleSheet())
         self.assertIn("text-align: center", button.styleSheet())
-        self.assertAlmostEqual(button.geometry().right(), round(layout["header"].right()), delta=2)
+        # The "Ready" status badge is painted flush to the header's right edge;
+        # the Export button must sit to its left so it does not cover the badge.
+        badge_text = preview_status_badge(preview._scene, preview._message)[0]
+        badge_width = status_badge_width(badge_text, QFontMetricsF(preview_caption_font(preview.font())))
+        expected_right = round(layout["header"].right() - badge_width - 8.0)
+        self.assertAlmostEqual(button.geometry().right(), expected_right, delta=2)
+        self.assertLess(button.geometry().right(), round(layout["header"].right() - badge_width))
         self.assertAlmostEqual(button.geometry().top(), round(layout["header"].top() + 4.0), delta=1)
 
         button.click()

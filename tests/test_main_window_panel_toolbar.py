@@ -63,6 +63,7 @@ class _HarnessWindow(QMainWindow):
             icon_bond_length=self._blank_icon,
             icon_flip_h=self._blank_icon,
             icon_flip_v=self._blank_icon,
+            icon_rotate=self._blank_icon,
             icon_save=self._blank_icon,
             icon_open=self._blank_icon,
             icon_preview_panel=self._blank_icon,
@@ -120,6 +121,7 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
             export_mol=mock.Mock(),
             open_preview_window=mock.Mock(),
             new_canvas=mock.Mock(),
+            show_rotate_options=mock.Mock(),
         )
         self.button_service = MainWindowUIAssemblyService(
             scene_transform_controller_for_window=self.scene_transform_controller_for_window,
@@ -204,7 +206,7 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
             self._toolbar_widget_groups(assembly.panel_bar),
         )
         self.assertIn(
-            ["flip_horizontal_button", "flip_vertical_button"],
+            ["flip_horizontal_button", "flip_vertical_button", "rotate_button"],
             self._toolbar_widget_groups(assembly.panel_bar),
         )
         self.assertEqual(

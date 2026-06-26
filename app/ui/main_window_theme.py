@@ -3,6 +3,7 @@ from __future__ import annotations
 from ui.main_window_palette import PALETTE
 from ui.main_window_stylesheet import MAIN_WINDOW_STYLESHEET
 from ui.main_window_toolbar_styles import (
+    CONTEXT_ACTION_BUTTON_STYLE,
     CONTEXT_BAR_BUTTON_HEIGHT,
     CONTEXT_BAR_CONTENT_HEIGHT,
     CONTEXT_BAR_ICON_SIZE,
@@ -16,6 +17,7 @@ from ui.main_window_toolbar_styles import (
 )
 
 __all__ = [
+    "CONTEXT_ACTION_BUTTON_STYLE",
     "CONTEXT_SEGMENT_STYLE",
     "CONTEXT_BAR_BUTTON_HEIGHT",
     "CONTEXT_BAR_CONTENT_HEIGHT",

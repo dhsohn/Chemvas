@@ -76,6 +76,7 @@ class _HarnessWindow(QMainWindow):
             icon_bond_length=self._blank_icon,
             icon_flip_h=self._blank_icon,
             icon_flip_v=self._blank_icon,
+            icon_rotate=self._blank_icon,
             icon_save=self._blank_icon,
             icon_open=self._blank_icon,
             icon_preview_panel=self._blank_icon,
@@ -129,6 +130,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             export_mol=mock.Mock(),
             open_preview_window=mock.Mock(),
             new_canvas=mock.Mock(),
+            show_rotate_options=mock.Mock(),
         )
         self.service = MainWindowUIAssemblyService(
             scene_transform_controller_for_window=self.scene_transform_controller_for_window,

@@ -14,6 +14,7 @@ from ui.main_window_config import (
     TEMPLATE_ENTRY_SPECS,
 )
 from ui.main_window_context_bar_widgets import (
+    action_button,
     atom_symbol_input,
     color_swatch_button,
     divider,
@@ -21,6 +22,7 @@ from ui.main_window_context_bar_widgets import (
     icon_button,
     length_field_button,
     new_context_page,
+    rotate_angle_input,
     segment_button,
     slider_dropdown_button,
 )
@@ -254,6 +256,24 @@ def build_orbital_page(window, tool_state_service) -> QWidget:
     return page
 
 
+def build_rotate_page(window, rotate_selection) -> QWidget:
+    page, layout = new_context_page()
+    layout.addWidget(hint_label("Rotate"))
+    angle_frame, angle_input = rotate_angle_input()
+    layout.addWidget(angle_frame)
+
+    def apply_rotation() -> None:
+        rotate_selection(window, float(angle_input.value()))
+
+    apply_button = action_button("Apply", "Rotate the selection by the entered angle")
+    apply_button.setObjectName("rotateApplyButton")
+    apply_button.clicked.connect(lambda _checked=False: apply_rotation())
+    angle_input.lineEdit().returnPressed.connect(apply_rotation)
+    layout.addWidget(apply_button)
+    layout.addStretch(1)
+    return page
+
+
 def build_color_palette_page(
     *,
     tooltip_prefix: str,
@@ -285,5 +305,6 @@ __all__ = [
     "build_empty_page",
     "build_mark_page",
     "build_orbital_page",
+    "build_rotate_page",
     "build_template_page",
 ]

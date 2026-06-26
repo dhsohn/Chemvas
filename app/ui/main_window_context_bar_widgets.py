@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import QSize, Qt
+from PyQt6.QtCore import QPointF, QSize, Qt
+from PyQt6.QtGui import QColor, QPainter, QPolygonF
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -9,19 +10,57 @@ from PyQt6.QtWidgets import (
     QMenu,
     QSizePolicy,
     QSlider,
+    QSpinBox,
     QToolButton,
+    QVBoxLayout,
     QWidget,
     QWidgetAction,
 )
 
 from ui.main_window_palette import PALETTE
 from ui.main_window_theme import (
+    CONTEXT_ACTION_BUTTON_STYLE,
     CONTEXT_BAR_BUTTON_HEIGHT,
     CONTEXT_BAR_ICON_SIZE,
     CONTEXT_SEGMENT_STYLE,
     TOOLBAR_BUTTON_SIZE,
     TOOLBAR_BUTTON_STYLE,
 )
+
+
+class _StepArrowButton(QToolButton):
+    """A flat button that paints a small triangle centered in its rect."""
+
+    def __init__(self, direction: str) -> None:
+        super().__init__()
+        self._direction = direction
+        self.setAutoRaise(True)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(PALETTE["text_muted"]))
+        half_w = 3.5
+        half_h = 2.0
+        cx = self.width() / 2.0
+        cy = self.height() / 2.0
+        if self._direction == "up":
+            points = [
+                QPointF(cx, cy - half_h),
+                QPointF(cx + half_w, cy + half_h),
+                QPointF(cx - half_w, cy + half_h),
+            ]
+        else:
+            points = [
+                QPointF(cx - half_w, cy - half_h),
+                QPointF(cx + half_w, cy - half_h),
+                QPointF(cx, cy + half_h),
+            ]
+        painter.drawPolygon(QPolygonF(points))
 
 _ICON_SIZE = QSize(CONTEXT_BAR_ICON_SIZE, CONTEXT_BAR_ICON_SIZE)
 _ICON_BUTTON_STYLE = (
@@ -123,6 +162,18 @@ def segment_button(
     return button
 
 
+def action_button(text: str, tooltip: str) -> QToolButton:
+    button = QToolButton()
+    button.setText(text)
+    button.setToolTip(tooltip)
+    button.setStatusTip(tooltip)
+    button.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT)
+    button.setAutoRaise(True)
+    button.setCursor(Qt.CursorShape.PointingHandCursor)
+    button.setStyleSheet(CONTEXT_ACTION_BUTTON_STYLE)
+    return button
+
+
 def length_field_button(text: str, tooltip: str) -> QToolButton:
     button = segment_button(text, tooltip)
     button.setObjectName("bondLengthField")
@@ -180,6 +231,54 @@ def atom_symbol_input(current_symbol: str, set_symbol) -> QLineEdit:
     return input_box
 
 
+def rotate_angle_input() -> tuple[QWidget, QSpinBox]:
+    container = QWidget()
+    layout = QHBoxLayout(container)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(4)
+
+    spin = QSpinBox()
+    spin.setObjectName("rotateAngleInput")
+    spin.setRange(-180, 180)
+    spin.setValue(15)
+    spin.setSuffix("°")
+    spin.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
+    spin.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    spin.setFixedWidth(56)
+    spin.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT + 4)
+    spin.setToolTip("Rotation angle")
+    spin.setStatusTip("Enter a rotation angle from -180 to 180 degrees")
+    layout.addWidget(spin)
+
+    stepper = QFrame()
+    stepper.setObjectName("rotateStepper")
+    stepper.setFixedSize(22, CONTEXT_BAR_BUTTON_HEIGHT + 4)
+    stepper.setStyleSheet(
+        "QFrame#rotateStepper {"
+        f" background: {_P['surface_input']};"
+        f" border: 1px solid {_P['border_strong']};"
+        " border-radius: 6px;"
+        "}"
+        "QFrame#rotateStepper QToolButton { background: transparent; border: none; }"
+        f"QFrame#rotateStepper QToolButton:hover {{ background: {_P['hover']}; border-radius: 4px; }}"
+    )
+    stepper_col = QVBoxLayout(stepper)
+    stepper_col.setContentsMargins(0, 1, 0, 1)
+    stepper_col.setSpacing(0)
+    up_btn = _StepArrowButton("up")
+    up_btn.setFixedSize(20, 13)
+    up_btn.setToolTip("Increase angle")
+    up_btn.clicked.connect(spin.stepUp)
+    down_btn = _StepArrowButton("down")
+    down_btn.setFixedSize(20, 13)
+    down_btn.setToolTip("Decrease angle")
+    down_btn.clicked.connect(spin.stepDown)
+    stepper_col.addWidget(up_btn)
+    stepper_col.addWidget(down_btn)
+    layout.addWidget(stepper)
+    return container, spin
+
+
 def color_swatch_button(label: str, hex_value: str, tooltip_prefix: str) -> QToolButton:
     button = QToolButton()
     button.setObjectName(f"{tooltip_prefix.lower().replace(' ', '_')}_swatch_{label.lower()}")
@@ -202,6 +301,7 @@ def color_swatch_button(label: str, hex_value: str, tooltip_prefix: str) -> QToo
 
 
 __all__ = [
+    "action_button",
     "atom_symbol_input",
     "color_swatch_button",
     "divider",
@@ -209,6 +309,7 @@ __all__ = [
     "icon_button",
     "length_field_button",
     "new_context_page",
+    "rotate_angle_input",
     "segment_button",
     "slider_dropdown_button",
 ]

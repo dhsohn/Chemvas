@@ -45,6 +45,7 @@ class MainWindowPanelToolbarCallbacks:
     export_mol: Callable[[object], None]
     open_preview_window: Callable[[object], None]
     new_canvas: Callable[[object], Any]
+    show_rotate_options: Callable[[object], None]
 
 
 def _normalize_tool_action_button(
@@ -195,6 +196,13 @@ def build_panel_toolbar(
         callback=lambda: scene_transform_controller.flip_selected_items(horizontal=False),
         object_name="flip_vertical_button",
     )
+    rotate_btn = create_toolbar_button(
+        icon=icon_factory.icon_rotate(),
+        tooltip="Rotate",
+        status_tip="Enter an angle to rotate the current selection",
+        callback=lambda: callbacks.show_rotate_options(window),
+        object_name="rotate_button",
+    )
 
     for action_key in TOOLBAR_PRIMARY_TOOL_GROUP:
         action = tool_actions[action_key]
@@ -211,6 +219,7 @@ def build_panel_toolbar(
     panel_bar.addSeparator()
     panel_bar.addWidget(flip_h_btn)
     panel_bar.addWidget(flip_v_btn)
+    panel_bar.addWidget(rotate_btn)
     panel_bar.addSeparator()
     panel_bar.addWidget(_toolbar_spacer())
     panel_bar.addWidget(undo_btn)
@@ -230,6 +239,7 @@ def build_panel_toolbar(
         redo_btn,
         flip_h_btn,
         flip_v_btn,
+        rotate_btn,
     ):
         button.setIconSize(panel_bar.iconSize())
         button.setFixedHeight(TOOLBAR_BUTTON_SIZE)

@@ -76,6 +76,31 @@ CONTEXT_SEGMENT_STYLE = _flat_toolbutton_style(
     )
 )
 
+# Outlined action button used inside the context options bar (e.g. Apply).
+CONTEXT_ACTION_BUTTON_STYLE = (
+    "QToolButton {"
+    f" border: 1px solid {_P['border_strong']};"
+    " border-radius: 6px;"
+    " padding: 0px 12px;"
+    f" background-color: {_P['surface_input']};"
+    f" color: {_P['text']};"
+    " font-size: 13px;"
+    " font-weight: 500;"
+    "}"
+    "QToolButton:hover {"
+    f" background-color: {_P['hover']};"
+    f" border-color: {_P['accent']};"
+    "}"
+    "QToolButton:pressed {"
+    f" background-color: {_P['pressed']};"
+    f" border-color: {_P['accent']};"
+    "}"
+    "QToolButton:disabled {"
+    f" color: {_P['text_faint']};"
+    f" border-color: {_P['border_strong']};"
+    "}"
+)
+
 SMILES_RENDER_BUTTON_STYLE = (
     "QToolButton#smiles_render_button {"
     " border: 1px solid transparent;"
@@ -100,6 +125,7 @@ SMILES_RENDER_BUTTON_STYLE = (
 
 
 __all__ = [
+    "CONTEXT_ACTION_BUTTON_STYLE",
     "CONTEXT_SEGMENT_STYLE",
     "CONTEXT_BAR_BUTTON_HEIGHT",
     "CONTEXT_BAR_CONTENT_HEIGHT",
