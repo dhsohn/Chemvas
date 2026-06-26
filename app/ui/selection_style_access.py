@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QRectF
 
-from ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
+from ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for, visible_atom_item_for
 from ui.canvas_bond_graphics_state import bond_items_for
 from ui.canvas_model_access import atom_for_id
 from ui.pick_radius_access import atom_pick_radius_for
@@ -71,12 +71,28 @@ def selection_indicator_rect_for_atom_for(canvas, atom_id: int):
     if atom is None:
         return None
     radius = atom_pick_radius_for(canvas)
-    return QRectF(
+    rect = QRectF(
         atom.x - radius,
         atom.y - radius,
         radius * 2.0,
         radius * 2.0,
     )
+    item = visible_atom_item_for(canvas, atom_id)
+    if item is not None:
+        try:
+            label_rect = item.sceneBoundingRect()
+        except (RuntimeError, AttributeError):
+            label_rect = None
+        # Short element labels keep their circular indicator; only long free text
+        # (multi-character labels that clearly overflow the circle) widen it so the
+        # highlight covers the whole string.
+        if (
+            label_rect is not None
+            and not label_rect.isEmpty()
+            and label_rect.width() > rect.width() * 3.0
+        ):
+            rect = rect.united(label_rect)
+    return rect
 
 
 __all__ = [

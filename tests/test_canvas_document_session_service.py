@@ -46,7 +46,10 @@ def _document_services(
     return SimpleNamespace(
         canvas_scene_reset_service=SimpleNamespace(clear_scene=clear_scene),
         canvas_graph_service=SimpleNamespace(rebuild_bond_adjacency=rebuild_bond_adjacency),
-        structure_build_service=SimpleNamespace(render_model=render_model),
+        structure_build_service=SimpleNamespace(
+            render_model=render_model,
+            ensure_ring_fills_for_model=mock.Mock(),
+        ),
         hit_testing_service=SimpleNamespace(mark_spatial_index_dirty=mark_spatial_index_dirty),
     )
 
@@ -76,7 +79,10 @@ def _session_service(canvas):
         services.canvas_graph_service = graph_service
     structure_build_service = getattr(services, "structure_build_service", None)
     if structure_build_service is None:
-        structure_build_service = SimpleNamespace(render_model=mock.Mock())
+        structure_build_service = SimpleNamespace(
+            render_model=mock.Mock(),
+            ensure_ring_fills_for_model=mock.Mock(),
+        )
         services.structure_build_service = structure_build_service
     return CanvasDocumentSessionService(
         canvas,

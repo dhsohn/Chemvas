@@ -149,6 +149,60 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         _color_service_for(atom_canvas).apply_color_to_item(None, QColor("#ffffff"))
         _color_service_for(fill_canvas).apply_ring_fill_color(None, QColor("#ffffff"))
 
+    def test_coloring_a_ring_pushes_a_single_composite_command(self) -> None:
+        from core.history import CompositeCommand
+
+        scene = QGraphicsScene()
+        ring_item = QGraphicsPolygonItem(
+            QPolygonF([QPointF(0.0, 0.0), QPointF(1.0, 0.0), QPointF(0.0, 1.0)])
+        )
+        ring_item.setData(0, "ring")
+        ring_item.setData(2, [1, 2])
+        scene.addItem(ring_item)
+
+        label_a = QGraphicsTextItem("C")
+        label_a.setData(0, "atom")
+        label_a.setData(1, 1)
+        scene.addItem(label_a)
+        label_b = QGraphicsTextItem("O")
+        label_b.setData(0, "atom")
+        label_b.setData(1, 2)
+        scene.addItem(label_b)
+        bond_item = QGraphicsPathItem()
+        bond_item.setData(0, "bond")
+        bond_item.setData(1, 0)
+        scene.addItem(bond_item)
+
+        pushes: list = []
+        canvas = SimpleNamespace(
+            scene=lambda: scene,
+            model=SimpleNamespace(
+                atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 1.0, 0.0)},
+                bonds=[Bond(1, 2, 1, color="#000000")],
+            ),
+            smiles_input_state=CanvasSmilesInputState(last_smiles_input=None),
+            services=SimpleNamespace(
+                history_service=_history_service(pushes.append),
+                atom_label_service=SimpleNamespace(
+                    implicit_carbon_dot_brush=mock.Mock(return_value=QBrush())
+                ),
+            ),
+        )
+        _set_atom_graphics(canvas, {1: label_a, 2: label_b})
+        set_bond_items_for(canvas, {0: [bond_item]})
+        graph_service = SimpleNamespace(bond_sets_for_atoms=mock.Mock(return_value=({0}, set())))
+        service = _color_service_for(canvas, graph_service=graph_service)
+
+        service.apply_color_to_item(ring_item, QColor("#ff8800"))
+
+        # One ring click == one undo step, even though it touches every atom and bond.
+        self.assertEqual(len(pushes), 1)
+        composite = pushes[0]
+        self.assertIsInstance(composite, CompositeCommand)
+        self.assertEqual(len(composite.commands), 3)
+        # History service is restored after the bundled mutation.
+        self.assertIs(service.history, canvas.services.history_service)
+
     def test_apply_color_to_item_short_circuits_for_invalid_scene_runtime_and_unknown_kind(self) -> None:
         scene = QGraphicsScene()
         other_scene = QGraphicsScene()

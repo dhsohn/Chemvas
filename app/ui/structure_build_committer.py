@@ -6,7 +6,11 @@ from typing import TYPE_CHECKING, Any
 from PyQt6.QtCore import QPointF
 
 from ui.atom_label_access import add_or_update_atom_label, atom_label_service
-from ui.canvas_model_access import atoms_for, bonds_for
+from ui.canvas_model_access import atom_for_id, atoms_for, bonds_for
+from ui.canvas_ring_fill_scene_access import create_ring_fill_item_for
+from ui.canvas_scene_items_state import ring_items_for
+from ui.graph_algorithms import find_rings
+from ui.scene_item_access import attach_scene_item
 from ui.canvas_smiles_input_state import (
     clear_last_smiles_input_for,
     last_smiles_input_for,
@@ -149,6 +153,9 @@ class StructureBuildCommitter:
             self.add_bond(atom_ids[index], atom_ids[(index + 1) % len(atom_ids)])
         self.add_bond_graphics_range(bonds_start)
         self.label_non_carbon_atoms(atom_ids, elements or ["C"] * len(atom_ids))
+        if len(points) >= 3:
+            ring_item = create_ring_fill_item_for(self.canvas, list(points), atom_ids)
+            attach_scene_item(self.canvas, ring_item)
         return atom_ids
 
     def add_linear_chain(self, points: list[QPointF], elements: list[str], bonds: list[int]) -> list[int]:
@@ -161,6 +168,32 @@ class StructureBuildCommitter:
         self.add_bond_graphics_range(bonds_start)
         self.label_non_carbon_atoms(atom_ids, elements)
         return atom_ids
+
+    def ensure_ring_fills_for_model(self) -> list:
+        rings = find_rings(bonds_for(self.canvas))
+        if not rings:
+            return []
+        existing: set[frozenset[int]] = set()
+        for ring_item in ring_items_for(self.canvas):
+            ring_atom_ids = ring_item.data(2)
+            if isinstance(ring_atom_ids, list):
+                existing.add(frozenset(a for a in ring_atom_ids if isinstance(a, int)))
+        created: list = []
+        for ring in rings:
+            if frozenset(ring) in existing:
+                continue
+            points = []
+            for atom_id in ring:
+                atom = atom_for_id(self.canvas, atom_id)
+                if atom is None:
+                    break
+                points.append(QPointF(atom.x, atom.y))
+            if len(points) != len(ring) or len(points) < 3:
+                continue
+            item = create_ring_fill_item_for(self.canvas, points, list(ring))
+            attach_scene_item(self.canvas, item)
+            created.append(item)
+        return created
 
     def render_model(self) -> None:
         for bond_id, bond in enumerate(bonds_for(self.canvas)):

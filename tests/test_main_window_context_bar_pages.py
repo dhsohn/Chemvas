@@ -117,7 +117,7 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         self.assertEqual(page_labels["ring_fill"], ["Ring Fill"])
         self.assertEqual(pages.atom_input.placeholderText(), "Atom")
         self.assertEqual(pages.atom_input.text(), "N")
-        self.assertEqual(pages.atom_input.maxLength(), 4)
+        self.assertEqual(pages.atom_input.maxLength(), 255)
 
         pages.bond_buttons["Hash"].click()
 

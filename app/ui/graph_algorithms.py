@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 from collections.abc import Iterable, Mapping
 from typing import Any
 
@@ -104,10 +105,109 @@ def reachable_from(atom_ids: set[int], adjacency: Mapping[int, Iterable[int]]) -
     return visited
 
 
+def _shortest_cycle_through_edge(
+    adjacency: Mapping[int, Iterable[int]],
+    u: int,
+    v: int,
+) -> list[int] | None:
+    """Shortest path from ``v`` back to ``u`` that does not use the ``u``-``v``
+    edge, returned as an ordered atom list ``[u, ..., v]``. ``None`` when the
+    edge is a bridge (no cycle contains it)."""
+    prev: dict[int, int | None] = {u: None}
+    queue: deque[int] = deque([u])
+    while queue:
+        current = queue.popleft()
+        for neighbor in adjacency.get(current, ()):
+            if {current, neighbor} == {u, v}:
+                continue
+            if neighbor in prev:
+                continue
+            prev[neighbor] = current
+            if neighbor == v:
+                path = [v]
+                node: int | None = current
+                while node is not None:
+                    path.append(node)
+                    node = prev[node]
+                path.reverse()
+                return path
+            queue.append(neighbor)
+    return None
+
+
+def find_rings(bonds: Iterable[Any]) -> list[list[int]]:
+    """Smallest set of smallest rings for a bond graph.
+
+    Each ring is returned as an ordered list of atom ids where consecutive
+    entries (and the first/last pair) are bonded, suitable for building a ring
+    polygon. Uses a Horton-style candidate generation with GF(2) independence so
+    fused systems yield the chemically expected smallest rings.
+    """
+    adjacency = adjacency_for_bonds(bonds)
+    if not adjacency:
+        return []
+    edge_list: list[tuple[int, int]] = []
+    seen_edges: set[frozenset[int]] = set()
+    for bond in bonds:
+        if bond is None:
+            continue
+        key = frozenset((bond.a, bond.b))
+        if len(key) != 2 or key in seen_edges:
+            continue
+        seen_edges.add(key)
+        edge_list.append((bond.a, bond.b))
+    nodes = set(adjacency)
+    num_components = len(connected_components_for_nodes(nodes, adjacency))
+    cycle_rank = len(edge_list) - len(nodes) + num_components
+    if cycle_rank <= 0:
+        return []
+    edge_index = {frozenset(edge): index for index, edge in enumerate(edge_list)}
+
+    candidates: list[list[int]] = []
+    for u, v in edge_list:
+        ring = _shortest_cycle_through_edge(adjacency, u, v)
+        if ring is not None:
+            candidates.append(ring)
+
+    unique: dict[frozenset[int], list[int]] = {}
+    for ring in candidates:
+        key = frozenset(ring)
+        if key not in unique or len(ring) < len(unique[key]):
+            unique[key] = ring
+
+    chosen: list[list[int]] = []
+    pivots: dict[int, int] = {}
+    for ring in sorted(unique.values(), key=len):
+        vector = 0
+        valid = True
+        for index in range(len(ring)):
+            edge_key = frozenset((ring[index], ring[(index + 1) % len(ring)]))
+            edge_id = edge_index.get(edge_key)
+            if edge_id is None:
+                valid = False
+                break
+            vector ^= 1 << edge_id
+        if not valid or vector == 0:
+            continue
+        reduced = vector
+        while reduced:
+            high_bit = reduced.bit_length() - 1
+            existing = pivots.get(high_bit)
+            if existing is None:
+                pivots[high_bit] = reduced
+                chosen.append(ring)
+                break
+            reduced ^= existing
+        if len(chosen) >= cycle_rank:
+            break
+    return chosen
+
+
 __all__ = [
     "adjacency_for_bonds",
     "connected_components_for_nodes",
     "edge_has_reachable_alternative_path",
+    "find_rings",
     "reachable_component_without_edge",
     "reachable_from",
 ]
