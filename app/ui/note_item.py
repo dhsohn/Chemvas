@@ -13,12 +13,19 @@ class NoteItem(QGraphicsTextItem):
         self.setTextInteractionFlags(Qt.TextInteractionFlag.TextEditorInteraction)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsFocusable, True)
         self._last_text = ""
+        self._last_html = ""
 
     def committed_text(self) -> str:
         return self._last_text
 
     def set_committed_text(self, text: str) -> None:
         self._last_text = str(text)
+
+    def committed_html(self) -> str:
+        return self._last_html
+
+    def set_committed_html(self, html: str) -> None:
+        self._last_html = str(html)
 
     def focusOutEvent(self, event) -> None:
         super().focusOutEvent(event)

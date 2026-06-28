@@ -74,6 +74,10 @@ def _make_text_item(kind: str, text: str, state: dict) -> QGraphicsTextItem:
     return item
 
 
+def _without_html(states: list[dict]) -> list[dict]:
+    return [{key: value for key, value in state.items() if key != "html"} for state in states]
+
+
 def _make_ring_item(atom_ids: list[int], *, state: dict | None = None, add_to_scene: bool = True) -> QGraphicsPolygonItem:
     polygon = QPolygonF([QPointF(0.0, 0.0), QPointF(12.0, 0.0), QPointF(6.0, 10.0)])
     item = _set_selectable(QGraphicsPolygonItem(polygon))
@@ -208,8 +212,9 @@ class SceneOpsControllerClipboardPayloadTest(unittest.TestCase):
             payload["marks"],
         )
         self.assertEqual(len(payload["scene_items"]), 2)
-        self.assertIn({"kind": "note", "text": "note", "x": 80.0, "y": 90.0}, payload["scene_items"])
-        self.assertIn({"kind": "arrow", "start": (5.0, 6.0), "end": (7.0, 8.0)}, payload["scene_items"])
+        normalized_scene_items = _without_html(payload["scene_items"])
+        self.assertIn({"kind": "note", "text": "note", "x": 80.0, "y": 90.0}, normalized_scene_items)
+        self.assertIn({"kind": "arrow", "start": (5.0, 6.0), "end": (7.0, 8.0)}, normalized_scene_items)
 
     def test_selection_payload_for_clipboard_filters_invalid_selection_entries(self) -> None:
         canvas = _FakeCanvas()
@@ -277,7 +282,9 @@ class SceneOpsControllerClipboardPayloadTest(unittest.TestCase):
                 }
             ],
         )
-        self.assertEqual(payload["scene_items"], [{"kind": "note", "text": "still here", "x": 10.0, "y": 11.0}])
+        self.assertEqual(
+            _without_html(payload["scene_items"]), [{"kind": "note", "text": "still here", "x": 10.0, "y": 11.0}]
+        )
 
     def test_clipboard_selection_payload_uses_custom_mime(self) -> None:
         canvas = _FakeCanvas()

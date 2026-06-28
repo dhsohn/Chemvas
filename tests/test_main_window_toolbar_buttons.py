@@ -5,9 +5,10 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtCore import Qt
+    from PyQt6.QtCore import QPoint, Qt
     from PyQt6.QtGui import QAction, QIcon, QKeySequence, QPixmap
-    from PyQt6.QtWidgets import QApplication, QMainWindow, QToolButton, QWidget
+    from PyQt6.QtTest import QTest
+    from PyQt6.QtWidgets import QApplication, QMainWindow, QMenu, QToolButton, QWidget
 except ModuleNotFoundError:
     QApplication = None
 
@@ -15,6 +16,7 @@ if QApplication is not None:
     from ui.main_window_toolbar_buttons import (
         ArrowButton,
         CornerMenuButton,
+        CornerMenuToolButton,
         MainWindowToolbarButtonFactory,
     )
 
@@ -33,6 +35,32 @@ class MainWindowToolbarButtonsTest(unittest.TestCase):
         pixmap = QPixmap(8, 8)
         pixmap.fill(Qt.GlobalColor.black)
         return QIcon(pixmap)
+
+    def test_corner_menu_tool_button_opens_menu_only_in_bottom_right_corner(self) -> None:
+        window = QMainWindow()
+        self.addCleanup(window.close)
+        action = QAction("Tool", window)
+        triggered = mock.Mock()
+        action.triggered.connect(lambda checked=False: triggered())
+        button = CornerMenuToolButton(window)
+        button.setDefaultAction(action)
+        menu = QMenu(button)
+        menu.addAction("Arial")
+        button.setMenu(menu)
+        button.setFixedSize(30, 30)
+        button.show()
+        self.app.processEvents()
+
+        with mock.patch.object(button, "showMenu") as show_menu:
+            QTest.mouseClick(button, Qt.MouseButton.LeftButton, pos=QPoint(27, 27))
+            show_menu.assert_called_once()
+            triggered.assert_not_called()
+
+        triggered.reset_mock()
+        with mock.patch.object(button, "showMenu") as show_menu:
+            QTest.mouseClick(button, Qt.MouseButton.LeftButton, pos=QPoint(13, 13))
+            show_menu.assert_not_called()
+            triggered.assert_called_once()
 
     def test_create_toolbar_button_sets_properties_and_callback(self) -> None:
         callback = mock.Mock()

@@ -40,7 +40,8 @@ TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
     ("bond", "Bond", "bond", "icon_bond", "Bond (ChemDraw: X)"),
     ("benzene", "Ring", "benzene", "icon_ring", "Ring / Benzene (ChemDraw: J)"),
     ("arrow", "Arrow", "arrow", "icon_arrow", "Arrow (ChemDraw: E)"),
-    ("text", "Atom", "text", "icon_text", "Atom / Text (ChemDraw: T)"),
+    ("text", "Atom", "text", "icon_text", "Atom (ChemDraw: A)"),
+    ("note", "Text", "note", "icon_note", "Text / Annotation (ChemDraw: T)"),
     ("mark", "Mark", "mark", "icon_mark", "Charge / Radical"),
     ("ts_bracket", "Brackets", "ts_bracket", "icon_ts_bracket", "Brackets (ChemDraw: Shift+G)"),
     ("orbital", "Orbital", "orbital", "icon_orbital", "Orbital"),
@@ -89,12 +90,20 @@ TOOLBAR_PRIMARY_TOOL_GROUP: tuple[str, ...] = (
 TOOLBAR_TOOL_GROUPS: list[tuple[str, ...]] = [
     TOOLBAR_PRIMARY_TOOL_GROUP,
     ("mark", "orbital"),
-    ("color", "ring_fill"),
+    ("note", "color", "ring_fill"),
 ]
 
 TOOLBAR_TOOL_ACTION_ORDER: list[str] = [
     *(action_key for group in TOOLBAR_TOOL_GROUPS for action_key in group),
 ]
+
+TEXT_FONT_FAMILY_CHOICES: tuple[str, ...] = (
+    "Arial",
+    "Helvetica",
+    "Times New Roman",
+    "Courier New",
+    "Verdana",
+)
 
 ARROW_MENU_ITEMS = ARROW_MENU_SPECS
 ARROW_PRESET_ITEMS = ARROW_PRESET_SPECS
@@ -113,6 +122,7 @@ __all__ = [
     "MARK_TOOL_ACTION_SPECS",
     "RING_FILL_TOOL_ACTION_SPEC",
     "TEMPLATE_ENTRY_SPECS",
+    "TEXT_FONT_FAMILY_CHOICES",
     "TOOL_ACTION_SPECS",
     "TOOLBAR_PRIMARY_TOOL_GROUP",
     "TOOLBAR_TOOL_ACTION_ORDER",

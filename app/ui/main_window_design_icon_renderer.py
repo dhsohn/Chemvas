@@ -31,7 +31,18 @@ _SVG_BY_NAME: dict[str, str] = {
     "arrow": '<line x1="3" y1="12" x2="20" y2="12"/><polyline points="15,7 20.5,12 15,17"/>',
     "bracket": '<path d="M9 4 H6 V20 H9"/><path d="M15 4 H18 V20 H15"/>',
     "orbital": '<ellipse cx="8" cy="12" rx="5" ry="7"/><ellipse cx="16" cy="12" rx="5" ry="7"/>',
-    "atom": '<path d="M6 6 H18 M12 6 V19 M9 19 H15"/>',
+    "atom": '<path d="M5 20 12 4 19 20 M8 14 H16"/>',
+    "note": '<path d="M5 5 H19 M5 10 H19 M5 15 H15 M5 20 H11"/>',
+    "font": '<path d="M2.5 18 6 5 9.5 18 M4 13.2 H8"/><circle cx="16.2" cy="14.6" r="3.4"/><path d="M19.6 11.4 V18"/>',
+    "text_bold": '<path d="M7.5 5 V19 M7.5 5 H13 C16.5 5 16.5 11.5 13 11.5 H7.5 M7.5 11.5 H14 C17.8 11.5 17.8 19 14 19 H7.5"/><path d="M9.3 5 V19"/>',
+    "text_italic": '<path d="M10 5 H17 M7 19 H14 M14.5 5 L9.5 19"/>',
+    "text_superscript": '<path d="M5 16.5 11 10 M5 10 11 16.5"/><path d="M14 8.4 C14 6.6 18.6 6.6 18.6 8.9 C18.6 10.8 14 11.1 14 12.6 H18.8"/>',
+    "text_subscript": '<path d="M5 7.5 11 14 M5 14 11 7.5"/><path d="M14 13.4 C14 11.6 18.6 11.6 18.6 13.9 C18.6 15.8 14 16.1 14 17.6 H18.8"/>',
+    "text_size_increase": '<path d="M3.5 18 7.5 7 11.5 18 M4.8 14.5 H10.2 M16.5 18 V8.5 M13.5 11.5 16.5 8.5 19.5 11.5"/>',
+    "text_size_decrease": '<path d="M4.5 18 8 8.5 11.5 18 M5.6 15 H10.4 M16.5 8.5 V18 M13.5 15 16.5 18 19.5 15"/>',
+    "align_left": '<path d="M4 6 H20 M4 11 H14 M4 16 H18 M4 21 H12"/>',
+    "align_center": '<path d="M4 6 H20 M7 11 H17 M5 16 H19 M8 21 H16"/>',
+    "align_right": '<path d="M4 6 H20 M10 11 H20 M6 16 H20 M12 21 H20"/>',
     "atom_orbit": (
         '<circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>'
         '<ellipse cx="12" cy="12" rx="9.5" ry="4" transform="rotate(45 12 12)"/>'
@@ -164,9 +175,12 @@ def has_design_icon(name: str) -> bool:
     return name in _SVG_BY_NAME
 
 
-def draw_design_icon(painter: QPainter, name: str, *, color: str | None = None) -> None:
+def draw_design_icon(painter: QPainter, name: str, *, color: str | None = None, size: float = 30.0) -> None:
     renderer = QSvgRenderer(QByteArray(_svg_document(name, color or _ICON_COLOR).encode("utf-8")))
-    renderer.render(painter, QRectF(3.0, 3.0, 24.0, 24.0))
+    # Render the 24-unit viewBox into the central 80% of the target size so the
+    # glyph keeps the same 10% padding it has in the default 30px icon canvas.
+    pad = size * 0.1
+    renderer.render(painter, QRectF(pad, pad, size * 0.8, size * 0.8))
 
 
 __all__ = ["DESIGN_ICON_NAMES", "draw_design_icon", "has_design_icon"]

@@ -418,7 +418,12 @@ class SceneOpsControllerTest(unittest.TestCase):
                 },
             ],
         )
-        self.assertEqual(payload["scene_items"], [{"kind": "note", "text": "payload", "x": 30.0, "y": 40.0}])
+        self.assertEqual(len(payload["scene_items"]), 1)
+        note_state = payload["scene_items"][0]
+        self.assertEqual(
+            {key: note_state[key] for key in ("kind", "text", "x", "y")},
+            {"kind": "note", "text": "payload", "x": 30.0, "y": 40.0},
+        )
 
     def test_selection_payload_for_clipboard_returns_none_for_empty_selection(self) -> None:
         canvas = _FakeCanvas()

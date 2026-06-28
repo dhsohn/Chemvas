@@ -111,7 +111,7 @@ class MainWindowToolRoutingService:
             self._tool_mode_controller_for_window(window).set_tool("color")
             color_service = self._color_mutation_service_for_window(window)
             for item in self._selected_scene_items(window):
-                if item.data(0) in {"bond", "atom", "ring"}:
+                if item.data(0) in {"bond", "atom", "ring", "note"}:
                     color_service.apply_color_to_item(item, color)
 
         qtimer.singleShot(0, apply_color)

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from core.history import CompositeCommand, UpdateAtomColorCommand, UpdateBondCommand
-from PyQt6.QtGui import QColor
+from PyQt6.QtGui import QColor, QTextCharFormat, QTextCursor
 from PyQt6.QtWidgets import QGraphicsEllipseItem, QGraphicsTextItem
 
 from ui.atom_label_access import implicit_carbon_dot_brush_for
@@ -19,7 +19,7 @@ from ui.canvas_smiles_input_state import last_smiles_input_for
 from ui.graphics_items import AtomDotItem
 from ui.history_commands import UpdateSceneItemCommand
 from ui.scene_item_access import item_is_in_canvas_scene
-from ui.scene_item_state import bond_state_dict, ring_state_dict_for
+from ui.scene_item_state import bond_state_dict, note_state_dict_for, ring_state_dict_for
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
@@ -56,6 +56,9 @@ class CanvasColorMutationService:
             return
         if kind == "ring":
             self._apply_ring_structure_color(item, color)
+            return
+        if kind == "note" and isinstance(item, QGraphicsTextItem):
+            self._apply_note_color(item, color)
 
     def apply_ring_fill_color(self, item, color: QColor, alpha: float = 0.25) -> None:
         if item is None or not color.isValid():
@@ -68,6 +71,20 @@ class CanvasColorMutationService:
         item.setBrush(fill)
         after_state = ring_state_dict_for(self.canvas, item)
         if before_state != after_state:
+            self.history.push(UpdateSceneItemCommand(item, before_state, after_state))
+
+    def _apply_note_color(self, item, color: QColor) -> None:
+        before_state = note_state_dict_for(self.canvas, item)
+        document = item.document()
+        if document is not None:
+            cursor = QTextCursor(document)
+            cursor.select(QTextCursor.SelectionType.Document)
+            char_format = QTextCharFormat()
+            char_format.setForeground(color)
+            cursor.mergeCharFormat(char_format)
+        item.setDefaultTextColor(color)
+        after_state = note_state_dict_for(self.canvas, item)
+        if before_state != after_state and self.history is not None:
             self.history.push(UpdateSceneItemCommand(item, before_state, after_state))
 
     def _apply_bond_color(self, item, color: QColor) -> None:

@@ -147,13 +147,15 @@ def _snapshot_notes(canvas) -> list[dict]:
     notes: list[dict] = []
     for item in attached_canvas_scene_items(canvas, note_items_for(canvas)):
         note_state = note_state_dict_for(canvas, item)
-        notes.append(
-            {
-                "text": note_state["text"],
-                "x": note_state["x"],
-                "y": note_state["y"],
-            }
-        )
+        snapshot = {
+            "text": note_state["text"],
+            "x": note_state["x"],
+            "y": note_state["y"],
+        }
+        html = note_state.get("html")
+        if isinstance(html, str):
+            snapshot["html"] = html
+        notes.append(snapshot)
     return notes
 
 

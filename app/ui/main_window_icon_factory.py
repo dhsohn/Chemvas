@@ -128,8 +128,16 @@ class MainWindowIconFactory:
     def make_icon(self, painter_fn, size: int | None = None) -> QIcon:
         return self._pixmap_icons.make_icon(painter_fn, size=size)
 
+    # Logical sizes the design icons are actually displayed at: 16px in the
+    # context options bar, 18px in the toolbars, plus the 30px base. Rendering an
+    # exact pixmap per size keeps small icons crisp instead of downscaling one.
+    DESIGN_ICON_SIZES = (16, 18, ICON_SIZE)
+
     def make_design_icon(self, name: str) -> QIcon:
-        return self.make_icon(lambda painter: draw_design_icon(painter, name), size=self.ICON_SIZE)
+        return self._pixmap_icons.make_sized_icon(
+            lambda painter, size: draw_design_icon(painter, name, size=size),
+            self.DESIGN_ICON_SIZES,
+        )
 
     def _design_icon(self, name: str, fallback: str) -> QIcon:
         return self.make_design_icon(name if has_design_icon(name) else fallback)
@@ -163,6 +171,39 @@ class MainWindowIconFactory:
 
     def icon_text(self) -> QIcon:
         return self.make_design_icon("atom")
+
+    def icon_note(self) -> QIcon:
+        return self.make_design_icon("note")
+
+    def icon_font(self) -> QIcon:
+        return self.make_design_icon("font")
+
+    def icon_text_bold(self) -> QIcon:
+        return self.make_design_icon("text_bold")
+
+    def icon_text_italic(self) -> QIcon:
+        return self.make_design_icon("text_italic")
+
+    def icon_text_superscript(self) -> QIcon:
+        return self.make_design_icon("text_superscript")
+
+    def icon_text_subscript(self) -> QIcon:
+        return self.make_design_icon("text_subscript")
+
+    def icon_text_size_increase(self) -> QIcon:
+        return self.make_design_icon("text_size_increase")
+
+    def icon_text_size_decrease(self) -> QIcon:
+        return self.make_design_icon("text_size_decrease")
+
+    def icon_align_left(self) -> QIcon:
+        return self.make_design_icon("align_left")
+
+    def icon_align_center(self) -> QIcon:
+        return self.make_design_icon("align_center")
+
+    def icon_align_right(self) -> QIcon:
+        return self.make_design_icon("align_right")
 
     def benzene_icon_inner_segments(
         self,

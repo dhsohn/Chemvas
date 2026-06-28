@@ -3,6 +3,7 @@ from __future__ import annotations
 from ui.note_item_ports import note_controller_for_access
 
 COMMITTED_NOTE_TEXT_ROLE = 0xC001
+COMMITTED_NOTE_HTML_ROLE = 0xC002
 
 
 def _note_controller_method(canvas, name: str):
@@ -45,6 +46,31 @@ def set_committed_note_text_for(item, text: str) -> None:
     item.committed_note_text = committed_text
 
 
+def committed_note_html_for(item) -> str:
+    committed_html = getattr(item, "committed_html", None)
+    if callable(committed_html):
+        return str(committed_html())
+    data = getattr(item, "data", None)
+    if callable(data):
+        value = data(COMMITTED_NOTE_HTML_ROLE)
+        if value is not None:
+            return str(value)
+    return str(getattr(item, "committed_note_html", ""))
+
+
+def set_committed_note_html_for(item, html: str) -> None:
+    set_committed_html = getattr(item, "set_committed_html", None)
+    if callable(set_committed_html):
+        set_committed_html(html)
+        return
+    committed_html = str(html)
+    set_data = getattr(item, "setData", None)
+    if callable(set_data):
+        set_data(COMMITTED_NOTE_HTML_ROLE, committed_html)
+        return
+    item.committed_note_html = committed_html
+
+
 def apply_note_style_for(canvas, item) -> None:
     method = _note_controller_method(canvas, "apply_note_style")
     if method is not None:
@@ -58,10 +84,13 @@ def update_note_box_for(canvas, item) -> None:
 
 
 __all__ = [
+    "COMMITTED_NOTE_HTML_ROLE",
     "COMMITTED_NOTE_TEXT_ROLE",
     "apply_note_style_for",
+    "committed_note_html_for",
     "committed_note_text_for",
     "new_note_item_for",
+    "set_committed_note_html_for",
     "set_committed_note_text_for",
     "update_note_box_for",
 ]

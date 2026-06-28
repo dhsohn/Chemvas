@@ -62,6 +62,23 @@ class CornerMenuButton(QToolButton):
         painter.drawPolygon(QPolygonF(points))
 
 
+class CornerMenuToolButton(CornerMenuButton):
+    """A corner-chevron button where only the bottom-right chevron opens the menu;
+    clicking anywhere else triggers the default action (e.g. selecting the tool)."""
+
+    _CORNER_ZONE = 14
+
+    def _is_in_corner(self, pos) -> bool:
+        return pos.x() >= self.width() - self._CORNER_ZONE and pos.y() >= self.height() - self._CORNER_ZONE
+
+    def mousePressEvent(self, event) -> None:
+        if self.menu() is not None and self._is_in_corner(event.position().toPoint()):
+            self.showMenu()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+
 class MainWindowToolbarButtonFactory:
     def create_toolbar_button(
         self,
@@ -167,5 +184,6 @@ class MainWindowToolbarButtonFactory:
 __all__ = [
     "ArrowButton",
     "CornerMenuButton",
+    "CornerMenuToolButton",
     "MainWindowToolbarButtonFactory",
 ]

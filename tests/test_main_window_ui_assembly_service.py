@@ -131,6 +131,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             open_preview_window=mock.Mock(),
             new_canvas=mock.Mock(),
             show_rotate_options=mock.Mock(),
+            set_note_font_family=mock.Mock(),
         )
         self.service = MainWindowUIAssemblyService(
             scene_transform_controller_for_window=self.scene_transform_controller_for_window,
@@ -294,7 +295,12 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             for action in assembly.panel_bar.actions()
             if not action.isSeparator() and action.text() in TOOLBAR_TOOL_ACTION_ORDER
         ]
-        self.assertEqual(tool_action_texts, TOOLBAR_TOOL_ACTION_ORDER)
+        # The "note" tool is embedded as a font-dropdown menu button (a widget),
+        # so it is not added as a plain action on the toolbar.
+        self.assertEqual(tool_action_texts, [key for key in TOOLBAR_TOOL_ACTION_ORDER if key != "note"])
+        note_button = assembly.panel_bar.findChild(QToolButton, "toolButton_note")
+        self.assertIsNotNone(note_button)
+        self.assertIsNotNone(note_button.menu())
         self.assertEqual(
             sum(1 for action in assembly.panel_bar.actions() if action.isSeparator()),
             5,

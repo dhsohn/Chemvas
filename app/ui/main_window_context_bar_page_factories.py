@@ -240,6 +240,50 @@ def build_atom_page(current_symbol: str, set_atom_symbol) -> AtomContextPage:
     return AtomContextPage(page=page, atom_input=atom_input)
 
 
+def _text_icon_button(icon, tooltip: str, on_click) -> QToolButton:
+    button = icon_button(icon, tooltip)
+    button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+    button.clicked.connect(lambda _checked=False: on_click())
+    return button
+
+
+def build_text_page(
+    window,
+    *,
+    toggle_bold,
+    toggle_italic,
+    toggle_superscript,
+    toggle_subscript,
+    adjust_size,
+    set_alignment,
+) -> QWidget:
+    icons = icon_factory_for_window(window)
+    page, layout = new_context_page()
+    layout.addWidget(hint_label("Text"))
+    layout.addWidget(
+        _text_icon_button(icons.icon_text_size_decrease(), "Decrease font size", lambda: adjust_size(-1))
+    )
+    layout.addWidget(
+        _text_icon_button(icons.icon_text_size_increase(), "Increase font size", lambda: adjust_size(1))
+    )
+    layout.addWidget(divider())
+    layout.addWidget(_text_icon_button(icons.icon_text_bold(), "Bold the selected text", toggle_bold))
+    layout.addWidget(_text_icon_button(icons.icon_text_italic(), "Italicize the selected text", toggle_italic))
+    layout.addWidget(divider())
+    layout.addWidget(
+        _text_icon_button(icons.icon_text_superscript(), "Superscript the selected text", toggle_superscript)
+    )
+    layout.addWidget(
+        _text_icon_button(icons.icon_text_subscript(), "Subscript the selected text", toggle_subscript)
+    )
+    layout.addWidget(divider())
+    layout.addWidget(_text_icon_button(icons.icon_align_left(), "Align left", lambda: set_alignment("left")))
+    layout.addWidget(_text_icon_button(icons.icon_align_center(), "Align center", lambda: set_alignment("center")))
+    layout.addWidget(_text_icon_button(icons.icon_align_right(), "Align right", lambda: set_alignment("right")))
+    layout.addStretch(1)
+    return page
+
+
 def build_orbital_page(window, tool_state_service) -> QWidget:
     page, layout = new_context_page()
     layout.addWidget(hint_label("Orbital"))
@@ -309,4 +353,5 @@ __all__ = [
     "build_orbital_page",
     "build_rotate_page",
     "build_template_page",
+    "build_text_page",
 ]

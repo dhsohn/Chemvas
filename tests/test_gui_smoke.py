@@ -256,8 +256,11 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertEqual(tool_settings_state_for(active_canvas_for_window(self.window)).active_bond_style, "single")
         self.assertEqual(tool_settings_state_for(active_canvas_for_window(self.window)).active_bond_order, 1)
 
-        self._press_key(Qt.Key.Key_T)
+        self._press_key(Qt.Key.Key_A)
         self.assertEqual(active_canvas_for_window(self.window).services.tools.active.name, "text")
+
+        self._press_key(Qt.Key.Key_T)
+        self.assertEqual(active_canvas_for_window(self.window).services.tools.active.name, "note")
 
         active_canvas_for_window(self.window).services.tool_mode_controller.set_arrow_type("curved_double")
         self._press_key(Qt.Key.Key_E)

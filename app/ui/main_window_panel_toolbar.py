@@ -5,10 +5,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from PyQt6.QtCore import QSize, Qt
-from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
-from PyQt6.QtWidgets import QSizePolicy, QToolBar, QToolButton, QWidget
+from PyQt6.QtGui import QAction, QActionGroup, QFont, QKeySequence
+from PyQt6.QtWidgets import QMenu, QSizePolicy, QToolBar, QToolButton, QWidget
 
 from ui.main_window_config import (
+    TEXT_FONT_FAMILY_CHOICES,
     TOOLBAR_PRIMARY_TOOL_GROUP,
     TOOLBAR_TOOL_GROUPS,
 )
@@ -18,7 +19,12 @@ from ui.main_window_theme import (
     TOOLBAR_ICON_SIZE,
     TOOLBAR_THICKNESS,
 )
+from ui.main_window_toolbar_buttons import CornerMenuToolButton
 from ui.main_window_ui_ports import icon_factory_for_window
+
+_NOTE_TOOL_MENU_BUTTON_STYLE = (
+    TOOLBAR_BUTTON_STYLE + "QToolButton::menu-indicator { image: none; width: 0px; height: 0px; }"
+)
 
 
 @dataclass(frozen=True)
@@ -46,6 +52,7 @@ class MainWindowPanelToolbarCallbacks:
     open_preview_window: Callable[[object], None]
     new_canvas: Callable[[object], Any]
     show_rotate_options: Callable[[object], None]
+    set_note_font_family: Callable[[object, str], None]
 
 
 def _normalize_tool_action_button(
@@ -79,6 +86,41 @@ def _toolbar_spacer() -> QWidget:
     spacer = QWidget()
     spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
     return spacer
+
+
+def _build_note_font_menu_button(
+    panel_bar: QToolBar,
+    window,
+    action: QAction,
+    callbacks: MainWindowPanelToolbarCallbacks,
+) -> QToolButton:
+    button = CornerMenuToolButton()
+    button.setDefaultAction(action)
+    menu = QMenu(button)
+    for family in TEXT_FONT_FAMILY_CHOICES:
+        font_action = menu.addAction(family)
+        if font_action is not None:
+            preview_font = QFont(family)
+            preview_font.setPointSize(13)
+            font_action.setFont(preview_font)
+            font_action.triggered.connect(
+                lambda _checked=False, value=family: callbacks.set_note_font_family(window, value)
+            )
+    button.setMenu(menu)
+    button.setPopupMode(QToolButton.ToolButtonPopupMode.DelayedPopup)
+    button.setObjectName("toolButton_note")
+    button.setIcon(action.icon())
+    button.setIconSize(panel_bar.iconSize())
+    button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+    button.setText("")
+    button.setToolTip(action.toolTip())
+    button.setStatusTip(action.statusTip() or action.toolTip())
+    button.setAutoRaise(True)
+    button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+    button.setStyleSheet(_NOTE_TOOL_MENU_BUTTON_STYLE)
+    button.setFixedSize(TOOLBAR_BUTTON_SIZE, TOOLBAR_BUTTON_SIZE)
+    button.setProperty("primaryTool", True)
+    return button
 
 
 def build_panel_toolbar(
@@ -204,16 +246,20 @@ def build_panel_toolbar(
         object_name="rotate_button",
     )
 
-    for action_key in TOOLBAR_PRIMARY_TOOL_GROUP:
+    def add_tool(action_key: str, *, primary: bool) -> None:
         action = tool_actions[action_key]
+        if action_key == "note":
+            panel_bar.addWidget(_build_note_font_menu_button(panel_bar, window, action, callbacks))
+            return
         panel_bar.addAction(action)
-        _normalize_tool_action_button(panel_bar, action, action_key, primary=True)
+        _normalize_tool_action_button(panel_bar, action, action_key, primary=primary)
+
+    for action_key in TOOLBAR_PRIMARY_TOOL_GROUP:
+        add_tool(action_key, primary=True)
     panel_bar.addSeparator()
     for group_index, action_keys in enumerate(TOOLBAR_TOOL_GROUPS[1:]):
         for action_key in action_keys:
-            action = tool_actions[action_key]
-            panel_bar.addAction(action)
-            _normalize_tool_action_button(panel_bar, action, action_key)
+            add_tool(action_key, primary=False)
         if group_index < len(TOOLBAR_TOOL_GROUPS[1:]) - 1:
             panel_bar.addSeparator()
     panel_bar.addSeparator()

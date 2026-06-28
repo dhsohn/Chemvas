@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.bracket_types import restored_bracket_kind
-from ui.note_item_access import set_committed_note_text_for
+from ui.note_item_access import set_committed_note_html_for, set_committed_note_text_for
 from ui.scene_item_state_serialization import (
     ARROW_KINDS,
     MarkCenterGetter,
@@ -123,8 +123,13 @@ def apply_scene_item_state(
         return
     kind = state.get("kind")
     if kind == "note" and isinstance(item, QGraphicsTextItem):
-        item.setPlainText(str(state.get("text", "")))
+        html = state.get("html")
+        if isinstance(html, str) and html:
+            item.setHtml(html)
+        else:
+            item.setPlainText(str(state.get("text", "")))
         set_committed_note_text_for(item, item.toPlainText())
+        set_committed_note_html_for(item, item.toHtml())
         item.setPos(QPointF(_float_state_value(state.get("x"), 0.0), _float_state_value(state.get("y"), 0.0)))
         note_style_applier(item)
         item.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)

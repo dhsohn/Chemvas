@@ -76,6 +76,10 @@ def _make_text_item(kind: str, text: str, state: dict) -> QGraphicsTextItem:
     return item
 
 
+def _without_html(states: list[dict]) -> list[dict]:
+    return [{key: value for key, value in state.items() if key != "html"} for state in states]
+
+
 def _make_ring_item(atom_ids: list[int], *, state: dict | None = None) -> QGraphicsPolygonItem:
     polygon = QPolygonF([QPointF(0.0, 0.0), QPointF(12.0, 0.0), QPointF(6.0, 10.0)])
     item = _set_selectable(QGraphicsPolygonItem(polygon))
@@ -331,7 +335,7 @@ class SceneClipboardLogicTest(unittest.TestCase):
             ],
         )
         self.assertCountEqual(
-            payload["scene_items"],
+            _without_html(payload["scene_items"]),
             [
                 {"kind": "note", "text": "note", "x": 80.0, "y": 90.0},
                 {"kind": "arrow", "start": (5.0, 6.0), "end": (7.0, 8.0)},
@@ -366,7 +370,9 @@ class SceneClipboardLogicTest(unittest.TestCase):
         self.assertEqual(payload["bonds"], [])
         self.assertEqual(payload["rings"], [])
         self.assertEqual(payload["marks"], [])
-        self.assertEqual(payload["scene_items"], [{"kind": "note", "text": "keep", "x": 10.0, "y": 11.0}])
+        self.assertEqual(
+            _without_html(payload["scene_items"]), [{"kind": "note", "text": "keep", "x": 10.0, "y": 11.0}]
+        )
 
     def test_selection_payload_returns_none_when_every_selected_entry_is_invalid_or_empty(self) -> None:
         canvas = _FakeCanvas()
