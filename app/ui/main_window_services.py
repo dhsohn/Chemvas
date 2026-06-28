@@ -50,7 +50,6 @@ from ui.main_window_preview_ports import preview_for_window
 from ui.main_window_status_service import MainWindowStatusService
 from ui.main_window_tab_ports import tab_references_for_window
 from ui.main_window_text_style_service import MainWindowTextStyleService
-from ui.note_item_ports import note_controller_for_access
 from ui.main_window_tool_action_service import MainWindowToolActionService
 from ui.main_window_tool_routing_service import MainWindowToolRoutingService
 from ui.main_window_tool_state_service import MainWindowToolStateService
@@ -67,6 +66,7 @@ from ui.main_window_ui_ports import (
     tool_actions_for_window,
     undo_button_for_window,
 )
+from ui.note_item_ports import note_controller_for_access
 
 
 @dataclass(slots=True)
