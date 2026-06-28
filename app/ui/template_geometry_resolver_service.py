@@ -6,6 +6,7 @@ from PyQt6.QtCore import QPointF
 
 from ui.structure_geometry_access import (
     cyclohexane_boat_points_for,
+    cyclohexane_chair_flipped_points_for,
     cyclohexane_chair_points_for,
     regular_ring_points_for_atom_for,
     regular_ring_points_for_bond_for,
@@ -33,6 +34,7 @@ class TemplateGeometryResolverService:
             regular_ring_points_for_atom=self.resolve_regular_ring_points_for_atom,
             regular_ring_points_for_bond=self.resolve_regular_ring_points_for_bond,
             chair_points=self.resolve_chair_points,
+            chair_flipped_points=self.resolve_chair_flipped_points,
             boat_points=self.resolve_boat_points,
             template_points_for_bond=self.resolve_template_points_for_bond,
         )
@@ -76,6 +78,10 @@ class TemplateGeometryResolverService:
 
     def resolve_chair_points(self, center: tuple[float, float]) -> list[tuple[float, float]]:
         points = cyclohexane_chair_points_for(self.canvas, QPointF(*center))
+        return [(point.x(), point.y()) for point in points]
+
+    def resolve_chair_flipped_points(self, center: tuple[float, float]) -> list[tuple[float, float]]:
+        points = cyclohexane_chair_flipped_points_for(self.canvas, QPointF(*center))
         return [(point.x(), point.y()) for point in points]
 
     def resolve_boat_points(self, center: tuple[float, float]) -> list[tuple[float, float]]:

@@ -4,6 +4,7 @@ import math
 
 from core.template_geometry import (
     cyclohexane_boat_points,
+    cyclohexane_chair_flipped_points,
     cyclohexane_chair_points,
     regular_ring_radius,
     ring_points,
@@ -145,6 +146,11 @@ def cyclohexane_chair_points_for(canvas, center: QPointF) -> list[QPointF]:
     return qpoints_from_pairs(points)
 
 
+def cyclohexane_chair_flipped_points_for(canvas, center: QPointF) -> list[QPointF]:
+    points = cyclohexane_chair_flipped_points((center.x(), center.y()), _bond_length(canvas))
+    return qpoints_from_pairs(points)
+
+
 def cyclohexane_boat_points_for(canvas, center: QPointF) -> list[QPointF]:
     points = cyclohexane_boat_points((center.x(), center.y()), _bond_length(canvas))
     return qpoints_from_pairs(points)
@@ -226,6 +232,7 @@ __all__ = [
     "atom_point_for",
     "connected_atom_unit_vectors_for",
     "cyclohexane_boat_points_for",
+    "cyclohexane_chair_flipped_points_for",
     "cyclohexane_chair_points_for",
     "default_bond_angle_for_vectors",
     "default_bond_endpoint_for",

@@ -82,6 +82,12 @@ def cyclohexane_chair_points(center: Point2D, bond_length: float) -> list[Point2
     return scale_points_to_bond_length(shifted, center, bond_length)
 
 
+def cyclohexane_chair_flipped_points(center: Point2D, bond_length: float) -> list[Point2D]:
+    """Cyclohexane chair mirrored left-to-right (the other chair orientation)."""
+    cx, _ = center
+    return [(2.0 * cx - x, y) for x, y in cyclohexane_chair_points(center, bond_length)]
+
+
 def cyclohexane_boat_points(center: Point2D, bond_length: float) -> list[Point2D]:
     cx, cy = center
     height = bond_length
@@ -301,6 +307,7 @@ def _polygon_contains_point(point: Point2D, polygon: Sequence[Point2D]) -> bool:
 __all__ = [
     "Point2D",
     "cyclohexane_boat_points",
+    "cyclohexane_chair_flipped_points",
     "cyclohexane_chair_points",
     "place_template_on_bond",
     "regular_ring_radius",
