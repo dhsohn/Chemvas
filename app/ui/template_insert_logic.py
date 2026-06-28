@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Literal, cast
 
 Point2D = tuple[float, float]
-TemplateRingStyle = Literal["regular", "benzene", "chair", "boat"]
+TemplateRingStyle = Literal["regular", "benzene", "chair", "chair_flip", "boat"]
 TemplateGenerator = Literal[
     "benzene",
     "free_regular_ring",
@@ -15,7 +15,7 @@ TemplateGenerator = Literal[
     "bond_template_shape",
 ]
 TemplateRadiusMode = Literal["regular_polygon", "bond_length"]
-TemplateShape = Literal["chair", "boat"]
+TemplateShape = Literal["chair", "chair_flip", "boat"]
 
 
 @dataclass(frozen=True)
@@ -51,6 +51,7 @@ class TemplatePointResolvers:
     regular_ring_points_for_atom: Callable[[int, int], Sequence[Point2D] | None]
     regular_ring_points_for_bond: Callable[[int, int, Point2D], Sequence[Point2D] | None]
     chair_points: Callable[[Point2D], Sequence[Point2D]]
+    chair_flipped_points: Callable[[Point2D], Sequence[Point2D]]
     boat_points: Callable[[Point2D], Sequence[Point2D]]
     template_points_for_bond: Callable[[Sequence[Point2D], int, Point2D], Sequence[Point2D] | None]
 
@@ -121,7 +122,7 @@ def _plan_template_insert(
             atom_id=request.atom_id,
         )
 
-    if ring_style == "chair" or ring_style == "boat":
+    if ring_style == "chair" or ring_style == "chair_flip" or ring_style == "boat":
         return TemplateInsertPlan(
             generator="bond_template_shape" if request.bond_id is not None else "free_template_shape",
             ring_size=request.ring_size,
@@ -158,7 +159,7 @@ def _plan_template_insert(
 
 def normalize_template_ring_style(ring_style: str | None) -> TemplateRingStyle | None:
     normalized = (ring_style or "regular").strip().lower()
-    if normalized in {"regular", "benzene", "chair", "boat"}:
+    if normalized in {"regular", "benzene", "chair", "chair_flip", "boat"}:
         return cast(TemplateRingStyle, normalized)
     return None
 
@@ -170,6 +171,8 @@ def _template_shape_points(
 ) -> Sequence[Point2D]:
     if plan.template_shape == "chair":
         return resolvers.chair_points(center)
+    if plan.template_shape == "chair_flip":
+        return resolvers.chair_flipped_points(center)
     if plan.template_shape == "boat":
         return resolvers.boat_points(center)
     raise ValueError(f"template_shape is required for {plan.generator}")

@@ -25,6 +25,7 @@ _TEMPLATE_ICON_BY_LABEL: dict[str, str] = {
     "Cyclobutane": "template_ring4",
     "Cyclopentane": "template_ring5",
     "Cyclohexane (Chair)": "template_chair",
+    "Cyclohexane (Chair, flipped)": "template_chair_flip",
     "Cycloheptane": "template_ring7",
     "Cyclooctane": "template_ring8",
 }

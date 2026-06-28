@@ -100,6 +100,7 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
                 "Cyclobutane",
                 "Cyclopentane",
                 "Cyclohexane (Chair)",
+                "Cyclohexane (Chair, flipped)",
                 "Cycloheptane",
                 "Cyclooctane",
             ],

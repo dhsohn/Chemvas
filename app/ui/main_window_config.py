@@ -31,6 +31,7 @@ TEMPLATE_ENTRY_SPECS: list[tuple[str, int, str]] = [
     ("Cyclobutane", 4, "regular"),
     ("Cyclopentane", 5, "regular"),
     ("Cyclohexane (Chair)", 6, "chair"),
+    ("Cyclohexane (Chair, flipped)", 6, "chair_flip"),
     ("Cycloheptane", 7, "regular"),
     ("Cyclooctane", 8, "regular"),
 ]
