@@ -430,9 +430,11 @@ def _validate_ring_fill_states(states: object, atom_ids: set[int]) -> None:
 
 def _validate_note_states(states: object) -> None:
     for note_state in _validated_scene_state_list(states):
-        if set(note_state) != {"text", "x", "y"}:
+        if not {"text", "x", "y"} <= set(note_state) <= {"text", "html", "x", "y"}:
             raise ValueError("Invalid Chemvas file.")
         if not isinstance(note_state.get("text"), str):
+            raise ValueError("Invalid Chemvas file.")
+        if "html" in note_state and not isinstance(note_state.get("html"), str):
             raise ValueError("Invalid Chemvas file.")
         if not _is_number(note_state.get("x")) or not _is_number(note_state.get("y")):
             raise ValueError("Invalid Chemvas file.")

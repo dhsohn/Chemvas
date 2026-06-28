@@ -46,10 +46,12 @@ class SceneItemStateSerializationTest(unittest.TestCase):
         note.setData(0, "note")
         note.setPos(QPointF(4.0, -3.0))
 
+        state = serialization.scene_item_state(note, mark_center_getter=lambda _: QPointF())
         self.assertEqual(
-            serialization.scene_item_state(note, mark_center_getter=lambda _: QPointF()),
+            {key: state[key] for key in ("kind", "text", "x", "y")},
             {"kind": "note", "text": "direct", "x": 4.0, "y": -3.0},
         )
+        self.assertIn("direct", state["html"])
 
     def test_state_dict_for_prefers_embedded_scene_state(self) -> None:
         ring = QGraphicsPolygonItem(QPolygonF([QPointF(0.0, 0.0), QPointF(3.0, 0.0), QPointF(1.5, 2.0)]))

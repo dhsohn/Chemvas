@@ -53,6 +53,22 @@ class MainWindowIconPixmapFactoryTest(unittest.TestCase):
 
         self.assertIn((18, 18), [(size.width(), size.height()) for size in icon.availableSizes()])
 
+    def test_make_sized_icon_renders_a_crisp_pixmap_per_size(self) -> None:
+        factory = MainWindowIconPixmapFactory(default_size=30, device_pixel_ratio=lambda: 1.0)
+        seen_sizes: list[int] = []
+
+        def draw(painter: QPainter, size: int) -> None:
+            seen_sizes.append(size)
+            painter.drawPoint(size // 2, size // 2)
+
+        icon = factory.make_sized_icon(draw, (16, 18, 30))
+
+        available = [(size.width(), size.height()) for size in icon.availableSizes()]
+        self.assertIn((16, 16), available)
+        self.assertIn((18, 18), available)
+        self.assertIn((30, 30), available)
+        self.assertEqual(sorted(seen_sizes), [16, 18, 30])
+
     def test_make_icon_registers_visible_checked_and_active_states(self) -> None:
         factory = MainWindowIconPixmapFactory(default_size=30, device_pixel_ratio=lambda: 1.0)
 

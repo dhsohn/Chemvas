@@ -122,6 +122,7 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
             open_preview_window=mock.Mock(),
             new_canvas=mock.Mock(),
             show_rotate_options=mock.Mock(),
+            set_note_font_family=mock.Mock(),
         )
         self.button_service = MainWindowUIAssemblyService(
             scene_transform_controller_for_window=self.scene_transform_controller_for_window,
@@ -201,8 +202,9 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
             ["toolButton_mark", "toolButton_orbital"],
             self._toolbar_widget_groups(assembly.panel_bar),
         )
+        # The note (Text) tool sits in the same partition as Color, ahead of it.
         self.assertIn(
-            [f"toolButton_{key}" for key in ("color", "ring_fill")],
+            [f"toolButton_{key}" for key in ("note", "color", "ring_fill")],
             self._toolbar_widget_groups(assembly.panel_bar),
         )
         self.assertIn(
@@ -213,23 +215,25 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
             self._toolbar_widget_groups(assembly.panel_bar)[-1],
             ["preview_panel_button", "open_button", "File", "new_canvas_button"],
         )
-        primary_buttons = [
-            assembly.panel_bar.findChild(QToolButton, name)
-            for name in (
-                "toolButton_select",
-                "toolButton_perspective",
-                "toolButton_text",
-                "toolButton_bond",
-                "toolButton_benzene",
-                "toolButton_arrow",
-                "toolButton_ts_bracket",
-            )
-        ]
-        self.assertEqual(
-            [button.text() for button in primary_buttons],
-            ["", "", "", "", "", "", ""],
+        primary_button_names = (
+            "toolButton_select",
+            "toolButton_perspective",
+            "toolButton_text",
+            "toolButton_bond",
+            "toolButton_benzene",
+            "toolButton_arrow",
+            "toolButton_ts_bracket",
         )
+        primary_buttons = [assembly.panel_bar.findChild(QToolButton, name) for name in primary_button_names]
+        self.assertEqual([button.text() for button in primary_buttons], [""] * len(primary_button_names))
         self.assertTrue(all(button.width() == button.height() for button in primary_buttons))
+        note_button = assembly.panel_bar.findChild(QToolButton, "toolButton_note")
+        self.assertIsNotNone(note_button.menu())
+        self.assertIs(note_button.defaultAction(), assembly.tool_actions["note"])
+        # Each font option is previewed in its own family.
+        font_actions = note_button.menu().actions()
+        self.assertTrue(font_actions)
+        self.assertTrue(all(action.font().family() == action.text() for action in font_actions))
         line_edits = assembly.panel_bar.findChildren(QLineEdit)
         self.assertEqual(line_edits, [])
         self.assertIsNone(assembly.panel_bar.findChild(QLineEdit, "atomInput"))

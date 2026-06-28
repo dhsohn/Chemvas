@@ -29,6 +29,7 @@ _TOOL_PAGE_KEYS = {
     "arrow": "arrow",
     "ts_bracket": "bracket",
     "text": "atom",
+    "note": "text",
     "mark": "mark",
     "benzene": "ring",
     "color": "color",

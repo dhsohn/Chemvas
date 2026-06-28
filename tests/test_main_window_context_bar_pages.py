@@ -49,6 +49,7 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         self.apply_color_preset_for_window = mock.Mock()
         self.apply_ring_fill_preset_for_window = mock.Mock()
         self.rotate_selection_for_window = mock.Mock()
+        self.note_controller_for_window = mock.Mock(return_value=None)
         self.builder = MainWindowContextBarPageBuilder(
             insert_controller_for_window=self.insert_controller_for_window,
             tool_mode_controller_for_window=self.tool_mode_controller_for_window,
@@ -58,6 +59,7 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
             apply_color_preset_for_window=self.apply_color_preset_for_window,
             apply_ring_fill_preset_for_window=self.apply_ring_fill_preset_for_window,
             rotate_selection_for_window=self.rotate_selection_for_window,
+            note_controller_for_window=self.note_controller_for_window,
         )
 
     def tearDown(self) -> None:
@@ -77,7 +79,7 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
 
         self.assertEqual(
             set(pages.pages),
-            {"empty", "bond", "arrow", "bracket", "atom", "ring", "mark", "rotate", "orbital", "color", "ring_fill"},
+            {"empty", "bond", "arrow", "bracket", "atom", "text", "ring", "mark", "rotate", "orbital", "color", "ring_fill"},
         )
         self.assertIn("Single", pages.bond_buttons)
         self.assertEqual(pages.bond_buttons["Single"].text(), "")

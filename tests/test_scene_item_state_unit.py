@@ -364,7 +364,11 @@ class SceneItemStateUnitTest(unittest.TestCase):
 
         state = scene_item_state(note, mark_center_getter=lambda _: QPointF())
 
-        self.assertEqual(state, {"kind": "note", "text": "memo", "x": 2.0, "y": -3.0})
+        self.assertEqual(
+            {key: state[key] for key in ("kind", "text", "x", "y")},
+            {"kind": "note", "text": "memo", "x": 2.0, "y": -3.0},
+        )
+        self.assertIn("memo", state["html"])
 
         style_applier = mock.Mock()
         note.setPlainText("unchanged")

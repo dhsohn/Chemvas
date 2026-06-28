@@ -25,6 +25,7 @@ class _HarnessWindow(QMainWindow):
             icon_select=self._blank_icon,
             icon_bond=self._blank_icon,
             icon_text=self._blank_icon,
+            icon_note=self._blank_icon,
             icon_mark=self._blank_icon,
             icon_ring=self._blank_icon,
             icon_arrow=self._blank_icon,

@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.main_window_palette import PALETTE
+from ui.main_window_toolbar_buttons import CornerMenuButton
 from ui.main_window_theme import (
     CONTEXT_ACTION_BUTTON_STYLE,
     CONTEXT_BAR_BUTTON_HEIGHT,
@@ -141,6 +142,23 @@ def icon_button(
     button.setCheckable(checkable)
     button.setStyleSheet(_ICON_BUTTON_STYLE)
     button.setCursor(Qt.CursorShape.PointingHandCursor)
+    return button
+
+
+def icon_menu_button(icon, tooltip: str) -> CornerMenuButton:
+    """An icon button that drops down a menu, matching the File button's form
+    (a small chevron painted in the bottom-right corner)."""
+    button = CornerMenuButton()
+    button.setIcon(icon)
+    button.setIconSize(_ICON_SIZE)
+    button.setFixedSize(CONTEXT_BAR_BUTTON_HEIGHT, CONTEXT_BAR_BUTTON_HEIGHT)
+    button.setToolTip(tooltip)
+    button.setStatusTip(tooltip)
+    button.setAutoRaise(True)
+    button.setStyleSheet(_ICON_BUTTON_STYLE)
+    button.setCursor(Qt.CursorShape.PointingHandCursor)
+    button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+    button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
     return button
 
 
@@ -309,6 +327,7 @@ __all__ = [
     "divider",
     "hint_label",
     "icon_button",
+    "icon_menu_button",
     "length_field_button",
     "new_context_page",
     "rotate_angle_input",

@@ -13,11 +13,17 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
+    from PyQt6.QtGui import QTextCharFormat, QTextCursor
+
+    from core.document_state import _validate_note_states
     from ui.canvas_note_controller import CanvasNoteController
     from ui.canvas_scene_items_state import selected_notes_for, set_selected_notes_for
     from ui.canvas_text_style_state import CanvasTextStyleState, set_text_style_for
     from ui.note_item import NoteItem
     from ui.note_item_access import committed_note_text_for
+    from ui.history_commands import UpdateSceneItemCommand
+    from ui.scene_item_restore import create_note_item_from_state
+    from ui.scene_item_state_serialization import note_state_dict
     from ui.selection_service_bundle import build_selection_services
     from ui.selection_style_state import SelectionStyleState
 
@@ -121,6 +127,105 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         attach_mock.assert_called_once_with(created)
         canvas._make_selectable.assert_called_once_with(created)
         controller.apply_note_style.assert_called_once_with(created)
+
+    def _editing_note_controller(self, text: str):
+        scene = QGraphicsScene()
+        canvas = SimpleNamespace(scene=lambda: scene, text_style_state=CanvasTextStyleState())
+        note = NoteItem(canvas)
+        note.setData(0, "note")
+        note.setPlainText(text)
+        scene.addItem(note)
+        scene.setFocusItem(note)
+        cursor = note.textCursor()
+        cursor.select(QTextCursor.SelectionType.Document)
+        note.setTextCursor(cursor)
+        return CanvasNoteController(canvas), note
+
+    def test_toggle_superscript_and_subscript_mark_selected_text(self) -> None:
+        controller, note = self._editing_note_controller("2")
+
+        controller.toggle_text_superscript()
+        self.assertIn("vertical-align:super", note.toHtml())
+
+        controller.toggle_text_superscript()
+        self.assertNotIn("vertical-align:super", note.toHtml())
+
+        controller.toggle_text_subscript()
+        self.assertIn("vertical-align:sub", note.toHtml())
+
+    def test_toggle_bold_italic_and_adjust_size_change_char_format(self) -> None:
+        controller, note = self._editing_note_controller("label")
+
+        controller.toggle_text_bold()
+        controller.toggle_text_italic()
+        controller.adjust_text_size(6)
+
+        cursor = note.textCursor()
+        cursor.select(QTextCursor.SelectionType.Document)
+        char_format = cursor.charFormat()
+        self.assertGreater(char_format.fontWeight(), QFont.Weight.Normal)
+        self.assertTrue(char_format.fontItalic())
+        self.assertGreater(char_format.fontPointSize(), 0.0)
+
+    def test_set_font_family_and_alignment_on_editing_note(self) -> None:
+        controller, note = self._editing_note_controller("memo")
+
+        controller.set_text_font_family("Courier New")
+        controller.set_text_alignment("center")
+
+        html = note.toHtml()
+        self.assertIn("Courier New", html)
+        cursor = note.textCursor()
+        cursor.select(QTextCursor.SelectionType.Document)
+        self.assertEqual(cursor.blockFormat().alignment(), Qt.AlignmentFlag.AlignHCenter)
+
+    def test_set_alignment_on_selected_note_records_history(self) -> None:
+        scene = QGraphicsScene()
+        push_command = mock.Mock()
+        canvas = SimpleNamespace(
+            scene=lambda: scene,
+            text_style_state=CanvasTextStyleState(),
+            services=SimpleNamespace(history_service=_history_service(push_command)),
+        )
+        note = NoteItem(canvas)
+        note.setData(0, "note")
+        note.setPlainText("memo")
+        scene.addItem(note)
+        set_selected_notes_for(canvas, [note])
+        controller = _note_controller(canvas)
+
+        controller.set_text_alignment("right")
+
+        cursor = note.textCursor()
+        cursor.select(QTextCursor.SelectionType.Document)
+        self.assertEqual(cursor.blockFormat().alignment(), Qt.AlignmentFlag.AlignRight)
+        self.assertEqual(push_command.call_count, 1)
+        self.assertIsInstance(push_command.call_args.args[0], UpdateSceneItemCommand)
+
+    def test_format_methods_noop_when_no_note_is_focused(self) -> None:
+        scene = QGraphicsScene()
+        canvas = SimpleNamespace(scene=lambda: scene, text_style_state=CanvasTextStyleState())
+        controller = CanvasNoteController(canvas)
+        # No focused note -> should not raise.
+        controller.toggle_text_bold()
+        controller.toggle_text_superscript()
+        controller.adjust_text_size(2)
+
+    def test_superscript_formatting_survives_serialize_restore(self) -> None:
+        controller, note = self._editing_note_controller("2")
+        controller.toggle_text_superscript()
+
+        state = note_state_dict(note)
+        snapshot = {key: state[key] for key in ("text", "html", "x", "y")}
+        _validate_note_states([snapshot])
+
+        restored = create_note_item_from_state(
+            snapshot,
+            note_item_factory=lambda: QGraphicsTextItem(),
+            note_style_applier=lambda item: None,
+        )
+        self.assertEqual(restored.toPlainText(), "2")
+        self.assertIn("vertical-align:super", restored.toHtml())
 
     def test_apply_text_style_to_selected_and_update_text_note_refresh_note_box(self) -> None:
         scene = QGraphicsScene()

@@ -50,6 +50,7 @@ from ui.main_window_preview_ports import preview_for_window
 from ui.main_window_status_service import MainWindowStatusService
 from ui.main_window_tab_ports import tab_references_for_window
 from ui.main_window_text_style_service import MainWindowTextStyleService
+from ui.note_item_ports import note_controller_for_access
 from ui.main_window_tool_action_service import MainWindowToolActionService
 from ui.main_window_tool_routing_service import MainWindowToolRoutingService
 from ui.main_window_tool_state_service import MainWindowToolStateService
@@ -141,6 +142,17 @@ def build_main_window_services() -> MainWindowServices:
     def rotate_selection_for_window(window, angle_degrees: float) -> None:
         scene_transform_controller_for_window(window).rotate_selected_items(angle_degrees)
 
+    def note_controller_for_window(window):
+        canvas = active_canvas_or_none_for_window(window)
+        if canvas is None:
+            return None
+        return note_controller_for_access(canvas)
+
+    def set_note_font_family_for_window(window, family: str) -> None:
+        controller = note_controller_for_window(window)
+        if controller is not None:
+            controller.set_text_font_family(family)
+
     context_bar_service = MainWindowContextBarService(
         page_builder=MainWindowContextBarPageBuilder(
             insert_controller_for_window=insert_controller_for_window,
@@ -151,6 +163,7 @@ def build_main_window_services() -> MainWindowServices:
             apply_color_preset_for_window=apply_color_preset_for_window,
             apply_ring_fill_preset_for_window=apply_ring_fill_preset_for_window,
             rotate_selection_for_window=rotate_selection_for_window,
+            note_controller_for_window=note_controller_for_window,
         ),
         active_tool_name_for_window=active_tool_name_for_window,
         active_canvas_or_none_for_window=active_canvas_or_none_for_window,
@@ -234,6 +247,7 @@ def build_main_window_services() -> MainWindowServices:
         open_preview_window=panel_service.open_preview_window,
         new_canvas=open_new_window,
         show_rotate_options=lambda window: context_page_state_service.show_context_page(window, "rotate"),
+        set_note_font_family=set_note_font_family_for_window,
     )
     ui_assembly_service = MainWindowUIAssemblyService(
         scene_transform_controller_for_window=scene_transform_controller_for_window,

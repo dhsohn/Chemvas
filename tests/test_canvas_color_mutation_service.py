@@ -203,6 +203,30 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         # History service is restored after the bundled mutation.
         self.assertIs(service.history, canvas.services.history_service)
 
+    def test_apply_color_to_item_colors_note_text_and_records_history(self) -> None:
+        scene = QGraphicsScene()
+        push_command = mock.Mock()
+        canvas = SimpleNamespace(
+            scene=lambda: scene,
+            model=SimpleNamespace(atoms={}, bonds=[]),
+            push_command=push_command,
+            services=SimpleNamespace(history_service=_history_service(push_command)),
+        )
+        _set_atom_graphics(canvas)
+        set_bond_items_for(canvas, {})
+        service = _color_service_for(canvas)
+
+        note = QGraphicsTextItem("memo")
+        note.setData(0, "note")
+        scene.addItem(note)
+
+        service.apply_color_to_item(note, QColor("#cc3344"))
+
+        self.assertEqual(note.defaultTextColor().name(), "#cc3344")
+        self.assertIn("#cc3344", note.toHtml())
+        self.assertEqual(push_command.call_count, 1)
+        self.assertIsInstance(push_command.call_args.args[0], UpdateSceneItemCommand)
+
     def test_apply_color_to_item_short_circuits_for_invalid_scene_runtime_and_unknown_kind(self) -> None:
         scene = QGraphicsScene()
         other_scene = QGraphicsScene()
@@ -219,7 +243,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         service = _color_service_for(canvas)
 
         invalid_kind_item = QGraphicsTextItem("X")
-        invalid_kind_item.setData(0, "note")
+        invalid_kind_item.setData(0, "mystery")
         invalid_kind_item.setData(1, 1)
         scene.addItem(invalid_kind_item)
         mismatched_item = QGraphicsTextItem("Y")

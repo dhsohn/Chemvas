@@ -45,7 +45,8 @@ ARROW_PRESET_BY_LABEL: dict[str, tuple[float, float]] = {
 TOOL_DISPLAY_NAMES: dict[str, str] = {
     "select": "Select",
     "bond": "Bond",
-    "text": "Atom / Text",
+    "text": "Atom",
+    "note": "Text",
     "benzene": "Ring",
     "arrow": "Arrow",
     "ts_bracket": "Brackets",

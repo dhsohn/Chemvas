@@ -91,6 +91,7 @@ def note_state_dict(item: QGraphicsTextItem) -> dict:
     return {
         "kind": "note",
         "text": item.toPlainText(),
+        "html": item.toHtml(),
         "x": item.pos().x(),
         "y": item.pos().y(),
     }

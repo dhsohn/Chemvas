@@ -102,8 +102,11 @@ class CanvasChemdrawShortcutService:
             if event.key() == Qt.Key.Key_X:
                 self.tool_mode.set_bond_style("single", 1)
                 return True
-            if event.key() == Qt.Key.Key_T:
+            if event.key() == Qt.Key.Key_A:
                 self.tool_mode.set_tool("text")
+                return True
+            if event.key() == Qt.Key.Key_T:
+                self.tool_mode.set_tool("note")
                 return True
             if event.key() == Qt.Key.Key_E:
                 self.tool_mode.set_arrow_type(self.DEFAULT_ARROW_TYPE)

@@ -16,6 +16,7 @@ from ui.main_window_context_bar_page_factories import (
     build_orbital_page,
     build_rotate_page,
     build_template_page,
+    build_text_page,
 )
 
 
@@ -47,6 +48,7 @@ class MainWindowContextBarPageBuilder:
         apply_color_preset_for_window,
         apply_ring_fill_preset_for_window,
         rotate_selection_for_window,
+        note_controller_for_window,
     ) -> None:
         self._insert_controller_for_window = insert_controller_for_window
         self._tool_mode_controller_for_window = tool_mode_controller_for_window
@@ -56,6 +58,13 @@ class MainWindowContextBarPageBuilder:
         self._apply_color_preset_for_window = apply_color_preset_for_window
         self._apply_ring_fill_preset_for_window = apply_ring_fill_preset_for_window
         self._rotate_selection_for_window = rotate_selection_for_window
+        self._note_controller_for_window = note_controller_for_window
+
+    def _note_command(self, window, method_name: str, *args) -> None:
+        controller = self._note_controller_for_window(window)
+        if controller is None:
+            return
+        getattr(controller, method_name)(*args)
 
     def build(self, window) -> ContextBarPages:
         tool_mode_controller = self._tool_mode_controller_for_window(window)
@@ -76,12 +85,22 @@ class MainWindowContextBarPageBuilder:
         )
         ring_page = build_template_page(window, self._insert_controller_for_window(window))
         mark_page = build_mark_page(window, self._tool_state)
+        text_page = build_text_page(
+            window,
+            toggle_bold=lambda: self._note_command(window, "toggle_text_bold"),
+            toggle_italic=lambda: self._note_command(window, "toggle_text_italic"),
+            toggle_superscript=lambda: self._note_command(window, "toggle_text_superscript"),
+            toggle_subscript=lambda: self._note_command(window, "toggle_text_subscript"),
+            adjust_size=lambda delta: self._note_command(window, "adjust_text_size", delta),
+            set_alignment=lambda name: self._note_command(window, "set_text_alignment", name),
+        )
         pages = {
             "empty": build_empty_page(),
             "bond": bond_page.page,
             "arrow": arrow_page.page,
             "bracket": bracket_page.page,
             "atom": atom_page.page,
+            "text": text_page,
             "ring": ring_page.page,
             "mark": mark_page.page,
             "rotate": build_rotate_page(window, self._rotate_selection_for_window),

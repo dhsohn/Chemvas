@@ -23,6 +23,12 @@ On the first tagged release, rename the "Unreleased" section below to
   objects.
 - Atom labels with charges, radicals, and common alias labels
   (`Me`, `Et`, `OH`, `Ph`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `i-Pr`).
+- Free **Text** annotation tool (`T`), separate from the **Atom** tool (`A`): place
+  captions/labels independent of the molecule graph, edited inline on the canvas.
+  Its option bar offers size, bold/italic, super-/subscript, and left/center/right
+  alignment, and the toolbar Text button has a font-family dropdown; text color is set
+  with the existing Color tool. Rich formatting is preserved in `.chemvas` documents
+  and figure exports.
 - SMILES import with cursor preview and click-to-place (requires RDKit).
 - Molecule Info window with interactive 3D preview and molecular formula/weight
   (requires RDKit).
