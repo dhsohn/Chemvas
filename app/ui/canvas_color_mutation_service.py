@@ -19,7 +19,11 @@ from ui.canvas_smiles_input_state import last_smiles_input_for
 from ui.graphics_items import AtomDotItem
 from ui.history_commands import UpdateSceneItemCommand
 from ui.scene_item_access import item_is_in_canvas_scene
-from ui.scene_item_state import bond_state_dict, note_state_dict_for, ring_state_dict_for
+from ui.scene_item_state import (
+    bond_state_dict,
+    note_state_dict_for,
+    ring_state_dict_for,
+)
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView

@@ -18,7 +18,6 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.main_window_palette import PALETTE
-from ui.main_window_toolbar_buttons import CornerMenuButton
 from ui.main_window_theme import (
     CONTEXT_ACTION_BUTTON_STYLE,
     CONTEXT_BAR_BUTTON_HEIGHT,
@@ -27,6 +26,7 @@ from ui.main_window_theme import (
     TOOLBAR_BUTTON_SIZE,
     TOOLBAR_BUTTON_STYLE,
 )
+from ui.main_window_toolbar_buttons import CornerMenuButton
 
 
 class _StepArrowButton(QToolButton):

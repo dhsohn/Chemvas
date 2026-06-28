@@ -13,15 +13,14 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from PyQt6.QtGui import QTextCharFormat, QTextCursor
-
     from core.document_state import _validate_note_states
+    from PyQt6.QtGui import QTextCursor
     from ui.canvas_note_controller import CanvasNoteController
     from ui.canvas_scene_items_state import selected_notes_for, set_selected_notes_for
     from ui.canvas_text_style_state import CanvasTextStyleState, set_text_style_for
+    from ui.history_commands import UpdateSceneItemCommand
     from ui.note_item import NoteItem
     from ui.note_item_access import committed_note_text_for
-    from ui.history_commands import UpdateSceneItemCommand
     from ui.scene_item_restore import create_note_item_from_state
     from ui.scene_item_state_serialization import note_state_dict
     from ui.selection_service_bundle import build_selection_services
