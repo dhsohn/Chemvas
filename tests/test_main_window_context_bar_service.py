@@ -55,22 +55,22 @@ def test_refresh_window_uses_injected_active_tool_name() -> None:
     service.refresh.assert_called_once_with(window, "bond", page_key="ring_fill")
 
 
-def test_reflect_bond_length_syncs_spin_from_active_canvas_with_blocked_signals() -> None:
+def test_reflect_bond_length_syncs_spin_from_active_canvas_preserving_fraction() -> None:
     bond_length_px_for_window = mock.Mock(return_value=33.4)
     service = _context_bar_service(
         active_canvas_or_none_for_window=mock.Mock(return_value=object()),
         bond_length_px_for_window=bond_length_px_for_window,
     )
     spin = mock.Mock()
-    spin.blockSignals.return_value = False
     service._bond_length_spin = spin
     window = object()
 
     service.reflect_bond_length(window)
 
     bond_length_px_for_window.assert_called_once_with(window)
-    spin.setValue.assert_called_once_with(33)
-    assert spin.blockSignals.call_args_list == [mock.call(True), mock.call(False)]
+    # The fractional value is passed through unrounded; sync_value records the
+    # baseline so a later focus/blur won't commit it.
+    spin.sync_value.assert_called_once_with(33.4)
 
 
 def test_reflect_bond_length_skips_when_no_active_canvas() -> None:
@@ -84,5 +84,5 @@ def test_reflect_bond_length_skips_when_no_active_canvas() -> None:
 
     service.reflect_bond_length(object())
 
-    spin.setValue.assert_not_called()
+    spin.sync_value.assert_not_called()
     bond_length_px_for_window.assert_not_called()

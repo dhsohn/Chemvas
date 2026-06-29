@@ -3,6 +3,7 @@ from __future__ import annotations
 from PyQt6.QtCore import QPointF, QSize, Qt
 from PyQt6.QtGui import QColor, QPainter, QPolygonF
 from PyQt6.QtWidgets import (
+    QDoubleSpinBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -299,37 +300,71 @@ def rotate_angle_input() -> tuple[QWidget, QSpinBox]:
     return container, spin
 
 
-def bond_length_input(current_px: float, on_commit) -> tuple[QWidget, QSpinBox]:
+class BondLengthSpinBox(QDoubleSpinBox):
+    """Decimal spin box that only reports edits the user actually made.
+
+    Documents may carry a fractional bond length, so a decimal field avoids
+    silently rounding it on display. ``sync_value`` records the value pushed in
+    programmatically (from the active canvas) as the baseline; ``is_changed``
+    is then False after a mere focus/blur, so ``editingFinished`` won't commit a
+    rounded value the user never asked to change.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._baseline = 0.0
+
+    def sync_value(self, value: float) -> None:
+        blocked = self.blockSignals(True)
+        self.setValue(float(value))
+        self.blockSignals(blocked)
+        self._baseline = self.value()
+
+    def is_changed(self) -> bool:
+        return self.value() != self._baseline
+
+    def mark_committed(self) -> None:
+        self._baseline = self.value()
+
+
+def bond_length_input(current_px: float, on_commit) -> tuple[QWidget, BondLengthSpinBox]:
     """Inline bond-length editor: a px spin box plus a compact stepper.
 
     Replaces the modal "Set bond length" dialog. The new value is committed
     (``on_commit(value)``) when editing finishes or a stepper arrow is clicked,
     not on every intermediate keystroke, so each change is a single history
-    entry rather than a flood of partial rescales.
+    entry rather than a flood of partial rescales. Commits are skipped unless
+    the value actually changed, so focusing and blurring the field never
+    rescales the structure.
     """
     container = QWidget()
     layout = QHBoxLayout(container)
     layout.setContentsMargins(0, 0, 0, 0)
     layout.setSpacing(4)
 
-    spin = QSpinBox()
+    spin = BondLengthSpinBox()
     spin.setObjectName("bondLengthInput")
-    spin.setRange(10, 200)
-    spin.setValue(max(10, min(200, int(round(current_px)))))
+    spin.setDecimals(1)
+    spin.setRange(10.0, 200.0)
+    spin.setSingleStep(1.0)
     spin.setSuffix(" px")
-    spin.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
+    spin.setButtonSymbols(QDoubleSpinBox.ButtonSymbols.NoButtons)
     spin.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
     spin.setFixedWidth(64)
     spin.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT + 4)
     spin.setToolTip("Default bond length")
     spin.setStatusTip("Set the default bond length in pixels")
+    spin.sync_value(current_px)
 
     def commit() -> None:
+        if not spin.is_changed():
+            return
+        spin.mark_committed()
         on_commit(spin.value())
 
     spin.editingFinished.connect(commit)
 
-    def step(delta: int) -> None:
+    def step(delta: float) -> None:
         spin.setValue(spin.value() + delta)
         commit()
 
@@ -386,6 +421,7 @@ def color_swatch_button(label: str, hex_value: str, tooltip_prefix: str) -> QToo
 
 
 __all__ = [
+    "BondLengthSpinBox",
     "action_button",
     "atom_symbol_input",
     "bond_length_input",

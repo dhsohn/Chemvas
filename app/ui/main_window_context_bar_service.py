@@ -191,10 +191,9 @@ class MainWindowContextBarService:
         canvas = self._active_canvas_or_none_for_window(window)
         if canvas is None:
             return
-        value = int(round(self._bond_length_px_for_window(window)))
-        blocked = self._bond_length_spin.blockSignals(True)
-        self._bond_length_spin.setValue(value)
-        self._bond_length_spin.blockSignals(blocked)
+        # sync_value blocks signals and records the baseline, so a later
+        # focus/blur won't commit this value and a fractional length is kept.
+        self._bond_length_spin.sync_value(self._bond_length_px_for_window(window))
 
     def reflect_ring_state(self, window) -> None:
         if not self._ring_buttons or self._ring_group is None:

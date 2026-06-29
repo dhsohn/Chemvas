@@ -8,10 +8,10 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 try:
     from PyQt6.QtWidgets import (
         QApplication,
+        QDoubleSpinBox,
         QLabel,
         QLineEdit,
         QSlider,
-        QSpinBox,
         QToolButton,
     )
 except ModuleNotFoundError:
@@ -147,12 +147,15 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         pages.bond_buttons["Hash"].click()
 
         self.activate_bond_style_for_window.assert_called_once_with(self.window, "Hash")
-        length_spin = pages.pages["bond"].findChild(QSpinBox, "bondLengthInput")
+        length_spin = pages.pages["bond"].findChild(QDoubleSpinBox, "bondLengthInput")
         self.assertIsNotNone(length_spin)
-        self.assertEqual(length_spin.value(), 20)
-        length_spin.setValue(28)
+        self.assertEqual(length_spin.value(), 20.0)
+        # Focus/blur without a real edit must not commit (no spurious rescale).
         length_spin.editingFinished.emit()
-        self.set_bond_length_value_for_window.assert_called_once_with(self.window, 28)
+        self.set_bond_length_value_for_window.assert_not_called()
+        length_spin.setValue(28.5)
+        length_spin.editingFinished.emit()
+        self.set_bond_length_value_for_window.assert_called_once_with(self.window, 28.5)
 
         template_button = next(
             button
