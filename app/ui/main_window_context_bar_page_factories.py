@@ -3,7 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QButtonGroup, QLineEdit, QSlider, QToolButton, QWidget
+from PyQt6.QtWidgets import (
+    QButtonGroup,
+    QLineEdit,
+    QSlider,
+    QSpinBox,
+    QToolButton,
+    QWidget,
+)
 
 from ui.main_window_config import (
     ARROW_MENU_SPECS,
@@ -16,11 +23,11 @@ from ui.main_window_config import (
 from ui.main_window_context_bar_widgets import (
     action_button,
     atom_symbol_input,
+    bond_length_input,
     color_swatch_button,
     divider,
     hint_label,
     icon_button,
-    length_field_button,
     new_context_page,
     rotate_angle_input,
     slider_dropdown_button,
@@ -49,6 +56,7 @@ class BondContextPage:
     page: QWidget
     group: QButtonGroup
     buttons: dict[str, QToolButton]
+    length_spin: QSpinBox
 
 
 @dataclass(frozen=True)
@@ -96,7 +104,12 @@ def build_empty_page() -> QWidget:
     return page
 
 
-def build_bond_page(window, activate_bond_style_for_window, set_bond_length_for_window) -> BondContextPage:
+def build_bond_page(
+    window,
+    activate_bond_style_for_window,
+    set_bond_length_value_for_window,
+    current_bond_length_px,
+) -> BondContextPage:
     page, layout = new_context_page()
     icon_factory = icon_factory_for_window(window)
 
@@ -120,11 +133,13 @@ def build_bond_page(window, activate_bond_style_for_window, set_bond_length_for_
         layout.addWidget(button)
 
     layout.addWidget(divider())
-    length_button = length_field_button("20 px", "Set the default bond length")
-    length_button.clicked.connect(lambda _checked=False: set_bond_length_for_window(window))
-    layout.addWidget(length_button)
+    length_widget, length_spin = bond_length_input(
+        current_bond_length_px,
+        lambda value: set_bond_length_value_for_window(window, value),
+    )
+    layout.addWidget(length_widget)
     layout.addStretch(1)
-    return BondContextPage(page=page, group=group, buttons=buttons)
+    return BondContextPage(page=page, group=group, buttons=buttons, length_spin=length_spin)
 
 
 def build_template_page(window, insert_controller) -> TemplateContextPage:

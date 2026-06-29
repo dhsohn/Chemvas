@@ -49,9 +49,15 @@ class MainWindowActiveCanvasUIService:
             selection_info_callback=lambda _formula, _mw: self.handle_selection_info(window),
             tool_change_callback=lambda: self._context_page_state.sync_tool_actions_from_canvas(window),
             zoom_callback=self._status.update_zoom_label,
-            history_change_callback=lambda: self._action_availability.update_action_availability(window),
+            history_change_callback=lambda: self._on_history_change(window),
             error_callback=lambda message: self._status.show_error_message(window, message, timeout=6000),
         )
+
+    def _on_history_change(self, window) -> None:
+        self._action_availability.update_action_availability(window)
+        # Undo/redo can change the bond length without re-showing the bond page,
+        # so keep its spin box in sync to avoid writing a stale value later.
+        self._context_bar.reflect_bond_length(window)
 
     def handle_selection_info(self, window) -> None:
         try:

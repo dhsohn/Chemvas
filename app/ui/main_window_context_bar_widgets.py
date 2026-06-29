@@ -263,7 +263,7 @@ def rotate_angle_input() -> tuple[QWidget, QSpinBox]:
     spin.setValue(15)
     spin.setSuffix("°")
     spin.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
-    spin.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    spin.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
     spin.setFixedWidth(56)
     spin.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT + 4)
     spin.setToolTip("Rotation angle")
@@ -299,6 +299,71 @@ def rotate_angle_input() -> tuple[QWidget, QSpinBox]:
     return container, spin
 
 
+def bond_length_input(current_px: float, on_commit) -> tuple[QWidget, QSpinBox]:
+    """Inline bond-length editor: a px spin box plus a compact stepper.
+
+    Replaces the modal "Set bond length" dialog. The new value is committed
+    (``on_commit(value)``) when editing finishes or a stepper arrow is clicked,
+    not on every intermediate keystroke, so each change is a single history
+    entry rather than a flood of partial rescales.
+    """
+    container = QWidget()
+    layout = QHBoxLayout(container)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(4)
+
+    spin = QSpinBox()
+    spin.setObjectName("bondLengthInput")
+    spin.setRange(10, 200)
+    spin.setValue(max(10, min(200, int(round(current_px)))))
+    spin.setSuffix(" px")
+    spin.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
+    spin.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+    spin.setFixedWidth(64)
+    spin.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT + 4)
+    spin.setToolTip("Default bond length")
+    spin.setStatusTip("Set the default bond length in pixels")
+
+    def commit() -> None:
+        on_commit(spin.value())
+
+    spin.editingFinished.connect(commit)
+
+    def step(delta: int) -> None:
+        spin.setValue(spin.value() + delta)
+        commit()
+
+    layout.addWidget(spin)
+
+    stepper = QFrame()
+    stepper.setObjectName("bondLengthStepper")
+    stepper.setFixedSize(22, CONTEXT_BAR_BUTTON_HEIGHT + 4)
+    stepper.setStyleSheet(
+        "QFrame#bondLengthStepper {"
+        f" background: {_P['surface_input']};"
+        f" border: 1px solid {_P['border_strong']};"
+        " border-radius: 6px;"
+        "}"
+        "QFrame#bondLengthStepper QToolButton { background: transparent; border: none; }"
+        f"QFrame#bondLengthStepper QToolButton:hover {{ background: {_P['hover']}; border-radius: 4px; }}"
+    )
+    stepper_col = QVBoxLayout(stepper)
+    stepper_col.setContentsMargins(0, 1, 0, 1)
+    stepper_col.setSpacing(0)
+    up_btn = _StepArrowButton("up")
+    up_btn.setFixedSize(20, 13)
+    up_btn.setToolTip("Increase bond length")
+    up_btn.clicked.connect(lambda _checked=False: step(spin.singleStep()))
+    down_btn = _StepArrowButton("down")
+    down_btn.setFixedSize(20, 13)
+    down_btn.setToolTip("Decrease bond length")
+    down_btn.clicked.connect(lambda _checked=False: step(-spin.singleStep()))
+    stepper_col.addWidget(up_btn)
+    stepper_col.addWidget(down_btn)
+    layout.addWidget(stepper)
+    return container, spin
+
+
 def color_swatch_button(label: str, hex_value: str, tooltip_prefix: str) -> QToolButton:
     button = QToolButton()
     button.setObjectName(f"{tooltip_prefix.lower().replace(' ', '_')}_swatch_{label.lower()}")
@@ -323,6 +388,7 @@ def color_swatch_button(label: str, hex_value: str, tooltip_prefix: str) -> QToo
 __all__ = [
     "action_button",
     "atom_symbol_input",
+    "bond_length_input",
     "color_swatch_button",
     "divider",
     "hint_label",

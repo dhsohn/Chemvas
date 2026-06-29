@@ -13,7 +13,10 @@ from ui.hover_highlight_access import clear_hover_highlight_for
 from ui.input_view_access import (
     focused_scene_item_for,
     reset_view_transform_for,
+    reset_zoom_for,
     should_override_chemdraw_shortcut_for,
+    zoom_in_for,
+    zoom_out_for,
 )
 from ui.insert_session_access import (
     cancel_smiles_insert_for,
@@ -82,6 +85,24 @@ class CanvasInputController:
             return
         if event.matches(QKeySequence.StandardKey.Redo):
             self.history.redo()
+            event.accept()
+            return
+        if event.matches(QKeySequence.StandardKey.ZoomIn) or (
+            event.modifiers() & Qt.KeyboardModifier.ControlModifier
+            and event.key() in (Qt.Key.Key_Plus, Qt.Key.Key_Equal)
+        ):
+            zoom_in_for(self.canvas)
+            event.accept()
+            return
+        if event.matches(QKeySequence.StandardKey.ZoomOut) or (
+            event.modifiers() & Qt.KeyboardModifier.ControlModifier
+            and event.key() in (Qt.Key.Key_Minus, Qt.Key.Key_Underscore)
+        ):
+            zoom_out_for(self.canvas)
+            event.accept()
+            return
+        if event.modifiers() & Qt.KeyboardModifier.ControlModifier and event.key() == Qt.Key.Key_0:
+            reset_zoom_for(self.canvas)
             event.accept()
             return
         if event.matches(QKeySequence.StandardKey.Copy):
