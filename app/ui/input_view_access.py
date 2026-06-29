@@ -121,10 +121,6 @@ def scroll_view_by_for(canvas, dx: int, dy: int) -> bool:
     return True
 
 
-def view_scale_for(canvas) -> float:
-    return float(canvas.transform().m11())
-
-
 def zoom_factor_for(canvas) -> float:
     return float(input_view_state_for(canvas).zoom)
 
@@ -267,7 +263,6 @@ __all__ = [
     "touch_interaction_for",
     "update_viewport_for",
     "update_view_transform_for",
-    "view_scale_for",
     "viewport_center_scene_pos_for",
     "zoom_factor_for",
     "zoom_in_for",

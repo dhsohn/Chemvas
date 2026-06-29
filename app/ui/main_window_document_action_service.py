@@ -16,7 +16,6 @@ from ui.export_dialog_logic import (
     normalize_export_path,
 )
 from ui.main_window_document_dialogs import (
-    prompt_bond_length,
     prompt_export_options,
 )
 from ui.main_window_path_logic import (
@@ -35,15 +34,11 @@ class MainWindowDocumentActionService:
         self,
         *,
         document_session_service_for_window,
-        geometry_controller_for_window,
-        bond_length_px_for_window,
         active_canvas_for_window,
         active_canvas_or_none_for_window,
         canvas_document_service,
     ) -> None:
         self._document_session_service_for_window = document_session_service_for_window
-        self._geometry_controller_for_window = geometry_controller_for_window
-        self._bond_length_px_for_window = bond_length_px_for_window
         self._active_canvas_for_window = active_canvas_for_window
         self._active_canvas_or_none_for_window = active_canvas_or_none_for_window
         self._canvas_documents = canvas_document_service
@@ -374,12 +369,6 @@ class MainWindowDocumentActionService:
         if choice == QMessageBox.StandardButton.Discard:
             return True
         return False
-
-    def set_bond_length(self, window) -> None:
-        current = self._bond_length_px_for_window(window)
-        selected = prompt_bond_length(window, current)
-        if selected is not None:
-            self._geometry_controller_for_window(window).set_bond_length(selected)
 
 
 __all__ = ["MainWindowDocumentActionService"]

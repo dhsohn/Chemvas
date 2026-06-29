@@ -215,8 +215,6 @@ def build_main_window_services() -> MainWindowServices:
     )
     document_action_service = MainWindowDocumentActionService(
         document_session_service_for_window=document_session_service_for_window,
-        geometry_controller_for_window=geometry_controller_for_window,
-        bond_length_px_for_window=bond_length_px_for_window,
         active_canvas_for_window=active_canvas_for_window,
         active_canvas_or_none_for_window=active_canvas_or_none_for_window,
         canvas_document_service=canvas_document_service,

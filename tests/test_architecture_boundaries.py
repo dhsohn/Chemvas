@@ -1118,7 +1118,6 @@ def test_main_window_document_action_service_delegates_dialog_assembly_to_module
 
     assert "from ui.main_window_document_dialogs import" in service_source
     assert "prompt_export_options(window)" in service_source
-    assert "prompt_bond_length(window, current)" in service_source
     assert "prompt_sheet_setup(" not in service_source
     assert "QDialog" not in service_source
     assert "QComboBox" not in service_source
@@ -1127,7 +1126,6 @@ def test_main_window_document_action_service_delegates_dialog_assembly_to_module
     assert "ArrowButton" not in service_source
     assert "QDialog" in dialogs_source
     assert "QComboBox" in dialogs_source
-    assert "QDoubleSpinBox" in dialogs_source
     assert "ArrowButton" in dialogs_source
 
 
@@ -1236,8 +1234,6 @@ def test_main_window_document_action_service_uses_injected_canvas_service_ports(
     )
 
     assert "document_session_service_for_window" in source
-    assert "geometry_controller_for_window" in source
-    assert "bond_length_px_for_window" in source
     assert "active_canvas_for_window" in source
     assert "canvas_document_service" in source
     assert "sheet_size_for_window" not in source
@@ -1247,7 +1243,6 @@ def test_main_window_document_action_service_uses_injected_canvas_service_ports(
     assert "save_document_state" not in source
     assert "self.save_canvas_as(window, canvas=canvas)" in source
     assert "self.save_canvas_to_path(window, path, canvas=canvas)" in source
-    assert "bond_length_px_for_window=bond_length_px_for_window" in services.read_text()
     assert "sheet_size_for_window=sheet_size_for_window" not in services.read_text()
     assert "sheet_orientation_for_window=sheet_orientation_for_window" not in services.read_text()
     assert "set_sheet_setup_for_window=set_sheet_setup_for_window" not in services.read_text()
