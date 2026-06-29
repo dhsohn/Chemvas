@@ -7,7 +7,6 @@ from PyQt6.QtWidgets import (
     QButtonGroup,
     QLineEdit,
     QSlider,
-    QSpinBox,
     QToolButton,
     QWidget,
 )
@@ -21,6 +20,7 @@ from ui.main_window_config import (
     TEMPLATE_ENTRY_SPECS,
 )
 from ui.main_window_context_bar_widgets import (
+    BondLengthSpinBox,
     action_button,
     atom_symbol_input,
     bond_length_input,
@@ -56,7 +56,7 @@ class BondContextPage:
     page: QWidget
     group: QButtonGroup
     buttons: dict[str, QToolButton]
-    length_spin: QSpinBox
+    length_spin: BondLengthSpinBox
 
 
 @dataclass(frozen=True)
