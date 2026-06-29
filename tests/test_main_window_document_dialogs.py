@@ -9,9 +9,7 @@ try:
         QApplication,
         QComboBox,
         QDialog,
-        QDoubleSpinBox,
         QPushButton,
-        QToolButton,
     )
 except ModuleNotFoundError:
     QApplication = None
@@ -22,7 +20,6 @@ if QApplication is not None:
     from ui.main_window_document_dialogs import (
         FigureExportOptions,
         SheetSetupSelection,
-        prompt_bond_length,
         prompt_export_options,
         prompt_sheet_setup,
     )
@@ -100,41 +97,6 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
 
         with mock.patch("ui.main_window_document_dialogs.QDialog.exec", new=drive_dialog):
             self.assertIsNone(prompt_export_options(self.window))
-
-    def test_prompt_bond_length_uses_spin_controls_and_returns_confirmed_value(self) -> None:
-        def drive_dialog(dialog: QDialog):
-            self.assertEqual(dialog.windowTitle(), "Bond Length")
-
-            spin = dialog.findChild(QDoubleSpinBox)
-            ok_button = next(button for button in dialog.findChildren(QPushButton) if button.text() == "OK")
-            cancel_button = next(button for button in dialog.findChildren(QPushButton) if button.text() == "Cancel")
-            up_button = dialog.findChild(QToolButton, "spinUpButton")
-            down_button = dialog.findChild(QToolButton, "spinDownButton")
-
-            self.assertIsNotNone(spin)
-            self.assertIsNotNone(up_button)
-            self.assertIsNotNone(down_button)
-            self.assertEqual(spin.value(), 24.0)
-            self.assertEqual(spin.minimum(), 10.0)
-            self.assertEqual(spin.maximum(), 200.0)
-            self.assertEqual(spin.decimals(), 1)
-
-            up_button.click()
-            up_button.click()
-            down_button.click()
-            self.assertEqual(spin.value(), 25.0)
-            self.assertEqual(ok_button.text(), "OK")
-            self.assertEqual(cancel_button.text(), "Cancel")
-            ok_button.click()
-
-            return QDialog.DialogCode.Accepted
-
-        with mock.patch("ui.main_window_document_dialogs.QDialog.exec", new=drive_dialog):
-            self.assertEqual(prompt_bond_length(self.window, 24.0), 25.0)
-
-    def test_prompt_bond_length_cancel_returns_none(self) -> None:
-        with mock.patch("ui.main_window_document_dialogs.QDialog.exec", return_value=QDialog.DialogCode.Rejected):
-            self.assertIsNone(prompt_bond_length(self.window, 24.0))
 
     def test_prompt_sheet_setup_uses_current_settings_and_returns_confirmed_value(self) -> None:
         set_sheet_setup_for(active_canvas_for_window(self.window), "A4", "landscape")

@@ -11,7 +11,6 @@ from ui.input_view_access import (
     set_focused_scene_item_for,
     set_scene_rect_for,
     update_viewport_for,
-    view_scale_for,
     viewport_center_scene_pos_for,
 )
 
@@ -70,14 +69,6 @@ class _ScrollBar:
 
     def setValue(self, value: int) -> None:
         self.updated_value = value
-
-
-class _Transform:
-    def __init__(self, scale: float) -> None:
-        self._scale = scale
-
-    def m11(self) -> float:
-        return self._scale
 
 
 class _Point:
@@ -223,11 +214,3 @@ def test_scroll_view_by_for_ignores_zero_delta() -> None:
     canvas = SimpleNamespace()
 
     assert scroll_view_by_for(canvas, 0, 0) is False
-
-
-def test_view_scale_for_reads_transform_scale() -> None:
-    canvas = SimpleNamespace(transform=mock.Mock(return_value=_Transform(1.25)))
-
-    assert view_scale_for(canvas) == 1.25
-
-    canvas.transform.assert_called_once_with()

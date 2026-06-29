@@ -6,7 +6,6 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
-    QDoubleSpinBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -120,56 +119,6 @@ def prompt_export_options(window) -> FigureExportOptions | None:
     )
 
 
-def prompt_bond_length(window, current: float) -> float | None:
-    dialog = QDialog(window)
-    dialog.setWindowTitle("Bond Length")
-    dialog.setStyleSheet(window.styleSheet())
-    layout = QVBoxLayout(dialog)
-
-    layout.addWidget(QLabel("Set bond length (px):"))
-
-    frame = QFrame()
-    frame.setObjectName("spinFrame")
-    frame_layout = QHBoxLayout(frame)
-    frame_layout.setContentsMargins(2, 2, 2, 2)
-    frame_layout.setSpacing(0)
-
-    spin = QDoubleSpinBox()
-    spin.setDecimals(1)
-    spin.setRange(10.0, 200.0)
-    spin.setValue(current)
-    spin.setButtonSymbols(QDoubleSpinBox.ButtonSymbols.NoButtons)
-    spin.setMinimumWidth(90)
-    spin.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-    frame_layout.addWidget(spin)
-
-    buttons_col = QVBoxLayout()
-    buttons_col.setContentsMargins(0, 0, 0, 0)
-    buttons_col.setSpacing(0)
-    up_btn = ArrowButton("up")
-    up_btn.setObjectName("spinUpButton")
-    up_btn.setFixedSize(18, 14)
-    down_btn = ArrowButton("down")
-    down_btn.setObjectName("spinDownButton")
-    down_btn.setFixedSize(18, 14)
-    buttons_col.addWidget(up_btn)
-    buttons_col.addWidget(down_btn)
-    frame_layout.addLayout(buttons_col)
-
-    layout.addWidget(frame)
-
-    ok_btn, cancel_btn = _add_action_row(layout, accept_label="OK")
-
-    up_btn.clicked.connect(lambda: spin.setValue(min(200.0, spin.value() + 1.0)))
-    down_btn.clicked.connect(lambda: spin.setValue(max(10.0, spin.value() - 1.0)))
-    ok_btn.clicked.connect(dialog.accept)
-    cancel_btn.clicked.connect(dialog.reject)
-
-    if dialog.exec() != QDialog.DialogCode.Accepted:
-        return None
-    return spin.value()
-
-
 def prompt_zoom_percent(window, current: int, *, minimum: int = 20, maximum: int = 500) -> int | None:
     dialog = QDialog(window)
     dialog.setWindowTitle("Set Zoom")
@@ -258,7 +207,6 @@ def prompt_sheet_setup(window, *, current_size: str, current_orientation: str) -
 __all__ = [
     "FigureExportOptions",
     "SheetSetupSelection",
-    "prompt_bond_length",
     "prompt_zoom_percent",
     "prompt_export_options",
     "prompt_sheet_setup",
