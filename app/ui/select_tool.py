@@ -5,6 +5,7 @@ from PyQt6.QtCore import QPointF, Qt
 from ui.handle_overlay_access import (
     clear_handles_for,
     show_curved_handles_for,
+    show_shape_handles_for,
 )
 from ui.handle_state import active_handles_for, handle_target_for
 from ui.history_commands import UpdateSceneItemCommand
@@ -23,6 +24,8 @@ class SelectTool(SelectionDragMixin, Tool):
         self._handle_before_state: dict | None = None
         self._pending_curved_handle_item = None
         self._pending_curved_handle_action: str | None = None
+        self._pending_shape_handle_item = None
+        self._pending_shape_handle_action: str | None = None
         self._reset_selection_drag_state()
         self._start_pos = None
         self._moved = False
@@ -48,6 +51,25 @@ class SelectTool(SelectionDragMixin, Tool):
     def _clear_pending_curved_handle_toggle(self) -> None:
         self._pending_curved_handle_item = None
         self._pending_curved_handle_action = None
+        self._pending_shape_handle_item = None
+        self._pending_shape_handle_action = None
+
+    def _shape_handle_toggle_action_for_item(self, item) -> str:
+        if handle_target_for(self.canvas) is item and bool(active_handles_for(self.canvas)):
+            return "hide"
+        return "show"
+
+    def _begin_shape_handle_toggle_or_drag(self, item, press_pos) -> bool:
+        snapshot = selection_snapshot_for(self.canvas)
+        atom_ids, selection_items = self._selection_drag_context(snapshot)
+        if not atom_ids and not selection_items:
+            return False
+        handle_target = handle_target_for(self.canvas)
+        if handle_target is not None and handle_target is not item:
+            clear_handles_for(self.canvas)
+        self._pending_shape_handle_item = item
+        self._pending_shape_handle_action = self._shape_handle_toggle_action_for_item(item)
+        return self._begin_selection_drag(atom_ids, selection_items, press_pos)
 
     def _curved_handle_toggle_action_for_item(self, item) -> str:
         if handle_target_for(self.canvas) is item and bool(active_handles_for(self.canvas)):
@@ -103,6 +125,12 @@ class SelectTool(SelectionDragMixin, Tool):
         selected_curved = self._selected_curved_item_for_handle_toggle(snapshot)
         if item is None and selected_curved is not None and self.context.selection_hit_test(press_pos, snapshot=snapshot):
             return self._begin_curved_handle_toggle_or_drag(selected_curved, press_pos)
+        if (
+            item is not None
+            and item.data(0) == "shape"
+            and item in self.context.selected_scene_items(excluded_kinds=set())
+        ):
+            return self._begin_shape_handle_toggle_or_drag(item, press_pos)
         self._clear_pending_curved_handle_toggle()
         clear_handles_for(self.canvas)
         selected = self.context.selected_scene_items(excluded_kinds=set())
@@ -178,6 +206,19 @@ class SelectTool(SelectionDragMixin, Tool):
             self._clear_pending_curved_handle_toggle()
             if action == "show":
                 show_curved_handles_for(self.canvas, item)
+            elif action == "hide":
+                clear_handles_for(self.canvas)
+            self._reset_selection_drag_state()
+            self._start_pos = None
+            self._moved = False
+            self._total_delta = QPointF(0.0, 0.0)
+            return True
+        if self._pending_shape_handle_item is not None and not self._moved:
+            item = self._pending_shape_handle_item
+            action = self._pending_shape_handle_action
+            self._clear_pending_curved_handle_toggle()
+            if action == "show":
+                show_shape_handles_for(self.canvas, item)
             elif action == "hide":
                 clear_handles_for(self.canvas)
             self._reset_selection_drag_state()

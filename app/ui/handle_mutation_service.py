@@ -2,13 +2,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QPointF
+from PyQt6.QtCore import QPointF, QRectF
 
 from ui.handle_interaction_logic import (
     orbital_rotation_angle as orbital_rotation_angle_helper,
 )
 from ui.handle_interaction_logic import (
     orbital_scale_factor as orbital_scale_factor_helper,
+)
+from ui.handle_interaction_logic import (
+    resized_shape_rect as resized_shape_rect_helper,
 )
 from ui.handle_mutation_access import (
     clamp_curved_midpoint_for,
@@ -19,6 +22,7 @@ from ui.handle_mutation_access import (
 )
 from ui.renderer_style_access import bond_length_px_for
 from ui.selection_service_access import refresh_selection_outline_for
+from ui.shape_geometry import normalized_shape_kind, shape_path
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
@@ -37,6 +41,18 @@ class HandleMutationService:
             center = item.boundingRect().center()
         scale = orbital_scale_factor_helper(center, pos, float(base_dist))
         item.setScale(scale)
+
+    def update_shape_resize(self, item, anchor: str, pos: QPointF) -> None:
+        data = item.data(1) or {}
+        rect = data.get("rect")
+        if not isinstance(rect, QRectF):
+            rect = item.sceneBoundingRect()
+        new_rect = resized_shape_rect_helper(rect, anchor, pos)
+        item.setPath(shape_path(new_rect, normalized_shape_kind(data.get("shape_kind"))))
+        updated = dict(data)
+        updated["rect"] = new_rect
+        item.setData(1, updated)
+        refresh_selection_outline_for(self.canvas)
 
     def update_orbital_rotate(self, item, pos: QPointF) -> None:
         data = item.data(1) or {}

@@ -63,7 +63,22 @@ class CanvasNoteController:
         set_committed_note_html_for(item, item.toHtml())
         return item
 
+    def _end_note_editing(self, item: QGraphicsTextItem) -> None:
+        """Leave edit mode: drop the text cursor selection (so a double-click
+        highlight does not linger) and stop accepting editor input."""
+        cursor = item.textCursor()
+        if cursor.hasSelection():
+            cursor.clearSelection()
+            item.setTextCursor(cursor)
+        item.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
+
+    def _deselect_note(self, item: QGraphicsTextItem) -> None:
+        if item in selected_notes_for(self.canvas):
+            remove_selected_note_for(self.canvas, item)
+        update_note_selection_box_for(self.canvas, item)
+
     def handle_note_focus_out(self, item: QGraphicsTextItem) -> None:
+        self._end_note_editing(item)
         text = item.toPlainText().strip()
         committed_text = committed_note_text_for(item)
         committed_html = committed_note_html_for(item)
@@ -81,6 +96,9 @@ class CanvasNoteController:
                     self.history.push(UpdateSceneItemCommand(item, before_state, after_state))
                 set_committed_note_text_for(item, text)
                 set_committed_note_html_for(item, current_html)
+            # Clicking away from the text ends the selection too, so the dashed box
+            # disappears instead of lingering after focus moves elsewhere.
+            self._deselect_note(item)
             return
         if committed_text:
             before_state = note_state_dict_for(self.canvas, item)
@@ -100,11 +118,32 @@ class CanvasNoteController:
         item.setPlainText(text)
         self.apply_note_style(item)
 
+    def _ensure_note_box_autoresize(self, item: QGraphicsTextItem) -> None:
+        """Keep the background/selection boxes sized to the text while it is typed.
+
+        The boxes are derived from ``item.boundingRect()`` but were only refreshed
+        on formatting commands, so plain typing left them at their initial width.
+        Connecting once to the document's ``contentsChanged`` resizes them live.
+        """
+        if item.data(22):
+            return
+        document = item.document()
+        if document is None:
+            return
+
+        def _resize() -> None:
+            self.update_note_box(item)
+            update_note_selection_box_for(self.canvas, item)
+
+        document.contentsChanged.connect(_resize)
+        item.setData(22, True)
+
     def begin_note_edit(self, item: QGraphicsTextItem) -> None:
         if item not in selected_notes_for(self.canvas):
             selection_controller = self._selection_controller()
             if selection_controller is not None:
                 selection_controller.select_note(item, additive=False)
+        self._ensure_note_box_autoresize(item)
         item.setTextInteractionFlags(Qt.TextInteractionFlag.TextEditorInteraction)
         item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsFocusable, True)
         focus_canvas_for(self.canvas, Qt.FocusReason.MouseFocusReason)

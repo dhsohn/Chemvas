@@ -56,6 +56,7 @@ if TYPE_CHECKING:
 OBJECT_OVERLAY_KINDS = {
     *ARROW_OBJECT_KINDS,
     "ts_bracket",
+    "shape",
     "mark",
     "orbital",
 }

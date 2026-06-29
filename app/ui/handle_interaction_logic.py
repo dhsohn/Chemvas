@@ -3,9 +3,9 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 
-from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QBrush, QColor, QPen
-from PyQt6.QtWidgets import QGraphicsEllipseItem, QGraphicsItem, QGraphicsScene
+from PyQt6.QtWidgets import QGraphicsItem, QGraphicsRectItem, QGraphicsScene
 
 
 def clear_handle_items(
@@ -26,19 +26,53 @@ def create_handle_item(
     handle_type: str,
     target,
     *,
-    radius: float = 5.0,
-) -> QGraphicsEllipseItem:
-    handle = QGraphicsEllipseItem(pos.x() - radius, pos.y() - radius, radius * 2.0, radius * 2.0)
-    handle.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-    pen = QPen(QColor("#d32f2f"))
-    pen.setStyle(Qt.PenStyle.DashLine)
-    pen.setWidthF(1.2)
+    size: float = 8.0,
+) -> QGraphicsRectItem:
+    # A small solid square, ChemDraw-style: white fill with a thin accent border.
+    half = size / 2.0
+    handle = QGraphicsRectItem(pos.x() - half, pos.y() - half, size, size)
+    handle.setBrush(QBrush(QColor("#ffffff")))
+    pen = QPen(QColor("#0f8a78"))
+    pen.setWidthF(1.3)
     handle.setPen(pen)
     handle.setData(0, "handle")
     handle.setData(1, handle_type)
     handle.setData(2, target)
     handle.setZValue(30)
     return handle
+
+
+def shape_resize_handle_positions(rect: QRectF) -> list[tuple[str, QPointF]]:
+    """Eight resize handles (corners + edge midpoints) around ``rect``."""
+    bounds = QRectF(rect).normalized()
+    left, top, right, bottom = bounds.left(), bounds.top(), bounds.right(), bounds.bottom()
+    cx, cy = bounds.center().x(), bounds.center().y()
+    return [
+        ("shape_nw", QPointF(left, top)),
+        ("shape_n", QPointF(cx, top)),
+        ("shape_ne", QPointF(right, top)),
+        ("shape_e", QPointF(right, cy)),
+        ("shape_se", QPointF(right, bottom)),
+        ("shape_s", QPointF(cx, bottom)),
+        ("shape_sw", QPointF(left, bottom)),
+        ("shape_w", QPointF(left, cy)),
+    ]
+
+
+def resized_shape_rect(rect: QRectF, anchor: str, pos: QPointF, *, min_size: float = 8.0) -> QRectF:
+    """Return ``rect`` with the edge/corner named by ``anchor`` moved to ``pos``."""
+    bounds = QRectF(rect).normalized()
+    left, top, right, bottom = bounds.left(), bounds.top(), bounds.right(), bounds.bottom()
+    direction = anchor.removeprefix("shape_")
+    if "w" in direction:
+        left = min(pos.x(), right - min_size)
+    if "e" in direction:
+        right = max(pos.x(), left + min_size)
+    if "n" in direction:
+        top = min(pos.y(), bottom - min_size)
+    if "s" in direction:
+        bottom = max(pos.y(), top + min_size)
+    return QRectF(QPointF(left, top), QPointF(right, bottom)).normalized()
 
 
 def orbital_handle_positions(center: QPointF, base_dist: float) -> tuple[QPointF, QPointF]:
@@ -134,4 +168,6 @@ __all__ = [
     "orbital_handle_positions",
     "orbital_rotation_angle",
     "orbital_scale_factor",
+    "resized_shape_rect",
+    "shape_resize_handle_positions",
 ]

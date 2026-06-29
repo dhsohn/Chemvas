@@ -17,6 +17,10 @@ from ui.note_item_access import set_committed_note_html_for, set_committed_note_
 from ui.scene_item_state import (
     ARROW_KINDS,
     mark_center_from_state,
+    shape_fill_from_state,
+    shape_kind_from_state,
+    shape_rect_from_state,
+    shape_stroke_from_state,
     ts_bracket_kind_from_state,
     ts_bracket_rect_from_state,
 )
@@ -29,6 +33,7 @@ MarkCenterSetter = Callable[[Any, QPointF], None]
 ArrowItemBuilder = Callable[[QPointF, QPointF, str], QGraphicsPathItem]
 CurvedArrowPathSetter = Callable[[QGraphicsPathItem, QPointF, QPointF, QPointF, bool], None]
 TsBracketItemBuilder = Callable[..., QGraphicsPathItem]
+ShapeItemBuilder = Callable[..., QGraphicsPathItem]
 OrbitalItemsBuilder = Callable[[QPointF, str], list[Any]]
 
 
@@ -150,6 +155,22 @@ def create_ts_bracket_item_from_state(
         return build_ts_bracket_item(rect)
 
 
+def create_shape_item_from_state(
+    shape_state: Mapping[str, object],
+    *,
+    build_shape_item: ShapeItemBuilder,
+) -> QGraphicsPathItem | None:
+    rect = shape_rect_from_state(shape_state)
+    if rect is None:
+        return None
+    return build_shape_item(
+        rect,
+        shape_kind_from_state(shape_state),
+        shape_stroke_from_state(shape_state),
+        shape_fill_from_state(shape_state),
+    )
+
+
 def create_orbital_item_from_state(
     orbital_state: Mapping[str, object],
     *,
@@ -194,6 +215,7 @@ def create_scene_item_from_state(
     build_arrow_item: ArrowItemBuilder,
     set_curved_arrow_path: CurvedArrowPathSetter,
     build_ts_bracket_item: TsBracketItemBuilder,
+    build_shape_item: ShapeItemBuilder | None = None,
     build_orbital_items: OrbitalItemsBuilder,
     orbital_base_handle_dist: float,
 ):
@@ -215,6 +237,10 @@ def create_scene_item_from_state(
         )
     if kind == "ts_bracket":
         return create_ts_bracket_item_from_state(state, build_ts_bracket_item=build_ts_bracket_item)
+    if kind == "shape":
+        if build_shape_item is None:
+            return None
+        return create_shape_item_from_state(state, build_shape_item=build_shape_item)
     if kind == "orbital":
         return create_orbital_item_from_state(
             state,

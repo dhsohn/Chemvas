@@ -103,6 +103,32 @@ def preview_ts_bracket_for(canvas, start, end, bracket_kind: str | None = None):
     return None
 
 
+def add_shape_for(canvas, rect, *, shape_kind: str | None = None, stroke_style: str | None = None):
+    method = _decoration_service_method(canvas, "add_shape")
+    if method is not None:
+        return method(rect, shape_kind=shape_kind, stroke_style=stroke_style)
+    return None
+
+
+def add_shape_from_points_for(canvas, start, end, *, shape_kind: str | None = None, stroke_style: str | None = None):
+    rect_from_points = _build_service_method(canvas, "shape_rect_from_points")
+    if rect_from_points is not None:
+        return add_shape_for(
+            canvas,
+            rect_from_points(start, end),
+            shape_kind=shape_kind,
+            stroke_style=stroke_style,
+        )
+    return None
+
+
+def preview_shape_for(canvas, start, end, *, shape_kind: str | None = None, stroke_style: str | None = None):
+    method = _build_service_method(canvas, "preview_shape")
+    if method is not None:
+        return method(start, end, shape_kind or "circle", stroke_style or "solid")
+    return None
+
+
 def add_orbital_for(canvas, center):
     method = _decoration_service_method(canvas, "add_orbital")
     if method is not None:
@@ -115,8 +141,11 @@ __all__ = [
     "add_mark_for",
     "add_mark_for_atom_for",
     "add_orbital_for",
+    "add_shape_for",
+    "add_shape_from_points_for",
     "add_ts_bracket_for",
     "add_ts_bracket_from_points_for",
     "preview_arrow_for",
+    "preview_shape_for",
     "preview_ts_bracket_for",
 ]

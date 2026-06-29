@@ -34,6 +34,7 @@ _TOOL_PAGE_KEYS = {
     "benzene": "ring",
     "color": "color",
     "orbital": "orbital",
+    "shape": "shape",
 }
 
 

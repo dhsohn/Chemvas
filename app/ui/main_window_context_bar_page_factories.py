@@ -23,7 +23,6 @@ from ui.main_window_context_bar_widgets import (
     length_field_button,
     new_context_page,
     rotate_angle_input,
-    segment_button,
     slider_dropdown_button,
 )
 from ui.main_window_toolbar_logic import BOND_STYLE_BY_LABEL
@@ -286,16 +285,60 @@ def build_text_page(
 
 def build_orbital_page(window, tool_state_service) -> QWidget:
     page, layout = new_context_page()
+    icon_factory = icon_factory_for_window(window)
     layout.addWidget(hint_label("Orbital"))
     for label in ("s", "p", "sp", "sp2", "sp3", "d"):
-        button = segment_button(label, f"Orbital: {label}")
+        button = icon_button(icon_factory.icon_orbital_preview(label), f"Orbital: {label}")
         button.clicked.connect(lambda _checked=False, value=label: tool_state_service.set_orbital_type(window, value))
         layout.addWidget(button)
     layout.addWidget(divider())
-    for label in ("Phase Off", "Phase On"):
-        button = segment_button(label, label)
+    for label, enabled in (("Phase Off", False), ("Phase On", True)):
+        button = icon_button(icon_factory.icon_orbital_phase(enabled), label)
         button.clicked.connect(lambda _checked=False, value=label: tool_state_service.set_orbital_phase(window, value))
         layout.addWidget(button)
+    layout.addStretch(1)
+    return page
+
+
+_SHAPE_KIND_SPECS = [
+    ("circle", "Circle"),
+    ("ellipse", "Ellipse"),
+    ("rounded_rect", "Rounded rectangle"),
+    ("rect", "Rectangle"),
+]
+
+_SHAPE_STROKE_SPECS = [
+    ("solid", "Solid outline"),
+    ("dashed", "Dashed outline"),
+    ("dotted", "Dotted outline"),
+    ("none", "No outline (select a shape first)"),
+]
+
+
+def build_shape_page(window, tool_state_service) -> QWidget:
+    page, layout = new_context_page()
+    icon_factory = icon_factory_for_window(window)
+    layout.addWidget(hint_label("Shape"))
+
+    kind_group = QButtonGroup(page)
+    kind_group.setExclusive(True)
+    for kind, tip in _SHAPE_KIND_SPECS:
+        button = icon_button(icon_factory.icon_shape_kind(kind), tip, checkable=True)
+        button.setChecked(kind == "circle")
+        button.clicked.connect(lambda _checked=False, value=kind: tool_state_service.set_shape_type(window, value))
+        kind_group.addButton(button)
+        layout.addWidget(button)
+
+    layout.addWidget(divider())
+    stroke_group = QButtonGroup(page)
+    stroke_group.setExclusive(True)
+    for style, tip in _SHAPE_STROKE_SPECS:
+        button = icon_button(icon_factory.icon_shape_stroke(style), tip, checkable=True)
+        button.setChecked(style == "solid")
+        button.clicked.connect(lambda _checked=False, value=style: tool_state_service.set_shape_stroke(window, value))
+        stroke_group.addButton(button)
+        layout.addWidget(button)
+
     layout.addStretch(1)
     return page
 
@@ -352,6 +395,7 @@ __all__ = [
     "build_mark_page",
     "build_orbital_page",
     "build_rotate_page",
+    "build_shape_page",
     "build_template_page",
     "build_text_page",
 ]

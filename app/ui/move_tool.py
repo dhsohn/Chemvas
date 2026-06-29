@@ -59,6 +59,7 @@ class MoveTool(SelectionDragMixin, Tool):
             "dotted",
             "orbital",
             "ts_bracket",
+            "shape",
         }:
             return True
         self._drag_item = item

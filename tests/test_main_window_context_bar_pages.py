@@ -79,7 +79,21 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
 
         self.assertEqual(
             set(pages.pages),
-            {"empty", "bond", "arrow", "bracket", "atom", "text", "ring", "mark", "rotate", "orbital", "color", "ring_fill"},
+            {
+                "empty",
+                "bond",
+                "arrow",
+                "bracket",
+                "atom",
+                "text",
+                "ring",
+                "mark",
+                "rotate",
+                "orbital",
+                "shape",
+                "color",
+                "ring_fill",
+            },
         )
         self.assertIn("Single", pages.bond_buttons)
         self.assertEqual(pages.bond_buttons["Single"].text(), "")

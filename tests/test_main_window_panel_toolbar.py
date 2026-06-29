@@ -202,9 +202,9 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
             ["toolButton_mark", "toolButton_orbital"],
             self._toolbar_widget_groups(assembly.panel_bar),
         )
-        # The note (Text) tool sits in the same partition as Color, ahead of it.
+        # Shape sits just right of the note (Text) tool, in the same partition as Color.
         self.assertIn(
-            [f"toolButton_{key}" for key in ("note", "color", "ring_fill")],
+            [f"toolButton_{key}" for key in ("note", "shape", "color", "ring_fill")],
             self._toolbar_widget_groups(assembly.panel_bar),
         )
         self.assertIn(

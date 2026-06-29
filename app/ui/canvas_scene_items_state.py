@@ -14,6 +14,7 @@ class CanvasSceneItemsState:
     mark_items: list[Any] = field(default_factory=list)
     arrow_items: list[Any] = field(default_factory=list)
     ts_bracket_items: list[Any] = field(default_factory=list)
+    shape_items: list[Any] = field(default_factory=list)
     orbital_items: list[Any] = field(default_factory=list)
 
 
@@ -24,6 +25,7 @@ SCENE_ITEM_COLLECTION_ATTRS = (
     "mark_items",
     "arrow_items",
     "ts_bracket_items",
+    "shape_items",
     "orbital_items",
 )
 
@@ -90,6 +92,10 @@ def ts_bracket_items_for(canvas: Any) -> list[Any]:
     return scene_item_collection_for(canvas, "ts_bracket_items")
 
 
+def shape_items_for(canvas: Any) -> list[Any]:
+    return scene_item_collection_for(canvas, "shape_items")
+
+
 def orbital_items_for(canvas: Any) -> list[Any]:
     return scene_item_collection_for(canvas, "orbital_items")
 
@@ -129,5 +135,6 @@ __all__ = [
     "selected_notes_for",
     "set_scene_item_collection_for",
     "set_selected_notes_for",
+    "shape_items_for",
     "ts_bracket_items_for",
 ]

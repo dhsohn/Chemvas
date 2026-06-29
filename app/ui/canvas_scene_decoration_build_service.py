@@ -37,6 +37,14 @@ from ui.renderer_style_access import (
     orbital_positive_color_for,
 )
 from ui.scene_item_access import add_item_to_canvas_scene
+from ui.shape_geometry import (
+    DEFAULT_SHAPE_KIND,
+    DEFAULT_STROKE_STYLE,
+    normalized_shape_kind,
+    normalized_stroke_style,
+    pen_style_for_stroke,
+    shape_path,
+)
 
 
 class _ChargeCircleMarkItem(NoSelectPathItem):
@@ -293,6 +301,63 @@ class CanvasSceneDecorationBuildService:
         item = self.build_ts_bracket_item(self.ts_bracket_rect_from_points(start, end), bracket_kind)
         preview_color = QColor(120, 120, 120, 140)
         item.setBrush(QBrush(preview_color))
+        return add_item_to_canvas_scene(self.canvas, item)
+
+    # --- Free decorative shapes (circle / ellipse / rounded rect / rect) ---
+    def shape_rect_from_points(self, start: QPointF, end: QPointF) -> QRectF:
+        rect = QRectF(start, end).normalized()
+        min_size = bond_length_px_for(self.canvas) * 1.2
+        if rect.width() < 4.0 and rect.height() < 4.0:
+            return QRectF(
+                start.x() - min_size / 2.0,
+                start.y() - min_size / 2.0,
+                min_size,
+                min_size,
+            )
+        return rect
+
+    def shape_stroke_width(self) -> float:
+        return max(1.4, bond_line_width_for(self.canvas))
+
+    def shape_pen(self, stroke_style: str = DEFAULT_STROKE_STYLE) -> QPen:
+        pen = QPen(QColor(bond_color_for(self.canvas)))
+        pen.setWidthF(self.shape_stroke_width())
+        pen.setStyle(pen_style_for_stroke(stroke_style))
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        return pen
+
+    def build_shape_item(
+        self,
+        rect: QRectF,
+        shape_kind: str = DEFAULT_SHAPE_KIND,
+        stroke_style: str = DEFAULT_STROKE_STYLE,
+        *,
+        fill: QColor | None = None,
+    ) -> QGraphicsPathItem:
+        normalized = QRectF(rect).normalized()
+        shape_kind = normalized_shape_kind(shape_kind)
+        stroke_style = normalized_stroke_style(stroke_style)
+        item = NoSelectPathItem(shape_path(normalized, shape_kind))
+        item.setPen(self.shape_pen(stroke_style))
+        # A transparent solid fill keeps the whole interior clickable (so it can be
+        # moved/coloured/deleted by clicking inside) while painting nothing.
+        item.setBrush(QBrush(QColor(0, 0, 0, 0)) if fill is None else QBrush(QColor(fill)))
+        item.setData(0, "shape")
+        item.setData(1, {"rect": normalized, "shape_kind": shape_kind, "stroke_style": stroke_style})
+        return item
+
+    def preview_shape(
+        self,
+        start: QPointF,
+        end: QPointF,
+        shape_kind: str = DEFAULT_SHAPE_KIND,
+        stroke_style: str = DEFAULT_STROKE_STYLE,
+    ):
+        item = self.build_shape_item(self.shape_rect_from_points(start, end), shape_kind, stroke_style)
+        pen = item.pen()
+        pen.setColor(QColor(120, 120, 120, 180))
+        item.setPen(pen)
         return add_item_to_canvas_scene(self.canvas, item)
 
     def build_orbital_items(self, center: QPointF, kind: str):

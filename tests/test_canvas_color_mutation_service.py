@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
     from PyQt6.QtCore import QPointF
-    from PyQt6.QtGui import QBrush, QColor, QPolygonF
+    from PyQt6.QtGui import QBrush, QColor, QPolygonF, QTextCursor
     from PyQt6.QtWidgets import (
         QApplication,
         QGraphicsEllipseItem,
@@ -226,6 +226,36 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         self.assertIn("#cc3344", note.toHtml())
         self.assertEqual(push_command.call_count, 1)
         self.assertIsInstance(push_command.call_args.args[0], UpdateSceneItemCommand)
+
+    def test_apply_color_to_note_recolors_only_selected_text(self) -> None:
+        scene = QGraphicsScene()
+        push_command = mock.Mock()
+        canvas = SimpleNamespace(
+            scene=lambda: scene,
+            model=SimpleNamespace(atoms={}, bonds=[]),
+            push_command=push_command,
+            services=SimpleNamespace(history_service=_history_service(push_command)),
+        )
+        _set_atom_graphics(canvas)
+        set_bond_items_for(canvas, {})
+        service = _color_service_for(canvas)
+
+        note = QGraphicsTextItem("Hello World")
+        note.setData(0, "note")
+        scene.addItem(note)
+        cursor = note.textCursor()
+        cursor.setPosition(6)
+        cursor.setPosition(11, QTextCursor.MoveMode.KeepAnchor)
+        note.setTextCursor(cursor)
+
+        service.apply_color_to_item(note, QColor("#e53935"))
+
+        html = note.toHtml().lower()
+        # The colour lands on the selected word only, not the whole-document default.
+        self.assertIn("e53935", html)
+        self.assertNotEqual(note.defaultTextColor().name().lower(), "#e53935")
+        self.assertTrue(note.textCursor().hasSelection())
+        self.assertEqual(push_command.call_count, 1)
 
     def test_apply_color_to_item_short_circuits_for_invalid_scene_runtime_and_unknown_kind(self) -> None:
         scene = QGraphicsScene()

@@ -6,7 +6,7 @@ from ui.edit_tools import ColorTool, FlipTool
 from ui.interaction_tools import MarkTool, NoteTool
 from ui.move_tool import MoveTool
 from ui.perspective_tool import PerspectiveTool
-from ui.preview_tools import ArrowTool, OrbitalTool, TSBracketTool
+from ui.preview_tools import ArrowTool, OrbitalTool, ShapeTool, TSBracketTool
 from ui.select_tool import SelectTool
 from ui.text_tool import TextTool
 from ui.tool_base import Tool
@@ -68,6 +68,7 @@ class ToolController:
             "arrow": ArrowTool(canvas, "auto", context=self.context),
             "equilibrium": ArrowTool(canvas, "equilibrium", context=self.context),
             "ts_bracket": TSBracketTool(canvas, context=self.context),
+            "shape": ShapeTool(canvas, context=self.context),
             "orbital": OrbitalTool(canvas, context=self.context),
             "perspective": PerspectiveTool(canvas, context=self.context),
         }

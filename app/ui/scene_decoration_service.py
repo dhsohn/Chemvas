@@ -10,6 +10,7 @@ from ui.history_commands import AddSceneItemsCommand
 from ui.mark_item_access import build_mark_item_for, set_mark_center_for
 from ui.scene_decoration_build_access import (
     build_arrow_item_for,
+    build_shape_item_for,
     build_ts_bracket_item_for,
 )
 from ui.scene_item_access import attach_scene_item, create_scene_item_from_state
@@ -17,6 +18,7 @@ from ui.scene_item_state import (
     arrow_state_dict_for,
     mark_state_dict_for,
     orbital_state_dict_for,
+    shape_state_dict_for,
     ts_bracket_state_dict_for,
 )
 
@@ -81,6 +83,23 @@ class SceneDecorationService:
         item = build_ts_bracket_item_for(self.canvas, rect, bracket_kind)
         attach_scene_item(self.canvas, item)
         self._push_add_scene_item(item, ts_bracket_state_dict_for(self.canvas, item))
+        return item
+
+    def add_shape(
+        self,
+        rect: QRectF,
+        *,
+        shape_kind: str | None = None,
+        stroke_style: str | None = None,
+    ):
+        settings = tool_settings_state_for(self.canvas)
+        shape_kind = shape_kind or settings.active_shape_type
+        stroke_style = stroke_style or settings.active_shape_stroke
+        item = build_shape_item_for(self.canvas, rect, shape_kind, stroke_style)
+        if item is None:
+            return None
+        attach_scene_item(self.canvas, item)
+        self._push_add_scene_item(item, shape_state_dict_for(self.canvas, item))
         return item
 
     def add_orbital(self, center: QPointF):

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from core.tool_overlay_logic import activate_tool_no_drag, clear_temporary_tool_overlay
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QEvent, Qt
+from PyQt6.QtGui import QTextCursor
 
 from ui.handle_overlay_access import (
     clear_handles_for,
     show_curved_handles_for,
     show_orbital_handles_for,
+    show_shape_handles_for,
 )
 from ui.renderer_style_access import bond_length_px_for
 from ui.scene_decoration_access import add_mark_for, add_mark_for_atom_for
@@ -55,6 +57,8 @@ class TransformTool(Tool):
             show_orbital_handles_for(self.canvas, item)
         elif kind in {"curved_single", "curved_double"}:
             show_curved_handles_for(self.canvas, item)
+        elif kind == "shape":
+            show_shape_handles_for(self.canvas, item)
         else:
             clear_temporary_tool_overlay(
                 self.canvas,
@@ -107,6 +111,12 @@ class NoteTool(Tool):
             if modifiers & Qt.KeyboardModifier.ShiftModifier:
                 select_note_for(self.canvas, item, additive=True)
                 return True
+            if item.hasFocus():
+                # Already editing this note: a single click repositions the caret
+                # (clearing a double-click word selection) and a double-click selects
+                # a word, like any text field.
+                self._place_caret_in_note(item, event)
+                return True
             select_note_for(self.canvas, item, additive=False)
             self.context.begin_note_edit(item)
             return True
@@ -115,6 +125,19 @@ class NoteTool(Tool):
         item = self.context.create_text_note(pos, "")
         self.context.begin_note_edit(item)
         return True
+
+    def _place_caret_in_note(self, item, event) -> None:
+        document = item.document()
+        cursor = item.textCursor()
+        layout = document.documentLayout() if document is not None else None
+        if layout is not None:
+            local = item.mapFromScene(self.context.scene_pos_from_event(event))
+            position = layout.hitTest(local, Qt.HitTestAccuracy.FuzzyHit)
+            if position >= 0:
+                cursor.setPosition(position)
+        if event.type() == QEvent.Type.MouseButtonDblClick:
+            cursor.select(QTextCursor.SelectionType.WordUnderCursor)
+        item.setTextCursor(cursor)
 
     def on_mouse_move(self, event) -> bool:
         return False

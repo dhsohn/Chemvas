@@ -302,6 +302,57 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
         self.assertFalse(box.isVisible())
 
+    def test_typing_resizes_note_box_live(self) -> None:
+        scene = QGraphicsScene()
+        canvas = SimpleNamespace(
+            scene=lambda: scene,
+            text_style_state=CanvasTextStyleState(note_padding=6.0, note_border_enabled=True),
+        )
+        _attach_history_service(canvas)
+        note = NoteItem(canvas)
+        note.setData(0, "note")
+        note.setPlainText("D")
+        scene.addItem(note)
+        controller = _note_controller(canvas)
+
+        controller._ensure_note_box_autoresize(note)
+        controller.update_note_box(note)
+        width_before = note.data(20).rect().width()
+
+        cursor = note.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        note.setTextCursor(cursor)
+        cursor.insertText("aehyup Sohn")
+
+        # contentsChanged should have resized the box to follow the longer text.
+        self.assertGreater(note.data(20).rect().width(), width_before)
+        # Connecting again is idempotent (no duplicate signal hookup).
+        controller._ensure_note_box_autoresize(note)
+        self.assertTrue(note.data(22))
+
+    def test_focus_out_ends_editing_and_clears_text_selection(self) -> None:
+        scene = QGraphicsScene()
+        canvas = SimpleNamespace(scene=lambda: scene, text_style_state=CanvasTextStyleState())
+        _attach_history_service(canvas)
+        canvas.services.selection_controller = SimpleNamespace(update_note_selection_box=mock.Mock())
+        set_selected_notes_for(canvas, [])
+        note = NoteItem(canvas)
+        note.setData(0, "note")
+        note.setPlainText("Hi there")
+        scene.addItem(note)
+        controller = _note_controller(canvas)
+
+        cursor = note.textCursor()
+        cursor.select(QTextCursor.SelectionType.Document)
+        note.setTextCursor(cursor)
+        self.assertTrue(note.textCursor().hasSelection())
+
+        controller.handle_note_focus_out(note)
+
+        # The double-click highlight is dropped and the editor stops accepting input.
+        self.assertFalse(note.textCursor().hasSelection())
+        self.assertEqual(note.textInteractionFlags(), Qt.TextInteractionFlag.NoTextInteraction)
+
     def test_selection_controller_note_box_helper_round_trips_visibility(self) -> None:
         scene = QGraphicsScene()
         item = QGraphicsTextItem("Mechanism")

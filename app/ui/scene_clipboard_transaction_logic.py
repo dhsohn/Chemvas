@@ -133,7 +133,7 @@ def translated_scene_item_state(
         translated["end"] = translated_point_value(translated.get("end"), dx, dy)
         translated["control"] = translated_point_value(translated.get("control"), dx, dy)
         return translated
-    if kind == "ts_bracket":
+    if kind in {"ts_bracket", "shape"}:
         for key in ("left", "right"):
             if isinstance(translated.get(key), (int, float)):
                 translated[key] = float(translated[key]) + dx
