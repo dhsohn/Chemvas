@@ -19,7 +19,9 @@ from ui.input_view_access import (
     global_pos_from_event_for,
     reset_view_transform_for,
     scroll_view_by_for,
+    set_zoom_for,
     touch_interaction_for,
+    zoom_factor_for,
 )
 from ui.sheet_setup_access import scene_pos_in_sheet_for
 
@@ -247,6 +249,14 @@ class CanvasPointerController:
 
     def wheel_event(self, event, *, base_wheel_event) -> None:
         touch_interaction_for(self.canvas)
+        if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            angle = event.angleDelta().y()
+            if angle:
+                # Smooth, cursor-anchored magnification: ~20% per mouse notch
+                # (angle == 120), and proportionally finer for trackpads.
+                set_zoom_for(self.canvas, zoom_factor_for(self.canvas) * (1.0015**angle), under_mouse=True)
+            event.accept()
+            return
         reset_view_transform_for(self.canvas)
         delta = event.pixelDelta()
         if delta.isNull():

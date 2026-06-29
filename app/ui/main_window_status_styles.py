@@ -22,10 +22,36 @@ def main_window_status_stylesheet(palette) -> str:
                 border-left: 1px solid {_P["border"]};
                 padding: 0 8px;
             }}
-            QStatusBar QLabel#statusZoomLabel {{
+            QStatusBar QToolButton#statusZoomButton {{
+                color: {_P["text_muted"]};
+                background: transparent;
+                border: none;
+                border-radius: 4px;
+                font-size: 13px;
+                min-width: 18px;
+                padding: 1px 5px;
+                margin: 0;
+            }}
+            QStatusBar QToolButton#statusZoomButton:hover {{
+                background: {_P["hover"]};
+                color: {_P["text"]};
+            }}
+            QStatusBar QToolButton#statusZoomButton:pressed {{
+                background: {_P["pressed"]};
+            }}
+            QStatusBar QToolButton#statusZoomLabel {{
                 color: {_P["text"]};
                 font-weight: 500;
-                padding: 0 8px 0 4px;
+            }}
+            QStatusBar QToolButton#statusZoomLabel:hover {{
+                background: {_P["hover"]};
+            }}
+            QStatusBar QToolButton#statusZoomLabel:pressed {{
+                background: {_P["pressed"]};
+            }}
+            QStatusBar QToolButton#statusZoomFitButton {{
+                font-size: 12px;
+                font-weight: 500;
             }}
 """
 
