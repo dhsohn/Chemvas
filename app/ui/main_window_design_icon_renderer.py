@@ -32,7 +32,10 @@ _SVG_BY_NAME: dict[str, str] = {
     "bracket": '<path d="M9 4 H6 V20 H9"/><path d="M15 4 H18 V20 H15"/>',
     "orbital": '<ellipse cx="8" cy="12" rx="5" ry="7"/><ellipse cx="16" cy="12" rx="5" ry="7"/>',
     "atom": '<path d="M5 20 12 4 19 20 M8 14 H16"/>',
-    "note": '<path d="M5 5 H19 M5 10 H19 M5 15 H15 M5 20 H11"/>',
+    "note": (
+        '<g transform="translate(12 12) skewX(-14) translate(-12 -12)">'
+        '<path d="M5 4 H19 M12 4 V20"/></g>'
+    ),
     "font": '<path d="M2.5 18 6 5 9.5 18 M4 13.2 H8"/><circle cx="16.2" cy="14.6" r="3.4"/><path d="M19.6 11.4 V18"/>',
     "text_bold": '<path d="M7.5 5 V19 M7.5 5 H13 C16.5 5 16.5 11.5 13 11.5 H7.5 M7.5 11.5 H14 C17.8 11.5 17.8 19 14 19 H7.5"/><path d="M9.3 5 V19"/>',
     "text_italic": '<path d="M10 5 H17 M7 19 H14 M14.5 5 L9.5 19"/>',
@@ -136,6 +139,20 @@ _SVG_BY_NAME: dict[str, str] = {
     "orbital_sp2": '<circle cx="8" cy="8" r="4"/><circle cx="16" cy="8" r="4"/><circle cx="12" cy="16" r="4"/>',
     "orbital_sp3": '<circle cx="8" cy="8" r="4"/><circle cx="16" cy="8" r="4"/><circle cx="12" cy="16" r="4"/><circle cx="12" cy="3" r="4"/>',
     "orbital_d": '<circle cx="7" cy="11" r="4"/><circle cx="17" cy="11" r="4"/><circle cx="12" cy="6" r="4"/><circle cx="12" cy="16" r="4"/>',
+    # Phase toggle: a p-orbital dumbbell read as one sign (both lobes hollow)
+    # versus two signs (top lobe filled), echoing the +/- lobe colouring.
+    "orbital_phase_off": '<circle cx="12" cy="7" r="5"/><circle cx="12" cy="17" r="5"/>',
+    "orbital_phase_on": '<circle cx="12" cy="7" r="5" fill="currentColor"/><circle cx="12" cy="17" r="5"/>',
+    # --- Shapes (decorative) ---
+    "shape": '<rect x="3.5" y="8.5" width="11" height="11" rx="1"/><circle cx="15.5" cy="9" r="5.5"/>',
+    "shape_circle": '<circle cx="12" cy="12" r="8"/>',
+    "shape_ellipse": '<ellipse cx="12" cy="12" rx="9" ry="6"/>',
+    "shape_rounded_rect": '<rect x="3.5" y="6" width="17" height="12" rx="3.5"/>',
+    "shape_rect": '<rect x="3.5" y="6" width="17" height="12"/>',
+    "stroke_solid": '<line x1="3" y1="12" x2="21" y2="12"/>',
+    "stroke_dashed": '<line x1="3" y1="12" x2="21" y2="12" stroke-dasharray="4 3"/>',
+    "stroke_dotted": '<line x1="3" y1="12" x2="21" y2="12" stroke-dasharray="0.1 3.4"/>',
+    "stroke_none": '<line x1="3" y1="12" x2="21" y2="12" stroke-dasharray="0.1 3.4"/><line x1="19" y1="6" x2="5" y2="18"/>',
     # --- Template previews ---
     "template_benzene": '<polygon points="12.0,2.0 20.66,7.0 20.66,17.0 12.0,22.0 3.34,17.0 3.34,7.0"/><line x1="12.0" y1="4.2" x2="18.75" y2="8.1"/><line x1="18.75" y1="15.9" x2="12.0" y2="19.8"/><line x1="5.25" y1="15.9" x2="5.25" y2="8.1"/>',
     "template_ring3": '<polygon points="12.0,2.0 20.66,17.0 3.34,17.0"/>',

@@ -26,6 +26,7 @@ class _FakeItem:
     def __init__(self, kind, *, data1=None, data2=None) -> None:
         self._data = {0: kind, 1: data1, 2: data2}
         self.moves = []
+        self.paths = []
         self.set_data_calls = []
 
     def data(self, key):
@@ -37,6 +38,9 @@ class _FakeItem:
 
     def moveBy(self, dx: float, dy: float) -> None:
         self.moves.append((dx, dy))
+
+    def setPath(self, path) -> None:
+        self.paths.append(path)
 
 
 class _FakeRingItem:
@@ -152,6 +156,28 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         self.assertEqual(arrow_item.data(2)["end"], QPointF(2.5, 0.5))
         self.assertEqual(arrow_item.data(2)["control"], QPointF(3.5, 1.5))
         self.assertEqual(view.refresh_selection_outline.call_count, 5)
+
+    def test_move_item_shifts_active_handles_glued_to_target(self) -> None:
+        from ui.handle_state import set_active_handles_for, set_handle_target_for
+
+        shape = _FakeItem("shape", data1={"rect": QRectF(0.0, 0.0, 10.0, 10.0)})
+        handle_a = _FakeItem("handle")
+        handle_b = _FakeItem("handle")
+        view = SimpleNamespace(refresh_selection_outline=mock.Mock())
+        self._bind_move_controller(view)
+        set_handle_target_for(view, shape)
+        set_active_handles_for(view, [handle_a, handle_b])
+
+        move_item_for(view, shape, 5.0, 7.0)
+
+        # The shape's resize handles follow it instead of floating in place.
+        self.assertEqual(handle_a.moves, [(5.0, 7.0)])
+        self.assertEqual(handle_b.moves, [(5.0, 7.0)])
+        self.assertEqual(shape.data(1)["rect"], QRectF(5.0, 7.0, 10.0, 10.0))
+        # A shape moves by rebuilding its path (pos stays at the origin) rather than
+        # moveBy, so a later resize does not double-apply the offset.
+        self.assertEqual(shape.moves, [])
+        self.assertEqual(len(shape.paths), 1)
 
     def test_move_item_covers_bond_mark_and_scene_item_guard_paths(self) -> None:
         invalid_bond_item = _FakeItem("bond", data1="bad")

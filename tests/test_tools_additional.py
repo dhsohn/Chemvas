@@ -6,8 +6,9 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtCore import QPointF, Qt
-    from PyQt6.QtWidgets import QApplication
+    from PyQt6.QtCore import QEvent, QPointF, Qt
+    from PyQt6.QtGui import QTextCursor
+    from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsTextItem
 except ModuleNotFoundError:
     QApplication = None
 
@@ -141,6 +142,10 @@ class _DataItem:
         self._scene = scene_obj
         self.selected = False
         self.visible = True
+        self._has_focus = False
+
+    def hasFocus(self) -> bool:
+        return self._has_focus
 
     def data(self, key):
         return self._data.get(key)
@@ -1018,6 +1023,34 @@ class ToolsAdditionalTest(unittest.TestCase):
         perspective_tool = PerspectiveTool(perspective_canvas, context=_tool_context_for(perspective_canvas))
         self.assertTrue(perspective_tool.on_mouse_release(_Event(QPointF())))
         self.assertEqual(perspective_canvas.end_calls, 0)
+
+    def test_note_tool_click_collapses_selection_double_click_selects_word(self) -> None:
+        scene = QGraphicsScene()
+        note = QGraphicsTextItem("Hello World")
+        note.setData(0, "note")
+        scene.addItem(note)
+
+        center_y = note.boundingRect().center().y()
+        context = SimpleNamespace(
+            scene_pos_from_event=lambda _event: note.mapToScene(QPointF(2.0, center_y))
+        )
+        tool = NoteTool(SimpleNamespace(), context=context)
+
+        cursor = note.textCursor()
+        cursor.select(QTextCursor.SelectionType.Document)
+        note.setTextCursor(cursor)
+        self.assertTrue(note.textCursor().hasSelection())
+
+        press = SimpleNamespace(type=lambda: QEvent.Type.MouseButtonPress)
+        tool._place_caret_in_note(note, press)
+        # A single click drops the selection (caret only).
+        self.assertFalse(note.textCursor().hasSelection())
+
+        dbl = SimpleNamespace(type=lambda: QEvent.Type.MouseButtonDblClick)
+        tool._place_caret_in_note(note, dbl)
+        # A double click selects the word under the caret.
+        self.assertTrue(note.textCursor().hasSelection())
+        self.assertEqual(note.textCursor().selectedText(), "Hello")
 
     def test_orbital_transform_mark_and_note_tools_cover_mouse_press_paths(self) -> None:
         canvas = _OrbitalMarkNoteCanvas()

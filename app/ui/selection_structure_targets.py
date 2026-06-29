@@ -14,6 +14,7 @@ STRUCTURE_OVERLAY_KINDS = {
     "inhibit",
     "dotted",
     "ts_bracket",
+    "shape",
     "orbital",
     "note",
     "mark",

@@ -10,6 +10,7 @@ from ui.canvas_scene_items_state import (
     note_items_for,
     orbital_items_for,
     ring_items_for,
+    shape_items_for,
     ts_bracket_items_for,
 )
 from ui.canvas_smiles_input_state import (
@@ -26,6 +27,7 @@ from ui.scene_item_access import (
     restore_note_from_state,
     restore_orbital_from_state,
     restore_ring_from_state,
+    restore_shape_from_state,
     restore_ts_bracket_from_state,
 )
 from ui.scene_item_state import (
@@ -34,6 +36,7 @@ from ui.scene_item_state import (
     note_state_dict_for,
     orbital_state_dict_for,
     ring_state_dict_for,
+    shape_state_dict_for,
     ts_bracket_state_dict_for,
 )
 from ui.sheet_setup_access import (
@@ -56,6 +59,7 @@ def snapshot_canvas_document_state(canvas) -> dict:
         "marks": _snapshot_marks(canvas),
         "arrows": _snapshot_arrows(canvas),
         "ts_brackets": _snapshot_ts_brackets(canvas),
+        "shapes": _snapshot_shapes(canvas),
         "orbitals": _snapshot_orbitals(canvas),
         "settings": serialize_settings(
             bond_length_px=bond_length_px_for(canvas),
@@ -114,6 +118,9 @@ def restore_document_post_model_items(canvas, state: dict) -> None:
 
     for ts_bracket_state in state["ts_brackets"]:
         restore_ts_bracket_from_state(canvas, ts_bracket_state)
+
+    for shape_state in state.get("shapes", []):
+        restore_shape_from_state(canvas, shape_state)
 
     for orbital_state in state["orbitals"]:
         restore_orbital_from_state(
@@ -192,6 +199,13 @@ def _snapshot_ts_brackets(canvas) -> list[dict]:
     for item in attached_canvas_scene_items(canvas, ts_bracket_items_for(canvas)):
         ts_brackets.append(ts_bracket_state_dict_for(canvas, item))
     return ts_brackets
+
+
+def _snapshot_shapes(canvas) -> list[dict]:
+    shapes: list[dict] = []
+    for item in attached_canvas_scene_items(canvas, shape_items_for(canvas)):
+        shapes.append(shape_state_dict_for(canvas, item))
+    return shapes
 
 
 def _snapshot_orbitals(canvas) -> list[dict]:

@@ -9,6 +9,9 @@ from core.model import Atom, Bond, MoleculeModel
 CHEMVAS_FILE_TYPE = "chemvas"
 CANVAS_FILE_VERSION = 1
 SUPPORTED_FILE_VERSIONS = frozenset((CANVAS_FILE_VERSION,))
+# "shapes" is optional so v1 files written before decorative shapes existed still
+# load; everything else must be present and no unknown keys are allowed.
+_OPTIONAL_CANVAS_STATE_KEYS = frozenset(("shapes",))
 CANVAS_STATE_KEYS = frozenset(
     (
         "model",
@@ -21,7 +24,7 @@ CANVAS_STATE_KEYS = frozenset(
         "settings",
         "last_smiles_input",
     )
-)
+) | _OPTIONAL_CANVAS_STATE_KEYS
 SETTINGS_KEYS = frozenset(
     (
         "bond_length_px",
@@ -81,6 +84,8 @@ VALID_TS_BRACKET_KINDS = frozenset(
 VALID_ORBITAL_KINDS = frozenset(
     ("s", "p", "sp", "sp2", "sp3", "d", "mo_bonding", "mo_antibonding")
 )
+VALID_SHAPE_KINDS = frozenset(("circle", "ellipse", "rounded_rect", "rect"))
+VALID_SHAPE_STROKES = frozenset(("solid", "dashed", "dotted", "none"))
 
 
 def atom_to_state(atom: Atom, explicit_label: bool) -> dict:
@@ -212,6 +217,7 @@ def selection_payload_to_canvas_state(
     note_states: list[dict] = []
     arrow_states: list[dict] = []
     ts_bracket_states: list[dict] = []
+    shape_states: list[dict] = []
     orbital_states: list[dict] = []
 
     for ring_state in rings:
@@ -251,6 +257,8 @@ def selection_payload_to_canvas_state(
             arrow_states.append(dict(item_state))
         elif kind == "ts_bracket":
             ts_bracket_states.append(dict(item_state))
+        elif kind == "shape":
+            shape_states.append(dict(item_state))
         elif kind == "orbital":
             orbital_states.append(
                 {
@@ -272,6 +280,7 @@ def selection_payload_to_canvas_state(
         "marks": mark_states,
         "arrows": arrow_states,
         "ts_brackets": ts_bracket_states,
+        "shapes": shape_states,
         "orbitals": orbital_states,
         "settings": dict(template_settings),
         "last_smiles_input": None,
@@ -325,7 +334,9 @@ def _state_kind(state: Mapping[str, object]) -> str | None:
 
 
 def _validate_canvas_state(state: Mapping[str, object]) -> None:
-    if set(state) != CANVAS_STATE_KEYS:
+    keys = set(state)
+    required = CANVAS_STATE_KEYS - _OPTIONAL_CANVAS_STATE_KEYS
+    if not required <= keys or not keys <= CANVAS_STATE_KEYS:
         raise ValueError("Invalid Chemvas file.")
     model_state = state.get("model")
     if not isinstance(model_state, Mapping):
@@ -336,6 +347,7 @@ def _validate_canvas_state(state: Mapping[str, object]) -> None:
     _validate_mark_states(state.get("marks"), atom_ids)
     _validate_arrow_states(state.get("arrows"))
     _validate_ts_bracket_states(state.get("ts_brackets"))
+    _validate_shape_states(state.get("shapes"))
     _validate_orbital_states(state.get("orbitals"))
     settings = state.get("settings")
     if not isinstance(settings, Mapping):
@@ -506,6 +518,33 @@ def _validate_ts_bracket_states(states: object) -> None:
         for key in ("left", "top", "right", "bottom"):
             if not _is_number(ts_bracket_state.get(key)):
                 raise ValueError("Invalid Chemvas file.")
+
+
+_SHAPE_STATE_BASE_KEYS = frozenset(
+    ("kind", "left", "top", "right", "bottom", "shape_kind", "stroke_style")
+)
+
+
+def _validate_shape_states(states: object) -> None:
+    if states is None:
+        return
+    for shape_state in _validated_scene_state_list(states):
+        keys = set(shape_state)
+        if not _SHAPE_STATE_BASE_KEYS <= keys or not keys <= _SHAPE_STATE_BASE_KEYS | {"fill", "fill_alpha"}:
+            raise ValueError("Invalid Chemvas file.")
+        if shape_state.get("kind") != "shape":
+            raise ValueError("Invalid Chemvas file.")
+        if shape_state.get("shape_kind") not in VALID_SHAPE_KINDS:
+            raise ValueError("Invalid Chemvas file.")
+        if shape_state.get("stroke_style") not in VALID_SHAPE_STROKES:
+            raise ValueError("Invalid Chemvas file.")
+        for key in ("left", "top", "right", "bottom"):
+            if not _is_number(shape_state.get(key)):
+                raise ValueError("Invalid Chemvas file.")
+        if "fill" in keys and not isinstance(shape_state.get("fill"), str):
+            raise ValueError("Invalid Chemvas file.")
+        if "fill_alpha" in keys and not _is_number(shape_state.get("fill_alpha")):
+            raise ValueError("Invalid Chemvas file.")
 
 
 def _validate_orbital_states(states: object) -> None:
@@ -694,6 +733,18 @@ def _validate_clipboard_scene_item(item_state: Mapping[str, object]) -> None:
         for edge_key in ("left", "top", "right", "bottom"):
             if not _is_number(item_state.get(edge_key)):
                 raise ValueError("Invalid clipboard payload.")
+        return
+    if kind == "shape":
+        if item_state.get("shape_kind") not in VALID_SHAPE_KINDS:
+            raise ValueError("Invalid clipboard payload.")
+        if item_state.get("stroke_style") not in VALID_SHAPE_STROKES:
+            raise ValueError("Invalid clipboard payload.")
+        for edge_key in ("left", "top", "right", "bottom"):
+            if not _is_number(item_state.get(edge_key)):
+                raise ValueError("Invalid clipboard payload.")
+        fill = item_state.get("fill")
+        if fill is not None and not isinstance(fill, str):
+            raise ValueError("Invalid clipboard payload.")
         return
     if kind == "orbital":
         if item_state.get("orbital_kind") not in VALID_ORBITAL_KINDS:

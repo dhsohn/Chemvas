@@ -285,6 +285,9 @@ class MainWindowIconFactory:
     def icon_orbital_preview(self, kind: str) -> QIcon:
         return self._design_icon(f"orbital_{kind}", "orbital_s")
 
+    def icon_orbital_phase(self, enabled: bool) -> QIcon:
+        return self.make_design_icon("orbital_phase_on" if enabled else "orbital_phase_off")
+
     def icon_template_preview(self, label: str) -> QIcon:
         return self._design_icon(_TEMPLATE_ICON_BY_LABEL.get(label, "template_ring6"), "template_ring6")
 
@@ -308,6 +311,15 @@ class MainWindowIconFactory:
 
     def icon_orbital(self) -> QIcon:
         return self.make_design_icon("orbital")
+
+    def icon_shape(self) -> QIcon:
+        return self.make_design_icon("shape")
+
+    def icon_shape_kind(self, kind: str) -> QIcon:
+        return self._design_icon(f"shape_{kind}", "shape_circle")
+
+    def icon_shape_stroke(self, style: str) -> QIcon:
+        return self._design_icon(f"stroke_{style}", "stroke_solid")
 
     def icon_move(self) -> QIcon:
         return self.make_design_icon("move")

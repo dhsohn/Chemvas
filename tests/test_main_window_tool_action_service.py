@@ -30,6 +30,7 @@ class _HarnessWindow(QMainWindow):
             icon_ring=self._blank_icon,
             icon_arrow=self._blank_icon,
             icon_ts_bracket=self._blank_icon,
+            icon_shape=self._blank_icon,
             icon_perspective=self._blank_icon,
             icon_color=self._blank_icon,
             icon_ring_fill=self._blank_icon,

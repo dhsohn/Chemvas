@@ -7,7 +7,13 @@ from ui.bracket_types import BRACKET_KIND_VALUES
 from ui.canvas_callback_state import callback_state_for
 from ui.canvas_insert_state import insert_state_for
 from ui.canvas_tool_settings_state import set_tool_setting_for, tool_settings_state_for
+from ui.canvas_window_access import history_service_for_canvas
+from ui.history_commands import UpdateSceneItemCommand
+from ui.scene_item_access import apply_scene_item_state
+from ui.scene_item_state import shape_state_dict_for
+from ui.selection_collection_access import selected_scene_items_for
 from ui.selection_service_access import refresh_selection_outline_for
+from ui.shape_geometry import SHAPE_KINDS, STROKE_STYLES
 
 
 class CanvasToolModeController:
@@ -102,6 +108,50 @@ class CanvasToolModeController:
 
     def set_orbital_phase_enabled(self, enabled: bool) -> None:
         set_tool_setting_for(self.canvas, "orbital_phase_enabled", enabled)
+
+    def set_shape_type(self, shape_type: str) -> None:
+        if shape_type not in SHAPE_KINDS:
+            return
+        self._cancel_active_insert_modes()
+        set_tool_setting_for(self.canvas, "active_shape_type", shape_type)
+        self._set_active_tool("shape")
+        self._refresh_tool_mode()
+
+    def _selected_shape_items(self) -> list:
+        return [
+            item
+            for item in selected_scene_items_for(self.canvas, excluded_kinds=set())
+            if item.data(0) == "shape"
+        ]
+
+    def _apply_shape_stroke_to_selected(self, stroke_style: str) -> bool:
+        shapes = self._selected_shape_items()
+        if not shapes:
+            return False
+        history = history_service_for_canvas(self.canvas)
+        for item in shapes:
+            before = shape_state_dict_for(self.canvas, item)
+            new_state = dict(before)
+            new_state["stroke_style"] = stroke_style
+            apply_scene_item_state(self.canvas, item, new_state)
+            after = shape_state_dict_for(self.canvas, item)
+            if before != after and history is not None:
+                history.push(UpdateSceneItemCommand(item, before, after))
+        refresh_selection_outline_for(self.canvas)
+        return True
+
+    def set_shape_stroke(self, stroke_style: str) -> None:
+        if stroke_style not in STROKE_STYLES:
+            return
+        self._cancel_active_insert_modes()
+        applied = self._apply_shape_stroke_to_selected(stroke_style)
+        # "none" only ever strips the border off an already-drawn shape; it never
+        # becomes the default, so freshly drawn shapes always keep a visible border.
+        if stroke_style != "none":
+            set_tool_setting_for(self.canvas, "active_shape_stroke", stroke_style)
+        if not applied:
+            self._set_active_tool("shape")
+        self._refresh_tool_mode()
 
     def set_arrow_line_width(self, width: float) -> None:
         set_tool_setting_for(self.canvas, "arrow_line_width", max(0.5, float(width)))

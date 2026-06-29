@@ -19,6 +19,7 @@ DELETE_SCENE_ITEM_KINDS = frozenset(
         "dotted",
         "orbital",
         "ts_bracket",
+        "shape",
         "note",
     }
 )

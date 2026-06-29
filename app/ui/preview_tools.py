@@ -7,8 +7,10 @@ from ui.canvas_tool_settings_state import tool_settings_state_for
 from ui.scene_decoration_access import (
     add_arrow_for,
     add_orbital_for,
+    add_shape_from_points_for,
     add_ts_bracket_from_points_for,
     preview_arrow_for,
+    preview_shape_for,
     preview_ts_bracket_for,
 )
 from ui.tool_base import Tool
@@ -89,6 +91,35 @@ class TSBracketTool(PreviewDragTool):
         add_ts_bracket_from_points_for(self.canvas, self._start_pos, end_pos, self._bracket_type())
 
 
+class ShapeTool(PreviewDragTool):
+    def __init__(self, canvas, *, context=None) -> None:
+        super().__init__("shape", canvas, context=context)
+
+    def _shape_kind(self) -> str:
+        return tool_settings_state_for(self.canvas).active_shape_type
+
+    def _stroke_style(self) -> str:
+        return tool_settings_state_for(self.canvas).active_shape_stroke
+
+    def _build_preview(self, current_pos):
+        return preview_shape_for(
+            self.canvas,
+            self._start_pos,
+            current_pos,
+            shape_kind=self._shape_kind(),
+            stroke_style=self._stroke_style(),
+        )
+
+    def _commit_drag(self, end_pos) -> None:
+        add_shape_from_points_for(
+            self.canvas,
+            self._start_pos,
+            end_pos,
+            shape_kind=self._shape_kind(),
+            stroke_style=self._stroke_style(),
+        )
+
+
 class OrbitalTool(Tool):
     def __init__(self, canvas, *, context=None) -> None:
         super().__init__("orbital", canvas, context=context)
@@ -104,4 +135,4 @@ class OrbitalTool(Tool):
         return True
 
 
-__all__ = ["ArrowTool", "OrbitalTool", "PreviewDragTool", "TSBracketTool"]
+__all__ = ["ArrowTool", "OrbitalTool", "PreviewDragTool", "ShapeTool", "TSBracketTool"]

@@ -28,6 +28,10 @@ def restore_ts_bracket_from_state(canvas, ts_bracket_state: dict):
     return scene_item_controller(canvas).restore_ts_bracket_from_state(ts_bracket_state)
 
 
+def restore_shape_from_state(canvas, shape_state: dict):
+    return scene_item_controller(canvas).restore_shape_from_state(shape_state)
+
+
 def restore_orbital_from_state(canvas, orbital_state: dict):
     return scene_item_controller(canvas).restore_orbital_from_state(orbital_state)
 
@@ -213,6 +217,7 @@ __all__ = [
     "restore_orbital_from_state",
     "restore_ring_from_state",
     "restore_scene_item",
+    "restore_shape_from_state",
     "restore_ts_bracket_from_state",
     "scene_item_controller",
 ]

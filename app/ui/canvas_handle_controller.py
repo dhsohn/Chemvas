@@ -36,6 +36,10 @@ class CanvasHandleController:
         if self.handle_overlay_service is not None:
             self.handle_overlay_service.show_curved_handles(item)
 
+    def show_shape_handles(self, item) -> None:
+        if self.handle_overlay_service is not None:
+            self.handle_overlay_service.show_shape_handles(item)
+
     def create_handle(self, pos: QPointF, handle_type: str, target):
         if self.handle_overlay_service is None:
             return None
@@ -61,6 +65,9 @@ class CanvasHandleController:
         elif handle_type == "curved_end":
             self.update_curved_endpoint(target, scene_pos, "end")
             self.show_curved_handles(target)
+        elif handle_type.startswith("shape_"):
+            self.update_shape_resize(target, handle_type, scene_pos)
+            self.show_shape_handles(target)
 
     def update_orbital_scale(self, item, pos: QPointF) -> None:
         if self.handle_mutation_service is not None:
@@ -73,6 +80,10 @@ class CanvasHandleController:
     def update_curved_control(self, item, pos: QPointF) -> None:
         if self.handle_mutation_service is not None:
             self.handle_mutation_service.update_curved_control(item, pos)
+
+    def update_shape_resize(self, item, anchor: str, pos: QPointF) -> None:
+        if self.handle_mutation_service is not None:
+            self.handle_mutation_service.update_shape_resize(item, anchor, pos)
 
     def update_curved_endpoint(self, item, pos: QPointF, endpoint: str) -> None:
         if self.handle_mutation_service is not None:

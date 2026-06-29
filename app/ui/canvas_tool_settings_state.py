@@ -17,6 +17,8 @@ class CanvasToolSettingsState:
     active_arrow_type: str = "reaction"
     active_bracket_type: str = DEFAULT_BRACKET_KIND
     active_orbital_type: str = "s"
+    active_shape_type: str = "circle"
+    active_shape_stroke: str = "solid"
     orbital_phase_enabled: bool = False
     arrow_line_width: float = 1.0
     arrow_head_scale: float = 0.3
@@ -36,6 +38,8 @@ TOOL_SETTING_ATTRS = (
     "active_arrow_type",
     "active_bracket_type",
     "active_orbital_type",
+    "active_shape_type",
+    "active_shape_stroke",
     "orbital_phase_enabled",
     "arrow_line_width",
     "arrow_head_scale",

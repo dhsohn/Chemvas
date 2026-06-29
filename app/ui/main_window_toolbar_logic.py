@@ -50,6 +50,7 @@ TOOL_DISPLAY_NAMES: dict[str, str] = {
     "benzene": "Ring",
     "arrow": "Arrow",
     "ts_bracket": "Brackets",
+    "shape": "Shape",
     "orbital": "Orbital",
     "perspective": "Perspective",
     "color": "Color",

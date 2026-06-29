@@ -65,6 +65,8 @@ class SceneItemLifecycleService:
             append_scene_item_for(self.canvas, "arrow_items", item)
         elif kind == "ts_bracket":
             append_scene_item_for(self.canvas, "ts_bracket_items", item)
+        elif kind == "shape":
+            append_scene_item_for(self.canvas, "shape_items", item)
         elif kind == "orbital":
             append_scene_item_for(self.canvas, "orbital_items", item)
         make_item_selectable(item)
@@ -96,9 +98,11 @@ class SceneItemLifecycleService:
             remove_scene_item_from_collection_for(self.canvas, "arrow_items", item)
         elif kind == "ts_bracket":
             remove_scene_item_from_collection_for(self.canvas, "ts_bracket_items", item)
+        elif kind == "shape":
+            remove_scene_item_from_collection_for(self.canvas, "shape_items", item)
         elif kind == "orbital":
             remove_scene_item_from_collection_for(self.canvas, "orbital_items", item)
-        if kind in {"orbital", "curved_single", "curved_double"} and item is handle_target_for(self.canvas):
+        if kind in {"shape", "orbital", "curved_single", "curved_double"} and item is handle_target_for(self.canvas):
             clear_handles_for(self.canvas)
         if remove_attached_item_from_canvas_scene(self.canvas, item) is None:
             return

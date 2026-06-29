@@ -12,8 +12,10 @@ from ui.canvas_graph_state import graph_state_for
 from ui.canvas_mark_registry import mark_registry_for
 from ui.canvas_model_access import atom_for_id, bond_for_id, bonds_for
 from ui.canvas_scene_items_state import ring_items_for
+from ui.handle_state import active_handles_for, handle_target_for
 from ui.mark_item_access import mark_center_for
 from ui.selection_service_access import refresh_selection_outline_for
+from ui.shape_geometry import normalized_shape_kind, shape_path
 
 
 class CanvasMoveController:
@@ -65,6 +67,18 @@ class CanvasMoveController:
                     data["dx"] = center.x() - atom.x
                     data["dy"] = center.y() - atom.y
                     item.setData(1, data)
+        elif kind == "shape":
+            # Move a shape by rebuilding its path in scene coordinates and keeping
+            # item.pos() at the origin. Using moveBy here would leave a non-zero
+            # pos that a later resize (which rebuilds the path in scene space)
+            # double-applies, making the shape jump away from its handles.
+            data = item.data(1) or {}
+            rect = data.get("rect")
+            if isinstance(rect, QRectF):
+                new_rect = rect.translated(dx, dy)
+                data["rect"] = new_rect
+                item.setData(1, data)
+                item.setPath(shape_path(new_rect, normalized_shape_kind(data.get("shape_kind"))))
         elif kind in {
             "arrow",
             "equilibrium",
@@ -101,8 +115,16 @@ class CanvasMoveController:
                 if isinstance(control, QPointF):
                     data["control"] = QPointF(control.x() + dx, control.y() + dy)
                 item.setData(2, data)
+        self._shift_active_handles_for(item, dx, dy)
         if update_selection:
             refresh_selection_outline_for(self.canvas)
+
+    def _shift_active_handles_for(self, item, dx: float, dy: float) -> None:
+        # Keep resize/transform handles glued to their item as it is dragged.
+        if item is not handle_target_for(self.canvas):
+            return
+        for handle in active_handles_for(self.canvas):
+            handle.moveBy(dx, dy)
 
     def move_atoms(
         self,

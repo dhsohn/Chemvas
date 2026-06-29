@@ -48,9 +48,11 @@ class HandleInteractionLogicTest(unittest.TestCase):
         self.assertAlmostEqual(handle.rect().center().x(), 12.0)
         self.assertAlmostEqual(handle.rect().center().y(), -4.0)
         self.assertEqual(handle.zValue(), 30)
-        self.assertEqual(handle.brush().style(), Qt.BrushStyle.NoBrush)
-        self.assertEqual(handle.pen().color().name(), "#d32f2f")
-        self.assertEqual(handle.pen().style(), Qt.PenStyle.DashLine)
+        # ChemDraw-style handle: small white-filled square with a thin accent border.
+        self.assertEqual(handle.brush().style(), Qt.BrushStyle.SolidPattern)
+        self.assertEqual(handle.brush().color().name(), "#ffffff")
+        self.assertEqual(handle.pen().color().name(), "#0f8a78")
+        self.assertEqual(handle.pen().style(), Qt.PenStyle.SolidLine)
 
     def test_clear_handle_items_removes_scene_items(self) -> None:
         scene = QGraphicsScene()

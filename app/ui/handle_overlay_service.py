@@ -10,6 +10,9 @@ from ui.handle_interaction_logic import (
 from ui.handle_interaction_logic import (
     orbital_handle_positions as orbital_handle_positions_helper,
 )
+from ui.handle_interaction_logic import (
+    shape_resize_handle_positions as shape_resize_handle_positions_helper,
+)
 from ui.handle_mutation_access import (
     curved_midpoint_for,
     default_curved_control_for,
@@ -59,6 +62,20 @@ class HandleOverlayService:
                 self.create_handle(rotate_pos, "orbital_rotate", item),
             ],
         )
+        set_handle_target_for(self.canvas, item)
+
+    def show_shape_handles(self, item) -> None:
+        self.clear_handles()
+        selection_highlight_styler_for(self.canvas).set_selection_highlight([item])
+        data = item.data(1) or {}
+        rect = data.get("rect")
+        if rect is None:
+            rect = item.sceneBoundingRect()
+        handles = [
+            self.create_handle(pos, handle_type, item)
+            for handle_type, pos in shape_resize_handle_positions_helper(rect)
+        ]
+        set_active_handles_for(self.canvas, handles)
         set_handle_target_for(self.canvas, item)
 
     def show_curved_handles(self, item) -> None:

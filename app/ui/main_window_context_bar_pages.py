@@ -15,6 +15,7 @@ from ui.main_window_context_bar_page_factories import (
     build_mark_page,
     build_orbital_page,
     build_rotate_page,
+    build_shape_page,
     build_template_page,
     build_text_page,
 )
@@ -105,6 +106,7 @@ class MainWindowContextBarPageBuilder:
             "mark": mark_page.page,
             "rotate": build_rotate_page(window, self._rotate_selection_for_window),
             "orbital": build_orbital_page(window, self._tool_state),
+            "shape": build_shape_page(window, self._tool_state),
             "color": build_color_palette_page(
                 tooltip_prefix="Color",
                 apply_preset=lambda value: self._apply_color_preset_for_window(window, value),

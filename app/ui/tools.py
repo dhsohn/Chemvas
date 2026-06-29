@@ -4,7 +4,7 @@ from ui.edit_tools import ColorTool, DeleteTool, EditBondTool, FlipTool
 from ui.interaction_tools import MarkTool, NoteTool, TransformTool
 from ui.move_tool import MoveTool
 from ui.perspective_tool import PerspectiveTool
-from ui.preview_tools import ArrowTool, OrbitalTool, TSBracketTool
+from ui.preview_tools import ArrowTool, OrbitalTool, ShapeTool, TSBracketTool
 from ui.rotate_tool import RotateTool
 from ui.select_tool import SelectTool
 from ui.text_tool import TextTool
@@ -27,6 +27,7 @@ __all__ = [
     "PerspectiveTool",
     "RotateTool",
     "SelectTool",
+    "ShapeTool",
     "TSBracketTool",
     "TextTool",
     "Tool",

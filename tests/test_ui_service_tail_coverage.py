@@ -24,6 +24,7 @@ if QApplication is not None:
     from ui.canvas_note_controller import CanvasNoteController
     from ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
     from ui.canvas_scene_items_state import (
+        selected_notes_for,
         set_scene_item_collection_for,
         set_selected_notes_for,
     )
@@ -280,7 +281,7 @@ class UIServiceTailCoverageTest(unittest.TestCase):
         atom_canvas.services.atom_label_service.implicit_carbon_dot_brush.assert_not_called()
         atom_canvas.push_command.assert_not_called()
 
-    def test_note_controller_skips_noop_focus_out_and_selected_note_reselection(self) -> None:
+    def test_note_controller_noop_focus_out_deselects_then_reedit_reselects(self) -> None:
         item = QGraphicsTextItem("Stable")
         set_committed_note_text_for(item, "Stable")
         canvas = SimpleNamespace(
@@ -298,10 +299,13 @@ class UIServiceTailCoverageTest(unittest.TestCase):
         controller = CanvasNoteController(canvas)
 
         controller.handle_note_focus_out(item)
-        controller.begin_note_edit(item)
-
+        # An unchanged note pushes no command, but clicking away deselects it.
         canvas.push_command.assert_not_called()
-        canvas.services.selection_controller.select_note.assert_not_called()
+        self.assertNotIn(item, selected_notes_for(canvas))
+
+        controller.begin_note_edit(item)
+        # Re-editing a now-deselected note selects it again.
+        canvas.services.selection_controller.select_note.assert_called_once_with(item, additive=False)
         canvas.setFocus.assert_called_once_with(Qt.FocusReason.MouseFocusReason)
 
     def test_apply_note_style_uses_legacy_line_height_value_when_enum_value_is_wrapped(self) -> None:

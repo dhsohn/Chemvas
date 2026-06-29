@@ -23,6 +23,7 @@ from ui.scene_item_state import (
     bond_state_dict,
     note_state_dict_for,
     ring_state_dict_for,
+    shape_state_dict_for,
 )
 
 if TYPE_CHECKING:
@@ -63,6 +64,21 @@ class CanvasColorMutationService:
             return
         if kind == "note" and isinstance(item, QGraphicsTextItem):
             self._apply_note_color(item, color)
+            return
+        if kind == "shape":
+            self._apply_shape_fill(item, color)
+
+    def _apply_shape_fill(self, item, color: QColor) -> None:
+        before_state = shape_state_dict_for(self.canvas, item)
+        # Fill with the picked colour as-is so "pick red → shape turns red"; text
+        # drawn on top stays readable because it is a separate item above the fill.
+        fill = QColor(color)
+        if fill.alphaF() <= 0.0:
+            fill.setAlphaF(1.0)
+        item.setBrush(fill)
+        after_state = shape_state_dict_for(self.canvas, item)
+        if before_state != after_state and self.history is not None:
+            self.history.push(UpdateSceneItemCommand(item, before_state, after_state))
 
     def apply_ring_fill_color(self, item, color: QColor, alpha: float = 0.25) -> None:
         if item is None or not color.isValid():
@@ -81,12 +97,19 @@ class CanvasColorMutationService:
         before_state = note_state_dict_for(self.canvas, item)
         document = item.document()
         if document is not None:
-            cursor = QTextCursor(document)
-            cursor.select(QTextCursor.SelectionType.Document)
             char_format = QTextCharFormat()
             char_format.setForeground(color)
-            cursor.mergeCharFormat(char_format)
-        item.setDefaultTextColor(color)
+            cursor = item.textCursor()
+            if cursor.hasSelection():
+                # Recolour only the text the user has selected, so a single note can
+                # hold several colours. The selection is kept so it stays visible.
+                cursor.mergeCharFormat(char_format)
+                item.setTextCursor(cursor)
+            else:
+                whole = QTextCursor(document)
+                whole.select(QTextCursor.SelectionType.Document)
+                whole.mergeCharFormat(char_format)
+                item.setDefaultTextColor(color)
         after_state = note_state_dict_for(self.canvas, item)
         if before_state != after_state and self.history is not None:
             self.history.push(UpdateSceneItemCommand(item, before_state, after_state))

@@ -45,6 +45,7 @@ TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
     ("note", "Text", "note", "icon_note", "Text / Annotation (ChemDraw: T)"),
     ("mark", "Mark", "mark", "icon_mark", "Charge / Radical"),
     ("ts_bracket", "Brackets", "ts_bracket", "icon_ts_bracket", "Brackets (ChemDraw: Shift+G)"),
+    ("shape", "Shape", "shape", "icon_shape", "Shapes / decoration (circle, ellipse, box)"),
     ("orbital", "Orbital", "orbital", "icon_orbital", "Orbital"),
     (
         "perspective",
@@ -88,10 +89,11 @@ TOOLBAR_PRIMARY_TOOL_GROUP: tuple[str, ...] = (
     "ts_bracket",
 )
 
+# "note" is the tool labelled "Text" in the UI; "shape" sits to its right.
 TOOLBAR_TOOL_GROUPS: list[tuple[str, ...]] = [
     TOOLBAR_PRIMARY_TOOL_GROUP,
     ("mark", "orbital"),
-    ("note", "color", "ring_fill"),
+    ("note", "shape", "color", "ring_fill"),
 ]
 
 TOOLBAR_TOOL_ACTION_ORDER: list[str] = [

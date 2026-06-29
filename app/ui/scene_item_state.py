@@ -32,14 +32,18 @@ from ui.scene_item_state_serialization import (
     ring_state_dict_for,
     scene_item_state,
     scene_item_state_for,
+    shape_state_dict,
+    shape_state_dict_for,
     ts_bracket_state_dict,
     ts_bracket_state_dict_for,
 )
+from ui.shape_geometry import normalized_shape_kind, normalized_stroke_style
 
 MarkCenterSetter = Callable[[Any, QPointF], None]
 NoteStyleApplier = Callable[[QGraphicsTextItem], None]
 RingFillBrushGetter = Callable[[], QBrush]
 TsBracketPathBuilder = Callable[..., Any]
+ShapeItemBuilder = Callable[..., QGraphicsPathItem]
 ArrowItemBuilder = Callable[[QPointF, QPointF, str], QGraphicsPathItem]
 CurvedArrowPathSetter = Callable[[QGraphicsPathItem, QPointF, QPointF, QPointF, bool], None]
 
@@ -98,6 +102,28 @@ def ts_bracket_kind_from_state(state: Mapping[str, object]) -> str:
     return restored_bracket_kind(state.get("bracket_kind"))
 
 
+def shape_rect_from_state(state: Mapping[str, object]) -> QRectF | None:
+    return ts_bracket_rect_from_state(state)
+
+
+def shape_kind_from_state(state: Mapping[str, object]) -> str:
+    return normalized_shape_kind(state.get("shape_kind"))
+
+
+def shape_stroke_from_state(state: Mapping[str, object]) -> str:
+    return normalized_stroke_style(state.get("stroke_style"))
+
+
+def shape_fill_from_state(state: Mapping[str, object]) -> QColor | None:
+    fill = state.get("fill")
+    if not isinstance(fill, str) or not fill:
+        return None
+    color = QColor(fill)
+    alpha = state.get("fill_alpha", 1.0)
+    color.setAlphaF(float(alpha) if isinstance(alpha, (int, float)) else 1.0)
+    return color
+
+
 def _build_ts_bracket_path(builder: TsBracketPathBuilder, rect: QRectF, bracket_kind: str):
     try:
         return builder(rect, bracket_kind)
@@ -118,6 +144,7 @@ def apply_scene_item_state(
     build_arrow_item: ArrowItemBuilder,
     set_curved_arrow_path: CurvedArrowPathSetter,
     orbital_base_handle_dist: float,
+    build_shape_item: ShapeItemBuilder | None = None,
 ) -> None:
     if item is None or not state:
         return
@@ -176,6 +203,21 @@ def apply_scene_item_state(
         item.setPen(QPen(Qt.PenStyle.NoPen))
         item.setBrush(QBrush(QColor(bond_color)))
         item.setData(1, {"rect": QRectF(rect), "bracket_kind": bracket_kind})
+        return
+    if kind == "shape" and isinstance(item, QGraphicsPathItem):
+        if build_shape_item is None:
+            return
+        rect = shape_rect_from_state(state)
+        if rect is None:
+            return
+        shape_kind = shape_kind_from_state(state)
+        stroke_style = shape_stroke_from_state(state)
+        rebuilt = build_shape_item(rect, shape_kind, stroke_style, shape_fill_from_state(state))
+        item.setPath(rebuilt.path())
+        item.setPen(rebuilt.pen())
+        item.setBrush(rebuilt.brush())
+        item.setData(0, "shape")
+        item.setData(1, {"rect": QRectF(rect), "shape_kind": shape_kind, "stroke_style": stroke_style})
         return
     if kind == "orbital" and isinstance(item, QGraphicsItemGroup):
         center_point = _point_from_state(state.get("center"))
@@ -242,6 +284,12 @@ __all__ = [
     "ring_state_dict_for",
     "scene_item_state",
     "scene_item_state_for",
+    "shape_fill_from_state",
+    "shape_kind_from_state",
+    "shape_rect_from_state",
+    "shape_state_dict",
+    "shape_state_dict_for",
+    "shape_stroke_from_state",
     "ts_bracket_rect_from_state",
     "ts_bracket_kind_from_state",
     "ts_bracket_state_dict",
