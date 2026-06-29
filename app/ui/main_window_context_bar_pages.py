@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PyQt6.QtWidgets import QButtonGroup, QLineEdit, QToolButton, QWidget
+from PyQt6.QtWidgets import QButtonGroup, QLineEdit, QSpinBox, QToolButton, QWidget
 
 from ui.main_window_context_bar_page_factories import (
     bond_label_for_state,
@@ -35,6 +35,7 @@ class ContextBarPages:
     bracket_group: QButtonGroup | None
     bracket_buttons: dict[str, QToolButton]
     atom_input: QLineEdit | None
+    bond_length_spin: QSpinBox | None
 
 
 class MainWindowContextBarPageBuilder:
@@ -132,6 +133,7 @@ class MainWindowContextBarPageBuilder:
             bracket_group=bracket_page.group,
             bracket_buttons=bracket_page.buttons,
             atom_input=atom_page.atom_input,
+            bond_length_spin=bond_page.length_spin,
         )
 
 
