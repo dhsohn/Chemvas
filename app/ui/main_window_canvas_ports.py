@@ -4,7 +4,14 @@ from ui.canvas_model_access import has_atoms_for
 from ui.canvas_service_access import canvas_services_for
 from ui.canvas_tool_settings_state import tool_settings_state_for
 from ui.canvas_window_access import history_service_for_canvas
-from ui.input_view_access import view_scale_for
+from ui.input_view_access import (
+    fit_canvas_to_view_for,
+    reset_zoom_for,
+    set_zoom_for,
+    zoom_factor_for,
+    zoom_in_for,
+    zoom_out_for,
+)
 from ui.renderer_style_access import bond_length_px_for
 from ui.selection_collection_access import selected_scene_items_for
 from ui.sheet_setup_access import (
@@ -95,7 +102,42 @@ def current_zoom_percent_for_window(window) -> int:
     canvas = active_canvas_or_none_for_window(window)
     if canvas is None:
         return 100
-    return max(1, int(round(view_scale_for(canvas) * 100)))
+    return max(1, int(round(zoom_factor_for(canvas) * 100)))
+
+
+def zoom_in_for_window(window) -> int:
+    canvas = active_canvas_or_none_for_window(window)
+    if canvas is not None:
+        zoom_in_for(canvas)
+    return current_zoom_percent_for_window(window)
+
+
+def zoom_out_for_window(window) -> int:
+    canvas = active_canvas_or_none_for_window(window)
+    if canvas is not None:
+        zoom_out_for(canvas)
+    return current_zoom_percent_for_window(window)
+
+
+def reset_zoom_for_window(window) -> int:
+    canvas = active_canvas_or_none_for_window(window)
+    if canvas is not None:
+        reset_zoom_for(canvas)
+    return current_zoom_percent_for_window(window)
+
+
+def fit_canvas_to_view_for_window(window) -> int:
+    canvas = active_canvas_or_none_for_window(window)
+    if canvas is not None:
+        fit_canvas_to_view_for(canvas)
+    return current_zoom_percent_for_window(window)
+
+
+def set_zoom_percent_for_window(window, percent: float) -> int:
+    canvas = active_canvas_or_none_for_window(window)
+    if canvas is not None:
+        set_zoom_for(canvas, percent / 100.0)
+    return current_zoom_percent_for_window(window)
 
 
 def canvas_count_for_window(window) -> int:
@@ -168,6 +210,11 @@ __all__ = [
     "color_tool_for_window",
     "context_bar_page_override_for_window",
     "current_zoom_percent_for_window",
+    "fit_canvas_to_view_for_window",
+    "reset_zoom_for_window",
+    "set_zoom_percent_for_window",
+    "zoom_in_for_window",
+    "zoom_out_for_window",
     "document_session_service_for_window",
     "geometry_controller_for_window",
     "has_exportable_atoms_for_window",

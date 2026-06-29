@@ -23,19 +23,24 @@ from ui.main_window_canvas_ports import (
     context_bar_page_override_for_window,
     current_zoom_percent_for_window,
     document_session_service_for_window,
+    fit_canvas_to_view_for_window,
     geometry_controller_for_window,
     has_exportable_atoms_for_window,
     history_service_for_window,
     insert_controller_for_window,
     next_canvas_name_for_window,
+    reset_zoom_for_window,
     scene_transform_controller_for_window,
     selected_scene_items_for_window,
     set_context_bar_page_override_for_window,
     set_last_canvas_tab_index_for_window,
+    set_zoom_percent_for_window,
     style_controller_for_window,
     tab_reactions_suspended_for_window,
     tool_mode_controller_for_window,
     tool_settings_for_window,
+    zoom_in_for_window,
+    zoom_out_for_window,
 )
 from ui.main_window_canvas_tab_ui_service import MainWindowCanvasTabUIService
 from ui.main_window_context_bar_pages import MainWindowContextBarPageBuilder
@@ -108,6 +113,11 @@ def build_main_window_services() -> MainWindowServices:
         active_canvas_name_for_window=active_canvas_name_for_window,
         active_canvas_index_for_window=active_canvas_index_for_window,
         context_bar_page_override_for_window=context_bar_page_override_for_window,
+        zoom_in_for_window=zoom_in_for_window,
+        zoom_out_for_window=zoom_out_for_window,
+        reset_zoom_for_window=reset_zoom_for_window,
+        fit_canvas_to_view_for_window=fit_canvas_to_view_for_window,
+        set_zoom_percent_for_window=set_zoom_percent_for_window,
     )
     tool_state_service = MainWindowToolStateService(
         tool_mode_controller_for_window=tool_mode_controller_for_window,
@@ -128,8 +138,8 @@ def build_main_window_services() -> MainWindowServices:
         )
         tool_state_service.set_bond_style(window, value)
 
-    def set_bond_length_for_window(window) -> None:
-        document_action_service.set_bond_length(window)
+    def set_bond_length_value_for_window(window, value) -> None:
+        geometry_controller_for_window(window).set_bond_length(float(value))
 
     tool_routing_service: MainWindowToolRoutingService
 
@@ -159,7 +169,8 @@ def build_main_window_services() -> MainWindowServices:
             tool_mode_controller_for_window=tool_mode_controller_for_window,
             tool_state_service=tool_state_service,
             activate_bond_style_for_window=activate_bond_style_for_window,
-            set_bond_length_for_window=set_bond_length_for_window,
+            set_bond_length_value_for_window=set_bond_length_value_for_window,
+            bond_length_px_for_window=bond_length_px_for_window,
             apply_color_preset_for_window=apply_color_preset_for_window,
             apply_ring_fill_preset_for_window=apply_ring_fill_preset_for_window,
             rotate_selection_for_window=rotate_selection_for_window,

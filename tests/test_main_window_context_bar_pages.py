@@ -6,7 +6,14 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtWidgets import QApplication, QLabel, QLineEdit, QSlider, QToolButton
+    from PyQt6.QtWidgets import (
+        QApplication,
+        QLabel,
+        QLineEdit,
+        QSlider,
+        QSpinBox,
+        QToolButton,
+    )
 except ModuleNotFoundError:
     QApplication = None
 
@@ -45,7 +52,8 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         self.tool_mode_controller_for_window = mock.Mock(return_value=self.tool_mode_controller)
         self.tool_state_service = mock.Mock()
         self.activate_bond_style_for_window = mock.Mock()
-        self.set_bond_length_for_window = mock.Mock()
+        self.set_bond_length_value_for_window = mock.Mock()
+        self.bond_length_px_for_window = mock.Mock(return_value=20.0)
         self.apply_color_preset_for_window = mock.Mock()
         self.apply_ring_fill_preset_for_window = mock.Mock()
         self.rotate_selection_for_window = mock.Mock()
@@ -55,7 +63,8 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
             tool_mode_controller_for_window=self.tool_mode_controller_for_window,
             tool_state_service=self.tool_state_service,
             activate_bond_style_for_window=self.activate_bond_style_for_window,
-            set_bond_length_for_window=self.set_bond_length_for_window,
+            set_bond_length_value_for_window=self.set_bond_length_value_for_window,
+            bond_length_px_for_window=self.bond_length_px_for_window,
             apply_color_preset_for_window=self.apply_color_preset_for_window,
             apply_ring_fill_preset_for_window=self.apply_ring_fill_preset_for_window,
             rotate_selection_for_window=self.rotate_selection_for_window,
@@ -138,13 +147,12 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         pages.bond_buttons["Hash"].click()
 
         self.activate_bond_style_for_window.assert_called_once_with(self.window, "Hash")
-        length_button = next(
-            button
-            for button in pages.pages["bond"].findChildren(QToolButton)
-            if button.toolTip() == "Set the default bond length"
-        )
-        length_button.click()
-        self.set_bond_length_for_window.assert_called_once_with(self.window)
+        length_spin = pages.pages["bond"].findChild(QSpinBox, "bondLengthInput")
+        self.assertIsNotNone(length_spin)
+        self.assertEqual(length_spin.value(), 20)
+        length_spin.setValue(28)
+        length_spin.editingFinished.emit()
+        self.set_bond_length_value_for_window.assert_called_once_with(self.window, 28)
 
         template_button = next(
             button

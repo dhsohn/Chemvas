@@ -6,7 +6,7 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtCore import QPoint
+    from PyQt6.QtCore import QPoint, QPointF, Qt
     from PyQt6.QtGui import QTransform
     from PyQt6.QtWidgets import QApplication, QGraphicsView
 except ModuleNotFoundError:
@@ -19,9 +19,15 @@ if QApplication is not None:
 
 
 class _FakeWheelEvent:
-    def __init__(self, pixel_delta: QPoint, angle_delta: QPoint) -> None:
+    def __init__(
+        self,
+        pixel_delta: QPoint,
+        angle_delta: QPoint,
+        modifiers: "Qt.KeyboardModifier | None" = None,
+    ) -> None:
         self._pixel_delta = pixel_delta
         self._angle_delta = angle_delta
+        self._modifiers = modifiers if modifiers is not None else Qt.KeyboardModifier.NoModifier
         self.accept = mock.Mock()
 
     def pixelDelta(self) -> QPoint:
@@ -29,6 +35,12 @@ class _FakeWheelEvent:
 
     def angleDelta(self) -> QPoint:
         return self._angle_delta
+
+    def modifiers(self) -> "Qt.KeyboardModifier":
+        return self._modifiers
+
+    def position(self) -> QPointF:
+        return QPointF(10.0, 10.0)
 
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas view tests")
@@ -93,3 +105,26 @@ class CanvasViewWheelAndScrollTest(unittest.TestCase):
             vbar.setValue.assert_not_called()
             event.accept.assert_not_called()
             base_wheel.assert_called_once_with(event)
+
+    def test_ctrl_wheel_zooms_in_and_out_without_scrolling(self) -> None:
+        with mock.patch.object(QGraphicsView, "wheelEvent", new=mock.Mock(return_value=None)) as base_wheel:
+            view, hbar, vbar = self._new_view()
+            input_view_state_for(view).zoom = 1.0
+
+            zoom_in = _FakeWheelEvent(
+                QPoint(0, 0), QPoint(0, 120), modifiers=Qt.KeyboardModifier.ControlModifier
+            )
+            CanvasView.wheelEvent(view, zoom_in)
+            self.assertGreater(input_view_state_for(view).zoom, 1.0)
+            zoom_in.accept.assert_called_once_with()
+
+            zoomed = input_view_state_for(view).zoom
+            zoom_out = _FakeWheelEvent(
+                QPoint(0, 0), QPoint(0, -120), modifiers=Qt.KeyboardModifier.ControlModifier
+            )
+            CanvasView.wheelEvent(view, zoom_out)
+            self.assertLess(input_view_state_for(view).zoom, zoomed)
+
+            hbar.setValue.assert_not_called()
+            vbar.setValue.assert_not_called()
+            self.assertEqual(base_wheel.call_count, 0)

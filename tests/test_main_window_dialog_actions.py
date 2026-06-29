@@ -33,6 +33,21 @@ class MainWindowDialogActionsTest(unittest.TestCase):
         self.assertFalse(hasattr(self.window, "set_bond_length"))
         self.assertFalse(hasattr(self.window, "setup_sheet"))
 
+    def test_zoom_label_double_click_applies_typed_percent(self) -> None:
+        status_service = services_for_window(self.window).status_service
+        with mock.patch("ui.main_window_status_service.prompt_zoom_percent", return_value=250):
+            status_service._prompt_zoom(self.window)
+
+        self.assertEqual(status_service.zoom_label.text(), "250%")
+
+    def test_zoom_label_double_click_cancel_leaves_zoom_unchanged(self) -> None:
+        status_service = services_for_window(self.window).status_service
+        before = status_service.zoom_label.text()
+        with mock.patch("ui.main_window_status_service.prompt_zoom_percent", return_value=None):
+            status_service._prompt_zoom(self.window)
+
+        self.assertEqual(status_service.zoom_label.text(), before)
+
     def test_canvas_name_helpers_cover_missing_active_canvas_paths(self) -> None:
         with mock.patch.object(type(self.window.tab_references), "active_canvas_or_none", return_value=None):
             with self.assertRaisesRegex(RuntimeError, "No active canvas."):

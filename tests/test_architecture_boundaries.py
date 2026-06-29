@@ -867,11 +867,11 @@ def test_main_window_context_bar_pages_use_injected_canvas_ports() -> None:
     assert "icon_factory_for_window" in source
     assert "tool_state_service" in source
     assert "activate_bond_style_for_window" in source
-    assert "set_bond_length_for_window" in source
+    assert "set_bond_length_value_for_window" in source
     assert "activate_bond_style_for_window=activate_bond_style_for_window" in (
         APP_ROOT / "ui" / "main_window_services.py"
     ).read_text()
-    assert "set_bond_length_for_window=set_bond_length_for_window" in (
+    assert "set_bond_length_value_for_window=set_bond_length_value_for_window" in (
         APP_ROOT / "ui" / "main_window_services.py"
     ).read_text()
     assert "tool_state_service=tool_state_service" in (APP_ROOT / "ui" / "main_window_services.py").read_text()

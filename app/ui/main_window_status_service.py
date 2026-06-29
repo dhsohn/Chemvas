@@ -1,10 +1,51 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtWidgets import QLabel
+from PyQt6.QtWidgets import QApplication, QLabel, QToolButton
 
+from ui.main_window_document_dialogs import prompt_zoom_percent
 from ui.main_window_toolbar_logic import tool_display_name
 from ui.selection_collection_access import selection_status_count_for
+
+
+class _ZoomPercentButton(QToolButton):
+    """Zoom-readout button: single click resets, double click types a value.
+
+    A single click is deferred by the double-click interval so a double click
+    cancels it cleanly — the view never flashes to 100% on its way to the
+    custom-value dialog, and the dialog opens with the real current zoom.
+    """
+
+    def __init__(self, on_single, on_double) -> None:
+        super().__init__()
+        self._on_single = on_single
+        self._on_double = on_double
+        self._pending_single = False
+        self._suppress_release = False
+        self._timer = QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.timeout.connect(self._emit_single)
+
+    def _emit_single(self) -> None:
+        if self._pending_single:
+            self._pending_single = False
+            self._on_single()
+
+    def mouseReleaseEvent(self, event) -> None:
+        super().mouseReleaseEvent(event)
+        if self._suppress_release:
+            self._suppress_release = False
+            return
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._pending_single = True
+            self._timer.start(QApplication.doubleClickInterval())
+
+    def mouseDoubleClickEvent(self, event) -> None:
+        self._timer.stop()
+        self._pending_single = False
+        self._suppress_release = True
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._on_double()
 
 TOOL_HINTS: dict[str, str] = {
     "select": "Select: click or drag marquee",
@@ -32,6 +73,11 @@ class MainWindowStatusService:
         active_canvas_name_for_window,
         active_canvas_index_for_window,
         context_bar_page_override_for_window,
+        zoom_in_for_window=None,
+        zoom_out_for_window=None,
+        reset_zoom_for_window=None,
+        fit_canvas_to_view_for_window=None,
+        set_zoom_percent_for_window=None,
     ) -> None:
         self._active_tool_name_for_window = active_tool_name_for_window
         self._current_zoom_percent_for_window = current_zoom_percent_for_window
@@ -40,18 +86,25 @@ class MainWindowStatusService:
         self._active_canvas_name_for_window = active_canvas_name_for_window
         self._active_canvas_index_for_window = active_canvas_index_for_window
         self._context_bar_page_override_for_window = context_bar_page_override_for_window
+        self._zoom_in_for_window = zoom_in_for_window
+        self._zoom_out_for_window = zoom_out_for_window
+        self._reset_zoom_for_window = reset_zoom_for_window
+        self._fit_canvas_to_view_for_window = fit_canvas_to_view_for_window
+        self._set_zoom_percent_for_window = set_zoom_percent_for_window
         self.tool_label: QLabel | None = None
         self.sheet_label: QLabel | None = None
         self.selection_label: QLabel | None = None
         self.zoom_caption: QLabel | None = None
-        self.zoom_label: QLabel | None = None
+        self.zoom_out_button: QToolButton | None = None
+        self.zoom_in_button: QToolButton | None = None
+        self.zoom_fit_button: QToolButton | None = None
+        self.zoom_label: QToolButton | None = None
 
     def init_status_bar(self, window) -> None:
         self.tool_label = QLabel()
         self.sheet_label = QLabel()
         self.selection_label = QLabel()
         self.zoom_caption = QLabel("Zoom")
-        self.zoom_label = QLabel("100%")
 
         for label in (
             self.tool_label,
@@ -62,17 +115,71 @@ class MainWindowStatusService:
             label.setObjectName("statusContextLabel")
             label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
+        self.zoom_out_button = self._build_zoom_button(
+            "−",
+            "Zoom out (Ctrl+-)",
+            lambda: self._apply_zoom(window, self._zoom_out_for_window),
+        )
+        # The percent reads like a label but is interactive: a single click
+        # resets to 100%, a double click opens a dialog to type an exact value.
+        self.zoom_label = _ZoomPercentButton(
+            on_single=lambda: self._apply_zoom(window, self._reset_zoom_for_window),
+            on_double=lambda: self._prompt_zoom(window),
+        )
+        self.zoom_label.setText("100%")
+        self.zoom_label.setToolTip("Click to reset to 100% · double-click to type a value")
+        self.zoom_label.setStatusTip("Click to reset zoom, double-click to enter a value")
+        self.zoom_label.setAutoRaise(True)
+        self.zoom_label.setCursor(Qt.CursorShape.PointingHandCursor)
         self.zoom_label.setObjectName("statusZoomLabel")
-        self.zoom_label.setFixedWidth(50)
-        self.zoom_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.zoom_label.setMinimumWidth(46)
+        self.zoom_in_button = self._build_zoom_button(
+            "+",
+            "Zoom in (Ctrl++)",
+            lambda: self._apply_zoom(window, self._zoom_in_for_window),
+        )
+        self.zoom_fit_button = self._build_zoom_button(
+            "Fit",
+            "Fit the page to the window",
+            lambda: self._apply_zoom(window, self._fit_canvas_to_view_for_window),
+        )
+        self.zoom_fit_button.setObjectName("statusZoomFitButton")
 
         window.statusBar().addPermanentWidget(self.tool_label)
         window.statusBar().addPermanentWidget(self.sheet_label)
         window.statusBar().addPermanentWidget(self.selection_label)
         window.statusBar().addPermanentWidget(self.zoom_caption)
+        window.statusBar().addPermanentWidget(self.zoom_out_button)
         window.statusBar().addPermanentWidget(self.zoom_label)
+        window.statusBar().addPermanentWidget(self.zoom_in_button)
+        window.statusBar().addPermanentWidget(self.zoom_fit_button)
         self.refresh_status_context(window)
         self.show_active_tool_hint(window)
+
+    @staticmethod
+    def _build_zoom_button(text: str, tooltip: str, callback) -> QToolButton:
+        button = QToolButton()
+        button.setObjectName("statusZoomButton")
+        button.setText(text)
+        button.setToolTip(tooltip)
+        button.setStatusTip(tooltip)
+        button.setAutoRaise(True)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.clicked.connect(lambda _checked=False: callback())
+        return button
+
+    def _apply_zoom(self, window, zoom_action) -> None:
+        if zoom_action is None:
+            return
+        self.update_zoom_label(zoom_action(window))
+
+    def _prompt_zoom(self, window) -> None:
+        if self._set_zoom_percent_for_window is None:
+            return
+        current = self._current_zoom_percent_for_window(window)
+        selected = prompt_zoom_percent(window, current)
+        if selected is not None:
+            self.update_zoom_label(self._set_zoom_percent_for_window(window, selected))
 
     def refresh_status_context(self, window, *, update_zoom: bool = True) -> None:
         self.update_tool_status_label(window)

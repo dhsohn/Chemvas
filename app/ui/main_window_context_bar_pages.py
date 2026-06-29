@@ -45,7 +45,8 @@ class MainWindowContextBarPageBuilder:
         tool_mode_controller_for_window,
         tool_state_service,
         activate_bond_style_for_window,
-        set_bond_length_for_window,
+        set_bond_length_value_for_window,
+        bond_length_px_for_window,
         apply_color_preset_for_window,
         apply_ring_fill_preset_for_window,
         rotate_selection_for_window,
@@ -55,7 +56,8 @@ class MainWindowContextBarPageBuilder:
         self._tool_mode_controller_for_window = tool_mode_controller_for_window
         self._tool_state = tool_state_service
         self._activate_bond_style_for_window = activate_bond_style_for_window
-        self._set_bond_length_for_window = set_bond_length_for_window
+        self._set_bond_length_value_for_window = set_bond_length_value_for_window
+        self._bond_length_px_for_window = bond_length_px_for_window
         self._apply_color_preset_for_window = apply_color_preset_for_window
         self._apply_ring_fill_preset_for_window = apply_ring_fill_preset_for_window
         self._rotate_selection_for_window = rotate_selection_for_window
@@ -72,7 +74,8 @@ class MainWindowContextBarPageBuilder:
         bond_page = build_bond_page(
             window,
             self._activate_bond_style_for_window,
-            self._set_bond_length_for_window,
+            self._set_bond_length_value_for_window,
+            self._bond_length_px_for_window(window),
         )
         arrow_page = build_arrow_page(
             window,
