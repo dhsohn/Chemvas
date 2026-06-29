@@ -181,6 +181,7 @@ def build_main_window_services() -> MainWindowServices:
         context_bar_page_override_for_window=context_bar_page_override_for_window,
         insert_controller_for_window=insert_controller_for_window,
         set_atom_input_for_window=set_atom_input_for_window,
+        bond_length_px_for_window=bond_length_px_for_window,
     )
     context_page_state_service = MainWindowContextPageStateService(
         tool_state_service=tool_state_service,

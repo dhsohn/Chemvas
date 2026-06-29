@@ -50,6 +50,7 @@ class MainWindowContextBarService:
         context_bar_page_override_for_window,
         insert_controller_for_window,
         set_atom_input_for_window,
+        bond_length_px_for_window=None,
     ) -> None:
         self._page_builder = page_builder
         self._active_tool_name_for_window = active_tool_name_for_window
@@ -57,6 +58,8 @@ class MainWindowContextBarService:
         self._context_bar_page_override_for_window = context_bar_page_override_for_window
         self._insert_controller_for_window = insert_controller_for_window
         self._set_atom_input_for_window = set_atom_input_for_window
+        self._bond_length_px_for_window = bond_length_px_for_window
+        self._bond_length_spin = None
         self._stack: QStackedWidget | None = None
         self._pages: dict[str, QWidget] = {}
         self._bond_group: QButtonGroup | None = None
@@ -94,6 +97,7 @@ class MainWindowContextBarService:
         self._arrow_buttons = context_pages.arrow_buttons
         self._bracket_group = context_pages.bracket_group
         self._bracket_buttons = context_pages.bracket_buttons
+        self._bond_length_spin = context_pages.bond_length_spin
         self._set_atom_input_for_window(window, context_pages.atom_input)
         for page in self._pages.values():
             stack.addWidget(page)
@@ -139,6 +143,7 @@ class MainWindowContextBarService:
         self.reflect_ring_state(window)
         if key == "bond":
             self.reflect_state(window)
+            self.reflect_bond_length(window)
         elif key == "mark":
             self.reflect_mark_state(window)
         elif key == "arrow":
@@ -175,6 +180,21 @@ class MainWindowContextBarService:
             button.setChecked(button is target)
             button.blockSignals(blocked)
         self._bond_group.setExclusive(True)
+
+    def reflect_bond_length(self, window) -> None:
+        # The spin box copies the bond length once at build time, so re-sync it
+        # from the active canvas here. Without this, switching canvases, loading
+        # a document, or undoing a change can leave a stale value that the next
+        # edit/stepper click would write back, rescaling the canvas unexpectedly.
+        if self._bond_length_spin is None or self._bond_length_px_for_window is None:
+            return
+        canvas = self._active_canvas_or_none_for_window(window)
+        if canvas is None:
+            return
+        value = int(round(self._bond_length_px_for_window(window)))
+        blocked = self._bond_length_spin.blockSignals(True)
+        self._bond_length_spin.setValue(value)
+        self._bond_length_spin.blockSignals(blocked)
 
     def reflect_ring_state(self, window) -> None:
         if not self._ring_buttons or self._ring_group is None:

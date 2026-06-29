@@ -3,7 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QButtonGroup, QLineEdit, QSlider, QToolButton, QWidget
+from PyQt6.QtWidgets import (
+    QButtonGroup,
+    QLineEdit,
+    QSlider,
+    QSpinBox,
+    QToolButton,
+    QWidget,
+)
 
 from ui.main_window_config import (
     ARROW_MENU_SPECS,
@@ -49,6 +56,7 @@ class BondContextPage:
     page: QWidget
     group: QButtonGroup
     buttons: dict[str, QToolButton]
+    length_spin: QSpinBox
 
 
 @dataclass(frozen=True)
@@ -125,13 +133,13 @@ def build_bond_page(
         layout.addWidget(button)
 
     layout.addWidget(divider())
-    length_widget, _length_spin = bond_length_input(
+    length_widget, length_spin = bond_length_input(
         current_bond_length_px,
         lambda value: set_bond_length_value_for_window(window, value),
     )
     layout.addWidget(length_widget)
     layout.addStretch(1)
-    return BondContextPage(page=page, group=group, buttons=buttons)
+    return BondContextPage(page=page, group=group, buttons=buttons, length_spin=length_spin)
 
 
 def build_template_page(window, insert_controller) -> TemplateContextPage:

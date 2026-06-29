@@ -949,7 +949,8 @@ def test_main_window_active_canvas_ui_service_uses_injected_collaborators() -> N
     assert "selection_info_callback=lambda _formula, _mw: self.handle_selection_info(window)" in source
     assert "tool_change_callback=lambda: self._context_page_state.sync_tool_actions_from_canvas(window)" in source
     assert "zoom_callback=self._status.update_zoom_label" in source
-    assert "history_change_callback=lambda: self._action_availability.update_action_availability(window)" in source
+    assert "history_change_callback=lambda: self._on_history_change(window)" in source
+    assert "self._action_availability.update_action_availability(window)" in source
     assert "error_callback=lambda message: self._status.show_error_message(window, message, timeout=6000)" in source
     assert "self._context_page_state.sync_tool_actions_from_canvas(window)" in source
     assert "context_page_state_service=context_page_state_service" in services.read_text()
