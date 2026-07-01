@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass
-from typing import Callable, Collection, Sequence
 
 from PyQt6.QtCore import QRectF
 from PyQt6.QtWidgets import QGraphicsItem

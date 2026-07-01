@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from core.tool_overlay_logic import activate_tool_no_drag
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor

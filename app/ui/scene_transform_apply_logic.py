@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Callable, Mapping, Sequence
 
 from core.history import HistoryCommand, SetAtomPositionsCommand
 from PyQt6.QtCore import QPointF

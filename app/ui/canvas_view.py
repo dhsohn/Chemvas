@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from PyQt6.QtCore import QRectF
 from PyQt6.QtGui import (
     QPainter,

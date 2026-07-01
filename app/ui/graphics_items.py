@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QFont, QFontMetricsF, QPainterPath, QPen
 from PyQt6.QtWidgets import (

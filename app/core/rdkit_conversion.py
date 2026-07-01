@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import TYPE_CHECKING, Mapping
+from collections.abc import Mapping
+from typing import TYPE_CHECKING
 
 from core.model import Bond, MoleculeModel
 from core.rdkit_types import Molecule3DAtom, Molecule3DBond, Molecule3DScene
