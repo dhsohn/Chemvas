@@ -734,7 +734,9 @@ class BondRendererUnitTest(unittest.TestCase):
         self._set_bond(Bond(0, 1, 1, style="bold"))
         self.canvas.bond_items[0] = [single]
         self.renderer.update_bond_geometry(0)
-        self.assertGreater(single.line().length(), 10.0)
+        # Bold strips now run straight between the atoms (no overshoot pad), so
+        # the fallback line spans exactly the atom separation.
+        self.assertAlmostEqual(single.line().length(), 10.0)
 
     def test_update_bond_geometry_updates_double_and_higher_order_nonbold_paths(self) -> None:
         outer = QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)

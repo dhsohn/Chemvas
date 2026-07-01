@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from PyQt6.QtWidgets import QGraphicsLineItem, QGraphicsPathItem, QGraphicsPolygonItem
 
-from ui.bond_geometry_primitives import bold_out_scale, extend_segment, scale_segment
 from ui.bond_style_logic import (
     DOUBLE_STYLE_OUTER,
     base_plain_double_style_for_dotted_variant,
@@ -13,7 +12,6 @@ from ui.bond_style_logic import (
 from ui.canvas_bond_graphics_state import bond_items_for_id
 from ui.canvas_model_access import atom_for_id, bond_for_id
 from ui.renderer_style_access import (
-    bond_length_px_for,
     renderer_bold_bond_width_for,
     renderer_bond_line_width_for,
 )
@@ -115,12 +113,14 @@ class BondGeometryUpdateService:
         use_nx, use_ny = (nx, ny) if not bold_outward else (-nx, -ny)
         outer_item = items[0]
         if isinstance(outer_item, QGraphicsPolygonItem):
-            polygon = self.renderer.strip_polygon(
+            polygon = self.renderer.graphics_drawer.bold_strip_polygon(
                 *outer_seg,
                 use_nx,
                 use_ny,
                 self._bond_line_width(),
                 self._bold_bond_width(),
+                bond.a,
+                bond.b,
             )
             outer_item.setPolygon(polygon)
         elif isinstance(outer_item, QGraphicsLineItem):
@@ -160,36 +160,29 @@ class BondGeometryUpdateService:
                 item.setLine(*seg)
 
     def _update_bold_single_geometry(self, bond, items, a, b, bold_outward: bool) -> None:
-        bx1, by1 = a.x, a.y
-        bx2, by2 = b.x, b.y
+        # Mirror the build path (_bold_single_items): draw straight between the
+        # atoms and mitre against bold neighbours, so a drag keeps the smooth
+        # junction instead of reverting to the old square/overshot strip.
         ring_center = self.renderer.ring_center_for_bond(bond)
-        scale = bold_out_scale(bold_outward, ring_center)
-        bx1, by1, bx2, by2 = scale_segment(bx1, by1, bx2, by2, scale)
-        pad = bond_length_px_for(self.canvas) * 0.1
-        bx1, by1, bx2, by2 = extend_segment(bx1, by1, bx2, by2, pad)
-        dx = bx2 - bx1
-        dy = by2 - by1
-        bx1 = bx1 + dx * 0.025
-        by1 = by1 + dy * 0.025
-        bx2 = bx2 - dx * 0.025
-        by2 = by2 - dy * 0.025
-        nx, ny = self.renderer.line_normal(bx1, by1, bx2, by2, ring_center)
+        nx, ny = self.renderer.line_normal(a.x, a.y, b.x, b.y, ring_center)
         if bold_outward:
             nx, ny = -nx, -ny
         if isinstance(items[0], QGraphicsPolygonItem):
-            polygon = self.renderer.strip_polygon(
-                bx1,
-                by1,
-                bx2,
-                by2,
+            polygon = self.renderer.graphics_drawer.bold_strip_polygon(
+                a.x,
+                a.y,
+                b.x,
+                b.y,
                 nx,
                 ny,
                 self._bond_line_width(),
                 self._bold_bond_width(),
+                bond.a,
+                bond.b,
             )
             items[0].setPolygon(polygon)
         elif isinstance(items[0], QGraphicsLineItem):
-            items[0].setLine(bx1, by1, bx2, by2)
+            items[0].setLine(a.x, a.y, b.x, b.y)
 
     def _update_bold_geometry(self, bond, items, a, b) -> None:
         bold_outward = bond.style == "bold_out"

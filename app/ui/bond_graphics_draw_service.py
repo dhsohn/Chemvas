@@ -95,10 +95,10 @@ class BondGraphicsDrawService:
     ):
         if bold_width <= base_width + 1e-6:
             return self._line_item(x1, y1, x2, y2)
-        polygon = self._bold_strip_polygon(x1, y1, x2, y2, nx, ny, base_width, bold_width, a_id, b_id)
+        polygon = self.bold_strip_polygon(x1, y1, x2, y2, nx, ny, base_width, bold_width, a_id, b_id)
         return self.renderer.graphics.filled_polygon(polygon)
 
-    def _bold_strip_polygon(self, x1, y1, x2, y2, nx, ny, base_width, bold_width, a_id, b_id):
+    def bold_strip_polygon(self, x1, y1, x2, y2, nx, ny, base_width, bold_width, a_id, b_id):
         # A bold bond is a one-sided trapezoid on the atom centreline. On its own
         # its ends are cut square, so neighbouring bold strips leave spikes/gaps at
         # a shared vertex. Extend each end edge to meet the neighbour's matching
