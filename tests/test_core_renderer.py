@@ -14,12 +14,14 @@ if Qt is not None:
 
 @unittest.skipUnless(Qt is not None, "PyQt6 is required for renderer tests")
 class RendererTest(unittest.TestCase):
-    def test_bond_pens_use_flat_caps_while_dotted_stays_round(self) -> None:
+    def test_bond_pens_use_round_caps_so_vertices_join_cleanly(self) -> None:
         renderer = Renderer()
 
-        self.assertEqual(renderer.bond_pen().capStyle(), Qt.PenCapStyle.FlatCap)
-        self.assertEqual(renderer.bold_bond_pen().capStyle(), Qt.PenCapStyle.FlatCap)
+        # Round caps make bonds meeting at an atom overlap into a clean join.
+        self.assertEqual(renderer.bond_pen().capStyle(), Qt.PenCapStyle.RoundCap)
         self.assertEqual(renderer.dotted_bond_pen().capStyle(), Qt.PenCapStyle.RoundCap)
+        # Bold bonds are drawn as mitred polygons, so their pen cap is unused.
+        self.assertEqual(renderer.bold_bond_pen().capStyle(), Qt.PenCapStyle.FlatCap)
 
     def test_visual_metrics_scale_with_bond_length(self) -> None:
         renderer = Renderer()

@@ -938,6 +938,38 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertEqual((bond.style, bond.order), ("triple", 3))
         self.assertEqual(len([entry for entry in active_canvas_for_window(self.window).model.bonds if entry is not None]), 1)
 
+    def test_adjacent_bold_bonds_mitre_to_shared_corners(self) -> None:
+        canvas = active_canvas_for_window(self.window)
+        a0 = add_atom_for(canvas, "C", 0.0, 0.0)
+        a1 = add_atom_for(canvas, "C", 20.0, 0.0)
+        a2 = add_atom_for(canvas, "C", 30.0, 17.320508)
+        b0 = add_bond_for(canvas, a0, a1)
+        b1 = add_bond_for(canvas, a1, a2)
+        transform = canvas.services.scene_transform_controller
+        transform.apply_bond_style(b0, "bold", 1)
+        transform.apply_bond_style(b1, "bold", 1)
+
+        vertex = QPointF(20.0, 0.0)
+
+        def near_corners(bond_id):
+            polygons = [item for item in bond_items_for_id(canvas, bond_id) if hasattr(item, "polygon")]
+            self.assertEqual(len(polygons), 1)
+            points = [polygons[0].mapToScene(point) for point in polygons[0].polygon()]
+            return [p for p in points if math.hypot(p.x() - vertex.x(), p.y() - vertex.y()) < 8.0]
+
+        corners0 = near_corners(b0)
+        corners1 = near_corners(b1)
+        # Each strip ends at the shared vertex with exactly two mitred corners.
+        self.assertEqual(len(corners0), 2)
+        self.assertEqual(len(corners1), 2)
+        # Every vertex corner of one strip coincides with one of the other's, so
+        # the two bold bonds share their end edge and read as one continuous outline.
+        for c0 in corners0:
+            self.assertTrue(
+                any(math.hypot(c0.x() - c1.x(), c0.y() - c1.y()) < 1e-6 for c1 in corners1),
+                f"bold strip corner ({c0.x()}, {c0.y()}) has no mitre partner",
+            )
+
     def test_dotted_bond_tool_draws_new_bond_and_converts_plain_double_short_segment(self) -> None:
         canvas_services_for(active_canvas_for_window(self.window)).tool_mode_controller.set_bond_style("dotted", 1)
         self._drag_scene_point(QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
