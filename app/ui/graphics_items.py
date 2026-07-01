@@ -119,6 +119,8 @@ class AtomLabelItem(NoSelectTextItem):
         self._layout: LabelLayout | None = None
         self._typographic = False
         self._outline_mode = False
+        self._anchor_element: str | None = None
+        self._anchor_at_end = False
         self._relayout()
 
     def set_outline_mode(self, enabled: bool) -> None:
@@ -137,9 +139,52 @@ class AtomLabelItem(NoSelectTextItem):
         self.prepareGeometryChange()
         self._hit_radius = None if hit_radius is None else max(0.0, float(hit_radius))
 
+    def set_anchor(self, element: str | None, *, at_end: bool = False) -> None:
+        """Anchor the bond attachment on one element glyph inside the label.
+
+        When set, :meth:`anchor_center` / :meth:`anchor_scene_rect` report that
+        glyph so the atom sits on it (not the label's midpoint) and bonds trim to
+        it. ``at_end`` picks the last matching glyph, for reversed labels ("HN").
+        """
+        self._anchor_element = element or None
+        self._anchor_at_end = bool(at_end)
+
+    def _anchor_local_rect(self) -> QRectF | None:
+        element = self._anchor_element
+        if not element:
+            return None
+        # The element always sits at one extreme of the display text ("N" + H, or
+        # H + "N" when reversed), so locate it by position. Matching a parsed run
+        # by text would miss it, since parse merges adjacent letters ("NH2" -> a
+        # single "NH" run) and the element is only part of that run.
+        if self._anchor_at_end:
+            if not self._raw_text.endswith(element):
+                return None
+        elif not self._raw_text.startswith(element):
+            return None
+        base = self._base_rect()
+        margin = self._doc_margin()
+        fm = QFontMetricsF(self.font())
+        width = fm.horizontalAdvance(element)
+        if self._typographic and self._layout is not None:
+            total = self._layout.width
+        else:
+            total = fm.horizontalAdvance(self._raw_text)
+        left = margin + (total - width) if self._anchor_at_end else margin
+        return QRectF(left, base.top(), width, base.height())
+
+    def anchor_center(self) -> QPointF | None:
+        rect = self._anchor_local_rect()
+        return rect.center() if rect is not None else None
+
+    def anchor_scene_rect(self) -> QRectF | None:
+        rect = self._anchor_local_rect()
+        return self.mapRectToScene(rect) if rect is not None else None
+
     def setPlainText(self, text) -> None:
         self._raw_text = "" if text is None else str(text)
         super().setPlainText(self._raw_text)
+        self._anchor_element = None
         self._relayout()
 
     def setFont(self, font) -> None:

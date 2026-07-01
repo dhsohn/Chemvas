@@ -412,6 +412,41 @@ class AtomLabelServiceTest(unittest.TestCase):
         self.assertIs(canvas.atom_dots[1], existing_dot)
         self.assertEqual(canvas.scene_obj.added_items, [])
 
+    def _label_hydride_with_neighbor(self, neighbor_x: float) -> str:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={1: Atom("C", neighbor_x, 0.0), 2: Atom("N", 0.0, 0.0)},
+            bonds=[Bond(1, 2, 1, style="single")],
+        )
+        service = _atom_label_service(canvas)
+        service.add_or_update_atom_label(2, "NH", record=False)
+        return canvas.atom_items[2].toPlainText()
+
+    def test_nh_label_keeps_hydrogen_away_from_a_left_bond(self) -> None:
+        # Neighbour to the left -> N stays on the left by the bond, H trails right.
+        self.assertEqual(self._label_hydride_with_neighbor(-20.0), "NH")
+
+    def test_nh_label_flips_hydrogen_away_from_a_right_bond(self) -> None:
+        # Neighbour to the right -> N moves right by the bond, H leads on the left.
+        self.assertEqual(self._label_hydride_with_neighbor(20.0), "HN")
+
+    def test_subscript_hydride_still_anchors_on_the_element(self) -> None:
+        # "NH2" renders as a merged "NH" run plus a "2" subscript; the anchor must
+        # still resolve to the N glyph (not the whole label) so trimming stays
+        # shallow. Regression: the element used to go unmatched and fall back.
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={1: Atom("C", -20.0, 0.0), 2: Atom("N", 0.0, 0.0)},
+            bonds=[Bond(1, 2, 1, style="single")],
+        )
+        service = _atom_label_service(canvas)
+        service.add_or_update_atom_label(2, "NH2", record=False)
+        item = canvas.atom_items[2]
+        self.assertEqual(item.toPlainText(), "NH2")
+        anchor = item.anchor_scene_rect()
+        self.assertIsNotNone(anchor)
+        self.assertLess(anchor.width(), item.sceneBoundingRect().width())
+
     def test_record_label_change_builds_composite_single_and_noop_commands(self) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(

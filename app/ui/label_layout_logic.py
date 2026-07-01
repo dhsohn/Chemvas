@@ -13,8 +13,47 @@ stored text; it only decides how to draw it.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
+
+# A label like "NH", "OH", "NH2", "CH3": one element symbol followed by an
+# optional run of hydrogens. These get directional layout so the element sits on
+# the atom and the hydrogens point away from the bonds (H outside a ring).
+_HYDRIDE_RE = re.compile(r"^([A-Z][a-z]?)(?:H(\d*))?$")
+
+
+def split_hydride_label(text: str) -> tuple[str, int] | None:
+    """Split ``"NH2"`` -> ``("N", 2)``; return ``None`` if not element+hydrogens.
+
+    A bare element (``"O"``, ``"Cl"``) yields hydrogen count 0. Multi-part
+    labels (``"CO2Me"``) return ``None`` and keep their plain centred layout.
+    """
+    match = _HYDRIDE_RE.match(text or "")
+    if match is None:
+        return None
+    element = match.group(1)
+    digits = match.group(2)
+    if digits is None:
+        h_count = 0
+    elif digits == "":
+        h_count = 1
+    else:
+        h_count = int(digits)
+    return element, h_count
+
+
+def hydride_display_text(element: str, h_count: int, *, face_left: bool) -> str:
+    """Order the element and its hydrogens so the element is nearest the bonds.
+
+    ``face_left`` puts the hydrogens on the left (``"HN"``/``"H2N"``), used when
+    the bonds approach from the right; otherwise they trail the element
+    (``"NH"``/``"NH2"``).
+    """
+    if h_count <= 0:
+        return element
+    hydrogens = "H" if h_count == 1 else f"H{h_count}"
+    return hydrogens + element if face_left else element + hydrogens
 
 # A subscript/superscript glyph is drawn at this fraction of the base font size.
 SUB_SCALE = 0.72
@@ -180,6 +219,8 @@ __all__ = [
     "LabelRun",
     "PlacedRun",
     "LabelLayout",
+    "hydride_display_text",
     "parse_atom_label",
     "place_runs",
+    "split_hydride_label",
 ]
