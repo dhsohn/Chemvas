@@ -40,6 +40,7 @@ if QApplication is not None:
         visible_atom_item_for,
     )
     from ui.canvas_bond_graphics_state import bond_items_for, bond_items_for_id
+    from ui.canvas_bond_renderer_state import update_bond_geometry_for
     from ui.canvas_geometry_access import mark_target_distance_for_atom_for
     from ui.canvas_hover_refresh import refresh_hover_from_cursor_for
     from ui.canvas_hover_state import hover_state_for
@@ -968,6 +969,41 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             self.assertTrue(
                 any(math.hypot(c0.x() - c1.x(), c0.y() - c1.y()) < 1e-6 for c1 in corners1),
                 f"bold strip corner ({c0.x()}, {c0.y()}) has no mitre partner",
+            )
+
+    def test_bold_bond_mitre_survives_geometry_update(self) -> None:
+        # The in-place geometry update path (used during endpoint drags) must
+        # produce the same mitred join as a full rebuild, not the old square strip.
+        canvas = active_canvas_for_window(self.window)
+        a0 = add_atom_for(canvas, "C", 0.0, 0.0)
+        a1 = add_atom_for(canvas, "C", 20.0, 0.0)
+        a2 = add_atom_for(canvas, "C", 30.0, 17.320508)
+        b0 = add_bond_for(canvas, a0, a1)
+        b1 = add_bond_for(canvas, a1, a2)
+        transform = canvas.services.scene_transform_controller
+        transform.apply_bond_style(b0, "bold", 1)
+        transform.apply_bond_style(b1, "bold", 1)
+
+        moved = QPointF(23.0, 4.0)
+        canvas.model.atoms[a1].x = moved.x()
+        canvas.model.atoms[a1].y = moved.y()
+        update_bond_geometry_for(canvas, b0)
+        update_bond_geometry_for(canvas, b1)
+
+        def near_corners(bond_id):
+            polygons = [item for item in bond_items_for_id(canvas, bond_id) if hasattr(item, "polygon")]
+            self.assertEqual(len(polygons), 1)
+            points = [polygons[0].mapToScene(point) for point in polygons[0].polygon()]
+            return [p for p in points if math.hypot(p.x() - moved.x(), p.y() - moved.y()) < 8.0]
+
+        corners0 = near_corners(b0)
+        corners1 = near_corners(b1)
+        self.assertEqual(len(corners0), 2)
+        self.assertEqual(len(corners1), 2)
+        for c0 in corners0:
+            self.assertTrue(
+                any(math.hypot(c0.x() - c1.x(), c0.y() - c1.y()) < 1e-6 for c1 in corners1),
+                f"after update, bold strip corner ({c0.x()}, {c0.y()}) has no mitre partner",
             )
 
     def test_dotted_bond_tool_draws_new_bond_and_converts_plain_double_short_segment(self) -> None:

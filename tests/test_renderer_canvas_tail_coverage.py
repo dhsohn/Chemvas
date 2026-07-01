@@ -278,7 +278,8 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
         self._set_bond(Bond(0, 1, 1, style="bold"))
         self.canvas.bond_items[0] = [single_line]
         self.renderer.update_bond_geometry(0)
-        self.assertGreater(single_line.line().length(), 10.0)
+        # Bold strips run straight between the atoms now (no overshoot pad).
+        self.assertAlmostEqual(single_line.line().length(), 10.0)
 
     def test_update_plain_and_higher_order_bonds_cover_tail_type_guards(self) -> None:
         self._set_bond(Bond(0, 1, 2, style="single"))
