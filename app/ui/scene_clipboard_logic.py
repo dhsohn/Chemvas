@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 
 from core.document_state import validate_clipboard_selection_payload
 from core.model import Bond

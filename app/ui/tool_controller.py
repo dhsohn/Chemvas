@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from __future__ import annotations
 
 from ui.benzene_tool import BenzeneTool
 from ui.bond_tool import BondTool
@@ -55,7 +55,7 @@ class ToolController:
             set_drag_mode=set_drag_mode,
             rubber_band_drag_mode=rubber_band_drag_mode,
         )
-        self.tools: Dict[str, Tool] = {
+        self.tools: dict[str, Tool] = {
             "select": SelectTool(canvas, context=self.context),
             "bond": BondTool(canvas, context=self.context),
             "text": TextTool(canvas, context=self.context),
@@ -72,7 +72,7 @@ class ToolController:
             "orbital": OrbitalTool(canvas, context=self.context),
             "perspective": PerspectiveTool(canvas, context=self.context),
         }
-        self.active: Optional[Tool] = None
+        self.active: Tool | None = None
 
     def set_active(self, name: str) -> None:
         if self.active:
