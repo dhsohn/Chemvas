@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import time
 
 from core.tool_overlay_logic import activate_tool_no_drag

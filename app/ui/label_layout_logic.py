@@ -13,8 +13,8 @@ stored text; it only decides how to draw it.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 # A subscript/superscript glyph is drawn at this fraction of the base font size.
 SUB_SCALE = 0.72

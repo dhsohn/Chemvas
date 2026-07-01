@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Callable, MutableMapping, Sequence
+from collections.abc import Callable, MutableMapping, Sequence
 
 from core.model import Bond
 

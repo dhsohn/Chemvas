@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Mapping, Optional
+from collections.abc import Mapping
 
 from core.model import MoleculeModel
 from core.rdkit_conversion import RDKitConversionHelper
@@ -77,7 +77,7 @@ class RDKitAdapter:
         rdkit = self._load_rdkit()
         return rdkit != (None, None)
 
-    def smiles_to_2d(self, smiles: str, scale: float = 40.0) -> Optional[MoleculeModel]:
+    def smiles_to_2d(self, smiles: str, scale: float = 40.0) -> MoleculeModel | None:
         return self._import_helper.smiles_to_2d(smiles, scale=scale)
 
     def model_to_rdkit_with_map(self, model: MoleculeModel, *, strict_labels: bool = False):

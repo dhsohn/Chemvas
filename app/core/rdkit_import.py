@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any, Optional, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from core.model import MoleculeModel
 from core.rdkit_types import MoleculeIdentifiers
@@ -14,7 +14,7 @@ class RDKitImportHelper:
     def __init__(self, adapter: RDKitAdapter) -> None:
         self.adapter = adapter
 
-    def smiles_to_2d(self, smiles: str, scale: float = 40.0) -> Optional[MoleculeModel]:
+    def smiles_to_2d(self, smiles: str, scale: float = 40.0) -> MoleculeModel | None:
         rdkit = self.adapter._load_rdkit()
         if rdkit == (None, None):
             return None
