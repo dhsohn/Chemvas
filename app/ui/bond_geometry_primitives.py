@@ -68,6 +68,27 @@ def trim_segment(segment: LineSegment, trim: float) -> LineSegment:
     )
 
 
+def line_intersection(
+    px: float,
+    py: float,
+    dx: float,
+    dy: float,
+    qx: float,
+    qy: float,
+    ex: float,
+    ey: float,
+) -> tuple[float, float] | None:
+    """Intersection of infinite lines ``(px,py)+t*(dx,dy)`` and ``(qx,qy)+s*(ex,ey)``.
+
+    Returns ``None`` when the directions are parallel (no unique crossing).
+    """
+    denom = dx * ey - dy * ex
+    if abs(denom) < 1e-9:
+        return None
+    t = ((qx - px) * ey - (qy - py) * ex) / denom
+    return (px + dx * t, py + dy * t)
+
+
 def strip_polygon(
     x1: float,
     y1: float,
@@ -107,6 +128,7 @@ __all__ = [
     "LineSegment",
     "bold_out_scale",
     "extend_segment",
+    "line_intersection",
     "normalize_3d",
     "offset_segment",
     "scale_segment",

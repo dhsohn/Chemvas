@@ -3,19 +3,27 @@ from __future__ import annotations
 import math
 
 from PyQt6.QtCore import QPointF
+from PyQt6.QtGui import QPolygonF
 
-from ui.bond_geometry_primitives import strip_polygon
+from ui.bond_geometry_primitives import line_intersection, strip_polygon
 from ui.bond_style_logic import (
+    BOLD_BOND_STYLES,
     DOUBLE_STYLE_DEFAULT,
     DOUBLE_STYLE_OUTER,
     base_plain_double_style_for_dotted_variant,
 )
+from ui.canvas_graph_state import graph_state_for
+from ui.canvas_model_access import atom_for_id, bond_for_id
 from ui.renderer_style_access import (
     bond_pen_for,
     renderer_bold_bond_width_for,
     renderer_bond_line_width_for,
     renderer_hash_spacing_for,
 )
+
+# Cap the mitre extension so a very acute junction falls back to a flat end
+# instead of shooting a long spike (Qt's "mitre limit" idea, in width units).
+_MITER_LIMIT = 6.0
 
 
 class BondGraphicsDrawService:
@@ -64,6 +72,8 @@ class BondGraphicsDrawService:
                 use_ny,
                 self._bond_line_width(),
                 self._bold_bond_width(),
+                a_id=a_id,
+                b_id=b_id,
             )
         else:
             outer_item = self._line_item(*outer_seg)
@@ -80,11 +90,101 @@ class BondGraphicsDrawService:
         ny: float,
         base_width: float,
         bold_width: float,
+        a_id: int | None = None,
+        b_id: int | None = None,
     ):
         if bold_width <= base_width + 1e-6:
             return self._line_item(x1, y1, x2, y2)
-        polygon = strip_polygon(x1, y1, x2, y2, nx, ny, base_width, bold_width)
+        polygon = self.bold_strip_polygon(x1, y1, x2, y2, nx, ny, base_width, bold_width, a_id, b_id)
         return self.renderer.graphics.filled_polygon(polygon)
+
+    def bold_strip_polygon(self, x1, y1, x2, y2, nx, ny, base_width, bold_width, a_id, b_id):
+        # A bold bond is a one-sided trapezoid on the atom centreline. On its own
+        # its ends are cut square, so neighbouring bold strips leave spikes/gaps at
+        # a shared vertex. Extend each end edge to meet the neighbour's matching
+        # edge (a true mitre) so the run reads as one continuous outline.
+        if a_id is None and b_id is None:
+            return strip_polygon(x1, y1, x2, y2, nx, ny, base_width, bold_width)
+        outer_off = -base_width / 2.0
+        inner_off = bold_width - base_width / 2.0
+        dx = x2 - x1
+        dy = y2 - y1
+        start_nb = self._bold_neighbor(a_id, b_id, dx, dy)
+        end_nb = self._bold_neighbor(b_id, a_id, -dx, -dy)
+        outer_start = self._miter_corner(x1, y1, nx, ny, outer_off, dx, dy, a_id, start_nb, bold_width)
+        outer_end = self._miter_corner(x2, y2, nx, ny, outer_off, dx, dy, b_id, end_nb, bold_width)
+        inner_end = self._miter_corner(x2, y2, nx, ny, inner_off, dx, dy, b_id, end_nb, bold_width)
+        inner_start = self._miter_corner(x1, y1, nx, ny, inner_off, dx, dy, a_id, start_nb, bold_width)
+        return QPolygonF([outer_start, outer_end, inner_end, inner_start])
+
+    def _bold_strip_normal(self, bond, a, b) -> tuple[float, float]:
+        ring_center = self.renderer.ring_center_for_bond(bond)
+        nx, ny = self.renderer.line_normal(a.x, a.y, b.x, b.y, ring_center)
+        if bond.style == "bold_out":
+            nx, ny = -nx, -ny
+        return nx, ny
+
+    def _bold_neighbor(self, vertex_id, other_id, away_dx, away_dy):
+        # Among bold bonds sharing this vertex (excluding this bond), pick the one
+        # whose direction most nearly continues this bond in a straight line — the
+        # natural perimeter partner to mitre against at higher-degree junctions.
+        if vertex_id is None:
+            return None
+        length = math.hypot(away_dx, away_dy) or 1.0
+        ax = away_dx / length
+        ay = away_dy / length
+        vertex = atom_for_id(self.canvas, vertex_id)
+        if vertex is None:
+            return None
+        best = None
+        best_score = -2.0
+        for bond_id in graph_state_for(self.canvas).atom_bond_ids.get(vertex_id, ()):
+            neighbor = bond_for_id(self.canvas, bond_id)
+            if neighbor is None or neighbor.style not in BOLD_BOND_STYLES:
+                continue
+            if {neighbor.a, neighbor.b} == {vertex_id, other_id}:
+                continue
+            far_id = neighbor.b if neighbor.a == vertex_id else neighbor.a
+            far = atom_for_id(self.canvas, far_id)
+            if far is None:
+                continue
+            fdx = far.x - vertex.x
+            fdy = far.y - vertex.y
+            flen = math.hypot(fdx, fdy) or 1.0
+            score = -(ax * fdx / flen + ay * fdy / flen)
+            if score > best_score:
+                best_score = score
+                best = neighbor
+        return best
+
+    def _miter_corner(self, vx, vy, nx, ny, off, dx, dy, vertex_id, neighbor, bold_width) -> QPointF:
+        base = QPointF(vx + nx * off, vy + ny * off)
+        if neighbor is None or vertex_id is None:
+            return base
+        nb_a = atom_for_id(self.canvas, neighbor.a)
+        nb_b = atom_for_id(self.canvas, neighbor.b)
+        if nb_a is None or nb_b is None:
+            return base
+        nbnx, nbny = self._bold_strip_normal(neighbor, nb_a, nb_b)
+        far_id = neighbor.b if neighbor.a == vertex_id else neighbor.a
+        far = atom_for_id(self.canvas, far_id)
+        if far is None:
+            return base
+        point = line_intersection(
+            vx + nx * off,
+            vy + ny * off,
+            dx,
+            dy,
+            vx + nbnx * off,
+            vy + nbny * off,
+            far.x - vx,
+            far.y - vy,
+        )
+        if point is None:
+            return base
+        if math.hypot(point[0] - vx, point[1] - vy) > _MITER_LIMIT * bold_width:
+            return base
+        return QPointF(point[0], point[1])
 
     def draw_parallel_bonds(
         self,
