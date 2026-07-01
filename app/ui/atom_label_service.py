@@ -133,19 +133,18 @@ class AtomLabelService:
         element, h_count = split
         if h_count <= 0:
             return text, None, False
+        # Point the hydrogens where the next single bond would sprout, reusing the
+        # exact bond-placement direction logic.
         vectors = connected_atom_unit_vectors_for(self.canvas, atom_id)
-        horizontal_eps = 0.1
-        has_left = any(dx < -horizontal_eps for dx, _ in vectors)
-        has_right = any(dx > horizontal_eps for dx, _ in vectors)
-        if has_left and has_right:
-            # Both horizontal sides carry a bond (e.g. C-NH-C): the hydrogens would
-            # sit on top of a bond, so keep the label centred with full-box
-            # clearance rather than anchoring/trimming to the element alone.
-            return text, None, False
-        # Otherwise point the hydrogens where the next single bond would sprout,
-        # reusing the exact bond-placement direction logic.
         angle = math.radians(default_bond_angle_for_vectors(vectors))
         face_left = math.cos(angle) < 0.0
+        # If a bond runs roughly along that same horizontal direction (e.g. the
+        # right-hand bond of a linear C-NH-C), the hydrogens would sit on top of
+        # it. Only then keep the label centred with full-box clearance -- a merely
+        # diagonal neighbour (top-of-ring N-H, zig-zag chain) still anchors.
+        h_direction = -1.0 if face_left else 1.0
+        if any(dx * h_direction > 0.8 for dx, _ in vectors):
+            return text, None, False
         display = hydride_display_text(element, h_count, face_left=face_left)
         return display, element, face_left
 
