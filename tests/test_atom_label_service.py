@@ -447,6 +447,21 @@ class AtomLabelServiceTest(unittest.TestCase):
         self.assertIsNotNone(anchor)
         self.assertLess(anchor.width(), item.sceneBoundingRect().width())
 
+    def test_nh_between_two_horizontal_bonds_keeps_full_clearance(self) -> None:
+        # C-NH-C: both horizontal sides carry a bond, so the open direction is
+        # vertical. Anchoring would leave a bond running through the H glyph, so
+        # the label stays centred with full-box clearance (no element anchor).
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={1: Atom("C", -20.0, 0.0), 2: Atom("N", 0.0, 0.0), 3: Atom("C", 20.0, 0.0)},
+            bonds=[Bond(1, 2, 1, style="single"), Bond(2, 3, 1, style="single")],
+        )
+        service = _atom_label_service(canvas)
+        service.add_or_update_atom_label(2, "NH", record=False)
+        item = canvas.atom_items[2]
+        self.assertEqual(item.toPlainText(), "NH")
+        self.assertIsNone(item.anchor_scene_rect())
+
     def test_record_label_change_builds_composite_single_and_noop_commands(self) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(

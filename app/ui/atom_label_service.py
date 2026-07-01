@@ -123,14 +123,6 @@ class AtomLabelService:
             center = item.boundingRect().center()
         item.setPos(x - center.x() + offset, y - center.y() - offset)
 
-    def _label_faces_left(self, atom_id: int) -> bool:
-        # Point the hydrogens where the next single bond would sprout, reusing the
-        # exact bond-placement direction logic. Whichever horizontal side that
-        # open direction falls on is the side the hydrogens take.
-        vectors = connected_atom_unit_vectors_for(self.canvas, atom_id)
-        angle = math.radians(default_bond_angle_for_vectors(vectors))
-        return math.cos(angle) < 0.0
-
     def _hydride_layout(self, atom_id: int, text: str) -> tuple[str, str | None, bool]:
         # Element+hydrogen labels ("NH", "OH", "NH2", "CH3") anchor on the element
         # with the hydrogens pointing away from the bonds; everything else keeps
@@ -141,7 +133,19 @@ class AtomLabelService:
         element, h_count = split
         if h_count <= 0:
             return text, None, False
-        face_left = self._label_faces_left(atom_id)
+        vectors = connected_atom_unit_vectors_for(self.canvas, atom_id)
+        horizontal_eps = 0.1
+        has_left = any(dx < -horizontal_eps for dx, _ in vectors)
+        has_right = any(dx > horizontal_eps for dx, _ in vectors)
+        if has_left and has_right:
+            # Both horizontal sides carry a bond (e.g. C-NH-C): the hydrogens would
+            # sit on top of a bond, so keep the label centred with full-box
+            # clearance rather than anchoring/trimming to the element alone.
+            return text, None, False
+        # Otherwise point the hydrogens where the next single bond would sprout,
+        # reusing the exact bond-placement direction logic.
+        angle = math.radians(default_bond_angle_for_vectors(vectors))
+        face_left = math.cos(angle) < 0.0
         display = hydride_display_text(element, h_count, face_left=face_left)
         return display, element, face_left
 
