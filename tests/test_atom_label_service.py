@@ -462,6 +462,23 @@ class AtomLabelServiceTest(unittest.TestCase):
         self.assertEqual(item.toPlainText(), "NH")
         self.assertIsNone(item.anchor_scene_rect())
 
+    def test_nh_with_diagonal_bonds_still_anchors(self) -> None:
+        # Top-of-ring / zig-zag style: both neighbours are steeply diagonal, so no
+        # bond runs along the horizontal hydrogen direction and anchoring stays.
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={
+                1: Atom("C", -10.0, -17.320508),
+                2: Atom("N", 0.0, 0.0),
+                3: Atom("C", 10.0, -17.320508),
+            },
+            bonds=[Bond(1, 2, 1, style="single"), Bond(2, 3, 1, style="single")],
+        )
+        service = _atom_label_service(canvas)
+        service.add_or_update_atom_label(2, "NH", record=False)
+        item = canvas.atom_items[2]
+        self.assertIsNotNone(item.anchor_scene_rect())
+
     def test_record_label_change_builds_composite_single_and_noop_commands(self) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
