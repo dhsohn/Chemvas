@@ -150,24 +150,27 @@ class AtomLabelItem(NoSelectTextItem):
         self._anchor_at_end = bool(at_end)
 
     def _anchor_local_rect(self) -> QRectF | None:
-        if not self._anchor_element:
+        element = self._anchor_element
+        if not element:
+            return None
+        # The element always sits at one extreme of the display text ("N" + H, or
+        # H + "N" when reversed), so locate it by position. Matching a parsed run
+        # by text would miss it, since parse merges adjacent letters ("NH2" -> a
+        # single "NH" run) and the element is only part of that run.
+        if self._anchor_at_end:
+            if not self._raw_text.endswith(element):
+                return None
+        elif not self._raw_text.startswith(element):
             return None
         base = self._base_rect()
         margin = self._doc_margin()
         fm = QFontMetricsF(self.font())
+        width = fm.horizontalAdvance(element)
         if self._typographic and self._layout is not None:
-            matches = [run for run in self._layout.runs if run.role == "normal" and run.text == self._anchor_element]
-            if not matches:
-                return None
-            run = matches[-1] if self._anchor_at_end else matches[0]
-            left = margin + run.x
-            width = fm.horizontalAdvance(run.text)
+            total = self._layout.width
         else:
-            idx = self._raw_text.rfind(self._anchor_element) if self._anchor_at_end else self._raw_text.find(self._anchor_element)
-            if idx < 0:
-                return None
-            left = margin + fm.horizontalAdvance(self._raw_text[:idx])
-            width = fm.horizontalAdvance(self._anchor_element)
+            total = fm.horizontalAdvance(self._raw_text)
+        left = margin + (total - width) if self._anchor_at_end else margin
         return QRectF(left, base.top(), width, base.height())
 
     def anchor_center(self) -> QPointF | None:
