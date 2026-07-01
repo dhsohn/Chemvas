@@ -124,7 +124,14 @@ class CanvasGeometryController:
         item = atom_items_for(self.canvas).get(atom_id)
         if item is None:
             return None
-        rect = item.sceneBoundingRect()
+        # Trim bonds to the anchored element glyph only, so an "NH"/"OH" label
+        # keeps a shallow cut around N/O instead of clearing the whole box.
+        rect = None
+        anchor_scene_rect = getattr(item, "anchor_scene_rect", None)
+        if callable(anchor_scene_rect):
+            rect = anchor_scene_rect()
+        if rect is None:
+            rect = item.sceneBoundingRect()
         atom = atom_for_id(self.canvas, atom_id)
         if atom is None:
             return None
