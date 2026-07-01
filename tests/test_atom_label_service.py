@@ -462,15 +462,16 @@ class AtomLabelServiceTest(unittest.TestCase):
         self.assertEqual(item.toPlainText(), "NH")
         self.assertIsNone(item.anchor_scene_rect())
 
-    def test_nh_with_diagonal_bonds_still_anchors(self) -> None:
-        # Top-of-ring / zig-zag style: both neighbours are steeply diagonal, so no
-        # bond runs along the horizontal hydrogen direction and anchoring stays.
+    def test_nh_with_hexagon_ring_bonds_still_anchors(self) -> None:
+        # A regular top/bottom hexagon N-H has ring bonds near (+-0.866, 0.5),
+        # ~30 degrees off horizontal. No bond runs along the horizontal hydrogen
+        # direction, so anchoring must stay (not fall back to full clearance).
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
             atoms={
-                1: Atom("C", -10.0, -17.320508),
+                1: Atom("C", -17.320508, 10.0),
                 2: Atom("N", 0.0, 0.0),
-                3: Atom("C", 10.0, -17.320508),
+                3: Atom("C", 17.320508, 10.0),
             },
             bonds=[Bond(1, 2, 1, style="single"), Bond(2, 3, 1, style="single")],
         )
