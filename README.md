@@ -122,7 +122,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for dev setup, how to run the tests, and 
 `*_ports` / `*_access` / `*_state` / `*_service` modules **on purpose**, and that
 boundary is enforced by a test. Read CONTRIBUTING before restructuring anything.
 
-The high-level design is in [docs/architecture.md](docs/architecture.md).
+The high-level design is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Roadmap / not yet supported
 
