@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Collection, Mapping, Sequence
-from typing import Callable
+from collections.abc import Callable, Collection, Mapping, Sequence
 
 from core.model import Bond
 from PyQt6.QtCore import QRectF

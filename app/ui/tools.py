@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from ui.benzene_tool import BenzeneTool
 from ui.bond_tool import BondTool
 from ui.edit_tools import ColorTool, DeleteTool, EditBondTool, FlipTool

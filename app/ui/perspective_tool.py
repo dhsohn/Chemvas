@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from core.perspective_drag_logic import resolve_perspective_drag_update
 from PyQt6.QtCore import Qt
 

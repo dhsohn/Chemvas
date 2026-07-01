@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from core.tool_overlay_logic import activate_tool_no_drag
 
 from ui.benzene_preview_access import clear_benzene_preview_for
