@@ -18,6 +18,7 @@ DOTTED_DOUBLE_STYLE_SEQUENCE = (
 
 PLAIN_DOUBLE_STYLES = frozenset(DOUBLE_STYLE_SEQUENCE)
 DOTTED_DOUBLE_STYLES = frozenset(DOTTED_DOUBLE_STYLE_SEQUENCE)
+BOLD_BOND_STYLES = frozenset({"bold", "bold_in", "bold_out"})
 STANDARD_BOND_STYLES = frozenset(
     {
         "single",
@@ -107,6 +108,7 @@ def style_for_existing_bond_overlay(
 
 
 __all__ = [
+    "BOLD_BOND_STYLES",
     "DOTTED_DOUBLE_STYLE_DEFAULT",
     "DOTTED_DOUBLE_STYLE_OUTER",
     "DOTTED_DOUBLE_STYLE_SEQUENCE",

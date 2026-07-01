@@ -3,7 +3,6 @@ from __future__ import annotations
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QGraphicsLineItem
 
-from ui.bond_geometry_primitives import bold_out_scale, extend_segment, scale_segment
 from ui.bond_graphics_access import apply_color_to_bond_item_for
 from ui.bond_style_logic import (
     is_dotted_double_bond_style,
@@ -14,7 +13,6 @@ from ui.canvas_bond_graphics_state import set_bond_items_for_id
 from ui.canvas_model_access import atom_for_id, bond_for_id
 from ui.renderer_style_access import (
     bond_color_for,
-    bond_length_px_for,
     renderer_bold_bond_width_for,
     renderer_bond_line_width_for,
 )
@@ -77,32 +75,25 @@ class BondGraphicsBuildService:
         return items
 
     def _bold_single_items(self, bond, a, b, *, bold_outward: bool) -> list:
-        bx1, by1 = a.x, a.y
-        bx2, by2 = b.x, b.y
+        # Draw the strip straight between the atoms; the mitre in
+        # one_sided_bond_strip joins it to its bold neighbours at each vertex, so
+        # no manual overshoot/pad is needed (that only produced spikes).
         ring_center = self.renderer.ring_center_for_bond(bond)
-        scale = bold_out_scale(bold_outward, ring_center)
-        bx1, by1, bx2, by2 = scale_segment(bx1, by1, bx2, by2, scale)
-        pad = bond_length_px_for(self.canvas) * 0.1
-        bx1, by1, bx2, by2 = extend_segment(bx1, by1, bx2, by2, pad)
-        dx = bx2 - bx1
-        dy = by2 - by1
-        bx1 = bx1 + dx * 0.025
-        by1 = by1 + dy * 0.025
-        bx2 = bx2 - dx * 0.025
-        by2 = by2 - dy * 0.025
-        nx, ny = self.renderer.line_normal(bx1, by1, bx2, by2, ring_center)
+        nx, ny = self.renderer.line_normal(a.x, a.y, b.x, b.y, ring_center)
         if bold_outward:
             nx, ny = -nx, -ny
         return [
             self.drawer.one_sided_bond_strip(
-                bx1,
-                by1,
-                bx2,
-                by2,
+                a.x,
+                a.y,
+                b.x,
+                b.y,
                 nx,
                 ny,
                 self._bond_line_width(),
                 self._bold_bond_width(),
+                a_id=bond.a,
+                b_id=bond.b,
             )
         ]
 
