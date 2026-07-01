@@ -43,8 +43,10 @@ class Renderer:
     def bond_pen(self) -> QPen:
         pen = QPen(QColor(self.style.bond_color))
         pen.setWidthF(self.bond_line_width())
-        pen.setCapStyle(Qt.PenCapStyle.FlatCap)
-        pen.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
+        # Round caps let the ends of two bonds meeting at an atom overlap into a
+        # clean join instead of leaving the notch a flat cap cuts at each vertex.
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
         return pen
 
     def dotted_bond_pen(self) -> QPen:
