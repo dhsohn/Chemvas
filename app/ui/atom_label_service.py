@@ -138,12 +138,13 @@ class AtomLabelService:
         vectors = connected_atom_unit_vectors_for(self.canvas, atom_id)
         angle = math.radians(default_bond_angle_for_vectors(vectors))
         face_left = math.cos(angle) < 0.0
-        # If a bond runs roughly along that same horizontal direction (e.g. the
-        # right-hand bond of a linear C-NH-C), the hydrogens would sit on top of
-        # it. Only then keep the label centred with full-box clearance -- a merely
-        # diagonal neighbour (top-of-ring N-H, zig-zag chain) still anchors.
+        # Only when a bond runs almost straight along that horizontal direction
+        # (within ~18 degrees, e.g. the right-hand bond of a flat C-NH-C) would
+        # the hydrogens sit on top of it; keep the label centred with full-box
+        # clearance there. Ordinary diagonal ring/chain neighbours -- a regular
+        # hexagon N-H has bonds near (+-0.866, 0.5) -- stay anchored.
         h_direction = -1.0 if face_left else 1.0
-        if any(dx * h_direction > 0.8 for dx, _ in vectors):
+        if any(dx * h_direction > 0.95 for dx, _ in vectors):
             return text, None, False
         display = hydride_display_text(element, h_count, face_left=face_left)
         return display, element, face_left
