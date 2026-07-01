@@ -85,7 +85,7 @@ python -m pip install -e ".[rdkit]"
 - 개발 환경 설정, 테스트 실행 방법, 그리고 **아키텍처 규약**은 [CONTRIBUTING.md](CONTRIBUTING.md)를 참고하세요.
   코드베이스가 수많은 작은 `*_ports` / `*_access` / `*_state` / `*_service` 모듈로 나뉜 것은 **의도된 설계**이며,
   그 경계는 테스트로 강제됩니다. 구조를 바꾸기 전에 반드시 CONTRIBUTING을 읽어주세요.
-- 전체 설계 개요는 [docs/architecture.md](docs/architecture.md)에 있습니다.
+- 전체 설계 개요는 [docs/ARCHITECTURE.ko.md](docs/ARCHITECTURE.ko.md)에 있습니다.
 
 ## 로드맵 / 아직 미지원
 버그가 아니라 알려진 빈칸입니다 — 기여를 환영합니다:
