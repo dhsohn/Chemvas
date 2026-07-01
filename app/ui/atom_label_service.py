@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -29,6 +30,7 @@ from ui.canvas_smiles_input_state import (
     last_smiles_input_for,
 )
 from ui.graphics_items import AtomDotItem, AtomLabelItem
+from ui.label_layout_logic import hydride_display_text, split_hydride_label
 from ui.pick_radius_access import atom_pick_radius_for
 from ui.renderer_style_access import (
     atom_color_for,
@@ -42,6 +44,10 @@ from ui.scene_item_access import (
     remove_item_from_canvas_scene,
 )
 from ui.scene_selectability import make_item_selectable
+from ui.structure_geometry_access import (
+    connected_atom_unit_vectors_for,
+    default_bond_angle_for_vectors,
+)
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
@@ -108,9 +114,36 @@ class AtomLabelService:
             remove_item_from_canvas_scene(self.canvas, dot)
 
     def position_label(self, item, x: float, y: float) -> None:
-        rect = item.boundingRect()
         offset = atom_label_offset_px_for(self.canvas)
-        item.setPos(x - rect.center().x() + offset, y - rect.center().y() - offset)
+        center = None
+        anchor_center = getattr(item, "anchor_center", None)
+        if callable(anchor_center):
+            center = anchor_center()
+        if center is None:
+            center = item.boundingRect().center()
+        item.setPos(x - center.x() + offset, y - center.y() - offset)
+
+    def _label_faces_left(self, atom_id: int) -> bool:
+        # Point the hydrogens where the next single bond would sprout, reusing the
+        # exact bond-placement direction logic. Whichever horizontal side that
+        # open direction falls on is the side the hydrogens take.
+        vectors = connected_atom_unit_vectors_for(self.canvas, atom_id)
+        angle = math.radians(default_bond_angle_for_vectors(vectors))
+        return math.cos(angle) < 0.0
+
+    def _hydride_layout(self, atom_id: int, text: str) -> tuple[str, str | None, bool]:
+        # Element+hydrogen labels ("NH", "OH", "NH2", "CH3") anchor on the element
+        # with the hydrogens pointing away from the bonds; everything else keeps
+        # its plain centred layout.
+        split = split_hydride_label(text)
+        if split is None:
+            return text, None, False
+        element, h_count = split
+        if h_count <= 0:
+            return text, None, False
+        face_left = self._label_faces_left(atom_id)
+        display = hydride_display_text(element, h_count, face_left=face_left)
+        return display, element, face_left
 
     def restore_atom_item_interaction(
         self,
@@ -236,7 +269,9 @@ class AtomLabelService:
         text_item.setData(1, atom_id)
         text_item.setZValue(3)
         make_item_selectable(text_item)
-        text_item.setPlainText(text)
+        display_text, anchor_element, anchor_at_end = self._hydride_layout(atom_id, text)
+        text_item.setPlainText(display_text)
+        text_item.set_anchor(anchor_element, at_end=anchor_at_end)
         self.position_label(text_item, atom.x, atom.y)
         self.remove_carbon_dot(atom_id)
         merge_ids, merge_info = self.merge_overlapping_atoms(atom_id) if allow_merge else ([], {})

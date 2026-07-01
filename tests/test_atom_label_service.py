@@ -412,6 +412,24 @@ class AtomLabelServiceTest(unittest.TestCase):
         self.assertIs(canvas.atom_dots[1], existing_dot)
         self.assertEqual(canvas.scene_obj.added_items, [])
 
+    def _label_hydride_with_neighbor(self, neighbor_x: float) -> str:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={1: Atom("C", neighbor_x, 0.0), 2: Atom("N", 0.0, 0.0)},
+            bonds=[Bond(1, 2, 1, style="single")],
+        )
+        service = _atom_label_service(canvas)
+        service.add_or_update_atom_label(2, "NH", record=False)
+        return canvas.atom_items[2].toPlainText()
+
+    def test_nh_label_keeps_hydrogen_away_from_a_left_bond(self) -> None:
+        # Neighbour to the left -> N stays on the left by the bond, H trails right.
+        self.assertEqual(self._label_hydride_with_neighbor(-20.0), "NH")
+
+    def test_nh_label_flips_hydrogen_away_from_a_right_bond(self) -> None:
+        # Neighbour to the right -> N moves right by the bond, H leads on the left.
+        self.assertEqual(self._label_hydride_with_neighbor(20.0), "HN")
+
     def test_record_label_change_builds_composite_single_and_noop_commands(self) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(

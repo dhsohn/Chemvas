@@ -2,9 +2,44 @@ import unittest
 
 from ui.label_layout_logic import (
     LabelRun,
+    hydride_display_text,
     parse_atom_label,
     place_runs,
+    split_hydride_label,
 )
+
+
+class SplitHydrideLabelTest(unittest.TestCase):
+    def test_bare_element_has_zero_hydrogens(self):
+        self.assertEqual(split_hydride_label("O"), ("O", 0))
+        self.assertEqual(split_hydride_label("Cl"), ("Cl", 0))
+
+    def test_single_hydrogen(self):
+        self.assertEqual(split_hydride_label("NH"), ("N", 1))
+        self.assertEqual(split_hydride_label("OH"), ("O", 1))
+
+    def test_multiple_hydrogens(self):
+        self.assertEqual(split_hydride_label("NH2"), ("N", 2))
+        self.assertEqual(split_hydride_label("CH3"), ("C", 3))
+
+    def test_non_hydride_labels_return_none(self):
+        self.assertIsNone(split_hydride_label("CO2Me"))
+        self.assertIsNone(split_hydride_label(""))
+        self.assertIsNone(split_hydride_label("NH4+"))
+
+
+class HydrideDisplayTextTest(unittest.TestCase):
+    def test_bare_element_ignores_direction(self):
+        self.assertEqual(hydride_display_text("O", 0, face_left=True), "O")
+        self.assertEqual(hydride_display_text("O", 0, face_left=False), "O")
+
+    def test_hydrogens_trail_when_facing_right(self):
+        self.assertEqual(hydride_display_text("N", 1, face_left=False), "NH")
+        self.assertEqual(hydride_display_text("N", 2, face_left=False), "NH2")
+
+    def test_hydrogens_lead_when_facing_left(self):
+        self.assertEqual(hydride_display_text("N", 1, face_left=True), "HN")
+        self.assertEqual(hydride_display_text("N", 2, face_left=True), "H2N")
 
 
 class ParseAtomLabelTest(unittest.TestCase):
