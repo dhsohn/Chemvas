@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import Any
 
 from core.model import MoleculeModel
 from core.rdkit_conversion import RDKitConversionHelper
@@ -16,7 +17,7 @@ from core.rdkit_types import (
 
 class RDKitAdapter:
     def __init__(self) -> None:
-        self._rdkit = None
+        self._rdkit: tuple[Any, Any] | None = None
         self.last_error: str | None = None
         self._name_map = {
             "c1ccccc1": "Benzene",
@@ -54,7 +55,7 @@ class RDKitAdapter:
         self._import_helper = RDKitImportHelper(self)
         self._conversion_helper = RDKitConversionHelper(self)
 
-    def _load_rdkit(self):
+    def _load_rdkit(self) -> tuple[Any, Any]:
         if self._rdkit is None:
             try:
                 from rdkit import Chem, RDLogger
@@ -63,7 +64,8 @@ class RDKitAdapter:
                 self._rdkit = (None, None)
                 self.last_error = "RDKit is not available in this environment."
                 return self._rdkit
-            RDLogger.DisableLog("rdApp.*")
+            # rdkit-stubs omits DisableLog even though rdkit provides it at runtime.
+            RDLogger.DisableLog("rdApp.*")  # type: ignore[attr-defined]
             self._rdkit = (Chem, AllChem)
         return self._rdkit
 
@@ -187,6 +189,6 @@ __all__ = [
     "Molecule3DBond",
     "Molecule3DScene",
     "MoleculeIdentifiers",
-    "RDKitResult",
     "RDKitAdapter",
+    "RDKitResult",
 ]

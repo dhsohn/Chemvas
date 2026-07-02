@@ -61,6 +61,7 @@ python_version = "3.13"
 mypy_path = "app"
 files = ["app/core", "app/ui"]
 warn_unused_ignores = true
+check_untyped_defs = true
 
 [[tool.mypy.overrides]]
 module = ["rdkit", "rdkit.*"]

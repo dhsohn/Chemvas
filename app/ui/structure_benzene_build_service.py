@@ -84,7 +84,7 @@ class StructureBenzeneBuildService:
         run_recorded_build(_build, before_smiles_input=before_smiles_input)
         return built_ring_item
 
-    def create_ring_fill_item(self, points, atom_ids):
+    def create_ring_fill_item(self, points: list[QPointF], atom_ids: list[int]) -> object:
         return create_ring_fill_item_for(self.canvas, points, atom_ids)
 
 
