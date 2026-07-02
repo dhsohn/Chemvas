@@ -67,3 +67,10 @@ check_untyped_defs = true
 [[tool.mypy.overrides]]
 module = ["rdkit", "rdkit.*"]
 ignore_missing_imports = true
+
+# core.rdkit_adapter carries a type: ignore for rdkit-stubs' missing
+# RDLogger.DisableLog. Without rdkit installed (CI) the module is Any and the
+# ignore would be flagged as unused, so skip that warning for this module only.
+[[tool.mypy.overrides]]
+module = ["core.rdkit_adapter"]
+warn_unused_ignores = false
