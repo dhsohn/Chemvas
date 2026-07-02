@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QFont, QFontMetricsF, QPainterPath, QPen
 from PyQt6.QtWidgets import (
@@ -13,7 +15,14 @@ from PyQt6.QtWidgets import (
     QStyleOptionGraphicsItem,
 )
 
-from ui.label_layout_logic import SUB_SCALE, LabelLayout, parse_atom_label, place_runs
+from ui.label_layout_logic import (
+    SUB_SCALE,
+    LabelLayout,
+    parse_atom_label,
+    place_hydride_stack,
+    place_runs,
+    split_hydride_label,
+)
 
 
 def _scaled_font(base: QFont, scale: float) -> QFont:
@@ -121,6 +130,8 @@ class AtomLabelItem(NoSelectTextItem):
         self._outline_mode = False
         self._anchor_element: str | None = None
         self._anchor_at_end = False
+        self._stack: tuple[str, int, bool] | None = None
+        self._stack_element_rect: QRectF | None = None
         self._relayout()
 
     def set_outline_mode(self, enabled: bool) -> None:
@@ -148,8 +159,31 @@ class AtomLabelItem(NoSelectTextItem):
         """
         self._anchor_element = element or None
         self._anchor_at_end = bool(at_end)
+        if self._stack is not None:
+            self._stack = None
+            self._relayout()
+            self.update()
+
+    def set_stack_anchor(self, element: str | None, *, hydrogens_below: bool = True) -> None:
+        """Anchor on ``element`` and stack its hydrogens on their own line.
+
+        Renders ChemDraw-style vertical hydrides ("N" over "H") for atoms whose
+        open side is vertical. The raw text must be an element-first hydride
+        label ("NH", "NH2"); anything else falls back to the plain anchor.
+        """
+        split = split_hydride_label(self._raw_text)
+        if element is None or split is None or split[0] != element or split[1] <= 0:
+            self.set_anchor(element)
+            return
+        self._anchor_element = None
+        self._anchor_at_end = False
+        self._stack = (element, split[1], bool(hydrogens_below))
+        self._relayout()
+        self.update()
 
     def _anchor_local_rect(self) -> QRectF | None:
+        if self._stack_element_rect is not None:
+            return QRectF(self._stack_element_rect)
         element = self._anchor_element
         if not element:
             return None
@@ -185,6 +219,7 @@ class AtomLabelItem(NoSelectTextItem):
         self._raw_text = "" if text is None else str(text)
         super().setPlainText(self._raw_text)
         self._anchor_element = None
+        self._stack = None
         self._relayout()
 
     def setFont(self, font) -> None:
@@ -195,13 +230,7 @@ class AtomLabelItem(NoSelectTextItem):
         doc = self.document()
         return float(doc.documentMargin()) if doc is not None else 0.0
 
-    def _relayout(self) -> None:
-        self.prepareGeometryChange()
-        runs = parse_atom_label(self._raw_text)
-        if not any(run.role != "normal" for run in runs):
-            self._layout = None
-            self._typographic = False
-            return
+    def _measure_context(self) -> tuple[Callable[[str, float], float], float, float, float]:
         font = self.font()
         base_fm = QFontMetricsF(font)
         sub_fm = QFontMetricsF(_scaled_font(font, SUB_SCALE))
@@ -214,11 +243,40 @@ class AtomLabelItem(NoSelectTextItem):
             metrics = sub_fm if point_size < size_pt else base_fm
             return metrics.horizontalAdvance(text)
 
+        return measure, base_fm.ascent(), base_fm.descent(), size_pt
+
+    def _relayout(self) -> None:
+        self.prepareGeometryChange()
+        self._stack_element_rect = None
+        if self._stack is not None:
+            element, h_count, hydrogens_below = self._stack
+            measure, ascent, descent, size_pt = self._measure_context()
+            layout, element_box = place_hydride_stack(
+                element,
+                h_count,
+                hydrogens_below=hydrogens_below,
+                measure=measure,
+                ascent=ascent,
+                descent=descent,
+                base_point_size=size_pt,
+            )
+            self._layout = layout
+            self._typographic = True
+            margin = self._doc_margin()
+            box_x, box_y, box_w, box_h = element_box
+            self._stack_element_rect = QRectF(margin + box_x, margin + box_y, box_w, box_h)
+            return
+        runs = parse_atom_label(self._raw_text)
+        if not any(run.role != "normal" for run in runs):
+            self._layout = None
+            self._typographic = False
+            return
+        measure, ascent, descent, size_pt = self._measure_context()
         self._layout = place_runs(
             runs,
             measure=measure,
-            ascent=base_fm.ascent(),
-            descent=base_fm.descent(),
+            ascent=ascent,
+            descent=descent,
             base_point_size=size_pt,
         )
         self._typographic = True

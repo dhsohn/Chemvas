@@ -112,6 +112,17 @@ class CanvasGeometryController:
 
     @staticmethod
     def visible_text_rect(item: QGraphicsTextItem) -> QRectF:
+        # Prefer the item's own painted content box. For a stacked hydride
+        # ("N" over "H") or any typographic label, the Qt document rect only
+        # covers the one-line plain text set via setPlainText, so it under-
+        # reports the vertical extent a mark (charge/radical) must clear and
+        # can overlap the second line. AtomLabelItem exposes the real box via
+        # export_scene_bounding_rect; plain text items fall back to the doc rect.
+        content_rect = getattr(item, "export_scene_bounding_rect", None)
+        if callable(content_rect):
+            rect = content_rect()
+            if isinstance(rect, QRectF):
+                return QRectF(rect)
         return item.mapRectToScene(QGraphicsTextItem.boundingRect(item))
 
     def visible_label_rect_for_atom(self, atom_id: int) -> QRectF | None:
