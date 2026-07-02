@@ -114,6 +114,20 @@ class CanvasGeometryControllerTest(unittest.TestCase):
         controller.canvas.model.atoms = {}
         self.assertIsNone(controller.label_cut_radius_for_atom(1))
 
+    def test_visible_text_rect_covers_both_lines_of_a_stacked_hydride(self) -> None:
+        from ui.graphics_items import AtomLabelItem
+
+        stacked = AtomLabelItem()
+        stacked.setFont(QFont("Helvetica", 13))
+        stacked.setPlainText("NH")
+        stacked.set_stack_anchor("N", hydrogens_below=True)
+
+        visible_rect = CanvasGeometryController.visible_text_rect(stacked)
+        one_line_rect = stacked.mapRectToScene(QGraphicsTextItem.boundingRect(stacked))
+        # The two-line content box must be taller than the one-line Qt document
+        # rect so a mark placed above/below clears the stacked hydrogen glyph.
+        self.assertGreater(visible_rect.height(), one_line_rect.height())
+
     def test_mark_clearance_for_kind_covers_radical_plus_minus_and_default(self) -> None:
         style = SimpleNamespace(bond_length_px=20.0, bond_line_width=2.0)
         controller = CanvasGeometryController(
