@@ -212,9 +212,7 @@ class RDKitConversionHelper:
             neighbor = model.atoms.get(neighbor_id)
             if neighbor is not None and neighbor.element.upper() == "H":
                 return True
-        if formal_charge or radical_electrons:
-            return False
-        return True
+        return not (formal_charge or radical_electrons)
 
     @staticmethod
     def _component_sort_key(model: MoleculeModel, atom_ids: set[int]) -> tuple[float, float, int]:
@@ -302,7 +300,7 @@ class RDKitConversionHelper:
             Molecule3DBond(
                 a=bond.GetBeginAtomIdx(),
                 b=bond.GetEndAtomIdx(),
-                order=max(1, int(round(bond.GetBondTypeAsDouble()))),
+                order=max(1, round(bond.GetBondTypeAsDouble())),
             )
             for bond in bond_iterable
         )
