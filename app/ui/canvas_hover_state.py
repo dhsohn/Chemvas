@@ -62,8 +62,8 @@ def set_hover_bond_id_for(canvas: Any, bond_id: int | None) -> None:
 
 
 __all__ = [
-    "CanvasHoverState",
     "HOVER_STATE_ATTR_MAP",
+    "CanvasHoverState",
     "HoverPreviewState",
     "append_hover_item_for",
     "extend_hover_items_for",

@@ -111,9 +111,9 @@ def clamp_curved_midpoint_for(canvas, start, end, mid):
 __all__ = [
     "clamp_curved_midpoint_for",
     "control_from_midpoint_for",
+    "curved_midpoint_for",
     "curved_snap_distance_for",
     "curved_snap_enabled_for",
-    "curved_midpoint_for",
     "default_curved_control_for",
     "orbital_snap_enabled_for",
     "orbital_snap_step_for",

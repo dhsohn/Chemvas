@@ -126,7 +126,7 @@ def zoom_factor_for(canvas) -> float:
 
 
 def zoom_percent_for(canvas) -> int:
-    return max(1, int(round(zoom_factor_for(canvas) * 100)))
+    return max(1, round(zoom_factor_for(canvas) * 100))
 
 
 def _notify_zoom_changed_for(canvas) -> None:
@@ -254,15 +254,15 @@ __all__ = [
     "reset_zoom_for",
     "rotate_view_for",
     "scene_pos_from_global_pos_for",
+    "scroll_view_by_for",
+    "set_focused_scene_item_for",
+    "set_scene_rect_for",
     "set_zoom_for",
     "shortcut_modifiers_for",
     "should_override_chemdraw_shortcut_for",
-    "scroll_view_by_for",
-    "set_scene_rect_for",
-    "set_focused_scene_item_for",
     "touch_interaction_for",
-    "update_viewport_for",
     "update_view_transform_for",
+    "update_viewport_for",
     "viewport_center_scene_pos_for",
     "zoom_factor_for",
     "zoom_in_for",

@@ -189,10 +189,10 @@ def clear_canvas_scene_item_list_map(canvas, item_map: dict) -> dict:
 
 
 __all__ = [
-    "apply_scene_item_state",
-    "attached_canvas_scene_items",
-    "attach_scene_item",
     "add_item_to_canvas_scene",
+    "apply_scene_item_state",
+    "attach_scene_item",
+    "attached_canvas_scene_items",
     "bond_ids_for_ring_item",
     "canvas_scene_for",
     "clear_canvas_scene",
@@ -202,10 +202,10 @@ __all__ = [
     "clear_scene_item_map",
     "create_scene_item_from_state",
     "create_scene_item_group",
-    "refresh_bond_geometry_for_ring_item",
     "destroy_scene_item_group",
     "item_can_be_added_to_canvas_scene",
     "item_is_in_canvas_scene",
+    "refresh_bond_geometry_for_ring_item",
     "remove_attached_item_from_canvas_scene",
     "remove_item_from_canvas_scene",
     "remove_items_from_canvas_scene",

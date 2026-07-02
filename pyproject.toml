@@ -48,13 +48,14 @@ skip_covered = true
 target-version = "py313"
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "I", "B", "C901"]
+select = ["E4", "E7", "E9", "F", "I", "B", "C901", "UP", "RUF012", "RUF021", "RUF022", "RUF046"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 30
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*.py" = ["E402"]
+# RUF012: test doubles use mutable class attributes as shared recording state.
+"tests/*.py" = ["E402", "RUF012"]
 
 [tool.mypy]
 python_version = "3.13"

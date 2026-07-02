@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import ClassVar
+
 from PyQt6.QtCore import Qt
 
 from ui.atom_label_access import add_or_update_atom_label, prompt_atom_label_for
@@ -22,7 +24,7 @@ from ui.structure_geometry_access import atom_point_for
 class CanvasChemdrawShortcutService:
     DEFAULT_ARROW_TYPE = "reaction"
 
-    LABEL_HOTKEYS = {
+    LABEL_HOTKEYS: ClassVar[dict[str, str]] = {
         "f": "F",
         "F": "CF3",
         "p": "P",

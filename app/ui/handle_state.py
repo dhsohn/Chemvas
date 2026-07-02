@@ -41,8 +41,8 @@ def set_handle_target_for(canvas, target) -> None:
 __all__ = [
     "CanvasHandleState",
     "active_handles_for",
-    "handle_target_for",
     "handle_state_for",
+    "handle_target_for",
     "set_active_handles_for",
     "set_handle_target_for",
 ]

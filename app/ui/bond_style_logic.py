@@ -109,10 +109,10 @@ def style_for_existing_bond_overlay(
 
 __all__ = [
     "BOLD_BOND_STYLES",
+    "DOTTED_DOUBLE_STYLES",
     "DOTTED_DOUBLE_STYLE_DEFAULT",
     "DOTTED_DOUBLE_STYLE_OUTER",
     "DOTTED_DOUBLE_STYLE_SEQUENCE",
-    "DOTTED_DOUBLE_STYLES",
     "DOUBLE_STYLE_CENTER",
     "DOUBLE_STYLE_DEFAULT",
     "DOUBLE_STYLE_OUTER",
@@ -122,8 +122,8 @@ __all__ = [
     "base_plain_double_style_for_dotted_variant",
     "cycle_plain_bond_style",
     "dotted_double_variant_for_style",
-    "is_plain_double_bond_style",
     "is_dotted_double_bond_style",
+    "is_plain_double_bond_style",
     "normalized_plain_double_style",
     "style_for_existing_bond_overlay",
 ]
