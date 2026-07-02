@@ -12,7 +12,12 @@ from PyQt6.QtGui import (
     QPainterPathStroker,
     QPen,
 )
-from PyQt6.QtWidgets import QGraphicsEllipseItem, QGraphicsPathItem, QGraphicsTextItem
+from PyQt6.QtWidgets import (
+    QGraphicsEllipseItem,
+    QGraphicsItem,
+    QGraphicsPathItem,
+    QGraphicsTextItem,
+)
 
 from ui.bracket_types import LEGACY_TS_BRACKET_KIND, normalized_bracket_kind
 from ui.canvas_arrow_build_service import CanvasArrowBuildService
@@ -45,6 +50,32 @@ from ui.shape_geometry import (
     pen_style_for_stroke,
     shape_path,
 )
+
+
+def _radial_orbital_lobes(
+    angles_and_phases: tuple[tuple[float, bool], ...],
+    rx: float,
+    ry: float,
+) -> tuple[tuple[float, float, float, float, bool], ...]:
+    return tuple(
+        (math.cos(math.radians(angle)) * 1.1, math.sin(math.radians(angle)) * 1.1, rx, ry, positive)
+        for angle, positive in angles_and_phases
+    )
+
+
+# Ellipse lobes per orbital kind as (dx, dy, rx, ry, positive_phase), all in
+# units of the base radius around the placement center. mo_antibonding also
+# paints a nodal line between its lobes (handled in build_orbital_items).
+_ORBITAL_LOBE_SPECS: dict[str, tuple[tuple[float, float, float, float, bool], ...]] = {
+    "s": ((0.0, 0.0, 1.0, 1.0, True),),
+    "p": ((-1.0, 0.0, 1.0, 0.7, True), (1.0, 0.0, 1.0, 0.7, False)),
+    "sp": ((-1.2, 0.0, 1.2, 0.7, True), (0.6, 0.0, 0.6, 0.4, False)),
+    "sp2": _radial_orbital_lobes(((0.0, True), (120.0, True), (240.0, True)), 0.75, 0.5),
+    "sp3": _radial_orbital_lobes(((45.0, True), (135.0, True), (225.0, True), (315.0, True)), 0.7, 0.45),
+    "d": _radial_orbital_lobes(((45.0, True), (135.0, False), (225.0, True), (315.0, False)), 0.7, 0.45),
+    "mo_bonding": ((-1.0, 0.0, 1.0, 0.7, True), (1.0, 0.0, 1.0, 0.7, True)),
+    "mo_antibonding": ((-1.0, 0.0, 1.0, 0.7, True), (1.0, 0.0, 1.0, 0.7, False)),
+}
 
 
 class _ChargeCircleMarkItem(NoSelectPathItem):
@@ -192,15 +223,8 @@ class CanvasSceneDecorationBuildService:
         bottom = rect.bottom()
         middle = rect.center().y()
         control = rect.height() * 0.22
-        if left:
-            outer_x = rect.left()
-            inner_x = outer_x + hook
-            path.moveTo(inner_x, top)
-            path.cubicTo(outer_x, top + control, outer_x, middle - control, outer_x, middle)
-            path.cubicTo(outer_x, middle + control, outer_x, bottom - control, inner_x, bottom)
-            return
-        outer_x = rect.right()
-        inner_x = outer_x - hook
+        outer_x = rect.left() if left else rect.right()
+        inner_x = outer_x + hook if left else outer_x - hook
         path.moveTo(inner_x, top)
         path.cubicTo(outer_x, top + control, outer_x, middle - control, outer_x, middle)
         path.cubicTo(outer_x, middle + control, outer_x, bottom - control, inner_x, bottom)
@@ -369,69 +393,21 @@ class CanvasSceneDecorationBuildService:
         neg_color.setAlphaF(orbital_alpha_for(self.canvas))
         phase_enabled = tool_settings_state_for(self.canvas).orbital_phase_enabled
 
-        def _ellipse_item(cx, cy, rx, ry, fill=None):
+        items: list[QGraphicsItem] = []
+        for dx, dy, rx_factor, ry_factor, positive in _ORBITAL_LOBE_SPECS.get(kind, ()):
+            cx = center.x() + dx * radius
+            cy = center.y() + dy * radius
+            rx = rx_factor * radius
+            ry = ry_factor * radius
             item = QGraphicsEllipseItem(cx - rx, cy - ry, rx * 2, ry * 2)
             item.setPen(pen)
-            if fill is not None:
-                item.setBrush(fill)
-            return item
-
-        items = []
-        if kind == "s":
-            fill = pos_color if phase_enabled else None
-            items.append(_ellipse_item(center.x(), center.y(), radius, radius, fill))
-            return items
-        if kind == "p":
-            fill1 = pos_color if phase_enabled else None
-            fill2 = neg_color if phase_enabled else None
-            items.append(_ellipse_item(center.x() - radius, center.y(), radius, radius * 0.7, fill1))
-            items.append(_ellipse_item(center.x() + radius, center.y(), radius, radius * 0.7, fill2))
-            return items
-        if kind == "sp":
-            fill1 = pos_color if phase_enabled else None
-            fill2 = neg_color if phase_enabled else None
-            items.append(_ellipse_item(center.x() - radius * 1.2, center.y(), radius * 1.2, radius * 0.7, fill1))
-            items.append(_ellipse_item(center.x() + radius * 0.6, center.y(), radius * 0.6, radius * 0.4, fill2))
-            return items
-        if kind == "sp2":
-            fill = pos_color if phase_enabled else None
-            for angle in [0, 120, 240]:
-                rad = math.radians(angle)
-                cx = center.x() + math.cos(rad) * radius * 1.1
-                cy = center.y() + math.sin(rad) * radius * 1.1
-                items.append(_ellipse_item(cx, cy, radius * 0.75, radius * 0.5, fill))
-            return items
-        if kind == "sp3":
-            fill = pos_color if phase_enabled else None
-            for angle in [45, 135, 225, 315]:
-                rad = math.radians(angle)
-                cx = center.x() + math.cos(rad) * radius * 1.1
-                cy = center.y() + math.sin(rad) * radius * 1.1
-                items.append(_ellipse_item(cx, cy, radius * 0.7, radius * 0.45, fill))
-            return items
-        if kind == "d":
-            fill1 = pos_color if phase_enabled else None
-            fill2 = neg_color if phase_enabled else None
-            for angle, fill in [(45, fill1), (135, fill2), (225, fill1), (315, fill2)]:
-                rad = math.radians(angle)
-                cx = center.x() + math.cos(rad) * radius * 1.1
-                cy = center.y() + math.sin(rad) * radius * 1.1
-                items.append(_ellipse_item(cx, cy, radius * 0.7, radius * 0.45, fill))
-            return items
-        if kind == "mo_bonding":
-            fill = pos_color if phase_enabled else None
-            items.append(_ellipse_item(center.x() - radius, center.y(), radius, radius * 0.7, fill))
-            items.append(_ellipse_item(center.x() + radius, center.y(), radius, radius * 0.7, fill))
-            return items
+            if phase_enabled:
+                item.setBrush(pos_color if positive else neg_color)
+            items.append(item)
         if kind == "mo_antibonding":
-            fill1 = pos_color if phase_enabled else None
-            fill2 = neg_color if phase_enabled else None
-            items.append(_ellipse_item(center.x() - radius, center.y(), radius, radius * 0.7, fill1))
-            items.append(_ellipse_item(center.x() + radius, center.y(), radius, radius * 0.7, fill2))
             node = NoSelectLineItem(center.x(), center.y() - radius * 0.8, center.x(), center.y() + radius * 0.8)
             node.setPen(pen)
             items.append(node)
-            return items
         return items
 
     def arrow_pen(self, dotted: bool = False):
