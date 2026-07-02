@@ -207,7 +207,7 @@ def prompt_sheet_setup(window, *, current_size: str, current_orientation: str) -
 __all__ = [
     "FigureExportOptions",
     "SheetSetupSelection",
-    "prompt_zoom_percent",
     "prompt_export_options",
     "prompt_sheet_setup",
+    "prompt_zoom_percent",
 ]

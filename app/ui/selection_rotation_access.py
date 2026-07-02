@@ -245,9 +245,9 @@ __all__ = [
     "fragment_plane_normal_for",
     "normalize_3d",
     "planar_fragment_components_for",
-    "rotation_scale_for_coords_for",
-    "rotate_selection_for",
     "rotate_point_around_axis_for",
+    "rotate_selection_for",
+    "rotation_scale_for_coords_for",
     "unproject_scene_point_3d_for",
     "update_ring_fills_for_atoms_for",
 ]

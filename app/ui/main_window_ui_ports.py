@@ -55,8 +55,8 @@ def export_xyz_button_for_window(window):
 
 
 __all__ = [
-    "atom_input_for_window",
     "apply_preview_window_assembly_for_window",
+    "atom_input_for_window",
     "export_xyz_button_for_window",
     "icon_factory_for_window",
     "preview_panel_button_for_window",

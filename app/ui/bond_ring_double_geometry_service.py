@@ -29,10 +29,10 @@ class BondRingDoubleGeometryService:
 
     def _has_label(self, a_id: int | None, b_id: int | None) -> bool:
         return (
-            a_id is not None
-            and self.renderer.label_rect_for_atom(a_id) is not None
-            or b_id is not None
-            and self.renderer.label_rect_for_atom(b_id) is not None
+            (a_id is not None
+            and self.renderer.label_rect_for_atom(a_id) is not None)
+            or (b_id is not None
+            and self.renderer.label_rect_for_atom(b_id) is not None)
         )
 
     def _projected_3d_segments(

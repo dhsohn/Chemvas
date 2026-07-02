@@ -48,7 +48,7 @@ def export_raster_file(
     height_px = max(1, round(plan.out_h_pt / POINTS_PER_INCH * dpi))
     with exported_scene(scene, export_items):
         image = QImage(width_px, height_px, QImage.Format.Format_ARGB32_Premultiplied)
-        dots_per_meter = int(round(dpi / METERS_PER_INCH))
+        dots_per_meter = round(dpi / METERS_PER_INCH)
         image.setDotsPerMeterX(dots_per_meter)
         image.setDotsPerMeterY(dots_per_meter)
         image.fill(Qt.GlobalColor.white if background == "white" else Qt.GlobalColor.transparent)
