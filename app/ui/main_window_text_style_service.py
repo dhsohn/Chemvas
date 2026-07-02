@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import Any, ClassVar
+
 from PyQt6.QtWidgets import QColorDialog
 
 
 class MainWindowTextStyleService:
-    _TEXT_ALIGNMENTS = {"Left": "left", "Center": "center", "Right": "right"}
-    _TEXT_PRESET_APPLIERS = {
+    _TEXT_ALIGNMENTS: ClassVar[dict[str, str]] = {"Left": "left", "Center": "center", "Right": "right"}
+    _TEXT_PRESET_APPLIERS: ClassVar[dict[str, Callable[[Any], None]]] = {
         "ACS": lambda controller: controller.apply_text_preset_acs(),
         "Paper Thin": lambda controller: controller.apply_text_preset_paper_thin(),
         "Paper Bold": lambda controller: controller.apply_text_preset_paper_bold(),

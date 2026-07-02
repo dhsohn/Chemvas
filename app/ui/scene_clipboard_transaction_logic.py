@@ -56,8 +56,8 @@ def build_clipboard_copy_plan(
     return ClipboardCopyPlan(
         source=source,
         scale=scale,
-        image_width=max(1, int(math.ceil(source.width() * scale))),
-        image_height=max(1, int(math.ceil(source.height() * scale))),
+        image_width=max(1, math.ceil(source.width() * scale)),
+        image_height=max(1, math.ceil(source.height() * scale)),
         payload_json=payload_json,
     )
 
@@ -209,8 +209,8 @@ __all__ = [
     "ClipboardPastePlan",
     "build_clipboard_copy_plan",
     "build_clipboard_paste_plan",
-    "clipboard_paste_offset",
     "clipboard_copy_cache_values",
+    "clipboard_paste_offset",
     "translated_point_value",
     "translated_scene_item_state",
     "visible_items_to_hide_for_copy",

@@ -76,7 +76,7 @@ class CanvasHitTestingService:
 
     @staticmethod
     def cell_coords(x: float, y: float, cell_size: float) -> tuple[int, int]:
-        return int(math.floor(x / cell_size)), int(math.floor(y / cell_size))
+        return math.floor(x / cell_size), math.floor(y / cell_size)
 
     def ensure_spatial_index(self) -> None:
         cell_size = self.grid_cell_size()
@@ -120,7 +120,7 @@ class CanvasHitTestingService:
         cell_size = spatial_cell_size_or_for(self.canvas, self.grid_cell_size())
         if cell_size <= 0:
             return None
-        cell_radius = int(math.ceil(max_dist / cell_size))
+        cell_radius = math.ceil(max_dist / cell_size)
         ix, iy = self.cell_coords(x, y, cell_size)
         nearest_id = None
         nearest_dist_sq = max_dist * max_dist
@@ -145,7 +145,7 @@ class CanvasHitTestingService:
         cell_size = spatial_cell_size_or_for(self.canvas, self.grid_cell_size())
         if cell_size <= 0:
             return None
-        cell_radius = int(math.ceil(max_dist / cell_size))
+        cell_radius = math.ceil(max_dist / cell_size)
         ix, iy = self.cell_coords(pos.x(), pos.y(), cell_size)
         nearest = None
         nearest_dist = max_dist

@@ -71,7 +71,7 @@ class ExportRenderServiceTest(unittest.TestCase):
             plan = render_scene_to_svg(scene, path, margin=4.0)
             self.assertTrue(os.path.exists(path))
             self.assertGreater(plan.source_w, 0.0)
-            with open(path, "r", encoding="utf-8") as handle:
+            with open(path, encoding="utf-8") as handle:
                 content = handle.read()
 
         self.assertIn("<svg", content)

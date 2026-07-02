@@ -102,9 +102,9 @@ def mark_kinds_by_atom_for(canvas) -> dict[int, list[str]]:
 
 __all__ = [
     "build_mark_item_for",
-    "mark_kinds_by_atom_for",
     "mark_center_for",
     "mark_center_for_pointer_for",
+    "mark_kinds_by_atom_for",
     "mark_offset_from_click_for",
     "mark_selection_radius_for",
     "remove_mark_item_for",

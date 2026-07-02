@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Callable
 
 # App-level registry for Chemvas's single-document-per-window model (like Word
@@ -20,10 +21,8 @@ def register_window(window) -> None:
 
 
 def forget_window(window) -> None:
-    try:
+    with contextlib.suppress(ValueError):
         _open_windows.remove(window)
-    except ValueError:
-        pass
 
 
 def open_windows() -> tuple:

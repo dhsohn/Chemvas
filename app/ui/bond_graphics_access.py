@@ -233,9 +233,9 @@ __all__ = [
     "orient_normal_toward_target",
     "parallel_bond_segments_for",
     "project_point_3d_for",
-    "ring_double_segments_for",
     "ring_center_3d_for_bond_for",
     "ring_center_for_bond_for",
+    "ring_double_segments_for",
     "strip_polygon_for",
     "wedge_polygon_for",
 ]

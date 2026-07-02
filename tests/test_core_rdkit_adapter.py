@@ -429,7 +429,7 @@ class _FakeAliasAtom:
         self._idx = idx
         self.symbol = symbol
         self._atomic_num = atomic_num
-        self._neighbors: list["_FakeAliasAtom"] = []
+        self._neighbors: list[_FakeAliasAtom] = []
 
     def GetIdx(self) -> int:
         return self._idx

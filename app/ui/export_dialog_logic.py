@@ -84,16 +84,16 @@ def default_export_path(current_file_path: str | None, fmt: str) -> str:
 
 
 __all__ = [
-    "EXPORT_FORMATS",
-    "DPI_OPTIONS",
     "DEFAULT_DPI",
-    "EXPORT_SCOPES",
+    "DPI_OPTIONS",
     "EXPORT_BACKGROUNDS",
+    "EXPORT_FORMATS",
+    "EXPORT_SCOPES",
     "EXPORT_SIZES",
-    "is_raster_format",
-    "is_dpi_relevant",
-    "suffix_for_format",
-    "file_filter_for_format",
-    "normalize_export_path",
     "default_export_path",
+    "file_filter_for_format",
+    "is_dpi_relevant",
+    "is_raster_format",
+    "normalize_export_path",
+    "suffix_for_format",
 ]

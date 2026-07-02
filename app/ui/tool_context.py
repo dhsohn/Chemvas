@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+
 from PyQt6.QtCore import QPointF
 
 _MISSING = object()
@@ -76,10 +78,8 @@ class ToolContext:
         item_at_scene_pos = self._callable_attr(self.hit_testing_service, "item_at_scene_pos")
         if item_at_scene_pos is not None:
             scene_pos = _MISSING
-            try:
+            with contextlib.suppress(AttributeError):
                 scene_pos = self.scene_pos_from_event(event)
-            except AttributeError:
-                pass
             if scene_pos is not _MISSING:
                 return item_at_scene_pos(scene_pos)
         return self._call_port(self.hit_testing_service, "item_at_event", event, default=None)

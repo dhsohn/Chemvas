@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterable, Mapping, Sequence
-from typing import TypeVar
 
 from core.model import Bond, MoleculeModel
 
@@ -25,8 +24,6 @@ _STEREO_BY_STYLE = {"wedge": 1, "hash": 6}
 # Target average bond length (in MDL coordinate units) used to normalise the
 # canvas's scene coordinates so emitted depictions look conventional.
 _TARGET_BOND_LENGTH = 1.5
-
-_T = TypeVar("_T")
 
 
 class MolfileError(ValueError):
@@ -138,7 +135,7 @@ def _property_lines(tag: str, entries: Sequence[tuple[int, int]]) -> list[str]:
     return lines
 
 
-def _chunked(items: Sequence[_T], size: int) -> Iterable[Sequence[_T]]:
+def _chunked[T](items: Sequence[T], size: int) -> Iterable[Sequence[T]]:
     for start in range(0, len(items), size):
         yield items[start : start + size]
 

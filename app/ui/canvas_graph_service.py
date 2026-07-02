@@ -166,9 +166,7 @@ class CanvasGraphService:
         bond = bond_for_id(self.canvas, bond_id)
         if bond is None or bond.order != 1:
             return False
-        if self.bond_in_cycle(bond_id):
-            return False
-        return True
+        return not self.bond_in_cycle(bond_id)
 
     def bond_component_atoms(self, bond_id: int) -> set[int] | None:
         bond = bond_for_id(self.canvas, bond_id)

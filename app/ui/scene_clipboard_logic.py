@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 from collections.abc import Callable, Mapping, Sequence
 
@@ -166,10 +167,8 @@ def clipboard_payload_candidates(
 ) -> list[str]:
     payload_candidates: list[str] = []
     if mime_data is not None and mime_data.hasFormat(mime_type):
-        try:
+        with contextlib.suppress(UnicodeDecodeError):
             payload_candidates.append(mime_data.data(mime_type).data().decode("utf-8"))
-        except UnicodeDecodeError:
-            pass
     return payload_candidates
 
 
