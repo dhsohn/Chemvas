@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.history import CompositeCommand, MoveAtomsCommand
+from core.history import CompositeCommand, HistoryCommand, MoveAtomsCommand
 from PyQt6.QtCore import QPointF
 
 from ui.canvas_model_access import bond_for_id
@@ -94,8 +94,8 @@ class SelectionDragMixin:
         self._total_delta += delta
         self._moved = True
 
-    def _build_move_command(self):
-        commands = []
+    def _build_move_command(self) -> HistoryCommand | None:
+        commands: list[HistoryCommand] = []
         if self._selection_atom_ids:
             commands.append(
                 MoveAtomsCommand(
