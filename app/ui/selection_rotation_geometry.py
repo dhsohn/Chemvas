@@ -183,8 +183,8 @@ def axis_rotated_coords(
 
 
 __all__ = [
-    "Coords3D",
     "ROTATION_DRAG_SENSITIVITY",
+    "Coords3D",
     "RotatePointAroundAxis",
     "axis_rotated_coords",
     "center_for_coords_3d",

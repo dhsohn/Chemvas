@@ -102,7 +102,7 @@ def current_zoom_percent_for_window(window) -> int:
     canvas = active_canvas_or_none_for_window(window)
     if canvas is None:
         return 100
-    return max(1, int(round(zoom_factor_for(canvas) * 100)))
+    return max(1, round(zoom_factor_for(canvas) * 100))
 
 
 def zoom_in_for_window(window) -> int:
@@ -198,9 +198,9 @@ def selected_scene_items_for_window(window, *, excluded_kinds):
 
 __all__ = [
     "active_canvas_for_window",
-    "active_canvas_or_none_for_window",
     "active_canvas_index_for_window",
     "active_canvas_name_for_window",
+    "active_canvas_or_none_for_window",
     "active_tool_name_for_window",
     "all_canvases_for_window",
     "bond_length_px_for_window",
@@ -210,27 +210,27 @@ __all__ = [
     "color_tool_for_window",
     "context_bar_page_override_for_window",
     "current_zoom_percent_for_window",
-    "fit_canvas_to_view_for_window",
-    "reset_zoom_for_window",
-    "set_zoom_percent_for_window",
-    "zoom_in_for_window",
-    "zoom_out_for_window",
     "document_session_service_for_window",
+    "fit_canvas_to_view_for_window",
     "geometry_controller_for_window",
     "has_exportable_atoms_for_window",
     "history_service_for_window",
     "insert_controller_for_window",
     "next_canvas_name_for_window",
+    "reset_zoom_for_window",
     "scene_transform_controller_for_window",
     "selected_scene_items_for_window",
     "set_context_bar_page_override_for_window",
     "set_last_canvas_tab_index_for_window",
     "set_sheet_setup_for_window",
     "set_tab_reactions_suspended_for_window",
+    "set_zoom_percent_for_window",
     "sheet_orientation_for_window",
     "sheet_size_for_window",
     "style_controller_for_window",
     "tab_reactions_suspended_for_window",
     "tool_mode_controller_for_window",
     "tool_settings_for_window",
+    "zoom_in_for_window",
+    "zoom_out_for_window",
 ]

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, ClassVar
 
 from ui.bracket_types import BRACKET_KIND_VALUES
 from ui.canvas_callback_state import callback_state_for
@@ -17,7 +17,7 @@ from ui.shape_geometry import SHAPE_KINDS, STROKE_STYLES
 
 
 class CanvasToolModeController:
-    MARK_KINDS = {"plus", "minus", "circled_plus", "circled_minus", "radical"}
+    MARK_KINDS: ClassVar[set[str]] = {"plus", "minus", "circled_plus", "circled_minus", "radical"}
 
     def __init__(
         self,

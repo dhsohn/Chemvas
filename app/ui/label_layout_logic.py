@@ -213,12 +213,12 @@ def place_runs(
 
 
 __all__ = [
-    "SUB_SCALE",
     "SUB_DROP_RATIO",
+    "SUB_SCALE",
     "SUPER_RISE_RATIO",
+    "LabelLayout",
     "LabelRun",
     "PlacedRun",
-    "LabelLayout",
     "hydride_display_text",
     "parse_atom_label",
     "place_runs",

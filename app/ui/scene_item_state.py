@@ -290,8 +290,8 @@ __all__ = [
     "shape_state_dict",
     "shape_state_dict_for",
     "shape_stroke_from_state",
-    "ts_bracket_rect_from_state",
     "ts_bracket_kind_from_state",
+    "ts_bracket_rect_from_state",
     "ts_bracket_state_dict",
     "ts_bracket_state_dict_for",
 ]

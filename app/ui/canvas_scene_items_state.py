@@ -117,8 +117,8 @@ def clear_selected_notes_for(canvas: Any) -> None:
 
 
 __all__ = [
-    "CanvasSceneItemsState",
     "SCENE_ITEM_COLLECTION_ATTRS",
+    "CanvasSceneItemsState",
     "add_selected_note_for",
     "append_scene_item_for",
     "arrow_items_for",

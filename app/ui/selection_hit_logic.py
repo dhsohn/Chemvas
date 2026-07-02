@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
@@ -57,8 +57,8 @@ class SelectionHitRequest:
 
 def build_selection_snapshot(
     *,
-    selected_atom_ids: Sequence[int],
-    selected_bond_ids: Sequence[int],
+    selected_atom_ids: Iterable[int],
+    selected_bond_ids: Iterable[int],
     selection_items: Sequence[object],
     selected_bond_atom_ids: Sequence[tuple[int, int]] = (),
 ) -> SelectionSnapshot:

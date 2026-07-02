@@ -37,8 +37,8 @@ def clear_last_smiles_input_for(canvas: Any) -> None:
 
 
 __all__ = [
-    "CanvasSmilesInputState",
     "SMILES_INPUT_ATTRS",
+    "CanvasSmilesInputState",
     "clear_last_smiles_input_for",
     "last_smiles_input_for",
     "set_last_smiles_input_for",

@@ -44,9 +44,9 @@ def refresh_selection_outline_for_canvas(canvas) -> None:
 
 
 __all__ = [
-    "move_service_from_canvas",
     "move_atoms_for",
     "move_item_for",
+    "move_service_from_canvas",
     "refresh_selection_outline_for_canvas",
     "shift_selection_outlines_for",
 ]
