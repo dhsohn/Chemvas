@@ -3,7 +3,9 @@ import unittest
 from ui.label_layout_logic import (
     LabelRun,
     hydride_display_text,
+    hydride_hydrogen_text,
     parse_atom_label,
+    place_hydride_stack,
     place_runs,
     split_hydride_label,
 )
@@ -132,6 +134,57 @@ class PlaceRunsTest(unittest.TestCase):
         layout = self.layout([LabelRun("NH", "normal"), LabelRun("+", "super")])
         base, sup = layout.runs
         self.assertLess(sup.baseline, base.baseline)
+
+
+class HydrideHydrogenTextTest(unittest.TestCase):
+    def test_counts_render_like_the_inline_form(self):
+        self.assertEqual(hydride_hydrogen_text(1), "H")
+        self.assertEqual(hydride_hydrogen_text(2), "H2")
+        self.assertEqual(hydride_hydrogen_text(3), "H3")
+
+
+class PlaceHydrideStackTest(unittest.TestCase):
+    def measure(self, text, point_size):
+        # Deterministic, Qt-free advance: one unit of width per char per point.
+        return len(text) * point_size
+
+    def stack(self, element, h_count, *, hydrogens_below=True):
+        return place_hydride_stack(
+            element,
+            h_count,
+            hydrogens_below=hydrogens_below,
+            measure=self.measure,
+            ascent=8.0,
+            descent=2.0,
+            base_point_size=10.0,
+        )
+
+    def test_single_hydrogen_stacks_below_the_element(self):
+        layout, element_box = self.stack("N", 1)
+        self.assertTrue(layout.has_typography)
+        self.assertAlmostEqual(layout.width, 10.0)
+        self.assertAlmostEqual(layout.height, 20.0)  # two plain 1-em lines
+        element_run, hydrogen_run = layout.runs
+        self.assertEqual(element_run.text, "N")
+        self.assertEqual(hydrogen_run.text, "H")
+        self.assertGreater(hydrogen_run.baseline, element_run.baseline)
+        self.assertEqual(element_box, (0.0, 0.0, 10.0, 10.0))
+
+    def test_hydrogens_above_put_the_element_on_the_second_line(self):
+        layout, element_box = self.stack("N", 1, hydrogens_below=False)
+        element_run = next(run for run in layout.runs if run.text == "N")
+        hydrogen_run = next(run for run in layout.runs if run.text == "H")
+        self.assertLess(hydrogen_run.baseline, element_run.baseline)
+        self.assertAlmostEqual(element_box[1], 10.0)  # below the 1-em H line
+
+    def test_lines_are_centred_on_each_other(self):
+        # "H2" (H at 10 + subscript 2 at 7.2) is wider than "N", so the element
+        # shifts right by half the difference and the hydrogen line starts at 0.
+        layout, element_box = self.stack("N", 2)
+        self.assertAlmostEqual(layout.width, 17.2)
+        self.assertAlmostEqual(element_box[0], 3.6)
+        hydrogen_run = next(run for run in layout.runs if run.text == "H")
+        self.assertAlmostEqual(hydrogen_run.x, 0.0)
 
 
 if __name__ == "__main__":

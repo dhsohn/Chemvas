@@ -44,13 +44,31 @@ from ui.scene_item_access import (
     remove_item_from_canvas_scene,
 )
 from ui.scene_selectability import make_item_selectable
-from ui.structure_geometry_access import (
-    connected_atom_unit_vectors_for,
-    default_bond_angle_for_vectors,
-)
+from ui.structure_geometry_access import connected_atom_unit_vectors_for
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
+
+
+def _open_direction(vectors: list[tuple[float, float]]) -> tuple[float, float]:
+    """Direction toward the open side of an atom, for hydride label placement.
+
+    Opposite the vector sum of the bonds (the same negative-sum rule the bond
+    sprout uses at a two-bond vertex). When the bonds cancel out (a straight
+    C-NH-C), fall back to the perpendicular of the first bond, flipped so its
+    dominant component is positive -- a flat chain stacks its H underneath
+    regardless of bond insertion order, like ChemDraw.
+    """
+    sum_x = sum(dx for dx, _ in vectors)
+    sum_y = sum(dy for _, dy in vectors)
+    if math.hypot(sum_x, sum_y) > 1e-6:
+        return -sum_x, -sum_y
+    if vectors:
+        perp_x, perp_y = vectors[0][1], -vectors[0][0]
+        if (perp_y if abs(perp_y) >= abs(perp_x) else perp_x) < 0.0:
+            perp_x, perp_y = -perp_x, -perp_y
+        return perp_x, perp_y
+    return 1.0, 0.0
 
 
 class AtomLabelService:
@@ -123,31 +141,43 @@ class AtomLabelService:
             center = item.boundingRect().center()
         item.setPos(x - center.x() + offset, y - center.y() - offset)
 
-    def _hydride_layout(self, atom_id: int, text: str) -> tuple[str, str | None, bool]:
+    def _hydride_layout(self, atom_id: int, text: str) -> tuple[str, str | None, bool, bool | None]:
         # Element+hydrogen labels ("NH", "OH", "NH2", "CH3") anchor on the element
         # with the hydrogens pointing away from the bonds; everything else keeps
-        # its plain centred layout.
+        # its plain centred layout. Returns (display_text, anchor_element,
+        # anchor_at_end, hydrogens_below); hydrogens_below is None for the
+        # horizontal layouts and picks the stacked line side otherwise.
         split = split_hydride_label(text)
         if split is None:
-            return text, None, False
+            return text, None, False, None
         element, h_count = split
         if h_count <= 0:
-            return text, None, False
-        # Point the hydrogens where the next single bond would sprout, reusing the
-        # exact bond-placement direction logic.
+            return text, None, False, None
+        # Put the hydrogens on the open side of the atom, quantised to the
+        # dominant axis. A vertical open side (both bonds of a vertex rising,
+        # or a flat C-NH-C chain) stacks the H on its own line under/over the
+        # element, ChemDraw-style, instead of forcing a horizontal layout.
         vectors = connected_atom_unit_vectors_for(self.canvas, atom_id)
-        angle = math.radians(default_bond_angle_for_vectors(vectors))
-        face_left = math.cos(angle) < 0.0
+        open_x, open_y = _open_direction(vectors)
+        if abs(open_y) > abs(open_x):
+            hydrogens_below = open_y > 0.0
+            v_direction = 1.0 if hydrogens_below else -1.0
+            # Mirror of the horizontal guard below: keep full-box clearance when
+            # a bond runs almost straight along the hydrogen direction.
+            if any(dy * v_direction > 0.95 for _, dy in vectors):
+                return text, None, False, None
+            return text, element, False, hydrogens_below
+        face_left = open_x < 0.0
         # Only when a bond runs almost straight along that horizontal direction
-        # (within ~18 degrees, e.g. the right-hand bond of a flat C-NH-C) would
-        # the hydrogens sit on top of it; keep the label centred with full-box
-        # clearance there. Ordinary diagonal ring/chain neighbours -- a regular
-        # hexagon N-H has bonds near (+-0.866, 0.5) -- stay anchored.
+        # (within ~18 degrees) would the hydrogens sit on top of it; keep the
+        # label centred with full-box clearance there. Ordinary diagonal
+        # ring/chain neighbours -- a regular hexagon N-H has bonds near
+        # (+-0.866, 0.5) -- stay anchored.
         h_direction = -1.0 if face_left else 1.0
         if any(dx * h_direction > 0.95 for dx, _ in vectors):
-            return text, None, False
+            return text, None, False, None
         display = hydride_display_text(element, h_count, face_left=face_left)
-        return display, element, face_left
+        return display, element, face_left, None
 
     def restore_atom_item_interaction(
         self,
@@ -273,9 +303,12 @@ class AtomLabelService:
         text_item.setData(1, atom_id)
         text_item.setZValue(3)
         make_item_selectable(text_item)
-        display_text, anchor_element, anchor_at_end = self._hydride_layout(atom_id, text)
+        display_text, anchor_element, anchor_at_end, hydrogens_below = self._hydride_layout(atom_id, text)
         text_item.setPlainText(display_text)
-        text_item.set_anchor(anchor_element, at_end=anchor_at_end)
+        if hydrogens_below is None:
+            text_item.set_anchor(anchor_element, at_end=anchor_at_end)
+        else:
+            text_item.set_stack_anchor(anchor_element, hydrogens_below=hydrogens_below)
         self.position_label(text_item, atom.x, atom.y)
         self.remove_carbon_dot(atom_id)
         merge_ids, merge_info = self.merge_overlapping_atoms(atom_id) if allow_merge else ([], {})

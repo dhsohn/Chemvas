@@ -447,10 +447,11 @@ class AtomLabelServiceTest(unittest.TestCase):
         self.assertIsNotNone(anchor)
         self.assertLess(anchor.width(), item.sceneBoundingRect().width())
 
-    def test_nh_between_two_horizontal_bonds_keeps_full_clearance(self) -> None:
+    def test_nh_between_two_horizontal_bonds_stacks_hydrogen_below(self) -> None:
         # C-NH-C: both horizontal sides carry a bond, so the open direction is
-        # vertical. Anchoring would leave a bond running through the H glyph, so
-        # the label stays centred with full-box clearance (no element anchor).
+        # vertical. The bond sum cancels and the perpendicular fallback points
+        # down, so the H stacks on its own line under the N (ChemDraw-style)
+        # instead of falling back to a centred full-clearance label.
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
             atoms={1: Atom("C", -20.0, 0.0), 2: Atom("N", 0.0, 0.0), 3: Atom("C", 20.0, 0.0)},
@@ -460,12 +461,36 @@ class AtomLabelServiceTest(unittest.TestCase):
         service.add_or_update_atom_label(2, "NH", record=False)
         item = canvas.atom_items[2]
         self.assertEqual(item.toPlainText(), "NH")
-        self.assertIsNone(item.anchor_scene_rect())
+        anchor = item.anchor_scene_rect()
+        self.assertIsNotNone(anchor)
+        # The anchored N glyph sits on the top line, hydrogens underneath.
+        self.assertLess(anchor.center().y(), item.sceneBoundingRect().center().y())
 
-    def test_nh_with_hexagon_ring_bonds_still_anchors(self) -> None:
-        # A regular top/bottom hexagon N-H has ring bonds near (+-0.866, 0.5),
-        # ~30 degrees off horizontal. No bond runs along the horizontal hydrogen
-        # direction, so anchoring must stay (not fall back to full clearance).
+    def test_nh_at_a_rising_two_bond_vertex_stacks_hydrogen_below(self) -> None:
+        # A dimethylamine vertex: both bonds rise from the N, so the open side
+        # (negative bond-vector sum) points straight down. ChemDraw stacks the H
+        # directly under the N there; the H must not trail off horizontally.
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={
+                1: Atom("C", -17.320508, -10.0),
+                2: Atom("N", 0.0, 0.0),
+                3: Atom("C", 17.320508, -10.0),
+            },
+            bonds=[Bond(1, 2, 1, style="single"), Bond(2, 3, 1, style="single")],
+        )
+        service = _atom_label_service(canvas)
+        service.add_or_update_atom_label(2, "NH", record=False)
+        item = canvas.atom_items[2]
+        self.assertEqual(item.toPlainText(), "NH")
+        anchor = item.anchor_scene_rect()
+        self.assertIsNotNone(anchor)
+        self.assertLess(anchor.center().y(), item.sceneBoundingRect().center().y())
+
+    def test_nh_with_hexagon_ring_bonds_stacks_hydrogen_above(self) -> None:
+        # A regular top-of-hexagon N-H has ring bonds near (+-0.866, 0.5), so
+        # the open side points straight up: the H stacks on its own line above
+        # the N, and the anchor stays on the element glyph for bond trimming.
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
             atoms={
@@ -478,7 +503,26 @@ class AtomLabelServiceTest(unittest.TestCase):
         service = _atom_label_service(canvas)
         service.add_or_update_atom_label(2, "NH", record=False)
         item = canvas.atom_items[2]
-        self.assertIsNotNone(item.anchor_scene_rect())
+        anchor = item.anchor_scene_rect()
+        self.assertIsNotNone(anchor)
+        # The anchored N glyph sits on the bottom line, hydrogens on top.
+        self.assertGreater(anchor.center().y(), item.sceneBoundingRect().center().y())
+
+    def test_nh2_with_a_vertical_bond_stacks_hydrogens_below(self) -> None:
+        # A single bond arriving from straight above leaves the open side below;
+        # the H2 stacks under the N instead of picking a horizontal side.
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={1: Atom("C", 0.0, -20.0), 2: Atom("N", 0.0, 0.0)},
+            bonds=[Bond(1, 2, 1, style="single")],
+        )
+        service = _atom_label_service(canvas)
+        service.add_or_update_atom_label(2, "NH2", record=False)
+        item = canvas.atom_items[2]
+        self.assertEqual(item.toPlainText(), "NH2")
+        anchor = item.anchor_scene_rect()
+        self.assertIsNotNone(anchor)
+        self.assertLess(anchor.center().y(), item.sceneBoundingRect().center().y())
 
     def test_record_label_change_builds_composite_single_and_noop_commands(self) -> None:
         canvas = _FakeCanvas()

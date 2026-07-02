@@ -52,8 +52,12 @@ def hydride_display_text(element: str, h_count: int, *, face_left: bool) -> str:
     """
     if h_count <= 0:
         return element
-    hydrogens = "H" if h_count == 1 else f"H{h_count}"
-    return hydrogens + element if face_left else element + hydrogens
+    return hydride_hydrogen_text(h_count) + element if face_left else element + hydride_hydrogen_text(h_count)
+
+
+def hydride_hydrogen_text(h_count: int) -> str:
+    """The hydrogen part of a hydride label: ``"H"``, ``"H2"``, ..."""
+    return "H" if h_count == 1 else f"H{h_count}"
 
 # A subscript/superscript glyph is drawn at this fraction of the base font size.
 SUB_SCALE = 0.72
@@ -212,6 +216,71 @@ def place_runs(
     )
 
 
+def place_hydride_stack(
+    element: str,
+    h_count: int,
+    *,
+    hydrogens_below: bool,
+    measure: Callable[[str, float], float],
+    ascent: float,
+    descent: float,
+    base_point_size: float,
+) -> tuple[LabelLayout, tuple[float, float, float, float]]:
+    """Stack the hydrogens on their own line under (or over) the element.
+
+    Used when the open side around an atom is vertical, matching ChemDraw's
+    "N over H" rendering at a two-bond vertex. Each line is centred on the
+    other. Returns the combined layout plus the element glyph box
+    ``(x, y, width, height)`` inside it, so callers can keep anchoring the atom
+    and trimming bonds to the element exactly like the horizontal layouts do.
+    """
+    element_line = place_runs(
+        parse_atom_label(element),
+        measure=measure,
+        ascent=ascent,
+        descent=descent,
+        base_point_size=base_point_size,
+    )
+    hydrogen_line = place_runs(
+        parse_atom_label(hydride_hydrogen_text(h_count)),
+        measure=measure,
+        ascent=ascent,
+        descent=descent,
+        base_point_size=base_point_size,
+    )
+
+    width = max(element_line.width, hydrogen_line.width)
+    element_x = (width - element_line.width) / 2.0
+    hydrogen_x = (width - hydrogen_line.width) / 2.0
+    element_y = 0.0 if hydrogens_below else hydrogen_line.height
+    hydrogen_y = element_line.height if hydrogens_below else 0.0
+
+    runs: list[PlacedRun] = []
+    for line, line_x, line_y in (
+        (element_line, element_x, element_y),
+        (hydrogen_line, hydrogen_x, hydrogen_y),
+    ):
+        for run in line.runs:
+            runs.append(
+                PlacedRun(
+                    text=run.text,
+                    role=run.role,
+                    point_size=run.point_size,
+                    x=run.x + line_x,
+                    baseline=run.baseline + line_y,
+                )
+            )
+    layout = LabelLayout(
+        runs=tuple(runs),
+        width=width,
+        height=element_line.height + hydrogen_line.height,
+        # Even a subscript-free stack ("N" over "H") needs custom run painting.
+        has_typography=True,
+    )
+    element_box = (element_x, element_y, element_line.width, element_line.height)
+    return layout, element_box
+
+
 __all__ = [
     "SUB_DROP_RATIO",
     "SUB_SCALE",
@@ -220,7 +289,9 @@ __all__ = [
     "LabelRun",
     "PlacedRun",
     "hydride_display_text",
+    "hydride_hydrogen_text",
     "parse_atom_label",
+    "place_hydride_stack",
     "place_runs",
     "split_hydride_label",
 ]
