@@ -60,14 +60,9 @@ class BondContextPage:
 
 
 @dataclass(frozen=True)
-class ArrowContextPage:
-    page: QWidget
-    group: QButtonGroup
-    buttons: dict[str, QToolButton]
+class ButtonGroupPage:
+    """A context page whose options are one exclusive group of icon buttons."""
 
-
-@dataclass(frozen=True)
-class BracketContextPage:
     page: QWidget
     group: QButtonGroup
     buttons: dict[str, QToolButton]
@@ -81,13 +76,6 @@ class TemplateContextPage:
 
 
 @dataclass(frozen=True)
-class MarkContextPage:
-    page: QWidget
-    group: QButtonGroup
-    buttons: dict[str, QToolButton]
-
-
-@dataclass(frozen=True)
 class AtomContextPage:
     page: QWidget
     atom_input: QLineEdit
@@ -95,6 +83,19 @@ class AtomContextPage:
 
 def bond_label_for_state(style: str, order: int) -> str | None:
     return _LABEL_BY_STYLE.get((style, order))
+
+
+def _add_group_buttons(group: QButtonGroup, layout, buttons: dict, entries) -> None:
+    """Append checkable icon buttons to ``group``/``layout``, keyed into ``buttons``.
+
+    Each entry is ``(key, icon, tooltip, on_click)``.
+    """
+    for key, icon, tooltip, handler in entries:
+        button = icon_button(icon, tooltip, checkable=True)
+        button.clicked.connect(handler)
+        group.addButton(button)
+        buttons[key] = button
+        layout.addWidget(button)
 
 
 def build_empty_page() -> QWidget:
@@ -117,20 +118,21 @@ def build_bond_page(
     group = QButtonGroup(page)
     group.setExclusive(True)
     buttons: dict[str, QToolButton] = {}
-    for label, icon_method, tip in _BOND_ORDER_SEGMENTS:
-        button = icon_button(getattr(icon_factory, icon_method)(), tip, checkable=True)
-        button.clicked.connect(lambda _checked, v=label: activate_bond_style_for_window(window, v))
-        group.addButton(button)
-        buttons[label] = button
-        layout.addWidget(button)
 
+    def bond_entries(specs):
+        return [
+            (
+                label,
+                getattr(icon_factory, icon_method)(),
+                tip,
+                lambda _checked, v=label: activate_bond_style_for_window(window, v),
+            )
+            for label, icon_method, tip in specs
+        ]
+
+    _add_group_buttons(group, layout, buttons, bond_entries(_BOND_ORDER_SEGMENTS))
     layout.addWidget(divider())
-    for label, icon_method, tip in _BOND_MODIFIERS:
-        button = icon_button(getattr(icon_factory, icon_method)(), tip, checkable=True)
-        button.clicked.connect(lambda _checked, v=label: activate_bond_style_for_window(window, v))
-        group.addButton(button)
-        buttons[label] = button
-        layout.addWidget(button)
+    _add_group_buttons(group, layout, buttons, bond_entries(_BOND_MODIFIERS))
 
     layout.addWidget(divider())
     length_widget, length_spin = bond_length_input(
@@ -149,22 +151,28 @@ def build_template_page(window, insert_controller) -> TemplateContextPage:
     group = QButtonGroup(page)
     group.setExclusive(True)
     buttons: dict[tuple[int, str], QToolButton] = {}
-    for label, ring_size, style in TEMPLATE_ENTRY_SPECS:
-        button = icon_button(icon_factory.icon_template_preview(label), label, checkable=True)
-        button.clicked.connect(
-            lambda _checked=False, n=ring_size, s=style: insert_controller.begin_ring_template_insert(
-                n,
-                style=s,
+    _add_group_buttons(
+        group,
+        layout,
+        buttons,
+        [
+            (
+                (ring_size, style),
+                icon_factory.icon_template_preview(label),
+                label,
+                lambda _checked=False, n=ring_size, s=style: insert_controller.begin_ring_template_insert(
+                    n,
+                    style=s,
+                ),
             )
-        )
-        group.addButton(button)
-        buttons[(ring_size, style)] = button
-        layout.addWidget(button)
+            for label, ring_size, style in TEMPLATE_ENTRY_SPECS
+        ],
+    )
     layout.addStretch(1)
     return TemplateContextPage(page=page, group=group, buttons=buttons)
 
 
-def build_mark_page(window, tool_state_service) -> MarkContextPage:
+def build_mark_page(window, tool_state_service) -> ButtonGroupPage:
     page, layout = new_context_page()
     icon_factory = icon_factory_for_window(window)
 
@@ -172,18 +180,25 @@ def build_mark_page(window, tool_state_service) -> MarkContextPage:
     group = QButtonGroup(page)
     group.setExclusive(True)
     buttons: dict[str, QToolButton] = {}
-    for _key, _label, kind, icon_method, tooltip in MARK_TOOL_ACTION_SPECS:
-        button = icon_button(getattr(icon_factory, icon_method)(), tooltip, checkable=True)
-        button.clicked.connect(lambda _checked=False, value=kind: tool_state_service.set_mark_kind(window, value))
-        group.addButton(button)
-        buttons[kind] = button
-        layout.addWidget(button)
-
+    _add_group_buttons(
+        group,
+        layout,
+        buttons,
+        [
+            (
+                kind,
+                getattr(icon_factory, icon_method)(),
+                tooltip,
+                lambda _checked=False, value=kind: tool_state_service.set_mark_kind(window, value),
+            )
+            for _key, _label, kind, icon_method, tooltip in MARK_TOOL_ACTION_SPECS
+        ],
+    )
     layout.addStretch(1)
-    return MarkContextPage(page=page, group=group, buttons=buttons)
+    return ButtonGroupPage(page=page, group=group, buttons=buttons)
 
 
-def build_arrow_page(window, tool_mode_controller, tool_state_service) -> ArrowContextPage:
+def build_arrow_page(window, tool_mode_controller, tool_state_service) -> ButtonGroupPage:
     page, layout = new_context_page()
     icon_factory = icon_factory_for_window(window)
 
@@ -191,12 +206,20 @@ def build_arrow_page(window, tool_mode_controller, tool_state_service) -> ArrowC
     group = QButtonGroup(page)
     group.setExclusive(True)
     buttons: dict[str, QToolButton] = {}
-    for label, value in ARROW_MENU_SPECS:
-        button = icon_button(icon_factory.icon_arrow_preview(value), label, checkable=True)
-        button.clicked.connect(lambda _checked, v=label: tool_state_service.set_arrow_type(window, v))
-        group.addButton(button)
-        buttons[value] = button
-        layout.addWidget(button)
+    _add_group_buttons(
+        group,
+        layout,
+        buttons,
+        [
+            (
+                value,
+                icon_factory.icon_arrow_preview(value),
+                label,
+                lambda _checked, v=label: tool_state_service.set_arrow_type(window, v),
+            )
+            for label, value in ARROW_MENU_SPECS
+        ],
+    )
 
     layout.addWidget(divider())
     for label in ARROW_PRESET_SPECS:
@@ -220,10 +243,10 @@ def build_arrow_page(window, tool_mode_controller, tool_state_service) -> ArrowC
     layout.addWidget(slider_dropdown_button(icon_factory.icon_arrow_head_scale(), "Arrow head size", head))
 
     layout.addStretch(1)
-    return ArrowContextPage(page=page, group=group, buttons=buttons)
+    return ButtonGroupPage(page=page, group=group, buttons=buttons)
 
 
-def build_bracket_page(window, tool_state_service) -> BracketContextPage:
+def build_bracket_page(window, tool_state_service) -> ButtonGroupPage:
     page, layout = new_context_page()
     icon_factory = icon_factory_for_window(window)
 
@@ -231,15 +254,22 @@ def build_bracket_page(window, tool_state_service) -> BracketContextPage:
     group = QButtonGroup(page)
     group.setExclusive(True)
     buttons: dict[str, QToolButton] = {}
-    for label, value in BRACKET_MENU_SPECS:
-        button = icon_button(icon_factory.icon_bracket_preview(value), label, checkable=True)
-        button.clicked.connect(lambda _checked=False, v=value: tool_state_service.set_bracket_type(window, v))
-        group.addButton(button)
-        buttons[value] = button
-        layout.addWidget(button)
-
+    _add_group_buttons(
+        group,
+        layout,
+        buttons,
+        [
+            (
+                value,
+                icon_factory.icon_bracket_preview(value),
+                label,
+                lambda _checked=False, v=value: tool_state_service.set_bracket_type(window, v),
+            )
+            for label, value in BRACKET_MENU_SPECS
+        ],
+    )
     layout.addStretch(1)
-    return BracketContextPage(page=page, group=group, buttons=buttons)
+    return ButtonGroupPage(page=page, group=group, buttons=buttons)
 
 
 def build_atom_page(current_symbol: str, set_atom_symbol) -> AtomContextPage:
@@ -394,11 +424,9 @@ def build_color_palette_page(
 
 
 __all__ = [
-    "ArrowContextPage",
     "AtomContextPage",
     "BondContextPage",
-    "BracketContextPage",
-    "MarkContextPage",
+    "ButtonGroupPage",
     "TemplateContextPage",
     "bond_label_for_state",
     "build_arrow_page",
