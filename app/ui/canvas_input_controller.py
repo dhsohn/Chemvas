@@ -65,10 +65,11 @@ class CanvasInputController:
 
     def key_press_event(self, event) -> None:
         focus_item = focused_scene_item_for(self.canvas)
-        if isinstance(focus_item, QGraphicsTextItem):
-            if focus_item.textInteractionFlags() & Qt.TextInteractionFlag.TextEditorInteraction:
-                QGraphicsView.keyPressEvent(self.canvas, event)
-                return
+        if isinstance(focus_item, QGraphicsTextItem) and (
+            focus_item.textInteractionFlags() & Qt.TextInteractionFlag.TextEditorInteraction
+        ):
+            QGraphicsView.keyPressEvent(self.canvas, event)
+            return
         self._hover_refresh()
         if event.key() == Qt.Key.Key_Escape:
             if self.insert_state.template_active:
@@ -105,14 +106,12 @@ class CanvasInputController:
             reset_zoom_for(self.canvas)
             event.accept()
             return
-        if event.matches(QKeySequence.StandardKey.Copy):
-            if self.scene_clipboard.copy_selection_to_clipboard():
-                event.accept()
-                return
-        if event.matches(QKeySequence.StandardKey.Paste):
-            if self.scene_clipboard.paste_selection_from_clipboard():
-                event.accept()
-                return
+        if event.matches(QKeySequence.StandardKey.Copy) and self.scene_clipboard.copy_selection_to_clipboard():
+            event.accept()
+            return
+        if event.matches(QKeySequence.StandardKey.Paste) and self.scene_clipboard.paste_selection_from_clipboard():
+            event.accept()
+            return
         if event.key() in (Qt.Key.Key_Backspace, Qt.Key.Key_Delete):
             if scene_selected_items_for(self.canvas):
                 self.scene_delete.delete_selected_items()
@@ -151,10 +150,9 @@ class CanvasInputController:
         return should_override_chemdraw_shortcut_for(self.canvas, event)
 
     def event(self, event, *, native_gesture_event_type=QNativeGestureEvent) -> bool:
-        if event.type() == QEvent.Type.ShortcutOverride:
-            if self.should_override_chemdraw_shortcut(event):
-                event.accept()
-                return True
+        if event.type() == QEvent.Type.ShortcutOverride and self.should_override_chemdraw_shortcut(event):
+            event.accept()
+            return True
         if event.type() == QEvent.Type.NativeGesture and isinstance(event, native_gesture_event_type):
             if event.gestureType() in {
                 Qt.NativeGestureType.PanNativeGesture,

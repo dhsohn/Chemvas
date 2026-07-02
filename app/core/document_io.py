@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 from dataclasses import dataclass
@@ -43,10 +44,8 @@ def write_document(path: PathType, state: dict[str, Any], version: int) -> Chemv
         os.replace(tmp, target)
     except BaseException:
         # Never leave a stray temp file behind on failure.
-        try:
+        with contextlib.suppress(OSError):
             tmp.unlink()
-        except OSError:
-            pass
         raise
     return document
 

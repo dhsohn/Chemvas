@@ -206,9 +206,10 @@ def place_template_on_bond(
             return points_a
         if a_in and b_in:
             return None
-    if center_hint is not None:
-        if _manhattan_distance(center_b, center_hint) < _manhattan_distance(center_a, center_hint):
-            return points_b
+    if center_hint is not None and _manhattan_distance(center_b, center_hint) < _manhattan_distance(
+        center_a, center_hint
+    ):
+        return points_b
     return points_a
 
 
@@ -312,9 +313,9 @@ __all__ = [
     "cyclohexane_chair_flipped_points",
     "cyclohexane_chair_points",
     "place_template_on_bond",
-    "regular_ring_radius",
     "regular_ring_points_for_atom",
     "regular_ring_points_for_bond",
+    "regular_ring_radius",
     "ring_points",
     "scale_points",
     "scale_points_to_bond_length",
