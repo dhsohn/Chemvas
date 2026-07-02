@@ -324,26 +324,7 @@ class Preview3D(QWidget):
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         button.clicked.connect(lambda _checked=False: self._handle_export_xyz_clicked())
-        button.setStyleSheet(
-            f"""
-            QToolButton#preview_export_xyz_button {{
-                background: {PALETTE["surface_input"]};
-                border: 1px solid {PALETTE["border_strong"]};
-                border-radius: 8px;
-                color: {PALETTE["text"]};
-                padding: 0;
-                text-align: center;
-            }}
-            QToolButton#preview_export_xyz_button:hover {{
-                background: {PALETTE["surface_input"]};
-                border-color: {PALETTE["checked_border"]};
-            }}
-            QToolButton#preview_export_xyz_button:pressed {{
-                background: {PALETTE["pressed"]};
-                border-color: {PALETTE["accent_pressed"]};
-            }}
-            """
-        )
+        button.setStyleSheet(self._header_button_style("preview_export_xyz_button"))
         self._export_xyz_button = button
         return button
 
