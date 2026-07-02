@@ -46,12 +46,9 @@ class RDKitConversionHelper:
                 rd_atom.SetNoImplicit(True)
             atom_map[atom_id] = rw.AddAtom(rd_atom)
         if invalid_labels:
-            detail = ", ".join(invalid_labels[:5])
-            if len(invalid_labels) > 5:
-                detail = f"{detail}, ..."
             self.adapter.last_error = (
                 "XYZ export supports element symbols only. "
-                f"Unsupported atom labels: {detail}."
+                f"Unsupported atom labels: {self._format_atom_refs(invalid_labels)}."
             )
             return None, None
         valid_atoms = set(atom_map.keys())
@@ -72,12 +69,9 @@ class RDKitConversionHelper:
             btype = self._bond_type(Chem, bond.order)
             rw.AddBond(atom_map[bond.a], atom_map[bond.b], btype)
         if unsupported_styles:
-            detail = ", ".join(unsupported_styles[:5])
-            if len(unsupported_styles) > 5:
-                detail = f"{detail}, ..."
             self.adapter.last_error = (
                 "XYZ export does not yet support wedge/hash stereobonds. "
-                f"Unsupported bond styles: {detail}."
+                f"Unsupported bond styles: {self._format_atom_refs(unsupported_styles)}."
             )
             return None, None
         mol = rw.GetMol()
@@ -182,22 +176,32 @@ class RDKitConversionHelper:
         return adjacency
 
     @staticmethod
+    def _has_explicit_h_neighbor(
+        model: MoleculeModel,
+        atom_id: int,
+        adjacency: Mapping[int, list[int]],
+    ) -> bool | None:
+        """True/False for a non-carbon atom; None when the check does not apply."""
+        atom = model.atoms.get(atom_id)
+        if atom is None or atom.element.upper() == "C":
+            return None
+        return any(
+            neighbor is not None and neighbor.element.upper() == "H"
+            for neighbor in (model.atoms.get(neighbor_id) for neighbor_id in adjacency.get(atom_id, []))
+        )
+
+    @classmethod
     def _should_disable_implicit_hydrogens(
+        cls,
         model: MoleculeModel,
         atom_id: int,
         adjacency: Mapping[int, list[int]],
     ) -> bool:
-        atom = model.atoms.get(atom_id)
-        if atom is None or atom.element.upper() == "C":
-            return False
-        for neighbor_id in adjacency.get(atom_id, []):
-            neighbor = model.atoms.get(neighbor_id)
-            if neighbor is not None and neighbor.element.upper() == "H":
-                return True
-        return False
+        return bool(cls._has_explicit_h_neighbor(model, atom_id, adjacency))
 
-    @staticmethod
+    @classmethod
     def _should_disable_conversion_implicit_hydrogens(
+        cls,
         model: MoleculeModel,
         atom_id: int,
         adjacency: Mapping[int, list[int]],
@@ -205,14 +209,10 @@ class RDKitConversionHelper:
         formal_charge: int = 0,
         radical_electrons: int = 0,
     ) -> bool:
-        atom = model.atoms.get(atom_id)
-        if atom is None or atom.element.upper() == "C":
+        has_h_neighbor = cls._has_explicit_h_neighbor(model, atom_id, adjacency)
+        if has_h_neighbor is None:
             return False
-        for neighbor_id in adjacency.get(atom_id, []):
-            neighbor = model.atoms.get(neighbor_id)
-            if neighbor is not None and neighbor.element.upper() == "H":
-                return True
-        return not (formal_charge or radical_electrons)
+        return has_h_neighbor or not (formal_charge or radical_electrons)
 
     @staticmethod
     def _component_sort_key(model: MoleculeModel, atom_ids: set[int]) -> tuple[float, float, int]:

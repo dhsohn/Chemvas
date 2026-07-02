@@ -21,54 +21,45 @@ def new_note_item_for(canvas):
     return NoteItem(canvas)
 
 
-def committed_note_text_for(item) -> str:
-    committed_text = getattr(item, "committed_text", None)
-    if callable(committed_text):
-        return str(committed_text())
+def _committed_note_value(item, accessor_name: str, role: int, attr_name: str) -> str:
+    accessor = getattr(item, accessor_name, None)
+    if callable(accessor):
+        return str(accessor())
     data = getattr(item, "data", None)
     if callable(data):
-        value = data(COMMITTED_NOTE_TEXT_ROLE)
+        value = data(role)
         if value is not None:
             return str(value)
-    return str(getattr(item, "committed_note_text", ""))
+    return str(getattr(item, attr_name, ""))
+
+
+def _set_committed_note_value(item, value, setter_name: str, role: int, attr_name: str) -> None:
+    setter = getattr(item, setter_name, None)
+    if callable(setter):
+        setter(value)
+        return
+    committed = str(value)
+    set_data = getattr(item, "setData", None)
+    if callable(set_data):
+        set_data(role, committed)
+        return
+    setattr(item, attr_name, committed)
+
+
+def committed_note_text_for(item) -> str:
+    return _committed_note_value(item, "committed_text", COMMITTED_NOTE_TEXT_ROLE, "committed_note_text")
 
 
 def set_committed_note_text_for(item, text: str) -> None:
-    set_committed_text = getattr(item, "set_committed_text", None)
-    if callable(set_committed_text):
-        set_committed_text(text)
-        return
-    committed_text = str(text)
-    set_data = getattr(item, "setData", None)
-    if callable(set_data):
-        set_data(COMMITTED_NOTE_TEXT_ROLE, committed_text)
-        return
-    item.committed_note_text = committed_text
+    _set_committed_note_value(item, text, "set_committed_text", COMMITTED_NOTE_TEXT_ROLE, "committed_note_text")
 
 
 def committed_note_html_for(item) -> str:
-    committed_html = getattr(item, "committed_html", None)
-    if callable(committed_html):
-        return str(committed_html())
-    data = getattr(item, "data", None)
-    if callable(data):
-        value = data(COMMITTED_NOTE_HTML_ROLE)
-        if value is not None:
-            return str(value)
-    return str(getattr(item, "committed_note_html", ""))
+    return _committed_note_value(item, "committed_html", COMMITTED_NOTE_HTML_ROLE, "committed_note_html")
 
 
 def set_committed_note_html_for(item, html: str) -> None:
-    set_committed_html = getattr(item, "set_committed_html", None)
-    if callable(set_committed_html):
-        set_committed_html(html)
-        return
-    committed_html = str(html)
-    set_data = getattr(item, "setData", None)
-    if callable(set_data):
-        set_data(COMMITTED_NOTE_HTML_ROLE, committed_html)
-        return
-    item.committed_note_html = committed_html
+    _set_committed_note_value(item, html, "set_committed_html", COMMITTED_NOTE_HTML_ROLE, "committed_note_html")
 
 
 def apply_note_style_for(canvas, item) -> None:

@@ -252,6 +252,42 @@ def atom_symbol_input(current_symbol: str, set_symbol) -> QLineEdit:
     return input_box
 
 
+def _stepper_frame(
+    object_name: str,
+    *,
+    up_tooltip: str,
+    down_tooltip: str,
+    on_step_up,
+    on_step_down,
+) -> QFrame:
+    stepper = QFrame()
+    stepper.setObjectName(object_name)
+    stepper.setFixedSize(22, CONTEXT_BAR_BUTTON_HEIGHT + 4)
+    stepper.setStyleSheet(
+        f"QFrame#{object_name} {{"
+        f" background: {_P['surface_input']};"
+        f" border: 1px solid {_P['border_strong']};"
+        " border-radius: 6px;"
+        "}"
+        f"QFrame#{object_name} QToolButton {{ background: transparent; border: none; }}"
+        f"QFrame#{object_name} QToolButton:hover {{ background: {_P['hover']}; border-radius: 4px; }}"
+    )
+    stepper_col = QVBoxLayout(stepper)
+    stepper_col.setContentsMargins(0, 1, 0, 1)
+    stepper_col.setSpacing(0)
+    up_btn = _StepArrowButton("up")
+    up_btn.setFixedSize(20, 13)
+    up_btn.setToolTip(up_tooltip)
+    up_btn.clicked.connect(on_step_up)
+    down_btn = _StepArrowButton("down")
+    down_btn.setFixedSize(20, 13)
+    down_btn.setToolTip(down_tooltip)
+    down_btn.clicked.connect(on_step_down)
+    stepper_col.addWidget(up_btn)
+    stepper_col.addWidget(down_btn)
+    return stepper
+
+
 def rotate_angle_input() -> tuple[QWidget, QSpinBox]:
     container = QWidget()
     layout = QHBoxLayout(container)
@@ -270,33 +306,15 @@ def rotate_angle_input() -> tuple[QWidget, QSpinBox]:
     spin.setToolTip("Rotation angle")
     spin.setStatusTip("Enter a rotation angle from -180 to 180 degrees")
     layout.addWidget(spin)
-
-    stepper = QFrame()
-    stepper.setObjectName("rotateStepper")
-    stepper.setFixedSize(22, CONTEXT_BAR_BUTTON_HEIGHT + 4)
-    stepper.setStyleSheet(
-        "QFrame#rotateStepper {"
-        f" background: {_P['surface_input']};"
-        f" border: 1px solid {_P['border_strong']};"
-        " border-radius: 6px;"
-        "}"
-        "QFrame#rotateStepper QToolButton { background: transparent; border: none; }"
-        f"QFrame#rotateStepper QToolButton:hover {{ background: {_P['hover']}; border-radius: 4px; }}"
+    layout.addWidget(
+        _stepper_frame(
+            "rotateStepper",
+            up_tooltip="Increase angle",
+            down_tooltip="Decrease angle",
+            on_step_up=spin.stepUp,
+            on_step_down=spin.stepDown,
+        )
     )
-    stepper_col = QVBoxLayout(stepper)
-    stepper_col.setContentsMargins(0, 1, 0, 1)
-    stepper_col.setSpacing(0)
-    up_btn = _StepArrowButton("up")
-    up_btn.setFixedSize(20, 13)
-    up_btn.setToolTip("Increase angle")
-    up_btn.clicked.connect(spin.stepUp)
-    down_btn = _StepArrowButton("down")
-    down_btn.setFixedSize(20, 13)
-    down_btn.setToolTip("Decrease angle")
-    down_btn.clicked.connect(spin.stepDown)
-    stepper_col.addWidget(up_btn)
-    stepper_col.addWidget(down_btn)
-    layout.addWidget(stepper)
     return container, spin
 
 
@@ -369,33 +387,15 @@ def bond_length_input(current_px: float, on_commit) -> tuple[QWidget, BondLength
         commit()
 
     layout.addWidget(spin)
-
-    stepper = QFrame()
-    stepper.setObjectName("bondLengthStepper")
-    stepper.setFixedSize(22, CONTEXT_BAR_BUTTON_HEIGHT + 4)
-    stepper.setStyleSheet(
-        "QFrame#bondLengthStepper {"
-        f" background: {_P['surface_input']};"
-        f" border: 1px solid {_P['border_strong']};"
-        " border-radius: 6px;"
-        "}"
-        "QFrame#bondLengthStepper QToolButton { background: transparent; border: none; }"
-        f"QFrame#bondLengthStepper QToolButton:hover {{ background: {_P['hover']}; border-radius: 4px; }}"
+    layout.addWidget(
+        _stepper_frame(
+            "bondLengthStepper",
+            up_tooltip="Increase bond length",
+            down_tooltip="Decrease bond length",
+            on_step_up=lambda _checked=False: step(spin.singleStep()),
+            on_step_down=lambda _checked=False: step(-spin.singleStep()),
+        )
     )
-    stepper_col = QVBoxLayout(stepper)
-    stepper_col.setContentsMargins(0, 1, 0, 1)
-    stepper_col.setSpacing(0)
-    up_btn = _StepArrowButton("up")
-    up_btn.setFixedSize(20, 13)
-    up_btn.setToolTip("Increase bond length")
-    up_btn.clicked.connect(lambda _checked=False: step(spin.singleStep()))
-    down_btn = _StepArrowButton("down")
-    down_btn.setFixedSize(20, 13)
-    down_btn.setToolTip("Decrease bond length")
-    down_btn.clicked.connect(lambda _checked=False: step(-spin.singleStep()))
-    stepper_col.addWidget(up_btn)
-    stepper_col.addWidget(down_btn)
-    layout.addWidget(stepper)
     return container, spin
 
 

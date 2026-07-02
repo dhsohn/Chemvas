@@ -37,6 +37,15 @@ def embedded_scene_item_state(item) -> dict:
     return dict(state) if isinstance(state, dict) else {}
 
 
+def _typed_state_dict_for(item, item_type: type, converter: Callable[[Any], dict]) -> dict:
+    embedded = embedded_scene_item_state(item)
+    if embedded:
+        return embedded
+    if isinstance(item, item_type):
+        return converter(item)
+    return {}
+
+
 def bond_state_dict(bond) -> dict:
     return {
         "a": bond.a,
@@ -80,12 +89,7 @@ def ring_state_dict(ring_item: QGraphicsPolygonItem) -> dict:
 
 def ring_state_dict_for(canvas, ring_item) -> dict:
     del canvas
-    embedded = embedded_scene_item_state(ring_item)
-    if embedded:
-        return embedded
-    if isinstance(ring_item, QGraphicsPolygonItem):
-        return ring_state_dict(ring_item)
-    return {}
+    return _typed_state_dict_for(ring_item, QGraphicsPolygonItem, ring_state_dict)
 
 
 def note_state_dict(item: QGraphicsTextItem) -> dict:
@@ -100,12 +104,7 @@ def note_state_dict(item: QGraphicsTextItem) -> dict:
 
 def note_state_dict_for(canvas, item) -> dict:
     del canvas
-    embedded = embedded_scene_item_state(item)
-    if embedded:
-        return embedded
-    if isinstance(item, QGraphicsTextItem):
-        return note_state_dict(item)
-    return {}
+    return _typed_state_dict_for(item, QGraphicsTextItem, note_state_dict)
 
 
 def mark_state_dict(item, *, mark_center_getter: MarkCenterGetter) -> dict:
@@ -148,12 +147,7 @@ def arrow_state_dict(item: QGraphicsPathItem) -> dict:
 
 def arrow_state_dict_for(canvas, item) -> dict:
     del canvas
-    embedded = embedded_scene_item_state(item)
-    if embedded:
-        return embedded
-    if isinstance(item, QGraphicsPathItem):
-        return arrow_state_dict(item)
-    return {}
+    return _typed_state_dict_for(item, QGraphicsPathItem, arrow_state_dict)
 
 
 def ts_bracket_state_dict(item: QGraphicsPathItem) -> dict:
@@ -176,12 +170,7 @@ def ts_bracket_state_dict(item: QGraphicsPathItem) -> dict:
 
 def ts_bracket_state_dict_for(canvas, item) -> dict:
     del canvas
-    embedded = embedded_scene_item_state(item)
-    if embedded:
-        return embedded
-    if isinstance(item, QGraphicsPathItem):
-        return ts_bracket_state_dict(item)
-    return {}
+    return _typed_state_dict_for(item, QGraphicsPathItem, ts_bracket_state_dict)
 
 
 def shape_state_dict(item: QGraphicsPathItem) -> dict:
@@ -207,12 +196,7 @@ def shape_state_dict(item: QGraphicsPathItem) -> dict:
 
 def shape_state_dict_for(canvas, item) -> dict:
     del canvas
-    embedded = embedded_scene_item_state(item)
-    if embedded:
-        return embedded
-    if isinstance(item, QGraphicsPathItem):
-        return shape_state_dict(item)
-    return {}
+    return _typed_state_dict_for(item, QGraphicsPathItem, shape_state_dict)
 
 
 def orbital_state_dict(item: QGraphicsItemGroup) -> dict:
@@ -230,12 +214,7 @@ def orbital_state_dict(item: QGraphicsItemGroup) -> dict:
 
 def orbital_state_dict_for(canvas, item) -> dict:
     del canvas
-    embedded = embedded_scene_item_state(item)
-    if embedded:
-        return embedded
-    if isinstance(item, QGraphicsItemGroup):
-        return orbital_state_dict(item)
-    return {}
+    return _typed_state_dict_for(item, QGraphicsItemGroup, orbital_state_dict)
 
 
 def scene_item_state(item, *, mark_center_getter: MarkCenterGetter) -> dict:
