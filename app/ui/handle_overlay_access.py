@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ui.handle_overlay_ports import handle_overlay_service_for_access
+from ui.canvas_service_ports import handle_overlay_service_for_access
 
 
 def clear_handles_for(canvas) -> None:

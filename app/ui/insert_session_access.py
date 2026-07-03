@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ui.insert_session_ports import insert_controller_for_access
+from ui.canvas_service_ports import insert_controller_for_access
 
 
 def _insert_controller_method(canvas, name: str):

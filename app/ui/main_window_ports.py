@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from ui.canvas_model_access import has_atoms_for
 from ui.canvas_service_access import canvas_services_for
 from ui.canvas_tool_settings_state import tool_settings_state_for
@@ -20,6 +22,72 @@ from ui.sheet_setup_access import (
     sheet_size_for,
 )
 
+if TYPE_CHECKING:
+    from ui.main_window_services import MainWindowServices
+    from ui.main_window_tab_references import MainWindowTabReferences
+    from ui.main_window_ui_references import MainWindowUiReferences
+    from ui.preview_3d import Preview3D
+
+
+def services_for_window(window) -> MainWindowServices:
+    return window._services
+
+
+def preview_for_window(window) -> Preview3D:
+    return window._preview_3d
+
+
+def tab_references_for_window(window) -> MainWindowTabReferences:
+    return window.tab_references
+
+
+def ui_references_for_window(window) -> MainWindowUiReferences:
+    return window.ui_references
+
+
+def icon_factory_for_window(window):
+    return ui_references_for_window(window).require_icon_factory()
+
+
+def atom_input_for_window(window):
+    return ui_references_for_window(window).atom_input
+
+
+def set_atom_input_for_window(window, atom_input) -> None:
+    ui_references_for_window(window).set_atom_input(atom_input)
+
+
+def tool_actions_for_window(window):
+    return ui_references_for_window(window).tool_actions
+
+
+def tool_action_for_window(window, action_key: str):
+    return ui_references_for_window(window).tool_action_for_key(action_key)
+
+
+def preview_panel_button_for_window(window):
+    return ui_references_for_window(window).preview_panel_button
+
+
+def preview_window_for_window(window):
+    return ui_references_for_window(window).preview_window
+
+
+def apply_preview_window_assembly_for_window(window, assembly) -> None:
+    ui_references_for_window(window).apply_preview_window_assembly(assembly)
+
+
+def undo_button_for_window(window):
+    return ui_references_for_window(window).undo_button
+
+
+def redo_button_for_window(window):
+    return ui_references_for_window(window).redo_button
+
+
+def export_xyz_button_for_window(window):
+    return ui_references_for_window(window).export_xyz_button
+
 
 def active_canvas_for_window(window):
     canvas = active_canvas_or_none_for_window(window)
@@ -29,11 +97,11 @@ def active_canvas_for_window(window):
 
 
 def active_canvas_or_none_for_window(window):
-    return window.tab_references.active_canvas_or_none(window.runtime_state.last_canvas_tab_index)
+    return tab_references_for_window(window).active_canvas_or_none(window.runtime_state.last_canvas_tab_index)
 
 
 def all_canvases_for_window(window):
-    return window.tab_references.all_canvases()
+    return tab_references_for_window(window).all_canvases()
 
 
 def tab_reactions_suspended_for_window(window) -> bool:
@@ -141,15 +209,15 @@ def set_zoom_percent_for_window(window, percent: float) -> int:
 
 
 def canvas_count_for_window(window) -> int:
-    return window.tab_references.canvas_count()
+    return tab_references_for_window(window).canvas_count()
 
 
 def active_canvas_name_for_window(window) -> str:
-    return window.tab_references.active_canvas_name(active_canvas_or_none_for_window(window))
+    return tab_references_for_window(window).active_canvas_name(active_canvas_or_none_for_window(window))
 
 
 def active_canvas_index_for_window(window) -> int:
-    return window.tab_references.active_canvas_index(active_canvas_or_none_for_window(window))
+    return tab_references_for_window(window).active_canvas_index(active_canvas_or_none_for_window(window))
 
 
 def context_bar_page_override_for_window(window) -> str | None:
@@ -203,6 +271,8 @@ __all__ = [
     "active_canvas_or_none_for_window",
     "active_tool_name_for_window",
     "all_canvases_for_window",
+    "apply_preview_window_assembly_for_window",
+    "atom_input_for_window",
     "bond_length_px_for_window",
     "canvas_count_for_window",
     "clear_context_bar_page_override_for_window",
@@ -211,15 +281,23 @@ __all__ = [
     "context_bar_page_override_for_window",
     "current_zoom_percent_for_window",
     "document_session_service_for_window",
+    "export_xyz_button_for_window",
     "fit_canvas_to_view_for_window",
     "geometry_controller_for_window",
     "has_exportable_atoms_for_window",
     "history_service_for_window",
+    "icon_factory_for_window",
     "insert_controller_for_window",
     "next_canvas_name_for_window",
+    "preview_for_window",
+    "preview_panel_button_for_window",
+    "preview_window_for_window",
+    "redo_button_for_window",
     "reset_zoom_for_window",
     "scene_transform_controller_for_window",
     "selected_scene_items_for_window",
+    "services_for_window",
+    "set_atom_input_for_window",
     "set_context_bar_page_override_for_window",
     "set_last_canvas_tab_index_for_window",
     "set_sheet_setup_for_window",
@@ -229,8 +307,13 @@ __all__ = [
     "sheet_size_for_window",
     "style_controller_for_window",
     "tab_reactions_suspended_for_window",
+    "tab_references_for_window",
+    "tool_action_for_window",
+    "tool_actions_for_window",
     "tool_mode_controller_for_window",
     "tool_settings_for_window",
+    "ui_references_for_window",
+    "undo_button_for_window",
     "zoom_in_for_window",
     "zoom_out_for_window",
 ]

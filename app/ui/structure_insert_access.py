@@ -16,10 +16,10 @@ from ui.canvas_model_access import (
     set_next_atom_id_for,
     trim_bonds_direct_for,
 )
+from ui.canvas_service_ports import structure_insert_build_service_for_access
 from ui.history_canvas_access import remove_atom_for_history, trim_bonds_for_history
 from ui.history_recording_access import record_additions_for
 from ui.selection_style_access import restore_selection_from_ids_for
-from ui.structure_insert_ports import structure_insert_build_service_for_access
 from ui.structure_mutation_access import (
     add_atom_for,
     add_benzene_ring_for,

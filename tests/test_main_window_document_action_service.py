@@ -22,12 +22,11 @@ if QApplication is not None:
     from ui.canvas_document_metadata_state import document_file_path_for
     from ui.canvas_window_access import snapshot_canvas_state_for
     from ui.main_window import MainWindow
-    from ui.main_window_canvas_ports import active_canvas_for_window
     from ui.main_window_path_logic import (
         resolve_save_as_path,
         resolve_save_path,
     )
-    from ui.main_window_service_ports import services_for_window
+    from ui.main_window_ports import active_canvas_for_window, services_for_window
     from ui.structure_mutation_access import add_bond_between_points_for
 
 

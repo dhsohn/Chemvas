@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from ui.canvas_tool_settings_state import tool_settings_state_for
-from ui.structure_mutation_ports import (
+from ui.canvas_service_ports import (
     structure_mutation_atom_service,
     structure_mutation_bond_service,
     structure_mutation_build_service,
 )
+from ui.canvas_tool_settings_state import tool_settings_state_for
 
 
 def add_atom_for(canvas, element: str, x: float, y: float) -> int:

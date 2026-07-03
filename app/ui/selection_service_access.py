@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from ui.canvas_service_ports import selection_service_for_access
 from ui.selection_hit_logic import structure_hit_is_selected
-from ui.selection_ports import selection_service_for_access
 from ui.selection_scene_access import (
     clear_scene_selection_for,
     set_scene_items_selected_for,

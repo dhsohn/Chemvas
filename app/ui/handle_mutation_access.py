@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from ui.canvas_service_ports import (
+    curved_arrow_path_service_for_access,
+    handle_mutation_service_for_access,
+)
 from ui.canvas_tool_settings_state import tool_settings_state_for
 from ui.handle_interaction_logic import (
     clamp_curved_midpoint as clamp_curved_midpoint_helper,
@@ -12,10 +16,6 @@ from ui.handle_interaction_logic import (
 )
 from ui.handle_interaction_logic import (
     default_curved_control as default_curved_control_helper,
-)
-from ui.handle_mutation_ports import (
-    curved_arrow_path_service_for_access,
-    handle_mutation_service_for_access,
 )
 from ui.renderer_style_access import bond_length_px_for
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ui.canvas_geometry_ports import geometry_controller_for_access
+from ui.canvas_service_ports import geometry_controller_for_access
 
 
 def _geometry_method(canvas, name: str):

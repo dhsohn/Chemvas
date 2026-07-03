@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ui.note_item_ports import note_controller_for_access
+from ui.canvas_service_ports import note_controller_for_access
 
 COMMITTED_NOTE_TEXT_ROLE = 0xC001
 COMMITTED_NOTE_HTML_ROLE = 0xC002

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from ui.pick_radius_access import atom_pick_radius_for
-from ui.scene_decoration_ports import (
+from ui.canvas_service_ports import (
     mark_scene_service_for_access,
     scene_decoration_build_service_for_access,
 )
+from ui.pick_radius_access import atom_pick_radius_for
 
 
 def _decoration_build_service(canvas):
