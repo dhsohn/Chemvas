@@ -5,7 +5,10 @@ from types import SimpleNamespace
 from ui.main_window_action_availability_service import (
     MainWindowActionAvailabilityService,
 )
-from ui.main_window_canvas_ports import (
+from ui.main_window_context_page_state_service import (
+    MainWindowContextPageStateService,
+)
+from ui.main_window_ports import (
     active_tool_name_for_window,
     color_mutation_service_for_window,
     color_tool_for_window,
@@ -16,9 +19,6 @@ from ui.main_window_canvas_ports import (
     scene_transform_controller_for_window,
     style_controller_for_window,
     tool_mode_controller_for_window,
-)
-from ui.main_window_context_page_state_service import (
-    MainWindowContextPageStateService,
 )
 from ui.main_window_services import build_main_window_services
 

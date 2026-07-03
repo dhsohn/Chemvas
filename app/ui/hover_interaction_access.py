@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from ui.canvas_tool_settings_state import tool_settings_state_for
-from ui.hover_ports import (
+from ui.canvas_service_ports import (
     bond_hover_preview_service_for_access,
     hover_interaction_service_for_access,
     hover_scene_service_for_access,
     mark_hover_preview_service_for_access,
 )
+from ui.canvas_tool_settings_state import tool_settings_state_for
 
 
 def _service_method(canvas, service_getter, method_name: str):

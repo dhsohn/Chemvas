@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ui.move_ports import move_controller_for_access
+from ui.canvas_service_ports import move_controller_for_access
 from ui.selection_service_access import (
     refresh_selection_outline_for,
     selection_service_from_canvas,

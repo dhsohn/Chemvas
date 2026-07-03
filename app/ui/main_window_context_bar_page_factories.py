@@ -32,8 +32,8 @@ from ui.main_window_context_bar_widgets import (
     rotate_angle_input,
     slider_dropdown_button,
 )
+from ui.main_window_ports import icon_factory_for_window
 from ui.main_window_toolbar_logic import BOND_STYLE_BY_LABEL
-from ui.main_window_ui_ports import icon_factory_for_window
 
 _BOND_ORDER_SEGMENTS = [
     ("Single", "icon_bond", "Single bond (1)"),

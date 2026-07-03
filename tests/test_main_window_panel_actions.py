@@ -16,10 +16,12 @@ if QApplication is not None:
     from ui.canvas_history_state import history_state_for
     from ui.canvas_window_access import snapshot_canvas_state_for
     from ui.main_window import MainWindow
-    from ui.main_window_canvas_ports import active_canvas_for_window
-    from ui.main_window_preview_ports import preview_for_window
-    from ui.main_window_service_ports import services_for_window
-    from ui.main_window_ui_ports import preview_window_for_window
+    from ui.main_window_ports import (
+        active_canvas_for_window,
+        preview_for_window,
+        preview_window_for_window,
+        services_for_window,
+    )
     from ui.structure_mutation_access import add_atom_for
 
 

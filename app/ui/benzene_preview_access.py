@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ui.benzene_preview_ports import benzene_preview_service_for_access
+from ui.canvas_service_ports import benzene_preview_service_for_access
 
 
 def _benzene_preview_method(canvas, name: str):

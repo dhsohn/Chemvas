@@ -3,7 +3,7 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsTextItem
 
-from ui.note_item_ports import note_controller_for_access
+from ui.canvas_service_ports import note_controller_for_access
 
 
 class NoteItem(QGraphicsTextItem):

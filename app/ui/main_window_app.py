@@ -57,7 +57,7 @@ def _name_window_document(window) -> None:
     _document_counter += 1
     name = f"Canvas {_document_counter}"
     try:
-        from ui.main_window_service_ports import services_for_window
+        from ui.main_window_ports import services_for_window
 
         services = services_for_window(window)
         canvas = window.tab_references.canvas_tabs.currentWidget()

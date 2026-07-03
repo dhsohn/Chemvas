@@ -23,8 +23,7 @@ if QApplication is not None:
     )
     from ui.handle_state import active_handles_for, handle_target_for
     from ui.main_window import MainWindow
-    from ui.main_window_canvas_ports import active_canvas_for_window
-    from ui.main_window_service_ports import services_for_window
+    from ui.main_window_ports import active_canvas_for_window, services_for_window
     from ui.move_access import move_item_for
     from ui.scene_decoration_access import add_arrow_for, add_orbital_for
 

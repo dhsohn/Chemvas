@@ -62,8 +62,7 @@ if QApplication is not None:
     )
     from ui.hover_interaction_access import update_hover_highlight_for
     from ui.main_window import MainWindow
-    from ui.main_window_canvas_ports import active_canvas_for_window
-    from ui.main_window_service_ports import services_for_window
+    from ui.main_window_ports import active_canvas_for_window, services_for_window
     from ui.mark_item_access import mark_center_for
     from ui.move_access import move_atoms_for
     from ui.pick_radius_access import atom_pick_radius_for

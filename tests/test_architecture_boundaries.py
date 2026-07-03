@@ -443,7 +443,7 @@ def test_main_window_delegates_runtime_state_to_state_object() -> None:
         if isinstance(node, ast.FunctionDef)
     }
     assert method_names.isdisjoint(removed_state_forwarders)
-    assert "window.runtime_state" in (APP_ROOT / "ui" / "main_window_canvas_ports.py").read_text()
+    assert "window.runtime_state" in (APP_ROOT / "ui" / "main_window_ports.py").read_text()
 
 
 def test_main_window_delegates_toolbar_ui_references_to_reference_object() -> None:
@@ -495,7 +495,7 @@ def test_main_window_delegates_toolbar_ui_references_to_reference_object() -> No
         if isinstance(node, ast.FunctionDef)
     }
     assert method_names.isdisjoint(removed_ui_forwarders)
-    ui_ports_source = (APP_ROOT / "ui" / "main_window_ui_ports.py").read_text()
+    ui_ports_source = (APP_ROOT / "ui" / "main_window_ports.py").read_text()
     assert "window.ui_references" in ui_ports_source
     assert "icon_factory_for_window" in ui_ports_source
     assert "preview_window_for_window" in ui_ports_source
@@ -545,7 +545,7 @@ def test_main_window_delegates_canvas_tab_references_to_reference_object() -> No
         if isinstance(node, ast.FunctionDef)
     }
     assert method_names.isdisjoint(removed_tab_forwarders)
-    assert "window.tab_references" in (APP_ROOT / "ui" / "main_window_canvas_ports.py").read_text()
+    assert "window.tab_references" in (APP_ROOT / "ui" / "main_window_ports.py").read_text()
     assert "for index in range(self.canvas_tabs.count())" not in source
     assert "self.canvas_tabs.currentWidget()" not in source
 
@@ -599,13 +599,34 @@ def test_main_window_context_page_state_service_uses_injected_services_and_publi
     assert _matching_lines(pattern, [service]) == []
 
 
-def test_main_window_canvas_ports_use_services_bundle_accessor_without_string_lookup() -> None:
-    path = APP_ROOT / "ui" / "main_window_canvas_ports.py"
+def test_main_window_ports_use_services_bundle_accessor_without_string_lookup() -> None:
+    path = APP_ROOT / "ui" / "main_window_ports.py"
     source = path.read_text()
     pattern = re.compile(r"\bcanvas_service_for\b|canvas_service_for\(|\bwindow\.canvas\b")
 
     assert "canvas_services_for" in source
     assert _matching_lines(pattern, [path]) == []
+
+
+def test_main_window_ports_keep_window_accessors_consolidated() -> None:
+    old_port_modules = (
+        "main_window_canvas_ports.py",
+        "main_window_service_ports.py",
+        "main_window_preview_ports.py",
+        "main_window_tab_ports.py",
+        "main_window_ui_ports.py",
+    )
+    source = (APP_ROOT / "ui" / "main_window_ports.py").read_text()
+
+    for module_name in old_port_modules:
+        assert not (APP_ROOT / "ui" / module_name).exists()
+        assert module_name.removesuffix(".py") not in "\n".join(path.read_text() for path in _app_python_files())
+
+    assert "def services_for_window(window)" in source
+    assert "def preview_for_window(window)" in source
+    assert "def tab_references_for_window(window)" in source
+    assert "def ui_references_for_window(window)" in source
+    assert "def active_canvas_for_window(window)" in source
 
 
 def test_canvas_view_ports_use_canvas_services_accessor_without_direct_services_lookup() -> None:
@@ -631,7 +652,7 @@ def test_production_code_does_not_depend_on_main_window_canvas_tabs_public_attr(
 
 
 def test_production_code_uses_main_window_service_port_instead_of_public_services_attr() -> None:
-    port = APP_ROOT / "ui" / "main_window_service_ports.py"
+    port = APP_ROOT / "ui" / "main_window_ports.py"
     port_source = port.read_text()
     public_attr_pattern = re.compile(r"\bwindow\.services\b")
     private_attr_pattern = re.compile(r"\._services\b")
@@ -645,7 +666,7 @@ def test_production_code_uses_main_window_service_port_instead_of_public_service
 
 
 def test_production_code_uses_main_window_preview_port_instead_of_public_preview_attr() -> None:
-    port = APP_ROOT / "ui" / "main_window_preview_ports.py"
+    port = APP_ROOT / "ui" / "main_window_ports.py"
     port_source = port.read_text()
     public_attr_pattern = re.compile(r"\bwindow\.preview_3d\b")
     private_attr_pattern = re.compile(r"\._preview_3d\b")
@@ -674,7 +695,7 @@ def test_main_window_services_delegates_canvas_port_lookup_to_ports_module() -> 
         r"|\bselected_scene_items_for\b"
     )
 
-    assert "from ui.main_window_canvas_ports import (" in source
+    assert "from ui.main_window_ports import (" in source
     assert "has_exportable_atoms_for_window" in source
     assert _matching_lines(pattern, [path]) == []
 
@@ -1499,19 +1520,49 @@ def test_simple_canvas_access_helpers_delegate_service_lookup_to_ports() -> None
         APP_ROOT / "ui" / "note_item_access.py",
         APP_ROOT / "ui" / "selection_highlight_styler.py",
     ]
-    port_paths = [
-        APP_ROOT / "ui" / "benzene_preview_ports.py",
-        APP_ROOT / "ui" / "canvas_scene_reset_ports.py",
-        APP_ROOT / "ui" / "hover_ports.py",
-        APP_ROOT / "ui" / "insert_session_ports.py",
-        APP_ROOT / "ui" / "note_item_ports.py",
-        APP_ROOT / "ui" / "selection_highlight_ports.py",
-        APP_ROOT / "ui" / "structure_build_ports.py",
-    ]
+    port = APP_ROOT / "ui" / "canvas_service_ports.py"
     forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
 
-    assert all("canvas_services_for" in path.read_text() for path in port_paths)
+    assert "canvas_services_for" in port.read_text()
     assert _matching_lines(forbidden, access_paths) == []
+
+
+def test_canvas_service_ports_keep_simple_service_accessors_consolidated() -> None:
+    old_port_modules = (
+        "atom_label_ports.py",
+        "benzene_preview_ports.py",
+        "canvas_geometry_ports.py",
+        "canvas_ring_fill_scene_ports.py",
+        "canvas_scene_reset_ports.py",
+        "canvas_window_ports.py",
+        "handle_mutation_ports.py",
+        "handle_overlay_ports.py",
+        "history_canvas_ports.py",
+        "history_recording_ports.py",
+        "hover_ports.py",
+        "insert_session_ports.py",
+        "move_ports.py",
+        "note_item_ports.py",
+        "scene_decoration_ports.py",
+        "scene_item_ports.py",
+        "selection_highlight_ports.py",
+        "selection_ports.py",
+        "structure_build_ports.py",
+        "structure_insert_ports.py",
+        "structure_mutation_ports.py",
+    )
+    source = (APP_ROOT / "ui" / "canvas_service_ports.py").read_text()
+    app_source = "\n".join(path.read_text() for path in _app_python_files())
+
+    for module_name in old_port_modules:
+        assert not (APP_ROOT / "ui" / module_name).exists()
+        assert module_name.removesuffix(".py") not in app_source
+
+    assert "def atom_label_service_for_access(canvas)" in source
+    assert "def geometry_controller_for_access(canvas)" in source
+    assert "def note_controller_for_access(canvas)" in source
+    assert "def scene_item_controller_for_access(canvas)" in source
+    assert "def structure_mutation_atom_service(canvas)" in source
 
 
 def test_note_committed_text_private_state_stays_inside_note_item() -> None:
@@ -1524,11 +1575,11 @@ def test_note_committed_text_private_state_stays_inside_note_item() -> None:
 
 def test_history_canvas_access_delegates_service_lookup_to_history_ports() -> None:
     access = APP_ROOT / "ui" / "history_canvas_access.py"
-    ports = APP_ROOT / "ui" / "history_canvas_ports.py"
+    ports = APP_ROOT / "ui" / "canvas_service_ports.py"
     source = access.read_text()
     forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
 
-    assert "from ui.history_canvas_ports import (" in source
+    assert "from ui.canvas_service_ports import (" in source
     assert "history_hit_testing_service_for" in source
     assert "history_atom_mutation_service_for" in source
     assert "history_bond_mutation_service_for" in source
@@ -1538,11 +1589,11 @@ def test_history_canvas_access_delegates_service_lookup_to_history_ports() -> No
 
 def test_structure_mutation_access_delegates_service_lookup_to_structure_ports() -> None:
     access = APP_ROOT / "ui" / "structure_mutation_access.py"
-    ports = APP_ROOT / "ui" / "structure_mutation_ports.py"
+    ports = APP_ROOT / "ui" / "canvas_service_ports.py"
     source = access.read_text()
     forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
 
-    assert "from ui.structure_mutation_ports import (" in source
+    assert "from ui.canvas_service_ports import (" in source
     assert "structure_mutation_atom_service" in source
     assert "structure_mutation_bond_service" in source
     assert "structure_mutation_build_service" in source
@@ -1552,11 +1603,11 @@ def test_structure_mutation_access_delegates_service_lookup_to_structure_ports()
 
 def test_ring_fill_scene_access_delegates_service_lookup_to_ring_fill_ports() -> None:
     access = APP_ROOT / "ui" / "canvas_ring_fill_scene_access.py"
-    ports = APP_ROOT / "ui" / "canvas_ring_fill_scene_ports.py"
+    ports = APP_ROOT / "ui" / "canvas_service_ports.py"
     source = access.read_text()
     forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
 
-    assert "from ui.canvas_ring_fill_scene_ports import ring_fill_scene_service_for_access" in source
+    assert "from ui.canvas_service_ports import ring_fill_scene_service_for_access" in source
     assert "ring_fill_scene_service_for_access" in source
     assert "canvas_services_for" in ports.read_text()
     assert _matching_lines(forbidden, [access]) == []
@@ -1564,7 +1615,7 @@ def test_ring_fill_scene_access_delegates_service_lookup_to_ring_fill_ports() ->
 
 def test_structure_build_access_delegates_service_lookup_to_structure_build_ports() -> None:
     access = APP_ROOT / "ui" / "structure_build_access.py"
-    ports = APP_ROOT / "ui" / "structure_build_ports.py"
+    ports = APP_ROOT / "ui" / "canvas_service_ports.py"
     commands = APP_ROOT / "ui" / "structure_template_commands.py"
     source = access.read_text()
     command_source = commands.read_text()
@@ -1576,7 +1627,7 @@ def test_structure_build_access_delegates_service_lookup_to_structure_build_port
         r"|\b_SERVICE_TEMPLATE_METHODS\b"
     )
 
-    assert "from ui.structure_build_ports import structure_build_service_for_access" in source
+    assert "from ui.canvas_service_ports import structure_build_service_for_access" in source
     assert "structure_build_service_for_access" in source
     assert "from ui.structure_template_commands import apply_structure_template_command" in source
     assert "apply_structure_template_command(structure_build_service_for_access(canvas), key)" in source
@@ -1591,11 +1642,11 @@ def test_structure_build_access_delegates_service_lookup_to_structure_build_port
 
 def test_structure_insert_access_delegates_service_lookup_to_structure_insert_ports() -> None:
     access = APP_ROOT / "ui" / "structure_insert_access.py"
-    ports = APP_ROOT / "ui" / "structure_insert_ports.py"
+    ports = APP_ROOT / "ui" / "canvas_service_ports.py"
     source = access.read_text()
     forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
 
-    assert "from ui.structure_insert_ports import structure_insert_build_service_for_access" in source
+    assert "from ui.canvas_service_ports import structure_insert_build_service_for_access" in source
     assert "structure_insert_build_service_for_access" in source
     assert "canvas_services_for" in ports.read_text()
     assert _matching_lines(forbidden, [access]) == []
@@ -1603,11 +1654,11 @@ def test_structure_insert_access_delegates_service_lookup_to_structure_insert_po
 
 def test_scene_decoration_access_delegates_service_lookup_to_scene_decoration_ports() -> None:
     access = APP_ROOT / "ui" / "scene_decoration_access.py"
-    ports = APP_ROOT / "ui" / "scene_decoration_ports.py"
+    ports = APP_ROOT / "ui" / "canvas_service_ports.py"
     source = access.read_text()
     forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
 
-    assert "from ui.scene_decoration_ports import (" in source
+    assert "from ui.canvas_service_ports import (" in source
     assert "scene_decoration_service_for_access" in source
     assert "scene_decoration_build_service_for_access" in source
     assert "mark_scene_service_for_access" in source
@@ -1617,11 +1668,11 @@ def test_scene_decoration_access_delegates_service_lookup_to_scene_decoration_po
 
 def test_mark_item_access_delegates_service_lookup_to_scene_decoration_ports() -> None:
     access = APP_ROOT / "ui" / "mark_item_access.py"
-    ports = APP_ROOT / "ui" / "scene_decoration_ports.py"
+    ports = APP_ROOT / "ui" / "canvas_service_ports.py"
     source = access.read_text()
     forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
 
-    assert "from ui.scene_decoration_ports import (" in source
+    assert "from ui.canvas_service_ports import (" in source
     assert "scene_decoration_build_service_for_access" in source
     assert "mark_scene_service_for_access" in source
     assert "canvas_services_for" in ports.read_text()
@@ -1630,11 +1681,11 @@ def test_mark_item_access_delegates_service_lookup_to_scene_decoration_ports() -
 
 def test_scene_decoration_build_access_delegates_service_lookup_to_scene_decoration_ports() -> None:
     access = APP_ROOT / "ui" / "scene_decoration_build_access.py"
-    ports = APP_ROOT / "ui" / "scene_decoration_ports.py"
+    ports = APP_ROOT / "ui" / "canvas_service_ports.py"
     source = access.read_text()
     forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
 
-    assert "from ui.scene_decoration_ports import scene_decoration_build_service_for_access" in source
+    assert "from ui.canvas_service_ports import scene_decoration_build_service_for_access" in source
     assert "scene_decoration_build_service_for_access" in source
     assert "canvas_services_for" in ports.read_text()
     assert _matching_lines(forbidden, [access]) == []
@@ -1642,11 +1693,11 @@ def test_scene_decoration_build_access_delegates_service_lookup_to_scene_decorat
 
 def test_handle_mutation_access_delegates_service_lookup_to_handle_mutation_ports() -> None:
     access = APP_ROOT / "ui" / "handle_mutation_access.py"
-    ports = APP_ROOT / "ui" / "handle_mutation_ports.py"
+    ports = APP_ROOT / "ui" / "canvas_service_ports.py"
     source = access.read_text()
     forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
 
-    assert "from ui.handle_mutation_ports import (" in source
+    assert "from ui.canvas_service_ports import (" in source
     assert "handle_mutation_service_for_access" in source
     assert "curved_arrow_path_service_for_access" in source
     assert "canvas_services_for" in ports.read_text()
@@ -1655,11 +1706,11 @@ def test_handle_mutation_access_delegates_service_lookup_to_handle_mutation_port
 
 def test_handle_overlay_access_delegates_service_lookup_to_handle_overlay_ports() -> None:
     access = APP_ROOT / "ui" / "handle_overlay_access.py"
-    ports = APP_ROOT / "ui" / "handle_overlay_ports.py"
+    ports = APP_ROOT / "ui" / "canvas_service_ports.py"
     source = access.read_text()
     forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
 
-    assert "from ui.handle_overlay_ports import handle_overlay_service_for_access" in source
+    assert "from ui.canvas_service_ports import handle_overlay_service_for_access" in source
     assert "handle_overlay_service_for_access" in source
     assert "canvas_services_for" in ports.read_text()
     assert _matching_lines(forbidden, [access]) == []
@@ -1667,11 +1718,11 @@ def test_handle_overlay_access_delegates_service_lookup_to_handle_overlay_ports(
 
 def test_history_recording_access_delegates_service_lookup_to_history_recording_ports() -> None:
     access = APP_ROOT / "ui" / "history_recording_access.py"
-    ports = APP_ROOT / "ui" / "history_recording_ports.py"
+    ports = APP_ROOT / "ui" / "canvas_service_ports.py"
     source = access.read_text()
     forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
 
-    assert "from ui.history_recording_ports import history_recording_service_for_access" in source
+    assert "from ui.canvas_service_ports import history_recording_service_for_access" in source
     assert "history_recording_service_for_access" in source
     assert "canvas_services_for" in ports.read_text()
     assert _matching_lines(forbidden, [access]) == []
@@ -1679,11 +1730,11 @@ def test_history_recording_access_delegates_service_lookup_to_history_recording_
 
 def test_canvas_window_access_delegates_service_lookup_to_canvas_window_ports() -> None:
     access = APP_ROOT / "ui" / "canvas_window_access.py"
-    ports = APP_ROOT / "ui" / "canvas_window_ports.py"
+    ports = APP_ROOT / "ui" / "canvas_service_ports.py"
     source = access.read_text()
     forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
 
-    assert "from ui.canvas_window_ports import canvas_window_document_session_service" in source
+    assert "from ui.canvas_service_ports import canvas_window_document_session_service" in source
     assert "canvas_window_document_session_service" in source
     assert "canvas_services_for" in ports.read_text()
     assert _matching_lines(forbidden, [access]) == []
@@ -1691,11 +1742,11 @@ def test_canvas_window_access_delegates_service_lookup_to_canvas_window_ports() 
 
 def test_move_access_delegates_service_lookup_to_move_ports() -> None:
     access = APP_ROOT / "ui" / "move_access.py"
-    ports = APP_ROOT / "ui" / "move_ports.py"
+    ports = APP_ROOT / "ui" / "canvas_service_ports.py"
     source = access.read_text()
     forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
 
-    assert "from ui.move_ports import move_controller_for_access" in source
+    assert "from ui.canvas_service_ports import move_controller_for_access" in source
     assert "move_controller_for_access" in source
     assert "canvas_services_for" in ports.read_text()
     assert _matching_lines(forbidden, [access]) == []
@@ -1707,12 +1758,12 @@ def test_geometry_access_helpers_delegate_service_lookup_to_geometry_ports() -> 
         APP_ROOT / "ui" / "bond_label_geometry_access.py",
         APP_ROOT / "ui" / "canvas_geometry_access.py",
     ]
-    ports = APP_ROOT / "ui" / "canvas_geometry_ports.py"
+    ports = APP_ROOT / "ui" / "canvas_service_ports.py"
     forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
 
     for access in access_paths:
         source = access.read_text()
-        assert "from ui.canvas_geometry_ports import geometry_controller_for_access" in source
+        assert "from ui.canvas_service_ports import geometry_controller_for_access" in source
         assert "geometry_controller_for_access" in source
     assert "canvas_services_for" in ports.read_text()
     assert _matching_lines(forbidden, access_paths) == []
@@ -1720,11 +1771,11 @@ def test_geometry_access_helpers_delegate_service_lookup_to_geometry_ports() -> 
 
 def test_selection_service_access_delegates_service_lookup_to_selection_ports() -> None:
     access = APP_ROOT / "ui" / "selection_service_access.py"
-    ports = APP_ROOT / "ui" / "selection_ports.py"
+    ports = APP_ROOT / "ui" / "canvas_service_ports.py"
     source = access.read_text()
     forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
 
-    assert "from ui.selection_ports import selection_service_for_access" in source
+    assert "from ui.canvas_service_ports import selection_service_for_access" in source
     assert "selection_service_for_access" in source
     assert "canvas_services_for" in ports.read_text()
     assert _matching_lines(forbidden, [access]) == []
@@ -1752,11 +1803,11 @@ def test_export_render_service_dispatches_to_format_specific_renderers() -> None
 
 def test_scene_item_access_delegates_service_lookup_to_scene_item_ports() -> None:
     access = APP_ROOT / "ui" / "scene_item_access.py"
-    ports = APP_ROOT / "ui" / "scene_item_ports.py"
+    ports = APP_ROOT / "ui" / "canvas_service_ports.py"
     source = access.read_text()
     forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
 
-    assert "from ui.scene_item_ports import scene_item_controller_for_access" in source
+    assert "from ui.canvas_service_ports import scene_item_controller_for_access" in source
     assert "scene_item_controller_for_access" in source
     assert "canvas_services_for" in ports.read_text()
     assert _matching_lines(forbidden, [access]) == []
@@ -1775,11 +1826,11 @@ def test_scene_item_access_delegates_scene_storage_to_scene_state() -> None:
 
 def test_atom_label_access_delegates_service_lookup_to_atom_label_ports() -> None:
     access = APP_ROOT / "ui" / "atom_label_access.py"
-    ports = APP_ROOT / "ui" / "atom_label_ports.py"
+    ports = APP_ROOT / "ui" / "canvas_service_ports.py"
     source = access.read_text()
     forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
 
-    assert "from ui.atom_label_ports import atom_label_service_for_access" in source
+    assert "from ui.canvas_service_ports import atom_label_service_for_access" in source
     assert "atom_label_service_for_access" in source
     assert "canvas_services_for" in ports.read_text()
     assert _matching_lines(forbidden, [access]) == []
@@ -3101,7 +3152,7 @@ def test_main_window_icon_factory_delegates_canvas_style_access_to_port() -> Non
     assert "renderer_style_access" not in factory_source
     assert "ring_double_segments_for" not in factory_source
     assert "from core.model import Atom" not in factory_source
-    assert "from ui.main_window_canvas_ports import active_canvas_for_window" in port_source
+    assert "from ui.main_window_ports import active_canvas_for_window" in port_source
     assert "return active_canvas_for_window(self._window)" in port_source
     assert "self._window.canvas" not in port_source
     assert "from ui.renderer_style_access import" in port_source
@@ -4106,8 +4157,7 @@ def test_rotation_preview_context_does_not_mirror_legacy_private_group_state() -
 
 def test_production_window_helpers_do_not_reach_into_window_private_members() -> None:
     allowed_paths = {
-        APP_ROOT / "ui" / "main_window_preview_ports.py",
-        APP_ROOT / "ui" / "main_window_service_ports.py",
+        APP_ROOT / "ui" / "main_window_ports.py",
     }
     main_window_files = sorted(path for path in APP_ROOT.glob("ui/main_window*.py") if path not in allowed_paths)
     pattern = re.compile(

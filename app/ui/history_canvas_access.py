@@ -9,12 +9,12 @@ from ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
 from ui.canvas_mark_registry import mark_registry_for
 from ui.canvas_model_access import atom_for_id, rebuild_graphics_for
 from ui.canvas_rotation_state import rotation_state_for
-from ui.canvas_smiles_input_state import set_last_smiles_input_for
-from ui.history_canvas_ports import (
+from ui.canvas_service_ports import (
     history_atom_mutation_service_for,
     history_bond_mutation_service_for,
     history_hit_testing_service_for,
 )
+from ui.canvas_smiles_input_state import set_last_smiles_input_for
 from ui.mark_item_access import set_mark_center_for
 from ui.move_access import move_atoms_for, move_service_from_canvas
 from ui.renderer_style_access import set_bond_length_for

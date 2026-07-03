@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from PyQt6.QtGui import QPen
 from PyQt6.QtWidgets import QGraphicsItemGroup
 
-from ui.selection_highlight_ports import selection_highlight_styler_for_access
+from ui.canvas_service_ports import selection_highlight_styler_for_access
 from ui.selection_style_access import (
     selected_highlight_items_for,
     selection_color_for,

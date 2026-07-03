@@ -19,12 +19,11 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from ui.main_window import MainWindow
-    from ui.main_window_canvas_ports import active_canvas_for_window
     from ui.main_window_context_bar_pages import (
         MainWindowContextBarPageBuilder,
         bond_label_for_state,
     )
-    from ui.main_window_service_ports import services_for_window
+    from ui.main_window_ports import active_canvas_for_window, services_for_window
     from ui.main_window_theme import (
         CONTEXT_BAR_BUTTON_HEIGHT,
     )

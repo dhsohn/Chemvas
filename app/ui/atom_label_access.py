@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from PyQt6.QtGui import QColor
 
-from ui.atom_label_ports import atom_label_service_for_access
 from ui.canvas_atom_graphics_state import atom_items_for, visible_atom_item_for
 from ui.canvas_model_access import atom_for_id
+from ui.canvas_service_ports import atom_label_service_for_access
 
 
 def atom_label_service(canvas):

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from ui.canvas_service_ports import structure_build_service_for_access
 from ui.input_view_access import viewport_center_scene_pos_for
-from ui.structure_build_ports import structure_build_service_for_access
 from ui.structure_template_commands import apply_structure_template_command
 
 

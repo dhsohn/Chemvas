@@ -4,8 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from ui.main_window_bootstrap import bootstrap_main_window, build_main_window_runtime
-from ui.main_window_preview_ports import preview_for_window
-from ui.main_window_service_ports import services_for_window
+from ui.main_window_ports import preview_for_window, services_for_window
 from ui.main_window_state import MainWindowState
 from ui.main_window_tab_references import MainWindowTabReferences
 from ui.main_window_ui_references import MainWindowUiReferences

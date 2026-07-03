@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ui.scene_decoration_ports import (
+from ui.canvas_service_ports import (
     mark_scene_service_for_access,
     scene_decoration_build_service_for_access,
     scene_decoration_service_for_access,

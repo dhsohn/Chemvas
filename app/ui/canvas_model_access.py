@@ -14,11 +14,11 @@ from ui.canvas_atom_graphics_state import (
 from ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
 from ui.canvas_model_state import model_for, set_model_for
 from ui.canvas_scene_items_state import ring_items_for
+from ui.canvas_service_ports import structure_build_service_for_access
 from ui.scene_item_access import (
     clear_canvas_scene_item_list_map,
     clear_canvas_scene_item_map,
 )
-from ui.structure_build_ports import structure_build_service_for_access
 
 
 def atoms_for(canvas: Any) -> Any:

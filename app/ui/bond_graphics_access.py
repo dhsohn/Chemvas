@@ -5,9 +5,9 @@ import math
 from PyQt6.QtCore import Qt
 
 from ui.bond_renderer_access import bond_renderer_for
-from ui.canvas_geometry_ports import geometry_controller_for_access
 from ui.canvas_model_access import atom_for_id
 from ui.canvas_rotation_state import rotation_state_for
+from ui.canvas_service_ports import geometry_controller_for_access
 from ui.renderer_style_access import bond_length_px_for
 
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ui.scene_decoration_ports import scene_decoration_build_service_for_access
+from ui.canvas_service_ports import scene_decoration_build_service_for_access
 
 
 def _service_method(canvas, name: str):

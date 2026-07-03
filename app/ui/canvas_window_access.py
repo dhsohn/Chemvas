@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ui.canvas_callback_state import callback_state_for
-from ui.canvas_window_ports import canvas_window_document_session_service
+from ui.canvas_service_ports import canvas_window_document_session_service
 from ui.selection_info_state import selection_info_state_for
 
 

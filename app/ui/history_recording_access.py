@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ui.history_recording_ports import history_recording_service_for_access
+from ui.canvas_service_ports import history_recording_service_for_access
 
 
 def record_additions_for(

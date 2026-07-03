@@ -5,7 +5,7 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QPen
 
 from ui.bond_graphics_access import ring_double_segments_for
-from ui.main_window_canvas_ports import active_canvas_for_window
+from ui.main_window_ports import active_canvas_for_window
 from ui.renderer_style_access import (
     bold_bond_pen_for,
     bond_length_px_for,

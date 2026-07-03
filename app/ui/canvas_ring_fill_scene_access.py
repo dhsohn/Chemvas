@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ui.canvas_ring_fill_scene_ports import ring_fill_scene_service_for_access
+from ui.canvas_service_ports import ring_fill_scene_service_for_access
 
 
 def create_ring_fill_item_for(canvas, points, atom_ids):

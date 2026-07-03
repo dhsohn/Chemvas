@@ -2,46 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ui.canvas_service_ports import note_controller_for_access
 from ui.main_window_action_availability_service import (
     MainWindowActionAvailabilityService,
 )
 from ui.main_window_active_canvas_ui_service import MainWindowActiveCanvasUIService
 from ui.main_window_app import open_new_window
 from ui.main_window_canvas_document_service import MainWindowCanvasDocumentService
-from ui.main_window_canvas_ports import (
-    active_canvas_for_window,
-    active_canvas_index_for_window,
-    active_canvas_name_for_window,
-    active_canvas_or_none_for_window,
-    active_tool_name_for_window,
-    all_canvases_for_window,
-    bond_length_px_for_window,
-    canvas_count_for_window,
-    clear_context_bar_page_override_for_window,
-    color_mutation_service_for_window,
-    color_tool_for_window,
-    context_bar_page_override_for_window,
-    current_zoom_percent_for_window,
-    document_session_service_for_window,
-    fit_canvas_to_view_for_window,
-    geometry_controller_for_window,
-    has_exportable_atoms_for_window,
-    history_service_for_window,
-    insert_controller_for_window,
-    next_canvas_name_for_window,
-    reset_zoom_for_window,
-    scene_transform_controller_for_window,
-    selected_scene_items_for_window,
-    set_context_bar_page_override_for_window,
-    set_last_canvas_tab_index_for_window,
-    set_zoom_percent_for_window,
-    style_controller_for_window,
-    tab_reactions_suspended_for_window,
-    tool_mode_controller_for_window,
-    tool_settings_for_window,
-    zoom_in_for_window,
-    zoom_out_for_window,
-)
 from ui.main_window_canvas_tab_ui_service import MainWindowCanvasTabUIService
 from ui.main_window_context_bar_pages import MainWindowContextBarPageBuilder
 from ui.main_window_context_bar_service import MainWindowContextBarService
@@ -51,27 +18,58 @@ from ui.main_window_context_page_state_service import (
 from ui.main_window_document_action_service import MainWindowDocumentActionService
 from ui.main_window_panel_service import MainWindowPanelService
 from ui.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
-from ui.main_window_preview_ports import preview_for_window
+from ui.main_window_ports import (
+    active_canvas_for_window,
+    active_canvas_index_for_window,
+    active_canvas_name_for_window,
+    active_canvas_or_none_for_window,
+    active_tool_name_for_window,
+    all_canvases_for_window,
+    apply_preview_window_assembly_for_window,
+    atom_input_for_window,
+    bond_length_px_for_window,
+    canvas_count_for_window,
+    clear_context_bar_page_override_for_window,
+    color_mutation_service_for_window,
+    color_tool_for_window,
+    context_bar_page_override_for_window,
+    current_zoom_percent_for_window,
+    document_session_service_for_window,
+    export_xyz_button_for_window,
+    fit_canvas_to_view_for_window,
+    geometry_controller_for_window,
+    has_exportable_atoms_for_window,
+    history_service_for_window,
+    icon_factory_for_window,
+    insert_controller_for_window,
+    next_canvas_name_for_window,
+    preview_for_window,
+    preview_window_for_window,
+    redo_button_for_window,
+    reset_zoom_for_window,
+    scene_transform_controller_for_window,
+    selected_scene_items_for_window,
+    set_atom_input_for_window,
+    set_context_bar_page_override_for_window,
+    set_last_canvas_tab_index_for_window,
+    set_zoom_percent_for_window,
+    style_controller_for_window,
+    tab_reactions_suspended_for_window,
+    tab_references_for_window,
+    tool_action_for_window,
+    tool_actions_for_window,
+    tool_mode_controller_for_window,
+    tool_settings_for_window,
+    undo_button_for_window,
+    zoom_in_for_window,
+    zoom_out_for_window,
+)
 from ui.main_window_status_service import MainWindowStatusService
-from ui.main_window_tab_ports import tab_references_for_window
 from ui.main_window_text_style_service import MainWindowTextStyleService
 from ui.main_window_tool_action_service import MainWindowToolActionService
 from ui.main_window_tool_routing_service import MainWindowToolRoutingService
 from ui.main_window_tool_state_service import MainWindowToolStateService
 from ui.main_window_ui_assembly_service import MainWindowUIAssemblyService
-from ui.main_window_ui_ports import (
-    apply_preview_window_assembly_for_window,
-    atom_input_for_window,
-    export_xyz_button_for_window,
-    icon_factory_for_window,
-    preview_window_for_window,
-    redo_button_for_window,
-    set_atom_input_for_window,
-    tool_action_for_window,
-    tool_actions_for_window,
-    undo_button_for_window,
-)
-from ui.note_item_ports import note_controller_for_access
 
 
 @dataclass(slots=True)

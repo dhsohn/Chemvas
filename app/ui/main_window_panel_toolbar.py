@@ -13,6 +13,7 @@ from ui.main_window_config import (
     TOOLBAR_PRIMARY_TOOL_GROUP,
     TOOLBAR_TOOL_GROUPS,
 )
+from ui.main_window_ports import icon_factory_for_window
 from ui.main_window_theme import (
     TOOLBAR_BUTTON_SIZE,
     TOOLBAR_BUTTON_STYLE,
@@ -20,7 +21,6 @@ from ui.main_window_theme import (
     TOOLBAR_THICKNESS,
 )
 from ui.main_window_toolbar_buttons import CornerMenuToolButton
-from ui.main_window_ui_ports import icon_factory_for_window
 
 _NOTE_TOOL_MENU_BUTTON_STYLE = (
     TOOLBAR_BUTTON_STYLE + "QToolButton::menu-indicator { image: none; width: 0px; height: 0px; }"
