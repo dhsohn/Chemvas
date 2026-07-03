@@ -12,9 +12,11 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from ui.main_window import MainWindow
-    from ui.main_window_canvas_ports import active_canvas_for_window
-    from ui.main_window_preview_ports import preview_for_window
-    from ui.main_window_service_ports import services_for_window
+    from ui.main_window_ports import (
+        active_canvas_for_window,
+        preview_for_window,
+        services_for_window,
+    )
 
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 and MainWindow are required for GUI canvas tab tests")

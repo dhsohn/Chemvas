@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ui.hover_ports import hover_scene_service_for_access
+from ui.canvas_service_ports import hover_scene_service_for_access
 
 
 def _hover_scene_method(canvas, name: str):

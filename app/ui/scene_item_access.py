@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ui.canvas_scene_state import canvas_scene_for, optional_canvas_scene_for
-from ui.scene_item_ports import scene_item_controller_for_access
+from ui.canvas_service_ports import scene_item_controller_for_access
 
 
 def scene_item_controller(canvas):

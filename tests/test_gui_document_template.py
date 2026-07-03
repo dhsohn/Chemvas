@@ -57,10 +57,12 @@ if QApplication is not None:
         snapshot_canvas_state_for,
     )
     from ui.main_window import MainWindow
-    from ui.main_window_canvas_ports import active_canvas_for_window
-    from ui.main_window_preview_ports import preview_for_window
-    from ui.main_window_service_ports import services_for_window
-    from ui.main_window_ui_ports import preview_window_for_window
+    from ui.main_window_ports import (
+        active_canvas_for_window,
+        preview_for_window,
+        preview_window_for_window,
+        services_for_window,
+    )
     from ui.mark_item_access import mark_center_for
     from ui.preview_3d_painter import preview_overlay_font
     from ui.scene_decoration_access import (

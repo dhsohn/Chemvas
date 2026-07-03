@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ui.canvas_scene_reset_ports import scene_reset_service_for_access
+from ui.canvas_service_ports import scene_reset_service_for_access
 
 
 def clear_scene_for(canvas) -> None:

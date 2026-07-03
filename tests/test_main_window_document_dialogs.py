@@ -16,14 +16,13 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from ui.main_window import MainWindow
-    from ui.main_window_canvas_ports import active_canvas_for_window
     from ui.main_window_document_dialogs import (
         FigureExportOptions,
         SheetSetupSelection,
         prompt_export_options,
         prompt_sheet_setup,
     )
-    from ui.main_window_service_ports import services_for_window
+    from ui.main_window_ports import active_canvas_for_window, services_for_window
     from ui.sheet_setup_access import set_sheet_setup_for
 
 

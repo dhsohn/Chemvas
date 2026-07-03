@@ -23,13 +23,13 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from ui.main_window import MainWindow
-    from ui.main_window_canvas_ports import active_canvas_for_window
     from ui.main_window_icon_factory import MainWindowIconFactory
     from ui.main_window_icon_geometry import (
         benzene_icon_polygon,
         chair_icon_points,
         template_preview_ring_sides,
     )
+    from ui.main_window_ports import active_canvas_for_window
 
 
 def _opaque_bounds(image) -> tuple[int, int, int, int] | None:
