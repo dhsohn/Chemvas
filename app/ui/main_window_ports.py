@@ -2,26 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ui.canvas_model_access import has_atoms_for
-from ui.canvas_service_access import canvas_services_for
-from ui.canvas_tool_settings_state import tool_settings_state_for
-from ui.canvas_window_access import history_service_for_canvas
-from ui.input_view_access import (
-    fit_canvas_to_view_for,
-    reset_zoom_for,
-    set_zoom_for,
-    zoom_factor_for,
-    zoom_in_for,
-    zoom_out_for,
-)
-from ui.renderer_style_access import bond_length_px_for
-from ui.selection_collection_access import selected_scene_items_for
-from ui.sheet_setup_access import (
-    set_sheet_setup_for,
-    sheet_orientation_for,
-    sheet_size_for,
-)
-
 if TYPE_CHECKING:
     from ui.main_window_services import MainWindowServices
     from ui.main_window_tab_references import MainWindowTabReferences
@@ -117,6 +97,8 @@ def set_last_canvas_tab_index_for_window(window, index: int) -> None:
 
 
 def _active_canvas_services_for_window(window):
+    from ui.canvas_service_access import canvas_services_for
+
     return canvas_services_for(active_canvas_for_window(window))
 
 
@@ -149,15 +131,21 @@ def geometry_controller_for_window(window):
 
 
 def history_service_for_window(window):
+    from ui.canvas_window_access import history_service_for_canvas
+
     return history_service_for_canvas(active_canvas_for_window(window))
 
 
 def has_exportable_atoms_for_window(window) -> bool:
+    from ui.canvas_model_access import has_atoms_for
+
     canvas = active_canvas_or_none_for_window(window)
     return has_atoms_for(canvas) if canvas is not None else False
 
 
 def active_tool_name_for_window(window):
+    from ui.canvas_service_access import canvas_services_for
+
     canvas = active_canvas_or_none_for_window(window)
     if canvas is None:
         return None
@@ -167,6 +155,8 @@ def active_tool_name_for_window(window):
 
 
 def current_zoom_percent_for_window(window) -> int:
+    from ui.input_view_access import zoom_factor_for
+
     canvas = active_canvas_or_none_for_window(window)
     if canvas is None:
         return 100
@@ -174,6 +164,8 @@ def current_zoom_percent_for_window(window) -> int:
 
 
 def zoom_in_for_window(window) -> int:
+    from ui.input_view_access import zoom_in_for
+
     canvas = active_canvas_or_none_for_window(window)
     if canvas is not None:
         zoom_in_for(canvas)
@@ -181,6 +173,8 @@ def zoom_in_for_window(window) -> int:
 
 
 def zoom_out_for_window(window) -> int:
+    from ui.input_view_access import zoom_out_for
+
     canvas = active_canvas_or_none_for_window(window)
     if canvas is not None:
         zoom_out_for(canvas)
@@ -188,6 +182,8 @@ def zoom_out_for_window(window) -> int:
 
 
 def reset_zoom_for_window(window) -> int:
+    from ui.input_view_access import reset_zoom_for
+
     canvas = active_canvas_or_none_for_window(window)
     if canvas is not None:
         reset_zoom_for(canvas)
@@ -195,6 +191,8 @@ def reset_zoom_for_window(window) -> int:
 
 
 def fit_canvas_to_view_for_window(window) -> int:
+    from ui.input_view_access import fit_canvas_to_view_for
+
     canvas = active_canvas_or_none_for_window(window)
     if canvas is not None:
         fit_canvas_to_view_for(canvas)
@@ -202,6 +200,8 @@ def fit_canvas_to_view_for_window(window) -> int:
 
 
 def set_zoom_percent_for_window(window, percent: float) -> int:
+    from ui.input_view_access import set_zoom_for
+
     canvas = active_canvas_or_none_for_window(window)
     if canvas is not None:
         set_zoom_for(canvas, percent / 100.0)
@@ -233,18 +233,26 @@ def set_context_bar_page_override_for_window(window, page_key: str | None) -> No
 
 
 def bond_length_px_for_window(window) -> float:
+    from ui.renderer_style_access import bond_length_px_for
+
     return bond_length_px_for(active_canvas_for_window(window))
 
 
 def sheet_size_for_window(window) -> str:
+    from ui.sheet_setup_access import sheet_size_for
+
     return sheet_size_for(active_canvas_for_window(window))
 
 
 def sheet_orientation_for_window(window) -> str:
+    from ui.sheet_setup_access import sheet_orientation_for
+
     return sheet_orientation_for(active_canvas_for_window(window))
 
 
 def set_sheet_setup_for_window(window, size: str, orientation: str) -> None:
+    from ui.sheet_setup_access import set_sheet_setup_for
+
     set_sheet_setup_for(active_canvas_for_window(window), size, orientation)
 
 
@@ -253,6 +261,8 @@ def next_canvas_name_for_window(window, prefix: str = "Canvas") -> str:
 
 
 def tool_settings_for_window(window):
+    from ui.canvas_tool_settings_state import tool_settings_state_for
+
     return tool_settings_state_for(active_canvas_for_window(window))
 
 
@@ -261,6 +271,8 @@ def color_tool_for_window(window):
 
 
 def selected_scene_items_for_window(window, *, excluded_kinds):
+    from ui.selection_collection_access import selected_scene_items_for
+
     return selected_scene_items_for(active_canvas_for_window(window), excluded_kinds=excluded_kinds)
 
 
