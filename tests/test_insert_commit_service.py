@@ -240,6 +240,7 @@ class InsertCommitServiceTest(unittest.TestCase):
             marks=[
                 SmilesMarkPlacement(3, "plus", 11.0, 19.0),
             ],
+            annotations={3: {"formal_charge": 1}},
         )
 
         applied = apply_smiles_commit_plan(
@@ -251,6 +252,7 @@ class InsertCommitServiceTest(unittest.TestCase):
 
         self.assertTrue(applied)
         self.assertEqual(canvas.mark_calls, [(0, 11.0, 19.0, "plus", False)])
+        self.assertEqual(canvas.model.atom_annotations, {0: {"formal_charge": 1}})
         self.assertEqual(
             canvas.record_calls,
             [

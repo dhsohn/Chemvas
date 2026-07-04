@@ -25,6 +25,7 @@ def apply_paste_payload(
     dy: float,
     add_atom: Callable[[str, float, float], int],
     apply_atom_color: Callable[[int, str], None],
+    set_atom_annotation: Callable[[int, dict[str, int] | None], None],
     add_or_update_atom_label: Callable[..., None],
     add_bond: Callable[[int, int, int], int],
     restore_bond_from_state: Callable[[int, dict], None],
@@ -48,6 +49,9 @@ def apply_paste_payload(
         color = atom_state.get("color")
         if isinstance(color, str):
             apply_atom_color(new_atom_id, color)
+        annotation = atom_state.get("annotation")
+        if isinstance(annotation, dict):
+            set_atom_annotation(new_atom_id, annotation)
         if element.upper() == "C" and bool(atom_state.get("explicit_label", False)):
             add_or_update_atom_label(
                 new_atom_id,

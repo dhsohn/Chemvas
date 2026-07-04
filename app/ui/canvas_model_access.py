@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from PyQt6.QtCore import QPointF
@@ -74,6 +75,7 @@ def required_atom_for(canvas: Any, atom_id: int) -> Any:
 
 def set_atom_for_id(canvas: Any, atom_id: int, atom: Any) -> None:
     atoms_for(canvas)[atom_id] = atom
+    clear_atom_annotation_for(canvas, atom_id)
 
 
 def bond_for_id(canvas: Any, bond_id: int | None) -> Any | None:
@@ -95,6 +97,48 @@ def created_atom_ids_from(canvas: Any, before_next_atom_id: int) -> list[int]:
 
 def remove_atom_direct_for(canvas: Any, atom_id: int) -> None:
     atoms_for(canvas).pop(atom_id, None)
+    clear_atom_annotation_for(canvas, atom_id)
+
+
+def atom_annotations_for(canvas: Any) -> dict[int, dict[str, int]]:
+    model = model_for(canvas)
+    annotations = getattr(model, "atom_annotations", None)
+    if isinstance(annotations, dict):
+        return annotations
+    annotations = {}
+    model.atom_annotations = annotations
+    return annotations
+
+
+def atom_annotation_for(canvas: Any, atom_id: int) -> dict[str, int] | None:
+    annotation = atom_annotations_for(canvas).get(atom_id)
+    if not isinstance(annotation, Mapping):
+        return None
+    return {
+        str(key): int(value)
+        for key, value in annotation.items()
+        if key in {"formal_charge", "radical_electrons"} and type(value) is int
+    }
+
+
+def set_atom_annotation_for(canvas: Any, atom_id: int, annotation: Mapping[str, int] | None) -> None:
+    annotations = atom_annotations_for(canvas)
+    if annotation:
+        annotations[atom_id] = {
+            str(key): int(value)
+            for key, value in annotation.items()
+            if key in {"formal_charge", "radical_electrons"} and type(value) is int and value
+        }
+        if not annotations[atom_id]:
+            annotations.pop(atom_id, None)
+        return
+    annotations.pop(atom_id, None)
+
+
+def clear_atom_annotation_for(canvas: Any, atom_id: int) -> None:
+    annotations = getattr(model_for(canvas), "atom_annotations", None)
+    if isinstance(annotations, dict):
+        annotations.pop(atom_id, None)
 
 
 def clear_bond_for_id(canvas: Any, bond_id: int) -> None:
@@ -153,12 +197,15 @@ def rebuild_graphics_for(canvas) -> None:
 __all__ = [
     "add_atom_to_model_for",
     "add_bond_to_model_for",
+    "atom_annotation_for",
+    "atom_annotations_for",
     "atom_for_id",
     "atoms_for",
     "bond_count_for",
     "bond_for_id",
     "bond_ids_from",
     "bonds_for",
+    "clear_atom_annotation_for",
     "clear_bond_for_id",
     "created_atom_ids_from",
     "ensure_next_atom_id_after_for",
@@ -170,6 +217,7 @@ __all__ = [
     "remove_atom_direct_for",
     "required_atom_for",
     "rescale_model_for",
+    "set_atom_annotation_for",
     "set_atom_for_id",
     "set_bond_for_id",
     "set_model_for",
