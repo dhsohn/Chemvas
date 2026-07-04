@@ -26,6 +26,7 @@ class RDKitImportHelper:
                 "c1ccccc1 (benzene), C1CCCCC1 (cyclohexane)."
             )
             return None
+        mol = self._kekulized_import_mol(Chem, mol)
         AllChem.Compute2DCoords(mol)
 
         conf = mol.GetConformer()
@@ -63,15 +64,69 @@ class RDKitImportHelper:
         scale_factor = (scale / avg_len) if avg_len > 0.0 else 1.0
 
         model = MoleculeModel()
+        atom_id_by_rd_idx: dict[int, int] = {}
         for atom in mol.GetAtoms():
             x, y = pos_by_idx[atom.GetIdx()]
-            model.add_atom(atom.GetSymbol(), x * scale_factor, -y * scale_factor)
+            atom_id = model.add_atom(atom.GetSymbol(), x * scale_factor, -y * scale_factor)
+            atom_id_by_rd_idx[atom.GetIdx()] = atom_id
+            annotation = self._atom_annotation(atom)
+            if annotation:
+                model.atom_annotations[atom_id] = annotation
 
         for bond in mol.GetBonds():
-            order = int(bond.GetBondTypeAsDouble())
-            model.add_bond(bond.GetBeginAtomIdx(), bond.GetEndAtomIdx(), order)
+            order = self._bond_order_for_import(bond)
+            model.add_bond(
+                atom_id_by_rd_idx[bond.GetBeginAtomIdx()],
+                atom_id_by_rd_idx[bond.GetEndAtomIdx()],
+                order,
+            )
 
         return model
+
+    @staticmethod
+    def _kekulized_import_mol(Chem, mol):
+        try:
+            has_aromatic_bond = any(
+                bool(getattr(bond, "GetIsAromatic", lambda: False)())
+                or abs(float(bond.GetBondTypeAsDouble()) - 1.5) < 1e-6
+                for bond in mol.GetBonds()
+            )
+        except Exception:
+            return mol
+        if not has_aromatic_bond or not hasattr(Chem, "Kekulize"):
+            return mol
+        try:
+            import_mol = Chem.Mol(mol) if hasattr(Chem, "Mol") else mol
+            Chem.Kekulize(import_mol, clearAromaticFlags=True)
+            return import_mol
+        except Exception:
+            return mol
+
+    @staticmethod
+    def _bond_order_for_import(bond) -> int:
+        try:
+            order_value = float(bond.GetBondTypeAsDouble())
+        except Exception:
+            return 1
+        if abs(order_value - 1.5) < 1e-6 or bool(getattr(bond, "GetIsAromatic", lambda: False)()):
+            return 2
+        order = round(order_value)
+        return max(1, min(3, order))
+
+    @staticmethod
+    def _atom_annotation(atom) -> dict[str, int]:
+        annotation: dict[str, int] = {}
+        formal_charge_getter = getattr(atom, "GetFormalCharge", None)
+        if callable(formal_charge_getter):
+            formal_charge = int(formal_charge_getter())
+            if formal_charge:
+                annotation["formal_charge"] = formal_charge
+        radical_getter = getattr(atom, "GetNumRadicalElectrons", None)
+        if callable(radical_getter):
+            radical_electrons = int(radical_getter())
+            if radical_electrons:
+                annotation["radical_electrons"] = radical_electrons
+        return annotation
 
     def compute_props(self, model: MoleculeModel) -> tuple[str | None, float | None, str | None]:
         identifiers = self.compute_identifiers(model)

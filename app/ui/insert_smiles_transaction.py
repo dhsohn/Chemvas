@@ -23,7 +23,7 @@ from ui.canvas_scene_items_state import (
     ts_bracket_items_for,
 )
 from ui.canvas_smiles_input_state import last_smiles_input_for
-from ui.history_commands import DeleteSceneItemsCommand
+from ui.history_commands import AddSceneItemsCommand, DeleteSceneItemsCommand
 from ui.scene_item_state import (
     atom_state_dict_for,
     bond_state_dict,
@@ -51,6 +51,7 @@ class SmilesLoadSnapshot:
         *,
         after_clear_next_atom_id: int,
         after_smiles_input: str,
+        added_scene_items: list | None = None,
     ) -> HistoryCommand | None:
         commands: list[HistoryCommand] = []
         for bond_id, bond_state in self.bond_states.items():
@@ -103,6 +104,19 @@ class SmilesLoadSnapshot:
                     after_smiles_input=after_smiles_input,
                 )
             )
+        if added_scene_items:
+            item_states = []
+            stateful_items = []
+            for item in added_scene_items:
+                if item is None:
+                    continue
+                state = scene_item_state_for(canvas, item)
+                if not state:
+                    continue
+                item_states.append(state)
+                stateful_items.append(item)
+            if item_states:
+                commands.append(AddSceneItemsCommand(item_states=item_states, items=stateful_items))
         if not commands:
             return None
         if len(commands) == 1:
@@ -144,11 +158,13 @@ class SmilesLoadTransactionBuilder:
         *,
         after_clear_next_atom_id: int,
         after_smiles_input: str,
+        added_scene_items: list | None = None,
     ) -> HistoryCommand | None:
         return snapshot.build_command(
             self.canvas,
             after_clear_next_atom_id=after_clear_next_atom_id,
             after_smiles_input=after_smiles_input,
+            added_scene_items=added_scene_items,
         )
 
     def _scene_items_for_delete(self, atom_ids: set[int]) -> list[object]:

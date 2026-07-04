@@ -31,10 +31,12 @@ class RDKitConversionHelper:
         Chem, _ = rdkit
         rw = Chem.RWMol()
         adjacency = self._build_model_adjacency(model)
+        atom_annotations = getattr(model, "atom_annotations", None)
         atom_map = {}
         invalid_labels: list[str] = []
         for atom_id in sorted(model.atoms):
             atom = model.atoms[atom_id]
+            formal_charge, radical_electrons = self._annotation_for_atom(atom_annotations, atom_id)
             try:
                 rd_atom = Chem.Atom(atom.element)
             except Exception:
@@ -44,6 +46,11 @@ class RDKitConversionHelper:
                 rd_atom = Chem.Atom("C")
             if self._should_disable_implicit_hydrogens(model, atom_id, adjacency):
                 rd_atom.SetNoImplicit(True)
+            self._apply_atom_annotation(
+                rd_atom,
+                formal_charge=formal_charge,
+                radical_electrons=radical_electrons,
+            )
             atom_map[atom_id] = rw.AddAtom(rd_atom)
         if invalid_labels:
             self.adapter.last_error = (

@@ -196,6 +196,27 @@ class DocumentStateTest(unittest.TestCase):
         state["settings"] = settings
         build_document_payload(state, version=CANVAS_FILE_VERSION)
 
+    def test_document_payload_accepts_legacy_settings_without_text_note_keys(self) -> None:
+        settings = _settings()
+        for key in (
+            "text_font_family",
+            "text_color",
+            "text_alignment",
+            "text_line_spacing",
+            "note_box_enabled",
+            "note_box_color",
+            "note_box_alpha",
+            "note_border_enabled",
+            "note_border_color",
+            "note_border_width",
+            "note_padding",
+        ):
+            settings.pop(key)
+        state = _canvas_state()
+        state["settings"] = settings
+
+        build_document_payload(state, version=CANVAS_FILE_VERSION)
+
     def test_settings_reject_extra_style_preset_key(self) -> None:
         settings = _settings()
         settings["style_preset"] = "Presentation"
@@ -236,7 +257,7 @@ class DocumentStateTest(unittest.TestCase):
                 }
             ],
             "scene_items": [
-                {"kind": "note", "text": "selected", "x": 5.0, "y": 6.0},
+                {"kind": "note", "text": "selected", "html": "<p><b>selected</b></p>", "x": 5.0, "y": 6.0},
                 {"kind": "arrow", "start": (1.0, 2.0), "end": (3.0, 4.0), "control": None, "double": False},
                 {"kind": "ts_bracket", "left": 1.0, "top": 2.0, "right": 3.0, "bottom": 4.0},
                 {"kind": "orbital", "orbital_kind": "p", "center": (8.0, 9.0), "scale": 1.2, "rotation": 30.0},
@@ -252,12 +273,37 @@ class DocumentStateTest(unittest.TestCase):
         self.assertEqual(state["ring_fills"][0]["atom_ids"], [3, 7])
         self.assertEqual(state["marks"][0]["kind"], "plus")
         self.assertEqual(state["notes"][0]["text"], "selected")
+        self.assertEqual(state["notes"][0]["html"], "<p><b>selected</b></p>")
         self.assertEqual(state["arrows"][0]["kind"], "arrow")
         self.assertEqual(state["ts_brackets"][0]["kind"], "ts_bracket")
         self.assertEqual(state["orbitals"][0]["kind"], "p")
         self.assertEqual(state["settings"], settings)
         self.assertIsNone(state["last_smiles_input"])
         build_document_payload(state, version=CANVAS_FILE_VERSION)
+
+    def test_build_document_payload_rejects_wedge_hash_on_non_single_bonds(self) -> None:
+        state = _canvas_state(
+            _model_state(
+                atoms={"0": _atom_state(), "1": _atom_state()},
+                bonds=[{"a": 0, "b": 1, "order": 2, "style": "wedge", "color": "#000000"}],
+                next_atom_id=2,
+            )
+        )
+
+        with self.assertRaises(ValueError):
+            build_document_payload(state, version=CANVAS_FILE_VERSION)
+
+    def test_selection_payload_rejects_wedge_hash_on_non_single_bonds(self) -> None:
+        payload = {
+            "atoms": [
+                {"id": 0, "element": "C", "x": 0.0, "y": 0.0, "color": "#000000", "explicit_label": False},
+                {"id": 1, "element": "C", "x": 1.0, "y": 0.0, "color": "#000000", "explicit_label": False},
+            ],
+            "bonds": [{"a": 0, "b": 1, "order": 2, "style": "hash", "color": "#000000"}],
+        }
+
+        with self.assertRaises(ValueError):
+            selection_payload_to_canvas_state(payload, _settings())
 
     def test_selection_payload_to_canvas_state_rejects_invalid_payload(self) -> None:
         with self.assertRaises(ValueError):

@@ -42,7 +42,8 @@ def _make_canvas(**overrides):
         services=SimpleNamespace(
             canvas_graph_service=SimpleNamespace(
                 expand_connected_atoms=overrides.pop("expand_connected_atoms", mock.Mock(side_effect=lambda ids: set(ids)))
-            )
+            ),
+            selection_controller=overrides.pop("selection_controller", SimpleNamespace()),
         ),
         scene=lambda: scene,
     )
@@ -108,6 +109,7 @@ def test_select_structure_for_item_selects_connected_atoms_bonds_and_rings() -> 
     ring_item = _FakeItem("ring", data2=[1, 2])
     unrelated_ring_item = _FakeItem("ring", data2=[1, 3])
     scene = _FakeScene([atom_item, atom_item_2, bond_graphic, ring_item, unrelated_ring_item])
+    selection_controller = SimpleNamespace(clear_note_selection=mock.Mock())
     service = _structure_service(
         _make_canvas(
             scene=scene,
@@ -119,6 +121,7 @@ def test_select_structure_for_item_selects_connected_atoms_bonds_and_rings() -> 
             bond_items={0: [bond_graphic], 1: [_FakeItem("bond")]},
             ring_items=[ring_item, unrelated_ring_item],
             expand_connected_atoms=mock.Mock(return_value={1, 2}),
+            selection_controller=selection_controller,
         )
     )
 
@@ -132,12 +135,14 @@ def test_select_structure_for_item_selects_connected_atoms_bonds_and_rings() -> 
     assert bond_graphic.isSelected()
     assert ring_item.isSelected()
     assert not unrelated_ring_item.isSelected()
+    selection_controller.clear_note_selection.assert_called_once_with()
 
 
 def test_select_structure_for_item_selects_overlay_without_outline_refresh() -> None:
     note_item = _FakeItem("note")
     scene = _FakeScene([note_item])
-    service = _structure_service(_make_canvas(scene=scene))
+    selection_controller = SimpleNamespace(clear_note_selection=mock.Mock())
+    service = _structure_service(_make_canvas(scene=scene, selection_controller=selection_controller))
 
     result = service.select_structure_for_item(note_item)
 
@@ -145,3 +150,4 @@ def test_select_structure_for_item_selects_overlay_without_outline_refresh() -> 
     assert not result.update_outline
     assert scene.clear_selection_calls == 1
     assert note_item.isSelected()
+    selection_controller.clear_note_selection.assert_called_once_with()

@@ -91,6 +91,19 @@ def flip_scene_item_state(
         after_state["right"] = flipped_rect.right()
         after_state["bottom"] = flipped_rect.bottom()
         return after_state
+    if kind == "shape":
+        shape_rect = ts_bracket_rect_from_state(before_state)
+        if shape_rect is None:
+            return after_state
+        flipped_rect = QRectF(
+            flip_point(shape_rect.topLeft(), center, horizontal),
+            flip_point(shape_rect.bottomRight(), center, horizontal),
+        ).normalized()
+        after_state["left"] = flipped_rect.left()
+        after_state["top"] = flipped_rect.top()
+        after_state["right"] = flipped_rect.right()
+        after_state["bottom"] = flipped_rect.bottom()
+        return after_state
     if kind in ARROW_KINDS:
         for key in ("start", "end", "control"):
             point = before_state.get(key)

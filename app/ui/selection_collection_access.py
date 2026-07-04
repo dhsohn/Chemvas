@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QPointF, Qt
 
+from ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
 from ui.canvas_bond_graphics_state import bond_items_for_id
 from ui.canvas_model_access import atom_for_id, atoms_for, bond_for_id
 from ui.selection_hit_logic import build_selection_snapshot
@@ -181,16 +182,31 @@ def selection_items_for_copy_for(canvas) -> list:
     def add_with_children(item) -> None:
         if not append_unique_scene_item(items, seen, item, excluded_kinds=COPY_SELECTION_EXCLUDED_KINDS):
             return
-        for child in item.childItems():
+        child_items = getattr(item, "childItems", None)
+        if not callable(child_items):
+            return
+        for child in child_items():
             add_with_children(child)
+
+    def add_atom_graphics(atom_id: int) -> None:
+        atom_item = atom_items_for(canvas).get(atom_id)
+        if atom_item is not None:
+            add_with_children(atom_item)
+        atom_dot = atom_dots_for(canvas).get(atom_id)
+        if atom_dot is not None:
+            add_with_children(atom_dot)
 
     for item in selected:
         kind = item.data(0)
         if kind == "bond":
             bond_id = item.data(1)
             if isinstance(bond_id, int):
+                bond = bond_for_id(canvas, bond_id)
                 for bond_item in bond_items_for_id(canvas, bond_id):
                     add_with_children(bond_item)
+                if bond is not None:
+                    add_atom_graphics(bond.a)
+                    add_atom_graphics(bond.b)
                 continue
         add_with_children(item)
     return items

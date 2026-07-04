@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 from core.model import MoleculeModel
@@ -33,10 +33,19 @@ class SmilesBondPlacement:
 
 
 @dataclass(frozen=True)
+class SmilesMarkPlacement:
+    source_atom_id: int
+    kind: str
+    x: float
+    y: float
+
+
+@dataclass(frozen=True)
 class SmilesCommitPlan:
     offset: Point2D
     atoms: list[SmilesAtomPlacement]
     bonds: list[SmilesBondPlacement]
+    marks: list[SmilesMarkPlacement] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -114,7 +123,41 @@ def plan_smiles_commit(
                 color=bond.color,
             )
         )
-    return SmilesCommitPlan(offset=(dx, dy), atoms=atoms, bonds=bonds)
+    marks = []
+    atom_annotations = getattr(model, "atom_annotations", {})
+    for atom_id, annotation in atom_annotations.items():
+        atom = model.atoms.get(atom_id)
+        if atom is None:
+            continue
+        for index, kind in enumerate(annotation_mark_kinds(annotation)):
+            direction_x, direction_y = annotation_mark_direction(index)
+            marks.append(
+                SmilesMarkPlacement(
+                    source_atom_id=atom_id,
+                    kind=kind,
+                    x=atom.x + dx + direction_x,
+                    y=atom.y + dy + direction_y,
+                )
+            )
+    return SmilesCommitPlan(offset=(dx, dy), atoms=atoms, bonds=bonds, marks=marks)
+
+
+def annotation_mark_kinds(annotation: Mapping[str, int]) -> tuple[str, ...]:
+    kinds: list[str] = []
+    formal_charge = int(annotation.get("formal_charge", 0))
+    radical_electrons = int(annotation.get("radical_electrons", 0))
+    if formal_charge > 0:
+        kinds.extend("plus" for _ in range(formal_charge))
+    elif formal_charge < 0:
+        kinds.extend("minus" for _ in range(abs(formal_charge)))
+    if radical_electrons > 0:
+        kinds.extend("radical" for _ in range(radical_electrons))
+    return tuple(kinds)
+
+
+def annotation_mark_direction(index: int) -> Point2D:
+    directions = ((1.0, -1.0), (-1.0, -1.0), (1.0, 1.0), (-1.0, 1.0))
+    return directions[index % len(directions)]
 
 
 def build_smiles_preview_geometry(
@@ -189,10 +232,13 @@ __all__ = [
     "SmilesAtomPlacement",
     "SmilesBondPlacement",
     "SmilesCommitPlan",
+    "SmilesMarkPlacement",
     "SmilesPreviewGeometry",
     "SmilesPreviewPlan",
     "SmilesPreviewResolvers",
     "SmilesPreviewSnapshot",
+    "annotation_mark_direction",
+    "annotation_mark_kinds",
     "build_smiles_preview_geometry",
     "build_smiles_preview_snapshot",
     "plan_smiles_commit",
