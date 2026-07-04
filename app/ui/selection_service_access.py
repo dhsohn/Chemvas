@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ui.canvas_service_access import optional_canvas_service_method
 from ui.canvas_service_ports import selection_service_for_access
 from ui.selection_hit_logic import structure_hit_is_selected
 from ui.selection_scene_access import (
@@ -20,31 +21,31 @@ def optional_selection_service_from_canvas(canvas):
         return None
 
 
+def _selection_service_method_for(canvas, name: str):
+    return optional_canvas_service_method(canvas, selection_service_for_access, name)
+
+
 def refresh_selection_outline_for(canvas) -> None:
-    controller = optional_selection_service_from_canvas(canvas)
-    update_selection_outline = getattr(controller, "update_selection_outline", None)
-    if callable(update_selection_outline):
+    update_selection_outline = _selection_service_method_for(canvas, "update_selection_outline")
+    if update_selection_outline is not None:
         update_selection_outline()
 
 
 def select_note_for(canvas, item, *, additive: bool = False) -> None:
-    controller = optional_selection_service_from_canvas(canvas)
-    select_note = getattr(controller, "select_note", None)
-    if callable(select_note):
+    select_note = _selection_service_method_for(canvas, "select_note")
+    if select_note is not None:
         select_note(item, additive=additive)
 
 
 def toggle_note_selection_for(canvas, item) -> None:
-    controller = optional_selection_service_from_canvas(canvas)
-    toggle_note_selection = getattr(controller, "toggle_note_selection", None)
-    if callable(toggle_note_selection):
+    toggle_note_selection = _selection_service_method_for(canvas, "toggle_note_selection")
+    if toggle_note_selection is not None:
         toggle_note_selection(item)
 
 
 def clear_note_selection_for(canvas) -> None:
-    controller = optional_selection_service_from_canvas(canvas)
-    clear_note_selection = getattr(controller, "clear_note_selection", None)
-    if callable(clear_note_selection):
+    clear_note_selection = _selection_service_method_for(canvas, "clear_note_selection")
+    if clear_note_selection is not None:
         clear_note_selection()
 
 
@@ -66,14 +67,12 @@ def structure_item_is_selected_for(
 
 
 def _selection_targets_method_for(canvas):
-    controller = optional_selection_service_from_canvas(canvas)
-    targets_for_item = getattr(controller, "selection_targets_for_item", None)
-    return targets_for_item if callable(targets_for_item) else None
+    return _selection_service_method_for(canvas, "selection_targets_for_item")
 
 
 def selection_targets_for_item_for(canvas, item) -> list:
     targets_for_item = _selection_targets_method_for(canvas)
-    if callable(targets_for_item):
+    if targets_for_item is not None:
         return [target for target in (targets_for_item(item) or []) if target is not None]
     return structure_selection_targets_for_item(canvas, item)
 

@@ -4,6 +4,7 @@ from PyQt6.QtGui import QColor
 
 from ui.canvas_atom_graphics_state import atom_items_for, visible_atom_item_for
 from ui.canvas_model_access import atom_for_id
+from ui.canvas_service_access import optional_canvas_service_method
 from ui.canvas_service_ports import atom_label_service_for_access
 
 
@@ -12,23 +13,19 @@ def atom_label_service(canvas):
 
 
 def atom_item_for_id_for(canvas, atom_id: int):
-    try:
-        service = atom_label_service(canvas)
-    except AttributeError:
-        service = None
-    atom_item_for_id = getattr(service, "atom_item_for_id", None)
-    if callable(atom_item_for_id):
+    atom_item_for_id = optional_canvas_service_method(canvas, atom_label_service_for_access, "atom_item_for_id")
+    if atom_item_for_id is not None:
         return atom_item_for_id(atom_id)
     return visible_atom_item_for(canvas, atom_id)
 
 
 def implicit_carbon_dot_brush_for(canvas):
-    try:
-        service = atom_label_service(canvas)
-    except AttributeError:
-        service = None
-    implicit_carbon_dot_brush = getattr(service, "implicit_carbon_dot_brush", None)
-    if callable(implicit_carbon_dot_brush):
+    implicit_carbon_dot_brush = optional_canvas_service_method(
+        canvas,
+        atom_label_service_for_access,
+        "implicit_carbon_dot_brush",
+    )
+    if implicit_carbon_dot_brush is not None:
         return implicit_carbon_dot_brush()
     return QColor(0, 0, 0, 0)
 
@@ -88,22 +85,18 @@ def add_or_update_atom_label(
 def clear_atom_label_for(canvas, atom_id: int) -> None:
     if atom_for_id(canvas, atom_id) is None:
         return
-    try:
-        service = atom_label_service(canvas)
-    except AttributeError:
-        service = None
-    add_or_update = getattr(service, "add_or_update_atom_label", None)
-    if callable(add_or_update):
+    add_or_update = optional_canvas_service_method(
+        canvas,
+        atom_label_service_for_access,
+        "add_or_update_atom_label",
+    )
+    if add_or_update is not None:
         add_or_update(atom_id, "C", show_carbon=False)
 
 
 def prompt_atom_label_for(canvas, atom_id: int) -> None:
-    try:
-        service = atom_label_service(canvas)
-    except AttributeError:
-        service = None
-    prompt_atom_label = getattr(service, "prompt_atom_label", None)
-    if callable(prompt_atom_label):
+    prompt_atom_label = optional_canvas_service_method(canvas, atom_label_service_for_access, "prompt_atom_label")
+    if prompt_atom_label is not None:
         prompt_atom_label(atom_id)
 
 
