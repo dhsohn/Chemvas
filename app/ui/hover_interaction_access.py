@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ui.canvas_service_access import optional_canvas_service_method
 from ui.canvas_service_ports import (
     bond_hover_preview_service_for_access,
     hover_interaction_service_for_access,
@@ -10,12 +11,7 @@ from ui.canvas_tool_settings_state import tool_settings_state_for
 
 
 def _service_method(canvas, service_getter, method_name: str):
-    try:
-        service = service_getter(canvas)
-    except AttributeError:
-        service = None
-    method = getattr(service, method_name, None)
-    return method if callable(method) else None
+    return optional_canvas_service_method(canvas, service_getter, method_name)
 
 
 def _hover_scene_method(canvas, name: str):
@@ -55,7 +51,7 @@ def add_free_bond_hover_preview_for(canvas, pos) -> None:
 
 def update_hover_highlight_for(canvas, pos) -> None:
     update_hover_highlight = _hover_interaction_method(canvas, "update_hover_highlight")
-    if callable(update_hover_highlight):
+    if update_hover_highlight is not None:
         update_hover_highlight(pos)
 
 

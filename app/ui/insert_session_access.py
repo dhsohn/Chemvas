@@ -1,15 +1,11 @@
 from __future__ import annotations
 
+from ui.canvas_service_access import optional_canvas_service_method
 from ui.canvas_service_ports import insert_controller_for_access
 
 
 def _insert_controller_method(canvas, name: str):
-    try:
-        controller = insert_controller_for_access(canvas)
-    except AttributeError:
-        controller = None
-    method = getattr(controller, name, None)
-    return method if callable(method) else None
+    return optional_canvas_service_method(canvas, insert_controller_for_access, name)
 
 
 def cancel_smiles_insert_for(canvas) -> None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ui.canvas_service_access import optional_canvas_service_method
 from ui.canvas_service_ports import (
     mark_scene_service_for_access,
     scene_decoration_build_service_for_access,
@@ -7,72 +8,59 @@ from ui.canvas_service_ports import (
 from ui.pick_radius_access import atom_pick_radius_for
 
 
-def _decoration_build_service(canvas):
-    try:
-        return scene_decoration_build_service_for_access(canvas)
-    except AttributeError:
-        return None
+def _decoration_build_method(canvas, name: str):
+    return optional_canvas_service_method(canvas, scene_decoration_build_service_for_access, name)
 
 
-def _mark_scene_service(canvas):
-    try:
-        return mark_scene_service_for_access(canvas)
-    except AttributeError:
-        return None
+def _mark_scene_method(canvas, name: str):
+    return optional_canvas_service_method(canvas, mark_scene_service_for_access, name)
 
 
 def build_mark_item_for(canvas, kind: str):
-    service = _decoration_build_service(canvas)
-    build_mark_item = getattr(service, "build_mark_item", None)
-    if callable(build_mark_item):
+    build_mark_item = _decoration_build_method(canvas, "build_mark_item")
+    if build_mark_item is not None:
         return build_mark_item(kind)
     return None
 
 
 def mark_center_for(canvas, item):
-    service = _decoration_build_service(canvas)
-    mark_center = getattr(service, "mark_center", None)
-    if callable(mark_center):
+    mark_center = _decoration_build_method(canvas, "mark_center")
+    if mark_center is not None:
         return mark_center(item)
     return item.pos()
 
 
 def set_mark_center_for(canvas, item, center) -> None:
-    service = _decoration_build_service(canvas)
-    set_mark_center = getattr(service, "set_mark_center", None)
-    if callable(set_mark_center):
+    set_mark_center = _decoration_build_method(canvas, "set_mark_center")
+    if set_mark_center is not None:
         set_mark_center(item, center)
         return
 
 
 def remove_mark_item_for(canvas, item) -> None:
-    service = _mark_scene_service(canvas)
-    remove_mark_item = getattr(service, "remove_mark_item", None)
-    if callable(remove_mark_item):
+    remove_mark_item = _mark_scene_method(canvas, "remove_mark_item")
+    if remove_mark_item is not None:
         remove_mark_item(item)
         return
 
 
 def remove_marks_for_atom_for(canvas, atom_id: int) -> None:
-    service = _mark_scene_service(canvas)
-    remove_marks_for_atom = getattr(service, "remove_marks_for_atom", None)
-    if callable(remove_marks_for_atom):
+    remove_marks_for_atom = _mark_scene_method(canvas, "remove_marks_for_atom")
+    if remove_marks_for_atom is not None:
         remove_marks_for_atom(atom_id)
         return
 
 
 def mark_offset_from_click_for(canvas, atom_id: int, click_pos, *, kind: str | None = None):
-    service = _mark_scene_service(canvas)
-    mark_offset_from_click = getattr(service, "mark_offset_from_click", None)
-    if callable(mark_offset_from_click):
+    mark_offset_from_click = _mark_scene_method(canvas, "mark_offset_from_click")
+    if mark_offset_from_click is not None:
         return mark_offset_from_click(atom_id, click_pos, kind=kind)
     return click_pos
 
 
 def mark_center_for_pointer_for(canvas, pos, atom_id: int | None, *, kind: str | None):
-    service = _mark_scene_service(canvas)
-    mark_center_for_pointer = getattr(service, "mark_center_for_pointer", None)
-    if callable(mark_center_for_pointer):
+    mark_center_for_pointer = _mark_scene_method(canvas, "mark_center_for_pointer")
+    if mark_center_for_pointer is not None:
         return mark_center_for_pointer(pos, atom_id, kind=kind)
     return pos
 

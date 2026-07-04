@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ui.canvas_service_access import optional_canvas_service_method
 from ui.canvas_service_ports import (
     mark_scene_service_for_access,
     scene_decoration_build_service_for_access,
@@ -8,21 +9,11 @@ from ui.canvas_service_ports import (
 
 
 def _decoration_service_method(canvas, name: str):
-    try:
-        service = scene_decoration_service_for_access(canvas)
-    except AttributeError:
-        return None
-    method = getattr(service, name, None)
-    return method if callable(method) else None
+    return optional_canvas_service_method(canvas, scene_decoration_service_for_access, name)
 
 
 def _build_service_method(canvas, name: str):
-    try:
-        service = scene_decoration_build_service_for_access(canvas)
-    except AttributeError:
-        return None
-    method = getattr(service, name, None)
-    return method if callable(method) else None
+    return optional_canvas_service_method(canvas, scene_decoration_build_service_for_access, name)
 
 
 def add_arrow_for(canvas, start, end, kind: str):
@@ -55,12 +46,8 @@ def add_mark_for_atom_for(
     kind: str | None = None,
     record: bool = True,
 ):
-    try:
-        service = mark_scene_service_for_access(canvas)
-    except AttributeError:
-        service = None
-    method = getattr(service, "add_mark_for_atom", None) if service is not None else None
-    if callable(method):
+    method = optional_canvas_service_method(canvas, mark_scene_service_for_access, "add_mark_for_atom")
+    if method is not None:
         return method(atom_id, click_pos, kind=kind, record=record)
     return None
 

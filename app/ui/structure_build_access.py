@@ -1,17 +1,13 @@
 from __future__ import annotations
 
+from ui.canvas_service_access import optional_canvas_service_method
 from ui.canvas_service_ports import structure_build_service_for_access
 from ui.input_view_access import viewport_center_scene_pos_for
 from ui.structure_template_commands import apply_structure_template_command
 
 
 def _service_method(canvas, name: str):
-    try:
-        service = structure_build_service_for_access(canvas)
-    except AttributeError:
-        return None
-    method = getattr(service, name, None)
-    return method if callable(method) else None
+    return optional_canvas_service_method(canvas, structure_build_service_for_access, name)
 
 
 def add_structure_template_for(canvas, key: str) -> None:
