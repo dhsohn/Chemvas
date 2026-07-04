@@ -259,6 +259,8 @@ class CanvasGeometryController:
         length = math.hypot(dx, dy)
         if length == 0:
             return 0.0, 1.0
+        p1 = QPointF(x1, y1)
+        p2 = QPointF(x2, y2)
         t0 = 0.0
         t1 = 1.0
         hit_start = False
@@ -266,6 +268,18 @@ class CanvasGeometryController:
         for atom_id, is_start in ((a_id, True), (b_id, False)):
             if atom_id is None:
                 continue
+            label_rect = self.visible_label_rect_for_atom(atom_id)
+            if label_rect is not None:
+                clipped = self.line_rect_clip_t(p1, p2, label_rect)
+                if clipped is not None:
+                    entry_t, exit_t = clipped
+                    if is_start:
+                        t0 = max(t0, min(1.0, exit_t))
+                        hit_start = True
+                    else:
+                        t1 = min(t1, max(0.0, entry_t))
+                        hit_end = True
+                    continue
             radius = self.label_cut_radius_for_atom(atom_id)
             if radius is None:
                 continue

@@ -11,6 +11,7 @@ from ui.canvas_model_access import atom_for_id, bond_for_id, bonds_for
 from ui.canvas_scene_items_state import ring_items_for
 from ui.selection_hit_logic import StructureHit
 from ui.selection_scene_access import clear_scene_selection_for
+from ui.selection_service_access import clear_note_selection_for
 from ui.selection_structure_targets import (
     STRUCTURE_OVERLAY_KINDS,
     structure_selection_targets_for_item,
@@ -101,12 +102,14 @@ class SelectionStructureService:
         kind = item.data(0)
         if kind in STRUCTURE_OVERLAY_KINDS:
             clear_scene_selection_for(self.canvas)
+            clear_note_selection_for(self.canvas)
             item.setSelected(True)
             return StructureSelectionResult(True)
         atom_ids = self._connected_atom_ids_for_item(item)
         if not atom_ids:
             return StructureSelectionResult(False)
         clear_scene_selection_for(self.canvas)
+        clear_note_selection_for(self.canvas)
         for atom_id in atom_ids:
             atom_item = self.atom_item_for_id(atom_id)
             if atom_item is not None:

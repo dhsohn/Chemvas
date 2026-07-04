@@ -21,7 +21,7 @@ from ui.canvas_smiles_input_state import (
     last_smiles_input_for,
     set_last_smiles_input_for,
 )
-from ui.history_commands import DeleteSceneItemsCommand
+from ui.history_commands import AddSceneItemsCommand, DeleteSceneItemsCommand
 from ui.insert_controller import InsertController
 from ui.sheet_setup_state import sheet_setup_state_for
 from ui.template_insert_logic import (
@@ -114,6 +114,8 @@ class _FakeCanvas:
         self.add_atom_calls: list[tuple[str, float, float]] = []
         self.ensure_carbon_dot_calls: list[int] = []
         self.atom_label_calls: list[tuple[int, str, bool, bool, bool]] = []
+        self.mark_calls: list[tuple[int, float, float, str | None, bool]] = []
+        self.created_marks: list[_FakeSceneItem] = []
         self.services = SimpleNamespace(
             history_service=self.history_service,
             atom_label_service=SimpleNamespace(
@@ -128,6 +130,7 @@ class _FakeCanvas:
                 bond_exists=self.bond_exists,
             ),
             canvas_history_recording_service=SimpleNamespace(record_additions=self._record_additions),
+            canvas_mark_scene_service=SimpleNamespace(add_mark_for_atom=self.add_mark_for_atom),
             canvas_scene_reset_service=SimpleNamespace(clear_scene=lambda: self.clear_scene()),
             hit_testing_service=SimpleNamespace(find_bond_near=Mock(return_value=None)),
             structure_build_service=SimpleNamespace(
@@ -172,6 +175,12 @@ class _FakeCanvas:
         self.atom_label_calls.append((atom_id, text, clear_smiles, record, show_carbon))
         self.model.atoms[atom_id].element = text
         self.model.atoms[atom_id].explicit_label = show_carbon
+
+    def add_mark_for_atom(self, atom_id: int, click_pos: QPointF, *, kind: str | None = None, record: bool = True):
+        self.mark_calls.append((atom_id, click_pos.x(), click_pos.y(), kind, record))
+        item = _FakeSceneItem("mark", atom_id=atom_id, state={"kind": "mark", "mark_kind": kind, "atom_id": atom_id})
+        self.created_marks.append(item)
+        return item
 
 
 def _controller_for(canvas: _FakeCanvas, **kwargs) -> InsertController:
@@ -366,6 +375,26 @@ class InsertControllerTest(unittest.TestCase):
         self.assertEqual(add_atoms.before_next_atom_id, 0)
         self.assertEqual(add_atoms.after_next_atom_id, 2)
         self.assertEqual(add_bond.previous_bond_count, 0)
+
+    def test_load_smiles_adds_annotation_marks_to_transaction_history(self) -> None:
+        canvas = _FakeCanvas()
+        model = MoleculeModel(atoms={0: Atom("N", 1.0, 2.0)})
+        model.atom_annotations = {0: {"formal_charge": 1}}
+        canvas.rdkit.smiles_to_2d.return_value = model
+
+        def _clear_scene() -> None:
+            canvas.model = MoleculeModel()
+
+        canvas.clear_scene = Mock(side_effect=_clear_scene)
+        controller = _controller_for(canvas)
+
+        controller.load_smiles("[NH4+]")
+
+        self.assertEqual(canvas.mark_calls, [(0, 2.0, 1.0, "plus", False)])
+        command = canvas.push_command.call_args.args[0]
+        self.assertIsInstance(command, CompositeCommand)
+        self.assertIsInstance(command.commands[-1], AddSceneItemsCommand)
+        self.assertEqual(command.commands[-1].items, canvas.created_marks)
 
     def test_load_smiles_skips_push_when_history_builder_returns_none(self) -> None:
         canvas = _FakeCanvas()

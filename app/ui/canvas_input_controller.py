@@ -22,7 +22,7 @@ from ui.insert_session_access import (
     cancel_smiles_insert_for,
     cancel_template_insert_for,
 )
-from ui.selection_scene_access import scene_selected_items_for
+from ui.selection_collection_access import selected_scene_items_for
 
 
 class CanvasInputController:
@@ -113,7 +113,7 @@ class CanvasInputController:
             event.accept()
             return
         if event.key() in (Qt.Key.Key_Backspace, Qt.Key.Key_Delete):
-            if scene_selected_items_for(self.canvas):
+            if selected_scene_items_for(self.canvas, excluded_kinds={"handle", "note_box", "note_select"}):
                 self.scene_delete.delete_selected_items()
                 event.accept()
                 return

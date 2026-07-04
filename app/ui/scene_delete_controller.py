@@ -31,7 +31,7 @@ from ui.scene_single_item_mutation_logic import (
     delete_bond_with_history,
     delete_ring_with_history,
 )
-from ui.selection_scene_access import scene_selected_items_for
+from ui.selection_collection_access import selected_scene_items_for
 from ui.selection_service_access import refresh_selection_outline_for
 
 if TYPE_CHECKING:
@@ -168,7 +168,7 @@ class SceneDeleteController:
         return command
 
     def delete_selected_items(self) -> bool:
-        items = scene_selected_items_for(self.canvas)
+        items = selected_scene_items_for(self.canvas, excluded_kinds={"handle", "note_box", "note_select"})
         if not items:
             return False
         self._style_controller().suspend_selection_outline(True)

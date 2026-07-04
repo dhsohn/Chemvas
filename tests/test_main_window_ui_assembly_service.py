@@ -354,7 +354,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
 
         window.canvas.insert_controller.begin_smiles_insert.assert_not_called()
         self.insert_controller_for_window.assert_not_called()
-        self.scene_transform_controller_for_window.assert_called_once_with(window)
+        self.scene_transform_controller_for_window.assert_not_called()
         assembly.save_action.trigger()
         assembly.save_as_action.trigger()
         assembly.load_action.trigger()
@@ -379,8 +379,14 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         window.setup_sheet.assert_not_called()
         assembly.undo_button.click()
         assembly.redo_button.click()
+        assembly.panel_bar.findChild(QToolButton, "flip_horizontal_button").click()
+        assembly.panel_bar.findChild(QToolButton, "flip_vertical_button").click()
         window.canvas.history_service.undo.assert_called_once_with()
         window.canvas.history_service.redo.assert_called_once_with()
+        window.canvas.scene_transform_controller.flip_selected_items.assert_has_calls(
+            [mock.call(horizontal=True), mock.call(horizontal=False)]
+        )
+        self.scene_transform_controller_for_window.assert_has_calls([mock.call(window), mock.call(window)])
         self.assertEqual(self.history_service_for_window.call_args_list, [mock.call(window), mock.call(window)])
 
     def test_apply_theme_sets_stylesheet(self) -> None:
