@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ui.canvas_service_access import optional_canvas_service_method
 from ui.canvas_service_ports import (
     curved_arrow_path_service_for_access,
     handle_mutation_service_for_access,
@@ -21,12 +22,7 @@ from ui.renderer_style_access import bond_length_px_for
 
 
 def _mutation_service_method(canvas, name: str):
-    try:
-        service = handle_mutation_service_for_access(canvas)
-    except AttributeError:
-        return None
-    method = getattr(service, name, None)
-    return method if callable(method) else None
+    return optional_canvas_service_method(canvas, handle_mutation_service_for_access, name)
 
 
 def orbital_snap_enabled_for(canvas) -> bool:
@@ -71,12 +67,12 @@ def update_curved_endpoint_for(canvas, item, pos, endpoint: str) -> None:
 
 
 def set_curved_arrow_path_for(canvas, item, start, end, control, double: bool) -> None:
-    try:
-        service = curved_arrow_path_service_for_access(canvas)
-    except AttributeError:
-        service = None
-    method = getattr(service, "set_curved_arrow_path", None)
-    if callable(method):
+    method = optional_canvas_service_method(
+        canvas,
+        curved_arrow_path_service_for_access,
+        "set_curved_arrow_path",
+    )
+    if method is not None:
         method(item, start, end, control, double)
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ui.canvas_service_access import optional_canvas_service_method
 from ui.canvas_service_ports import note_controller_for_access
 
 COMMITTED_NOTE_TEXT_ROLE = 0xC001
@@ -7,12 +8,7 @@ COMMITTED_NOTE_HTML_ROLE = 0xC002
 
 
 def _note_controller_method(canvas, name: str):
-    try:
-        controller = note_controller_for_access(canvas)
-    except AttributeError:
-        return None
-    method = getattr(controller, name, None)
-    return method if callable(method) else None
+    return optional_canvas_service_method(canvas, note_controller_for_access, name)
 
 
 def new_note_item_for(canvas):

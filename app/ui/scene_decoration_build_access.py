@@ -1,15 +1,11 @@
 from __future__ import annotations
 
+from ui.canvas_service_access import optional_canvas_service_method
 from ui.canvas_service_ports import scene_decoration_build_service_for_access
 
 
 def _service_method(canvas, name: str):
-    try:
-        service = scene_decoration_build_service_for_access(canvas)
-    except AttributeError:
-        service = None
-    method = getattr(service, name, None)
-    return method if callable(method) else None
+    return optional_canvas_service_method(canvas, scene_decoration_build_service_for_access, name)
 
 
 def build_arrow_item_for(canvas, start, end, kind: str):

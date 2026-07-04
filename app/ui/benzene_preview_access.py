@@ -1,15 +1,11 @@
 from __future__ import annotations
 
+from ui.canvas_service_access import optional_canvas_service_method
 from ui.canvas_service_ports import benzene_preview_service_for_access
 
 
 def _benzene_preview_method(canvas, name: str):
-    try:
-        service = benzene_preview_service_for_access(canvas)
-    except AttributeError:
-        service = None
-    method = getattr(service, name, None)
-    return method if callable(method) else None
+    return optional_canvas_service_method(canvas, benzene_preview_service_for_access, name)
 
 
 def clear_benzene_preview_for(canvas) -> None:
