@@ -15,6 +15,7 @@ from ui.smiles_insert_logic import (
     SmilesAtomPlacement,
     SmilesBondPlacement,
     SmilesCommitPlan,
+    SmilesMarkPlacement,
 )
 from ui.structure_insert_access import add_insert_ring_from_points_for
 from ui.template_insert_logic import (
@@ -34,6 +35,8 @@ class _FakeCanvas:
         self.added_graphics: list[int] = []
         self.labels: list[tuple[int, str, bool, bool]] = []
         self.carbon_dots: list[int] = []
+        self.mark_calls: list[tuple[int, float, float, str | None, bool]] = []
+        self.created_marks: list[object] = []
         self.ring_calls: list[list[tuple[float, float]]] = []
         self.benzene_calls: list[tuple[float, float, int | None]] = []
         self.bond_renderer = SimpleNamespace(add_bond_graphics=self._add_bond_graphics)
@@ -46,6 +49,7 @@ class _FakeCanvas:
             canvas_bond_mutation_service=SimpleNamespace(add_bond=self.add_bond),
             canvas_graph_service=SimpleNamespace(bond_exists=self.bond_exists),
             canvas_history_recording_service=SimpleNamespace(record_additions=self._record_additions),
+            canvas_mark_scene_service=SimpleNamespace(add_mark_for_atom=self.add_mark_for_atom),
             structure_build_service=SimpleNamespace(
                 add_atom_with_merge=self.add_atom_with_merge,
                 add_ring_from_points=self.add_ring_from_points,
@@ -81,6 +85,12 @@ class _FakeCanvas:
 
     def _record_additions(self, **kwargs) -> None:
         self.record_calls.append(kwargs)
+
+    def add_mark_for_atom(self, atom_id: int, click_pos: QPointF, *, kind: str | None = None, record: bool = True):
+        self.mark_calls.append((atom_id, click_pos.x(), click_pos.y(), kind, record))
+        item = object()
+        self.created_marks.append(item)
+        return item
 
     def bond_exists(self, a_id: int, b_id: int) -> bool:
         return any(
@@ -215,6 +225,42 @@ class InsertCommitServiceTest(unittest.TestCase):
                     "before_next_atom_id": 0,
                     "before_bond_count": 0,
                     "before_smiles_input": "old",
+                }
+            ],
+        )
+
+    def test_apply_smiles_commit_plan_adds_annotation_marks_to_history(self) -> None:
+        canvas = _FakeCanvas()
+        plan = SmilesCommitPlan(
+            offset=(0.0, 0.0),
+            atoms=[
+                SmilesAtomPlacement(3, "N", 10.0, 20.0, "#111111", True),
+            ],
+            bonds=[],
+            marks=[
+                SmilesMarkPlacement(3, "plus", 11.0, 19.0),
+            ],
+            annotations={3: {"formal_charge": 1}},
+        )
+
+        applied = apply_smiles_commit_plan(
+            canvas,
+            plan,
+            before_smiles_input="old",
+            after_smiles_input="new",
+        )
+
+        self.assertTrue(applied)
+        self.assertEqual(canvas.mark_calls, [(0, 11.0, 19.0, "plus", False)])
+        self.assertEqual(canvas.model.atom_annotations, {0: {"formal_charge": 1}})
+        self.assertEqual(
+            canvas.record_calls,
+            [
+                {
+                    "before_next_atom_id": 0,
+                    "before_bond_count": 0,
+                    "before_smiles_input": "old",
+                    "added_scene_items": canvas.created_marks,
                 }
             ],
         )

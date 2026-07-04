@@ -226,6 +226,18 @@ class SceneTransformLogicTest(unittest.TestCase):
             "ts_bracket",
             state={"kind": "ts_bracket", "left": 1.0, "top": 2.0, "right": 3.0, "bottom": 6.0},
         )
+        shape_item = _make_rect_item(
+            "shape",
+            state={
+                "kind": "shape",
+                "left": 1.0,
+                "top": 2.0,
+                "right": 3.0,
+                "bottom": 6.0,
+                "shape_kind": "rect",
+                "stroke_style": "solid",
+            },
+        )
         arrow_item = _make_rect_item(
             "arrow",
             state={"kind": "arrow", "start": (1.0, 2.0), "end": (5.0, 6.0), "control": (3.0, 8.0)},
@@ -271,6 +283,24 @@ class SceneTransformLogicTest(unittest.TestCase):
             flip_point=canvas._flip_point,
             ts_bracket_rect_from_state=canvas._ts_bracket_rect_from_state,
         )
+        shape_state = flip_scene_item_state(
+            shape_item,
+            {
+                "kind": "shape",
+                "left": 1.0,
+                "top": 2.0,
+                "right": 3.0,
+                "bottom": 6.0,
+                "shape_kind": "rect",
+                "stroke_style": "solid",
+            },
+            center=QPointF(5.0, 5.0),
+            horizontal=True,
+            transformed_atom_positions={},
+            atoms=canvas.model.atoms,
+            flip_point=canvas._flip_point,
+            ts_bracket_rect_from_state=canvas._ts_bracket_rect_from_state,
+        )
         arrow_state = flip_scene_item_state(
             arrow_item,
             {"kind": "arrow", "start": (1.0, 2.0), "end": (5.0, 6.0), "control": (3.0, 8.0)},
@@ -293,6 +323,8 @@ class SceneTransformLogicTest(unittest.TestCase):
         self.assertEqual(orbital_state["rotation"], 165.0)
         self.assertEqual(bracket_state["top"], 4.0)
         self.assertEqual(bracket_state["bottom"], 8.0)
+        self.assertEqual(shape_state["left"], 7.0)
+        self.assertEqual(shape_state["right"], 9.0)
         self.assertEqual(arrow_state["start"], (7.0, 2.0))
         self.assertEqual(arrow_state["end"], (3.0, 6.0))
         self.assertEqual(arrow_state["control"], (5.0, 8.0))

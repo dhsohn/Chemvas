@@ -14,6 +14,8 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from core.model import Atom, Bond
+    from ui.canvas_atom_graphics_state import set_atom_dots_for, set_atom_items_for
+    from ui.canvas_bond_graphics_state import set_bond_items_for
     from ui.canvas_mark_registry import CanvasMarkRegistry
     from ui.canvas_scene_items_state import set_scene_item_collection_for
     from ui.mark_item_access import mark_kinds_by_atom_for
@@ -197,6 +199,21 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
         bounds_item = SimpleNamespace(sceneBoundingRect=lambda: QRectF(1.0, 2.0, 3.0, 4.0))
         rect = _copy_bounds_for_items([bounds_item])
         self.assertEqual(rect, QRectF(1.0, 2.0, 3.0, 4.0))
+
+    def test_selection_items_for_copy_includes_selected_bond_endpoint_atom_graphics(self) -> None:
+        selected_bond = _FakeItem("bond", data1=0)
+        bond_graphic = _FakeItem("bond", data1=0)
+        atom_label = _FakeItem("atom", data1=1)
+        atom_dot = _FakeItem("atom", data1=2)
+        view = SimpleNamespace(model=SimpleNamespace(bonds=[Bond(1, 2, 1)]))
+        set_bond_items_for(view, {0: [bond_graphic]})
+        set_atom_items_for(view, {1: atom_label})
+        set_atom_dots_for(view, {2: atom_dot})
+
+        with mock.patch("ui.selection_collection_access.selected_scene_items_for", return_value=[selected_bond]):
+            copied = selection_items_for_copy_for(view)
+
+        self.assertEqual(copied, [bond_graphic, atom_label, atom_dot])
 
     def test_helper_tails_cover_invalid_metadata_bounds_and_mark_kind_filters(self) -> None:
         view = SimpleNamespace(

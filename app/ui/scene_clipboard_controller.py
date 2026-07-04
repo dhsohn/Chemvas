@@ -10,6 +10,7 @@ from ui.canvas_format_access import (
 from ui.canvas_mark_registry import mark_registry_for
 from ui.canvas_model_access import (
     bonds_for,
+    set_atom_annotation_for,
 )
 from ui.canvas_scene_items_state import ring_items_for
 from ui.history_canvas_access import apply_atom_color_for_history
@@ -80,6 +81,9 @@ class SceneClipboardController:
     def _apply_atom_color(self, atom_id: int, color) -> None:
         apply_atom_color_for_history(self.canvas, atom_id, color)
 
+    def _set_atom_annotation(self, atom_id: int, annotation: dict[str, int] | None) -> None:
+        set_atom_annotation_for(self.canvas, atom_id, annotation)
+
     def _restore_bond(self, bond_id: int, bond_state: dict) -> None:
         self._bond_mutation_service().restore_bond_from_state(bond_id, bond_state)
 
@@ -99,6 +103,7 @@ class SceneClipboardController:
         return SceneClipboardPasteCallbacks(
             add_atom=self._add_atom,
             apply_atom_color=self._apply_atom_color,
+            set_atom_annotation=self._set_atom_annotation,
             add_or_update_atom_label=self._add_or_update_atom_label,
             add_bond=self._add_bond,
             restore_bond_from_state=self._restore_bond,

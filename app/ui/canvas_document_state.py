@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from core.document_state import serialize_model_state, serialize_settings
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor
 
 from ui.canvas_atom_graphics_state import atom_items_for
 from ui.canvas_model_access import model_for
@@ -17,7 +19,11 @@ from ui.canvas_smiles_input_state import (
     last_smiles_input_for,
     set_last_smiles_input_for,
 )
-from ui.canvas_text_style_state import set_text_style_for, text_style_state_for
+from ui.canvas_text_style_state import (
+    CanvasTextStyleState,
+    set_text_style_for,
+    text_style_state_for,
+)
 from ui.canvas_tool_settings_state import set_tool_setting_for, tool_settings_state_for
 from ui.renderer_style_access import bond_length_px_for, set_bond_length_for
 from ui.scene_item_access import (
@@ -66,9 +72,20 @@ def snapshot_canvas_document_state(canvas) -> dict:
             arrow_line_width=tool_settings.arrow_line_width,
             arrow_head_scale=tool_settings.arrow_head_scale,
             orbital_phase_enabled=tool_settings.orbital_phase_enabled,
+            text_font_family=text_style.text_font_family,
             text_font_size=text_style.text_font_size,
             text_font_weight=int(text_style.text_font_weight),
             text_italic=text_style.text_italic,
+            text_color=text_style.text_color.name(),
+            text_alignment=_alignment_name(text_style.text_alignment),
+            text_line_spacing=text_style.text_line_spacing,
+            note_box_enabled=text_style.note_box_enabled,
+            note_box_color=text_style.note_box_color.name(),
+            note_box_alpha=text_style.note_box_alpha,
+            note_border_enabled=text_style.note_border_enabled,
+            note_border_color=text_style.note_border_color.name(),
+            note_border_width=text_style.note_border_width,
+            note_padding=text_style.note_padding,
             sheet_size=sheet_size_for(canvas),
             sheet_orientation=sheet_orientation_for(canvas),
         ),
@@ -78,15 +95,74 @@ def snapshot_canvas_document_state(canvas) -> dict:
 
 def apply_document_settings(canvas, state: dict) -> None:
     settings = state["settings"]
+    default_text_style = CanvasTextStyleState()
     set_bond_length_for(canvas, settings["bond_length_px"])
     set_tool_setting_for(canvas, "arrow_line_width", settings["arrow_line_width"])
     set_tool_setting_for(canvas, "arrow_head_scale", settings["arrow_head_scale"])
     set_tool_setting_for(canvas, "orbital_phase_enabled", settings["orbital_phase_enabled"])
+    set_text_style_for(canvas, "text_font_family", settings.get("text_font_family", default_text_style.text_font_family))
     set_text_style_for(canvas, "text_font_size", settings["text_font_size"])
     set_text_style_for(canvas, "text_font_weight", settings["text_font_weight"])
     set_text_style_for(canvas, "text_italic", settings["text_italic"])
+    set_text_style_for(
+        canvas,
+        "text_color",
+        _color_from_setting(settings.get("text_color"), default_text_style.text_color),
+    )
+    set_text_style_for(
+        canvas,
+        "text_alignment",
+        _alignment_from_name(settings.get("text_alignment"), default_text_style.text_alignment),
+    )
+    set_text_style_for(canvas, "text_line_spacing", settings.get("text_line_spacing", default_text_style.text_line_spacing))
+    set_text_style_for(canvas, "note_box_enabled", settings.get("note_box_enabled", default_text_style.note_box_enabled))
+    set_text_style_for(
+        canvas,
+        "note_box_color",
+        _color_from_setting(settings.get("note_box_color"), default_text_style.note_box_color),
+    )
+    set_text_style_for(canvas, "note_box_alpha", settings.get("note_box_alpha", default_text_style.note_box_alpha))
+    set_text_style_for(
+        canvas,
+        "note_border_enabled",
+        settings.get("note_border_enabled", default_text_style.note_border_enabled),
+    )
+    set_text_style_for(
+        canvas,
+        "note_border_color",
+        _color_from_setting(settings.get("note_border_color"), default_text_style.note_border_color),
+    )
+    set_text_style_for(canvas, "note_border_width", settings.get("note_border_width", default_text_style.note_border_width))
+    set_text_style_for(canvas, "note_padding", settings.get("note_padding", default_text_style.note_padding))
     set_sheet_setup_for(canvas, settings["sheet_size"], settings["sheet_orientation"])
     set_last_smiles_input_for(canvas, state["last_smiles_input"])
+
+
+def _alignment_name(alignment) -> str:
+    if alignment == Qt.AlignmentFlag.AlignHCenter:
+        return "center"
+    if alignment == Qt.AlignmentFlag.AlignRight:
+        return "right"
+    if alignment == Qt.AlignmentFlag.AlignJustify:
+        return "justify"
+    return "left"
+
+
+def _alignment_from_name(value, fallback):
+    return {
+        "left": Qt.AlignmentFlag.AlignLeft,
+        "center": Qt.AlignmentFlag.AlignHCenter,
+        "right": Qt.AlignmentFlag.AlignRight,
+        "justify": Qt.AlignmentFlag.AlignJustify,
+    }.get(value, fallback)
+
+
+def _color_from_setting(value, fallback: QColor) -> QColor:
+    if isinstance(value, str):
+        color = QColor(value)
+        if color.isValid():
+            return color
+    return QColor(fallback)
 
 
 def restore_document_pre_model_items(canvas, state: dict) -> None:

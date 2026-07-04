@@ -105,6 +105,26 @@ class DocumentStateTest(unittest.TestCase):
         self.assertIsNone(state["bonds"][1])
         self.assertEqual(state["next_atom_id"], 3)
 
+    def test_serialize_model_state_round_trips_atom_annotations(self) -> None:
+        model = MoleculeModel(
+            atoms={
+                0: Atom("N", 0.0, 0.0),
+                1: Atom("C", 2.0, 0.0),
+            },
+            bonds=[Bond(0, 1, 1)],
+        )
+        model.atom_annotations = {
+            0: {"formal_charge": 1, "radical_electrons": 1},
+            1: {"radical_electrons": 0},
+            99: {"formal_charge": -1},
+        }
+
+        state = serialize_model_state(model)
+        restored = deserialize_model_state(state)
+
+        self.assertEqual(state["atom_annotations"], {0: {"formal_charge": 1, "radical_electrons": 1}})
+        self.assertEqual(restored.atom_annotations, {0: {"formal_charge": 1, "radical_electrons": 1}})
+
     def test_deserialize_model_state_rebuilds_model(self) -> None:
         model = deserialize_model_state(
             {
@@ -123,6 +143,7 @@ class DocumentStateTest(unittest.TestCase):
                     None,
                 ],
                 "next_atom_id": 7,
+                "atom_annotations": {"2": {"formal_charge": -1}},
             }
         )
 
@@ -133,6 +154,7 @@ class DocumentStateTest(unittest.TestCase):
         self.assertEqual(model.bonds[0].order, 3)
         self.assertEqual(model.bonds[0].style, "triple")
         self.assertIsNone(model.bonds[1])
+        self.assertEqual(model.atom_annotations, {2: {"formal_charge": -1}})
 
     def test_deserialize_model_state_uses_serialized_next_atom_id(self) -> None:
         model = deserialize_model_state(
@@ -196,6 +218,27 @@ class DocumentStateTest(unittest.TestCase):
         state["settings"] = settings
         build_document_payload(state, version=CANVAS_FILE_VERSION)
 
+    def test_document_payload_accepts_legacy_settings_without_text_note_keys(self) -> None:
+        settings = _settings()
+        for key in (
+            "text_font_family",
+            "text_color",
+            "text_alignment",
+            "text_line_spacing",
+            "note_box_enabled",
+            "note_box_color",
+            "note_box_alpha",
+            "note_border_enabled",
+            "note_border_color",
+            "note_border_width",
+            "note_padding",
+        ):
+            settings.pop(key)
+        state = _canvas_state()
+        state["settings"] = settings
+
+        build_document_payload(state, version=CANVAS_FILE_VERSION)
+
     def test_settings_reject_extra_style_preset_key(self) -> None:
         settings = _settings()
         settings["style_preset"] = "Presentation"
@@ -211,7 +254,15 @@ class DocumentStateTest(unittest.TestCase):
             "version": 1,
             "atoms": [
                 {"id": 3, "element": "C", "x": 10.0, "y": 20.0, "color": "#111111", "explicit_label": True},
-                {"id": 7, "element": "O", "x": 30.0, "y": 40.0, "color": "#222222", "explicit_label": False},
+                {
+                    "id": 7,
+                    "element": "O",
+                    "x": 30.0,
+                    "y": 40.0,
+                    "color": "#222222",
+                    "explicit_label": False,
+                    "annotation": {"formal_charge": -1},
+                },
             ],
             "bonds": [{"a": 3, "b": 7, "order": 2, "style": "double", "color": "#333333"}],
             "rings": [
@@ -236,7 +287,7 @@ class DocumentStateTest(unittest.TestCase):
                 }
             ],
             "scene_items": [
-                {"kind": "note", "text": "selected", "x": 5.0, "y": 6.0},
+                {"kind": "note", "text": "selected", "html": "<p><b>selected</b></p>", "x": 5.0, "y": 6.0},
                 {"kind": "arrow", "start": (1.0, 2.0), "end": (3.0, 4.0), "control": None, "double": False},
                 {"kind": "ts_bracket", "left": 1.0, "top": 2.0, "right": 3.0, "bottom": 4.0},
                 {"kind": "orbital", "orbital_kind": "p", "center": (8.0, 9.0), "scale": 1.2, "rotation": 30.0},
@@ -247,17 +298,71 @@ class DocumentStateTest(unittest.TestCase):
 
         self.assertEqual(set(state["model"]["atoms"]), {3, 7})
         self.assertEqual(state["model"]["atoms"][3]["element"], "C")
+        self.assertEqual(state["model"]["atom_annotations"], {7: {"formal_charge": -1}})
         self.assertEqual(state["model"]["bonds"], selection_payload["bonds"])
         self.assertEqual(state["model"]["next_atom_id"], 8)
         self.assertEqual(state["ring_fills"][0]["atom_ids"], [3, 7])
         self.assertEqual(state["marks"][0]["kind"], "plus")
         self.assertEqual(state["notes"][0]["text"], "selected")
+        self.assertEqual(state["notes"][0]["html"], "<p><b>selected</b></p>")
         self.assertEqual(state["arrows"][0]["kind"], "arrow")
         self.assertEqual(state["ts_brackets"][0]["kind"], "ts_bracket")
         self.assertEqual(state["orbitals"][0]["kind"], "p")
         self.assertEqual(state["settings"], settings)
         self.assertIsNone(state["last_smiles_input"])
         build_document_payload(state, version=CANVAS_FILE_VERSION)
+
+    def test_build_document_payload_rejects_wedge_hash_on_non_single_bonds(self) -> None:
+        state = _canvas_state(
+            _model_state(
+                atoms={"0": _atom_state(), "1": _atom_state()},
+                bonds=[{"a": 0, "b": 1, "order": 2, "style": "wedge", "color": "#000000"}],
+                next_atom_id=2,
+            )
+        )
+
+        with self.assertRaises(ValueError):
+            build_document_payload(state, version=CANVAS_FILE_VERSION)
+
+    def test_build_document_payload_validates_atom_annotations(self) -> None:
+        state = _canvas_state(
+            _model_state(
+                atoms={"0": _atom_state()},
+                next_atom_id=1,
+            )
+        )
+        state["model"]["atom_annotations"] = {"0": {"formal_charge": -1, "radical_electrons": 1}}
+        build_document_payload(state, version=CANVAS_FILE_VERSION)
+
+        invalid_cases = [
+            {"1": {"formal_charge": 1}},
+            {"0": {"formal_charge": "1"}},
+            {"0": {"radical_electrons": -1}},
+            {"0": {"unknown": 1}},
+        ]
+        for atom_annotations in invalid_cases:
+            with self.subTest(atom_annotations=atom_annotations):
+                state = _canvas_state(
+                    _model_state(
+                        atoms={"0": _atom_state()},
+                        next_atom_id=1,
+                    )
+                )
+                state["model"]["atom_annotations"] = atom_annotations
+                with self.assertRaises(ValueError):
+                    build_document_payload(state, version=CANVAS_FILE_VERSION)
+
+    def test_selection_payload_rejects_wedge_hash_on_non_single_bonds(self) -> None:
+        payload = {
+            "atoms": [
+                {"id": 0, "element": "C", "x": 0.0, "y": 0.0, "color": "#000000", "explicit_label": False},
+                {"id": 1, "element": "C", "x": 1.0, "y": 0.0, "color": "#000000", "explicit_label": False},
+            ],
+            "bonds": [{"a": 0, "b": 1, "order": 2, "style": "hash", "color": "#000000"}],
+        }
+
+        with self.assertRaises(ValueError):
+            selection_payload_to_canvas_state(payload, _settings())
 
     def test_selection_payload_to_canvas_state_rejects_invalid_payload(self) -> None:
         with self.assertRaises(ValueError):

@@ -153,6 +153,7 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
             model=SimpleNamespace(
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 2.0, 0.0)},
                 bonds=[Bond(1, 2, 1)],
+                atom_annotations={1: {"formal_charge": 1}},
             ),
             graph_state=CanvasGraphState(
                 atom_neighbors={1: {2}, 2: {1}},
@@ -170,6 +171,7 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
         self.assertEqual(scene.removed_items, [label_item, dot_item])
         mark_scene.remove_marks_for_atom.assert_called_once_with(1)
         self.assertNotIn(1, canvas.model.atoms)
+        self.assertNotIn(1, canvas.model.atom_annotations)
         self.assertNotIn(1, atom_coords_3d_for(canvas))
         self.assertNotIn(1, canvas.graph_state.atom_neighbors)
         self.assertEqual(canvas.graph_state.atom_neighbors[2], set())
@@ -213,11 +215,19 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
 
         service.restore_atom_from_state(
             4,
-            {"element": "C", "x": 3.0, "y": 4.0, "color": "#00ff00", "explicit_label": True},
+            {
+                "element": "C",
+                "x": 3.0,
+                "y": 4.0,
+                "color": "#00ff00",
+                "explicit_label": True,
+                "annotation": {"formal_charge": 1},
+            },
         )
 
         self.assertEqual(scene.removed_items, [old_label, old_dot])
         self.assertEqual(canvas.model.next_atom_id, 5)
+        self.assertEqual(canvas.model.atom_annotations, {4: {"formal_charge": 1}})
         graph.ensure_atom_neighbors.assert_called_once_with(4)
         graph.ensure_atom_bond_ids.assert_called_once_with(4)
         atom_label.add_or_update_atom_label.assert_called_once_with(

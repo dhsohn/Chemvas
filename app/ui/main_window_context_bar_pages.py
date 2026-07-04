@@ -89,7 +89,13 @@ class MainWindowContextBarPageBuilder:
             tool_mode_controller.get_atom_symbol(),
             lambda text: self._tool_mode_controller_for_window(window).set_atom_symbol(text),
         )
-        ring_page = build_template_page(window, self._insert_controller_for_window(window))
+        ring_page = build_template_page(
+            window,
+            lambda ring_size, *, style: self._insert_controller_for_window(window).begin_ring_template_insert(
+                ring_size,
+                style=style,
+            ),
+        )
         mark_page = build_mark_page(window, self._tool_state)
         text_page = build_text_page(
             window,

@@ -144,7 +144,7 @@ def build_bond_page(
     return BondContextPage(page=page, group=group, buttons=buttons, length_spin=length_spin)
 
 
-def build_template_page(window, insert_controller) -> TemplateContextPage:
+def build_template_page(window, begin_ring_template_insert) -> TemplateContextPage:
     page, layout = new_context_page()
     icon_factory = icon_factory_for_window(window)
     layout.addWidget(hint_label("Ring"))
@@ -160,7 +160,7 @@ def build_template_page(window, insert_controller) -> TemplateContextPage:
                 (ring_size, style),
                 icon_factory.icon_template_preview(label),
                 label,
-                lambda _checked=False, n=ring_size, s=style: insert_controller.begin_ring_template_insert(
+                lambda _checked=False, n=ring_size, s=style: begin_ring_template_insert(
                     n,
                     style=s,
                 ),

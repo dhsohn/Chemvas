@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 from core.model import MoleculeModel
@@ -33,10 +33,20 @@ class SmilesBondPlacement:
 
 
 @dataclass(frozen=True)
+class SmilesMarkPlacement:
+    source_atom_id: int
+    kind: str
+    x: float
+    y: float
+
+
+@dataclass(frozen=True)
 class SmilesCommitPlan:
     offset: Point2D
     atoms: list[SmilesAtomPlacement]
     bonds: list[SmilesBondPlacement]
+    marks: list[SmilesMarkPlacement] = field(default_factory=list)
+    annotations: dict[int, dict[str, int]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -114,7 +124,57 @@ def plan_smiles_commit(
                 color=bond.color,
             )
         )
-    return SmilesCommitPlan(offset=(dx, dy), atoms=atoms, bonds=bonds)
+    marks = []
+    annotations: dict[int, dict[str, int]] = {}
+    atom_annotations = getattr(model, "atom_annotations", {})
+    for atom_id, annotation in atom_annotations.items():
+        atom = model.atoms.get(atom_id)
+        if atom is None:
+            continue
+        annotation_values = normalized_atom_annotation(annotation)
+        if not annotation_values:
+            continue
+        annotations[atom_id] = annotation_values
+        for index, kind in enumerate(annotation_mark_kinds(annotation_values)):
+            direction_x, direction_y = annotation_mark_direction(index)
+            marks.append(
+                SmilesMarkPlacement(
+                    source_atom_id=atom_id,
+                    kind=kind,
+                    x=atom.x + dx + direction_x,
+                    y=atom.y + dy + direction_y,
+                )
+            )
+    return SmilesCommitPlan(offset=(dx, dy), atoms=atoms, bonds=bonds, marks=marks, annotations=annotations)
+
+
+def normalized_atom_annotation(annotation: Mapping[str, int]) -> dict[str, int]:
+    values: dict[str, int] = {}
+    formal_charge = annotation.get("formal_charge", 0)
+    if type(formal_charge) is int and formal_charge:
+        values["formal_charge"] = formal_charge
+    radical_electrons = annotation.get("radical_electrons", 0)
+    if type(radical_electrons) is int and radical_electrons > 0:
+        values["radical_electrons"] = radical_electrons
+    return values
+
+
+def annotation_mark_kinds(annotation: Mapping[str, int]) -> tuple[str, ...]:
+    kinds: list[str] = []
+    formal_charge = int(annotation.get("formal_charge", 0))
+    radical_electrons = int(annotation.get("radical_electrons", 0))
+    if formal_charge > 0:
+        kinds.extend("plus" for _ in range(formal_charge))
+    elif formal_charge < 0:
+        kinds.extend("minus" for _ in range(abs(formal_charge)))
+    if radical_electrons > 0:
+        kinds.extend("radical" for _ in range(radical_electrons))
+    return tuple(kinds)
+
+
+def annotation_mark_direction(index: int) -> Point2D:
+    directions = ((1.0, -1.0), (-1.0, -1.0), (1.0, 1.0), (-1.0, 1.0))
+    return directions[index % len(directions)]
 
 
 def build_smiles_preview_geometry(
@@ -189,12 +249,16 @@ __all__ = [
     "SmilesAtomPlacement",
     "SmilesBondPlacement",
     "SmilesCommitPlan",
+    "SmilesMarkPlacement",
     "SmilesPreviewGeometry",
     "SmilesPreviewPlan",
     "SmilesPreviewResolvers",
     "SmilesPreviewSnapshot",
+    "annotation_mark_direction",
+    "annotation_mark_kinds",
     "build_smiles_preview_geometry",
     "build_smiles_preview_snapshot",
+    "normalized_atom_annotation",
     "plan_smiles_commit",
     "plan_smiles_preview_update",
     "smiles_preview_center",

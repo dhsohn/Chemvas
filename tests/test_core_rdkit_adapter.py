@@ -212,15 +212,23 @@ class _FakePosition:
 
 
 class _FakeAtom:
-    def __init__(self, idx: int, symbol: str) -> None:
+    def __init__(self, idx: int, symbol: str, *, formal_charge: int = 0, radical_electrons: int = 0) -> None:
         self._idx = idx
         self._symbol = symbol
+        self._formal_charge = formal_charge
+        self._radical_electrons = radical_electrons
 
     def GetIdx(self) -> int:
         return self._idx
 
     def GetSymbol(self) -> str:
         return self._symbol
+
+    def GetFormalCharge(self) -> int:
+        return self._formal_charge
+
+    def GetNumRadicalElectrons(self) -> int:
+        return self._radical_electrons
 
 
 class _FakeBond:
@@ -255,8 +263,20 @@ class _FakeMol:
         bonds: list[tuple[int, int, float]],
         positions: dict[int, tuple[float, float, float]],
         canonical_smiles: str | None = None,
+        formal_charges: dict[int, int] | None = None,
+        radical_electrons: dict[int, int] | None = None,
     ) -> None:
-        self._atoms = [_FakeAtom(idx, symbol) for idx, symbol in enumerate(atom_symbols)]
+        formal_charges = formal_charges or {}
+        radical_electrons = radical_electrons or {}
+        self._atoms = [
+            _FakeAtom(
+                idx,
+                symbol,
+                formal_charge=formal_charges.get(idx, 0),
+                radical_electrons=radical_electrons.get(idx, 0),
+            )
+            for idx, symbol in enumerate(atom_symbols)
+        ]
         self._bonds = [_FakeBond(a, b, order) for a, b, order in bonds]
         self._conformer = _FakeConformer(positions)
         self.canonical_smiles = canonical_smiles
@@ -671,6 +691,41 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertAlmostEqual(model.atoms[1].y, -8.94427190999916)
         self.assertEqual(len(model.bonds), 1)
         self.assertEqual(model.bonds[0].order, 2)
+
+    def test_smiles_to_2d_records_charge_and_radical_annotations(self) -> None:
+        fake_mol = _FakeMol(
+            atom_symbols=["N", "C"],
+            bonds=[],
+            positions={0: (0.0, 0.0, 0.0), 1: (1.0, 0.0, 0.0)},
+            formal_charges={0: 1},
+            radical_electrons={1: 1},
+        )
+        adapter = RDKitAdapter()
+        adapter._rdkit = (_FakeChem({"[N+].[CH3]": fake_mol}), _FakeAllChem())
+
+        model = adapter.smiles_to_2d("[N+].[CH3]", scale=20.0)
+
+        self.assertIsNotNone(model)
+        assert model is not None
+        self.assertEqual(model.atom_annotations, {0: {"formal_charge": 1}, 1: {"radical_electrons": 1}})
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for aromatic import tests")
+    def test_smiles_to_2d_kekulizes_aromatic_bonds_and_preserves_charge_identifiers(self) -> None:
+        adapter = RDKitAdapter()
+
+        benzene = adapter.smiles_to_2d("c1ccccc1")
+        ammonium = adapter.smiles_to_2d("[NH4+]")
+
+        self.assertIsNotNone(benzene)
+        self.assertIsNotNone(ammonium)
+        assert benzene is not None
+        assert ammonium is not None
+        self.assertEqual([bond.order for bond in benzene.bonds if bond is not None].count(2), 3)
+        self.assertEqual(adapter.compute_identifiers(benzene).smiles, "c1ccccc1")
+        ammonium_identifiers = adapter.compute_identifiers(ammonium)
+        self.assertEqual(ammonium.atom_annotations, {0: {"formal_charge": 1}})
+        self.assertEqual(ammonium_identifiers.formula, "H4N+")
+        self.assertEqual(ammonium_identifiers.smiles, "[NH4+]")
 
     def test_smiles_to_2d_returns_none_when_rdkit_is_unavailable(self) -> None:
         adapter = RDKitAdapter()

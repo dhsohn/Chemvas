@@ -27,6 +27,7 @@ from ui.scene_paste_apply_logic import apply_paste_payload
 class SceneClipboardPasteCallbacks:
     add_atom: Callable[[str, float, float], int]
     apply_atom_color: Callable[[int, str], None]
+    set_atom_annotation: Callable[[int, dict[str, int] | None], None]
     add_or_update_atom_label: Callable[..., None]
     add_bond: Callable[[int, int, int], int]
     restore_bond_from_state: Callable[[int, dict], None]
@@ -69,6 +70,7 @@ def paste_selection_from_clipboard_for_canvas(
         dy=plan.dy,
         add_atom=callbacks.add_atom,
         apply_atom_color=callbacks.apply_atom_color,
+        set_atom_annotation=callbacks.set_atom_annotation,
         add_or_update_atom_label=callbacks.add_or_update_atom_label,
         add_bond=callbacks.add_bond,
         restore_bond_from_state=callbacks.restore_bond_from_state,

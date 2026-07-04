@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from PyQt6.QtCore import QPointF
+
 from ui.canvas_smiles_input_state import set_last_smiles_input_for
 from ui.insert_commit_rollback import rollback_insert_mutation
+from ui.scene_decoration_access import add_mark_for_atom_for
 from ui.smiles_insert_logic import SmilesCommitPlan
 from ui.structure_insert_access import (
     add_insert_atom_for,
@@ -16,6 +19,7 @@ from ui.structure_insert_access import (
     insert_next_atom_id_for,
     new_insert_bond_ids_from,
     record_insert_additions_for,
+    set_inserted_atom_annotation_for,
     set_inserted_atom_metadata_for,
     set_inserted_bond_metadata_for,
 )
@@ -113,12 +117,47 @@ def apply_smiles_commit_plan(
                     record=False,
                 )
 
+        for source_atom_id, annotation in plan.annotations.items():
+            annotated_atom_id = id_map.get(source_atom_id)
+            if annotated_atom_id is None:
+                rollback_insert_mutation(
+                    canvas,
+                    before_next_atom_id=before_next_atom_id,
+                    before_bond_count=before_bond_count,
+                    before_smiles_input=before_smiles_input,
+                )
+                return False
+            if not set_inserted_atom_annotation_for(canvas, annotated_atom_id, annotation):
+                rollback_insert_mutation(
+                    canvas,
+                    before_next_atom_id=before_next_atom_id,
+                    before_bond_count=before_bond_count,
+                    before_smiles_input=before_smiles_input,
+                )
+                return False
+
+        added_scene_items = []
+        for mark_plan in plan.marks:
+            mark_atom_id = id_map.get(mark_plan.source_atom_id)
+            if mark_atom_id is None:
+                continue
+            item = add_mark_for_atom_for(
+                canvas,
+                mark_atom_id,
+                QPointF(mark_plan.x, mark_plan.y),
+                kind=mark_plan.kind,
+                record=False,
+            )
+            if item is not None:
+                added_scene_items.append(item)
+
         set_last_smiles_input_for(canvas, after_smiles_input)
         record_insert_additions_for(
             canvas,
             before_next_atom_id=before_next_atom_id,
             before_bond_count=before_bond_count,
             before_smiles_input=before_smiles_input,
+            added_scene_items=added_scene_items or None,
         )
     except Exception:
         rollback_insert_mutation(

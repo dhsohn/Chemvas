@@ -174,6 +174,18 @@ class CanvasGeometryControllerTest(unittest.TestCase):
         self.assertAlmostEqual(tight[0], 0.0)
         self.assertAlmostEqual(tight[1], 0.503)
 
+    def test_trim_line_for_labels_uses_visible_label_rect_for_wide_aliases(self) -> None:
+        canvas = SimpleNamespace(
+            renderer=SimpleNamespace(style=SimpleNamespace(bond_line_width=0.0)),
+        )
+        controller = CanvasGeometryController(canvas)
+        controller.visible_label_rect_for_atom = lambda atom_id: {1: QRectF(-2.0, -5.0, 32.0, 10.0)}.get(atom_id)
+        controller.label_cut_radius_for_atom = lambda atom_id: 5.0
+
+        trimmed = controller.trim_line_for_labels(1, None, 0.0, 0.0, 100.0, 0.0)
+
+        self.assertEqual(trimmed, (0.3, 1.0))
+
     def test_trim_line_for_labels_clamps_start_only_and_end_only_min_span(self) -> None:
         canvas = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_line_width=5.0)),
