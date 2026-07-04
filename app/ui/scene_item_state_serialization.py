@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
 
 from ui.bracket_types import LEGACY_TS_BRACKET_KIND, normalized_bracket_kind
 from ui.canvas_atom_graphics_state import atom_items_for
-from ui.canvas_model_access import atom_for_id
+from ui.canvas_model_access import atom_annotation_for, atom_for_id
 from ui.shape_geometry import normalized_shape_kind, normalized_stroke_style
 
 MarkCenterGetter = Callable[[Any], QPointF]
@@ -63,13 +63,17 @@ def atom_state_dict_for(canvas, atom_id: int) -> dict:
     explicit = bool(atom.explicit_label)
     if atom.element.upper() == "C" and atom_id in atom_items_for(canvas):
         explicit = True
-    return {
+    state = {
         "element": atom.element,
         "x": atom.x,
         "y": atom.y,
         "color": atom.color,
         "explicit_label": explicit,
     }
+    annotation = atom_annotation_for(canvas, atom_id)
+    if annotation:
+        state["annotation"] = annotation
+    return state
 
 
 def ring_state_dict(ring_item: QGraphicsPolygonItem) -> dict:

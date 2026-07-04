@@ -75,6 +75,26 @@ class SmilesInsertLogicTest(unittest.TestCase):
             (0, 0, 1, 2, "double", "#123456"),
         )
 
+    def test_plan_smiles_commit_preserves_atom_annotations_and_mark_placements(self) -> None:
+        model = _build_model()
+        model.atom_annotations = {
+            1: {"formal_charge": 1, "radical_electrons": 2},
+            99: {"formal_charge": -1},
+        }
+
+        plan = plan_smiles_commit(model, (0.0, 0.0), (25.0, -5.0))
+
+        assert plan is not None
+        self.assertEqual(plan.annotations, {1: {"formal_charge": 1, "radical_electrons": 2}})
+        self.assertEqual(
+            [(mark.source_atom_id, mark.kind, mark.x, mark.y) for mark in plan.marks],
+            [
+                (1, "plus", 36.0, -6.0),
+                (1, "radical", 34.0, -6.0),
+                (1, "radical", 36.0, -4.0),
+            ],
+        )
+
     def test_plan_smiles_commit_rejects_dangling_bond_endpoint(self) -> None:
         self.assertIsNone(plan_smiles_commit(_build_model(include_dangling_bond=True), (0.0, 0.0), (0.0, 0.0)))
 

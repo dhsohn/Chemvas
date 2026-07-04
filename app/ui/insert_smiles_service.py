@@ -38,6 +38,7 @@ from ui.smiles_insert_logic import (
     SmilesPreviewResolvers,
     annotation_mark_direction,
     annotation_mark_kinds,
+    normalized_atom_annotation,
     plan_smiles_commit,
     plan_smiles_preview_update,
     smiles_preview_center,
@@ -229,7 +230,8 @@ class InsertSmilesService:
             atom = model.atoms.get(atom_id)
             if atom is None:
                 continue
-            for index, kind in enumerate(annotation_mark_kinds(annotation)):
+            annotation_values = normalized_atom_annotation(annotation)
+            for index, kind in enumerate(annotation_mark_kinds(annotation_values)):
                 direction_x, direction_y = annotation_mark_direction(index)
                 item = add_mark_for_atom_for(
                     self.canvas,

@@ -28,6 +28,7 @@ class _RecordingPasteCanvas(_RecordingFakeCanvas):
         super().__init__()
         self.add_atom_calls: list[tuple[str, float, float]] = []
         self.add_bond_calls: list[tuple[int, int, int]] = []
+        self.atom_annotation_calls: list[tuple[int, dict[str, int] | None]] = []
         self.translate_none_kinds: set[str] = set()
         self.translate_empty_kinds: set[str] = set()
         self.translate_calls: list[tuple[str | None, float, float, dict[int, int]]] = []
@@ -39,6 +40,9 @@ class _RecordingPasteCanvas(_RecordingFakeCanvas):
     def add_bond(self, atom_a: int, atom_b: int, order: int) -> int:
         self.add_bond_calls.append((atom_a, atom_b, order))
         return super().add_bond(atom_a, atom_b, order)
+
+    def set_atom_annotation(self, atom_id: int, annotation: dict[str, int] | None) -> None:
+        self.atom_annotation_calls.append((atom_id, annotation))
 
     def _translated_scene_item_state(
         self,
@@ -78,7 +82,15 @@ class ScenePasteApplyLogicTest(unittest.TestCase):
                 "bad",
                 {"id": "bad", "element": "C", "x": 1.0, "y": 2.0},
                 {"id": 10, "element": "C", "x": 5.0, "y": 7.0, "color": "#123456", "explicit_label": True},
-                {"id": 11, "element": "O", "x": 15.0, "y": 17.0, "color": "#abcdef", "explicit_label": True},
+                {
+                    "id": 11,
+                    "element": "O",
+                    "x": 15.0,
+                    "y": 17.0,
+                    "color": "#abcdef",
+                    "explicit_label": True,
+                    "annotation": {"formal_charge": -1, "radical_electrons": 1},
+                },
                 {"id": 12, "element": "C", "x": 21.0, "y": 22.0, "color": "#fedcba", "explicit_label": False},
             ],
             "bonds": [
@@ -112,6 +124,7 @@ class ScenePasteApplyLogicTest(unittest.TestCase):
             dy=22.0,
             add_atom=canvas.add_atom,
             apply_atom_color=canvas.apply_atom_color,
+            set_atom_annotation=canvas.set_atom_annotation,
             add_or_update_atom_label=canvas.add_or_update_atom_label,
             add_bond=canvas.add_bond,
             restore_bond_from_state=canvas._restore_bond_from_state,
@@ -136,6 +149,7 @@ class ScenePasteApplyLogicTest(unittest.TestCase):
                 (2, "#fedcba"),
             ],
         )
+        self.assertEqual(canvas.atom_annotation_calls, [(1, {"formal_charge": -1, "radical_electrons": 1})])
         self.assertEqual(
             canvas.atom_label_calls,
             [
@@ -226,6 +240,7 @@ class ScenePasteApplyLogicTest(unittest.TestCase):
             dy=22.0,
             add_atom=canvas.add_atom,
             apply_atom_color=canvas.apply_atom_color,
+            set_atom_annotation=canvas.set_atom_annotation,
             add_or_update_atom_label=canvas.add_or_update_atom_label,
             add_bond=canvas.add_bond,
             restore_bond_from_state=canvas._restore_bond_from_state,

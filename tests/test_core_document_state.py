@@ -105,6 +105,26 @@ class DocumentStateTest(unittest.TestCase):
         self.assertIsNone(state["bonds"][1])
         self.assertEqual(state["next_atom_id"], 3)
 
+    def test_serialize_model_state_round_trips_atom_annotations(self) -> None:
+        model = MoleculeModel(
+            atoms={
+                0: Atom("N", 0.0, 0.0),
+                1: Atom("C", 2.0, 0.0),
+            },
+            bonds=[Bond(0, 1, 1)],
+        )
+        model.atom_annotations = {
+            0: {"formal_charge": 1, "radical_electrons": 1},
+            1: {"radical_electrons": 0},
+            99: {"formal_charge": -1},
+        }
+
+        state = serialize_model_state(model)
+        restored = deserialize_model_state(state)
+
+        self.assertEqual(state["atom_annotations"], {0: {"formal_charge": 1, "radical_electrons": 1}})
+        self.assertEqual(restored.atom_annotations, {0: {"formal_charge": 1, "radical_electrons": 1}})
+
     def test_deserialize_model_state_rebuilds_model(self) -> None:
         model = deserialize_model_state(
             {
@@ -123,6 +143,7 @@ class DocumentStateTest(unittest.TestCase):
                     None,
                 ],
                 "next_atom_id": 7,
+                "atom_annotations": {"2": {"formal_charge": -1}},
             }
         )
 
@@ -133,6 +154,7 @@ class DocumentStateTest(unittest.TestCase):
         self.assertEqual(model.bonds[0].order, 3)
         self.assertEqual(model.bonds[0].style, "triple")
         self.assertIsNone(model.bonds[1])
+        self.assertEqual(model.atom_annotations, {2: {"formal_charge": -1}})
 
     def test_deserialize_model_state_uses_serialized_next_atom_id(self) -> None:
         model = deserialize_model_state(
@@ -232,7 +254,15 @@ class DocumentStateTest(unittest.TestCase):
             "version": 1,
             "atoms": [
                 {"id": 3, "element": "C", "x": 10.0, "y": 20.0, "color": "#111111", "explicit_label": True},
-                {"id": 7, "element": "O", "x": 30.0, "y": 40.0, "color": "#222222", "explicit_label": False},
+                {
+                    "id": 7,
+                    "element": "O",
+                    "x": 30.0,
+                    "y": 40.0,
+                    "color": "#222222",
+                    "explicit_label": False,
+                    "annotation": {"formal_charge": -1},
+                },
             ],
             "bonds": [{"a": 3, "b": 7, "order": 2, "style": "double", "color": "#333333"}],
             "rings": [
@@ -268,6 +298,7 @@ class DocumentStateTest(unittest.TestCase):
 
         self.assertEqual(set(state["model"]["atoms"]), {3, 7})
         self.assertEqual(state["model"]["atoms"][3]["element"], "C")
+        self.assertEqual(state["model"]["atom_annotations"], {7: {"formal_charge": -1}})
         self.assertEqual(state["model"]["bonds"], selection_payload["bonds"])
         self.assertEqual(state["model"]["next_atom_id"], 8)
         self.assertEqual(state["ring_fills"][0]["atom_ids"], [3, 7])
@@ -292,6 +323,34 @@ class DocumentStateTest(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             build_document_payload(state, version=CANVAS_FILE_VERSION)
+
+    def test_build_document_payload_validates_atom_annotations(self) -> None:
+        state = _canvas_state(
+            _model_state(
+                atoms={"0": _atom_state()},
+                next_atom_id=1,
+            )
+        )
+        state["model"]["atom_annotations"] = {"0": {"formal_charge": -1, "radical_electrons": 1}}
+        build_document_payload(state, version=CANVAS_FILE_VERSION)
+
+        invalid_cases = [
+            {"1": {"formal_charge": 1}},
+            {"0": {"formal_charge": "1"}},
+            {"0": {"radical_electrons": -1}},
+            {"0": {"unknown": 1}},
+        ]
+        for atom_annotations in invalid_cases:
+            with self.subTest(atom_annotations=atom_annotations):
+                state = _canvas_state(
+                    _model_state(
+                        atoms={"0": _atom_state()},
+                        next_atom_id=1,
+                    )
+                )
+                state["model"]["atom_annotations"] = atom_annotations
+                with self.assertRaises(ValueError):
+                    build_document_payload(state, version=CANVAS_FILE_VERSION)
 
     def test_selection_payload_rejects_wedge_hash_on_non_single_bonds(self) -> None:
         payload = {

@@ -46,6 +46,7 @@ class SmilesCommitPlan:
     atoms: list[SmilesAtomPlacement]
     bonds: list[SmilesBondPlacement]
     marks: list[SmilesMarkPlacement] = field(default_factory=list)
+    annotations: dict[int, dict[str, int]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -124,12 +125,17 @@ def plan_smiles_commit(
             )
         )
     marks = []
+    annotations: dict[int, dict[str, int]] = {}
     atom_annotations = getattr(model, "atom_annotations", {})
     for atom_id, annotation in atom_annotations.items():
         atom = model.atoms.get(atom_id)
         if atom is None:
             continue
-        for index, kind in enumerate(annotation_mark_kinds(annotation)):
+        annotation_values = normalized_atom_annotation(annotation)
+        if not annotation_values:
+            continue
+        annotations[atom_id] = annotation_values
+        for index, kind in enumerate(annotation_mark_kinds(annotation_values)):
             direction_x, direction_y = annotation_mark_direction(index)
             marks.append(
                 SmilesMarkPlacement(
@@ -139,7 +145,18 @@ def plan_smiles_commit(
                     y=atom.y + dy + direction_y,
                 )
             )
-    return SmilesCommitPlan(offset=(dx, dy), atoms=atoms, bonds=bonds, marks=marks)
+    return SmilesCommitPlan(offset=(dx, dy), atoms=atoms, bonds=bonds, marks=marks, annotations=annotations)
+
+
+def normalized_atom_annotation(annotation: Mapping[str, int]) -> dict[str, int]:
+    values: dict[str, int] = {}
+    formal_charge = annotation.get("formal_charge", 0)
+    if type(formal_charge) is int and formal_charge:
+        values["formal_charge"] = formal_charge
+    radical_electrons = annotation.get("radical_electrons", 0)
+    if type(radical_electrons) is int and radical_electrons > 0:
+        values["radical_electrons"] = radical_electrons
+    return values
 
 
 def annotation_mark_kinds(annotation: Mapping[str, int]) -> tuple[str, ...]:
@@ -241,6 +258,7 @@ __all__ = [
     "annotation_mark_kinds",
     "build_smiles_preview_geometry",
     "build_smiles_preview_snapshot",
+    "normalized_atom_annotation",
     "plan_smiles_commit",
     "plan_smiles_preview_update",
     "smiles_preview_center",

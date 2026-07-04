@@ -24,6 +24,7 @@ from ui.canvas_model_access import (
     bond_for_id,
     ensure_next_atom_id_after_for,
     remove_atom_direct_for,
+    set_atom_annotation_for,
     set_atom_for_id,
 )
 from ui.mark_item_access import remove_marks_for_atom_for
@@ -94,6 +95,7 @@ class CanvasAtomMutationService:
             explicit_label=bool(state.get("explicit_label", False)),
         )
         set_atom_for_id(self.canvas, atom_id, atom)
+        set_atom_annotation_for(self.canvas, atom_id, state.get("annotation"))
         self.graph_service.ensure_atom_neighbors(atom_id)
         self.graph_service.ensure_atom_bond_ids(atom_id)
         ensure_next_atom_id_after_for(self.canvas, atom_id)

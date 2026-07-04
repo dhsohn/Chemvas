@@ -111,6 +111,24 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         self.assertEqual(scene_item_command.item_states, [{"item": "arrow"}])
         self.assertEqual(scene_item_command.items, [scene_item])
 
+    def test_record_additions_includes_atom_annotations_in_atom_states(self) -> None:
+        canvas = _make_canvas(
+            atoms={1: Atom("N", 1.0, 2.0)},
+            next_atom_id=2,
+        )
+        canvas.model.atom_annotations = {1: {"formal_charge": 1}}
+
+        _recording_service(canvas).record_additions(
+            before_next_atom_id=1,
+            before_bond_count=0,
+            before_smiles_input="before-smiles",
+        )
+
+        canvas.push_command.assert_called_once()
+        command = canvas.push_command.call_args.args[0]
+        self.assertIsInstance(command, AddAtomsCommand)
+        self.assertEqual(command.atom_states[1]["annotation"], {"formal_charge": 1})
+
     def test_record_additions_pushes_single_scene_item_command_when_only_scene_items_are_added(self) -> None:
         scene_item = _SceneItem("label", {"item": "label"})
         canvas = _make_canvas()

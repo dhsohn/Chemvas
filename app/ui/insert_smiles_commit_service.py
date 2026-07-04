@@ -19,6 +19,7 @@ from ui.structure_insert_access import (
     insert_next_atom_id_for,
     new_insert_bond_ids_from,
     record_insert_additions_for,
+    set_inserted_atom_annotation_for,
     set_inserted_atom_metadata_for,
     set_inserted_bond_metadata_for,
 )
@@ -115,6 +116,25 @@ def apply_smiles_commit_plan(
                     clear_smiles=False,
                     record=False,
                 )
+
+        for source_atom_id, annotation in plan.annotations.items():
+            annotated_atom_id = id_map.get(source_atom_id)
+            if annotated_atom_id is None:
+                rollback_insert_mutation(
+                    canvas,
+                    before_next_atom_id=before_next_atom_id,
+                    before_bond_count=before_bond_count,
+                    before_smiles_input=before_smiles_input,
+                )
+                return False
+            if not set_inserted_atom_annotation_for(canvas, annotated_atom_id, annotation):
+                rollback_insert_mutation(
+                    canvas,
+                    before_next_atom_id=before_next_atom_id,
+                    before_bond_count=before_bond_count,
+                    before_smiles_input=before_smiles_input,
+                )
+                return False
 
         added_scene_items = []
         for mark_plan in plan.marks:

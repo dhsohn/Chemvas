@@ -13,6 +13,7 @@ from ui.canvas_model_access import (
     created_atom_ids_from,
     next_atom_id_for,
     remove_atom_direct_for,
+    set_atom_annotation_for,
     set_next_atom_id_for,
     trim_bonds_direct_for,
 )
@@ -69,6 +70,13 @@ def set_inserted_atom_metadata_for(canvas, atom_id: int, *, color: str | None, e
         return False
     atom.color = color
     atom.explicit_label = explicit_label
+    return True
+
+
+def set_inserted_atom_annotation_for(canvas, atom_id: int, annotation: dict[str, int] | None) -> bool:
+    if insert_atom_for_id(canvas, atom_id) is None:
+        return False
+    set_atom_annotation_for(canvas, atom_id, annotation)
     return True
 
 
@@ -189,6 +197,7 @@ __all__ = [
     "record_insert_additions_for",
     "restore_insert_selection_from_ids_for",
     "rollback_insert_mutation_for",
+    "set_inserted_atom_annotation_for",
     "set_inserted_atom_metadata_for",
     "set_inserted_bond_metadata_for",
 ]

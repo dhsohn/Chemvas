@@ -393,6 +393,8 @@ class InsertControllerTest(unittest.TestCase):
         self.assertEqual(canvas.mark_calls, [(0, 2.0, 1.0, "plus", False)])
         command = canvas.push_command.call_args.args[0]
         self.assertIsInstance(command, CompositeCommand)
+        self.assertIsInstance(command.commands[0], AddAtomsCommand)
+        self.assertEqual(command.commands[0].atom_states[0]["annotation"], {"formal_charge": 1})
         self.assertIsInstance(command.commands[-1], AddSceneItemsCommand)
         self.assertEqual(command.commands[-1].items, canvas.created_marks)
 
