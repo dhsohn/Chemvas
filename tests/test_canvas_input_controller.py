@@ -24,6 +24,7 @@ if QApplication is not None:
     from ui.canvas_hover_state import set_hover_atom_id_for, set_hover_bond_id_for
     from ui.canvas_input_controller import CanvasInputController
     from ui.canvas_insert_state import CanvasInsertState
+    from ui.canvas_scene_items_state import set_selected_notes_for
     from ui.input_view_state import input_view_state_for
 
 
@@ -245,6 +246,17 @@ class CanvasInputControllerTest(unittest.TestCase):
         canvas.services.scene_delete_controller.delete_selected_items.assert_called_once_with()
         canvas.delete_selected_items.assert_not_called()
         selected_delete_event.accept.assert_called_once_with()
+
+        canvas = _Canvas()
+        controller = _input_controller(canvas)
+        note = QGraphicsTextItem("note")
+        note.setData(0, "note")
+        canvas.scene_obj.addItem(note)
+        set_selected_notes_for(canvas, [note])
+        note_delete_event = _FakeEvent(key=Qt.Key.Key_Delete)
+        controller.key_press_event(note_delete_event)
+        canvas.services.scene_delete_controller.delete_selected_items.assert_called_once_with()
+        note_delete_event.accept.assert_called_once_with()
 
         canvas = _Canvas()
         controller = _input_controller(canvas)

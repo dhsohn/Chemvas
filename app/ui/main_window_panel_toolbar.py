@@ -223,19 +223,18 @@ def build_panel_toolbar(
         shortcut=QKeySequence.StandardKey.Redo,
         object_name="redo_button",
     )
-    scene_transform_controller = scene_transform_controller_for_window(window)
     flip_h_btn = create_toolbar_button(
         icon=icon_factory.icon_flip_h(),
         tooltip="Flip Horizontal (Ctrl+Shift+H)",
         status_tip="Flip the current selection horizontally",
-        callback=lambda: scene_transform_controller.flip_selected_items(horizontal=True),
+        callback=lambda: scene_transform_controller_for_window(window).flip_selected_items(horizontal=True),
         object_name="flip_horizontal_button",
     )
     flip_v_btn = create_toolbar_button(
         icon=icon_factory.icon_flip_v(),
         tooltip="Flip Vertical (Ctrl+Shift+V)",
         status_tip="Flip the current selection vertically",
-        callback=lambda: scene_transform_controller.flip_selected_items(horizontal=False),
+        callback=lambda: scene_transform_controller_for_window(window).flip_selected_items(horizontal=False),
         object_name="flip_vertical_button",
     )
     rotate_btn = create_toolbar_button(

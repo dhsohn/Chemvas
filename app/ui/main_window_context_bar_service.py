@@ -128,9 +128,12 @@ class MainWindowContextBarService:
         render_button.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT)
         render_button.setStyleSheet(SMILES_RENDER_BUTTON_STYLE)
         render_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        insert_controller = self._insert_controller_for_window(window)
-        render_button.clicked.connect(lambda _checked=False: insert_controller.begin_smiles_insert(smiles_input.text()))
-        smiles_input.returnPressed.connect(lambda: insert_controller.begin_smiles_insert(smiles_input.text()))
+        render_button.clicked.connect(
+            lambda _checked=False: self._insert_controller_for_window(window).begin_smiles_insert(smiles_input.text())
+        )
+        smiles_input.returnPressed.connect(
+            lambda: self._insert_controller_for_window(window).begin_smiles_insert(smiles_input.text())
+        )
         bar.addWidget(smiles_input)
         bar.addWidget(render_button)
 

@@ -26,6 +26,7 @@ class MoleculeModel:
     atoms: dict[int, Atom] = field(default_factory=dict)
     bonds: list[Bond | None] = field(default_factory=list)
     next_atom_id: int = 0
+    atom_annotations: dict[int, dict[str, int]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.atoms:

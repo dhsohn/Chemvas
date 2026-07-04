@@ -292,6 +292,18 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertEqual(canvas.suspend_selection_outline_calls, [True, False])
         self.assertEqual(canvas.update_selection_outline_calls, 1)
 
+    def test_delete_selected_items_includes_note_selection_registry(self) -> None:
+        canvas = _FakeCanvas()
+        note_item = _make_note_item("Registry", 12.0, 14.0)
+        canvas.add_item(note_item, selected=False)
+        canvas.selected_notes = [note_item]
+        controller = scene_delete_controller_for(canvas)
+
+        self.assertTrue(controller.delete_selected_items())
+        self.assertEqual(len(canvas.pushed_commands), 1)
+        self.assertIsInstance(canvas.pushed_commands[0], DeleteSceneItemsCommand)
+        self.assertEqual(canvas.removed_scene_items, [note_item])
+
     def test_delete_ring_prefers_scene_item_controller_when_available(self) -> None:
         canvas = _FakeCanvas()
         ring_item = _make_ring_item()

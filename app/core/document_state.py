@@ -25,7 +25,7 @@ CANVAS_STATE_KEYS = frozenset(
         "last_smiles_input",
     )
 ) | _OPTIONAL_CANVAS_STATE_KEYS
-SETTINGS_KEYS = frozenset(
+REQUIRED_SETTINGS_KEYS = frozenset(
     (
         "bond_length_px",
         "arrow_line_width",
@@ -38,6 +38,22 @@ SETTINGS_KEYS = frozenset(
         "sheet_orientation",
     )
 )
+OPTIONAL_SETTINGS_KEYS = frozenset(
+    (
+        "text_font_family",
+        "text_color",
+        "text_alignment",
+        "text_line_spacing",
+        "note_box_enabled",
+        "note_box_color",
+        "note_box_alpha",
+        "note_border_enabled",
+        "note_border_color",
+        "note_border_width",
+        "note_padding",
+    )
+)
+SETTINGS_KEYS = REQUIRED_SETTINGS_KEYS | OPTIONAL_SETTINGS_KEYS
 VALID_BOND_ORDERS = frozenset((1, 2, 3))
 VALID_BOND_STYLES = frozenset(
     (
@@ -86,6 +102,7 @@ VALID_ORBITAL_KINDS = frozenset(
 )
 VALID_SHAPE_KINDS = frozenset(("circle", "ellipse", "rounded_rect", "rect"))
 VALID_SHAPE_STROKES = frozenset(("solid", "dashed", "dotted", "none"))
+VALID_ATOM_ANNOTATION_KEYS = frozenset(("formal_charge", "radical_electrons"))
 
 
 def atom_to_state(atom: Atom, explicit_label: bool) -> dict:
@@ -123,11 +140,15 @@ def serialize_model_state(
         for atom_id, atom in model.atoms.items()
     }
     bonds = [bond_to_state(bond) for bond in model.bonds]
-    return {
+    state = {
         "atoms": atoms,
         "bonds": bonds,
         "next_atom_id": model.next_atom_id,
     }
+    atom_annotations = _serialized_atom_annotations(getattr(model, "atom_annotations", {}), atoms.keys())
+    if atom_annotations:
+        state["atom_annotations"] = atom_annotations
+    return state
 
 
 def deserialize_model_state(model_state: Mapping[str, object]) -> MoleculeModel:
@@ -160,6 +181,14 @@ def deserialize_model_state(model_state: Mapping[str, object]) -> MoleculeModel:
         )
     model.bonds = bonds
     model.next_atom_id = int(cast(Any, model_state["next_atom_id"]))
+    annotations_state = cast(Mapping[object, Mapping[str, object]], model_state.get("atom_annotations", {}))
+    model.atom_annotations = {
+        int(cast(Any, atom_id)): {
+            cast(str, key): int(cast(Any, value))
+            for key, value in annotation.items()
+        }
+        for atom_id, annotation in annotations_state.items()
+    }
     return model
 
 
@@ -174,15 +203,37 @@ def serialize_settings(
     text_italic: bool,
     sheet_size: str,
     sheet_orientation: str,
+    text_font_family: str = "Arial",
+    text_color: str = "#222222",
+    text_alignment: str = "left",
+    text_line_spacing: float = 1.0,
+    note_box_enabled: bool = False,
+    note_box_color: str = "#ffffff",
+    note_box_alpha: float = 1.0,
+    note_border_enabled: bool = False,
+    note_border_color: str = "#333333",
+    note_border_width: float = 1.0,
+    note_padding: float = 6.0,
 ) -> dict:
     return {
         "bond_length_px": bond_length_px,
         "arrow_line_width": arrow_line_width,
         "arrow_head_scale": arrow_head_scale,
         "orbital_phase_enabled": orbital_phase_enabled,
+        "text_font_family": text_font_family,
         "text_font_size": text_font_size,
         "text_font_weight": text_font_weight,
         "text_italic": text_italic,
+        "text_color": text_color,
+        "text_alignment": text_alignment,
+        "text_line_spacing": text_line_spacing,
+        "note_box_enabled": note_box_enabled,
+        "note_box_color": note_box_color,
+        "note_box_alpha": note_box_alpha,
+        "note_border_enabled": note_border_enabled,
+        "note_border_color": note_border_color,
+        "note_border_width": note_border_width,
+        "note_padding": note_padding,
         "sheet_size": sheet_size,
         "sheet_orientation": sheet_orientation,
     }
@@ -203,6 +254,7 @@ def selection_payload_to_canvas_state(
     scene_items = cast(list[Mapping[str, object]], selection_payload.get("scene_items", []))
 
     atom_states: dict[int, dict] = {}
+    atom_annotations: dict[int, dict[str, int]] = {}
     for atom_state in atoms:
         atom_id = _validated_id(atom_state.get("id"))
         atom_states[atom_id] = {
@@ -212,6 +264,9 @@ def selection_payload_to_canvas_state(
             "color": atom_state["color"],
             "explicit_label": atom_state["explicit_label"],
         }
+        annotation = _normalized_atom_annotation(cast(Mapping[str, object] | None, atom_state.get("annotation")))
+        if annotation:
+            atom_annotations[atom_id] = annotation
 
     ring_fills: list[dict] = []
     note_states: list[dict] = []
@@ -246,13 +301,15 @@ def selection_payload_to_canvas_state(
     for item_state in scene_items:
         kind = item_state.get("kind")
         if kind == "note":
-            note_states.append(
-                {
-                    "text": item_state["text"],
-                    "x": item_state["x"],
-                    "y": item_state["y"],
-                }
-            )
+            note_state = {
+                "text": item_state["text"],
+                "x": item_state["x"],
+                "y": item_state["y"],
+            }
+            html = item_state.get("html")
+            if isinstance(html, str):
+                note_state["html"] = html
+            note_states.append(note_state)
         elif kind in VALID_ARROW_KINDS:
             arrow_states.append(dict(item_state))
         elif kind == "ts_bracket":
@@ -269,12 +326,16 @@ def selection_payload_to_canvas_state(
                 }
             )
 
+    model_state = {
+        "atoms": atom_states,
+        "bonds": [dict(bond_state) for bond_state in bonds],
+        "next_atom_id": max(atom_states, default=-1) + 1,
+    }
+    if atom_annotations:
+        model_state["atom_annotations"] = atom_annotations
+
     state = {
-        "model": {
-            "atoms": atom_states,
-            "bonds": [dict(bond_state) for bond_state in bonds],
-            "next_atom_id": max(atom_states, default=-1) + 1,
-        },
+        "model": model_state,
         "ring_fills": ring_fills,
         "notes": note_states,
         "marks": mark_states,
@@ -361,7 +422,8 @@ def _validate_canvas_state(state: Mapping[str, object]) -> None:
 def _validate_model_state(model_state: Mapping[str, object]) -> set[int]:
     atoms_state = model_state.get("atoms")
     bonds_state = model_state.get("bonds")
-    if set(model_state) != {"atoms", "bonds", "next_atom_id"}:
+    required_keys = {"atoms", "bonds", "next_atom_id"}
+    if not required_keys <= set(model_state) or not set(model_state) <= required_keys | {"atom_annotations"}:
         raise ValueError("Invalid Chemvas file.")
     if not isinstance(atoms_state, Mapping) or not isinstance(bonds_state, list):
         raise ValueError("Invalid Chemvas file.")
@@ -384,6 +446,7 @@ def _validate_model_state(model_state: Mapping[str, object]) -> set[int]:
         if not isinstance(bond_state, Mapping):
             raise ValueError("Invalid Chemvas file.")
         _validate_bond_state(bond_state, atom_ids)
+    _validate_atom_annotations_state(model_state.get("atom_annotations", {}), atom_ids)
     return atom_ids
 
 
@@ -417,6 +480,8 @@ def _validate_bond_state(bond_state: Mapping[str, object], atom_ids: set[int]) -
         raise ValueError("Invalid Chemvas file.")
     style = bond_state.get("style")
     if not isinstance(style, str) or style not in VALID_BOND_STYLES:
+        raise ValueError("Invalid Chemvas file.")
+    if style in {"wedge", "hash"} and order != 1:
         raise ValueError("Invalid Chemvas file.")
     color = bond_state.get("color")
     if not _is_hex_color(color):
@@ -572,7 +637,7 @@ def _validated_scene_state_list(states: object) -> list[Mapping[str, object]]:
 
 def _validate_settings_state(settings: Mapping[str, object]) -> None:
     keys = set(settings)
-    if keys != SETTINGS_KEYS:
+    if not REQUIRED_SETTINGS_KEYS <= keys or not keys <= SETTINGS_KEYS:
         raise ValueError("Invalid Chemvas file.")
     if not _is_number(settings.get("bond_length_px")):
         raise ValueError("Invalid Chemvas file.")
@@ -587,6 +652,30 @@ def _validate_settings_state(settings: Mapping[str, object]) -> None:
     if not _is_int(settings.get("text_font_weight")):
         raise ValueError("Invalid Chemvas file.")
     if type(settings.get("text_italic")) is not bool:
+        raise ValueError("Invalid Chemvas file.")
+    if "text_font_family" in settings and (
+        not isinstance(settings.get("text_font_family"), str) or not settings.get("text_font_family")
+    ):
+        raise ValueError("Invalid Chemvas file.")
+    if "text_color" in settings and not _is_hex_color(settings.get("text_color")):
+        raise ValueError("Invalid Chemvas file.")
+    if "text_alignment" in settings and settings.get("text_alignment") not in {"left", "center", "right", "justify"}:
+        raise ValueError("Invalid Chemvas file.")
+    if "text_line_spacing" in settings and not _is_number(settings.get("text_line_spacing")):
+        raise ValueError("Invalid Chemvas file.")
+    if "note_box_enabled" in settings and type(settings.get("note_box_enabled")) is not bool:
+        raise ValueError("Invalid Chemvas file.")
+    if "note_box_color" in settings and not _is_hex_color(settings.get("note_box_color")):
+        raise ValueError("Invalid Chemvas file.")
+    if "note_box_alpha" in settings and not _is_number(settings.get("note_box_alpha")):
+        raise ValueError("Invalid Chemvas file.")
+    if "note_border_enabled" in settings and type(settings.get("note_border_enabled")) is not bool:
+        raise ValueError("Invalid Chemvas file.")
+    if "note_border_color" in settings and not _is_hex_color(settings.get("note_border_color")):
+        raise ValueError("Invalid Chemvas file.")
+    if "note_border_width" in settings and not _is_number(settings.get("note_border_width")):
+        raise ValueError("Invalid Chemvas file.")
+    if "note_padding" in settings and not _is_number(settings.get("note_padding")):
         raise ValueError("Invalid Chemvas file.")
     if not isinstance(settings.get("sheet_size"), str) or not settings.get("sheet_size"):
         raise ValueError("Invalid Chemvas file.")
@@ -625,7 +714,8 @@ def _validate_clipboard_atoms(atoms: object) -> set[int]:
     for atom_state in atoms:
         if not isinstance(atom_state, Mapping):
             raise ValueError("Invalid clipboard payload.")
-        if set(atom_state) != {"id", "element", "x", "y", "color", "explicit_label"}:
+        required_keys = {"id", "element", "x", "y", "color", "explicit_label"}
+        if not required_keys <= set(atom_state) or not set(atom_state) <= required_keys | {"annotation"}:
             raise ValueError("Invalid clipboard payload.")
         atom_id = _validated_id(atom_state.get("id"))
         if atom_id in atom_ids:
@@ -639,8 +729,62 @@ def _validate_clipboard_atoms(atoms: object) -> set[int]:
             raise ValueError("Invalid clipboard payload.")
         if type(atom_state.get("explicit_label")) is not bool:
             raise ValueError("Invalid clipboard payload.")
+        _validate_atom_annotation(atom_state.get("annotation", {}))
         atom_ids.add(atom_id)
     return atom_ids
+
+
+def _serialized_atom_annotations(
+    atom_annotations: Mapping[int, Mapping[str, int]],
+    atom_ids: Collection[int],
+) -> dict[int, dict[str, int]]:
+    serialized: dict[int, dict[str, int]] = {}
+    atom_id_set = set(atom_ids)
+    for atom_id, annotation in atom_annotations.items():
+        if atom_id not in atom_id_set:
+            continue
+        normalized = _normalized_atom_annotation(annotation)
+        if normalized:
+            serialized[atom_id] = normalized
+    return serialized
+
+
+def _normalized_atom_annotation(annotation: Mapping[str, object] | None) -> dict[str, int]:
+    if not isinstance(annotation, Mapping):
+        return {}
+    normalized: dict[str, int] = {}
+    formal_charge = annotation.get("formal_charge")
+    if type(formal_charge) is int and formal_charge:
+        normalized["formal_charge"] = formal_charge
+    radical_electrons = annotation.get("radical_electrons")
+    if type(radical_electrons) is int and radical_electrons > 0:
+        normalized["radical_electrons"] = radical_electrons
+    return normalized
+
+
+def _validate_atom_annotations_state(annotations_state: object, atom_ids: set[int]) -> None:
+    if not isinstance(annotations_state, Mapping):
+        raise ValueError("Invalid Chemvas file.")
+    for atom_id_value, annotation in annotations_state.items():
+        atom_id = _validated_id(atom_id_value)
+        if atom_id not in atom_ids:
+            raise ValueError("Invalid Chemvas file.")
+        _validate_atom_annotation(annotation)
+
+
+def _validate_atom_annotation(annotation: object) -> None:
+    if annotation is None:
+        return
+    if not isinstance(annotation, Mapping):
+        raise ValueError("Invalid Chemvas file.")
+    if not set(annotation) <= VALID_ATOM_ANNOTATION_KEYS:
+        raise ValueError("Invalid Chemvas file.")
+    formal_charge = annotation.get("formal_charge", 0)
+    radical_electrons = annotation.get("radical_electrons", 0)
+    if type(formal_charge) is not int:
+        raise ValueError("Invalid Chemvas file.")
+    if type(radical_electrons) is not int or radical_electrons < 0:
+        raise ValueError("Invalid Chemvas file.")
 
 
 def _validate_clipboard_bonds(bonds: object, atom_ids: set[int]) -> None:
@@ -658,7 +802,10 @@ def _validate_clipboard_bonds(bonds: object, atom_ids: set[int]) -> None:
         order = bond_state.get("order")
         if not _is_int(order) or order not in VALID_BOND_ORDERS:
             raise ValueError("Invalid clipboard payload.")
-        if bond_state.get("style") not in VALID_BOND_STYLES:
+        style = bond_state.get("style")
+        if style not in VALID_BOND_STYLES:
+            raise ValueError("Invalid clipboard payload.")
+        if style in {"wedge", "hash"} and order != 1:
             raise ValueError("Invalid clipboard payload.")
         if not _is_hex_color(bond_state.get("color")):
             raise ValueError("Invalid clipboard payload.")
@@ -709,7 +856,12 @@ def _validate_clipboard_mark(mark_state: Mapping[str, object]) -> None:
 def _validate_clipboard_scene_item(item_state: Mapping[str, object]) -> None:
     kind = item_state.get("kind")
     if kind == "note":
+        keys = set(item_state)
+        if not {"kind", "text", "x", "y"} <= keys or not keys <= {"kind", "text", "html", "x", "y"}:
+            raise ValueError("Invalid clipboard payload.")
         if not isinstance(item_state.get("text"), str):
+            raise ValueError("Invalid clipboard payload.")
+        if "html" in item_state and not isinstance(item_state.get("html"), str):
             raise ValueError("Invalid clipboard payload.")
         if not _is_number(item_state.get("x")) or not _is_number(item_state.get("y")):
             raise ValueError("Invalid clipboard payload.")

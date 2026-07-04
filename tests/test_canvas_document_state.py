@@ -3,6 +3,8 @@ from types import SimpleNamespace
 from unittest import mock
 
 from core.model import Atom, Bond, MoleculeModel
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor
 from ui.canvas_atom_graphics_state import set_atom_items_for
 from ui.canvas_document_state import (
     apply_document_settings,
@@ -12,7 +14,7 @@ from ui.canvas_document_state import (
 )
 from ui.canvas_scene_items_state import CanvasSceneItemsState
 from ui.canvas_smiles_input_state import CanvasSmilesInputState, last_smiles_input_for
-from ui.canvas_text_style_state import text_style_state_for
+from ui.canvas_text_style_state import CanvasTextStyleState, text_style_state_for
 from ui.canvas_tool_settings_state import tool_settings_state_for
 
 
@@ -133,6 +135,22 @@ class CanvasDocumentStateTest(unittest.TestCase):
             sheet_size="A4",
             sheet_orientation="portrait",
             smiles_input_state=CanvasSmilesInputState(last_smiles_input="CCO"),
+            text_style_state=CanvasTextStyleState(
+                text_font_family="Courier New",
+                text_font_size=13,
+                text_font_weight=600,
+                text_italic=False,
+                text_color=QColor("#123456"),
+                text_alignment=Qt.AlignmentFlag.AlignRight,
+                text_line_spacing=1.25,
+                note_box_enabled=True,
+                note_box_color=QColor("#abcdef"),
+                note_box_alpha=0.4,
+                note_border_enabled=True,
+                note_border_color=QColor("#654321"),
+                note_border_width=1.7,
+                note_padding=9.0,
+            ),
             scene=lambda: scene_obj,
         )
         set_atom_items_for(canvas, {1: object()})
@@ -153,6 +171,17 @@ class CanvasDocumentStateTest(unittest.TestCase):
             [{"kind": "p", "center": (2.0, 3.0), "scale": 2.0, "rotation": 45.0}],
         )
         self.assertNotIn("style_preset", state["settings"])
+        self.assertEqual(state["settings"]["text_font_family"], "Courier New")
+        self.assertEqual(state["settings"]["text_color"], "#123456")
+        self.assertEqual(state["settings"]["text_alignment"], "right")
+        self.assertEqual(state["settings"]["text_line_spacing"], 1.25)
+        self.assertTrue(state["settings"]["note_box_enabled"])
+        self.assertEqual(state["settings"]["note_box_color"], "#abcdef")
+        self.assertEqual(state["settings"]["note_box_alpha"], 0.4)
+        self.assertTrue(state["settings"]["note_border_enabled"])
+        self.assertEqual(state["settings"]["note_border_color"], "#654321")
+        self.assertEqual(state["settings"]["note_border_width"], 1.7)
+        self.assertEqual(state["settings"]["note_padding"], 9.0)
         self.assertEqual(state["settings"]["sheet_size"], "A4")
         self.assertEqual(state["settings"]["sheet_orientation"], "portrait")
         self.assertEqual(state["last_smiles_input"], "CCO")
@@ -184,9 +213,20 @@ class CanvasDocumentStateTest(unittest.TestCase):
                     "arrow_line_width": 1.7,
                     "arrow_head_scale": 0.5,
                     "orbital_phase_enabled": True,
+                    "text_font_family": "Helvetica",
                     "text_font_size": 14,
                     "text_font_weight": 500,
                     "text_italic": True,
+                    "text_color": "#445566",
+                    "text_alignment": "center",
+                    "text_line_spacing": 1.3,
+                    "note_box_enabled": True,
+                    "note_box_color": "#ffffff",
+                    "note_box_alpha": 0.5,
+                    "note_border_enabled": True,
+                    "note_border_color": "#111111",
+                    "note_border_width": 1.4,
+                    "note_padding": 8.0,
                     "sheet_size": "A4",
                     "sheet_orientation": "portrait",
                 },
@@ -203,10 +243,62 @@ class CanvasDocumentStateTest(unittest.TestCase):
         self.assertEqual(tool_settings.arrow_head_scale, 0.5)
         self.assertTrue(tool_settings.orbital_phase_enabled)
         text_style = text_style_state_for(canvas)
+        self.assertEqual(text_style.text_font_family, "Helvetica")
         self.assertEqual(text_style.text_font_size, 14)
         self.assertEqual(text_style.text_font_weight, 500)
         self.assertTrue(text_style.text_italic)
+        self.assertEqual(text_style.text_color.name(), "#445566")
+        self.assertEqual(text_style.text_alignment, Qt.AlignmentFlag.AlignHCenter)
+        self.assertEqual(text_style.text_line_spacing, 1.3)
+        self.assertTrue(text_style.note_box_enabled)
+        self.assertEqual(text_style.note_box_color.name(), "#ffffff")
+        self.assertEqual(text_style.note_box_alpha, 0.5)
+        self.assertTrue(text_style.note_border_enabled)
+        self.assertEqual(text_style.note_border_color.name(), "#111111")
+        self.assertEqual(text_style.note_border_width, 1.4)
+        self.assertEqual(text_style.note_padding, 8.0)
         self.assertEqual(last_smiles_input_for(canvas), "after")
+
+    def test_apply_document_settings_defaults_missing_text_note_settings_for_legacy_state(self) -> None:
+        canvas = SimpleNamespace(
+            renderer=SimpleNamespace(
+                style=SimpleNamespace(bond_length_px=18.0),
+                set_bond_length=mock.Mock(),
+            ),
+            setSceneRect=mock.Mock(),
+            viewport=lambda: SimpleNamespace(update=mock.Mock()),
+            smiles_input_state=CanvasSmilesInputState(last_smiles_input="before"),
+            text_style_state=CanvasTextStyleState(
+                text_font_family="Courier New",
+                text_color=QColor("#ff00aa"),
+                text_alignment=Qt.AlignmentFlag.AlignRight,
+                note_box_enabled=True,
+            ),
+        )
+
+        apply_document_settings(
+            canvas,
+            {
+                "settings": {
+                    "bond_length_px": 22.0,
+                    "arrow_line_width": 1.7,
+                    "arrow_head_scale": 0.5,
+                    "orbital_phase_enabled": True,
+                    "text_font_size": 14,
+                    "text_font_weight": 500,
+                    "text_italic": True,
+                    "sheet_size": "A4",
+                    "sheet_orientation": "portrait",
+                },
+                "last_smiles_input": "after",
+            },
+        )
+
+        text_style = text_style_state_for(canvas)
+        self.assertEqual(text_style.text_font_family, "Arial")
+        self.assertEqual(text_style.text_color.name(), "#222222")
+        self.assertEqual(text_style.text_alignment, Qt.AlignmentFlag.AlignLeft)
+        self.assertFalse(text_style.note_box_enabled)
 
     def test_apply_document_settings_ignores_legacy_style_preset(self) -> None:
         from core.renderer import Renderer

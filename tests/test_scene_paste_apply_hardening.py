@@ -54,6 +54,7 @@ def _run(model: _ModelLikeBondAdder, *, atoms, bonds):
         dy=0.0,
         add_atom=model.add_atom,
         apply_atom_color=_noop,
+        set_atom_annotation=_noop,
         add_or_update_atom_label=_noop,
         add_bond=model.add_bond,
         restore_bond_from_state=_noop,

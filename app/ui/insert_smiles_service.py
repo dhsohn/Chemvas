@@ -33,8 +33,12 @@ from ui.renderer_style_access import (
     bond_line_width_for,
     bond_pen_for,
 )
+from ui.scene_decoration_access import add_mark_for_atom_for
 from ui.smiles_insert_logic import (
     SmilesPreviewResolvers,
+    annotation_mark_direction,
+    annotation_mark_kinds,
+    normalized_atom_annotation,
     plan_smiles_commit,
     plan_smiles_preview_update,
     smiles_preview_center,
@@ -93,11 +97,20 @@ class InsertSmilesService:
         self.graph_service.rebuild_bond_adjacency()
         set_last_smiles_input_for(self.canvas, smiles)
         self.structure_build_service.render_model()
-        command = self.transaction_builder.build_command(
-            snapshot,
-            after_clear_next_atom_id=after_clear_next_atom_id,
-            after_smiles_input=smiles,
-        )
+        added_scene_items = self._add_annotation_marks(model)
+        if added_scene_items:
+            command = self.transaction_builder.build_command(
+                snapshot,
+                after_clear_next_atom_id=after_clear_next_atom_id,
+                after_smiles_input=smiles,
+                added_scene_items=added_scene_items,
+            )
+        else:
+            command = self.transaction_builder.build_command(
+                snapshot,
+                after_clear_next_atom_id=after_clear_next_atom_id,
+                after_smiles_input=smiles,
+            )
         if command is not None:
             self.history.push(command)
 
@@ -209,6 +222,27 @@ class InsertSmilesService:
             self._clear_smiles_preview_callback()
             return
         self.clear_smiles_preview()
+
+    def _add_annotation_marks(self, model) -> list:
+        added = []
+        atom_annotations = getattr(model, "atom_annotations", {})
+        for atom_id, annotation in atom_annotations.items():
+            atom = model.atoms.get(atom_id)
+            if atom is None:
+                continue
+            annotation_values = normalized_atom_annotation(annotation)
+            for index, kind in enumerate(annotation_mark_kinds(annotation_values)):
+                direction_x, direction_y = annotation_mark_direction(index)
+                item = add_mark_for_atom_for(
+                    self.canvas,
+                    atom_id,
+                    QPointF(atom.x + direction_x, atom.y + direction_y),
+                    kind=kind,
+                    record=False,
+                )
+                if item is not None:
+                    added.append(item)
+        return added
 
 
 __all__ = ["InsertSmilesService"]
