@@ -70,6 +70,7 @@ if QApplication is not None:
         add_arrow_for,
         add_mark_for,
         add_mark_for_atom_for,
+        add_orbital_for,
         add_ts_bracket_for,
     )
     from ui.scene_item_state import scene_item_state_for
@@ -410,6 +411,31 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertAlmostEqual(data["start"].y(), 5.0)
         self.assertAlmostEqual(data["end"].x(), 10.0)
         self.assertAlmostEqual(data["end"].y(), 5.0)
+
+    def test_rotate_selection_orbits_orbital_glyph(self) -> None:
+        canvas = active_canvas_for_window(self.window)
+        atom_id = add_atom_for(canvas, "C", 0.0, 0.0)
+        orbital = add_orbital_for(canvas, QPointF(40.0, 0.0))
+        assert orbital is not None
+        transform = canvas_services_for(canvas).scene_transform_controller
+
+        self._select_atom_ids(atom_id)
+        orbital.setSelected(True)
+        self.app.processEvents()
+        # Pivot is the midpoint of the atom (0,0) and the orbital bounds around
+        # (40,0). Rotating 180deg must carry the orbital across the pivot, not
+        # just spin it in place.
+        before_center = orbital.data(1)["center"]
+        transform.rotate_selected_items(180.0)
+        self.app.processEvents()
+
+        after_center = orbital.data(1)["center"]
+        self.assertLess(after_center.x(), before_center.x())
+        # The lobe geometry must follow the recorded center: the group's mapped
+        # scene position tracks the center shift rather than staying put.
+        mapped = orbital.mapToScene(orbital.transformOriginPoint())
+        self.assertAlmostEqual(mapped.x(), after_center.x())
+        self.assertAlmostEqual(mapped.y(), after_center.y())
 
     def test_perspective_shift_click_toggles_atom_selection(self) -> None:
         atom_a = add_atom_for(active_canvas_for_window(self.window), "C", -40.0, 0.0)
