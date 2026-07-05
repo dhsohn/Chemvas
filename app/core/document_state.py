@@ -7,11 +7,13 @@ from typing import Any, TypeGuard, cast
 from core.model import Atom, Bond, MoleculeModel
 
 CHEMVAS_FILE_TYPE = "chemvas"
-CANVAS_FILE_VERSION = 1
-SUPPORTED_FILE_VERSIONS = frozenset((CANVAS_FILE_VERSION,))
-# "shapes" is optional so v1 files written before decorative shapes existed still
-# load; everything else must be present and no unknown keys are allowed.
+CANVAS_FILE_VERSION = 2
+LEGACY_CANVAS_FILE_VERSION = 1
+SUPPORTED_FILE_VERSIONS = frozenset((LEGACY_CANVAS_FILE_VERSION, CANVAS_FILE_VERSION))
+# Optional keys preserve compatibility with v1 files written before each feature
+# existed; everything else must be present and no unknown keys are allowed.
 _OPTIONAL_CANVAS_STATE_KEYS = frozenset(("shapes",))
+_V2_OPTIONAL_CANVAS_STATE_KEYS = frozenset(("perspective",))
 CANVAS_STATE_KEYS = frozenset(
     (
         "model",
@@ -25,6 +27,10 @@ CANVAS_STATE_KEYS = frozenset(
         "last_smiles_input",
     )
 ) | _OPTIONAL_CANVAS_STATE_KEYS
+CANVAS_STATE_KEYS_BY_VERSION = {
+    LEGACY_CANVAS_FILE_VERSION: CANVAS_STATE_KEYS,
+    CANVAS_FILE_VERSION: CANVAS_STATE_KEYS | _V2_OPTIONAL_CANVAS_STATE_KEYS,
+}
 REQUIRED_SETTINGS_KEYS = frozenset(
     (
         "bond_length_px",
@@ -346,7 +352,7 @@ def selection_payload_to_canvas_state(
         "settings": dict(template_settings),
         "last_smiles_input": None,
     }
-    _validate_canvas_state(state)
+    _validate_canvas_state(state, version=CANVAS_FILE_VERSION)
     return state
 
 
@@ -384,7 +390,7 @@ def _validate_document_state(state: Mapping[str, object], version: int) -> None:
     state_kind = _state_kind(state)
     if state_kind != "canvas":
         raise ValueError("Invalid Chemvas file.")
-    _validate_canvas_state(state)
+    _validate_canvas_state(state, version=version)
 
 
 def _state_kind(state: Mapping[str, object]) -> str | None:
@@ -394,10 +400,13 @@ def _state_kind(state: Mapping[str, object]) -> str | None:
     return None
 
 
-def _validate_canvas_state(state: Mapping[str, object]) -> None:
+def _validate_canvas_state(state: Mapping[str, object], *, version: int) -> None:
     keys = set(state)
+    allowed_keys = CANVAS_STATE_KEYS_BY_VERSION.get(version)
+    if allowed_keys is None:
+        raise ValueError("Invalid Chemvas file.")
     required = CANVAS_STATE_KEYS - _OPTIONAL_CANVAS_STATE_KEYS
-    if not required <= keys or not keys <= CANVAS_STATE_KEYS:
+    if not required <= keys or not keys <= allowed_keys:
         raise ValueError("Invalid Chemvas file.")
     model_state = state.get("model")
     if not isinstance(model_state, Mapping):
@@ -410,6 +419,7 @@ def _validate_canvas_state(state: Mapping[str, object]) -> None:
     _validate_ts_bracket_states(state.get("ts_brackets"))
     _validate_shape_states(state.get("shapes"))
     _validate_orbital_states(state.get("orbitals"))
+    _validate_perspective_state(state.get("perspective"), atom_ids)
     settings = state.get("settings")
     if not isinstance(settings, Mapping):
         raise ValueError("Invalid Chemvas file.")
@@ -622,6 +632,34 @@ def _validate_orbital_states(states: object) -> None:
             raise ValueError("Invalid Chemvas file.")
         if not _is_number(orbital_state.get("scale")) or not _is_number(orbital_state.get("rotation")):
             raise ValueError("Invalid Chemvas file.")
+
+
+def _validate_perspective_state(state: object, atom_ids: set[int]) -> None:
+    if state is None:
+        return
+    if not isinstance(state, Mapping):
+        raise ValueError("Invalid Chemvas file.")
+    if set(state) != {"atom_coords_3d", "projection_center_3d", "projection_anchor_2d"}:
+        raise ValueError("Invalid Chemvas file.")
+    atom_coords_3d = state.get("atom_coords_3d")
+    if not isinstance(atom_coords_3d, Mapping):
+        raise ValueError("Invalid Chemvas file.")
+    for atom_id_value, coords in atom_coords_3d.items():
+        atom_id = _validated_id(atom_id_value)
+        if atom_id not in atom_ids or not _is_point_3d(coords):
+            raise ValueError("Invalid Chemvas file.")
+    _validate_optional_point_3d(state.get("projection_center_3d"))
+    _validate_optional_point_2d(state.get("projection_anchor_2d"))
+
+
+def _validate_optional_point_3d(value: object) -> None:
+    if value is not None and not _is_point_3d(value):
+        raise ValueError("Invalid Chemvas file.")
+
+
+def _validate_optional_point_2d(value: object) -> None:
+    if value is not None and not _is_point(value):
+        raise ValueError("Invalid Chemvas file.")
 
 
 def _validated_scene_state_list(states: object) -> list[Mapping[str, object]]:
@@ -978,6 +1016,13 @@ def _is_point(value: object) -> bool:
         return False
     x, y = value
     return _is_number(x) and _is_number(y)
+
+
+def _is_point_3d(value: object) -> bool:
+    if not isinstance(value, (list, tuple)) or len(value) != 3:
+        return False
+    x, y, z = value
+    return _is_number(x) and _is_number(y) and _is_number(z)
 
 
 def _is_atom_id_sequence(value: object, atom_ids: set[int]) -> bool:

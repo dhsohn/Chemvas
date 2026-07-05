@@ -48,6 +48,42 @@ def test_structure_benzene_build_service_plans_attached_and_free_ring_points() -
     regular_for_atom.assert_called_once_with(6, 1)
 
 
+def test_structure_benzene_build_service_rejects_triple_bond_fuse_before_geometry_or_commit() -> None:
+    canvas = _FakeCanvas()
+    canvas.model = MoleculeModel(
+        atoms={
+            0: Atom("C", 0.0, 0.0),
+            1: Atom("C", 20.0, 0.0),
+        },
+        bonds=[Bond(0, 1, 3)],
+    )
+    builder = _builder_for(canvas)
+    regular_for_bond = Mock(side_effect=AssertionError("triple-bond fuse should not plan geometry"))
+    run_recorded_build = Mock(side_effect=AssertionError("triple-bond fuse should not commit"))
+
+    assert (
+        builder.benzene_ring_points(
+            QPointF(10.0, 10.0),
+            attach_bond_id=0,
+            regular_ring_points_for_bond=regular_for_bond,
+            regular_ring_points_for_atom=Mock(),
+        )
+        is None
+    )
+    ring_item = builder.add_benzene_ring(
+        QPointF(10.0, 10.0),
+        attach_bond_id=0,
+        benzene_ring_points=Mock(side_effect=AssertionError("triple-bond fuse should not build geometry")),
+        add_atom_with_merge=Mock(),
+        bond_exists=Mock(),
+        run_recorded_build=run_recorded_build,
+    )
+
+    assert ring_item is None
+    regular_for_bond.assert_not_called()
+    run_recorded_build.assert_not_called()
+
+
 def test_structure_benzene_build_service_blocks_occupied_free_ring_and_uses_free_fallback() -> None:
     canvas = _FakeCanvas()
     builder = _builder_for(canvas)

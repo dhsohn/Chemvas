@@ -29,6 +29,8 @@ class StructureBenzeneBuildService:
         regular_ring_points_for_bond: Callable,
         regular_ring_points_for_atom: Callable,
     ) -> tuple[list[QPointF], list[tuple[int, float, float]]] | None:
+        if self._has_unsupported_fuse_bond_order(attach_bond_id):
+            return None
         return plan_benzene_ring_points(
             center,
             attach_atom_id=attach_atom_id,
@@ -55,6 +57,9 @@ class StructureBenzeneBuildService:
         create_ring_fill_item: Callable | None = None,
         run_recorded_build: Callable,
     ) -> object | None:
+        if self._has_unsupported_fuse_bond_order(attach_bond_id):
+            return None
+
         built_ring_item = None
 
         def _build():
@@ -90,6 +95,17 @@ class StructureBenzeneBuildService:
 
     def create_ring_fill_item(self, points: list[QPointF], atom_ids: list[int]) -> object:
         return create_ring_fill_item_for(self.canvas, points, atom_ids)
+
+    def _has_unsupported_fuse_bond_order(self, attach_bond_id: int | None) -> bool:
+        if attach_bond_id is None:
+            return False
+        bonds = bonds_for(self.canvas)
+        if not (0 <= attach_bond_id < len(bonds)):
+            return False
+        bond = bonds[attach_bond_id]
+        if bond is None:
+            return False
+        return bond.order >= 3
 
 
 __all__ = ["StructureBenzeneBuildService"]
