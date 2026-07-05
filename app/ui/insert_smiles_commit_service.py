@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
@@ -7,6 +8,7 @@ from PyQt6.QtCore import QPointF
 from ui.canvas_smiles_input_state import set_last_smiles_input_for
 from ui.insert_commit_rollback import rollback_insert_mutation
 from ui.scene_decoration_access import add_mark_for_atom_for
+from ui.scene_item_access import remove_scene_item
 from ui.smiles_insert_logic import SmilesCommitPlan
 from ui.structure_insert_access import (
     add_insert_atom_for,
@@ -48,6 +50,7 @@ def apply_smiles_commit_plan(
     before_bond_count = insert_bond_count_for(canvas)
 
     id_map: dict[int, int] = {}
+    added_scene_items = []
     try:
         for atom_plan in plan.atoms:
             new_id = add_insert_atom_for(canvas, atom_plan.element, atom_plan.x, atom_plan.y)
@@ -136,7 +139,6 @@ def apply_smiles_commit_plan(
                 )
                 return False
 
-        added_scene_items = []
         for mark_plan in plan.marks:
             mark_atom_id = id_map.get(mark_plan.source_atom_id)
             if mark_atom_id is None:
@@ -160,6 +162,9 @@ def apply_smiles_commit_plan(
             added_scene_items=added_scene_items or None,
         )
     except Exception:
+        for item in reversed(added_scene_items):
+            with contextlib.suppress(Exception):
+                remove_scene_item(canvas, item)
         rollback_insert_mutation(
             canvas,
             before_next_atom_id=before_next_atom_id,

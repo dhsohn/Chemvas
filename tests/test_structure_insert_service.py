@@ -11,7 +11,10 @@ from ui.canvas_atom_graphics_state import (
     set_atom_items_for,
 )
 from ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
-from ui.canvas_smiles_input_state import set_last_smiles_input_for
+from ui.canvas_smiles_input_state import (
+    last_smiles_input_for,
+    set_last_smiles_input_for,
+)
 from ui.structure_insert_service import StructureInsertService
 
 
@@ -93,8 +96,14 @@ class _FakeCanvas:
                 ensure_carbon_dot=self.ensure_carbon_dot,
             ),
             note_controller=SimpleNamespace(create_text_note=self.add_text_note),
-            canvas_atom_mutation_service=SimpleNamespace(add_atom=self.add_atom),
-            canvas_bond_mutation_service=SimpleNamespace(add_bond=self.add_bond),
+            canvas_atom_mutation_service=SimpleNamespace(
+                add_atom=self.add_atom,
+                remove_atom_only=self.remove_atom_only,
+            ),
+            canvas_bond_mutation_service=SimpleNamespace(
+                add_bond=self.add_bond,
+                trim_bonds_to_length=self.trim_bonds_to_length,
+            ),
         )
         self.bond_renderer = SimpleNamespace(add_bond_graphics=self._add_bond_graphics)
 
@@ -139,6 +148,18 @@ class _FakeCanvas:
     def add_bond(self, a_id: int, b_id: int, order: int = 1) -> int:
         self.model.add_bond(a_id, b_id, order)
         return len(self.model.bonds) - 1
+
+    def remove_atom_only(self, atom_id: int, remove_marks: bool = True) -> None:
+        del remove_marks
+        self.model.atoms.pop(atom_id, None)
+        self.model.atom_annotations.pop(atom_id, None)
+        self.atom_items.pop(atom_id, None)
+        self.atom_dots.pop(atom_id, None)
+
+    def trim_bonds_to_length(self, length: int) -> None:
+        for bond_id in range(length, len(self.model.bonds)):
+            self.bond_items.pop(bond_id, None)
+        del self.model.bonds[length:]
 
     def _add_bond_graphics(self, bond_id: int) -> None:
         self.add_bond_graphics_calls.append(bond_id)
@@ -363,6 +384,30 @@ class StructureInsertServiceTest(unittest.TestCase):
         )
         self.assertEqual(canvas.selected_atom_ids(), {1, 2})
         self.assertEqual(canvas.selected_bond_ids(), {0})
+
+    def test_insert_structure_model_rolls_back_if_bond_graphics_raise_before_history_record(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.bond_renderer.add_bond_graphics = Mock(side_effect=RuntimeError("graphics failed"))
+        service = _structure_insert_service(canvas)
+        model = MoleculeModel(
+            atoms={
+                2: Atom("C", 0.0, 0.0, explicit_label=False),
+                4: Atom("N", 10.0, 0.0, explicit_label=True),
+            },
+            bonds=[Bond(2, 4, order=1, style="single", color="#0000ff")],
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "graphics failed"):
+            service.insert_structure_model(model, center=QPointF(5.0, 0.0))
+
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertEqual(canvas.model.bonds, [])
+        self.assertEqual(canvas.atom_items, {})
+        self.assertEqual(canvas.bond_items, {})
+        canvas._record_additions.assert_not_called()
+        self.assertEqual(last_smiles_input_for(canvas), "before")
+        self.assertEqual(canvas.selected_atom_ids(), set())
+        self.assertEqual(canvas.selected_bond_ids(), set())
 
     def test_insert_structure_model_prefers_atom_label_service_over_canvas_wrapper(self) -> None:
         canvas = _FakeCanvas()

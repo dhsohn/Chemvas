@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING
 
 from core.model import MoleculeModel
@@ -7,7 +8,9 @@ from PyQt6.QtCore import QPointF
 
 from ui.canvas_smiles_input_state import last_smiles_input_for
 from ui.input_view_access import viewport_center_scene_pos_for
+from ui.insert_commit_rollback import rollback_insert_mutation
 from ui.renderer_style_access import bond_length_px_for
+from ui.scene_item_access import remove_scene_item
 from ui.structure_insert_access import (
     add_insert_atom_for,
     add_insert_bond_for,
@@ -64,89 +67,101 @@ class StructureInsertService:
         atom_id_map: dict[int, int] = {}
         inserted_atom_ids: set[int] = set()
         inserted_bond_ids: set[int] = set()
-        source_atom_annotations = getattr(model, "atom_annotations", {})
-        if not hasattr(source_atom_annotations, "get"):
-            source_atom_annotations = {}
-        for old_id in sorted(model.atoms):
-            atom = model.atoms[old_id]
-            new_id = add_insert_atom_for(self.canvas, atom.element, atom.x + dx, atom.y + dy)
-            set_inserted_atom_metadata_for(
-                self.canvas,
-                new_id,
-                color=atom.color,
-                explicit_label=atom.explicit_label,
-            )
-            set_inserted_atom_annotation_for(
-                self.canvas,
-                new_id,
-                source_atom_annotations.get(old_id),
-            )
-            atom_id_map[old_id] = new_id
-            inserted_atom_ids.add(new_id)
-
-        bonds_start = insert_bond_count_for(self.canvas)
-        for bond in model.bonds:
-            if bond is None:
-                continue
-            a_id = atom_id_map.get(bond.a)
-            b_id = atom_id_map.get(bond.b)
-            if a_id is None or b_id is None:
-                continue
-            new_bond_id = add_insert_bond_for(self.canvas, a_id, b_id, bond.order)
-            set_inserted_bond_metadata_for(
-                self.canvas,
-                new_bond_id,
-                style=bond.style,
-                color=bond.color,
-            )
-        for bond_id in new_insert_bond_ids_from(self.canvas, bonds_start):
-            bond = insert_bond_for_id(self.canvas, bond_id)
-            if bond is None:
-                continue
-            add_insert_bond_graphics_for(self.canvas, bond_id)
-            inserted_bond_ids.add(bond_id)
-
-        for new_id in inserted_atom_ids:
-            atom = insert_atom_for_id(self.canvas, new_id)
-            if atom is None:
-                continue
-            if atom.element == "C" and not atom.explicit_label:
-                ensure_insert_carbon_dot_for(self.canvas, new_id)
-            else:
-                add_or_update_insert_atom_label_for(
+        added_scene_items = []
+        try:
+            source_atom_annotations = getattr(model, "atom_annotations", {})
+            if not hasattr(source_atom_annotations, "get"):
+                source_atom_annotations = {}
+            for old_id in sorted(model.atoms):
+                atom = model.atoms[old_id]
+                new_id = add_insert_atom_for(self.canvas, atom.element, atom.x + dx, atom.y + dy)
+                set_inserted_atom_metadata_for(
                     self.canvas,
                     new_id,
-                    atom.element,
-                    clear_smiles=False,
-                    record=False,
+                    color=atom.color,
+                    explicit_label=atom.explicit_label,
                 )
-
-        added_scene_items = []
-        if title:
-            inserted_atoms = [
-                atom
-                for atom_id in inserted_atom_ids
-                for atom in [insert_atom_for_id(self.canvas, atom_id)]
-                if atom is not None
-            ]
-            if inserted_atoms:
-                inserted_left = min(atom.x for atom in inserted_atoms)
-                inserted_top = min(atom.y for atom in inserted_atoms)
-                note_pos = QPointF(
-                    inserted_left,
-                    inserted_top - bond_length_px_for(self.canvas) * 1.4,
+                set_inserted_atom_annotation_for(
+                    self.canvas,
+                    new_id,
+                    source_atom_annotations.get(old_id),
                 )
-                note_item = self._create_text_note(note_pos, title)
-                if note_item is not None:
-                    added_scene_items.append(note_item)
+                atom_id_map[old_id] = new_id
+                inserted_atom_ids.add(new_id)
 
-        record_insert_additions_for(
-            self.canvas,
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-            added_scene_items=added_scene_items,
-        )
+            bonds_start = insert_bond_count_for(self.canvas)
+            for bond in model.bonds:
+                if bond is None:
+                    continue
+                a_id = atom_id_map.get(bond.a)
+                b_id = atom_id_map.get(bond.b)
+                if a_id is None or b_id is None:
+                    continue
+                new_bond_id = add_insert_bond_for(self.canvas, a_id, b_id, bond.order)
+                set_inserted_bond_metadata_for(
+                    self.canvas,
+                    new_bond_id,
+                    style=bond.style,
+                    color=bond.color,
+                )
+            for bond_id in new_insert_bond_ids_from(self.canvas, bonds_start):
+                bond = insert_bond_for_id(self.canvas, bond_id)
+                if bond is None:
+                    continue
+                add_insert_bond_graphics_for(self.canvas, bond_id)
+                inserted_bond_ids.add(bond_id)
+
+            for new_id in inserted_atom_ids:
+                atom = insert_atom_for_id(self.canvas, new_id)
+                if atom is None:
+                    continue
+                if atom.element == "C" and not atom.explicit_label:
+                    ensure_insert_carbon_dot_for(self.canvas, new_id)
+                else:
+                    add_or_update_insert_atom_label_for(
+                        self.canvas,
+                        new_id,
+                        atom.element,
+                        clear_smiles=False,
+                        record=False,
+                    )
+
+            if title:
+                inserted_atoms = [
+                    atom
+                    for atom_id in inserted_atom_ids
+                    for atom in [insert_atom_for_id(self.canvas, atom_id)]
+                    if atom is not None
+                ]
+                if inserted_atoms:
+                    inserted_left = min(atom.x for atom in inserted_atoms)
+                    inserted_top = min(atom.y for atom in inserted_atoms)
+                    note_pos = QPointF(
+                        inserted_left,
+                        inserted_top - bond_length_px_for(self.canvas) * 1.4,
+                    )
+                    note_item = self._create_text_note(note_pos, title)
+                    if note_item is not None:
+                        added_scene_items.append(note_item)
+
+            record_insert_additions_for(
+                self.canvas,
+                before_next_atom_id=before_next_atom_id,
+                before_bond_count=before_bond_count,
+                before_smiles_input=before_smiles_input,
+                added_scene_items=added_scene_items,
+            )
+        except Exception:
+            for item in reversed(added_scene_items):
+                with contextlib.suppress(Exception):
+                    remove_scene_item(self.canvas, item)
+            rollback_insert_mutation(
+                self.canvas,
+                before_next_atom_id=before_next_atom_id,
+                before_bond_count=before_bond_count,
+                before_smiles_input=before_smiles_input,
+            )
+            raise
         restore_insert_selection_from_ids_for(self.canvas, inserted_atom_ids, inserted_bond_ids)
         return inserted_atom_ids, inserted_bond_ids
 
