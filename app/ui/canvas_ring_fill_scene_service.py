@@ -7,7 +7,7 @@ from PyQt6.QtGui import QPen, QPolygonF
 
 from ui.canvas_model_access import atom_for_id
 from ui.canvas_scene_items_state import ring_items_for
-from ui.graphics_items import NoSelectPolygonItem
+from ui.graphics_items import RING_FILL_Z_VALUE, NoSelectPolygonItem
 from ui.renderer_style_access import bond_length_px_for, ring_fill_brush_for
 from ui.scene_selectability import make_item_selectable
 
@@ -110,6 +110,7 @@ class CanvasRingFillSceneService:
         ring_item.setPen(QPen(Qt.PenStyle.NoPen))
         ring_item.setData(0, "ring")
         ring_item.setData(2, list(atom_ids))
+        ring_item.setZValue(RING_FILL_Z_VALUE)
         make_item_selectable(ring_item)
         return ring_item
 

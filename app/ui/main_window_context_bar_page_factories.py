@@ -356,7 +356,7 @@ _SHAPE_STROKE_SPECS = [
     ("solid", "Solid outline"),
     ("dashed", "Dashed outline"),
     ("dotted", "Dotted outline"),
-    ("none", "No outline (select a shape first)"),
+    ("none", "No outline"),
 ]
 
 

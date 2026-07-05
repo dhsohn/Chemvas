@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
-from ui.graphics_items import NoSelectPolygonItem
+from ui.graphics_items import RING_FILL_Z_VALUE, NoSelectPolygonItem
 from ui.note_html_sanitizer import sanitize_note_html
 from ui.note_item_access import set_committed_note_html_for, set_committed_note_text_for
 from ui.scene_item_state import (
@@ -58,6 +58,7 @@ def create_ring_item_from_state(
     ring_item.setPen(QPen(Qt.PenStyle.NoPen))
     ring_item.setData(0, "ring")
     ring_item.setData(2, ring_state.get("atom_ids"))
+    ring_item.setZValue(RING_FILL_Z_VALUE)
     return ring_item
 
 
