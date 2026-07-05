@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -10,6 +11,7 @@ from ui.canvas_model_access import atom_for_id, bond_count_for, next_atom_id_for
 from ui.canvas_rotation_state import rotation_state_for
 from ui.canvas_smiles_input_state import last_smiles_input_for
 from ui.history_recording_access import record_additions_for
+from ui.insert_commit_rollback import rollback_insert_mutation
 from ui.renderer_style_access import bond_length_px_for
 from ui.scene_clipboard_access import (
     clipboard_paste_count_for,
@@ -17,11 +19,16 @@ from ui.scene_clipboard_access import (
     set_clipboard_paste_count_for,
     set_clipboard_paste_source_json_for,
 )
+from ui.scene_clipboard_selection import (
+    capture_clipboard_selection_snapshot_for_canvas,
+    restore_clipboard_selection_snapshot_for_canvas,
+)
 from ui.scene_clipboard_transaction_logic import (
     build_clipboard_paste_plan,
     clipboard_paste_offset,
     translated_scene_item_state,
 )
+from ui.scene_item_access import remove_scene_item
 from ui.scene_paste_apply_logic import apply_paste_payload
 
 
@@ -66,42 +73,65 @@ def paste_selection_from_clipboard_for_canvas(
     # cascade offset for the next real paste.
     if not plan.has_payload_content():
         return False
-    result = apply_paste_payload(
-        atoms=plan.atoms,
-        bonds=plan.bonds,
-        rings=plan.rings,
-        marks=plan.marks,
-        scene_items=plan.scene_items,
-        perspective=plan.perspective,
-        dx=plan.dx,
-        dy=plan.dy,
-        add_atom=callbacks.add_atom,
-        apply_atom_color=callbacks.apply_atom_color,
-        set_atom_annotation=callbacks.set_atom_annotation,
-        add_or_update_atom_label=callbacks.add_or_update_atom_label,
-        add_bond=callbacks.add_bond,
-        restore_bond_from_state=callbacks.restore_bond_from_state,
-        translated_scene_item_state=translated_scene_item_state,
-        create_scene_item_from_state=callbacks.create_scene_item_from_state,
-        apply_perspective=callbacks.apply_perspective,
-    )
+    before_smiles_input = plan.before_smiles_input if isinstance(plan.before_smiles_input, str) else None
+    selection_snapshot = capture_clipboard_selection_snapshot_for_canvas(canvas)
+    tracked_scene_items: list[object] = []
 
-    if not result.has_changes():
-        return False
+    def create_tracked_scene_item_from_state(state: dict) -> object:
+        item = callbacks.create_scene_item_from_state(state)
+        if item is not None:
+            tracked_scene_items.append(item)
+        return item
+
+    try:
+        result = apply_paste_payload(
+            atoms=plan.atoms,
+            bonds=plan.bonds,
+            rings=plan.rings,
+            marks=plan.marks,
+            scene_items=plan.scene_items,
+            perspective=plan.perspective,
+            dx=plan.dx,
+            dy=plan.dy,
+            add_atom=callbacks.add_atom,
+            apply_atom_color=callbacks.apply_atom_color,
+            set_atom_annotation=callbacks.set_atom_annotation,
+            add_or_update_atom_label=callbacks.add_or_update_atom_label,
+            add_bond=callbacks.add_bond,
+            restore_bond_from_state=callbacks.restore_bond_from_state,
+            translated_scene_item_state=translated_scene_item_state,
+            create_scene_item_from_state=create_tracked_scene_item_from_state,
+            apply_perspective=callbacks.apply_perspective,
+        )
+
+        if not result.has_changes():
+            return False
+
+        added_scene_items = [item for item in result.added_scene_items if isinstance(item, QGraphicsItem)]
+        callbacks.select_pasted_content(result.new_atom_ids, added_scene_items)
+        record_additions_for(
+            canvas,
+            plan.before_next_atom_id,
+            plan.before_bond_count,
+            before_smiles_input,
+            added_scene_items=added_scene_items,
+        )
+    except Exception:
+        for item in reversed(tracked_scene_items):
+            with contextlib.suppress(Exception):
+                remove_scene_item(canvas, item)
+        rollback_insert_mutation(
+            canvas,
+            before_next_atom_id=plan.before_next_atom_id,
+            before_bond_count=plan.before_bond_count,
+            before_smiles_input=before_smiles_input,
+        )
+        with contextlib.suppress(Exception):
+            restore_clipboard_selection_snapshot_for_canvas(canvas, selection_snapshot)
+        raise
 
     set_clipboard_paste_source_json_for(canvas, plan.paste_source_json)
     set_clipboard_paste_count_for(canvas, plan.paste_count)
-
-    added_scene_items = [item for item in result.added_scene_items if isinstance(item, QGraphicsItem)]
-    callbacks.select_pasted_content(result.new_atom_ids, added_scene_items)
-    before_smiles_input = plan.before_smiles_input if isinstance(plan.before_smiles_input, str) else None
-    record_additions_for(
-        canvas,
-        plan.before_next_atom_id,
-        plan.before_bond_count,
-        before_smiles_input,
-        added_scene_items=added_scene_items,
-    )
     return True
 
 

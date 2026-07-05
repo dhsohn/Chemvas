@@ -1,14 +1,26 @@
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Callable
 
+from core.document_state import deserialize_model_state
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QMessageBox
 
 from ui.benzene_preview_access import clear_benzene_preview_for
 from ui.bond_graphics_access import parallel_bond_segments_for
+from ui.canvas_atom_graphics_state import clear_atom_graphics_for
+from ui.canvas_bond_graphics_state import clear_bond_graphics_for
+from ui.canvas_document_state import (
+    restore_document_post_model_items,
+    restore_document_pre_model_items,
+    restore_document_projection_state,
+    snapshot_canvas_document_state,
+)
 from ui.canvas_insert_state import CanvasInsertState
+from ui.canvas_mark_registry import mark_registry_for
 from ui.canvas_model_access import next_atom_id_for, set_model_for
+from ui.canvas_scene_items_state import clear_scene_item_collections_for
 from ui.canvas_scene_reset_access import clear_scene_for
 from ui.canvas_smiles_input_state import set_last_smiles_input_for
 from ui.canvas_window_access import notify_error_for
@@ -34,6 +46,7 @@ from ui.renderer_style_access import (
     bond_pen_for,
 )
 from ui.scene_decoration_access import add_mark_for_atom_for
+from ui.scene_item_access import clear_canvas_scene, remove_scene_item
 from ui.smiles_insert_logic import (
     SmilesPreviewResolvers,
     annotation_mark_direction,
@@ -43,6 +56,8 @@ from ui.smiles_insert_logic import (
     plan_smiles_preview_update,
     smiles_preview_center,
 )
+
+MAX_SMILES_INPUT_LENGTH = 1024
 
 
 class InsertSmilesService:
@@ -80,9 +95,17 @@ class InsertSmilesService:
         if not notify_error_for(self.canvas, f"SMILES: {message}"):
             QMessageBox.warning(self.canvas, "SMILES Error", message)
 
+    def _reject_oversized_smiles(self, smiles: str) -> bool:
+        if len(smiles) <= MAX_SMILES_INPUT_LENGTH:
+            return False
+        self._warn_smiles_error(f"SMILES input is too long (maximum {MAX_SMILES_INPUT_LENGTH} characters).")
+        return True
+
     def load_smiles(self, smiles: str) -> None:
         smiles = smiles.strip()
         if not smiles:
+            return
+        if self._reject_oversized_smiles(smiles):
             return
         model = smiles_to_2d_for(self.canvas, smiles, scale=bond_length_px_for(self.canvas))
         if model is None:
@@ -90,29 +113,43 @@ class InsertSmilesService:
             return
         if self.structure_build_service is None:
             raise RuntimeError("structure_build_service is required to load SMILES")
+        document_snapshot = snapshot_canvas_document_state(self.canvas)
         snapshot = self.transaction_builder.capture()
-        clear_scene_for(self.canvas)
         after_clear_next_atom_id = next_atom_id_for(self.canvas)
-        set_model_for(self.canvas, model)
-        self.graph_service.rebuild_bond_adjacency()
-        set_last_smiles_input_for(self.canvas, smiles)
-        self.structure_build_service.render_model()
-        added_scene_items = self._add_annotation_marks(model)
-        if added_scene_items:
-            command = self.transaction_builder.build_command(
+        added_scene_items: list[object] = []
+        command = None
+        mutated = False
+
+        def build_load_command():
+            if added_scene_items:
+                return self.transaction_builder.build_command(
+                    snapshot,
+                    after_clear_next_atom_id=after_clear_next_atom_id,
+                    after_smiles_input=smiles,
+                    added_scene_items=added_scene_items,
+                )
+            return self.transaction_builder.build_command(
                 snapshot,
                 after_clear_next_atom_id=after_clear_next_atom_id,
                 after_smiles_input=smiles,
-                added_scene_items=added_scene_items,
             )
-        else:
-            command = self.transaction_builder.build_command(
-                snapshot,
-                after_clear_next_atom_id=after_clear_next_atom_id,
-                after_smiles_input=smiles,
-            )
-        if command is not None:
-            self.history.push(command)
+
+        try:
+            mutated = True
+            clear_scene_for(self.canvas)
+            after_clear_next_atom_id = next_atom_id_for(self.canvas)
+            set_model_for(self.canvas, model)
+            self.graph_service.rebuild_bond_adjacency()
+            set_last_smiles_input_for(self.canvas, smiles)
+            self.structure_build_service.render_model()
+            self._add_annotation_marks(model, added_scene_items)
+            command = build_load_command()
+            if command is not None:
+                self.history.push(command)
+        except Exception:
+            if mutated:
+                self._restore_document_state_after_failed_load(document_snapshot, added_scene_items)
+            raise
 
     def begin_smiles_insert(self, smiles: str) -> None:
         if self.insert_state.template_active:
@@ -120,6 +157,8 @@ class InsertSmilesService:
         clear_benzene_preview_for(self.canvas)
         smiles = smiles.strip()
         if not smiles:
+            return
+        if self._reject_oversized_smiles(smiles):
             return
         model = smiles_to_2d_for(self.canvas, smiles, scale=bond_length_px_for(self.canvas))
         if model is None:
@@ -223,8 +262,9 @@ class InsertSmilesService:
             return
         self.clear_smiles_preview()
 
-    def _add_annotation_marks(self, model) -> list:
-        added = []
+    def _add_annotation_marks(self, model, added: list[object] | None = None) -> list[object]:
+        if added is None:
+            added = []
         atom_annotations = getattr(model, "atom_annotations", {})
         for atom_id, annotation in atom_annotations.items():
             atom = model.atoms.get(atom_id)
@@ -244,5 +284,36 @@ class InsertSmilesService:
                     added.append(item)
         return added
 
+    def _restore_document_state_after_failed_load(self, state: dict, added_scene_items: list[object]) -> None:
+        for item in reversed(added_scene_items):
+            with contextlib.suppress(Exception):
+                remove_scene_item(self.canvas, item)
+        with contextlib.suppress(Exception):
+            clear_scene_for(self.canvas)
+        with contextlib.suppress(Exception):
+            clear_canvas_scene(self.canvas)
+        with contextlib.suppress(Exception):
+            clear_scene_item_collections_for(self.canvas)
+        with contextlib.suppress(Exception):
+            mark_registry_for(self.canvas).clear()
+        with contextlib.suppress(Exception):
+            clear_atom_graphics_for(self.canvas)
+        with contextlib.suppress(Exception):
+            clear_bond_graphics_for(self.canvas)
+        with contextlib.suppress(Exception):
+            set_model_for(self.canvas, deserialize_model_state(state["model"]))
+        with contextlib.suppress(Exception):
+            set_last_smiles_input_for(self.canvas, state.get("last_smiles_input"))
+        with contextlib.suppress(Exception):
+            self.graph_service.rebuild_bond_adjacency()
+        with contextlib.suppress(Exception):
+            restore_document_pre_model_items(self.canvas, state)
+        with contextlib.suppress(Exception):
+            restore_document_projection_state(self.canvas, state)
+        with contextlib.suppress(Exception):
+            self.structure_build_service.render_model()
+        with contextlib.suppress(Exception):
+            restore_document_post_model_items(self.canvas, state)
 
-__all__ = ["InsertSmilesService"]
+
+__all__ = ["MAX_SMILES_INPUT_LENGTH", "InsertSmilesService"]

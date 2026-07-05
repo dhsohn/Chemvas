@@ -26,6 +26,7 @@ if QApplication is not None:
         DeleteBondCommand,
     )
     from core.model import Atom, Bond, MoleculeModel
+    from ui.atom_coords_access import atom_coords_3d_for
     from ui.canvas_atom_graphics_state import (
         atom_dots_for,
         atom_items_for,
@@ -811,6 +812,7 @@ class _FakeCanvas:
     def _remove_atom_only(self, atom_id: int, remove_marks: bool = True) -> None:
         self.remove_atom_calls.append((atom_id, remove_marks))
         self.model.atoms.pop(atom_id, None)
+        atom_coords_3d_for(self).pop(atom_id, None)
 
     def scene_item_state(self, item: QGraphicsItem) -> dict:
         state = item.data(9)

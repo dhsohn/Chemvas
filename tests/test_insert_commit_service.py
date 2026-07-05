@@ -4,6 +4,7 @@ from unittest import mock
 
 from core.model import Atom, Bond, MoleculeModel
 from PyQt6.QtCore import QPointF
+from ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
 from ui.canvas_smiles_input_state import (
     last_smiles_input_for,
     set_last_smiles_input_for,
@@ -17,7 +18,10 @@ from ui.smiles_insert_logic import (
     SmilesCommitPlan,
     SmilesMarkPlacement,
 )
-from ui.structure_insert_access import add_insert_ring_from_points_for
+from ui.structure_insert_access import (
+    add_insert_ring_from_points_for,
+    rollback_insert_mutation_for,
+)
 from ui.template_insert_logic import (
     TemplateInsertPlan,
     TemplateInsertRequest,
@@ -195,6 +199,16 @@ class InsertCommitServiceTest(unittest.TestCase):
 
         self.assertEqual(atom_ids, [7])
         structure_build_service.add_ring_from_points.assert_called_once_with(points)
+
+    def test_rollback_insert_mutation_direct_fallback_removes_atom_coords_3d(self) -> None:
+        canvas = SimpleNamespace(model=MoleculeModel())
+        atom_id = canvas.model.add_atom("C", 1.0, 2.0)
+        set_atom_coords_3d_for(canvas, {atom_id: (1.0, 2.0, 3.0)})
+
+        rollback_insert_mutation_for(canvas, before_next_atom_id=0, before_bond_count=0)
+
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertEqual(atom_coords_3d_for(canvas), {})
 
     def test_apply_smiles_commit_plan_builds_atoms_bonds_and_history(self) -> None:
         canvas = _FakeCanvas()

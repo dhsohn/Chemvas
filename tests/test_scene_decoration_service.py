@@ -25,6 +25,10 @@ class _FakeScene:
     def addItem(self, item) -> None:
         self.items.append(item)
 
+    def removeItem(self, item) -> None:
+        if item in self.items:
+            self.items.remove(item)
+
 
 class _FakeItem:
     def __init__(self) -> None:
@@ -43,6 +47,9 @@ class _FakeSceneItemController:
 
     def attach_scene_item(self, item) -> None:
         self.canvas.attach_scene_item(item)
+
+    def remove_scene_item(self, item) -> None:
+        self.canvas.remove_scene_item(item)
 
     def create_scene_item_from_state(self, state):
         return self.canvas.create_scene_item_from_state(state)
@@ -131,6 +138,57 @@ class SceneDecorationServiceTest(unittest.TestCase):
         )
 
         self.assertIsNone(service.add_mark(QPointF(0.0, 0.0), kind="unsupported"))
+
+    def test_add_mark_removes_attached_item_if_centering_raises(self) -> None:
+        scene = _FakeScene()
+        text_mark = QGraphicsTextItem("-")
+        build_service = SimpleNamespace(
+            build_mark_item=mock.Mock(return_value=text_mark),
+            set_mark_center=mock.Mock(side_effect=RuntimeError("center failed")),
+        )
+        removed = []
+
+        def _attach(item) -> None:
+            scene.addItem(item)
+            canvas.mark_items.append(item)
+            data = item.data(1) or {}
+            atom_id = data.get("atom_id") if isinstance(data, dict) else None
+            if isinstance(atom_id, int):
+                canvas.mark_registry.add_for_atom(atom_id, item)
+
+        def _remove(item) -> None:
+            removed.append(item)
+            scene.removeItem(item)
+            if item in canvas.mark_items:
+                canvas.mark_items.remove(item)
+            for atom_id, items in list(canvas.mark_registry.by_atom.items()):
+                if item in items:
+                    items.remove(item)
+                if not items:
+                    canvas.mark_registry.by_atom.pop(atom_id, None)
+
+        canvas = SimpleNamespace(
+            tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
+            mark_items=[],
+            mark_registry=CanvasMarkRegistry(),
+            attach_scene_item=mock.Mock(side_effect=_attach),
+            remove_scene_item=mock.Mock(side_effect=_remove),
+        )
+        canvas.services = SimpleNamespace(
+            history_service=SimpleNamespace(push=mock.Mock()),
+            scene_decoration_build_service=build_service,
+            scene_item_controller=_FakeSceneItemController(canvas),
+        )
+        service = _scene_decoration_service(canvas)
+
+        with self.assertRaisesRegex(RuntimeError, "center failed"):
+            service.add_mark(QPointF(4.0, 5.0), kind="minus", atom_id=7, record=False)
+
+        self.assertEqual(scene.items, [])
+        self.assertEqual(canvas.mark_items, [])
+        self.assertEqual(canvas.mark_registry.by_atom, {})
+        self.assertEqual(removed, [text_mark])
+        canvas.services.history_service.push.assert_not_called()
 
     def test_add_arrow_and_ts_bracket_register_items_and_push_history(self) -> None:
         scene = _FakeScene()

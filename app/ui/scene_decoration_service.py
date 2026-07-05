@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF, QRectF
@@ -13,7 +14,11 @@ from ui.scene_decoration_build_access import (
     build_shape_item_for,
     build_ts_bracket_item_for,
 )
-from ui.scene_item_access import attach_scene_item, create_scene_item_from_state
+from ui.scene_item_access import (
+    attach_scene_item,
+    create_scene_item_from_state,
+    remove_scene_item,
+)
 from ui.scene_item_state import (
     arrow_state_dict_for,
     mark_state_dict_for,
@@ -52,10 +57,14 @@ class SceneDecorationService:
             data["text"] = item.toPlainText()
         item.setData(0, "mark")
         item.setData(1, data)
-        attach_scene_item(self.canvas, item)
-        set_mark_center_for(self.canvas, item, pos)
-        if record:
-            self._push_add_scene_item(item, mark_state_dict_for(self.canvas, item))
+        try:
+            attach_scene_item(self.canvas, item)
+            set_mark_center_for(self.canvas, item, pos)
+            if record:
+                self._push_add_scene_item(item, mark_state_dict_for(self.canvas, item))
+        except Exception:
+            self._remove_attached_item(item)
+            raise
         return item
 
     def add_arrow(self, start: QPointF, end: QPointF, kind: str):
@@ -74,15 +83,23 @@ class SceneDecorationService:
         else:
             data = {"start": start, "end": end, "control": None, "double": False}
         item.setData(2, data)
-        attach_scene_item(self.canvas, item)
-        self._push_add_scene_item(item, arrow_state_dict_for(self.canvas, item))
+        try:
+            attach_scene_item(self.canvas, item)
+            self._push_add_scene_item(item, arrow_state_dict_for(self.canvas, item))
+        except Exception:
+            self._remove_attached_item(item)
+            raise
         return item
 
     def add_ts_bracket(self, rect: QRectF, *, bracket_kind: str | None = None):
         bracket_kind = bracket_kind or tool_settings_state_for(self.canvas).active_bracket_type
         item = build_ts_bracket_item_for(self.canvas, rect, bracket_kind)
-        attach_scene_item(self.canvas, item)
-        self._push_add_scene_item(item, ts_bracket_state_dict_for(self.canvas, item))
+        try:
+            attach_scene_item(self.canvas, item)
+            self._push_add_scene_item(item, ts_bracket_state_dict_for(self.canvas, item))
+        except Exception:
+            self._remove_attached_item(item)
+            raise
         return item
 
     def add_shape(
@@ -98,8 +115,12 @@ class SceneDecorationService:
         item = build_shape_item_for(self.canvas, rect, shape_kind, stroke_style)
         if item is None:
             return None
-        attach_scene_item(self.canvas, item)
-        self._push_add_scene_item(item, shape_state_dict_for(self.canvas, item))
+        try:
+            attach_scene_item(self.canvas, item)
+            self._push_add_scene_item(item, shape_state_dict_for(self.canvas, item))
+        except Exception:
+            self._remove_attached_item(item)
+            raise
         return item
 
     def add_orbital(self, center: QPointF):
@@ -115,12 +136,20 @@ class SceneDecorationService:
         )
         if group is None:
             return None
-        self._push_add_scene_item(group, orbital_state_dict_for(self.canvas, group))
+        try:
+            self._push_add_scene_item(group, orbital_state_dict_for(self.canvas, group))
+        except Exception:
+            self._remove_attached_item(group)
+            raise
         return group
 
     def _push_add_scene_item(self, item, state: dict) -> None:
         command = AddSceneItemsCommand(item_states=[state], items=[item])
         self.history.push(command)
+
+    def _remove_attached_item(self, item) -> None:
+        with contextlib.suppress(Exception):
+            remove_scene_item(self.canvas, item)
 
 
 __all__ = ["SceneDecorationService"]
