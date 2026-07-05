@@ -176,6 +176,10 @@ class ShapeDocumentValidationTest(unittest.TestCase):
         bad_stroke["stroke_style"] = "wavy"
         with self.assertRaises(ValueError):
             _validate_shape_states([bad_stroke])
+        bad_fill = self._valid_shape()
+        bad_fill["fill"] = "red"
+        with self.assertRaises(ValueError):
+            _validate_shape_states([bad_fill])
 
     def test_document_payload_round_trips_shapes(self) -> None:
         state = {

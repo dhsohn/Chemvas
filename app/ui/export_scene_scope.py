@@ -57,11 +57,31 @@ def set_label_outline_mode(items: Sequence[QGraphicsItem], enabled: bool) -> lis
     return changed
 
 
+def _item_with_descendants(item: QGraphicsItem) -> list[QGraphicsItem]:
+    items = [item]
+    for child in item.childItems():
+        items.extend(_item_with_descendants(child))
+    return items
+
+
+def export_item_closure(items: Sequence[QGraphicsItem]) -> list[QGraphicsItem]:
+    expanded: list[QGraphicsItem] = []
+    seen: set[QGraphicsItem] = set()
+    for item in items:
+        for descendant in _item_with_descendants(item):
+            if descendant in seen:
+                continue
+            seen.add(descendant)
+            expanded.append(descendant)
+    return expanded
+
+
 @contextmanager
 def exported_scene(scene: QGraphicsScene, export_items: Sequence[QGraphicsItem]):
-    export_set = set(export_items)
+    expanded_export_items = export_item_closure(export_items)
+    export_set = set(expanded_export_items)
     hidden = [item for item in scene.items() if item.isVisible() and item not in export_set]
-    outlined = set_label_outline_mode(export_items, True)
+    outlined = set_label_outline_mode(expanded_export_items, True)
     for item in hidden:
         item.setVisible(False)
     try:
@@ -76,6 +96,7 @@ __all__ = [
     "EXPORT_EXCLUDED_KINDS",
     "collect_export_items",
     "content_bounds",
+    "export_item_closure",
     "exported_scene",
     "item_export_bounds",
     "set_label_outline_mode",

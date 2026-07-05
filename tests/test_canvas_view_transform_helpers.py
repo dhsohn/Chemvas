@@ -18,6 +18,7 @@ if QApplication is not None:
     from ui.canvas_bond_graphics_state import set_bond_items_for
     from ui.canvas_graph_service import CanvasGraphService
     from ui.canvas_graph_state import CanvasGraphState
+    from ui.canvas_mark_registry import CanvasMarkRegistry
     from ui.canvas_ring_fill_scene_access import update_ring_fills_for_atoms_for
     from ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
     from ui.canvas_scene_items_state import set_scene_item_collection_for
@@ -70,6 +71,23 @@ class _FakeRingItem:
         return None
 
 
+class _FakePositionedItem:
+    def __init__(self, data1=None) -> None:
+        self._data1 = data1
+        self.positions: list[QPointF] = []
+
+    def data(self, key):
+        if key == 1:
+            return self._data1
+        return None
+
+    def setPos(self, x, y=None) -> None:
+        if isinstance(x, QPointF):
+            self.positions.append(QPointF(x))
+            return
+        self.positions.append(QPointF(float(x), float(y)))
+
+
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas view tests")
 class CanvasViewTransformHelperTest(unittest.TestCase):
     @classmethod
@@ -101,6 +119,10 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
         label_2 = object()
         atom_1 = Atom("C", 1.0, 0.0)
         atom_2 = Atom("O", 0.0, 1.0)
+        dot_1 = _FakePositionedItem()
+        mark_with_offset = _FakePositionedItem({"dx": 2.0, "dy": -3.0})
+        mark_without_offset = _FakePositionedItem({})
+        mark_centers: list[QPointF] = []
         atom_label_service = SimpleNamespace(position_label=mock.Mock())
         move_controller = SimpleNamespace(redraw_connected_bonds=mock.Mock())
         ring_fill_service = SimpleNamespace(rotate_ring_fills=mock.Mock())
@@ -122,10 +144,14 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
                 canvas_ring_fill_scene_service=ring_fill_service,
                 move_controller=move_controller,
                 selection_controller=selection_controller,
+                scene_decoration_build_service=SimpleNamespace(
+                    set_mark_center=lambda _mark, center: mark_centers.append(QPointF(center))
+                ),
             ),
+            mark_registry=CanvasMarkRegistry({1: [mark_with_offset, mark_without_offset]}),
         )
         set_atom_items_for(view, {1: label_1, 2: label_2})
-        set_atom_dots_for(view, {})
+        set_atom_dots_for(view, {1: dot_1})
 
         rotate_selection_for(view, 90.0)
 
@@ -148,6 +174,8 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
             },
             {label_1: (1.0, 1.0), label_2: (0.0, 0.0)},
         )
+        self.assertEqual(dot_1.positions, [QPointF(1.0, 1.0)])
+        self.assertEqual(mark_centers, [QPointF(3.0, -2.0), QPointF(1.0, 1.0)])
         self.assertEqual(
             {call.args[0] for call in move_controller.redraw_connected_bonds.call_args_list},
             {1, 2},

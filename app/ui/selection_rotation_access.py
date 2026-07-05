@@ -160,7 +160,6 @@ def apply_projected_atom_positions_for(
     coords_3d: dict[int, tuple[float, float, float]],
 ) -> None:
     label_service = atom_label_service(canvas)
-    mark_registry = mark_registry_for(canvas)
     for atom_id in atom_ids:
         point = coords_3d.get(atom_id)
         if point is None:
@@ -172,23 +171,30 @@ def apply_projected_atom_positions_for(
         proj_x, proj_y = project_point_3d_for(canvas, point)
         atom.x = proj_x
         atom.y = proj_y
-        label = atom_items_for(canvas).get(atom_id)
-        if label is not None:
-            label_service.position_label(label, atom.x, atom.y)
-        dot = atom_dots_for(canvas).get(atom_id)
-        if dot is not None:
-            dot.setPos(atom.x, atom.y)
-        marks = mark_registry.get_for_atom(atom_id)
-        if not marks:
-            continue
-        for mark in list(marks):
-            data = mark.data(1) or {}
-            dx = data.get("dx")
-            dy = data.get("dy")
-            if isinstance(dx, (int, float)) and isinstance(dy, (int, float)):
-                set_mark_center_for(canvas, mark, QPointF(atom.x + dx, atom.y + dy))
-            else:
-                set_mark_center_for(canvas, mark, QPointF(atom.x, atom.y))
+        _sync_atom_scene_items_for(canvas, atom_id, label_service)
+
+
+def _sync_atom_scene_items_for(canvas, atom_id: int, label_service) -> None:
+    atom = atom_for_id(canvas, atom_id)
+    if atom is None:
+        return
+    label = atom_items_for(canvas).get(atom_id)
+    if label is not None:
+        label_service.position_label(label, atom.x, atom.y)
+    dot = atom_dots_for(canvas).get(atom_id)
+    if dot is not None:
+        dot.setPos(atom.x, atom.y)
+    marks = mark_registry_for(canvas).get_for_atom(atom_id)
+    if not marks:
+        return
+    for mark in list(marks):
+        data = mark.data(1) or {}
+        dx = data.get("dx")
+        dy = data.get("dy")
+        if isinstance(dx, (int, float)) and isinstance(dy, (int, float)):
+            set_mark_center_for(canvas, mark, QPointF(atom.x + dx, atom.y + dy))
+        else:
+            set_mark_center_for(canvas, mark, QPointF(atom.x, atom.y))
 
 
 def rotate_selection_for(canvas, angle_degrees: float) -> None:
@@ -212,9 +218,7 @@ def rotate_selection_for(canvas, angle_degrees: float) -> None:
             continue
         atom.x = x
         atom.y = y
-        label = atom_items_for(canvas).get(atom_id)
-        if label is not None:
-            label_service.position_label(label, atom.x, atom.y)
+        _sync_atom_scene_items_for(canvas, atom_id, label_service)
     move_controller = move_service_from_canvas(canvas)
     for atom_id in atom_ids:
         move_controller.redraw_connected_bonds(atom_id)
