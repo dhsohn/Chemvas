@@ -194,6 +194,38 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
         self.assertAlmostEqual(canvas.model.atoms[atom_2_id].x, 10.0)
         self.assertAlmostEqual(canvas.model.atoms[atom_2_id].y, 10.0)
 
+    def test_translate_selected_items_moves_atoms_and_records_history(self) -> None:
+        canvas = _FakeCanvas()
+        atom_1_id = canvas.add_atom("C", 0.0, 0.0)
+        atom_2_id = canvas.add_atom("O", 20.0, 0.0)
+        for atom_id in (atom_1_id, atom_2_id):
+            atom_item = canvas._atom_item_for_id(atom_id)
+            assert atom_item is not None
+            atom_item.setSelected(True)
+
+        controller = scene_transform_controller_for(canvas)
+        self.assertTrue(controller.translate_selected_items(10.0, -5.0))
+
+        self.assertEqual(len(canvas.pushed_commands), 1)
+        self.assertIsInstance(canvas.pushed_commands[0], SetAtomPositionsCommand)
+        self.assertEqual((canvas.model.atoms[atom_1_id].x, canvas.model.atoms[atom_1_id].y), (10.0, -5.0))
+        self.assertEqual((canvas.model.atoms[atom_2_id].x, canvas.model.atoms[atom_2_id].y), (30.0, -5.0))
+
+    def test_translate_selected_items_noop_without_offset_or_selection(self) -> None:
+        canvas = _FakeCanvas()
+        controller = scene_transform_controller_for(canvas)
+
+        self.assertFalse(controller.translate_selected_items(0.0, 0.0))
+        self.assertFalse(controller.translate_selected_items(10.0, 0.0))
+        self.assertEqual(canvas.pushed_commands, [])
+
+        atom_id = canvas.add_atom("C", 0.0, 0.0)
+        atom_item = canvas._atom_item_for_id(atom_id)
+        assert atom_item is not None
+        atom_item.setSelected(True)
+        self.assertFalse(controller.translate_selected_items(0.0, 0.0))
+        self.assertEqual(canvas.pushed_commands, [])
+
     def test_rotate_selected_items_noop_for_zero_angle_or_empty_selection(self) -> None:
         canvas = _FakeCanvas()
         controller = scene_transform_controller_for(canvas)

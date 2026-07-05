@@ -1261,6 +1261,61 @@ class StructureBuildServiceTest(unittest.TestCase):
             ],
         )
 
+    def test_sprout_dimethyl_from_atom_builds_two_methyls_in_one_record(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={
+                0: Atom("C", 0.0, 0.0),
+            },
+            bonds=[],
+        )
+        service = _service_for(canvas)
+        service.sprout_bond_endpoint = Mock(side_effect=[QPointF(20.0, 0.0), QPointF(20.0, 10.0)])
+        service.add_bond_between_points = Mock()
+
+        service.sprout_dimethyl_from_atom(0)
+
+        service.add_bond_between_points.assert_not_called()
+        self.assertEqual(
+            {atom_id: (atom.element, atom.x, atom.y) for atom_id, atom in canvas.model.atoms.items()},
+            {
+                0: ("C", 0.0, 0.0),
+                1: ("C", 20.0, 0.0),
+                2: ("C", 20.0, 10.0),
+            },
+        )
+        self.assertEqual(
+            [(bond.a, bond.b, bond.order, bond.style) for bond in canvas.model.bonds if bond is not None],
+            [
+                (0, 1, 1, "single"),
+                (0, 2, 1, "single"),
+            ],
+        )
+        self.assertEqual(canvas.added_graphics, [0, 1])
+        self.assertEqual(len(canvas.record_calls), 1)
+
+    def test_sprout_dimethyl_from_atom_keeps_first_methyl_when_second_endpoint_missing(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={
+                0: Atom("C", 0.0, 0.0),
+            },
+            bonds=[],
+        )
+        service = _service_for(canvas)
+        service.sprout_bond_endpoint = Mock(side_effect=[QPointF(20.0, 0.0), None])
+        service.add_bond_between_points = Mock()
+
+        service.sprout_dimethyl_from_atom(0)
+
+        service.add_bond_between_points.assert_not_called()
+        self.assertEqual(sorted(canvas.model.atoms), [0, 1])
+        self.assertEqual(
+            [(bond.a, bond.b, bond.order, bond.style) for bond in canvas.model.bonds if bond is not None],
+            [(0, 1, 1, "single")],
+        )
+        self.assertEqual(len(canvas.record_calls), 1)
+
     def test_sprout_acetyl_from_atom_rolls_back_if_recorded_build_raises(self) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(

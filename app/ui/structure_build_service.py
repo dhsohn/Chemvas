@@ -224,6 +224,9 @@ class StructureBuildService:
     def sprout_acetyl_from_atom(self, atom_id: int) -> None:
         self.growth_builder.sprout_acetyl_from_atom(atom_id)
 
+    def sprout_dimethyl_from_atom(self, atom_id: int) -> None:
+        self.growth_builder.sprout_dimethyl_from_atom(atom_id)
+
     def sprout_regular_ring_from_atom(self, atom_id: int, n: int) -> None:
         self.growth_builder.sprout_regular_ring_from_atom(atom_id, n)
 

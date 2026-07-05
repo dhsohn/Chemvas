@@ -288,13 +288,21 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
         tool_settings_state_for(active_canvas_for_window(self.window)).active_bracket_type = "dagger"
         self._hover_scene_point(QPointF(200.0, 200.0))
-        self._press_key(Qt.Key.Key_G, Qt.KeyboardModifier.ShiftModifier)
+        self._press_key(Qt.Key.Key_T, Qt.KeyboardModifier.ShiftModifier)
         self.assertEqual(active_canvas_for_window(self.window).services.tools.active.name, "ts_bracket")
         self.assertEqual(tool_settings_state_for(active_canvas_for_window(self.window)).active_bracket_type, "square_pair")
         square_bracket_button = next(
             widget for widget in self.window.findChildren(QToolButton) if widget.toolTip() == "Square Brackets"
         )
         self.assertTrue(square_bracket_button.isChecked())
+
+        self._press_key(Qt.Key.Key_G, Qt.KeyboardModifier.ShiftModifier)
+        self.assertEqual(active_canvas_for_window(self.window).services.tools.active.name, "orbital")
+        self.assertEqual(tool_settings_state_for(active_canvas_for_window(self.window)).active_orbital_type, "s")
+
+        self._press_key(Qt.Key.Key_E, Qt.KeyboardModifier.ShiftModifier)
+        self.assertEqual(active_canvas_for_window(self.window).services.tools.active.name, "mark")
+        self.assertEqual(tool_settings_state_for(active_canvas_for_window(self.window)).mark_kind, "plus")
 
         self._press_key(Qt.Key.Key_D, Qt.KeyboardModifier.AltModifier)
         self.assertEqual(active_canvas_for_window(self.window).services.tools.active.name, "perspective")

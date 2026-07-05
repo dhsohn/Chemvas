@@ -31,6 +31,12 @@ def sprout_acetyl_from_atom_for(canvas, atom_id: int) -> None:
         method(atom_id)
 
 
+def sprout_dimethyl_from_atom_for(canvas, atom_id: int) -> None:
+    method = _service_method(canvas, "sprout_dimethyl_from_atom")
+    if method is not None:
+        method(atom_id)
+
+
 def sprout_benzene_from_atom_for(canvas, atom_id: int) -> None:
     method = _service_method(canvas, "sprout_benzene_from_atom")
     if method is not None:
@@ -70,5 +76,6 @@ __all__ = [
     "sprout_acetyl_from_atom_for",
     "sprout_benzene_from_atom_for",
     "sprout_bond_from_atom_for",
+    "sprout_dimethyl_from_atom_for",
     "sprout_regular_ring_from_atom_for",
 ]

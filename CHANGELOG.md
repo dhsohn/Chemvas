@@ -46,7 +46,11 @@ On the first tagged release, rename the "Unreleased" section below to
   charges/radicals and wedge/hash stereo (requires RDKit).
 - Editing: select/move, horizontal & vertical flip, perspective rotation, and
   delta-based undo/redo.
-- ChemDraw-compatible keyboard shortcut subset.
+- ChemDraw-compatible keyboard shortcut subset: atom/bond hover hotkeys
+  (labels, sprouts incl. gem-dimethyl `9`, dashed `d`/`Shift+D` and double-bond
+  position `l`/`c`/`r` bond styles), generic tool hotkeys (`Shift+T` brackets,
+  `Shift+G` orbitals, `Shift+E` chemical symbols), selection rotate/nudge via
+  `Alt`/`Shift`+arrows, view keys `F5`–`F8`, and `Ctrl+X` cut.
 - `.chemvas` JSON document save/load (`{"type":"chemvas","version":1,...}`).
 - ACS 1996 default style and color palette.
 

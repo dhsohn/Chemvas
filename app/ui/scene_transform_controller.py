@@ -271,6 +271,30 @@ class SceneTransformController:
             return
         self.history.push(CompositeCommand(commands))
 
+    def translate_selected_items(self, dx: float, dy: float) -> bool:
+        if not dx and not dy:
+            return False
+        atom_ids = selected_atom_ids_for_transform_for(self.canvas)
+        if not atom_ids:
+            return False
+        before_positions: dict[int, tuple[float, float]] = {}
+        for atom_id in atom_ids:
+            atom = self._atoms.get(atom_id)
+            if atom is None:
+                continue
+            before_positions[atom_id] = (atom.x, atom.y)
+        if not before_positions:
+            return False
+        after_positions = {atom_id: (x + dx, y + dy) for atom_id, (x, y) in before_positions.items()}
+        self._set_atom_positions(after_positions)
+        self.history.push(
+            SetAtomPositionsCommand(
+                before_positions=before_positions,
+                after_positions=after_positions,
+            )
+        )
+        return True
+
     def rotate_selected_items(self, angle_degrees: float) -> None:
         if not angle_degrees:
             return
