@@ -328,6 +328,10 @@ class CanvasSceneDecorationBuildService:
         return add_item_to_canvas_scene(self.canvas, item)
 
     # --- Free decorative shapes (circle / ellipse / rounded rect / rect) ---
+    # Shapes sit behind structures/arrows/text (default z 0) so a shape drawn
+    # over existing content never obscures it.
+    SHAPE_Z_VALUE = -10.0
+
     def shape_rect_from_points(self, start: QPointF, end: QPointF) -> QRectF:
         rect = QRectF(start, end).normalized()
         min_size = bond_length_px_for(self.canvas) * 1.2
@@ -369,6 +373,7 @@ class CanvasSceneDecorationBuildService:
         item.setBrush(QBrush(QColor(0, 0, 0, 0)) if fill is None else QBrush(QColor(fill)))
         item.setData(0, "shape")
         item.setData(1, {"rect": normalized, "shape_kind": shape_kind, "stroke_style": stroke_style})
+        item.setZValue(self.SHAPE_Z_VALUE)
         return item
 
     def preview_shape(
@@ -381,6 +386,10 @@ class CanvasSceneDecorationBuildService:
         item = self.build_shape_item(self.shape_rect_from_points(start, end), shape_kind, stroke_style)
         pen = item.pen()
         pen.setColor(QColor(120, 120, 120, 180))
+        if pen.style() == Qt.PenStyle.NoPen:
+            # Borderless shapes still need drag feedback; the dashed guide
+            # exists only in the preview and disappears on commit.
+            pen.setStyle(Qt.PenStyle.DashLine)
         item.setPen(pen)
         return add_item_to_canvas_scene(self.canvas, item)
 

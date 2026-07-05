@@ -203,6 +203,59 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         # History service is restored after the bundled mutation.
         self.assertIs(service.history, canvas.services.history_service)
 
+    def test_apply_color_to_item_washes_shape_fill_and_records_history(self) -> None:
+        scene = QGraphicsScene()
+        pushes: list = []
+        canvas = SimpleNamespace(
+            scene=lambda: scene,
+            model=SimpleNamespace(atoms={}, bonds=[]),
+            services=SimpleNamespace(history_service=_history_service(pushes.append)),
+        )
+        _set_atom_graphics(canvas)
+        set_bond_items_for(canvas, {})
+        service = _color_service_for(canvas)
+
+        shape = QGraphicsPathItem()
+        shape.setData(0, "shape")
+        scene.addItem(shape)
+
+        picked = QColor("#d84a3a")
+        service.apply_color_to_item(shape, picked)
+
+        # Shapes are background panels: the picked colour is diluted toward the
+        # white sheet and applied opaque, so molecules on top stay readable and
+        # nothing shows through the panel.
+        fill = shape.brush().color()
+        tint = CanvasColorMutationService.SHAPE_FILL_TINT
+        self.assertEqual(fill.alphaF(), 1.0)
+        self.assertEqual(fill.red(), round(255 - (255 - picked.red()) * tint))
+        self.assertEqual(fill.green(), round(255 - (255 - picked.green()) * tint))
+        self.assertEqual(fill.blue(), round(255 - (255 - picked.blue()) * tint))
+        self.assertEqual(len(pushes), 1)
+        self.assertIsInstance(pushes[0], UpdateSceneItemCommand)
+
+    def test_apply_ring_fill_color_applies_opaque_pastel(self) -> None:
+        ring_item = QGraphicsPolygonItem(
+            QPolygonF([QPointF(0.0, 0.0), QPointF(1.0, 0.0), QPointF(0.0, 1.0)])
+        )
+        ring_item.setData(0, "ring")
+        pushes: list = []
+        canvas = SimpleNamespace(
+            services=SimpleNamespace(history_service=_history_service(pushes.append)),
+        )
+        service = _color_service_for(canvas)
+
+        picked = QColor("#d84a3a")
+        service.apply_ring_fill_color(ring_item, picked)
+
+        fill = ring_item.brush().color()
+        self.assertEqual(fill.alphaF(), 1.0)
+        self.assertEqual(fill.red(), round(255 - (255 - picked.red()) * 0.25))
+        self.assertEqual(fill.green(), round(255 - (255 - picked.green()) * 0.25))
+        self.assertEqual(fill.blue(), round(255 - (255 - picked.blue()) * 0.25))
+        self.assertEqual(len(pushes), 1)
+        self.assertIsInstance(pushes[0], UpdateSceneItemCommand)
+
     def test_apply_color_to_item_colors_note_text_and_records_history(self) -> None:
         scene = QGraphicsScene()
         push_command = mock.Mock()

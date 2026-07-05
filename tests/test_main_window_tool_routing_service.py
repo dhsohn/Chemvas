@@ -154,7 +154,7 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
 
         color_tool = SimpleNamespace(set_color=mock.Mock())
         self.color_tool_for_window.return_value = color_tool
-        selected_items = [_FakeItem("atom"), _FakeItem("ring"), _FakeItem("note")]
+        selected_items = [_FakeItem("atom"), _FakeItem("ring"), _FakeItem("note"), _FakeItem("shape")]
         self.selected_scene_items_for_window.return_value = selected_items
 
         with (
@@ -172,9 +172,12 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
         color_tool.set_color.assert_called_once()
         self.assertEqual(color_tool.set_color.call_args.args[0].name(), "#2f6ed3")
         set_tool.assert_called_once_with("color")
-        self.assertEqual([call.args[0].data(0) for call in apply_color.call_args_list], ["atom", "ring", "note"])
         self.assertEqual(
-            [call.args[1].name() for call in apply_color.call_args_list], ["#2f6ed3", "#2f6ed3", "#2f6ed3"]
+            [call.args[0].data(0) for call in apply_color.call_args_list], ["atom", "ring", "note", "shape"]
+        )
+        self.assertEqual(
+            [call.args[1].name() for call in apply_color.call_args_list],
+            ["#2f6ed3", "#2f6ed3", "#2f6ed3", "#2f6ed3"],
         )
         self.assertEqual([call.args[0].data(0) for call in apply_fill.call_args_list], ["ring"])
         self.assertEqual([call.args[1].name() for call in apply_fill.call_args_list], ["#f4d06f"])
