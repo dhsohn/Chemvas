@@ -14,8 +14,8 @@ from PyQt6.QtGui import QPainterPath
 SHAPE_KINDS: tuple[str, ...] = ("circle", "ellipse", "rounded_rect", "rect")
 DEFAULT_SHAPE_KIND = "circle"
 
-# "none" removes the outline entirely. It is only ever applied to an existing
-# shape (never the default for a fresh draw, so new shapes stay visible).
+# "none" removes the outline entirely, for borderless background panels; the
+# drag preview substitutes a dashed guide so drawing one stays visible.
 STROKE_STYLES: tuple[str, ...] = ("solid", "dashed", "dotted", "none")
 DEFAULT_STROKE_STYLE = "solid"
 

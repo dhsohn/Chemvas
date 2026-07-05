@@ -40,7 +40,7 @@ class ColorTool(Tool):
             targets = [
                 sel
                 for sel in self.context.selected_scene_items(excluded_kinds=set())
-                if sel.data(0) in {"bond", "atom", "ring"}
+                if sel.data(0) in {"bond", "atom", "ring", "shape"}
             ]
             if not targets:
                 return True

@@ -59,6 +59,12 @@ class NoSelectPolygonItem(_NoSelectPaintMixin, QGraphicsPolygonItem):
     pass
 
 
+# Ring fills paint behind bonds and atom labels (z 0/3) so an opaque pastel
+# fill never covers the structure, but above decorative shape panels (z -10)
+# so a ring highlight stays visible on top of a background panel.
+RING_FILL_Z_VALUE = -5.0
+
+
 class NoSelectRectItem(_NoSelectPaintMixin, QGraphicsRectItem):
     pass
 

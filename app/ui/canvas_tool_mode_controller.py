@@ -145,10 +145,10 @@ class CanvasToolModeController:
             return
         self._cancel_active_insert_modes()
         applied = self._apply_shape_stroke_to_selected(stroke_style)
-        # "none" only ever strips the border off an already-drawn shape; it never
-        # becomes the default, so freshly drawn shapes always keep a visible border.
-        if stroke_style != "none":
-            set_tool_setting_for(self.canvas, "active_shape_stroke", stroke_style)
+        # "none" is a first-class drawing default so background panels can be
+        # drawn borderless; the drag preview substitutes a dashed guide so the
+        # draw stays visible until release.
+        set_tool_setting_for(self.canvas, "active_shape_stroke", stroke_style)
         if not applied:
             self._set_active_tool("shape")
         self._refresh_tool_mode()

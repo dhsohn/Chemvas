@@ -1758,18 +1758,21 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         QTest.qWait(10)
 
         fill_color = "#f4d06f"
+        # Ring fills apply as an opaque pastel: the picked colour diluted to 25%
+        # toward the white sheet.
+        expected_fill = "#fcf3db"
         stroke_color = "#2f6ed3"
         services_for_window(self.window).tool_routing_service.apply_ring_fill_preset(self.window, fill_color)
         self.app.processEvents()
         QTest.qWait(10)
 
-        self.assertEqual(ring_item.brush().color().name(), fill_color)
+        self.assertEqual(ring_item.brush().color().name(), expected_fill)
 
         services_for_window(self.window).tool_routing_service.apply_color_preset(self.window, stroke_color)
         self.app.processEvents()
         QTest.qWait(10)
 
-        self.assertEqual(ring_item.brush().color().name(), fill_color)
+        self.assertEqual(ring_item.brush().color().name(), expected_fill)
         self.assertIsInstance(ring_atom_ids, list)
         for atom_id in ring_atom_ids:
             self.assertEqual(active_canvas_for_window(self.window).model.atoms[atom_id].color, stroke_color)

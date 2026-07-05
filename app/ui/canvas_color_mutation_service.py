@@ -68,14 +68,24 @@ class CanvasColorMutationService:
         if kind == "shape":
             self._apply_shape_fill(item, color)
 
+    # Shape panels and ring fills stack behind the structure as ChemDraw-style
+    # pastels: the picked colour is diluted toward the white sheet and applied
+    # opaque, so it reads as tinted paper rather than translucent glass. A
+    # translucent wash would blend with whatever sits underneath and look
+    # layered instead.
+    SHAPE_FILL_TINT = 0.12
+
+    @staticmethod
+    def _pastel_fill(color: QColor, tint: float) -> QColor:
+        return QColor(
+            round(255 - (255 - color.red()) * tint),
+            round(255 - (255 - color.green()) * tint),
+            round(255 - (255 - color.blue()) * tint),
+        )
+
     def _apply_shape_fill(self, item, color: QColor) -> None:
         before_state = shape_state_dict_for(self.canvas, item)
-        # Fill with the picked colour as-is so "pick red → shape turns red"; text
-        # drawn on top stays readable because it is a separate item above the fill.
-        fill = QColor(color)
-        if fill.alphaF() <= 0.0:
-            fill.setAlphaF(1.0)
-        item.setBrush(fill)
+        item.setBrush(self._pastel_fill(color, self.SHAPE_FILL_TINT))
         after_state = shape_state_dict_for(self.canvas, item)
         if before_state != after_state and self.history is not None:
             self.history.push(UpdateSceneItemCommand(item, before_state, after_state))
@@ -86,8 +96,15 @@ class CanvasColorMutationService:
         if item.data(0) != "ring":
             return
         before_state = ring_state_dict_for(self.canvas, item)
-        fill = QColor(color)
-        fill.setAlphaF(max(0.0, min(1.0, float(alpha))))
+        # ``alpha`` is the pastel strength: 0 clears the fill, anything above
+        # pre-dilutes the colour toward white and applies it opaque (the ring
+        # sits behind the structure, so translucency is not needed).
+        tint = max(0.0, min(1.0, float(alpha)))
+        if tint <= 0.0:
+            fill = QColor(color)
+            fill.setAlphaF(0.0)
+        else:
+            fill = self._pastel_fill(color, tint)
         item.setBrush(fill)
         after_state = ring_state_dict_for(self.canvas, item)
         if before_state != after_state:

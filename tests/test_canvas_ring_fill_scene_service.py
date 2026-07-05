@@ -241,6 +241,9 @@ class CanvasRingFillSceneServiceTest(unittest.TestCase):
         self.assertEqual(item.pen().style(), Qt.PenStyle.NoPen)
         self.assertEqual(item.brush().color().name(), brush.color().name())
         self.assertTrue(item.flags() & item.GraphicsItemFlag.ItemIsSelectable)
+        # Ring fills stack behind bonds/labels so an opaque pastel fill never
+        # covers the structure.
+        self.assertLess(item.zValue(), 0.0)
 
 
 if __name__ == "__main__":

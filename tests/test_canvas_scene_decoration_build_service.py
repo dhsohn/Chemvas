@@ -120,6 +120,30 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
         self.assertEqual(item.pen().style(), Qt.PenStyle.NoPen)
         self.assertEqual(item.brush().color().name(), QColor(self.canvas.renderer.style.bond_color).name())
 
+    def test_shape_stroke_none_is_drawable_borderless_with_dashed_preview(self) -> None:
+        from ui.canvas_tool_settings_state import tool_settings_state_for
+
+        # "none" becomes the active drawing default (not just a mutation of the
+        # current selection), so background panels can be drawn borderless.
+        self.canvas.services.tool_mode_controller.set_shape_stroke("none")
+        self.assertEqual(tool_settings_state_for(self.canvas).active_shape_stroke, "none")
+
+        item = self.service.build_shape_item(QRectF(0.0, 0.0, 40.0, 20.0), "rect", "none")
+        preview = self.service.preview_shape(QPointF(0.0, 0.0), QPointF(40.0, 20.0), "rect", "none")
+
+        self.assertEqual(item.pen().style(), Qt.PenStyle.NoPen)
+        # The drag preview substitutes a dashed guide so drawing stays visible.
+        self.assertEqual(preview.pen().style(), Qt.PenStyle.DashLine)
+
+    def test_build_shape_item_stacks_behind_default_scene_content(self) -> None:
+        item = self.service.build_shape_item(QRectF(0.0, 0.0, 40.0, 20.0), "rect")
+        preview = self.service.preview_shape(QPointF(0.0, 0.0), QPointF(40.0, 20.0), "circle")
+
+        self.assertEqual(item.data(0), "shape")
+        self.assertLess(item.zValue(), 0.0)
+        self.assertEqual(item.zValue(), CanvasSceneDecorationBuildService.SHAPE_Z_VALUE)
+        self.assertEqual(preview.zValue(), CanvasSceneDecorationBuildService.SHAPE_Z_VALUE)
+
     def test_build_orbital_items_respects_phase_fill_and_supported_shapes(self) -> None:
         set_tool_setting_for(self.canvas, "orbital_phase_enabled", False)
         s_items = self.service.build_orbital_items(QPointF(0.0, 0.0), "s")
