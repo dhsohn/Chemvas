@@ -1,6 +1,10 @@
+import base64
+import json
 import tempfile
 import unittest
+import zlib
 from pathlib import Path
+from unittest import mock
 from xml.etree import ElementTree as ET
 
 from core.document_state import CANVAS_FILE_VERSION, serialize_settings
@@ -40,6 +44,11 @@ def _sheet_state(text: str = "note") -> dict:
         "settings": _settings(),
         "last_smiles_input": None,
     }
+
+
+def _encoded_payload(payload: dict) -> str:
+    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return base64.b64encode(zlib.compress(raw)).decode("ascii")
 
 
 class SvgRoundtripTest(unittest.TestCase):
@@ -93,6 +102,170 @@ class SvgRoundtripTest(unittest.TestCase):
             sources = list(root.iter(f"{{{CHEMVAS_SVG_NAMESPACE}}}source"))
             self.assertEqual(len(sources), 1)
             self.assertEqual(extract_chemvas_document_from_svg(path).state, second_state)
+
+    def test_embed_removes_existing_chemvas_sources_from_all_root_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._svg_path(tmp)
+            stale = create_editable_svg_payload(
+                _sheet_state("stale"),
+                document_version=CANVAS_FILE_VERSION,
+                scope=CHEMVAS_SVG_SCOPE_SHEET,
+            )
+            fresh_state = _sheet_state("fresh")
+            fresh = create_editable_svg_payload(
+                fresh_state,
+                document_version=CANVAS_FILE_VERSION,
+                scope=CHEMVAS_SVG_SCOPE_SHEET,
+            )
+            path.write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg" '
+                'xmlns:chemvas="https://chemvas.app/ns/svg-source/1">'
+                '<metadata><title>external metadata</title>'
+                f'<chemvas:source encoding="base64+zlib+json">{_encoded_payload(stale)}</chemvas:source>'
+                '</metadata>'
+                '<metadata>'
+                f'<chemvas:source encoding="base64+zlib+json">{_encoded_payload(stale)}</chemvas:source>'
+                '</metadata>'
+                '</svg>',
+                encoding="utf-8",
+            )
+
+            embed_chemvas_document_in_svg(path, fresh)
+
+            root = ET.parse(path).getroot()
+            sources = list(root.iter(f"{{{CHEMVAS_SVG_NAMESPACE}}}source"))
+            self.assertEqual(len(sources), 1)
+            self.assertEqual(extract_chemvas_document_from_svg(path).state, fresh_state)
+
+    def test_extract_uses_root_metadata_source_not_nested_shadow_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._svg_path(tmp)
+            shadow = create_editable_svg_payload(
+                _sheet_state("shadow"),
+                document_version=CANVAS_FILE_VERSION,
+                scope=CHEMVAS_SVG_SCOPE_SHEET,
+            )
+            good_state = _sheet_state("good")
+            good = create_editable_svg_payload(
+                good_state,
+                document_version=CANVAS_FILE_VERSION,
+                scope=CHEMVAS_SVG_SCOPE_SHEET,
+            )
+            path.write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg" '
+                'xmlns:chemvas="https://chemvas.app/ns/svg-source/1">'
+                '<defs>'
+                f'<chemvas:source encoding="base64+zlib+json">{_encoded_payload(shadow)}</chemvas:source>'
+                '</defs>'
+                '<metadata>'
+                f'<chemvas:source encoding="base64+zlib+json">{_encoded_payload(good)}</chemvas:source>'
+                '</metadata>'
+                '</svg>',
+                encoding="utf-8",
+            )
+
+            self.assertEqual(extract_chemvas_document_from_svg(path).state, good_state)
+
+    def test_extract_searches_all_root_metadata_but_rejects_duplicate_root_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._svg_path(tmp)
+            good_state = _sheet_state("good")
+            good = create_editable_svg_payload(
+                good_state,
+                document_version=CANVAS_FILE_VERSION,
+                scope=CHEMVAS_SVG_SCOPE_SHEET,
+            )
+            path.write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg" '
+                'xmlns:chemvas="https://chemvas.app/ns/svg-source/1">'
+                '<metadata><title>external metadata</title></metadata>'
+                '<metadata>'
+                f'<chemvas:source encoding="base64+zlib+json">{_encoded_payload(good)}</chemvas:source>'
+                '</metadata>'
+                '</svg>',
+                encoding="utf-8",
+            )
+
+            self.assertEqual(extract_chemvas_document_from_svg(path).state, good_state)
+
+            shadow = create_editable_svg_payload(
+                _sheet_state("shadow"),
+                document_version=CANVAS_FILE_VERSION,
+                scope=CHEMVAS_SVG_SCOPE_SHEET,
+            )
+            path.write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg" '
+                'xmlns:chemvas="https://chemvas.app/ns/svg-source/1">'
+                '<metadata>'
+                f'<chemvas:source encoding="base64+zlib+json">{_encoded_payload(shadow)}</chemvas:source>'
+                '</metadata>'
+                '<metadata>'
+                f'<chemvas:source encoding="base64+zlib+json">{_encoded_payload(good)}</chemvas:source>'
+                '</metadata>'
+                '</svg>',
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "Invalid editable Chemvas metadata"):
+                extract_chemvas_document_from_svg(path)
+
+    def test_extract_rejects_multiple_root_metadata_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._svg_path(tmp)
+            first = create_editable_svg_payload(
+                _sheet_state("first"),
+                document_version=CANVAS_FILE_VERSION,
+                scope=CHEMVAS_SVG_SCOPE_SHEET,
+            )
+            second = create_editable_svg_payload(
+                _sheet_state("second"),
+                document_version=CANVAS_FILE_VERSION,
+                scope=CHEMVAS_SVG_SCOPE_SHEET,
+            )
+            path.write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg" '
+                'xmlns:chemvas="https://chemvas.app/ns/svg-source/1">'
+                '<metadata>'
+                f'<chemvas:source encoding="base64+zlib+json">{_encoded_payload(first)}</chemvas:source>'
+                f'<chemvas:source encoding="base64+zlib+json">{_encoded_payload(second)}</chemvas:source>'
+                '</metadata>'
+                '</svg>',
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "Invalid editable Chemvas metadata"):
+                extract_chemvas_document_from_svg(path)
+
+    def test_extract_rejects_oversized_encoded_or_decompressed_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._svg_path(tmp)
+            payload = create_editable_svg_payload(
+                _sheet_state(),
+                document_version=CANVAS_FILE_VERSION,
+                scope=CHEMVAS_SVG_SCOPE_SHEET,
+            )
+            encoded = _encoded_payload(payload)
+            source = (
+                '<svg xmlns="http://www.w3.org/2000/svg" '
+                'xmlns:chemvas="https://chemvas.app/ns/svg-source/1">'
+                '<metadata>'
+                f'<chemvas:source encoding="base64+zlib+json">{encoded}</chemvas:source>'
+                '</metadata>'
+                '</svg>'
+            )
+            path.write_text(source, encoding="utf-8")
+
+            with mock.patch("core.svg_roundtrip._MAX_SVG_SOURCE_TEXT_BYTES", len(encoded) - 1):
+                with self.assertRaisesRegex(ValueError, "Invalid editable Chemvas metadata"):
+                    extract_chemvas_document_from_svg(path)
+
+            raw_len = len(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8"))
+            with mock.patch("core.svg_roundtrip._MAX_SVG_PAYLOAD_BYTES", raw_len - 1):
+                with self.assertRaisesRegex(ValueError, "Invalid editable Chemvas metadata"):
+                    extract_chemvas_document_from_svg(path)
+
+            with mock.patch("core.svg_roundtrip._MAX_SVG_PAYLOAD_BYTES", raw_len):
+                self.assertEqual(extract_chemvas_document_from_svg(path).state, _sheet_state())
 
     def test_extract_rejects_missing_or_invalid_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

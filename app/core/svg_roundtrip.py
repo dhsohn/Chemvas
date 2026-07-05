@@ -25,6 +25,8 @@ XLINK_NAMESPACE = "http://www.w3.org/1999/xlink"
 
 _SOURCE_TAG = f"{{{CHEMVAS_SVG_NAMESPACE}}}source"
 _METADATA_TAG = f"{{{SVG_NAMESPACE}}}metadata"
+_MAX_SVG_SOURCE_TEXT_BYTES = 8 * 1024 * 1024
+_MAX_SVG_PAYLOAD_BYTES = 32 * 1024 * 1024
 
 
 ET.register_namespace("", SVG_NAMESPACE)
@@ -55,9 +57,10 @@ def embed_chemvas_document_in_svg(path: PathType, payload: dict[str, Any]) -> No
     root = tree.getroot()
     metadata = _metadata_element(root)
 
-    for child in list(metadata):
-        if child.tag == _SOURCE_TAG:
-            metadata.remove(child)
+    for metadata_element in _root_metadata_elements(root):
+        for child in list(metadata_element):
+            if child.tag == _SOURCE_TAG:
+                metadata_element.remove(child)
 
     source = ET.Element(
         _SOURCE_TAG,
@@ -80,17 +83,22 @@ def extract_chemvas_document_from_svg(path: PathType) -> ChemvasDocument:
 def extract_chemvas_svg_payload(path: PathType) -> dict[str, Any]:
     tree = ET.parse(Path(path))
     root = tree.getroot()
-    sources = list(root.iter(_SOURCE_TAG))
+    sources = [
+        child
+        for metadata in _root_metadata_elements(root)
+        for child in list(metadata)
+        if child.tag == _SOURCE_TAG
+    ]
     if not sources:
         raise ValueError("No editable Chemvas metadata found in SVG.")
+    if len(sources) != 1:
+        raise ValueError("Invalid editable Chemvas metadata in SVG.")
+    payload = _decode_source_element(sources[0])
+    return _validated_editable_svg_payload(payload)
 
-    for source in sources:
-        try:
-            payload = _decode_source_element(source)
-            return _validated_editable_svg_payload(payload)
-        except ValueError:
-            continue
-    raise ValueError("Invalid editable Chemvas metadata in SVG.")
+
+def _root_metadata_elements(root: ET.Element) -> list[ET.Element]:
+    return [child for child in list(root) if child.tag == _METADATA_TAG]
 
 
 def _metadata_element(root: ET.Element) -> ET.Element:
@@ -110,14 +118,28 @@ def _decode_source_element(source: ET.Element) -> dict[str, Any]:
     if source.get("encoding") != CHEMVAS_SVG_ENCODING:
         raise ValueError("Unsupported editable Chemvas metadata encoding.")
     text = source.text or ""
+    if len(text.encode("utf-8")) > _MAX_SVG_SOURCE_TEXT_BYTES:
+        raise ValueError("Invalid editable Chemvas metadata in SVG.")
     try:
-        raw = zlib.decompress(base64.b64decode(text.encode("ascii"), validate=True))
+        compressed = base64.b64decode(text.encode("ascii"), validate=True)
+        raw = _decompress_svg_payload(compressed)
         payload = json.loads(raw.decode("utf-8"))
-    except (ValueError, OSError, zlib.error, UnicodeDecodeError) as exc:
+    except (ValueError, OSError, zlib.error, UnicodeError) as exc:
         raise ValueError("Invalid editable Chemvas metadata in SVG.") from exc
     if not isinstance(payload, dict):
         raise ValueError("Invalid editable Chemvas metadata in SVG.")
     return payload
+
+
+def _decompress_svg_payload(compressed: bytes) -> bytes:
+    decompressor = zlib.decompressobj()
+    raw = decompressor.decompress(compressed, _MAX_SVG_PAYLOAD_BYTES + 1)
+    if len(raw) > _MAX_SVG_PAYLOAD_BYTES or decompressor.unconsumed_tail:
+        raise ValueError("Invalid editable Chemvas metadata in SVG.")
+    raw += decompressor.flush()
+    if len(raw) > _MAX_SVG_PAYLOAD_BYTES or not decompressor.eof or decompressor.unused_data:
+        raise ValueError("Invalid editable Chemvas metadata in SVG.")
+    return raw
 
 
 def _validated_editable_svg_payload(payload: dict[str, Any]) -> dict[str, Any]:

@@ -109,6 +109,9 @@ VALID_ORBITAL_KINDS = frozenset(
 VALID_SHAPE_KINDS = frozenset(("circle", "ellipse", "rounded_rect", "rect"))
 VALID_SHAPE_STROKES = frozenset(("solid", "dashed", "dotted", "none"))
 VALID_ATOM_ANNOTATION_KEYS = frozenset(("formal_charge", "radical_electrons"))
+CLIPBOARD_SELECTION_PAYLOAD_KEYS = frozenset(
+    ("format", "version", "atoms", "bonds", "rings", "marks", "scene_items")
+)
 
 
 def atom_to_state(atom: Atom, explicit_label: bool) -> dict:
@@ -262,7 +265,7 @@ def selection_payload_to_canvas_state(
     atom_states: dict[int, dict] = {}
     atom_annotations: dict[int, dict[str, int]] = {}
     for atom_state in atoms:
-        atom_id = _validated_id(atom_state.get("id"))
+        atom_id = _validated_clipboard_id(atom_state.get("id"))
         atom_states[atom_id] = {
             "element": atom_state["element"],
             "x": atom_state["x"],
@@ -732,6 +735,8 @@ def validate_clipboard_selection_payload(payload: Mapping[str, object]) -> bool:
     whole paste rather than build invalid scene state.
     """
     try:
+        if not isinstance(payload, Mapping) or not set(payload) <= CLIPBOARD_SELECTION_PAYLOAD_KEYS:
+            raise ValueError("Invalid clipboard payload.")
         atom_ids = _validate_clipboard_atoms(payload.get("atoms"))
         _validate_clipboard_bonds(payload.get("bonds"), atom_ids)
         for ring_state in _validated_scene_state_list(payload.get("rings", [])):
@@ -755,7 +760,7 @@ def _validate_clipboard_atoms(atoms: object) -> set[int]:
         required_keys = {"id", "element", "x", "y", "color", "explicit_label"}
         if not required_keys <= set(atom_state) or not set(atom_state) <= required_keys | {"annotation"}:
             raise ValueError("Invalid clipboard payload.")
-        atom_id = _validated_id(atom_state.get("id"))
+        atom_id = _validated_clipboard_id(atom_state.get("id"))
         if atom_id in atom_ids:
             raise ValueError("Invalid clipboard payload.")
         element = atom_state.get("element")
@@ -833,8 +838,8 @@ def _validate_clipboard_bonds(bonds: object, atom_ids: set[int]) -> None:
             raise ValueError("Invalid clipboard payload.")
         if set(bond_state) != {"a", "b", "order", "style", "color"}:
             raise ValueError("Invalid clipboard payload.")
-        a = _validated_id(bond_state.get("a"))
-        b = _validated_id(bond_state.get("b"))
+        a = _validated_clipboard_id(bond_state.get("a"))
+        b = _validated_clipboard_id(bond_state.get("b"))
         if a == b or a not in atom_ids or b not in atom_ids:
             raise ValueError("Invalid clipboard payload.")
         order = bond_state.get("order")
@@ -860,7 +865,7 @@ def _validate_clipboard_ring(ring_state: Mapping[str, object], atom_ids: set[int
     ring_atom_ids = ring_state.get("atom_ids")
     if not isinstance(ring_atom_ids, (list, tuple)) or not ring_atom_ids:
         raise ValueError("Invalid clipboard payload.")
-    if not _is_atom_id_sequence(ring_atom_ids, atom_ids):
+    if not _is_clipboard_atom_id_sequence(ring_atom_ids, atom_ids):
         raise ValueError("Invalid clipboard payload.")
     color = ring_state.get("color")
     if color is not None and not _is_hex_color(color):
@@ -1001,6 +1006,12 @@ def _validated_id(value: object) -> int:
     return parsed
 
 
+def _validated_clipboard_id(value: object) -> int:
+    if type(value) is not int or value < 0:
+        raise ValueError("Invalid clipboard payload.")
+    return value
+
+
 def _is_int(value: object) -> TypeGuard[int]:
     return type(value) is int
 
@@ -1030,6 +1041,16 @@ def _is_atom_id_sequence(value: object, atom_ids: set[int]) -> bool:
         return False
     try:
         parsed_ids = [_validated_id(atom_id) for atom_id in value]
+    except ValueError:
+        return False
+    return all(atom_id in atom_ids for atom_id in parsed_ids)
+
+
+def _is_clipboard_atom_id_sequence(value: object, atom_ids: set[int]) -> bool:
+    if not isinstance(value, (list, tuple)):
+        return False
+    try:
+        parsed_ids = [_validated_clipboard_id(atom_id) for atom_id in value]
     except ValueError:
         return False
     return all(atom_id in atom_ids for atom_id in parsed_ids)
