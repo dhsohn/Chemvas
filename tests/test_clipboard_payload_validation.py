@@ -77,6 +77,21 @@ class ClipboardPayloadValidationTest(unittest.TestCase):
         mutate(payload)
         self.assertFalse(validate_clipboard_selection_payload(payload))
 
+    def test_rejects_top_level_extra_key(self) -> None:
+        self._assert_rejected(lambda p: p.__setitem__("payload_json", "{}"))
+
+    def test_rejects_string_numeric_atom_ids_and_references(self) -> None:
+        cases = [
+            ("atom id", lambda p: p["atoms"][0].__setitem__("id", "0")),
+            ("bond endpoint a", lambda p: p["bonds"][0].__setitem__("a", "0")),
+            ("bond endpoint b", lambda p: p["bonds"][0].__setitem__("b", "1")),
+            ("ring atom id", lambda p: p["rings"][0].__setitem__("atom_ids", ["0", 1])),
+            ("mark atom id", lambda p: p["marks"][0].__setitem__("atom_id", "0")),
+        ]
+        for name, mutate in cases:
+            with self.subTest(name=name):
+                self._assert_rejected(mutate)
+
     def test_rejects_non_string_element(self) -> None:
         self._assert_rejected(lambda p: p["atoms"][0].__setitem__("element", 6))
 
