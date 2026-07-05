@@ -110,6 +110,35 @@ class StructureGrowthBuildServiceTest(unittest.TestCase):
         )
         owner.committer.add_atom_label.assert_called_once_with(3, "O", show_carbon=True)
 
+    def test_sprout_dimethyl_adds_two_single_bonds_from_hotspot(self) -> None:
+        owner = _FakeOwner()
+        owner.atom_point.side_effect = lambda atom_id: QPointF(10.0, 0.0)
+        owner.sprout_bond_endpoint.side_effect = [QPointF(20.0, 0.0), QPointF(20.0, 10.0)]
+
+        StructureGrowthBuildService(_actions_for(owner)).sprout_dimethyl_from_atom(1)
+
+        self.assertEqual(
+            owner.add_bond_between_points.call_args_list,
+            [
+                mock.call(QPointF(10.0, 0.0), QPointF(20.0, 0.0), "single", 1),
+                mock.call(QPointF(10.0, 0.0), QPointF(20.0, 10.0), "single", 1),
+            ],
+        )
+
+    def test_sprout_dimethyl_stops_when_endpoints_are_missing(self) -> None:
+        owner = _FakeOwner()
+        owner.sprout_bond_endpoint.return_value = None
+        StructureGrowthBuildService(_actions_for(owner)).sprout_dimethyl_from_atom(1)
+        owner.add_bond_between_points.assert_not_called()
+
+        owner = _FakeOwner()
+        owner.atom_point.side_effect = lambda atom_id: QPointF(10.0, 0.0)
+        owner.sprout_bond_endpoint.side_effect = [QPointF(20.0, 0.0), None]
+        StructureGrowthBuildService(_actions_for(owner)).sprout_dimethyl_from_atom(1)
+        owner.add_bond_between_points.assert_called_once_with(
+            QPointF(10.0, 0.0), QPointF(20.0, 0.0), "single", 1
+        )
+
     def test_ring_growth_and_fuse_helpers_run_recorded_actions(self) -> None:
         owner = _FakeOwner()
         service = StructureGrowthBuildService(_actions_for(owner))

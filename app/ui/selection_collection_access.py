@@ -172,6 +172,25 @@ def selected_items_for_transform_for(canvas) -> list:
     return selected_scene_items_for(canvas, excluded_kinds=TRANSFORM_SELECTION_EXCLUDED_KINDS)
 
 
+def independent_selection_items(selection_items: list, atom_ids: set[int]) -> list:
+    items: list = []
+    seen = set()
+    for item in selection_items:
+        if item is None or item in seen:
+            continue
+        seen.add(item)
+        kind = item.data(0)
+        if kind in {"atom", "bond", "ring"}:
+            continue
+        if kind == "mark":
+            data = item.data(1) or {}
+            atom_id = data.get("atom_id")
+            if isinstance(atom_id, int) and atom_id in atom_ids:
+                continue
+        items.append(item)
+    return items
+
+
 def selection_items_for_copy_for(canvas) -> list:
     selected = selected_scene_items_for(canvas, excluded_kinds=COPY_SELECTION_EXCLUDED_KINDS)
     if not selected:
@@ -231,6 +250,7 @@ __all__ = [
     "append_ring_selection_atom_ids",
     "append_selected_item_ids",
     "append_unique_scene_item",
+    "independent_selection_items",
     "selected_atom_ids_for_transform_for",
     "selected_bond_atom_ids_for",
     "selected_chemical_ids_for",

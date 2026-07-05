@@ -310,9 +310,41 @@ class SceneItemStateUnitTest(unittest.TestCase):
         data = item.data(1)
         self.assertEqual((data["center"].x(), data["center"].y()), (8.0, 9.0))
         self.assertEqual(data["base_handle_dist"], 24.0)
-        self.assertEqual((item.transformOriginPoint().x(), item.transformOriginPoint().y()), (8.0, 9.0))
+        # The group translates by the center delta (3,-4) -> (8,9) so the lobes
+        # follow, and the transform origin stays at the lobe center in local
+        # coordinates (new center minus the new pos).
+        self.assertEqual((item.pos().x(), item.pos().y()), (5.0, 13.0))
+        self.assertEqual((item.transformOriginPoint().x(), item.transformOriginPoint().y()), (3.0, -4.0))
         self.assertAlmostEqual(item.scale(), 1.5)
         self.assertAlmostEqual(item.rotation(), 22.0)
+
+    def test_apply_orbital_state_translates_group_from_prior_position(self) -> None:
+        item = QGraphicsItemGroup()
+        item.setData(0, "orbital")
+        item.setData(1, {"center": QPointF(10.0, 0.0)})
+        # Simulate a prior nudge: lobes built around (2,0), group moved by (8,0)
+        # so the absolute center is (10,0).
+        item.setPos(8.0, 0.0)
+
+        apply_scene_item_state(
+            item,
+            {"kind": "orbital", "center": (0.0, 10.0), "scale": 1.0, "rotation": 90.0},
+            model_atoms={},
+            note_style_applier=lambda item: None,
+            mark_center_setter=lambda item, center: None,
+            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
+            ts_bracket_path_builder=lambda rect: QPainterPath(),
+            bond_color="#000000",
+            build_arrow_item=lambda start, end, kind: QGraphicsPathItem(),
+            set_curved_arrow_path=lambda *args: None,
+            orbital_base_handle_dist=18.0,
+        )
+
+        # Center moves (10,0) -> (0,10): delta (-10,10), so pos (8,0) -> (-2,10).
+        # Local lobe center is invariant at center - pos = (2,0).
+        self.assertEqual((item.pos().x(), item.pos().y()), (-2.0, 10.0))
+        self.assertEqual((item.data(1)["center"].x(), item.data(1)["center"].y()), (0.0, 10.0))
+        self.assertEqual((item.transformOriginPoint().x(), item.transformOriginPoint().y()), (2.0, 0.0))
 
     def test_arrow_state_helpers_handle_missing_points_and_straight_rebuild(self) -> None:
         item = QGraphicsPathItem()
@@ -357,6 +389,53 @@ class SceneItemStateUnitTest(unittest.TestCase):
         self.assertEqual(item.pen().color().name(), "#224466")
         self.assertEqual(item.brush().color().name(), "#335577")
         build_arrow_item.assert_called_once()
+
+    def test_apply_arrow_state_clears_stale_translation(self) -> None:
+        item = QGraphicsPathItem()
+        item.setData(0, "arrow")
+        # Simulate a prior drag/nudge: move_item shifts pos() via moveBy while
+        # the serialized start/end already hold the new absolute coordinates.
+        item.setPos(15.0, -7.0)
+        rebuilt = QGraphicsPathItem()
+        rebuilt.setPen(QPen(QColor("#224466")))
+        rebuilt.setBrush(QBrush(QColor("#335577")))
+
+        apply_scene_item_state(
+            item,
+            {"kind": "arrow", "start": (1.0, 2.0), "end": (6.0, 7.0), "double": False},
+            model_atoms={},
+            note_style_applier=lambda item: None,
+            mark_center_setter=lambda item, center: None,
+            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
+            ts_bracket_path_builder=lambda rect: QPainterPath(),
+            bond_color="#000000",
+            build_arrow_item=lambda start, end, kind: rebuilt,
+            set_curved_arrow_path=lambda *args: None,
+            orbital_base_handle_dist=18.0,
+        )
+
+        self.assertEqual((item.pos().x(), item.pos().y()), (0.0, 0.0))
+
+    def test_apply_ts_bracket_state_clears_stale_translation(self) -> None:
+        item = QGraphicsPathItem()
+        item.setData(0, "ts_bracket")
+        item.setPos(12.0, 4.0)
+
+        apply_scene_item_state(
+            item,
+            {"kind": "ts_bracket", "left": -8.0, "top": -3.0, "right": 9.0, "bottom": 6.0},
+            model_atoms={},
+            note_style_applier=lambda item: None,
+            mark_center_setter=lambda item, center: None,
+            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
+            ts_bracket_path_builder=lambda rect: QPainterPath(),
+            bond_color="#000000",
+            build_arrow_item=lambda start, end, kind: QGraphicsPathItem(),
+            set_curved_arrow_path=lambda *args: None,
+            orbital_base_handle_dist=18.0,
+        )
+
+        self.assertEqual((item.pos().x(), item.pos().y()), (0.0, 0.0))
 
     def test_apply_curved_arrow_state_uses_curve_setter(self) -> None:
         item = QGraphicsPathItem()

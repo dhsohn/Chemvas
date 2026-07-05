@@ -197,6 +197,7 @@ def should_override_chemdraw_shortcut_for(canvas, event) -> bool:
             "6",
             "7",
             "8",
+            "9",
             "a",
             "b",
             "c",
@@ -237,7 +238,29 @@ def should_override_chemdraw_shortcut_for(canvas, event) -> bool:
             "Z",
         }
     if hover_state_for(canvas).bond_id is not None:
-        return text in {"1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "a", "b", "h", "w", "B", "H"}
+        return text in {
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "0",
+            "a",
+            "b",
+            "c",
+            "d",
+            "h",
+            "l",
+            "r",
+            "w",
+            "B",
+            "D",
+            "H",
+        }
     return False
 
 

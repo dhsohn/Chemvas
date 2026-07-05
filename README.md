@@ -102,17 +102,23 @@ molecule model, annotations, arrows, bracket annotations, and settings:
 Chemvas supports a major subset of ChemDraw-compatible shortcuts.
 
 - **Empty canvas (tool hotkeys):** Select/Marquee `Space`, Bond `X`, Atom/Text `T`,
-  Arrow `E`, Benzene `J`, Brackets `Shift+G`, Perspective `Alt+D`
+  Arrow `E`, Benzene `J`, Brackets `Shift+T`, Orbitals `Shift+G`,
+  Chemical symbols `Shift+E`, Perspective `Alt+D`
 - **Atom hotkeys (hover over an atom):** element/alias labels
   `c n o s p f h b i l m e r x d` and `Shift+f/p/a/b/s/n/e/z/m/l/o/q/h/y`, charge `+`/`-`,
-  edit label `Enter`, sprout `0/1/2/3/a/4/5/6/7/8/z/v/u`
+  edit label `Enter`, sprout `0/1/2/3/a/4/5/6/7/8/9/z/v/u` (`9` = gem-dimethyl)
 - **Bond hotkeys (hover over a bond):** Single `1`, Double `2`, Triple `3`,
-  Bold `b`/`Shift+B`, Wedge `w`, Hash `h`/`Shift+H`, Benzene fusion `a`,
+  Bold `b`/`Shift+B`, Wedge `w`, Hash `h`/`Shift+H`, Dashed `d`/`Shift+D`,
+  double-bond position `l`/`c`/`r`, Benzene fusion `a`,
   Ring fusion `4/5/6/7/8`, Chair fusion `9/0`
-- **Objects:** Flip Horizontal `Ctrl+Shift+H`, Flip Vertical `Ctrl+Shift+V`
+- **Objects:** Flip Horizontal `Ctrl+Shift+H`, Flip Vertical `Ctrl+Shift+V`,
+  Rotate selection `Alt+Up/Down` (15°) and `Alt+Left/Right` (1°),
+  Nudge selection `Shift+Arrows` (10 pt)
+- **View:** Actual size `F5`, Fit to window `F6`, Magnify `F7`, Reduce `F8`
 - **File / edit:** Save / Open / Undo / Redo (platform defaults), `Ctrl+C` (copy
-  selection as image), `Delete`/`Backspace` (delete selection, or edit/delete the
-  hovered atom/bond), `Esc` (cancel template / SMILES insertion)
+  selection as image), `Ctrl+X` (cut selection), `Delete`/`Backspace` (delete
+  selection, or edit/delete the hovered atom/bond), `Esc` (cancel template /
+  SMILES insertion)
 
 ## Development
 

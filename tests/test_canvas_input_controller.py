@@ -219,6 +219,40 @@ class CanvasInputControllerTest(unittest.TestCase):
         copy_event.accept.assert_called_once_with()
         paste_event.accept.assert_called_once_with()
 
+    def test_key_press_event_view_function_keys_and_cut(self) -> None:
+        canvas = _Canvas()
+        controller = _input_controller(canvas)
+
+        with (
+            mock.patch("ui.canvas_input_controller.reset_zoom_for") as reset_zoom,
+            mock.patch("ui.canvas_input_controller.fit_canvas_to_view_for") as fit_view,
+            mock.patch("ui.canvas_input_controller.zoom_in_for") as zoom_in,
+            mock.patch("ui.canvas_input_controller.zoom_out_for") as zoom_out,
+        ):
+            for key in (Qt.Key.Key_F5, Qt.Key.Key_F6, Qt.Key.Key_F7, Qt.Key.Key_F8):
+                event = _FakeEvent(key=key)
+                controller.key_press_event(event)
+                event.accept.assert_called_once_with()
+        reset_zoom.assert_called_once_with(canvas)
+        fit_view.assert_called_once_with(canvas)
+        zoom_in.assert_called_once_with(canvas)
+        zoom_out.assert_called_once_with(canvas)
+
+        cut_event = _FakeEvent(key=Qt.Key.Key_X, matches={QKeySequence.StandardKey.Cut})
+        canvas.services.scene_clipboard_controller.copy_selection_to_clipboard.return_value = True
+        controller.key_press_event(cut_event)
+        canvas.services.scene_clipboard_controller.copy_selection_to_clipboard.assert_called_once_with()
+        canvas.services.scene_delete_controller.delete_selected_items.assert_called_once_with()
+        cut_event.accept.assert_called_once_with()
+
+        canvas = _Canvas()
+        controller = _input_controller(canvas)
+        empty_cut_event = _FakeEvent(key=Qt.Key.Key_X, matches={QKeySequence.StandardKey.Cut})
+        with mock.patch.object(QGraphicsView, "keyPressEvent", new=mock.Mock(return_value=None)):
+            controller.key_press_event(empty_cut_event)
+        canvas.services.scene_delete_controller.delete_selected_items.assert_not_called()
+        empty_cut_event.accept.assert_not_called()
+
     def test_key_press_event_escape_copy_and_paste_false_paths_fall_through(self) -> None:
         canvas = _Canvas()
         controller = _input_controller(canvas)

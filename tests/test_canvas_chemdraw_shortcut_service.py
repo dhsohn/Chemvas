@@ -68,13 +68,17 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
     def test_object_and_generic_shortcuts_dispatch_expected_actions(self) -> None:
         calls: list[tuple] = []
         scene_transform_controller = SimpleNamespace(
-            flip_selected_items=lambda *, horizontal: calls.append(("flip", horizontal))
+            flip_selected_items=lambda *, horizontal: calls.append(("flip", horizontal)),
+            rotate_selected_items=lambda angle: calls.append(("rotate", angle)),
+            translate_selected_items=lambda dx, dy: (calls.append(("translate", dx, dy)), True)[1],
         )
         tool_mode_controller = SimpleNamespace(
             set_tool=lambda tool: calls.append(("tool", tool)),
             set_bond_style=lambda style, order: calls.append(("bond_style", style, order)),
             set_arrow_type=lambda arrow_type: calls.append(("arrow_type", arrow_type)),
             set_bracket_type=lambda bracket_type: calls.append(("bracket_type", bracket_type)),
+            set_orbital_type=lambda orbital_type: calls.append(("orbital_type", orbital_type)),
+            set_mark_kind=lambda kind: calls.append(("mark_kind", kind)),
         )
         canvas = SimpleNamespace(
             _shortcut_modifiers=shortcut_modifiers_for,
@@ -96,20 +100,42 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
             )
         )
         self.assertFalse(service.handle_object_shortcut(_FakeKeyEvent(Qt.Key.Key_X)))
+        self.assertTrue(service.handle_object_shortcut(_FakeKeyEvent(Qt.Key.Key_Up, Qt.KeyboardModifier.AltModifier)))
+        self.assertTrue(
+            service.handle_object_shortcut(_FakeKeyEvent(Qt.Key.Key_Down, Qt.KeyboardModifier.AltModifier))
+        )
+        self.assertTrue(
+            service.handle_object_shortcut(_FakeKeyEvent(Qt.Key.Key_Left, Qt.KeyboardModifier.AltModifier))
+        )
+        self.assertTrue(
+            service.handle_object_shortcut(_FakeKeyEvent(Qt.Key.Key_Right, Qt.KeyboardModifier.AltModifier))
+        )
+        self.assertTrue(
+            service.handle_object_shortcut(_FakeKeyEvent(Qt.Key.Key_Right, Qt.KeyboardModifier.ShiftModifier))
+        )
 
         self.assertTrue(service.handle_generic_hotkey(_FakeKeyEvent(Qt.Key.Key_Space)))
         self.assertTrue(service.handle_generic_hotkey(_FakeKeyEvent(Qt.Key.Key_X)))
         self.assertTrue(service.handle_generic_hotkey(_FakeKeyEvent(Qt.Key.Key_E)))
+        self.assertTrue(service.handle_generic_hotkey(_FakeKeyEvent(Qt.Key.Key_T, Qt.KeyboardModifier.ShiftModifier)))
         self.assertTrue(service.handle_generic_hotkey(_FakeKeyEvent(Qt.Key.Key_G, Qt.KeyboardModifier.ShiftModifier)))
+        self.assertTrue(service.handle_generic_hotkey(_FakeKeyEvent(Qt.Key.Key_E, Qt.KeyboardModifier.ShiftModifier)))
         self.assertTrue(service.handle_generic_hotkey(_FakeKeyEvent(Qt.Key.Key_D, Qt.KeyboardModifier.AltModifier)))
         self.assertFalse(service.handle_generic_hotkey(_FakeKeyEvent(Qt.Key.Key_Z)))
 
         self.assertIn(("flip", True), calls)
         self.assertIn(("flip", False), calls)
+        self.assertIn(("rotate", -15.0), calls)
+        self.assertIn(("rotate", 15.0), calls)
+        self.assertIn(("rotate", -1.0), calls)
+        self.assertIn(("rotate", 1.0), calls)
+        self.assertIn(("translate", 10.0, 0.0), calls)
         self.assertIn(("tool", "select"), calls)
         self.assertIn(("bond_style", "single", 1), calls)
         self.assertIn(("arrow_type", "reaction"), calls)
         self.assertIn(("bracket_type", "square_pair"), calls)
+        self.assertIn(("orbital_type", "s"), calls)
+        self.assertIn(("mark_kind", "plus"), calls)
         self.assertIn(("tool", "perspective"), calls)
 
     def test_handle_shortcut_routes_between_object_atom_bond_and_generic_paths(self) -> None:
@@ -160,6 +186,7 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
                     ),
                     sprout_acetyl_from_atom=lambda atom_id: calls.append(("acetyl", atom_id)),
                     sprout_benzene_from_atom=lambda atom_id: calls.append(("benzene", atom_id)),
+                    sprout_dimethyl_from_atom=lambda atom_id: calls.append(("dimethyl", atom_id)),
                     sprout_regular_ring_from_atom=lambda atom_id, n: calls.append(("ring", atom_id, n)),
                 ),
             ),
@@ -185,6 +212,7 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         self.assertTrue(service.handle_atom_hotkey(_FakeKeyEvent(Qt.Key.Key_6, text="6"), 1))
         self.assertTrue(service.handle_atom_hotkey(_FakeKeyEvent(Qt.Key.Key_7, text="7"), 1))
         self.assertTrue(service.handle_atom_hotkey(_FakeKeyEvent(Qt.Key.Key_8, text="8"), 1))
+        self.assertTrue(service.handle_atom_hotkey(_FakeKeyEvent(Qt.Key.Key_9, text="9"), 1))
         self.assertTrue(service.handle_atom_hotkey(_FakeKeyEvent(Qt.Key.Key_Z, text="z"), 1))
         self.assertTrue(service.handle_atom_hotkey(_FakeKeyEvent(Qt.Key.Key_U, text="u"), 1))
         self.assertTrue(service.handle_atom_hotkey(_FakeKeyEvent(Qt.Key.Key_V, text="v"), 1))
@@ -198,6 +226,7 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         self.assertIn(("bond", 1, "single", 1, True), calls)
         self.assertIn(("bond", 1, "hash", 1, False), calls)
         self.assertIn(("acetyl", 1), calls)
+        self.assertIn(("dimethyl", 1), calls)
         self.assertIn(("benzene", 1), calls)
         self.assertIn(("ring", 1, 5), calls)
         self.assertIn(("ring", 1, 4), calls)
@@ -214,7 +243,7 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         canvas = SimpleNamespace(
             model=SimpleNamespace(
                 atoms={1: Atom("C", 1.0, 2.0), 2: Atom("O", 4.0, 5.0)},
-                bonds=[Bond(1, 2, 1), None],
+                bonds=[Bond(1, 2, 1), None, Bond(1, 2, 2)],
             ),
             _shortcut_modifiers=shortcut_modifiers_for,
             services=SimpleNamespace(
@@ -237,6 +266,12 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         )
         self.assertTrue(service.handle_bond_hotkey(_FakeKeyEvent(Qt.Key.Key_B, Qt.KeyboardModifier.ShiftModifier, text="B"), 0))
         self.assertTrue(service.handle_bond_hotkey(_FakeKeyEvent(Qt.Key.Key_H, Qt.KeyboardModifier.ShiftModifier, text="H"), 0))
+        self.assertTrue(service.handle_bond_hotkey(_FakeKeyEvent(Qt.Key.Key_D, Qt.KeyboardModifier.ShiftModifier, text="D"), 0))
+        self.assertTrue(service.handle_bond_hotkey(_FakeKeyEvent(Qt.Key.Key_D, text="d"), 0))
+        self.assertFalse(service.handle_bond_hotkey(_FakeKeyEvent(Qt.Key.Key_C, text="c"), 0))
+        self.assertTrue(service.handle_bond_hotkey(_FakeKeyEvent(Qt.Key.Key_C, text="c"), 2))
+        self.assertTrue(service.handle_bond_hotkey(_FakeKeyEvent(Qt.Key.Key_L, text="l"), 2))
+        self.assertTrue(service.handle_bond_hotkey(_FakeKeyEvent(Qt.Key.Key_R, text="r"), 2))
         self.assertTrue(service.handle_bond_hotkey(_FakeKeyEvent(Qt.Key.Key_1, text="1"), 0))
         self.assertTrue(service.handle_bond_hotkey(_FakeKeyEvent(Qt.Key.Key_2, text="2"), 0))
         self.assertTrue(service.handle_bond_hotkey(_FakeKeyEvent(Qt.Key.Key_3, text="3"), 0))
@@ -250,6 +285,11 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
 
         self.assertIn(("style", 0, "bold_in", 2), calls)
         self.assertIn(("style", 0, "hash", 1), calls)
+        self.assertIn(("style", 0, "dotted", 1), calls)
+        self.assertIn(("style", 0, "dotted_double", 2), calls)
+        self.assertIn(("style", 2, "double_center", 2), calls)
+        self.assertIn(("style", 2, "double", 2), calls)
+        self.assertIn(("style", 2, "double_outer", 2), calls)
         self.assertIn(("style", 0, "single", 1), calls)
         self.assertIn(("style", 0, "double", 2), calls)
         self.assertIn(("style", 0, "triple", 3), calls)
