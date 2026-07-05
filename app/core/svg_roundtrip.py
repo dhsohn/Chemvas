@@ -3,12 +3,17 @@ from __future__ import annotations
 import base64
 import json
 import zlib
+from decimal import Decimal
 from os import PathLike
-from typing import Any
+from typing import Any, cast
 from xml.etree import ElementTree as ET
 
 from core.document_io import ChemvasDocument, create_document, parse_document
-from core.document_state import CHEMVAS_FILE_TYPE, SUPPORTED_FILE_VERSIONS
+from core.document_state import (
+    CHEMVAS_FILE_TYPE,
+    SUPPORTED_FILE_VERSIONS,
+    normalize_json_numbers,
+)
 
 PathType = str | PathLike[str]
 
@@ -129,7 +134,7 @@ def _decode_source_element(source: ET.Element) -> dict[str, Any]:
     try:
         compressed = base64.b64decode(text.encode("ascii"), validate=True)
         raw = _decompress_svg_payload(compressed)
-        payload = json.loads(raw.decode("utf-8"))
+        payload = json.loads(raw.decode("utf-8"), parse_float=Decimal)
     except (ValueError, OSError, RecursionError, zlib.error, UnicodeError) as exc:
         raise ValueError("Invalid editable Chemvas metadata in SVG.") from exc
     if not isinstance(payload, dict):
@@ -164,7 +169,7 @@ def _validated_editable_svg_payload(payload: dict[str, Any]) -> dict[str, Any]:
         parse_document(document)
     except ValueError as exc:
         raise ValueError("Invalid editable Chemvas SVG payload.") from exc
-    return payload
+    return cast(dict[str, Any], normalize_json_numbers(payload))
 
 
 __all__ = [

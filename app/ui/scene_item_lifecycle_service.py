@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import suppress
+
 from PyQt6.QtCore import Qt
 
 from ui.canvas_bond_renderer_state import update_bond_geometry_for
@@ -43,13 +45,32 @@ class SceneItemLifecycleService:
         return bond_ids
 
     def refresh_bond_geometry_for_ring_item(self, item) -> None:
-        for bond_id in self.bond_ids_for_ring_item(item):
+        self._refresh_bond_geometry_for_bond_ids(self.bond_ids_for_ring_item(item))
+
+    def _refresh_bond_geometry_for_bond_ids(self, bond_ids: set[int]) -> None:
+        for bond_id in bond_ids:
             update_bond_geometry_for(self.canvas, bond_id)
+
+    def _refresh_bond_geometry_best_effort(self, bond_ids: set[int]) -> None:
+        for bond_id in bond_ids:
+            with suppress(Exception):
+                update_bond_geometry_for(self.canvas, bond_id)
 
     def attach_scene_item(self, item) -> None:
         if not item_can_be_added_to_canvas_scene(self.canvas, item):
             return
         kind = item.data(0)
+        try:
+            self._register_scene_item(item, kind)
+            make_item_selectable(item)
+            add_item_to_canvas_scene(self.canvas, item)
+            if kind == "ring":
+                self.refresh_bond_geometry_for_ring_item(item)
+        except Exception:
+            self._rollback_failed_attach(item, kind)
+            raise
+
+    def _register_scene_item(self, item, kind) -> None:
         if kind == "ring":
             append_scene_item_for(self.canvas, "ring_items", item)
         elif kind == "mark":
@@ -69,30 +90,34 @@ class SceneItemLifecycleService:
             append_scene_item_for(self.canvas, "shape_items", item)
         elif kind == "orbital":
             append_scene_item_for(self.canvas, "orbital_items", item)
-        make_item_selectable(item)
-        add_item_to_canvas_scene(self.canvas, item)
+
+    def _rollback_failed_attach(self, item, kind) -> None:
+        ring_bond_ids: set[int] = set()
         if kind == "ring":
-            self.refresh_bond_geometry_for_ring_item(item)
+            with suppress(Exception):
+                ring_bond_ids = self.bond_ids_for_ring_item(item)
+        with suppress(Exception):
+            self._remove_scene_item_registration(item, kind)
+        with suppress(Exception):
+            remove_attached_item_from_canvas_scene(self.canvas, item)
+        if ring_bond_ids:
+            self._refresh_bond_geometry_best_effort(ring_bond_ids)
 
-    def restore_scene_item(self, item) -> None:
-        self.attach_scene_item(item)
-
-    def remove_scene_item(self, item) -> None:
-        if item is None:
-            return
-        kind = item.data(0)
+    def _remove_scene_item_registration(self, item, kind) -> None:
         if kind == "ring":
             remove_scene_item_from_collection_for(self.canvas, "ring_items", item)
         elif kind == "mark":
             data = item.data(1) or {}
             atom_id = data.get("atom_id") if isinstance(data, dict) else None
-            remove_mark_item_for(self.canvas, item)
-            if isinstance(atom_id, int) and not self.marks.get_for_atom(atom_id):
-                self.marks.by_atom.pop(atom_id, None)
-            return
+            remove_scene_item_from_collection_for(self.canvas, "mark_items", item)
+            if isinstance(atom_id, int):
+                marks = self.marks.get_for_atom(atom_id)
+                if marks is not None and item in marks:
+                    marks.remove(item)
+                if not marks:
+                    self.marks.by_atom.pop(atom_id, None)
         elif kind == "note":
             remove_selected_note_for(self.canvas, item)
-            update_note_selection_box_for(self.canvas, item)
             remove_scene_item_from_collection_for(self.canvas, "note_items", item)
         elif kind in ARROW_KINDS:
             remove_scene_item_from_collection_for(self.canvas, "arrow_items", item)
@@ -102,6 +127,24 @@ class SceneItemLifecycleService:
             remove_scene_item_from_collection_for(self.canvas, "shape_items", item)
         elif kind == "orbital":
             remove_scene_item_from_collection_for(self.canvas, "orbital_items", item)
+
+    def restore_scene_item(self, item) -> None:
+        self.attach_scene_item(item)
+
+    def remove_scene_item(self, item) -> None:
+        if item is None:
+            return
+        kind = item.data(0)
+        if kind == "mark":
+            data = item.data(1) or {}
+            atom_id = data.get("atom_id") if isinstance(data, dict) else None
+            remove_mark_item_for(self.canvas, item)
+            if isinstance(atom_id, int) and not self.marks.get_for_atom(atom_id):
+                self.marks.by_atom.pop(atom_id, None)
+            return
+        self._remove_scene_item_registration(item, kind)
+        if kind == "note":
+            update_note_selection_box_for(self.canvas, item)
         if kind in {"shape", "orbital", "curved_single", "curved_double"} and item is handle_target_for(self.canvas):
             clear_handles_for(self.canvas)
         if remove_attached_item_from_canvas_scene(self.canvas, item) is None:

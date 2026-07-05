@@ -1,6 +1,7 @@
 import os
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -215,6 +216,58 @@ class SceneItemControllerTest(unittest.TestCase):
         self.assertIs(mark.scene(), self.canvas.scene())
         self.assertIs(note.scene(), self.canvas.scene())
 
+    def test_attach_scene_item_rolls_back_mark_registry_when_scene_add_fails(self) -> None:
+        mark = QGraphicsTextItem("+")
+        mark.setData(0, "mark")
+        mark.setData(1, {"atom_id": 7})
+
+        with patch("ui.scene_item_lifecycle_service.add_item_to_canvas_scene", side_effect=RuntimeError("boom")):
+            with self.assertRaisesRegex(RuntimeError, "boom"):
+                self.controller.attach_scene_item(mark)
+
+        self.assertEqual(self.canvas.mark_items, [])
+        self.assertEqual(self.canvas.mark_registry.by_atom, {})
+        self.assertIsNone(mark.scene())
+
+    def test_attach_scene_item_removes_scene_item_when_ring_refresh_fails(self) -> None:
+        ring = QGraphicsPolygonItem(QPolygonF([QPointF(0.0, 0.0), QPointF(4.0, 0.0), QPointF(2.0, 3.0)]))
+        ring.setData(0, "ring")
+        ring.setData(2, [1, 2, 3])
+        self.canvas.bond_lookup = {(1, 2): 17}
+
+        def fail_update(_bond_id: int) -> None:
+            raise RuntimeError("refresh failed")
+
+        self.canvas.bond_renderer.update_bond_geometry = fail_update
+
+        with self.assertRaisesRegex(RuntimeError, "refresh failed"):
+            self.controller.attach_scene_item(ring)
+
+        self.assertEqual(self.canvas.ring_items, [])
+        self.assertIsNone(ring.scene())
+
+    def test_attach_scene_item_refreshes_ring_bonds_after_partial_refresh_failure(self) -> None:
+        ring = QGraphicsPolygonItem(QPolygonF([QPointF(0.0, 0.0), QPointF(4.0, 0.0), QPointF(2.0, 3.0)]))
+        ring.setData(0, "ring")
+        ring.setData(2, [1, 2, 3])
+        self.canvas.bond_lookup = {(1, 2): 17, (2, 3): 18, (3, 1): 19}
+        calls = []
+
+        def fail_second_update(bond_id: int) -> None:
+            calls.append((bond_id, ring in self.canvas.ring_items, ring.scene() is self.canvas.scene()))
+            if len(calls) == 2:
+                raise RuntimeError("refresh failed")
+
+        self.canvas.bond_renderer.update_bond_geometry = fail_second_update
+
+        with self.assertRaisesRegex(RuntimeError, "refresh failed"):
+            self.controller.attach_scene_item(ring)
+
+        post_rollback_calls = [bond_id for bond_id, registered, in_scene in calls if not registered and not in_scene]
+        self.assertEqual(self.canvas.ring_items, [])
+        self.assertIsNone(ring.scene())
+        self.assertCountEqual(post_rollback_calls, [17, 18, 19])
+
     def test_restore_scene_item_skips_already_attached_or_deleted_items(self) -> None:
         note = QGraphicsTextItem("Attached")
         note.setData(0, "note")
@@ -365,6 +418,9 @@ class SceneItemControllerTest(unittest.TestCase):
         mark = self.controller.create_scene_item_from_state(
             {"kind": "mark", "mark_kind": "plus", "atom_id": 3, "dx": 2.0, "dy": -1.0}
         )
+        default_mark = self.controller.create_scene_item_from_state(
+            {"kind": "mark", "mark_kind": None, "atom_id": None, "x": 6.0, "y": 7.0}
+        )
         unknown = self.controller.create_scene_item_from_state({"kind": "mystery"})
         invalid_ring = self.controller.create_scene_item_from_state({"kind": "ring", "points": [(0.0, 0.0), (1.0, 1.0)]})
         invalid_arrow = self.controller.create_scene_item_from_state({"kind": "arrow", "start": (0.0, 0.0)})
@@ -377,6 +433,9 @@ class SceneItemControllerTest(unittest.TestCase):
         self.assertIn(note, self.canvas.note_items)
         self.assertIsNotNone(mark)
         self.assertIn(mark, self.canvas.mark_items)
+        self.assertIsNotNone(default_mark)
+        self.assertIn(default_mark, self.canvas.mark_items)
+        self.assertEqual(self.canvas.built_mark_kinds[:2], ["plus", "plus"])
         self.assertIsNone(unknown)
         self.assertIsNone(invalid_ring)
         self.assertIsNone(invalid_arrow)

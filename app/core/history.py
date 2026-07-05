@@ -266,10 +266,29 @@ class DeleteAtomsCommand(HistoryCommand):
     before_smiles_input: str | None = None
     after_smiles_input: str | None = None
     remove_marks: bool = True
+    atom_coords_3d: dict[int, tuple[float, float, float]] | None = None
+    restore_projection_state: bool = False
+    before_projection_center_3d: tuple[float, float, float] | None = None
+    after_projection_center_3d: tuple[float, float, float] | None = None
+    before_projection_anchor_2d: tuple[float, float] | None = None
+    after_projection_anchor_2d: tuple[float, float] | None = None
 
     def undo(self, canvas) -> None:
+        if self.restore_projection_state:
+            _history_canvas_port().restore_projection_state_for_history(
+                canvas,
+                self.before_projection_center_3d,
+                self.before_projection_anchor_2d,
+            )
         for atom_id, state in self.atom_states.items():
             _history_canvas_port().restore_atom_from_state_for_history(canvas, atom_id, state)
+        if self.atom_coords_3d:
+            _history_canvas_port().set_atom_positions_for_history(
+                canvas,
+                {},
+                update_selection=False,
+                coords_3d=self.atom_coords_3d,
+            )
         if self.remove_marks:
             for mark_state in self.mark_states:
                 _history_canvas_port().restore_mark_from_state_for_history(canvas, mark_state)
@@ -279,6 +298,12 @@ class DeleteAtomsCommand(HistoryCommand):
     def redo(self, canvas) -> None:
         for atom_id in self.atom_states:
             _history_canvas_port().remove_atom_for_history(canvas, atom_id, remove_marks=self.remove_marks)
+        if self.restore_projection_state:
+            _history_canvas_port().restore_projection_state_for_history(
+                canvas,
+                self.after_projection_center_3d,
+                self.after_projection_anchor_2d,
+            )
         canvas.model.next_atom_id = self.after_next_atom_id
         _set_last_smiles_input(canvas, self.after_smiles_input)
 

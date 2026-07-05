@@ -112,6 +112,7 @@ class AtomLabelHistoryRecorder:
                     before_smiles_input=before_smiles_input,
                     after_smiles_input=after_smiles_input,
                     remove_marks=False,
+                    atom_coords_3d=merge_info.get("atom_coords_3d") or None,
                 )
             )
         return commands

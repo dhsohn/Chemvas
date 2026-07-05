@@ -223,6 +223,24 @@ class SceneDeleteLogicTest(unittest.TestCase):
         self.assertEqual(len(canvas.pushed_commands), 1)
         self.assertIsInstance(canvas.pushed_commands[0], DeleteBondCommand)
 
+    def test_delete_selected_items_rolls_back_scene_item_when_history_push_fails(self) -> None:
+        canvas = _FakeCanvas()
+        note_item = _make_note_item("Mechanism", 12.0, 18.0)
+        canvas.add_item(note_item, selected=True)
+
+        def fail_push(_command) -> None:
+            raise RuntimeError("history")
+
+        canvas.history_service.push = fail_push
+        controller = scene_delete_controller_for(canvas)
+
+        with self.assertRaisesRegex(RuntimeError, "history"):
+            controller.delete_selected_items()
+
+        self.assertIs(note_item.scene(), canvas.scene())
+        self.assertEqual(canvas.removed_scene_items, [note_item])
+        self.assertEqual(canvas.pushed_commands, [])
+
     def test_delete_selected_items_classifies_scene_items_and_moves_atom_bound_marks_into_atom_delete_state(self) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(

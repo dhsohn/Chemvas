@@ -13,13 +13,18 @@ def _valid_payload() -> dict:
         "atoms": [
             {"id": 0, "element": "C", "x": 1.0, "y": 2.0, "color": "#000000", "explicit_label": False},
             {"id": 1, "element": "O", "x": 3.0, "y": 4.0, "color": "#ff0000", "explicit_label": True},
+            {"id": 2, "element": "C", "x": 2.0, "y": 5.0, "color": "#000000", "explicit_label": False},
         ],
-        "bonds": [{"a": 0, "b": 1, "order": 2, "style": "double", "color": "#000000"}],
+        "bonds": [
+            {"a": 0, "b": 1, "order": 2, "style": "double", "color": "#000000"},
+            {"a": 1, "b": 2, "order": 1, "style": "single", "color": "#000000"},
+            {"a": 2, "b": 0, "order": 1, "style": "single", "color": "#000000"},
+        ],
         "rings": [
             {
                 "kind": "ring",
-                "points": [[0.0, 0.0], [1.0, 0.0], [0.5, 1.0]],
-                "atom_ids": [0, 1],
+                "points": [[1.0, 2.0], [3.0, 4.0], [2.0, 5.0]],
+                "atom_ids": [0, 1, 2],
                 "color": "#112233",
                 "alpha": 0.3,
             }
@@ -192,8 +197,61 @@ class ClipboardPayloadValidationTest(unittest.TestCase):
     def test_rejects_bond_referencing_missing_atom(self) -> None:
         self._assert_rejected(lambda p: p["bonds"][0].__setitem__("b", 99))
 
+    def test_rejects_duplicate_bond_pairs(self) -> None:
+        self._assert_rejected(
+            lambda p: p["bonds"].append({"a": 1, "b": 0, "order": 1, "style": "single", "color": "#000000"})
+        )
+
     def test_rejects_ring_atom_outside_selection(self) -> None:
-        self._assert_rejected(lambda p: p["rings"][0].__setitem__("atom_ids", [0, 42]))
+        self._assert_rejected(lambda p: p["rings"][0].__setitem__("atom_ids", [0, 1, 42]))
+
+    def test_rejects_degenerate_ring_points(self) -> None:
+        self._assert_rejected(lambda p: p["rings"][0].__setitem__("points", [[0.0, 0.0], [1.0, 0.0]]))
+
+    def test_rejects_degenerate_ring_atom_cycle(self) -> None:
+        cases = [
+            ("null", lambda p: p["rings"][0].__setitem__("atom_ids", None)),
+            ("empty", lambda p: p["rings"][0].__setitem__("atom_ids", [])),
+            ("short", lambda p: p["rings"][0].__setitem__("atom_ids", [0, 1])),
+            ("duplicate", lambda p: p["rings"][0].__setitem__("atom_ids", [0, 1, 0])),
+            ("missing closing bond", lambda p: p["bonds"].pop()),
+            ("point count mismatch", lambda p: p["rings"][0]["points"].append([0.0, 0.5])),
+            (
+                "large coordinate mismatch",
+                lambda p: (
+                    p["atoms"][0].__setitem__("x", 1_000_000_000.0),
+                    p["rings"][0]["points"][0].__setitem__(0, 1_000_000_000.5),
+                ),
+            ),
+            (
+                "huge integer coordinate mismatch",
+                lambda p: (
+                    p["atoms"][0].__setitem__("x", 10**20),
+                    p["rings"][0]["points"][0].__setitem__(0, 10**20 + 1000),
+                ),
+            ),
+            (
+                "unrepresentable integer coordinate",
+                lambda p: (
+                    p["atoms"][0].__setitem__("x", 10**20 + 1),
+                    p["rings"][0]["points"][0].__setitem__(0, 10**20 + 1),
+                ),
+            ),
+            (
+                "unsafe float coordinate",
+                lambda p: (
+                    p["atoms"][0].__setitem__("x", 1e20),
+                    p["rings"][0]["points"][0].__setitem__(0, 1e20),
+                ),
+            ),
+        ]
+        for name, mutate in cases:
+            with self.subTest(name=name):
+                self._assert_rejected(mutate)
+
+    def test_rejects_ring_alpha_out_of_range(self) -> None:
+        self._assert_rejected(lambda p: p["rings"][0].__setitem__("alpha", 1.1))
+        self._assert_rejected(lambda p: p["rings"][0].__setitem__("alpha", -0.1))
 
     def test_rejects_invalid_mark_kind(self) -> None:
         self._assert_rejected(lambda p: p["marks"][0].__setitem__("mark_kind", "bogus"))
@@ -246,6 +304,7 @@ class ClipboardPayloadValidationTest(unittest.TestCase):
             "stroke_style": "solid",
         }
         self._assert_rejected(lambda p: p["scene_items"].append({**shape, "fill": "red"}))
+        self._assert_rejected(lambda p: p["scene_items"].append({**shape, "fill": "#123456", "fill_alpha": 1.1}))
         self._assert_rejected(lambda p: p["scene_items"].append({**shape, "injected": True}))
 
     def test_rejects_invalid_orbital_kind(self) -> None:

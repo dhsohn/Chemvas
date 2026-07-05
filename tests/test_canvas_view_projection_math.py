@@ -175,6 +175,10 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                     2: Atom("O", 20.0, 0.0),
                 }
             ),
+            rotation_state=CanvasRotationState(
+                projection_center_3d=(10.0, 0.0, 0.0),
+                projection_anchor_2d=(10.0, 0.0),
+            ),
             bond_items={},
             atom_items={},
             atom_dots={},
@@ -186,6 +190,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             ),
         )
         set_scene_item_collection_for(view, "ring_items", [ring_item])
+        set_atom_coords_3d_for(view, {1: (0.25, 0.0, 4.0), 2: (19.75, 0.0, 4.0)})
 
         CanvasGeometryController(
             view,
@@ -196,6 +201,10 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertEqual(style.bond_length_px, 30.0)
         self.assertAlmostEqual(view.model.atoms[1].x, -5.0)
         self.assertAlmostEqual(view.model.atoms[2].x, 25.0)
+        self.assertEqual(atom_coords_3d_for(view), {1: (-4.625, 0.0, 6.0), 2: (24.625, 0.0, 6.0)})
+        self.assertEqual(current_atom_coords_3d_for(view, 1), (-4.625, 0.0, 6.0))
+        self.assertEqual(view.rotation_state.projection_center_3d, (10.0, 0.0, 0.0))
+        self.assertEqual(view.rotation_state.projection_anchor_2d, (10.0, 0.0))
         scaled_points = [(point.x(), point.y()) for point in ring_item.polygon()]
         self.assertEqual(scaled_points, [(-5.0, 0.0), (25.0, 0.0), (10.0, 15.0)])
         structure_build_service.render_model.assert_called_once_with()
@@ -203,6 +212,12 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         command = pushed[0]
         self.assertIsInstance(command, CompositeCommand)
         self.assertEqual([type(entry) for entry in command.commands], [UpdateBondLengthCommand, SetAtomPositionsCommand, SetRingPolygonsCommand])
+        atom_positions_command = command.commands[1]
+        self.assertEqual(atom_positions_command.before_coords_3d, {1: (0.25, 0.0, 4.0), 2: (19.75, 0.0, 4.0)})
+        self.assertEqual(atom_positions_command.after_coords_3d, {1: (-4.625, 0.0, 6.0), 2: (24.625, 0.0, 6.0)})
+        self.assertTrue(atom_positions_command.restore_projection_state)
+        self.assertEqual(atom_positions_command.before_projection_center_3d, (10.0, 0.0, 0.0))
+        self.assertEqual(atom_positions_command.after_projection_center_3d, (10.0, 0.0, 0.0))
 
     def test_set_bond_length_short_circuits_for_empty_model_or_same_scale(self) -> None:
         empty_style = SimpleNamespace(bond_length_px=20.0)

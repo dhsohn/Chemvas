@@ -12,8 +12,10 @@ from core.history import (
     HistoryCommand,
 )
 
+from ui.atom_coords_access import atom_coords_3d_for
 from ui.canvas_mark_registry import mark_registry_for
 from ui.canvas_model_access import atoms_for, bonds_for, next_atom_id_for
+from ui.canvas_rotation_state import rotation_state_for
 from ui.canvas_scene_items_state import (
     arrow_items_for,
     mark_items_for,
@@ -42,6 +44,9 @@ class SmilesLoadSnapshot:
     atom_states: dict[int, dict]
     bond_states: dict[int, dict]
     mark_states_for_atoms: list[dict]
+    atom_coords_3d: dict[int, tuple[float, float, float]] | None = None
+    before_projection_center_3d: tuple[float, float, float] | None = None
+    before_projection_anchor_2d: tuple[float, float] | None = None
     scene_items: list[object] = field(default_factory=list)
     scene_item_states: list[dict] = field(default_factory=list)
 
@@ -64,6 +69,7 @@ class SmilesLoadSnapshot:
                 )
             )
         if self.atom_states:
+            rotation_state = rotation_state_for(canvas)
             commands.append(
                 DeleteAtomsCommand(
                     atom_states=self.atom_states,
@@ -72,6 +78,12 @@ class SmilesLoadSnapshot:
                     after_next_atom_id=after_clear_next_atom_id,
                     before_smiles_input=self.before_smiles_input,
                     after_smiles_input=after_smiles_input,
+                    atom_coords_3d=self.atom_coords_3d,
+                    restore_projection_state=True,
+                    before_projection_center_3d=self.before_projection_center_3d,
+                    after_projection_center_3d=rotation_state.projection_center_3d,
+                    before_projection_anchor_2d=self.before_projection_anchor_2d,
+                    after_projection_anchor_2d=rotation_state.projection_anchor_2d,
                 )
             )
         if self.scene_item_states:
@@ -140,6 +152,11 @@ class SmilesLoadTransactionBuilder:
         for atom_id in atom_states:
             for mark in self.marks.get_for_atom(atom_id) or []:
                 mark_states_for_atoms.append(mark_state_dict_for(self.canvas, mark))
+        stored_coords_3d = atom_coords_3d_for(self.canvas)
+        atom_coords_3d = {
+            atom_id: stored_coords_3d[atom_id] for atom_id in atom_states if atom_id in stored_coords_3d
+        }
+        rotation_state = rotation_state_for(self.canvas)
         scene_items = self._scene_items_for_delete(set(atom_states))
         scene_item_states = [scene_item_state_for(self.canvas, item) for item in scene_items]
         return SmilesLoadSnapshot(
@@ -148,6 +165,9 @@ class SmilesLoadTransactionBuilder:
             atom_states=atom_states,
             bond_states=bond_states,
             mark_states_for_atoms=mark_states_for_atoms,
+            atom_coords_3d=atom_coords_3d or None,
+            before_projection_center_3d=rotation_state.projection_center_3d,
+            before_projection_anchor_2d=rotation_state.projection_anchor_2d,
             scene_items=scene_items,
             scene_item_states=scene_item_states,
         )

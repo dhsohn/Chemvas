@@ -154,13 +154,13 @@ class StructureBuildService:
         snapshot = self.committer.begin_recorded_change(before_smiles_input=before_smiles_input)
         try:
             added_scene_items = action()
+            if added_scene_items is None:
+                self.committer.abort_recorded_change(snapshot)
+                return []
+            self.committer.record_additions(snapshot, added_scene_items=added_scene_items)
         except Exception:
             self.committer.abort_recorded_change(snapshot)
             raise
-        if added_scene_items is None:
-            self.committer.abort_recorded_change(snapshot)
-            return []
-        self.committer.record_additions(snapshot, added_scene_items=added_scene_items)
         return added_scene_items
 
     def _run_fragment_recorded_build(
@@ -188,10 +188,10 @@ class StructureBuildService:
             if not action():
                 self.committer.abort_recorded_change(snapshot)
                 return False
+            self.committer.record_additions(snapshot)
         except Exception:
             self.committer.abort_recorded_change(snapshot)
             raise
-        self.committer.record_additions(snapshot)
         return True
 
     def _fragment_actions(self) -> StructureFragmentBuildActions:

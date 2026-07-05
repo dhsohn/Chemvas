@@ -426,6 +426,43 @@ class HistoryCommandTest(unittest.TestCase):
         self.assertEqual(atom_coords_3d_for(canvas)[3], (1.0, 2.0, 3.0))
         self.assertIn(("redraw_bonds_for_atoms", {3}), canvas.calls)
 
+    def test_delete_atoms_command_restores_atom_coords_3d_on_undo(self) -> None:
+        canvas = _FakeCanvas()
+        command = DeleteAtomsCommand(
+            atom_states={3: {"element": "N", "x": 1.0, "y": 2.0}},
+            before_next_atom_id=4,
+            after_next_atom_id=3,
+            atom_coords_3d={3: (1.0, 2.0, 3.0)},
+        )
+
+        command.undo(canvas)
+
+        self.assertEqual(atom_coords_3d_for(canvas)[3], (1.0, 2.0, 3.0))
+        self.assertIn(("redraw_bonds_for_atoms", {3}), canvas.calls)
+
+    def test_delete_atoms_command_restores_projection_state_when_requested(self) -> None:
+        canvas = _FakeCanvas()
+        command = DeleteAtomsCommand(
+            atom_states={3: {"element": "N", "x": 1.0, "y": 2.0}},
+            before_next_atom_id=4,
+            after_next_atom_id=3,
+            atom_coords_3d={3: (1.0, 2.0, 3.0)},
+            restore_projection_state=True,
+            before_projection_center_3d=(1.0, 2.0, 3.0),
+            after_projection_center_3d=None,
+            before_projection_anchor_2d=(1.0, 2.0),
+            after_projection_anchor_2d=None,
+        )
+
+        command.undo(canvas)
+        self.assertEqual(canvas.rotation_state.projection_center_3d, (1.0, 2.0, 3.0))
+        self.assertEqual(canvas.rotation_state.projection_anchor_2d, (1.0, 2.0))
+        self.assertEqual(atom_coords_3d_for(canvas)[3], (1.0, 2.0, 3.0))
+
+        command.redo(canvas)
+        self.assertIsNone(canvas.rotation_state.projection_center_3d)
+        self.assertIsNone(canvas.rotation_state.projection_anchor_2d)
+
     def test_delete_atoms_command_can_skip_mark_restoration_and_mark_removal(self) -> None:
         canvas = _FakeCanvas()
         command = DeleteAtomsCommand(

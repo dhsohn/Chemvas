@@ -50,7 +50,7 @@ class CanvasStyleController:
         self._apply_text_style_to_selected()
 
     def set_text_weight(self, weight: int) -> None:
-        self._set_text_style("text_font_weight", max(0, min(99, int(weight))))
+        self._set_text_style("text_font_weight", max(1, min(1000, int(weight))))
         self._apply_text_style_to_selected()
 
     def get_text_weight(self) -> int:

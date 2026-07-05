@@ -331,6 +331,44 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertEqual(canvas.record_calls, [])
         self.assertEqual(last_smiles_input_for(canvas), "kept")
 
+    def test_run_recorded_build_rolls_back_when_history_recording_fails(self) -> None:
+        canvas = _FakeCanvas()
+        service = _service_for(canvas)
+        ring = _FakeRingItem(
+            False,
+            [QPointF(0.0, 0.0), QPointF(1.0, 0.0), QPointF(0.0, 1.0)],
+            [0],
+        )
+        canvas.services.canvas_history_recording_service.record_additions = Mock(side_effect=RuntimeError("history"))
+
+        def action() -> list:
+            service.committer.add_atom("C", 1.0, 2.0)
+            canvas.attach_scene_item(ring)
+            return [ring]
+
+        with self.assertRaisesRegex(RuntimeError, "history"):
+            service.run_recorded_build(action)
+
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertEqual(canvas.ring_items, [])
+        self.assertEqual(canvas.scene_items, [])
+        self.assertEqual(last_smiles_input_for(canvas), "before")
+
+    def test_run_recorded_additions_action_rolls_back_when_history_recording_fails(self) -> None:
+        canvas = _FakeCanvas()
+        service = _service_for(canvas)
+        canvas.services.canvas_history_recording_service.record_additions = Mock(side_effect=RuntimeError("history"))
+
+        def action() -> bool:
+            service.committer.add_atom("C", 1.0, 2.0)
+            return True
+
+        with self.assertRaisesRegex(RuntimeError, "history"):
+            service._run_recorded_additions_action(action)
+
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertEqual(last_smiles_input_for(canvas), "before")
+
     def test_template_helpers_compute_centered_inputs(self) -> None:
         canvas = _FakeCanvas()
         service = _service_for(canvas)

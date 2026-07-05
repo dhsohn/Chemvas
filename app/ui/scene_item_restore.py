@@ -92,7 +92,8 @@ def create_mark_item_from_state(
     center = mark_center_from_state(mark_state, model_atoms)
     if center is None:
         return None
-    kind = str(mark_state.get("mark_kind", "plus"))
+    mark_kind = mark_state.get("mark_kind")
+    kind = mark_kind if isinstance(mark_kind, str) else "plus"
     item = build_mark_item(kind)
     if item is None:
         return None
