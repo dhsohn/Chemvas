@@ -6,7 +6,12 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
     from PyQt6.QtCore import QRectF
-    from PyQt6.QtWidgets import QApplication, QGraphicsRectItem, QGraphicsScene
+    from PyQt6.QtWidgets import (
+        QApplication,
+        QGraphicsItemGroup,
+        QGraphicsRectItem,
+        QGraphicsScene,
+    )
 except ModuleNotFoundError:
     QApplication = None
 
@@ -14,6 +19,7 @@ if QApplication is not None:
     from ui.export_scene_scope import (
         collect_export_items,
         content_bounds,
+        export_item_closure,
         exported_scene,
         item_export_bounds,
         set_label_outline_mode,
@@ -76,4 +82,26 @@ def test_exported_scene_hides_non_export_items_and_restores_outline_mode() -> No
 
     assert hidden_item.isVisible()
     assert export_item.outline_modes == [True, False]
+    assert app is not None
+
+
+def test_exported_scene_keeps_export_item_descendants_visible() -> None:
+    app = QApplication.instance() or QApplication([])
+    scene = QGraphicsScene()
+    group = QGraphicsItemGroup()
+    group.setData(0, "orbital")
+    child = QGraphicsRectItem(0.0, 0.0, 10.0, 10.0)
+    group.addToGroup(child)
+    unrelated = QGraphicsRectItem(20.0, 0.0, 10.0, 10.0)
+    scene.addItem(group)
+    scene.addItem(unrelated)
+
+    assert export_item_closure([group]) == [group, child]
+
+    with exported_scene(scene, [group]):
+        assert group.isVisible()
+        assert child.isVisible()
+        assert not unrelated.isVisible()
+
+    assert unrelated.isVisible()
     assert app is not None

@@ -108,8 +108,19 @@ def _serialize_marks(
         if not mark_state:
             continue
         seen_mark_items.add(item)
-        marks.append(mark_state)
+        marks.append(_selected_mark_state_for_payload(mark_state, atom_ids))
     return marks
+
+
+def _selected_mark_state_for_payload(mark_state: dict, atom_ids: set[int]) -> dict:
+    atom_id = mark_state.get("atom_id")
+    if not isinstance(atom_id, int) or atom_id in atom_ids:
+        return mark_state
+    detached = dict(mark_state)
+    detached["atom_id"] = None
+    detached["dx"] = None
+    detached["dy"] = None
+    return detached
 
 
 def _serialize_scene_items(

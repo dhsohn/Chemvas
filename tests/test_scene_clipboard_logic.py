@@ -374,6 +374,51 @@ class SceneClipboardLogicTest(unittest.TestCase):
             _without_html(payload["scene_items"]), [{"kind": "note", "text": "keep", "x": 10.0, "y": 11.0}]
         )
 
+    def test_selected_atom_bound_mark_without_atom_serializes_as_pastable_standalone_mark(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[])
+        mark = _make_text_item(
+            "mark",
+            "+",
+            {
+                "kind": "mark",
+                "mark_kind": "plus",
+                "text": "+",
+                "atom_id": 1,
+                "dx": 2.0,
+                "dy": 3.0,
+                "x": 2.0,
+                "y": 3.0,
+            },
+        )
+        canvas.add_item(mark, selected=True)
+
+        controller = scene_clipboard_controller_for(canvas)
+        payload = controller.selection_payload_for_clipboard()
+
+        self.assertIsNotNone(payload)
+        assert payload is not None
+        self.assertEqual(payload["atoms"], [])
+        self.assertEqual(
+            payload["marks"],
+            [
+                {
+                    "kind": "mark",
+                    "mark_kind": "plus",
+                    "text": "+",
+                    "atom_id": None,
+                    "dx": None,
+                    "dy": None,
+                    "x": 2.0,
+                    "y": 3.0,
+                }
+            ],
+        )
+        payload_json = json.dumps(payload, separators=(",", ":"))
+        decoded_payload, decoded_json = decode_clipboard_selection_payload([payload_json], version=1)
+        self.assertEqual(decoded_payload, payload)
+        self.assertEqual(decoded_json, payload_json)
+
     def test_selection_payload_returns_none_when_every_selected_entry_is_invalid_or_empty(self) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(

@@ -55,6 +55,23 @@ class ClipboardPayloadValidationTest(unittest.TestCase):
         payload["scene_items"] = []
         self.assertTrue(validate_clipboard_selection_payload(payload))
 
+    def test_accepts_unattached_mark_without_offsets(self) -> None:
+        payload = _valid_payload()
+        payload["marks"] = [
+            {
+                "kind": "mark",
+                "mark_kind": None,
+                "text": None,
+                "atom_id": None,
+                "dx": None,
+                "dy": None,
+                "x": 2.0,
+                "y": 3.0,
+            }
+        ]
+
+        self.assertTrue(validate_clipboard_selection_payload(payload))
+
     def _assert_rejected(self, mutate) -> None:
         payload = _valid_payload()
         mutate(payload)
@@ -93,14 +110,61 @@ class ClipboardPayloadValidationTest(unittest.TestCase):
     def test_rejects_invalid_mark_kind(self) -> None:
         self._assert_rejected(lambda p: p["marks"][0].__setitem__("mark_kind", "bogus"))
 
+    def test_rejects_mark_referencing_missing_atom(self) -> None:
+        self._assert_rejected(lambda p: p["marks"][0].__setitem__("atom_id", 42))
+
+    def test_rejects_unattached_mark_with_atom_offsets(self) -> None:
+        self._assert_rejected(lambda p: p["marks"][0].update({"atom_id": None, "dx": 1.0, "dy": 1.0}))
+
+    def test_rejects_mark_with_partial_offset(self) -> None:
+        self._assert_rejected(lambda p: p["marks"][0].__setitem__("dy", None))
+
     def test_rejects_unknown_scene_item_kind(self) -> None:
         self._assert_rejected(lambda p: p["scene_items"].append({"kind": "wormhole"}))
 
     def test_rejects_arrow_without_endpoints(self) -> None:
         self._assert_rejected(lambda p: p["scene_items"][1].__setitem__("end", None))
 
+    def test_rejects_arrow_extra_key_and_non_bool_double(self) -> None:
+        self._assert_rejected(lambda p: p["scene_items"][1].__setitem__("injected", True))
+        self._assert_rejected(lambda p: p["scene_items"][1].__setitem__("double", "yes"))
+
+    def test_accepts_valid_shape_scene_item(self) -> None:
+        payload = _valid_payload()
+        payload["scene_items"].append(
+            {
+                "kind": "shape",
+                "left": 0.0,
+                "top": 1.0,
+                "right": 2.0,
+                "bottom": 3.0,
+                "shape_kind": "rect",
+                "stroke_style": "solid",
+                "fill": "#123456",
+                "fill_alpha": 0.4,
+            }
+        )
+
+        self.assertTrue(validate_clipboard_selection_payload(payload))
+
+    def test_rejects_shape_bad_fill_and_extra_keys(self) -> None:
+        shape = {
+            "kind": "shape",
+            "left": 0.0,
+            "top": 1.0,
+            "right": 2.0,
+            "bottom": 3.0,
+            "shape_kind": "rect",
+            "stroke_style": "solid",
+        }
+        self._assert_rejected(lambda p: p["scene_items"].append({**shape, "fill": "red"}))
+        self._assert_rejected(lambda p: p["scene_items"].append({**shape, "injected": True}))
+
     def test_rejects_invalid_orbital_kind(self) -> None:
         self._assert_rejected(lambda p: p["scene_items"][3].__setitem__("orbital_kind", "f"))
+
+    def test_rejects_orbital_extra_key(self) -> None:
+        self._assert_rejected(lambda p: p["scene_items"][3].__setitem__("injected", True))
 
     def test_rejects_non_list_sections(self) -> None:
         self._assert_rejected(lambda p: p.__setitem__("atoms", {}))
