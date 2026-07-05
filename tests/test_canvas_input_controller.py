@@ -105,6 +105,7 @@ class _Canvas(QGraphicsView):
         atom_label_service = SimpleNamespace(add_or_update_atom_label=mock.Mock())
         hover_scene_service = SimpleNamespace(clear_hover_highlight=mock.Mock())
         self.chemdraw_shortcut_service = SimpleNamespace(handle_shortcut=mock.Mock(return_value=False))
+        self.tool_mode_controller = SimpleNamespace(set_tool=mock.Mock())
         self.services = SimpleNamespace(
             history_service=self.history_service,
             insert_controller=insert_controller,
@@ -154,6 +155,7 @@ def _input_controller(canvas: _Canvas) -> CanvasInputController:
         history_service=canvas.services.history_service,
         hover_refresh=canvas.hover_refresh,
         chemdraw_shortcut_service=canvas.chemdraw_shortcut_service,
+        tool_mode_controller=canvas.tool_mode_controller,
     )
 
 
@@ -218,6 +220,45 @@ class CanvasInputControllerTest(unittest.TestCase):
         redo_event.accept.assert_called_once_with()
         copy_event.accept.assert_called_once_with()
         paste_event.accept.assert_called_once_with()
+
+    def test_key_press_select_all_switches_to_select_tool_and_selects(self) -> None:
+        canvas = _Canvas()
+        controller = _input_controller(canvas)
+        event = _FakeEvent(key=Qt.Key.Key_A, matches={QKeySequence.StandardKey.SelectAll})
+
+        with mock.patch(
+            "ui.canvas_input_controller.select_all_scene_items_for",
+            return_value=True,
+        ) as select_all:
+            controller.key_press_event(event)
+
+        canvas.tool_mode_controller.set_tool.assert_called_once_with("select")
+        select_all.assert_called_once_with(canvas)
+        event.accept.assert_called_once_with()
+
+    def test_key_press_ctrl_g_groups_and_ctrl_shift_g_ungroups(self) -> None:
+        canvas = _Canvas()
+        controller = _input_controller(canvas)
+        group_event = _FakeEvent(
+            key=Qt.Key.Key_G,
+            modifiers=Qt.KeyboardModifier.ControlModifier,
+        )
+        ungroup_event = _FakeEvent(
+            key=Qt.Key.Key_G,
+            modifiers=Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier,
+        )
+
+        with (
+            mock.patch("ui.canvas_input_controller.group_selection_for", return_value=True) as group,
+            mock.patch("ui.canvas_input_controller.ungroup_selection_for", return_value=True) as ungroup,
+        ):
+            controller.key_press_event(group_event)
+            controller.key_press_event(ungroup_event)
+
+        group.assert_called_once_with(canvas)
+        ungroup.assert_called_once_with(canvas)
+        group_event.accept.assert_called_once_with()
+        ungroup_event.accept.assert_called_once_with()
 
     def test_key_press_event_view_function_keys_and_cut(self) -> None:
         canvas = _Canvas()

@@ -23,6 +23,8 @@ from ui.insert_session_access import (
     cancel_smiles_insert_for,
     cancel_template_insert_for,
 )
+from ui.scene_group_operations import group_selection_for, ungroup_selection_for
+from ui.select_all_access import select_all_scene_items_for
 from ui.selection_collection_access import selected_scene_items_for
 
 
@@ -36,6 +38,7 @@ class CanvasInputController:
         history_service=None,
         hover_refresh: Callable[[], None] | None = None,
         chemdraw_shortcut_service=None,
+        tool_mode_controller,
     ) -> None:
         self.canvas = canvas
         self.insert_state = insert_state_for(canvas)
@@ -44,6 +47,7 @@ class CanvasInputController:
         self.scene_clipboard = scene_clipboard_controller
         self._hover_refresh = hover_refresh or (lambda: None)
         self.chemdraw_shortcut_service = chemdraw_shortcut_service
+        self.tool_mode_controller = tool_mode_controller
 
     @property
     def history(self):
@@ -132,6 +136,21 @@ class CanvasInputController:
             event.accept()
             return
         if event.matches(QKeySequence.StandardKey.Paste) and self.scene_clipboard.paste_selection_from_clipboard():
+            event.accept()
+            return
+        if event.matches(QKeySequence.StandardKey.SelectAll):
+            self.tool_mode_controller.set_tool("select")
+            select_all_scene_items_for(self.canvas)
+            event.accept()
+            return
+        if (
+            event.modifiers() & Qt.KeyboardModifier.ControlModifier
+            and event.key() == Qt.Key.Key_G
+        ):
+            if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+                ungroup_selection_for(self.canvas)
+            else:
+                group_selection_for(self.canvas)
             event.accept()
             return
         if event.key() in (Qt.Key.Key_Backspace, Qt.Key.Key_Delete):

@@ -12,6 +12,7 @@ from ui.bond_graphics_access import parallel_bond_segments_for
 from ui.canvas_atom_graphics_state import clear_atom_graphics_for
 from ui.canvas_bond_graphics_state import clear_bond_graphics_for
 from ui.canvas_document_state import (
+    restore_document_groups,
     restore_document_post_model_items,
     restore_document_pre_model_items,
     restore_document_projection_state,
@@ -314,6 +315,8 @@ class InsertSmilesService:
             self.structure_build_service.render_model()
         with contextlib.suppress(Exception):
             restore_document_post_model_items(self.canvas, state)
+        with contextlib.suppress(Exception):
+            restore_document_groups(self.canvas, state)
 
 
 __all__ = ["MAX_SMILES_INPUT_LENGTH", "InsertSmilesService"]

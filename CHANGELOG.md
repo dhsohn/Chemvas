@@ -52,6 +52,15 @@ On the first tagged release, rename the "Unreleased" section below to
   `Shift+G` orbitals, `Shift+E` chemical symbols), selection rotate/nudge via
   `Alt`/`Shift`+arrows (also moves/rotates selected arrows, notes, brackets,
   orbitals, and shapes), view keys `F5`–`F8`, and `Ctrl+X` cut.
+- **Select All** (`Ctrl+A`): selects every object on the canvas (structures,
+  arrows, brackets, shapes, orbitals, marks, and text notes) and switches to the
+  Select tool.
+- **Group / Ungroup** (`Ctrl+G` / `Ctrl+Shift+G`): ChemDraw-style object groups.
+  Selecting any member (click, shift-click, or marquee) extends the selection to
+  the whole group so grouped fragments, arrows, and annotations move and delete
+  together. Grouping is undoable, absorbs overlapping groups, and group
+  membership is persisted in `.chemvas` documents (file format version 3;
+  older files still load).
 - `.chemvas` JSON document save/load (`{"type":"chemvas","version":1,...}`).
 - ACS 1996 default style and color palette.
 

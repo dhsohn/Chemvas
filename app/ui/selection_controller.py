@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
+from ui.scene_group_operations import group_selection_targets_for
 from ui.selection_collection_access import selected_ids_for
 from ui.selection_hit_logic import (
     SelectionRect,
@@ -62,6 +63,7 @@ class SelectionController:
         targets = self.structure_service.selection_targets_for_item(item)
         if not targets:
             return False
+        targets = group_selection_targets_for(self.canvas, targets)
         should_select = not any(target.isSelected() for target in targets)
         set_scene_items_selected_for(self.canvas, targets, should_select)
         self.update_selection_outline()

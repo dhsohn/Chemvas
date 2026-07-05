@@ -9,6 +9,7 @@ from PyQt6.QtGui import QColor
 from ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
 from ui.bond_graphics_access import project_point_3d_for
 from ui.canvas_atom_graphics_state import atom_items_for
+from ui.canvas_group_state import clear_groups_for, group_state_for, register_group_for
 from ui.canvas_model_access import model_for
 from ui.canvas_rotation_state import rotation_state_for
 from ui.canvas_scene_items_state import (
@@ -97,6 +98,9 @@ def snapshot_canvas_document_state(canvas) -> dict:
         "last_smiles_input": last_smiles_input_for(canvas),
     }
     _add_projection_state(canvas, state)
+    groups = _snapshot_groups(canvas)
+    if groups:
+        state["groups"] = groups
     return state
 
 
@@ -269,6 +273,66 @@ def restore_document_post_model_items(canvas, state: dict) -> None:
                 "rotation": orbital_state["rotation"],
             }
         )
+
+
+def _grouped_item_lists_for(canvas) -> dict[str, list]:
+    return {
+        "notes": attached_canvas_scene_items(canvas, note_items_for(canvas)),
+        "arrows": [
+            item
+            for item in attached_canvas_scene_items(canvas, arrow_items_for(canvas))
+            if arrow_state_dict_for(canvas, item)
+        ],
+        "ts_brackets": attached_canvas_scene_items(canvas, ts_bracket_items_for(canvas)),
+        "shapes": attached_canvas_scene_items(canvas, shape_items_for(canvas)),
+        "orbitals": attached_canvas_scene_items(canvas, orbital_items_for(canvas)),
+    }
+
+
+def _snapshot_groups(canvas) -> list[dict]:
+    state_groups = group_state_for(canvas).groups
+    if not state_groups:
+        return []
+    item_index: dict[int, tuple[str, int]] = {}
+    for kind_key, items in _grouped_item_lists_for(canvas).items():
+        for index, item in enumerate(items):
+            item_index[id(item)] = (kind_key, index)
+    model_atoms = model_for(canvas).atoms
+    groups: list[dict] = []
+    for group_id in sorted(state_groups):
+        group = state_groups[group_id]
+        atoms = sorted(atom_id for atom_id in group.atom_ids if atom_id in model_atoms)
+        items = [
+            list(item_index[id(item)])
+            for item in group.items
+            if id(item) in item_index
+        ]
+        if not atoms and not items:
+            continue
+        groups.append({"atoms": atoms, "items": items})
+    return groups
+
+
+def restore_document_groups(canvas, state: dict) -> None:
+    clear_groups_for(canvas)
+    groups_state = state.get("groups") or []
+    if not groups_state:
+        return
+    item_lists = _grouped_item_lists_for(canvas)
+    model_atoms = model_for(canvas).atoms
+    for group_state in groups_state:
+        atom_ids = {
+            int(atom_id)
+            for atom_id in group_state.get("atoms", [])
+            if int(atom_id) in model_atoms
+        }
+        items = []
+        for kind_key, index in group_state.get("items", []):
+            candidates = item_lists.get(kind_key, [])
+            if 0 <= index < len(candidates):
+                items.append(candidates[index])
+        if atom_ids or items:
+            register_group_for(canvas, atom_ids, items)
 
 
 def _snapshot_ring_fills(canvas) -> list[dict]:

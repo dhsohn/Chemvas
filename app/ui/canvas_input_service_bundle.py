@@ -63,6 +63,7 @@ def build_canvas_input_services(
         history_service=history_service,
         hover_refresh=hover_refresh,
         chemdraw_shortcut_service=chemdraw_shortcut_service,
+        tool_mode_controller=tool_mode_controller,
     )
     return CanvasInputServiceBundle(
         input_controller=input_controller,
