@@ -209,6 +209,36 @@ class DocumentIOTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
                 read_document(path)
 
+    def test_read_document_rejects_unsafe_decimal_float_token(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "sample.chemvas"
+            payload = {
+                "type": CHEMVAS_FILE_TYPE,
+                "version": CANVAS_FILE_VERSION,
+                "state": _canvas_state(
+                    _model_state(
+                        {
+                            "0": {
+                                "element": "C",
+                                "x": "__UNSAFE_FLOAT__",
+                                "y": 0.0,
+                                "color": "#000000",
+                                "explicit_label": False,
+                            }
+                        },
+                        [],
+                        1,
+                    )
+                ),
+            }
+            path.write_text(
+                json.dumps(payload).replace('"__UNSAFE_FLOAT__"', "9007199254740990.5"),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
+                read_document(path)
+
     def test_parse_document_rejects_huge_numeric_coordinate_without_leaking_overflow_error(self) -> None:
         payload = {
             "type": CHEMVAS_FILE_TYPE,

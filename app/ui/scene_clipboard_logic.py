@@ -3,10 +3,13 @@ from __future__ import annotations
 import contextlib
 import json
 from collections.abc import Callable, Mapping, Sequence
+from decimal import Decimal
+from typing import cast
 
 from core.document_state import (
     CLIPBOARD_SELECTION_PERSPECTIVE_VERSION,
     LEGACY_CLIPBOARD_SELECTION_VERSION,
+    normalize_json_numbers,
     validate_clipboard_selection_payload,
 )
 from core.model import Bond
@@ -204,8 +207,8 @@ def decode_clipboard_selection_payload(
 ) -> tuple[dict | None, str | None]:
     for payload_json in payload_candidates:
         try:
-            payload = json.loads(payload_json)
-        except (json.JSONDecodeError, RecursionError):
+            payload = json.loads(payload_json, parse_float=Decimal)
+        except (ValueError, RecursionError):
             continue
         if not isinstance(payload, dict):
             continue
@@ -217,7 +220,7 @@ def decode_clipboard_selection_payload(
         # content does not pass the same whitelist used for .chemvas files.
         if not validate_clipboard_selection_payload(payload):
             continue
-        return payload, payload_json
+        return cast(dict, normalize_json_numbers(payload)), payload_json
     return None, None
 
 

@@ -57,8 +57,10 @@ class PreviewDragTool(Tool):
             return False
         end_pos = self.context.scene_pos_from_event(event)
         self._clear_preview()
-        self._commit_drag(end_pos)
-        self._start_pos = None
+        try:
+            self._commit_drag(end_pos)
+        finally:
+            self._start_pos = None
         return True
 
 

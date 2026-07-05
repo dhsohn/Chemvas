@@ -1110,6 +1110,20 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertIsNone(tool._start_pos)
         self.assertIsNone(tool._preview_item)
 
+    def test_preview_drag_release_clears_start_position_when_commit_raises(self) -> None:
+        canvas = _FakePreviewCanvas()
+        canvas.services.scene_decoration_service.add_arrow = mock.Mock(side_effect=RuntimeError("commit"))
+        tool = ArrowTool(canvas, mode="auto", context=_tool_context_for(canvas))
+
+        self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 2.0))))
+        self.assertTrue(tool.on_mouse_move(_FakeEvent(QPointF(5.0, 6.0))))
+
+        with self.assertRaisesRegex(RuntimeError, "commit"):
+            tool.on_mouse_release(_FakeEvent(QPointF(8.0, 9.0)))
+
+        self.assertIsNone(tool._start_pos)
+        self.assertIsNone(tool._preview_item)
+
     def test_ts_bracket_tool_preview_drag_and_deactivate_cleanup(self) -> None:
         canvas = _FakePreviewCanvas()
         tool = TSBracketTool(canvas, context=_tool_context_for(canvas))

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import os
 from pathlib import Path
 
 from core.document_io import read_document, write_document
@@ -194,6 +196,30 @@ class CanvasDocumentSessionService:
         elif sizing == "col2":
             target_width_pt = points_for_mm(174.0)
 
+        if fmt.lower() == "svg":
+            target = Path(path)
+            tmp = target.with_name(f".{target.name}.tmp")
+            try:
+                export_canvas_scene_for(
+                    self.canvas,
+                    str(tmp),
+                    fmt=fmt,
+                    items=items,
+                    margin=pad,
+                    dpi=dpi,
+                    background=background,
+                    title="Chemvas drawing",
+                    unit_scale=unit_scale,
+                    target_width_pt=target_width_pt,
+                )
+                self._embed_editable_svg_payload(str(tmp), fmt=fmt, scope=scope)
+                os.replace(tmp, target)
+            except BaseException:
+                with contextlib.suppress(OSError):
+                    tmp.unlink()
+                raise
+            return
+
         export_canvas_scene_for(
             self.canvas,
             path,
@@ -206,7 +232,6 @@ class CanvasDocumentSessionService:
             unit_scale=unit_scale,
             target_width_pt=target_width_pt,
         )
-        self._embed_editable_svg_payload(path, fmt=fmt, scope=scope)
 
     def _embed_editable_svg_payload(self, path: str, *, fmt: str, scope: str) -> None:
         if fmt.lower() != "svg":

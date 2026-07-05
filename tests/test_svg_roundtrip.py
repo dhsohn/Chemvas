@@ -196,6 +196,33 @@ class SvgRoundtripTest(unittest.TestCase):
 
             self.assertEqual(extract_chemvas_document_from_svg(path).state, good_state)
 
+    def test_extract_rejects_unsafe_decimal_float_token_before_normalizing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._svg_path(tmp)
+            payload = create_editable_svg_payload(
+                _sheet_state("unsafe"),
+                document_version=CANVAS_FILE_VERSION,
+                scope=CHEMVAS_SVG_SCOPE_SHEET,
+            )
+            payload["document"]["state"]["notes"][0]["x"] = "__UNSAFE_FLOAT__"
+            raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).replace(
+                '"__UNSAFE_FLOAT__"',
+                "9007199254740990.5",
+            )
+            encoded = base64.b64encode(zlib.compress(raw.encode("utf-8"))).decode("ascii")
+            path.write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg" '
+                'xmlns:chemvas="https://chemvas.app/ns/svg-source/1">'
+                "<metadata>"
+                f'<chemvas:source encoding="base64+zlib+json">{encoded}</chemvas:source>'
+                "</metadata>"
+                "</svg>",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "Invalid editable Chemvas"):
+                extract_chemvas_document_from_svg(path)
+
     def test_extract_searches_all_root_metadata_but_rejects_duplicate_root_sources(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = self._svg_path(tmp)

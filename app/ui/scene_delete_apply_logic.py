@@ -24,6 +24,7 @@ def apply_delete_selection_plan(
     scene_item_state_getter: Callable[[object], dict],
     remove_scene_item: Callable[[object], None],
     clear_handles: Callable[[], None],
+    atom_coords_3d_getter: Callable[[int], tuple[float, float, float] | None] | None = None,
 ) -> list[HistoryCommand]:
     commands: list[HistoryCommand] = []
 
@@ -48,6 +49,12 @@ def apply_delete_selection_plan(
 
     if plan.atom_ids:
         atom_states = {atom_id: atom_state_getter(atom_id) for atom_id in plan.atom_ids}
+        atom_coords_3d: dict[int, tuple[float, float, float]] = {}
+        if atom_coords_3d_getter is not None:
+            for atom_id in plan.atom_ids:
+                coords = atom_coords_3d_getter(atom_id)
+                if coords is not None:
+                    atom_coords_3d[atom_id] = coords
         before_next_atom_id = next_atom_id_getter()
         for atom_id in plan.atom_ids:
             remove_atom_only(atom_id)
@@ -59,6 +66,7 @@ def apply_delete_selection_plan(
                 after_next_atom_id=next_atom_id_getter(),
                 before_smiles_input=before_smiles_input,
                 after_smiles_input=current_smiles_input_getter(),
+                atom_coords_3d=atom_coords_3d or None,
             )
         )
 

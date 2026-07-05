@@ -63,6 +63,7 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
             },
             next_atom_id_getter=lambda: model.next_atom_id,
             remove_atom_only=remove_atom_only,
+            atom_coords_3d_getter=lambda atom_id: {1: (0.0, 0.0, 2.0)}.get(atom_id),
         )
 
         self.assertIsInstance(command, CompositeCommand)
@@ -76,6 +77,7 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
         self.assertEqual(atom_delete.mark_states, [{"kind": "mark", "atom_id": 1, "x": 2.0, "y": 3.0}])
         self.assertEqual(atom_delete.before_next_atom_id, 4)
         self.assertEqual(atom_delete.after_next_atom_id, 4)
+        self.assertEqual(atom_delete.atom_coords_3d, {1: (0.0, 0.0, 2.0)})
         self.assertIsNone(atom_delete.after_smiles_input)
 
     def test_delete_bond_with_history_validates_and_builds_command(self) -> None:

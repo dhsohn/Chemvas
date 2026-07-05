@@ -261,6 +261,252 @@ class DocumentStateTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             build_document_payload(state, version=LEGACY_CANVAS_FILE_VERSION)
 
+    def test_document_payload_rejects_duplicate_bond_pairs(self) -> None:
+        atoms = {
+            0: _atom_state(),
+            1: {**_atom_state(), "x": 1.0},
+        }
+        state = _canvas_state(
+            _model_state(
+                atoms=atoms,
+                bonds=[
+                    {"a": 0, "b": 1, "order": 1, "style": "single", "color": "#000000"},
+                    {"a": 1, "b": 0, "order": 2, "style": "double", "color": "#000000"},
+                ],
+                next_atom_id=2,
+            )
+        )
+
+        with self.assertRaises(ValueError):
+            build_document_payload(state, version=CANVAS_FILE_VERSION)
+
+    def test_document_payload_rejects_degenerate_ring_fill_points(self) -> None:
+        atoms = {
+            0: _atom_state(),
+            1: {**_atom_state(), "x": 1.0},
+            2: {**_atom_state(), "x": 0.5, "y": 1.0},
+        }
+        bonds = [
+            {"a": 0, "b": 1, "order": 1, "style": "single", "color": "#000000"},
+            {"a": 1, "b": 2, "order": 1, "style": "single", "color": "#000000"},
+            {"a": 2, "b": 0, "order": 1, "style": "single", "color": "#000000"},
+        ]
+        state = _canvas_state(_model_state(atoms=atoms, bonds=bonds, next_atom_id=3))
+        state["ring_fills"] = [
+            {
+                "points": [(0.0, 0.0), (1.0, 0.0)],
+                "atom_ids": [0, 1, 2],
+                "color": "#000000",
+                "alpha": 0.4,
+            }
+        ]
+
+        with self.assertRaises(ValueError):
+            build_document_payload(state, version=CANVAS_FILE_VERSION)
+
+    def test_document_payload_rejects_degenerate_ring_fill_atom_cycle(self) -> None:
+        atoms = {
+            0: _atom_state(),
+            1: {**_atom_state(), "x": 1.0},
+            2: {**_atom_state(), "x": 0.5, "y": 1.0},
+        }
+        bonds = [
+            {"a": 0, "b": 1, "order": 1, "style": "single", "color": "#000000"},
+            {"a": 1, "b": 2, "order": 1, "style": "single", "color": "#000000"},
+            {"a": 2, "b": 0, "order": 1, "style": "single", "color": "#000000"},
+        ]
+
+        cases = [
+            ("null", None, bonds),
+            ("empty", [], bonds),
+            ("short", [0, 1], bonds),
+            ("duplicate", [0, 1, 0], bonds),
+            ("missing closing bond", [0, 1, 2], bonds[:2]),
+        ]
+        for name, atom_ids, case_bonds in cases:
+            with self.subTest(name=name):
+                state = _canvas_state(_model_state(atoms=atoms, bonds=case_bonds, next_atom_id=3))
+                state["ring_fills"] = [
+                    {
+                        "points": [(0.0, 0.0), (1.0, 0.0), (0.5, 1.0)],
+                        "atom_ids": atom_ids,
+                        "color": "#000000",
+                        "alpha": 0.4,
+                    }
+                ]
+                with self.assertRaises(ValueError):
+                    build_document_payload(state, version=CANVAS_FILE_VERSION)
+
+    def test_document_payload_rejects_ring_fill_point_atom_count_mismatch(self) -> None:
+        atoms = {
+            0: _atom_state(),
+            1: {**_atom_state(), "x": 1.0},
+            2: {**_atom_state(), "x": 0.5, "y": 1.0},
+        }
+        bonds = [
+            {"a": 0, "b": 1, "order": 1, "style": "single", "color": "#000000"},
+            {"a": 1, "b": 2, "order": 1, "style": "single", "color": "#000000"},
+            {"a": 2, "b": 0, "order": 1, "style": "single", "color": "#000000"},
+        ]
+        state = _canvas_state(_model_state(atoms=atoms, bonds=bonds, next_atom_id=3))
+        state["ring_fills"] = [
+            {
+                "points": [(0.0, 0.0), (1.0, 0.0), (0.5, 1.0), (0.0, 0.5)],
+                "atom_ids": [0, 1, 2],
+                "color": "#000000",
+                "alpha": 0.4,
+            }
+        ]
+
+        with self.assertRaises(ValueError):
+            build_document_payload(state, version=CANVAS_FILE_VERSION)
+
+    def test_document_payload_rejects_large_coordinate_ring_point_mismatch(self) -> None:
+        atoms = {
+            0: {**_atom_state(), "x": 1_000_000_000.0},
+            1: {**_atom_state(), "x": 1_000_000_001.0},
+            2: {**_atom_state(), "x": 1_000_000_000.5, "y": 1.0},
+        }
+        bonds = [
+            {"a": 0, "b": 1, "order": 1, "style": "single", "color": "#000000"},
+            {"a": 1, "b": 2, "order": 1, "style": "single", "color": "#000000"},
+            {"a": 2, "b": 0, "order": 1, "style": "single", "color": "#000000"},
+        ]
+        state = _canvas_state(_model_state(atoms=atoms, bonds=bonds, next_atom_id=3))
+        state["ring_fills"] = [
+            {
+                "points": [(1_000_000_000.5, 0.0), (1_000_000_001.0, 0.0), (1_000_000_000.5, 1.0)],
+                "atom_ids": [0, 1, 2],
+                "color": "#000000",
+                "alpha": 0.4,
+            }
+        ]
+
+        with self.assertRaises(ValueError):
+            build_document_payload(state, version=CANVAS_FILE_VERSION)
+
+    def test_document_payload_rejects_huge_integer_ring_point_mismatch(self) -> None:
+        huge = 10**20
+        atoms = {
+            0: {**_atom_state(), "x": huge},
+            1: {**_atom_state(), "x": huge + 1},
+            2: {**_atom_state(), "x": huge, "y": 1},
+        }
+        bonds = [
+            {"a": 0, "b": 1, "order": 1, "style": "single", "color": "#000000"},
+            {"a": 1, "b": 2, "order": 1, "style": "single", "color": "#000000"},
+            {"a": 2, "b": 0, "order": 1, "style": "single", "color": "#000000"},
+        ]
+        state = _canvas_state(_model_state(atoms=atoms, bonds=bonds, next_atom_id=3))
+        state["ring_fills"] = [
+            {
+                "points": [(huge + 1000, 0), (huge + 1, 0), (huge, 1)],
+                "atom_ids": [0, 1, 2],
+                "color": "#000000",
+                "alpha": 0.4,
+            }
+        ]
+
+        with self.assertRaises(ValueError):
+            build_document_payload(state, version=CANVAS_FILE_VERSION)
+
+    def test_document_payload_rejects_unrepresentable_integer_coordinates(self) -> None:
+        huge = 10**20 + 1
+        atoms = {
+            0: {**_atom_state(), "x": huge},
+            1: {**_atom_state(), "x": huge + 1000},
+            2: {**_atom_state(), "x": huge, "y": 1},
+        }
+        bonds = [
+            {"a": 0, "b": 1, "order": 1, "style": "single", "color": "#000000"},
+            {"a": 1, "b": 2, "order": 1, "style": "single", "color": "#000000"},
+            {"a": 2, "b": 0, "order": 1, "style": "single", "color": "#000000"},
+        ]
+        state = _canvas_state(_model_state(atoms=atoms, bonds=bonds, next_atom_id=3))
+        state["ring_fills"] = [
+            {
+                "points": [(huge, 0), (huge + 1000, 0), (huge, 1)],
+                "atom_ids": [0, 1, 2],
+                "color": "#000000",
+                "alpha": 0.4,
+            }
+        ]
+
+        with self.assertRaises(ValueError):
+            build_document_payload(state, version=CANVAS_FILE_VERSION)
+
+    def test_document_payload_rejects_unsafe_float_coordinates(self) -> None:
+        huge = 1e20
+        atoms = {
+            0: {**_atom_state(), "x": huge},
+            1: {**_atom_state(), "x": huge + 1.0},
+            2: {**_atom_state(), "x": huge, "y": 1.0},
+        }
+        bonds = [
+            {"a": 0, "b": 1, "order": 1, "style": "single", "color": "#000000"},
+            {"a": 1, "b": 2, "order": 1, "style": "single", "color": "#000000"},
+            {"a": 2, "b": 0, "order": 1, "style": "single", "color": "#000000"},
+        ]
+        state = _canvas_state(_model_state(atoms=atoms, bonds=bonds, next_atom_id=3))
+        state["ring_fills"] = [
+            {
+                "points": [(huge, 0.0), (huge + 1.0, 0.0), (huge, 1.0)],
+                "atom_ids": [0, 1, 2],
+                "color": "#000000",
+                "alpha": 0.4,
+            }
+        ]
+
+        with self.assertRaises(ValueError):
+            build_document_payload(state, version=CANVAS_FILE_VERSION)
+
+    def test_document_payload_rejects_out_of_range_scene_alpha(self) -> None:
+        atoms = {
+            0: _atom_state(),
+            1: {**_atom_state(), "x": 1.0},
+            2: {**_atom_state(), "x": 0.5, "y": 1.0},
+        }
+        bonds = [
+            {"a": 0, "b": 1, "order": 1, "style": "single", "color": "#000000"},
+            {"a": 1, "b": 2, "order": 1, "style": "single", "color": "#000000"},
+            {"a": 2, "b": 0, "order": 1, "style": "single", "color": "#000000"},
+        ]
+        cases = [
+            (
+                "ring_fills",
+                [
+                    {
+                        "points": [(0.0, 0.0), (1.0, 0.0), (0.5, 1.0)],
+                        "atom_ids": [0, 1, 2],
+                        "color": "#000000",
+                        "alpha": 1.1,
+                    }
+                ],
+            ),
+            (
+                "shapes",
+                [
+                    {
+                        "kind": "shape",
+                        "left": 0.0,
+                        "top": 0.0,
+                        "right": 1.0,
+                        "bottom": 1.0,
+                        "shape_kind": "rect",
+                        "stroke_style": "solid",
+                        "fill": "#000000",
+                        "fill_alpha": -0.1,
+                    }
+                ],
+            ),
+        ]
+        for key, value in cases:
+            with self.subTest(key=key):
+                state = _canvas_state(_model_state(atoms=atoms, bonds=bonds, next_atom_id=3))
+                state[key] = value
+                with self.assertRaises(ValueError):
+                    build_document_payload(state, version=CANVAS_FILE_VERSION)
+
     def test_document_payload_rejects_invalid_optional_perspective_state(self) -> None:
         state = _canvas_state(
             _model_state(
@@ -291,6 +537,33 @@ class DocumentStateTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             build_document_payload(state, version=CANVAS_FILE_VERSION)
 
+    def test_settings_reject_out_of_domain_values(self) -> None:
+        cases = [
+            ("bond_length_px", 0.0),
+            ("arrow_line_width", 0.49),
+            ("arrow_head_scale", 0.09),
+            ("arrow_head_scale", 0.81),
+            ("text_font_size", 5),
+            ("text_font_weight", -1),
+            ("text_font_weight", 0),
+            ("text_font_weight", 1001),
+            ("text_line_spacing", 0.79),
+            ("note_box_alpha", -0.1),
+            ("note_box_alpha", 1.1),
+            ("note_border_width", 0.49),
+            ("note_padding", 1.99),
+            ("sheet_size", "Letter"),
+            ("sheet_orientation", "vertical"),
+        ]
+        for key, value in cases:
+            with self.subTest(key=key, value=value):
+                settings = _settings()
+                settings[key] = value
+                state = _canvas_state()
+                state["settings"] = settings
+                with self.assertRaises(ValueError):
+                    build_document_payload(state, version=CANVAS_FILE_VERSION)
+
     def test_selection_payload_to_canvas_state_maps_supported_items(self) -> None:
         settings = _settings()
         selection_payload = {
@@ -307,13 +580,18 @@ class DocumentStateTest(unittest.TestCase):
                     "explicit_label": False,
                     "annotation": {"formal_charge": -1},
                 },
+                {"id": 9, "element": "C", "x": 20.0, "y": 55.0, "color": "#111111", "explicit_label": False},
             ],
-            "bonds": [{"a": 3, "b": 7, "order": 2, "style": "double", "color": "#333333"}],
+            "bonds": [
+                {"a": 3, "b": 7, "order": 2, "style": "double", "color": "#333333"},
+                {"a": 7, "b": 9, "order": 1, "style": "single", "color": "#333333"},
+                {"a": 9, "b": 3, "order": 1, "style": "single", "color": "#333333"},
+            ],
             "rings": [
                 {
                     "kind": "ring",
-                    "points": [(0.0, 0.0), (1.0, 0.0), (0.5, 1.0)],
-                    "atom_ids": [3, 7],
+                    "points": [(10.0, 20.0), (30.0, 40.0), (20.0, 55.0)],
+                    "atom_ids": [3, 7, 9],
                     "color": "#abcdef",
                     "alpha": 0.2,
                 }
@@ -321,7 +599,7 @@ class DocumentStateTest(unittest.TestCase):
             "marks": [
                 {
                     "kind": "mark",
-                    "mark_kind": "plus",
+                    "mark_kind": None,
                     "text": "+",
                     "atom_id": 3,
                     "dx": 1.0,
@@ -340,12 +618,12 @@ class DocumentStateTest(unittest.TestCase):
 
         state = selection_payload_to_canvas_state(selection_payload, settings)
 
-        self.assertEqual(set(state["model"]["atoms"]), {3, 7})
+        self.assertEqual(set(state["model"]["atoms"]), {3, 7, 9})
         self.assertEqual(state["model"]["atoms"][3]["element"], "C")
         self.assertEqual(state["model"]["atom_annotations"], {7: {"formal_charge": -1}})
         self.assertEqual(state["model"]["bonds"], selection_payload["bonds"])
-        self.assertEqual(state["model"]["next_atom_id"], 8)
-        self.assertEqual(state["ring_fills"][0]["atom_ids"], [3, 7])
+        self.assertEqual(state["model"]["next_atom_id"], 10)
+        self.assertEqual(state["ring_fills"][0]["atom_ids"], [3, 7, 9])
         self.assertEqual(state["marks"][0]["kind"], "plus")
         self.assertEqual(state["notes"][0]["text"], "selected")
         self.assertEqual(state["notes"][0]["html"], "<p><b>selected</b></p>")
@@ -450,11 +728,27 @@ class DocumentStateTest(unittest.TestCase):
     def test_build_document_payload_accepts_valid_nested_scene_items(self) -> None:
         state = _canvas_state(
             _model_state(
-                atoms={"0": _atom_state()},
-                next_atom_id=1,
+                atoms={
+                    "0": _atom_state(),
+                    "1": {**_atom_state(), "x": 1.0},
+                    "2": {**_atom_state(), "x": 0.5, "y": 1.0},
+                },
+                bonds=[
+                    {"a": 0, "b": 1, "order": 1, "style": "single", "color": "#000000"},
+                    {"a": 1, "b": 2, "order": 1, "style": "single", "color": "#000000"},
+                    {"a": 2, "b": 0, "order": 1, "style": "single", "color": "#000000"},
+                ],
+                next_atom_id=3,
             )
         )
-        state["ring_fills"] = [{"points": [(0.0, 0.0), (1.0, 0.0)], "atom_ids": [0], "color": "#abcdef", "alpha": 0.25}]
+        state["ring_fills"] = [
+            {
+                "points": [(0.0, 0.0), (1.0, 0.0), (0.5, 1.0)],
+                "atom_ids": [0, 1, 2],
+                "color": "#abcdef",
+                "alpha": 0.25,
+            }
+        ]
         state["notes"] = [{"text": "note", "x": 1.0, "y": 2.0}]
         state["marks"] = [{"kind": "plus", "text": "+", "atom_id": 0, "dx": 1.0, "dy": 0.0, "x": 1.0, "y": 0.0}]
         state["arrows"] = [{"kind": "arrow", "start": (0.0, 0.0), "end": (1.0, 1.0), "control": None, "double": False}]

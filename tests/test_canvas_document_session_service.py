@@ -253,6 +253,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         with (
             mock.patch("ui.canvas_document_session_service.export_canvas_scene_for") as export_canvas_scene,
             mock.patch.object(service, "_embed_editable_svg_payload") as embed_editable_svg,
+            mock.patch("ui.canvas_document_session_service.os.replace") as replace,
         ):
             service.export_figure(
                 "/tmp/out.svg",
@@ -265,7 +266,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         export_canvas_scene.assert_called_once_with(
             canvas,
-            "/tmp/out.svg",
+            "/tmp/.out.svg.tmp",
             fmt="svg",
             items=[selected_item],
             margin=3.0,
@@ -275,7 +276,8 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             unit_scale=0.5,
             target_width_pt=None,
         )
-        embed_editable_svg.assert_called_once_with("/tmp/out.svg", fmt="svg", scope="selection")
+        embed_editable_svg.assert_called_once_with("/tmp/.out.svg.tmp", fmt="svg", scope="selection")
+        replace.assert_called_once_with(Path("/tmp/.out.svg.tmp"), Path("/tmp/out.svg"))
         self.assertEqual(canvas.scene.call_count, 2)
 
     def test_export_mol_writes_molfile_from_payload(self) -> None:
@@ -418,6 +420,40 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 service.export_figure(path, fmt="svg", scope="sheet")
 
             self.assertEqual(extract_chemvas_document_from_svg(path).state, state)
+
+    def test_export_figure_keeps_existing_svg_when_metadata_embedding_fails(self) -> None:
+        canvas = SimpleNamespace(
+            FILE_FORMAT_VERSION=1,
+            renderer=SimpleNamespace(
+                style=SimpleNamespace(
+                    bond_line_width=1.0,
+                    bond_length_px=30.0,
+                    bond_length_pt=15.0,
+                )
+            ),
+        )
+        _attach_history_service(canvas)
+        service = _session_service(canvas)
+
+        def write_svg(_canvas, path, **_kwargs) -> None:
+            Path(path).write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" />',
+                encoding="utf-8",
+            )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "figure.svg"
+            path.write_text("ORIGINAL", encoding="utf-8")
+            tmp_path = path.with_name(f".{path.name}.tmp")
+            with (
+                mock.patch("ui.canvas_document_session_service.export_canvas_scene_for", side_effect=write_svg),
+                mock.patch.object(service, "_embed_editable_svg_payload", side_effect=RuntimeError("metadata")),
+                self.assertRaisesRegex(RuntimeError, "metadata"),
+            ):
+                service.export_figure(str(path), fmt="svg", scope="sheet")
+
+            self.assertEqual(path.read_text(encoding="utf-8"), "ORIGINAL")
+            self.assertFalse(tmp_path.exists())
 
     def test_embed_editable_svg_payload_uses_sheet_state_for_svg_only(self) -> None:
         state = {
