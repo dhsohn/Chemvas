@@ -3,7 +3,12 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
-from core.history import CompositeCommand, HistoryCommand, SetAtomPositionsCommand
+from core.history import (
+    CompositeCommand,
+    HistoryCommand,
+    MoveAtomsCommand,
+    SetAtomPositionsCommand,
+)
 
 from ui.bond_graphics_access import add_bond_graphics_for
 from ui.bond_graphics_logic import refresh_bond_graphics
@@ -16,7 +21,9 @@ from ui.canvas_model_access import (
 )
 from ui.canvas_smiles_input_state import last_smiles_input_for
 from ui.history_canvas_access import set_atom_positions_for_history
+from ui.history_commands import MoveItemsCommand, UpdateSceneItemCommand
 from ui.history_recording_access import record_bond_update_for
+from ui.move_access import move_atoms_for, move_item_for
 from ui.scene_flip_geometry import bounds_from_points as bounds_from_points_logic
 from ui.scene_flip_geometry import (
     center_for_flip_group,
@@ -40,6 +47,7 @@ from ui.scene_item_state import (
     scene_item_state_for,
     ts_bracket_rect_from_state,
 )
+from ui.scene_rotation_state import rotate_scene_item_state
 from ui.scene_single_item_mutation_logic import (
     apply_bond_style_with_history,
     cycle_bond_style_with_history,
@@ -53,6 +61,7 @@ from ui.selection_center_logic import (
     bounding_box_center_for_atoms as bounding_box_center_for_atoms_logic,
 )
 from ui.selection_collection_access import (
+    independent_selection_items,
     selected_atom_ids_for_transform_for,
     selected_items_for_transform_for,
 )
@@ -117,6 +126,13 @@ class SceneTransformController:
 
     def _apply_scene_item_state(self, item, state: dict) -> None:
         apply_scene_item_state_helper(self.canvas, item, state)
+
+    def _flip_bounds_for_item(self, item):
+        return flip_bounds_for_item(
+            item,
+            scene_item_state_getter=self._scene_item_state,
+            bounds_from_points=bounds_from_points_logic,
+        )
 
     def _rebuild_bond_graphics(self, bond_id: int, *, redraw_connected: bool) -> None:
         refresh_bond_graphics(
@@ -187,19 +203,12 @@ class SceneTransformController:
             marks_by_atom=self.marks.by_atom,
         )
 
-        def flip_bounds(item):
-            return flip_bounds_for_item(
-                item,
-                scene_item_state_getter=self._scene_item_state,
-                bounds_from_points=bounds_from_points_logic,
-            )
-
         def flip_center(selected_atom_ids, selected_items):
             return flip_center_for_selection(
                 selected_atom_ids,
                 selected_items,
                 atoms=self._atoms,
-                flip_bounds_getter=flip_bounds,
+                flip_bounds_getter=self._flip_bounds_for_item,
             )
 
         def flip_state(item, before_state, center, is_horizontal, transformed):
@@ -275,33 +284,37 @@ class SceneTransformController:
         if not dx and not dy:
             return False
         atom_ids = selected_atom_ids_for_transform_for(self.canvas)
-        if not atom_ids:
+        items = independent_selection_items(selected_items_for_transform_for(self.canvas), atom_ids)
+        if not atom_ids and not items:
             return False
-        before_positions: dict[int, tuple[float, float]] = {}
-        for atom_id in atom_ids:
-            atom = self._atoms.get(atom_id)
-            if atom is None:
-                continue
-            before_positions[atom_id] = (atom.x, atom.y)
-        if not before_positions:
-            return False
-        after_positions = {atom_id: (x + dx, y + dy) for atom_id, (x, y) in before_positions.items()}
-        self._set_atom_positions(after_positions)
-        self.history.push(
-            SetAtomPositionsCommand(
-                before_positions=before_positions,
-                after_positions=after_positions,
-            )
-        )
+        commands: list[HistoryCommand] = []
+        if atom_ids:
+            move_atoms_for(self.canvas, atom_ids, dx, dy, update_selection=False)
+            commands.append(MoveAtomsCommand(atom_ids=set(atom_ids), dx=dx, dy=dy))
+        if items:
+            for item in items:
+                move_item_for(self.canvas, item, dx, dy, update_selection=False)
+            commands.append(MoveItemsCommand(items=list(items), dx=dx, dy=dy))
+        refresh_selection_outline_for(self.canvas)
+        if len(commands) == 1:
+            self.history.push(commands[0])
+        else:
+            self.history.push(CompositeCommand(commands))
         return True
 
     def rotate_selected_items(self, angle_degrees: float) -> None:
         if not angle_degrees:
             return
         atom_ids = selected_atom_ids_for_transform_for(self.canvas)
-        if not atom_ids:
+        items = independent_selection_items(selected_items_for_transform_for(self.canvas), atom_ids)
+        if not atom_ids and not items:
             return
-        center = self._bounding_box_center_for_atoms(atom_ids)
+        center = flip_center_for_selection(
+            atom_ids,
+            items,
+            atoms=self._atoms,
+            flip_bounds_getter=self._flip_bounds_for_item,
+        )
         if center is None:
             return
         before_positions: dict[int, tuple[float, float]] = {}
@@ -316,15 +329,37 @@ class SceneTransformController:
             center=center,
             angle_radians=math.radians(angle_degrees),
         )
-        if not after_positions or before_positions == after_positions:
-            return
-        self._set_atom_positions(after_positions)
-        self.history.push(
-            SetAtomPositionsCommand(
-                before_positions=before_positions,
-                after_positions=after_positions,
+        commands: list[HistoryCommand] = []
+        if after_positions and before_positions != after_positions:
+            self._set_atom_positions(after_positions, update_selection=False)
+            commands.append(
+                SetAtomPositionsCommand(
+                    before_positions=before_positions,
+                    after_positions=after_positions,
+                )
             )
-        )
+        for item in items:
+            before_state = self._scene_item_state(item)
+            after_state = rotate_scene_item_state(
+                item,
+                before_state,
+                center=center,
+                angle_degrees=angle_degrees,
+                transformed_atom_positions=after_positions,
+                atoms=self._atoms,
+                ts_bracket_rect_from_state=ts_bracket_rect_from_state,
+            )
+            if not before_state or not after_state or before_state == after_state:
+                continue
+            self._apply_scene_item_state(item, after_state)
+            commands.append(UpdateSceneItemCommand(item, before_state, after_state))
+        if not commands:
+            return
+        refresh_selection_outline_for(self.canvas)
+        if len(commands) == 1:
+            self.history.push(commands[0])
+            return
+        self.history.push(CompositeCommand(commands))
 
 
 __all__ = ["SceneTransformController"]

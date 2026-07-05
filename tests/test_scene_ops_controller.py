@@ -716,6 +716,8 @@ class _FakeCanvas:
             move_controller=SimpleNamespace(
                 redraw_connected_bonds=self.redraw_connected_bonds,
                 redraw_bonds_for_atoms=self.redraw_bonds_for_atoms,
+                move_atoms=self.move_atoms,
+                move_item=self.move_item,
             ),
         )
 
@@ -836,6 +838,29 @@ class _FakeCanvas:
 
     def refresh_selection_outline(self) -> None:
         self.update_selection_outline_calls += 1
+
+    def move_atoms(
+        self,
+        atom_ids: set[int],
+        dx: float,
+        dy: float,
+        bond_ids: set[int] | None = None,
+        redraw_bond_ids: set[int] | None = None,
+        update_selection: bool = True,
+    ) -> None:
+        for atom_id in atom_ids:
+            atom = self.model.atoms.get(atom_id)
+            if atom is None:
+                continue
+            atom.x += dx
+            atom.y += dy
+        if update_selection:
+            self.refresh_selection_outline()
+
+    def move_item(self, item: QGraphicsItem, dx: float, dy: float, update_selection: bool = True) -> None:
+        item.moveBy(dx, dy)
+        if update_selection:
+            self.refresh_selection_outline()
 
     def push_command(self, command) -> None:
         self.pushed_commands.append(command)

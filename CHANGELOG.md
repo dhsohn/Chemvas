@@ -50,7 +50,8 @@ On the first tagged release, rename the "Unreleased" section below to
   (labels, sprouts incl. gem-dimethyl `9`, dashed `d`/`Shift+D` and double-bond
   position `l`/`c`/`r` bond styles), generic tool hotkeys (`Shift+T` brackets,
   `Shift+G` orbitals, `Shift+E` chemical symbols), selection rotate/nudge via
-  `Alt`/`Shift`+arrows, view keys `F5`–`F8`, and `Ctrl+X` cut.
+  `Alt`/`Shift`+arrows (also moves/rotates selected arrows, notes, brackets,
+  orbitals, and shapes), view keys `F5`–`F8`, and `Ctrl+X` cut.
 - `.chemvas` JSON document save/load (`{"type":"chemvas","version":1,...}`).
 - ACS 1996 default style and color palette.
 
