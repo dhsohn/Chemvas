@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -8,6 +9,7 @@ from PyQt6.QtCore import QPointF
 from ui.renderer_style_access import bond_length_px_for
 from ui.structure_build_committer import StructureBuildCommitter
 from ui.structure_growth_logic import (
+    alternating_ring_bond_specs,
     crown_ether_elements,
     fused_benzene_centers,
 )
@@ -43,10 +45,12 @@ class StructureFragmentBuildService:
 
     def add_fused_benzenes(self, count: int, mode: str, actions: StructureFragmentBuildActions) -> None:
         center = actions.viewport_center()
-        step = bond_length_px_for(self.canvas) * 1.5
+        step = bond_length_px_for(self.canvas) * math.sqrt(3.0)
         merge: list = []
         for ring_center in fused_benzene_centers(center, step, count, mode):
-            actions.add_ring_from_points(actions.ring_points(ring_center, 6), merge=merge)
+            points = actions.ring_points(ring_center, 6)
+            bond_orders = [order for _, _, order in alternating_ring_bond_specs(range(len(points)))]
+            actions.add_ring_from_points(points, merge=merge, bond_orders=bond_orders)
 
     def add_crown_ether(self, atoms: int, oxygens: int, actions: StructureFragmentBuildActions) -> None:
         center = actions.viewport_center()
@@ -139,10 +143,14 @@ class StructureFragmentBuildService:
             center = actions.viewport_center()
             step = bond_length_px_for(self.canvas)
             carbon = QPointF(center.x(), center.y())
-            oxygen_upper = QPointF(center.x() + step, center.y() - step * 0.6)
-            oxygen_lower = QPointF(center.x() + step, center.y() + step * 0.6)
-            actions.add_linear_chain([carbon, oxygen_upper], ["C", "O"], [2])
-            actions.add_linear_chain([carbon, oxygen_lower], ["C", "O"], [1])
+            self._add_branched_fragment(
+                carbon,
+                "C",
+                [
+                    (QPointF(center.x() + step, center.y() - step * 0.6), "O", 2),
+                    (QPointF(center.x() + step, center.y() + step * 0.6), "O", 1),
+                ],
+            )
 
         actions.run_recorded_build(_build)
 
@@ -151,10 +159,14 @@ class StructureFragmentBuildService:
             center = actions.viewport_center()
             step = bond_length_px_for(self.canvas)
             nitrogen = QPointF(center.x(), center.y())
-            oxygen_upper = QPointF(center.x() + step, center.y() - step * 0.6)
-            oxygen_lower = QPointF(center.x() + step, center.y() + step * 0.6)
-            actions.add_linear_chain([nitrogen, oxygen_upper], ["N", "O"], [2])
-            actions.add_linear_chain([nitrogen, oxygen_lower], ["N", "O"], [2])
+            self._add_branched_fragment(
+                nitrogen,
+                "N",
+                [
+                    (QPointF(center.x() + step, center.y() - step * 0.6), "O", 2),
+                    (QPointF(center.x() + step, center.y() + step * 0.6), "O", 2),
+                ],
+            )
 
         actions.run_recorded_build(_build)
 
@@ -163,10 +175,14 @@ class StructureFragmentBuildService:
             center = actions.viewport_center()
             step = bond_length_px_for(self.canvas)
             sulfur = QPointF(center.x(), center.y())
-            oxygen_upper = QPointF(center.x() + step, center.y() - step * 0.7)
-            oxygen_lower = QPointF(center.x() + step, center.y() + step * 0.7)
-            actions.add_linear_chain([sulfur, oxygen_upper], ["S", "O"], [2])
-            actions.add_linear_chain([sulfur, oxygen_lower], ["S", "O"], [2])
+            self._add_branched_fragment(
+                sulfur,
+                "S",
+                [
+                    (QPointF(center.x() + step, center.y() - step * 0.7), "O", 2),
+                    (QPointF(center.x() + step, center.y() + step * 0.7), "O", 2),
+                ],
+            )
 
         actions.run_recorded_build(_build)
 
@@ -185,13 +201,15 @@ class StructureFragmentBuildService:
             center = actions.viewport_center()
             step = bond_length_px_for(self.canvas)
             carbon = QPointF(center.x(), center.y())
-            branches = [
-                QPointF(center.x() + step, center.y()),
-                QPointF(center.x() - step, center.y()),
-                QPointF(center.x(), center.y() - step),
-            ]
-            for branch in branches:
-                actions.add_linear_chain([carbon, branch], ["C", "C"], [1])
+            self._add_branched_fragment(
+                carbon,
+                "C",
+                [
+                    (QPointF(center.x() + step, center.y()), "C", 1),
+                    (QPointF(center.x() - step, center.y()), "C", 1),
+                    (QPointF(center.x(), center.y() - step), "C", 1),
+                ],
+            )
 
         actions.run_recorded_build(_build)
 
@@ -200,10 +218,14 @@ class StructureFragmentBuildService:
             center = actions.viewport_center()
             step = bond_length_px_for(self.canvas)
             carbon = QPointF(center.x(), center.y())
-            branch_right = QPointF(center.x() + step, center.y())
-            branch_up = QPointF(center.x(), center.y() - step)
-            actions.add_linear_chain([carbon, branch_right], ["C", "C"], [1])
-            actions.add_linear_chain([carbon, branch_up], ["C", "C"], [1])
+            self._add_branched_fragment(
+                carbon,
+                "C",
+                [
+                    (QPointF(center.x() + step, center.y()), "C", 1),
+                    (QPointF(center.x(), center.y() - step), "C", 1),
+                ],
+            )
 
         actions.run_recorded_build(_build)
 
@@ -252,6 +274,22 @@ class StructureFragmentBuildService:
             self.committer.add_atom_label(oxygen_2_id, "O", record=False)
 
         actions.run_recorded_build(_build)
+
+    def _add_branched_fragment(
+        self,
+        center: QPointF,
+        center_element: str,
+        branches: list[tuple[QPointF, str, int]],
+    ) -> None:
+        center_id = self.committer.add_atom(center_element, center.x(), center.y())
+        if center_element != "C":
+            self.committer.add_atom_label(center_id, center_element, record=False)
+        for branch, element, order in branches:
+            branch_id = self.committer.add_atom(element, branch.x(), branch.y())
+            bond_id = self.committer.add_bond(center_id, branch_id, order)
+            self.committer.add_bond_graphics(bond_id)
+            if element != "C":
+                self.committer.add_atom_label(branch_id, element, record=False)
 
 
 __all__ = ["StructureFragmentBuildActions", "StructureFragmentBuildService"]

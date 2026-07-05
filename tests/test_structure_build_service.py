@@ -1,3 +1,4 @@
+import math
 import unittest
 from types import SimpleNamespace
 from unittest import mock
@@ -30,19 +31,27 @@ class _FakeViewport:
 
 
 class _FakePolygon:
-    def __init__(self, contains: bool) -> None:
+    def __init__(self, contains: bool, points: list[QPointF] | None = None) -> None:
         self._contains = contains
+        self._points = points or []
 
     def containsPoint(self, point: QPointF, fill_rule) -> bool:
         return self._contains
 
+    def __iter__(self):
+        return iter(self._points)
+
 
 class _FakeRingItem:
-    def __init__(self, contains: bool) -> None:
-        self._polygon = _FakePolygon(contains)
+    def __init__(self, contains: bool, points: list[QPointF] | None = None, atom_ids: list[int] | None = None) -> None:
+        self._polygon = _FakePolygon(contains, points)
+        self._data = {0: "ring", 2: list(atom_ids or [])}
 
     def polygon(self) -> _FakePolygon:
         return self._polygon
+
+    def data(self, key: int):
+        return self._data.get(key)
 
 
 class _FakeCanvas:
@@ -159,11 +168,12 @@ class _FakeCanvas:
 
     def attach_scene_item(self, item) -> None:
         self.scene_items.append(item)
-        if isinstance(item, dict) and item.get("kind") == "ring":
+        data = getattr(item, "data", None)
+        if callable(data) and data(0) == "ring":
             self.ring_items.append(item)
 
     def _create_ring_fill_item(self, points, atom_ids):
-        return {"kind": "ring", "points": [(point.x(), point.y()) for point in points], "atom_ids": list(atom_ids)}
+        return _FakeRingItem(False, list(points), list(atom_ids))
 
     def _benzene_ring_points(self, center, attach_atom_id=None, attach_bond_id=None):
         return (
@@ -283,6 +293,13 @@ class StructureBuildServiceTest(unittest.TestCase):
         second_merge = service.add_ring_from_points.call_args_list[1].kwargs["merge"]
         self.assertIs(first_merge, second_merge)
         self.assertEqual(len(service.add_ring_from_points.call_args_list), 2)
+        first_points = service.add_ring_from_points.call_args_list[0].args[0]
+        second_points = service.add_ring_from_points.call_args_list[1].args[0]
+        first_center_x = sum(point.x() for point in first_points) / 6.0
+        second_center_x = sum(point.x() for point in second_points) / 6.0
+        self.assertAlmostEqual(second_center_x - first_center_x, 20.0 * math.sqrt(3.0))
+        self.assertEqual(service.add_ring_from_points.call_args_list[0].kwargs["bond_orders"], [2, 1, 2, 1, 2, 1])
+        self.assertEqual(service.add_ring_from_points.call_args_list[1].kwargs["bond_orders"], [2, 1, 2, 1, 2, 1])
 
         service.add_ring_from_points.reset_mock()
         service.template_builder.add_crown_ether(12, 4)
@@ -290,6 +307,66 @@ class StructureBuildServiceTest(unittest.TestCase):
             service.add_ring_from_points.call_args.kwargs["elements"],
             ["O", "C", "C", "O", "C", "C", "O", "C", "C", "O", "C", "C"],
         )
+
+    def test_fused_benzene_templates_build_single_connected_fused_graphs(self) -> None:
+        cases = (
+            (2, "linear", 10, 11, 5),
+            (3, "linear", 14, 16, 7),
+            (3, "angled", 14, 16, 7),
+        )
+
+        for count, mode, expected_atoms, expected_bonds, expected_double_bonds in cases:
+            with self.subTest(count=count, mode=mode):
+                canvas = _FakeCanvas()
+                service = _service_for(canvas)
+
+                service.template_builder.add_fused_benzenes(count, mode)
+
+                bonds = [bond for bond in canvas.model.bonds if bond is not None]
+                bond_pairs = [frozenset((bond.a, bond.b)) for bond in bonds]
+                coordinates = {(round(atom.x, 6), round(atom.y, 6)) for atom in canvas.model.atoms.values()}
+                adjacency = {atom_id: set() for atom_id in canvas.model.atoms}
+                for bond in bonds:
+                    adjacency[bond.a].add(bond.b)
+                    adjacency[bond.b].add(bond.a)
+                order_sums = {atom_id: 0 for atom_id in canvas.model.atoms}
+                for bond in bonds:
+                    order_sums[bond.a] += bond.order
+                    order_sums[bond.b] += bond.order
+                seen: set[int] = set()
+                stack = [next(iter(adjacency))]
+                while stack:
+                    atom_id = stack.pop()
+                    if atom_id in seen:
+                        continue
+                    seen.add(atom_id)
+                    stack.extend(adjacency[atom_id] - seen)
+
+                self.assertEqual(len(canvas.model.atoms), expected_atoms)
+                self.assertEqual(len(bonds), expected_bonds)
+                self.assertEqual(len(bond_pairs), len(set(bond_pairs)))
+                self.assertEqual(len(coordinates), len(canvas.model.atoms))
+                self.assertEqual(seen, set(canvas.model.atoms))
+                self.assertEqual(sum(1 for bond in bonds if bond.order == 2), expected_double_bonds)
+                self.assertLessEqual(max(order_sums.values()), 4)
+
+    def test_naphthalene_template_uses_single_shared_edge_and_five_double_bonds(self) -> None:
+        canvas = _FakeCanvas()
+        service = _service_for(canvas)
+
+        service.template_builder.add_fused_benzenes(2, "linear")
+
+        bonds = [bond for bond in canvas.model.bonds if bond is not None]
+        adjacency = {atom_id: set() for atom_id in canvas.model.atoms}
+        for bond in bonds:
+            adjacency[bond.a].add(bond.b)
+            adjacency[bond.b].add(bond.a)
+        shared_atoms = [atom_id for atom_id, neighbors in adjacency.items() if len(neighbors) == 3]
+        shared_edge = [bond for bond in bonds if {bond.a, bond.b} == set(shared_atoms)]
+
+        self.assertEqual(len(shared_atoms), 2)
+        self.assertEqual([bond.order for bond in shared_edge], [1])
+        self.assertEqual(sum(1 for bond in bonds if bond.order == 2), 5)
 
     def test_cyclohexane_builders_delegate_to_ring_builder_and_record_history(self) -> None:
         canvas = _FakeCanvas()
@@ -416,6 +493,17 @@ class StructureBuildServiceTest(unittest.TestCase):
                 (2, "O", {"clear_smiles": True, "record": False, "allow_merge": True, "show_carbon": False}),
             ],
         )
+
+    def test_add_ring_from_points_accepts_custom_bond_orders(self) -> None:
+        canvas = _FakeCanvas()
+
+        atom_ids = _service_for(canvas).add_ring_from_points(
+            [QPointF(0.0, 0.0), QPointF(10.0, 0.0), QPointF(5.0, 8.0)],
+            bond_orders=[2, 1, 2],
+        )
+
+        self.assertEqual(atom_ids, [0, 1, 2])
+        self.assertEqual([bond.order for bond in canvas.model.bonds if bond is not None], [2, 1, 2])
 
     def test_add_linear_chain_and_render_model_use_atom_label_service(self) -> None:
         canvas = _FakeCanvas()
@@ -891,8 +979,51 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertIsNotNone(ring_item)
         assert ring_item is not None
         self.assertEqual(len(canvas.model.bonds), 6)
+        self.assertEqual(sum(1 for bond in canvas.model.bonds if bond is not None and bond.order == 2), 3)
         self.assertEqual(canvas.added_graphics, [1, 2, 3, 4, 5])
         self.assertEqual(canvas.scene_items, [ring_item])
+
+    def test_add_benzene_ring_fused_to_existing_benzene_single_edges_preserves_valid_valence(self) -> None:
+        for bond_id in (1, 3, 5):
+            with self.subTest(bond_id=bond_id):
+                canvas = _FakeCanvas()
+                service = _service_for(canvas)
+                service.add_benzene_ring(QPointF(50.0, 60.0))
+
+                service.fuse_benzene_to_bond(bond_id)
+
+                bonds = [bond for bond in canvas.model.bonds if bond is not None]
+                bond_pairs = [frozenset((bond.a, bond.b)) for bond in bonds]
+                order_sums = {atom_id: 0 for atom_id in canvas.model.atoms}
+                for built_bond in bonds:
+                    order_sums[built_bond.a] += built_bond.order
+                    order_sums[built_bond.b] += built_bond.order
+
+                self.assertEqual(len(canvas.model.atoms), 10)
+                self.assertEqual(len(bonds), 11)
+                self.assertEqual(len(bond_pairs), len(set(bond_pairs)))
+                self.assertEqual(sum(1 for built_bond in bonds if built_bond.order == 2), 5)
+                self.assertLessEqual(max(order_sums.values()), 4)
+
+    def test_add_benzene_ring_fused_to_existing_double_bond_counts_shared_double_once(self) -> None:
+        canvas = _FakeCanvas()
+        service = _service_for(canvas)
+        atom_a_id = canvas.model.add_atom("C", 0.0, 0.0)
+        atom_b_id = canvas.model.add_atom("C", 20.0, 0.0)
+        bond_id = canvas.model.add_bond(atom_a_id, atom_b_id, 2)
+
+        service.add_benzene_ring(QPointF(10.0, 20.0), attach_bond_id=bond_id)
+
+        bonds = [bond for bond in canvas.model.bonds if bond is not None]
+        order_sums = {atom_id: 0 for atom_id in canvas.model.atoms}
+        for built_bond in bonds:
+            order_sums[built_bond.a] += built_bond.order
+            order_sums[built_bond.b] += built_bond.order
+
+        self.assertEqual(len(canvas.model.atoms), 6)
+        self.assertEqual(len(bonds), 6)
+        self.assertEqual(sum(1 for bond in bonds if bond.order == 2), 3)
+        self.assertLessEqual(max(order_sums.values()), 4)
 
     def test_ring_and_chain_fragment_builders_record_expected_counts(self) -> None:
         cases = (
@@ -900,12 +1031,12 @@ class StructureBuildServiceTest(unittest.TestCase):
             ("add_benzyl", 8, 8, 8),
             ("add_vinyl", 2, 1, 1),
             ("add_allyl", 3, 2, 2),
-            ("add_carboxyl", 4, 2, 2),
-            ("add_nitro", 4, 2, 2),
-            ("add_sulfonyl", 4, 2, 2),
+            ("add_carboxyl", 3, 2, 2),
+            ("add_nitro", 3, 2, 2),
+            ("add_sulfonyl", 3, 2, 2),
             ("add_carbonyl", 2, 1, 1),
-            ("add_tbu", 6, 3, 3),
-            ("add_ipr", 4, 2, 2),
+            ("add_tbu", 4, 3, 3),
+            ("add_ipr", 3, 2, 2),
             ("add_me", 1, 0, 0),
             ("add_et", 2, 1, 1),
         )
@@ -935,6 +1066,41 @@ class StructureBuildServiceTest(unittest.TestCase):
                         }
                     ],
                 )
+
+    def test_branched_fragment_templates_reuse_one_central_atom(self) -> None:
+        cases = (
+            ("add_carboxyl", "C", {"C": 1, "O": 2}, 2),
+            ("add_nitro", "N", {"N": 1, "O": 2}, 2),
+            ("add_sulfonyl", "S", {"S": 1, "O": 2}, 2),
+            ("add_tbu", "C", {"C": 4}, 3),
+            ("add_ipr", "C", {"C": 3}, 2),
+        )
+
+        for method_name, center_element, expected_elements, expected_degree in cases:
+            with self.subTest(method=method_name):
+                canvas = _FakeCanvas()
+                service = _service_for(canvas)
+
+                getattr(service.template_builder, method_name)()
+
+                central_atoms = [
+                    atom_id
+                    for atom_id, atom in canvas.model.atoms.items()
+                    if atom.element == center_element and (atom.x, atom.y) == (50.0, 60.0)
+                ]
+                self.assertEqual(len(central_atoms), 1)
+                central_atom_id = central_atoms[0]
+                attached = [
+                    bond.b if bond.a == central_atom_id else bond.a
+                    for bond in canvas.model.bonds
+                    if bond is not None and central_atom_id in {bond.a, bond.b}
+                ]
+                self.assertEqual(len(attached), expected_degree)
+                element_counts = {
+                    element: sum(1 for atom in canvas.model.atoms.values() if atom.element == element)
+                    for element in expected_elements
+                }
+                self.assertEqual(element_counts, expected_elements)
 
     def test_add_peptide_2_adds_carbonyl_oxygens_and_labels_them(self) -> None:
         canvas = _FakeCanvas()
