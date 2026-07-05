@@ -54,6 +54,6 @@ def read_document(path: PathType) -> ChemvasDocument:
     with Path(path).open("r", encoding="utf-8") as handle:
         try:
             payload = json.load(handle)
-        except (json.JSONDecodeError, RecursionError, UnicodeError) as exc:
+        except (ValueError, RecursionError, UnicodeError) as exc:
             raise ValueError("Invalid Chemvas file.") from exc
     return parse_document(payload)

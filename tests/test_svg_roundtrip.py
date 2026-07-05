@@ -51,6 +51,10 @@ def _encoded_payload(payload: dict) -> str:
     return base64.b64encode(zlib.compress(raw)).decode("ascii")
 
 
+def _write_svg_with_unsupported_encoding(path: Path) -> None:
+    path.write_bytes(b'<?xml version="1.0" encoding="BOGUS"?><svg/>')
+
+
 class SvgRoundtripTest(unittest.TestCase):
     def _svg_path(self, tmp: str) -> Path:
         path = Path(tmp) / "figure.svg"
@@ -136,6 +140,32 @@ class SvgRoundtripTest(unittest.TestCase):
             sources = list(root.iter(f"{{{CHEMVAS_SVG_NAMESPACE}}}source"))
             self.assertEqual(len(sources), 1)
             self.assertEqual(extract_chemvas_document_from_svg(path).state, fresh_state)
+
+    def test_embed_rejects_malformed_svg_without_leaking_parse_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._svg_path(tmp)
+            path.write_text("<svg><metadata>", encoding="utf-8")
+            payload = create_editable_svg_payload(
+                _sheet_state(),
+                document_version=CANVAS_FILE_VERSION,
+                scope=CHEMVAS_SVG_SCOPE_SHEET,
+            )
+
+            with self.assertRaisesRegex(ValueError, "Invalid SVG file"):
+                embed_chemvas_document_in_svg(path, payload)
+
+    def test_embed_rejects_unsupported_svg_encoding_without_leaking_lookup_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._svg_path(tmp)
+            _write_svg_with_unsupported_encoding(path)
+            payload = create_editable_svg_payload(
+                _sheet_state(),
+                document_version=CANVAS_FILE_VERSION,
+                scope=CHEMVAS_SVG_SCOPE_SHEET,
+            )
+
+            with self.assertRaisesRegex(ValueError, "Invalid SVG file"):
+                embed_chemvas_document_in_svg(path, payload)
 
     def test_extract_uses_root_metadata_source_not_nested_shadow_source(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -266,6 +296,44 @@ class SvgRoundtripTest(unittest.TestCase):
 
             with mock.patch("core.svg_roundtrip._MAX_SVG_PAYLOAD_BYTES", raw_len):
                 self.assertEqual(extract_chemvas_document_from_svg(path).state, _sheet_state())
+
+    def test_extract_rejects_malformed_svg_without_leaking_parse_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._svg_path(tmp)
+            path.write_text("<svg><metadata>", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "Invalid editable Chemvas metadata"):
+                extract_chemvas_document_from_svg(path)
+
+    def test_extract_rejects_unsupported_svg_encoding_without_leaking_lookup_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._svg_path(tmp)
+            _write_svg_with_unsupported_encoding(path)
+
+            with self.assertRaisesRegex(ValueError, "Invalid editable Chemvas metadata"):
+                extract_chemvas_document_from_svg(path)
+
+    def test_extract_rejects_invalid_embedded_document_without_leaking_file_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._svg_path(tmp)
+            payload = create_editable_svg_payload(
+                _sheet_state(),
+                document_version=CANVAS_FILE_VERSION,
+                scope=CHEMVAS_SVG_SCOPE_SHEET,
+            )
+            payload["document"]["state"] = {}
+            path.write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg" '
+                'xmlns:chemvas="https://chemvas.app/ns/svg-source/1">'
+                '<metadata>'
+                f'<chemvas:source encoding="base64+zlib+json">{_encoded_payload(payload)}</chemvas:source>'
+                '</metadata>'
+                '</svg>',
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "Invalid editable Chemvas SVG payload"):
+                extract_chemvas_document_from_svg(path)
 
     def test_extract_rejects_deep_metadata_json_without_leaking_recursion_error(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

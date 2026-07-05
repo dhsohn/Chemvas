@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 import unittest
@@ -180,6 +181,81 @@ class DocumentIOTest(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
                 read_document(path)
+
+    def test_read_document_rejects_overlong_json_integer_without_leaking_int_guard_error(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "sample.chemvas"
+            payload = {
+                "type": CHEMVAS_FILE_TYPE,
+                "version": CANVAS_FILE_VERSION,
+                "state": _canvas_state(
+                    _model_state(
+                        {
+                            "0": {
+                                "element": "C",
+                                "x": "__HUGE_INT__",
+                                "y": 0.0,
+                                "color": "#000000",
+                                "explicit_label": False,
+                            }
+                        },
+                        [],
+                        1,
+                    )
+                ),
+            }
+            path.write_text(json.dumps(payload).replace('"__HUGE_INT__"', "9" * 5000), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
+                read_document(path)
+
+    def test_parse_document_rejects_huge_numeric_coordinate_without_leaking_overflow_error(self) -> None:
+        payload = {
+            "type": CHEMVAS_FILE_TYPE,
+            "version": CANVAS_FILE_VERSION,
+            "state": _canvas_state(
+                _model_state(
+                    {
+                        "0": {
+                            "element": "C",
+                            "x": int("9" * 4000),
+                            "y": 0.0,
+                            "color": "#000000",
+                            "explicit_label": False,
+                        }
+                    },
+                    [],
+                    1,
+                )
+            ),
+        }
+
+        with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
+            parse_document(payload)
+
+    def test_parse_document_rejects_overlong_decimal_id_without_leaking_int_guard_error(self) -> None:
+        payload = {
+            "type": CHEMVAS_FILE_TYPE,
+            "version": CANVAS_FILE_VERSION,
+            "state": _canvas_state(
+                _model_state(
+                    {
+                        "9" * 5000: {
+                            "element": "C",
+                            "x": 0.0,
+                            "y": 0.0,
+                            "color": "#000000",
+                            "explicit_label": False,
+                        }
+                    },
+                    [],
+                    1,
+                )
+            ),
+        }
+
+        with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
+            parse_document(payload)
 
     def test_write_document_is_atomic_and_preserves_file_on_failure(self) -> None:
         state = _canvas_state()
