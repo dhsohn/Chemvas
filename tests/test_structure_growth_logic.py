@@ -1,3 +1,4 @@
+import math
 import unittest
 
 from core.model import Atom, Bond
@@ -21,7 +22,9 @@ class StructureGrowthLogicTest(unittest.TestCase):
         linear = fused_benzene_centers(center, 30.0, 3, mode="linear")
 
         self.assertEqual([(point.x(), point.y()) for point in count_two], [(-5.0, 20.0), (25.0, 20.0)])
-        self.assertEqual([(point.x(), point.y()) for point in angled], [(-20.0, 20.0), (10.0, 20.0), (28.0, 38.0)])
+        self.assertEqual([(point.x(), point.y()) for point in angled[:2]], [(-20.0, 20.0), (10.0, 20.0)])
+        self.assertAlmostEqual(angled[2].x(), 25.0)
+        self.assertAlmostEqual(angled[2].y(), 20.0 + 30.0 * math.sqrt(3.0) / 2.0)
         self.assertEqual([(point.x(), point.y()) for point in linear], [(-20.0, 20.0), (10.0, 20.0), (40.0, 20.0)])
 
     def test_crown_ether_elements_marks_oxygen_stride(self) -> None:
@@ -66,6 +69,10 @@ class StructureGrowthLogicTest(unittest.TestCase):
         self.assertEqual(
             alternating_ring_bond_specs([0, 1, 2, 3]),
             [(0, 1, 2), (1, 2, 1), (2, 3, 2), (3, 0, 1)],
+        )
+        self.assertEqual(
+            alternating_ring_bond_specs([0, 1, 2, 3], first_order=1),
+            [(0, 1, 1), (1, 2, 2), (2, 3, 1), (3, 0, 2)],
         )
 
 

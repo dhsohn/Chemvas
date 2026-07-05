@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
@@ -25,7 +26,7 @@ def fused_benzene_centers(center: QPointF, step: float, count: int, mode: str = 
         return [
             QPointF(center.x() - step, center.y()),
             QPointF(center.x(), center.y()),
-            QPointF(center.x() + step * 0.6, center.y() + step * 0.6),
+            QPointF(center.x() + step / 2.0, center.y() + step * math.sqrt(3.0) / 2.0),
         ]
     return [
         QPointF(center.x() - step, center.y()),
@@ -82,11 +83,13 @@ def mirrored_local_points(points: Sequence[QPointF], mirrored: bool) -> list[QPo
     return [QPointF(point.x(), -point.y()) for point in points]
 
 
-def alternating_ring_bond_specs(atom_ids: Sequence[int]) -> list[tuple[int, int, int]]:
+def alternating_ring_bond_specs(atom_ids: Sequence[int], *, first_order: int = 2) -> list[tuple[int, int, int]]:
     specs: list[tuple[int, int, int]] = []
+    first_is_double = first_order == 2
     for index, atom_a_id in enumerate(atom_ids):
         atom_b_id = atom_ids[(index + 1) % len(atom_ids)]
-        specs.append((atom_a_id, atom_b_id, 2 if index % 2 == 0 else 1))
+        order = 2 if (index % 2 == 0) == first_is_double else 1
+        specs.append((atom_a_id, atom_b_id, order))
     return specs
 
 

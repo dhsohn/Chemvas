@@ -4,6 +4,8 @@ from typing import Any
 
 from PyQt6.QtCore import QObject, pyqtSignal
 
+from ui.structure_payload_logic import model_with_atom_annotations
+
 
 class Preview3DWorker(QObject):
     finished = pyqtSignal(int, object, object, object, object, object, object)
@@ -33,7 +35,8 @@ class Preview3DWorker(QObject):
         error = None
         rdkit = self._rdkit_adapter_factory() if self._rdkit_adapter_factory is not None else self._rdkit
         try:
-            identifiers = rdkit.compute_identifiers(self._model)
+            identifier_model = model_with_atom_annotations(self._model, self._atom_annotations)
+            identifiers = rdkit.compute_identifiers(identifier_model)
             formula = identifiers.formula
             mw = identifiers.mw
             smiles = identifiers.smiles

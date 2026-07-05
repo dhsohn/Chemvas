@@ -97,6 +97,14 @@ class StructureBuildCommitter:
             bond.style = style
         return bond_id
 
+    def bond_id_between(self, a_id: int, b_id: int) -> int | None:
+        for bond_id, bond in enumerate(bonds_for(self.canvas)):
+            if bond is None:
+                continue
+            if (bond.a == a_id and bond.b == b_id) or (bond.a == b_id and bond.b == a_id):
+                return bond_id
+        return None
+
     def add_bond_graphics_range(self, start_bond_id: int) -> None:
         for bond_id in new_insert_bond_ids_from(self.canvas, start_bond_id):
             self.add_bond_graphics(bond_id)
@@ -142,21 +150,88 @@ class StructureBuildCommitter:
         points,
         elements: list[str] | None = None,
         merge: list | None = None,
+        bond_orders: list[int] | None = None,
     ) -> list[int]:
-        merge = merge or []
+        if merge is None:
+            merge = []
         atom_ids = []
         for idx, point in enumerate(points):
             element = elements[idx] if elements else "C"
             atom_ids.append(self.add_atom_with_merge(point, element, merge))
+        resolved_bond_orders = self.resolved_ring_bond_orders(atom_ids, bond_orders)
         bonds_start = insert_bond_count_for(self.canvas)
         for index in range(len(atom_ids)):
-            self.add_bond(atom_ids[index], atom_ids[(index + 1) % len(atom_ids)])
+            order = resolved_bond_orders[index]
+            a_id = atom_ids[index]
+            b_id = atom_ids[(index + 1) % len(atom_ids)]
+            if self.bond_id_between(a_id, b_id) is not None:
+                continue
+            self.add_bond(a_id, b_id, order)
         self.add_bond_graphics_range(bonds_start)
         self.label_non_carbon_atoms(atom_ids, elements or ["C"] * len(atom_ids))
         if len(points) >= 3:
             ring_item = create_ring_fill_item_for(self.canvas, list(points), atom_ids)
             attach_scene_item(self.canvas, ring_item)
         return atom_ids
+
+    def resolved_ring_bond_orders(self, atom_ids: list[int], bond_orders: list[int] | None) -> list[int]:
+        if not bond_orders:
+            return [1] * len(atom_ids)
+        resolved = [bond_orders[index] if index < len(bond_orders) else 1 for index in range(len(atom_ids))]
+        if not self._is_alternating_single_double_pattern(resolved):
+            return resolved
+        inverted = [1 if order == 2 else 2 for order in resolved]
+        valid_candidates = [
+            (self._projected_ring_double_bond_count(atom_ids, candidate), index, candidate)
+            for index, candidate in enumerate((resolved, inverted))
+            if self._max_projected_bond_order_sum(atom_ids, candidate) <= 4
+        ]
+        exact_benzene_candidates = [candidate for candidate in valid_candidates if candidate[0] == 3]
+        if exact_benzene_candidates:
+            return min(exact_benzene_candidates, key=lambda candidate: candidate[1])[2]
+        under_benzene_candidates = [candidate for candidate in valid_candidates if candidate[0] < 3]
+        if under_benzene_candidates:
+            return max(under_benzene_candidates, key=lambda candidate: (candidate[0], -candidate[1]))[2]
+        if valid_candidates:
+            return min(valid_candidates, key=lambda candidate: (candidate[0], candidate[1]))[2]
+        return resolved
+
+    @staticmethod
+    def _is_alternating_single_double_pattern(bond_orders: list[int]) -> bool:
+        return all(order in (1, 2) for order in bond_orders) and all(
+            bond_orders[index] != bond_orders[(index + 1) % len(bond_orders)] for index in range(len(bond_orders))
+        )
+
+    def _max_projected_bond_order_sum(self, atom_ids: list[int], bond_orders: list[int]) -> int:
+        sums = {atom_id: 0 for atom_id in atom_ids}
+        for bond in bonds_for(self.canvas):
+            if bond is None:
+                continue
+            if bond.a in sums:
+                sums[bond.a] += max(1, int(bond.order or 1))
+            if bond.b in sums:
+                sums[bond.b] += max(1, int(bond.order or 1))
+        for index, order in enumerate(bond_orders):
+            a_id = atom_ids[index]
+            b_id = atom_ids[(index + 1) % len(atom_ids)]
+            if self.bond_id_between(a_id, b_id) is not None:
+                continue
+            sums[a_id] += order
+            sums[b_id] += order
+        return max(sums.values(), default=0)
+
+    def _projected_ring_double_bond_count(self, atom_ids: list[int], bond_orders: list[int]) -> int:
+        double_count = 0
+        for index, order in enumerate(bond_orders):
+            a_id = atom_ids[index]
+            b_id = atom_ids[(index + 1) % len(atom_ids)]
+            existing_bond = insert_bond_for_id(self.canvas, self.bond_id_between(a_id, b_id))
+            if existing_bond is not None:
+                if existing_bond.order >= 2:
+                    double_count += 1
+            elif order == 2:
+                double_count += 1
+        return double_count
 
     def add_linear_chain(self, points: list[QPointF], elements: list[str], bonds: list[int]) -> list[int]:
         atom_ids = []

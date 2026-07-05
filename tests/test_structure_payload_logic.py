@@ -7,6 +7,7 @@ from ui.structure_payload_logic import (
     build_structure_payload,
     build_submodel,
     expand_atom_ids_for_structure,
+    model_with_atom_annotations,
 )
 
 
@@ -111,6 +112,39 @@ class StructurePayloadLogicTest(unittest.TestCase):
         self.assertEqual(len(export_model.bonds), 2)
         self.assertEqual(atom_annotations[0], {"formal_charge": -1})
         self.assertEqual(atom_annotations[2], {"radical_electrons": 1})
+
+    def test_model_with_atom_annotations_overlays_payload_without_mutating_source(self) -> None:
+        model = self._example_model()
+        model.atom_annotations = {1: {"formal_charge": 1}}
+
+        identifier_model = model_with_atom_annotations(
+            model,
+            {
+                1: {"formal_charge": -1, "radical_electrons": 0},
+                2: {"radical_electrons": 1},
+            },
+        )
+
+        self.assertIsNot(identifier_model, model)
+        self.assertEqual(identifier_model.atoms, model.atoms)
+        self.assertEqual(identifier_model.bonds, model.bonds)
+        self.assertEqual(
+            identifier_model.atom_annotations,
+            {
+                1: {"formal_charge": -1},
+                2: {"radical_electrons": 1},
+            },
+        )
+        self.assertEqual(model.atom_annotations, {1: {"formal_charge": 1}})
+
+        cleared_model = model_with_atom_annotations(model, {})
+
+        self.assertEqual(cleared_model.atom_annotations, {})
+
+    def test_model_with_atom_annotations_preserves_model_when_payload_is_missing(self) -> None:
+        model = self._example_model()
+
+        self.assertIs(model_with_atom_annotations(model, None), model)
 
     def test_expand_build_and_annotation_helpers_skip_invalid_or_missing_entries(self) -> None:
         model = MoleculeModel()

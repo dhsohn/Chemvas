@@ -24,6 +24,7 @@ from ui.preview_3d_renderer import status_badge_width
 from ui.preview_3d_state import preview_payload_signature, preview_status_badge
 from ui.preview_3d_worker import Preview3DWorker
 from ui.structure_payload_access import build_selected_3d_conversion_payload_for
+from ui.structure_payload_logic import model_with_atom_annotations
 
 
 class Preview3D(QWidget):
@@ -92,7 +93,8 @@ class Preview3D(QWidget):
 
     def _set_canvas_structure(self, model, atom_annotations) -> None:
         if not self._async_enabled:
-            identifiers = self._rdkit.compute_identifiers(model)
+            identifier_model = model_with_atom_annotations(model, atom_annotations)
+            identifiers = self._rdkit.compute_identifiers(identifier_model)
             self.set_info(
                 identifiers.formula or "",
                 "" if identifiers.mw is None else f"{identifiers.mw:.2f}",
