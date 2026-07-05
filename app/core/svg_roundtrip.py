@@ -124,7 +124,7 @@ def _decode_source_element(source: ET.Element) -> dict[str, Any]:
         compressed = base64.b64decode(text.encode("ascii"), validate=True)
         raw = _decompress_svg_payload(compressed)
         payload = json.loads(raw.decode("utf-8"))
-    except (ValueError, OSError, zlib.error, UnicodeError) as exc:
+    except (ValueError, OSError, RecursionError, zlib.error, UnicodeError) as exc:
         raise ValueError("Invalid editable Chemvas metadata in SVG.") from exc
     if not isinstance(payload, dict):
         raise ValueError("Invalid editable Chemvas metadata in SVG.")

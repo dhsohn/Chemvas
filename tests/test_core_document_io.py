@@ -165,6 +165,14 @@ class DocumentIOTest(unittest.TestCase):
         self.assertEqual(loaded.payload, written.payload)
         self.assertEqual(loaded.state, state)
 
+    def test_read_document_rejects_deep_json_without_leaking_recursion_error(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "sample.chemvas"
+            path.write_text("[" * 20_000 + "0" + "]" * 20_000, encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
+                read_document(path)
+
     def test_write_document_is_atomic_and_preserves_file_on_failure(self) -> None:
         state = _canvas_state()
 
