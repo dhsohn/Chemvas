@@ -50,6 +50,7 @@ class _FakeCanvas:
             canvas_graph_service=SimpleNamespace(bond_exists=self.bond_exists),
             canvas_history_recording_service=SimpleNamespace(record_additions=self._record_additions),
             canvas_mark_scene_service=SimpleNamespace(add_mark_for_atom=self.add_mark_for_atom),
+            scene_item_controller=SimpleNamespace(remove_scene_item=self.remove_scene_item),
             structure_build_service=SimpleNamespace(
                 add_atom_with_merge=self.add_atom_with_merge,
                 add_ring_from_points=self.add_ring_from_points,
@@ -91,6 +92,10 @@ class _FakeCanvas:
         item = object()
         self.created_marks.append(item)
         return item
+
+    def remove_scene_item(self, item) -> None:
+        if item in self.created_marks:
+            self.created_marks.remove(item)
 
     def bond_exists(self, a_id: int, b_id: int) -> bool:
         return any(
@@ -264,6 +269,41 @@ class InsertCommitServiceTest(unittest.TestCase):
                 }
             ],
         )
+
+    def test_apply_smiles_commit_plan_removes_created_marks_if_later_mark_creation_raises(self) -> None:
+        canvas = _FakeCanvas()
+        plan = SmilesCommitPlan(
+            offset=(0.0, 0.0),
+            atoms=[
+                SmilesAtomPlacement(3, "N", 10.0, 20.0, "#111111", True),
+            ],
+            bonds=[],
+            marks=[
+                SmilesMarkPlacement(3, "plus", 11.0, 19.0),
+                SmilesMarkPlacement(3, "minus", 9.0, 21.0),
+            ],
+        )
+
+        def add_first_mark_then_fail(atom_id: int, click_pos: QPointF, *, kind: str | None = None, record: bool = True):
+            if not canvas.created_marks:
+                return canvas.add_mark_for_atom(atom_id, click_pos, kind=kind, record=record)
+            raise RuntimeError("mark failed")
+
+        canvas.services.canvas_mark_scene_service.add_mark_for_atom = add_first_mark_then_fail
+
+        with self.assertRaisesRegex(RuntimeError, "mark failed"):
+            apply_smiles_commit_plan(
+                canvas,
+                plan,
+                before_smiles_input="old",
+                after_smiles_input="new",
+            )
+
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertEqual(canvas.model.bonds, [])
+        self.assertEqual(canvas.created_marks, [])
+        self.assertEqual(canvas.record_calls, [])
+        self.assertEqual(last_smiles_input_for(canvas), "old")
 
     def test_apply_template_commit_resolution_handles_free_and_bond_paths(self) -> None:
         free_canvas = _FakeCanvas()
