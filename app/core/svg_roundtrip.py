@@ -4,7 +4,6 @@ import base64
 import json
 import zlib
 from os import PathLike
-from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree as ET
 
@@ -53,7 +52,7 @@ def create_editable_svg_payload(
 
 def embed_chemvas_document_in_svg(path: PathType, payload: dict[str, Any]) -> None:
     _validated_editable_svg_payload(payload)
-    tree = ET.parse(path)
+    tree = _parse_svg_tree(path, error_message="Invalid SVG file.")
     root = tree.getroot()
     metadata = _metadata_element(root)
 
@@ -81,7 +80,7 @@ def extract_chemvas_document_from_svg(path: PathType) -> ChemvasDocument:
 
 
 def extract_chemvas_svg_payload(path: PathType) -> dict[str, Any]:
-    tree = ET.parse(Path(path))
+    tree = _parse_svg_tree(path, error_message="Invalid editable Chemvas metadata in SVG.")
     root = tree.getroot()
     sources = [
         child
@@ -95,6 +94,13 @@ def extract_chemvas_svg_payload(path: PathType) -> dict[str, Any]:
         raise ValueError("Invalid editable Chemvas metadata in SVG.")
     payload = _decode_source_element(sources[0])
     return _validated_editable_svg_payload(payload)
+
+
+def _parse_svg_tree(path: PathType, *, error_message: str) -> ET.ElementTree[ET.Element[str]]:
+    try:
+        return ET.parse(path)
+    except (ET.ParseError, LookupError) as exc:
+        raise ValueError(error_message) from exc
 
 
 def _root_metadata_elements(root: ET.Element) -> list[ET.Element]:
@@ -154,7 +160,10 @@ def _validated_editable_svg_payload(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("Invalid editable Chemvas SVG payload.")
     if document.get("type") != CHEMVAS_FILE_TYPE or document.get("version") not in SUPPORTED_FILE_VERSIONS:
         raise ValueError("Invalid editable Chemvas SVG payload.")
-    parse_document(document)
+    try:
+        parse_document(document)
+    except ValueError as exc:
+        raise ValueError("Invalid editable Chemvas SVG payload.") from exc
     return payload
 
 
