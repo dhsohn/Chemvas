@@ -253,6 +253,27 @@ class SceneClipboardLogicTest(unittest.TestCase):
         self.assertEqual(payload, valid_payload)
         self.assertEqual(payload_json, valid_payload_json)
 
+    def test_decode_clipboard_selection_payload_rejects_string_numeric_atom_id(self) -> None:
+        invalid_payload = {
+            "format": "chemvas-selection",
+            "version": 1,
+            "atoms": [{"id": "0", "element": "C", "x": 1.0, "y": 2.0, "color": "#000000", "explicit_label": False}],
+            "bonds": [],
+            "rings": [],
+            "marks": [],
+            "scene_items": [],
+        }
+        valid_payload = _valid_note_clipboard_payload()
+        valid_payload_json = json.dumps(valid_payload, separators=(",", ":"))
+
+        payload, payload_json = decode_clipboard_selection_payload(
+            [json.dumps(invalid_payload, separators=(",", ":")), valid_payload_json],
+            version=1,
+        )
+
+        self.assertEqual(payload, valid_payload)
+        self.assertEqual(payload_json, valid_payload_json)
+
     def test_selection_payload_extends_atom_and_bond_selection_and_keeps_related_scene_items(self) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
