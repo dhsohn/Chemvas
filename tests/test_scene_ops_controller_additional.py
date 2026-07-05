@@ -195,6 +195,35 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
         self.assertAlmostEqual(canvas.model.atoms[atom_2_id].x, 10.0)
         self.assertAlmostEqual(canvas.model.atoms[atom_2_id].y, 10.0)
 
+    def test_rotate_selected_items_rotates_atom_bound_marks(self) -> None:
+        canvas = _FakeCanvas()
+        atom_id = canvas.add_atom("C", 0.0, 0.0)
+        atom_item = canvas._atom_item_for_id(atom_id)
+        assert atom_item is not None
+        atom_item.setSelected(True)
+        # A charge sitting directly above the atom (dx=0, dy=-5).
+        mark_item = _make_rect_item(
+            "mark",
+            data1={"atom_id": atom_id, "dx": 0.0, "dy": -5.0},
+            state={"kind": "mark", "atom_id": atom_id, "x": 0.0, "y": -5.0, "dx": 0.0, "dy": -5.0},
+        )
+        canvas.add_item(mark_item)
+        canvas.mark_registry.by_atom[atom_id] = [mark_item]
+
+        controller = scene_transform_controller_for(canvas)
+        controller.rotate_selected_items(90.0)
+
+        # A single selected atom sits at the rotation center, so it does not
+        # move, but its mark must still rotate 90deg CW: above -> right of atom.
+        self.assertEqual(len(canvas.pushed_commands), 1)
+        command = canvas.pushed_commands[0]
+        self.assertIsInstance(command, UpdateSceneItemCommand)
+        after_state = mark_item.data(9)
+        self.assertAlmostEqual(after_state["x"], 5.0)
+        self.assertAlmostEqual(after_state["y"], 0.0)
+        self.assertAlmostEqual(after_state["dx"], 5.0)
+        self.assertAlmostEqual(after_state["dy"], 0.0)
+
     def test_translate_selected_items_moves_atoms_and_records_history(self) -> None:
         canvas = _FakeCanvas()
         atom_1_id = canvas.add_atom("C", 0.0, 0.0)

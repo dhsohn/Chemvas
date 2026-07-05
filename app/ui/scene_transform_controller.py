@@ -302,12 +302,27 @@ class SceneTransformController:
             self.history.push(CompositeCommand(commands))
         return True
 
+    def _atom_bound_marks(self, atom_ids: set[int]) -> list:
+        marks: list = []
+        seen: set = set()
+        for atom_id in atom_ids:
+            for mark in self.marks.by_atom.get(atom_id, ()):
+                if mark is None or mark in seen:
+                    continue
+                seen.add(mark)
+                marks.append(mark)
+        return marks
+
     def rotate_selected_items(self, angle_degrees: float) -> None:
         if not angle_degrees:
             return
         atom_ids = selected_atom_ids_for_transform_for(self.canvas)
         items = independent_selection_items(selected_items_for_transform_for(self.canvas), atom_ids)
-        if not atom_ids and not items:
+        # Marks attached to selected atoms are filtered out of ``items`` (their
+        # atom carries them), but a translation-only atom move would leave the
+        # mark on the same side of the atom. Rotate them explicitly like flip.
+        transform_items = self._atom_bound_marks(atom_ids) + items
+        if not atom_ids and not transform_items:
             return
         center = flip_center_for_selection(
             atom_ids,
@@ -329,16 +344,10 @@ class SceneTransformController:
             center=center,
             angle_radians=math.radians(angle_degrees),
         )
-        commands: list[HistoryCommand] = []
-        if after_positions and before_positions != after_positions:
-            self._set_atom_positions(after_positions, update_selection=False)
-            commands.append(
-                SetAtomPositionsCommand(
-                    before_positions=before_positions,
-                    after_positions=after_positions,
-                )
-            )
-        for item in items:
+        # Capture item states before moving atoms so atom-bound marks are read
+        # at their original positions (set_atom_positions repositions them).
+        item_updates: list[tuple[object, dict, dict]] = []
+        for item in transform_items:
             before_state = self._scene_item_state(item)
             after_state = rotate_scene_item_state(
                 item,
@@ -351,6 +360,17 @@ class SceneTransformController:
             )
             if not before_state or not after_state or before_state == after_state:
                 continue
+            item_updates.append((item, before_state, after_state))
+        commands: list[HistoryCommand] = []
+        if after_positions and before_positions != after_positions:
+            self._set_atom_positions(after_positions, update_selection=False)
+            commands.append(
+                SetAtomPositionsCommand(
+                    before_positions=before_positions,
+                    after_positions=after_positions,
+                )
+            )
+        for item, before_state, after_state in item_updates:
             self._apply_scene_item_state(item, after_state)
             commands.append(UpdateSceneItemCommand(item, before_state, after_state))
         if not commands:

@@ -392,6 +392,25 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertFalse(arrow_a.isSelected())
         self.assertTrue(arrow_b.isSelected())
 
+    def test_nudge_then_rotate_arrow_does_not_double_shift(self) -> None:
+        canvas = active_canvas_for_window(self.window)
+        arrow = add_arrow_for(canvas, QPointF(0.0, 0.0), QPointF(20.0, 0.0), "arrow")
+        transform = canvas_services_for(canvas).scene_transform_controller
+
+        self._select_items(arrow)
+        self.assertTrue(transform.translate_selected_items(10.0, 5.0))
+        # Rotate 180deg about the arrow's own midpoint so the endpoints simply
+        # swap; a stale translation would push them off by (10, 5).
+        transform.rotate_selected_items(180.0)
+        self.app.processEvents()
+
+        data = arrow.data(2)
+        self.assertEqual((arrow.pos().x(), arrow.pos().y()), (0.0, 0.0))
+        self.assertAlmostEqual(data["start"].x(), 30.0)
+        self.assertAlmostEqual(data["start"].y(), 5.0)
+        self.assertAlmostEqual(data["end"].x(), 10.0)
+        self.assertAlmostEqual(data["end"].y(), 5.0)
+
     def test_perspective_shift_click_toggles_atom_selection(self) -> None:
         atom_a = add_atom_for(active_canvas_for_window(self.window), "C", -40.0, 0.0)
         atom_b = add_atom_for(active_canvas_for_window(self.window), "O", 40.0, 0.0)
