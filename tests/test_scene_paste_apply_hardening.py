@@ -98,6 +98,39 @@ class ApplyPastePayloadHardeningTest(unittest.TestCase):
         )
         self.assertEqual(model.added_bonds, [])
 
+    def test_perspective_state_is_remapped_to_new_atom_ids_and_translated(self) -> None:
+        model = _ModelLikeBondAdder()
+        applied: list[tuple[dict[int, tuple[float, float, float]], tuple[float, float, float] | None, tuple[float, float] | None]] = []
+
+        apply_paste_payload(
+            atoms=self.atoms,
+            bonds=[],
+            rings=[],
+            marks=[],
+            scene_items=[],
+            dx=10.0,
+            dy=20.0,
+            add_atom=model.add_atom,
+            apply_atom_color=_noop,
+            set_atom_annotation=_noop,
+            add_or_update_atom_label=_noop,
+            add_bond=model.add_bond,
+            restore_bond_from_state=_noop,
+            translated_scene_item_state=lambda state, **_kwargs: None,
+            create_scene_item_from_state=lambda state: None,
+            perspective={
+                "atom_coords_3d": [
+                    {"atom_id": 1, "coords": [1.0, 2.0, 3.0]},
+                    {"atom_id": 99, "coords": [9.0, 9.0, 9.0]},
+                ],
+                "projection_center_3d": [4.0, 5.0, 6.0],
+                "projection_anchor_2d": [7.0, 8.0],
+            },
+            apply_perspective=lambda coords, center, anchor: applied.append((coords, center, anchor)),
+        )
+
+        self.assertEqual(applied, [({100: (11.0, 22.0, 3.0)}, (14.0, 25.0, 6.0), (17.0, 28.0))])
+
     def test_valid_bonds_are_still_applied(self) -> None:
         model = _ModelLikeBondAdder()
         result = _run(

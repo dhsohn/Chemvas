@@ -28,6 +28,7 @@ from ui.scene_clipboard_logic import (
 )
 from ui.scene_clipboard_paste_service import (
     SceneClipboardPasteCallbacks,
+    apply_pasted_perspective_for_canvas,
     paste_selection_from_clipboard_for_canvas,
 )
 from ui.scene_clipboard_selection import select_pasted_content_for_canvas
@@ -109,6 +110,12 @@ class SceneClipboardController:
             restore_bond_from_state=self._restore_bond,
             create_scene_item_from_state=self._create_scene_item_from_state,
             select_pasted_content=self.select_pasted_content,
+            apply_perspective=lambda coords, center, anchor: apply_pasted_perspective_for_canvas(
+                self.canvas,
+                coords,
+                center,
+                anchor,
+            ),
         )
 
     def _clear_note_selection(self) -> None:

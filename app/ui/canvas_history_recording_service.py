@@ -8,6 +8,7 @@ from core.history import (
     UpdateBondCommand,
 )
 
+from ui.atom_coords_access import atom_coords_3d_for
 from ui.canvas_model_access import (
     atom_for_id,
     bond_count_for,
@@ -44,6 +45,10 @@ class CanvasHistoryRecordingService:
                 if atom_for_id(self.canvas, atom_id) is not None
             }
             if atom_states:
+                stored_coords_3d = atom_coords_3d_for(self.canvas)
+                atom_coords_3d = {
+                    atom_id: stored_coords_3d[atom_id] for atom_id in atom_states if atom_id in stored_coords_3d
+                }
                 commands.append(
                     AddAtomsCommand(
                         atom_states=atom_states,
@@ -51,6 +56,7 @@ class CanvasHistoryRecordingService:
                         after_next_atom_id=after_next_atom_id,
                         before_smiles_input=before_smiles_input,
                         after_smiles_input=last_smiles_input_for(self.canvas),
+                        atom_coords_3d=atom_coords_3d or None,
                     )
                 )
         for bond_id in range(before_bond_count, bond_count_for(self.canvas)):

@@ -109,8 +109,10 @@ VALID_ORBITAL_KINDS = frozenset(
 VALID_SHAPE_KINDS = frozenset(("circle", "ellipse", "rounded_rect", "rect"))
 VALID_SHAPE_STROKES = frozenset(("solid", "dashed", "dotted", "none"))
 VALID_ATOM_ANNOTATION_KEYS = frozenset(("formal_charge", "radical_electrons"))
+LEGACY_CLIPBOARD_SELECTION_VERSION = 1
+CLIPBOARD_SELECTION_PERSPECTIVE_VERSION = 2
 CLIPBOARD_SELECTION_PAYLOAD_KEYS = frozenset(
-    ("format", "version", "atoms", "bonds", "rings", "marks", "scene_items")
+    ("format", "version", "atoms", "bonds", "rings", "marks", "scene_items", "perspective")
 )
 
 
@@ -355,8 +357,34 @@ def selection_payload_to_canvas_state(
         "settings": dict(template_settings),
         "last_smiles_input": None,
     }
+    perspective_state = _clipboard_perspective_to_canvas_state(selection_payload.get("perspective"))
+    if perspective_state is not None:
+        state["perspective"] = perspective_state
     _validate_canvas_state(state, version=CANVAS_FILE_VERSION)
     return state
+
+
+def _clipboard_perspective_to_canvas_state(perspective_state: object) -> dict | None:
+    if not isinstance(perspective_state, Mapping):
+        return None
+    coords_entries = cast(list[Mapping[str, object]], perspective_state["atom_coords_3d"])
+    coords_3d = {
+        _validated_clipboard_id(entry["atom_id"]): (
+            float(cast(Any, entry["coords"])[0]),
+            float(cast(Any, entry["coords"])[1]),
+            float(cast(Any, entry["coords"])[2]),
+        )
+        for entry in coords_entries
+    }
+    if not coords_3d:
+        return None
+    center = perspective_state.get("projection_center_3d")
+    anchor = perspective_state.get("projection_anchor_2d")
+    return {
+        "atom_coords_3d": coords_3d,
+        "projection_center_3d": tuple(float(value) for value in cast(Any, center)) if center is not None else None,
+        "projection_anchor_2d": tuple(float(value) for value in cast(Any, anchor)) if anchor is not None else None,
+    }
 
 
 def build_document_payload(state: dict, version: int) -> dict:
@@ -745,6 +773,7 @@ def validate_clipboard_selection_payload(payload: Mapping[str, object]) -> bool:
             _validate_clipboard_mark(mark_state, atom_ids)
         for item_state in _validated_scene_state_list(payload.get("scene_items", [])):
             _validate_clipboard_scene_item(item_state)
+        _validate_clipboard_perspective(payload, atom_ids)
     except ValueError:
         return False
     return True
@@ -775,6 +804,32 @@ def _validate_clipboard_atoms(atoms: object) -> set[int]:
         _validate_atom_annotation(atom_state.get("annotation", {}))
         atom_ids.add(atom_id)
     return atom_ids
+
+
+def _validate_clipboard_perspective(payload: Mapping[str, object], atom_ids: set[int]) -> None:
+    perspective_state = payload.get("perspective")
+    if perspective_state is None:
+        return
+    version = payload.get("version")
+    if version != CLIPBOARD_SELECTION_PERSPECTIVE_VERSION:
+        raise ValueError("Invalid clipboard payload.")
+    if not isinstance(perspective_state, Mapping):
+        raise ValueError("Invalid clipboard payload.")
+    if set(perspective_state) != {"atom_coords_3d", "projection_center_3d", "projection_anchor_2d"}:
+        raise ValueError("Invalid clipboard payload.")
+    atom_coords_3d = perspective_state.get("atom_coords_3d")
+    if not isinstance(atom_coords_3d, list):
+        raise ValueError("Invalid clipboard payload.")
+    seen_atom_ids: set[int] = set()
+    for entry in atom_coords_3d:
+        if not isinstance(entry, Mapping) or set(entry) != {"atom_id", "coords"}:
+            raise ValueError("Invalid clipboard payload.")
+        atom_id = _validated_clipboard_id(entry.get("atom_id"))
+        if atom_id in seen_atom_ids or atom_id not in atom_ids or not _is_point_3d(entry.get("coords")):
+            raise ValueError("Invalid clipboard payload.")
+        seen_atom_ids.add(atom_id)
+    _validate_optional_point_3d(perspective_state.get("projection_center_3d"))
+    _validate_optional_point_2d(perspective_state.get("projection_anchor_2d"))
 
 
 def _serialized_atom_annotations(

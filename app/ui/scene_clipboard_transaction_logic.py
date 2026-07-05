@@ -31,6 +31,7 @@ class ClipboardPastePlan:
     rings: Sequence[object]
     marks: Sequence[object]
     scene_items: Sequence[object]
+    perspective: object | None
     before_next_atom_id: int
     before_bond_count: int
     before_smiles_input: object
@@ -188,6 +189,7 @@ def build_clipboard_paste_plan(
         rings=payload.get("rings", []),
         marks=payload.get("marks", []),
         scene_items=payload.get("scene_items", []),
+        perspective=payload.get("perspective"),
         before_next_atom_id=before_next_atom_id,
         before_bond_count=before_bond_count,
         before_smiles_input=before_smiles_input,

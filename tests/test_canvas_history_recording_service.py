@@ -12,6 +12,7 @@ from core.history import (
     UpdateBondCommand,
 )
 from core.model import Atom, Bond
+from ui.atom_coords_access import set_atom_coords_3d_for
 from ui.canvas_history_recording_service import CanvasHistoryRecordingService
 from ui.canvas_history_state import CanvasHistoryState
 from ui.canvas_smiles_input_state import CanvasSmilesInputState
@@ -128,6 +129,24 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         command = canvas.push_command.call_args.args[0]
         self.assertIsInstance(command, AddAtomsCommand)
         self.assertEqual(command.atom_states[1]["annotation"], {"formal_charge": 1})
+
+    def test_record_additions_includes_atom_coords_3d_in_add_atoms_command(self) -> None:
+        canvas = _make_canvas(
+            atoms={1: Atom("N", 1.0, 2.0), 2: Atom("C", 3.0, 4.0)},
+            next_atom_id=3,
+        )
+        set_atom_coords_3d_for(canvas, {1: (1.0, 2.0, 3.0), 99: (9.0, 9.0, 9.0)})
+
+        _recording_service(canvas).record_additions(
+            before_next_atom_id=1,
+            before_bond_count=0,
+            before_smiles_input="before-smiles",
+        )
+
+        canvas.push_command.assert_called_once()
+        command = canvas.push_command.call_args.args[0]
+        self.assertIsInstance(command, AddAtomsCommand)
+        self.assertEqual(command.atom_coords_3d, {1: (1.0, 2.0, 3.0)})
 
     def test_record_additions_pushes_single_scene_item_command_when_only_scene_items_are_added(self) -> None:
         scene_item = _SceneItem("label", {"item": "label"})
