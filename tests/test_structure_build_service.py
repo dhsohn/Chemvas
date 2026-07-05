@@ -4,15 +4,18 @@ from types import SimpleNamespace
 from unittest import mock
 from unittest.mock import Mock
 
+from core.history import CompositeCommand
 from core.model import Atom, Bond, MoleculeModel
 from core.rdkit_adapter import RDKitAdapter
 from PyQt6.QtCore import QPointF
+from ui.canvas_history_recording_service import CanvasHistoryRecordingService
 from ui.canvas_scene_items_state import ring_items_for, set_scene_item_collection_for
 from ui.canvas_smiles_input_state import (
     last_smiles_input_for,
     set_last_smiles_input_for,
 )
 from ui.structure_build_service import StructureBuildService
+from ui.structure_template_commands import apply_structure_template_command
 
 try:
     from rdkit import Chem as _RealChem
@@ -51,7 +54,18 @@ class _FakePolygon:
 class _FakeRingItem:
     def __init__(self, contains: bool, points: list[QPointF] | None = None, atom_ids: list[int] | None = None) -> None:
         self._polygon = _FakePolygon(contains, points)
-        self._data = {0: "ring", 2: list(atom_ids or [])}
+        ring_atom_ids = list(atom_ids or [])
+        self._data = {
+            0: "ring",
+            2: ring_atom_ids,
+            9: {
+                "kind": "ring",
+                "points": [(point.x(), point.y()) for point in points or []],
+                "atom_ids": ring_atom_ids,
+                "color": None,
+                "alpha": 0.0,
+            },
+        }
 
     def polygon(self) -> _FakePolygon:
         return self._polygon
@@ -92,7 +106,11 @@ class _FakeCanvas:
                 record_additions=self._record_additions,
                 record_bond_update=self._record_bond_update,
             ),
-            scene_item_controller=SimpleNamespace(attach_scene_item=self.attach_scene_item),
+            scene_item_controller=SimpleNamespace(
+                attach_scene_item=self.attach_scene_item,
+                remove_scene_item=self.remove_scene_item,
+                restore_scene_item=self.restore_scene_item,
+            ),
             canvas_graph_service=SimpleNamespace(
                 bond_id_between=self.bond_id_between,
                 bond_exists=self.bond_exists,
@@ -103,6 +121,11 @@ class _FakeCanvas:
             ),
             canvas_ring_fill_scene_service=SimpleNamespace(create_ring_fill_item=self._create_ring_fill_item),
         )
+        self.services.canvas_atom_mutation_service.remove_atom_only = self.remove_atom_only
+        self.services.canvas_atom_mutation_service.restore_atom_from_state = self.restore_atom_from_state
+        self.services.canvas_bond_mutation_service.remove_bond_by_id = self.remove_bond_by_id
+        self.services.canvas_bond_mutation_service.restore_bond_from_state = self.restore_bond_from_state
+        self.services.canvas_bond_mutation_service.trim_bonds_to_length = self.trim_bonds_to_length
 
     def viewport(self) -> _FakeViewport:
         return _FakeViewport(self.viewport_center)
@@ -177,6 +200,51 @@ class _FakeCanvas:
         data = getattr(item, "data", None)
         if callable(data) and data(0) == "ring":
             self.ring_items.append(item)
+
+    def remove_scene_item(self, item) -> None:
+        if item in self.scene_items:
+            self.scene_items.remove(item)
+        if item in self.ring_items:
+            self.ring_items.remove(item)
+
+    def restore_scene_item(self, item) -> None:
+        if item not in self.scene_items:
+            self.scene_items.append(item)
+        data = getattr(item, "data", None)
+        if callable(data) and data(0) == "ring" and item not in self.ring_items:
+            self.ring_items.append(item)
+
+    def remove_atom_only(self, atom_id: int, remove_marks: bool = True) -> None:
+        del remove_marks
+        self.model.atoms.pop(atom_id, None)
+
+    def restore_atom_from_state(self, atom_id: int, state: dict) -> None:
+        self.model.atoms[atom_id] = Atom(
+            state.get("element", "C"),
+            state.get("x", 0.0),
+            state.get("y", 0.0),
+            color=state.get("color", "#000000"),
+            explicit_label=bool(state.get("explicit_label", False)),
+        )
+        self.model.next_atom_id = max(self.model.next_atom_id, atom_id + 1)
+
+    def remove_bond_by_id(self, bond_id: int) -> None:
+        if 0 <= bond_id < len(self.model.bonds):
+            self.model.bonds[bond_id] = None
+
+    def restore_bond_from_state(self, bond_id: int, bond_state: dict) -> None:
+        while len(self.model.bonds) <= bond_id:
+            self.model.bonds.append(None)
+        self.model.bonds[bond_id] = Bond(
+            bond_state.get("a", 0),
+            bond_state.get("b", 0),
+            bond_state.get("order", 1),
+            style=bond_state.get("style", "single"),
+            color=bond_state.get("color", "#000000"),
+        )
+
+    def trim_bonds_to_length(self, length: int) -> None:
+        del self.model.bonds[length:]
 
     def _create_ring_fill_item(self, points, atom_ids):
         return _FakeRingItem(False, list(points), list(atom_ids))
@@ -498,6 +566,78 @@ class StructureBuildServiceTest(unittest.TestCase):
                 self.assertEqual(sum(1 for neighbors in adjacency.values() if len(neighbors) == 3), 2)
                 self.assertLessEqual(max(order_sums.values()), 4)
                 self.assertTrue(any(atom.element != "C" for atom in canvas.model.atoms.values()))
+
+    def test_fused_heterocycle_template_rolls_back_if_second_ring_geometry_fails(self) -> None:
+        canvas = _FakeCanvas()
+        service = _service_for(canvas)
+        service.regular_ring_points_for_bond = Mock(return_value=None)
+
+        service.template_builder.add_indole()
+
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertEqual(canvas.model.bonds, [])
+        self.assertEqual(canvas.ring_items, [])
+        self.assertEqual(canvas.scene_items, [])
+        self.assertEqual(canvas.record_calls, [])
+
+    def test_fused_heterocycle_template_rolls_back_if_second_ring_build_raises(self) -> None:
+        canvas = _FakeCanvas()
+        service = _service_for(canvas)
+        real_add_ring_from_points = service.add_ring_from_points
+        call_count = 0
+
+        def add_ring_then_fail(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return real_add_ring_from_points(*args, **kwargs)
+            raise RuntimeError("second ring failed")
+
+        service.add_ring_from_points = Mock(side_effect=add_ring_then_fail)
+
+        with self.assertRaisesRegex(RuntimeError, "second ring failed"):
+            service.template_builder.add_indole()
+
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertEqual(canvas.model.bonds, [])
+        self.assertEqual(canvas.ring_items, [])
+        self.assertEqual(canvas.scene_items, [])
+        self.assertEqual(canvas.record_calls, [])
+        self.assertEqual(last_smiles_input_for(canvas), "before")
+
+    def test_catalog_template_history_undo_redo_includes_ring_items(self) -> None:
+        canvas = _FakeCanvas()
+        pushed_commands = []
+        canvas.services.canvas_history_recording_service = CanvasHistoryRecordingService(
+            canvas,
+            history_service=SimpleNamespace(push=pushed_commands.append),
+        )
+        service = _service_for(canvas)
+
+        apply_structure_template_command(service, "pyridine")
+
+        self.assertEqual(len(pushed_commands), 1)
+        command = pushed_commands[0]
+        self.assertIsInstance(command, CompositeCommand)
+        self.assertEqual(len(canvas.model.atoms), 6)
+        self.assertEqual(len([bond for bond in canvas.model.bonds if bond is not None]), 6)
+        self.assertEqual(len(canvas.ring_items), 1)
+        self.assertEqual(len(canvas.scene_items), 1)
+
+        command.undo(canvas)
+
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertEqual(canvas.model.bonds, [])
+        self.assertEqual(canvas.ring_items, [])
+        self.assertEqual(canvas.scene_items, [])
+        self.assertEqual(last_smiles_input_for(canvas), "before")
+
+        command.redo(canvas)
+
+        self.assertEqual(len(canvas.model.atoms), 6)
+        self.assertEqual(len([bond for bond in canvas.model.bonds if bond is not None]), 6)
+        self.assertEqual(len(canvas.ring_items), 1)
+        self.assertEqual(len(canvas.scene_items), 1)
 
     @unittest.skipUnless(_RealChem is not None, "RDKit is required for aromatic template identity tests")
     def test_named_aromatic_templates_round_trip_to_expected_canonical_smiles(self) -> None:
@@ -1155,6 +1295,7 @@ class StructureBuildServiceTest(unittest.TestCase):
                 self.assertEqual(len(canvas.model.atoms), atom_count)
                 self.assertEqual(len(canvas.model.bonds), bond_count)
                 self.assertEqual(len(canvas.added_graphics), graphic_count)
+                expected_scene_items = canvas.ring_items if method_name in {"add_phenyl", "add_benzyl"} else []
                 self.assertEqual(
                     canvas.record_calls,
                     [
@@ -1162,7 +1303,7 @@ class StructureBuildServiceTest(unittest.TestCase):
                             "before_next_atom_id": 0,
                             "before_bond_count": 0,
                             "before_smiles_input": "before",
-                            "added_scene_items": [],
+                            "added_scene_items": expected_scene_items,
                         }
                     ],
                 )

@@ -7,7 +7,7 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtCore import QPointF, QRectF
+    from PyQt6.QtCore import QMimeData, QPointF, QRectF
     from PyQt6.QtGui import QImage, QPolygonF
     from PyQt6.QtWidgets import (
         QApplication,
@@ -28,6 +28,7 @@ if QApplication is not None:
     from ui.canvas_scene_items_state import set_scene_item_collection_for
     from ui.scene_clipboard_controller import SceneClipboardController
     from ui.scene_clipboard_logic import (
+        MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES,
         build_selection_clipboard_payload,
         clipboard_payload_candidates,
         decode_clipboard_selection_payload,
@@ -272,6 +273,23 @@ class SceneClipboardLogicTest(unittest.TestCase):
             [json.dumps(invalid_payload, separators=(",", ":")), valid_payload_json],
             version=1,
         )
+
+        self.assertEqual(payload, valid_payload)
+        self.assertEqual(payload_json, valid_payload_json)
+
+    def test_clipboard_payload_candidates_rejects_oversized_custom_payload_before_decode(self) -> None:
+        mime_data = QMimeData()
+        mime_type = "application/x-chemvas-selection+json"
+        mime_data.setData(mime_type, b"{" + (b" " * MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES) + b"}")
+
+        self.assertEqual(clipboard_payload_candidates(mime_data, mime_type=mime_type), [])
+
+    def test_decode_clipboard_selection_payload_rejects_deep_json_that_raises_recursion_error(self) -> None:
+        deep_json = "[" * 20_000 + "0" + "]" * 20_000
+        valid_payload = _valid_note_clipboard_payload()
+        valid_payload_json = json.dumps(valid_payload, separators=(",", ":"))
+
+        payload, payload_json = decode_clipboard_selection_payload([deep_json, valid_payload_json], version=1)
 
         self.assertEqual(payload, valid_payload)
         self.assertEqual(payload_json, valid_payload_json)

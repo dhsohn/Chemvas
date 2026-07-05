@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import Any
+
+from ui.structure_fragment_build_service import FRAGMENT_BUILD_FAILED
+
 REGULAR_RING_TEMPLATES = {
     "cyclopropane": 3,
     "cyclobutane": 4,
@@ -89,9 +94,13 @@ def apply_structure_template_command(service, key: str) -> None:
     raise ValueError(f"Unknown structure template: {key}")
 
 
-def _successful_template_action(action):
-    def _action() -> list:
-        action()
+def _successful_template_action(action: Callable[[], Any]) -> Callable[[], list | None]:
+    def _action() -> list | None:
+        result = action()
+        if result is FRAGMENT_BUILD_FAILED:
+            return None
+        if isinstance(result, list):
+            return result
         return []
 
     return _action

@@ -14,6 +14,8 @@ from ui.structure_growth_logic import (
     fused_benzene_centers,
 )
 
+FRAGMENT_BUILD_FAILED = object()
+
 
 @dataclass(frozen=True, slots=True)
 class StructureFragmentBuildActions:
@@ -91,7 +93,7 @@ class StructureFragmentBuildService:
         x_scale: float,
         y_scale: float,
         actions: StructureFragmentBuildActions,
-    ) -> None:
+    ) -> list | object:
         center = actions.viewport_center()
         atom_ids = actions.add_ring_from_points(
             actions.ring_points(center, 6),
@@ -99,14 +101,14 @@ class StructureFragmentBuildService:
         )
         bond_id = self.committer.bond_id_between(atom_ids[1], atom_ids[2])
         if bond_id is None:
-            return
+            return FRAGMENT_BUILD_FAILED
         center_hint = QPointF(
             center.x() + bond_length_px_for(self.canvas) * x_scale,
             center.y() + bond_length_px_for(self.canvas) * y_scale,
         )
         ring_result = actions.regular_ring_points_for_bond(ring_size, bond_id, center_hint)
         if ring_result is None:
-            return
+            return FRAGMENT_BUILD_FAILED
         points, merge = ring_result
         ring_elements = _fused_heterocycle_elements(ring_size, elements)
         actions.add_ring_from_points(
@@ -115,6 +117,7 @@ class StructureFragmentBuildService:
             merge=merge,
             bond_orders=_fused_heterocycle_bond_orders(ring_size, ring_elements),
         )
+        return []
 
     def add_phenyl(self, actions: StructureFragmentBuildActions) -> None:
         def _build() -> None:
@@ -345,4 +348,4 @@ def _fused_heterocycle_elements(ring_size: int, elements: list[str]) -> list[str
     return ["C", "C", *normalized[: ring_size - 2]]
 
 
-__all__ = ["StructureFragmentBuildActions", "StructureFragmentBuildService"]
+__all__ = ["FRAGMENT_BUILD_FAILED", "StructureFragmentBuildActions", "StructureFragmentBuildService"]

@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.graphics_items import NoSelectPolygonItem
+from ui.note_html_sanitizer import sanitize_note_html
 from ui.note_item_access import set_committed_note_html_for, set_committed_note_text_for
 from ui.scene_item_state import (
     ARROW_KINDS,
@@ -67,8 +68,8 @@ def create_note_item_from_state(
     note_style_applier: NoteStyleApplier,
 ) -> QGraphicsTextItem:
     item = note_item_factory()
-    html = note_state.get("html")
-    if isinstance(html, str) and html:
+    html = sanitize_note_html(note_state.get("html"))
+    if html is not None:
         item.setHtml(html)
     else:
         item.setPlainText(str(note_state.get("text", "")))

@@ -14,6 +14,7 @@ from PyQt6.QtCore import QMimeData
 from PyQt6.QtWidgets import QGraphicsItem
 
 CLIPBOARD_SELECTION_FORMAT = "chemvas-selection"
+MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES = 8 * 1024 * 1024
 
 
 def _item_in_scene(item: QGraphicsItem, scene) -> bool:
@@ -188,8 +189,11 @@ def clipboard_payload_candidates(
 ) -> list[str]:
     payload_candidates: list[str] = []
     if mime_data is not None and mime_data.hasFormat(mime_type):
+        payload_data = mime_data.data(mime_type)
+        if payload_data.size() > MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES:
+            return payload_candidates
         with contextlib.suppress(UnicodeDecodeError):
-            payload_candidates.append(mime_data.data(mime_type).data().decode("utf-8"))
+            payload_candidates.append(payload_data.data().decode("utf-8"))
     return payload_candidates
 
 
@@ -201,7 +205,7 @@ def decode_clipboard_selection_payload(
     for payload_json in payload_candidates:
         try:
             payload = json.loads(payload_json)
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, RecursionError):
             continue
         if not isinstance(payload, dict):
             continue
@@ -227,6 +231,7 @@ def _is_supported_selection_payload_version(payload_version: object, *, current_
 
 __all__ = [
     "CLIPBOARD_SELECTION_FORMAT",
+    "MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES",
     "build_selection_clipboard_payload",
     "clipboard_payload_candidates",
     "decode_clipboard_selection_payload",
