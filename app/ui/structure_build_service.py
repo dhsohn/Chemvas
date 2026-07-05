@@ -272,8 +272,9 @@ class StructureBuildService:
         points,
         elements: list[str] | None = None,
         merge: list | None = None,
+        bond_orders: list[int] | None = None,
     ) -> list[int]:
-        return self.committer.add_ring_from_points(points, elements=elements, merge=merge)
+        return self.committer.add_ring_from_points(points, elements=elements, merge=merge, bond_orders=bond_orders)
 
     def add_atom_with_merge(self, point: QPointF, element: str, merge: list) -> int:
         return self.committer.add_atom_with_merge(point, element, merge)

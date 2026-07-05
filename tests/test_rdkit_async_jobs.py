@@ -13,6 +13,7 @@ except ModuleNotFoundError:
     QObject = None
 
 if QObject is not None:
+    from core.model import MoleculeModel
     from core.rdkit_types import MoleculeIdentifiers, RDKitResult
     from ui import rdkit_async_jobs
     from ui.preview_3d_worker import Preview3DWorker
@@ -261,14 +262,21 @@ class Preview3DWorkerTest(unittest.TestCase):
             model_to_3d_scene_result=mock.Mock(return_value=RDKitResult(None, "local preview error")),
             last_error="stale preview error",
         )
+        model = MoleculeModel()
+        atom_id = model.add_atom("C", 0.0, 0.0)
+        atom_annotations = {atom_id: {"formal_charge": 1}}
         emitted = []
-        worker = Preview3DWorker(7, rdkit, "model", {"annotations": True})
+        worker = Preview3DWorker(7, rdkit, model, atom_annotations)
         worker.finished.connect(lambda *args: emitted.append(args))
 
         worker.run()
 
-        rdkit.compute_identifiers.assert_called_once_with("model")
-        rdkit.model_to_3d_scene_result.assert_called_once_with("model", atom_annotations={"annotations": True})
+        rdkit.compute_identifiers.assert_called_once()
+        identifier_model = rdkit.compute_identifiers.call_args.args[0]
+        self.assertIsNot(identifier_model, model)
+        self.assertEqual(identifier_model.atom_annotations, atom_annotations)
+        self.assertEqual(model.atom_annotations, {})
+        rdkit.model_to_3d_scene_result.assert_called_once_with(model, atom_annotations=atom_annotations)
         self.assertEqual(emitted, [(7, "C", 12.01, "C", "KEY", None, "local preview error")])
 
 

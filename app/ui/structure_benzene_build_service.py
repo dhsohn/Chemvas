@@ -68,8 +68,12 @@ class StructureBenzeneBuildService:
             for point in points:
                 atom_ids.append(add_atom_with_merge(point, "C", merge))
 
+            bond_orders = [order for _, _, order in alternating_ring_bond_specs(atom_ids)]
+            resolved_bond_orders = self.committer.resolved_ring_bond_orders(atom_ids, bond_orders)
             bonds_start = bond_count_for(self.canvas)
-            for a_id, b_id, order in alternating_ring_bond_specs(atom_ids):
+            for index, order in enumerate(resolved_bond_orders):
+                a_id = atom_ids[index]
+                b_id = atom_ids[(index + 1) % len(atom_ids)]
                 if bond_exists(a_id, b_id):
                     continue
                 self.committer.add_bond(a_id, b_id, order)

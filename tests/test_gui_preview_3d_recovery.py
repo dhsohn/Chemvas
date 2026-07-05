@@ -102,6 +102,25 @@ class SequencedAdapter:
         return scene
 
 
+class AnnotatedIdentifierAdapter(SequencedAdapter):
+    def __init__(self, responses) -> None:
+        super().__init__(responses)
+        self.identifier_annotations = []
+
+    def compute_identifiers(self, model):
+        annotations = getattr(model, "atom_annotations", {})
+        self.identifier_annotations.append(
+            {atom_id: dict(values) for atom_id, values in annotations.items()}
+        )
+        formal_charge = sum(values.get("formal_charge", 0) for values in annotations.values())
+        radical_electrons = sum(values.get("radical_electrons", 0) for values in annotations.values())
+        return MoleculeIdentifiers(
+            formula=f"charge={formal_charge};radical={radical_electrons}",
+            mw=12.0 + formal_charge + radical_electrons,
+            smiles=f"[charge={formal_charge}].[radical={radical_electrons}]",
+        )
+
+
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for Preview3D tests")
 class Preview3DRecoveryTest(unittest.TestCase):
     @classmethod
@@ -154,6 +173,25 @@ class Preview3DRecoveryTest(unittest.TestCase):
         preview.set_rdkit_adapter(adapter_b)
 
         self.assertIs(preview.rdkit_adapter, adapter_b)
+
+    def test_sync_preview_identifiers_use_payload_annotations(self) -> None:
+        model = self._make_model()
+        annotations = {
+            0: {"formal_charge": 1},
+            1: {"radical_electrons": 1},
+        }
+        scene = self._make_scene()
+        adapter = AnnotatedIdentifierAdapter([(scene, None)])
+        preview = self._create_preview(adapter)
+
+        preview._set_canvas_structure(model, annotations)
+        self._wait_for_rebuild()
+
+        self.assertEqual(adapter.identifier_annotations, [annotations])
+        self.assertEqual(adapter.calls, [(model, annotations)])
+        self.assertEqual(preview._formula_text, "charge=1;radical=1")
+        self.assertEqual(preview._mw_text, "14.00")
+        self.assertEqual(preview._smiles_text, "[charge=1].[radical=1]")
 
     def test_preview_recovers_after_payload_failure_with_same_structure(self) -> None:
         model = self._make_model()

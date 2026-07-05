@@ -130,6 +130,20 @@ def build_3d_conversion_payload(
     return export_model, atom_annotations
 
 
+def model_with_atom_annotations(
+    model: MoleculeModel,
+    atom_annotations: Mapping[int, Mapping[str, int]] | None,
+) -> MoleculeModel:
+    if atom_annotations is None:
+        return model
+    return MoleculeModel(
+        atoms=dict(model.atoms),
+        bonds=list(model.bonds),
+        next_atom_id=model.next_atom_id,
+        atom_annotations=_normalized_atom_annotations(atom_annotations),
+    )
+
+
 def _append_selected_bond(
     submodel: MoleculeModel,
     model: MoleculeModel,
@@ -173,3 +187,20 @@ def _annotation_totals(mark_kinds: Iterable[str]) -> tuple[int, int]:
         elif kind == "radical":
             radical_electrons += 1
     return formal_charge, radical_electrons
+
+
+def _normalized_atom_annotations(
+    atom_annotations: Mapping[int, Mapping[str, int]],
+) -> AtomAnnotations:
+    annotations: AtomAnnotations = {}
+    for atom_id, values in atom_annotations.items():
+        annotation: dict[str, int] = {}
+        formal_charge = int(values.get("formal_charge", 0))
+        radical_electrons = int(values.get("radical_electrons", 0))
+        if formal_charge:
+            annotation["formal_charge"] = formal_charge
+        if radical_electrons:
+            annotation["radical_electrons"] = radical_electrons
+        if annotation:
+            annotations[int(atom_id)] = annotation
+    return annotations
