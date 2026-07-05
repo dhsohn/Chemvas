@@ -24,8 +24,8 @@ class StructureTemplateBuildService:
     def add_regular_ring_template(self, n: int) -> None:
         self.fragment_builder.add_regular_ring_template(n, self.actions())
 
-    def add_hetero_ring_template(self, n: int, elements: list[str]) -> None:
-        self.fragment_builder.add_hetero_ring_template(n, elements, self.actions())
+    def add_hetero_ring_template(self, n: int, elements: list[str], bond_orders: list[int] | None = None) -> None:
+        self.fragment_builder.add_hetero_ring_template(n, elements, self.actions(), bond_orders=bond_orders)
 
     def add_fused_benzenes(self, count: int, mode: str = "linear") -> None:
         self.fragment_builder.add_fused_benzenes(count, mode, self.actions())
@@ -42,7 +42,7 @@ class StructureTemplateBuildService:
     def add_indole(self) -> None:
         self._run_recorded_fused_heterocycle_template(
             ring_size=5,
-            elements=["N", "C", "C", "C", "C"],
+            elements=["C", "C", "N", "C", "C"],
             x_scale=1.1,
             y_scale=0.6,
         )
@@ -50,7 +50,7 @@ class StructureTemplateBuildService:
     def add_quinoline(self) -> None:
         self._run_recorded_fused_heterocycle_template(
             ring_size=6,
-            elements=["N", "C", "C", "C", "C", "C"],
+            elements=["C", "C", "N", "C", "C", "C"],
             x_scale=1.5,
         )
 
@@ -64,7 +64,7 @@ class StructureTemplateBuildService:
     def add_benzimidazole(self) -> None:
         self._run_recorded_fused_heterocycle_template(
             ring_size=5,
-            elements=["N", "C", "N", "C", "C"],
+            elements=["C", "C", "N", "C", "N"],
             x_scale=1.1,
             y_scale=0.6,
         )

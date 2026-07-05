@@ -22,7 +22,9 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from core.model import Atom, Bond, MoleculeModel
+    from ui.atom_coords_access import set_atom_coords_3d_for
     from ui.canvas_mark_registry import CanvasMarkRegistry
+    from ui.canvas_rotation_state import rotation_state_for
     from ui.canvas_scene_items_state import set_scene_item_collection_for
     from ui.scene_clipboard_controller import SceneClipboardController
     from ui.scene_clipboard_logic import (
@@ -274,6 +276,15 @@ class SceneClipboardLogicTest(unittest.TestCase):
         self.assertEqual(payload, valid_payload)
         self.assertEqual(payload_json, valid_payload_json)
 
+    def test_decode_clipboard_selection_payload_accepts_legacy_v1_payload_for_v2_reader(self) -> None:
+        valid_payload = _valid_note_clipboard_payload()
+        valid_payload_json = json.dumps(valid_payload, separators=(",", ":"))
+
+        payload, payload_json = decode_clipboard_selection_payload([valid_payload_json], version=2)
+
+        self.assertEqual(payload, valid_payload)
+        self.assertEqual(payload_json, valid_payload_json)
+
     def test_selection_payload_extends_atom_and_bond_selection_and_keeps_related_scene_items(self) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
@@ -361,6 +372,41 @@ class SceneClipboardLogicTest(unittest.TestCase):
                 {"kind": "note", "text": "note", "x": 80.0, "y": 90.0},
                 {"kind": "arrow", "start": (5.0, 6.0), "end": (7.0, 8.0)},
             ],
+        )
+
+    def test_selection_payload_v2_includes_only_fresh_selected_perspective_coords(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.CLIPBOARD_SELECTION_VERSION = 2
+        canvas.renderer = SimpleNamespace(style=SimpleNamespace(bond_length_px=30.0))
+        canvas.model = MoleculeModel(
+            atoms={
+                1: Atom("C", 0.0, 0.0),
+                2: Atom("O", 20.0, 0.0),
+            },
+            bonds=[Bond(1, 2, 1, style="single", color="#444444")],
+        )
+        set_atom_coords_3d_for(canvas, {1: (0.0, 0.0, 20.0), 2: (100.0, 100.0, 5.0)})
+        rotation = rotation_state_for(canvas)
+        rotation.projection_center_3d = (0.0, 0.0, 0.0)
+        rotation.projection_anchor_2d = (0.0, 0.0)
+
+        atom_item = _make_rect_item("atom", data1=1)
+        bond_item = _make_rect_item("bond", data1=0)
+        canvas.add_item(atom_item, selected=True)
+        canvas.add_item(bond_item, selected=True)
+
+        payload = scene_clipboard_controller_for(canvas).selection_payload_for_clipboard()
+
+        self.assertIsNotNone(payload)
+        assert payload is not None
+        self.assertEqual(payload["version"], 2)
+        self.assertEqual(
+            payload["perspective"],
+            {
+                "atom_coords_3d": [{"atom_id": 1, "coords": (0.0, 0.0, 20.0)}],
+                "projection_center_3d": (0.0, 0.0, 0.0),
+                "projection_anchor_2d": (0.0, 0.0),
+            },
         )
 
     def test_selection_payload_filters_invalid_entries_and_retains_only_valid_scene_state(self) -> None:

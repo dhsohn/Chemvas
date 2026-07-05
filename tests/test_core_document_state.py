@@ -356,6 +356,41 @@ class DocumentStateTest(unittest.TestCase):
         self.assertIsNone(state["last_smiles_input"])
         build_document_payload(state, version=CANVAS_FILE_VERSION)
 
+    def test_selection_payload_to_canvas_state_maps_v2_perspective_state(self) -> None:
+        settings = _settings()
+        selection_payload = {
+            "format": "chemvas-selection",
+            "version": 2,
+            "atoms": [
+                {"id": 3, "element": "C", "x": 10.0, "y": 20.0, "color": "#111111", "explicit_label": True},
+                {"id": 7, "element": "O", "x": 30.0, "y": 40.0, "color": "#222222", "explicit_label": False},
+            ],
+            "bonds": [{"a": 3, "b": 7, "order": 1, "style": "single", "color": "#333333"}],
+            "rings": [],
+            "marks": [],
+            "scene_items": [],
+            "perspective": {
+                "atom_coords_3d": [
+                    {"atom_id": 3, "coords": [10.0, 20.0, 5.0]},
+                    {"atom_id": 7, "coords": [30.0, 40.0, -3.0]},
+                ],
+                "projection_center_3d": [20.0, 30.0, 1.0],
+                "projection_anchor_2d": [21.0, 31.0],
+            },
+        }
+
+        state = selection_payload_to_canvas_state(selection_payload, settings)
+
+        self.assertEqual(
+            state["perspective"],
+            {
+                "atom_coords_3d": {3: (10.0, 20.0, 5.0), 7: (30.0, 40.0, -3.0)},
+                "projection_center_3d": (20.0, 30.0, 1.0),
+                "projection_anchor_2d": (21.0, 31.0),
+            },
+        )
+        build_document_payload(state, version=CANVAS_FILE_VERSION)
+
     def test_build_document_payload_rejects_wedge_hash_on_non_single_bonds(self) -> None:
         state = _canvas_state(
             _model_state(

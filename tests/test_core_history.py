@@ -150,9 +150,16 @@ class _FakeCanvas:
 
     def remove_atom_only(self, atom_id, remove_marks=True) -> None:
         self.calls.append(("remove_atom_for_history", atom_id, remove_marks))
+        self.model.atoms.pop(atom_id, None)
+        atom_coords_3d_for(self).pop(atom_id, None)
 
     def restore_atom_from_state(self, atom_id, state) -> None:
         self.calls.append(("restore_atom_from_state", atom_id, dict(state)))
+        self.model.atoms[atom_id] = Atom(
+            state.get("element", "C"),
+            state.get("x", 0.0),
+            state.get("y", 0.0),
+        )
 
     def apply_atom_color(self, atom_id, color) -> None:
         self.calls.append(("apply_atom_color", atom_id, color))
@@ -404,6 +411,20 @@ class HistoryCommandTest(unittest.TestCase):
         self.assertIn(("restore_mark_from_state", {"kind": "plus"}), canvas.calls)
         self.assertEqual(canvas.model.next_atom_id, 3)
         self.assertEqual(canvas.last_smiles_input, "after")
+
+    def test_add_atoms_command_restores_atom_coords_3d_on_redo(self) -> None:
+        canvas = _FakeCanvas()
+        command = AddAtomsCommand(
+            atom_states={3: {"element": "N", "x": 1.0, "y": 2.0}},
+            before_next_atom_id=3,
+            after_next_atom_id=4,
+            atom_coords_3d={3: (1.0, 2.0, 3.0)},
+        )
+
+        command.redo(canvas)
+
+        self.assertEqual(atom_coords_3d_for(canvas)[3], (1.0, 2.0, 3.0))
+        self.assertIn(("redraw_bonds_for_atoms", {3}), canvas.calls)
 
     def test_delete_atoms_command_can_skip_mark_restoration_and_mark_removal(self) -> None:
         canvas = _FakeCanvas()

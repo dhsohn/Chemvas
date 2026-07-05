@@ -879,6 +879,22 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertEqual(mol.atoms[0].formal_charge, 1)
         self.assertEqual(mol.atoms[1].radical_electrons, 1)
 
+    def test_build_conversion_rdkit_mol_keeps_implicit_hydrogen_for_two_coordinate_neutral_nitrogen(self) -> None:
+        adapter = RDKitAdapter()
+        chem = _FakeChem({})
+        adapter._rdkit = (chem, _FakeAllChem())
+        model = MoleculeModel()
+        carbon_a = model.add_atom("C", 0.0, 0.0)
+        nitrogen = model.add_atom("N", 1.0, 0.0)
+        carbon_b = model.add_atom("C", 2.0, 0.0)
+        model.add_bond(carbon_a, nitrogen, 1)
+        model.add_bond(nitrogen, carbon_b, 1)
+
+        mol = adapter._build_conversion_rdkit_mol(model)
+
+        self.assertIsNotNone(mol)
+        self.assertFalse(mol.atoms[1].no_implicit)
+
     def test_model_to_rdkit_with_map_returns_none_when_rdkit_is_unavailable(self) -> None:
         adapter = RDKitAdapter()
         adapter._rdkit = (None, None)
@@ -1582,6 +1598,27 @@ class RDKitAdapterTest(unittest.TestCase):
         name = adapter.get_name_from_smiles("benzene-ish")
 
         self.assertEqual(name, "Benzene")
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for aromatic name-map tests")
+    def test_get_name_from_smiles_recognizes_aromatic_template_names(self) -> None:
+        cases = (
+            ("c1ccc2ccccc2c1", "Naphthalene"),
+            ("c1ccc2c(c1)ccc1ccccc12", "Phenanthrene"),
+            ("c1ccncc1", "Pyridine"),
+            ("n1cnccc1", "Pyrimidine"),
+            ("c1c[nH]cn1", "Imidazole"),
+            ("c1ccoc1", "Furan"),
+            ("c1ccsc1", "Thiophene"),
+            ("c1ccc2[nH]ccc2c1", "Indole"),
+            ("c1ccc2cnccc2c1", "Isoquinoline"),
+            ("c1ccc2[nH]cnc2c1", "Benzimidazole"),
+        )
+
+        adapter = RDKitAdapter()
+
+        for smiles, expected_name in cases:
+            with self.subTest(smiles=smiles):
+                self.assertEqual(adapter.get_name_from_smiles(smiles), expected_name)
 
     def test_get_name_from_smiles_returns_none_when_rdkit_is_unavailable(self) -> None:
         adapter = RDKitAdapter()

@@ -1063,14 +1063,14 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         self.assertEqual(
             template_builder.add_hetero_ring_template.call_args_list,
             [
-                mock.call(6, ["C", "C", "C", "C", "C", "N"]),
-                mock.call(6, ["N", "C", "N", "C", "C", "C"]),
-                mock.call(5, ["C", "N", "C", "N", "C"]),
-                mock.call(5, ["N", "C", "C", "C", "C"]),
-                mock.call(5, ["O", "C", "C", "C", "C"]),
-                mock.call(5, ["S", "C", "C", "C", "C"]),
-                mock.call(6, ["O", "C", "C", "C", "C", "C"]),
-                mock.call(5, ["O", "C", "C", "C", "C"]),
+                mock.call(6, ["C", "C", "C", "C", "C", "N"], [2, 1, 2, 1, 2, 1]),
+                mock.call(6, ["N", "C", "N", "C", "C", "C"], [2, 1, 2, 1, 2, 1]),
+                mock.call(5, ["C", "N", "C", "N", "C"], [1, 2, 1, 1, 2]),
+                mock.call(5, ["N", "C", "C", "C", "C"], [1, 2, 1, 2, 1]),
+                mock.call(5, ["O", "C", "C", "C", "C"], [1, 2, 1, 2, 1]),
+                mock.call(5, ["S", "C", "C", "C", "C"], [1, 2, 1, 2, 1]),
+                mock.call(6, ["O", "C", "C", "C", "C", "C"], None),
+                mock.call(5, ["O", "C", "C", "C", "C"], None),
             ],
         )
         self.assertEqual(

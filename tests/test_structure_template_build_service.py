@@ -29,6 +29,7 @@ def _actions(*, run_recorded_build=None) -> StructureFragmentBuildActions:
         viewport_center=lambda: QPointF(1.0, 2.0),
         regular_ring_radius=lambda n: float(n),
         ring_points=lambda *args, **kwargs: [],
+        regular_ring_points_for_bond=lambda *args, **kwargs: None,
         cyclohexane_chair_points=lambda center: [],
         cyclohexane_boat_points=lambda center: [],
         add_ring_from_points=lambda *args, **kwargs: [],
@@ -49,7 +50,7 @@ def test_template_build_service_passes_actions_to_fragment_builder() -> None:
 
     assert fragment_builder.calls == [
         ("add_regular_ring_template", (6, actions), {}),
-        ("add_hetero_ring_template", (5, ["O", "C", "C", "C", "C"], actions), {}),
+        ("add_hetero_ring_template", (5, ["O", "C", "C", "C", "C"], actions), {"bond_orders": None}),
         ("add_phenyl", (actions,), {}),
     ]
 
@@ -69,7 +70,7 @@ def test_fused_heterocycle_templates_run_inside_recorded_build() -> None:
             (),
             {
                 "ring_size": 5,
-                "elements": ["N", "C", "C", "C", "C"],
+                "elements": ["C", "C", "N", "C", "C"],
                 "x_scale": 1.1,
                 "y_scale": 0.6,
                 "actions": actions,
@@ -88,7 +89,7 @@ def test_direct_fused_heterocycle_template_can_use_explicit_actions() -> None:
 
     service.add_fused_heterocycle_template(
         ring_size=6,
-        elements=["N", "C", "C", "C", "C", "C"],
+        elements=["C", "C", "N", "C", "C", "C"],
         x_scale=1.5,
         actions=explicit_actions,
     )
@@ -99,7 +100,7 @@ def test_direct_fused_heterocycle_template_can_use_explicit_actions() -> None:
             (),
             {
                 "ring_size": 6,
-                "elements": ["N", "C", "C", "C", "C", "C"],
+                "elements": ["C", "C", "N", "C", "C", "C"],
                 "x_scale": 1.5,
                 "y_scale": 0.0,
                 "actions": explicit_actions,

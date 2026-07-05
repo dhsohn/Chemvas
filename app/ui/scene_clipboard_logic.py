@@ -4,7 +4,11 @@ import contextlib
 import json
 from collections.abc import Callable, Mapping, Sequence
 
-from core.document_state import validate_clipboard_selection_payload
+from core.document_state import (
+    CLIPBOARD_SELECTION_PERSPECTIVE_VERSION,
+    LEGACY_CLIPBOARD_SELECTION_VERSION,
+    validate_clipboard_selection_payload,
+)
 from core.model import Bond
 from PyQt6.QtCore import QMimeData
 from PyQt6.QtWidgets import QGraphicsItem
@@ -149,6 +153,7 @@ def build_selection_clipboard_payload(
     atom_state_getter: Callable[[int], dict],
     bond_state_getter: Callable[[object], dict],
     scene_item_state_getter: Callable[[QGraphicsItem], dict],
+    perspective_state_getter: Callable[[set[int]], dict | None] | None = None,
     version: int,
 ) -> dict | None:
     atom_ids = _selection_atom_ids(explicit_atom_ids, selected_bond_ids, bonds)
@@ -160,7 +165,7 @@ def build_selection_clipboard_payload(
 
     if not atoms and not marks and not rings and not scene_item_states:
         return None
-    return {
+    payload = {
         "format": CLIPBOARD_SELECTION_FORMAT,
         "version": version,
         "atoms": atoms,
@@ -169,6 +174,11 @@ def build_selection_clipboard_payload(
         "marks": marks,
         "scene_items": scene_item_states,
     }
+    if version == CLIPBOARD_SELECTION_PERSPECTIVE_VERSION and perspective_state_getter is not None:
+        perspective_state = perspective_state_getter(atom_ids)
+        if perspective_state is not None:
+            payload["perspective"] = perspective_state
+    return payload
 
 
 def clipboard_payload_candidates(
@@ -197,7 +207,7 @@ def decode_clipboard_selection_payload(
             continue
         if payload.get("format") != CLIPBOARD_SELECTION_FORMAT:
             continue
-        if payload.get("version") != version:
+        if not _is_supported_selection_payload_version(payload.get("version"), current_version=version):
             continue
         # Clipboard MIME is outside the trust boundary: reject any payload whose
         # content does not pass the same whitelist used for .chemvas files.
@@ -205,6 +215,14 @@ def decode_clipboard_selection_payload(
             continue
         return payload, payload_json
     return None, None
+
+
+def _is_supported_selection_payload_version(payload_version: object, *, current_version: int) -> bool:
+    if type(payload_version) is not int:
+        return False
+    if payload_version == current_version:
+        return True
+    return payload_version == LEGACY_CLIPBOARD_SELECTION_VERSION and current_version >= CLIPBOARD_SELECTION_PERSPECTIVE_VERSION
 
 
 __all__ = [

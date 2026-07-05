@@ -3,6 +3,9 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
+Coords2D = tuple[float, float]
+Coords3D = tuple[float, float, float]
+
 
 @dataclass(slots=True)
 class PasteApplyResult:
@@ -31,6 +34,8 @@ def apply_paste_payload(
     restore_bond_from_state: Callable[[int, dict], None],
     translated_scene_item_state: Callable[..., dict | None],
     create_scene_item_from_state: Callable[[dict], object],
+    perspective: object | None = None,
+    apply_perspective: Callable[[dict[int, Coords3D], Coords3D | None, Coords2D | None], None] | None = None,
 ) -> PasteApplyResult:
     result = PasteApplyResult()
 
@@ -111,7 +116,65 @@ def apply_paste_payload(
             if item is not None:
                 result.added_scene_items.append(item)
 
+    if apply_perspective is not None:
+        translated_perspective = translated_perspective_state(
+            perspective,
+            atom_id_map=result.atom_id_map,
+            dx=dx,
+            dy=dy,
+        )
+        if translated_perspective is not None:
+            apply_perspective(*translated_perspective)
+
     return result
 
 
-__all__ = ["PasteApplyResult", "apply_paste_payload"]
+def translated_perspective_state(
+    perspective: object | None,
+    *,
+    atom_id_map: dict[int, int],
+    dx: float,
+    dy: float,
+) -> tuple[dict[int, Coords3D], Coords3D | None, Coords2D | None] | None:
+    if not isinstance(perspective, dict):
+        return None
+    translated_coords: dict[int, Coords3D] = {}
+    coords_entries = perspective.get("atom_coords_3d")
+    if not isinstance(coords_entries, list):
+        return None
+    for entry in coords_entries:
+        if not isinstance(entry, dict):
+            continue
+        atom_id = entry.get("atom_id")
+        coords = _point_3d(entry.get("coords"))
+        if not isinstance(atom_id, int) or atom_id not in atom_id_map or coords is None:
+            continue
+        translated_coords[atom_id_map[atom_id]] = (coords[0] + dx, coords[1] + dy, coords[2])
+    if not translated_coords:
+        return None
+    center = _point_3d(perspective.get("projection_center_3d"))
+    anchor = _point_2d(perspective.get("projection_anchor_2d"))
+    translated_center = None if center is None else (center[0] + dx, center[1] + dy, center[2])
+    translated_anchor = None if anchor is None else (anchor[0] + dx, anchor[1] + dy)
+    return translated_coords, translated_center, translated_anchor
+
+
+def _point_3d(value: object) -> Coords3D | None:
+    if not isinstance(value, (list, tuple)) or len(value) != 3:
+        return None
+    x, y, z = value
+    if not isinstance(x, (int, float)) or not isinstance(y, (int, float)) or not isinstance(z, (int, float)):
+        return None
+    return float(x), float(y), float(z)
+
+
+def _point_2d(value: object) -> Coords2D | None:
+    if not isinstance(value, (list, tuple)) or len(value) != 2:
+        return None
+    x, y = value
+    if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+        return None
+    return float(x), float(y)
+
+
+__all__ = ["PasteApplyResult", "apply_paste_payload", "translated_perspective_state"]

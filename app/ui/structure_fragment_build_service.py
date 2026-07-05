@@ -20,6 +20,7 @@ class StructureFragmentBuildActions:
     viewport_center: Callable[[], QPointF]
     regular_ring_radius: Callable[[int], float]
     ring_points: Callable
+    regular_ring_points_for_bond: Callable
     cyclohexane_chair_points: Callable
     cyclohexane_boat_points: Callable
     add_ring_from_points: Callable
@@ -38,10 +39,21 @@ class StructureFragmentBuildService:
         radius = actions.regular_ring_radius(n)
         actions.add_ring_from_points(actions.ring_points(center, n, radius=radius))
 
-    def add_hetero_ring_template(self, n: int, elements: list[str], actions: StructureFragmentBuildActions) -> None:
+    def add_hetero_ring_template(
+        self,
+        n: int,
+        elements: list[str],
+        actions: StructureFragmentBuildActions,
+        *,
+        bond_orders: list[int] | None = None,
+    ) -> None:
         center = actions.viewport_center()
         radius = actions.regular_ring_radius(n)
-        actions.add_ring_from_points(actions.ring_points(center, n, radius=radius), elements=elements)
+        actions.add_ring_from_points(
+            actions.ring_points(center, n, radius=radius),
+            elements=elements,
+            bond_orders=bond_orders,
+        )
 
     def add_fused_benzenes(self, count: int, mode: str, actions: StructureFragmentBuildActions) -> None:
         center = actions.viewport_center()
@@ -81,22 +93,36 @@ class StructureFragmentBuildService:
         actions: StructureFragmentBuildActions,
     ) -> None:
         center = actions.viewport_center()
-        merge: list[tuple[int, float, float]] = []
-        actions.add_ring_from_points(actions.ring_points(center, 6), merge=merge)
-        other_center = QPointF(
+        atom_ids = actions.add_ring_from_points(
+            actions.ring_points(center, 6),
+            bond_orders=_benzene_bond_orders(),
+        )
+        bond_id = self.committer.bond_id_between(atom_ids[1], atom_ids[2])
+        if bond_id is None:
+            return
+        center_hint = QPointF(
             center.x() + bond_length_px_for(self.canvas) * x_scale,
             center.y() + bond_length_px_for(self.canvas) * y_scale,
         )
+        ring_result = actions.regular_ring_points_for_bond(ring_size, bond_id, center_hint)
+        if ring_result is None:
+            return
+        points, merge = ring_result
+        ring_elements = _fused_heterocycle_elements(ring_size, elements)
         actions.add_ring_from_points(
-            actions.ring_points(other_center, ring_size),
-            elements=elements,
+            points,
+            elements=ring_elements,
             merge=merge,
+            bond_orders=_fused_heterocycle_bond_orders(ring_size, ring_elements),
         )
 
     def add_phenyl(self, actions: StructureFragmentBuildActions) -> None:
         def _build() -> None:
             center = actions.viewport_center()
-            atom_ids = actions.add_ring_from_points(actions.ring_points(center, 6))
+            atom_ids = actions.add_ring_from_points(
+                actions.ring_points(center, 6),
+                bond_orders=_benzene_bond_orders(first_order=1),
+            )
             attach = QPointF(center.x() - bond_length_px_for(self.canvas) * 2.0, center.y())
             attach_id = self.committer.add_atom("C", attach.x(), attach.y())
             self.committer.add_bond(atom_ids[0], attach_id)
@@ -107,7 +133,10 @@ class StructureFragmentBuildService:
     def add_benzyl(self, actions: StructureFragmentBuildActions) -> None:
         def _build() -> None:
             center = actions.viewport_center()
-            atom_ids = actions.add_ring_from_points(actions.ring_points(center, 6))
+            atom_ids = actions.add_ring_from_points(
+                actions.ring_points(center, 6),
+                bond_orders=_benzene_bond_orders(first_order=1),
+            )
             start = QPointF(center.x() - bond_length_px_for(self.canvas) * 2.0, center.y())
             mid = QPointF(start.x() - bond_length_px_for(self.canvas), start.y())
             chain_ids = actions.add_linear_chain([start, mid], ["C", "C"], [1])
@@ -290,6 +319,30 @@ class StructureFragmentBuildService:
             self.committer.add_bond_graphics(bond_id)
             if element != "C":
                 self.committer.add_atom_label(branch_id, element, record=False)
+
+
+def _benzene_bond_orders(*, first_order: int = 2) -> list[int]:
+    return [order for _, _, order in alternating_ring_bond_specs(range(6), first_order=first_order)]
+
+
+def _fused_heterocycle_bond_orders(ring_size: int, elements: list[str]) -> list[int] | None:
+    if ring_size == 6:
+        return _benzene_bond_orders()
+    if ring_size != 5:
+        return None
+    normalized = _fused_heterocycle_elements(ring_size, elements)
+    if normalized == ["C", "C", "N", "C", "C"]:
+        return [1, 1, 1, 2, 1]
+    return [1, 1, 2, 1, 1]
+
+
+def _fused_heterocycle_elements(ring_size: int, elements: list[str]) -> list[str]:
+    if ring_size < 3:
+        return elements
+    normalized = list(elements[:ring_size])
+    if len(normalized) == ring_size and normalized[:2] == ["C", "C"]:
+        return normalized
+    return ["C", "C", *normalized[: ring_size - 2]]
 
 
 __all__ = ["StructureFragmentBuildActions", "StructureFragmentBuildService"]

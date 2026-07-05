@@ -5,6 +5,7 @@ from unittest import mock
 from unittest.mock import Mock
 
 from core.model import Atom, Bond, MoleculeModel
+from core.rdkit_adapter import RDKitAdapter
 from PyQt6.QtCore import QPointF
 from ui.canvas_scene_items_state import ring_items_for, set_scene_item_collection_for
 from ui.canvas_smiles_input_state import (
@@ -12,6 +13,11 @@ from ui.canvas_smiles_input_state import (
     set_last_smiles_input_for,
 )
 from ui.structure_build_service import StructureBuildService
+
+try:
+    from rdkit import Chem as _RealChem
+except ModuleNotFoundError:
+    _RealChem = None
 
 
 class _FakeRect:
@@ -415,17 +421,22 @@ class StructureBuildServiceTest(unittest.TestCase):
 
     def test_fused_heterocycle_builders_use_expected_offsets_and_merge_contract(self) -> None:
         cases = (
-            ("add_indole", 5, ["N", "C", "C", "C", "C"], (72.0, 72.0)),
-            ("add_quinoline", 6, ["N", "C", "C", "C", "C", "C"], (80.0, 60.0)),
-            ("add_isoquinoline", 6, ["C", "C", "C", "C", "N", "C"], (80.0, 60.0)),
-            ("add_benzimidazole", 5, ["N", "C", "N", "C", "C"], (72.0, 72.0)),
+            ("add_indole", 5, ["C", "C", "N", "C", "C"], (72.0, 72.0), [1, 1, 1, 2, 1]),
+            ("add_quinoline", 6, ["C", "C", "N", "C", "C", "C"], (80.0, 60.0), [2, 1, 2, 1, 2, 1]),
+            ("add_isoquinoline", 6, ["C", "C", "C", "C", "N", "C"], (80.0, 60.0), [2, 1, 2, 1, 2, 1]),
+            ("add_benzimidazole", 5, ["C", "C", "N", "C", "N"], (72.0, 72.0), [1, 1, 2, 1, 1]),
         )
 
-        for method_name, ring_size, elements, expected_second_center in cases:
+        for method_name, ring_size, elements, expected_center_hint, bond_orders in cases:
             with self.subTest(method=method_name):
                 canvas = _FakeCanvas()
                 service = _service_for(canvas)
-                service.add_ring_from_points = Mock()
+                first_ring_atom_ids = [10, 11, 12, 13, 14, 15]
+                second_points = [QPointF(70.0 + index, 80.0 - index) for index in range(ring_size)]
+                second_merge = [(11, 67.0, 50.0), (12, 67.0, 70.0)]
+                service.add_ring_from_points = Mock(side_effect=[first_ring_atom_ids, list(range(20, 20 + ring_size))])
+                service.fragment_builder.committer.bond_id_between = Mock(return_value=4)
+                service.regular_ring_points_for_bond = Mock(return_value=(second_points, second_merge))
                 ring_points_calls: list[tuple[int, tuple[float, float], float | None]] = []
 
                 def ring_points(center: QPointF, n: int, radius: float | None = None, *, calls=ring_points_calls):
@@ -436,17 +447,16 @@ class StructureBuildServiceTest(unittest.TestCase):
 
                 getattr(service.template_builder, method_name)()
 
-                self.assertEqual(
-                    ring_points_calls,
-                    [
-                        (6, (50.0, 60.0), None),
-                        (ring_size, expected_second_center, None),
-                    ],
-                )
-                first_merge = service.add_ring_from_points.call_args_list[0].kwargs["merge"]
-                second_merge = service.add_ring_from_points.call_args_list[1].kwargs["merge"]
-                self.assertIs(first_merge, second_merge)
+                self.assertEqual(ring_points_calls, [(6, (50.0, 60.0), None)])
+                service.fragment_builder.committer.bond_id_between.assert_called_once_with(11, 12)
+                center_hint = service.regular_ring_points_for_bond.call_args.args[2]
+                self.assertEqual(service.regular_ring_points_for_bond.call_args.args[:2], (ring_size, 4))
+                self.assertEqual((center_hint.x(), center_hint.y()), expected_center_hint)
+                self.assertEqual(service.add_ring_from_points.call_args_list[0].kwargs["bond_orders"], [2, 1, 2, 1, 2, 1])
+                self.assertEqual(service.add_ring_from_points.call_args_list[1].args[0], second_points)
+                self.assertEqual(service.add_ring_from_points.call_args_list[1].kwargs["merge"], second_merge)
                 self.assertEqual(service.add_ring_from_points.call_args_list[1].kwargs["elements"], elements)
+                self.assertEqual(service.add_ring_from_points.call_args_list[1].kwargs["bond_orders"], bond_orders)
                 self.assertEqual(
                     canvas.record_calls,
                     [
@@ -458,6 +468,76 @@ class StructureBuildServiceTest(unittest.TestCase):
                         }
                     ],
                 )
+
+    def test_fused_heterocycle_templates_build_fused_aromatic_graphs(self) -> None:
+        cases = (
+            ("add_indole", 9, 10, 4),
+            ("add_quinoline", 10, 11, 5),
+            ("add_isoquinoline", 10, 11, 5),
+            ("add_benzimidazole", 9, 10, 4),
+        )
+
+        for method_name, atom_count, bond_count, double_bond_count in cases:
+            with self.subTest(method=method_name):
+                canvas = _FakeCanvas()
+                service = _service_for(canvas)
+
+                getattr(service.template_builder, method_name)()
+                bonds = [bond for bond in canvas.model.bonds if bond is not None]
+                adjacency = {atom_id: set() for atom_id in canvas.model.atoms}
+                order_sums = {atom_id: 0 for atom_id in canvas.model.atoms}
+                for bond in bonds:
+                    adjacency[bond.a].add(bond.b)
+                    adjacency[bond.b].add(bond.a)
+                    order_sums[bond.a] += bond.order
+                    order_sums[bond.b] += bond.order
+
+                self.assertEqual(len(canvas.model.atoms), atom_count)
+                self.assertEqual(len(bonds), bond_count)
+                self.assertEqual(sum(1 for bond in bonds if bond.order == 2), double_bond_count)
+                self.assertEqual(sum(1 for neighbors in adjacency.values() if len(neighbors) == 3), 2)
+                self.assertLessEqual(max(order_sums.values()), 4)
+                self.assertTrue(any(atom.element != "C" for atom in canvas.model.atoms.values()))
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for aromatic template identity tests")
+    def test_named_aromatic_templates_round_trip_to_expected_canonical_smiles(self) -> None:
+        cases = (
+            ("add_indole", "c1ccc2[nH]ccc2c1"),
+            ("add_quinoline", "c1ccc2ncccc2c1"),
+            ("add_isoquinoline", "c1ccc2cnccc2c1"),
+            ("add_benzimidazole", "c1ccc2[nH]cnc2c1"),
+        )
+
+        for method_name, expected_smiles in cases:
+            with self.subTest(method=method_name):
+                canvas = _FakeCanvas()
+                service = _service_for(canvas)
+
+                getattr(service.template_builder, method_name)()
+                mol = RDKitAdapter().model_to_rdkit(canvas.model)
+
+                self.assertIsNotNone(mol)
+                self.assertEqual(_RealChem.MolToSmiles(mol, canonical=True), expected_smiles)
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for aromatic template MOL export tests")
+    def test_named_aromatic_templates_mol_export_preserves_canonical_identity(self) -> None:
+        cases = (
+            ("add_indole", "c1ccc2[nH]ccc2c1"),
+            ("add_benzimidazole", "c1ccc2[nH]cnc2c1"),
+        )
+
+        for method_name, expected_smiles in cases:
+            with self.subTest(method=method_name):
+                canvas = _FakeCanvas()
+                service = _service_for(canvas)
+
+                getattr(service.template_builder, method_name)()
+                block = RDKitAdapter().model_to_mol_block(canvas.model)
+                self.assertIsNotNone(block)
+                mol = _RealChem.MolFromMolBlock(block)
+
+                self.assertIsNotNone(mol)
+                self.assertEqual(_RealChem.MolToSmiles(mol, canonical=True), expected_smiles)
 
     def test_add_atom_with_merge_reuses_close_points(self) -> None:
         canvas = _FakeCanvas()
@@ -1086,6 +1166,22 @@ class StructureBuildServiceTest(unittest.TestCase):
                         }
                     ],
                 )
+
+    def test_phenyl_and_benzyl_templates_keep_aromatic_ring_bonds_with_valid_valence(self) -> None:
+        for method_name in ("add_phenyl", "add_benzyl"):
+            with self.subTest(method=method_name):
+                canvas = _FakeCanvas()
+                service = _service_for(canvas)
+
+                getattr(service.template_builder, method_name)()
+                bonds = [bond for bond in canvas.model.bonds if bond is not None]
+                order_sums = {atom_id: 0 for atom_id in canvas.model.atoms}
+                for bond in bonds:
+                    order_sums[bond.a] += bond.order
+                    order_sums[bond.b] += bond.order
+
+                self.assertEqual(sum(1 for bond in bonds if bond.order == 2), 3)
+                self.assertLessEqual(max(order_sums.values()), 4)
 
     def test_branched_fragment_templates_reuse_one_central_atom(self) -> None:
         cases = (

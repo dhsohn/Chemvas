@@ -1,6 +1,9 @@
 import unittest
 
-from core.document_state import validate_clipboard_selection_payload
+from core.document_state import (
+    CLIPBOARD_SELECTION_PERSPECTIVE_VERSION,
+    validate_clipboard_selection_payload,
+)
 
 
 def _valid_payload() -> dict:
@@ -55,6 +58,20 @@ class ClipboardPayloadValidationTest(unittest.TestCase):
         payload["scene_items"] = []
         self.assertTrue(validate_clipboard_selection_payload(payload))
 
+    def test_accepts_v2_perspective_state(self) -> None:
+        payload = _valid_payload()
+        payload["version"] = CLIPBOARD_SELECTION_PERSPECTIVE_VERSION
+        payload["perspective"] = {
+            "atom_coords_3d": [
+                {"atom_id": 0, "coords": [1.0, 2.0, 3.0]},
+                {"atom_id": 1, "coords": [4.0, 5.0, 6.0]},
+            ],
+            "projection_center_3d": [2.0, 3.0, 4.0],
+            "projection_anchor_2d": [2.5, 3.5],
+        }
+
+        self.assertTrue(validate_clipboard_selection_payload(payload))
+
     def test_accepts_unattached_mark_without_offsets(self) -> None:
         payload = _valid_payload()
         payload["marks"] = [
@@ -87,6 +104,62 @@ class ClipboardPayloadValidationTest(unittest.TestCase):
             ("bond endpoint b", lambda p: p["bonds"][0].__setitem__("b", "1")),
             ("ring atom id", lambda p: p["rings"][0].__setitem__("atom_ids", ["0", 1])),
             ("mark atom id", lambda p: p["marks"][0].__setitem__("atom_id", "0")),
+        ]
+        for name, mutate in cases:
+            with self.subTest(name=name):
+                self._assert_rejected(mutate)
+
+    def test_rejects_invalid_perspective_state(self) -> None:
+        def add_valid_perspective(payload: dict) -> None:
+            payload["version"] = CLIPBOARD_SELECTION_PERSPECTIVE_VERSION
+            payload["perspective"] = {
+                "atom_coords_3d": [{"atom_id": 0, "coords": [1.0, 2.0, 3.0]}],
+                "projection_center_3d": [2.0, 3.0, 4.0],
+                "projection_anchor_2d": [2.5, 3.5],
+            }
+
+        def add_legacy_perspective(payload: dict) -> None:
+            payload["perspective"] = {
+                "atom_coords_3d": [{"atom_id": 0, "coords": [1.0, 2.0, 3.0]}],
+                "projection_center_3d": None,
+                "projection_anchor_2d": None,
+            }
+
+        def add_future_perspective(payload: dict) -> None:
+            add_valid_perspective(payload)
+            payload["version"] = CLIPBOARD_SELECTION_PERSPECTIVE_VERSION + 1
+
+        def mutate_perspective(payload: dict, mutate) -> None:
+            add_valid_perspective(payload)
+            mutate(payload["perspective"])
+
+        cases = [
+            ("legacy version", add_legacy_perspective),
+            ("future version", add_future_perspective),
+            (
+                "string atom id",
+                lambda p: mutate_perspective(p, lambda state: state["atom_coords_3d"][0].__setitem__("atom_id", "0")),
+            ),
+            (
+                "missing atom",
+                lambda p: mutate_perspective(p, lambda state: state["atom_coords_3d"][0].__setitem__("atom_id", 99)),
+            ),
+            (
+                "duplicate atom",
+                lambda p: mutate_perspective(
+                    p,
+                    lambda state: state["atom_coords_3d"].append({"atom_id": 0, "coords": [4.0, 5.0, 6.0]}),
+                ),
+            ),
+            (
+                "bad coords",
+                lambda p: mutate_perspective(p, lambda state: state["atom_coords_3d"][0].__setitem__("coords", [1.0, 2.0])),
+            ),
+            (
+                "bad center",
+                lambda p: mutate_perspective(p, lambda state: state.__setitem__("projection_center_3d", [1.0, 2.0])),
+            ),
+            ("extra key", lambda p: mutate_perspective(p, lambda state: state.__setitem__("extra", True))),
         ]
         for name, mutate in cases:
             with self.subTest(name=name):

@@ -29,6 +29,15 @@ CROWN_ETHER_TEMPLATES = {
     "crown_18_6": (18, 6),
 }
 
+HETERO_RING_BOND_ORDERS = {
+    "pyridine": [2, 1, 2, 1, 2, 1],
+    "pyrimidine": [2, 1, 2, 1, 2, 1],
+    "imidazole": [1, 2, 1, 1, 2],
+    "pyrrole": [1, 2, 1, 2, 1],
+    "furan": [1, 2, 1, 2, 1],
+    "thiophene": [1, 2, 1, 2, 1],
+}
+
 SERVICE_TEMPLATE_METHODS = {
     "cyclohexane_chair": "add_cyclohexane_chair",
     "cyclohexane_boat": "add_cyclohexane_boat",
@@ -56,25 +65,36 @@ def apply_structure_template_command(service, key: str) -> None:
     template_builder = service.template_builder
     if key in REGULAR_RING_TEMPLATES:
         n = REGULAR_RING_TEMPLATES[key]
-        service.run_recorded_build(lambda: template_builder.add_regular_ring_template(n))
+        service.run_recorded_build(_successful_template_action(lambda: template_builder.add_regular_ring_template(n)))
         return
     if key in HETERO_RING_TEMPLATES:
         n, elements = HETERO_RING_TEMPLATES[key]
-        service.run_recorded_build(lambda: template_builder.add_hetero_ring_template(n, elements))
+        bond_orders = HETERO_RING_BOND_ORDERS.get(key)
+        service.run_recorded_build(
+            _successful_template_action(lambda: template_builder.add_hetero_ring_template(n, elements, bond_orders))
+        )
         return
     if key in FUSED_BENZENE_TEMPLATES:
         count, mode = FUSED_BENZENE_TEMPLATES[key]
-        service.run_recorded_build(lambda: template_builder.add_fused_benzenes(count, mode=mode))
+        service.run_recorded_build(_successful_template_action(lambda: template_builder.add_fused_benzenes(count, mode=mode)))
         return
     if key in CROWN_ETHER_TEMPLATES:
         atoms, oxygens = CROWN_ETHER_TEMPLATES[key]
-        service.run_recorded_build(lambda: template_builder.add_crown_ether(atoms, oxygens))
+        service.run_recorded_build(_successful_template_action(lambda: template_builder.add_crown_ether(atoms, oxygens)))
         return
     method_name = SERVICE_TEMPLATE_METHODS.get(key)
     if method_name is not None:
         getattr(template_builder, method_name)()
         return
     raise ValueError(f"Unknown structure template: {key}")
+
+
+def _successful_template_action(action):
+    def _action() -> list:
+        action()
+        return []
+
+    return _action
 
 
 def known_structure_template_keys() -> tuple[str, ...]:
@@ -92,6 +112,7 @@ def known_structure_template_keys() -> tuple[str, ...]:
 __all__ = [
     "CROWN_ETHER_TEMPLATES",
     "FUSED_BENZENE_TEMPLATES",
+    "HETERO_RING_BOND_ORDERS",
     "HETERO_RING_TEMPLATES",
     "REGULAR_RING_TEMPLATES",
     "SERVICE_TEMPLATE_METHODS",

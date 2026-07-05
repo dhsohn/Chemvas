@@ -1,15 +1,22 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Collection, Mapping, Sequence
 
+from core.document_state import CLIPBOARD_SELECTION_PERSPECTIVE_VERSION
 from core.model import Bond
 from PyQt6.QtCore import QRectF
 from PyQt6.QtWidgets import QGraphicsItem
 
+from ui.atom_coords_access import atom_coords_3d_for
+from ui.bond_graphics_access import project_point_3d_for
+from ui.canvas_model_access import model_for
+from ui.canvas_rotation_state import rotation_state_for
 from ui.export_render_service import (
     render_scene_to_pdf_bytes,
     render_scene_to_svg_bytes,
 )
+from ui.renderer_style_access import bond_length_px_for
 from ui.scene_clipboard_logic import build_selection_clipboard_payload
 from ui.scene_clipboard_state import scene_clipboard_state_for
 from ui.scene_clipboard_transaction_logic import visible_items_to_hide_for_copy
@@ -57,8 +64,42 @@ def build_selection_clipboard_payload_for_canvas(
         atom_state_getter=atom_state_getter,
         bond_state_getter=bond_state_getter,
         scene_item_state_getter=scene_item_state_getter,
+        perspective_state_getter=(
+            lambda atom_ids: _selection_perspective_state_for_canvas(canvas, atom_ids)
+            if version == CLIPBOARD_SELECTION_PERSPECTIVE_VERSION
+            else None
+        ),
         version=version,
     )
+
+
+def _selection_perspective_state_for_canvas(canvas, atom_ids: set[int]) -> dict | None:
+    model = model_for(canvas)
+    stored_coords = atom_coords_3d_for(canvas)
+    coords_3d = [
+        {"atom_id": atom_id, "coords": stored_coords[atom_id]}
+        for atom_id in sorted(atom_ids)
+        if atom_id in model.atoms
+        and atom_id in stored_coords
+        and _stored_atom_coords_3d_matches_projection(canvas, atom_id, stored_coords[atom_id])
+    ]
+    if not coords_3d:
+        return None
+    rotation = rotation_state_for(canvas)
+    return {
+        "atom_coords_3d": coords_3d,
+        "projection_center_3d": rotation.projection_center_3d,
+        "projection_anchor_2d": rotation.projection_anchor_2d,
+    }
+
+
+def _stored_atom_coords_3d_matches_projection(canvas, atom_id: int, coords: tuple[float, float, float]) -> bool:
+    atom = model_for(canvas).atoms.get(atom_id)
+    if atom is None:
+        return False
+    proj_x, proj_y = project_point_3d_for(canvas, coords)
+    tolerance = max(1.0, bond_length_px_for(canvas) * 0.15)
+    return math.hypot(proj_x - atom.x, proj_y - atom.y) <= tolerance
 
 
 def visible_canvas_items_to_hide_for_copy(
