@@ -4,6 +4,7 @@ import unittest
 from core.document_state import (
     CANVAS_FILE_VERSION,
     CHEMVAS_FILE_TYPE,
+    LEGACY_CANVAS_FILE_VERSION,
     atom_to_state,
     bond_to_state,
     build_document_payload,
@@ -238,6 +239,49 @@ class DocumentStateTest(unittest.TestCase):
         state["settings"] = settings
 
         build_document_payload(state, version=CANVAS_FILE_VERSION)
+
+    def test_document_payload_accepts_legacy_v1_canvas_state(self) -> None:
+        build_document_payload(_canvas_state(), version=LEGACY_CANVAS_FILE_VERSION)
+
+    def test_document_payload_accepts_optional_perspective_state(self) -> None:
+        state = _canvas_state(
+            _model_state(
+                atoms={0: _atom_state()},
+                next_atom_id=1,
+            )
+        )
+        state["perspective"] = {
+            "atom_coords_3d": {"0": [1.0, 2.0, 3.0]},
+            "projection_center_3d": [4.0, 5.0, 6.0],
+            "projection_anchor_2d": [7.0, 8.0],
+        }
+
+        build_document_payload(state, version=CANVAS_FILE_VERSION)
+
+        with self.assertRaises(ValueError):
+            build_document_payload(state, version=LEGACY_CANVAS_FILE_VERSION)
+
+    def test_document_payload_rejects_invalid_optional_perspective_state(self) -> None:
+        state = _canvas_state(
+            _model_state(
+                atoms={0: _atom_state()},
+                next_atom_id=1,
+            )
+        )
+        invalid_states = [
+            {"perspective": {"atom_coords_3d": {"99": [1.0, 2.0, 3.0]}, "projection_center_3d": None, "projection_anchor_2d": None}},
+            {"perspective": {"atom_coords_3d": {"0": [1.0, 2.0]}, "projection_center_3d": None, "projection_anchor_2d": None}},
+            {"perspective": {"atom_coords_3d": {"0": [1.0, 2.0, 3.0]}, "projection_center_3d": [1.0, 2.0], "projection_anchor_2d": None}},
+            {"perspective": {"atom_coords_3d": {"0": [1.0, 2.0, 3.0]}, "projection_center_3d": None, "projection_anchor_2d": [1.0, 2.0, 3.0]}},
+            {"perspective": {"atom_coords_3d": {"0": [1.0, 2.0, 3.0]}, "projection_center_3d": [1.0, math.inf, 3.0], "projection_anchor_2d": None}},
+            {"perspective": {"atom_coords_3d": {"0": [1.0, 2.0, 3.0]}}},
+        ]
+        for invalid_state in invalid_states:
+            with self.subTest(invalid_state=invalid_state):
+                candidate = dict(state)
+                candidate.update(invalid_state)
+                with self.assertRaises(ValueError):
+                    build_document_payload(candidate, version=CANVAS_FILE_VERSION)
 
     def test_settings_reject_extra_style_preset_key(self) -> None:
         settings = _settings()
@@ -495,8 +539,6 @@ class DocumentStateTest(unittest.TestCase):
             build_document_payload(canvas_state, version=3)
         with self.assertRaises(ValueError):
             build_document_payload({"active_sheet_index": 0, "sheets": []}, version=CANVAS_FILE_VERSION)
-        with self.assertRaises(ValueError):
-            build_document_payload(canvas_state, version=2)
 
     def test_extract_document_state_rejects_version_two_workbook_payload(self) -> None:
         payload = {

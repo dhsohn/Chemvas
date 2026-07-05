@@ -152,6 +152,10 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 side_effect=lambda _canvas, _state: events.append("pre"),
             ),
             mock.patch(
+                "ui.canvas_document_session_service.restore_document_projection_state",
+                side_effect=lambda _canvas, _state: events.append("projection"),
+            ),
+            mock.patch(
                 "ui.canvas_document_session_service.restore_document_post_model_items",
                 side_effect=lambda _canvas, _state: events.append("post"),
             ),
@@ -160,7 +164,10 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         self.assertEqual(canvas.model, "new-model")
         self.assertTrue(history_state_for(canvas).enabled)
-        self.assertEqual(events, ["clear", "settings", "deserialize", "adjacency", "pre", "render", "post", "dirty"])
+        self.assertEqual(
+            events,
+            ["clear", "settings", "deserialize", "adjacency", "pre", "projection", "render", "post", "dirty"],
+        )
         canvas.services.structure_build_service.ensure_ring_fills_for_model.assert_not_called()
 
     def test_apply_state_reenables_history_when_restore_fails(self) -> None:

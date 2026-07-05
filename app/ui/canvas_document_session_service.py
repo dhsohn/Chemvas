@@ -20,6 +20,7 @@ from ui.canvas_document_state import (
     apply_document_settings,
     restore_document_post_model_items,
     restore_document_pre_model_items,
+    restore_document_projection_state,
     snapshot_canvas_document_state,
 )
 from ui.canvas_format_access import (
@@ -89,6 +90,7 @@ class CanvasDocumentSessionService:
             set_model_for(self.canvas, deserialize_model_state(state["model"]))
             self.graph_service.rebuild_bond_adjacency()
             restore_document_pre_model_items(self.canvas, state)
+            restore_document_projection_state(self.canvas, state)
             self.structure_build_service.render_model()
             restore_document_post_model_items(self.canvas, state)
             self.hit_testing_service.mark_spatial_index_dirty()

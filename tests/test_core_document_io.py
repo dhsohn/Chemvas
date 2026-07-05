@@ -14,6 +14,7 @@ from core.document_io import (
 from core.document_state import (
     CANVAS_FILE_VERSION,
     CHEMVAS_FILE_TYPE,
+    LEGACY_CANVAS_FILE_VERSION,
     serialize_settings,
 )
 
@@ -108,7 +109,18 @@ class DocumentIOTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     parse_document(payload)
 
-    def test_workbook_version_two_payloads_are_invalid(self) -> None:
+    def test_legacy_v1_payloads_are_still_valid(self) -> None:
+        state = _canvas_state()
+        payload = {
+            "type": CHEMVAS_FILE_TYPE,
+            "version": LEGACY_CANVAS_FILE_VERSION,
+            "state": state,
+        }
+
+        self.assertIs(parse_document(payload).state, state)
+        self.assertIs(create_document(state, version=LEGACY_CANVAS_FILE_VERSION).state, state)
+
+    def test_workbook_shaped_payloads_are_invalid(self) -> None:
         workbook_payload = {
             "type": CHEMVAS_FILE_TYPE,
             "version": 2,
@@ -120,8 +132,6 @@ class DocumentIOTest(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             parse_document(workbook_payload)
-        with self.assertRaises(ValueError):
-            create_document(_canvas_state(), version=2)
 
     def test_create_document_rejects_unsupported_or_mismatched_versions(self) -> None:
         with self.assertRaises(ValueError):
