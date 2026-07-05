@@ -5,6 +5,7 @@ from unittest import mock
 
 import pytest
 from core.rdkit_adapter import RDKitAdapter
+from ui.structure_fragment_build_service import FRAGMENT_BUILD_FAILED
 from ui.structure_template_commands import (
     apply_structure_template_command,
     known_structure_template_keys,
@@ -81,6 +82,20 @@ def test_structure_template_commands_dispatch_service_methods_and_unknown_keys()
         apply_structure_template_command(service, "not-a-template")
 
 
+def test_structure_template_commands_preserve_recorded_action_result_conventions() -> None:
+    service = _template_service()
+    recorded_results = []
+    service.run_recorded_build.side_effect = lambda action: recorded_results.append(action())
+    scene_item = object()
+
+    service.template_builder.add_regular_ring_template.return_value = [scene_item]
+    apply_structure_template_command(service, "cyclopropane")
+    service.template_builder.add_regular_ring_template.return_value = FRAGMENT_BUILD_FAILED
+    apply_structure_template_command(service, "cyclopropane")
+
+    assert recorded_results == [[scene_item], None]
+
+
 def test_structure_template_commands_record_real_catalog_builds_without_rollback() -> None:
     cases = (
         ("cyclopropane", 3, 3, 0),
@@ -100,6 +115,7 @@ def test_structure_template_commands_record_real_catalog_builds_without_rollback
         assert len(bonds) == bond_count, key
         assert sum(1 for bond in bonds if bond.order == 2) == double_bond_count, key
         assert len(canvas.record_calls) == 1, key
+        assert canvas.record_calls[0]["added_scene_items"] == canvas.ring_items, key
 
 
 @pytest.mark.skipif(_RealChem is None, reason="RDKit is required for aromatic template identity tests")

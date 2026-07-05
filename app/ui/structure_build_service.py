@@ -18,6 +18,7 @@ from ui.structure_benzene_build_service import StructureBenzeneBuildService
 from ui.structure_bond_build_service import StructureBondBuildService
 from ui.structure_build_committer import StructureBuildCommitter
 from ui.structure_fragment_build_service import (
+    FRAGMENT_BUILD_FAILED,
     StructureFragmentBuildActions,
     StructureFragmentBuildService,
 )
@@ -151,7 +152,11 @@ class StructureBuildService:
         before_smiles_input: str | None = None,
     ) -> list:
         snapshot = self.committer.begin_recorded_change(before_smiles_input=before_smiles_input)
-        added_scene_items = action()
+        try:
+            added_scene_items = action()
+        except Exception:
+            self.committer.abort_recorded_change(snapshot)
+            raise
         if added_scene_items is None:
             self.committer.abort_recorded_change(snapshot)
             return []
@@ -166,6 +171,8 @@ class StructureBuildService:
     ) -> list:
         def _action() -> list | None:
             added_scene_items = action()
+            if added_scene_items is FRAGMENT_BUILD_FAILED:
+                return None
             return [] if added_scene_items is None else added_scene_items
 
         return self.run_recorded_build(_action, before_smiles_input=before_smiles_input)

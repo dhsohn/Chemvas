@@ -23,6 +23,7 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from ui.note_item_access import committed_note_text_for
+    from ui.scene_item_restore import create_note_item_from_state
     from ui.scene_item_state import (
         apply_scene_item_state,
         arrow_state_dict,
@@ -130,6 +131,39 @@ class SceneItemStateUnitTest(unittest.TestCase):
         self.assertEqual((note.pos().x(), note.pos().y()), (14.0, -9.0))
         self.assertEqual(note.textInteractionFlags(), Qt.TextInteractionFlag.NoTextInteraction)
         style_applier.assert_called_once_with(note)
+
+    def test_note_state_sanitizes_resource_bearing_html_on_apply_and_restore(self) -> None:
+        unsafe_html = '<p onclick="bad()">Safe<img src="file:///tmp/secret"><script>bad()</script><b>Bold</b></p>'
+        style_applier = mock.Mock()
+        note = QGraphicsTextItem("old")
+        note.setData(0, "note")
+
+        apply_scene_item_state(
+            note,
+            {"kind": "note", "text": "fallback", "html": unsafe_html, "x": 1.0, "y": 2.0},
+            model_atoms={},
+            note_style_applier=style_applier,
+            mark_center_setter=lambda item, center: None,
+            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
+            ts_bracket_path_builder=lambda rect: QPainterPath(),
+            bond_color="#000000",
+            build_arrow_item=lambda start, end, kind: QGraphicsPathItem(),
+            set_curved_arrow_path=lambda *args: None,
+            orbital_base_handle_dist=18.0,
+        )
+        restored = create_note_item_from_state(
+            {"kind": "note", "text": "fallback", "html": unsafe_html, "x": 1.0, "y": 2.0},
+            note_item_factory=QGraphicsTextItem,
+            note_style_applier=lambda item: None,
+        )
+
+        for item in (note, restored):
+            html = item.toHtml().lower()
+            self.assertIn("safe", item.toPlainText().lower())
+            self.assertIn("bold", item.toPlainText().lower())
+            self.assertNotIn("file://", html)
+            self.assertNotIn("<img", html)
+            self.assertNotIn("script", html)
 
     def test_apply_mark_state_updates_metadata_and_prefers_atom_offset_center(self) -> None:
         mark = QGraphicsTextItem("+")

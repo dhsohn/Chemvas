@@ -8,7 +8,11 @@ from PyQt6.QtCore import QPointF
 from ui.atom_label_access import add_or_update_atom_label, atom_label_service
 from ui.canvas_model_access import atom_for_id, atoms_for, bonds_for
 from ui.canvas_ring_fill_scene_access import create_ring_fill_item_for
-from ui.canvas_scene_items_state import ring_items_for
+from ui.canvas_scene_items_state import (
+    SCENE_ITEM_COLLECTION_ATTRS,
+    ring_items_for,
+    scene_item_collection_for,
+)
 from ui.canvas_smiles_input_state import (
     clear_last_smiles_input_for,
     last_smiles_input_for,
@@ -16,7 +20,7 @@ from ui.canvas_smiles_input_state import (
 )
 from ui.graph_algorithms import find_rings
 from ui.renderer_style_access import bond_length_px_for
-from ui.scene_item_access import attach_scene_item
+from ui.scene_item_access import attach_scene_item, remove_scene_item
 from ui.structure_insert_access import (
     add_insert_atom_for,
     add_insert_bond_for,
@@ -40,6 +44,7 @@ class StructureBuildHistorySnapshot:
     before_smiles_input: str | None
     before_next_atom_id: int
     before_bond_count: int
+    before_scene_items: dict[str, tuple[Any, ...]]
 
 
 class StructureBuildCommitter:
@@ -57,6 +62,7 @@ class StructureBuildCommitter:
             before_smiles_input=before_smiles_input,
             before_next_atom_id=insert_next_atom_id_for(self.canvas),
             before_bond_count=insert_bond_count_for(self.canvas),
+            before_scene_items=self._scene_item_snapshot(),
         )
         clear_last_smiles_input_for(self.canvas)
         return snapshot
@@ -72,17 +78,69 @@ class StructureBuildCommitter:
             "before_bond_count": snapshot.before_bond_count,
             "before_smiles_input": snapshot.before_smiles_input,
         }
-        if added_scene_items is not None:
-            kwargs["added_scene_items"] = added_scene_items
+        merged_scene_items = self._merged_added_scene_items(snapshot, added_scene_items)
+        if merged_scene_items is not None:
+            kwargs["added_scene_items"] = merged_scene_items
         record_insert_additions_for(self.canvas, **kwargs)
 
     def abort_recorded_change(self, snapshot: StructureBuildHistorySnapshot) -> None:
+        self._remove_new_scene_items(snapshot)
         rollback_insert_mutation_for(
             self.canvas,
             before_next_atom_id=snapshot.before_next_atom_id,
             before_bond_count=snapshot.before_bond_count,
         )
         set_last_smiles_input_for(self.canvas, snapshot.before_smiles_input)
+
+    def _scene_item_snapshot(self) -> dict[str, tuple[Any, ...]]:
+        return {
+            name: tuple(scene_item_collection_for(self.canvas, name))
+            for name in SCENE_ITEM_COLLECTION_ATTRS
+        }
+
+    def _new_scene_items_since(self, snapshot: StructureBuildHistorySnapshot) -> list[Any]:
+        items: list[Any] = []
+        seen_ids: set[int] = set()
+        before_ids = {
+            id(item)
+            for collection in snapshot.before_scene_items.values()
+            for item in collection
+        }
+        for name in SCENE_ITEM_COLLECTION_ATTRS:
+            for item in scene_item_collection_for(self.canvas, name):
+                item_id = id(item)
+                if item_id in before_ids or item_id in seen_ids:
+                    continue
+                seen_ids.add(item_id)
+                items.append(item)
+        return items
+
+    def _merged_added_scene_items(
+        self,
+        snapshot: StructureBuildHistorySnapshot,
+        added_scene_items: list | None,
+    ) -> list | None:
+        merged: list[Any] = []
+        seen_ids: set[int] = set()
+        for item in [*(added_scene_items or []), *self._new_scene_items_since(snapshot)]:
+            item_id = id(item)
+            if item_id in seen_ids:
+                continue
+            seen_ids.add(item_id)
+            merged.append(item)
+        if added_scene_items is None and not merged:
+            return None
+        return merged
+
+    def _remove_new_scene_items(self, snapshot: StructureBuildHistorySnapshot) -> None:
+        for item in reversed(self._new_scene_items_since(snapshot)):
+            try:
+                remove_scene_item(self.canvas, item)
+            except AttributeError:
+                for name in SCENE_ITEM_COLLECTION_ATTRS:
+                    collection = scene_item_collection_for(self.canvas, name)
+                    if item in collection:
+                        collection.remove(item)
 
     def add_bond_graphics(self, bond_id: int) -> None:
         add_insert_bond_graphics_for(self.canvas, bond_id)
