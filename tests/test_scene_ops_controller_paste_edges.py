@@ -1,5 +1,6 @@
 import os
 import unittest
+from unittest.mock import Mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -207,6 +208,52 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
         self.assertEqual(canvas.record_additions_calls, [(0, 0, None, canvas.created_items)])
         self.assertEqual(canvas.clear_note_selection_calls, 1)
         self.assertEqual(canvas.update_selection_outline_calls, 1)
+
+    def test_paste_selection_from_clipboard_rolls_back_if_history_recording_raises(self) -> None:
+        canvas = _RecordingFakeCanvas()
+        canvas.scene_clipboard_state.paste_source_json = "old-source"
+        canvas.scene_clipboard_state.paste_count = 3
+        existing_note = _make_note_item("keep", 4.0, 6.0)
+        canvas.add_item(existing_note, selected=True)
+        canvas.selected_notes.append(existing_note)
+        controller = scene_clipboard_controller_for(canvas)
+        payload = {
+            "format": "chemvas-selection",
+            "version": 2,
+            "atoms": [
+                {"id": 10, "element": "C", "x": 5.0, "y": 7.0},
+            ],
+            "bonds": [],
+            "rings": [],
+            "marks": [],
+            "scene_items": [
+                {"kind": "note", "text": "copied", "x": 50.0, "y": 60.0},
+            ],
+            "perspective": {
+                "atom_coords_3d": [{"atom_id": 10, "coords": [1.0, 2.0, 3.0]}],
+                "projection_center_3d": [1.0, 2.0, 0.0],
+                "projection_anchor_2d": [1.0, 2.0],
+            },
+        }
+        controller.clipboard_selection_payload = lambda: (payload, "fresh-source")
+        canvas.services.canvas_history_recording_service.record_additions = Mock(
+            side_effect=RuntimeError("history failed")
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "history failed"):
+            controller.paste_selection_from_clipboard()
+
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertEqual(canvas.model.bonds, [])
+        self.assertEqual(atom_coords_3d_for(canvas), {})
+        self.assertEqual(canvas.scene_clipboard_state.paste_source_json, "old-source")
+        self.assertEqual(canvas.scene_clipboard_state.paste_count, 3)
+        self.assertEqual(canvas.removed_scene_items, canvas.created_items)
+        self.assertIsNone(canvas.created_items[0].scene())
+        self.assertEqual(canvas.record_additions_calls, [])
+        self.assertTrue(existing_note.isSelected())
+        self.assertEqual(canvas.selected_notes, [existing_note])
+        self.assertNotIn(canvas.created_items[0], canvas.selected_notes)
 
     def test_paste_selection_from_clipboard_remaps_perspective_state(self) -> None:
         canvas = _RecordingFakeCanvas()

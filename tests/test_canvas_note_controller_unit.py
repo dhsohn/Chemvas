@@ -127,6 +127,41 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         canvas._make_selectable.assert_called_once_with(created)
         controller.apply_note_style.assert_called_once_with(created)
 
+    def test_create_text_note_removes_attached_item_if_style_application_raises(self) -> None:
+        scene = QGraphicsScene()
+        pos = QPointF(3.0, 4.0)
+        removed = []
+
+        def _attach(target) -> None:
+            scene.addItem(target)
+            canvas.note_items.append(target)
+
+        def _remove(target) -> None:
+            removed.append(target)
+            if target in canvas.note_items:
+                canvas.note_items.remove(target)
+            scene.removeItem(target)
+
+        canvas = SimpleNamespace(
+            note_items=[],
+            services=SimpleNamespace(
+                scene_item_controller=SimpleNamespace(
+                    attach_scene_item=mock.Mock(side_effect=_attach),
+                    remove_scene_item=mock.Mock(side_effect=_remove),
+                ),
+            ),
+        )
+        _attach_history_service(canvas)
+        controller = _note_controller(canvas)
+        controller.apply_note_style = mock.Mock(side_effect=RuntimeError("style failed"))
+
+        with self.assertRaisesRegex(RuntimeError, "style failed"):
+            controller.create_text_note(pos, "Mechanism")
+
+        self.assertEqual(canvas.note_items, [])
+        self.assertEqual(len(removed), 1)
+        self.assertNotIn(removed[0], scene.items())
+
     def _editing_note_controller(self, text: str):
         scene = QGraphicsScene()
         canvas = SimpleNamespace(scene=lambda: scene, text_style_state=CanvasTextStyleState())
