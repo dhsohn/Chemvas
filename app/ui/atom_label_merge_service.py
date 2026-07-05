@@ -4,6 +4,7 @@ from typing import cast
 
 from core.model import Bond
 
+from ui.atom_coords_access import atom_coords_3d_for
 from ui.bond_style_logic import STANDARD_BOND_STYLES
 from ui.canvas_atom_graphics_state import pop_atom_dot_for, pop_atom_item_for
 from ui.canvas_bond_graphics_state import bond_items_for_id, pop_bond_items_for
@@ -40,6 +41,10 @@ class AtomLabelMergeService:
             "bond_before_states": {},
             "deleted_bond_ids": [],
         }
+        stored_coords_3d = atom_coords_3d_for(self.canvas)
+        atom_coords_3d = {atom_id: stored_coords_3d[atom_id] for atom_id in merge_ids if atom_id in stored_coords_3d}
+        if atom_coords_3d:
+            merge_info["atom_coords_3d"] = atom_coords_3d
         self._capture_bond_states_touching_merged_atoms(merge_ids, merge_info)
         self._remove_merged_atom_items(merge_ids)
         self._retarget_bonds(merge_ids, atom_id)

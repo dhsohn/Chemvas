@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from core.history import CompositeCommand, HistoryCommand
 from PyQt6.QtWidgets import QGraphicsPolygonItem
 
+from ui.atom_coords_access import atom_coords_3d_for
 from ui.canvas_mark_registry import mark_registry_for
 from ui.canvas_model_access import (
     atom_for_id,
@@ -114,6 +115,13 @@ class SceneDeleteController:
     def _remove_scene_item(self, item) -> None:
         remove_scene_item_helper(self.canvas, item)
 
+    def _push_history_or_rollback(self, command: HistoryCommand) -> None:
+        try:
+            self.history.push(command)
+        except Exception:
+            command.undo(self.canvas)
+            raise
+
     def delete_atom(self, atom_id: int, record: bool = True) -> HistoryCommand | None:
         if not isinstance(atom_id, int) or not self._has_atom(atom_id):
             return None
@@ -132,9 +140,10 @@ class SceneDeleteController:
             atom_state_getter=self._atom_state,
             next_atom_id_getter=lambda: self._next_atom_id,
             remove_atom_only=self._remove_atom,
+            atom_coords_3d_getter=lambda atom_id: atom_coords_3d_for(self.canvas).get(atom_id),
         )
         if record:
-            self.history.push(command)
+            self._push_history_or_rollback(command)
         return command
 
     def delete_bond(self, bond_id: int, record: bool = True) -> HistoryCommand | None:
@@ -154,7 +163,7 @@ class SceneDeleteController:
         if command is None:
             return None
         if record:
-            self.history.push(command)
+            self._push_history_or_rollback(command)
         return command
 
     def delete_ring(self, item: QGraphicsPolygonItem, record: bool = True) -> HistoryCommand | None:
@@ -164,7 +173,7 @@ class SceneDeleteController:
             remove_scene_item=self._remove_scene_item,
         )
         if record:
-            self.history.push(command)
+            self._push_history_or_rollback(command)
         return command
 
     def delete_selected_items(self) -> bool:
@@ -202,14 +211,13 @@ class SceneDeleteController:
                 scene_item_state_getter=self._scene_item_state,
                 remove_scene_item=self._remove_scene_item,
                 clear_handles=lambda: clear_handles_for(self.canvas),
+                atom_coords_3d_getter=lambda atom_id: atom_coords_3d_for(self.canvas).get(atom_id),
             )
 
             if not commands:
                 return False
-            if len(commands) == 1:
-                self.history.push(commands[0])
-                return True
-            self.history.push(CompositeCommand(commands))
+            command = commands[0] if len(commands) == 1 else CompositeCommand(commands)
+            self._push_history_or_rollback(command)
             return True
         finally:
             self._style_controller().suspend_selection_outline(False)

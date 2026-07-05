@@ -277,6 +277,37 @@ class SceneClipboardLogicTest(unittest.TestCase):
         self.assertEqual(payload, valid_payload)
         self.assertEqual(payload_json, valid_payload_json)
 
+    def test_decode_clipboard_selection_payload_rejects_unsafe_decimal_float_token(self) -> None:
+        invalid_payload = {
+            "format": "chemvas-selection",
+            "version": 1,
+            "atoms": [
+                {
+                    "id": 0,
+                    "element": "C",
+                    "x": "__UNSAFE_FLOAT__",
+                    "y": 2.0,
+                    "color": "#000000",
+                    "explicit_label": False,
+                }
+            ],
+            "bonds": [],
+            "rings": [],
+            "marks": [],
+            "scene_items": [],
+        }
+        invalid_payload_json = json.dumps(invalid_payload, separators=(",", ":")).replace(
+            '"__UNSAFE_FLOAT__"',
+            "9007199254740990.5",
+        )
+        valid_payload = _valid_note_clipboard_payload()
+        valid_payload_json = json.dumps(valid_payload, separators=(",", ":"))
+
+        payload, payload_json = decode_clipboard_selection_payload([invalid_payload_json, valid_payload_json], version=1)
+
+        self.assertEqual(payload, valid_payload)
+        self.assertEqual(payload_json, valid_payload_json)
+
     def test_clipboard_payload_candidates_rejects_oversized_custom_payload_before_decode(self) -> None:
         mime_data = QMimeData()
         mime_type = "application/x-chemvas-selection+json"
@@ -290,6 +321,16 @@ class SceneClipboardLogicTest(unittest.TestCase):
         valid_payload_json = json.dumps(valid_payload, separators=(",", ":"))
 
         payload, payload_json = decode_clipboard_selection_payload([deep_json, valid_payload_json], version=1)
+
+        self.assertEqual(payload, valid_payload)
+        self.assertEqual(payload_json, valid_payload_json)
+
+    def test_decode_clipboard_selection_payload_skips_overlong_integer_guard_error(self) -> None:
+        overlong_version_json = '{"format":"chemvas-selection","version":' + ("9" * 5000) + "}"
+        valid_payload = _valid_note_clipboard_payload()
+        valid_payload_json = json.dumps(valid_payload, separators=(",", ":"))
+
+        payload, payload_json = decode_clipboard_selection_payload([overlong_version_json, valid_payload_json], version=1)
 
         self.assertEqual(payload, valid_payload)
         self.assertEqual(payload_json, valid_payload_json)

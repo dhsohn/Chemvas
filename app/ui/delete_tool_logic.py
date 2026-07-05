@@ -21,6 +21,7 @@ DELETE_SCENE_ITEM_KINDS = frozenset(
         "ts_bracket",
         "shape",
         "note",
+        "mark",
     }
 )
 
@@ -42,6 +43,9 @@ def erase_delete_tool_item(canvas, item, *, scene_ops=None):
 
     if kind == "ring":
         return True, scene_ops.delete_ring(item, record=False)
+
+    if kind not in DELETE_SCENE_ITEM_KINDS:
+        return False, None
 
     state = scene_item_state_for(canvas, item)
     remove_scene_item(canvas, item)

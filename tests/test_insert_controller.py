@@ -443,6 +443,10 @@ class InsertControllerTest(unittest.TestCase):
         free_mark = _FakeSceneItem("free-mark")
         note = _FakeSceneItem("note")
         canvas.mark_registry.by_atom = {0: [bound_mark]}
+        set_atom_coords_3d_for(canvas, {0: (-1.0, -2.0, 3.0)})
+        rotation = rotation_state_for(canvas)
+        rotation.projection_center_3d = (-1.0, -2.0, 3.0)
+        rotation.projection_anchor_2d = (-1.0, -2.0)
         set_scene_item_collection_for(canvas, "mark_items", [bound_mark, free_mark])
         set_scene_item_collection_for(canvas, "note_items", [note])
         canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(
@@ -452,6 +456,8 @@ class InsertControllerTest(unittest.TestCase):
 
         def _clear_scene() -> None:
             canvas.model = MoleculeModel()
+            set_atom_coords_3d_for(canvas, {})
+            rotation_state_for(canvas).reset_all()
 
         canvas.clear_scene = Mock(side_effect=_clear_scene)
         controller = _controller_for(canvas)
@@ -478,6 +484,12 @@ class InsertControllerTest(unittest.TestCase):
         self.assertEqual(delete_atoms.before_next_atom_id, 1)
         self.assertEqual(delete_atoms.after_next_atom_id, 0)
         self.assertEqual(delete_atoms.mark_states, [{"kind": "mark"}])
+        self.assertEqual(delete_atoms.atom_coords_3d, {0: (-1.0, -2.0, 3.0)})
+        self.assertTrue(delete_atoms.restore_projection_state)
+        self.assertEqual(delete_atoms.before_projection_center_3d, (-1.0, -2.0, 3.0))
+        self.assertIsNone(delete_atoms.after_projection_center_3d)
+        self.assertEqual(delete_atoms.before_projection_anchor_2d, (-1.0, -2.0))
+        self.assertIsNone(delete_atoms.after_projection_anchor_2d)
         self.assertEqual(delete_scene_items.item_states, [{"kind": "free-mark"}, {"kind": "note"}])
         self.assertEqual(add_atoms.before_next_atom_id, 0)
         self.assertEqual(add_atoms.after_next_atom_id, 2)

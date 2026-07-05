@@ -12,7 +12,7 @@ from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QFontMetricsF
 from PyQt6.QtWidgets import QGraphicsPolygonItem, QGraphicsTextItem
 
-from ui.atom_coords_access import current_atom_coords_3d_for
+from ui.atom_coords_access import atom_coords_3d_for, current_atom_coords_3d_for
 from ui.canvas_atom_graphics_state import atom_items_for
 from ui.canvas_geometry_logic import (
     line_rect_clip_t as line_rect_clip_t_helper,
@@ -34,6 +34,7 @@ from ui.canvas_model_access import (
     rebuild_graphics_for,
     rescale_model_for,
 )
+from ui.canvas_rotation_state import rotation_state_for
 from ui.canvas_scene_items_state import ring_items_for
 from ui.renderer_style_access import (
     atom_font_for,
@@ -205,6 +206,10 @@ class CanvasGeometryController:
     def set_bond_length(self, length_px: float) -> None:
         old_length = bond_length_px_for(self.canvas)
         before_positions = {atom_id: (atom.x, atom.y) for atom_id, atom in atoms_for(self.canvas).items()}
+        before_coords_3d = self._atom_coords_3d_for_positions(before_positions)
+        rotation_state = rotation_state_for(self.canvas)
+        before_projection_center_3d = rotation_state.projection_center_3d
+        before_projection_anchor_2d = rotation_state.projection_anchor_2d
         before_ring_polygons = [
             [(point.x(), point.y()) for point in ring_item.polygon()]
             for ring_item in ring_items_for(self.canvas)
@@ -217,17 +222,39 @@ class CanvasGeometryController:
             return
         if self.hit_testing_service is None:
             raise RuntimeError("CanvasGeometryController.set_bond_length requires hit_testing_service")
+        center_x, center_y = self._model_center()
         rescale_model_for(self.canvas, scale)
+        self._rescale_perspective_state(scale, center_x, center_y)
         self.hit_testing_service.mark_spatial_index_dirty()
         rebuild_graphics_for(self.canvas)
         after_positions = {atom_id: (atom.x, atom.y) for atom_id, atom in atoms_for(self.canvas).items()}
+        after_coords_3d = self._atom_coords_3d_for_positions(after_positions)
+        after_projection_center_3d = rotation_state.projection_center_3d
+        after_projection_anchor_2d = rotation_state.projection_anchor_2d
         after_ring_polygons = [
             [(point.x(), point.y()) for point in ring_item.polygon()]
             for ring_item in ring_items_for(self.canvas)
         ]
         commands = [
             UpdateBondLengthCommand(before_length=old_length, after_length=length_px),
-            SetAtomPositionsCommand(before_positions=before_positions, after_positions=after_positions),
+            SetAtomPositionsCommand(
+                before_positions=before_positions,
+                after_positions=after_positions,
+                before_coords_3d=before_coords_3d or None,
+                after_coords_3d=after_coords_3d or None,
+                restore_projection_state=bool(
+                    before_coords_3d
+                    or after_coords_3d
+                    or before_projection_center_3d is not None
+                    or after_projection_center_3d is not None
+                    or before_projection_anchor_2d is not None
+                    or after_projection_anchor_2d is not None
+                ),
+                before_projection_center_3d=before_projection_center_3d,
+                after_projection_center_3d=after_projection_center_3d,
+                before_projection_anchor_2d=before_projection_anchor_2d,
+                after_projection_anchor_2d=after_projection_anchor_2d,
+            ),
         ]
         ring_items = ring_items_for(self.canvas)
         if ring_items:
@@ -241,6 +268,38 @@ class CanvasGeometryController:
         if self.history is None:
             raise AttributeError("CanvasGeometryController requires an injected history_service")
         self.history.push(CompositeCommand(commands))
+
+    def _atom_coords_3d_for_positions(self, positions: dict[int, tuple[float, float]]) -> dict[int, tuple[float, float, float]]:
+        stored_coords = atom_coords_3d_for(self.canvas)
+        return {atom_id: stored_coords[atom_id] for atom_id in positions if atom_id in stored_coords}
+
+    def _model_center(self) -> tuple[float, float]:
+        atoms = atoms_for(self.canvas)
+        center_x = sum(atom.x for atom in atoms.values()) / len(atoms)
+        center_y = sum(atom.y for atom in atoms.values()) / len(atoms)
+        return center_x, center_y
+
+    @staticmethod
+    def _scaled_xy(x: float, y: float, scale: float, center_x: float, center_y: float) -> tuple[float, float]:
+        return center_x + (x - center_x) * scale, center_y + (y - center_y) * scale
+
+    def _rescale_perspective_state(self, scale: float, center_x: float, center_y: float) -> None:
+        rotation_state = rotation_state_for(self.canvas)
+        projection_center = rotation_state.projection_center_3d
+        z_center = projection_center[2] if projection_center is not None else 0.0
+        atom_ids = set(atoms_for(self.canvas))
+        for atom_id, (x, y, z) in list(atom_coords_3d_for(self.canvas).items()):
+            if atom_id not in atom_ids:
+                continue
+            scaled_x, scaled_y = self._scaled_xy(x, y, scale, center_x, center_y)
+            atom_coords_3d_for(self.canvas)[atom_id] = (scaled_x, scaled_y, z_center + (z - z_center) * scale)
+        if projection_center is not None:
+            x, y, z = projection_center
+            scaled_x, scaled_y = self._scaled_xy(x, y, scale, center_x, center_y)
+            rotation_state.projection_center_3d = (scaled_x, scaled_y, z)
+        if rotation_state.projection_anchor_2d is not None:
+            x, y = rotation_state.projection_anchor_2d
+            rotation_state.projection_anchor_2d = self._scaled_xy(x, y, scale, center_x, center_y)
 
     def line_rect_intersections(self, p1: QPointF, p2: QPointF, rect: QRectF) -> list[float]:
         return line_rect_intersections_helper(p1, p2, rect)

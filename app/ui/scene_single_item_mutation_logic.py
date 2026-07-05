@@ -29,6 +29,7 @@ def delete_atom_with_history(
     atom_state_getter: Callable[[int], dict],
     next_atom_id_getter: Callable[[], int],
     remove_atom_only: Callable[[int], None],
+    atom_coords_3d_getter: Callable[[int], tuple[float, float, float] | None] | None = None,
 ) -> HistoryCommand:
     bonds_to_remove = [
         bond_id
@@ -38,6 +39,7 @@ def delete_atom_with_history(
     clear_smiles_input()
     mark_states = [mark_state_getter(mark) for mark in marks_by_atom.get(atom_id, [])]
     atom_state = atom_state_getter(atom_id)
+    coords_3d = atom_coords_3d_getter(atom_id) if atom_coords_3d_getter is not None else None
     commands: list[HistoryCommand] = []
     for bond_id in sorted(bonds_to_remove, reverse=True):
         bond = bonds[bond_id]
@@ -65,6 +67,7 @@ def delete_atom_with_history(
             after_next_atom_id=next_atom_id_getter(),
             before_smiles_input=before_smiles_input,
             after_smiles_input=current_smiles_input_getter(),
+            atom_coords_3d={atom_id: coords_3d} if coords_3d is not None else None,
         )
     )
     return commands[0] if len(commands) == 1 else CompositeCommand(commands)

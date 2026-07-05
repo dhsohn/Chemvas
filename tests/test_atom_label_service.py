@@ -21,6 +21,7 @@ if QApplication is not None:
         UpdateBondCommand,
     )
     from core.model import Atom, Bond, MoleculeModel
+    from ui.atom_coords_access import set_atom_coords_3d_for
     from ui.atom_label_service import AtomLabelService
     from ui.canvas_atom_graphics_state import (
         atom_dots_for,
@@ -253,6 +254,7 @@ class AtomLabelServiceTest(unittest.TestCase):
         deleted_duplicate_item = _FakeGraphicsItem()
         canvas.atom_items[2] = merged_label
         canvas.atom_dots[2] = merged_dot
+        set_atom_coords_3d_for(canvas, {2: (0.4, 0.3, 4.0)})
         set_bond_items_for(
             canvas,
             {
@@ -270,6 +272,7 @@ class AtomLabelServiceTest(unittest.TestCase):
             merge_info["atom_states"],
             {2: {"element": "O", "x": 0.4, "y": 0.3, "color": "#000000", "explicit_label": False}},
         )
+        self.assertEqual(merge_info["atom_coords_3d"], {2: (0.4, 0.3, 4.0)})
         self.assertEqual(set(merge_info["bond_before_states"]), {0, 1, 2})
         self.assertCountEqual(merge_info["deleted_bond_ids"], [0, 1])
         self.assertNotIn(2, canvas.model.atoms)
@@ -550,6 +553,7 @@ class AtomLabelServiceTest(unittest.TestCase):
                 },
                 "deleted_bond_ids": [1],
                 "atom_states": {7: {"element": "C"}},
+                "atom_coords_3d": {7: (1.0, 2.0, 3.0)},
             },
         )
 
@@ -561,6 +565,7 @@ class AtomLabelServiceTest(unittest.TestCase):
             [ChangeAtomLabelCommand, UpdateBondCommand, DeleteBondCommand, DeleteAtomsCommand],
         )
         self.assertFalse(composite.commands[-1].remove_marks)
+        self.assertEqual(composite.commands[-1].atom_coords_3d, {7: (1.0, 2.0, 3.0)})
 
         service.record_label_change(
             atom_id=5,

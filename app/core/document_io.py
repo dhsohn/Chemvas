@@ -4,11 +4,16 @@ import contextlib
 import json
 import os
 from dataclasses import dataclass
+from decimal import Decimal
 from os import PathLike
 from pathlib import Path
 from typing import Any, cast
 
-from core.document_state import build_document_payload, extract_document_state
+from core.document_state import (
+    build_document_payload,
+    extract_document_state,
+    normalize_json_numbers,
+)
 
 PathType = str | PathLike[str]
 
@@ -26,7 +31,9 @@ def create_document(state: dict[str, Any], version: int) -> ChemvasDocument:
 
 def parse_document(payload: object) -> ChemvasDocument:
     state = extract_document_state(payload)
-    return ChemvasDocument(payload=cast(dict[str, Any], payload), state=state)
+    normalized_payload = cast(dict[str, Any], normalize_json_numbers(payload))
+    normalized_state = cast(dict[str, Any], normalize_json_numbers(state))
+    return ChemvasDocument(payload=normalized_payload, state=normalized_state)
 
 
 def write_document(path: PathType, state: dict[str, Any], version: int) -> ChemvasDocument:
@@ -53,7 +60,7 @@ def write_document(path: PathType, state: dict[str, Any], version: int) -> Chemv
 def read_document(path: PathType) -> ChemvasDocument:
     with Path(path).open("r", encoding="utf-8") as handle:
         try:
-            payload = json.load(handle)
+            payload = json.load(handle, parse_float=Decimal)
         except (ValueError, RecursionError, UnicodeError) as exc:
             raise ValueError("Invalid Chemvas file.") from exc
     return parse_document(payload)

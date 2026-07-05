@@ -453,6 +453,79 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         self.assertEqual(canvas.removed_items[-1], item)
         self.assertEqual(committed_note_text_for(item), "")
 
+    def test_handle_note_focus_out_rolls_back_new_note_when_add_history_push_fails(self) -> None:
+        canvas = SimpleNamespace(
+            removed_items=[],
+            updated_boxes=[],
+            _note_state_dict=lambda item: {
+                "kind": "note",
+                "text": item.toPlainText(),
+                "x": item.pos().x(),
+                "y": item.pos().y(),
+            },
+        )
+        set_selected_notes_for(canvas, [])
+
+        def fail_push(_command) -> None:
+            raise RuntimeError("history")
+
+        canvas.push_command = fail_push
+        canvas.services = SimpleNamespace(
+            scene_item_controller=SimpleNamespace(remove_scene_item=canvas.removed_items.append),
+            selection_controller=SimpleNamespace(update_note_selection_box=canvas.updated_boxes.append),
+        )
+        _attach_history_service(canvas)
+        controller = _note_controller(canvas)
+        item = NoteItem(canvas)
+        item.setPlainText("Mechanism")
+
+        with self.assertRaisesRegex(RuntimeError, "history"):
+            controller.handle_note_focus_out(item)
+
+        self.assertEqual(canvas.removed_items, [item])
+        self.assertEqual(committed_note_text_for(item), "")
+
+    def test_handle_note_focus_out_restores_deleted_note_when_delete_history_push_fails(self) -> None:
+        canvas = SimpleNamespace(
+            commands=[],
+            removed_items=[],
+            restored_items=[],
+            updated_boxes=[],
+        )
+        set_selected_notes_for(canvas, [])
+
+        def _note_state_dict(item) -> dict:
+            return {
+                "kind": "note",
+                "text": item.toPlainText(),
+                "x": item.pos().x(),
+                "y": item.pos().y(),
+            }
+
+        canvas._note_state_dict = _note_state_dict
+        canvas.push_command = canvas.commands.append
+        canvas.services = SimpleNamespace(
+            scene_item_controller=SimpleNamespace(
+                remove_scene_item=canvas.removed_items.append,
+                restore_scene_item=canvas.restored_items.append,
+            ),
+            selection_controller=SimpleNamespace(update_note_selection_box=canvas.updated_boxes.append),
+        )
+        history = _attach_history_service(canvas)
+        controller = _note_controller(canvas)
+        item = NoteItem(canvas)
+        item.setPlainText("Mechanism")
+        controller.handle_note_focus_out(item)
+        history.push = mock.Mock(side_effect=RuntimeError("history"))
+        item.setPlainText("")
+
+        with self.assertRaisesRegex(RuntimeError, "history"):
+            controller.handle_note_focus_out(item)
+
+        self.assertEqual(canvas.removed_items, [item])
+        self.assertEqual(canvas.restored_items, [item])
+        self.assertEqual(committed_note_text_for(item), "Mechanism")
+
     def test_handle_note_focus_out_removes_empty_untracked_note_and_selection_box(self) -> None:
         canvas = SimpleNamespace(
             commands=[],

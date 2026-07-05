@@ -81,6 +81,7 @@ class SceneDeleteApplyLogicTest(unittest.TestCase):
             "redraw_connected_bonds": canvas.redraw_connected_bonds,
             "remove_atom_only": canvas._remove_atom_only,
             "atom_state_getter": canvas._atom_state_dict,
+            "atom_coords_3d_getter": canvas.atom_coords_3d.get,
             "remove_scene_item": canvas.remove_scene_item,
             "scene_item_state_getter": canvas.scene_item_state,
             "clear_handles_fn": canvas.clear_handles,
@@ -158,6 +159,7 @@ class SceneDeleteApplyLogicTest(unittest.TestCase):
         )
         self.assertEqual(delete_atoms.before_next_atom_id, 7)
         self.assertEqual(delete_atoms.after_next_atom_id, 7)
+        self.assertEqual(delete_atoms.atom_coords_3d, {1: (10.0, 11.0, 1.0), 3: (30.0, 31.0, 3.0)})
         self.assertEqual(canvas.remove_atom_calls, [(1, True), (3, True)])
         self.assertEqual(canvas.last_smiles_input, None)
 
@@ -212,6 +214,10 @@ class _FakeDeleteCanvas:
         self.remove_atom_calls: list[tuple[int, bool]] = []
         self.removed_scene_items: list[object] = []
         self.clear_handles_calls = 0
+        self.atom_coords_3d = {
+            1: (10.0, 11.0, 1.0),
+            3: (30.0, 31.0, 3.0),
+        }
 
     def _bond_state_dict(self, bond: Bond) -> dict:
         return {

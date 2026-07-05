@@ -26,14 +26,30 @@ class _Command(HistoryCommand):
         return None
 
 
+class _Point:
+    def __init__(self, x: float = 0.0, y: float = 0.0) -> None:
+        self._x = x
+        self._y = y
+
+    def x(self) -> float:
+        return self._x
+
+    def y(self) -> float:
+        return self._y
+
+
 class _Item:
     def __init__(self, kind=None, item_id=None, state=None) -> None:
         self._data = {0: kind, 1: item_id}
         if state is not None:
             self._data[9] = state
+        self._pos = _Point()
 
     def data(self, key):
         return self._data.get(key)
+
+    def pos(self):
+        return self._pos
 
 
 class _Canvas:
@@ -105,12 +121,36 @@ class DeleteToolLogicTest(unittest.TestCase):
         self.assertEqual(command.items, [note_item])
         self.assertEqual(canvas.removed_items, [note_item])
 
-        weird_item = _Item("weird", 11, state={"kind": "weird", "id": 11})
-        changed, command = erase_delete_tool_item(canvas, weird_item)
+        mark_item = _Item(
+            "mark",
+            {"kind": "plus", "text": "+", "atom_id": 3, "dx": 1.0, "dy": -2.0},
+        )
+        changed, command = erase_delete_tool_item(canvas, mark_item)
         self.assertTrue(changed)
         self.assertIsInstance(command, DeleteSceneItemsCommand)
-        self.assertEqual(command.item_states, [{"kind": "weird", "id": 11}])
-        self.assertEqual(canvas.removed_items[-1], weird_item)
+        self.assertEqual(
+            command.item_states,
+            [
+                {
+                    "kind": "mark",
+                    "mark_kind": "plus",
+                    "text": "+",
+                    "atom_id": 3,
+                    "dx": 1.0,
+                    "dy": -2.0,
+                    "x": 0.0,
+                    "y": 0.0,
+                }
+            ],
+        )
+        self.assertEqual(command.items, [mark_item])
+        self.assertEqual(canvas.removed_items, [note_item, mark_item])
+
+        weird_item = _Item("weird", 11, state={"kind": "weird", "id": 11})
+        changed, command = erase_delete_tool_item(canvas, weird_item)
+        self.assertFalse(changed)
+        self.assertIsNone(command)
+        self.assertNotIn(weird_item, canvas.removed_items)
 
     def test_erase_delete_tool_item_rejects_non_integer_atom_and_bond_ids(self) -> None:
         canvas = _Canvas()

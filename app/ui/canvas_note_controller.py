@@ -87,6 +87,14 @@ class CanvasNoteController:
             remove_selected_note_for(self.canvas, item)
         update_note_selection_box_for(self.canvas, item)
 
+    def _push_history_or_rollback(self, command) -> None:
+        try:
+            self.history.push(command)
+        except Exception:
+            with contextlib.suppress(Exception):
+                command.undo(self.canvas)
+            raise
+
     def handle_note_focus_out(self, item: QGraphicsTextItem) -> None:
         self._end_note_editing(item)
         text = item.toPlainText().strip()
@@ -98,12 +106,12 @@ class CanvasNoteController:
             if text != committed_text or html_changed:
                 after_state = note_state_dict_for(self.canvas, item)
                 if not committed_text:
-                    self.history.push(AddSceneItemsCommand(item_states=[after_state], items=[item]))
+                    self._push_history_or_rollback(AddSceneItemsCommand(item_states=[after_state], items=[item]))
                 else:
                     before_state = note_state_dict_for(self.canvas, item)
                     before_state["text"] = committed_text
                     before_state["html"] = committed_html
-                    self.history.push(UpdateSceneItemCommand(item, before_state, after_state))
+                    self._push_history_or_rollback(UpdateSceneItemCommand(item, before_state, after_state))
                 set_committed_note_text_for(item, text)
                 set_committed_note_html_for(item, current_html)
             # Clicking away from the text ends the selection too, so the dashed box
@@ -115,7 +123,7 @@ class CanvasNoteController:
             before_state["text"] = committed_text
             before_state["html"] = committed_html
             remove_scene_item(self.canvas, item)
-            self.history.push(DeleteSceneItemsCommand(item_states=[before_state], items=[item]))
+            self._push_history_or_rollback(DeleteSceneItemsCommand(item_states=[before_state], items=[item]))
             set_committed_note_text_for(item, "")
             set_committed_note_html_for(item, "")
             return
