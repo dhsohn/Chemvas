@@ -54,7 +54,10 @@ class CanvasHistoryService:
 
     def notify_change(self) -> None:
         if self.state.change_callback is not None:
-            self.state.change_callback()
+            try:
+                self.state.change_callback()
+            except Exception:
+                return
 
     def is_enabled(self) -> bool:
         return bool(self.state.enabled)

@@ -320,6 +320,22 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         self.assertEqual(history_state_for(history_view).history, [second, third])
         self.assertEqual(history_state_for(history_view).redo_stack, [])
 
+        failing_push_view = SimpleNamespace(
+            history_state=CanvasHistoryState(
+                history=[first],
+                redo_stack=[second],
+                change_callback=mock.Mock(side_effect=RuntimeError("notify failed")),
+            ),
+        )
+        failing_push_history = CanvasHistoryService(
+            failing_push_view,
+            history_state_for(failing_push_view),
+        )
+        failing_push_history.push(third)
+        self.assertEqual(history_state_for(failing_push_view).history, [first, third])
+        self.assertEqual(history_state_for(failing_push_view).redo_stack, [])
+        history_state_for(failing_push_view).change_callback.assert_called_once_with()
+
         disabled_view = SimpleNamespace(
             history_state=CanvasHistoryState(enabled=False, limit=2, redo_stack=["redo"]),
         )

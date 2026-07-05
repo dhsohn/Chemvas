@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import (
     QBrush,
@@ -58,9 +60,17 @@ class CanvasNoteController:
         set_committed_note_text_for(item, text)
         item.setData(0, "note")
         item.setPos(pos)
-        attach_scene_item(self.canvas, item)
-        self.apply_note_style(item)
-        set_committed_note_html_for(item, item.toHtml())
+        attached = False
+        try:
+            attach_scene_item(self.canvas, item)
+            attached = True
+            self.apply_note_style(item)
+            set_committed_note_html_for(item, item.toHtml())
+        except Exception:
+            if attached:
+                with contextlib.suppress(Exception):
+                    remove_scene_item(self.canvas, item)
+            raise
         return item
 
     def _end_note_editing(self, item: QGraphicsTextItem) -> None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 from ui.atom_label_access import add_or_update_atom_label, atom_label_service
@@ -174,6 +175,10 @@ def rollback_insert_mutation_for(canvas, *, before_next_atom_id: int, before_bon
             remove_atom_for_history(canvas, atom_id)
         except AttributeError:
             remove_atom_direct_for(canvas, atom_id)
+            with contextlib.suppress(Exception):
+                from ui.atom_coords_access import pop_atom_coords_3d_for
+
+                pop_atom_coords_3d_for(canvas, atom_id)
 
     set_next_atom_id_for(canvas, before_next_atom_id)
 

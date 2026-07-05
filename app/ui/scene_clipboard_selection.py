@@ -1,14 +1,49 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsTextItem
 
 from ui.atom_label_access import atom_item_for_id_for
-from ui.selection_scene_access import clear_scene_selection_for
-from ui.selection_service_access import refresh_selection_outline_for
+from ui.selection_scene_access import (
+    clear_scene_selection_for,
+    scene_selected_items_for,
+    selected_scene_notes_for,
+    set_scene_items_selected_for,
+)
+from ui.selection_service_access import (
+    clear_note_selection_for,
+    refresh_selection_outline_for,
+    select_note_for,
+)
 
 NoteSelector = Callable[[QGraphicsTextItem], None]
+
+
+@dataclass(frozen=True, slots=True)
+class SceneClipboardSelectionSnapshot:
+    scene_items: list[QGraphicsItem]
+    notes: list[QGraphicsTextItem]
+
+
+def capture_clipboard_selection_snapshot_for_canvas(canvas) -> SceneClipboardSelectionSnapshot:
+    return SceneClipboardSelectionSnapshot(
+        scene_items=scene_selected_items_for(canvas),
+        notes=selected_scene_notes_for(canvas),
+    )
+
+
+def restore_clipboard_selection_snapshot_for_canvas(
+    canvas,
+    snapshot: SceneClipboardSelectionSnapshot,
+) -> None:
+    clear_scene_selection_for(canvas, block_signals=True)
+    clear_note_selection_for(canvas)
+    set_scene_items_selected_for(canvas, snapshot.scene_items, True, block_signals=True)
+    for note in snapshot.notes:
+        select_note_for(canvas, note, additive=True)
+    refresh_selection_outline_for(canvas)
 
 
 def select_pasted_content_for_canvas(
@@ -34,4 +69,10 @@ def select_pasted_content_for_canvas(
     refresh_selection_outline_for(canvas)
 
 
-__all__ = ["NoteSelector", "select_pasted_content_for_canvas"]
+__all__ = [
+    "NoteSelector",
+    "SceneClipboardSelectionSnapshot",
+    "capture_clipboard_selection_snapshot_for_canvas",
+    "restore_clipboard_selection_snapshot_for_canvas",
+    "select_pasted_content_for_canvas",
+]

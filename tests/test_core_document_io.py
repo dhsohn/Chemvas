@@ -173,6 +173,14 @@ class DocumentIOTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
                 read_document(path)
 
+    def test_read_document_rejects_invalid_utf8_without_leaking_decode_error(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "sample.chemvas"
+            path.write_bytes(b"\xff\xfe\x00")
+
+            with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
+                read_document(path)
+
     def test_write_document_is_atomic_and_preserves_file_on_failure(self) -> None:
         state = _canvas_state()
 
