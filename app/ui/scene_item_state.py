@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.bracket_types import restored_bracket_kind
+from ui.note_html_sanitizer import sanitize_note_html
 from ui.note_item_access import set_committed_note_html_for, set_committed_note_text_for
 from ui.scene_item_state_serialization import (
     ARROW_KINDS,
@@ -150,8 +151,8 @@ def apply_scene_item_state(
         return
     kind = state.get("kind")
     if kind == "note" and isinstance(item, QGraphicsTextItem):
-        html = state.get("html")
-        if isinstance(html, str) and html:
+        html = sanitize_note_html(state.get("html"))
+        if html is not None:
             item.setHtml(html)
         else:
             item.setPlainText(str(state.get("text", "")))

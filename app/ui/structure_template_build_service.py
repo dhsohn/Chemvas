@@ -96,8 +96,8 @@ class StructureTemplateBuildService:
         x_scale: float,
         y_scale: float = 0.0,
         actions: StructureFragmentBuildActions | None = None,
-    ) -> None:
-        self.fragment_builder.add_fused_heterocycle_template(
+    ):
+        return self.fragment_builder.add_fused_heterocycle_template(
             ring_size=ring_size,
             elements=elements,
             x_scale=x_scale,
