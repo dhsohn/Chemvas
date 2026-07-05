@@ -26,7 +26,7 @@ from ui.canvas_view_setup import initialize_canvas_view
 class CanvasView(QGraphicsView):
     FILE_FORMAT_VERSION = 2
     CLIPBOARD_SELECTION_MIME = "application/x-chemvas-selection+json"
-    CLIPBOARD_SELECTION_VERSION = 1
+    CLIPBOARD_SELECTION_VERSION = 2
 
     def __init__(self) -> None:
         super().__init__()

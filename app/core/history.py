@@ -235,6 +235,7 @@ class AddAtomsCommand(HistoryCommand):
     after_next_atom_id: int
     before_smiles_input: str | None = None
     after_smiles_input: str | None = None
+    atom_coords_3d: dict[int, tuple[float, float, float]] | None = None
 
     def undo(self, canvas) -> None:
         for atom_id in self.atom_states:
@@ -245,6 +246,13 @@ class AddAtomsCommand(HistoryCommand):
     def redo(self, canvas) -> None:
         for atom_id, state in self.atom_states.items():
             _history_canvas_port().restore_atom_from_state_for_history(canvas, atom_id, state)
+        if self.atom_coords_3d:
+            _history_canvas_port().set_atom_positions_for_history(
+                canvas,
+                {},
+                update_selection=False,
+                coords_3d=self.atom_coords_3d,
+            )
         canvas.model.next_atom_id = self.after_next_atom_id
         _set_last_smiles_input(canvas, self.after_smiles_input)
 

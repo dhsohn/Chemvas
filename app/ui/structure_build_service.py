@@ -188,6 +188,7 @@ class StructureBuildService:
             viewport_center=self.viewport_center,
             regular_ring_radius=self.regular_ring_radius,
             ring_points=self.ring_points,
+            regular_ring_points_for_bond=self.regular_ring_points_for_bond,
             cyclohexane_chair_points=self.cyclohexane_chair_points,
             cyclohexane_boat_points=self.cyclohexane_boat_points,
             add_ring_from_points=self.add_ring_from_points,

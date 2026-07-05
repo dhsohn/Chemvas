@@ -219,7 +219,29 @@ class RDKitConversionHelper:
         has_h_neighbor = cls._has_explicit_h_neighbor(model, atom_id, adjacency)
         if has_h_neighbor is None:
             return False
-        return has_h_neighbor or not (formal_charge or radical_electrons)
+        if has_h_neighbor:
+            return True
+        if formal_charge or radical_electrons:
+            return False
+        return not cls._allows_neutral_nitrogen_implicit_hydrogen(model, atom_id, adjacency)
+
+    @staticmethod
+    def _allows_neutral_nitrogen_implicit_hydrogen(
+        model: MoleculeModel,
+        atom_id: int,
+        adjacency: Mapping[int, list[int]],
+    ) -> bool:
+        atom = model.atoms.get(atom_id)
+        if atom is None or atom.element.upper() != "N":
+            return False
+        if len(adjacency.get(atom_id, [])) != 2:
+            return False
+        order_sum = 0
+        for bond in model.bonds:
+            if bond is None or atom_id not in (bond.a, bond.b):
+                continue
+            order_sum += max(1, int(bond.order or 1))
+        return order_sum == 2
 
     @staticmethod
     def _component_sort_key(model: MoleculeModel, atom_ids: set[int]) -> tuple[float, float, int]:

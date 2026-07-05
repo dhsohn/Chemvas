@@ -10,6 +10,10 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
+    from ui.atom_coords_access import atom_coords_3d_for
+    from ui.bond_graphics_access import project_point_3d_for
+    from ui.canvas_rotation_state import rotation_state_for
+
     from tests.test_scene_ops_controller import (
         _FakeCanvas,
         _make_note_item,
@@ -203,6 +207,48 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
         self.assertEqual(canvas.record_additions_calls, [(0, 0, None, canvas.created_items)])
         self.assertEqual(canvas.clear_note_selection_calls, 1)
         self.assertEqual(canvas.update_selection_outline_calls, 1)
+
+    def test_paste_selection_from_clipboard_remaps_perspective_state(self) -> None:
+        canvas = _RecordingFakeCanvas()
+        rotation = rotation_state_for(canvas)
+        rotation.projection_center_3d = (100.0, 100.0, 0.0)
+        rotation.projection_anchor_2d = (100.0, 100.0)
+        controller = scene_clipboard_controller_for(canvas)
+        payload = {
+            "format": "chemvas-selection",
+            "version": 2,
+            "atoms": [
+                {"id": 10, "element": "C", "x": 5.0, "y": 7.0},
+                {"id": 11, "element": "N", "x": 25.0, "y": 7.0},
+            ],
+            "bonds": [{"a": 10, "b": 11, "order": 1, "style": "single", "color": "#000000"}],
+            "rings": [],
+            "marks": [],
+            "scene_items": [],
+            "perspective": {
+                "atom_coords_3d": [
+                    {"atom_id": 10, "coords": [1.0, 2.0, 3.0]},
+                    {"atom_id": 11, "coords": [4.0, 5.0, 6.0]},
+                ],
+                "projection_center_3d": [7.0, 8.0, 9.0],
+                "projection_anchor_2d": [10.0, 11.0],
+            },
+        }
+        controller.clipboard_selection_payload = lambda: (payload, "perspective-source")
+
+        self.assertTrue(controller.paste_selection_from_clipboard())
+
+        coords_3d = atom_coords_3d_for(canvas)
+        self.assertEqual(set(coords_3d), {0, 1})
+        self.assertEqual(coords_3d[0][2], -6.0)
+        self.assertEqual(coords_3d[1][2], -3.0)
+        self.assertEqual(rotation.projection_center_3d, (100.0, 100.0, 0.0))
+        self.assertEqual(rotation.projection_anchor_2d, (100.0, 100.0))
+        for atom_id, coords in coords_3d.items():
+            projected_x, projected_y = project_point_3d_for(canvas, coords)
+            atom = canvas.model.atoms[atom_id]
+            self.assertAlmostEqual(projected_x, atom.x)
+            self.assertAlmostEqual(projected_y, atom.y)
 
     def test_copy_selection_to_clipboard_returns_false_for_invalid_bounds(self) -> None:
         canvas = _RecordingFakeCanvas()
