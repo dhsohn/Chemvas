@@ -21,6 +21,7 @@ from ui.structure_insert_access import (
     new_insert_bond_ids_from,
     record_insert_additions_for,
     restore_insert_selection_from_ids_for,
+    set_inserted_atom_annotation_for,
     set_inserted_atom_metadata_for,
     set_inserted_bond_metadata_for,
 )
@@ -63,6 +64,9 @@ class StructureInsertService:
         atom_id_map: dict[int, int] = {}
         inserted_atom_ids: set[int] = set()
         inserted_bond_ids: set[int] = set()
+        source_atom_annotations = getattr(model, "atom_annotations", {})
+        if not hasattr(source_atom_annotations, "get"):
+            source_atom_annotations = {}
         for old_id in sorted(model.atoms):
             atom = model.atoms[old_id]
             new_id = add_insert_atom_for(self.canvas, atom.element, atom.x + dx, atom.y + dy)
@@ -71,6 +75,11 @@ class StructureInsertService:
                 new_id,
                 color=atom.color,
                 explicit_label=atom.explicit_label,
+            )
+            set_inserted_atom_annotation_for(
+                self.canvas,
+                new_id,
+                source_atom_annotations.get(old_id),
             )
             atom_id_map[old_id] = new_id
             inserted_atom_ids.add(new_id)

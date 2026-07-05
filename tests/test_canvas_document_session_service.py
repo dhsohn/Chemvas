@@ -161,6 +161,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertEqual(canvas.model, "new-model")
         self.assertTrue(history_state_for(canvas).enabled)
         self.assertEqual(events, ["clear", "settings", "deserialize", "adjacency", "pre", "render", "post", "dirty"])
+        canvas.services.structure_build_service.ensure_ring_fills_for_model.assert_not_called()
 
     def test_apply_state_reenables_history_when_restore_fails(self) -> None:
         canvas = SimpleNamespace(

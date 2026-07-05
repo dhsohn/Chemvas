@@ -289,6 +289,43 @@ class StructureInsertServiceTest(unittest.TestCase):
         self.assertTrue(canvas.model.atoms[1].explicit_label)
         self.assertFalse(canvas.model.atoms[2].explicit_label)
 
+    def test_insert_structure_model_remaps_atom_annotations_to_inserted_atoms(self) -> None:
+        canvas = _FakeCanvas()
+        existing_atom_id = canvas.model.add_atom("H", -10.0, -10.0)
+        canvas.model.atom_annotations[existing_atom_id] = {"formal_charge": -1}
+        service = _structure_insert_service(canvas)
+        model = MoleculeModel(
+            atoms={
+                3: Atom("C", 0.0, 0.0, explicit_label=False),
+                5: Atom("N", 8.0, 0.0, explicit_label=True),
+                7: Atom("O", 16.0, 0.0, explicit_label=True),
+            },
+            bonds=[Bond(5, 7, order=2, style="double", color="#223344")],
+            atom_annotations={
+                3: {"formal_charge": 0},
+                5: {"formal_charge": 1, "radical_electrons": 2},
+                7: {"formal_charge": -1},
+                99: {"formal_charge": 1},
+            },
+        )
+
+        inserted_atom_ids, inserted_bond_ids = service.insert_structure_model(
+            model,
+            center=QPointF(8.0, 0.0),
+        )
+        model.atom_annotations[5]["formal_charge"] = 3
+
+        self.assertEqual(inserted_atom_ids, {1, 2, 3})
+        self.assertEqual(inserted_bond_ids, {0})
+        self.assertEqual(
+            canvas.model.atom_annotations,
+            {
+                0: {"formal_charge": -1},
+                2: {"formal_charge": 1, "radical_electrons": 2},
+                3: {"formal_charge": -1},
+            },
+        )
+
     def test_insert_structure_model_adds_title_note_and_restores_selection_history(self) -> None:
         canvas = _FakeCanvas()
         set_last_smiles_input_for(canvas, "CCO")
