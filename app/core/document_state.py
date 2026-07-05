@@ -1053,7 +1053,10 @@ def _validated_id(value: object) -> int:
     if type(value) is int:
         parsed = value
     elif isinstance(value, str) and value.isdecimal():
-        parsed = int(value)
+        try:
+            parsed = int(value)
+        except ValueError as exc:
+            raise ValueError("Invalid Chemvas file.") from exc
     else:
         raise ValueError("Invalid Chemvas file.")
     if parsed < 0:
@@ -1074,7 +1077,10 @@ def _is_int(value: object) -> TypeGuard[int]:
 def _is_number(value: object) -> bool:
     if type(value) not in (int, float):
         return False
-    return math.isfinite(cast(float, value))
+    try:
+        return math.isfinite(cast(float, value))
+    except OverflowError:
+        return False
 
 
 def _is_point(value: object) -> bool:
