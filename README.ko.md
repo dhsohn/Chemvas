@@ -59,11 +59,12 @@ python -m pip install -e ".[rdkit]"
 
 ## 단축키
 - Chemvas는 ChemDraw 호환 단축키의 주요 하위집합을 지원합니다.
-- 빈 캔버스(Generic tool hotkeys): Select/Marquee(`Space`), Bond(`X`), Atom/Text(`T`), Arrow(`E`), Benzene(`J`), Brackets(`Shift+G`), Perspective(`Alt+D`)
-- Atom hotkeys(원자 위 hover): 원소/약식 라벨 `c n o s p f h b i l m e r x d` 및 `Shift+f/p/a/b/s/n/e/z/m/l/o/q/h/y`, 전하 `+/-`, 라벨 편집 `Enter`, sprout `0/1/2/3/a/4/5/6/7/8/z/v/u`
-- Bond hotkeys(결합 위 hover): Single(`1`), Double(`2`), Triple(`3`), Bold(`b`/`Shift+B`), Wedge(`w`), Hash(`h`/`Shift+H`), Benzene fusion(`a`), Ring fusion(`4/5/6/7/8`), Chair fusion(`9/0`)
-- 객체: Flip Horizontal(`Ctrl+Shift+H`), Flip Vertical(`Ctrl+Shift+V`)
-- 파일/편집: Save/Open/Undo/Redo(플랫폼 기본 단축키), `Ctrl+C`(선택 영역 이미지 복사), `Delete/Backspace`(선택 삭제 또는 hover atom/bond 편집/삭제), `Esc`(템플릿/SMILES 삽입 취소)
+- 빈 캔버스(Generic tool hotkeys): Select/Marquee(`Space`), Bond(`X`), Atom/Text(`T`), Arrow(`E`), Benzene(`J`), Brackets(`Shift+T`), Orbitals(`Shift+G`), Chemical symbols(`Shift+E`), Perspective(`Alt+D`)
+- Atom hotkeys(원자 위 hover): 원소/약식 라벨 `c n o s p f h b i l m e r x d` 및 `Shift+f/p/a/b/s/n/e/z/m/l/o/q/h/y`, 전하 `+/-`, 라벨 편집 `Enter`, sprout `0/1/2/3/a/4/5/6/7/8/9/z/v/u` (`9` = gem-dimethyl)
+- Bond hotkeys(결합 위 hover): Single(`1`), Double(`2`), Triple(`3`), Bold(`b`/`Shift+B`), Wedge(`w`), Hash(`h`/`Shift+H`), Dashed(`d`/`Shift+D`), 이중결합 위치(`l`/`c`/`r`), Benzene fusion(`a`), Ring fusion(`4/5/6/7/8`), Chair fusion(`9/0`)
+- 객체: Flip Horizontal(`Ctrl+Shift+H`), Flip Vertical(`Ctrl+Shift+V`), 선택 회전 `Alt+Up/Down`(15°)·`Alt+Left/Right`(1°), 선택 이동 `Shift+방향키`(10pt)
+- 뷰: 실제 크기(`F5`), 창에 맞춤(`F6`), 확대(`F7`), 축소(`F8`)
+- 파일/편집: Save/Open/Undo/Redo(플랫폼 기본 단축키), `Ctrl+C`(선택 영역 이미지 복사), `Ctrl+X`(선택 잘라내기), `Delete/Backspace`(선택 삭제 또는 hover atom/bond 편집/삭제), `Esc`(템플릿/SMILES 삽입 취소)
 
 ## 의존성
 - PyQt6 필요

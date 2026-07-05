@@ -10,8 +10,9 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from core.history import CompositeCommand, SetAtomPositionsCommand
+    from core.history import CompositeCommand, MoveAtomsCommand, SetAtomPositionsCommand
     from core.model import Atom
+    from ui.history_commands import MoveItemsCommand, UpdateSceneItemCommand
     from ui.scene_transform_logic import (
         center_for_flip_group,
         flip_bounds_for_item,
@@ -193,6 +194,166 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
         self.assertAlmostEqual(canvas.model.atoms[atom_1_id].y, -10.0)
         self.assertAlmostEqual(canvas.model.atoms[atom_2_id].x, 10.0)
         self.assertAlmostEqual(canvas.model.atoms[atom_2_id].y, 10.0)
+
+    def test_rotate_selected_items_rotates_atom_bound_marks(self) -> None:
+        canvas = _FakeCanvas()
+        atom_id = canvas.add_atom("C", 0.0, 0.0)
+        atom_item = canvas._atom_item_for_id(atom_id)
+        assert atom_item is not None
+        atom_item.setSelected(True)
+        # A charge sitting directly above the atom (dx=0, dy=-5).
+        mark_item = _make_rect_item(
+            "mark",
+            data1={"atom_id": atom_id, "dx": 0.0, "dy": -5.0},
+            state={"kind": "mark", "atom_id": atom_id, "x": 0.0, "y": -5.0, "dx": 0.0, "dy": -5.0},
+        )
+        canvas.add_item(mark_item)
+        canvas.mark_registry.by_atom[atom_id] = [mark_item]
+
+        controller = scene_transform_controller_for(canvas)
+        controller.rotate_selected_items(90.0)
+
+        # A single selected atom sits at the rotation center, so it does not
+        # move, but its mark must still rotate 90deg CW: above -> right of atom.
+        self.assertEqual(len(canvas.pushed_commands), 1)
+        command = canvas.pushed_commands[0]
+        self.assertIsInstance(command, UpdateSceneItemCommand)
+        after_state = mark_item.data(9)
+        self.assertAlmostEqual(after_state["x"], 5.0)
+        self.assertAlmostEqual(after_state["y"], 0.0)
+        self.assertAlmostEqual(after_state["dx"], 5.0)
+        self.assertAlmostEqual(after_state["dy"], 0.0)
+
+    def test_translate_selected_items_moves_atoms_and_records_history(self) -> None:
+        canvas = _FakeCanvas()
+        atom_1_id = canvas.add_atom("C", 0.0, 0.0)
+        atom_2_id = canvas.add_atom("O", 20.0, 0.0)
+        for atom_id in (atom_1_id, atom_2_id):
+            atom_item = canvas._atom_item_for_id(atom_id)
+            assert atom_item is not None
+            atom_item.setSelected(True)
+
+        controller = scene_transform_controller_for(canvas)
+        self.assertTrue(controller.translate_selected_items(10.0, -5.0))
+
+        self.assertEqual(len(canvas.pushed_commands), 1)
+        command = canvas.pushed_commands[0]
+        self.assertIsInstance(command, MoveAtomsCommand)
+        self.assertEqual(command.atom_ids, {atom_1_id, atom_2_id})
+        self.assertEqual((command.dx, command.dy), (10.0, -5.0))
+        self.assertEqual((canvas.model.atoms[atom_1_id].x, canvas.model.atoms[atom_1_id].y), (10.0, -5.0))
+        self.assertEqual((canvas.model.atoms[atom_2_id].x, canvas.model.atoms[atom_2_id].y), (30.0, -5.0))
+
+    def test_translate_selected_items_moves_scene_items_with_atoms(self) -> None:
+        canvas = _FakeCanvas()
+        atom_id = canvas.add_atom("C", 0.0, 0.0)
+        atom_item = canvas._atom_item_for_id(atom_id)
+        assert atom_item is not None
+        atom_item.setSelected(True)
+        arrow_item = _make_rect_item(
+            "arrow",
+            state={"kind": "arrow", "start": (30.0, 10.0), "end": (50.0, 10.0)},
+        )
+        canvas.add_item(arrow_item, selected=True)
+
+        controller = scene_transform_controller_for(canvas)
+        self.assertTrue(controller.translate_selected_items(10.0, 0.0))
+
+        self.assertEqual(len(canvas.pushed_commands), 1)
+        command = canvas.pushed_commands[0]
+        self.assertIsInstance(command, CompositeCommand)
+        self.assertIsInstance(command.commands[0], MoveAtomsCommand)
+        self.assertIsInstance(command.commands[1], MoveItemsCommand)
+        self.assertEqual(command.commands[1].items, [arrow_item])
+        self.assertEqual((canvas.model.atoms[atom_id].x, canvas.model.atoms[atom_id].y), (10.0, 0.0))
+        self.assertEqual((arrow_item.pos().x(), arrow_item.pos().y()), (10.0, 0.0))
+
+    def test_translate_selected_items_moves_standalone_scene_items(self) -> None:
+        canvas = _FakeCanvas()
+        note_item = _make_note_item("nudge me", 40.0, 10.0)
+        canvas.add_item(note_item, selected=True)
+
+        controller = scene_transform_controller_for(canvas)
+        self.assertTrue(controller.translate_selected_items(0.0, 10.0))
+
+        self.assertEqual(len(canvas.pushed_commands), 1)
+        command = canvas.pushed_commands[0]
+        self.assertIsInstance(command, MoveItemsCommand)
+        self.assertEqual(command.items, [note_item])
+        self.assertEqual((note_item.pos().x(), note_item.pos().y()), (40.0, 20.0))
+
+    def test_translate_selected_items_noop_without_offset_or_selection(self) -> None:
+        canvas = _FakeCanvas()
+        controller = scene_transform_controller_for(canvas)
+
+        self.assertFalse(controller.translate_selected_items(0.0, 0.0))
+        self.assertFalse(controller.translate_selected_items(10.0, 0.0))
+        self.assertEqual(canvas.pushed_commands, [])
+
+        atom_id = canvas.add_atom("C", 0.0, 0.0)
+        atom_item = canvas._atom_item_for_id(atom_id)
+        assert atom_item is not None
+        atom_item.setSelected(True)
+        self.assertFalse(controller.translate_selected_items(0.0, 0.0))
+        self.assertEqual(canvas.pushed_commands, [])
+
+    def test_rotate_selected_items_rotates_scene_items_with_atoms(self) -> None:
+        canvas = _FakeCanvas()
+        atom_1_id = canvas.add_atom("C", 0.0, 0.0)
+        atom_2_id = canvas.add_atom("O", 20.0, 0.0)
+        for atom_id in (atom_1_id, atom_2_id):
+            atom_item = canvas._atom_item_for_id(atom_id)
+            assert atom_item is not None
+            atom_item.setSelected(True)
+        arrow_item = _make_rect_item(
+            "arrow",
+            state={"kind": "arrow", "start": (30.0, 10.0), "end": (50.0, 10.0), "control": (40.0, 20.0)},
+        )
+        canvas.add_item(arrow_item, selected=True)
+
+        controller = scene_transform_controller_for(canvas)
+        controller.rotate_selected_items(90.0)
+
+        self.assertEqual(len(canvas.pushed_commands), 1)
+        command = canvas.pushed_commands[0]
+        self.assertIsInstance(command, CompositeCommand)
+        self.assertIsInstance(command.commands[0], SetAtomPositionsCommand)
+        self.assertIsInstance(command.commands[1], UpdateSceneItemCommand)
+        # Combined selection center is (25, 10): atoms span x 0..20 and the
+        # arrow bounds span (30..50, 10..20).
+        self.assertAlmostEqual(canvas.model.atoms[atom_1_id].x, 35.0)
+        self.assertAlmostEqual(canvas.model.atoms[atom_1_id].y, -15.0)
+        self.assertAlmostEqual(canvas.model.atoms[atom_2_id].x, 35.0)
+        self.assertAlmostEqual(canvas.model.atoms[atom_2_id].y, 5.0)
+        arrow_state = arrow_item.data(9)
+        self.assertAlmostEqual(arrow_state["start"][0], 25.0)
+        self.assertAlmostEqual(arrow_state["start"][1], 15.0)
+        self.assertAlmostEqual(arrow_state["end"][0], 25.0)
+        self.assertAlmostEqual(arrow_state["end"][1], 35.0)
+        self.assertAlmostEqual(arrow_state["control"][0], 15.0)
+        self.assertAlmostEqual(arrow_state["control"][1], 25.0)
+
+    def test_rotate_selected_items_rotates_standalone_scene_items(self) -> None:
+        canvas = _FakeCanvas()
+        arrow_item = _make_rect_item(
+            "arrow",
+            state={"kind": "arrow", "start": (30.0, 10.0), "end": (50.0, 10.0), "control": (40.0, 20.0)},
+        )
+        canvas.add_item(arrow_item, selected=True)
+
+        controller = scene_transform_controller_for(canvas)
+        controller.rotate_selected_items(90.0)
+
+        self.assertEqual(len(canvas.pushed_commands), 1)
+        command = canvas.pushed_commands[0]
+        self.assertIsInstance(command, UpdateSceneItemCommand)
+        arrow_state = arrow_item.data(9)
+        self.assertAlmostEqual(arrow_state["start"][0], 45.0)
+        self.assertAlmostEqual(arrow_state["start"][1], 5.0)
+        self.assertAlmostEqual(arrow_state["end"][0], 45.0)
+        self.assertAlmostEqual(arrow_state["end"][1], 25.0)
+        self.assertAlmostEqual(arrow_state["control"][0], 35.0)
+        self.assertAlmostEqual(arrow_state["control"][1], 15.0)
 
     def test_rotate_selected_items_noop_for_zero_angle_or_empty_selection(self) -> None:
         canvas = _FakeCanvas()

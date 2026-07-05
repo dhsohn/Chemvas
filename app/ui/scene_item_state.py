@@ -200,6 +200,10 @@ def apply_scene_item_state(
         if rect is None:
             return
         bracket_kind = ts_bracket_kind_from_state(state)
+        # The rect is in scene coordinates, so the rebuilt path is absolute.
+        # Clear any translation left by a prior drag/nudge (move_item shifts
+        # item.pos() via moveBy) or the item would render double-offset.
+        item.setPos(0.0, 0.0)
         item.setPath(_build_ts_bracket_path(ts_bracket_path_builder, rect, bracket_kind))
         item.setPen(QPen(Qt.PenStyle.NoPen))
         item.setBrush(QBrush(QColor(bond_color)))
@@ -223,8 +227,19 @@ def apply_scene_item_state(
     if kind == "orbital" and isinstance(item, QGraphicsItemGroup):
         center_point = _point_from_state(state.get("center"))
         if center_point is not None:
+            previous = item.data(1) or {}
+            old_center = previous.get("center")
+            if isinstance(old_center, QPointF):
+                # The lobe geometry does not rebuild on apply, so translate the
+                # group to follow the new absolute center (flip/rotate/restore
+                # only change metadata otherwise, leaving the glyph behind).
+                item.moveBy(center_point.x() - old_center.x(), center_point.y() - old_center.y())
             item.setData(1, {"center": center_point, "base_handle_dist": orbital_base_handle_dist})
-            item.setTransformOriginPoint(center_point)
+            # Transform origin is item-local: the lobes sit around center - pos,
+            # so rotation still pivots about the true lobe center after a move.
+            item.setTransformOriginPoint(
+                QPointF(center_point.x() - item.pos().x(), center_point.y() - item.pos().y())
+            )
         item.setScale(_float_state_value(state.get("scale"), item.scale()))
         item.setRotation(_float_state_value(state.get("rotation"), item.rotation()))
         return
@@ -233,6 +248,10 @@ def apply_scene_item_state(
         end_pt = _point_from_state(state.get("end"))
         if start_pt is None or end_pt is None:
             return
+        # start/end are scene coordinates, so the rebuilt path is absolute.
+        # Clear any translation left by a prior drag/nudge (move_item shifts
+        # item.pos() via moveBy) or the arrow would render double-offset.
+        item.setPos(0.0, 0.0)
         control_pt = _point_from_state(state.get("control"))
         double = bool(state.get("double", False))
         if kind in {"curved_single", "curved_double"} and control_pt is not None:

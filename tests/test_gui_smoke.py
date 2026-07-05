@@ -70,6 +70,7 @@ if QApplication is not None:
         add_arrow_for,
         add_mark_for,
         add_mark_for_atom_for,
+        add_orbital_for,
         add_ts_bracket_for,
     )
     from ui.scene_item_state import scene_item_state_for
@@ -288,13 +289,21 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
         tool_settings_state_for(active_canvas_for_window(self.window)).active_bracket_type = "dagger"
         self._hover_scene_point(QPointF(200.0, 200.0))
-        self._press_key(Qt.Key.Key_G, Qt.KeyboardModifier.ShiftModifier)
+        self._press_key(Qt.Key.Key_T, Qt.KeyboardModifier.ShiftModifier)
         self.assertEqual(active_canvas_for_window(self.window).services.tools.active.name, "ts_bracket")
         self.assertEqual(tool_settings_state_for(active_canvas_for_window(self.window)).active_bracket_type, "square_pair")
         square_bracket_button = next(
             widget for widget in self.window.findChildren(QToolButton) if widget.toolTip() == "Square Brackets"
         )
         self.assertTrue(square_bracket_button.isChecked())
+
+        self._press_key(Qt.Key.Key_G, Qt.KeyboardModifier.ShiftModifier)
+        self.assertEqual(active_canvas_for_window(self.window).services.tools.active.name, "orbital")
+        self.assertEqual(tool_settings_state_for(active_canvas_for_window(self.window)).active_orbital_type, "s")
+
+        self._press_key(Qt.Key.Key_E, Qt.KeyboardModifier.ShiftModifier)
+        self.assertEqual(active_canvas_for_window(self.window).services.tools.active.name, "mark")
+        self.assertEqual(tool_settings_state_for(active_canvas_for_window(self.window)).mark_kind, "plus")
 
         self._press_key(Qt.Key.Key_D, Qt.KeyboardModifier.AltModifier)
         self.assertEqual(active_canvas_for_window(self.window).services.tools.active.name, "perspective")
@@ -383,6 +392,50 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self._click_scene_point(QPointF(-45.0, -10.0), Qt.KeyboardModifier.ShiftModifier)
         self.assertFalse(arrow_a.isSelected())
         self.assertTrue(arrow_b.isSelected())
+
+    def test_nudge_then_rotate_arrow_does_not_double_shift(self) -> None:
+        canvas = active_canvas_for_window(self.window)
+        arrow = add_arrow_for(canvas, QPointF(0.0, 0.0), QPointF(20.0, 0.0), "arrow")
+        transform = canvas_services_for(canvas).scene_transform_controller
+
+        self._select_items(arrow)
+        self.assertTrue(transform.translate_selected_items(10.0, 5.0))
+        # Rotate 180deg about the arrow's own midpoint so the endpoints simply
+        # swap; a stale translation would push them off by (10, 5).
+        transform.rotate_selected_items(180.0)
+        self.app.processEvents()
+
+        data = arrow.data(2)
+        self.assertEqual((arrow.pos().x(), arrow.pos().y()), (0.0, 0.0))
+        self.assertAlmostEqual(data["start"].x(), 30.0)
+        self.assertAlmostEqual(data["start"].y(), 5.0)
+        self.assertAlmostEqual(data["end"].x(), 10.0)
+        self.assertAlmostEqual(data["end"].y(), 5.0)
+
+    def test_rotate_selection_orbits_orbital_glyph(self) -> None:
+        canvas = active_canvas_for_window(self.window)
+        atom_id = add_atom_for(canvas, "C", 0.0, 0.0)
+        orbital = add_orbital_for(canvas, QPointF(40.0, 0.0))
+        assert orbital is not None
+        transform = canvas_services_for(canvas).scene_transform_controller
+
+        self._select_atom_ids(atom_id)
+        orbital.setSelected(True)
+        self.app.processEvents()
+        # Pivot is the midpoint of the atom (0,0) and the orbital bounds around
+        # (40,0). Rotating 180deg must carry the orbital across the pivot, not
+        # just spin it in place.
+        before_center = orbital.data(1)["center"]
+        transform.rotate_selected_items(180.0)
+        self.app.processEvents()
+
+        after_center = orbital.data(1)["center"]
+        self.assertLess(after_center.x(), before_center.x())
+        # The lobe geometry must follow the recorded center: the group's mapped
+        # scene position tracks the center shift rather than staying put.
+        mapped = orbital.mapToScene(orbital.transformOriginPoint())
+        self.assertAlmostEqual(mapped.x(), after_center.x())
+        self.assertAlmostEqual(mapped.y(), after_center.y())
 
     def test_perspective_shift_click_toggles_atom_selection(self) -> None:
         atom_a = add_atom_for(active_canvas_for_window(self.window), "C", -40.0, 0.0)

@@ -110,6 +110,43 @@ class StructureGrowthBuildService:
         methyl_end = self.actions.default_bond_endpoint(carbon_point, carbon_id)
         self.actions.add_bond_between_points(carbon_point, methyl_end, "single", 1)
 
+    def sprout_dimethyl_from_atom(self, atom_id: int) -> None:
+        start = self.actions.atom_point(atom_id)
+        first_end = self.actions.sprout_bond_endpoint(atom_id, cyclic=False)
+        if first_end is None:
+            return
+        if (
+            self.actions.add_atom is None
+            or self.actions.add_bond is None
+            or self.actions.add_bond_graphics is None
+        ):
+            self._sprout_dimethyl_with_bond_builder(atom_id, start, first_end)
+            return
+
+        def _build() -> bool:
+            assert self.actions.add_atom is not None
+            assert self.actions.add_bond is not None
+            assert self.actions.add_bond_graphics is not None
+            first_id = self.actions.add_atom("C", first_end.x(), first_end.y())
+            first_bond_id = self.actions.add_bond(atom_id, first_id, 1, style="single")
+            self.actions.add_bond_graphics(first_bond_id)
+            second_end = self.actions.sprout_bond_endpoint(atom_id, cyclic=False)
+            if second_end is None:
+                return True
+            second_id = self.actions.add_atom("C", second_end.x(), second_end.y())
+            second_bond_id = self.actions.add_bond(atom_id, second_id, 1, style="single")
+            self.actions.add_bond_graphics(second_bond_id)
+            return True
+
+        self.actions.run_recorded_additions_action(_build)
+
+    def _sprout_dimethyl_with_bond_builder(self, atom_id: int, start: QPointF, first_end: QPointF) -> None:
+        self.actions.add_bond_between_points(start, first_end, "single", 1)
+        second_end = self.actions.sprout_bond_endpoint(atom_id, cyclic=False)
+        if second_end is None:
+            return
+        self.actions.add_bond_between_points(start, second_end, "single", 1)
+
     def sprout_regular_ring_from_atom(self, atom_id: int, n: int) -> None:
         def _build() -> bool:
             result = self.actions.regular_ring_points_for_atom(n, atom_id)

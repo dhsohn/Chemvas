@@ -8,27 +8,9 @@ from PyQt6.QtCore import QPointF
 from ui.canvas_model_access import bond_for_id
 from ui.history_commands import MoveItemsCommand
 from ui.move_access import move_atoms_for, move_item_for, shift_selection_outlines_for
+from ui.selection_collection_access import independent_selection_items
 from ui.selection_service_access import refresh_selection_outline_for
 from ui.tool_context import ToolContext
-
-
-def independent_selection_items(selection_items: list, atom_ids: set[int]) -> list:
-    items: list = []
-    seen = set()
-    for item in selection_items:
-        if item is None or item in seen:
-            continue
-        seen.add(item)
-        kind = item.data(0)
-        if kind in {"atom", "bond", "ring"}:
-            continue
-        if kind == "mark":
-            data = item.data(1) or {}
-            atom_id = data.get("atom_id")
-            if isinstance(atom_id, int) and atom_id in atom_ids:
-                continue
-        items.append(item)
-    return items
 
 
 def atom_ids_with_bonds(canvas, atom_ids: set[int], bond_ids: set[int]) -> set[int]:

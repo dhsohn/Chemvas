@@ -118,6 +118,13 @@ class CanvasViewEventShortcutTest(unittest.TestCase):
         )
         self.assertTrue(should_override_chemdraw_shortcut_for(atom_view, atom_event))
 
+        dimethyl_event = _FakeEvent(
+            modifiers=Qt.KeyboardModifier.NoModifier,
+            key=Qt.Key.Key_unknown,
+            text="9",
+        )
+        self.assertTrue(should_override_chemdraw_shortcut_for(atom_view, dimethyl_event))
+
         bond_view = self._new_view()
         set_hover_bond_id_for(bond_view, 11)
         bond_event = _FakeEvent(
@@ -126,6 +133,14 @@ class CanvasViewEventShortcutTest(unittest.TestCase):
             text="b",
         )
         self.assertTrue(should_override_chemdraw_shortcut_for(bond_view, bond_event))
+
+        for text in ("c", "d", "l", "r", "D"):
+            bond_style_event = _FakeEvent(
+                modifiers=Qt.KeyboardModifier.NoModifier,
+                key=Qt.Key.Key_unknown,
+                text=text,
+            )
+            self.assertTrue(should_override_chemdraw_shortcut_for(bond_view, bond_style_event))
 
         reject_view = self._new_view()
         set_hover_atom_id_for(reject_view, 3)

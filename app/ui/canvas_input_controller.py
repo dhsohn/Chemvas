@@ -11,6 +11,7 @@ from ui.canvas_hover_state import hover_state_for
 from ui.canvas_insert_state import insert_state_for
 from ui.hover_highlight_access import clear_hover_highlight_for
 from ui.input_view_access import (
+    fit_canvas_to_view_for,
     focused_scene_item_for,
     reset_view_transform_for,
     reset_zoom_for,
@@ -106,7 +107,28 @@ class CanvasInputController:
             reset_zoom_for(self.canvas)
             event.accept()
             return
+        if self.shortcut_modifiers(event) == Qt.KeyboardModifier.NoModifier:
+            if event.key() == Qt.Key.Key_F5:
+                reset_zoom_for(self.canvas)
+                event.accept()
+                return
+            if event.key() == Qt.Key.Key_F6:
+                fit_canvas_to_view_for(self.canvas)
+                event.accept()
+                return
+            if event.key() == Qt.Key.Key_F7:
+                zoom_in_for(self.canvas)
+                event.accept()
+                return
+            if event.key() == Qt.Key.Key_F8:
+                zoom_out_for(self.canvas)
+                event.accept()
+                return
         if event.matches(QKeySequence.StandardKey.Copy) and self.scene_clipboard.copy_selection_to_clipboard():
+            event.accept()
+            return
+        if event.matches(QKeySequence.StandardKey.Cut) and self.scene_clipboard.copy_selection_to_clipboard():
+            self.scene_delete.delete_selected_items()
             event.accept()
             return
         if event.matches(QKeySequence.StandardKey.Paste) and self.scene_clipboard.paste_selection_from_clipboard():
