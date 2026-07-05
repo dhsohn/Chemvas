@@ -7,6 +7,7 @@ from PyQt6.QtCore import QPointF
 
 from ui.canvas_smiles_input_state import set_last_smiles_input_for
 from ui.insert_commit_rollback import rollback_insert_mutation
+from ui.structure_build_committer import StructureBuildCommitter
 from ui.structure_insert_access import (
     add_atom_with_merge_for,
     add_insert_benzene_ring_for,
@@ -20,7 +21,6 @@ from ui.structure_insert_access import (
     insert_bond_for_id,
     insert_next_atom_id_for,
     new_insert_bond_ids_from,
-    record_insert_additions_for,
 )
 from ui.template_insert_logic import (
     TemplateInsertPlan,
@@ -55,20 +55,23 @@ def apply_template_commit_resolution(
         return False
 
     points = [QPointF(x, y) for x, y in resolution.points]
-    before_next_atom_id = insert_next_atom_id_for(canvas)
-    before_bond_count = insert_bond_count_for(canvas)
+    committer = StructureBuildCommitter(canvas)
+    snapshot = committer.begin_recorded_change(before_smiles_input=before_smiles_input)
 
     try:
         if plan.generator in {"atom_regular_ring", "bond_regular_ring", "bond_template_shape"}:
             if plan.generator == "atom_regular_ring":
                 if plan.atom_id is None:
+                    committer.abort_recorded_change(snapshot)
                     return False
                 merge = atom_merge_seed(canvas, plan.atom_id)
             elif plan.bond_id is not None:
                 merge = bond_merge_seed(canvas, plan.bond_id)
             else:
+                committer.abort_recorded_change(snapshot)
                 return False
             if not merge:
+                committer.abort_recorded_change(snapshot)
                 return False
             set_last_smiles_input_for(canvas, after_smiles_input)
             atom_ids: list[int] = []
@@ -87,19 +90,9 @@ def apply_template_commit_resolution(
             set_last_smiles_input_for(canvas, after_smiles_input)
             add_insert_ring_from_points_for(canvas, points)
 
-        record_insert_additions_for(
-            canvas,
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        committer.record_additions(snapshot)
     except Exception:
-        rollback_insert_mutation(
-            canvas,
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        committer.abort_recorded_change(snapshot)
         raise
     return True
 

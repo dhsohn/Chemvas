@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import math
 
 from PyQt6.QtCore import QPointF
@@ -46,29 +47,33 @@ class StructureBondBuildService:
         existing_bond_id = None
         if start_id is not None and end_id is not None:
             existing_bond_id = self.graph_service.bond_id_between(start_id, end_id)
-            if existing_bond_id is not None and bond_for_id(self.canvas, existing_bond_id) is None:
-                return None
+        if existing_bond_id is not None and bond_for_id(self.canvas, existing_bond_id) is None:
+            return None
         snapshot = self.committer.begin_recorded_change()
         before_smiles_input = snapshot.before_smiles_input
-        if start_id is None:
-            start_id = self.committer.add_atom("C", start.x(), start.y())
-        if end_id is None:
-            end_id = self.committer.add_atom("C", end.x(), end.y())
-        if existing_bond_id is None:
-            existing_bond_id = self.graph_service.bond_id_between(start_id, end_id)
-        if existing_bond_id is not None:
-            result = self._update_existing_bond(
-                existing_bond_id,
-                style,
-                order,
-                before_smiles_input,
-                start_id,
-                end_id,
-            )
-            if result is None:
-                self.committer.abort_recorded_change(snapshot)
-            return result
-        return self._add_new_bond(snapshot, start_id, end_id, style, order)
+        try:
+            if start_id is None:
+                start_id = self.committer.add_atom("C", start.x(), start.y())
+            if end_id is None:
+                end_id = self.committer.add_atom("C", end.x(), end.y())
+            if existing_bond_id is None:
+                existing_bond_id = self.graph_service.bond_id_between(start_id, end_id)
+            if existing_bond_id is not None:
+                result = self._update_existing_bond(
+                    existing_bond_id,
+                    style,
+                    order,
+                    before_smiles_input,
+                    start_id,
+                    end_id,
+                )
+                if result is None:
+                    self.committer.abort_recorded_change(snapshot)
+                return result
+            return self._add_new_bond(snapshot, start_id, end_id, style, order)
+        except Exception:
+            self.committer.abort_recorded_change(snapshot)
+            raise
 
     def _update_existing_bond(
         self,
@@ -89,20 +94,31 @@ class StructureBondBuildService:
             style,
             order,
         )
-        bond.style = next_style
-        bond.order = next_order
-        self.move_controller.redraw_bond(bond_id)
-        self.move_controller.redraw_connected_bonds(bond.a, skip_bond_id=bond_id)
-        self.move_controller.redraw_connected_bonds(bond.b, skip_bond_id=bond_id)
-        after_state = bond_state_dict(bond)
-        record_bond_update_for(
-            self.canvas,
-            bond_id,
-            before_state,
-            after_state,
-            before_smiles_input,
-            last_smiles_input_for(self.canvas),
-        )
+        try:
+            bond.style = next_style
+            bond.order = next_order
+            self.move_controller.redraw_bond(bond_id)
+            self.move_controller.redraw_connected_bonds(bond.a, skip_bond_id=bond_id)
+            self.move_controller.redraw_connected_bonds(bond.b, skip_bond_id=bond_id)
+            after_state = bond_state_dict(bond)
+            record_bond_update_for(
+                self.canvas,
+                bond_id,
+                before_state,
+                after_state,
+                before_smiles_input,
+                last_smiles_input_for(self.canvas),
+            )
+        except Exception:
+            bond.order = before_state["order"]
+            bond.style = before_state["style"]
+            bond.color = before_state.get("color", bond.color)
+            with contextlib.suppress(Exception):
+                self.move_controller.redraw_bond(bond_id)
+            for atom_id in (bond.a, bond.b):
+                with contextlib.suppress(Exception):
+                    self.move_controller.redraw_connected_bonds(atom_id, skip_bond_id=bond_id)
+            raise
         return start_id, end_id
 
     def _add_new_bond(

@@ -14,8 +14,14 @@ from ui.canvas_smiles_input_state import (
     last_smiles_input_for,
     set_last_smiles_input_for,
 )
+from ui.insert_template_commit_service import apply_template_commit_resolution
 from ui.structure_build_service import StructureBuildService
 from ui.structure_template_commands import apply_structure_template_command
+from ui.template_insert_logic import (
+    TemplateInsertPlan,
+    TemplateInsertRequest,
+    TemplateInsertResolution,
+)
 
 try:
     from rdkit import Chem as _RealChem
@@ -639,6 +645,60 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertEqual(len(canvas.ring_items), 1)
         self.assertEqual(len(canvas.scene_items), 1)
 
+    def test_free_template_insert_history_undo_redo_includes_ring_items(self) -> None:
+        canvas = _FakeCanvas()
+        pushed_commands = []
+        canvas.services.canvas_history_recording_service = CanvasHistoryRecordingService(
+            canvas,
+            history_service=SimpleNamespace(push=pushed_commands.append),
+        )
+        service = _service_for(canvas)
+        canvas.services.structure_build_service = service
+        request = TemplateInsertRequest(ring_size=5, cursor_pos=(0.0, 0.0), ring_style="regular")
+        plan = TemplateInsertPlan(
+            generator="free_regular_ring",
+            ring_size=5,
+            ring_style="regular",
+            bond_id=None,
+            radius_mode="regular_polygon",
+        )
+        resolution = TemplateInsertResolution(
+            plan=plan,
+            points=[(0.0, 0.0), (10.0, 0.0), (12.0, 8.0), (5.0, 14.0), (-2.0, 8.0)],
+        )
+
+        applied = apply_template_commit_resolution(
+            canvas,
+            request,
+            plan,
+            resolution,
+            before_smiles_input="before",
+        )
+
+        self.assertTrue(applied)
+        self.assertEqual(len(pushed_commands), 1)
+        command = pushed_commands[0]
+        self.assertIsInstance(command, CompositeCommand)
+        self.assertEqual(len(canvas.model.atoms), 5)
+        self.assertEqual(len([bond for bond in canvas.model.bonds if bond is not None]), 5)
+        self.assertEqual(len(canvas.ring_items), 1)
+        self.assertEqual(len(canvas.scene_items), 1)
+
+        command.undo(canvas)
+
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertEqual(canvas.model.bonds, [])
+        self.assertEqual(canvas.ring_items, [])
+        self.assertEqual(canvas.scene_items, [])
+        self.assertEqual(last_smiles_input_for(canvas), "before")
+
+        command.redo(canvas)
+
+        self.assertEqual(len(canvas.model.atoms), 5)
+        self.assertEqual(len([bond for bond in canvas.model.bonds if bond is not None]), 5)
+        self.assertEqual(len(canvas.ring_items), 1)
+        self.assertEqual(len(canvas.scene_items), 1)
+
     @unittest.skipUnless(_RealChem is not None, "RDKit is required for aromatic template identity tests")
     def test_named_aromatic_templates_round_trip_to_expected_canonical_smiles(self) -> None:
         cases = (
@@ -854,6 +914,133 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertEqual(canvas.record_calls, [])
         canvas.hit_testing_find_atom_near.assert_not_called()
 
+    def test_add_bond_between_points_rolls_back_new_bond_if_graphics_raise(self) -> None:
+        canvas = _FakeCanvas()
+        service = _service_for(canvas)
+        service.committer.add_bond_graphics = Mock(side_effect=RuntimeError("graphics failed"))
+
+        with self.assertRaisesRegex(RuntimeError, "graphics failed"):
+            service.add_bond_between_points(QPointF(0.0, 0.0), QPointF(10.0, 0.0), "single", 1)
+
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertEqual(canvas.model.bonds, [])
+        self.assertEqual(canvas.record_calls, [])
+        self.assertEqual(last_smiles_input_for(canvas), "before")
+
+    def test_add_bond_between_points_restores_existing_bond_if_redraw_raises(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={0: Atom("C", 0.0, 0.0), 1: Atom("C", 10.0, 0.0)},
+            bonds=[Bond(0, 1, 1, style="single", color="#123456")],
+        )
+        canvas.model.next_atom_id = 2
+        canvas.hit_testing_find_atom_near = Mock(side_effect=[0, 1])
+        canvas.services.hit_testing_service.find_atom_near = canvas.hit_testing_find_atom_near
+        canvas.services.move_controller.redraw_bond = Mock(side_effect=RuntimeError("redraw failed"))
+        service = _service_for(canvas)
+
+        with self.assertRaisesRegex(RuntimeError, "redraw failed"):
+            service.add_bond_between_points(QPointF(0.0, 0.0), QPointF(10.0, 0.0), "double", 2)
+
+        bond = canvas.model.bonds[0]
+        self.assertIsNotNone(bond)
+        self.assertEqual((bond.order, bond.style, bond.color), (1, "single", "#123456"))
+        self.assertEqual(canvas.recorded_bond_updates, [])
+        self.assertEqual(last_smiles_input_for(canvas), "before")
+
+    def test_add_bond_between_points_redraws_restored_existing_bond_if_connected_redraw_raises(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={0: Atom("C", 0.0, 0.0), 1: Atom("C", 10.0, 0.0)},
+            bonds=[Bond(0, 1, 1, style="single", color="#123456")],
+        )
+        canvas.model.next_atom_id = 2
+        canvas.hit_testing_find_atom_near = Mock(side_effect=[0, 1])
+        canvas.services.hit_testing_service.find_atom_near = canvas.hit_testing_find_atom_near
+        redrawn_states: list[tuple[int, str]] = []
+
+        def redraw_bond(bond_id: int) -> None:
+            bond = canvas.model.bonds[bond_id]
+            assert bond is not None
+            redrawn_states.append((bond.order, bond.style))
+
+        canvas.services.move_controller.redraw_bond = Mock(side_effect=redraw_bond)
+        canvas.services.move_controller.redraw_connected_bonds = Mock(side_effect=RuntimeError("connected failed"))
+        service = _service_for(canvas)
+
+        with self.assertRaisesRegex(RuntimeError, "connected failed"):
+            service.add_bond_between_points(QPointF(0.0, 0.0), QPointF(10.0, 0.0), "double", 2)
+
+        bond = canvas.model.bonds[0]
+        self.assertIsNotNone(bond)
+        self.assertEqual((bond.order, bond.style, bond.color), (1, "single", "#123456"))
+        self.assertEqual(redrawn_states, [(2, "double"), (1, "single")])
+        self.assertEqual(canvas.recorded_bond_updates, [])
+        self.assertEqual(last_smiles_input_for(canvas), "before")
+
+    def test_add_bond_between_points_redraws_restored_connected_bonds_if_later_redraw_raises(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={
+                0: Atom("C", 0.0, 0.0),
+                1: Atom("C", 10.0, 0.0),
+                2: Atom("C", -10.0, 0.0),
+                3: Atom("C", 20.0, 0.0),
+            },
+            bonds=[
+                Bond(0, 1, 1, style="single", color="#123456"),
+                Bond(0, 2, 1, style="single"),
+                Bond(1, 3, 1, style="single"),
+            ],
+        )
+        canvas.model.next_atom_id = 4
+        canvas.hit_testing_find_atom_near = Mock(side_effect=[0, 1])
+        canvas.services.hit_testing_service.find_atom_near = canvas.hit_testing_find_atom_near
+        redrawn_bond_states: list[tuple[int, str]] = []
+        redrawn_connected_states: list[tuple[int, int, str]] = []
+        failed_once = False
+
+        def main_bond_state() -> tuple[int, str]:
+            bond = canvas.model.bonds[0]
+            assert bond is not None
+            return bond.order, bond.style
+
+        def redraw_bond(bond_id: int) -> None:
+            assert bond_id == 0
+            redrawn_bond_states.append(main_bond_state())
+
+        def redraw_connected_bonds(atom_id: int, skip_bond_id: int | None = None) -> None:
+            nonlocal failed_once
+            assert skip_bond_id == 0
+            order, style = main_bond_state()
+            redrawn_connected_states.append((atom_id, order, style))
+            if atom_id == 1 and not failed_once:
+                failed_once = True
+                raise RuntimeError("connected failed")
+
+        canvas.services.move_controller.redraw_bond = Mock(side_effect=redraw_bond)
+        canvas.services.move_controller.redraw_connected_bonds = Mock(side_effect=redraw_connected_bonds)
+        service = _service_for(canvas)
+
+        with self.assertRaisesRegex(RuntimeError, "connected failed"):
+            service.add_bond_between_points(QPointF(0.0, 0.0), QPointF(10.0, 0.0), "double", 2)
+
+        bond = canvas.model.bonds[0]
+        self.assertIsNotNone(bond)
+        self.assertEqual((bond.order, bond.style, bond.color), (1, "single", "#123456"))
+        self.assertEqual(redrawn_bond_states, [(2, "double"), (1, "single")])
+        self.assertEqual(
+            redrawn_connected_states,
+            [
+                (0, 2, "double"),
+                (1, 2, "double"),
+                (0, 1, "single"),
+                (1, 1, "single"),
+            ],
+        )
+        self.assertEqual(canvas.recorded_bond_updates, [])
+        self.assertEqual(last_smiles_input_for(canvas), "before")
+
     def test_add_benzene_ring_builds_ring_item_and_records_scene_item(self) -> None:
         canvas = _FakeCanvas()
         service = _service_for(canvas)
@@ -1035,6 +1222,31 @@ class StructureBuildServiceTest(unittest.TestCase):
                 }
             ],
         )
+
+    def test_sprout_acetyl_from_atom_rolls_back_if_recorded_build_raises(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={
+                0: Atom("C", 0.0, 0.0),
+            },
+            bonds=[],
+        )
+        canvas.model.next_atom_id = 1
+        service = _service_for(canvas)
+        service.sprout_bond_endpoint = Mock(return_value=QPointF(20.0, 0.0))
+        service.committer.add_bond_graphics = Mock(side_effect=RuntimeError("graphics failed"))
+
+        with self.assertRaisesRegex(RuntimeError, "graphics failed"):
+            service.sprout_acetyl_from_atom(0)
+
+        self.assertEqual(
+            {atom_id: (atom.element, atom.x, atom.y) for atom_id, atom in canvas.model.atoms.items()},
+            {0: ("C", 0.0, 0.0)},
+        )
+        self.assertEqual(canvas.model.next_atom_id, 1)
+        self.assertEqual(canvas.model.bonds, [])
+        self.assertEqual(canvas.record_calls, [])
+        self.assertEqual(last_smiles_input_for(canvas), "before")
 
     def test_fuse_benzene_to_bond_uses_midpoint_and_skips_missing_geometry(self) -> None:
         canvas = _FakeCanvas()

@@ -184,9 +184,13 @@ class StructureBuildService:
         before_smiles_input: str | None = None,
     ) -> bool:
         snapshot = self.committer.begin_recorded_change(before_smiles_input=before_smiles_input)
-        if not action():
+        try:
+            if not action():
+                self.committer.abort_recorded_change(snapshot)
+                return False
+        except Exception:
             self.committer.abort_recorded_change(snapshot)
-            return False
+            raise
         self.committer.record_additions(snapshot)
         return True
 

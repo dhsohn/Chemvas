@@ -267,6 +267,24 @@ class SvgRoundtripTest(unittest.TestCase):
             with mock.patch("core.svg_roundtrip._MAX_SVG_PAYLOAD_BYTES", raw_len):
                 self.assertEqual(extract_chemvas_document_from_svg(path).state, _sheet_state())
 
+    def test_extract_rejects_deep_metadata_json_without_leaking_recursion_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._svg_path(tmp)
+            deep_json = "[" * 20_000 + "0" + "]" * 20_000
+            encoded = base64.b64encode(zlib.compress(deep_json.encode("utf-8"))).decode("ascii")
+            path.write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg" '
+                'xmlns:chemvas="https://chemvas.app/ns/svg-source/1">'
+                '<metadata>'
+                f'<chemvas:source encoding="base64+zlib+json">{encoded}</chemvas:source>'
+                '</metadata>'
+                '</svg>',
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "Invalid editable Chemvas metadata"):
+                extract_chemvas_document_from_svg(path)
+
     def test_extract_rejects_missing_or_invalid_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = self._svg_path(tmp)

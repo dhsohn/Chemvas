@@ -52,5 +52,8 @@ def write_document(path: PathType, state: dict[str, Any], version: int) -> Chemv
 
 def read_document(path: PathType) -> ChemvasDocument:
     with Path(path).open("r", encoding="utf-8") as handle:
-        payload = json.load(handle)
+        try:
+            payload = json.load(handle)
+        except (json.JSONDecodeError, RecursionError) as exc:
+            raise ValueError("Invalid Chemvas file.") from exc
     return parse_document(payload)
