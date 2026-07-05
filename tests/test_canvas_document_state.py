@@ -5,13 +5,16 @@ from unittest import mock
 from core.model import Atom, Bond, MoleculeModel
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
+from ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
 from ui.canvas_atom_graphics_state import set_atom_items_for
 from ui.canvas_document_state import (
     apply_document_settings,
     restore_document_post_model_items,
     restore_document_pre_model_items,
+    restore_document_projection_state,
     snapshot_canvas_document_state,
 )
+from ui.canvas_rotation_state import rotation_state_for
 from ui.canvas_scene_items_state import CanvasSceneItemsState
 from ui.canvas_smiles_input_state import CanvasSmilesInputState, last_smiles_input_for
 from ui.canvas_text_style_state import CanvasTextStyleState, text_style_state_for
@@ -113,7 +116,13 @@ class CanvasDocumentStateTest(unittest.TestCase):
         disposed = _DisposedSceneItem()
 
         canvas = SimpleNamespace(
-            model=MoleculeModel(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[Bond(1, 1, 1)]),
+            model=MoleculeModel(
+                atoms={
+                    1: Atom("C", 10.0, 20.0),
+                    2: Atom("C", 0.0, 0.0),
+                },
+                bonds=[Bond(1, 2, 1)],
+            ),
             scene_items_state=CanvasSceneItemsState(
                 ring_items=[ring_item, detached, disposed],
                 note_items=[note_item, detached],
@@ -154,10 +163,29 @@ class CanvasDocumentStateTest(unittest.TestCase):
             scene=lambda: scene_obj,
         )
         set_atom_items_for(canvas, {1: object()})
+        set_atom_coords_3d_for(
+            canvas,
+            {
+                1: (10.0, 20.0, 30.0),
+                2: (100.0, 100.0, 5.0),
+                99: (90.0, 90.0, 90.0),
+            },
+        )
+        rotation = rotation_state_for(canvas)
+        rotation.projection_center_3d = (10.0, 20.0, 30.0)
+        rotation.projection_anchor_2d = (10.0, 20.0)
 
         state = snapshot_canvas_document_state(canvas)
 
         self.assertTrue(state["model"]["atoms"][1]["explicit_label"])
+        self.assertEqual(
+            state["perspective"],
+            {
+                "atom_coords_3d": {1: (10.0, 20.0, 30.0)},
+                "projection_center_3d": (10.0, 20.0, 30.0),
+                "projection_anchor_2d": (10.0, 20.0),
+            },
+        )
         self.assertEqual(state["ring_fills"], [{"points": [(0.0, 0.0)], "atom_ids": [1], "color": "#abcdef", "alpha": 0.25}])
         self.assertEqual(state["notes"], [{"text": "note", "x": 1.0, "y": 2.0}])
         self.assertEqual(
@@ -299,6 +327,41 @@ class CanvasDocumentStateTest(unittest.TestCase):
         self.assertEqual(text_style.text_color.name(), "#222222")
         self.assertEqual(text_style.text_alignment, Qt.AlignmentFlag.AlignLeft)
         self.assertFalse(text_style.note_box_enabled)
+
+    def test_restore_document_projection_state_restores_coords_and_projection(self) -> None:
+        canvas = SimpleNamespace()
+        set_atom_coords_3d_for(canvas, {9: (9.0, 9.0, 9.0)})
+        rotation = rotation_state_for(canvas)
+        rotation.projection_center_3d = (1.0, 1.0, 1.0)
+        rotation.projection_anchor_2d = (2.0, 2.0)
+
+        restore_document_projection_state(
+            canvas,
+            {
+                "perspective": {
+                    "atom_coords_3d": {"3": [1, 2.5, 4]},
+                    "projection_center_3d": [5, 6.5, 7],
+                    "projection_anchor_2d": [8, 9.5],
+                },
+            },
+        )
+
+        self.assertEqual(atom_coords_3d_for(canvas), {3: (1.0, 2.5, 4.0)})
+        self.assertEqual(rotation.projection_center_3d, (5.0, 6.5, 7.0))
+        self.assertEqual(rotation.projection_anchor_2d, (8.0, 9.5))
+
+    def test_restore_document_projection_state_clears_missing_legacy_projection(self) -> None:
+        canvas = SimpleNamespace()
+        set_atom_coords_3d_for(canvas, {1: (1.0, 2.0, 3.0)})
+        rotation = rotation_state_for(canvas)
+        rotation.projection_center_3d = (4.0, 5.0, 6.0)
+        rotation.projection_anchor_2d = (7.0, 8.0)
+
+        restore_document_projection_state(canvas, {})
+
+        self.assertEqual(atom_coords_3d_for(canvas), {})
+        self.assertIsNone(rotation.projection_center_3d)
+        self.assertIsNone(rotation.projection_anchor_2d)
 
     def test_apply_document_settings_ignores_legacy_style_preset(self) -> None:
         from core.renderer import Renderer

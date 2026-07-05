@@ -1025,6 +1025,26 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertEqual(sum(1 for bond in bonds if bond.order == 2), 3)
         self.assertLessEqual(max(order_sums.values()), 4)
 
+    def test_fuse_benzene_to_existing_triple_bond_is_rejected_without_mutation(self) -> None:
+        canvas = _FakeCanvas()
+        service = _service_for(canvas)
+        atom_a_id = canvas.model.add_atom("C", 0.0, 0.0)
+        atom_b_id = canvas.model.add_atom("C", 20.0, 0.0)
+        bond_id = canvas.model.add_bond(atom_a_id, atom_b_id, 3)
+
+        self.assertIsNone(service.benzene_ring_points(QPointF(10.0, 10.0), attach_bond_id=bond_id))
+        self.assertIsNone(service.fuse_benzene_to_bond(bond_id))
+
+        self.assertEqual(len(canvas.model.atoms), 2)
+        self.assertEqual(
+            [(bond.a, bond.b, bond.order) for bond in canvas.model.bonds if bond is not None],
+            [(atom_a_id, atom_b_id, 3)],
+        )
+        self.assertEqual(canvas.added_graphics, [])
+        self.assertEqual(canvas.scene_items, [])
+        self.assertEqual(canvas.record_calls, [])
+        self.assertEqual(last_smiles_input_for(canvas), "before")
+
     def test_ring_and_chain_fragment_builders_record_expected_counts(self) -> None:
         cases = (
             ("add_phenyl", 7, 7, 7),

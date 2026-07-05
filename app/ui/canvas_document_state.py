@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import math
+
 from core.document_state import serialize_model_state, serialize_settings
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 
+from ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
+from ui.bond_graphics_access import project_point_3d_for
 from ui.canvas_atom_graphics_state import atom_items_for
 from ui.canvas_model_access import model_for
+from ui.canvas_rotation_state import rotation_state_for
 from ui.canvas_scene_items_state import (
     arrow_items_for,
     mark_items_for,
@@ -55,7 +60,7 @@ from ui.sheet_setup_access import (
 def snapshot_canvas_document_state(canvas) -> dict:
     tool_settings = tool_settings_state_for(canvas)
     text_style = text_style_state_for(canvas)
-    return {
+    state = {
         "model": serialize_model_state(
             model_for(canvas),
             explicit_label_atom_ids=atom_items_for(canvas).keys(),
@@ -91,6 +96,61 @@ def snapshot_canvas_document_state(canvas) -> dict:
         ),
         "last_smiles_input": last_smiles_input_for(canvas),
     }
+    _add_projection_state(canvas, state)
+    return state
+
+
+def _add_projection_state(canvas, state: dict) -> None:
+    model = model_for(canvas)
+    coords_3d = {
+        atom_id: coords
+        for atom_id, coords in atom_coords_3d_for(canvas).items()
+        if _stored_atom_coords_3d_matches_projection(canvas, atom_id, coords)
+    }
+    if not coords_3d:
+        return
+    rotation = rotation_state_for(canvas)
+    state["perspective"] = {
+        "atom_coords_3d": {
+            atom_id: coords
+            for atom_id, coords in coords_3d.items()
+            if atom_id in model.atoms
+        },
+        "projection_center_3d": rotation.projection_center_3d,
+        "projection_anchor_2d": rotation.projection_anchor_2d,
+    }
+
+
+def _stored_atom_coords_3d_matches_projection(canvas, atom_id: int, coords: tuple[float, float, float]) -> bool:
+    atom = model_for(canvas).atoms.get(atom_id)
+    if atom is None:
+        return False
+    proj_x, proj_y = project_point_3d_for(canvas, coords)
+    tolerance = max(1.0, bond_length_px_for(canvas) * 0.15)
+    return math.hypot(proj_x - atom.x, proj_y - atom.y) <= tolerance
+
+
+def restore_document_projection_state(canvas, state: dict) -> None:
+    perspective_state = state.get("perspective") or {}
+    coords_state = perspective_state.get("atom_coords_3d", {})
+    coords_3d = {
+        int(atom_id): (float(coords[0]), float(coords[1]), float(coords[2]))
+        for atom_id, coords in coords_state.items()
+    }
+    set_atom_coords_3d_for(canvas, coords_3d)
+    rotation = rotation_state_for(canvas)
+    center = perspective_state.get("projection_center_3d")
+    anchor = perspective_state.get("projection_anchor_2d")
+    rotation.projection_center_3d = (
+        (float(center[0]), float(center[1]), float(center[2]))
+        if center is not None
+        else None
+    )
+    rotation.projection_anchor_2d = (
+        (float(anchor[0]), float(anchor[1]))
+        if anchor is not None
+        else None
+    )
 
 
 def apply_document_settings(canvas, state: dict) -> None:
