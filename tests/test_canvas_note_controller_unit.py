@@ -526,6 +526,38 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         self.assertEqual(canvas.restored_items, [item])
         self.assertEqual(committed_note_text_for(item), "Mechanism")
 
+    def test_handle_note_focus_out_routes_deselection_through_note_service(self) -> None:
+        canvas = SimpleNamespace(
+            commands=[],
+            removed_items=[],
+            updated_boxes=[],
+            _note_state_dict=lambda item: {},
+        )
+        set_selected_notes_for(canvas, [])
+        canvas.push_command = canvas.commands.append
+        toggle_note_selection = mock.Mock()
+        canvas.services = SimpleNamespace(
+            scene_item_controller=SimpleNamespace(remove_scene_item=canvas.removed_items.append),
+            selection_controller=SimpleNamespace(
+                update_note_selection_box=canvas.updated_boxes.append,
+                toggle_note_selection=toggle_note_selection,
+            ),
+        )
+        _attach_history_service(canvas)
+        controller = _note_controller(canvas)
+        item = NoteItem(canvas)
+        item.setPlainText("kept")
+        item.set_committed_text("kept")
+        item.set_committed_html(item.toHtml())
+        selected_notes_for(canvas).append(item)
+
+        controller.handle_note_focus_out(item)
+
+        # The note-service toggle handles grouped companions and the outline
+        # refresh; the controller must not strip the note from state directly.
+        toggle_note_selection.assert_called_once_with(item)
+        self.assertIn(item, selected_notes_for(canvas))
+
     def test_handle_note_focus_out_removes_empty_untracked_note_and_selection_box(self) -> None:
         canvas = SimpleNamespace(
             commands=[],

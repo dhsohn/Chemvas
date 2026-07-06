@@ -84,6 +84,13 @@ class CanvasNoteController:
 
     def _deselect_note(self, item: QGraphicsTextItem) -> None:
         if item in selected_notes_for(self.canvas):
+            # Route through the note service so notes-only groups deselect as a
+            # unit and the group box outline refreshes; a direct state removal
+            # would strand the grouped companions in the selection.
+            toggle_note_selection = getattr(self._selection_controller(), "toggle_note_selection", None)
+            if callable(toggle_note_selection):
+                toggle_note_selection(item)
+                return
             remove_selected_note_for(self.canvas, item)
         update_note_selection_box_for(self.canvas, item)
 
@@ -127,9 +134,7 @@ class CanvasNoteController:
             set_committed_note_text_for(item, "")
             set_committed_note_html_for(item, "")
             return
-        if item in selected_notes_for(self.canvas):
-            remove_selected_note_for(self.canvas, item)
-            update_note_selection_box_for(self.canvas, item)
+        self._deselect_note(item)
         remove_scene_item(self.canvas, item)
 
     def update_text_note(self, item: QGraphicsTextItem, text: str) -> None:
