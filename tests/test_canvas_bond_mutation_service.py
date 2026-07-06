@@ -33,6 +33,7 @@ class _FakeScene:
 def _graph_service(*, bond_id_between=None):
     return SimpleNamespace(
         bond_id_between=mock.Mock(return_value=bond_id_between),
+        bond_id_between_with_repair=mock.Mock(return_value=bond_id_between),
         add_bond_neighbors=mock.Mock(),
         remove_bond_neighbors=mock.Mock(),
         add_bond_index=mock.Mock(),
@@ -257,12 +258,13 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
 
 
 class CanvasBondMutationServiceStaleIndexTest(unittest.TestCase):
-    def test_add_bond_heals_stale_index_instead_of_duplicating(self) -> None:
-        # The graph index claims no bond exists, but the model already has one:
-        # add_bond must return the existing id and repair the index rather than
-        # push a duplicate pair into the model.
+    def test_add_bond_uses_self_repairing_index_lookup(self) -> None:
+        # Bond creation is the write site where a stale index answer would
+        # corrupt the model, so it must go through the graph service's
+        # repairing lookup and return the bond it finds without duplicating.
         model = _FakeModel(bonds=[Bond(1, 2, 1)])
-        graph = _graph_service(bond_id_between=None)
+        graph = _graph_service()
+        graph.bond_id_between_with_repair = mock.Mock(return_value=0)
         hit_testing = _hit_testing_service()
         canvas = SimpleNamespace(
             services=_services(graph=graph, hit_testing=hit_testing),
@@ -274,8 +276,7 @@ class CanvasBondMutationServiceStaleIndexTest(unittest.TestCase):
         self.assertEqual(bond_id, 0)
         self.assertEqual(model.add_bond_calls, [])
         self.assertEqual(len(model.bonds), 1)
-        graph.add_bond_neighbors.assert_called_once_with(1, 2)
-        graph.add_bond_index.assert_called_once_with(0, 1, 2)
+        graph.bond_id_between_with_repair.assert_called_once_with(1, 2)
 
 
 if __name__ == "__main__":

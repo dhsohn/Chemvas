@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ui.canvas_state_lookup import canvas_state_object
+from ui.canvas_state_lookup import ensure_canvas_state
 
 
 @dataclass(slots=True)
@@ -35,12 +35,7 @@ class CanvasGraphState:
 
 
 def graph_state_for(canvas: Any) -> CanvasGraphState:
-    state = canvas_state_object(canvas, "graph_state")
-    if state is not None:
-        return state
-    state = CanvasGraphState()
-    canvas.graph_state = state
-    return state
+    return ensure_canvas_state(canvas, "graph_state", CanvasGraphState)
 
 
 __all__ = ["CanvasGraphState", "graph_state_for"]

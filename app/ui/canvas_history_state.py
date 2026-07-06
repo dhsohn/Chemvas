@@ -6,7 +6,7 @@ from typing import Any
 
 from core.history import HistoryCommand
 
-from ui.canvas_state_lookup import canvas_state_object
+from ui.canvas_state_lookup import ensure_canvas_state
 
 
 @dataclass
@@ -19,12 +19,7 @@ class CanvasHistoryState:
 
 
 def history_state_for(canvas: Any) -> CanvasHistoryState:
-    state = canvas_state_object(canvas, "history_state")
-    if state is not None:
-        return state
-    state = CanvasHistoryState()
-    canvas.history_state = state
-    return state
+    return ensure_canvas_state(canvas, "history_state", CanvasHistoryState)
 
 
 __all__ = ["CanvasHistoryState", "history_state_for"]

@@ -11,6 +11,19 @@
 - Label layout (`app/ui/label_layout_logic.py`): 원자 레이블 원시 문자열을 조판 런(typographic runs, 아래첨자 포함)과 그 배치로 파싱하는 순수(Qt-free) 로직. 레이블 타이포그래피의 단일 진실 공급원(single source of truth)이다: `AtomLabelItem`은 화면 그리기를 위해 이를 소비하고, 벡터 내보내기(vector export)는 글리프를 아웃라인 처리할 때 동일한 배치를 소비하므로 화면과 내보내기가 결코 어긋나지 않는다. 표시 텍스트에 대해서만 동작하며 저장된 `element` 문자열을 절대 변경하지 않는다.
 - Figure export (`app/ui/export_plan_logic.py` + `app/ui/export_dialog_logic.py` + `app/ui/export_render_service.py`): 두 개의 순수 모듈은 패딩이 적용된 소스 사각형(source rect) / 물리적 출력 크기(포인트 단위)를 계산하고 대화상자의 포맷/크기/경로 규칙을 소유한다. Qt 서비스(`export_scene`)는 보이는 콘텐츠 항목을 수집하고(일시적 오버레이는 클립보드 복사와 동일한 방식으로 제외), 항목별 내보내기 잉크/콘텐츠 사각형(export ink/content rects)이 가능한 경우 이를 사용해 경계를 계산하며(따라서 레이블 히트 타겟과 투명한 암시적 탄소 점(implicit-carbon dots)이 물리적 크기에 영향을 주지 않도록), 나머지 모든 것을 숨기고, 원자 레이블을 아웃라인 모드로 전환하며, 씬 영역을 네 가지 싱크(sink) 중 하나로 렌더링한다 — `QSvgGenerator`(72 dpi의 SVG로 1 단위 = 1 pt), `QPdfWriter`(PDF, 페이지가 콘텐츠에 맞춰 포인트 단위로 크기 설정), 또는 `QImage`(DPI 메타데이터가 포함된 PNG/TIFF). `unit_scale`(씬 단위당 포인트) 또는 `target_width_pt`는 줌과 무관하게 결정적인 물리적 크기를 제공한다: 결합 길이 모드(bond-length mode)는 스타일의 `bond_length_pt`를 사용하고, 컬럼 모드(column modes)는 84/174 mm에 맞춘다. `scope`는 전체 캔버스 대 선택 영역을 선택하고, `background`는 투명 대 흰색을 선택한다. 아웃라인 처리된 레이블은 어떤 포맷도 폰트 의존적인 `<text>`를 포함하지 않음을 의미하므로 화면/SVG/PDF/래스터 모두 동일한 글리프를 표시한다.
 
+## UI 계층 규율 (ports / access / state / services)
+`app/ui` 패키지는 역할이 고정된 다수의 작은 모듈로 의도적으로 분리되어 있다. 목표는 `CanvasView`와 `MainWindow`를 얇은 Qt 셸로 유지하고(갓 오브젝트 금지), 모든 서비스를 헤드리스로 생성 가능하게 하며(전체 테스트 스위트가 `SimpleNamespace` 캔버스로 약 20초에 실행), 모든 의존성을 명시적으로 만드는 것이다.
+
+- **State 모듈** (`*_state.py`): 관심사당 dataclass 하나와 `<name>_state_for(canvas)` 접근자. 모든 상태 접근자는 `ensure_canvas_state(canvas, name, factory)`(`ui/canvas_state_lookup.py`)를 거치며, 조회와 부착에 하나의 이름만 사용한다. 실제 캔버스에서는 모든 상태가 eager 생성되는 `CanvasRuntimeState` 컨테이너(`ui/canvas_runtime_state.py`)의 필드로 존재한다. 컨테이너는 strict하다 — 컨테이너에 없는 필드를 요청하는 접근자는 그림자 사본을 조용히 부착하는 대신 즉시 실패한다. 일부 상태(`model`, `renderer`, `bond_renderer`, `rdkit`)는 의도적으로 캔버스 직접 속성으로 저장되며 `runtime_field=False`를 사용한다. 새 상태 추가 시: dataclass + 접근자 + `CanvasRuntimeState` 필드가 세트이며, `test_state_accessor_names_match_runtime_state_container`가 동기화를 강제한다.
+- **Access 모듈** (`*_access.py`): 연산 하나를 감싸는 자유 함수(`foo_for(canvas)`). `canvas.services`에 직접 접근할 수 없고, 서비스 조회는 대응하는 ports 모듈에 위임한다.
+- **Ports 모듈** (`*_ports.py`): 서비스 컨테이너(`canvas_services_for` / window 비공개 저장소)를 해석할 수 있는 유일한 모듈. 그 외 모든 코드는 협력자를 주입받거나 port를 호출한다.
+- **서비스와 컨트롤러**: `ui/canvas_service_composer.py`에서 캔버스당 한 번, 명시적 키워드 주입으로 조립된다 — 서비스 내부의 서비스 로케이터 금지, 누락된 배선을 숨기는 `=None` 협력자 기본값 금지.
+- **core는 Qt-free이자 ui-free**: `app/core`는 모듈 수준에서 `ui`를 import할 수 없다(지연 해석되는 프로토콜 구현이 유일한 승인된 예외, `core/history.py` 참고).
+
+이 규칙들은 `tests/test_architecture_boundaries.py`가 강제한다. 이 파일은 *규칙*(금지 접근 패턴, 제거된 표면의 유지, 의존성 계약)만 담는다 — 특정 구현 문구가 존재한다는 단언은 두지 않는다. 규칙을 추가할 때는 새 코드가 자동으로 적용받는 패턴 금지 또는 의존성 계약으로 표현한다.
+
+이 규율의 알려진 트레이드오프(의도적으로 수용): 실재하는 간접 비용(ui LOC의 약 20%가 배선)과 캔버스 seam의 약한 정적 타이핑(`canvas: Any`). 하나의 불변식이 여러 작은 모듈에 걸칠 때는 일관성 계약을 소유 모듈 한 곳에 문서화해야 한다 — 파생 그래프 인덱스의 예로 `ui/graph_index_operations.py`와 `CanvasGraphService.bond_id_between_with_repair` 패턴을 참고.
+
 ## 데이터/렌더 흐름 (Data/Render Flow)
 Tools -> CanvasView -> MoleculeModel 변경(mutation) -> Renderer/BondRenderer -> QGraphicsScene 업데이트 -> HistoryCommand 푸시.
 

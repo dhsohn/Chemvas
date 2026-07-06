@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ui.canvas_state_lookup import canvas_state_object
+from ui.canvas_state_lookup import ensure_canvas_state
 
 Coords3D = tuple[float, float, float]
 Point2D = tuple[float, float]
@@ -55,12 +55,7 @@ class CanvasRotationState:
 
 
 def rotation_state_for(canvas: Any) -> CanvasRotationState:
-    state = canvas_state_object(canvas, "rotation_state")
-    if state is not None:
-        return state
-    state = CanvasRotationState()
-    canvas.rotation_state = state
-    return state
+    return ensure_canvas_state(canvas, "rotation_state", CanvasRotationState)
 
 
 __all__ = ["CanvasRotationState", "rotation_state_for"]

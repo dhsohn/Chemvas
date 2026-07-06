@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ui.canvas_state_lookup import canvas_state_object
+from ui.canvas_state_lookup import ensure_canvas_state
 
 
 @dataclass(slots=True)
@@ -15,12 +15,7 @@ BOND_GRAPHICS_ATTRS = ("bond_items",)
 
 
 def bond_graphics_state_for(canvas: Any) -> CanvasBondGraphicsState:
-    state = canvas_state_object(canvas, "bond_graphics_state")
-    if state is not None:
-        return state
-    state = CanvasBondGraphicsState()
-    canvas.bond_graphics_state = state
-    return state
+    return ensure_canvas_state(canvas, "bond_graphics_state", CanvasBondGraphicsState)
 
 
 def bond_items_for(canvas: Any) -> dict[int, list[Any]]:

@@ -4,16 +4,11 @@ from typing import Any
 
 from core.model import MoleculeModel
 
-from ui.canvas_state_lookup import canvas_state_object
+from ui.canvas_state_lookup import ensure_canvas_state
 
 
 def model_for(canvas: Any) -> Any:
-    model = canvas_state_object(canvas, "model")
-    if model is not None:
-        return model
-    model = MoleculeModel()
-    canvas.model = model
-    return model
+    return ensure_canvas_state(canvas, "model", MoleculeModel, runtime_field=False)
 
 
 def set_model_for(canvas: Any, model: Any) -> None:
