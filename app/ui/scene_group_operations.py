@@ -8,6 +8,7 @@ from ui.canvas_group_state import (
     register_group_for,
     remove_group_for,
 )
+from ui.canvas_mark_registry import mark_registry_for
 from ui.canvas_model_access import atoms_for, bonds_for
 from ui.canvas_scene_items_state import remove_selected_note_for, ring_items_for
 from ui.canvas_window_access import history_service_for_canvas
@@ -129,10 +130,15 @@ def ungroup_selection_for(canvas) -> bool:
 
 def _structure_items_for_atom_ids(canvas, atom_ids: set[int]) -> list:
     items: list = []
+    registry = mark_registry_for(canvas)
     for atom_id in atom_ids:
         atom_item = visible_atom_item_for(canvas, atom_id)
         if atom_item is not None:
             items.append(atom_item)
+        # Atom-bound marks travel with their atom, so they select and deselect
+        # as part of the structure; a lingering Qt-selected charge mark would
+        # otherwise keep re-triggering its atom's group after a deselect.
+        items.extend(registry.get_for_atom(atom_id) or [])
     for bond_id, bond in enumerate(bonds_for(canvas)):
         if bond is None:
             continue

@@ -20,6 +20,7 @@ if QApplication is not None:
     from ui.canvas_atom_graphics_state import set_atom_item_for
     from ui.canvas_bond_graphics_state import bond_items_for
     from ui.canvas_group_state import group_state_for, register_group_for
+    from ui.canvas_mark_registry import mark_registry_for
     from ui.canvas_model_access import model_for
     from ui.canvas_scene_items_state import (
         add_selected_note_for,
@@ -524,6 +525,24 @@ class SceneGroupOperationsTest(unittest.TestCase):
         self.assertFalse(other_note.isSelected())
         self.assertEqual(selected_group_rects_for(canvas), [])
         self.assertFalse(group_state_for(canvas).expanding)
+
+    def test_deselecting_mixed_group_note_clears_qt_selected_bound_mark(self) -> None:
+        canvas = _Canvas()
+        atom_a, item_a = _add_atom(canvas, selected=True)
+        note = _add_note(canvas, selected=True)
+        register_group_for(canvas, {atom_a}, [note])
+        # A charge mark bound to the grouped atom, Qt-selected via rubber band.
+        mark = _add_mark(canvas, atom_id=atom_a, selected=True)
+        mark_registry_for(canvas).add_for_atom(atom_a, mark)
+        service = SelectionNoteService(canvas)
+
+        service.toggle_note_selection(note)
+
+        self.assertFalse(item_a.isSelected())
+        # The bound mark must drop with the group or its lingering Qt
+        # selection would keep re-triggering the group box.
+        self.assertFalse(mark.isSelected())
+        self.assertEqual(selected_group_rects_for(canvas), [])
 
     def test_clearing_note_selection_deselects_mixed_groups_as_unit(self) -> None:
         canvas = _Canvas()
