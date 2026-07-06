@@ -392,6 +392,16 @@ class SceneGroupOperationsTest(unittest.TestCase):
 
         self.assertEqual(len(rects), 1)
 
+    def test_selected_group_rects_ignore_note_only_selection_of_mixed_group(self) -> None:
+        canvas = _Canvas()
+        atom_a, _ = _add_atom(canvas)
+        note = _add_note(canvas, selected=True)
+        register_group_for(canvas, {atom_a}, [note])
+
+        # A mixed group keys off scene selection; a lone note-tool selection
+        # must not draw a box implying the whole group is selected.
+        self.assertEqual(selected_group_rects_for(canvas), [])
+
     def test_selected_group_rects_empty_without_group_selection(self) -> None:
         canvas = _Canvas()
         atom_a, _ = _add_atom(canvas, selected=True)

@@ -14,6 +14,7 @@ from ui.canvas_scene_items_state import (
 )
 from ui.canvas_text_style_state import text_style_state_for
 from ui.graphics_items import NoSelectRectItem
+from ui.selection_service_access import refresh_selection_outline_for
 from ui.selection_style_access import selection_color_for, selection_stroke_delta_for
 
 if TYPE_CHECKING:
@@ -27,8 +28,11 @@ class SelectionNoteService:
     def select_note(self, item: QGraphicsTextItem, additive: bool = False) -> None:
         if not additive:
             self.clear_note_selection()
+        changed = item not in selected_notes_for(self.canvas)
         add_selected_note_for(self.canvas, item)
         self.update_note_selection_box(item)
+        if changed:
+            self._refresh_outline_for_note_change()
 
     def toggle_note_selection(self, item: QGraphicsTextItem) -> None:
         if item in selected_notes_for(self.canvas):
@@ -36,6 +40,7 @@ class SelectionNoteService:
         else:
             add_selected_note_for(self.canvas, item)
         self.update_note_selection_box(item)
+        self._refresh_outline_for_note_change()
 
     def set_note_selected(self, item: QGraphicsTextItem, selected: bool) -> None:
         is_selected = item in selected_notes_for(self.canvas)
@@ -46,6 +51,14 @@ class SelectionNoteService:
         else:
             remove_selected_note_for(self.canvas, item)
         self.update_note_selection_box(item)
+        self._refresh_outline_for_note_change()
+
+    def _refresh_outline_for_note_change(self) -> None:
+        # Note selection lives outside QGraphicsScene selection, so it never
+        # emits selectionChanged; refresh explicitly or a notes-only group box
+        # would linger after the note selection is cleared (e.g. switching to
+        # the bond tool).
+        refresh_selection_outline_for(self.canvas)
 
     def apply_group_note_toggle(
         self,
@@ -71,6 +84,8 @@ class SelectionNoteService:
         clear_selected_notes_for(self.canvas)
         for note in notes:
             self.update_note_selection_box(note)
+        if notes:
+            self._refresh_outline_for_note_change()
 
     def update_note_selection_box(self, item: QGraphicsTextItem) -> None:
         sel = item.data(21)

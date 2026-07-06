@@ -185,11 +185,22 @@ def group_selection_targets_for(canvas, targets: list) -> list:
     return extended
 
 
+def _group_has_scene_members(canvas, group) -> bool:
+    if group.atom_ids & set(atoms_for(canvas)):
+        return True
+    return any(
+        member.data(0) != "note"
+        for member in attached_canvas_scene_items(canvas, group.items)
+    )
+
+
 def selected_group_rects_for(canvas) -> list:
     """Scene rects of groups intersecting the current selection.
 
     The selection outline draws one ChemDraw-style dashed box per selected
-    group so grouped objects visibly act as a unit.
+    group so grouped objects visibly act as a unit. Boxes key off Qt scene
+    selection (matching the expansion trigger); only notes-only groups key off
+    the note-service selection, since they have no scene-selectable members.
     """
     state = group_state_for(canvas)
     if not state.groups:
@@ -199,12 +210,26 @@ def selected_group_rects_for(canvas) -> list:
         for atom_id in selected_atom_ids_for_transform_for(canvas)
         if atom_id in atoms_for(canvas)
     }
-    selected_items = selected_scene_items_for(canvas, excluded_kinds=TRANSFORM_SELECTION_EXCLUDED_KINDS)
+    trigger_items = [
+        item
+        for item in scene_selected_items_for(canvas)
+        if _is_groupable_standalone_item(canvas, item)
+    ]
     group_ids = group_ids_for_members_for(
         canvas,
         atom_ids | selected_mark_atom_ids_for(canvas),
-        selected_items,
+        trigger_items,
     )
+    selected_notes = selected_scene_notes_for(canvas)
+    if selected_notes:
+        for group_id, group in state.groups.items():
+            if group_id in group_ids or _group_has_scene_members(canvas, group):
+                continue
+            if any(
+                any(member is note for member in group.items)
+                for note in selected_notes
+            ):
+                group_ids.add(group_id)
     if not group_ids:
         return []
     live_atom_ids = set(atoms_for(canvas))
@@ -237,7 +262,6 @@ def _stale_group_notes_for(canvas, state, active_group_ids: set[int]) -> list:
     selected_notes = selected_scene_notes_for(canvas)
     if not selected_notes:
         return []
-    live_atom_ids = set(atoms_for(canvas))
     stale: list = []
     for group_id, group in state.groups.items():
         if group_id in active_group_ids:
@@ -251,11 +275,7 @@ def _stale_group_notes_for(canvas, state, active_group_ids: set[int]) -> list:
             continue
         # A notes-only group is never scene-triggered; leave its manual
         # note-tool selection alone.
-        has_scene_members = bool(group.atom_ids & live_atom_ids) or any(
-            member.data(0) != "note"
-            for member in attached_canvas_scene_items(canvas, group.items)
-        )
-        if not has_scene_members:
+        if not _group_has_scene_members(canvas, group):
             continue
         stale.extend(member_notes)
     return stale
