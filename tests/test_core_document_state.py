@@ -4,6 +4,7 @@ import unittest
 from core.document_state import (
     CANVAS_FILE_VERSION,
     CHEMVAS_FILE_TYPE,
+    GROUPS_CANVAS_FILE_VERSION,
     LEGACY_CANVAS_FILE_VERSION,
     atom_to_state,
     bond_to_state,
@@ -102,8 +103,8 @@ class DocumentStateTest(unittest.TestCase):
 
         self.assertTrue(state["atoms"][0]["explicit_label"])
         self.assertTrue(state["atoms"][1]["explicit_label"])
-        self.assertEqual(state["bonds"][0]["a"], 0)
-        self.assertIsNone(state["bonds"][1])
+        # v4 serialization is compact: the in-memory tombstone slot is dropped.
+        self.assertEqual([bond["a"] for bond in state["bonds"]], [0])
         self.assertEqual(state["next_atom_id"], 3)
 
     def test_serialize_model_state_round_trips_atom_annotations(self) -> None:
@@ -948,6 +949,59 @@ class UnhashableChoiceValueTest(unittest.TestCase):
             build_document_payload(state, CANVAS_FILE_VERSION)
 
 
+class CompactBondFormatTest(unittest.TestCase):
+    """v4 bond lists are compact; tombstones remain readable in older files."""
+
+    @staticmethod
+    def _state_with_bond_tombstone() -> dict:
+        return _canvas_state(
+            _model_state(
+                atoms={0: _atom_state(), 1: {**_atom_state(), "x": 10.0}},
+                bonds=[
+                    None,
+                    {"a": 0, "b": 1, "order": 1, "style": "single", "color": "#000000"},
+                ],
+                next_atom_id=2,
+            )
+        )
+
+    def test_v4_rejects_bond_tombstones(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
+            build_document_payload(self._state_with_bond_tombstone(), CANVAS_FILE_VERSION)
+
+    def test_pre_v4_versions_accept_bond_tombstones(self) -> None:
+        for version in (LEGACY_CANVAS_FILE_VERSION, GROUPS_CANVAS_FILE_VERSION):
+            with self.subTest(version=version):
+                payload = build_document_payload(self._state_with_bond_tombstone(), version)
+                self.assertEqual(payload["version"], version)
+
+    def test_deserialize_still_reads_pre_v4_tombstoned_bonds(self) -> None:
+        model = deserialize_model_state(
+            self._state_with_bond_tombstone()["model"]
+        )
+
+        self.assertEqual(len(model.bonds), 2)
+        self.assertIsNone(model.bonds[0])
+        self.assertEqual((model.bonds[1].a, model.bonds[1].b), (0, 1))
+
+    def test_tombstoned_model_round_trips_to_compact_v4_state(self) -> None:
+        model = MoleculeModel()
+        a = model.add_atom("C", 0.0, 0.0)
+        b = model.add_atom("C", 10.0, 0.0)
+        c = model.add_atom("C", 20.0, 0.0)
+        model.add_bond(a, b, 1)
+        model.add_bond(b, c, 2)
+        model.bonds[0] = None  # simulate a deleted bond slot
+
+        state = serialize_model_state(model)
+        payload = build_document_payload(_canvas_state(state), CANVAS_FILE_VERSION)
+        restored = deserialize_model_state(payload["state"]["model"])
+
+        self.assertEqual(payload["version"], CANVAS_FILE_VERSION)
+        self.assertEqual(len(restored.bonds), 1)
+        self.assertEqual((restored.bonds[0].a, restored.bonds[0].b, restored.bonds[0].order), (b, c, 2))
+
+
 class ModelInvariantTest(unittest.TestCase):
     def test_add_bond_rejects_duplicate_pair(self) -> None:
         model = MoleculeModel()
@@ -962,7 +1016,7 @@ class ModelInvariantTest(unittest.TestCase):
 class SerializeModelStateHealingTest(unittest.TestCase):
     """Saving must survive in-memory drift instead of failing validation."""
 
-    def test_duplicate_and_dangling_bonds_are_tombstoned(self) -> None:
+    def test_duplicate_and_dangling_bonds_are_dropped(self) -> None:
         model = MoleculeModel()
         a = model.add_atom("C", 0.0, 0.0)
         b = model.add_atom("C", 10.0, 0.0)
@@ -973,9 +1027,8 @@ class SerializeModelStateHealingTest(unittest.TestCase):
 
         state = serialize_model_state(model)
 
-        self.assertEqual(len(state["bonds"]), 4)
-        self.assertIsNotNone(state["bonds"][0])
-        self.assertEqual(state["bonds"][1:], [None, None, None])
+        self.assertEqual(len(state["bonds"]), 1)
+        self.assertEqual((state["bonds"][0]["a"], state["bonds"][0]["b"]), (a, b))
         build_document_payload(_canvas_state(state), CANVAS_FILE_VERSION)
 
     def test_wedge_order_and_next_atom_id_are_normalized(self) -> None:

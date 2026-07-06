@@ -42,6 +42,7 @@ When an operation touches multiple entity types at once (ex: atom creation plus 
 - The preview window should reuse the same conversion path as `.xyz` export to avoid divergence between what the user sees and what gets exported.
 - The 3D preview opens as a separate modeless window from the toolbar. It uses the selected-structure conversion path, owns the `Export 3D XYZ` action for the selected molecule, and shows an empty preview when no chemical structure is selected.
 - Each open canvas tab is an independent document with its own file path and clean/dirty digest. `.chemvas` loading accepts only the canonical single-canvas payload.
+- `.chemvas` documents are versioned (current: v4; v1–v3 stay loadable). v4 stores bonds as a compact array: deleted-slot tombstones (`null` entries in pre-v4 files) are runtime bookkeeping and never reach the document. Bond identity is runtime-scoped — no document section references bonds by position or id (atoms carry explicit ids because marks, ring fills, groups, and perspective state reference them).
 
 ## Planned Next Slices
 - Extract preview rendering (bond/SMILES/template) into dedicated renderer modules.
