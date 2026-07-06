@@ -197,6 +197,28 @@ def _sync_atom_scene_items_for(canvas, atom_id: int, label_service) -> None:
             set_mark_center_for(canvas, mark, QPointF(atom.x, atom.y))
 
 
+def _rotate_bound_mark_offsets_for(canvas, atom_ids: set[int], angle_radians: float) -> None:
+    """Rotate the stored dx/dy of marks bound to the rotating atoms.
+
+    Matches the Alt+arrows rotation semantics (rotate_scene_item_state) and
+    the rigid rotation preview: the mark orbits with its atom AND its offset
+    turns, instead of being re-applied unrotated after the atoms move.
+    """
+    cos_a = math.cos(angle_radians)
+    sin_a = math.sin(angle_radians)
+    registry = mark_registry_for(canvas)
+    for atom_id in atom_ids:
+        for mark in list(registry.get_for_atom(atom_id) or []):
+            data = mark.data(1) or {}
+            dx = data.get("dx")
+            dy = data.get("dy")
+            if not isinstance(dx, (int, float)) or not isinstance(dy, (int, float)):
+                continue
+            data["dx"] = dx * cos_a - dy * sin_a
+            data["dy"] = dx * sin_a + dy * cos_a
+            mark.setData(1, data)
+
+
 def rotate_selection_for(canvas, angle_degrees: float) -> None:
     atom_ids, bond_ids = selected_ids_for(canvas)
     atom_ids = selected_rotation_atom_ids(atom_ids, bond_ids, bonds=bonds_for(canvas))
@@ -207,6 +229,7 @@ def rotate_selection_for(canvas, angle_degrees: float) -> None:
         return
     angle = math.radians(angle_degrees)
     label_service = atom_label_service(canvas)
+    _rotate_bound_mark_offsets_for(canvas, atom_ids, angle)
     for atom_id, (x, y) in rotated_atom_positions(
         atom_ids,
         atoms=atoms_for(canvas),

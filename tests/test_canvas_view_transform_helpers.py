@@ -81,6 +81,10 @@ class _FakePositionedItem:
             return self._data1
         return None
 
+    def setData(self, key, value) -> None:
+        if key == 1:
+            self._data1 = value
+
     def setPos(self, x, y=None) -> None:
         if isinstance(x, QPointF):
             self.positions.append(QPointF(x))
@@ -175,7 +179,10 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
             {label_1: (1.0, 1.0), label_2: (0.0, 0.0)},
         )
         self.assertEqual(dot_1.positions, [QPointF(1.0, 1.0)])
-        self.assertEqual(mark_centers, [QPointF(3.0, -2.0), QPointF(1.0, 1.0)])
+        # The bound mark's offset rotates with the selection (matching the
+        # Alt+arrows path and the rigid rotation preview): (2, -3) rotated 90
+        # degrees becomes (3, 2), applied at the rotated atom (1, 1).
+        self.assertEqual(mark_centers, [QPointF(4.0, 3.0), QPointF(1.0, 1.0)])
         self.assertEqual(
             {call.args[0] for call in move_controller.redraw_connected_bonds.call_args_list},
             {1, 2},
