@@ -568,11 +568,13 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         set_selected_notes_for(canvas, [])
         canvas.push_command = canvas.commands.append
         toggle_note_selection = mock.Mock()
+        update_selection_outline = mock.Mock()
         canvas.services = SimpleNamespace(
             scene_item_controller=SimpleNamespace(remove_scene_item=canvas.removed_items.append),
             selection_controller=SimpleNamespace(
                 update_note_selection_box=canvas.updated_boxes.append,
                 toggle_note_selection=toggle_note_selection,
+                update_selection_outline=update_selection_outline,
             ),
         )
         _attach_history_service(canvas)
@@ -589,6 +591,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
         toggle_note_selection.assert_called_once_with(item)
         self.assertEqual(canvas.removed_items, [item])
+        # A mixed group's box spans attached members, so the outline must be
+        # refreshed again after the note leaves the scene.
+        update_selection_outline.assert_called_once_with()
 
     def test_handle_note_focus_out_removes_empty_untracked_note_and_selection_box(self) -> None:
         canvas = SimpleNamespace(
