@@ -398,6 +398,45 @@ class SceneGroupOperationsTest(unittest.TestCase):
 
         self.assertEqual(len(rects), 1)
 
+    def test_selected_group_rects_ignore_qt_selected_note_of_notes_only_group(self) -> None:
+        canvas = _Canvas()
+        note_a = _add_note(canvas)
+        note_b = _add_note(canvas)
+        register_group_for(canvas, set(), [note_a, note_b])
+        # A lingering Qt selection (rubber band / mirrored flags) must not
+        # bypass the full note-service selection gate.
+        note_a.setSelected(True)
+
+        self.assertEqual(selected_group_rects_for(canvas), [])
+
+    def test_expand_selection_ignores_qt_selected_note_of_notes_only_group(self) -> None:
+        canvas = _Canvas()
+        note_a = _add_note(canvas)
+        note_b = _add_note(canvas)
+        register_group_for(canvas, set(), [note_a, note_b])
+        note_a.setSelected(True)
+
+        # Notes-only groups have no scene shrink path, so a Qt-selected note
+        # must not scene-expand them (sticky-marquee prevention).
+        expand_selection_to_groups_for(canvas)
+
+        canvas.selection_controller.select_note.assert_not_called()
+
+    def test_notes_only_unit_deselect_clears_qt_flags(self) -> None:
+        canvas = _Canvas()
+        note_a = _add_note(canvas, selected=True)
+        note_b = _add_note(canvas, selected=True)
+        note_a.setSelected(True)
+        note_b.setSelected(True)
+        register_group_for(canvas, set(), [note_a, note_b])
+        service = SelectionNoteService(canvas)
+
+        service.toggle_note_selection(note_a)
+
+        self.assertEqual(selected_notes_for(canvas), [])
+        self.assertFalse(note_a.isSelected())
+        self.assertFalse(note_b.isSelected())
+
     def test_selected_group_rects_require_full_notes_only_group_selection(self) -> None:
         canvas = _Canvas()
         note_a = _add_note(canvas, selected=True)

@@ -19,6 +19,7 @@ from ui.scene_group_operations import (
     expand_note_selection_to_groups_for,
     notes_only_group_member_notes_for,
 )
+from ui.selection_scene_access import set_scene_items_selected_for
 from ui.selection_service_access import refresh_selection_outline_for
 from ui.selection_style_access import selection_color_for, selection_stroke_delta_for
 
@@ -67,11 +68,17 @@ class SelectionNoteService:
         # A notes-only group deselects as a unit, mirroring the select-direction
         # expansion; otherwise Ctrl-clicking one member leaves a partial group
         # that delete/copy/drag would silently act on.
-        for member in notes_only_group_member_notes_for(self.canvas, item):
+        member_notes = notes_only_group_member_notes_for(self.canvas, item)
+        for member in member_notes:
             if member is item or member not in selected_notes_for(self.canvas):
                 continue
             remove_selected_note_for(self.canvas, member)
             self.update_note_selection_box(member)
+        if member_notes:
+            # Attached notes are Qt-selectable (e.g. via rubber band); clear
+            # those flags too so a lingering Qt selection cannot keep a member
+            # in drag snapshots after the unit deselected.
+            set_scene_items_selected_for(self.canvas, member_notes, False)
         # Mixed groups deselect as a unit too: the group box spans attached
         # members, so leaving the scene members selected would keep a box over
         # a note that a drag no longer moves.

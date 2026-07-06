@@ -221,6 +221,14 @@ def selected_group_rects_for(canvas) -> list:
         atom_ids | selected_mark_atom_ids_for(canvas),
         trigger_items,
     )
+    # A notes-only group must never be scene-triggered (e.g. by a lingering
+    # Qt-selected note): its box is gated exclusively by the full note-service
+    # selection check below, so it never claims notes a drag would not move.
+    group_ids = {
+        group_id
+        for group_id in group_ids
+        if _group_has_scene_members(canvas, state.groups[group_id])
+    }
     selected_notes = selected_scene_notes_for(canvas)
     if selected_notes:
         for group_id, group in state.groups.items():
@@ -402,6 +410,15 @@ def expand_selection_to_groups_for(canvas) -> None:
     # selected by the expansion below.
     trigger_atom_ids = atom_ids | selected_mark_atom_ids_for(canvas)
     group_ids = group_ids_for_members_for(canvas, trigger_atom_ids, trigger_items)
+    # Notes-only groups have no shrink path here (the stale-note reconciliation
+    # skips them), so a Qt-selected note must not scene-expand them or a
+    # marquee that once touched the note could never deselect the group; their
+    # unit behaviour lives entirely in the note-service paths.
+    group_ids = {
+        group_id
+        for group_id in group_ids
+        if _group_has_scene_members(canvas, state.groups[group_id])
+    }
     member_atom_ids: set[int] = set()
     member_items: list = []
     for group_id in group_ids:
