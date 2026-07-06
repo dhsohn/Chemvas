@@ -56,7 +56,9 @@ On the first tagged release, rename the "Unreleased" section below to
   arrows, brackets, shapes, orbitals, marks, and text notes) and switches to the
   Select tool.
 - **Group / Ungroup** (`Ctrl+G` / `Ctrl+Shift+G`): ChemDraw-style object groups.
-  Selecting any member (click, shift-click, or marquee) extends the selection to
+  A selected group is outlined by a single dashed bounding box, and clicking
+  anywhere inside the box drags the whole group. Selecting any member (click,
+  shift-click, or marquee) extends the selection to
   the whole group so grouped fragments, arrows, and annotations move and delete
   together. Grouping is undoable, absorbs overlapping groups, and group
   membership is persisted in `.chemvas` documents (file format version 3;

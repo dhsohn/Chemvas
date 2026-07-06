@@ -15,12 +15,14 @@ from ui.canvas_model_access import atom_for_id, atoms_for, bond_for_id, bonds_fo
 from ui.mark_item_access import mark_center_for, mark_selection_radius_for
 from ui.pick_radius_access import atom_pick_radius_for
 from ui.renderer_style_access import bond_length_px_for
+from ui.scene_group_operations import selected_group_rects_for
 from ui.scene_item_access import add_item_to_canvas_scene, remove_item_from_canvas_scene
 from ui.selection_center_logic import bounding_box_center_for_atoms
 from ui.selection_collection_access import selected_ids_for
 from ui.selection_outline_items import (
     selection_center_outline_items,
     selection_component_outline_item,
+    selection_group_outline_item,
     selection_object_outline_item,
 )
 from ui.selection_outline_paths import (
@@ -126,6 +128,8 @@ class SelectionOutlineService:
 
         for item in object_items:
             self.add_selection_object_overlay(item, object_fill)
+        for group_rect in selected_group_rects_for(self.canvas):
+            self.add_selection_group_overlay(group_rect)
         emit_selection_info_for(self.canvas)
 
     def clear_selection_outlines(self) -> None:
@@ -232,6 +236,11 @@ class SelectionOutlineService:
         if path.isEmpty():
             return
         outline = selection_object_outline_item(path, color)
+        add_item_to_canvas_scene(self.canvas, outline)
+        append_selection_outline_for(self.canvas, outline)
+
+    def add_selection_group_overlay(self, rect) -> None:
+        outline = selection_group_outline_item(rect, QColor(selection_color_for(self.canvas)))
         add_item_to_canvas_scene(self.canvas, outline)
         append_selection_outline_for(self.canvas, outline)
 

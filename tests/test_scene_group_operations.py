@@ -27,6 +27,7 @@ if QApplication is not None:
         expand_selection_to_groups_for,
         group_selection_for,
         group_selection_targets_for,
+        selected_group_rects_for,
         ungroup_selection_for,
     )
 
@@ -330,6 +331,40 @@ class SceneGroupOperationsTest(unittest.TestCase):
             extended_ids,
             {id(ring), id(item_a), id(item_b), id(arrow)},
         )
+
+    def test_group_selection_refreshes_outline_for_immediate_feedback(self) -> None:
+        canvas = _Canvas()
+        _add_atom(canvas, selected=True)
+        _add_arrow(canvas, selected=True)
+
+        self.assertTrue(group_selection_for(canvas))
+        canvas.selection_controller.update_selection_outline.assert_called_once_with()
+
+        self.assertTrue(ungroup_selection_for(canvas))
+        self.assertEqual(canvas.selection_controller.update_selection_outline.call_count, 2)
+
+    def test_selected_group_rects_cover_all_group_members(self) -> None:
+        canvas = _Canvas()
+        atom_a, item_a = _add_atom(canvas, 0.0, 0.0, selected=True)
+        arrow = _add_arrow(canvas)
+        arrow.setRect(100.0, 40.0, 20.0, 10.0)
+        register_group_for(canvas, {atom_a}, [arrow])
+
+        rects = selected_group_rects_for(canvas)
+
+        self.assertEqual(len(rects), 1)
+        rect = rects[0]
+        self.assertLessEqual(rect.left(), 0.0)
+        self.assertGreaterEqual(rect.right(), 120.0)
+        self.assertGreaterEqual(rect.bottom(), 50.0)
+
+    def test_selected_group_rects_empty_without_group_selection(self) -> None:
+        canvas = _Canvas()
+        atom_a, _ = _add_atom(canvas, selected=True)
+        atom_b, _ = _add_atom(canvas, 50.0, 0.0)
+        register_group_for(canvas, {atom_b}, [])
+
+        self.assertEqual(selected_group_rects_for(canvas), [])
 
     def test_group_selection_targets_resolves_atom_bound_mark_to_group(self) -> None:
         canvas = _Canvas()

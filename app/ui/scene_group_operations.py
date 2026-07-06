@@ -13,6 +13,7 @@ from ui.canvas_scene_items_state import ring_items_for
 from ui.canvas_window_access import history_service_for_canvas
 from ui.graph_algorithms import adjacency_for_bonds, connected_components_for_nodes
 from ui.history_commands import GroupSceneItemsCommand, UngroupSceneItemsCommand
+from ui.renderer_style_access import bond_length_px_for
 from ui.scene_item_access import attached_canvas_scene_items
 from ui.scene_item_state_serialization import ARROW_KINDS
 from ui.selection_collection_access import (
@@ -32,6 +33,7 @@ from ui.selection_service_access import (
     select_note_for,
     toggle_note_selection_for,
 )
+from ui.selection_style_access import selection_indicator_rect_for_atom_for
 
 GROUPABLE_STANDALONE_KINDS = frozenset({"note", "ts_bracket", "shape", "orbital"}) | frozenset(ARROW_KINDS)
 
@@ -106,6 +108,7 @@ def group_selection_for(canvas) -> bool:
         remove_group_for(canvas, absorbed_id)
     command.group_id = register_group_for(canvas, atom_ids, items)
     history_service_for_canvas(canvas).push(command)
+    refresh_selection_outline_for(canvas)
     return True
 
 
@@ -119,6 +122,7 @@ def ungroup_selection_for(canvas) -> bool:
     for group_id, _ in removed:
         remove_group_for(canvas, group_id)
     history_service_for_canvas(canvas).push(UngroupSceneItemsCommand(removed=removed))
+    refresh_selection_outline_for(canvas)
     return True
 
 
@@ -179,6 +183,47 @@ def group_selection_targets_for(canvas, targets: list) -> list:
             seen.add(id(structure_item))
             extended.append(structure_item)
     return extended
+
+
+def selected_group_rects_for(canvas) -> list:
+    """Scene rects of groups intersecting the current selection.
+
+    The selection outline draws one ChemDraw-style dashed box per selected
+    group so grouped objects visibly act as a unit.
+    """
+    state = group_state_for(canvas)
+    if not state.groups:
+        return []
+    atom_ids = {
+        atom_id
+        for atom_id in selected_atom_ids_for_transform_for(canvas)
+        if atom_id in atoms_for(canvas)
+    }
+    selected_items = selected_scene_items_for(canvas, excluded_kinds=TRANSFORM_SELECTION_EXCLUDED_KINDS)
+    group_ids = group_ids_for_members_for(
+        canvas,
+        atom_ids | selected_mark_atom_ids_for(canvas),
+        selected_items,
+    )
+    if not group_ids:
+        return []
+    live_atom_ids = set(atoms_for(canvas))
+    pad = bond_length_px_for(canvas) * 0.18
+    rects = []
+    for group_id in sorted(group_ids):
+        group = state.groups[group_id]
+        rect = None
+        for atom_id in group.atom_ids & live_atom_ids:
+            atom_rect = selection_indicator_rect_for_atom_for(canvas, atom_id)
+            if atom_rect is None:
+                continue
+            rect = atom_rect if rect is None else rect.united(atom_rect)
+        for member in attached_canvas_scene_items(canvas, group.items):
+            member_rect = member.sceneBoundingRect()
+            rect = member_rect if rect is None else rect.united(member_rect)
+        if rect is not None:
+            rects.append(rect.adjusted(-pad, -pad, pad, pad))
+    return rects
 
 
 def _stale_group_notes_for(canvas, state, active_group_ids: set[int]) -> list:
@@ -272,5 +317,6 @@ __all__ = [
     "expand_selection_to_groups_for",
     "group_selection_for",
     "group_selection_targets_for",
+    "selected_group_rects_for",
     "ungroup_selection_for",
 ]
