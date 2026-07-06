@@ -14,7 +14,10 @@ from ui.canvas_scene_items_state import (
 )
 from ui.canvas_text_style_state import text_style_state_for
 from ui.graphics_items import NoSelectRectItem
-from ui.scene_group_operations import expand_note_selection_to_groups_for
+from ui.scene_group_operations import (
+    expand_note_selection_to_groups_for,
+    notes_only_group_member_notes_for,
+)
 from ui.selection_service_access import refresh_selection_outline_for
 from ui.selection_style_access import selection_color_for, selection_stroke_delta_for
 
@@ -39,6 +42,7 @@ class SelectionNoteService:
     def toggle_note_selection(self, item: QGraphicsTextItem) -> None:
         if item in selected_notes_for(self.canvas):
             remove_selected_note_for(self.canvas, item)
+            self._deselect_grouped_note_companions(item)
         else:
             add_selected_note_for(self.canvas, item)
             expand_note_selection_to_groups_for(self.canvas, item)
@@ -54,8 +58,19 @@ class SelectionNoteService:
             expand_note_selection_to_groups_for(self.canvas, item)
         else:
             remove_selected_note_for(self.canvas, item)
+            self._deselect_grouped_note_companions(item)
         self.update_note_selection_box(item)
         self._refresh_outline_for_note_change()
+
+    def _deselect_grouped_note_companions(self, item: QGraphicsTextItem) -> None:
+        # A notes-only group deselects as a unit, mirroring the select-direction
+        # expansion; otherwise Ctrl-clicking one member leaves a partial group
+        # that delete/copy/drag would silently act on.
+        for member in notes_only_group_member_notes_for(self.canvas, item):
+            if member is item or member not in selected_notes_for(self.canvas):
+                continue
+            remove_selected_note_for(self.canvas, member)
+            self.update_note_selection_box(member)
 
     def _refresh_outline_for_note_change(self) -> None:
         # Note selection lives outside QGraphicsScene selection, so it never

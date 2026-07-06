@@ -12,6 +12,7 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
+    from ui.canvas_group_state import register_group_for
     from ui.canvas_scene_items_state import selected_notes_for, set_selected_notes_for
     from ui.selection_note_service import SelectionNoteService
     from ui.selection_style_state import SelectionStyleState
@@ -93,6 +94,26 @@ class SelectionNoteServiceTest(unittest.TestCase):
             note_padding=6.0,
             selection_style_state=SelectionStyleState(color=QColor("#1f5eff"), stroke_delta=0.8),
         )
+
+    def test_toggle_note_selection_deselects_notes_only_group_as_unit(self) -> None:
+        scene = QGraphicsScene()
+        note_a = QGraphicsTextItem("A")
+        note_b = QGraphicsTextItem("B")
+        note_a.setData(0, "note")
+        note_b.setData(0, "note")
+        scene.addItem(note_a)
+        scene.addItem(note_b)
+        canvas = self._note_canvas()
+        canvas.scene = lambda: scene
+        set_selected_notes_for(canvas, [note_a, note_b])
+        register_group_for(canvas, set(), [note_a, note_b])
+        service = SelectionNoteService(canvas)
+
+        # Ctrl-clicking one member must drop the whole notes-only group, not
+        # leave a partial selection behind.
+        service.toggle_note_selection(note_a)
+
+        self.assertEqual(selected_notes_for(canvas), [])
 
     def test_note_selection_changes_refresh_selection_outline(self) -> None:
         scene = QGraphicsScene()
