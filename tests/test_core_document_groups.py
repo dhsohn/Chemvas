@@ -40,7 +40,17 @@ def _canvas_state(groups: list | None = None) -> dict:
         "model": _model_state(),
         "ring_fills": [],
         "notes": [{"text": "note", "x": 0.0, "y": 0.0}],
-        "marks": [],
+        "marks": [
+            {
+                "kind": "plus",
+                "text": "+",
+                "atom_id": None,
+                "dx": None,
+                "dy": None,
+                "x": 5.0,
+                "y": 5.0,
+            }
+        ],
         "arrows": [
             {
                 "kind": "arrow",
@@ -63,7 +73,7 @@ def _canvas_state(groups: list | None = None) -> dict:
 class DocumentGroupsValidationTest(unittest.TestCase):
     def test_valid_groups_round_trip_through_payload(self) -> None:
         state = _canvas_state(
-            groups=[{"atoms": [0, 1], "items": [["arrows", 0], ["notes", 0]]}],
+            groups=[{"atoms": [0, 1], "items": [["marks", 0], ["arrows", 0], ["notes", 0]]}],
         )
 
         payload = build_document_payload(state, CANVAS_FILE_VERSION)
@@ -91,6 +101,7 @@ class DocumentGroupsValidationTest(unittest.TestCase):
             [{"atoms": [0, 0], "items": []}],
             [{"atoms": [0], "items": []}, {"atoms": [0], "items": []}],
             [{"atoms": [0], "items": [["shapes", 0]]}],
+            [{"atoms": [0], "items": [["marks", 1]]}],
             [{"atoms": [0], "items": [["arrows", 1]]}],
             [{"atoms": [0], "items": [["arrows", -1]]}],
             [{"atoms": [0], "items": [["unknown", 0]]}],

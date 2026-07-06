@@ -43,7 +43,7 @@ CANVAS_STATE_KEYS_BY_VERSION = {
         CANVAS_STATE_KEYS | _V2_OPTIONAL_CANVAS_STATE_KEYS | _V3_OPTIONAL_CANVAS_STATE_KEYS
     ),
 }
-_GROUPABLE_STATE_ITEM_KEYS = frozenset(("notes", "arrows", "ts_brackets", "shapes", "orbitals"))
+_GROUPABLE_STATE_ITEM_KEYS = frozenset(("notes", "marks", "arrows", "ts_brackets", "shapes", "orbitals"))
 POINT_COORDINATE_TOLERANCE = Decimal("0.000001")
 MAX_SAFE_NUMBER = float(2**53 - 1)
 MAX_SAFE_NUMBER_DECIMAL = Decimal(2**53 - 1)

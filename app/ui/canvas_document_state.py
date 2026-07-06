@@ -276,8 +276,12 @@ def restore_document_post_model_items(canvas, state: dict) -> None:
 
 
 def _grouped_item_lists_for(canvas) -> dict[str, list]:
+    # Each list must iterate in the same order as the matching document snapshot
+    # key so a group's [kind, index] reference resolves to the same object on
+    # reload. Standalone marks can be group members, so they are indexed here too.
     return {
         "notes": attached_canvas_scene_items(canvas, note_items_for(canvas)),
+        "marks": attached_canvas_scene_items(canvas, mark_items_for(canvas)),
         "arrows": [
             item
             for item in attached_canvas_scene_items(canvas, arrow_items_for(canvas))
