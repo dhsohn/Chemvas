@@ -7,6 +7,7 @@ from ui.benzene_preview_access import clear_benzene_preview_for
 from ui.canvas_atom_graphics_state import clear_atom_graphics_for
 from ui.canvas_bond_graphics_state import clear_bond_graphics_for
 from ui.canvas_graph_state import graph_state_for
+from ui.canvas_group_state import clear_groups_for
 from ui.canvas_hover_state import (
     set_hover_atom_id_for,
     set_hover_bond_id_for,
@@ -48,6 +49,7 @@ class CanvasSceneResetService:
         self.graph.reset()
         clear_bond_graphics_for(self.canvas)
         clear_scene_item_collections_for(self.canvas)
+        clear_groups_for(self.canvas)
         self.marks.clear()
         self.insert_state.smiles_preview_model = None
         clear_template_preview_for(self.canvas)

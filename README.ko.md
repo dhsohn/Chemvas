@@ -64,7 +64,7 @@ python -m pip install -e ".[rdkit]"
 - Bond hotkeys(결합 위 hover): Single(`1`), Double(`2`), Triple(`3`), Bold(`b`/`Shift+B`), Wedge(`w`), Hash(`h`/`Shift+H`), Dashed(`d`/`Shift+D`), 이중결합 위치(`l`/`c`/`r`), Benzene fusion(`a`), Ring fusion(`4/5/6/7/8`), Chair fusion(`9/0`)
 - 객체: Flip Horizontal(`Ctrl+Shift+H`), Flip Vertical(`Ctrl+Shift+V`), 선택 회전 `Alt+Up/Down`(15°)·`Alt+Left/Right`(1°), 선택 이동 `Shift+방향키`(10pt)
 - 뷰: 실제 크기(`F5`), 창에 맞춤(`F6`), 확대(`F7`), 축소(`F8`)
-- 파일/편집: Save/Open/Undo/Redo(플랫폼 기본 단축키), `Ctrl+C`(선택 영역 이미지 복사), `Ctrl+X`(선택 잘라내기), `Delete/Backspace`(선택 삭제 또는 hover atom/bond 편집/삭제), `Esc`(템플릿/SMILES 삽입 취소)
+- 파일/편집: Save/Open/Undo/Redo(플랫폼 기본 단축키), `Ctrl+A`(전체 선택, Select 도구로 전환), `Ctrl+C`(선택 영역 이미지 복사), `Ctrl+X`(선택 잘라내기), `Ctrl+G`/`Ctrl+Shift+G`(선택 그룹/그룹 해제), `Delete/Backspace`(선택 삭제 또는 hover atom/bond 편집/삭제), `Esc`(템플릿/SMILES 삽입 취소)
 
 ## 의존성
 - PyQt6 필요

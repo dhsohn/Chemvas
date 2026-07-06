@@ -5,6 +5,12 @@ from dataclasses import dataclass, field
 from core.history import HistoryCommand
 
 from ui.atom_label_access import add_or_update_atom_label
+from ui.canvas_group_state import (
+    CanvasSceneGroup,
+    register_group_for,
+    remove_group_for,
+    restore_group_for,
+)
 from ui.canvas_smiles_input_state import set_last_smiles_input_for
 from ui.move_access import (
     move_item_for,
@@ -103,6 +109,45 @@ class DeleteSceneItemsCommand(HistoryCommand):
 
 
 @dataclass
+class GroupSceneItemsCommand(HistoryCommand):
+    atom_ids: set[int]
+    items: list
+    absorbed: list[tuple[int, CanvasSceneGroup]] = field(default_factory=list)
+    group_id: int | None = None
+
+    def redo(self, canvas) -> None:
+        for absorbed_id, _ in self.absorbed:
+            remove_group_for(canvas, absorbed_id)
+        if self.group_id is None:
+            self.group_id = register_group_for(canvas, self.atom_ids, self.items)
+            return
+        restore_group_for(
+            canvas,
+            self.group_id,
+            CanvasSceneGroup(set(self.atom_ids), list(self.items)),
+        )
+
+    def undo(self, canvas) -> None:
+        if self.group_id is not None:
+            remove_group_for(canvas, self.group_id)
+        for absorbed_id, group in self.absorbed:
+            restore_group_for(canvas, absorbed_id, group)
+
+
+@dataclass
+class UngroupSceneItemsCommand(HistoryCommand):
+    removed: list[tuple[int, CanvasSceneGroup]]
+
+    def redo(self, canvas) -> None:
+        for group_id, _ in self.removed:
+            remove_group_for(canvas, group_id)
+
+    def undo(self, canvas) -> None:
+        for group_id, group in self.removed:
+            restore_group_for(canvas, group_id, group)
+
+
+@dataclass
 class ChangeAtomLabelCommand(HistoryCommand):
     atom_id: int
     before_element: str
@@ -151,6 +196,8 @@ __all__ = [
     "AddSceneItemsCommand",
     "ChangeAtomLabelCommand",
     "DeleteSceneItemsCommand",
+    "GroupSceneItemsCommand",
     "MoveItemsCommand",
+    "UngroupSceneItemsCommand",
     "UpdateSceneItemCommand",
 ]

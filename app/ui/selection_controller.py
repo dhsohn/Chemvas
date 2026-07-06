@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
+from ui.scene_group_operations import group_selection_targets_for
 from ui.selection_collection_access import selected_ids_for
 from ui.selection_hit_logic import (
     SelectionRect,
@@ -62,8 +63,17 @@ class SelectionController:
         targets = self.structure_service.selection_targets_for_item(item)
         if not targets:
             return False
-        should_select = not any(target.isSelected() for target in targets)
-        set_scene_items_selected_for(self.canvas, targets, should_select)
+        targets = group_selection_targets_for(self.canvas, targets)
+        note_targets = [target for target in targets if target.data(0) == "note"]
+        scene_targets = [target for target in targets if target.data(0) != "note"]
+        # Notes are not QGraphicsItem-selectable; they carry their own selection
+        # state, so they never contribute to the toggle decision and must be
+        # routed through the note service to match the group's toggle direction.
+        should_select = (
+            not any(target.isSelected() for target in scene_targets) if scene_targets else None
+        )
+        set_scene_items_selected_for(self.canvas, scene_targets, bool(should_select))
+        self.note_service.apply_group_note_toggle(note_targets, should_select)
         self.update_selection_outline()
         return True
 

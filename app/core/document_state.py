@@ -8,13 +8,21 @@ from typing import Any, TypeGuard, cast
 from core.model import Atom, Bond, MoleculeModel
 
 CHEMVAS_FILE_TYPE = "chemvas"
-CANVAS_FILE_VERSION = 2
+CANVAS_FILE_VERSION = 3
+PERSPECTIVE_CANVAS_FILE_VERSION = 2
 LEGACY_CANVAS_FILE_VERSION = 1
-SUPPORTED_FILE_VERSIONS = frozenset((LEGACY_CANVAS_FILE_VERSION, CANVAS_FILE_VERSION))
+SUPPORTED_FILE_VERSIONS = frozenset(
+    (
+        LEGACY_CANVAS_FILE_VERSION,
+        PERSPECTIVE_CANVAS_FILE_VERSION,
+        CANVAS_FILE_VERSION,
+    )
+)
 # Optional keys preserve compatibility with v1 files written before each feature
 # existed; everything else must be present and no unknown keys are allowed.
 _OPTIONAL_CANVAS_STATE_KEYS = frozenset(("shapes",))
 _V2_OPTIONAL_CANVAS_STATE_KEYS = frozenset(("perspective",))
+_V3_OPTIONAL_CANVAS_STATE_KEYS = frozenset(("groups",))
 CANVAS_STATE_KEYS = frozenset(
     (
         "model",
@@ -30,8 +38,12 @@ CANVAS_STATE_KEYS = frozenset(
 ) | _OPTIONAL_CANVAS_STATE_KEYS
 CANVAS_STATE_KEYS_BY_VERSION = {
     LEGACY_CANVAS_FILE_VERSION: CANVAS_STATE_KEYS,
-    CANVAS_FILE_VERSION: CANVAS_STATE_KEYS | _V2_OPTIONAL_CANVAS_STATE_KEYS,
+    PERSPECTIVE_CANVAS_FILE_VERSION: CANVAS_STATE_KEYS | _V2_OPTIONAL_CANVAS_STATE_KEYS,
+    CANVAS_FILE_VERSION: (
+        CANVAS_STATE_KEYS | _V2_OPTIONAL_CANVAS_STATE_KEYS | _V3_OPTIONAL_CANVAS_STATE_KEYS
+    ),
 }
+_GROUPABLE_STATE_ITEM_KEYS = frozenset(("notes", "marks", "arrows", "ts_brackets", "shapes", "orbitals"))
 POINT_COORDINATE_TOLERANCE = Decimal("0.000001")
 MAX_SAFE_NUMBER = float(2**53 - 1)
 MAX_SAFE_NUMBER_DECIMAL = Decimal(2**53 - 1)
@@ -457,6 +469,7 @@ def _validate_canvas_state(state: Mapping[str, object], *, version: int) -> None
     _validate_shape_states(state.get("shapes"))
     _validate_orbital_states(state.get("orbitals"))
     _validate_perspective_state(state.get("perspective"), atom_ids)
+    _validate_group_states(state, atom_ids)
     settings = state.get("settings")
     if not isinstance(settings, Mapping):
         raise ValueError("Invalid Chemvas file.")
@@ -716,6 +729,42 @@ def _validate_perspective_state(state: object, atom_ids: set[int]) -> None:
             raise ValueError("Invalid Chemvas file.")
     _validate_optional_point_3d(state.get("projection_center_3d"))
     _validate_optional_point_2d(state.get("projection_anchor_2d"))
+
+
+def _validate_group_states(state: Mapping[str, object], atom_ids: set[int]) -> None:
+    group_states = state.get("groups")
+    if group_states is None:
+        return
+    if not isinstance(group_states, list):
+        raise ValueError("Invalid Chemvas file.")
+    item_counts: dict[str, int] = {}
+    for key in _GROUPABLE_STATE_ITEM_KEYS:
+        items = state.get(key)
+        item_counts[key] = len(items) if isinstance(items, list) else 0
+    seen_atom_ids: set[int] = set()
+    seen_item_refs: set[tuple[str, int]] = set()
+    for group_state in group_states:
+        if not isinstance(group_state, Mapping) or set(group_state) != {"atoms", "items"}:
+            raise ValueError("Invalid Chemvas file.")
+        group_atoms = group_state.get("atoms")
+        group_items = group_state.get("items")
+        if not isinstance(group_atoms, list) or not isinstance(group_items, list):
+            raise ValueError("Invalid Chemvas file.")
+        if not group_atoms and not group_items:
+            raise ValueError("Invalid Chemvas file.")
+        for atom_id in group_atoms:
+            if not _is_int(atom_id) or atom_id not in atom_ids or atom_id in seen_atom_ids:
+                raise ValueError("Invalid Chemvas file.")
+            seen_atom_ids.add(atom_id)
+        for item_ref in group_items:
+            if not isinstance(item_ref, (list, tuple)) or len(item_ref) != 2:
+                raise ValueError("Invalid Chemvas file.")
+            kind, index = item_ref
+            if kind not in _GROUPABLE_STATE_ITEM_KEYS or not _is_int(index):
+                raise ValueError("Invalid Chemvas file.")
+            if not 0 <= index < item_counts[kind] or (kind, index) in seen_item_refs:
+                raise ValueError("Invalid Chemvas file.")
+            seen_item_refs.add((kind, index))
 
 
 def _validate_optional_point_3d(value: object) -> None:
