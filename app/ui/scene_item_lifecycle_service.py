@@ -10,6 +10,7 @@ from ui.canvas_scene_items_state import (
     append_scene_item_for,
     remove_scene_item_from_collection_for,
     remove_selected_note_for,
+    selected_notes_for,
 )
 from ui.handle_overlay_access import clear_handles_for
 from ui.handle_state import handle_target_for
@@ -22,6 +23,7 @@ from ui.scene_item_access import (
 )
 from ui.scene_item_state import ARROW_KINDS
 from ui.scene_selectability import make_item_selectable
+from ui.selection_service_access import refresh_selection_outline_for
 
 
 class SceneItemLifecycleService:
@@ -142,12 +144,20 @@ class SceneItemLifecycleService:
             if isinstance(atom_id, int) and not self.marks.get_for_atom(atom_id):
                 self.marks.by_atom.pop(atom_id, None)
             return
+        was_selected_note = kind == "note" and item in selected_notes_for(self.canvas)
         self._remove_scene_item_registration(item, kind)
         if kind == "note":
             update_note_selection_box_for(self.canvas, item)
         if kind in {"shape", "orbital", "curved_single", "curved_double"} and item is handle_target_for(self.canvas):
             clear_handles_for(self.canvas)
-        if remove_attached_item_from_canvas_scene(self.canvas, item) is None:
+        removed = remove_attached_item_from_canvas_scene(self.canvas, item)
+        if was_selected_note:
+            # Scene items emit selectionChanged when a selected item is removed,
+            # which redraws the outline; notes carry their own selection state,
+            # so an erased selected note must refresh explicitly or a stale
+            # group box would linger.
+            refresh_selection_outline_for(self.canvas)
+        if removed is None:
             return
         if kind == "ring":
             self.refresh_bond_geometry_for_ring_item(item)

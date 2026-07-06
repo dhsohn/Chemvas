@@ -20,15 +20,23 @@ if QApplication is not None:
     from ui.canvas_atom_graphics_state import set_atom_item_for
     from ui.canvas_bond_graphics_state import bond_items_for
     from ui.canvas_group_state import group_state_for, register_group_for
+    from ui.canvas_mark_registry import mark_registry_for
     from ui.canvas_model_access import model_for
-    from ui.canvas_scene_items_state import add_selected_note_for, append_scene_item_for
+    from ui.canvas_scene_items_state import (
+        add_selected_note_for,
+        append_scene_item_for,
+        selected_notes_for,
+    )
     from ui.history_commands import GroupSceneItemsCommand, UngroupSceneItemsCommand
     from ui.scene_group_operations import (
+        expand_note_selection_to_groups_for,
         expand_selection_to_groups_for,
         group_selection_for,
         group_selection_targets_for,
+        selected_group_rects_for,
         ungroup_selection_for,
     )
+    from ui.selection_note_service import SelectionNoteService
 
 
 class _History:
@@ -330,6 +338,247 @@ class SceneGroupOperationsTest(unittest.TestCase):
             extended_ids,
             {id(ring), id(item_a), id(item_b), id(arrow)},
         )
+
+    def test_group_selection_refreshes_outline_for_immediate_feedback(self) -> None:
+        canvas = _Canvas()
+        _add_atom(canvas, selected=True)
+        _add_arrow(canvas, selected=True)
+
+        self.assertTrue(group_selection_for(canvas))
+        canvas.selection_controller.update_selection_outline.assert_called_once_with()
+
+        self.assertTrue(ungroup_selection_for(canvas))
+        self.assertEqual(canvas.selection_controller.update_selection_outline.call_count, 2)
+
+    def test_selected_group_rects_cover_all_group_members(self) -> None:
+        canvas = _Canvas()
+        atom_a, item_a = _add_atom(canvas, 0.0, 0.0, selected=True)
+        arrow = _add_arrow(canvas)
+        arrow.setRect(100.0, 40.0, 20.0, 10.0)
+        register_group_for(canvas, {atom_a}, [arrow])
+
+        rects = selected_group_rects_for(canvas)
+
+        self.assertEqual(len(rects), 1)
+        rect = rects[0]
+        self.assertLessEqual(rect.left(), 0.0)
+        self.assertGreaterEqual(rect.right(), 120.0)
+        self.assertGreaterEqual(rect.bottom(), 50.0)
+
+    def test_group_command_undo_redo_refreshes_outline(self) -> None:
+        canvas = _Canvas()
+        _add_atom(canvas, selected=True)
+        _add_arrow(canvas, selected=True)
+        self.assertTrue(group_selection_for(canvas))
+        command = canvas.history.commands[-1]
+
+        command.undo(canvas)
+        command.redo(canvas)
+
+        self.assertEqual(canvas.selection_controller.update_selection_outline.call_count, 3)
+
+    def test_ungroup_command_undo_redo_refreshes_outline(self) -> None:
+        canvas = _Canvas()
+        atom_a, _ = _add_atom(canvas, selected=True)
+        register_group_for(canvas, {atom_a}, [])
+        self.assertTrue(ungroup_selection_for(canvas))
+        command = canvas.history.commands[-1]
+
+        command.undo(canvas)
+        command.redo(canvas)
+
+        self.assertEqual(canvas.selection_controller.update_selection_outline.call_count, 3)
+
+    def test_selected_group_rects_for_notes_only_group(self) -> None:
+        canvas = _Canvas()
+        note_a = _add_note(canvas, selected=True)
+        note_b = _add_note(canvas, selected=True)
+        register_group_for(canvas, set(), [note_a, note_b])
+
+        rects = selected_group_rects_for(canvas)
+
+        self.assertEqual(len(rects), 1)
+
+    def test_selected_group_rects_ignore_qt_selected_note_of_notes_only_group(self) -> None:
+        canvas = _Canvas()
+        note_a = _add_note(canvas)
+        note_b = _add_note(canvas)
+        register_group_for(canvas, set(), [note_a, note_b])
+        # A lingering Qt selection (rubber band / mirrored flags) must not
+        # bypass the full note-service selection gate.
+        note_a.setSelected(True)
+
+        self.assertEqual(selected_group_rects_for(canvas), [])
+
+    def test_expand_selection_ignores_qt_selected_note_of_notes_only_group(self) -> None:
+        canvas = _Canvas()
+        note_a = _add_note(canvas)
+        note_b = _add_note(canvas)
+        register_group_for(canvas, set(), [note_a, note_b])
+        note_a.setSelected(True)
+
+        # Notes-only groups have no scene shrink path, so a Qt-selected note
+        # must not scene-expand them (sticky-marquee prevention).
+        expand_selection_to_groups_for(canvas)
+
+        canvas.selection_controller.select_note.assert_not_called()
+
+    def test_clear_note_selection_clears_qt_flags_of_cleared_notes(self) -> None:
+        canvas = _Canvas()
+        note_a = _add_note(canvas, selected=True)
+        note_b = _add_note(canvas, selected=True)
+        # Mirrored Qt flags, e.g. from a notes-only group toggle.
+        note_a.setSelected(True)
+        note_b.setSelected(True)
+        register_group_for(canvas, set(), [note_a, note_b])
+        service = SelectionNoteService(canvas)
+
+        # NoteTool press on empty canvas clears the note selection wholesale;
+        # the Qt flags must drop too or an invisible selection would remain.
+        service.clear_note_selection()
+
+        self.assertEqual(selected_notes_for(canvas), [])
+        self.assertFalse(note_a.isSelected())
+        self.assertFalse(note_b.isSelected())
+        self.assertEqual(selected_group_rects_for(canvas), [])
+
+    def test_notes_only_unit_deselect_clears_qt_flags(self) -> None:
+        canvas = _Canvas()
+        note_a = _add_note(canvas, selected=True)
+        note_b = _add_note(canvas, selected=True)
+        note_a.setSelected(True)
+        note_b.setSelected(True)
+        register_group_for(canvas, set(), [note_a, note_b])
+        service = SelectionNoteService(canvas)
+
+        service.toggle_note_selection(note_a)
+
+        self.assertEqual(selected_notes_for(canvas), [])
+        self.assertFalse(note_a.isSelected())
+        self.assertFalse(note_b.isSelected())
+
+    def test_selected_group_rects_require_full_notes_only_group_selection(self) -> None:
+        canvas = _Canvas()
+        note_a = _add_note(canvas, selected=True)
+        note_b = _add_note(canvas)
+        register_group_for(canvas, set(), [note_a, note_b])
+
+        # A partially-selected notes-only group must not draw a box claiming
+        # more than drag/delete/copy would act on.
+        self.assertEqual(selected_group_rects_for(canvas), [])
+
+    def test_expand_note_selection_selects_rest_of_notes_only_group(self) -> None:
+        canvas = _Canvas()
+        note_a = _add_note(canvas, selected=True)
+        note_b = _add_note(canvas)
+        register_group_for(canvas, set(), [note_a, note_b])
+
+        expand_note_selection_to_groups_for(canvas, note_a)
+
+        canvas.selection_controller.select_note.assert_called_once_with(note_b, additive=True)
+        self.assertFalse(group_state_for(canvas).expanding)
+
+    def test_expand_note_selection_skips_mixed_groups_and_reentry(self) -> None:
+        canvas = _Canvas()
+        atom_a, _ = _add_atom(canvas)
+        note = _add_note(canvas, selected=True)
+        other = _add_note(canvas)
+        register_group_for(canvas, {atom_a}, [note, other])
+
+        # Mixed groups expand through the scene selectionChanged hook instead.
+        expand_note_selection_to_groups_for(canvas, note)
+        canvas.selection_controller.select_note.assert_not_called()
+
+        notes_only_canvas = _Canvas()
+        note_a = _add_note(notes_only_canvas, selected=True)
+        note_b = _add_note(notes_only_canvas)
+        register_group_for(notes_only_canvas, set(), [note_a, note_b])
+        group_state_for(notes_only_canvas).expanding = True
+
+        expand_note_selection_to_groups_for(notes_only_canvas, note_a)
+        notes_only_canvas.selection_controller.select_note.assert_not_called()
+
+    def test_deselecting_mixed_group_note_deselects_whole_group(self) -> None:
+        canvas = _Canvas()
+        atom_a, item_a = _add_atom(canvas, selected=True)
+        arrow = _add_arrow(canvas, selected=True)
+        note = _add_note(canvas, selected=True)
+        other_note = _add_note(canvas, selected=True)
+        # Attached notes are Qt-selectable; a rubber band can Qt-select them.
+        note.setSelected(True)
+        other_note.setSelected(True)
+        register_group_for(canvas, {atom_a}, [arrow, note, other_note])
+        service = SelectionNoteService(canvas)
+
+        # Note focus-out / NoteTool Ctrl-click deselects through the note
+        # service; the mixed group must drop as a unit or the box would span a
+        # note that a drag no longer moves.
+        service.toggle_note_selection(note)
+
+        self.assertFalse(item_a.isSelected())
+        self.assertFalse(arrow.isSelected())
+        self.assertNotIn(note, selected_notes_for(canvas))
+        self.assertNotIn(other_note, selected_notes_for(canvas))
+        # The notes' Qt selection flags must clear too, or they would keep
+        # triggering the group box.
+        self.assertFalse(note.isSelected())
+        self.assertFalse(other_note.isSelected())
+        self.assertEqual(selected_group_rects_for(canvas), [])
+        self.assertFalse(group_state_for(canvas).expanding)
+
+    def test_deselecting_mixed_group_note_clears_qt_selected_bound_mark(self) -> None:
+        canvas = _Canvas()
+        atom_a, item_a = _add_atom(canvas, selected=True)
+        note = _add_note(canvas, selected=True)
+        register_group_for(canvas, {atom_a}, [note])
+        # A charge mark bound to the grouped atom, Qt-selected via rubber band.
+        mark = _add_mark(canvas, atom_id=atom_a, selected=True)
+        mark_registry_for(canvas).add_for_atom(atom_a, mark)
+        service = SelectionNoteService(canvas)
+
+        service.toggle_note_selection(note)
+
+        self.assertFalse(item_a.isSelected())
+        # The bound mark must drop with the group or its lingering Qt
+        # selection would keep re-triggering the group box.
+        self.assertFalse(mark.isSelected())
+        self.assertEqual(selected_group_rects_for(canvas), [])
+
+    def test_clearing_note_selection_deselects_mixed_groups_as_unit(self) -> None:
+        canvas = _Canvas()
+        atom_a, item_a = _add_atom(canvas, selected=True)
+        note = _add_note(canvas, selected=True)
+        register_group_for(canvas, {atom_a}, [note])
+        atom_b, item_b = _add_atom(canvas, 60.0, 0.0, selected=True)
+        service = SelectionNoteService(canvas)
+
+        # NoteTool press on empty canvas clears the note selection wholesale;
+        # the mixed group's scene members must drop with their note.
+        service.clear_note_selection()
+
+        self.assertFalse(item_a.isSelected())
+        self.assertEqual(selected_notes_for(canvas), [])
+        self.assertEqual(selected_group_rects_for(canvas), [])
+        # Ungrouped scene selection is untouched.
+        self.assertTrue(item_b.isSelected())
+
+    def test_selected_group_rects_ignore_note_only_selection_of_mixed_group(self) -> None:
+        canvas = _Canvas()
+        atom_a, _ = _add_atom(canvas)
+        note = _add_note(canvas, selected=True)
+        register_group_for(canvas, {atom_a}, [note])
+
+        # A mixed group keys off scene selection; a lone note-tool selection
+        # must not draw a box implying the whole group is selected.
+        self.assertEqual(selected_group_rects_for(canvas), [])
+
+    def test_selected_group_rects_empty_without_group_selection(self) -> None:
+        canvas = _Canvas()
+        atom_a, _ = _add_atom(canvas, selected=True)
+        atom_b, _ = _add_atom(canvas, 50.0, 0.0)
+        register_group_for(canvas, {atom_b}, [])
+
+        self.assertEqual(selected_group_rects_for(canvas), [])
 
     def test_group_selection_targets_resolves_atom_bound_mark_to_group(self) -> None:
         canvas = _Canvas()

@@ -62,6 +62,23 @@ class SelectionOutlineServiceTest(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
 
+    def test_update_selection_outline_draws_group_box_for_notes_only_selection(self) -> None:
+        # A notes-only group has no QGraphicsScene-selected items, but its
+        # dashed group box must still be drawn after Ctrl+G.
+        scene = _FakeScene([])
+        canvas = _make_canvas(scene=scene)
+        service = _outline_service(canvas)
+        service.add_selection_group_overlay = mock.Mock()
+        group_rect = QRectF(0.0, 0.0, 30.0, 20.0)
+        with mock.patch(
+            "ui.selection_outline_service.selected_group_rects_for",
+            return_value=[group_rect],
+        ):
+            service.update_selection_outline()
+
+        service.add_selection_group_overlay.assert_called_once_with(group_rect)
+        canvas.selection_info_callback.assert_called_once()
+
     def test_update_selection_outline_handles_suspend_clear_and_overlay_dispatch(self) -> None:
         suspended_canvas = _make_canvas(selection_style_state=SelectionStyleState(suspend_outline=True))
         _outline_service(suspended_canvas).update_selection_outline()
