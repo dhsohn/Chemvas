@@ -1,11 +1,9 @@
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass, field
 from importlib import import_module
-from typing import TYPE_CHECKING, Any, Protocol, cast
-
-if TYPE_CHECKING:
-    from ui.history_commands import MoveItemsCommand as MoveItemsCommand
+from typing import Any, Protocol, cast
 
 
 class HistoryCommand:
@@ -92,12 +90,31 @@ class CompositeCommand(HistoryCommand):
     commands: list[HistoryCommand] = field(default_factory=list)
 
     def undo(self, canvas) -> None:
-        for command in reversed(self.commands):
-            command.undo(canvas)
+        # A composite must apply atomically: if one child fails part-way, roll
+        # the already-undone children forward again so the canvas is not left
+        # in a state no command on either stack describes.
+        completed: list[HistoryCommand] = []
+        try:
+            for command in reversed(self.commands):
+                command.undo(canvas)
+                completed.append(command)
+        except Exception:
+            for command in reversed(completed):
+                with contextlib.suppress(Exception):
+                    command.redo(canvas)
+            raise
 
     def redo(self, canvas) -> None:
-        for command in self.commands:
-            command.redo(canvas)
+        completed: list[HistoryCommand] = []
+        try:
+            for command in self.commands:
+                command.redo(canvas)
+                completed.append(command)
+        except Exception:
+            for command in reversed(completed):
+                with contextlib.suppress(Exception):
+                    command.undo(canvas)
+            raise
 
 
 @dataclass
@@ -372,14 +389,6 @@ class UpdateBondCommand(HistoryCommand):
         _set_last_smiles_input(canvas, self.after_smiles_input)
 
 
-def __getattr__(name: str):
-    if name == "MoveItemsCommand":
-        from ui.history_commands import MoveItemsCommand
-
-        return MoveItemsCommand
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
 __all__ = [
     "AddAtomsCommand",
     "AddBondCommand",
@@ -388,7 +397,6 @@ __all__ = [
     "DeleteBondCommand",
     "HistoryCommand",
     "MoveAtomsCommand",
-    "MoveItemsCommand",
     "SetAtomPositionsCommand",
     "SetRingPolygonsCommand",
     "SetSmilesInputCommand",

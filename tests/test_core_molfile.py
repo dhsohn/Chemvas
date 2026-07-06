@@ -97,3 +97,26 @@ class MolfileWriterTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MolfileLimitsTest(unittest.TestCase):
+    def test_atom_count_over_v2000_limit_raises(self) -> None:
+        model = MoleculeModel()
+        for index in range(1000):
+            model.add_atom("C", float(index), 0.0)
+
+        with self.assertRaisesRegex(MolfileError, "at most 999 atoms"):
+            write_molfile(model)
+
+    def test_charge_outside_mdl_range_raises(self) -> None:
+        model = _ethanol()
+
+        with self.assertRaisesRegex(MolfileError, "outside the MDL range"):
+            write_molfile(model, atom_annotations={0: {"formal_charge": 16}})
+
+    def test_charge_at_mdl_range_boundary_is_written(self) -> None:
+        model = _ethanol()
+
+        block = write_molfile(model, atom_annotations={0: {"formal_charge": -15}})
+
+        self.assertIn("M  CHG  1   1 -15", block)

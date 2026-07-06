@@ -47,6 +47,12 @@ class MoleculeModel:
             raise ValueError("Bond endpoints must be distinct.")
         if type(order) is not int or order not in (1, 2, 3):
             raise ValueError("Bond order must be 1, 2, or 3.")
+        # Last line of defense: callers deduplicate through the graph index,
+        # but a duplicate pair reaching the model would make every later save
+        # fail document validation, so reject it loudly here instead.
+        for bond in self.bonds:
+            if bond is not None and {bond.a, bond.b} == {a, b}:
+                raise ValueError("Bond endpoints are already bonded.")
         bond_id = len(self.bonds)
         self.bonds.append(Bond(a=a, b=b, order=order))
         return bond_id

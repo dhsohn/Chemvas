@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Collection, Mapping
+from collections.abc import Callable, Collection, Mapping
 from decimal import Decimal
 from typing import Any, TypeGuard, cast
 
@@ -160,24 +160,71 @@ def serialize_model_state(
     model: MoleculeModel,
     explicit_label_atom_ids: Collection[int] = (),
 ) -> dict:
+    """Serialize ``model`` into a canvas-state model dict.
+
+    The output is normalized to satisfy document validation even when the
+    in-memory model has drifted (duplicate bonds, dangling endpoints, invalid
+    styles, non-finite coordinates). Saving must never fail because of an
+    editing bug — the serializer heals what it can instead of letting
+    ``build_document_payload`` reject the user's work.
+    """
     explicit_ids = set(explicit_label_atom_ids)
     atoms = {
-        atom_id: atom_to_state(
-            atom,
-            explicit_label=(atom.element.upper() == "C" and atom_id in explicit_ids),
+        atom_id: _normalized_atom_state(
+            atom_to_state(
+                atom,
+                explicit_label=(atom.element.upper() == "C" and atom_id in explicit_ids),
+            )
         )
         for atom_id, atom in model.atoms.items()
     }
-    bonds = [bond_to_state(bond) for bond in model.bonds]
+    bonds: list[dict | None] = []
+    seen_bond_pairs: set[tuple[int, int]] = set()
+    for bond in model.bonds:
+        bond_state = bond_to_state(bond)
+        if bond_state is not None:
+            a = cast(int, bond_state["a"])
+            b = cast(int, bond_state["b"])
+            if a == b or a not in atoms or b not in atoms or _bond_pair_key(a, b) in seen_bond_pairs:
+                bond_state = None
+            else:
+                seen_bond_pairs.add(_bond_pair_key(a, b))
+                bond_state = _normalized_bond_state(bond_state)
+        bonds.append(bond_state)
     state = {
         "atoms": atoms,
         "bonds": bonds,
-        "next_atom_id": model.next_atom_id,
+        "next_atom_id": max(int(model.next_atom_id), max(atoms, default=-1) + 1),
     }
     atom_annotations = _serialized_atom_annotations(getattr(model, "atom_annotations", {}), atoms.keys())
     if atom_annotations:
         state["atom_annotations"] = atom_annotations
     return state
+
+
+def _normalized_atom_state(atom_state: dict) -> dict:
+    element = atom_state.get("element")
+    if not isinstance(element, str) or not element.strip():
+        atom_state["element"] = "C"
+    for key in ("x", "y"):
+        value = atom_state.get(key)
+        atom_state[key] = float(cast(Any, value)) if _is_number(value) else 0.0
+    if not _is_hex_color(atom_state.get("color")):
+        atom_state["color"] = "#000000"
+    atom_state["explicit_label"] = bool(atom_state.get("explicit_label"))
+    return atom_state
+
+
+def _normalized_bond_state(bond_state: dict) -> dict:
+    if bond_state.get("order") not in VALID_BOND_ORDERS:
+        bond_state["order"] = 1
+    if bond_state.get("style") not in VALID_BOND_STYLES:
+        bond_state["style"] = "single"
+    if bond_state["style"] in {"wedge", "hash"} and bond_state["order"] != 1:
+        bond_state["order"] = 1
+    if not _is_hex_color(bond_state.get("color")):
+        bond_state["color"] = "#000000"
+    return bond_state
 
 
 def deserialize_model_state(model_state: Mapping[str, object]) -> MoleculeModel:
@@ -521,47 +568,218 @@ def _validate_model_state(
     return atom_ids, bond_pairs, atom_positions
 
 
+# --- Shared field validators -------------------------------------------------
+# The .chemvas file loader and the clipboard-paste loader enforce the same
+# structural rules. Each rule lives exactly once below, parameterized by the
+# per-boundary error message (and id validator, where the encodings differ),
+# so the two trust boundaries cannot silently drift apart.
+
+
+def _validate_atom_fields(atom_state: Mapping[str, object], *, error: str) -> None:
+    element = atom_state.get("element")
+    if not isinstance(element, str) or not element.strip():
+        raise ValueError(error)
+    if not _is_number(atom_state.get("x")) or not _is_number(atom_state.get("y")):
+        raise ValueError(error)
+    if not _is_hex_color(atom_state.get("color")):
+        raise ValueError(error)
+    if type(atom_state.get("explicit_label")) is not bool:
+        raise ValueError(error)
+
+
+def _validate_bond_fields(
+    bond_state: Mapping[str, object],
+    atom_ids: set[int],
+    *,
+    id_validator: Callable[[object], int],
+    error: str,
+) -> tuple[int, int]:
+    if set(bond_state) != {"a", "b", "order", "style", "color"}:
+        raise ValueError(error)
+    a = id_validator(bond_state.get("a"))
+    b = id_validator(bond_state.get("b"))
+    if a == b or a not in atom_ids or b not in atom_ids:
+        raise ValueError(error)
+    order = bond_state.get("order")
+    if not _is_int(order) or order not in VALID_BOND_ORDERS:
+        raise ValueError(error)
+    style = bond_state.get("style")
+    if style not in VALID_BOND_STYLES:
+        raise ValueError(error)
+    if style in {"wedge", "hash"} and order != 1:
+        raise ValueError(error)
+    if not _is_hex_color(bond_state.get("color")):
+        raise ValueError(error)
+    return _bond_pair_key(a, b)
+
+
+def _validate_note_fields(
+    note_state: Mapping[str, object],
+    *,
+    required_keys: frozenset[str],
+    error: str,
+) -> None:
+    keys = set(note_state)
+    if not required_keys <= keys or not keys <= required_keys | {"html"}:
+        raise ValueError(error)
+    if not isinstance(note_state.get("text"), str):
+        raise ValueError(error)
+    if "html" in note_state and not isinstance(note_state.get("html"), str):
+        raise ValueError(error)
+    if not _is_number(note_state.get("x")) or not _is_number(note_state.get("y")):
+        raise ValueError(error)
+
+
+def _validate_arrow_fields(arrow_state: Mapping[str, object], *, error: str) -> None:
+    keys = set(arrow_state)
+    required_keys = {"kind", "start", "end"}
+    if not required_keys <= keys or not keys <= required_keys | {"control", "double"}:
+        raise ValueError(error)
+    if arrow_state.get("kind") not in VALID_ARROW_KINDS:
+        raise ValueError(error)
+    if not _is_point(arrow_state.get("start")) or not _is_point(arrow_state.get("end")):
+        raise ValueError(error)
+    control = arrow_state.get("control")
+    if control is not None and not _is_point(control):
+        raise ValueError(error)
+    double = arrow_state.get("double")
+    if double is not None and type(double) is not bool:
+        raise ValueError(error)
+
+
+def _validate_ts_bracket_fields(ts_bracket_state: Mapping[str, object], *, error: str) -> None:
+    keys = set(ts_bracket_state)
+    if ts_bracket_state.get("kind") != "ts_bracket":
+        raise ValueError(error)
+    bracket_kind = ts_bracket_state.get("bracket_kind")
+    if bracket_kind is not None and bracket_kind not in VALID_TS_BRACKET_KINDS:
+        raise ValueError(error)
+    if keys in ({"kind", "rect"}, {"kind", "rect", "bracket_kind"}):
+        rect = ts_bracket_state.get("rect")
+        if not isinstance(rect, (list, tuple)) or len(rect) != 4 or any(not _is_number(value) for value in rect):
+            raise ValueError(error)
+        return
+    if keys not in (
+        {"kind", "left", "top", "right", "bottom"},
+        {"kind", "left", "top", "right", "bottom", "bracket_kind"},
+    ):
+        raise ValueError(error)
+    for key in ("left", "top", "right", "bottom"):
+        if not _is_number(ts_bracket_state.get(key)):
+            raise ValueError(error)
+
+
+def _validate_shape_fields(shape_state: Mapping[str, object], *, error: str) -> None:
+    keys = set(shape_state)
+    if not _SHAPE_STATE_BASE_KEYS <= keys or not keys <= _SHAPE_STATE_BASE_KEYS | {"fill", "fill_alpha"}:
+        raise ValueError(error)
+    if shape_state.get("kind") != "shape":
+        raise ValueError(error)
+    if shape_state.get("shape_kind") not in VALID_SHAPE_KINDS:
+        raise ValueError(error)
+    if shape_state.get("stroke_style") not in VALID_SHAPE_STROKES:
+        raise ValueError(error)
+    for key in ("left", "top", "right", "bottom"):
+        if not _is_number(shape_state.get(key)):
+            raise ValueError(error)
+    if "fill" in keys and not _is_hex_color(shape_state.get("fill")):
+        raise ValueError(error)
+    if "fill_alpha" in keys and (
+        not _is_number(shape_state.get("fill_alpha"))
+        or not 0.0 <= cast(float, shape_state.get("fill_alpha")) <= 1.0
+    ):
+        raise ValueError(error)
+
+
+def _validate_orbital_fields(
+    orbital_state: Mapping[str, object],
+    *,
+    kind_key: str,
+    required_keys: frozenset[str],
+    error: str,
+) -> None:
+    if set(orbital_state) != required_keys:
+        raise ValueError(error)
+    if orbital_state.get(kind_key) not in VALID_ORBITAL_KINDS:
+        raise ValueError(error)
+    if not _is_point(orbital_state.get("center")):
+        raise ValueError(error)
+    if not _is_number(orbital_state.get("scale")) or not _is_number(orbital_state.get("rotation")):
+        raise ValueError(error)
+
+
+def _validate_ring_fields(
+    ring_state: Mapping[str, object],
+    atom_ids: set[int],
+    bond_pairs: set[tuple[int, int]],
+    atom_positions: Mapping[int, tuple[int | float | Decimal, int | float | Decimal]],
+    *,
+    required_keys: frozenset[str],
+    clipboard: bool,
+    error: str,
+) -> None:
+    if set(ring_state) != required_keys:
+        raise ValueError(error)
+    points = ring_state.get("points")
+    if not isinstance(points, (list, tuple)) or len(points) < 3 or any(not _is_point(point) for point in points):
+        raise ValueError(error)
+    ring_atom_ids = ring_state.get("atom_ids")
+    if not isinstance(ring_atom_ids, (list, tuple)) or len(ring_atom_ids) != len(points):
+        raise ValueError(error)
+    if not _is_atom_id_cycle(ring_atom_ids, atom_ids, bond_pairs, clipboard=clipboard):
+        raise ValueError(error)
+    if not _ring_points_match_atom_positions(points, ring_atom_ids, atom_positions, clipboard=clipboard):
+        raise ValueError(error)
+    color = ring_state.get("color")
+    if color is not None and not _is_hex_color(color):
+        raise ValueError(error)
+    alpha = ring_state.get("alpha")
+    if not _is_number(alpha) or not 0.0 <= cast(float, alpha) <= 1.0:
+        raise ValueError(error)
+
+
+# --- .chemvas file validation -------------------------------------------------
+
+
 def _validate_atom_state(atom_state: Mapping[str, object]) -> None:
     if set(atom_state) != {"element", "x", "y", "color", "explicit_label"}:
         raise ValueError("Invalid Chemvas file.")
-    element = atom_state.get("element")
-    if not isinstance(element, str) or not element.strip():
-        raise ValueError("Invalid Chemvas file.")
-    if not _is_number(atom_state.get("x")) or not _is_number(atom_state.get("y")):
-        raise ValueError("Invalid Chemvas file.")
-    color = atom_state.get("color")
-    if not _is_hex_color(color):
-        raise ValueError("Invalid Chemvas file.")
-    explicit_label = atom_state.get("explicit_label")
-    if type(explicit_label) is not bool:
-        raise ValueError("Invalid Chemvas file.")
+    _validate_atom_fields(atom_state, error="Invalid Chemvas file.")
 
 
 def _validate_bond_state(bond_state: Mapping[str, object], atom_ids: set[int]) -> tuple[int, int]:
-    if set(bond_state) != {"a", "b", "order", "style", "color"}:
-        raise ValueError("Invalid Chemvas file.")
-    a = _validated_id(bond_state.get("a"))
-    b = _validated_id(bond_state.get("b"))
-    if a not in atom_ids or b not in atom_ids:
-        raise ValueError("Invalid Chemvas file.")
-    if a == b:
-        raise ValueError("Invalid Chemvas file.")
-    order = bond_state.get("order")
-    if not _is_int(order) or order not in VALID_BOND_ORDERS:
-        raise ValueError("Invalid Chemvas file.")
-    style = bond_state.get("style")
-    if not isinstance(style, str) or style not in VALID_BOND_STYLES:
-        raise ValueError("Invalid Chemvas file.")
-    if style in {"wedge", "hash"} and order != 1:
-        raise ValueError("Invalid Chemvas file.")
-    color = bond_state.get("color")
-    if not _is_hex_color(color):
-        raise ValueError("Invalid Chemvas file.")
-    return _bond_pair_key(a, b)
+    return _validate_bond_fields(
+        bond_state,
+        atom_ids,
+        id_validator=_validated_id,
+        error="Invalid Chemvas file.",
+    )
 
 
 def _bond_pair_key(a: int, b: int) -> tuple[int, int]:
     return (a, b) if a < b else (b, a)
+
+
+def model_bond_pairs(model: MoleculeModel) -> set[tuple[int, int]]:
+    """Normalized (low, high) atom-id pairs of the model's live bonds."""
+    return {
+        _bond_pair_key(bond.a, bond.b)
+        for bond in model.bonds
+        if bond is not None and bond.a != bond.b
+    }
+
+
+def ring_atom_ids_form_cycle(
+    ring_atom_ids: Collection[int],
+    atom_ids: set[int],
+    bond_pairs: set[tuple[int, int]],
+) -> bool:
+    """Public wrapper of the ring-cycle rule used by document validation.
+
+    Snapshot code uses this to drop ring fills that no longer describe a real
+    bonded cycle, so a stale ring can never make saving fail validation.
+    """
+    return _is_atom_id_cycle(list(ring_atom_ids), atom_ids, bond_pairs)
 
 
 def _validate_ring_fill_states(
@@ -571,36 +789,24 @@ def _validate_ring_fill_states(
     atom_positions: Mapping[int, tuple[int | float | Decimal, int | float | Decimal]],
 ) -> None:
     for ring_state in _validated_scene_state_list(states):
-        if set(ring_state) != {"points", "atom_ids", "color", "alpha"}:
-            raise ValueError("Invalid Chemvas file.")
-        points = ring_state.get("points")
-        if not isinstance(points, (list, tuple)) or len(points) < 3 or any(not _is_point(point) for point in points):
-            raise ValueError("Invalid Chemvas file.")
-        ring_atom_ids = ring_state.get("atom_ids")
-        if not isinstance(ring_atom_ids, (list, tuple)) or len(ring_atom_ids) != len(points):
-            raise ValueError("Invalid Chemvas file.")
-        if not _is_atom_id_cycle(ring_atom_ids, atom_ids, bond_pairs):
-            raise ValueError("Invalid Chemvas file.")
-        if not _ring_points_match_atom_positions(points, ring_atom_ids, atom_positions):
-            raise ValueError("Invalid Chemvas file.")
-        color = ring_state.get("color")
-        if color is not None and not _is_hex_color(color):
-            raise ValueError("Invalid Chemvas file.")
-        alpha = ring_state.get("alpha")
-        if not _is_number(alpha) or not 0.0 <= cast(float, alpha) <= 1.0:
-            raise ValueError("Invalid Chemvas file.")
+        _validate_ring_fields(
+            ring_state,
+            atom_ids,
+            bond_pairs,
+            atom_positions,
+            required_keys=frozenset(("points", "atom_ids", "color", "alpha")),
+            clipboard=False,
+            error="Invalid Chemvas file.",
+        )
 
 
 def _validate_note_states(states: object) -> None:
     for note_state in _validated_scene_state_list(states):
-        if not {"text", "x", "y"} <= set(note_state) <= {"text", "html", "x", "y"}:
-            raise ValueError("Invalid Chemvas file.")
-        if not isinstance(note_state.get("text"), str):
-            raise ValueError("Invalid Chemvas file.")
-        if "html" in note_state and not isinstance(note_state.get("html"), str):
-            raise ValueError("Invalid Chemvas file.")
-        if not _is_number(note_state.get("x")) or not _is_number(note_state.get("y")):
-            raise ValueError("Invalid Chemvas file.")
+        _validate_note_fields(
+            note_state,
+            required_keys=frozenset(("text", "x", "y")),
+            error="Invalid Chemvas file.",
+        )
 
 
 def _validate_mark_states(states: object, atom_ids: set[int]) -> None:
@@ -630,45 +836,13 @@ def _validate_mark_states(states: object, atom_ids: set[int]) -> None:
 
 
 def _validate_arrow_states(states: object) -> None:
-    required_keys = {"kind", "start", "end"}
-    allowed_keys = required_keys | {"control", "double"}
     for arrow_state in _validated_scene_state_list(states):
-        keys = set(arrow_state)
-        if not required_keys <= keys or not keys <= allowed_keys:
-            raise ValueError("Invalid Chemvas file.")
-        if arrow_state.get("kind") not in VALID_ARROW_KINDS:
-            raise ValueError("Invalid Chemvas file.")
-        if not _is_point(arrow_state.get("start")) or not _is_point(arrow_state.get("end")):
-            raise ValueError("Invalid Chemvas file.")
-        control = arrow_state.get("control")
-        if control is not None and not _is_point(control):
-            raise ValueError("Invalid Chemvas file.")
-        double = arrow_state.get("double")
-        if double is not None and type(double) is not bool:
-            raise ValueError("Invalid Chemvas file.")
+        _validate_arrow_fields(arrow_state, error="Invalid Chemvas file.")
 
 
 def _validate_ts_bracket_states(states: object) -> None:
     for ts_bracket_state in _validated_scene_state_list(states):
-        keys = set(ts_bracket_state)
-        if ts_bracket_state.get("kind") != "ts_bracket":
-            raise ValueError("Invalid Chemvas file.")
-        bracket_kind = ts_bracket_state.get("bracket_kind")
-        if bracket_kind is not None and bracket_kind not in VALID_TS_BRACKET_KINDS:
-            raise ValueError("Invalid Chemvas file.")
-        if keys in ({"kind", "rect"}, {"kind", "rect", "bracket_kind"}):
-            rect = ts_bracket_state.get("rect")
-            if not isinstance(rect, (list, tuple)) or len(rect) != 4 or any(not _is_number(value) for value in rect):
-                raise ValueError("Invalid Chemvas file.")
-            continue
-        if keys not in (
-            {"kind", "left", "top", "right", "bottom"},
-            {"kind", "left", "top", "right", "bottom", "bracket_kind"},
-        ):
-            raise ValueError("Invalid Chemvas file.")
-        for key in ("left", "top", "right", "bottom"):
-            if not _is_number(ts_bracket_state.get(key)):
-                raise ValueError("Invalid Chemvas file.")
+        _validate_ts_bracket_fields(ts_bracket_state, error="Invalid Chemvas file.")
 
 
 _SHAPE_STATE_BASE_KEYS = frozenset(
@@ -680,37 +854,17 @@ def _validate_shape_states(states: object) -> None:
     if states is None:
         return
     for shape_state in _validated_scene_state_list(states):
-        keys = set(shape_state)
-        if not _SHAPE_STATE_BASE_KEYS <= keys or not keys <= _SHAPE_STATE_BASE_KEYS | {"fill", "fill_alpha"}:
-            raise ValueError("Invalid Chemvas file.")
-        if shape_state.get("kind") != "shape":
-            raise ValueError("Invalid Chemvas file.")
-        if shape_state.get("shape_kind") not in VALID_SHAPE_KINDS:
-            raise ValueError("Invalid Chemvas file.")
-        if shape_state.get("stroke_style") not in VALID_SHAPE_STROKES:
-            raise ValueError("Invalid Chemvas file.")
-        for key in ("left", "top", "right", "bottom"):
-            if not _is_number(shape_state.get(key)):
-                raise ValueError("Invalid Chemvas file.")
-        if "fill" in keys and not _is_hex_color(shape_state.get("fill")):
-            raise ValueError("Invalid Chemvas file.")
-        if "fill_alpha" in keys and (
-            not _is_number(shape_state.get("fill_alpha"))
-            or not 0.0 <= cast(float, shape_state.get("fill_alpha")) <= 1.0
-        ):
-            raise ValueError("Invalid Chemvas file.")
+        _validate_shape_fields(shape_state, error="Invalid Chemvas file.")
 
 
 def _validate_orbital_states(states: object) -> None:
     for orbital_state in _validated_scene_state_list(states):
-        if set(orbital_state) != {"kind", "center", "scale", "rotation"}:
-            raise ValueError("Invalid Chemvas file.")
-        if orbital_state.get("kind") not in VALID_ORBITAL_KINDS:
-            raise ValueError("Invalid Chemvas file.")
-        if not _is_point(orbital_state.get("center")):
-            raise ValueError("Invalid Chemvas file.")
-        if not _is_number(orbital_state.get("scale")) or not _is_number(orbital_state.get("rotation")):
-            raise ValueError("Invalid Chemvas file.")
+        _validate_orbital_fields(
+            orbital_state,
+            kind_key="kind",
+            required_keys=frozenset(("kind", "center", "scale", "rotation")),
+            error="Invalid Chemvas file.",
+        )
 
 
 def _validate_perspective_state(state: object, atom_ids: set[int]) -> None:
@@ -886,15 +1040,7 @@ def _validate_clipboard_atoms(atoms: object) -> tuple[set[int], dict[int, tuple[
         atom_id = _validated_clipboard_id(atom_state.get("id"))
         if atom_id in atom_ids:
             raise ValueError("Invalid clipboard payload.")
-        element = atom_state.get("element")
-        if not isinstance(element, str) or not element.strip():
-            raise ValueError("Invalid clipboard payload.")
-        if not _is_number(atom_state.get("x")) or not _is_number(atom_state.get("y")):
-            raise ValueError("Invalid clipboard payload.")
-        if not _is_hex_color(atom_state.get("color")):
-            raise ValueError("Invalid clipboard payload.")
-        if type(atom_state.get("explicit_label")) is not bool:
-            raise ValueError("Invalid clipboard payload.")
+        _validate_atom_fields(atom_state, error="Invalid clipboard payload.")
         _validate_atom_annotation(atom_state.get("annotation", {}))
         atom_ids.add(atom_id)
         atom_positions[atom_id] = (
@@ -990,26 +1136,15 @@ def _validate_clipboard_bonds(bonds: object, atom_ids: set[int]) -> set[tuple[in
     for bond_state in bonds:
         if not isinstance(bond_state, Mapping):
             raise ValueError("Invalid clipboard payload.")
-        if set(bond_state) != {"a", "b", "order", "style", "color"}:
-            raise ValueError("Invalid clipboard payload.")
-        a = _validated_clipboard_id(bond_state.get("a"))
-        b = _validated_clipboard_id(bond_state.get("b"))
-        if a == b or a not in atom_ids or b not in atom_ids:
-            raise ValueError("Invalid clipboard payload.")
-        bond_pair = _bond_pair_key(a, b)
+        bond_pair = _validate_bond_fields(
+            bond_state,
+            atom_ids,
+            id_validator=_validated_clipboard_id,
+            error="Invalid clipboard payload.",
+        )
         if bond_pair in bond_pairs:
             raise ValueError("Invalid clipboard payload.")
         bond_pairs.add(bond_pair)
-        order = bond_state.get("order")
-        if not _is_int(order) or order not in VALID_BOND_ORDERS:
-            raise ValueError("Invalid clipboard payload.")
-        style = bond_state.get("style")
-        if style not in VALID_BOND_STYLES:
-            raise ValueError("Invalid clipboard payload.")
-        if style in {"wedge", "hash"} and order != 1:
-            raise ValueError("Invalid clipboard payload.")
-        if not _is_hex_color(bond_state.get("color")):
-            raise ValueError("Invalid clipboard payload.")
     return bond_pairs
 
 
@@ -1021,29 +1156,21 @@ def _validate_clipboard_ring(
 ) -> None:
     if ring_state.get("kind") != "ring":
         raise ValueError("Invalid clipboard payload.")
-    if set(ring_state) != {"kind", "points", "atom_ids", "color", "alpha"}:
-        raise ValueError("Invalid clipboard payload.")
-    points = ring_state.get("points")
-    if not isinstance(points, (list, tuple)) or len(points) < 3 or any(not _is_point(point) for point in points):
-        raise ValueError("Invalid clipboard payload.")
-    ring_atom_ids = ring_state.get("atom_ids")
-    if not isinstance(ring_atom_ids, (list, tuple)):
-        raise ValueError("Invalid clipboard payload.")
-    if len(ring_atom_ids) != len(points):
-        raise ValueError("Invalid clipboard payload.")
-    if not _is_atom_id_cycle(ring_atom_ids, atom_ids, bond_pairs, clipboard=True):
-        raise ValueError("Invalid clipboard payload.")
-    if not _ring_points_match_atom_positions(points, ring_atom_ids, atom_positions, clipboard=True):
-        raise ValueError("Invalid clipboard payload.")
-    color = ring_state.get("color")
-    if color is not None and not _is_hex_color(color):
-        raise ValueError("Invalid clipboard payload.")
-    alpha = ring_state.get("alpha")
-    if not _is_number(alpha) or not 0.0 <= cast(float, alpha) <= 1.0:
-        raise ValueError("Invalid clipboard payload.")
+    _validate_ring_fields(
+        ring_state,
+        atom_ids,
+        bond_pairs,
+        atom_positions,
+        required_keys=frozenset(("kind", "points", "atom_ids", "color", "alpha")),
+        clipboard=True,
+        error="Invalid clipboard payload.",
+    )
 
 
 def _validate_clipboard_mark(mark_state: Mapping[str, object], atom_ids: set[int]) -> None:
+    # Deliberately looser than _validate_mark_states: legacy clipboard payloads
+    # may carry mark_kind=None, which selection_payload_to_canvas_state maps to
+    # "plus" before the state reaches the (strict) file validator.
     if mark_state.get("kind") != "mark":
         raise ValueError("Invalid clipboard payload.")
     if set(mark_state) != {"kind", "mark_kind", "text", "atom_id", "dx", "dy", "x", "y"}:
@@ -1073,97 +1200,30 @@ def _validate_clipboard_mark(mark_state: Mapping[str, object], atom_ids: set[int
 def _validate_clipboard_scene_item(item_state: Mapping[str, object]) -> None:
     kind = item_state.get("kind")
     if kind == "note":
-        keys = set(item_state)
-        if not {"kind", "text", "x", "y"} <= keys or not keys <= {"kind", "text", "html", "x", "y"}:
-            raise ValueError("Invalid clipboard payload.")
-        if not isinstance(item_state.get("text"), str):
-            raise ValueError("Invalid clipboard payload.")
-        if "html" in item_state and not isinstance(item_state.get("html"), str):
-            raise ValueError("Invalid clipboard payload.")
-        if not _is_number(item_state.get("x")) or not _is_number(item_state.get("y")):
-            raise ValueError("Invalid clipboard payload.")
+        _validate_note_fields(
+            item_state,
+            required_keys=frozenset(("kind", "text", "x", "y")),
+            error="Invalid clipboard payload.",
+        )
         return
     if kind in VALID_ARROW_KINDS:
-        _validate_clipboard_arrow_item(item_state)
+        _validate_arrow_fields(item_state, error="Invalid clipboard payload.")
         return
     if kind == "ts_bracket":
-        _validate_clipboard_ts_bracket_item(item_state)
+        _validate_ts_bracket_fields(item_state, error="Invalid clipboard payload.")
         return
     if kind == "shape":
-        _validate_clipboard_shape_item(item_state)
+        _validate_shape_fields(item_state, error="Invalid clipboard payload.")
         return
     if kind == "orbital":
-        _validate_clipboard_orbital_item(item_state)
+        _validate_orbital_fields(
+            item_state,
+            kind_key="orbital_kind",
+            required_keys=frozenset(("kind", "orbital_kind", "center", "scale", "rotation")),
+            error="Invalid clipboard payload.",
+        )
         return
     raise ValueError("Invalid clipboard payload.")
-
-
-def _validate_clipboard_arrow_item(item_state: Mapping[str, object]) -> None:
-    keys = set(item_state)
-    if not {"kind", "start", "end"} <= keys or not keys <= {"kind", "start", "end", "control", "double"}:
-        raise ValueError("Invalid clipboard payload.")
-    if not _is_point(item_state.get("start")) or not _is_point(item_state.get("end")):
-        raise ValueError("Invalid clipboard payload.")
-    control = item_state.get("control")
-    if control is not None and not _is_point(control):
-        raise ValueError("Invalid clipboard payload.")
-    double = item_state.get("double")
-    if double is not None and type(double) is not bool:
-        raise ValueError("Invalid clipboard payload.")
-
-
-def _validate_clipboard_ts_bracket_item(item_state: Mapping[str, object]) -> None:
-    keys = set(item_state)
-    bracket_kind = item_state.get("bracket_kind")
-    if bracket_kind is not None and bracket_kind not in VALID_TS_BRACKET_KINDS:
-        raise ValueError("Invalid clipboard payload.")
-    rect = item_state.get("rect")
-    if rect is not None:
-        if keys not in ({"kind", "rect"}, {"kind", "rect", "bracket_kind"}):
-            raise ValueError("Invalid clipboard payload.")
-        if not isinstance(rect, (list, tuple)) or len(rect) != 4 or any(not _is_number(value) for value in rect):
-            raise ValueError("Invalid clipboard payload.")
-        return
-    if keys not in (
-        {"kind", "left", "top", "right", "bottom"},
-        {"kind", "left", "top", "right", "bottom", "bracket_kind"},
-    ):
-        raise ValueError("Invalid clipboard payload.")
-    for edge_key in ("left", "top", "right", "bottom"):
-        if not _is_number(item_state.get(edge_key)):
-            raise ValueError("Invalid clipboard payload.")
-
-
-def _validate_clipboard_shape_item(item_state: Mapping[str, object]) -> None:
-    keys = set(item_state)
-    if not _SHAPE_STATE_BASE_KEYS <= keys or not keys <= _SHAPE_STATE_BASE_KEYS | {"fill", "fill_alpha"}:
-        raise ValueError("Invalid clipboard payload.")
-    if item_state.get("shape_kind") not in VALID_SHAPE_KINDS:
-        raise ValueError("Invalid clipboard payload.")
-    if item_state.get("stroke_style") not in VALID_SHAPE_STROKES:
-        raise ValueError("Invalid clipboard payload.")
-    for edge_key in ("left", "top", "right", "bottom"):
-        if not _is_number(item_state.get(edge_key)):
-            raise ValueError("Invalid clipboard payload.")
-    fill = item_state.get("fill")
-    if fill is not None and not _is_hex_color(fill):
-        raise ValueError("Invalid clipboard payload.")
-    if "fill_alpha" in keys and (
-        not _is_number(item_state.get("fill_alpha"))
-        or not 0.0 <= cast(float, item_state.get("fill_alpha")) <= 1.0
-    ):
-        raise ValueError("Invalid clipboard payload.")
-
-
-def _validate_clipboard_orbital_item(item_state: Mapping[str, object]) -> None:
-    if set(item_state) != {"kind", "orbital_kind", "center", "scale", "rotation"}:
-        raise ValueError("Invalid clipboard payload.")
-    if item_state.get("orbital_kind") not in VALID_ORBITAL_KINDS:
-        raise ValueError("Invalid clipboard payload.")
-    if not _is_point(item_state.get("center")):
-        raise ValueError("Invalid clipboard payload.")
-    if not _is_number(item_state.get("scale")) or not _is_number(item_state.get("rotation")):
-        raise ValueError("Invalid clipboard payload.")
 
 
 def _validated_id(value: object) -> int:
@@ -1298,6 +1358,11 @@ def _coordinate_matches(value: object, expected: int | float | Decimal) -> bool:
     if not _is_number(value):
         return False
     return abs(Decimal(str(value)) - Decimal(str(expected))) <= POINT_COORDINATE_TOLERANCE
+
+
+def is_hex_color(value: object) -> bool:
+    """Public form of the document hex-color rule (``#rgb`` / ``#rrggbb``)."""
+    return _is_hex_color(value)
 
 
 def _is_hex_color(value: object) -> bool:

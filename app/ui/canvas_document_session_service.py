@@ -98,6 +98,14 @@ class CanvasDocumentSessionService:
             restore_document_post_model_items(self.canvas, state)
             restore_document_groups(self.canvas, state)
             self.hit_testing_service.mark_spatial_index_dirty()
+        except BaseException:
+            # The old scene is already gone; fall back to a consistent empty
+            # canvas and drop the history stack, whose commands reference the
+            # destroyed items and would corrupt the canvas if replayed.
+            with contextlib.suppress(Exception):
+                clear_scene_for(self.canvas)
+            self.history.clear()
+            raise
         finally:
             self.history.set_enabled(True)
 

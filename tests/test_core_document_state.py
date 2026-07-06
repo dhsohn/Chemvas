@@ -932,5 +932,62 @@ class DocumentStateTest(unittest.TestCase):
             )
 
 
+class ModelInvariantTest(unittest.TestCase):
+    def test_add_bond_rejects_duplicate_pair(self) -> None:
+        model = MoleculeModel()
+        a = model.add_atom("C", 0.0, 0.0)
+        b = model.add_atom("C", 10.0, 0.0)
+        model.add_bond(a, b, 1)
+
+        with self.assertRaisesRegex(ValueError, "already bonded"):
+            model.add_bond(b, a, 2)
+
+
+class SerializeModelStateHealingTest(unittest.TestCase):
+    """Saving must survive in-memory drift instead of failing validation."""
+
+    def test_duplicate_and_dangling_bonds_are_tombstoned(self) -> None:
+        model = MoleculeModel()
+        a = model.add_atom("C", 0.0, 0.0)
+        b = model.add_atom("C", 10.0, 0.0)
+        model.add_bond(a, b, 1)
+        model.bonds.append(Bond(b, a, 2))
+        model.bonds.append(Bond(a, a, 1))
+        model.bonds.append(Bond(a, 99, 1))
+
+        state = serialize_model_state(model)
+
+        self.assertEqual(len(state["bonds"]), 4)
+        self.assertIsNotNone(state["bonds"][0])
+        self.assertEqual(state["bonds"][1:], [None, None, None])
+        build_document_payload(_canvas_state(state), CANVAS_FILE_VERSION)
+
+    def test_wedge_order_and_next_atom_id_are_normalized(self) -> None:
+        model = MoleculeModel()
+        a = model.add_atom("C", 0.0, 0.0)
+        b = model.add_atom("C", 10.0, 0.0)
+        model.add_bond(a, b, 1)
+        model.bonds[0].style = "wedge"
+        model.bonds[0].order = 2
+        model.next_atom_id = 0
+
+        state = serialize_model_state(model)
+
+        self.assertEqual(state["bonds"][0]["order"], 1)
+        self.assertEqual(state["next_atom_id"], 2)
+        build_document_payload(_canvas_state(state), CANVAS_FILE_VERSION)
+
+    def test_non_finite_coordinates_and_bad_colors_are_normalized(self) -> None:
+        model = MoleculeModel()
+        a = model.add_atom("C", float("nan"), 0.0)
+        model.atoms[a].color = "not-a-color"
+
+        state = serialize_model_state(model)
+
+        self.assertEqual(state["atoms"][a]["x"], 0.0)
+        self.assertEqual(state["atoms"][a]["color"], "#000000")
+        build_document_payload(_canvas_state(state), CANVAS_FILE_VERSION)
+
+
 if __name__ == "__main__":
     unittest.main()
