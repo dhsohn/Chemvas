@@ -209,6 +209,34 @@ class SceneGroupOperationsTest(unittest.TestCase):
         self.assertEqual(len(state.groups), 1)
         self.assertEqual(next(iter(state.groups.values())).atom_ids, {atom_a, atom_b, atom_c})
 
+    def test_group_selection_union_keeps_unselected_members_of_absorbed_group(self) -> None:
+        canvas = _Canvas()
+        atom_a, _ = _add_atom(canvas)
+        atom_b, _ = _add_atom(canvas, 10.0, 0.0, selected=True)
+        atom_c, _ = _add_atom(canvas, 20.0, 0.0, selected=True)
+        register_group_for(canvas, {atom_a, atom_b}, [])
+
+        self.assertTrue(group_selection_for(canvas))
+
+        state = group_state_for(canvas)
+        self.assertEqual(len(state.groups), 1)
+        merged = next(iter(state.groups.values()))
+        # atom_a was not selected, but grouping {b, c} over the {a, b} group
+        # must not silently strip a's membership.
+        self.assertEqual(merged.atom_ids, {atom_a, atom_b, atom_c})
+
+    def test_group_selection_is_noop_for_subset_of_existing_group(self) -> None:
+        canvas = _Canvas()
+        atom_a, _ = _add_atom(canvas, selected=True)
+        atom_b, _ = _add_atom(canvas, 10.0, 0.0, selected=True)
+        atom_c, _ = _add_atom(canvas, 20.0, 0.0)
+        register_group_for(canvas, {atom_a, atom_b, atom_c}, [])
+
+        self.assertFalse(group_selection_for(canvas))
+        self.assertEqual(canvas.history.commands, [])
+        group = next(iter(group_state_for(canvas).groups.values()))
+        self.assertEqual(group.atom_ids, {atom_a, atom_b, atom_c})
+
     def test_ungroup_selection_removes_intersecting_groups_with_undo(self) -> None:
         canvas = _Canvas()
         atom_a, _ = _add_atom(canvas, selected=True)

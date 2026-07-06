@@ -397,6 +397,20 @@ class SvgRoundtripTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Invalid editable Chemvas metadata"):
                 extract_chemvas_document_from_svg(path)
 
+    def test_extract_rejects_doctype_declarations(self) -> None:
+        # xml.etree expands internal entities, so a DTD could be used for a
+        # billion-laughs memory blowup; Chemvas SVGs never carry a DOCTYPE.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._svg_path(tmp)
+            path.write_text(
+                '<?xml version="1.0"?>'
+                '<!DOCTYPE svg [<!ENTITY a "aaaaaaaaaa">]>'
+                '<svg xmlns="http://www.w3.org/2000/svg"><metadata/></svg>',
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "Invalid editable Chemvas metadata"):
+                extract_chemvas_document_from_svg(path)
+
 
 if __name__ == "__main__":
     unittest.main()

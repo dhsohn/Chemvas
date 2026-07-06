@@ -25,9 +25,27 @@ _STEREO_BY_STYLE = {"wedge": 1, "hash": 6}
 # canvas's scene coordinates so emitted depictions look conventional.
 _TARGET_BOND_LENGTH = 1.5
 
+# V2000 counts-line fields are 3 characters wide; exceeding them would shift
+# the fixed-width columns and silently corrupt the file for every parser.
+_V2000_MAX_ATOMS = 999
+_V2000_MAX_BONDS = 999
+
+# MDL "M  CHG" charge values are defined for -15..+15 only.
+_MDL_MIN_CHARGE = -15
+_MDL_MAX_CHARGE = 15
+
 
 class MolfileError(ValueError):
     """Raised when a model cannot be represented as an MDL Molfile."""
+
+
+class MolfileLimitError(MolfileError):
+    """Raised for hard V2000 capacity/range limits.
+
+    Unlike plain :class:`MolfileError` (e.g. abbreviation labels, which an
+    RDKit fallback can expand), these limits hold for any V2000 writer, so
+    callers must surface them instead of retrying through a fallback.
+    """
 
 
 def write_molfile(
@@ -43,14 +61,23 @@ def write_molfile(
     per-atom mapping the 3D export uses). RDKit is not required.
     """
     atom_ids = sorted(model.atoms)
-    _reject_non_element_labels(model, atom_ids)
-
     index_by_id = {atom_id: position for position, atom_id in enumerate(atom_ids, start=1)}
     bonds = [
         bond
         for bond in model.bonds
         if bond is not None and bond.a in index_by_id and bond.b in index_by_id
     ]
+    # Capacity limits come before alias rejection: a too-large drawing must
+    # raise MolfileLimitError even when it also contains abbreviation labels,
+    # or the caller's RDKit expansion fallback would swallow the hard limit.
+    if len(atom_ids) > _V2000_MAX_ATOMS or len(bonds) > _V2000_MAX_BONDS:
+        raise MolfileLimitError(
+            "Cannot export to MOL: V2000 molfiles support at most "
+            f"{_V2000_MAX_ATOMS} atoms and {_V2000_MAX_BONDS} bonds "
+            f"(this drawing has {len(atom_ids)} atoms and {len(bonds)} bonds). "
+            "Export a smaller selection instead."
+        )
+    _reject_non_element_labels(model, atom_ids)
     scale = _coordinate_scale(model, bonds)
     annotations = atom_annotations or {}
 
@@ -109,8 +136,14 @@ def _charges(
     entries = []
     for atom_id, values in annotations.items():
         charge = int(values.get("formal_charge", 0))
-        if charge != 0 and atom_id in index_by_id:
-            entries.append((index_by_id[atom_id], charge))
+        if charge == 0 or atom_id not in index_by_id:
+            continue
+        if not _MDL_MIN_CHARGE <= charge <= _MDL_MAX_CHARGE:
+            raise MolfileLimitError(
+                f"Cannot export to MOL: formal charge {charge:+d} is outside "
+                f"the MDL range {_MDL_MIN_CHARGE}..{_MDL_MAX_CHARGE:+d}."
+            )
+        entries.append((index_by_id[atom_id], charge))
     return sorted(entries)
 
 
@@ -140,4 +173,4 @@ def _chunked[T](items: Sequence[T], size: int) -> Iterable[Sequence[T]]:
         yield items[start : start + size]
 
 
-__all__ = ["MolfileError", "write_molfile"]
+__all__ = ["MolfileError", "MolfileLimitError", "write_molfile"]

@@ -817,7 +817,9 @@ class RDKitAdapterTest(unittest.TestCase):
         a0 = model.add_atom("C", 0.0, 0.0)
         a1 = model.add_atom("Xx", 1.0, 0.0)
         model.add_bond(a0, a1, 1)
-        model.add_bond(a1, a0, 2)
+        # Corrupt states bypass the model API on purpose: add_bond rejects
+        # duplicate pairs, but the RDKit builder must still tolerate them.
+        model.bonds.append(Bond(a1, a0, 2))
         model.bonds.append(Bond(a0, a0, 3))
 
         mol, atom_map = adapter.model_to_rdkit_with_map(model)
@@ -842,7 +844,10 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertTrue(mol.atoms[0].no_implicit)
         self.assertFalse(mol.atoms[1].no_implicit)
 
-    def test_build_conversion_rdkit_mol_disables_implicit_hydrogen_completion_for_unannotated_hetero_atom(self) -> None:
+    def test_build_conversion_rdkit_mol_keeps_implicit_hydrogen_completion_for_bare_hetero_atom(self) -> None:
+        # A drawn C-O must embed as methanol, not an H-less oxygen: hetero
+        # atoms follow the standard convention of implicit hydrogens up to
+        # normal valence unless the user drew the hydrogens explicitly.
         adapter = RDKitAdapter()
         chem = _FakeChem({})
         adapter._rdkit = (chem, _FakeAllChem())
@@ -855,7 +860,22 @@ class RDKitAdapterTest(unittest.TestCase):
 
         self.assertIsNotNone(mol)
         self.assertFalse(mol.atoms[0].no_implicit)
-        self.assertTrue(mol.atoms[1].no_implicit)
+        self.assertFalse(mol.atoms[1].no_implicit)
+
+    def test_build_conversion_rdkit_mol_disables_implicit_hydrogen_for_explicit_hydrogen_neighbor(self) -> None:
+        adapter = RDKitAdapter()
+        chem = _FakeChem({})
+        adapter._rdkit = (chem, _FakeAllChem())
+        model = MoleculeModel()
+        oxygen = model.add_atom("O", 0.0, 0.0)
+        hydrogen = model.add_atom("H", 1.0, 0.0)
+        model.add_bond(oxygen, hydrogen, 1)
+
+        mol = adapter._build_conversion_rdkit_mol(model)
+
+        self.assertIsNotNone(mol)
+        self.assertTrue(mol.atoms[0].no_implicit)
+        self.assertFalse(mol.atoms[1].no_implicit)
 
     def test_build_conversion_rdkit_mol_keeps_implicit_hydrogen_completion_for_annotated_hetero_atom(self) -> None:
         adapter = RDKitAdapter()
@@ -1549,7 +1569,9 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertEqual(sorted(atom.symbol for atom in scene.atoms), ["H", "O"])
 
     @unittest.skipUnless(_RealChem is not None, "RDKit is required for implicit-hydrogen tests")
-    def test_model_to_3d_scene_does_not_complete_unannotated_terminal_hetero_atom(self) -> None:
+    def test_model_to_3d_scene_completes_unannotated_terminal_hetero_atom(self) -> None:
+        # A drawn C-O follows the standard convention and embeds as methanol
+        # (CH3-OH, 4 hydrogens), not as an H-less oxygen.
         adapter = RDKitAdapter()
         model = MoleculeModel()
         carbon = model.add_atom("C", 0.0, 0.0)
@@ -1563,10 +1585,10 @@ class RDKitAdapterTest(unittest.TestCase):
         elements = [atom.symbol for atom in scene.atoms]
         self.assertEqual(elements.count("C"), 1)
         self.assertEqual(elements.count("O"), 1)
-        self.assertEqual(elements.count("H"), 3)
+        self.assertEqual(elements.count("H"), 4)
 
     @unittest.skipUnless(_RealChem is not None, "RDKit is required for implicit-hydrogen tests")
-    def test_model_to_xyz_block_does_not_complete_unannotated_terminal_hetero_atom(self) -> None:
+    def test_model_to_xyz_block_completes_unannotated_terminal_hetero_atom(self) -> None:
         adapter = RDKitAdapter()
         model = MoleculeModel()
         carbon = model.add_atom("C", 0.0, 0.0)
@@ -1582,7 +1604,7 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertEqual(atom_count, len(records))
         self.assertEqual(elements.count("C"), 1)
         self.assertEqual(elements.count("O"), 1)
-        self.assertEqual(elements.count("H"), 3)
+        self.assertEqual(elements.count("H"), 4)
 
     def test_get_name_from_smiles_uses_canonical_map(self) -> None:
         fake_mol = _FakeMol(
@@ -1952,7 +1974,9 @@ class RDKitConversionEdgeTest(unittest.TestCase):
         model.bonds.append(Bond(a0, 99, 1))
         model.add_bond(a0, a1, 1)
         model.bonds[-1].style = "wedge"
-        model.add_bond(a1, a0, 1)
+        # Duplicate pair appended directly: add_bond rejects duplicates, but
+        # the conversion builder must still skip them.
+        model.bonds.append(Bond(a1, a0, 1))
 
         mol = adapter._build_conversion_rdkit_mol(model)
 

@@ -19,6 +19,7 @@ from ui.canvas_smiles_input_state import (
     set_last_smiles_input_for,
 )
 from ui.graph_algorithms import find_rings
+from ui.graph_index_operations import first_matching_bond_id
 from ui.renderer_style_access import bond_length_px_for
 from ui.scene_item_access import attach_scene_item, remove_scene_item
 from ui.structure_insert_access import (
@@ -156,12 +157,7 @@ class StructureBuildCommitter:
         return bond_id
 
     def bond_id_between(self, a_id: int, b_id: int) -> int | None:
-        for bond_id, bond in enumerate(bonds_for(self.canvas)):
-            if bond is None:
-                continue
-            if (bond.a == a_id and bond.b == b_id) or (bond.a == b_id and bond.b == a_id):
-                return bond_id
-        return None
+        return first_matching_bond_id(bonds_for(self.canvas), a_id, b_id)
 
     def add_bond_graphics_range(self, start_bond_id: int) -> None:
         for bond_id in new_insert_bond_ids_from(self.canvas, start_bond_id):

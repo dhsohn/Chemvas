@@ -9,7 +9,7 @@ from core.document_state import (
     deserialize_model_state,
     selection_payload_to_canvas_state,
 )
-from core.molfile import MolfileError, write_molfile
+from core.molfile import MolfileError, MolfileLimitError, write_molfile
 from core.svg_roundtrip import (
     CHEMVAS_SVG_SCOPE_SELECTION,
     CHEMVAS_SVG_SCOPE_SHEET,
@@ -98,6 +98,14 @@ class CanvasDocumentSessionService:
             restore_document_post_model_items(self.canvas, state)
             restore_document_groups(self.canvas, state)
             self.hit_testing_service.mark_spatial_index_dirty()
+        except BaseException:
+            # The old scene is already gone; fall back to a consistent empty
+            # canvas and drop the history stack, whose commands reference the
+            # destroyed items and would corrupt the canvas if replayed.
+            with contextlib.suppress(Exception):
+                clear_scene_for(self.canvas)
+            self.history.clear()
+            raise
         finally:
             self.history.set_enabled(True)
 
@@ -131,6 +139,10 @@ class CanvasDocumentSessionService:
             raise ValueError("There is no molecular structure to export.")
         try:
             block = write_molfile(export_model, atom_annotations=atom_annotations)
+        except MolfileLimitError:
+            # Hard V2000 capacity/range limits hold for any writer; falling
+            # back to RDKit would either mask them or blame missing RDKit.
+            raise
         except MolfileError as exc:
             # The structure uses abbreviation labels (Ph, CF3, ...) that are not
             # single elements. Fall back to RDKit, which expands them into explicit

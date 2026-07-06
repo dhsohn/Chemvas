@@ -139,3 +139,21 @@ def test_build_bond_adjacency_index_and_bond_set_classification() -> None:
         )
         == (set(), set())
     )
+
+
+def test_bond_sets_scans_for_atoms_missing_an_index_entry() -> None:
+    # Atom 2 has no index entry at all (never indexed), while atom 1 is
+    # indexed: the lookup must scan for atom 2's bonds instead of silently
+    # returning a partial result.
+    bonds = [_bond(1, 5), _bond(2, 3)]
+    atom_bond_ids = {1: {0}, 3: {1}, 5: {0}}
+
+    assert (
+        bond_sets_for_atom_ids(
+            {1, 2},
+            atom_bond_ids,
+            bonds,
+            bond_for_id=lambda bond_id: bonds[bond_id],
+        )
+        == (set(), {0, 1})
+    )

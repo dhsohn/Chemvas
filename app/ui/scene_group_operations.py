@@ -99,16 +99,27 @@ def group_selection_for(canvas) -> bool:
     state = group_state_for(canvas)
     overlapping = group_ids_for_members_for(canvas, atom_ids, items)
     if len(overlapping) == 1:
+        # Selection adds nothing beyond the one group it overlaps: no-op.
         existing = state.groups[next(iter(overlapping))]
-        if existing.atom_ids == atom_ids and len(existing.items) == len(items):
-            existing_items = set(map(id, existing.items))
-            if all(id(item) in existing_items for item in items):
-                return False
+        existing_items = set(map(id, existing.items))
+        if atom_ids <= existing.atom_ids and all(id(item) in existing_items for item in items):
+            return False
     absorbed = [(group_id, state.groups[group_id]) for group_id in sorted(overlapping)]
-    command = GroupSceneItemsCommand(atom_ids=set(atom_ids), items=list(items), absorbed=absorbed)
+    # Union semantics: an absorbed group's unselected members must join the
+    # new group rather than silently losing their membership.
+    merged_atom_ids = set(atom_ids)
+    merged_items = list(items)
+    merged_item_ids = set(map(id, merged_items))
+    for _, group in absorbed:
+        merged_atom_ids |= group.atom_ids
+        for member in group.items:
+            if id(member) not in merged_item_ids:
+                merged_item_ids.add(id(member))
+                merged_items.append(member)
+    command = GroupSceneItemsCommand(atom_ids=set(merged_atom_ids), items=list(merged_items), absorbed=absorbed)
     for absorbed_id, _ in absorbed:
         remove_group_for(canvas, absorbed_id)
-    command.group_id = register_group_for(canvas, atom_ids, items)
+    command.group_id = register_group_for(canvas, merged_atom_ids, merged_items)
     history_service_for_canvas(canvas).push(command)
     refresh_selection_outline_for(canvas)
     return True

@@ -91,7 +91,12 @@ class CanvasDocumentStateTest(unittest.TestCase):
         scene_obj = object()
         ring_item = _SceneItem(
             scene_obj,
-            {"points": [(0.0, 0.0)], "atom_ids": [1], "color": "#abcdef", "alpha": 0.25},
+            {
+                "points": [(10.0, 20.0), (0.0, 0.0), (5.0, 5.0)],
+                "atom_ids": [1, 2, 3],
+                "color": "#abcdef",
+                "alpha": 0.25,
+            },
         )
         note_item = _SceneItem(scene_obj, {"text": "note", "x": 1.0, "y": 2.0})
         mark_item = _SceneItem(
@@ -120,8 +125,9 @@ class CanvasDocumentStateTest(unittest.TestCase):
                 atoms={
                     1: Atom("C", 10.0, 20.0),
                     2: Atom("C", 0.0, 0.0),
+                    3: Atom("C", 5.0, 5.0),
                 },
-                bonds=[Bond(1, 2, 1)],
+                bonds=[Bond(1, 2, 1), Bond(2, 3, 1), Bond(1, 3, 1)],
             ),
             scene_items_state=CanvasSceneItemsState(
                 ring_items=[ring_item, detached, disposed],
@@ -186,7 +192,17 @@ class CanvasDocumentStateTest(unittest.TestCase):
                 "projection_anchor_2d": (10.0, 20.0),
             },
         )
-        self.assertEqual(state["ring_fills"], [{"points": [(0.0, 0.0)], "atom_ids": [1], "color": "#abcdef", "alpha": 0.25}])
+        self.assertEqual(
+            state["ring_fills"],
+            [
+                {
+                    "points": [(10.0, 20.0), (0.0, 0.0), (5.0, 5.0)],
+                    "atom_ids": [1, 2, 3],
+                    "color": "#abcdef",
+                    "alpha": 0.25,
+                }
+            ],
+        )
         self.assertEqual(state["notes"], [{"text": "note", "x": 1.0, "y": 2.0}])
         self.assertEqual(
             state["marks"],

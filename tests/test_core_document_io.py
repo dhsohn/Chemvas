@@ -140,6 +140,12 @@ class DocumentIOTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             create_document({"active_sheet_index": 0, "sheets": []}, version=CANVAS_FILE_VERSION)
 
+    def test_create_document_reports_save_side_error_message(self) -> None:
+        # The save path never produced this state from a file, so the failure
+        # message must not claim the *file* is invalid.
+        with self.assertRaisesRegex(ValueError, "Failed to save"):
+            create_document({"active_sheet_index": 0, "sheets": []}, version=CANVAS_FILE_VERSION)
+
     def test_write_and_read_document_round_trip_wrapped_payload(self) -> None:
         state = _canvas_state(
             _model_state(

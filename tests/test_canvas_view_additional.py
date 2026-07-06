@@ -368,9 +368,11 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             failing_undo_view,
             history_state_for(failing_undo_view),
         )
+        # A command whose undo fails part-way is dropped: leaving it on the
+        # stack would re-apply its completed parts on the next attempt.
         with self.assertRaisesRegex(RuntimeError, "undo failed"):
             failing_undo_history.undo()
-        self.assertEqual(history_state_for(failing_undo_view).history, [failing_undo])
+        self.assertEqual(history_state_for(failing_undo_view).history, [])
         self.assertEqual(history_state_for(failing_undo_view).redo_stack, [])
 
         failing_redo = _FakeCommand()
@@ -383,7 +385,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "redo failed"):
             failing_redo_history.redo()
         self.assertEqual(history_state_for(failing_redo_view).history, [])
-        self.assertEqual(history_state_for(failing_redo_view).redo_stack, [failing_redo])
+        self.assertEqual(history_state_for(failing_redo_view).redo_stack, [])
 
         noop_view = SimpleNamespace(history_state=CanvasHistoryState())
         noop_view.runtime_state = SimpleNamespace(

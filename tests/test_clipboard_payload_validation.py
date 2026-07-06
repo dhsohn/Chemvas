@@ -318,6 +318,13 @@ class ClipboardPayloadValidationTest(unittest.TestCase):
         # Deepcopy isolation sanity: original template remains valid.
         self.assertTrue(validate_clipboard_selection_payload(_valid_payload()))
 
+    def test_rejects_unhashable_choice_values_without_type_error(self) -> None:
+        # JSON arrays/objects where a string is expected must be rejected via
+        # the normal False path, not crash the membership test with TypeError.
+        self._assert_rejected(lambda p: p["bonds"][0].__setitem__("style", ["single"]))
+        self._assert_rejected(lambda p: p["scene_items"][0].__setitem__("kind", ["note"]))
+        self._assert_rejected(lambda p: p["marks"][0].__setitem__("mark_kind", {}))
+
 
 if __name__ == "__main__":
     unittest.main()

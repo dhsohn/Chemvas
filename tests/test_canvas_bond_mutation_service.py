@@ -256,5 +256,27 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
         hit_testing.mark_spatial_index_dirty.assert_not_called()
 
 
+class CanvasBondMutationServiceStaleIndexTest(unittest.TestCase):
+    def test_add_bond_heals_stale_index_instead_of_duplicating(self) -> None:
+        # The graph index claims no bond exists, but the model already has one:
+        # add_bond must return the existing id and repair the index rather than
+        # push a duplicate pair into the model.
+        model = _FakeModel(bonds=[Bond(1, 2, 1)])
+        graph = _graph_service(bond_id_between=None)
+        hit_testing = _hit_testing_service()
+        canvas = SimpleNamespace(
+            services=_services(graph=graph, hit_testing=hit_testing),
+            model=model,
+        )
+
+        bond_id = _service_for(canvas).add_bond(1, 2, 1)
+
+        self.assertEqual(bond_id, 0)
+        self.assertEqual(model.add_bond_calls, [])
+        self.assertEqual(len(model.bonds), 1)
+        graph.add_bond_neighbors.assert_called_once_with(1, 2)
+        graph.add_bond_index.assert_called_once_with(0, 1, 2)
+
+
 if __name__ == "__main__":
     unittest.main()

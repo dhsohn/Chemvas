@@ -26,18 +26,31 @@ class CanvasHistoryService:
     def undo(self) -> None:
         if not self.state.history:
             return
-        command = self.state.history[-1]
-        command.undo(self.canvas)
-        self.state.history.pop()
+        # Pop before applying: a command whose undo fails part-way must not
+        # stay on the stack, or retrying would re-apply the parts that did
+        # succeed on top of an already half-undone canvas.
+        command = self.state.history.pop()
+        try:
+            command.undo(self.canvas)
+        except Exception:
+            # The canvas no longer matches what the redo stack expects.
+            self.state.redo_stack.clear()
+            self.notify_change()
+            raise
         self.state.redo_stack.append(command)
         self.notify_change()
 
     def redo(self) -> None:
         if not self.state.redo_stack:
             return
-        command = self.state.redo_stack[-1]
-        command.redo(self.canvas)
-        self.state.redo_stack.pop()
+        command = self.state.redo_stack.pop()
+        try:
+            command.redo(self.canvas)
+        except Exception:
+            # Deeper redo entries assumed this command was applied.
+            self.state.redo_stack.clear()
+            self.notify_change()
+            raise
         self.state.history.append(command)
         self.notify_change()
 

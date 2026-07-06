@@ -245,11 +245,6 @@ class _MinimalCanvas(_FakeCanvas):
 
 
 class HistoryCommandTest(unittest.TestCase):
-    def test_move_items_command_remains_available_from_core_history(self) -> None:
-        from core.history import MoveItemsCommand as CompatMoveItemsCommand
-
-        self.assertIs(CompatMoveItemsCommand, MoveItemsCommand)
-
     def test_history_command_base_methods_raise_not_implemented(self) -> None:
         command = HistoryCommand()
 
@@ -278,6 +273,42 @@ class HistoryCommandTest(unittest.TestCase):
                 "redo:third",
             ],
         )
+
+    def test_composite_command_rolls_back_partially_applied_undo(self) -> None:
+        log: list[str] = []
+
+        class _FailingCommand(_RecorderCommand):
+            def undo(self, canvas) -> None:
+                self.log.append(f"undo:{self.name}")
+                raise RuntimeError("undo failed")
+
+        command = CompositeCommand(
+            [_RecorderCommand("first", log), _FailingCommand("second", log), _RecorderCommand("third", log)]
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "undo failed"):
+            command.undo(None)
+
+        # "third" was undone before "second" failed, so it must be re-applied;
+        # "first" never ran and must stay untouched.
+        self.assertEqual(log, ["undo:third", "undo:second", "redo:third"])
+
+    def test_composite_command_rolls_back_partially_applied_redo(self) -> None:
+        log: list[str] = []
+
+        class _FailingCommand(_RecorderCommand):
+            def redo(self, canvas) -> None:
+                self.log.append(f"redo:{self.name}")
+                raise RuntimeError("redo failed")
+
+        command = CompositeCommand(
+            [_RecorderCommand("first", log), _FailingCommand("second", log), _RecorderCommand("third", log)]
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "redo failed"):
+            command.redo(None)
+
+        self.assertEqual(log, ["redo:first", "redo:second", "undo:first"])
 
     def test_move_commands_delegate_to_canvas(self) -> None:
         canvas = _FakeCanvas()

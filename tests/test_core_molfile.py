@@ -2,7 +2,7 @@ import math
 import unittest
 
 from core.model import MoleculeModel
-from core.molfile import MolfileError, write_molfile
+from core.molfile import MolfileError, MolfileLimitError, write_molfile
 
 try:
     from rdkit import Chem as _RealChem
@@ -93,6 +93,40 @@ class MolfileWriterTest(unittest.TestCase):
         mol = _RealChem.MolFromMolBlock(block)
         self.assertIsNotNone(mol)
         self.assertEqual(mol.GetAtomWithIdx(0).GetFormalCharge(), 1)
+
+
+class MolfileLimitsTest(unittest.TestCase):
+    def test_atom_count_over_v2000_limit_raises(self) -> None:
+        model = MoleculeModel()
+        for index in range(1000):
+            model.add_atom("C", float(index), 0.0)
+
+        with self.assertRaisesRegex(MolfileLimitError, "at most 999 atoms"):
+            write_molfile(model)
+
+    def test_limit_raises_before_alias_rejection(self) -> None:
+        # A too-large drawing containing an abbreviation must surface the hard
+        # limit, not the alias error that callers retry through RDKit.
+        model = MoleculeModel()
+        model.add_atom("Ph", 0.0, 0.0)
+        for index in range(1000):
+            model.add_atom("C", float(index + 1), 0.0)
+
+        with self.assertRaisesRegex(MolfileLimitError, "at most 999 atoms"):
+            write_molfile(model)
+
+    def test_charge_outside_mdl_range_raises(self) -> None:
+        model = _ethanol()
+
+        with self.assertRaisesRegex(MolfileLimitError, "outside the MDL range"):
+            write_molfile(model, atom_annotations={0: {"formal_charge": 16}})
+
+    def test_charge_at_mdl_range_boundary_is_written(self) -> None:
+        model = _ethanol()
+
+        block = write_molfile(model, atom_annotations={0: {"formal_charge": -15}})
+
+        self.assertIn("M  CHG  1   1 -15", block)
 
 
 if __name__ == "__main__":

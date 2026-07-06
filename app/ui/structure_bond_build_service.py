@@ -46,9 +46,10 @@ class StructureBondBuildService:
             return None
         existing_bond_id = None
         if start_id is not None and end_id is not None:
+            # bond_id_between only ever returns ids whose bond slot is live
+            # (tombstones fail its atom-match check), so no stale-id guard is
+            # needed here; a missing bond simply means "draw a new one".
             existing_bond_id = self.graph_service.bond_id_between(start_id, end_id)
-        if existing_bond_id is not None and bond_for_id(self.canvas, existing_bond_id) is None:
-            return None
         snapshot = self.committer.begin_recorded_change()
         before_smiles_input = snapshot.before_smiles_input
         try:

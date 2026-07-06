@@ -151,15 +151,22 @@ def bond_sets_for_atom_ids(
     if not atom_ids:
         return internal, boundary
     bond_ids: set[int] = set()
+    # Atoms with no index entry at all get a scan fallback, mirroring
+    # bond_id_between_indexed_atoms: a present (even empty) entry is trusted,
+    # a missing one means the index never learned about the atom.
+    missing_entry_atom_ids: set[int] = set()
     for atom_id in atom_ids:
-        bond_ids.update(atom_bond_ids.get(atom_id, ()))
-    if not bond_ids:
+        indexed = atom_bond_ids.get(atom_id)
+        if indexed is None:
+            missing_entry_atom_ids.add(atom_id)
+        else:
+            bond_ids.update(indexed)
+    if missing_entry_atom_ids or not bond_ids:
+        scan_atom_ids = atom_ids if not bond_ids else missing_entry_atom_ids
         for bond_id, bond in enumerate(bonds):
             if bond is None:
                 continue
-            a_in = bond.a in atom_ids
-            b_in = bond.b in atom_ids
-            if a_in or b_in:
+            if bond.a in scan_atom_ids or bond.b in scan_atom_ids:
                 bond_ids.add(bond_id)
     for bond_id in bond_ids:
         bond = bond_for_id(bond_id)

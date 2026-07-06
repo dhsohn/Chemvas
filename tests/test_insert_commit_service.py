@@ -116,9 +116,15 @@ class _FakeCanvas:
         atom_ids = []
         for point in points:
             atom_ids.append(self.add_atom("C", point.x(), point.y()))
+        before_bond_count = len(self.model.bonds)
         for index in range(len(atom_ids)):
-            self.add_bond(atom_ids[index], atom_ids[(index + 1) % len(atom_ids)])
-        for bond_id in range(len(self.model.bonds) - len(atom_ids), len(self.model.bonds)):
+            a_id = atom_ids[index]
+            b_id = atom_ids[(index + 1) % len(atom_ids)]
+            # Mirror production behavior: bond creation deduplicates instead
+            # of pushing duplicate pairs into the model.
+            if not self.bond_exists(a_id, b_id):
+                self.add_bond(a_id, b_id)
+        for bond_id in range(before_bond_count, len(self.model.bonds)):
             self._add_bond_graphics(bond_id)
         return atom_ids
 
@@ -342,7 +348,7 @@ class InsertCommitServiceTest(unittest.TestCase):
 
         self.assertTrue(applied)
         self.assertEqual(free_canvas.add_atom_calls, [("C", 1.0, 2.0), ("C", 3.0, 4.0)])
-        self.assertEqual(free_canvas.add_bond_calls, [(0, 1, 1), (1, 0, 1)])
+        self.assertEqual(free_canvas.add_bond_calls, [(0, 1, 1)])
         self.assertEqual(free_canvas.record_calls[0]["before_smiles_input"], "before-free")
         self.assertIsNone(last_smiles_input_for(free_canvas))
 

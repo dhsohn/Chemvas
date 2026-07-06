@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import math
 
-from core.document_state import serialize_model_state, serialize_settings
+from core.document_state import (
+    VALID_MARK_KINDS,
+    is_hex_color,
+    model_bond_pairs,
+    ring_atom_ids_form_cycle,
+    serialize_model_state,
+    serialize_settings,
+)
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 
@@ -61,18 +68,19 @@ from ui.sheet_setup_access import (
 def snapshot_canvas_document_state(canvas) -> dict:
     tool_settings = tool_settings_state_for(canvas)
     text_style = text_style_state_for(canvas)
+    item_lists = _document_item_lists_for(canvas)
     state = {
         "model": serialize_model_state(
             model_for(canvas),
             explicit_label_atom_ids=atom_items_for(canvas).keys(),
         ),
         "ring_fills": _snapshot_ring_fills(canvas),
-        "notes": _snapshot_notes(canvas),
-        "marks": _snapshot_marks(canvas),
-        "arrows": _snapshot_arrows(canvas),
-        "ts_brackets": _snapshot_ts_brackets(canvas),
-        "shapes": _snapshot_shapes(canvas),
-        "orbitals": _snapshot_orbitals(canvas),
+        "notes": _snapshot_notes(canvas, item_lists["notes"]),
+        "marks": _snapshot_marks(canvas, item_lists["marks"]),
+        "arrows": _snapshot_arrows(canvas, item_lists["arrows"]),
+        "ts_brackets": _snapshot_ts_brackets(canvas, item_lists["ts_brackets"]),
+        "shapes": _snapshot_shapes(canvas, item_lists["shapes"]),
+        "orbitals": _snapshot_orbitals(canvas, item_lists["orbitals"]),
         "settings": serialize_settings(
             bond_length_px=bond_length_px_for(canvas),
             arrow_line_width=tool_settings.arrow_line_width,
@@ -98,7 +106,7 @@ def snapshot_canvas_document_state(canvas) -> dict:
         "last_smiles_input": last_smiles_input_for(canvas),
     }
     _add_projection_state(canvas, state)
-    groups = _snapshot_groups(canvas)
+    groups = _snapshot_groups(canvas, item_lists)
     if groups:
         state["groups"] = groups
     return state
@@ -120,9 +128,17 @@ def _add_projection_state(canvas, state: dict) -> None:
             for atom_id, coords in coords_3d.items()
             if atom_id in model.atoms
         },
-        "projection_center_3d": rotation.projection_center_3d,
-        "projection_anchor_2d": rotation.projection_anchor_2d,
+        "projection_center_3d": _finite_point_or_none(rotation.projection_center_3d),
+        "projection_anchor_2d": _finite_point_or_none(rotation.projection_anchor_2d),
     }
+
+
+def _finite_point_or_none(point):
+    if point is None:
+        return None
+    if all(isinstance(value, (int, float)) and math.isfinite(value) for value in point):
+        return point
+    return None
 
 
 def _stored_atom_coords_3d_matches_projection(canvas, atom_id: int, coords: tuple[float, float, float]) -> bool:
@@ -275,10 +291,12 @@ def restore_document_post_model_items(canvas, state: dict) -> None:
         )
 
 
-def _grouped_item_lists_for(canvas) -> dict[str, list]:
-    # Each list must iterate in the same order as the matching document snapshot
-    # key so a group's [kind, index] reference resolves to the same object on
-    # reload. Standalone marks can be group members, so they are indexed here too.
+def _document_item_lists_for(canvas) -> dict[str, list]:
+    # Single source of the per-kind item lists: the snapshot serializers below
+    # and the group [kind, index] references both consume THIS function, so a
+    # group reference can never resolve to a different object than the one the
+    # matching snapshot entry was written from. Standalone marks can be group
+    # members, so they are indexed here too.
     return {
         "notes": attached_canvas_scene_items(canvas, note_items_for(canvas)),
         "marks": attached_canvas_scene_items(canvas, mark_items_for(canvas)),
@@ -293,27 +311,39 @@ def _grouped_item_lists_for(canvas) -> dict[str, list]:
     }
 
 
-def _snapshot_groups(canvas) -> list[dict]:
+def _snapshot_groups(canvas, item_lists: dict[str, list] | None = None) -> list[dict]:
     state_groups = group_state_for(canvas).groups
     if not state_groups:
         return []
+    if item_lists is None:
+        item_lists = _document_item_lists_for(canvas)
     item_index: dict[int, tuple[str, int]] = {}
-    for kind_key, items in _grouped_item_lists_for(canvas).items():
+    for kind_key, items in item_lists.items():
         for index, item in enumerate(items):
             item_index[id(item)] = (kind_key, index)
     model_atoms = model_for(canvas).atoms
     groups: list[dict] = []
+    # Runtime grouping keeps groups disjoint; the seen-sets are healing for
+    # drifted state, since overlapping members would fail save validation.
+    seen_atom_ids: set[int] = set()
+    seen_item_refs: set[tuple[str, int]] = set()
     for group_id in sorted(state_groups):
         group = state_groups[group_id]
-        atoms = sorted(atom_id for atom_id in group.atom_ids if atom_id in model_atoms)
-        items = [
-            list(item_index[id(item)])
+        atoms = sorted(
+            atom_id
+            for atom_id in group.atom_ids
+            if atom_id in model_atoms and atom_id not in seen_atom_ids
+        )
+        item_refs = [
+            item_index[id(item)]
             for item in group.items
-            if id(item) in item_index
+            if id(item) in item_index and item_index[id(item)] not in seen_item_refs
         ]
-        if not atoms and not items:
+        if not atoms and not item_refs:
             continue
-        groups.append({"atoms": atoms, "items": items})
+        seen_atom_ids.update(atoms)
+        seen_item_refs.update(item_refs)
+        groups.append({"atoms": atoms, "items": [list(ref) for ref in item_refs]})
     return groups
 
 
@@ -322,7 +352,7 @@ def restore_document_groups(canvas, state: dict) -> None:
     groups_state = state.get("groups") or []
     if not groups_state:
         return
-    item_lists = _grouped_item_lists_for(canvas)
+    item_lists = _document_item_lists_for(canvas)
     model_atoms = model_for(canvas).atoms
     for group_state in groups_state:
         atom_ids = {
@@ -340,23 +370,43 @@ def restore_document_groups(canvas, state: dict) -> None:
 
 
 def _snapshot_ring_fills(canvas) -> list[dict]:
+    # Ring fills are healed on the way out: points are rewritten from the live
+    # atom coordinates (the validator requires an exact match), and rings whose
+    # atoms no longer form a bonded cycle are dropped instead of making the
+    # whole save fail validation.
+    model = model_for(canvas)
+    atom_ids = set(model.atoms)
+    bond_pairs = model_bond_pairs(model)
     ring_fills: list[dict] = []
     for ring_item in attached_canvas_scene_items(canvas, ring_items_for(canvas)):
         ring_state = ring_state_dict_for(canvas, ring_item)
+        ring_atom_ids = ring_state["atom_ids"]
+        if not isinstance(ring_atom_ids, (list, tuple)):
+            continue
+        ring_atom_ids = [atom_id for atom_id in ring_atom_ids if isinstance(atom_id, int)]
+        if len(ring_atom_ids) != len(ring_state["atom_ids"]):
+            continue
+        if not ring_atom_ids_form_cycle(ring_atom_ids, atom_ids, bond_pairs):
+            continue
+        alpha = ring_state["alpha"]
+        color = ring_state["color"]
         ring_fills.append(
             {
-                "points": ring_state["points"],
-                "atom_ids": ring_state["atom_ids"],
-                "color": ring_state["color"],
-                "alpha": ring_state["alpha"],
+                "points": [
+                    (model.atoms[atom_id].x, model.atoms[atom_id].y)
+                    for atom_id in ring_atom_ids
+                ],
+                "atom_ids": list(ring_atom_ids),
+                "color": color if color is None or is_hex_color(color) else None,
+                "alpha": min(max(float(alpha), 0.0), 1.0) if isinstance(alpha, (int, float)) else 1.0,
             }
         )
     return ring_fills
 
 
-def _snapshot_notes(canvas) -> list[dict]:
+def _snapshot_notes(canvas, items: list) -> list[dict]:
     notes: list[dict] = []
-    for item in attached_canvas_scene_items(canvas, note_items_for(canvas)):
+    for item in items:
         note_state = note_state_dict_for(canvas, item)
         snapshot = {
             "text": note_state["text"],
@@ -370,17 +420,29 @@ def _snapshot_notes(canvas) -> list[dict]:
     return notes
 
 
-def _snapshot_marks(canvas) -> list[dict]:
+def _snapshot_marks(canvas, items: list) -> list[dict]:
+    # Marks are healed in place (never dropped) so their indices stay aligned
+    # with the group [kind, index] references built from the same item list. A
+    # mark whose atom no longer exists degrades to a free-floating mark instead
+    # of making the whole save fail validation.
+    live_atom_ids = set(model_for(canvas).atoms)
     marks: list[dict] = []
-    for item in attached_canvas_scene_items(canvas, mark_items_for(canvas)):
+    for item in items:
         mark_state = mark_state_dict_for(canvas, item)
+        atom_id = mark_state["atom_id"]
+        bound = isinstance(atom_id, int) and atom_id in live_atom_ids
+        dx = mark_state["dx"] if bound else None
+        dy = mark_state["dy"] if bound else None
+        if (dx is None) != (dy is None):
+            dx = dy = None
+        mark_kind = mark_state["mark_kind"]
         marks.append(
             {
-                "kind": mark_state["mark_kind"],
+                "kind": mark_kind if isinstance(mark_kind, str) and mark_kind in VALID_MARK_KINDS else "plus",
                 "text": mark_state["text"],
-                "atom_id": mark_state["atom_id"],
-                "dx": mark_state["dx"],
-                "dy": mark_state["dy"],
+                "atom_id": atom_id if bound else None,
+                "dx": dx,
+                "dy": dy,
                 "x": mark_state["x"],
                 "y": mark_state["y"],
             }
@@ -388,9 +450,9 @@ def _snapshot_marks(canvas) -> list[dict]:
     return marks
 
 
-def _snapshot_arrows(canvas) -> list[dict]:
+def _snapshot_arrows(canvas, items: list) -> list[dict]:
     arrows: list[dict] = []
-    for item in attached_canvas_scene_items(canvas, arrow_items_for(canvas)):
+    for item in items:
         arrow_state = arrow_state_dict_for(canvas, item)
         if not arrow_state:
             continue
@@ -398,23 +460,23 @@ def _snapshot_arrows(canvas) -> list[dict]:
     return arrows
 
 
-def _snapshot_ts_brackets(canvas) -> list[dict]:
+def _snapshot_ts_brackets(canvas, items: list) -> list[dict]:
     ts_brackets: list[dict] = []
-    for item in attached_canvas_scene_items(canvas, ts_bracket_items_for(canvas)):
+    for item in items:
         ts_brackets.append(ts_bracket_state_dict_for(canvas, item))
     return ts_brackets
 
 
-def _snapshot_shapes(canvas) -> list[dict]:
+def _snapshot_shapes(canvas, items: list) -> list[dict]:
     shapes: list[dict] = []
-    for item in attached_canvas_scene_items(canvas, shape_items_for(canvas)):
+    for item in items:
         shapes.append(shape_state_dict_for(canvas, item))
     return shapes
 
 
-def _snapshot_orbitals(canvas) -> list[dict]:
+def _snapshot_orbitals(canvas, items: list) -> list[dict]:
     orbitals: list[dict] = []
-    for item in attached_canvas_scene_items(canvas, orbital_items_for(canvas)):
+    for item in items:
         orbital_state = orbital_state_dict_for(canvas, item)
         orbitals.append(
             {

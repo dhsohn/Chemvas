@@ -25,7 +25,15 @@ class ChemvasDocument:
 
 
 def create_document(state: dict[str, Any], version: int) -> ChemvasDocument:
-    payload = build_document_payload(state, version)
+    try:
+        payload = build_document_payload(state, version)
+    except ValueError as exc:
+        # This is the save/export side: the state came from our own snapshot,
+        # not from a file, so "Invalid Chemvas file." would mislead the user.
+        raise ValueError(
+            "Failed to save: the document state did not pass validation. "
+            "This is a Chemvas bug — please report it."
+        ) from exc
     return ChemvasDocument(payload=payload, state=payload["state"])
 
 
