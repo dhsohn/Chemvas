@@ -334,7 +334,10 @@ def deselect_groups_for_note_for(canvas, note) -> None:
             live_atom_ids = group.atom_ids & set(atoms_for(canvas))
             members = attached_canvas_scene_items(canvas, group.items)
             scene_items = _structure_items_for_atom_ids(canvas, live_atom_ids)
-            scene_items.extend(member for member in members if member.data(0) != "note")
+            # Notes are included: attach_scene_item makes them Qt-selectable,
+            # so a rubber-band-selected note would otherwise keep its Qt
+            # selection and keep triggering the group box.
+            scene_items.extend(members)
             set_scene_items_selected_for(canvas, scene_items, False)
             selected_notes = selected_scene_notes_for(canvas)
             for member in members:

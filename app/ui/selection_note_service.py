@@ -88,20 +88,22 @@ class SelectionNoteService:
         self,
         notes: list[QGraphicsItem],
         selected: bool | None,
-    ) -> None:
+    ) -> bool | None:
         """Select or deselect grouped notes as a unit.
 
         ``selected`` mirrors the group's structure members; pass ``None`` when the
         group has no selectable scene members so the direction is decided from the
-        notes' own current state.
+        notes' own current state. Returns the direction that was applied so the
+        caller can mirror it onto the notes' Qt selection flags.
         """
         if not notes:
-            return
+            return None
         if selected is None:
             current = selected_notes_for(self.canvas)
             selected = not all(note in current for note in notes)
         for note in notes:
             self.set_note_selected(cast(QGraphicsTextItem, note), selected)
+        return selected
 
     def clear_note_selection(self) -> None:
         notes = list(selected_notes_for(self.canvas))

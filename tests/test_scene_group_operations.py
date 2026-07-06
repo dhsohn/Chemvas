@@ -445,6 +445,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         arrow = _add_arrow(canvas, selected=True)
         note = _add_note(canvas, selected=True)
         other_note = _add_note(canvas, selected=True)
+        # Attached notes are Qt-selectable; a rubber band can Qt-select them.
+        note.setSelected(True)
+        other_note.setSelected(True)
         register_group_for(canvas, {atom_a}, [arrow, note, other_note])
         service = SelectionNoteService(canvas)
 
@@ -457,6 +460,10 @@ class SceneGroupOperationsTest(unittest.TestCase):
         self.assertFalse(arrow.isSelected())
         self.assertNotIn(note, selected_notes_for(canvas))
         self.assertNotIn(other_note, selected_notes_for(canvas))
+        # The notes' Qt selection flags must clear too, or they would keep
+        # triggering the group box.
+        self.assertFalse(note.isSelected())
+        self.assertFalse(other_note.isSelected())
         self.assertEqual(selected_group_rects_for(canvas), [])
         self.assertFalse(group_state_for(canvas).expanding)
 
