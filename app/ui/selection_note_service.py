@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QBrush, QPen
-from PyQt6.QtWidgets import QGraphicsRectItem, QGraphicsTextItem
+from PyQt6.QtWidgets import QGraphicsItem, QGraphicsRectItem, QGraphicsTextItem
 
 from ui.canvas_scene_items_state import (
     add_selected_note_for,
@@ -36,6 +36,35 @@ class SelectionNoteService:
         else:
             add_selected_note_for(self.canvas, item)
         self.update_note_selection_box(item)
+
+    def set_note_selected(self, item: QGraphicsTextItem, selected: bool) -> None:
+        is_selected = item in selected_notes_for(self.canvas)
+        if selected == is_selected:
+            return
+        if selected:
+            add_selected_note_for(self.canvas, item)
+        else:
+            remove_selected_note_for(self.canvas, item)
+        self.update_note_selection_box(item)
+
+    def apply_group_note_toggle(
+        self,
+        notes: list[QGraphicsItem],
+        selected: bool | None,
+    ) -> None:
+        """Select or deselect grouped notes as a unit.
+
+        ``selected`` mirrors the group's structure members; pass ``None`` when the
+        group has no selectable scene members so the direction is decided from the
+        notes' own current state.
+        """
+        if not notes:
+            return
+        if selected is None:
+            current = selected_notes_for(self.canvas)
+            selected = not all(note in current for note in notes)
+        for note in notes:
+            self.set_note_selected(cast(QGraphicsTextItem, note), selected)
 
     def clear_note_selection(self) -> None:
         notes = list(selected_notes_for(self.canvas))

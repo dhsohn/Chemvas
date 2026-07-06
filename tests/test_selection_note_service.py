@@ -86,3 +86,56 @@ class SelectionNoteServiceTest(unittest.TestCase):
         self.assertEqual(selected_notes_for(canvas), [])
         self.assertFalse(note_a.data(21).isVisible())
         self.assertFalse(note_b.data(21).isVisible())
+
+    def _note_canvas(self):
+        return SimpleNamespace(
+            note_padding=6.0,
+            selection_style_state=SelectionStyleState(color=QColor("#1f5eff"), stroke_delta=0.8),
+        )
+
+    def test_set_note_selected_is_idempotent_in_both_directions(self) -> None:
+        scene = QGraphicsScene()
+        note = QGraphicsTextItem("A")
+        scene.addItem(note)
+        canvas = self._note_canvas()
+        set_selected_notes_for(canvas, [])
+        service = SelectionNoteService(canvas)
+
+        service.set_note_selected(note, False)
+        self.assertEqual(selected_notes_for(canvas), [])
+
+        service.set_note_selected(note, True)
+        service.set_note_selected(note, True)
+        self.assertEqual(selected_notes_for(canvas), [note])
+        self.assertTrue(note.data(21).isVisible())
+
+        service.set_note_selected(note, False)
+        self.assertEqual(selected_notes_for(canvas), [])
+        self.assertFalse(note.data(21).isVisible())
+
+    def test_apply_group_note_toggle_directions_and_autodecide(self) -> None:
+        scene = QGraphicsScene()
+        note_a = QGraphicsTextItem("A")
+        note_b = QGraphicsTextItem("B")
+        scene.addItem(note_a)
+        scene.addItem(note_b)
+        canvas = self._note_canvas()
+        set_selected_notes_for(canvas, [])
+        service = SelectionNoteService(canvas)
+
+        # Explicit select, then explicit deselect.
+        service.apply_group_note_toggle([note_a, note_b], True)
+        self.assertEqual(selected_notes_for(canvas), [note_a, note_b])
+        service.apply_group_note_toggle([note_a, note_b], False)
+        self.assertEqual(selected_notes_for(canvas), [])
+
+        # selected=None decides from current state: none selected -> select all.
+        service.apply_group_note_toggle([note_a, note_b], None)
+        self.assertEqual(selected_notes_for(canvas), [note_a, note_b])
+        # All selected -> None deselects all.
+        service.apply_group_note_toggle([note_a, note_b], None)
+        self.assertEqual(selected_notes_for(canvas), [])
+
+        # Empty list is a no-op.
+        service.apply_group_note_toggle([], True)
+        self.assertEqual(selected_notes_for(canvas), [])

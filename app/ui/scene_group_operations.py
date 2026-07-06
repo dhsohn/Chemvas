@@ -29,6 +29,23 @@ from ui.selection_service_access import (
 GROUPABLE_STANDALONE_KINDS = frozenset({"note", "ts_bracket", "shape", "orbital"}) | frozenset(ARROW_KINDS)
 
 
+def _is_standalone_mark(canvas, item) -> bool:
+    data = item.data(1)
+    atom_id = data.get("atom_id") if isinstance(data, dict) else None
+    # Atom-bound marks already travel with their atom; only free-floating marks
+    # are independent objects that a group needs to track.
+    return not (isinstance(atom_id, int) and atom_id in atoms_for(canvas))
+
+
+def _is_groupable_standalone_item(canvas, item) -> bool:
+    kind = item.data(0)
+    if kind in GROUPABLE_STANDALONE_KINDS:
+        return True
+    if kind == "mark":
+        return _is_standalone_mark(canvas, item)
+    return False
+
+
 def _selected_group_members_for(canvas) -> tuple[set[int], list]:
     atom_ids = {
         atom_id
@@ -38,7 +55,7 @@ def _selected_group_members_for(canvas) -> tuple[set[int], list]:
     items = [
         item
         for item in selected_scene_items_for(canvas, excluded_kinds=TRANSFORM_SELECTION_EXCLUDED_KINDS)
-        if item.data(0) in GROUPABLE_STANDALONE_KINDS
+        if _is_groupable_standalone_item(canvas, item)
     ]
     return atom_ids, items
 
@@ -135,8 +152,6 @@ def group_selection_targets_for(canvas, targets: list) -> list:
         group = state.groups[group_id]
         member_atom_ids.update(group.atom_ids)
         for member in attached_canvas_scene_items(canvas, group.items):
-            if member.data(0) == "note":
-                continue
             if id(member) not in seen:
                 seen.add(id(member))
                 extended.append(member)

@@ -84,6 +84,13 @@ def _add_arrow(canvas, *, selected: bool = False):
     return item
 
 
+def _add_mark(canvas, *, atom_id=None, selected: bool = False):
+    item = canvas.add_scene_item("mark", selected=selected)
+    item.setData(1, {"kind": "plus", "atom_id": atom_id})
+    append_scene_item_for(canvas, "mark_items", item)
+    return item
+
+
 def _add_note(canvas, *, selected: bool = False):
     item = canvas.add_scene_item("note", selected=False)
     append_scene_item_for(canvas, "note_items", item)
@@ -131,6 +138,29 @@ class SceneGroupOperationsTest(unittest.TestCase):
         self.assertEqual({id(item) for item in group.items}, {id(arrow), id(note)})
         self.assertEqual(len(canvas.history.commands), 1)
         self.assertIsInstance(canvas.history.commands[0], GroupSceneItemsCommand)
+
+    def test_group_selection_includes_standalone_marks(self) -> None:
+        canvas = _Canvas()
+        atom_a, _ = _add_atom(canvas, selected=True)
+        mark = _add_mark(canvas, atom_id=None, selected=True)
+
+        self.assertTrue(group_selection_for(canvas))
+
+        group = next(iter(group_state_for(canvas).groups.values()))
+        self.assertEqual(group.atom_ids, {atom_a})
+        self.assertEqual({id(item) for item in group.items}, {id(mark)})
+
+    def test_group_selection_excludes_atom_bound_marks(self) -> None:
+        canvas = _Canvas()
+        atom_a, _ = _add_atom(canvas, selected=True)
+        atom_b, _ = _add_atom(canvas, 30.0, 0.0, selected=True)
+        # A mark pinned to a selected atom is not an independent unit, so the
+        # selection is a single connected fragment plus its mark and cannot group.
+        _add_mark(canvas, atom_id=atom_b, selected=True)
+        _add_bond(canvas, atom_a, atom_b, selected=True)
+
+        self.assertFalse(group_selection_for(canvas))
+        self.assertEqual(group_state_for(canvas).groups, {})
 
     def test_group_selection_is_noop_for_identical_membership(self) -> None:
         canvas = _Canvas()
@@ -242,6 +272,16 @@ class SceneGroupOperationsTest(unittest.TestCase):
 
         extended_ids = {id(item) for item in extended}
         self.assertEqual(extended_ids, {id(item_a), id(item_b), id(bond_item), id(arrow)})
+
+    def test_group_selection_targets_includes_grouped_notes(self) -> None:
+        canvas = _Canvas()
+        atom_a, item_a = _add_atom(canvas)
+        note = _add_note(canvas)
+        register_group_for(canvas, {atom_a}, [note])
+
+        extended = group_selection_targets_for(canvas, [item_a])
+
+        self.assertIn(id(note), {id(item) for item in extended})
 
     def test_group_selection_targets_without_group_returns_targets(self) -> None:
         canvas = _Canvas()
