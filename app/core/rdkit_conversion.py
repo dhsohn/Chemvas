@@ -204,44 +204,12 @@ class RDKitConversionHelper:
         atom_id: int,
         adjacency: Mapping[int, list[int]],
     ) -> bool:
+        # Standard drawing convention: hetero atoms carry implicit hydrogens up
+        # to their normal valence (R-NH2, R-OH, ...), so RDKit's completion is
+        # only suppressed when the user drew the hydrogens explicitly — adding
+        # implicit ones on top would double-count them. Both the tolerant
+        # round-trip builder and the strict conversion builder share this rule.
         return bool(cls._has_explicit_h_neighbor(model, atom_id, adjacency))
-
-    @classmethod
-    def _should_disable_conversion_implicit_hydrogens(
-        cls,
-        model: MoleculeModel,
-        atom_id: int,
-        adjacency: Mapping[int, list[int]],
-        *,
-        formal_charge: int = 0,
-        radical_electrons: int = 0,
-    ) -> bool:
-        has_h_neighbor = cls._has_explicit_h_neighbor(model, atom_id, adjacency)
-        if has_h_neighbor is None:
-            return False
-        if has_h_neighbor:
-            return True
-        if formal_charge or radical_electrons:
-            return False
-        return not cls._allows_neutral_nitrogen_implicit_hydrogen(model, atom_id, adjacency)
-
-    @staticmethod
-    def _allows_neutral_nitrogen_implicit_hydrogen(
-        model: MoleculeModel,
-        atom_id: int,
-        adjacency: Mapping[int, list[int]],
-    ) -> bool:
-        atom = model.atoms.get(atom_id)
-        if atom is None or atom.element.upper() != "N":
-            return False
-        if len(adjacency.get(atom_id, [])) != 2:
-            return False
-        order_sum = 0
-        for bond in model.bonds:
-            if bond is None or atom_id not in (bond.a, bond.b):
-                continue
-            order_sum += max(1, int(bond.order or 1))
-        return order_sum == 2
 
     @staticmethod
     def _component_sort_key(model: MoleculeModel, atom_ids: set[int]) -> tuple[float, float, int]:
@@ -624,13 +592,7 @@ class RDKitConversionHelper:
             except Exception:
                 invalid_labels.append(f"{atom.element} (atom {atom_id})")
                 continue
-            if self._should_disable_conversion_implicit_hydrogens(
-                model,
-                atom_id,
-                adjacency,
-                formal_charge=formal_charge,
-                radical_electrons=radical_electrons,
-            ):
+            if self._should_disable_implicit_hydrogens(model, atom_id, adjacency):
                 rd_atom.SetNoImplicit(True)
             self._apply_atom_annotation(
                 rd_atom,

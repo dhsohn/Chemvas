@@ -11,11 +11,13 @@ from ui.canvas_model_access import (
     bond_count_for,
     bond_for_id,
     bond_ids_from,
+    bonds_for,
     clear_bond_for_id,
     has_bond_slot_for,
     set_bond_for_id,
     trim_bonds_direct_for,
 )
+from ui.graph_index_operations import first_matching_bond_id
 from ui.scene_item_access import remove_items_from_canvas_scene
 
 if TYPE_CHECKING:
@@ -31,6 +33,15 @@ class CanvasBondMutationService:
     def add_bond(self, a: int, b: int, order: int = 1) -> int:
         graph_service = self.graph_service
         existing_id = graph_service.bond_id_between(a, b)
+        if existing_id is None:
+            # The index is the fast path, but this is the one write site where
+            # a stale entry would let a duplicate bond into the model and
+            # poison every later save. Bond creation is rare enough that a
+            # full scan is cheap; repair the index when it disagrees.
+            existing_id = first_matching_bond_id(bonds_for(self.canvas), a, b)
+            if existing_id is not None:
+                graph_service.add_bond_neighbors(a, b)
+                graph_service.add_bond_index(existing_id, a, b)
         if existing_id is not None:
             return existing_id
         bond_id = add_bond_to_model_for(self.canvas, a, b, order)

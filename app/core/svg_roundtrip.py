@@ -5,6 +5,7 @@ import json
 import zlib
 from decimal import Decimal
 from os import PathLike
+from pathlib import Path
 from typing import Any, cast
 from xml.etree import ElementTree as ET
 
@@ -103,7 +104,16 @@ def extract_chemvas_svg_payload(path: PathType) -> dict[str, Any]:
 
 def _parse_svg_tree(path: PathType, *, error_message: str) -> ET.ElementTree[ET.Element[str]]:
     try:
-        return ET.parse(path)
+        data = Path(path).read_bytes()
+    except OSError as exc:
+        raise ValueError(error_message) from exc
+    # xml.etree expands internal entities, so a crafted DTD ("billion laughs")
+    # could exhaust memory. Chemvas-exported SVGs never carry a DOCTYPE, and
+    # entity declarations can only live inside one, so reject it outright.
+    if b"<!DOCTYPE" in data or b"<!ENTITY" in data:
+        raise ValueError(error_message)
+    try:
+        return ET.ElementTree(ET.fromstring(data))
     except (ET.ParseError, LookupError) as exc:
         raise ValueError(error_message) from exc
 
