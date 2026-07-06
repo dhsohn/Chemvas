@@ -7,6 +7,7 @@ from unittest import mock
 
 from core.document_io import (
     ChemvasDocument,
+    atomic_write_text,
     create_document,
     parse_document,
     read_document,
@@ -359,6 +360,19 @@ class DocumentIOTest(unittest.TestCase):
             siblings = os.listdir(temp_dir)
 
         self.assertEqual(siblings, ["sample.chemvas"])
+
+    def test_atomic_write_text_preserves_existing_file_on_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "export.xyz"
+            path.write_text("ORIGINAL", encoding="utf-8")
+            tmp_path = path.with_name(f".{path.name}.tmp")
+
+            with mock.patch("core.document_io.os.fsync", side_effect=OSError("disk full")):
+                with self.assertRaises(OSError):
+                    atomic_write_text(path, "NEW")
+
+            self.assertEqual(path.read_text(encoding="utf-8"), "ORIGINAL")
+            self.assertFalse(tmp_path.exists())
 
 
 if __name__ == "__main__":

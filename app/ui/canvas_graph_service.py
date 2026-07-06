@@ -72,6 +72,29 @@ class CanvasGraphService:
     def remove_bond_index(self, bond_id: int, a_id: int, b_id: int) -> None:
         remove_bond_from_atom_index(self.graph.atom_bond_ids, bond_id, a_id, b_id)
 
+    def _ensure_indexed_bond(self, bond_id: int, a_id: int, b_id: int) -> None:
+        changed = False
+        bonds_a = self.graph.atom_bond_ids.setdefault(a_id, set())
+        if bond_id not in bonds_a:
+            bonds_a.add(bond_id)
+            changed = True
+        bonds_b = self.graph.atom_bond_ids.setdefault(b_id, set())
+        if bond_id not in bonds_b:
+            bonds_b.add(bond_id)
+            changed = True
+
+        neighbors_a = self.graph.atom_neighbors.setdefault(a_id, set())
+        if b_id not in neighbors_a:
+            neighbors_a.add(b_id)
+            changed = True
+        neighbors_b = self.graph.atom_neighbors.setdefault(b_id, set())
+        if a_id not in neighbors_b:
+            neighbors_b.add(a_id)
+            changed = True
+
+        if changed:
+            self.graph.bump_version()
+
     @staticmethod
     def bond_matches_atoms(bond, a_id: int, b_id: int) -> bool:
         return graph_bond_matches_atoms(bond, a_id, b_id)
@@ -93,7 +116,7 @@ class CanvasGraphService:
         )
 
     def bond_id_between(self, a_id: int, b_id: int, skip_bond_id: int | None = None) -> int | None:
-        return bond_id_between_indexed_atoms(
+        bond_id = bond_id_between_indexed_atoms(
             self.graph.atom_bond_ids,
             bonds_for(self.canvas),
             a_id,
@@ -101,24 +124,13 @@ class CanvasGraphService:
             bond_for_id=lambda bond_id: bond_for_id(self.canvas, bond_id),
             skip_bond_id=skip_bond_id,
         )
+        if bond_id is not None:
+            self._ensure_indexed_bond(bond_id, a_id, b_id)
+        return bond_id
 
     def bond_id_between_with_repair(self, a_id: int, b_id: int) -> int | None:
-        """Index lookup backed by a model scan that repairs a stale index.
-
-        The graph index is derived state, so this service owns its consistency
-        contract: a *present* (even empty) index entry is trusted on the fast
-        path, but before a caller acts on "no bond exists" in a way that could
-        corrupt the model (e.g. creating a bond), this slow path re-checks the
-        model directly and re-indexes anything the index forgot.
-        """
-        existing_id = self.bond_id_between(a_id, b_id)
-        if existing_id is not None:
-            return existing_id
-        existing_id = graph_first_matching_bond_id(bonds_for(self.canvas), a_id, b_id)
-        if existing_id is not None:
-            self.add_bond_neighbors(a_id, b_id)
-            self.add_bond_index(existing_id, a_id, b_id)
-        return existing_id
+        """Compatibility wrapper for callers that require self-repairing reads."""
+        return self.bond_id_between(a_id, b_id)
 
     def bond_exists(self, a_id: int, b_id: int) -> bool:
         return self.bond_id_between(a_id, b_id) is not None

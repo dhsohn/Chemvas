@@ -13,6 +13,7 @@ from core.document_state import (
     extract_document_state,
     selection_payload_to_canvas_state,
     serialize_model_state,
+    serialize_model_state_with_warnings,
     serialize_settings,
 )
 from core.model import Atom, Bond, MoleculeModel
@@ -126,6 +127,38 @@ class DocumentStateTest(unittest.TestCase):
 
         self.assertEqual(state["atom_annotations"], {0: {"formal_charge": 1, "radical_electrons": 1}})
         self.assertEqual(restored.atom_annotations, {0: {"formal_charge": 1, "radical_electrons": 1}})
+
+    def test_serialize_model_state_with_warnings_reports_repairs(self) -> None:
+        model = MoleculeModel(
+            atoms={
+                0: Atom("", math.nan, 0.0, color="red"),
+                1: Atom("O", 20.0, 0.0),
+            },
+            bonds=[
+                Bond(0, 1, 4, "bogus", "blue"),
+                Bond(0, 99, 1),
+                Bond(1, 1, 1),
+                Bond(1, 0, 1),
+            ],
+        )
+        model.atom_annotations = {99: {"formal_charge": 1}}
+
+        state, warnings = serialize_model_state_with_warnings(model)
+
+        self.assertEqual(state["atoms"][0]["element"], "C")
+        self.assertEqual(state["atoms"][0]["x"], 0.0)
+        self.assertEqual(state["atoms"][0]["color"], "#000000")
+        self.assertEqual(state["bonds"], [{"a": 0, "b": 1, "order": 1, "style": "single", "color": "#000000"}])
+        self.assertNotIn("atom_annotations", state)
+        self.assertIn("1 atom label was replaced with carbon.", warnings)
+        self.assertIn("1 atom position was reset to a finite coordinate.", warnings)
+        self.assertIn("1 atom color was reset to black.", warnings)
+        self.assertIn("2 invalid bonds were omitted.", warnings)
+        self.assertIn("1 duplicate bond was omitted.", warnings)
+        self.assertIn("1 bond order was reset.", warnings)
+        self.assertIn("1 bond style was reset.", warnings)
+        self.assertIn("1 bond color was reset to black.", warnings)
+        self.assertIn("1 stale atom annotation was omitted.", warnings)
 
     def test_deserialize_model_state_rebuilds_model(self) -> None:
         model = deserialize_model_state(

@@ -180,16 +180,26 @@ def serialize_model_state(
     fail because of an editing bug — the serializer heals what it can instead
     of letting ``build_document_payload`` reject the user's work.
     """
+    state, _warnings = serialize_model_state_with_warnings(model, explicit_label_atom_ids)
+    return state
+
+
+def serialize_model_state_with_warnings(
+    model: MoleculeModel,
+    explicit_label_atom_ids: Collection[int] = (),
+) -> tuple[dict, list[str]]:
     explicit_ids = set(explicit_label_atom_ids)
-    atoms = {
-        atom_id: _normalized_atom_state(
-            atom_to_state(
-                atom,
-                explicit_label=(atom.element.upper() == "C" and atom_id in explicit_ids),
-            )
+    warning_counts: dict[str, int] = {}
+    atoms: dict[int, dict] = {}
+    for atom_id, atom in model.atoms.items():
+        element = atom.element if isinstance(atom.element, str) else ""
+        raw_atom_state = atom_to_state(
+            atom,
+            explicit_label=(element.upper() == "C" and atom_id in explicit_ids),
         )
-        for atom_id, atom in model.atoms.items()
-    }
+        normalized_atom_state = _normalized_atom_state(raw_atom_state.copy())
+        _record_atom_serialization_repairs(warning_counts, raw_atom_state, normalized_atom_state)
+        atoms[atom_id] = normalized_atom_state
     bonds: list[dict] = []
     seen_bond_pairs: set[tuple[int, int]] = set()
     for bond in model.bonds:
@@ -198,10 +208,16 @@ def serialize_model_state(
             continue
         a = cast(int, bond_state["a"])
         b = cast(int, bond_state["b"])
-        if a == b or a not in atoms or b not in atoms or _bond_pair_key(a, b) in seen_bond_pairs:
+        if a == b or a not in atoms or b not in atoms:
+            warning_counts["dropped_bonds"] = warning_counts.get("dropped_bonds", 0) + 1
+            continue
+        if _bond_pair_key(a, b) in seen_bond_pairs:
+            warning_counts["duplicate_bonds"] = warning_counts.get("duplicate_bonds", 0) + 1
             continue
         seen_bond_pairs.add(_bond_pair_key(a, b))
-        bonds.append(_normalized_bond_state(bond_state))
+        normalized_bond_state = _normalized_bond_state(bond_state.copy())
+        _record_bond_serialization_repairs(warning_counts, bond_state, normalized_bond_state)
+        bonds.append(normalized_bond_state)
     state = {
         "atoms": atoms,
         "bonds": bonds,
@@ -210,7 +226,115 @@ def serialize_model_state(
     atom_annotations = _serialized_atom_annotations(getattr(model, "atom_annotations", {}), atoms.keys())
     if atom_annotations:
         state["atom_annotations"] = atom_annotations
-    return state
+    _record_atom_annotation_serialization_repairs(
+        warning_counts,
+        getattr(model, "atom_annotations", {}),
+        atoms.keys(),
+    )
+    return state, _model_serialization_warnings(warning_counts)
+
+
+def _record_atom_serialization_repairs(
+    warning_counts: dict[str, int],
+    raw_state: Mapping[str, object],
+    normalized_state: Mapping[str, object],
+) -> None:
+    if raw_state.get("element") != normalized_state.get("element"):
+        warning_counts["atom_labels"] = warning_counts.get("atom_labels", 0) + 1
+    if raw_state.get("x") != normalized_state.get("x") or raw_state.get("y") != normalized_state.get("y"):
+        warning_counts["atom_coordinates"] = warning_counts.get("atom_coordinates", 0) + 1
+    if raw_state.get("color") != normalized_state.get("color"):
+        warning_counts["atom_colors"] = warning_counts.get("atom_colors", 0) + 1
+
+
+def _record_bond_serialization_repairs(
+    warning_counts: dict[str, int],
+    raw_state: Mapping[str, object],
+    normalized_state: Mapping[str, object],
+) -> None:
+    if raw_state.get("order") != normalized_state.get("order"):
+        warning_counts["bond_orders"] = warning_counts.get("bond_orders", 0) + 1
+    if raw_state.get("style") != normalized_state.get("style"):
+        warning_counts["bond_styles"] = warning_counts.get("bond_styles", 0) + 1
+    if raw_state.get("color") != normalized_state.get("color"):
+        warning_counts["bond_colors"] = warning_counts.get("bond_colors", 0) + 1
+
+
+def _record_atom_annotation_serialization_repairs(
+    warning_counts: dict[str, int],
+    raw_annotations: Mapping[int, Mapping[str, int]],
+    live_atom_ids: Collection[int],
+) -> None:
+    live_atom_id_set = set(live_atom_ids)
+    for atom_id, annotation in raw_annotations.items():
+        if atom_id not in live_atom_id_set and annotation:
+            warning_counts["atom_annotations"] = warning_counts.get("atom_annotations", 0) + 1
+
+
+def _model_serialization_warnings(warning_counts: Mapping[str, int]) -> list[str]:
+    warnings: list[str] = []
+    _append_count_warning(
+        warnings,
+        warning_counts.get("atom_labels", 0),
+        "1 atom label was replaced with carbon.",
+        "{} atom labels were replaced with carbon.",
+    )
+    _append_count_warning(
+        warnings,
+        warning_counts.get("atom_coordinates", 0),
+        "1 atom position was reset to a finite coordinate.",
+        "{} atom positions were reset to finite coordinates.",
+    )
+    _append_count_warning(
+        warnings,
+        warning_counts.get("atom_colors", 0),
+        "1 atom color was reset to black.",
+        "{} atom colors were reset to black.",
+    )
+    _append_count_warning(
+        warnings,
+        warning_counts.get("dropped_bonds", 0),
+        "1 invalid bond was omitted.",
+        "{} invalid bonds were omitted.",
+    )
+    _append_count_warning(
+        warnings,
+        warning_counts.get("duplicate_bonds", 0),
+        "1 duplicate bond was omitted.",
+        "{} duplicate bonds were omitted.",
+    )
+    _append_count_warning(
+        warnings,
+        warning_counts.get("bond_orders", 0),
+        "1 bond order was reset.",
+        "{} bond orders were reset.",
+    )
+    _append_count_warning(
+        warnings,
+        warning_counts.get("bond_styles", 0),
+        "1 bond style was reset.",
+        "{} bond styles were reset.",
+    )
+    _append_count_warning(
+        warnings,
+        warning_counts.get("bond_colors", 0),
+        "1 bond color was reset to black.",
+        "{} bond colors were reset to black.",
+    )
+    _append_count_warning(
+        warnings,
+        warning_counts.get("atom_annotations", 0),
+        "1 stale atom annotation was omitted.",
+        "{} stale atom annotations were omitted.",
+    )
+    return warnings
+
+
+def _append_count_warning(warnings: list[str], count: int, singular: str, plural: str) -> None:
+    if count == 1:
+        warnings.append(singular)
+    elif count > 1:
+        warnings.append(plural.format(count))
 
 
 def _normalized_atom_state(atom_state: dict) -> dict:

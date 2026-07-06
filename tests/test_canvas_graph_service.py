@@ -62,7 +62,11 @@ class CanvasGraphServiceTest(unittest.TestCase):
         bonds = [Bond(1, 2, 1), Bond(1, 2, 2)]
         canvas = SimpleNamespace(
             model=SimpleNamespace(bonds=bonds),
-            graph_state=CanvasGraphState(atom_neighbors={1: {2}, 2: {1}}, graph_version=4),
+            graph_state=CanvasGraphState(
+                atom_neighbors={1: {2}, 2: {1}},
+                atom_bond_ids={1: {0, 1}, 2: {0, 1}},
+                graph_version=4,
+            ),
         )
         service = CanvasGraphService(canvas)
 
@@ -415,20 +419,32 @@ class CanvasGraphServiceTest(unittest.TestCase):
         unique_leaf_service.bond_is_rotatable = mock.Mock(return_value=False)
         self.assertIsNone(unique_leaf_service.rotatable_axis_from_selection(set(), {0, 1}))
 
-    def test_bond_id_between_with_repair_reindexes_forgotten_bond(self) -> None:
+    def test_bond_id_between_repairs_present_empty_entries_from_model_scan(self) -> None:
         # The model holds a bond the index never learned about (stale empty
-        # entries): the repairing lookup must find it via the model scan and
-        # re-index it so the fast path works afterwards.
+        # entries): the read path must find it via the model scan and re-index
+        # it so the fast path works afterwards.
         canvas = self._make_canvas([Bond(1, 2, 1)])
         service = CanvasGraphService(canvas)
         service.graph.atom_bond_ids = {1: set(), 2: set()}
         service.graph.atom_neighbors = {1: set(), 2: set()}
 
-        self.assertIsNone(service.bond_id_between(1, 2))
-        self.assertEqual(service.bond_id_between_with_repair(1, 2), 0)
+        self.assertEqual(service.bond_id_between(1, 2), 0)
         self.assertEqual(service.graph.atom_bond_ids, {1: {0}, 2: {0}})
         self.assertEqual(service.graph.atom_neighbors, {1: {2}, 2: {1}})
+        self.assertEqual(service.graph.graph_version, 1)
         self.assertEqual(service.bond_id_between(1, 2), 0)
+        self.assertEqual(service.graph.graph_version, 1)
+        self.assertEqual(service.bond_id_between_with_repair(1, 2), 0)
+
+    def test_bond_id_between_scans_present_empty_entries_with_skip_bond_id(self) -> None:
+        canvas = self._make_canvas([Bond(1, 2, 1), Bond(1, 2, 2)])
+        service = CanvasGraphService(canvas)
+        service.graph.atom_bond_ids = {1: set(), 2: set()}
+        service.graph.atom_neighbors = {1: set(), 2: set()}
+
+        self.assertEqual(service.bond_id_between(1, 2, skip_bond_id=0), 1)
+        self.assertEqual(service.graph.atom_bond_ids, {1: {1}, 2: {1}})
+        self.assertEqual(service.graph.atom_neighbors, {1: {2}, 2: {1}})
 
     def test_bond_id_between_with_repair_returns_none_without_bond(self) -> None:
         canvas = self._make_canvas([], atoms=self._make_atoms(1, 2))

@@ -65,6 +65,23 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             self.assertEqual(self.window.tab_references.canvas_tabs.tabText(0), "new.chemvas")
             self.assertFalse(services_for_window(self.window).canvas_document_service.is_dirty(canvas))
 
+    def test_save_canvas_to_path_reports_document_adjustments(self) -> None:
+        message_box = mock.Mock()
+
+        with mock.patch(
+            "ui.main_window_document_action_service.save_canvas_to_file_for",
+            return_value=["1 invalid bond was omitted."],
+        ):
+            result = self.service.save_canvas_to_path(
+                self.window,
+                "/tmp/adjusted.chemvas",
+                message_box=message_box,
+            )
+
+        self.assertTrue(result)
+        message_box.warning.assert_called_once()
+        self.assertIn("1 invalid bond was omitted.", message_box.warning.call_args.args[2])
+
     def test_save_canvas_prefers_current_path_and_falls_back_to_save_as(self) -> None:
         canvas = active_canvas_for_window(self.window)
         services_for_window(self.window).canvas_document_service.set_file_path(canvas, "/tmp/existing.chemvas")

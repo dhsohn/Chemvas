@@ -88,17 +88,29 @@ class RDKitConversionHelper:
         # surface any real failure. This deliberately differs from
         # ``_build_conversion_rdkit_mol``, which is strict and aborts on a
         # sanitize error. Keep the tolerant behavior (see
-        # test_model_to_rdkit_with_map_ignores_invalid_bonds_and_sanitize_errors).
+        # test_model_to_rdkit_with_map_tolerant_ignores_invalid_bonds_and_sanitize_errors).
         try:
             Chem.SanitizeMol(mol)
         except Exception:
             logger.debug("SanitizeMol failed for tolerant round-trip build; continuing.", exc_info=True)
         return mol, atom_map
 
-    def model_to_rdkit_with_map(self, model: MoleculeModel, *, strict_labels: bool = False):
-        return self._build_rdkit_mol_with_map(model, strict_labels=strict_labels)
+    def model_to_rdkit_with_map_tolerant(self, model: MoleculeModel):
+        return self._build_rdkit_mol_with_map(model, strict_labels=False)
 
-    def model_to_rdkit(self, model: MoleculeModel, *, strict_labels: bool = False):
+    def model_to_rdkit_with_map_strict_labels(self, model: MoleculeModel):
+        return self._build_rdkit_mol_with_map(model, strict_labels=True)
+
+    def model_to_rdkit_with_map(self, model: MoleculeModel, *, strict_labels: bool = True):
+        if strict_labels:
+            return self.model_to_rdkit_with_map_strict_labels(model)
+        return self.model_to_rdkit_with_map_tolerant(model)
+
+    def model_to_rdkit_tolerant(self, model: MoleculeModel):
+        mol, _ = self.adapter.model_to_rdkit_with_map_tolerant(model)
+        return mol
+
+    def model_to_rdkit(self, model: MoleculeModel, *, strict_labels: bool = True):
         mol, _ = self.adapter.model_to_rdkit_with_map(model, strict_labels=strict_labels)
         return mol
 
@@ -717,9 +729,10 @@ class RDKitConversionHelper:
             self.adapter.last_error = "RDKit is not available in this environment."
             return None
         Chem, AllChem = rdkit
-        mol, atom_map = self.adapter.model_to_rdkit_with_map(model)
+        mol, atom_map = self.adapter.model_to_rdkit_with_map_strict_labels(model)
         if mol is None or atom_map is None:
-            self.adapter.last_error = "Failed to build RDKit molecule."
+            if self.adapter.last_error is None:
+                self.adapter.last_error = "Failed to build RDKit molecule."
             return None
         mol_h = self.adapter._embed_3d_molecule(mol, Chem, AllChem)
         if mol_h is None:
