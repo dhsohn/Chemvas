@@ -91,7 +91,7 @@ class MainWindowDocumentActionService:
         message_box = QMessageBox if message_box is None else message_box
         target = self._active_canvas_for_window(window) if canvas is None else canvas
         try:
-            save_canvas_to_file_for(target, path)
+            warnings = save_canvas_to_file_for(target, path)
         except Exception as exc:
             message_box.warning(window, "Save Error", f"Failed to save file:\n{exc}")
             return False
@@ -100,6 +100,13 @@ class MainWindowDocumentActionService:
         self._canvas_documents.mark_clean(target)
         self._canvas_documents.refresh_tab_title(window, target)
         window.statusBar().showMessage(f"Saved: {path}", 4000)
+        if warnings:
+            message_box.warning(
+                window,
+                "Save Adjusted Document",
+                "Saved file, but Chemvas adjusted document data before writing:\n\n- "
+                + "\n- ".join(warnings),
+            )
         return True
 
     def save_canvas(
@@ -252,6 +259,7 @@ class MainWindowDocumentActionService:
                 dpi=options.dpi,
                 background=options.background,
                 sizing=options.sizing,
+                editable_svg=options.editable_svg,
             )
         except Exception as exc:
             message_box.warning(

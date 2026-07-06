@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import contextlib
-import os
 from pathlib import Path
 
-from core.document_io import read_document, write_document
+from core.document_io import (
+    atomic_write_text,
+    atomic_write_via_temp,
+    read_document,
+    write_document,
+)
 from core.document_state import (
     deserialize_model_state,
     selection_payload_to_canvas_state,
@@ -25,6 +29,7 @@ from ui.canvas_document_state import (
     restore_document_pre_model_items,
     restore_document_projection_state,
     snapshot_canvas_document_state,
+    snapshot_canvas_document_state_with_warnings,
 )
 from ui.canvas_format_access import (
     clipboard_selection_version_for,
@@ -113,8 +118,13 @@ class CanvasDocumentSessionService:
         self.apply_state(state)
         self.history.clear()
 
-    def save_to_file(self, path: str) -> None:
-        write_document(path, self.snapshot_state(), file_format_version_for(self.canvas))
+    def snapshot_state_with_warnings(self) -> tuple[dict, list[str]]:
+        return snapshot_canvas_document_state_with_warnings(self.canvas)
+
+    def save_to_file(self, path: str) -> list[str]:
+        state, warnings = self.snapshot_state_with_warnings()
+        write_document(path, state, file_format_version_for(self.canvas))
+        return warnings
 
     def load_from_file(self, path: str) -> None:
         document = read_document(path)
@@ -131,7 +141,7 @@ class CanvasDocumentSessionService:
         if xyz_block is None:
             message = rdkit_last_error_for(self.canvas) or "Failed to export 3D XYZ."
             raise ValueError(message)
-        Path(path).write_text(xyz_block, encoding="utf-8")
+        atomic_write_text(path, xyz_block)
 
     def export_mol(self, path: str, *, selected_only: bool = False) -> None:
         export_model, atom_annotations = self._build_xyz_payload(selected_only=selected_only)
@@ -155,7 +165,7 @@ class CanvasDocumentSessionService:
                         f"{exc} Install RDKit to expand these abbreviations automatically."
                     ) from exc
                 raise ValueError(reason) from exc
-        Path(path).write_text(block, encoding="utf-8")
+        atomic_write_text(path, block)
 
     def export_xyz_async(self, path: str, *, on_success, on_error, selected_only: bool = False) -> None:
         try:
@@ -189,6 +199,7 @@ class CanvasDocumentSessionService:
         dpi: int = 300,
         background: str = "transparent",
         sizing: str = "bond",
+        editable_svg: bool = False,
     ) -> None:
         from ui.export_plan_logic import points_for_mm
 
@@ -210,42 +221,26 @@ class CanvasDocumentSessionService:
         elif sizing == "col2":
             target_width_pt = points_for_mm(174.0)
 
-        if fmt.lower() == "svg":
-            target = Path(path)
-            tmp = target.with_name(f".{target.name}.tmp")
-            try:
-                export_canvas_scene_for(
-                    self.canvas,
-                    str(tmp),
-                    fmt=fmt,
-                    items=items,
-                    margin=pad,
-                    dpi=dpi,
-                    background=background,
-                    title="Chemvas drawing",
-                    unit_scale=unit_scale,
-                    target_width_pt=target_width_pt,
-                )
-                self._embed_editable_svg_payload(str(tmp), fmt=fmt, scope=scope)
-                os.replace(tmp, target)
-            except BaseException:
-                with contextlib.suppress(OSError):
-                    tmp.unlink()
-                raise
-            return
+        fmt = fmt.lower()
+        target = Path(path)
 
-        export_canvas_scene_for(
-            self.canvas,
-            path,
-            fmt=fmt,
-            items=items,
-            margin=pad,
-            dpi=dpi,
-            background=background,
-            title="Chemvas drawing",
-            unit_scale=unit_scale,
-            target_width_pt=target_width_pt,
-        )
+        def render_to_temp(tmp: Path) -> None:
+            export_canvas_scene_for(
+                self.canvas,
+                str(tmp),
+                fmt=fmt,
+                items=items,
+                margin=pad,
+                dpi=dpi,
+                background=background,
+                title="Chemvas drawing",
+                unit_scale=unit_scale,
+                target_width_pt=target_width_pt,
+            )
+            if fmt == "svg" and editable_svg:
+                self._embed_editable_svg_payload(str(tmp), fmt=fmt, scope=scope)
+
+        atomic_write_via_temp(target, render_to_temp)
 
     def _embed_editable_svg_payload(self, path: str, *, fmt: str, scope: str) -> None:
         if fmt.lower() != "svg":

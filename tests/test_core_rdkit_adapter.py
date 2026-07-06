@@ -727,6 +727,44 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertEqual(ammonium_identifiers.formula, "H4N+")
         self.assertEqual(ammonium_identifiers.smiles, "[NH4+]")
 
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for smoke tests")
+    def test_real_rdkit_smoke_smiles_model_and_mol_block_round_trip(self) -> None:
+        adapter = RDKitAdapter()
+
+        model = adapter.smiles_to_2d("CCO")
+
+        self.assertIsNotNone(model)
+        assert model is not None
+        self.assertEqual(len(model.atoms), 3)
+        self.assertEqual(len(model.bonds), 2)
+
+        mol = adapter.model_to_rdkit_strict_labels(model)
+        self.assertIsNotNone(mol)
+        self.assertEqual(_RealChem.MolToSmiles(mol, canonical=True), "CCO")
+
+        mol_block = adapter.model_to_mol_block(model)
+        self.assertIsNotNone(mol_block)
+        assert mol_block is not None
+        mol_from_block = _RealChem.MolFromMolBlock(mol_block, sanitize=True, removeHs=False)
+        self.assertIsNotNone(mol_from_block)
+        self.assertEqual(_RealChem.MolToSmiles(mol_from_block, canonical=True), "CCO")
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for smoke tests")
+    def test_real_rdkit_smoke_strict_labels_reject_abbreviations(self) -> None:
+        adapter = RDKitAdapter()
+        model = MoleculeModel()
+        model.add_atom("Me", 0.0, 0.0)
+        model.add_atom("Xx", 1.0, 0.0)
+
+        mol, atom_map = adapter.model_to_rdkit_with_map_strict_labels(model)
+
+        self.assertIsNone(mol)
+        self.assertIsNone(atom_map)
+        self.assertEqual(
+            adapter.last_error,
+            "XYZ export supports element symbols only. Unsupported atom labels: Me (atom 0), Xx (atom 1).",
+        )
+
     def test_smiles_to_2d_returns_none_when_rdkit_is_unavailable(self) -> None:
         adapter = RDKitAdapter()
         adapter._rdkit = (None, None)
@@ -809,7 +847,7 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertIsNone(model)
         self.assertIn("Invalid SMILES string", adapter.last_error or "")
 
-    def test_model_to_rdkit_with_map_deduplicates_and_falls_back_to_carbon(self) -> None:
+    def test_model_to_rdkit_with_map_tolerant_deduplicates_and_falls_back_to_carbon(self) -> None:
         adapter = RDKitAdapter()
         chem = _FakeChem({})
         adapter._rdkit = (chem, _FakeAllChem())
@@ -822,14 +860,25 @@ class RDKitAdapterTest(unittest.TestCase):
         model.bonds.append(Bond(a1, a0, 2))
         model.bonds.append(Bond(a0, a0, 3))
 
-        mol, atom_map = adapter.model_to_rdkit_with_map(model)
+        mol, atom_map = adapter.model_to_rdkit_with_map_tolerant(model)
 
         self.assertEqual(atom_map, {0: 0, 1: 1})
         self.assertEqual([atom.symbol for atom in mol.atoms], ["C", "C"])
         self.assertEqual(mol.bonds, [(0, 1, "single")])
         self.assertEqual(len(chem.sanitized_molecules), 1)
 
-    def test_model_to_rdkit_with_map_disables_implicit_hydrogen_completion_for_explicit_hydrogen_on_hetero_atom(self) -> None:
+    def test_model_to_rdkit_tolerant_falls_back_to_carbon(self) -> None:
+        adapter = RDKitAdapter()
+        adapter._rdkit = (_FakeChem({}), _FakeAllChem())
+        model = MoleculeModel()
+        model.add_atom("Xx", 0.0, 0.0)
+
+        mol = adapter.model_to_rdkit_tolerant(model)
+
+        self.assertIsNotNone(mol)
+        self.assertEqual([atom.symbol for atom in mol.atoms], ["C"])
+
+    def test_model_to_rdkit_with_map_tolerant_disables_implicit_hydrogen_completion_for_explicit_hydrogen_on_hetero_atom(self) -> None:
         adapter = RDKitAdapter()
         chem = _FakeChem({})
         adapter._rdkit = (chem, _FakeAllChem())
@@ -838,7 +887,7 @@ class RDKitAdapterTest(unittest.TestCase):
         hydrogen = model.add_atom("H", 1.0, 0.0)
         model.add_bond(oxygen, hydrogen, 1)
 
-        mol, atom_map = adapter.model_to_rdkit_with_map(model)
+        mol, atom_map = adapter.model_to_rdkit_with_map_tolerant(model)
 
         self.assertEqual(atom_map, {0: 0, 1: 1})
         self.assertTrue(mol.atoms[0].no_implicit)
@@ -919,9 +968,9 @@ class RDKitAdapterTest(unittest.TestCase):
         adapter = RDKitAdapter()
         adapter._rdkit = (None, None)
 
-        self.assertEqual(adapter.model_to_rdkit_with_map(self._simple_model()), (None, None))
+        self.assertEqual(adapter.model_to_rdkit_with_map_strict_labels(self._simple_model()), (None, None))
 
-    def test_model_to_rdkit_with_map_ignores_invalid_bonds_and_sanitize_errors(self) -> None:
+    def test_model_to_rdkit_with_map_tolerant_ignores_invalid_bonds_and_sanitize_errors(self) -> None:
         adapter = RDKitAdapter()
         chem = _FakeChem({}, sanitize_error=RuntimeError("bad sanitize"))
         adapter._rdkit = (chem, _FakeAllChem())
@@ -932,7 +981,7 @@ class RDKitAdapterTest(unittest.TestCase):
         model.bonds.append(Bond(a0, 99, 2))
         model.bonds.append(Bond(a0, a1, 99))
 
-        mol, atom_map = adapter.model_to_rdkit_with_map(model)
+        mol, atom_map = adapter.model_to_rdkit_with_map_tolerant(model)
 
         self.assertEqual(atom_map, {0: 0, 1: 1})
         self.assertEqual(mol.bonds, [(0, 1, "single")])
@@ -946,7 +995,7 @@ class RDKitAdapterTest(unittest.TestCase):
         for index, label in enumerate(["Xx", "Me", "Et", "Ph", "OMe", "Boc"]):
             model.add_atom(label, float(index), 0.0)
 
-        mol, atom_map = adapter._conversion_helper._build_rdkit_mol_with_map(model, strict_labels=True)
+        mol, atom_map = adapter.model_to_rdkit_with_map_strict_labels(model)
 
         self.assertIsNone(mol)
         self.assertIsNone(atom_map)
@@ -955,6 +1004,22 @@ class RDKitAdapterTest(unittest.TestCase):
             "XYZ export supports element symbols only. "
             "Unsupported atom labels: Xx (atom 0), Me (atom 1), Et (atom 2), "
             "Ph (atom 3), OMe (atom 4), ....",
+        )
+
+    def test_model_to_rdkit_with_map_defaults_to_strict_labels(self) -> None:
+        adapter = RDKitAdapter()
+        chem = _FakeChem({})
+        adapter._rdkit = (chem, _FakeAllChem())
+        model = MoleculeModel()
+        model.add_atom("Xx", 0.0, 0.0)
+
+        mol, atom_map = adapter.model_to_rdkit_with_map(model)
+
+        self.assertIsNone(mol)
+        self.assertIsNone(atom_map)
+        self.assertEqual(
+            adapter.last_error,
+            "XYZ export supports element symbols only. Unsupported atom labels: Xx (atom 0).",
         )
 
     def test_model_to_rdkit_with_map_rejects_unsupported_bond_styles(self) -> None:
@@ -1037,12 +1102,15 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertIsNone(mol)
         self.assertEqual(adapter.last_error, "3D conversion produced an invalid structure: bad sanitize")
 
-    def test_model_to_rdkit_returns_molecule_from_wrapped_builder(self) -> None:
+    def test_model_to_rdkit_returns_molecule_from_strict_builder(self) -> None:
         adapter = RDKitAdapter()
         expected = SimpleNamespace(name="mol")
+        model = self._simple_model()
 
-        with mock.patch.object(adapter, "model_to_rdkit_with_map", return_value=(expected, {0: 0})):
-            self.assertIs(adapter.model_to_rdkit(self._simple_model()), expected)
+        with mock.patch.object(adapter, "model_to_rdkit_with_map_strict_labels", return_value=(expected, {0: 0})) as mocked:
+            self.assertIs(adapter.model_to_rdkit(model), expected)
+
+        mocked.assert_called_once_with(model)
 
     def test_compute_props_returns_none_triplet_when_rdkit_is_unavailable(self) -> None:
         adapter = RDKitAdapter()
@@ -1054,7 +1122,7 @@ class RDKitAdapterTest(unittest.TestCase):
         adapter = RDKitAdapter()
         adapter._rdkit = (_FakeChem({}), _FakeAllChem())
 
-        with mock.patch.object(adapter, "model_to_rdkit", return_value=None):
+        with mock.patch.object(adapter, "model_to_rdkit_strict_labels", return_value=None):
             self.assertEqual(adapter.compute_props(self._simple_model()), (None, None, None))
 
     def test_compute_props_blanks_unsupported_labels_instead_of_carbon(self) -> None:
@@ -1072,11 +1140,12 @@ class RDKitAdapterTest(unittest.TestCase):
     def test_compute_props_uses_strict_labels(self) -> None:
         adapter = RDKitAdapter()
         adapter._rdkit = (_FakeChem({}), _FakeAllChem())
+        model = self._simple_model()
 
-        with mock.patch.object(adapter, "model_to_rdkit", return_value=None) as model_to_rdkit:
-            adapter.compute_props(self._simple_model())
+        with mock.patch.object(adapter, "model_to_rdkit_strict_labels", return_value=None) as model_to_rdkit:
+            adapter.compute_props(model)
 
-        self.assertTrue(model_to_rdkit.call_args.kwargs.get("strict_labels"))
+        model_to_rdkit.assert_called_once_with(model)
 
     def test_compute_props_returns_formula_mass_and_smiles(self) -> None:
         chem = _FakeChem({}, add_hs_result=SimpleNamespace())
@@ -1086,7 +1155,7 @@ class RDKitAdapterTest(unittest.TestCase):
 
         with mock.patch.object(
             adapter,
-            "model_to_rdkit",
+            "model_to_rdkit_strict_labels",
             return_value=SimpleNamespace(canonical_smiles="CO"),
         ):
             with _patch_descriptor_modules(formula="CH4O", mw=32.042):
@@ -1103,7 +1172,7 @@ class RDKitAdapterTest(unittest.TestCase):
 
         with mock.patch.object(
             adapter,
-            "model_to_rdkit",
+            "model_to_rdkit_strict_labels",
             return_value=SimpleNamespace(canonical_smiles="CO"),
         ):
             with _patch_descriptor_modules(mw_error=RuntimeError("descriptor failure")):
@@ -1130,7 +1199,7 @@ class RDKitAdapterTest(unittest.TestCase):
         adapter = RDKitAdapter()
         adapter._rdkit = (_FakeChem({}), _FakeAllChem())
 
-        with mock.patch.object(adapter, "model_to_rdkit", return_value=None):
+        with mock.patch.object(adapter, "model_to_rdkit_strict_labels", return_value=None):
             identifiers = adapter.compute_identifiers(self._simple_model())
 
         self.assertIsNone(identifiers.formula)
@@ -1146,7 +1215,7 @@ class RDKitAdapterTest(unittest.TestCase):
 
         with mock.patch.object(
             adapter,
-            "model_to_rdkit",
+            "model_to_rdkit_strict_labels",
             return_value=SimpleNamespace(canonical_smiles="CO"),
         ):
             with _patch_descriptor_modules(formula="CH4O", mw=32.042):
@@ -1266,12 +1335,31 @@ class RDKitAdapterTest(unittest.TestCase):
     def test_model_to_3d_coords_returns_none_when_model_conversion_fails(self) -> None:
         adapter = RDKitAdapter()
         adapter._rdkit = (_FakeChem({}), _FakeAllChem3D())
+        model = self._simple_model()
 
-        with mock.patch.object(adapter, "model_to_rdkit_with_map", return_value=(None, None)):
-            coords = adapter.model_to_3d_coords(self._simple_model())
+        with mock.patch.object(adapter, "model_to_rdkit_with_map_strict_labels", return_value=(None, None)) as mocked:
+            coords = adapter.model_to_3d_coords(model)
 
         self.assertIsNone(coords)
         self.assertEqual(adapter.last_error, "Failed to build RDKit molecule.")
+        mocked.assert_called_once_with(model)
+
+    def test_model_to_3d_coords_rejects_invalid_labels_instead_of_using_carbon(self) -> None:
+        chem = _FakeChem({})
+        all_chem = _FakeAllChem3D()
+        adapter = RDKitAdapter()
+        adapter._rdkit = (chem, all_chem)
+        model = MoleculeModel()
+        model.add_atom("Xx", 0.0, 0.0)
+
+        coords = adapter.model_to_3d_coords(model)
+
+        self.assertIsNone(coords)
+        self.assertEqual(
+            adapter.last_error,
+            "XYZ export supports element symbols only. Unsupported atom labels: Xx (atom 0).",
+        )
+        self.assertEqual(all_chem.embed_calls, [])
 
     def test_model_to_3d_coords_retries_with_random_coords_and_returns_mapping(self) -> None:
         chem = _FakeChem(
@@ -1284,7 +1372,7 @@ class RDKitAdapterTest(unittest.TestCase):
 
         with mock.patch.object(
             adapter,
-            "model_to_rdkit_with_map",
+            "model_to_rdkit_with_map_strict_labels",
             return_value=(SimpleNamespace(), {10: 0, 11: 1}),
         ):
             coords = adapter.model_to_3d_coords(self._simple_model())
@@ -1303,7 +1391,7 @@ class RDKitAdapterTest(unittest.TestCase):
 
         with mock.patch.object(
             adapter,
-            "model_to_rdkit_with_map",
+            "model_to_rdkit_with_map_strict_labels",
             return_value=(SimpleNamespace(), {7: 0}),
         ):
             coords = adapter.model_to_3d_coords(self._simple_model())
@@ -1317,7 +1405,7 @@ class RDKitAdapterTest(unittest.TestCase):
 
         with mock.patch.object(
             adapter,
-            "model_to_rdkit_with_map",
+            "model_to_rdkit_with_map_strict_labels",
             return_value=(SimpleNamespace(), {0: 0}),
         ):
             coords = adapter.model_to_3d_coords(self._simple_model())
@@ -1332,7 +1420,7 @@ class RDKitAdapterTest(unittest.TestCase):
 
         with mock.patch.object(
             adapter,
-            "model_to_rdkit_with_map",
+            "model_to_rdkit_with_map_strict_labels",
             return_value=(SimpleNamespace(), {0: 0}),
         ):
             coords = adapter.model_to_3d_coords(self._simple_model())
@@ -1353,7 +1441,7 @@ class RDKitAdapterTest(unittest.TestCase):
 
         with mock.patch.object(
             adapter,
-            "model_to_rdkit_with_map",
+            "model_to_rdkit_with_map_strict_labels",
             return_value=(SimpleNamespace(), {0: 0}),
         ):
             coords = adapter.model_to_3d_coords(self._simple_model())

@@ -142,7 +142,7 @@ class RDKitImportHelper:
         # would report identifiers that do not match the drawn structure. When
         # such a label is present the conversion returns ``None`` and we leave
         # the identifiers blank instead of showing a misleading value.
-        mol = self.adapter.model_to_rdkit(model, strict_labels=True)
+        mol = self.adapter.model_to_rdkit_strict_labels(model)
         if mol is None:
             return MoleculeIdentifiers()
         try:

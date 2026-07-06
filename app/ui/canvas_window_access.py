@@ -13,8 +13,8 @@ def restore_canvas_state_for(canvas, state: dict) -> None:
     canvas_window_document_session_service(canvas).restore_state(state)
 
 
-def save_canvas_to_file_for(canvas, path: str) -> None:
-    canvas_window_document_session_service(canvas).save_to_file(path)
+def save_canvas_to_file_for(canvas, path: str) -> list[str]:
+    return canvas_window_document_session_service(canvas).save_to_file(path)
 
 
 def set_selection_info_callback_for(canvas, callback) -> None:

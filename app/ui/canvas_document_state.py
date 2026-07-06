@@ -7,7 +7,7 @@ from core.document_state import (
     is_hex_color,
     model_bond_pairs,
     ring_atom_ids_form_cycle,
-    serialize_model_state,
+    serialize_model_state_with_warnings,
     serialize_settings,
 )
 from PyQt6.QtCore import Qt
@@ -66,14 +66,20 @@ from ui.sheet_setup_access import (
 
 
 def snapshot_canvas_document_state(canvas) -> dict:
+    state, _warnings = snapshot_canvas_document_state_with_warnings(canvas)
+    return state
+
+
+def snapshot_canvas_document_state_with_warnings(canvas) -> tuple[dict, list[str]]:
     tool_settings = tool_settings_state_for(canvas)
     text_style = text_style_state_for(canvas)
     item_lists = _document_item_lists_for(canvas)
+    model_state, warnings = serialize_model_state_with_warnings(
+        model_for(canvas),
+        explicit_label_atom_ids=atom_items_for(canvas).keys(),
+    )
     state = {
-        "model": serialize_model_state(
-            model_for(canvas),
-            explicit_label_atom_ids=atom_items_for(canvas).keys(),
-        ),
+        "model": model_state,
         "ring_fills": _snapshot_ring_fills(canvas),
         "notes": _snapshot_notes(canvas, item_lists["notes"]),
         "marks": _snapshot_marks(canvas, item_lists["marks"]),
@@ -109,7 +115,7 @@ def snapshot_canvas_document_state(canvas) -> dict:
     groups = _snapshot_groups(canvas, item_lists)
     if groups:
         state["groups"] = groups
-    return state
+    return state, warnings
 
 
 def _add_projection_state(canvas, state: dict) -> None:

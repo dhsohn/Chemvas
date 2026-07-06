@@ -15,6 +15,8 @@ except ModuleNotFoundError:
 if QApplication is not None:
     from ui import scene_item_state as facade
     from ui import scene_item_state_serialization as serialization
+    from ui.note_html_sanitizer import sanitize_note_html
+    from ui.scene_item_restore import create_note_item_from_state
 
 
 class EmbeddedStateItem:
@@ -52,6 +54,41 @@ class SceneItemStateSerializationTest(unittest.TestCase):
             {"kind": "note", "text": "direct", "x": 4.0, "y": -3.0},
         )
         self.assertIn("direct", state["html"])
+
+    def test_note_state_serializes_same_sanitized_subset_restored_notes_accept(self) -> None:
+        note = QGraphicsTextItem()
+        note.setData(0, "note")
+        note.setHtml(
+            '<div style="background-color:#ffeeaa">'
+            '<font color="#123456" face="Courier New" size="4"><u>Legacy</u></font>'
+            '<blockquote><ul><li><span style="background-color:#aabbcc">Item</span></li></ul></blockquote>'
+            '<img src="file:///tmp/secret"><script>bad()</script>'
+            "</div>"
+        )
+
+        state = serialization.note_state_dict(note)
+
+        self.assertEqual(state["html"], sanitize_note_html(note.toHtml()))
+        self.assertNotIn("<html", state["html"].lower())
+        self.assertNotIn("<script", state["html"].lower())
+        self.assertNotIn("<img", state["html"].lower())
+        self.assertNotIn("file://", state["html"].lower())
+        self.assertIn("text-decoration:underline", state["html"])
+        self.assertIn("font-family:&#x27;Courier New&#x27;", state["html"])
+        self.assertIn("font-size:large", state["html"])
+        self.assertIn("color:#123456", state["html"])
+        self.assertIn("background-color:#ffeeaa", state["html"])
+        self.assertIn("<ul", state["html"])
+        self.assertIn("<li", state["html"])
+
+        restored = create_note_item_from_state(
+            state,
+            note_item_factory=QGraphicsTextItem,
+            note_style_applier=lambda item: None,
+        )
+        resaved = serialization.note_state_dict(restored)
+
+        self.assertEqual(resaved["html"], state["html"])
 
     def test_state_dict_for_prefers_embedded_scene_state(self) -> None:
         ring = QGraphicsPolygonItem(QPolygonF([QPointF(0.0, 0.0), QPointF(3.0, 0.0), QPointF(1.5, 2.0)]))

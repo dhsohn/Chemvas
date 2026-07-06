@@ -7,6 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 try:
     from PyQt6.QtWidgets import (
         QApplication,
+        QCheckBox,
         QComboBox,
         QDialog,
         QPushButton,
@@ -52,6 +53,7 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
             scope_combo = dialog.findChild(QComboBox, "exportScopeCombo")
             background_combo = dialog.findChild(QComboBox, "exportBackgroundCombo")
             dpi_combo = dialog.findChild(QComboBox, "exportDpiCombo")
+            editable_check = dialog.findChild(QCheckBox, "exportEditableSvgCheck")
             export_button = next(button for button in dialog.findChildren(QPushButton) if button.text() == "Export")
             cancel_button = next(button for button in dialog.findChildren(QPushButton) if button.text() == "Cancel")
 
@@ -60,10 +62,14 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
             self.assertIsNotNone(scope_combo)
             self.assertIsNotNone(background_combo)
             self.assertIsNotNone(dpi_combo)
+            self.assertIsNotNone(editable_check)
             self.assertFalse(dpi_combo.isEnabled())
+            self.assertTrue(editable_check.isEnabled())
+            self.assertFalse(editable_check.isChecked())
 
             format_combo.setCurrentIndex(format_combo.findData("png"))
             self.assertTrue(dpi_combo.isEnabled())
+            self.assertFalse(editable_check.isEnabled())
             size_combo.setCurrentIndex(size_combo.findData("col2"))
             scope_combo.setCurrentIndex(scope_combo.findData("selection"))
             background_combo.setCurrentIndex(background_combo.findData("white"))
