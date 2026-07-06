@@ -932,6 +932,22 @@ class DocumentStateTest(unittest.TestCase):
             )
 
 
+class UnhashableChoiceValueTest(unittest.TestCase):
+    def test_document_validation_rejects_unhashable_bond_style_with_value_error(self) -> None:
+        # A JSON array where a style string belongs must fail as an invalid
+        # file, not escape the boundary as a TypeError.
+        state = _canvas_state(
+            _model_state(
+                atoms={0: _atom_state(), 1: {**_atom_state(), "x": 10.0}},
+                bonds=[{"a": 0, "b": 1, "order": 1, "style": ["single"], "color": "#000000"}],
+                next_atom_id=2,
+            )
+        )
+
+        with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
+            build_document_payload(state, CANVAS_FILE_VERSION)
+
+
 class ModelInvariantTest(unittest.TestCase):
     def test_add_bond_rejects_duplicate_pair(self) -> None:
         model = MoleculeModel()

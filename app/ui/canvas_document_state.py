@@ -435,9 +435,10 @@ def _snapshot_marks(canvas, items: list) -> list[dict]:
         dy = mark_state["dy"] if bound else None
         if (dx is None) != (dy is None):
             dx = dy = None
+        mark_kind = mark_state["mark_kind"]
         marks.append(
             {
-                "kind": mark_state["mark_kind"] if mark_state["mark_kind"] in VALID_MARK_KINDS else "plus",
+                "kind": mark_kind if isinstance(mark_kind, str) and mark_kind in VALID_MARK_KINDS else "plus",
                 "text": mark_state["text"],
                 "atom_id": atom_id if bound else None,
                 "dx": dx,

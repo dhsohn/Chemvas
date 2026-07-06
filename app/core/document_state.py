@@ -216,9 +216,10 @@ def _normalized_atom_state(atom_state: dict) -> dict:
 
 
 def _normalized_bond_state(bond_state: dict) -> dict:
-    if bond_state.get("order") not in VALID_BOND_ORDERS:
+    order = bond_state.get("order")
+    if not _is_int(order) or order not in VALID_BOND_ORDERS:
         bond_state["order"] = 1
-    if bond_state.get("style") not in VALID_BOND_STYLES:
+    if not _is_valid_choice(bond_state.get("style"), VALID_BOND_STYLES):
         bond_state["style"] = "single"
     if bond_state["style"] in {"wedge", "hash"} and bond_state["order"] != 1:
         bond_state["order"] = 1
@@ -604,7 +605,7 @@ def _validate_bond_fields(
     if not _is_int(order) or order not in VALID_BOND_ORDERS:
         raise ValueError(error)
     style = bond_state.get("style")
-    if style not in VALID_BOND_STYLES:
+    if not _is_valid_choice(style, VALID_BOND_STYLES):
         raise ValueError(error)
     if style in {"wedge", "hash"} and order != 1:
         raise ValueError(error)
@@ -635,7 +636,7 @@ def _validate_arrow_fields(arrow_state: Mapping[str, object], *, error: str) -> 
     required_keys = {"kind", "start", "end"}
     if not required_keys <= keys or not keys <= required_keys | {"control", "double"}:
         raise ValueError(error)
-    if arrow_state.get("kind") not in VALID_ARROW_KINDS:
+    if not _is_valid_choice(arrow_state.get("kind"), VALID_ARROW_KINDS):
         raise ValueError(error)
     if not _is_point(arrow_state.get("start")) or not _is_point(arrow_state.get("end")):
         raise ValueError(error)
@@ -652,7 +653,7 @@ def _validate_ts_bracket_fields(ts_bracket_state: Mapping[str, object], *, error
     if ts_bracket_state.get("kind") != "ts_bracket":
         raise ValueError(error)
     bracket_kind = ts_bracket_state.get("bracket_kind")
-    if bracket_kind is not None and bracket_kind not in VALID_TS_BRACKET_KINDS:
+    if bracket_kind is not None and not _is_valid_choice(bracket_kind, VALID_TS_BRACKET_KINDS):
         raise ValueError(error)
     if keys in ({"kind", "rect"}, {"kind", "rect", "bracket_kind"}):
         rect = ts_bracket_state.get("rect")
@@ -675,9 +676,9 @@ def _validate_shape_fields(shape_state: Mapping[str, object], *, error: str) -> 
         raise ValueError(error)
     if shape_state.get("kind") != "shape":
         raise ValueError(error)
-    if shape_state.get("shape_kind") not in VALID_SHAPE_KINDS:
+    if not _is_valid_choice(shape_state.get("shape_kind"), VALID_SHAPE_KINDS):
         raise ValueError(error)
-    if shape_state.get("stroke_style") not in VALID_SHAPE_STROKES:
+    if not _is_valid_choice(shape_state.get("stroke_style"), VALID_SHAPE_STROKES):
         raise ValueError(error)
     for key in ("left", "top", "right", "bottom"):
         if not _is_number(shape_state.get(key)):
@@ -700,7 +701,7 @@ def _validate_orbital_fields(
 ) -> None:
     if set(orbital_state) != required_keys:
         raise ValueError(error)
-    if orbital_state.get(kind_key) not in VALID_ORBITAL_KINDS:
+    if not _is_valid_choice(orbital_state.get(kind_key), VALID_ORBITAL_KINDS):
         raise ValueError(error)
     if not _is_point(orbital_state.get("center")):
         raise ValueError(error)
@@ -754,6 +755,16 @@ def _validate_bond_state(bond_state: Mapping[str, object], atom_ids: set[int]) -
         id_validator=_validated_id,
         error="Invalid Chemvas file.",
     )
+
+
+def _is_valid_choice(value: object, choices: Collection[str]) -> bool:
+    """Safe membership test for untrusted input.
+
+    Malformed payloads can put unhashable values (JSON arrays/objects) where a
+    string is expected; testing those with ``in`` against a set raises
+    TypeError, which would escape the boundary's ValueError rejection path.
+    """
+    return isinstance(value, str) and value in choices
 
 
 def _bond_pair_key(a: int, b: int) -> tuple[int, int]:
@@ -813,7 +824,7 @@ def _validate_mark_states(states: object, atom_ids: set[int]) -> None:
     for mark_state in _validated_scene_state_list(states):
         if set(mark_state) != {"kind", "text", "atom_id", "dx", "dy", "x", "y"}:
             raise ValueError("Invalid Chemvas file.")
-        if mark_state.get("kind") not in VALID_MARK_KINDS:
+        if not _is_valid_choice(mark_state.get("kind"), VALID_MARK_KINDS):
             raise ValueError("Invalid Chemvas file.")
         text = mark_state.get("text")
         if text is not None and not isinstance(text, str):
@@ -914,7 +925,7 @@ def _validate_group_states(state: Mapping[str, object], atom_ids: set[int]) -> N
             if not isinstance(item_ref, (list, tuple)) or len(item_ref) != 2:
                 raise ValueError("Invalid Chemvas file.")
             kind, index = item_ref
-            if kind not in _GROUPABLE_STATE_ITEM_KEYS or not _is_int(index):
+            if not _is_valid_choice(kind, _GROUPABLE_STATE_ITEM_KEYS) or not _is_int(index):
                 raise ValueError("Invalid Chemvas file.")
             if not 0 <= index < item_counts[kind] or (kind, index) in seen_item_refs:
                 raise ValueError("Invalid Chemvas file.")
@@ -967,7 +978,9 @@ def _validate_settings_state(settings: Mapping[str, object]) -> None:
         raise ValueError("Invalid Chemvas file.")
     if "text_color" in settings and not _is_hex_color(settings.get("text_color")):
         raise ValueError("Invalid Chemvas file.")
-    if "text_alignment" in settings and settings.get("text_alignment") not in {"left", "center", "right", "justify"}:
+    if "text_alignment" in settings and not _is_valid_choice(
+        settings.get("text_alignment"), {"left", "center", "right", "justify"}
+    ):
         raise ValueError("Invalid Chemvas file.")
     if "text_line_spacing" in settings and (
         not _is_number(settings.get("text_line_spacing")) or cast(float, settings.get("text_line_spacing")) < 0.8
@@ -993,9 +1006,9 @@ def _validate_settings_state(settings: Mapping[str, object]) -> None:
         not _is_number(settings.get("note_padding")) or cast(float, settings.get("note_padding")) < 2.0
     ):
         raise ValueError("Invalid Chemvas file.")
-    if settings.get("sheet_size") not in VALID_SHEET_SIZES:
+    if not _is_valid_choice(settings.get("sheet_size"), VALID_SHEET_SIZES):
         raise ValueError("Invalid Chemvas file.")
-    if settings.get("sheet_orientation") not in VALID_SHEET_ORIENTATIONS:
+    if not _is_valid_choice(settings.get("sheet_orientation"), VALID_SHEET_ORIENTATIONS):
         raise ValueError("Invalid Chemvas file.")
 
 
@@ -1176,7 +1189,7 @@ def _validate_clipboard_mark(mark_state: Mapping[str, object], atom_ids: set[int
     if set(mark_state) != {"kind", "mark_kind", "text", "atom_id", "dx", "dy", "x", "y"}:
         raise ValueError("Invalid clipboard payload.")
     mark_kind = mark_state.get("mark_kind")
-    if mark_kind is not None and mark_kind not in VALID_MARK_KINDS:
+    if mark_kind is not None and not _is_valid_choice(mark_kind, VALID_MARK_KINDS):
         raise ValueError("Invalid clipboard payload.")
     text = mark_state.get("text")
     if text is not None and not isinstance(text, str):
@@ -1199,6 +1212,8 @@ def _validate_clipboard_mark(mark_state: Mapping[str, object], atom_ids: set[int
 
 def _validate_clipboard_scene_item(item_state: Mapping[str, object]) -> None:
     kind = item_state.get("kind")
+    if not isinstance(kind, str):
+        raise ValueError("Invalid clipboard payload.")
     if kind == "note":
         _validate_note_fields(
             item_state,
