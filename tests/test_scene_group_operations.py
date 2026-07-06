@@ -331,6 +331,33 @@ class SceneGroupOperationsTest(unittest.TestCase):
             {id(ring), id(item_a), id(item_b), id(arrow)},
         )
 
+    def test_group_selection_targets_resolves_atom_bound_mark_to_group(self) -> None:
+        canvas = _Canvas()
+        atom_a, item_a = _add_atom(canvas)
+        arrow = _add_arrow(canvas)
+        mark = _add_mark(canvas, atom_id=atom_a)
+        register_group_for(canvas, {atom_a}, [arrow])
+
+        # Shift-clicking the charge on a grouped atom must toggle the whole
+        # group, not just the mark.
+        extended = group_selection_targets_for(canvas, [mark])
+
+        extended_ids = {id(item) for item in extended}
+        self.assertEqual(extended_ids, {id(mark), id(item_a), id(arrow)})
+
+    def test_expand_selection_triggers_from_atom_bound_mark(self) -> None:
+        canvas = _Canvas()
+        atom_a, item_a = _add_atom(canvas)
+        arrow = _add_arrow(canvas)
+        _add_mark(canvas, atom_id=atom_a, selected=True)
+        register_group_for(canvas, {atom_a}, [arrow])
+
+        expand_selection_to_groups_for(canvas)
+
+        self.assertTrue(item_a.isSelected())
+        self.assertTrue(arrow.isSelected())
+        canvas.selection_controller.update_selection_outline.assert_called_once_with()
+
     def test_group_selection_targets_includes_grouped_notes(self) -> None:
         canvas = _Canvas()
         atom_a, item_a = _add_atom(canvas)

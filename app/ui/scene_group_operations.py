@@ -19,6 +19,7 @@ from ui.selection_collection_access import (
     TRANSFORM_SELECTION_EXCLUDED_KINDS,
     append_selected_item_ids,
     selected_atom_ids_for_transform_for,
+    selected_mark_atom_ids_for,
     selected_scene_items_for,
 )
 from ui.selection_scene_access import (
@@ -35,12 +36,20 @@ from ui.selection_service_access import (
 GROUPABLE_STANDALONE_KINDS = frozenset({"note", "ts_bracket", "shape", "orbital"}) | frozenset(ARROW_KINDS)
 
 
-def _is_standalone_mark(canvas, item) -> bool:
+def _bound_mark_atom_id(canvas, item) -> int | None:
+    if item.data(0) != "mark":
+        return None
     data = item.data(1)
     atom_id = data.get("atom_id") if isinstance(data, dict) else None
+    if isinstance(atom_id, int) and atom_id in atoms_for(canvas):
+        return atom_id
+    return None
+
+
+def _is_standalone_mark(canvas, item) -> bool:
     # Atom-bound marks already travel with their atom; only free-floating marks
     # are independent objects that a group needs to track.
-    return not (isinstance(atom_id, int) and atom_id in atoms_for(canvas))
+    return _bound_mark_atom_id(canvas, item) is None
 
 
 def _is_groupable_standalone_item(canvas, item) -> bool:
@@ -58,6 +67,9 @@ def _selected_group_members_for(canvas) -> tuple[set[int], list]:
         for atom_id in selected_atom_ids_for_transform_for(canvas)
         if atom_id in atoms_for(canvas)
     }
+    # A selected atom-bound mark stands in for its atom (charges travel with the
+    # atom), so grouping/ungrouping via the mark reaches the atom's group.
+    atom_ids |= selected_mark_atom_ids_for(canvas)
     items = [
         item
         for item in selected_scene_items_for(canvas, excluded_kinds=TRANSFORM_SELECTION_EXCLUDED_KINDS)
@@ -140,6 +152,11 @@ def group_selection_targets_for(canvas, targets: list) -> list:
     bond_ids: set[int] = set()
     for item in targets:
         append_selected_item_ids(canvas, atom_ids, bond_ids, item)
+        # An atom-bound mark stands in for its atom; it is not stored in
+        # group.items, so it must resolve to the atom to reach the group.
+        mark_atom_id = _bound_mark_atom_id(canvas, item)
+        if mark_atom_id is not None:
+            atom_ids.add(mark_atom_id)
     bonds = bonds_for(canvas)
     for bond_id in bond_ids:
         if 0 <= bond_id < len(bonds) and bonds[bond_id] is not None:
@@ -216,7 +233,11 @@ def expand_selection_to_groups_for(canvas) -> None:
         for item in scene_selected_items_for(canvas)
         if _is_groupable_standalone_item(canvas, item)
     ]
-    group_ids = group_ids_for_members_for(canvas, atom_ids, trigger_items)
+    # Selected atom-bound marks stand in for their atoms when matching groups,
+    # but stay out of `atom_ids` so the atoms still count as missing and get
+    # selected by the expansion below.
+    trigger_atom_ids = atom_ids | selected_mark_atom_ids_for(canvas)
+    group_ids = group_ids_for_members_for(canvas, trigger_atom_ids, trigger_items)
     member_atom_ids: set[int] = set()
     member_items: list = []
     for group_id in group_ids:
