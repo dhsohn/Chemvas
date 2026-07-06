@@ -108,6 +108,12 @@ class SelectionNoteService:
         clear_selected_notes_for(self.canvas)
         for note in notes:
             self.update_note_selection_box(note)
+        for note in notes:
+            # Mixed groups deselect as a unit: without this, clearing the note
+            # selection (e.g. NoteTool press on empty canvas) would leave the
+            # group's scene members selected and the box spanning notes that a
+            # drag no longer moves.
+            deselect_groups_for_note_for(self.canvas, note)
         if notes:
             self._refresh_outline_for_note_change()
 

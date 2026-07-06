@@ -460,6 +460,24 @@ class SceneGroupOperationsTest(unittest.TestCase):
         self.assertEqual(selected_group_rects_for(canvas), [])
         self.assertFalse(group_state_for(canvas).expanding)
 
+    def test_clearing_note_selection_deselects_mixed_groups_as_unit(self) -> None:
+        canvas = _Canvas()
+        atom_a, item_a = _add_atom(canvas, selected=True)
+        note = _add_note(canvas, selected=True)
+        register_group_for(canvas, {atom_a}, [note])
+        atom_b, item_b = _add_atom(canvas, 60.0, 0.0, selected=True)
+        service = SelectionNoteService(canvas)
+
+        # NoteTool press on empty canvas clears the note selection wholesale;
+        # the mixed group's scene members must drop with their note.
+        service.clear_note_selection()
+
+        self.assertFalse(item_a.isSelected())
+        self.assertEqual(selected_notes_for(canvas), [])
+        self.assertEqual(selected_group_rects_for(canvas), [])
+        # Ungrouped scene selection is untouched.
+        self.assertTrue(item_b.isSelected())
+
     def test_selected_group_rects_ignore_note_only_selection_of_mixed_group(self) -> None:
         canvas = _Canvas()
         atom_a, _ = _add_atom(canvas)
