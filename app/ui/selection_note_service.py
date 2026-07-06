@@ -15,6 +15,7 @@ from ui.canvas_scene_items_state import (
 from ui.canvas_text_style_state import text_style_state_for
 from ui.graphics_items import NoSelectRectItem
 from ui.scene_group_operations import (
+    deselect_groups_for_note_for,
     expand_note_selection_to_groups_for,
     notes_only_group_member_notes_for,
 )
@@ -71,6 +72,10 @@ class SelectionNoteService:
                 continue
             remove_selected_note_for(self.canvas, member)
             self.update_note_selection_box(member)
+        # Mixed groups deselect as a unit too: the group box spans attached
+        # members, so leaving the scene members selected would keep a box over
+        # a note that a drag no longer moves.
+        deselect_groups_for_note_for(self.canvas, item)
 
     def _refresh_outline_for_note_change(self) -> None:
         # Note selection lives outside QGraphicsScene selection, so it never

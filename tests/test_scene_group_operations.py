@@ -21,7 +21,11 @@ if QApplication is not None:
     from ui.canvas_bond_graphics_state import bond_items_for
     from ui.canvas_group_state import group_state_for, register_group_for
     from ui.canvas_model_access import model_for
-    from ui.canvas_scene_items_state import add_selected_note_for, append_scene_item_for
+    from ui.canvas_scene_items_state import (
+        add_selected_note_for,
+        append_scene_item_for,
+        selected_notes_for,
+    )
     from ui.history_commands import GroupSceneItemsCommand, UngroupSceneItemsCommand
     from ui.scene_group_operations import (
         expand_note_selection_to_groups_for,
@@ -31,6 +35,7 @@ if QApplication is not None:
         selected_group_rects_for,
         ungroup_selection_for,
     )
+    from ui.selection_note_service import SelectionNoteService
 
 
 class _History:
@@ -433,6 +438,27 @@ class SceneGroupOperationsTest(unittest.TestCase):
 
         expand_note_selection_to_groups_for(notes_only_canvas, note_a)
         notes_only_canvas.selection_controller.select_note.assert_not_called()
+
+    def test_deselecting_mixed_group_note_deselects_whole_group(self) -> None:
+        canvas = _Canvas()
+        atom_a, item_a = _add_atom(canvas, selected=True)
+        arrow = _add_arrow(canvas, selected=True)
+        note = _add_note(canvas, selected=True)
+        other_note = _add_note(canvas, selected=True)
+        register_group_for(canvas, {atom_a}, [arrow, note, other_note])
+        service = SelectionNoteService(canvas)
+
+        # Note focus-out / NoteTool Ctrl-click deselects through the note
+        # service; the mixed group must drop as a unit or the box would span a
+        # note that a drag no longer moves.
+        service.toggle_note_selection(note)
+
+        self.assertFalse(item_a.isSelected())
+        self.assertFalse(arrow.isSelected())
+        self.assertNotIn(note, selected_notes_for(canvas))
+        self.assertNotIn(other_note, selected_notes_for(canvas))
+        self.assertEqual(selected_group_rects_for(canvas), [])
+        self.assertFalse(group_state_for(canvas).expanding)
 
     def test_selected_group_rects_ignore_note_only_selection_of_mixed_group(self) -> None:
         canvas = _Canvas()
