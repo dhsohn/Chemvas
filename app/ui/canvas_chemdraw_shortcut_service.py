@@ -106,13 +106,16 @@ class CanvasChemdrawShortcutService:
     def handle_shortcut(self, event) -> bool:
         if self.handle_object_shortcut(event):
             return True
+        # Hover handlers get priority but must not swallow keys they do not
+        # handle: pressing a tool shortcut (Space, J, ...) while hovering an
+        # atom still has to reach the generic hotkeys below.
         hover_state = hover_state_for(self.canvas)
         hover_atom_id = hover_state.atom_id
-        if hover_atom_id is not None:
-            return self.handle_atom_hotkey(event, hover_atom_id)
+        if hover_atom_id is not None and self.handle_atom_hotkey(event, hover_atom_id):
+            return True
         hover_bond_id = hover_state.bond_id
-        if hover_bond_id is not None:
-            return self.handle_bond_hotkey(event, hover_bond_id)
+        if hover_bond_id is not None and self.handle_bond_hotkey(event, hover_bond_id):
+            return True
         return self.handle_generic_hotkey(event)
 
     def handle_object_shortcut(self, event) -> bool:
@@ -245,6 +248,8 @@ class CanvasChemdrawShortcutService:
             return False
         if modifiers == Qt.KeyboardModifier.ShiftModifier:
             if event.key() == Qt.Key.Key_B:
+                # 'b' applies a bold single; Shift+B upgrades to a bold double
+                # (order 2 renders via the bold multi-line path).
                 self.scene_transform.apply_bond_style(bond_id, "bold_in", 2)
                 return True
             if event.key() == Qt.Key.Key_H:

@@ -80,7 +80,12 @@ class CanvasHitTestingService:
 
     def ensure_spatial_index(self) -> None:
         cell_size = self.grid_cell_size()
-        if has_fresh_spatial_index_for(self.canvas, cell_size):
+        if has_fresh_spatial_index_for(
+            self.canvas,
+            cell_size,
+            atom_count=len(atoms_for(self.canvas)),
+            bond_slot_count=len(bonds_for(self.canvas)),
+        ):
             return
         self.rebuild_spatial_index(cell_size)
 
@@ -108,7 +113,14 @@ class CanvasHitTestingService:
                 for iy in range(min_iy, max_iy + 1):
                     bond_grid.setdefault((ix, iy), set()).add(bond_id)
 
-        set_spatial_index_for(self.canvas, atom_grid=atom_grid, bond_grid=bond_grid, cell_size=cell_size)
+        set_spatial_index_for(
+            self.canvas,
+            atom_grid=atom_grid,
+            bond_grid=bond_grid,
+            cell_size=cell_size,
+            atom_count=len(atoms_for(self.canvas)),
+            bond_slot_count=len(bonds_for(self.canvas)),
+        )
 
     def mark_spatial_index_dirty(self) -> None:
         mark_spatial_index_dirty_for(self.canvas)
@@ -133,7 +145,11 @@ class CanvasHitTestingService:
                     dx = atom.x - x
                     dy = atom.y - y
                     dist_sq = dx * dx + dy * dy
-                    if dist_sq <= nearest_dist_sq:
+                    # Lowest atom id breaks exact-distance ties so the pick
+                    # does not depend on set iteration order.
+                    if dist_sq < nearest_dist_sq or (
+                        dist_sq == nearest_dist_sq and (nearest_id is None or atom_id < nearest_id)
+                    ):
                         nearest_id = atom_id
                         nearest_dist_sq = dist_sq
         return nearest_id

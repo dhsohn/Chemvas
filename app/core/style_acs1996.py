@@ -11,7 +11,10 @@ class ACS1996Style:
     # This is what export uses to size the figure independently of on-screen zoom.
     bond_length_pt: float = 14.4
     bond_line_width: float = 1.5
-    bold_bond_width: float = 2.2
+    # Effective drawn width of bold bonds. Both the canvas renderer and the
+    # bond preview consume this value as-is — keep any emphasis factor folded
+    # in here rather than multiplying at the call sites.
+    bold_bond_width: float = 3.3
     hash_bond_width: float = 1.3
     bond_spacing_px: float = 4.4
     hash_spacing_px: float = 3.0

@@ -163,6 +163,29 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         service.handle_object_shortcut.return_value = True
         self.assertTrue(service.handle_shortcut(event))
 
+    def test_handle_shortcut_falls_through_to_generic_when_hover_handlers_miss(self) -> None:
+        # Pressing a tool shortcut (Space, J, ...) while hovering an atom or a
+        # bond must still reach the generic hotkeys instead of being swallowed.
+        canvas = SimpleNamespace()
+        set_hover_atom_id_for(canvas, 4)
+        service = _shortcut_service(canvas)
+        service.handle_object_shortcut = mock.Mock(return_value=False)
+        service.handle_atom_hotkey = mock.Mock(return_value=False)
+        service.handle_bond_hotkey = mock.Mock(return_value=False)
+        service.handle_generic_hotkey = mock.Mock(return_value=True)
+
+        event = _FakeKeyEvent(Qt.Key.Key_Space, text=" ")
+        self.assertTrue(service.handle_shortcut(event))
+        service.handle_atom_hotkey.assert_called_once_with(event, 4)
+        service.handle_generic_hotkey.assert_called_once_with(event)
+
+        set_hover_atom_id_for(canvas, None)
+        set_hover_bond_id_for(canvas, 7)
+        service.handle_generic_hotkey.reset_mock()
+        self.assertTrue(service.handle_shortcut(event))
+        service.handle_bond_hotkey.assert_called_once_with(event, 7)
+        service.handle_generic_hotkey.assert_called_once_with(event)
+
     def test_atom_hotkey_routes_to_prompt_marks_labels_and_sprouts(self) -> None:
         calls: list[tuple] = []
         canvas = SimpleNamespace(

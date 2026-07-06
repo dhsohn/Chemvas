@@ -93,7 +93,7 @@ def _bold_strip_item(
         nx,
         ny,
         config.bond_line_width,
-        config.bold_bond_width * 1.5,
+        config.bold_bond_width,
     )
 
 
@@ -117,7 +117,7 @@ def _update_bold_first_item(
                 nx,
                 ny,
                 config.bond_line_width,
-                config.bold_bond_width * 1.5,
+                config.bold_bond_width,
             )
         )
         return True

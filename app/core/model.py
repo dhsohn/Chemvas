@@ -71,7 +71,11 @@ class MoleculeModel:
             dx = atom.x - x
             dy = atom.y - y
             dist_sq = dx * dx + dy * dy
-            if dist_sq <= nearest_dist_sq:
+            # Lowest atom id breaks exact-distance ties, matching the spatial
+            # index lookup so both paths pick the same atom.
+            if dist_sq < nearest_dist_sq or (
+                dist_sq == nearest_dist_sq and (nearest_id is None or atom_id < nearest_id)
+            ):
                 nearest_id = atom_id
                 nearest_dist_sq = dist_sq
         return nearest_id

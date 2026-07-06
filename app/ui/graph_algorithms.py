@@ -142,6 +142,13 @@ def find_rings(bonds: Iterable[Any]) -> list[list[int]]:
     entries (and the first/last pair) are bonded, suitable for building a ring
     polygon. Uses a Horton-style candidate generation with GF(2) independence so
     fused systems yield the chemically expected smallest rings.
+
+    This is an SSSR *approximation*: candidates are limited to one shortest
+    cycle per edge (full Horton enumerates all shortest cycles per edge), so
+    heavily bridged polycycles can yield a valid-but-different basis than the
+    textbook SSSR. Common fused systems (6-6, 6-5, steroids) are unaffected;
+    revisit candidate generation before relying on this for ring perception in
+    exotic cage topologies.
     """
     adjacency = adjacency_for_bonds(bonds)
     if not adjacency:
