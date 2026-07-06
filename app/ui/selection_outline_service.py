@@ -80,7 +80,10 @@ class SelectionOutlineService:
         if suspend_selection_outline_for(self.canvas):
             return
         items = scene_selected_items_for(self.canvas)
-        if not items:
+        # Notes carry their own selection state, so a notes-only group has no
+        # scene-selected items yet still needs its dashed group box.
+        group_rects = selected_group_rects_for(self.canvas)
+        if not items and not group_rects:
             self.clear_selection_outlines()
             emit_selection_info_for(self.canvas)
             return
@@ -89,7 +92,7 @@ class SelectionOutlineService:
             for item in items
             if item.data(0) not in {"handle", "note_box", "note_select", "selection_outline"}
         ]
-        if not items:
+        if not items and not group_rects:
             return
         explicit_atom_ids, bond_ids = selected_ids_for(self.canvas)
         atom_ids = set(explicit_atom_ids)
@@ -128,7 +131,7 @@ class SelectionOutlineService:
 
         for item in object_items:
             self.add_selection_object_overlay(item, object_fill)
-        for group_rect in selected_group_rects_for(self.canvas):
+        for group_rect in group_rects:
             self.add_selection_group_overlay(group_rect)
         emit_selection_info_for(self.canvas)
 

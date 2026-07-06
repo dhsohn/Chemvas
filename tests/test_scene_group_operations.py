@@ -358,6 +358,40 @@ class SceneGroupOperationsTest(unittest.TestCase):
         self.assertGreaterEqual(rect.right(), 120.0)
         self.assertGreaterEqual(rect.bottom(), 50.0)
 
+    def test_group_command_undo_redo_refreshes_outline(self) -> None:
+        canvas = _Canvas()
+        _add_atom(canvas, selected=True)
+        _add_arrow(canvas, selected=True)
+        self.assertTrue(group_selection_for(canvas))
+        command = canvas.history.commands[-1]
+
+        command.undo(canvas)
+        command.redo(canvas)
+
+        self.assertEqual(canvas.selection_controller.update_selection_outline.call_count, 3)
+
+    def test_ungroup_command_undo_redo_refreshes_outline(self) -> None:
+        canvas = _Canvas()
+        atom_a, _ = _add_atom(canvas, selected=True)
+        register_group_for(canvas, {atom_a}, [])
+        self.assertTrue(ungroup_selection_for(canvas))
+        command = canvas.history.commands[-1]
+
+        command.undo(canvas)
+        command.redo(canvas)
+
+        self.assertEqual(canvas.selection_controller.update_selection_outline.call_count, 3)
+
+    def test_selected_group_rects_for_notes_only_group(self) -> None:
+        canvas = _Canvas()
+        note_a = _add_note(canvas, selected=True)
+        note_b = _add_note(canvas, selected=True)
+        register_group_for(canvas, set(), [note_a, note_b])
+
+        rects = selected_group_rects_for(canvas)
+
+        self.assertEqual(len(rects), 1)
+
     def test_selected_group_rects_empty_without_group_selection(self) -> None:
         canvas = _Canvas()
         atom_a, _ = _add_atom(canvas, selected=True)
