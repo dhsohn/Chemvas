@@ -29,7 +29,7 @@ class Renderer:
         return self.scaled_style_metric(self.style.bond_line_width)
 
     def bold_bond_width(self) -> float:
-        return self.scaled_style_metric(self.style.bold_bond_width * 1.5)
+        return self.scaled_style_metric(self.style.bold_bond_width)
 
     def bond_spacing(self) -> float:
         return self.scaled_style_metric(self.style.bond_spacing_px)
