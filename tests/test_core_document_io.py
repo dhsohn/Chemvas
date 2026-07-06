@@ -172,6 +172,47 @@ class DocumentIOTest(unittest.TestCase):
         self.assertEqual(loaded.payload, written.payload)
         self.assertEqual(loaded.state, state)
 
+    def test_read_document_accepts_pre_v4_file_with_bond_tombstones(self) -> None:
+        # Files written before v4 carry null entries for deleted bond slots;
+        # they must keep loading unchanged.
+        state = _canvas_state(
+            _model_state(
+                {
+                    "0": {"element": "C", "x": 0.0, "y": 0.0, "color": "#000000", "explicit_label": False},
+                    "1": {"element": "C", "x": 10.0, "y": 0.0, "color": "#000000", "explicit_label": False},
+                },
+                [None, {"a": 0, "b": 1, "order": 1, "style": "single", "color": "#000000"}],
+                2,
+            )
+        )
+        payload = {"type": CHEMVAS_FILE_TYPE, "version": 3, "state": state}
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "legacy.chemvas"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            loaded = read_document(path)
+
+        self.assertEqual(loaded.payload["version"], 3)
+        self.assertEqual(loaded.state["model"]["bonds"][0], None)
+
+    def test_write_document_rejects_bond_tombstones_at_current_version(self) -> None:
+        state = _canvas_state(
+            _model_state(
+                {
+                    "0": {"element": "C", "x": 0.0, "y": 0.0, "color": "#000000", "explicit_label": False},
+                    "1": {"element": "C", "x": 10.0, "y": 0.0, "color": "#000000", "explicit_label": False},
+                },
+                [None, {"a": 0, "b": 1, "order": 1, "style": "single", "color": "#000000"}],
+                2,
+            )
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "sample.chemvas"
+            with self.assertRaises(ValueError):
+                write_document(path, state, version=CANVAS_FILE_VERSION)
+            self.assertFalse(path.exists())
+
     def test_read_document_rejects_deep_json_without_leaking_recursion_error(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "sample.chemvas"

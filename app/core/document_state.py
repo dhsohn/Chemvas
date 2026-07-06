@@ -8,13 +8,20 @@ from typing import Any, TypeGuard, cast
 from core.model import Atom, Bond, MoleculeModel
 
 CHEMVAS_FILE_TYPE = "chemvas"
-CANVAS_FILE_VERSION = 3
+# v4: bonds are a compact array — deleted-slot tombstones (null entries) are a
+# runtime bookkeeping detail and no longer appear in documents. Nothing in the
+# format references bonds by position, so no other section changed.
+CANVAS_FILE_VERSION = 4
+GROUPS_CANVAS_FILE_VERSION = 3
 PERSPECTIVE_CANVAS_FILE_VERSION = 2
 LEGACY_CANVAS_FILE_VERSION = 1
+# First version whose bond list must be compact (no null tombstone entries).
+COMPACT_BONDS_FILE_VERSION = CANVAS_FILE_VERSION
 SUPPORTED_FILE_VERSIONS = frozenset(
     (
         LEGACY_CANVAS_FILE_VERSION,
         PERSPECTIVE_CANVAS_FILE_VERSION,
+        GROUPS_CANVAS_FILE_VERSION,
         CANVAS_FILE_VERSION,
     )
 )
@@ -39,6 +46,9 @@ CANVAS_STATE_KEYS = frozenset(
 CANVAS_STATE_KEYS_BY_VERSION = {
     LEGACY_CANVAS_FILE_VERSION: CANVAS_STATE_KEYS,
     PERSPECTIVE_CANVAS_FILE_VERSION: CANVAS_STATE_KEYS | _V2_OPTIONAL_CANVAS_STATE_KEYS,
+    GROUPS_CANVAS_FILE_VERSION: (
+        CANVAS_STATE_KEYS | _V2_OPTIONAL_CANVAS_STATE_KEYS | _V3_OPTIONAL_CANVAS_STATE_KEYS
+    ),
     CANVAS_FILE_VERSION: (
         CANVAS_STATE_KEYS | _V2_OPTIONAL_CANVAS_STATE_KEYS | _V3_OPTIONAL_CANVAS_STATE_KEYS
     ),
@@ -162,11 +172,13 @@ def serialize_model_state(
 ) -> dict:
     """Serialize ``model`` into a canvas-state model dict.
 
-    The output is normalized to satisfy document validation even when the
-    in-memory model has drifted (duplicate bonds, dangling endpoints, invalid
-    styles, non-finite coordinates). Saving must never fail because of an
-    editing bug — the serializer heals what it can instead of letting
-    ``build_document_payload`` reject the user's work.
+    Bonds are emitted as a compact list (the v4 format): the in-memory
+    deleted-slot tombstones are runtime bookkeeping and never reach the
+    document. The output is also normalized to satisfy document validation
+    even when the in-memory model has drifted (duplicate bonds, dangling
+    endpoints, invalid styles, non-finite coordinates). Saving must never
+    fail because of an editing bug — the serializer heals what it can instead
+    of letting ``build_document_payload`` reject the user's work.
     """
     explicit_ids = set(explicit_label_atom_ids)
     atoms = {
@@ -178,19 +190,18 @@ def serialize_model_state(
         )
         for atom_id, atom in model.atoms.items()
     }
-    bonds: list[dict | None] = []
+    bonds: list[dict] = []
     seen_bond_pairs: set[tuple[int, int]] = set()
     for bond in model.bonds:
         bond_state = bond_to_state(bond)
-        if bond_state is not None:
-            a = cast(int, bond_state["a"])
-            b = cast(int, bond_state["b"])
-            if a == b or a not in atoms or b not in atoms or _bond_pair_key(a, b) in seen_bond_pairs:
-                bond_state = None
-            else:
-                seen_bond_pairs.add(_bond_pair_key(a, b))
-                bond_state = _normalized_bond_state(bond_state)
-        bonds.append(bond_state)
+        if bond_state is None:
+            continue
+        a = cast(int, bond_state["a"])
+        b = cast(int, bond_state["b"])
+        if a == b or a not in atoms or b not in atoms or _bond_pair_key(a, b) in seen_bond_pairs:
+            continue
+        seen_bond_pairs.add(_bond_pair_key(a, b))
+        bonds.append(_normalized_bond_state(bond_state))
     state = {
         "atoms": atoms,
         "bonds": bonds,
@@ -508,7 +519,7 @@ def _validate_canvas_state(state: Mapping[str, object], *, version: int) -> None
     model_state = state.get("model")
     if not isinstance(model_state, Mapping):
         raise ValueError("Invalid Chemvas file.")
-    atom_ids, bond_pairs, atom_positions = _validate_model_state(model_state)
+    atom_ids, bond_pairs, atom_positions = _validate_model_state(model_state, version=version)
     _validate_ring_fill_states(state.get("ring_fills"), atom_ids, bond_pairs, atom_positions)
     _validate_note_states(state.get("notes"))
     _validate_mark_states(state.get("marks"), atom_ids)
@@ -529,6 +540,8 @@ def _validate_canvas_state(state: Mapping[str, object], *, version: int) -> None
 
 def _validate_model_state(
     model_state: Mapping[str, object],
+    *,
+    version: int = CANVAS_FILE_VERSION,
 ) -> tuple[set[int], set[tuple[int, int]], dict[int, tuple[int | float | Decimal, int | float | Decimal]]]:
     atoms_state = model_state.get("atoms")
     bonds_state = model_state.get("bonds")
@@ -558,6 +571,10 @@ def _validate_model_state(
     bond_pairs: set[tuple[int, int]] = set()
     for bond_state in bonds_state:
         if bond_state is None:
+            # Pre-v4 files carried deleted-slot tombstones; v4 bond lists are
+            # compact and a null entry means the file is malformed.
+            if version >= COMPACT_BONDS_FILE_VERSION:
+                raise ValueError("Invalid Chemvas file.")
             continue
         if not isinstance(bond_state, Mapping):
             raise ValueError("Invalid Chemvas file.")
