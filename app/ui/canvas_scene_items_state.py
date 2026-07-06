@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ui.canvas_state_lookup import canvas_state_object
+from ui.canvas_state_lookup import ensure_canvas_state
 
 
 @dataclass(slots=True)
@@ -31,12 +31,7 @@ SCENE_ITEM_COLLECTION_ATTRS = (
 
 
 def scene_items_state_for(canvas: Any) -> CanvasSceneItemsState:
-    state = canvas_state_object(canvas, "scene_items_state")
-    if state is not None:
-        return state
-    state = CanvasSceneItemsState()
-    canvas.scene_items_state = state
-    return state
+    return ensure_canvas_state(canvas, "scene_items_state", CanvasSceneItemsState)
 
 
 def scene_item_collection_for(canvas: Any, name: str) -> list[Any]:

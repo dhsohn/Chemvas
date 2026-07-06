@@ -6,7 +6,7 @@ from typing import Any
 
 from ui.bond_graphics_access import project_point_3d_for
 from ui.canvas_model_access import atom_for_id
-from ui.canvas_state_lookup import canvas_state_object
+from ui.canvas_state_lookup import ensure_canvas_state
 from ui.renderer_style_access import bond_length_px_for
 
 AtomCoords3D = tuple[float, float, float]
@@ -21,12 +21,7 @@ ATOM_COORDS_3D_ATTRS = ("atom_coords_3d",)
 
 
 def atom_coords_3d_state_for(canvas: Any) -> CanvasAtomCoords3DState:
-    state = canvas_state_object(canvas, "atom_coords_3d_state")
-    if state is not None:
-        return state
-    state = CanvasAtomCoords3DState()
-    canvas.atom_coords_3d_state = state
-    return state
+    return ensure_canvas_state(canvas, "atom_coords_3d_state", CanvasAtomCoords3DState)
 
 
 def atom_coords_3d_for(canvas: Any) -> dict[int, AtomCoords3D]:

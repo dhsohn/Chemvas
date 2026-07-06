@@ -4,16 +4,11 @@ from typing import Any
 
 from core.renderer import Renderer
 
-from ui.canvas_state_lookup import canvas_state_object
+from ui.canvas_state_lookup import ensure_canvas_state
 
 
 def renderer_for(canvas: Any):
-    renderer = canvas_state_object(canvas, "renderer")
-    if renderer is not None:
-        return renderer
-    renderer = Renderer()
-    canvas.renderer = renderer
-    return renderer
+    return ensure_canvas_state(canvas, "renderer", Renderer, runtime_field=False)
 
 
 def set_renderer_for(canvas: Any, renderer) -> None:

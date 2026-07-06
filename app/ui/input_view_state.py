@@ -5,7 +5,7 @@ from typing import Any
 
 from PyQt6.QtGui import QTransform
 
-from ui.canvas_state_lookup import canvas_state_object
+from ui.canvas_state_lookup import ensure_canvas_state
 
 
 @dataclass(slots=True)
@@ -20,12 +20,7 @@ class InputViewState:
 
 
 def input_view_state_for(canvas: Any) -> InputViewState:
-    state = canvas_state_object(canvas, "input_view_state")
-    if state is not None:
-        return state
-    state = InputViewState()
-    canvas.input_view_state = state
-    return state
+    return ensure_canvas_state(canvas, "input_view_state", InputViewState)
 
 
 __all__ = ["InputViewState", "input_view_state_for"]

@@ -5,7 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from ui.canvas_state_lookup import canvas_state_object
+from ui.canvas_state_lookup import ensure_canvas_state
 
 SelectionSignature = tuple[frozenset[int], frozenset[int]]
 
@@ -26,12 +26,7 @@ class SelectionInfoState:
 
 
 def selection_info_state_for(canvas: Any) -> SelectionInfoState:
-    state = canvas_state_object(canvas, "selection_info_state")
-    if state is not None:
-        return state
-    state = SelectionInfoState.create()
-    canvas.selection_info_state = state
-    return state
+    return ensure_canvas_state(canvas, "selection_info_state", SelectionInfoState.create)
 
 
 __all__ = [

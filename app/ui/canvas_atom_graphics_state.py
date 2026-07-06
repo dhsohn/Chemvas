@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ui.canvas_state_lookup import canvas_state_object
+from ui.canvas_state_lookup import ensure_canvas_state
 
 
 @dataclass(slots=True)
@@ -16,12 +16,7 @@ ATOM_GRAPHICS_ATTRS = ("atom_items", "atom_dots")
 
 
 def atom_graphics_state_for(canvas: Any) -> CanvasAtomGraphicsState:
-    state = canvas_state_object(canvas, "atom_graphics_state")
-    if state is not None:
-        return state
-    state = CanvasAtomGraphicsState()
-    canvas.atom_graphics_state = state
-    return state
+    return ensure_canvas_state(canvas, "atom_graphics_state", CanvasAtomGraphicsState)
 
 
 def atom_items_for(canvas: Any) -> dict[int, Any]:

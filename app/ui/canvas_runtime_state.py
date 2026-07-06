@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, ClassVar
 from weakref import ref
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSlot
@@ -12,6 +12,7 @@ from ui.canvas_bond_graphics_state import CanvasBondGraphicsState
 from ui.canvas_callback_state import CanvasCallbackState
 from ui.canvas_document_metadata_state import CanvasDocumentMetadataState
 from ui.canvas_graph_state import CanvasGraphState
+from ui.canvas_group_state import CanvasGroupState
 from ui.canvas_history_service import CanvasHistoryService
 from ui.canvas_history_state import CanvasHistoryState
 from ui.canvas_hover_state import HoverPreviewState
@@ -56,12 +57,17 @@ class RdkitIdleWarmupBridge(QObject):
 
 @dataclass(slots=True)
 class CanvasRuntimeState:
+    # Marks this as the canonical, complete state container: state accessors
+    # refuse to shadow a missing field on it (see ensure_canvas_state).
+    STRICT_STATE_CONTAINER: ClassVar[bool] = True
+
     document_metadata_state: CanvasDocumentMetadataState
     sheet_setup_state: SheetSetupState
     selection_info_state: SelectionInfoState
     rdkit_idle_timer: QTimer
     rdkit_idle_warmup_bridge: RdkitIdleWarmupBridge
     graph_state: CanvasGraphState
+    group_state: CanvasGroupState
     insert_state: CanvasInsertState
     history_state: CanvasHistoryState
     history_service: CanvasHistoryService
@@ -101,6 +107,7 @@ class CanvasRuntimeState:
             rdkit_idle_timer=rdkit_idle_timer,
             rdkit_idle_warmup_bridge=rdkit_idle_warmup_bridge,
             graph_state=CanvasGraphState(),
+            group_state=CanvasGroupState(),
             insert_state=CanvasInsertState(),
             history_state=history_state,
             history_service=CanvasHistoryService(canvas, history_state),

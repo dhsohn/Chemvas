@@ -5,7 +5,7 @@ from typing import Any
 
 from PyQt6.QtGui import QColor
 
-from ui.canvas_state_lookup import canvas_state_object
+from ui.canvas_state_lookup import ensure_canvas_state
 
 
 @dataclass(slots=True)
@@ -17,12 +17,7 @@ class SelectionStyleState:
 
 
 def selection_style_state_for(canvas: Any) -> SelectionStyleState:
-    state = canvas_state_object(canvas, "selection_style_state")
-    if state is not None:
-        return state
-    state = SelectionStyleState()
-    canvas.selection_style_state = state
-    return state
+    return ensure_canvas_state(canvas, "selection_style_state", SelectionStyleState)
 
 
 __all__ = [

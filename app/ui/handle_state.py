@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ui.canvas_state_lookup import canvas_state_object
+from ui.canvas_state_lookup import ensure_canvas_state
 
 
 @dataclass(slots=True)
@@ -12,12 +12,7 @@ class CanvasHandleState:
 
 
 def handle_state_for(canvas) -> CanvasHandleState:
-    state = canvas_state_object(canvas, "handle_state")
-    if state is not None:
-        return state
-    state = CanvasHandleState()
-    canvas.handle_state = state
-    return state
+    return ensure_canvas_state(canvas, "handle_state", CanvasHandleState)
 
 
 def active_handles_for(canvas):

@@ -6,7 +6,7 @@ from typing import Any
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont
 
-from ui.canvas_state_lookup import canvas_state_object
+from ui.canvas_state_lookup import ensure_canvas_state
 
 
 @dataclass(slots=True)
@@ -46,12 +46,7 @@ TEXT_STYLE_ATTRS = (
 
 
 def text_style_state_for(canvas: Any) -> CanvasTextStyleState:
-    state = canvas_state_object(canvas, "text_style_state")
-    if state is not None:
-        return state
-    state = CanvasTextStyleState()
-    canvas.text_style_state = state
-    return state
+    return ensure_canvas_state(canvas, "text_style_state", CanvasTextStyleState)
 
 
 def set_text_style_for(canvas: Any, name: str, value: Any) -> None:

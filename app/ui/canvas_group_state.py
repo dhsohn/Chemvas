@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ui.canvas_state_lookup import canvas_state_object
+from ui.canvas_state_lookup import ensure_canvas_state
 
 
 @dataclass(slots=True)
@@ -20,12 +20,7 @@ class CanvasGroupState:
 
 
 def group_state_for(canvas: Any) -> CanvasGroupState:
-    state = canvas_state_object(canvas, "group_state")
-    if state is not None:
-        return state
-    state = CanvasGroupState()
-    canvas.group_state = state
-    return state
+    return ensure_canvas_state(canvas, "group_state", CanvasGroupState)
 
 
 def clear_groups_for(canvas: Any) -> None:

@@ -4,7 +4,7 @@ from typing import Any
 
 from core.rdkit_adapter import RDKitAdapter
 
-from ui.canvas_state_lookup import canvas_state_object
+from ui.canvas_state_lookup import ensure_canvas_state
 
 
 def new_rdkit_adapter():
@@ -12,12 +12,7 @@ def new_rdkit_adapter():
 
 
 def rdkit_adapter_for(canvas: Any):
-    adapter = canvas_state_object(canvas, "rdkit")
-    if adapter is not None:
-        return adapter
-    adapter = new_rdkit_adapter()
-    canvas.rdkit = adapter
-    return adapter
+    return ensure_canvas_state(canvas, "rdkit", new_rdkit_adapter, runtime_field=False)
 
 
 def set_rdkit_adapter_for(canvas: Any, adapter) -> None:

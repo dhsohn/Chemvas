@@ -4,7 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from ui.canvas_state_lookup import canvas_state_object
+from ui.canvas_state_lookup import ensure_canvas_state
 
 
 @dataclass(slots=True)
@@ -15,12 +15,7 @@ class CanvasCallbackState:
 
 
 def callback_state_for(canvas: Any) -> CanvasCallbackState:
-    state = canvas_state_object(canvas, "callback_state")
-    if state is not None:
-        return state
-    state = CanvasCallbackState()
-    canvas.callback_state = state
-    return state
+    return ensure_canvas_state(canvas, "callback_state", CanvasCallbackState)
 
 
 __all__ = ["CanvasCallbackState", "callback_state_for"]

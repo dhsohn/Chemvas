@@ -415,6 +415,28 @@ class CanvasGraphServiceTest(unittest.TestCase):
         unique_leaf_service.bond_is_rotatable = mock.Mock(return_value=False)
         self.assertIsNone(unique_leaf_service.rotatable_axis_from_selection(set(), {0, 1}))
 
+    def test_bond_id_between_with_repair_reindexes_forgotten_bond(self) -> None:
+        # The model holds a bond the index never learned about (stale empty
+        # entries): the repairing lookup must find it via the model scan and
+        # re-index it so the fast path works afterwards.
+        canvas = self._make_canvas([Bond(1, 2, 1)])
+        service = CanvasGraphService(canvas)
+        service.graph.atom_bond_ids = {1: set(), 2: set()}
+        service.graph.atom_neighbors = {1: set(), 2: set()}
+
+        self.assertIsNone(service.bond_id_between(1, 2))
+        self.assertEqual(service.bond_id_between_with_repair(1, 2), 0)
+        self.assertEqual(service.graph.atom_bond_ids, {1: {0}, 2: {0}})
+        self.assertEqual(service.graph.atom_neighbors, {1: {2}, 2: {1}})
+        self.assertEqual(service.bond_id_between(1, 2), 0)
+
+    def test_bond_id_between_with_repair_returns_none_without_bond(self) -> None:
+        canvas = self._make_canvas([], atoms=self._make_atoms(1, 2))
+        service = CanvasGraphService(canvas)
+
+        self.assertIsNone(service.bond_id_between_with_repair(1, 2))
+
 
 if __name__ == "__main__":
+
     unittest.main()

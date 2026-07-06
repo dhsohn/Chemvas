@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ui.canvas_state_lookup import canvas_state_object
+from ui.canvas_state_lookup import ensure_canvas_state
 
 
 @dataclass(slots=True)
@@ -12,12 +12,7 @@ class SelectionOutlineState:
 
 
 def selection_outline_state_for(canvas: Any) -> SelectionOutlineState:
-    state = canvas_state_object(canvas, "selection_outline_state")
-    if state is not None:
-        return state
-    state = SelectionOutlineState()
-    canvas.selection_outline_state = state
-    return state
+    return ensure_canvas_state(canvas, "selection_outline_state", SelectionOutlineState)
 
 
 def selection_outlines_for(canvas: Any) -> list[Any]:

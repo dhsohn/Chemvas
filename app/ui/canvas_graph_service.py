@@ -102,6 +102,24 @@ class CanvasGraphService:
             skip_bond_id=skip_bond_id,
         )
 
+    def bond_id_between_with_repair(self, a_id: int, b_id: int) -> int | None:
+        """Index lookup backed by a model scan that repairs a stale index.
+
+        The graph index is derived state, so this service owns its consistency
+        contract: a *present* (even empty) index entry is trusted on the fast
+        path, but before a caller acts on "no bond exists" in a way that could
+        corrupt the model (e.g. creating a bond), this slow path re-checks the
+        model directly and re-indexes anything the index forgot.
+        """
+        existing_id = self.bond_id_between(a_id, b_id)
+        if existing_id is not None:
+            return existing_id
+        existing_id = graph_first_matching_bond_id(bonds_for(self.canvas), a_id, b_id)
+        if existing_id is not None:
+            self.add_bond_neighbors(a_id, b_id)
+            self.add_bond_index(existing_id, a_id, b_id)
+        return existing_id
+
     def bond_exists(self, a_id: int, b_id: int) -> bool:
         return self.bond_id_between(a_id, b_id) is not None
 

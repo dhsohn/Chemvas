@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ui.canvas_state_lookup import canvas_state_object
+from ui.canvas_state_lookup import ensure_canvas_state
 
 
 @dataclass(slots=True)
@@ -14,12 +14,7 @@ class CanvasSpatialIndexState:
 
 
 def spatial_index_state_for(canvas) -> CanvasSpatialIndexState:
-    state = canvas_state_object(canvas, "spatial_index_state")
-    if state is not None:
-        return state
-    state = CanvasSpatialIndexState()
-    canvas.spatial_index_state = state
-    return state
+    return ensure_canvas_state(canvas, "spatial_index_state", CanvasSpatialIndexState)
 
 
 def has_fresh_spatial_index_for(canvas, cell_size: float) -> bool:

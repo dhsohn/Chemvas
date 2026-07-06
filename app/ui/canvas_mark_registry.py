@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ui.canvas_state_lookup import canvas_state_object
+from ui.canvas_state_lookup import ensure_canvas_state
 
 
 class CanvasMarkRegistry:
@@ -28,12 +28,7 @@ class CanvasMarkRegistry:
 
 
 def mark_registry_for(canvas: Any) -> CanvasMarkRegistry:
-    registry = canvas_state_object(canvas, "mark_registry")
-    if registry is not None:
-        return registry
-    registry = CanvasMarkRegistry()
-    canvas.mark_registry = registry
-    return registry
+    return ensure_canvas_state(canvas, "mark_registry", CanvasMarkRegistry)
 
 
 __all__ = ["CanvasMarkRegistry", "mark_registry_for"]

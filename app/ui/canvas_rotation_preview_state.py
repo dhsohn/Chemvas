@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from PyQt6.QtWidgets import QGraphicsItemGroup
 
-from ui.canvas_state_lookup import canvas_state_object
+from ui.canvas_state_lookup import ensure_canvas_state
 
 
 @dataclass(slots=True)
@@ -13,12 +13,7 @@ class CanvasRotationPreviewState:
 
 
 def rotation_preview_state_for(canvas) -> CanvasRotationPreviewState:
-    state = canvas_state_object(canvas, "rotation_preview_state")
-    if state is not None:
-        return state
-    state = CanvasRotationPreviewState()
-    canvas.rotation_preview_state = state
-    return state
+    return ensure_canvas_state(canvas, "rotation_preview_state", CanvasRotationPreviewState)
 
 
 __all__ = ["CanvasRotationPreviewState", "rotation_preview_state_for"]
