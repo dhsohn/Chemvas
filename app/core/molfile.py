@@ -61,14 +61,15 @@ def write_molfile(
     per-atom mapping the 3D export uses). RDKit is not required.
     """
     atom_ids = sorted(model.atoms)
-    _reject_non_element_labels(model, atom_ids)
-
     index_by_id = {atom_id: position for position, atom_id in enumerate(atom_ids, start=1)}
     bonds = [
         bond
         for bond in model.bonds
         if bond is not None and bond.a in index_by_id and bond.b in index_by_id
     ]
+    # Capacity limits come before alias rejection: a too-large drawing must
+    # raise MolfileLimitError even when it also contains abbreviation labels,
+    # or the caller's RDKit expansion fallback would swallow the hard limit.
     if len(atom_ids) > _V2000_MAX_ATOMS or len(bonds) > _V2000_MAX_BONDS:
         raise MolfileLimitError(
             "Cannot export to MOL: V2000 molfiles support at most "
@@ -76,6 +77,7 @@ def write_molfile(
             f"(this drawing has {len(atom_ids)} atoms and {len(bonds)} bonds). "
             "Export a smaller selection instead."
         )
+    _reject_non_element_labels(model, atom_ids)
     scale = _coordinate_scale(model, bonds)
     annotations = atom_annotations or {}
 

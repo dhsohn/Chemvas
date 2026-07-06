@@ -95,15 +95,22 @@ class MolfileWriterTest(unittest.TestCase):
         self.assertEqual(mol.GetAtomWithIdx(0).GetFormalCharge(), 1)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class MolfileLimitsTest(unittest.TestCase):
     def test_atom_count_over_v2000_limit_raises(self) -> None:
         model = MoleculeModel()
         for index in range(1000):
             model.add_atom("C", float(index), 0.0)
+
+        with self.assertRaisesRegex(MolfileLimitError, "at most 999 atoms"):
+            write_molfile(model)
+
+    def test_limit_raises_before_alias_rejection(self) -> None:
+        # A too-large drawing containing an abbreviation must surface the hard
+        # limit, not the alias error that callers retry through RDKit.
+        model = MoleculeModel()
+        model.add_atom("Ph", 0.0, 0.0)
+        for index in range(1000):
+            model.add_atom("C", float(index + 1), 0.0)
 
         with self.assertRaisesRegex(MolfileLimitError, "at most 999 atoms"):
             write_molfile(model)
@@ -120,3 +127,7 @@ class MolfileLimitsTest(unittest.TestCase):
         block = write_molfile(model, atom_annotations={0: {"formal_charge": -15}})
 
         self.assertIn("M  CHG  1   1 -15", block)
+
+
+if __name__ == "__main__":
+    unittest.main()
