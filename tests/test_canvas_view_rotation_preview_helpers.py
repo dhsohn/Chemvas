@@ -128,7 +128,10 @@ class CanvasViewRotationPreviewHelperTest(unittest.TestCase):
         atom_item = _FakeSelectedItem("atom", 1)
         note_item = _FakeSelectedItem("note", None)
         arrow_item = _FakeSelectedItem("arrow", None)
-        scene = _FakeScene([atom_item, note_item, arrow_item])
+        bound_mark = _FakeSelectedItem("mark", {"kind": "plus", "atom_id": 1})
+        foreign_mark = _FakeSelectedItem("mark", {"kind": "plus", "atom_id": 99})
+        standalone_mark = _FakeSelectedItem("mark", {"kind": "plus", "atom_id": None})
+        scene = _FakeScene([atom_item, note_item, arrow_item, bound_mark, foreign_mark, standalone_mark])
         view = SimpleNamespace(
             rotation_preview_state=CanvasRotationPreviewState(),
             scene=lambda: scene,
@@ -138,10 +141,11 @@ class CanvasViewRotationPreviewHelperTest(unittest.TestCase):
 
         self.assertTrue(view.services.rotation_preview_controller.begin_selection_rotation())
 
-        # rotate_selection_for only rotates atoms/bonds/ring fills on commit;
-        # previewing anything else (e.g. a Qt-selected grouped note) would show
-        # a rotation that snaps back.
-        self.assertEqual(scene.created_with, [atom_item])
+        # The commit (rotate_selection_for) rotates atoms/bonds/ring fills and
+        # repositions marks bound to the rotated atoms; previewing anything
+        # else (a grouped note, an arrow, a mark on an unrotated atom) would
+        # show motion that snaps back.
+        self.assertEqual(scene.created_with, [atom_item, bound_mark])
 
     def test_update_rotation_preview_is_noop_without_group_and_updates_group_angle(self) -> None:
         idle_view = SimpleNamespace(rotation_preview_state=CanvasRotationPreviewState())

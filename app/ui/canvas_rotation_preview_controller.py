@@ -10,6 +10,14 @@ from ui.selection_rotation_logic import selected_rotation_atom_ids
 from ui.selection_scene_access import scene_selected_items_for
 
 
+def _is_mark_bound_to_atoms(item, atom_ids: set[int]) -> bool:
+    if item.data(0) != "mark":
+        return False
+    data = item.data(1)
+    atom_id = data.get("atom_id") if isinstance(data, dict) else None
+    return isinstance(atom_id, int) and atom_id in atom_ids
+
+
 class CanvasRotationPreviewController:
     def __init__(self, canvas) -> None:
         self.canvas = canvas
@@ -18,19 +26,23 @@ class CanvasRotationPreviewController:
         state = rotation_preview_state_for(self.canvas)
         if state.group is not None:
             return False
-        # Preview only what the commit rotates: rotate_selection_for moves
-        # atoms (with their bonds and ring fills). Other Qt-selected items —
-        # e.g. a grouped note whose selection flag is mirrored — would spin in
-        # the preview and then snap back on commit.
-        items = [
-            item
-            for item in scene_selected_items_for(self.canvas)
-            if item.data(0) in {"atom", "bond", "ring"}
-        ]
-        if not items:
+        selected = scene_selected_items_for(self.canvas)
+        if not selected:
             return False
         atom_ids, bond_ids = selected_ids_for(self.canvas)
         atom_ids = selected_rotation_atom_ids(atom_ids, bond_ids, bonds=bonds_for(self.canvas))
+        # Preview only what the commit repositions: rotate_selection_for moves
+        # atoms (with their bonds, ring fills, and the marks bound to rotated
+        # atoms). Other Qt-selected items — e.g. a grouped note whose selection
+        # flag is mirrored — would spin in the preview and snap back on commit.
+        items = [
+            item
+            for item in selected
+            if item.data(0) in {"atom", "bond", "ring"}
+            or _is_mark_bound_to_atoms(item, atom_ids)
+        ]
+        if not items:
+            return False
         center = center_for_atoms(atom_ids, atoms=atoms_for(self.canvas))
         if center is None:
             return False
