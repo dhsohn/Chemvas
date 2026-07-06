@@ -11,10 +11,10 @@ from pathlib import Path
 
 # (label, fmt key, default suffix)
 EXPORT_FORMATS: tuple[tuple[str, str, str], ...] = (
-    ("SVG — vector", "svg", ".svg"),
-    ("PDF — vector", "pdf", ".pdf"),
-    ("PNG — raster", "png", ".png"),
-    ("TIFF — raster", "tiff", ".tiff"),
+    ("Plain SVG - vector", "svg", ".svg"),
+    ("PDF - vector", "pdf", ".pdf"),
+    ("PNG - raster", "png", ".png"),
+    ("TIFF - raster", "tiff", ".tiff"),
 )
 
 DPI_OPTIONS: tuple[int, ...] = (150, 300, 600, 1200)

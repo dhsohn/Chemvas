@@ -3,12 +3,12 @@
 Consistency contract (shared by every consumer):
 
 - The indexes are derived state; the bond list on the model is the truth.
-- A *present* index entry — even an empty set — is trusted on read paths.
-- A *missing* entry means the index never learned about that atom, so read
-  helpers fall back to scanning the model for those atoms.
-- Write paths that would corrupt the model on a stale answer must not rely on
-  the fast path: ``CanvasGraphService.bond_id_between_with_repair`` re-checks
-  the model and repairs the index before "no bond exists" is acted on.
+- Read helpers use populated index entries as the fast path. Missing or empty
+  entries fall back to scanning the model because they cannot prove absence.
+- A missing or empty entry means the index may never have learned about that
+  atom, so it cannot prove that no model bond exists.
+- ``CanvasGraphService`` repairs stale derived indexes when a read path finds
+  model truth that the index missed.
 """
 
 from __future__ import annotations
@@ -110,29 +110,36 @@ def bond_id_between_indexed_atoms(
     *,
     bond_for_id: Callable[[int], Any | None],
     skip_bond_id: int | None = None,
+    scan_index_misses: bool = False,
 ) -> int | None:
     if a_id == b_id:
         return None
-    bonds_a = atom_bond_ids.get(a_id)
-    bonds_b = atom_bond_ids.get(b_id)
-    if bonds_a is None or bonds_b is None:
+
+    def scan_model() -> int | None:
         return first_matching_bond_id(
             bonds,
             a_id,
             b_id,
             skip_bond_id=skip_bond_id,
         )
+
+    bonds_a = atom_bond_ids.get(a_id)
+    bonds_b = atom_bond_ids.get(b_id)
     if not bonds_a or not bonds_b:
-        return None
+        # Missing/empty endpoint entries cannot distinguish "isolated atom"
+        # from "index never learned this atom". Without a model versioned
+        # negative cache, the only correct negative lookup is a model scan.
+        return scan_model()
+
     shared = bonds_a & bonds_b
     if skip_bond_id is not None and skip_bond_id in shared:
         shared = set(shared)
         shared.discard(skip_bond_id)
-    if not shared:
-        return None
     for bond_id in sorted(shared):
         if bond_matches_atoms(bond_for_id(bond_id), a_id, b_id):
             return bond_id
+    if shared or scan_index_misses:
+        return scan_model()
     return None
 
 
@@ -164,18 +171,17 @@ def bond_sets_for_atom_ids(
     if not atom_ids:
         return internal, boundary
     bond_ids: set[int] = set()
-    # Atoms with no index entry at all get a scan fallback, mirroring
-    # bond_id_between_indexed_atoms: a present (even empty) entry is trusted,
-    # a missing one means the index never learned about the atom.
-    missing_entry_atom_ids: set[int] = set()
+    # Atoms with missing or empty index entries get a scan fallback, mirroring
+    # bond_id_between_indexed_atoms: those entries cannot prove that no model
+    # bond exists.
+    scan_atom_ids: set[int] = set()
     for atom_id in atom_ids:
         indexed = atom_bond_ids.get(atom_id)
-        if indexed is None:
-            missing_entry_atom_ids.add(atom_id)
-        else:
+        if indexed:
             bond_ids.update(indexed)
-    if missing_entry_atom_ids or not bond_ids:
-        scan_atom_ids = atom_ids if not bond_ids else missing_entry_atom_ids
+        else:
+            scan_atom_ids.add(atom_id)
+    if scan_atom_ids:
         for bond_id, bond in enumerate(bonds):
             if bond is None:
                 continue

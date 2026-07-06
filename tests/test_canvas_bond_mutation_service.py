@@ -9,6 +9,13 @@ from core.model import Bond
 from ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
 from ui.canvas_bond_mutation_service import CanvasBondMutationService
 
+try:
+    from ui.canvas_graph_service import CanvasGraphService
+    from ui.canvas_graph_state import CanvasGraphState
+except ModuleNotFoundError:
+    CanvasGraphService = None
+    CanvasGraphState = None
+
 
 class _FakeModel:
     def __init__(self, bonds=None) -> None:
@@ -277,6 +284,36 @@ class CanvasBondMutationServiceStaleIndexTest(unittest.TestCase):
         self.assertEqual(model.add_bond_calls, [])
         self.assertEqual(len(model.bonds), 1)
         graph.bond_id_between_with_repair.assert_called_once_with(1, 2)
+
+    @unittest.skipUnless(
+        CanvasGraphService is not None and CanvasGraphState is not None,
+        "PyQt6 is required for canvas graph service tests",
+    )
+    def test_trim_bonds_to_length_does_not_repair_trimmed_parallel_bond_indexes(self) -> None:
+        scene = _FakeScene()
+        graph_state = CanvasGraphState(
+            atom_neighbors={1: {2}, 2: {1}},
+            atom_bond_ids={1: {0, 1}, 2: {0, 1}},
+        )
+        hit_testing = _hit_testing_service()
+        canvas = SimpleNamespace(
+            graph_state=graph_state,
+            model=SimpleNamespace(bonds=[Bond(1, 2, 1), Bond(1, 2, 2)]),
+            scene=lambda: scene,
+        )
+        graph = CanvasGraphService(canvas)
+        canvas.services = _services(graph=graph, hit_testing=hit_testing)
+        item_0 = object()
+        item_1 = object()
+        set_bond_items_for(canvas, {0: [item_0], 1: [item_1]})
+
+        _service_for(canvas).trim_bonds_to_length(0)
+
+        self.assertEqual(canvas.model.bonds, [])
+        self.assertEqual(graph_state.atom_bond_ids, {1: set(), 2: set()})
+        self.assertEqual(graph_state.atom_neighbors, {1: set(), 2: set()})
+        self.assertEqual(scene.removed_items, [item_0, item_1])
+        hit_testing.mark_spatial_index_dirty.assert_called_once_with()
 
 
 if __name__ == "__main__":

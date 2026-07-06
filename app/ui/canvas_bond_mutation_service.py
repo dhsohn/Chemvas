@@ -81,13 +81,16 @@ class CanvasBondMutationService:
         if length < 0 or length >= bond_count_for(self.canvas):
             return
         graph_service = self.graph_service
-        for bond_id in bond_ids_from(self.canvas, length):
-            bond = bond_for_id(self.canvas, bond_id)
+        trimmed_bonds = [
+            (bond_id, bond_for_id(self.canvas, bond_id))
+            for bond_id in bond_ids_from(self.canvas, length)
+        ]
+        trim_bonds_direct_for(self.canvas, length)
+        for bond_id, bond in trimmed_bonds:
             if bond is not None:
                 graph_service.remove_bond_index(bond_id, bond.a, bond.b)
                 graph_service.remove_bond_neighbors(bond.a, bond.b, skip_bond_id=bond_id)
             self._clear_bond_graphics(bond_id)
-        trim_bonds_direct_for(self.canvas, length)
         self.hit_testing_service.mark_spatial_index_dirty()
 
     def _clear_bond_graphics(self, bond_id: int) -> None:

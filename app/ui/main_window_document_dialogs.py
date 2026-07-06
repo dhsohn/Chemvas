@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QFrame,
@@ -34,6 +35,7 @@ class FigureExportOptions:
     scope: str
     dpi: int
     background: str
+    editable_svg: bool = False
 
 
 @dataclass(frozen=True)
@@ -87,6 +89,15 @@ def prompt_export_options(window) -> FigureExportOptions | None:
         background_combo.addItem(label, value)
     layout.addWidget(background_combo)
 
+    editable_svg_check = QCheckBox("Editable Chemvas SVG")
+    editable_svg_check.setObjectName("exportEditableSvgCheck")
+    layout.addWidget(editable_svg_check)
+
+    editable_svg_warning = QLabel("Embeds Chemvas document data in SVG metadata.")
+    editable_svg_warning.setObjectName("exportEditableSvgWarning")
+    editable_svg_warning.setWordWrap(True)
+    layout.addWidget(editable_svg_warning)
+
     dpi_label = QLabel("Resolution (DPI):")
     layout.addWidget(dpi_label)
     dpi_combo = QComboBox()
@@ -96,13 +107,20 @@ def prompt_export_options(window) -> FigureExportOptions | None:
     dpi_combo.setCurrentIndex(DPI_OPTIONS.index(DEFAULT_DPI))
     layout.addWidget(dpi_combo)
 
-    def sync_dpi_enabled() -> None:
-        enabled = is_dpi_relevant(format_combo.currentData())
-        dpi_label.setEnabled(enabled)
-        dpi_combo.setEnabled(enabled)
+    def sync_format_controls() -> None:
+        fmt = format_combo.currentData()
+        dpi_enabled = is_dpi_relevant(fmt)
+        dpi_label.setEnabled(dpi_enabled)
+        dpi_combo.setEnabled(dpi_enabled)
+        editable_enabled = fmt == "svg"
+        editable_svg_check.setEnabled(editable_enabled)
+        if not editable_enabled:
+            editable_svg_check.setChecked(False)
+        editable_svg_warning.setVisible(editable_enabled and editable_svg_check.isChecked())
 
-    format_combo.currentIndexChanged.connect(sync_dpi_enabled)
-    sync_dpi_enabled()
+    format_combo.currentIndexChanged.connect(sync_format_controls)
+    editable_svg_check.toggled.connect(sync_format_controls)
+    sync_format_controls()
 
     export_btn, cancel_btn = _add_action_row(layout, accept_label="Export")
     export_btn.clicked.connect(dialog.accept)
@@ -116,6 +134,7 @@ def prompt_export_options(window) -> FigureExportOptions | None:
         scope=scope_combo.currentData(),
         dpi=int(dpi_combo.currentData()),
         background=background_combo.currentData(),
+        editable_svg=format_combo.currentData() == "svg" and editable_svg_check.isChecked(),
     )
 
 

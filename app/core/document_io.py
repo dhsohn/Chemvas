@@ -3,6 +3,8 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
 from os import PathLike
@@ -46,15 +48,41 @@ def parse_document(payload: object) -> ChemvasDocument:
 
 def write_document(path: PathType, state: dict[str, Any], version: int) -> ChemvasDocument:
     document = create_document(state, version)
+    atomic_write_via_temp(
+        path,
+        lambda tmp: _write_document_payload(tmp, document.payload),
+    )
+    return document
+
+
+def _write_document_payload(path: Path, payload: dict[str, Any]) -> None:
+    with path.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2)
+
+
+def atomic_write_text(path: PathType, text: str, *, encoding: str = "utf-8") -> None:
+    atomic_write_via_temp(path, lambda tmp: _write_text_payload(tmp, text, encoding=encoding))
+
+
+def _write_text_payload(path: Path, text: str, *, encoding: str) -> None:
+    with path.open("w", encoding=encoding) as handle:
+        handle.write(text)
+
+
+def atomic_write_via_temp(path: PathType, writer: Callable[[Path], None]) -> None:
     target = Path(path)
-    # Atomic write: render to a sibling temp file, flush to disk, then replace.
-    # A crash/IO error mid-write leaves the previous file intact instead of a
-    # truncated document.
-    tmp = target.with_name(f".{target.name}.tmp")
+    # Atomic write: render/write to a sibling temp file, flush to disk, then
+    # replace. A crash/IO error mid-write leaves the previous file intact.
+    with tempfile.NamedTemporaryFile(
+        prefix=f".{target.name}.",
+        suffix=".tmp",
+        dir=target.parent,
+        delete=False,
+    ) as tmp_handle:
+        tmp = Path(tmp_handle.name)
     try:
-        with tmp.open("w", encoding="utf-8") as handle:
-            json.dump(document.payload, handle, indent=2)
-            handle.flush()
+        writer(tmp)
+        with tmp.open("rb+") as handle:
             os.fsync(handle.fileno())
         os.replace(tmp, target)
     except BaseException:
@@ -62,7 +90,6 @@ def write_document(path: PathType, state: dict[str, Any], version: int) -> Chemv
         with contextlib.suppress(OSError):
             tmp.unlink()
         raise
-    return document
 
 
 def read_document(path: PathType) -> ChemvasDocument:

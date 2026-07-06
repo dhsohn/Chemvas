@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
 from ui.bracket_types import LEGACY_TS_BRACKET_KIND, normalized_bracket_kind
 from ui.canvas_atom_graphics_state import atom_items_for
 from ui.canvas_model_access import atom_annotation_for, atom_for_id
+from ui.note_html_sanitizer import sanitize_note_html
 from ui.shape_geometry import normalized_shape_kind, normalized_stroke_style
 
 MarkCenterGetter = Callable[[Any], QPointF]
@@ -97,10 +98,11 @@ def ring_state_dict_for(canvas, ring_item) -> dict:
 
 
 def note_state_dict(item: QGraphicsTextItem) -> dict:
+    html = sanitize_note_html(item.toHtml()) or ""
     return {
         "kind": "note",
         "text": item.toPlainText(),
-        "html": item.toHtml(),
+        "html": html,
         "x": item.pos().x(),
         "y": item.pos().y(),
     }

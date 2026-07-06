@@ -33,9 +33,10 @@ conversion — Chemvas runs without it.
   and click to place it on the canvas.
 - **Molecule Info window** _(RDKit)_ — 3D preview (drag to rotate, scroll to zoom)
   plus molecular formula and weight for the current selection.
-- **Figure export** — SVG / PDF / PNG / TIFF with outlined glyphs (so screen, vector,
-  and raster output never diverge) and deterministic physical sizing
-  (bond-length or 84 / 174 mm column fit), independent of zoom.
+- **Figure export** — plain SVG / PDF / PNG / TIFF with outlined glyphs (so screen,
+  vector, and raster output never diverge) and deterministic physical sizing
+  (bond-length or 84 / 174 mm column fit), independent of zoom. Editable Chemvas
+  SVG is opt-in and embeds the source document in SVG metadata.
 - **2D→3D `.xyz` export** _(RDKit)_ — convert the current molecule or atom/bond
   selection into 3D coordinates; charges/radicals and wedge/hash stereo are carried
   through, and common alias labels are expanded into explicit fragments.
@@ -85,6 +86,10 @@ molecule model, annotations, arrows, bracket annotations, and settings:
 ```json
 { "type": "chemvas", "version": 1, "state": { /* ... */ } }
 ```
+
+Figure export defaults to plain SVG without Chemvas source metadata. Choose
+**Editable Chemvas SVG** only when you want the SVG to carry the original
+document payload for round-tripping back into Chemvas.
 
 ## 3D export & Molecule Info
 

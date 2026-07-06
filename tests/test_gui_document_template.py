@@ -384,7 +384,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         doc_service = active_canvas_for_window(self.window).services.canvas_document_session_service
 
         with (
-            patch.object(doc_service, "save_to_file") as save_mock,
+            patch.object(doc_service, "save_to_file", return_value=[]) as save_mock,
             patch("ui.main_window_document_action_service.QFileDialog.getSaveFileName") as dialog_mock,
         ):
             self.assertFalse(hasattr(active_canvas_for_window(self.window), "save_to_file"))

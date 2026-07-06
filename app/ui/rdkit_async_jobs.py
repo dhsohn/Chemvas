@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from pathlib import Path
-
+from core.document_io import atomic_write_text
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
 from ui.rdkit_export_job_state import rdkit_export_jobs_for
@@ -37,7 +36,7 @@ class XYZExportWorker(QObject):
             if xyz_block is None:
                 self.failed.emit(error or "Failed to export 3D XYZ.")
                 return
-            Path(self._path).write_text(xyz_block, encoding="utf-8")
+            atomic_write_text(self._path, xyz_block)
             self.succeeded.emit(self._path)
         except Exception as exc:
             self.failed.emit(str(exc) or "Failed to export 3D XYZ.")
