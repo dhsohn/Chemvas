@@ -1,6 +1,7 @@
 import os
 import unittest
 from types import SimpleNamespace
+from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -11,6 +12,7 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
+    from ui.canvas_group_state import register_group_for
     from ui.canvas_scene_items_state import selected_notes_for, set_selected_notes_for
     from ui.selection_note_service import SelectionNoteService
     from ui.selection_style_state import SelectionStyleState
@@ -92,6 +94,54 @@ class SelectionNoteServiceTest(unittest.TestCase):
             note_padding=6.0,
             selection_style_state=SelectionStyleState(color=QColor("#1f5eff"), stroke_delta=0.8),
         )
+
+    def test_toggle_note_selection_deselects_notes_only_group_as_unit(self) -> None:
+        scene = QGraphicsScene()
+        note_a = QGraphicsTextItem("A")
+        note_b = QGraphicsTextItem("B")
+        note_a.setData(0, "note")
+        note_b.setData(0, "note")
+        scene.addItem(note_a)
+        scene.addItem(note_b)
+        canvas = self._note_canvas()
+        canvas.scene = lambda: scene
+        set_selected_notes_for(canvas, [note_a, note_b])
+        register_group_for(canvas, set(), [note_a, note_b])
+        service = SelectionNoteService(canvas)
+
+        # Ctrl-clicking one member must drop the whole notes-only group, not
+        # leave a partial selection behind.
+        service.toggle_note_selection(note_a)
+
+        self.assertEqual(selected_notes_for(canvas), [])
+
+    def test_note_selection_changes_refresh_selection_outline(self) -> None:
+        scene = QGraphicsScene()
+        note = QGraphicsTextItem("A")
+        scene.addItem(note)
+        canvas = self._note_canvas()
+        outline_refresh = mock.Mock()
+        canvas.services = SimpleNamespace(
+            selection_controller=SimpleNamespace(update_selection_outline=outline_refresh)
+        )
+        set_selected_notes_for(canvas, [])
+        service = SelectionNoteService(canvas)
+
+        # No-op paths must not redraw.
+        service.clear_note_selection()
+        service.set_note_selected(note, False)
+        outline_refresh.assert_not_called()
+
+        # Real changes must redraw so notes-only group boxes track note selection.
+        service.select_note(note, additive=True)
+        self.assertEqual(outline_refresh.call_count, 1)
+        service.set_note_selected(note, True)
+        self.assertEqual(outline_refresh.call_count, 1)
+        service.toggle_note_selection(note)
+        self.assertEqual(outline_refresh.call_count, 2)
+        service.select_note(note, additive=True)
+        service.clear_note_selection()
+        self.assertEqual(outline_refresh.call_count, 4)
 
     def test_set_note_selected_is_idempotent_in_both_directions(self) -> None:
         scene = QGraphicsScene()

@@ -1,9 +1,25 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPen
 
 from ui.graphics_items import NoSelectEllipseItem, NoSelectPathItem
+
+
+def selection_group_outline_item(rect: QRectF, color: QColor) -> NoSelectPathItem:
+    path = QPainterPath()
+    corner = min(6.0, min(rect.width(), rect.height()) / 4.0)
+    path.addRoundedRect(rect, corner, corner)
+    outline = NoSelectPathItem(path)
+    outline.setData(0, "selection_outline")
+    outline.setData(2, {"kind": "group"})
+    outline.setZValue(20)
+    pen = QPen(color)
+    pen.setWidthF(1.2)
+    pen.setStyle(Qt.PenStyle.DashLine)
+    outline.setPen(pen)
+    outline.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+    return outline
 
 
 def selection_object_outline_item(path: QPainterPath, color: QColor) -> NoSelectPathItem:
@@ -68,5 +84,6 @@ def selection_center_outline_items(
 __all__ = [
     "selection_center_outline_items",
     "selection_component_outline_item",
+    "selection_group_outline_item",
     "selection_object_outline_item",
 ]

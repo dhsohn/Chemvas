@@ -71,7 +71,7 @@ class SelectionHitTestService:
         outline_hit = False
         for outline in selection_outlines_for(self.canvas):
             data = outline.data(2) or {}
-            if data.get("kind") not in {"component", "object"}:
+            if data.get("kind") not in {"component", "object", "group"}:
                 continue
             if outline.contains(outline.mapFromScene(pos)):
                 outline_hit = True

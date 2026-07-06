@@ -8,11 +8,14 @@ from ui.canvas_group_state import (
     register_group_for,
     remove_group_for,
 )
+from ui.canvas_mark_registry import mark_registry_for
 from ui.canvas_model_access import atoms_for, bonds_for
-from ui.canvas_scene_items_state import ring_items_for
+from ui.canvas_scene_items_state import remove_selected_note_for, ring_items_for
 from ui.canvas_window_access import history_service_for_canvas
 from ui.graph_algorithms import adjacency_for_bonds, connected_components_for_nodes
 from ui.history_commands import GroupSceneItemsCommand, UngroupSceneItemsCommand
+from ui.note_selection_box import update_note_selection_box_for
+from ui.renderer_style_access import bond_length_px_for
 from ui.scene_item_access import attached_canvas_scene_items
 from ui.scene_item_state_serialization import ARROW_KINDS
 from ui.selection_collection_access import (
@@ -32,6 +35,7 @@ from ui.selection_service_access import (
     select_note_for,
     toggle_note_selection_for,
 )
+from ui.selection_style_access import selection_indicator_rect_for_atom_for
 
 GROUPABLE_STANDALONE_KINDS = frozenset({"note", "ts_bracket", "shape", "orbital"}) | frozenset(ARROW_KINDS)
 
@@ -106,6 +110,7 @@ def group_selection_for(canvas) -> bool:
         remove_group_for(canvas, absorbed_id)
     command.group_id = register_group_for(canvas, atom_ids, items)
     history_service_for_canvas(canvas).push(command)
+    refresh_selection_outline_for(canvas)
     return True
 
 
@@ -119,15 +124,21 @@ def ungroup_selection_for(canvas) -> bool:
     for group_id, _ in removed:
         remove_group_for(canvas, group_id)
     history_service_for_canvas(canvas).push(UngroupSceneItemsCommand(removed=removed))
+    refresh_selection_outline_for(canvas)
     return True
 
 
 def _structure_items_for_atom_ids(canvas, atom_ids: set[int]) -> list:
     items: list = []
+    registry = mark_registry_for(canvas)
     for atom_id in atom_ids:
         atom_item = visible_atom_item_for(canvas, atom_id)
         if atom_item is not None:
             items.append(atom_item)
+        # Atom-bound marks travel with their atom, so they select and deselect
+        # as part of the structure; a lingering Qt-selected charge mark would
+        # otherwise keep re-triggering its atom's group after a deselect.
+        items.extend(registry.get_for_atom(atom_id) or [])
     for bond_id, bond in enumerate(bonds_for(canvas)):
         if bond is None:
             continue
@@ -181,6 +192,178 @@ def group_selection_targets_for(canvas, targets: list) -> list:
     return extended
 
 
+def _group_has_scene_members(canvas, group) -> bool:
+    if group.atom_ids & set(atoms_for(canvas)):
+        return True
+    return any(
+        member.data(0) != "note"
+        for member in attached_canvas_scene_items(canvas, group.items)
+    )
+
+
+def selected_group_rects_for(canvas) -> list:
+    """Scene rects of groups intersecting the current selection.
+
+    The selection outline draws one ChemDraw-style dashed box per selected
+    group so grouped objects visibly act as a unit. Boxes key off Qt scene
+    selection (matching the expansion trigger); only notes-only groups key off
+    the note-service selection, since they have no scene-selectable members.
+    """
+    state = group_state_for(canvas)
+    if not state.groups:
+        return []
+    atom_ids = {
+        atom_id
+        for atom_id in selected_atom_ids_for_transform_for(canvas)
+        if atom_id in atoms_for(canvas)
+    }
+    trigger_items = [
+        item
+        for item in scene_selected_items_for(canvas)
+        if _is_groupable_standalone_item(canvas, item)
+    ]
+    group_ids = group_ids_for_members_for(
+        canvas,
+        atom_ids | selected_mark_atom_ids_for(canvas),
+        trigger_items,
+    )
+    # A notes-only group must never be scene-triggered (e.g. by a lingering
+    # Qt-selected note): its box is gated exclusively by the full note-service
+    # selection check below, so it never claims notes a drag would not move.
+    group_ids = {
+        group_id
+        for group_id in group_ids
+        if _group_has_scene_members(canvas, state.groups[group_id])
+    }
+    selected_notes = selected_scene_notes_for(canvas)
+    if selected_notes:
+        for group_id, group in state.groups.items():
+            if group_id in group_ids or _group_has_scene_members(canvas, group):
+                continue
+            member_notes = [
+                member
+                for member in attached_canvas_scene_items(canvas, group.items)
+                if member.data(0) == "note"
+            ]
+            # Draw the box only when the whole note group is selected, so it
+            # never claims more than drag/delete/copy would actually act on.
+            if member_notes and all(
+                any(member is note for note in selected_notes)
+                for member in member_notes
+            ):
+                group_ids.add(group_id)
+    if not group_ids:
+        return []
+    live_atom_ids = set(atoms_for(canvas))
+    pad = bond_length_px_for(canvas) * 0.18
+    rects = []
+    for group_id in sorted(group_ids):
+        group = state.groups[group_id]
+        rect = None
+        for atom_id in group.atom_ids & live_atom_ids:
+            atom_rect = selection_indicator_rect_for_atom_for(canvas, atom_id)
+            if atom_rect is None:
+                continue
+            rect = atom_rect if rect is None else rect.united(atom_rect)
+        for member in attached_canvas_scene_items(canvas, group.items):
+            member_rect = member.sceneBoundingRect()
+            rect = member_rect if rect is None else rect.united(member_rect)
+        if rect is not None:
+            rects.append(rect.adjusted(-pad, -pad, pad, pad))
+    return rects
+
+
+def notes_only_group_member_notes_for(canvas, note) -> list:
+    """Attached note members of the notes-only group containing ``note``.
+
+    Returns an empty list for ungrouped notes, members of mixed groups (those
+    expand through the scene selectionChanged hook), or while a group
+    expansion is already applying a selection change.
+    """
+    state = group_state_for(canvas)
+    if state.expanding or not state.groups:
+        return []
+    for group in state.groups.values():
+        if not any(member is note for member in group.items):
+            continue
+        if _group_has_scene_members(canvas, group):
+            continue
+        return [
+            member
+            for member in attached_canvas_scene_items(canvas, group.items)
+            if member.data(0) == "note"
+        ]
+    return []
+
+
+def expand_note_selection_to_groups_for(canvas, note) -> None:
+    """Select the remaining notes of a notes-only group when one is selected.
+
+    Mixed groups expand through the scene selectionChanged hook; notes-only
+    groups have no scene-selectable member, so the note service calls this
+    when a note becomes selected to keep the group acting as a unit.
+    """
+    member_notes = notes_only_group_member_notes_for(canvas, note)
+    if not member_notes:
+        return
+    selected_notes = selected_scene_notes_for(canvas)
+    missing = [
+        member
+        for member in member_notes
+        if not any(member is selected for selected in selected_notes)
+    ]
+    if not missing:
+        return
+    state = group_state_for(canvas)
+    state.expanding = True
+    try:
+        for member in missing:
+            select_note_for(canvas, member, additive=True)
+    finally:
+        state.expanding = False
+
+
+def deselect_groups_for_note_for(canvas, note) -> None:
+    """Deselect the whole group when one of its notes is deselected directly.
+
+    Mirrors the scene-side unit rule: without this, deselecting a mixed
+    group's note (note focus-out, NoteTool Ctrl-click) leaves the scene
+    members selected, so the group box keeps spanning a note that a drag
+    would leave behind.
+    """
+    state = group_state_for(canvas)
+    if state.expanding or not state.groups:
+        return
+    target_groups = [
+        group
+        for group in state.groups.values()
+        if any(member is note for member in group.items)
+        and _group_has_scene_members(canvas, group)
+    ]
+    if not target_groups:
+        return
+    state.expanding = True
+    try:
+        for group in target_groups:
+            live_atom_ids = group.atom_ids & set(atoms_for(canvas))
+            members = attached_canvas_scene_items(canvas, group.items)
+            scene_items = _structure_items_for_atom_ids(canvas, live_atom_ids)
+            # Notes are included: attach_scene_item makes them Qt-selectable,
+            # so a rubber-band-selected note would otherwise keep its Qt
+            # selection and keep triggering the group box.
+            scene_items.extend(members)
+            set_scene_items_selected_for(canvas, scene_items, False)
+            selected_notes = selected_scene_notes_for(canvas)
+            for member in members:
+                if member.data(0) != "note" or member is note:
+                    continue
+                if any(member is selected for selected in selected_notes):
+                    remove_selected_note_for(canvas, member)
+                    update_note_selection_box_for(canvas, member)
+    finally:
+        state.expanding = False
+
+
 def _stale_group_notes_for(canvas, state, active_group_ids: set[int]) -> list:
     """Selected note members of groups that are no longer scene-selected.
 
@@ -192,7 +375,6 @@ def _stale_group_notes_for(canvas, state, active_group_ids: set[int]) -> list:
     selected_notes = selected_scene_notes_for(canvas)
     if not selected_notes:
         return []
-    live_atom_ids = set(atoms_for(canvas))
     stale: list = []
     for group_id, group in state.groups.items():
         if group_id in active_group_ids:
@@ -206,11 +388,7 @@ def _stale_group_notes_for(canvas, state, active_group_ids: set[int]) -> list:
             continue
         # A notes-only group is never scene-triggered; leave its manual
         # note-tool selection alone.
-        has_scene_members = bool(group.atom_ids & live_atom_ids) or any(
-            member.data(0) != "note"
-            for member in attached_canvas_scene_items(canvas, group.items)
-        )
-        if not has_scene_members:
+        if not _group_has_scene_members(canvas, group):
             continue
         stale.extend(member_notes)
     return stale
@@ -238,6 +416,15 @@ def expand_selection_to_groups_for(canvas) -> None:
     # selected by the expansion below.
     trigger_atom_ids = atom_ids | selected_mark_atom_ids_for(canvas)
     group_ids = group_ids_for_members_for(canvas, trigger_atom_ids, trigger_items)
+    # Notes-only groups have no shrink path here (the stale-note reconciliation
+    # skips them), so a Qt-selected note must not scene-expand them or a
+    # marquee that once touched the note could never deselect the group; their
+    # unit behaviour lives entirely in the note-service paths.
+    group_ids = {
+        group_id
+        for group_id in group_ids
+        if _group_has_scene_members(canvas, state.groups[group_id])
+    }
     member_atom_ids: set[int] = set()
     member_items: list = []
     for group_id in group_ids:
@@ -269,8 +456,12 @@ def expand_selection_to_groups_for(canvas) -> None:
 
 __all__ = [
     "GROUPABLE_STANDALONE_KINDS",
+    "deselect_groups_for_note_for",
+    "expand_note_selection_to_groups_for",
     "expand_selection_to_groups_for",
     "group_selection_for",
     "group_selection_targets_for",
+    "notes_only_group_member_notes_for",
+    "selected_group_rects_for",
     "ungroup_selection_for",
 ]

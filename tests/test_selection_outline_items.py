@@ -11,9 +11,11 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
+    from PyQt6.QtCore import QRectF
     from ui.selection_outline_items import (
         selection_center_outline_items,
         selection_component_outline_item,
+        selection_group_outline_item,
         selection_object_outline_item,
     )
 
@@ -24,6 +26,17 @@ class SelectionOutlineItemsTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
+
+    def test_selection_group_outline_item_draws_dashed_unfilled_box(self) -> None:
+        item = selection_group_outline_item(QRectF(0.0, 0.0, 40.0, 20.0), QColor("#1f5eff"))
+
+        self.assertEqual(item.data(0), "selection_outline")
+        self.assertEqual(item.data(2), {"kind": "group"})
+        self.assertEqual(item.zValue(), 20)
+        self.assertEqual(item.pen().style(), Qt.PenStyle.DashLine)
+        self.assertEqual(item.pen().color().name(), "#1f5eff")
+        self.assertEqual(item.brush().style(), Qt.BrushStyle.NoBrush)
+        self.assertTrue(item.contains(QPointF(20.0, 10.0)))
 
     def test_selection_object_outline_item_sets_metadata_and_fill(self) -> None:
         path = QPainterPath()

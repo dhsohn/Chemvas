@@ -120,18 +120,22 @@ class GroupSceneItemsCommand(HistoryCommand):
             remove_group_for(canvas, absorbed_id)
         if self.group_id is None:
             self.group_id = register_group_for(canvas, self.atom_ids, self.items)
-            return
-        restore_group_for(
-            canvas,
-            self.group_id,
-            CanvasSceneGroup(set(self.atom_ids), list(self.items)),
-        )
+        else:
+            restore_group_for(
+                canvas,
+                self.group_id,
+                CanvasSceneGroup(set(self.atom_ids), list(self.items)),
+            )
+        # The dashed group box is part of the selection outline; without a
+        # refresh, undo/redo would leave a stale box (and its hit-test area).
+        refresh_selection_outline_for_canvas(canvas)
 
     def undo(self, canvas) -> None:
         if self.group_id is not None:
             remove_group_for(canvas, self.group_id)
         for absorbed_id, group in self.absorbed:
             restore_group_for(canvas, absorbed_id, group)
+        refresh_selection_outline_for_canvas(canvas)
 
 
 @dataclass
@@ -141,10 +145,12 @@ class UngroupSceneItemsCommand(HistoryCommand):
     def redo(self, canvas) -> None:
         for group_id, _ in self.removed:
             remove_group_for(canvas, group_id)
+        refresh_selection_outline_for_canvas(canvas)
 
     def undo(self, canvas) -> None:
         for group_id, group in self.removed:
             restore_group_for(canvas, group_id, group)
+        refresh_selection_outline_for_canvas(canvas)
 
 
 @dataclass

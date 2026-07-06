@@ -37,7 +37,10 @@ from ui.note_item_access import (
 from ui.note_selection_box import update_note_selection_box_for
 from ui.scene_item_access import attach_scene_item, remove_scene_item
 from ui.scene_item_state import note_state_dict_for
-from ui.selection_service_access import selection_service_from_canvas
+from ui.selection_service_access import (
+    refresh_selection_outline_for,
+    selection_service_from_canvas,
+)
 
 
 class CanvasNoteController:
@@ -84,6 +87,13 @@ class CanvasNoteController:
 
     def _deselect_note(self, item: QGraphicsTextItem) -> None:
         if item in selected_notes_for(self.canvas):
+            # Route through the note service so notes-only groups deselect as a
+            # unit and the group box outline refreshes; a direct state removal
+            # would strand the grouped companions in the selection.
+            toggle_note_selection = getattr(self._selection_controller(), "toggle_note_selection", None)
+            if callable(toggle_note_selection):
+                toggle_note_selection(item)
+                return
             remove_selected_note_for(self.canvas, item)
         update_note_selection_box_for(self.canvas, item)
 
@@ -122,15 +132,21 @@ class CanvasNoteController:
             before_state = note_state_dict_for(self.canvas, item)
             before_state["text"] = committed_text
             before_state["html"] = committed_html
+            # Deselect before removal so grouped companion notes drop with it,
+            # then refresh again after removal: a mixed group's box is spanned
+            # by attached members, so the pre-removal refresh still covered
+            # this note and the lifecycle refresh skips already-deselected
+            # notes.
+            self._deselect_note(item)
             remove_scene_item(self.canvas, item)
+            refresh_selection_outline_for(self.canvas)
             self._push_history_or_rollback(DeleteSceneItemsCommand(item_states=[before_state], items=[item]))
             set_committed_note_text_for(item, "")
             set_committed_note_html_for(item, "")
             return
-        if item in selected_notes_for(self.canvas):
-            remove_selected_note_for(self.canvas, item)
-            update_note_selection_box_for(self.canvas, item)
+        self._deselect_note(item)
         remove_scene_item(self.canvas, item)
+        refresh_selection_outline_for(self.canvas)
 
     def update_text_note(self, item: QGraphicsTextItem, text: str) -> None:
         item.setPlainText(text)
