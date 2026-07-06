@@ -158,6 +158,27 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
         service.mark_spatial_index_dirty()
         self.assertTrue(canvas.spatial_index_state.dirty)
 
+    def test_spatial_index_self_heals_when_dirty_mark_was_missed(self) -> None:
+        # The dirty flag depends on every mutation path remembering to call
+        # mark_spatial_index_dirty; if one forgets, a changed atom/bond count
+        # must still trigger a rebuild instead of serving stale hits.
+        canvas = SimpleNamespace(
+            renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
+            model=SimpleNamespace(
+                atoms={1: Atom("C", 0.0, 0.0)},
+                bonds=[],
+            ),
+            spatial_index_state=CanvasSpatialIndexState(),
+        )
+        service = CanvasHitTestingService(canvas)
+        service.ensure_spatial_index()
+        self.assertIsNone(service.find_atom_near(30.0, 0.0, 5.0))
+
+        # Mutate the model WITHOUT marking the index dirty.
+        canvas.model.atoms[2] = Atom("O", 30.0, 0.0)
+
+        self.assertEqual(service.find_atom_near(30.0, 0.0, 5.0), 2)
+
     def test_spatial_index_and_nearest_helpers_cover_missing_sparse_and_zero_cell_paths(self) -> None:
         sparse_canvas = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),

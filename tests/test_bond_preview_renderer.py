@@ -257,7 +257,7 @@ class BondPreviewRendererTest(unittest.TestCase):
         bx1, by1, bx2, by2 = expanded_bold_segment(start, end, 20.0)
         self.assertEqual(items, [strip])
         line_normal.assert_called_once_with(bx1, by1, bx2, by2, None)
-        one_sided.assert_called_once_with(bx1, by1, bx2, by2, -0.25, -0.75, 1.2, 3.5999999999999996)
+        one_sided.assert_called_once_with(bx1, by1, bx2, by2, -0.25, -0.75, 1.2, 2.4)
 
     def test_build_bold_parallel_preview_keeps_non_line_first_item(self) -> None:
         first = QGraphicsPolygonItem()
@@ -311,7 +311,7 @@ class BondPreviewRendererTest(unittest.TestCase):
         )
 
         self.assertIsInstance(items[0], QGraphicsPolygonItem)
-        one_sided.assert_called_once_with(0.0, 0.0, 10.0, 0.0, 0.25, 0.75, 1.2, 3.5999999999999996)
+        one_sided.assert_called_once_with(0.0, 0.0, 10.0, 0.0, 0.25, 0.75, 1.2, 2.4)
 
     def test_build_parallel_nonbold_preview_uses_parallel_resolver(self) -> None:
         expected = [QGraphicsLineItem(0.0, 0.0, 8.0, 0.0), QGraphicsLineItem(0.0, 1.0, 8.0, 1.0)]
