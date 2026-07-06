@@ -101,17 +101,12 @@ class RDKitConversionHelper:
     def model_to_rdkit_with_map_strict_labels(self, model: MoleculeModel):
         return self._build_rdkit_mol_with_map(model, strict_labels=True)
 
-    def model_to_rdkit_with_map(self, model: MoleculeModel, *, strict_labels: bool = True):
-        if strict_labels:
-            return self.model_to_rdkit_with_map_strict_labels(model)
-        return self.model_to_rdkit_with_map_tolerant(model)
-
     def model_to_rdkit_tolerant(self, model: MoleculeModel):
         mol, _ = self.adapter.model_to_rdkit_with_map_tolerant(model)
         return mol
 
-    def model_to_rdkit(self, model: MoleculeModel, *, strict_labels: bool = True):
-        mol, _ = self.adapter.model_to_rdkit_with_map(model, strict_labels=strict_labels)
+    def model_to_rdkit_strict_labels(self, model: MoleculeModel):
+        mol, _ = self.adapter.model_to_rdkit_with_map_strict_labels(model)
         return mol
 
     def _embed_3d_molecule(self, mol, Chem, AllChem):

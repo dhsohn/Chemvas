@@ -141,7 +141,11 @@ class DocumentStateTest(unittest.TestCase):
                 Bond(1, 0, 1),
             ],
         )
-        model.atom_annotations = {99: {"formal_charge": 1}}
+        model.atom_annotations = {
+            1: {"formal_charge": 0, "radical_electrons": 0},
+            88: {"formal_charge": 0},
+            99: {"formal_charge": 1},
+        }
 
         state, warnings = serialize_model_state_with_warnings(model)
 
@@ -159,6 +163,7 @@ class DocumentStateTest(unittest.TestCase):
         self.assertIn("1 bond style was reset.", warnings)
         self.assertIn("1 bond color was reset to black.", warnings)
         self.assertIn("1 stale atom annotation was omitted.", warnings)
+        self.assertEqual(warnings.count("1 stale atom annotation was omitted."), 1)
 
     def test_deserialize_model_state_rebuilds_model(self) -> None:
         model = deserialize_model_state(

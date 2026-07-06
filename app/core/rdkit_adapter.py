@@ -82,8 +82,8 @@ class RDKitAdapter:
     def smiles_to_2d(self, smiles: str, scale: float = 40.0) -> MoleculeModel | None:
         return self._import_helper.smiles_to_2d(smiles, scale=scale)
 
-    def model_to_rdkit_with_map(self, model: MoleculeModel, *, strict_labels: bool = True):
-        return self._conversion_helper.model_to_rdkit_with_map(model, strict_labels=strict_labels)
+    def model_to_rdkit_with_map(self, model: MoleculeModel):
+        return self.model_to_rdkit_with_map_strict_labels(model)
 
     def model_to_rdkit_with_map_tolerant(self, model: MoleculeModel):
         return self._conversion_helper.model_to_rdkit_with_map_tolerant(model)
@@ -91,8 +91,11 @@ class RDKitAdapter:
     def model_to_rdkit_with_map_strict_labels(self, model: MoleculeModel):
         return self._conversion_helper.model_to_rdkit_with_map_strict_labels(model)
 
-    def model_to_rdkit(self, model: MoleculeModel, *, strict_labels: bool = True):
-        return self._conversion_helper.model_to_rdkit(model, strict_labels=strict_labels)
+    def model_to_rdkit_strict_labels(self, model: MoleculeModel):
+        return self._conversion_helper.model_to_rdkit_strict_labels(model)
+
+    def model_to_rdkit(self, model: MoleculeModel):
+        return self.model_to_rdkit_strict_labels(model)
 
     def model_to_rdkit_tolerant(self, model: MoleculeModel):
         return self._conversion_helper.model_to_rdkit_tolerant(model)

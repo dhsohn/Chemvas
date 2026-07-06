@@ -115,7 +115,14 @@ class CanvasGraphService:
             skip_bond_id=skip_bond_id,
         )
 
-    def bond_id_between(self, a_id: int, b_id: int, skip_bond_id: int | None = None) -> int | None:
+    def _indexed_bond_id_between(
+        self,
+        a_id: int,
+        b_id: int,
+        *,
+        skip_bond_id: int | None = None,
+        scan_index_misses: bool = False,
+    ) -> int | None:
         bond_id = bond_id_between_indexed_atoms(
             self.graph.atom_bond_ids,
             bonds_for(self.canvas),
@@ -123,14 +130,18 @@ class CanvasGraphService:
             b_id,
             bond_for_id=lambda bond_id: bond_for_id(self.canvas, bond_id),
             skip_bond_id=skip_bond_id,
+            scan_index_misses=scan_index_misses,
         )
         if bond_id is not None:
             self._ensure_indexed_bond(bond_id, a_id, b_id)
         return bond_id
 
+    def bond_id_between(self, a_id: int, b_id: int, skip_bond_id: int | None = None) -> int | None:
+        return self._indexed_bond_id_between(a_id, b_id, skip_bond_id=skip_bond_id)
+
     def bond_id_between_with_repair(self, a_id: int, b_id: int) -> int | None:
-        """Compatibility wrapper for callers that require self-repairing reads."""
-        return self.bond_id_between(a_id, b_id)
+        """Lookup that scans and repairs after any indexed miss."""
+        return self._indexed_bond_id_between(a_id, b_id, scan_index_misses=True)
 
     def bond_exists(self, a_id: int, b_id: int) -> bool:
         return self.bond_id_between(a_id, b_id) is not None

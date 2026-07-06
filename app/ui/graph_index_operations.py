@@ -110,40 +110,37 @@ def bond_id_between_indexed_atoms(
     *,
     bond_for_id: Callable[[int], Any | None],
     skip_bond_id: int | None = None,
+    scan_index_misses: bool = False,
 ) -> int | None:
     if a_id == b_id:
         return None
+
+    def scan_model() -> int | None:
+        return first_matching_bond_id(
+            bonds,
+            a_id,
+            b_id,
+            skip_bond_id=skip_bond_id,
+        )
+
     bonds_a = atom_bond_ids.get(a_id)
     bonds_b = atom_bond_ids.get(b_id)
-    if bonds_a is None or bonds_b is None:
-        return first_matching_bond_id(
-            bonds,
-            a_id,
-            b_id,
-            skip_bond_id=skip_bond_id,
-        )
     if not bonds_a or not bonds_b:
-        return first_matching_bond_id(
-            bonds,
-            a_id,
-            b_id,
-            skip_bond_id=skip_bond_id,
-        )
+        # Missing/empty endpoint entries cannot distinguish "isolated atom"
+        # from "index never learned this atom". Without a model versioned
+        # negative cache, the only correct negative lookup is a model scan.
+        return scan_model()
+
     shared = bonds_a & bonds_b
     if skip_bond_id is not None and skip_bond_id in shared:
         shared = set(shared)
         shared.discard(skip_bond_id)
-    if not shared:
-        return None
     for bond_id in sorted(shared):
         if bond_matches_atoms(bond_for_id(bond_id), a_id, b_id):
             return bond_id
-    return first_matching_bond_id(
-        bonds,
-        a_id,
-        b_id,
-        skip_bond_id=skip_bond_id,
-    )
+    if shared or scan_index_misses:
+        return scan_model()
+    return None
 
 
 def build_bond_adjacency_index(

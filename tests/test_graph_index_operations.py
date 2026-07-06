@@ -24,6 +24,16 @@ class _BondsThatMustNotBeScanned:
         raise AssertionError("valid indexed lookups must not scan the model")
 
 
+class _CountingBonds:
+    def __init__(self, bonds):
+        self.bonds = bonds
+        self.iterations = 0
+
+    def __iter__(self):
+        self.iterations += 1
+        return iter(self.bonds)
+
+
 def test_neighbor_and_atom_bond_index_mutations_preserve_existing_entries() -> None:
     atom_neighbors = {1: {2}, 2: {1}}
     atom_bond_ids = {1: {0}, 2: {0}}
@@ -138,6 +148,49 @@ def test_bond_lookup_preserves_fast_indexed_path_for_valid_entries() -> None:
         )
         is None
     )
+
+
+def test_bond_lookup_scans_stale_disjoint_entries_only_in_repair_mode() -> None:
+    bonds = [_bond(1, 3), _bond(2, 4), _bond(1, 2)]
+    atom_bond_ids = {1: {0}, 2: {1}, 3: {0}, 4: {1}}
+
+    assert (
+        bond_id_between_indexed_atoms(
+            atom_bond_ids,
+            _BondsThatMustNotBeScanned(),
+            1,
+            2,
+            bond_for_id=lambda bond_id: bonds[bond_id],
+        )
+        is None
+    )
+    assert (
+        bond_id_between_indexed_atoms(
+            atom_bond_ids,
+            bonds,
+            1,
+            2,
+            bond_for_id=lambda bond_id: bonds[bond_id],
+            scan_index_misses=True,
+        )
+        == 2
+    )
+
+
+def test_bond_lookup_scans_unindexed_negative_once() -> None:
+    bonds = _CountingBonds([_bond(3, 4), _bond(5, 6)])
+
+    assert (
+        bond_id_between_indexed_atoms(
+            {1: set(), 2: set()},
+            bonds,
+            1,
+            2,
+            bond_for_id=lambda bond_id: bonds.bonds[bond_id],
+        )
+        is None
+    )
+    assert bonds.iterations == 1
 
 
 def test_build_bond_adjacency_index_and_bond_set_classification() -> None:

@@ -267,7 +267,7 @@ def _record_atom_annotation_serialization_repairs(
 ) -> None:
     live_atom_id_set = set(live_atom_ids)
     for atom_id, annotation in raw_annotations.items():
-        if atom_id not in live_atom_id_set and annotation:
+        if atom_id not in live_atom_id_set and _normalized_atom_annotation(annotation):
             warning_counts["atom_annotations"] = warning_counts.get("atom_annotations", 0) + 1
 
 

@@ -738,7 +738,7 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertEqual(len(model.atoms), 3)
         self.assertEqual(len(model.bonds), 2)
 
-        mol = adapter.model_to_rdkit(model, strict_labels=True)
+        mol = adapter.model_to_rdkit_strict_labels(model)
         self.assertIsNotNone(mol)
         self.assertEqual(_RealChem.MolToSmiles(mol, canonical=True), "CCO")
 
@@ -756,7 +756,7 @@ class RDKitAdapterTest(unittest.TestCase):
         model.add_atom("Me", 0.0, 0.0)
         model.add_atom("Xx", 1.0, 0.0)
 
-        mol, atom_map = adapter.model_to_rdkit_with_map(model, strict_labels=True)
+        mol, atom_map = adapter.model_to_rdkit_with_map_strict_labels(model)
 
         self.assertIsNone(mol)
         self.assertIsNone(atom_map)
@@ -968,7 +968,7 @@ class RDKitAdapterTest(unittest.TestCase):
         adapter = RDKitAdapter()
         adapter._rdkit = (None, None)
 
-        self.assertEqual(adapter.model_to_rdkit_with_map(self._simple_model()), (None, None))
+        self.assertEqual(adapter.model_to_rdkit_with_map_strict_labels(self._simple_model()), (None, None))
 
     def test_model_to_rdkit_with_map_tolerant_ignores_invalid_bonds_and_sanitize_errors(self) -> None:
         adapter = RDKitAdapter()
@@ -1102,15 +1102,15 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertIsNone(mol)
         self.assertEqual(adapter.last_error, "3D conversion produced an invalid structure: bad sanitize")
 
-    def test_model_to_rdkit_returns_molecule_from_wrapped_builder(self) -> None:
+    def test_model_to_rdkit_returns_molecule_from_strict_builder(self) -> None:
         adapter = RDKitAdapter()
         expected = SimpleNamespace(name="mol")
         model = self._simple_model()
 
-        with mock.patch.object(adapter, "model_to_rdkit_with_map", return_value=(expected, {0: 0})) as mocked:
+        with mock.patch.object(adapter, "model_to_rdkit_with_map_strict_labels", return_value=(expected, {0: 0})) as mocked:
             self.assertIs(adapter.model_to_rdkit(model), expected)
 
-        mocked.assert_called_once_with(model, strict_labels=True)
+        mocked.assert_called_once_with(model)
 
     def test_compute_props_returns_none_triplet_when_rdkit_is_unavailable(self) -> None:
         adapter = RDKitAdapter()
@@ -1122,7 +1122,7 @@ class RDKitAdapterTest(unittest.TestCase):
         adapter = RDKitAdapter()
         adapter._rdkit = (_FakeChem({}), _FakeAllChem())
 
-        with mock.patch.object(adapter, "model_to_rdkit", return_value=None):
+        with mock.patch.object(adapter, "model_to_rdkit_strict_labels", return_value=None):
             self.assertEqual(adapter.compute_props(self._simple_model()), (None, None, None))
 
     def test_compute_props_blanks_unsupported_labels_instead_of_carbon(self) -> None:
@@ -1140,11 +1140,12 @@ class RDKitAdapterTest(unittest.TestCase):
     def test_compute_props_uses_strict_labels(self) -> None:
         adapter = RDKitAdapter()
         adapter._rdkit = (_FakeChem({}), _FakeAllChem())
+        model = self._simple_model()
 
-        with mock.patch.object(adapter, "model_to_rdkit", return_value=None) as model_to_rdkit:
-            adapter.compute_props(self._simple_model())
+        with mock.patch.object(adapter, "model_to_rdkit_strict_labels", return_value=None) as model_to_rdkit:
+            adapter.compute_props(model)
 
-        self.assertTrue(model_to_rdkit.call_args.kwargs.get("strict_labels"))
+        model_to_rdkit.assert_called_once_with(model)
 
     def test_compute_props_returns_formula_mass_and_smiles(self) -> None:
         chem = _FakeChem({}, add_hs_result=SimpleNamespace())
@@ -1154,7 +1155,7 @@ class RDKitAdapterTest(unittest.TestCase):
 
         with mock.patch.object(
             adapter,
-            "model_to_rdkit",
+            "model_to_rdkit_strict_labels",
             return_value=SimpleNamespace(canonical_smiles="CO"),
         ):
             with _patch_descriptor_modules(formula="CH4O", mw=32.042):
@@ -1171,7 +1172,7 @@ class RDKitAdapterTest(unittest.TestCase):
 
         with mock.patch.object(
             adapter,
-            "model_to_rdkit",
+            "model_to_rdkit_strict_labels",
             return_value=SimpleNamespace(canonical_smiles="CO"),
         ):
             with _patch_descriptor_modules(mw_error=RuntimeError("descriptor failure")):
@@ -1198,7 +1199,7 @@ class RDKitAdapterTest(unittest.TestCase):
         adapter = RDKitAdapter()
         adapter._rdkit = (_FakeChem({}), _FakeAllChem())
 
-        with mock.patch.object(adapter, "model_to_rdkit", return_value=None):
+        with mock.patch.object(adapter, "model_to_rdkit_strict_labels", return_value=None):
             identifiers = adapter.compute_identifiers(self._simple_model())
 
         self.assertIsNone(identifiers.formula)
@@ -1214,7 +1215,7 @@ class RDKitAdapterTest(unittest.TestCase):
 
         with mock.patch.object(
             adapter,
-            "model_to_rdkit",
+            "model_to_rdkit_strict_labels",
             return_value=SimpleNamespace(canonical_smiles="CO"),
         ):
             with _patch_descriptor_modules(formula="CH4O", mw=32.042):

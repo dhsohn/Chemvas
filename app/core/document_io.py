@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
@@ -72,10 +73,16 @@ def atomic_write_via_temp(path: PathType, writer: Callable[[Path], None]) -> Non
     target = Path(path)
     # Atomic write: render/write to a sibling temp file, flush to disk, then
     # replace. A crash/IO error mid-write leaves the previous file intact.
-    tmp = target.with_name(f".{target.name}.tmp")
+    with tempfile.NamedTemporaryFile(
+        prefix=f".{target.name}.",
+        suffix=".tmp",
+        dir=target.parent,
+        delete=False,
+    ) as tmp_handle:
+        tmp = Path(tmp_handle.name)
     try:
         writer(tmp)
-        with tmp.open("rb") as handle:
+        with tmp.open("rb+") as handle:
             os.fsync(handle.fileno())
         os.replace(tmp, target)
     except BaseException:

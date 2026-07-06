@@ -257,7 +257,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "out.svg"
-            tmp_path = path.with_name(f".{path.name}.tmp")
             with (
                 mock.patch(
                     "ui.canvas_document_session_service.export_canvas_scene_for",
@@ -275,17 +274,25 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                     editable_svg=True,
                 )
 
-            export_canvas_scene.assert_called_once_with(
-                canvas,
-                str(tmp_path),
-                fmt="svg",
-                items=[selected_item],
-                margin=3.0,
-                dpi=144,
-                background="white",
-                title="Chemvas drawing",
-                unit_scale=0.5,
-                target_width_pt=None,
+            export_canvas_scene.assert_called_once()
+            export_args, export_kwargs = export_canvas_scene.call_args
+            self.assertIs(export_args[0], canvas)
+            tmp_path = Path(export_args[1])
+            self.assertEqual(tmp_path.parent, path.parent)
+            self.assertTrue(tmp_path.name.startswith(f".{path.name}."))
+            self.assertTrue(tmp_path.name.endswith(".tmp"))
+            self.assertEqual(
+                export_kwargs,
+                {
+                    "fmt": "svg",
+                    "items": [selected_item],
+                    "margin": 3.0,
+                    "dpi": 144,
+                    "background": "white",
+                    "title": "Chemvas drawing",
+                    "unit_scale": 0.5,
+                    "target_width_pt": None,
+                },
             )
             embed_editable_svg.assert_called_once_with(str(tmp_path), fmt="svg", scope="selection")
             self.assertEqual(path.read_text(encoding="utf-8"), "<svg />")
@@ -510,14 +517,19 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "figure.svg"
             path.write_text("ORIGINAL", encoding="utf-8")
-            tmp_path = path.with_name(f".{path.name}.tmp")
             with (
-                mock.patch("ui.canvas_document_session_service.export_canvas_scene_for", side_effect=write_svg),
+                mock.patch("ui.canvas_document_session_service.export_canvas_scene_for", side_effect=write_svg) as export_canvas_scene,
                 mock.patch.object(service, "_embed_editable_svg_payload", side_effect=RuntimeError("metadata")),
                 self.assertRaisesRegex(RuntimeError, "metadata"),
             ):
                 service.export_figure(str(path), fmt="svg", scope="sheet", editable_svg=True)
 
+            export_canvas_scene.assert_called_once()
+            export_args, _export_kwargs = export_canvas_scene.call_args
+            tmp_path = Path(export_args[1])
+            self.assertEqual(tmp_path.parent, path.parent)
+            self.assertTrue(tmp_path.name.startswith(f".{path.name}."))
+            self.assertTrue(tmp_path.name.endswith(".tmp"))
             self.assertEqual(path.read_text(encoding="utf-8"), "ORIGINAL")
             self.assertFalse(tmp_path.exists())
 

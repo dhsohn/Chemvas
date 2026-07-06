@@ -446,6 +446,22 @@ class CanvasGraphServiceTest(unittest.TestCase):
         self.assertEqual(service.graph.atom_bond_ids, {1: {1}, 2: {1}})
         self.assertEqual(service.graph.atom_neighbors, {1: {2}, 2: {1}})
 
+    def test_bond_id_between_with_repair_scans_stale_non_empty_entries(self) -> None:
+        canvas = self._make_canvas(
+            [Bond(1, 3, 1), Bond(2, 4, 1), Bond(1, 2, 1)],
+            atoms=self._make_atoms(1, 2, 3, 4),
+        )
+        service = CanvasGraphService(canvas)
+        service.graph.atom_bond_ids = {1: {0}, 2: {1}, 3: {0}, 4: {1}}
+        service.graph.atom_neighbors = {1: {3}, 2: {4}, 3: {1}, 4: {2}}
+
+        self.assertIsNone(service.bond_id_between(1, 2))
+        self.assertEqual(service.bond_id_between_with_repair(1, 2), 2)
+        self.assertEqual(service.graph.atom_bond_ids[1], {0, 2})
+        self.assertEqual(service.graph.atom_bond_ids[2], {1, 2})
+        self.assertEqual(service.graph.atom_neighbors[1], {2, 3})
+        self.assertEqual(service.graph.atom_neighbors[2], {1, 4})
+
     def test_bond_id_between_with_repair_returns_none_without_bond(self) -> None:
         canvas = self._make_canvas([], atoms=self._make_atoms(1, 2))
         service = CanvasGraphService(canvas)
