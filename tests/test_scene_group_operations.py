@@ -91,6 +91,13 @@ def _add_mark(canvas, *, atom_id=None, selected: bool = False):
     return item
 
 
+def _add_ring(canvas, atom_ids, *, selected: bool = False):
+    item = canvas.add_scene_item("ring", selected=selected)
+    item.setData(2, list(atom_ids))
+    append_scene_item_for(canvas, "ring_items", item)
+    return item
+
+
 def _add_note(canvas, *, selected: bool = False):
     item = canvas.add_scene_item("note", selected=False)
     append_scene_item_for(canvas, "note_items", item)
@@ -272,6 +279,24 @@ class SceneGroupOperationsTest(unittest.TestCase):
 
         extended_ids = {id(item) for item in extended}
         self.assertEqual(extended_ids, {id(item_a), id(item_b), id(bond_item), id(arrow)})
+
+    def test_group_selection_targets_expands_from_ring_atom_ids(self) -> None:
+        canvas = _Canvas()
+        atom_a, item_a = _add_atom(canvas)
+        atom_b, item_b = _add_atom(canvas, 10.0, 0.0)
+        ring = _add_ring(canvas, [atom_a, atom_b])
+        arrow = _add_arrow(canvas)
+        register_group_for(canvas, {atom_a, atom_b}, [arrow])
+
+        # Shift-clicking the ring fill must resolve the group via the ring's atom
+        # IDs, not just atom/bond targets, and pull in the rest of the group.
+        extended = group_selection_targets_for(canvas, [ring])
+
+        extended_ids = {id(item) for item in extended}
+        self.assertEqual(
+            extended_ids,
+            {id(ring), id(item_a), id(item_b), id(arrow)},
+        )
 
     def test_group_selection_targets_includes_grouped_notes(self) -> None:
         canvas = _Canvas()

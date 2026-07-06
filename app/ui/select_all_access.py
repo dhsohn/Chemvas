@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ui.canvas_atom_graphics_state import atom_items_for
+from ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
 from ui.canvas_bond_graphics_state import bond_items_for
 from ui.canvas_scene_items_state import (
     arrow_items_for,
@@ -22,6 +22,8 @@ from ui.selection_service_access import (
 def _all_selectable_scene_items_for(canvas) -> tuple[list, list]:
     items: list = []
     items.extend(attached_canvas_scene_items(canvas, atom_items_for(canvas).values()))
+    # Implicit carbons are drawn as dots rather than labelled atom items.
+    items.extend(attached_canvas_scene_items(canvas, atom_dots_for(canvas).values()))
     for bond_items in bond_items_for(canvas).values():
         items.extend(attached_canvas_scene_items(canvas, bond_items))
     for items_for in (

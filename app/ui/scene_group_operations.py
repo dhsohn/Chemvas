@@ -17,6 +17,7 @@ from ui.scene_item_access import attached_canvas_scene_items
 from ui.scene_item_state_serialization import ARROW_KINDS
 from ui.selection_collection_access import (
     TRANSFORM_SELECTION_EXCLUDED_KINDS,
+    append_selected_item_ids,
     selected_atom_ids_for_transform_for,
     selected_scene_items_for,
 )
@@ -130,17 +131,13 @@ def group_selection_targets_for(canvas, targets: list) -> list:
     state = group_state_for(canvas)
     if not state.groups or not targets:
         return targets
-    atom_ids = {
-        item.data(1)
-        for item in targets
-        if item.data(0) == "atom" and isinstance(item.data(1), int)
-    }
+    atom_ids: set[int] = set()
+    bond_ids: set[int] = set()
     for item in targets:
-        if item.data(0) != "bond":
-            continue
-        bond_id = item.data(1)
-        bonds = bonds_for(canvas)
-        if isinstance(bond_id, int) and 0 <= bond_id < len(bonds) and bonds[bond_id] is not None:
+        append_selected_item_ids(canvas, atom_ids, bond_ids, item)
+    bonds = bonds_for(canvas)
+    for bond_id in bond_ids:
+        if 0 <= bond_id < len(bonds) and bonds[bond_id] is not None:
             atom_ids.update((bonds[bond_id].a, bonds[bond_id].b))
     group_ids = group_ids_for_members_for(canvas, atom_ids, targets)
     if not group_ids:
