@@ -18,7 +18,15 @@ class CanvasRotationPreviewController:
         state = rotation_preview_state_for(self.canvas)
         if state.group is not None:
             return False
-        items = scene_selected_items_for(self.canvas)
+        # Preview only what the commit rotates: rotate_selection_for moves
+        # atoms (with their bonds and ring fills). Other Qt-selected items —
+        # e.g. a grouped note whose selection flag is mirrored — would spin in
+        # the preview and then snap back on commit.
+        items = [
+            item
+            for item in scene_selected_items_for(self.canvas)
+            if item.data(0) in {"atom", "bond", "ring"}
+        ]
         if not items:
             return False
         atom_ids, bond_ids = selected_ids_for(self.canvas)

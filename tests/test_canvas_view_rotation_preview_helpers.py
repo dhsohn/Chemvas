@@ -124,6 +124,25 @@ class CanvasViewRotationPreviewHelperTest(unittest.TestCase):
         self.assertEqual(scene._group.origin, QPointF(5.0, 6.0))
         self.assertIs(view.rotation_preview_state.group, scene._group)
 
+    def test_begin_selection_rotation_excludes_items_the_commit_does_not_rotate(self) -> None:
+        atom_item = _FakeSelectedItem("atom", 1)
+        note_item = _FakeSelectedItem("note", None)
+        arrow_item = _FakeSelectedItem("arrow", None)
+        scene = _FakeScene([atom_item, note_item, arrow_item])
+        view = SimpleNamespace(
+            rotation_preview_state=CanvasRotationPreviewState(),
+            scene=lambda: scene,
+            model=SimpleNamespace(atoms={1: Atom("C", 1.0, 1.0)}, bonds=[]),
+        )
+        view.services = SimpleNamespace(rotation_preview_controller=CanvasRotationPreviewController(view))
+
+        self.assertTrue(view.services.rotation_preview_controller.begin_selection_rotation())
+
+        # rotate_selection_for only rotates atoms/bonds/ring fills on commit;
+        # previewing anything else (e.g. a Qt-selected grouped note) would show
+        # a rotation that snaps back.
+        self.assertEqual(scene.created_with, [atom_item])
+
     def test_update_rotation_preview_is_noop_without_group_and_updates_group_angle(self) -> None:
         idle_view = SimpleNamespace(rotation_preview_state=CanvasRotationPreviewState())
         idle_view.services = SimpleNamespace(rotation_preview_controller=CanvasRotationPreviewController(idle_view))
