@@ -225,9 +225,16 @@ def selected_group_rects_for(canvas) -> list:
         for group_id, group in state.groups.items():
             if group_id in group_ids or _group_has_scene_members(canvas, group):
                 continue
-            if any(
-                any(member is note for member in group.items)
-                for note in selected_notes
+            member_notes = [
+                member
+                for member in attached_canvas_scene_items(canvas, group.items)
+                if member.data(0) == "note"
+            ]
+            # Draw the box only when the whole note group is selected, so it
+            # never claims more than drag/delete/copy would actually act on.
+            if member_notes and all(
+                any(member is note for note in selected_notes)
+                for member in member_notes
             ):
                 group_ids.add(group_id)
     if not group_ids:
@@ -249,6 +256,42 @@ def selected_group_rects_for(canvas) -> list:
         if rect is not None:
             rects.append(rect.adjusted(-pad, -pad, pad, pad))
     return rects
+
+
+def expand_note_selection_to_groups_for(canvas, note) -> None:
+    """Select the remaining notes of a notes-only group when one is selected.
+
+    Mixed groups expand through the scene selectionChanged hook; notes-only
+    groups have no scene-selectable member, so the note service calls this
+    when a note becomes selected to keep the group acting as a unit.
+    """
+    state = group_state_for(canvas)
+    if state.expanding or not state.groups:
+        return
+    for group in state.groups.values():
+        if not any(member is note for member in group.items):
+            continue
+        if _group_has_scene_members(canvas, group):
+            continue
+        member_notes = [
+            member
+            for member in attached_canvas_scene_items(canvas, group.items)
+            if member.data(0) == "note"
+        ]
+        selected_notes = selected_scene_notes_for(canvas)
+        missing = [
+            member
+            for member in member_notes
+            if not any(member is selected for selected in selected_notes)
+        ]
+        if not missing:
+            continue
+        state.expanding = True
+        try:
+            for member in missing:
+                select_note_for(canvas, member, additive=True)
+        finally:
+            state.expanding = False
 
 
 def _stale_group_notes_for(canvas, state, active_group_ids: set[int]) -> list:
@@ -334,6 +377,7 @@ def expand_selection_to_groups_for(canvas) -> None:
 
 __all__ = [
     "GROUPABLE_STANDALONE_KINDS",
+    "expand_note_selection_to_groups_for",
     "expand_selection_to_groups_for",
     "group_selection_for",
     "group_selection_targets_for",

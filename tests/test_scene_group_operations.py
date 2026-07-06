@@ -24,6 +24,7 @@ if QApplication is not None:
     from ui.canvas_scene_items_state import add_selected_note_for, append_scene_item_for
     from ui.history_commands import GroupSceneItemsCommand, UngroupSceneItemsCommand
     from ui.scene_group_operations import (
+        expand_note_selection_to_groups_for,
         expand_selection_to_groups_for,
         group_selection_for,
         group_selection_targets_for,
@@ -391,6 +392,47 @@ class SceneGroupOperationsTest(unittest.TestCase):
         rects = selected_group_rects_for(canvas)
 
         self.assertEqual(len(rects), 1)
+
+    def test_selected_group_rects_require_full_notes_only_group_selection(self) -> None:
+        canvas = _Canvas()
+        note_a = _add_note(canvas, selected=True)
+        note_b = _add_note(canvas)
+        register_group_for(canvas, set(), [note_a, note_b])
+
+        # A partially-selected notes-only group must not draw a box claiming
+        # more than drag/delete/copy would act on.
+        self.assertEqual(selected_group_rects_for(canvas), [])
+
+    def test_expand_note_selection_selects_rest_of_notes_only_group(self) -> None:
+        canvas = _Canvas()
+        note_a = _add_note(canvas, selected=True)
+        note_b = _add_note(canvas)
+        register_group_for(canvas, set(), [note_a, note_b])
+
+        expand_note_selection_to_groups_for(canvas, note_a)
+
+        canvas.selection_controller.select_note.assert_called_once_with(note_b, additive=True)
+        self.assertFalse(group_state_for(canvas).expanding)
+
+    def test_expand_note_selection_skips_mixed_groups_and_reentry(self) -> None:
+        canvas = _Canvas()
+        atom_a, _ = _add_atom(canvas)
+        note = _add_note(canvas, selected=True)
+        other = _add_note(canvas)
+        register_group_for(canvas, {atom_a}, [note, other])
+
+        # Mixed groups expand through the scene selectionChanged hook instead.
+        expand_note_selection_to_groups_for(canvas, note)
+        canvas.selection_controller.select_note.assert_not_called()
+
+        notes_only_canvas = _Canvas()
+        note_a = _add_note(notes_only_canvas, selected=True)
+        note_b = _add_note(notes_only_canvas)
+        register_group_for(notes_only_canvas, set(), [note_a, note_b])
+        group_state_for(notes_only_canvas).expanding = True
+
+        expand_note_selection_to_groups_for(notes_only_canvas, note_a)
+        notes_only_canvas.selection_controller.select_note.assert_not_called()
 
     def test_selected_group_rects_ignore_note_only_selection_of_mixed_group(self) -> None:
         canvas = _Canvas()
