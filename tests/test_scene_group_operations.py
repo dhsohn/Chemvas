@@ -48,6 +48,7 @@ if QApplication is not None:
             self.runtime_state = SimpleNamespace(history_service=self.history)
             self.selection_controller = SimpleNamespace(
                 select_note=mock.Mock(),
+                toggle_note_selection=mock.Mock(),
                 update_selection_outline=mock.Mock(),
             )
             self.services = SimpleNamespace(selection_controller=self.selection_controller)
@@ -254,6 +255,38 @@ class SceneGroupOperationsTest(unittest.TestCase):
         expand_selection_to_groups_for(canvas)
 
         canvas.selection_controller.update_selection_outline.assert_not_called()
+
+    def test_expand_selection_deselects_stale_group_note_when_group_leaves_selection(self) -> None:
+        canvas = _Canvas()
+        atom_a, item_a = _add_atom(canvas)
+        arrow = _add_arrow(canvas)
+        note = _add_note(canvas, selected=True)
+        register_group_for(canvas, {atom_a}, [arrow, note])
+        # Simulate the rubber band moving off the group: Qt deselected the
+        # group's scene members but the note-service selection is untouched.
+        atom_b, item_b = _add_atom(canvas, 50.0, 0.0)
+        item_b.setSelected(True)
+
+        expand_selection_to_groups_for(canvas)
+
+        # The lingering note must not re-anchor the group...
+        self.assertFalse(item_a.isSelected())
+        self.assertFalse(arrow.isSelected())
+        # ...and must itself be deselected so the group drops as a unit.
+        canvas.selection_controller.toggle_note_selection.assert_called_once_with(note)
+        canvas.selection_controller.update_selection_outline.assert_called_once_with()
+
+    def test_expand_selection_keeps_notes_only_group_selection(self) -> None:
+        canvas = _Canvas()
+        note_a = _add_note(canvas, selected=True)
+        note_b = _add_note(canvas, selected=True)
+        register_group_for(canvas, set(), [note_a, note_b])
+        _, item = _add_atom(canvas)
+        item.setSelected(True)
+
+        expand_selection_to_groups_for(canvas)
+
+        canvas.selection_controller.toggle_note_selection.assert_not_called()
 
     def test_expand_selection_ignores_ungrouped_selection(self) -> None:
         canvas = _Canvas()

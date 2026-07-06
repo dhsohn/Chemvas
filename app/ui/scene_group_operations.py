@@ -21,10 +21,15 @@ from ui.selection_collection_access import (
     selected_atom_ids_for_transform_for,
     selected_scene_items_for,
 )
-from ui.selection_scene_access import set_scene_items_selected_for
+from ui.selection_scene_access import (
+    scene_selected_items_for,
+    selected_scene_notes_for,
+    set_scene_items_selected_for,
+)
 from ui.selection_service_access import (
     refresh_selection_outline_for,
     select_note_for,
+    toggle_note_selection_for,
 )
 
 GROUPABLE_STANDALONE_KINDS = frozenset({"note", "ts_bracket", "shape", "orbital"}) | frozenset(ARROW_KINDS)
@@ -159,17 +164,59 @@ def group_selection_targets_for(canvas, targets: list) -> list:
     return extended
 
 
+def _stale_group_notes_for(canvas, state, active_group_ids: set[int]) -> list:
+    """Selected note members of groups that are no longer scene-selected.
+
+    Qt's rubber band and clearSelection only touch scene selection, so once an
+    expansion selects a group's note, nothing would ever deselect it — and a
+    still-selected note would keep re-triggering the group. These notes must be
+    dropped so the group deselects as a unit.
+    """
+    selected_notes = selected_scene_notes_for(canvas)
+    if not selected_notes:
+        return []
+    live_atom_ids = set(atoms_for(canvas))
+    stale: list = []
+    for group_id, group in state.groups.items():
+        if group_id in active_group_ids:
+            continue
+        member_notes = [
+            note
+            for note in selected_notes
+            if any(member is note for member in group.items)
+        ]
+        if not member_notes:
+            continue
+        # A notes-only group is never scene-triggered; leave its manual
+        # note-tool selection alone.
+        has_scene_members = bool(group.atom_ids & live_atom_ids) or any(
+            member.data(0) != "note"
+            for member in attached_canvas_scene_items(canvas, group.items)
+        )
+        if not has_scene_members:
+            continue
+        stale.extend(member_notes)
+    return stale
+
+
 def expand_selection_to_groups_for(canvas) -> None:
     state = group_state_for(canvas)
     if state.expanding or not state.groups:
         return
-    atom_ids, items = _selected_group_members_for(canvas)
-    selected_items = selected_scene_items_for(canvas, excluded_kinds=TRANSFORM_SELECTION_EXCLUDED_KINDS)
-    if not atom_ids and not selected_items:
-        return
-    group_ids = group_ids_for_members_for(canvas, atom_ids, selected_items)
-    if not group_ids:
-        return
+    atom_ids = {
+        atom_id
+        for atom_id in selected_atom_ids_for_transform_for(canvas)
+        if atom_id in atoms_for(canvas)
+    }
+    # Trigger only from Qt scene selection. Note-service selection must not
+    # anchor a group: the rubber band never deselects notes, so a note trigger
+    # would make a once-touched group impossible to marquee-deselect.
+    trigger_items = [
+        item
+        for item in scene_selected_items_for(canvas)
+        if _is_groupable_standalone_item(canvas, item)
+    ]
+    group_ids = group_ids_for_members_for(canvas, atom_ids, trigger_items)
     member_atom_ids: set[int] = set()
     member_items: list = []
     for group_id in group_ids:
@@ -177,10 +224,12 @@ def expand_selection_to_groups_for(canvas) -> None:
         member_atom_ids.update(group.atom_ids)
         member_items.extend(attached_canvas_scene_items(canvas, group.items))
     member_atom_ids &= set(atoms_for(canvas))
+    selected_items = selected_scene_items_for(canvas, excluded_kinds=TRANSFORM_SELECTION_EXCLUDED_KINDS)
     selected_ids = set(map(id, selected_items))
     missing_atoms = member_atom_ids - atom_ids
     missing_items = [item for item in member_items if id(item) not in selected_ids]
-    if not missing_atoms and not missing_items:
+    stale_notes = _stale_group_notes_for(canvas, state, group_ids)
+    if not missing_atoms and not missing_items and not stale_notes:
         return
     state.expanding = True
     try:
@@ -190,6 +239,8 @@ def expand_selection_to_groups_for(canvas) -> None:
         for note in missing_items:
             if note.data(0) == "note":
                 select_note_for(canvas, note, additive=True)
+        for note in stale_notes:
+            toggle_note_selection_for(canvas, note)
         refresh_selection_outline_for(canvas)
     finally:
         state.expanding = False
