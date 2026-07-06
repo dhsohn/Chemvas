@@ -865,7 +865,7 @@ class DocumentStateTest(unittest.TestCase):
         canvas_state = _canvas_state()
 
         with self.assertRaises(ValueError):
-            build_document_payload(canvas_state, version=3)
+            build_document_payload(canvas_state, version=CANVAS_FILE_VERSION + 1)
         with self.assertRaises(ValueError):
             build_document_payload({"active_sheet_index": 0, "sheets": []}, version=CANVAS_FILE_VERSION)
 

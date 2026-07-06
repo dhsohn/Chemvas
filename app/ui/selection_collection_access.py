@@ -114,14 +114,20 @@ def selected_bond_atom_ids_for(canvas, bond_ids: set[int]) -> tuple[tuple[int, i
 
 def selection_snapshot_for(canvas):
     selected = tuple(scene_selected_items_for(canvas))
-    if not selected:
+    # Notes carry their own selection state rather than QGraphicsScene selection,
+    # so they must be folded in explicitly or a grouped note would be left behind
+    # when the rest of the selection is dragged.
+    notes = tuple(selected_scene_notes_for(canvas))
+    if not selected and not notes:
         return None
     atom_ids, bond_ids = selected_ids_for(canvas)
+    selection_items = [item for item in selected if selection_target_item(item)]
+    selection_items.extend(notes)
     return build_selection_snapshot(
         selected_atom_ids=atom_ids,
         selected_bond_ids=bond_ids,
         selected_bond_atom_ids=selected_bond_atom_ids_for(canvas, bond_ids),
-        selection_items=tuple(item for item in selected if selection_target_item(item)),
+        selection_items=tuple(selection_items),
     )
 
 

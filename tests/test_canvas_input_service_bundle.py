@@ -82,4 +82,5 @@ def test_build_canvas_input_services_wires_explicit_collaborators(monkeypatch) -
         "history_service": history_service,
         "hover_refresh": hover_refresh,
         "chemdraw_shortcut_service": services.chemdraw_shortcut_service,
+        "tool_mode_controller": services.tool_mode_controller,
     }

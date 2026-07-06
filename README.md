@@ -115,8 +115,10 @@ Chemvas supports a major subset of ChemDraw-compatible shortcuts.
   Rotate selection `Alt+Up/Down` (15°) and `Alt+Left/Right` (1°),
   Nudge selection `Shift+Arrows` (10 pt)
 - **View:** Actual size `F5`, Fit to window `F6`, Magnify `F7`, Reduce `F8`
-- **File / edit:** Save / Open / Undo / Redo (platform defaults), `Ctrl+C` (copy
-  selection as image), `Ctrl+X` (cut selection), `Delete`/`Backspace` (delete
+- **File / edit:** Save / Open / Undo / Redo (platform defaults), `Ctrl+A` (select
+  all, switches to the Select tool), `Ctrl+C` (copy
+  selection as image), `Ctrl+X` (cut selection), `Ctrl+G` / `Ctrl+Shift+G`
+  (group / ungroup selection), `Delete`/`Backspace` (delete
   selection, or edit/delete the hovered atom/bond), `Esc` (cancel template /
   SMILES insertion)
 

@@ -97,7 +97,7 @@ class DocumentIOTest(unittest.TestCase):
             {},
             {"type": CHEMVAS_FILE_TYPE, "version": CANVAS_FILE_VERSION, "state": {}},
             {"type": "unexpected", "version": CANVAS_FILE_VERSION, "state": _canvas_state()},
-            {"type": CHEMVAS_FILE_TYPE, "version": 3, "state": _canvas_state()},
+            {"type": CHEMVAS_FILE_TYPE, "version": CANVAS_FILE_VERSION + 1, "state": _canvas_state()},
             {
                 "type": CHEMVAS_FILE_TYPE,
                 "version": CANVAS_FILE_VERSION,

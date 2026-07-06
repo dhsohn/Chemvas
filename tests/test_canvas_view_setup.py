@@ -33,6 +33,7 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(monkeypatch
     monkeypatch.setattr(setup, "build_canvas_services", mock.Mock(return_value=services))
     monkeypatch.setattr(setup, "attach_canvas_services", mock.Mock())
     monkeypatch.setattr(setup, "QGraphicsScene", mock.Mock(return_value="scene"))
+    monkeypatch.setattr(setup, "expand_selection_to_groups_for", mock.Mock())
 
     setup.initialize_canvas_view(canvas)
 
@@ -47,7 +48,10 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(monkeypatch
         history_service="history-service",
     )
     setup.attach_canvas_services.assert_called_once_with(canvas, services)
-    canvas.scene.return_value.selectionChanged.connect.assert_called_once_with(
-        services.selection_controller.update_selection_outline
-    )
+    selection_connect = canvas.scene.return_value.selectionChanged.connect
+    assert selection_connect.call_count == 2
+    expand_slot = selection_connect.call_args_list[0].args[0]
+    expand_slot()
+    setup.expand_selection_to_groups_for.assert_called_once_with(canvas)
+    assert selection_connect.call_args_list[1].args[0] is services.selection_controller.update_selection_outline
     services.tools.set_active.assert_called_once_with("bond")

@@ -20,6 +20,7 @@ from core.svg_roundtrip import (
 from ui.canvas_document_export_access import export_canvas_scene_for
 from ui.canvas_document_state import (
     apply_document_settings,
+    restore_document_groups,
     restore_document_post_model_items,
     restore_document_pre_model_items,
     restore_document_projection_state,
@@ -95,6 +96,7 @@ class CanvasDocumentSessionService:
             restore_document_projection_state(self.canvas, state)
             self.structure_build_service.render_model()
             restore_document_post_model_items(self.canvas, state)
+            restore_document_groups(self.canvas, state)
             self.hit_testing_service.mark_spatial_index_dirty()
         finally:
             self.history.set_enabled(True)
