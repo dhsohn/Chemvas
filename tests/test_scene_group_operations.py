@@ -422,6 +422,25 @@ class SceneGroupOperationsTest(unittest.TestCase):
 
         canvas.selection_controller.select_note.assert_not_called()
 
+    def test_clear_note_selection_clears_qt_flags_of_cleared_notes(self) -> None:
+        canvas = _Canvas()
+        note_a = _add_note(canvas, selected=True)
+        note_b = _add_note(canvas, selected=True)
+        # Mirrored Qt flags, e.g. from a notes-only group toggle.
+        note_a.setSelected(True)
+        note_b.setSelected(True)
+        register_group_for(canvas, set(), [note_a, note_b])
+        service = SelectionNoteService(canvas)
+
+        # NoteTool press on empty canvas clears the note selection wholesale;
+        # the Qt flags must drop too or an invisible selection would remain.
+        service.clear_note_selection()
+
+        self.assertEqual(selected_notes_for(canvas), [])
+        self.assertFalse(note_a.isSelected())
+        self.assertFalse(note_b.isSelected())
+        self.assertEqual(selected_group_rects_for(canvas), [])
+
     def test_notes_only_unit_deselect_clears_qt_flags(self) -> None:
         canvas = _Canvas()
         note_a = _add_note(canvas, selected=True)

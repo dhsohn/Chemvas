@@ -117,6 +117,11 @@ class SelectionNoteService:
         clear_selected_notes_for(self.canvas)
         for note in notes:
             self.update_note_selection_box(note)
+        if notes:
+            # Drop the notes' Qt flags with the service selection: mirrored
+            # flags (e.g. from a group toggle) would otherwise survive as an
+            # invisible Qt selection that delete/copy/drag still acts on.
+            set_scene_items_selected_for(self.canvas, notes, False)
         for note in notes:
             # Mixed groups deselect as a unit: without this, clearing the note
             # selection (e.g. NoteTool press on empty canvas) would leave the
