@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ui.canvas_state_lookup import canvas_state_object
+from ui.canvas_state_lookup import ensure_canvas_state
 
 
 @dataclass(slots=True)
@@ -24,12 +24,7 @@ HOVER_STATE_ATTR_MAP = {
 
 
 def hover_state_for(canvas: Any) -> CanvasHoverState:
-    state = canvas_state_object(canvas, "hover_preview_state")
-    if state is not None:
-        return state
-    state = CanvasHoverState()
-    canvas.hover_preview_state = state
-    return state
+    return ensure_canvas_state(canvas, "hover_preview_state", CanvasHoverState)
 
 
 def hover_preview_state_for(canvas: Any) -> HoverPreviewState:

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ui.canvas_state_lookup import canvas_state_object
+from ui.canvas_state_lookup import ensure_canvas_state
 
 
 @dataclass(slots=True)
@@ -15,12 +15,7 @@ SMILES_INPUT_ATTRS = ("last_smiles_input",)
 
 
 def smiles_input_state_for(canvas: Any) -> CanvasSmilesInputState:
-    state = canvas_state_object(canvas, "smiles_input_state")
-    if state is not None:
-        return state
-    state = CanvasSmilesInputState()
-    canvas.smiles_input_state = state
-    return state
+    return ensure_canvas_state(canvas, "smiles_input_state", CanvasSmilesInputState)
 
 
 def last_smiles_input_for(canvas: Any) -> str | None:

@@ -5,7 +5,7 @@ from typing import Any
 
 from core.model import MoleculeModel
 
-from ui.canvas_state_lookup import canvas_state_object
+from ui.canvas_state_lookup import ensure_canvas_state
 
 
 @dataclass
@@ -27,12 +27,7 @@ class CanvasInsertState:
 
 
 def insert_state_for(canvas: Any) -> CanvasInsertState:
-    state = canvas_state_object(canvas, "insert_state")
-    if state is not None:
-        return state
-    state = CanvasInsertState()
-    canvas.insert_state = state
-    return state
+    return ensure_canvas_state(canvas, "insert_state", CanvasInsertState)
 
 
 __all__ = ["CanvasInsertState", "insert_state_for"]

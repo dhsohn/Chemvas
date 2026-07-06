@@ -1,3 +1,16 @@
+"""Pure operations on the derived atom-neighbor / atom-bond indexes.
+
+Consistency contract (shared by every consumer):
+
+- The indexes are derived state; the bond list on the model is the truth.
+- A *present* index entry — even an empty set — is trusted on read paths.
+- A *missing* entry means the index never learned about that atom, so read
+  helpers fall back to scanning the model for those atoms.
+- Write paths that would corrupt the model on a stale answer must not rely on
+  the fast path: ``CanvasGraphService.bond_id_between_with_repair`` re-checks
+  the model and repairs the index before "no bond exists" is acted on.
+"""
+
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, MutableMapping, Sequence

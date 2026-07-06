@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ui.bracket_types import DEFAULT_BRACKET_KIND
-from ui.canvas_state_lookup import canvas_state_object
+from ui.canvas_state_lookup import ensure_canvas_state
 
 
 @dataclass(slots=True)
@@ -47,12 +47,7 @@ TOOL_SETTING_ATTRS = (
 
 
 def tool_settings_state_for(canvas: Any) -> CanvasToolSettingsState:
-    state = canvas_state_object(canvas, "tool_settings_state")
-    if state is not None:
-        return state
-    state = CanvasToolSettingsState()
-    canvas.tool_settings_state = state
-    return state
+    return ensure_canvas_state(canvas, "tool_settings_state", CanvasToolSettingsState)
 
 
 def set_tool_setting_for(canvas: Any, name: str, value: Any) -> None:

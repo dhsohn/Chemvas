@@ -2,18 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from ui.canvas_state_lookup import canvas_state_object
+from ui.canvas_state_lookup import ensure_canvas_state
 
 
 def bond_renderer_for(canvas: Any):
-    renderer = canvas_state_object(canvas, "bond_renderer")
-    if renderer is not None:
-        return renderer
     from ui.bond_renderer import BondRenderer
 
-    renderer = BondRenderer(canvas)
-    canvas.bond_renderer = renderer
-    return renderer
+    return ensure_canvas_state(canvas, "bond_renderer", lambda: BondRenderer(canvas), runtime_field=False)
 
 
 def set_bond_renderer_for(canvas: Any, renderer) -> None:
