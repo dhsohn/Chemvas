@@ -129,6 +129,9 @@ class CanvasNoteController:
             before_state = note_state_dict_for(self.canvas, item)
             before_state["text"] = committed_text
             before_state["html"] = committed_html
+            # Deselect before removal so grouped companion notes drop with it
+            # and the group box outline refreshes instead of going stale.
+            self._deselect_note(item)
             remove_scene_item(self.canvas, item)
             self._push_history_or_rollback(DeleteSceneItemsCommand(item_states=[before_state], items=[item]))
             set_committed_note_text_for(item, "")
