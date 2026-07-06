@@ -39,6 +39,15 @@ class MolfileError(ValueError):
     """Raised when a model cannot be represented as an MDL Molfile."""
 
 
+class MolfileLimitError(MolfileError):
+    """Raised for hard V2000 capacity/range limits.
+
+    Unlike plain :class:`MolfileError` (e.g. abbreviation labels, which an
+    RDKit fallback can expand), these limits hold for any V2000 writer, so
+    callers must surface them instead of retrying through a fallback.
+    """
+
+
 def write_molfile(
     model: MoleculeModel,
     *,
@@ -61,7 +70,7 @@ def write_molfile(
         if bond is not None and bond.a in index_by_id and bond.b in index_by_id
     ]
     if len(atom_ids) > _V2000_MAX_ATOMS or len(bonds) > _V2000_MAX_BONDS:
-        raise MolfileError(
+        raise MolfileLimitError(
             "Cannot export to MOL: V2000 molfiles support at most "
             f"{_V2000_MAX_ATOMS} atoms and {_V2000_MAX_BONDS} bonds "
             f"(this drawing has {len(atom_ids)} atoms and {len(bonds)} bonds). "
@@ -128,7 +137,7 @@ def _charges(
         if charge == 0 or atom_id not in index_by_id:
             continue
         if not _MDL_MIN_CHARGE <= charge <= _MDL_MAX_CHARGE:
-            raise MolfileError(
+            raise MolfileLimitError(
                 f"Cannot export to MOL: formal charge {charge:+d} is outside "
                 f"the MDL range {_MDL_MIN_CHARGE}..{_MDL_MAX_CHARGE:+d}."
             )
@@ -162,4 +171,4 @@ def _chunked[T](items: Sequence[T], size: int) -> Iterable[Sequence[T]]:
         yield items[start : start + size]
 
 
-__all__ = ["MolfileError", "write_molfile"]
+__all__ = ["MolfileError", "MolfileLimitError", "write_molfile"]

@@ -9,7 +9,7 @@ from core.document_state import (
     deserialize_model_state,
     selection_payload_to_canvas_state,
 )
-from core.molfile import MolfileError, write_molfile
+from core.molfile import MolfileError, MolfileLimitError, write_molfile
 from core.svg_roundtrip import (
     CHEMVAS_SVG_SCOPE_SELECTION,
     CHEMVAS_SVG_SCOPE_SHEET,
@@ -139,6 +139,10 @@ class CanvasDocumentSessionService:
             raise ValueError("There is no molecular structure to export.")
         try:
             block = write_molfile(export_model, atom_annotations=atom_annotations)
+        except MolfileLimitError:
+            # Hard V2000 capacity/range limits hold for any writer; falling
+            # back to RDKit would either mask them or blame missing RDKit.
+            raise
         except MolfileError as exc:
             # The structure uses abbreviation labels (Ph, CF3, ...) that are not
             # single elements. Fall back to RDKit, which expands them into explicit

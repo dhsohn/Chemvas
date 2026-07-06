@@ -333,6 +333,25 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         fallback.assert_called_once()
         self.assertIn("M  END", content)
 
+    def test_export_mol_surfaces_v2000_limit_without_rdkit_fallback(self) -> None:
+        # Hard V2000 limits hold for any writer: the RDKit abbreviation
+        # fallback must not swallow them or blame missing RDKit.
+        model = MoleculeModel()
+        for index in range(1000):
+            model.add_atom("C", float(index), 0.0)
+        service = _session_service(_attach_history_service(SimpleNamespace()))
+        with (
+            mock.patch.object(service, "_build_xyz_payload", return_value=(model, {})),
+            mock.patch(
+                "ui.canvas_document_session_service.model_to_mol_block_for",
+                return_value="should-not-be-used",
+            ) as fallback,
+        ):
+            with self.assertRaises(ValueError) as ctx:
+                service.export_mol("/tmp/should-not-be-written.mol")
+        fallback.assert_not_called()
+        self.assertIn("999 atoms", str(ctx.exception))
+
     def test_export_mol_reports_install_rdkit_when_abbreviation_cannot_expand(self) -> None:
         model = MoleculeModel()
         model.add_atom("Ph", 0.0, 0.0)
