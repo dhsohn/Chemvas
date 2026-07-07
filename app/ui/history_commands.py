@@ -61,11 +61,15 @@ class UpdateSceneItemCommand(HistoryCommand):
     before_state: dict
     after_state: dict
 
+    def _apply(self, canvas, state: dict) -> None:
+        _apply_scene_item_state(canvas, self.item, state)
+        refresh_selection_outline_for_canvas(canvas)
+
     def undo(self, canvas) -> None:
-        _apply_scene_item_state(canvas, self.item, self.before_state)
+        self._apply(canvas, self.before_state)
 
     def redo(self, canvas) -> None:
-        _apply_scene_item_state(canvas, self.item, self.after_state)
+        self._apply(canvas, self.after_state)
 
 
 @dataclass

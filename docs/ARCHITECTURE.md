@@ -47,6 +47,6 @@ When an operation touches multiple entity types at once (ex: atom creation plus 
 ## Planned Next Slices
 - Extract preview rendering (bond/SMILES/template) into dedicated renderer modules.
 - Batch scene updates around multi-item operations (selection, mass move, template insert).
-- Publication export has landed (`export_scene`): SVG/PDF/PNG/TIFF, outlined labels, format/scope/DPI/background dialog, and physical-unit sizing (bond-length + 84/174 mm column fit). Next on this path:
-- Clipboard vector: also place PDF/SVG flavors on the clipboard (today only a PNG is copied) so paste into Illustrator / macOS Office stays vector.
+- Publication export has landed (`export_scene`): SVG/PDF/PNG/TIFF, outlined labels, format/scope/DPI/background dialog, and physical-unit sizing (bond-length + 84/174 mm column fit).
+- Clipboard copy places a PNG on the clipboard and best-effort SVG/PDF flavors for vector-aware targets such as Illustrator / macOS Office. If vector rendering fails, copy falls back to raster rather than failing the whole operation.
 - Fold formal charge into label superscripts (`place_runs` already supports the `super` role); resolve the inline charge-vs-subscript ambiguity using the existing charge mark/property rather than parsing inline text.

@@ -76,6 +76,7 @@ class SmilesLoadTransactionBuilderTest(unittest.TestCase):
         note = _FakeItem("note")
         arrow = _FakeItem("arrow")
         ts_bracket = _FakeItem("ts")
+        shape = _FakeItem("shape")
         orbital = _FakeItem("orbital")
         canvas.mark_registry.by_atom = {1: [bound_mark]}
         set_scene_item_collection_for(canvas, "mark_items", [bound_mark, stale_mark, free_mark])
@@ -83,6 +84,7 @@ class SmilesLoadTransactionBuilderTest(unittest.TestCase):
         set_scene_item_collection_for(canvas, "note_items", [note])
         set_scene_item_collection_for(canvas, "arrow_items", [arrow])
         set_scene_item_collection_for(canvas, "ts_bracket_items", [ts_bracket])
+        set_scene_item_collection_for(canvas, "shape_items", [shape])
         set_scene_item_collection_for(canvas, "orbital_items", [orbital])
         builder = SmilesLoadTransactionBuilder(canvas)
 
@@ -93,7 +95,7 @@ class SmilesLoadTransactionBuilderTest(unittest.TestCase):
         self.assertEqual(snapshot.mark_states_for_atoms, [{"kind": "bound-mark"}])
         self.assertEqual(
             [item.kind for item in snapshot.scene_items],
-            ["ring", "stale-mark", "free-mark", "note", "arrow", "ts", "orbital"],
+            ["ring", "stale-mark", "free-mark", "note", "arrow", "ts", "shape", "orbital"],
         )
         self.assertEqual(
             snapshot.scene_item_states,
@@ -104,6 +106,7 @@ class SmilesLoadTransactionBuilderTest(unittest.TestCase):
                 {"kind": "note"},
                 {"kind": "arrow"},
                 {"kind": "ts"},
+                {"kind": "shape"},
                 {"kind": "orbital"},
             ],
         )
@@ -178,6 +181,7 @@ class SmilesLoadTransactionBuilderTest(unittest.TestCase):
         delete_scene_items = [child for child in command.commands if isinstance(child, DeleteSceneItemsCommand)]
         self.assertEqual(len(delete_scene_items), 1)
         self.assertEqual(delete_scene_items[0].item_states, [{"kind": "ring"}])
+        self.assertEqual(delete_scene_items[0].items, [])
 
     def test_build_command_skips_sparse_new_bonds(self) -> None:
         canvas = _FakeCanvas()

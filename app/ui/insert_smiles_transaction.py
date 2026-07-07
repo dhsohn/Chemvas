@@ -22,6 +22,7 @@ from ui.canvas_scene_items_state import (
     note_items_for,
     orbital_items_for,
     ring_items_for,
+    shape_items_for,
     ts_bracket_items_for,
 )
 from ui.canvas_smiles_input_state import last_smiles_input_for
@@ -90,7 +91,7 @@ class SmilesLoadSnapshot:
             commands.append(
                 DeleteSceneItemsCommand(
                     item_states=self.scene_item_states,
-                    items=list(self.scene_items),
+                    items=[],
                 )
             )
         new_atom_states = {atom_id: atom_state_dict_for(canvas, atom_id) for atom_id in atoms_for(canvas)}
@@ -193,6 +194,7 @@ class SmilesLoadTransactionBuilder:
         scene_items.extend(note_items_for(self.canvas))
         scene_items.extend(arrow_items_for(self.canvas))
         scene_items.extend(ts_bracket_items_for(self.canvas))
+        scene_items.extend(shape_items_for(self.canvas))
         scene_items.extend(orbital_items_for(self.canvas))
         return scene_items
 
