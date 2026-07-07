@@ -52,12 +52,11 @@ def create_editable_svg_payload(
         "scope": scope,
         "document": document.payload,
     }
-    _validated_editable_svg_payload(payload)
-    return payload
+    return _validated_editable_svg_payload(payload)
 
 
 def embed_chemvas_document_in_svg(path: PathType, payload: dict[str, Any]) -> None:
-    _validated_editable_svg_payload(payload)
+    payload = _validated_editable_svg_payload(payload)
     tree = _parse_svg_tree(path, error_message="Invalid SVG file.")
     root = tree.getroot()
     metadata = _metadata_element(root)
@@ -164,16 +163,24 @@ def _decompress_svg_payload(compressed: bytes) -> bytes:
 
 
 def _validated_editable_svg_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    if set(payload) != {"type", "version", "scope", "document"}:
+        raise ValueError("Invalid editable Chemvas SVG payload.")
     if payload.get("type") != CHEMVAS_SVG_PAYLOAD_TYPE:
         raise ValueError("Invalid editable Chemvas SVG payload.")
     if payload.get("version") != CHEMVAS_SVG_PAYLOAD_VERSION:
         raise ValueError("Invalid editable Chemvas SVG payload.")
-    if payload.get("scope") not in CHEMVAS_SVG_SCOPES:
+    scope = payload.get("scope")
+    if not isinstance(scope, str) or scope not in CHEMVAS_SVG_SCOPES:
         raise ValueError("Invalid editable Chemvas SVG payload.")
     document = payload.get("document")
     if not isinstance(document, dict):
         raise ValueError("Invalid editable Chemvas SVG payload.")
-    if document.get("type") != CHEMVAS_FILE_TYPE or document.get("version") not in SUPPORTED_FILE_VERSIONS:
+    document_version = document.get("version")
+    if (
+        document.get("type") != CHEMVAS_FILE_TYPE
+        or type(document_version) is not int
+        or document_version not in SUPPORTED_FILE_VERSIONS
+    ):
         raise ValueError("Invalid editable Chemvas SVG payload.")
     try:
         parse_document(document)

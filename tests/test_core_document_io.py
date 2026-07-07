@@ -2,6 +2,7 @@ import json
 import os
 import tempfile
 import unittest
+from decimal import Decimal
 from pathlib import Path
 from unittest import mock
 
@@ -92,6 +93,61 @@ class DocumentIOTest(unittest.TestCase):
 
         self.assertIs(wrapped.payload, payload)
         self.assertIs(wrapped.state, state)
+
+    def test_parse_document_rejects_extra_wrapper_key_before_normalizing(self) -> None:
+        state = _canvas_state()
+        extra = []
+        for _ in range(2000):
+            extra = [extra]
+        payload = {
+            "type": CHEMVAS_FILE_TYPE,
+            "version": CANVAS_FILE_VERSION,
+            "state": state,
+            "extra": extra,
+        }
+
+        with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
+            parse_document(payload)
+
+    def test_create_and_write_document_normalize_decimal_numbers(self) -> None:
+        state = _canvas_state(
+            _model_state(
+                {"0": {"element": "C", "x": Decimal("1.25"), "y": 0.0, "color": "#000000", "explicit_label": False}},
+                [],
+                1,
+            )
+        )
+
+        document = create_document(state, version=CANVAS_FILE_VERSION)
+
+        self.assertEqual(document.state["model"]["atoms"]["0"]["x"], 1.25)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "decimal.chemvas"
+            write_document(path, state, version=CANVAS_FILE_VERSION)
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+
+        self.assertEqual(loaded["state"]["model"]["atoms"]["0"]["x"], 1.25)
+
+    def test_create_and_write_document_normalize_decimal_numbers_inside_tuples(self) -> None:
+        state = _canvas_state()
+        state["arrows"] = [
+            {
+                "kind": "arrow",
+                "start": (Decimal("1.25"), 0.0),
+                "end": (2.0, Decimal("3.5")),
+            }
+        ]
+
+        document = create_document(state, version=CANVAS_FILE_VERSION)
+
+        self.assertEqual(document.state["arrows"][0]["start"], (1.25, 0.0))
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "tuple-decimal.chemvas"
+            write_document(path, state, version=CANVAS_FILE_VERSION)
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+
+        self.assertEqual(loaded["state"]["arrows"][0]["start"], [1.25, 0.0])
+        self.assertEqual(loaded["state"]["arrows"][0]["end"], [2.0, 3.5])
 
     def test_parse_document_rejects_invalid_state_like_document_state(self) -> None:
         cases = (

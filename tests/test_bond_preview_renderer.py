@@ -228,7 +228,7 @@ class BondPreviewRendererTest(unittest.TestCase):
         self.assertIs(items, expected)
         hashed.assert_called_once_with(-2.0, 1.0, 5.0, 6.0, 9, 10)
 
-    def test_build_bold_single_preview_uses_expanded_segment_and_flipped_normal(self) -> None:
+    def test_build_bold_single_preview_uses_atom_to_atom_segment_and_flipped_normal(self) -> None:
         strip = QGraphicsPolygonItem()
         line_normal = mock.Mock(return_value=(0.25, 0.75))
         one_sided = mock.Mock(return_value=strip)

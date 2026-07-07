@@ -24,10 +24,21 @@ from ui.canvas_scene_items_state import (
     note_items_for,
     orbital_items_for,
     ring_items_for,
+    shape_items_for,
     ts_bracket_items_for,
 )
 from ui.canvas_scene_reset_service import CanvasSceneResetService
+from ui.handle_state import (
+    active_handles_for,
+    handle_target_for,
+    set_active_handles_for,
+    set_handle_target_for,
+)
 from ui.insert_mode_logic import clear_insert_session
+from ui.selection_outline_state import (
+    selection_outlines_for,
+    set_selection_outlines_for,
+)
 
 
 class _FakeScene:
@@ -85,6 +96,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             mark_items=[object()],
             arrow_items=[object()],
             ts_bracket_items=[object()],
+            shape_items=[object()],
             orbital_items=[object()],
             mark_registry=CanvasMarkRegistry({1: [object()]}),
             insert_state=CanvasInsertState(smiles_preview_model=object()),
@@ -93,6 +105,9 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         set_hover_items_for(canvas, [object()])
         set_hover_atom_id_for(canvas, 3)
         set_hover_bond_id_for(canvas, 4)
+        set_selection_outlines_for(canvas, [object()])
+        set_active_handles_for(canvas, [object()])
+        set_handle_target_for(canvas, object())
 
         CanvasSceneResetService(
             canvas,
@@ -132,7 +147,11 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         self.assertEqual(mark_items_for(canvas), [])
         self.assertEqual(arrow_items_for(canvas), [])
         self.assertEqual(ts_bracket_items_for(canvas), [])
+        self.assertEqual(shape_items_for(canvas), [])
         self.assertEqual(orbital_items_for(canvas), [])
+        self.assertEqual(selection_outlines_for(canvas), [])
+        self.assertEqual(active_handles_for(canvas), [])
+        self.assertIsNone(handle_target_for(canvas))
         self.assertEqual(canvas.mark_registry.by_atom, {})
         self.assertIsNone(canvas.insert_state.smiles_preview_model)
         canvas.services.insert_controller.clear_template_preview.assert_called_once_with()

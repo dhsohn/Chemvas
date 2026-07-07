@@ -58,6 +58,8 @@ def set_label_outline_mode(items: Sequence[QGraphicsItem], enabled: bool) -> lis
 
 
 def _item_with_descendants(item: QGraphicsItem) -> list[QGraphicsItem]:
+    if item.data(0) in EXPORT_EXCLUDED_KINDS:
+        return []
     items = [item]
     for child in item.childItems():
         items.extend(_item_with_descendants(child))

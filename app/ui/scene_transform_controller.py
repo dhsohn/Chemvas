@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 from core.history import (
     CompositeCommand,
@@ -19,6 +20,7 @@ from ui.canvas_model_access import (
     atoms_for,
     bonds_for,
 )
+from ui.canvas_rotation_preview_state import RotationPreviewItemSnapshot
 from ui.canvas_smiles_input_state import last_smiles_input_for
 from ui.history_canvas_access import set_atom_positions_for_history
 from ui.history_commands import MoveItemsCommand, UpdateSceneItemCommand
@@ -43,6 +45,7 @@ from ui.scene_item_access import (
 )
 from ui.scene_item_access import remove_item_from_canvas_scene
 from ui.scene_item_state import (
+    ARROW_KINDS,
     bond_state_dict,
     scene_item_state_for,
     ts_bracket_rect_from_state,
@@ -70,6 +73,18 @@ from ui.selection_service_access import refresh_selection_outline_for
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
+
+
+@dataclass(frozen=True, slots=True)
+class RotationSelectionPreview:
+    items: list[object]
+    center: object
+    position_items: list[object]
+
+
+ROTATION_GROUP_PREVIEW_KINDS = ARROW_KINDS | {"orbital"}
+ROTATION_POSITION_PREVIEW_KINDS = {"mark"}
+ROTATION_STATE_ITEM_KINDS = ROTATION_GROUP_PREVIEW_KINDS | ROTATION_POSITION_PREVIEW_KINDS
 
 
 class SceneTransformController:
@@ -313,23 +328,123 @@ class SceneTransformController:
                 marks.append(mark)
         return marks
 
-    def rotate_selected_items(self, angle_degrees: float) -> None:
-        if not angle_degrees:
+    @staticmethod
+    def _append_unique_item(items: list, seen: set, item) -> None:
+        if item is None or item in seen:
             return
+        seen.add(item)
+        items.append(item)
+
+    @staticmethod
+    def _rotation_state_items(items: list) -> list:
+        return [item for item in items if item.data(0) in ROTATION_STATE_ITEM_KINDS]
+
+    def _rotation_selection(self) -> tuple[set[int], list, list]:
         atom_ids = selected_atom_ids_for_transform_for(self.canvas)
-        items = independent_selection_items(selected_items_for_transform_for(self.canvas), atom_ids)
-        # Marks attached to selected atoms are filtered out of ``items`` (their
-        # atom carries them), but a translation-only atom move would leave the
-        # mark on the same side of the atom. Rotate them explicitly like flip.
+        items = self._rotation_state_items(
+            independent_selection_items(selected_items_for_transform_for(self.canvas), atom_ids)
+        )
         transform_items = self._atom_bound_marks(atom_ids) + items
-        if not atom_ids and not transform_items:
-            return
-        center = flip_center_for_selection(
+        return atom_ids, items, transform_items
+
+    def _rotation_center(self, atom_ids: set[int], items: list):
+        return flip_center_for_selection(
             atom_ids,
             items,
             atoms=self._atoms,
             flip_bounds_getter=self._flip_bounds_for_item,
         )
+
+    def rotation_selection_preview(self) -> RotationSelectionPreview | None:
+        atom_ids = selected_atom_ids_for_transform_for(self.canvas)
+        selection_items = selected_items_for_transform_for(self.canvas)
+        independent_items_for_center = self._rotation_state_items(
+            independent_selection_items(selection_items, atom_ids)
+        )
+        transform_items = self._atom_bound_marks(atom_ids) + independent_items_for_center
+        if not atom_ids and not transform_items:
+            return None
+        center = self._rotation_center(atom_ids, independent_items_for_center)
+        if center is None:
+            return None
+        preview_items: list = []
+        seen: set = set()
+        for item in selection_items:
+            if item.data(0) in {"atom", "bond", "ring"}:
+                self._append_unique_item(preview_items, seen, item)
+        position_items: list = []
+        position_seen: set = set()
+        for item in transform_items:
+            kind = item.data(0)
+            if kind in ROTATION_GROUP_PREVIEW_KINDS:
+                self._append_unique_item(preview_items, seen, item)
+            elif kind in ROTATION_POSITION_PREVIEW_KINDS:
+                self._append_unique_item(position_items, position_seen, item)
+        if not preview_items:
+            return None
+        return RotationSelectionPreview(
+            items=preview_items,
+            center=center,
+            position_items=position_items,
+        )
+
+    def rotation_position_preview_snapshots(self, items: list) -> list[RotationPreviewItemSnapshot]:
+        snapshots: list[RotationPreviewItemSnapshot] = []
+        for item in items:
+            state = self._scene_item_state(item)
+            if state:
+                snapshots.append(RotationPreviewItemSnapshot(item=item, state=state))
+        return snapshots
+
+    def _rotation_preview_atom_positions(self, center: Any, angle_degrees: float) -> dict[int, tuple[float, float]]:
+        atom_ids = selected_atom_ids_for_transform_for(self.canvas)
+        if not atom_ids:
+            return {}
+        return rotated_atom_positions(
+            atom_ids,
+            atoms=self._atoms,
+            center=center,
+            angle_radians=math.radians(angle_degrees),
+        )
+
+    def apply_rotation_position_preview(
+        self,
+        snapshots: list[RotationPreviewItemSnapshot],
+        *,
+        center: Any,
+        angle_degrees: float,
+    ) -> None:
+        transformed_atom_positions = self._rotation_preview_atom_positions(center, angle_degrees)
+        for snapshot in snapshots:
+            after_state = rotate_scene_item_state(
+                snapshot.item,
+                snapshot.state,
+                center=center,
+                angle_degrees=angle_degrees,
+                transformed_atom_positions=transformed_atom_positions,
+                atoms=self._atoms,
+                ts_bracket_rect_from_state=ts_bracket_rect_from_state,
+            )
+            if after_state:
+                self._apply_scene_item_state(snapshot.item, after_state)
+
+    def restore_rotation_position_preview(
+        self,
+        snapshots: list[RotationPreviewItemSnapshot],
+    ) -> None:
+        for snapshot in snapshots:
+            self._apply_scene_item_state(snapshot.item, snapshot.state)
+
+    def rotate_selected_items(self, angle_degrees: float) -> None:
+        if not angle_degrees:
+            return
+        atom_ids, items, transform_items = self._rotation_selection()
+        # Marks attached to selected atoms are filtered out of ``items`` (their
+        # atom carries them), but a translation-only atom move would leave the
+        # mark on the same side of the atom. Rotate them explicitly like flip.
+        if not atom_ids and not transform_items:
+            return
+        center = self._rotation_center(atom_ids, items)
         if center is None:
             return
         before_positions: dict[int, tuple[float, float]] = {}
@@ -382,4 +497,4 @@ class SceneTransformController:
         self.history.push(CompositeCommand(commands))
 
 
-__all__ = ["SceneTransformController"]
+__all__ = ["RotationSelectionPreview", "SceneTransformController"]

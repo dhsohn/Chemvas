@@ -333,6 +333,118 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
         self.assertAlmostEqual(arrow_state["control"][0], 15.0)
         self.assertAlmostEqual(arrow_state["control"][1], 25.0)
 
+    def test_rotation_selection_preview_matches_transform_items_and_center(self) -> None:
+        canvas = _FakeCanvas()
+        atom_1_id = canvas.add_atom("C", 0.0, 0.0)
+        atom_item = canvas._atom_item_for_id(atom_1_id)
+        assert atom_item is not None
+        atom_item.setSelected(True)
+        arrow_item = _make_rect_item(
+            "arrow",
+            state={"kind": "arrow", "start": (30.0, 10.0), "end": (50.0, 10.0), "control": (40.0, 20.0)},
+        )
+        mark_item = _make_rect_item(
+            "mark",
+            data1={"atom_id": atom_1_id, "dx": 0.0, "dy": -5.0},
+            state={"kind": "mark", "atom_id": atom_1_id, "x": 0.0, "y": -5.0, "dx": 0.0, "dy": -5.0},
+        )
+        canvas.add_item(arrow_item, selected=True)
+        canvas.add_item(mark_item)
+        canvas.mark_registry.by_atom[atom_1_id] = [mark_item]
+
+        preview = scene_transform_controller_for(canvas).rotation_selection_preview()
+
+        assert preview is not None
+        self.assertEqual(preview.items, [atom_item, arrow_item])
+        self.assertEqual(preview.position_items, [mark_item])
+        # The center includes the selected atom and independent arrow bounds,
+        # matching rotate_selected_items()' commit pivot.
+        self.assertEqual(preview.center, QPointF(25.0, 10.0))
+
+    def test_rotation_position_preview_moves_marks_upright_and_restores_before_commit(self) -> None:
+        canvas = _FakeCanvas()
+        atom_id = canvas.add_atom("C", 0.0, 0.0)
+        atom_item = canvas._atom_item_for_id(atom_id)
+        assert atom_item is not None
+        atom_item.setSelected(True)
+        mark_item = _make_rect_item(
+            "mark",
+            data1={"atom_id": atom_id, "dx": 0.0, "dy": -5.0},
+            state={"kind": "mark", "atom_id": atom_id, "x": 0.0, "y": -5.0, "dx": 0.0, "dy": -5.0},
+        )
+        canvas.add_item(mark_item)
+        canvas.mark_registry.by_atom[atom_id] = [mark_item]
+        controller = scene_transform_controller_for(canvas)
+        preview = controller.rotation_selection_preview()
+        assert preview is not None
+        snapshots = controller.rotation_position_preview_snapshots(preview.position_items)
+
+        controller.apply_rotation_position_preview(
+            snapshots,
+            center=preview.center,
+            angle_degrees=90.0,
+        )
+
+        after_state = mark_item.data(9)
+        self.assertAlmostEqual(after_state["x"], 5.0)
+        self.assertAlmostEqual(after_state["y"], 0.0)
+        self.assertAlmostEqual(after_state["dx"], 5.0)
+        self.assertAlmostEqual(after_state["dy"], 0.0)
+        self.assertEqual(mark_item.rotation(), 0.0)
+
+        controller.restore_rotation_position_preview(snapshots)
+
+        self.assertEqual(
+            mark_item.data(9),
+            {
+                "kind": "mark",
+                "mark_kind": None,
+                "text": None,
+                "atom_id": atom_id,
+                "x": 0.0,
+                "y": -5.0,
+                "dx": 0.0,
+                "dy": -5.0,
+            },
+        )
+
+    def test_rotation_selection_preview_excludes_upright_noop_scene_items(self) -> None:
+        for kind, item in (
+            ("note", _make_note_item("upright", 20.0, 30.0)),
+            ("shape", _make_rect_item("shape", state={"kind": "shape", "left": 0.0, "top": 0.0, "right": 10.0, "bottom": 10.0})),
+            (
+                "ts_bracket",
+                _make_rect_item(
+                    "ts_bracket",
+                    state={"kind": "ts_bracket", "left": 0.0, "top": 0.0, "right": 10.0, "bottom": 10.0},
+                ),
+            ),
+        ):
+            with self.subTest(kind=kind):
+                canvas = _FakeCanvas()
+                canvas.add_item(item, selected=True)
+
+                self.assertIsNone(scene_transform_controller_for(canvas).rotation_selection_preview())
+
+    def test_rotate_selected_items_ignores_upright_items_not_shown_in_preview(self) -> None:
+        canvas = _FakeCanvas()
+        atom_1_id = canvas.add_atom("C", 0.0, 0.0)
+        atom_2_id = canvas.add_atom("O", 20.0, 0.0)
+        for atom_id in (atom_1_id, atom_2_id):
+            atom_item = canvas._atom_item_for_id(atom_id)
+            assert atom_item is not None
+            atom_item.setSelected(True)
+        note_item = _make_note_item("stay put", 40.0, 10.0)
+        canvas.add_item(note_item, selected=True)
+
+        preview = scene_transform_controller_for(canvas).rotation_selection_preview()
+        scene_transform_controller_for(canvas).rotate_selected_items(90.0)
+
+        assert preview is not None
+        self.assertNotIn(note_item, preview.items)
+        self.assertEqual(note_item.data(9), {"kind": "note", "text": "stay put", "x": 40.0, "y": 10.0})
+        self.assertEqual(len(canvas.pushed_commands), 1)
+
     def test_rotate_selected_items_rotates_standalone_scene_items(self) -> None:
         canvas = _FakeCanvas()
         arrow_item = _make_rect_item(

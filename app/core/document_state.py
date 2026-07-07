@@ -392,7 +392,10 @@ def deserialize_model_state(model_state: Mapping[str, object]) -> MoleculeModel:
             )
         )
     model.bonds = bonds
-    model.next_atom_id = int(cast(Any, model_state["next_atom_id"]))
+    model.next_atom_id = max(
+        int(cast(Any, model_state["next_atom_id"])),
+        max(model.atoms, default=-1) + 1,
+    )
     annotations_state = cast(Mapping[object, Mapping[str, object]], model_state.get("atom_annotations", {}))
     model.atom_annotations = {
         int(cast(Any, atom_id)): {
@@ -604,6 +607,8 @@ def extract_document_state(payload: object) -> dict:
 
 
 def _extract_wrapped_document_state(payload: Mapping[str, object]) -> dict:
+    if set(payload) != {"type", "version", "state"}:
+        raise ValueError("Invalid Chemvas file.")
     if payload.get("type") != CHEMVAS_FILE_TYPE:
         raise ValueError("Invalid Chemvas file.")
     version = payload.get("version")
@@ -1434,6 +1439,14 @@ def normalize_json_numbers(value: object) -> object:
         if all(normalized is original for normalized, original in zip(normalized_list, value, strict=True)):
             return value
         return normalized_list
+    if isinstance(value, tuple):
+        normalized_tuple = tuple(normalize_json_numbers(item) for item in value)
+        if all(
+            normalized is original
+            for normalized, original in zip(normalized_tuple, value, strict=True)
+        ):
+            return value
+        return normalized_tuple
     if isinstance(value, dict):
         normalized_dict = {key: normalize_json_numbers(item) for key, item in value.items()}
         if all(normalized_dict[key] is item for key, item in value.items()):

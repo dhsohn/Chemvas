@@ -18,6 +18,7 @@ from ui.canvas_mark_registry import mark_registry_for
 from ui.canvas_model_access import set_model_for
 from ui.canvas_rotation_state import rotation_state_for
 from ui.canvas_scene_items_state import clear_scene_item_collections_for
+from ui.handle_state import set_active_handles_for, set_handle_target_for
 from ui.insert_mode_logic import clear_insert_session
 from ui.insert_session_access import (
     apply_insert_session_state_for,
@@ -25,6 +26,7 @@ from ui.insert_session_access import (
     clear_template_preview_for,
 )
 from ui.scene_item_access import clear_canvas_scene
+from ui.selection_outline_state import clear_selection_outlines_for
 
 
 class CanvasSceneResetService:
@@ -37,6 +39,9 @@ class CanvasSceneResetService:
         self.marks = mark_registry_for(canvas)
 
     def clear_scene(self) -> None:
+        clear_selection_outlines_for(self.canvas)
+        set_active_handles_for(self.canvas, [])
+        set_handle_target_for(self.canvas, None)
         clear_canvas_scene(self.canvas)
         set_hover_items_for(self.canvas, [])
         set_hover_atom_id_for(self.canvas, None)

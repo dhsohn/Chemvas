@@ -34,12 +34,14 @@ def test_build_canvas_scene_view_services_wires_explicit_collaborators(monkeypat
     graph_service = object()
     hit_testing_service = object()
     history_service = object()
+    scene_transform_controller = object()
 
     services = build_canvas_scene_view_services(
         canvas,
         graph_service=graph_service,
         hit_testing_service=hit_testing_service,
         history_service=history_service,
+        scene_transform_controller=scene_transform_controller,
     )
 
     assert isinstance(services, CanvasSceneViewServiceBundle)
@@ -58,3 +60,6 @@ def test_build_canvas_scene_view_services_wires_explicit_collaborators(monkeypat
     }
     assert services.canvas_ring_fill_scene_service.args == (canvas,)
     assert services.rotation_preview_controller.args == (canvas,)
+    assert services.rotation_preview_controller.kwargs == {
+        "scene_transform_controller": scene_transform_controller,
+    }

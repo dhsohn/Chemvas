@@ -29,6 +29,7 @@ def build_canvas_scene_view_services(
     graph_service: Any,
     hit_testing_service: Any,
     history_service: Any,
+    scene_transform_controller: Any,
 ) -> CanvasSceneViewServiceBundle:
     scene_item_lifecycle_service = SceneItemLifecycleService(canvas, graph_service=graph_service)
     scene_item_controller = SceneItemController(
@@ -43,7 +44,10 @@ def build_canvas_scene_view_services(
         history_service=history_service,
     )
     canvas_ring_fill_scene_service = CanvasRingFillSceneService(canvas)
-    rotation_preview_controller = CanvasRotationPreviewController(canvas)
+    rotation_preview_controller = CanvasRotationPreviewController(
+        canvas,
+        scene_transform_controller=scene_transform_controller,
+    )
     return CanvasSceneViewServiceBundle(
         scene_item_controller=scene_item_controller,
         selection_highlight_styler=selection_highlight_styler,

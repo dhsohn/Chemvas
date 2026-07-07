@@ -100,7 +100,7 @@ def resolve_template_insert(
     else:
         return None
 
-    if points is None:
+    if points is None or len(points) != plan.ring_size:
         return None
     return TemplateInsertResolution(plan=plan, points=[(x, y) for x, y in points])
 
@@ -123,6 +123,8 @@ def _plan_template_insert(
         )
 
     if ring_style == "chair" or ring_style == "chair_flip" or ring_style == "boat":
+        if request.ring_size != 6:
+            return None
         return TemplateInsertPlan(
             generator="bond_template_shape" if request.bond_id is not None else "free_template_shape",
             ring_size=request.ring_size,

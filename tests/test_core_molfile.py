@@ -20,6 +20,16 @@ def _ethanol() -> MoleculeModel:
     return model
 
 
+def _far_offset_ethanol() -> MoleculeModel:
+    model = MoleculeModel()
+    a = model.add_atom("C", 1_000_000.0, -2_000_000.0)
+    b = model.add_atom("C", 1_000_030.0, -2_000_000.0)
+    c = model.add_atom("O", 1_000_060.0, -2_000_000.0)
+    model.add_bond(a, b, 1)
+    model.add_bond(b, c, 1)
+    return model
+
+
 def _benzene() -> MoleculeModel:
     model = MoleculeModel()
     ids = [
@@ -47,6 +57,29 @@ class MolfileWriterTest(unittest.TestCase):
         y_first = float(atom_lines[0].split()[1])
         y_second = float(atom_lines[1].split()[1])
         self.assertGreater(y_first, y_second)
+
+    def test_far_offset_coordinates_stay_in_v2000_atom_fields(self) -> None:
+        block = write_molfile(_far_offset_ethanol())
+        if _RealChem is not None:
+            mol = _RealChem.MolFromMolBlock(block)
+            self.assertIsNotNone(mol)
+            self.assertEqual(_RealChem.MolToSmiles(mol), "CCO")
+            return
+
+        for line, element in zip(block.splitlines()[4:7], ("C", "C", "O"), strict=True):
+            self.assertLessEqual(len(line[0:10]), 10)
+            self.assertLessEqual(len(line[10:20]), 10)
+            self.assertLessEqual(len(line[20:30]), 10)
+            self.assertEqual(line[31:34], f"{element:<3}")
+
+    def test_huge_same_sign_coordinate_center_does_not_emit_infinity(self) -> None:
+        model = MoleculeModel()
+        model.add_atom("C", 1e308, 1e308)
+
+        block = write_molfile(model)
+
+        self.assertNotIn("inf", block.lower())
+        self.assertEqual(block.splitlines()[4][0:30], "    0.0000    0.0000    0.0000")
 
     def test_wedge_and_hash_styles_become_stereo_flags(self) -> None:
         model = MoleculeModel()
@@ -127,6 +160,31 @@ class MolfileLimitsTest(unittest.TestCase):
         block = write_molfile(model, atom_annotations={0: {"formal_charge": -15}})
 
         self.assertIn("M  CHG  1   1 -15", block)
+
+    def test_coordinate_span_outside_v2000_field_raises(self) -> None:
+        model = MoleculeModel()
+        model.add_atom("C", -100_000_000.0, 0.0)
+        model.add_atom("C", 100_000_000.0, 0.0)
+
+        with self.assertRaisesRegex(MolfileLimitError, "10-character atom-field"):
+            write_molfile(model)
+
+    def test_coordinate_center_overflow_raises_limit_error(self) -> None:
+        model = MoleculeModel()
+        model.add_atom("C", -1e308, 0.0)
+        model.add_atom("C", 1e308, 0.0)
+
+        with self.assertRaisesRegex(MolfileLimitError, "finite V2000"):
+            write_molfile(model)
+
+    def test_coordinate_scale_overflow_raises_limit_error(self) -> None:
+        model = MoleculeModel()
+        atom_1 = model.add_atom("C", 0.0, 0.0)
+        atom_2 = model.add_atom("C", 1.4e308, 1.4e308)
+        model.add_bond(atom_1, atom_2, 1)
+
+        with self.assertRaisesRegex(MolfileLimitError, "finite V2000"):
+            write_molfile(model)
 
 
 if __name__ == "__main__":

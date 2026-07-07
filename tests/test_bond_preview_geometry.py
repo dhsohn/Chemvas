@@ -12,11 +12,11 @@ from ui.bond_preview_geometry import (
 )
 
 
-def test_bond_preview_geometry_expands_and_trims_segments() -> None:
+def test_bond_preview_geometry_uses_atom_to_atom_bold_segment_and_trims_segments() -> None:
     expanded = expanded_bold_segment(QPointF(0.0, 0.0), QPointF(10.0, 0.0), 20.0)
 
-    assert math.isclose(expanded[0], -1.65)
-    assert math.isclose(expanded[2], 11.65)
+    assert math.isclose(expanded[0], 0.0)
+    assert math.isclose(expanded[2], 10.0)
     assert trim_segment((0.0, 0.0, 10.0, 0.0), 2.0) == (2.0, 0.0, 8.0, 0.0)
 
 

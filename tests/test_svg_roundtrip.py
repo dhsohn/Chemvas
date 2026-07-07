@@ -3,6 +3,7 @@ import json
 import tempfile
 import unittest
 import zlib
+from decimal import Decimal
 from pathlib import Path
 from unittest import mock
 from xml.etree import ElementTree as ET
@@ -83,6 +84,56 @@ class SvgRoundtripTest(unittest.TestCase):
             self.assertEqual(len(sources), 1)
             self.assertEqual(extract_chemvas_svg_payload(path)["scope"], CHEMVAS_SVG_SCOPE_SHEET)
             self.assertEqual(extract_chemvas_document_from_svg(path).state, state)
+
+    def test_embed_rejects_extra_svg_payload_key_before_normalizing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._svg_path(tmp)
+            payload = create_editable_svg_payload(
+                _sheet_state(),
+                document_version=CANVAS_FILE_VERSION,
+                scope=CHEMVAS_SVG_SCOPE_SHEET,
+            )
+            extra = []
+            for _ in range(2000):
+                extra = [extra]
+            payload["extra"] = extra
+
+            with self.assertRaisesRegex(ValueError, "Invalid editable Chemvas SVG payload"):
+                embed_chemvas_document_in_svg(path, payload)
+
+    def test_embed_rejects_unhashable_svg_metadata_values_as_value_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._svg_path(tmp)
+            payload = create_editable_svg_payload(
+                _sheet_state(),
+                document_version=CANVAS_FILE_VERSION,
+                scope=CHEMVAS_SVG_SCOPE_SHEET,
+            )
+            for mutation in (
+                lambda candidate: candidate.update({"scope": []}),
+                lambda candidate: candidate["document"].update({"version": []}),
+            ):
+                with self.subTest(mutation=mutation):
+                    candidate = json.loads(json.dumps(payload))
+                    mutation(candidate)
+                    with self.assertRaisesRegex(ValueError, "Invalid editable Chemvas SVG payload"):
+                        embed_chemvas_document_in_svg(path, candidate)
+
+    def test_embed_normalizes_decimal_document_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._svg_path(tmp)
+            state = _sheet_state()
+            state["notes"][0]["x"] = Decimal("1.25")
+            payload = create_editable_svg_payload(
+                state,
+                document_version=CANVAS_FILE_VERSION,
+                scope=CHEMVAS_SVG_SCOPE_SHEET,
+            )
+
+            embed_chemvas_document_in_svg(path, payload)
+            extracted = extract_chemvas_document_from_svg(path)
+
+        self.assertEqual(extracted.state["notes"][0]["x"], 1.25)
 
     def test_embed_replaces_existing_chemvas_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

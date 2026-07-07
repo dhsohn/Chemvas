@@ -79,6 +79,7 @@ def write_molfile(
         )
     _reject_non_element_labels(model, atom_ids)
     scale = _coordinate_scale(model, bonds)
+    center_x, center_y = _coordinate_center(model, atom_ids)
     annotations = atom_annotations or {}
 
     lines: list[str] = [title, "  Chemvas", ""]
@@ -86,7 +87,9 @@ def write_molfile(
     for atom_id in atom_ids:
         atom = model.atoms[atom_id]
         # Canvas y grows downward; MDL y grows upward, so negate it.
-        lines.append(_atom_line(atom.x * scale, -atom.y * scale, atom.element))
+        lines.append(
+            _atom_line((atom.x - center_x) * scale, -(atom.y - center_y) * scale, atom.element)
+        )
     for bond in bonds:
         lines.append(_bond_line(index_by_id[bond.a], index_by_id[bond.b], bond))
     lines.extend(_property_lines("CHG", _charges(annotations, index_by_id)))
@@ -111,16 +114,70 @@ def _coordinate_scale(model: MoleculeModel, bonds: Sequence[Bond]) -> float:
         a = model.atoms[bond.a]
         b = model.atoms[bond.b]
         distance = math.hypot(a.x - b.x, a.y - b.y)
+        if not math.isfinite(distance):
+            raise MolfileLimitError(
+                "Cannot export to MOL: a bond length is outside the finite V2000 "
+                "coordinate scaling range."
+            )
         if distance > 0.0:
             lengths.append(distance)
     if not lengths:
         return 1.0
     average = sum(lengths) / len(lengths)
-    return _TARGET_BOND_LENGTH / average if average > 0.0 else 1.0
+    if not math.isfinite(average) or average <= 0.0:
+        raise MolfileLimitError(
+            "Cannot export to MOL: bond lengths are outside the finite V2000 "
+            "coordinate scaling range."
+        )
+    scale = _TARGET_BOND_LENGTH / average
+    if not math.isfinite(scale) or scale <= 0.0:
+        raise MolfileLimitError(
+            "Cannot export to MOL: bond lengths are outside the finite V2000 "
+            "coordinate scaling range."
+        )
+    return scale
+
+
+def _coordinate_center(model: MoleculeModel, atom_ids: Sequence[int]) -> tuple[float, float]:
+    if not atom_ids:
+        return (0.0, 0.0)
+    xs = [model.atoms[atom_id].x for atom_id in atom_ids]
+    ys = [model.atoms[atom_id].y for atom_id in atom_ids]
+    return (_safe_midpoint(min(xs), max(xs)), _safe_midpoint(min(ys), max(ys)))
+
+
+def _safe_midpoint(low: float, high: float) -> float:
+    midpoint = low + (high - low) / 2.0
+    if not math.isfinite(midpoint):
+        raise MolfileLimitError(
+            "Cannot export to MOL: coordinates are outside the finite V2000 "
+            "centering range."
+        )
+    return midpoint
 
 
 def _atom_line(x: float, y: float, element: str) -> str:
-    return f"{x:>10.4f}{y:>10.4f}{0.0:>10.4f} {element:<3}{0:>2}" + "  0" * 11
+    return (
+        f"{_coordinate_field(x)}{_coordinate_field(y)}{_coordinate_field(0.0)} "
+        f"{element:<3}{0:>2}" + "  0" * 11
+    )
+
+
+def _coordinate_field(value: float) -> str:
+    if not math.isfinite(value):
+        raise MolfileLimitError(
+            "Cannot export to MOL: a coordinate is outside the finite V2000 "
+            "atom-field range after centering."
+        )
+    if value == 0.0:
+        value = 0.0
+    field = f"{value:>10.4f}"
+    if len(field) > 10:
+        raise MolfileLimitError(
+            "Cannot export to MOL: a coordinate is outside the V2000 "
+            "10-character atom-field range after centering."
+        )
+    return field
 
 
 def _bond_line(begin: int, end: int, bond: Bond) -> str:

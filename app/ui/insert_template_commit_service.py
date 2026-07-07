@@ -51,7 +51,7 @@ def apply_template_commit_resolution(
             after_smiles_input=after_smiles_input,
         )
 
-    if resolution is None or resolution.points is None:
+    if resolution is None or resolution.points is None or len(resolution.points) != plan.ring_size:
         return False
 
     points = [QPointF(x, y) for x, y in resolution.points]

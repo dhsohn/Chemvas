@@ -307,6 +307,7 @@ def test_build_canvas_services_uses_selection_service_bundle(monkeypatch) -> Non
         graph_service,
         hit_testing_service,
         history_service,
+        scene_transform_controller,
     ):
         build_canvas_scene_view_services_calls.append(
             (
@@ -314,6 +315,7 @@ def test_build_canvas_services_uses_selection_service_bundle(monkeypatch) -> Non
                 graph_service,
                 hit_testing_service,
                 history_service,
+                scene_transform_controller,
             )
         )
         return scene_view_bundle
@@ -469,6 +471,7 @@ def test_build_canvas_services_uses_selection_service_bundle(monkeypatch) -> Non
             services.canvas_graph_service,
             hit_testing_service,
             history_service,
+            services.scene_transform_controller,
         )
     ]
     assert build_tool_services_calls == [

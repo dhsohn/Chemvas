@@ -411,6 +411,7 @@ class HistoryCommandTest(unittest.TestCase):
         self.assertIn(("apply_atom_color", 4, "#ff0000"), canvas.calls)
         self.assertIn(("apply_scene_item_state", "item", {"x": 1}), canvas.calls)
         self.assertIn(("apply_scene_item_state", "item", {"x": 2}), canvas.calls)
+        self.assertEqual(canvas.calls.count(("refresh_selection_outline",)), 2)
 
     def test_atom_commands_restore_and_remove_atoms_and_marks(self) -> None:
         canvas = _FakeCanvas()
@@ -590,6 +591,7 @@ class HistoryCommandTest(unittest.TestCase):
         self.assertIn(("controller_restore_scene_item", delete_item), canvas.calls)
         self.assertIn(("controller_apply_scene_item_state", "item", {"x": 1}), canvas.calls)
         self.assertIn(("controller_apply_scene_item_state", "item", {"x": 2}), canvas.calls)
+        self.assertEqual(canvas.calls.count(("refresh_selection_outline",)), 2)
         self.assertIn(("controller_restore_mark_from_state", {"kind": "plus"}), canvas.calls)
         self.assertNotIn(("create_scene_item_from_state", {"kind": "note"}), canvas.calls)
         self.assertNotIn(("apply_scene_item_state", "item", {"x": 1}), canvas.calls)

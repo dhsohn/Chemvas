@@ -39,6 +39,10 @@ def _point_tuples(points) -> list[tuple[float, float]]:
     return [(point.x(), point.y()) for point in points]
 
 
+def _points(count: int, *, start: float = 1.0) -> list[tuple[float, float]]:
+    return [(start + 2.0 * index, start + 2.0 * index + 1.0) for index in range(count)]
+
+
 class _FakeRect:
     def __init__(self, center: QPointF) -> None:
         self._center = center
@@ -905,7 +909,7 @@ class InsertControllerTest(unittest.TestCase):
         request = TemplateInsertRequest(ring_size=5, cursor_pos=(12.0, 18.0), ring_style="regular")
         plan = plan_template_commit(request)
         assert plan is not None
-        resolution = TemplateInsertResolution(plan=plan, points=[(1.0, 2.0), (3.0, 4.0), (5.0, 6.0)])
+        resolution = TemplateInsertResolution(plan=plan, points=_points(5))
 
         with patch.object(controller, "template_insert_request", return_value=request), patch(
             "ui.template_geometry_resolver_service.resolve_template_insert",
@@ -916,7 +920,7 @@ class InsertControllerTest(unittest.TestCase):
         canvas.services.structure_build_service.add_ring_from_points.assert_called_once()
         self.assertEqual(
             _point_tuples(canvas.services.structure_build_service.add_ring_from_points.call_args.args[0]),
-            [(1.0, 2.0), (3.0, 4.0), (5.0, 6.0)],
+            _points(5),
         )
         canvas.add_benzene_ring.assert_not_called()
         canvas.services.structure_build_service.add_atom_with_merge.assert_not_called()
@@ -993,7 +997,7 @@ class InsertControllerTest(unittest.TestCase):
         canvas.insert_state.template_ring_style = "chair"
         set_last_smiles_input_for(canvas, "before")
 
-        atom_ids = iter([10, 11, 12])
+        atom_ids = iter([10, 11, 12, 13, 14, 15])
 
         def add_atom_with_merge(point: QPointF, element: str, merge: list) -> int:
             atom_id = next(atom_ids)
@@ -1008,7 +1012,7 @@ class InsertControllerTest(unittest.TestCase):
         request = TemplateInsertRequest(ring_size=6, cursor_pos=(20.0, 30.0), bond_id=0, ring_style="chair")
         plan = plan_template_commit(request)
         assert plan is not None
-        resolution = TemplateInsertResolution(plan=plan, points=[(9.0, 8.0), (7.0, 6.0), (5.0, 4.0)])
+        resolution = TemplateInsertResolution(plan=plan, points=_points(6, start=5.0))
 
         with patch.object(controller, "template_insert_request", return_value=request), patch(
             "ui.template_geometry_resolver_service.resolve_template_insert",
@@ -1017,21 +1021,24 @@ class InsertControllerTest(unittest.TestCase):
             controller.commit_template_insert(QPointF(*request.cursor_pos))
 
         expected_merge = [(1, 1.0, 2.0), (2, 3.0, 4.0)]
-        self.assertEqual(canvas.services.structure_build_service.add_atom_with_merge.call_count, 3)
+        self.assertEqual(canvas.services.structure_build_service.add_atom_with_merge.call_count, 6)
         self.assertEqual(
             [
                 _point_tuples([call.args[0]])[0]
                 for call in canvas.services.structure_build_service.add_atom_with_merge.call_args_list
             ],
-            [(9.0, 8.0), (7.0, 6.0), (5.0, 4.0)],
+            _points(6, start=5.0),
         )
         for call in canvas.services.structure_build_service.add_atom_with_merge.call_args_list:
             self.assertEqual(call.args[1], "C")
             self.assertEqual(call.args[2], expected_merge)
-        self.assertEqual(canvas.add_bond_calls, [(11, 12, 1), (12, 10, 1)])
+        self.assertEqual(
+            canvas.add_bond_calls,
+            [(11, 12, 1), (12, 13, 1), (13, 14, 1), (14, 15, 1), (15, 10, 1)],
+        )
         self.assertEqual(
             [call.args[0] for call in canvas._add_bond_graphics.call_args_list],
-            [1, 2],
+            [1, 2, 3, 4, 5],
         )
         canvas.services.structure_build_service.add_ring_from_points.assert_not_called()
         self.assertTrue(canvas.insert_state.template_active)
@@ -1053,7 +1060,7 @@ class InsertControllerTest(unittest.TestCase):
         canvas.insert_state.template_ring_style = "regular"
         set_last_smiles_input_for(canvas, "before")
 
-        atom_ids = iter([10, 11])
+        atom_ids = iter([10, 11, 12, 13])
 
         def add_atom_with_merge(point: QPointF, element: str, merge: list) -> int:
             if (point.x(), point.y()) == (1.0, 2.0):
@@ -1073,7 +1080,10 @@ class InsertControllerTest(unittest.TestCase):
         )
         plan = plan_template_commit(request)
         assert plan is not None
-        resolution = TemplateInsertResolution(plan=plan, points=[(1.0, 2.0), (7.0, 6.0), (5.0, 4.0)])
+        resolution = TemplateInsertResolution(
+            plan=plan,
+            points=[(1.0, 2.0), (7.0, 6.0), (5.0, 4.0), (9.0, 8.0), (11.0, 10.0)],
+        )
 
         with patch.object(controller, "template_insert_request", return_value=request), patch(
             "ui.template_geometry_resolver_service.resolve_template_insert",
@@ -1082,12 +1092,15 @@ class InsertControllerTest(unittest.TestCase):
             controller.commit_template_insert(QPointF(*request.cursor_pos))
 
         expected_merge = [(1, 1.0, 2.0)]
-        self.assertEqual(canvas.services.structure_build_service.add_atom_with_merge.call_count, 3)
+        self.assertEqual(canvas.services.structure_build_service.add_atom_with_merge.call_count, 5)
         for call in canvas.services.structure_build_service.add_atom_with_merge.call_args_list:
             self.assertEqual(call.args[1], "C")
             self.assertEqual(call.args[2], expected_merge)
-        self.assertEqual(canvas.add_bond_calls, [(1, 10, 1), (10, 11, 1), (11, 1, 1)])
-        self.assertEqual([call.args[0] for call in canvas._add_bond_graphics.call_args_list], [0, 1, 2])
+        self.assertEqual(
+            canvas.add_bond_calls,
+            [(1, 10, 1), (10, 11, 1), (11, 12, 1), (12, 13, 1), (13, 1, 1)],
+        )
+        self.assertEqual([call.args[0] for call in canvas._add_bond_graphics.call_args_list], [0, 1, 2, 3, 4])
         canvas._record_additions.assert_called_once_with(
             before_next_atom_id=2,
             before_bond_count=0,

@@ -29,6 +29,10 @@ from ui.template_insert_logic import (
 )
 
 
+def _points(count: int, *, start: float = 1.0) -> list[tuple[float, float]]:
+    return [(start + 2.0 * index, start + 2.0 * index + 1.0) for index in range(count)]
+
+
 class _FakeCanvas:
     def __init__(self) -> None:
         self.model = MoleculeModel()
@@ -335,7 +339,7 @@ class InsertCommitServiceTest(unittest.TestCase):
             bond_id=None,
             radius_mode="regular_polygon",
         )
-        free_resolution = TemplateInsertResolution(plan=free_plan, points=[(1.0, 2.0), (3.0, 4.0)])
+        free_resolution = TemplateInsertResolution(plan=free_plan, points=_points(6))
 
         applied = apply_template_commit_resolution(
             free_canvas,
@@ -347,8 +351,11 @@ class InsertCommitServiceTest(unittest.TestCase):
         )
 
         self.assertTrue(applied)
-        self.assertEqual(free_canvas.add_atom_calls, [("C", 1.0, 2.0), ("C", 3.0, 4.0)])
-        self.assertEqual(free_canvas.add_bond_calls, [(0, 1, 1)])
+        self.assertEqual(free_canvas.add_atom_calls, [("C", x, y) for x, y in _points(6)])
+        self.assertEqual(
+            free_canvas.add_bond_calls,
+            [(0, 1, 1), (1, 2, 1), (2, 3, 1), (3, 4, 1), (4, 5, 1), (5, 0, 1)],
+        )
         self.assertEqual(free_canvas.record_calls[0]["before_smiles_input"], "before-free")
         self.assertIsNone(last_smiles_input_for(free_canvas))
 
@@ -369,7 +376,7 @@ class InsertCommitServiceTest(unittest.TestCase):
         )
         bond_resolution = TemplateInsertResolution(
             plan=bond_plan,
-            points=[(11.0, 12.0), (13.0, 14.0), (15.0, 16.0)],
+            points=_points(6, start=11.0),
         )
 
         applied = apply_template_commit_resolution(
@@ -383,6 +390,32 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertTrue(applied)
         self.assertEqual(bond_canvas.ring_calls[-1][:2], [(0, 0.0, 0.0), (1, 10.0, 0.0)])
         self.assertEqual(bond_canvas.record_calls[0]["before_smiles_input"], "before-bond")
+
+    def test_apply_template_commit_resolution_rejects_degenerate_point_sets(self) -> None:
+        canvas = _FakeCanvas()
+        request = TemplateInsertRequest(ring_size=6, cursor_pos=(5.0, 6.0), ring_style="regular")
+        plan = TemplateInsertPlan(
+            generator="free_regular_ring",
+            ring_size=6,
+            ring_style="regular",
+            bond_id=None,
+            radius_mode="regular_polygon",
+        )
+        resolution = TemplateInsertResolution(plan=plan, points=[(1.0, 2.0), (3.0, 4.0)])
+
+        applied = apply_template_commit_resolution(
+            canvas,
+            request,
+            plan,
+            resolution,
+            before_smiles_input="before-free",
+        )
+
+        self.assertFalse(applied)
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertEqual(canvas.model.bonds, [])
+        self.assertEqual(canvas.record_calls, [])
+        self.assertEqual(last_smiles_input_for(canvas), "before")
 
     def test_apply_template_commit_resolution_uses_benzene_path_and_rejects_invalid_points(self) -> None:
         canvas = _FakeCanvas()
@@ -470,7 +503,7 @@ class InsertCommitServiceTest(unittest.TestCase):
             bond_id=4,
             template_shape="chair",
         )
-        resolution = TemplateInsertResolution(plan=plan, points=[(0.0, 0.0), (1.0, 1.0)])
+        resolution = TemplateInsertResolution(plan=plan, points=_points(6, start=0.0))
 
         with mock.patch("ui.insert_commit_service.apply_template_commit_resolution", return_value=True) as patched:
             applied = service.apply_template_commit(
@@ -574,7 +607,7 @@ class InsertCommitServiceTest(unittest.TestCase):
             bond_id=None,
             radius_mode="regular_polygon",
         )
-        resolution = TemplateInsertResolution(plan=plan, points=[(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)])
+        resolution = TemplateInsertResolution(plan=plan, points=_points(6))
 
         self.assertFalse(
             apply_template_commit_resolution(

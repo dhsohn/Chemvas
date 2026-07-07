@@ -118,6 +118,7 @@ def compose_canvas_services(
         graph_service=canvas_graph_service,
         hit_testing_service=selection_services.hit_testing_service,
         history_service=history_service,
+        scene_transform_controller=scene_operation_services.scene_transform_controller,
     )
     auxiliary_services = builders.build_canvas_auxiliary_services(
         canvas,

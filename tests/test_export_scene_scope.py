@@ -105,3 +105,25 @@ def test_exported_scene_keeps_export_item_descendants_visible() -> None:
 
     assert unrelated.isVisible()
     assert app is not None
+
+
+def test_exported_scene_excludes_transient_descendants() -> None:
+    app = QApplication.instance() or QApplication([])
+    scene = QGraphicsScene()
+    note = QGraphicsRectItem(0.0, 0.0, 10.0, 10.0)
+    note.setData(0, "note")
+    note_select = QGraphicsRectItem(-2.0, -2.0, 14.0, 14.0, note)
+    note_select.setData(0, "note_select")
+    child_content = QGraphicsRectItem(1.0, 1.0, 2.0, 2.0, note)
+    child_content.setData(0, "mark")
+    scene.addItem(note)
+
+    assert export_item_closure([note]) == [note, child_content]
+
+    with exported_scene(scene, [note]):
+        assert note.isVisible()
+        assert child_content.isVisible()
+        assert not note_select.isVisible()
+
+    assert note_select.isVisible()
+    assert app is not None
