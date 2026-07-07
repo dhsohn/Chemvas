@@ -7,6 +7,7 @@ import pytest
 from core.rdkit_adapter import RDKitAdapter
 from ui.structure_fragment_build_service import FRAGMENT_BUILD_FAILED
 from ui.structure_template_commands import (
+    SERVICE_TEMPLATE_METHODS,
     apply_structure_template_command,
     known_structure_template_keys,
 )
@@ -116,6 +117,16 @@ def test_structure_template_commands_record_real_catalog_builds_without_rollback
         assert sum(1 for bond in bonds if bond.order == 2) == double_bond_count, key
         assert len(canvas.record_calls) == 1, key
         assert canvas.record_calls[0]["added_scene_items"] == canvas.ring_items, key
+
+
+def test_structure_template_service_methods_self_record_history_once() -> None:
+    for key in SERVICE_TEMPLATE_METHODS:
+        canvas = _FakeCanvas()
+        service = _service_for(canvas)
+
+        apply_structure_template_command(service, key)
+
+        assert len(canvas.record_calls) == 1, key
 
 
 @pytest.mark.skipif(_RealChem is None, reason="RDKit is required for aromatic template identity tests")

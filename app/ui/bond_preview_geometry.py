@@ -11,26 +11,7 @@ from ui.bond_style_logic import DOUBLE_STYLE_DEFAULT, DOUBLE_STYLE_OUTER
 
 
 def expanded_bold_segment(start: QPointF, end: QPointF, bond_length_px: float) -> LineSegment:
-    bx1 = start.x()
-    by1 = start.y()
-    bx2 = end.x()
-    by2 = end.y()
-    dx = bx2 - bx1
-    dy = by2 - by1
-    length = math.hypot(dx, dy) or 1.0
-    pad = bond_length_px * 0.1
-    factor = pad / length
-    bx1 = bx1 - dx * factor
-    by1 = by1 - dy * factor
-    bx2 = bx2 + dx * factor
-    by2 = by2 + dy * factor
-    dx = bx2 - bx1
-    dy = by2 - by1
-    bx1 = bx1 + dx * 0.025
-    by1 = by1 + dy * 0.025
-    bx2 = bx2 - dx * 0.025
-    by2 = by2 - dy * 0.025
-    return bx1, by1, bx2, by2
+    return start.x(), start.y(), end.x(), end.y()
 
 
 def scale_segment_offset(segment: LineSegment, base: LineSegment, scale: float) -> LineSegment:

@@ -36,7 +36,9 @@ def create_document(state: dict[str, Any], version: int) -> ChemvasDocument:
             "Failed to save: the document state did not pass validation. "
             "This is a Chemvas bug — please report it."
         ) from exc
-    return ChemvasDocument(payload=payload, state=payload["state"])
+    normalized_payload = cast(dict[str, Any], normalize_json_numbers(payload))
+    normalized_state = cast(dict[str, Any], normalized_payload["state"])
+    return ChemvasDocument(payload=normalized_payload, state=normalized_state)
 
 
 def parse_document(payload: object) -> ChemvasDocument:

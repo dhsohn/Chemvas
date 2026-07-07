@@ -196,7 +196,7 @@ class DocumentStateTest(unittest.TestCase):
         self.assertIsNone(model.bonds[1])
         self.assertEqual(model.atom_annotations, {2: {"formal_charge": -1}})
 
-    def test_deserialize_model_state_uses_serialized_next_atom_id(self) -> None:
+    def test_deserialize_model_state_clamps_low_next_atom_id(self) -> None:
         model = deserialize_model_state(
             {
                 "atoms": {
@@ -208,10 +208,10 @@ class DocumentStateTest(unittest.TestCase):
             }
         )
 
-        self.assertEqual(model.next_atom_id, 4)
-        self.assertEqual(model.add_atom("N", 0.0, 0.0), 4)
+        self.assertEqual(model.next_atom_id, 8)
+        self.assertEqual(model.add_atom("N", 0.0, 0.0), 8)
         self.assertIn(7, model.atoms)
-        self.assertIn(4, model.atoms)
+        self.assertIn(8, model.atoms)
 
     def test_deserialize_model_state_requires_complete_model_payload(self) -> None:
         with self.assertRaises(KeyError):
