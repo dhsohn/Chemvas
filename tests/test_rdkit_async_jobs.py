@@ -335,14 +335,14 @@ class ExportXYZInThreadTest(unittest.TestCase):
                 normalized_export_target_path(aliased),
             )
 
-    def test_owner_delete_and_shutdown_survive_running_qthread_and_clean_registry(self) -> None:
+    def test_owner_delete_keeps_running_qthread_until_event_loop_cleans_registry(self) -> None:
         app_root = Path(__file__).resolve().parents[1] / "app"
         script = r'''
 import sys
 import time
 from pathlib import Path
 
-from PyQt6.QtCore import QCoreApplication, QEvent, QObject
+from PyQt6.QtCore import QCoreApplication, QObject, QTimer
 
 from ui.rdkit_async_jobs import export_xyz_in_thread
 from ui.rdkit_export_job_state import active_rdkit_export_jobs
@@ -368,11 +368,19 @@ export_xyz_in_thread(
     on_success=successes.append,
     on_error=errors.append,
 )
-app.processEvents()
-time.sleep(0.03)
-owner.deleteLater()
-QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
-app.aboutToQuit.emit()
+QTimer.singleShot(30, owner.deleteLater)
+
+
+def quit_after_cleanup():
+    if active_rdkit_export_jobs():
+        QTimer.singleShot(10, quit_after_cleanup)
+        return
+    app.quit()
+
+
+QTimer.singleShot(0, quit_after_cleanup)
+QTimer.singleShot(3000, lambda: app.exit(2))
+assert app.exec() == 0
 assert target.read_text(encoding="utf-8") == "0\ncompleted after owner close\n"
 assert successes == []
 assert errors == []

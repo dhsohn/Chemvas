@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 from core.document_io import atomic_write_text, atomic_write_via_temp
-from PyQt6.QtCore import QCoreApplication, QObject, QThread, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
 
 from ui.rdkit_export_job_state import (
     RDKitExportJob,
@@ -73,18 +73,9 @@ class XYZExportCoordinator(QObject):
     def __init__(self) -> None:
         super().__init__()
         self.registry = rdkit_export_job_registry()
-        self._application: QCoreApplication | None = None
-        self._shutting_down = False
         self.success_received.connect(self._handle_success)
         self.failure_received.connect(self._handle_failure)
         self.thread_finished_received.connect(self._handle_thread_finished)
-
-    def attach_to_application(self) -> None:
-        application = QCoreApplication.instance()
-        if application is None or application is self._application:
-            return
-        self._application = application
-        application.aboutToQuit.connect(self.shutdown)
 
     def _invoke_callback(self, job: RDKitExportJob, callback, value: str) -> None:
         if callback is None or not job.owner_state.callbacks_enabled:
@@ -146,36 +137,6 @@ class XYZExportCoordinator(QObject):
         if released is not None:
             _remove_staging_file(released.staging_path)
 
-    @pyqtSlot()
-    def shutdown(self) -> None:
-        if self._shutting_down:
-            return
-        self._shutting_down = True
-        jobs = list(self.registry.active_jobs())
-        for job in jobs:
-            self.registry.disable_owner_callbacks(job.owner_state)
-            thread = job.thread
-            if thread is not None and thread.isRunning():
-                thread.quit()
-        for job in jobs:
-            thread = job.thread
-            if thread is not None and thread.isRunning():
-                thread.wait()
-            job.thread_finished = True
-            if not job.result_handled:
-                result = getattr(job.worker, "result", None)
-                if result is not None:
-                    succeeded, value = result
-                    if succeeded:
-                        self._handle_success(job.job_id, value)
-                    else:
-                        self._handle_failure(job.job_id, value)
-                else:
-                    _remove_staging_file(job.staging_path)
-                    job.result_handled = True
-            self._release_if_complete(job)
-
-
 _EXPORT_COORDINATOR: XYZExportCoordinator | None = None
 
 
@@ -183,7 +144,6 @@ def xyz_export_coordinator() -> XYZExportCoordinator:
     global _EXPORT_COORDINATOR
     if _EXPORT_COORDINATOR is None:
         _EXPORT_COORDINATOR = XYZExportCoordinator()
-    _EXPORT_COORDINATOR.attach_to_application()
     return _EXPORT_COORDINATOR
 
 
