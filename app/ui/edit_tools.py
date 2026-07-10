@@ -26,8 +26,8 @@ class ColorTool(Tool):
         qcolor = color if isinstance(color, QColor) else QColor(color)
         self._last_color = qcolor.name() if qcolor.isValid() else str(color)
 
-    def _apply_color_to_item(self, item, color: QColor) -> None:
-        self.context.apply_color_to_item(item, color)
+    def _apply_color_to_items(self, items, color: QColor) -> None:
+        self.context.apply_color_to_items(items, color)
 
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
@@ -47,8 +47,7 @@ class ColorTool(Tool):
         color = QColor(self._last_color or atom_color_for(self.canvas))
         if not color.isValid():
             return True
-        for target in targets:
-            self._apply_color_to_item(target, color)
+        self._apply_color_to_items(targets, color)
         return True
 
 

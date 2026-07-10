@@ -72,8 +72,8 @@ class StructureBondBuildService:
                     self.committer.abort_recorded_change(snapshot)
                 return result
             return self._add_new_bond(snapshot, start_id, end_id, style, order)
-        except Exception:
-            self.committer.abort_recorded_change(snapshot)
+        except Exception as error:
+            self.committer.abort_recorded_change(snapshot, original_error=error)
             raise
 
     def _update_existing_bond(

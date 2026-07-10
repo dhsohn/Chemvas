@@ -19,10 +19,7 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from core.history import (
-        UpdateAtomColorCommand,
-        UpdateBondCommand,
-    )
+    from core.history import UpdateAtomColorCommand
     from core.model import Atom, Bond, MoleculeModel
     from ui.atom_coords_access import CanvasAtomCoords3DState, atom_coords_3d_for
     from ui.atom_label_access import (
@@ -43,7 +40,10 @@ if QApplication is not None:
     )
     from ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
     from ui.canvas_callback_state import CanvasCallbackState
-    from ui.canvas_color_mutation_service import CanvasColorMutationService
+    from ui.canvas_color_mutation_service import (
+        CanvasColorMutationService,
+        UpdateBondColorCommand,
+    )
     from ui.canvas_document_session_service import CanvasDocumentSessionService
     from ui.canvas_history_service import CanvasHistoryService
     from ui.canvas_history_state import CanvasHistoryState, history_state_for
@@ -1974,7 +1974,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         self.assertEqual(bond_view.model.bonds[0].color, "#ff0000")
         self.assertEqual(bond_item.pen().color().name(), "#ff0000")
-        self.assertIsInstance(bond_pushes.pop(), UpdateBondCommand)
+        self.assertIsInstance(bond_pushes.pop(), UpdateBondColorCommand)
 
         atom_item = QGraphicsTextItem("O")
         atom_item.setData(0, "atom")

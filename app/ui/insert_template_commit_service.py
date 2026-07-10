@@ -86,13 +86,14 @@ def apply_template_commit_resolution(
                 add_insert_bond_for(canvas, a_id, b_id)
             for new_bond_id in new_insert_bond_ids_from(canvas, bonds_start):
                 add_insert_bond_graphics_for(canvas, new_bond_id)
+            committer.add_ring_fill(points, atom_ids)
         else:
             set_last_smiles_input_for(canvas, after_smiles_input)
             add_insert_ring_from_points_for(canvas, points)
 
         committer.record_additions(snapshot)
-    except Exception:
-        committer.abort_recorded_change(snapshot)
+    except Exception as error:
+        committer.abort_recorded_change(snapshot, original_error=error)
         raise
     return True
 
@@ -126,13 +127,16 @@ def _apply_benzene_template_commit(
                 before_smiles_input=before_smiles_input,
             )
             return False
-    except Exception:
-        rollback_insert_mutation(
-            canvas,
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+    except Exception as error:
+        try:
+            rollback_insert_mutation(
+                canvas,
+                before_next_atom_id=before_next_atom_id,
+                before_bond_count=before_bond_count,
+                before_smiles_input=before_smiles_input,
+            )
+        except Exception as rollback_error:
+            error.add_note(f"Template rollback also failed: {rollback_error!r}")
         raise
     return True
 

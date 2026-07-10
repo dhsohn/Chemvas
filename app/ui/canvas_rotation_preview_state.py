@@ -19,6 +19,11 @@ class CanvasRotationPreviewState:
     position_snapshots: list[RotationPreviewItemSnapshot] = field(default_factory=list)
     center: object | None = None
 
+    def reset(self) -> None:
+        self.group = None
+        self.position_snapshots = []
+        self.center = None
+
 
 def rotation_preview_state_for(canvas) -> CanvasRotationPreviewState:
     return ensure_canvas_state(canvas, "rotation_preview_state", CanvasRotationPreviewState)

@@ -48,7 +48,13 @@ if QApplication is not None:
         wedge_polygon_for,
     )
     from ui.bond_renderer import bond_renderer_for
-    from ui.canvas_atom_graphics_state import set_atom_dots_for, set_atom_items_for
+    from ui.canvas_atom_graphics_state import (
+        atom_dots_for,
+        atom_items_for,
+        set_atom_dots_for,
+        set_atom_items_for,
+    )
+    from ui.canvas_bond_graphics_state import bond_items_for_id
     from ui.canvas_geometry_controller import CanvasGeometryController
     from ui.canvas_graph_service import CanvasGraphService
     from ui.canvas_graph_state import CanvasGraphState
@@ -56,6 +62,10 @@ if QApplication is not None:
     from ui.canvas_move_controller import CanvasMoveController
     from ui.canvas_rotation_state import CanvasRotationState
     from ui.canvas_scene_items_state import set_scene_item_collection_for
+    from ui.canvas_view import CanvasView
+    from ui.graphics_items import AtomLabelItem
+    from ui.history_commands import UpdateSceneItemCommand
+    from ui.renderer_style_access import bond_length_px_for
     from ui.selection_rotation_access import (
         apply_projected_atom_positions_for,
         atom_in_planar_system_for,
@@ -72,6 +82,7 @@ if QApplication is not None:
         rotation_scale_for_coords_for,
         unproject_scene_point_3d_for,
     )
+    from ui.structure_mutation_access import add_atom_for, add_bond_for
 
 
 class _FakeRingItem:
@@ -158,6 +169,338 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
 
+    def _real_bond_length_canvas(self):
+        canvas = CanvasView()
+
+        def close_canvas(target=canvas) -> None:
+            target.services.canvas_scene_reset_service.clear_scene()
+            target.close()
+
+        self.addCleanup(close_canvas)
+        label_atom_id = add_atom_for(canvas, "N", 0.0, 0.0)
+        dot_atom_id = add_atom_for(canvas, "C", 20.0, 0.0)
+        bond_id = add_bond_for(canvas, label_atom_id, dot_atom_id)
+        add_bond_graphics_for(canvas, bond_id)
+        return canvas, label_atom_id, dot_atom_id, bond_id
+
+    def test_bond_length_history_preserves_graphics_selection_and_prior_item_command(self) -> None:
+        canvas, label_atom_id, dot_atom_id, bond_id = self._real_bond_length_canvas()
+        label_item = atom_items_for(canvas)[label_atom_id]
+        dot_item = atom_dots_for(canvas)[dot_atom_id]
+        bond_item = bond_items_for_id(canvas, bond_id)[0]
+        original_ids = (id(label_item), id(dot_item), id(bond_item))
+        original_font_size = label_item.font().pointSizeF()
+        original_dot_hit_width = dot_item.boundingRect().width()
+        original_pen_width = bond_item.pen().widthF()
+        for item in (label_item, dot_item, bond_item):
+            item.setSelected(True)
+
+        prior_command = UpdateSceneItemCommand(
+            item=bond_item,
+            before_state={"opacity": 1.0},
+            after_state={"opacity": 0.4},
+        )
+        bond_item.setOpacity(0.4)
+        canvas.services.history_service.push(prior_command)
+
+        canvas.services.geometry_controller.set_bond_length(30.0)
+
+        self.assertEqual(
+            (
+                id(atom_items_for(canvas)[label_atom_id]),
+                id(atom_dots_for(canvas)[dot_atom_id]),
+                id(bond_items_for_id(canvas, bond_id)[0]),
+            ),
+            original_ids,
+        )
+        self.assertGreater(label_item.font().pointSizeF(), original_font_size)
+        self.assertGreater(dot_item.boundingRect().width(), original_dot_hit_width)
+        self.assertGreater(bond_item.pen().widthF(), original_pen_width)
+        self.assertTrue(all(item.isSelected() for item in (label_item, dot_item, bond_item)))
+
+        canvas.services.history_service.undo()
+
+        self.assertEqual(bond_length_px_for(canvas), 20.0)
+        self.assertEqual(
+            (
+                id(atom_items_for(canvas)[label_atom_id]),
+                id(atom_dots_for(canvas)[dot_atom_id]),
+                id(bond_items_for_id(canvas, bond_id)[0]),
+            ),
+            original_ids,
+        )
+        self.assertEqual(label_item.font().pointSizeF(), original_font_size)
+        self.assertEqual(dot_item.boundingRect().width(), original_dot_hit_width)
+        self.assertEqual(bond_item.pen().widthF(), original_pen_width)
+        self.assertTrue(all(item.isSelected() for item in (label_item, dot_item, bond_item)))
+
+        with mock.patch(
+            "ui.history_commands._apply_scene_item_state",
+            side_effect=lambda _canvas, item, state: item.setOpacity(state["opacity"]),
+        ):
+            canvas.services.history_service.undo()
+
+        self.assertIs(prior_command.item, bond_items_for_id(canvas, bond_id)[0])
+        self.assertEqual(bond_item.opacity(), 1.0)
+
+    def test_bond_length_command_fail_once_restores_metrics_identity_and_selection(self) -> None:
+        canvas, label_atom_id, dot_atom_id, bond_id = self._real_bond_length_canvas()
+        canvas.services.geometry_controller.set_bond_length(30.0)
+        canvas.services.history_service.clear()
+        label_item = atom_items_for(canvas)[label_atom_id]
+        dot_item = atom_dots_for(canvas)[dot_atom_id]
+        bond_item = bond_items_for_id(canvas, bond_id)[0]
+        for item in (label_item, dot_item, bond_item):
+            item.setSelected(True)
+        original_ids = (id(label_item), id(dot_item), id(bond_item))
+        original_metrics = (
+            label_item.font().pointSizeF(),
+            dot_item.boundingRect().width(),
+            bond_item.pen().widthF(),
+            bond_item.line(),
+        )
+        update_calls = 0
+        original_update = canvas.bond_renderer.update_bond_geometry
+
+        def fail_once_after_update(_canvas, target_bond_id: int) -> None:
+            nonlocal update_calls
+            original_update(target_bond_id)
+            update_calls += 1
+            if update_calls == 1:
+                raise RuntimeError("injected in-place refresh failure")
+
+        command = UpdateBondLengthCommand(before_length=20.0, after_length=30.0)
+        with mock.patch(
+            "ui.bond_length_graphics_refresh.update_bond_geometry_for",
+            side_effect=fail_once_after_update,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "in-place refresh failure"):
+                command.undo(canvas)
+
+        self.assertEqual(bond_length_px_for(canvas), 30.0)
+        self.assertEqual(
+            (
+                id(atom_items_for(canvas)[label_atom_id]),
+                id(atom_dots_for(canvas)[dot_atom_id]),
+                id(bond_items_for_id(canvas, bond_id)[0]),
+            ),
+            original_ids,
+        )
+        self.assertEqual(
+            (
+                label_item.font().pointSizeF(),
+                dot_item.boundingRect().width(),
+                bond_item.pen().widthF(),
+                bond_item.line(),
+            ),
+            original_metrics,
+        )
+        self.assertTrue(all(item.isSelected() for item in (label_item, dot_item, bond_item)))
+
+    def test_set_bond_length_fail_once_rolls_back_model_metrics_and_history(self) -> None:
+        canvas, label_atom_id, dot_atom_id, bond_id = self._real_bond_length_canvas()
+        label_item = atom_items_for(canvas)[label_atom_id]
+        dot_item = atom_dots_for(canvas)[dot_atom_id]
+        bond_item = bond_items_for_id(canvas, bond_id)[0]
+        for item in (label_item, dot_item, bond_item):
+            item.setSelected(True)
+        original_ids = (id(label_item), id(dot_item), id(bond_item))
+        original_positions = {
+            atom_id: (atom.x, atom.y) for atom_id, atom in canvas.model.atoms.items()
+        }
+        original_metrics = (
+            label_item.font().pointSizeF(),
+            dot_item.boundingRect().width(),
+            bond_item.pen().widthF(),
+            bond_item.line(),
+        )
+        update_calls = 0
+        original_update = canvas.bond_renderer.update_bond_geometry
+
+        def fail_once_after_update(_canvas, target_bond_id: int) -> None:
+            nonlocal update_calls
+            original_update(target_bond_id)
+            update_calls += 1
+            if update_calls == 1:
+                raise RuntimeError("injected initial refresh failure")
+
+        with mock.patch(
+            "ui.bond_length_graphics_refresh.update_bond_geometry_for",
+            side_effect=fail_once_after_update,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "initial refresh failure"):
+                canvas.services.geometry_controller.set_bond_length(30.0)
+
+        self.assertEqual(bond_length_px_for(canvas), 20.0)
+        self.assertEqual(
+            {atom_id: (atom.x, atom.y) for atom_id, atom in canvas.model.atoms.items()},
+            original_positions,
+        )
+        self.assertEqual(
+            (
+                id(atom_items_for(canvas)[label_atom_id]),
+                id(atom_dots_for(canvas)[dot_atom_id]),
+                id(bond_items_for_id(canvas, bond_id)[0]),
+            ),
+            original_ids,
+        )
+        self.assertEqual(
+            (
+                label_item.font().pointSizeF(),
+                dot_item.boundingRect().width(),
+                bond_item.pen().widthF(),
+                bond_item.line(),
+            ),
+            original_metrics,
+        )
+        self.assertTrue(all(item.isSelected() for item in (label_item, dot_item, bond_item)))
+        self.assertFalse(canvas.services.history_service.can_undo())
+
+    def test_set_bond_length_persistent_pre_update_failure_restores_raw_bond_geometry(self) -> None:
+        canvas, label_atom_id, dot_atom_id, bond_id = self._real_bond_length_canvas()
+        label_item = atom_items_for(canvas)[label_atom_id]
+        dot_item = atom_dots_for(canvas)[dot_atom_id]
+        bond_item = bond_items_for_id(canvas, bond_id)[0]
+        for item in (label_item, dot_item, bond_item):
+            item.setSelected(True)
+        original_style = canvas.renderer.style
+        original_positions = {
+            atom_id: (atom.x, atom.y) for atom_id, atom in canvas.model.atoms.items()
+        }
+        original_metrics = (
+            label_item.font(),
+            dot_item.rect(),
+            dot_item.boundingRect(),
+            bond_item.pen(),
+            bond_item.line(),
+        )
+
+        with mock.patch(
+            "ui.bond_length_graphics_refresh.update_bond_geometry_for",
+            side_effect=RuntimeError("persistent geometry callback failure"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "persistent geometry"):
+                canvas.services.geometry_controller.set_bond_length(30.0)
+
+        self.assertIs(canvas.renderer.style, original_style)
+        self.assertEqual(bond_length_px_for(canvas), 20.0)
+        self.assertEqual(
+            {atom_id: (atom.x, atom.y) for atom_id, atom in canvas.model.atoms.items()},
+            original_positions,
+        )
+        self.assertEqual(
+            (
+                label_item.font(),
+                dot_item.rect(),
+                dot_item.boundingRect(),
+                bond_item.pen(),
+                bond_item.line(),
+            ),
+            original_metrics,
+        )
+        self.assertIs(atom_items_for(canvas)[label_atom_id], label_item)
+        self.assertIs(atom_dots_for(canvas)[dot_atom_id], dot_item)
+        self.assertIs(bond_items_for_id(canvas, bond_id)[0], bond_item)
+        self.assertTrue(all(item.isSelected() for item in (label_item, dot_item, bond_item)))
+        self.assertFalse(canvas.services.history_service.can_undo())
+
+    def test_set_bond_length_persistent_label_setter_failure_restores_raw_atom_graphics(self) -> None:
+        canvas, label_atom_id, _dot_atom_id, _bond_id = self._real_bond_length_canvas()
+        label_item = atom_items_for(canvas)[label_atom_id]
+        label_item.setSelected(True)
+        original_font = label_item.font()
+        original_bounds = label_item.boundingRect()
+        original_shape_bounds = label_item.shape().boundingRect()
+        original_position = label_item.pos()
+        original_style = canvas.renderer.style
+        original_set_font = AtomLabelItem.setFont
+        calls = 0
+
+        def mutate_once_then_fail_persistently(item, font) -> None:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                original_set_font(item, font)
+            raise RuntimeError("persistent atom font callback failure")
+
+        with mock.patch.object(
+            AtomLabelItem,
+            "setFont",
+            new=mutate_once_then_fail_persistently,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "persistent atom font"):
+                canvas.services.geometry_controller.set_bond_length(30.0)
+
+        self.assertGreaterEqual(calls, 2)
+        self.assertIs(canvas.renderer.style, original_style)
+        self.assertEqual(bond_length_px_for(canvas), 20.0)
+        self.assertIs(atom_items_for(canvas)[label_atom_id], label_item)
+        self.assertEqual(label_item.font(), original_font)
+        self.assertEqual(label_item.boundingRect(), original_bounds)
+        self.assertEqual(label_item.shape().boundingRect(), original_shape_bounds)
+        self.assertEqual(label_item.pos(), original_position)
+        self.assertTrue(label_item.isSelected())
+        self.assertFalse(canvas.services.history_service.can_undo())
+
+    def test_set_bond_length_append_then_raise_restores_history_identity_and_style(self) -> None:
+        canvas, label_atom_id, dot_atom_id, bond_id = self._real_bond_length_canvas()
+        label_item = atom_items_for(canvas)[label_atom_id]
+        dot_item = atom_dots_for(canvas)[dot_atom_id]
+        bond_item = bond_items_for_id(canvas, bond_id)[0]
+        for item in (label_item, dot_item, bond_item):
+            item.setSelected(True)
+
+        history = canvas.services.history_service
+        state = history.state
+        prior_command = UpdateSceneItemCommand(
+            item=bond_item,
+            before_state={"opacity": 1.0},
+            after_state={"opacity": 0.5},
+        )
+        redo_command = UpdateSceneItemCommand(
+            item=label_item,
+            before_state={"opacity": 0.7},
+            after_state={"opacity": 1.0},
+        )
+        state.history.append(prior_command)
+        state.redo_stack.append(redo_command)
+        history_list = state.history
+        redo_list = state.redo_stack
+        renderer_style = canvas.renderer.style
+        original_positions = {
+            atom_id: (atom.x, atom.y) for atom_id, atom in canvas.model.atoms.items()
+        }
+        original_ids = (id(label_item), id(dot_item), id(bond_item))
+        original_push = history.push
+
+        def append_then_raise(command) -> None:
+            original_push(command)
+            raise RuntimeError("history push failed after append")
+
+        with mock.patch.object(history, "push", side_effect=append_then_raise):
+            with self.assertRaisesRegex(RuntimeError, "failed after append"):
+                canvas.services.geometry_controller.set_bond_length(30.0)
+
+        self.assertIs(canvas.renderer.style, renderer_style)
+        self.assertEqual(bond_length_px_for(canvas), 20.0)
+        self.assertEqual(
+            {atom_id: (atom.x, atom.y) for atom_id, atom in canvas.model.atoms.items()},
+            original_positions,
+        )
+        self.assertEqual(
+            (
+                id(atom_items_for(canvas)[label_atom_id]),
+                id(atom_dots_for(canvas)[dot_atom_id]),
+                id(bond_items_for_id(canvas, bond_id)[0]),
+            ),
+            original_ids,
+        )
+        self.assertTrue(all(item.isSelected() for item in (label_item, dot_item, bond_item)))
+        self.assertIs(state.history, history_list)
+        self.assertIs(state.redo_stack, redo_list)
+        self.assertEqual(state.history, [prior_command])
+        self.assertEqual(state.redo_stack, [redo_command])
+
     def test_set_bond_length_rescales_model_and_pushes_composite_command(self) -> None:
         ring_item = _FakeRingItem([(0.0, 0.0), (20.0, 0.0), (10.0, 10.0)])
         style = SimpleNamespace(bond_length_px=20.0)
@@ -207,7 +550,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertEqual(view.rotation_state.projection_anchor_2d, (10.0, 0.0))
         scaled_points = [(point.x(), point.y()) for point in ring_item.polygon()]
         self.assertEqual(scaled_points, [(-5.0, 0.0), (25.0, 0.0), (10.0, 15.0)])
-        structure_build_service.render_model.assert_called_once_with()
+        structure_build_service.render_model.assert_not_called()
         self.assertEqual(len(pushed), 1)
         command = pushed[0]
         self.assertIsInstance(command, CompositeCommand)

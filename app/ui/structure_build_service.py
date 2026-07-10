@@ -158,8 +158,8 @@ class StructureBuildService:
                 self.committer.abort_recorded_change(snapshot)
                 return []
             self.committer.record_additions(snapshot, added_scene_items=added_scene_items)
-        except Exception:
-            self.committer.abort_recorded_change(snapshot)
+        except Exception as error:
+            self.committer.abort_recorded_change(snapshot, original_error=error)
             raise
         return added_scene_items
 
@@ -189,8 +189,8 @@ class StructureBuildService:
                 self.committer.abort_recorded_change(snapshot)
                 return False
             self.committer.record_additions(snapshot)
-        except Exception:
-            self.committer.abort_recorded_change(snapshot)
+        except Exception as error:
+            self.committer.abort_recorded_change(snapshot, original_error=error)
             raise
         return True
 

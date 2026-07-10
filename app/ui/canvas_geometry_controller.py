@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import math
 
 from core.history import (
@@ -13,6 +14,7 @@ from PyQt6.QtGui import QFontMetricsF
 from PyQt6.QtWidgets import QGraphicsPolygonItem, QGraphicsTextItem
 
 from ui.atom_coords_access import atom_coords_3d_for, current_atom_coords_3d_for
+from ui.bond_length_graphics_refresh import refresh_bond_length_graphics_for
 from ui.canvas_atom_graphics_state import atom_items_for
 from ui.canvas_geometry_logic import (
     line_rect_clip_t as line_rect_clip_t_helper,
@@ -31,15 +33,23 @@ from ui.canvas_model_access import (
     atoms_for,
     bond_for_id,
     has_atoms_for,
-    rebuild_graphics_for,
     rescale_model_for,
 )
 from ui.canvas_rotation_state import rotation_state_for
 from ui.canvas_scene_items_state import ring_items_for
+from ui.history_canvas_access import (
+    capture_history_transaction_for_history,
+    restore_bond_length_for_history,
+    restore_history_transaction_for_history,
+    restore_projection_state_for_history,
+    set_atom_positions_for_history,
+    set_ring_polygons_for_history,
+)
 from ui.renderer_style_access import (
     atom_font_for,
     bond_length_px_for,
     bond_line_width_for,
+    renderer_for,
     set_bond_length_for,
 )
 
@@ -205,69 +215,170 @@ class CanvasGeometryController:
 
     def set_bond_length(self, length_px: float) -> None:
         old_length = bond_length_px_for(self.canvas)
+        if old_length <= 0 or not has_atoms_for(self.canvas):
+            set_bond_length_for(self.canvas, length_px)
+            return
+        scale = length_px / old_length
+        if scale == 1.0:
+            set_bond_length_for(self.canvas, length_px)
+            return
+        if self.hit_testing_service is None:
+            raise RuntimeError("CanvasGeometryController.set_bond_length requires hit_testing_service")
+        if self.history is None:
+            raise AttributeError("CanvasGeometryController requires an injected history_service")
+
         before_positions = {atom_id: (atom.x, atom.y) for atom_id, atom in atoms_for(self.canvas).items()}
         before_coords_3d = self._atom_coords_3d_for_positions(before_positions)
         rotation_state = rotation_state_for(self.canvas)
         before_projection_center_3d = rotation_state.projection_center_3d
         before_projection_anchor_2d = rotation_state.projection_anchor_2d
+        current_ring_items = list(ring_items_for(self.canvas))
         before_ring_polygons = [
             [(point.x(), point.y()) for point in ring_item.polygon()]
-            for ring_item in ring_items_for(self.canvas)
+            for ring_item in current_ring_items
         ]
-        set_bond_length_for(self.canvas, length_px)
-        if old_length <= 0 or not has_atoms_for(self.canvas):
-            return
-        scale = length_px / old_length
-        if scale == 1.0:
-            return
-        if self.hit_testing_service is None:
-            raise RuntimeError("CanvasGeometryController.set_bond_length requires hit_testing_service")
-        center_x, center_y = self._model_center()
-        rescale_model_for(self.canvas, scale)
-        self._rescale_perspective_state(scale, center_x, center_y)
-        self.hit_testing_service.mark_spatial_index_dirty()
-        rebuild_graphics_for(self.canvas)
-        after_positions = {atom_id: (atom.x, atom.y) for atom_id, atom in atoms_for(self.canvas).items()}
-        after_coords_3d = self._atom_coords_3d_for_positions(after_positions)
-        after_projection_center_3d = rotation_state.projection_center_3d
-        after_projection_anchor_2d = rotation_state.projection_anchor_2d
-        after_ring_polygons = [
-            [(point.x(), point.y()) for point in ring_item.polygon()]
-            for ring_item in ring_items_for(self.canvas)
-        ]
-        commands = [
-            UpdateBondLengthCommand(before_length=old_length, after_length=length_px),
-            SetAtomPositionsCommand(
-                before_positions=before_positions,
-                after_positions=after_positions,
-                before_coords_3d=before_coords_3d or None,
-                after_coords_3d=after_coords_3d or None,
-                restore_projection_state=bool(
-                    before_coords_3d
-                    or after_coords_3d
-                    or before_projection_center_3d is not None
-                    or after_projection_center_3d is not None
-                    or before_projection_anchor_2d is not None
-                    or after_projection_anchor_2d is not None
+        renderer = renderer_for(self.canvas)
+        before_renderer_style = renderer.style
+        transaction = capture_history_transaction_for_history(
+            self.canvas,
+            history_service=self.history,
+        )
+        try:
+            set_bond_length_for(self.canvas, length_px)
+            center_x, center_y = self._model_center()
+            rescale_model_for(self.canvas, scale)
+            self._rescale_perspective_state(scale, center_x, center_y)
+            self.hit_testing_service.mark_spatial_index_dirty()
+            refresh_bond_length_graphics_for(self.canvas)
+            after_positions = {
+                atom_id: (atom.x, atom.y) for atom_id, atom in atoms_for(self.canvas).items()
+            }
+            after_coords_3d = self._atom_coords_3d_for_positions(after_positions)
+            after_projection_center_3d = rotation_state.projection_center_3d
+            after_projection_anchor_2d = rotation_state.projection_anchor_2d
+            after_ring_polygons = [
+                [(point.x(), point.y()) for point in ring_item.polygon()]
+                for ring_item in current_ring_items
+            ]
+            commands = [
+                UpdateBondLengthCommand(before_length=old_length, after_length=length_px),
+                SetAtomPositionsCommand(
+                    before_positions=before_positions,
+                    after_positions=after_positions,
+                    before_coords_3d=before_coords_3d or None,
+                    after_coords_3d=after_coords_3d or None,
+                    restore_projection_state=bool(
+                        before_coords_3d
+                        or after_coords_3d
+                        or before_projection_center_3d is not None
+                        or after_projection_center_3d is not None
+                        or before_projection_anchor_2d is not None
+                        or after_projection_anchor_2d is not None
+                    ),
+                    before_projection_center_3d=before_projection_center_3d,
+                    after_projection_center_3d=after_projection_center_3d,
+                    before_projection_anchor_2d=before_projection_anchor_2d,
+                    after_projection_anchor_2d=after_projection_anchor_2d,
                 ),
-                before_projection_center_3d=before_projection_center_3d,
-                after_projection_center_3d=after_projection_center_3d,
-                before_projection_anchor_2d=before_projection_anchor_2d,
-                after_projection_anchor_2d=after_projection_anchor_2d,
-            ),
-        ]
-        ring_items = ring_items_for(self.canvas)
-        if ring_items:
-            commands.append(
-                SetRingPolygonsCommand(
-                    ring_items=list(ring_items),
-                    before_polygons=before_ring_polygons,
-                    after_polygons=after_ring_polygons,
+            ]
+            if current_ring_items:
+                commands.append(
+                    SetRingPolygonsCommand(
+                        ring_items=current_ring_items,
+                        before_polygons=before_ring_polygons,
+                        after_polygons=after_ring_polygons,
+                    )
                 )
+            self.history.push(CompositeCommand(commands))
+        except BaseException as exc:
+            self._restore_failed_bond_length_change(
+                old_length=old_length,
+                renderer=renderer,
+                renderer_style=before_renderer_style,
+                transaction=transaction,
+                original_error=exc,
+                positions=before_positions,
+                coords_3d=before_coords_3d,
+                projection_center_3d=before_projection_center_3d,
+                projection_anchor_2d=before_projection_anchor_2d,
+                ring_items=current_ring_items,
+                ring_polygons=before_ring_polygons,
             )
-        if self.history is None:
-            raise AttributeError("CanvasGeometryController requires an injected history_service")
-        self.history.push(CompositeCommand(commands))
+            raise
+
+    def _restore_failed_bond_length_change(
+        self,
+        *,
+        old_length: float,
+        renderer,
+        renderer_style,
+        transaction,
+        original_error: BaseException,
+        positions: dict[int, tuple[float, float]],
+        coords_3d: dict[int, tuple[float, float, float]],
+        projection_center_3d: tuple[float, float, float] | None,
+        projection_anchor_2d: tuple[float, float] | None,
+        ring_items: list,
+        ring_polygons: list[list[tuple[float, float]]],
+    ) -> None:
+        # Each compensation is independent so one persistently broken graphics
+        # item cannot prevent the model, projection, and remaining items from
+        # being restored as far as possible.
+        with contextlib.suppress(BaseException):
+            restore_projection_state_for_history(
+                self.canvas,
+                projection_center_3d,
+                projection_anchor_2d,
+            )
+        with contextlib.suppress(BaseException):
+            set_atom_positions_for_history(
+                self.canvas,
+                positions,
+                coords_3d=coords_3d or None,
+            )
+        with contextlib.suppress(BaseException):
+            set_ring_polygons_for_history(self.canvas, ring_items, ring_polygons)
+        with contextlib.suppress(BaseException):
+            restore_bond_length_for_history(self.canvas, old_length)
+        # Renderer.set_bond_length replaces the immutable style object. Restore
+        # the exact original object so external style references remain valid.
+        with contextlib.suppress(BaseException):
+            renderer.style = renderer_style
+        # The transaction snapshot preserves model containers, but Atom objects
+        # are mutable leaves. Restore their coordinates directly even when a
+        # persistently broken graphics callback interrupted the UI compensation.
+        for atom_id, (x, y) in positions.items():
+            atom = atom_for_id(self.canvas, atom_id)
+            if atom is None:
+                continue
+            atom.x = x
+            atom.y = y
+        with contextlib.suppress(BaseException):
+            restore_projection_state_for_history(
+                self.canvas,
+                projection_center_3d,
+                projection_anchor_2d,
+            )
+        with contextlib.suppress(BaseException):
+            set_ring_polygons_for_history(self.canvas, ring_items, ring_polygons)
+        with contextlib.suppress(BaseException):
+            refresh_bond_length_graphics_for(self.canvas)
+        with contextlib.suppress(BaseException):
+            self.hit_testing_service.mark_spatial_index_dirty()
+        # Apply the exact container/scene/history snapshot last. In particular,
+        # its canonical bond refresh now observes the directly restored Atom
+        # coordinates and original renderer style; a persistent failure in the
+        # higher-level refresh callback cannot re-corrupt the raw state after
+        # this authoritative restore.
+        try:
+            restore_history_transaction_for_history(self.canvas, transaction)
+        except BaseException as rollback_error:
+            add_note = getattr(original_error, "add_note", None)
+            if callable(add_note):
+                add_note(
+                    "Bond-length rollback also encountered "
+                    f"{type(rollback_error).__name__}: {rollback_error}"
+                )
 
     def _atom_coords_3d_for_positions(self, positions: dict[int, tuple[float, float]]) -> dict[int, tuple[float, float, float]]:
         stored_coords = atom_coords_3d_for(self.canvas)

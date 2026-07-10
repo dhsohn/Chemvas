@@ -3,11 +3,16 @@ from __future__ import annotations
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QPolygonF
 
-from ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for_id
+from ui.atom_coords_access import (
+    atom_coords_3d_for,
+    atom_coords_3d_for_id,
+    set_atom_coords_3d_for_id,
+)
 from ui.atom_label_access import atom_label_service
+from ui.bond_length_graphics_refresh import refresh_bond_length_graphics_for
 from ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
 from ui.canvas_mark_registry import mark_registry_for
-from ui.canvas_model_access import atom_for_id, rebuild_graphics_for
+from ui.canvas_model_access import atom_for_id
 from ui.canvas_rotation_state import rotation_state_for
 from ui.canvas_service_ports import (
     history_atom_mutation_service_for,
@@ -23,6 +28,28 @@ from ui.selection_rotation_access import update_ring_fills_for_atoms_for
 from ui.selection_service_access import refresh_selection_outline_for
 
 
+def capture_history_transaction_for_history(
+    canvas,
+    *,
+    history_service=None,
+):
+    # Lazy import keeps the core history port free of an eager dependency on
+    # the scene/history command graph (and therefore avoids an import cycle).
+    from ui.canvas_delete_transaction import CanvasDeleteTransactionSnapshot
+
+    return CanvasDeleteTransactionSnapshot.capture(
+        canvas,
+        history_service=history_service,
+    )
+
+
+def restore_history_transaction_for_history(canvas, snapshot) -> None:
+    del canvas
+    errors = snapshot.restore()
+    if errors:
+        raise BaseExceptionGroup("History transaction rollback failed", errors)
+
+
 def move_atoms_for_history(
     canvas,
     atom_ids: set[int],
@@ -33,15 +60,46 @@ def move_atoms_for_history(
     redraw_bond_ids: set[int] | None = None,
     update_selection: bool = True,
 ) -> None:
-    move_atoms_for(
-        canvas,
-        atom_ids,
-        dx,
-        dy,
-        bond_ids=bond_ids,
-        redraw_bond_ids=redraw_bond_ids,
-        update_selection=update_selection,
-    )
+    before_positions: dict[int, tuple[float, float]] = {}
+    before_coords_3d: dict[int, tuple[float, float, float]] = {}
+    for atom_id in atom_ids:
+        atom = atom_for_id(canvas, atom_id)
+        if atom is None:
+            continue
+        before_positions[atom_id] = (atom.x, atom.y)
+        coords_3d = atom_coords_3d_for_id(canvas, atom_id)
+        if coords_3d is not None:
+            before_coords_3d[atom_id] = coords_3d
+    try:
+        move_atoms_for(
+            canvas,
+            atom_ids,
+            dx,
+            dy,
+            bond_ids=bond_ids,
+            redraw_bond_ids=redraw_bond_ids,
+            update_selection=update_selection,
+        )
+    except BaseException as original_error:
+        # The move controller mutates atoms one at a time before redrawing
+        # dependent graphics. Restore absolute positions instead of applying
+        # the inverse delta to every requested atom: some atoms may not have
+        # been reached when the original call failed.
+        try:
+            set_atom_positions_for_history(
+                canvas,
+                before_positions,
+                update_selection=update_selection,
+                coords_3d=before_coords_3d or None,
+            )
+        except BaseException as rollback_error:
+            add_note = getattr(original_error, "add_note", None)
+            if callable(add_note):
+                add_note(
+                    "Move rollback also encountered "
+                    f"{type(rollback_error).__name__}: {rollback_error}"
+                )
+        raise
 
 
 def restore_projection_state_for_history(
@@ -100,7 +158,12 @@ def set_atom_positions_for_history(
             set_atom_coords_3d_for_id(canvas, atom_id, coord)
             atom_ids.add(atom_id)
     if atom_ids:
-        move_service_from_canvas(canvas).redraw_bonds_for_atoms(atom_ids)
+        move_service = move_service_from_canvas(canvas)
+        update_geometries = getattr(move_service, "update_bond_geometries_for_atoms", None)
+        if callable(update_geometries):
+            update_geometries(atom_ids)
+        else:
+            move_service.redraw_bonds_for_atoms(atom_ids)
         update_ring_fills_for_atoms_for(canvas, atom_ids)
     history_hit_testing_service_for(canvas).mark_spatial_index_dirty()
     if update_selection:
@@ -125,7 +188,7 @@ def set_last_smiles_input_for_history(canvas, value: str | None) -> None:
 
 def restore_bond_length_for_history(canvas, length_px: float) -> None:
     set_bond_length_for(canvas, length_px)
-    rebuild_graphics_for(canvas)
+    refresh_bond_length_graphics_for(canvas)
     history_hit_testing_service_for(canvas).mark_spatial_index_dirty()
 
 
@@ -162,12 +225,14 @@ def trim_bonds_for_history(canvas, length: int) -> None:
 
 __all__ = [
     "apply_atom_color_for_history",
+    "capture_history_transaction_for_history",
     "move_atoms_for_history",
     "remove_atom_for_history",
     "remove_bond_for_history",
     "restore_atom_from_state_for_history",
     "restore_bond_from_state_for_history",
     "restore_bond_length_for_history",
+    "restore_history_transaction_for_history",
     "restore_mark_from_state_for_history",
     "restore_projection_state_for_history",
     "set_atom_positions_for_history",

@@ -260,11 +260,15 @@ class _MiscCanvas:
         self.scene_obj = _Scene()
         self.item = None
         self.colored = []
+        self.color_batches = []
         self.flipped = []
         self.cycled = []
         self.bond_id = None
         self.services = SimpleNamespace(
-            canvas_color_mutation_service=SimpleNamespace(apply_color_to_item=self.apply_color_to_item),
+            canvas_color_mutation_service=SimpleNamespace(
+                apply_color_to_item=self.apply_color_to_item,
+                apply_color_to_items=self.apply_color_to_items,
+            ),
             scene_transform_controller=SimpleNamespace(
                 flip_bond_direction=self.flip_bond_direction,
                 cycle_bond_style=self.cycle_bond_style,
@@ -286,6 +290,12 @@ class _MiscCanvas:
 
     def apply_color_to_item(self, item, color) -> None:
         self.colored.append((item, color.name()))
+
+    def apply_color_to_items(self, items, color) -> None:
+        items = list(items)
+        self.color_batches.append((items, color.name()))
+        for item in items:
+            self.apply_color_to_item(item, color)
 
     def flip_bond_direction(self, bond_id: int) -> None:
         self.flipped.append(bond_id)
@@ -852,9 +862,12 @@ class ToolsAdditionalTest(unittest.TestCase):
         color_tool.activate()
         self.assertTrue(color_tool.on_mouse_press(_Event(QPointF())))
         self.assertEqual(misc_canvas.colored[-1][0], target)
+        self.assertEqual(misc_canvas.color_batches[-1][0], [target])
         misc_canvas.item = None
         self.assertTrue(color_tool.on_mouse_press(_Event(QPointF())))
         self.assertEqual(len(misc_canvas.colored), 3)
+        self.assertEqual(len(misc_canvas.color_batches), 2)
+        self.assertEqual(len(misc_canvas.color_batches[-1][0]), 2)
 
         flip_tool.activate()
         misc_canvas.item = _DataItem("bond", 9)

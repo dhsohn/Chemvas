@@ -31,45 +31,49 @@ def delete_atom_with_history(
     remove_atom_only: Callable[[int], None],
     atom_coords_3d_getter: Callable[[int], tuple[float, float, float] | None] | None = None,
 ) -> HistoryCommand:
-    bonds_to_remove = [
-        bond_id
+    bond_snapshots = [
+        (bond_id, bond.a, bond.b, bond_state_getter(bond))
         for bond_id, bond in enumerate(bonds)
         if bond is not None and (bond.a == atom_id or bond.b == atom_id)
     ]
-    clear_smiles_input()
     mark_states = [mark_state_getter(mark) for mark in marks_by_atom.get(atom_id, [])]
     atom_state = atom_state_getter(atom_id)
     coords_3d = atom_coords_3d_getter(atom_id) if atom_coords_3d_getter is not None else None
-    commands: list[HistoryCommand] = []
-    for bond_id in sorted(bonds_to_remove, reverse=True):
-        bond = bonds[bond_id]
-        if bond is None:
-            continue
-        bond_state = bond_state_getter(bond)
-        remove_bond_by_id(bond_id)
-        redraw_connected_bonds(bond.a)
-        redraw_connected_bonds(bond.b)
-        commands.append(
-            DeleteBondCommand(
-                bond_id=bond_id,
-                bond_state=bond_state,
-                before_smiles_input=before_smiles_input,
-                after_smiles_input=current_smiles_input_getter(),
-            )
-        )
     before_next_atom_id = next_atom_id_getter()
-    remove_atom_only(atom_id)
-    commands.append(
-        DeleteAtomsCommand(
-            atom_states={atom_id: atom_state},
-            mark_states=mark_states,
-            before_next_atom_id=before_next_atom_id,
-            after_next_atom_id=next_atom_id_getter(),
+
+    clear_smiles_input()
+    after_smiles_input = current_smiles_input_getter()
+    commands: list[HistoryCommand] = []
+    for bond_id, atom_a, atom_b, bond_state in sorted(
+        bond_snapshots,
+        key=lambda snapshot: snapshot[0],
+        reverse=True,
+    ):
+        bond_command = DeleteBondCommand(
+            bond_id=bond_id,
+            bond_state=bond_state,
             before_smiles_input=before_smiles_input,
-            after_smiles_input=current_smiles_input_getter(),
-            atom_coords_3d={atom_id: coords_3d} if coords_3d is not None else None,
+            after_smiles_input=after_smiles_input,
         )
+        remove_bond_by_id(bond_id)
+        redraw_connected_bonds(atom_a)
+        redraw_connected_bonds(atom_b)
+        bond_command.after_smiles_input = current_smiles_input_getter()
+        commands.append(bond_command)
+
+    atom_command = DeleteAtomsCommand(
+        atom_states={atom_id: atom_state},
+        mark_states=mark_states,
+        before_next_atom_id=before_next_atom_id,
+        after_next_atom_id=before_next_atom_id,
+        before_smiles_input=before_smiles_input,
+        after_smiles_input=after_smiles_input,
+        atom_coords_3d={atom_id: coords_3d} if coords_3d is not None else None,
     )
+    remove_atom_only(atom_id)
+    atom_command.after_next_atom_id = next_atom_id_getter()
+    atom_command.after_smiles_input = current_smiles_input_getter()
+    commands.append(atom_command)
     return commands[0] if len(commands) == 1 else CompositeCommand(commands)
 
 
@@ -90,16 +94,20 @@ def delete_bond_with_history(
     if bond is None:
         return None
     bond_state = bond_state_getter(bond)
+    atom_a = bond.a
+    atom_b = bond.b
     clear_smiles_input()
-    remove_bond_by_id(bond_id)
-    redraw_connected_bonds(bond.a)
-    redraw_connected_bonds(bond.b)
-    return DeleteBondCommand(
+    command = DeleteBondCommand(
         bond_id=bond_id,
         bond_state=bond_state,
         before_smiles_input=before_smiles_input,
         after_smiles_input=current_smiles_input_getter(),
     )
+    remove_bond_by_id(bond_id)
+    redraw_connected_bonds(atom_a)
+    redraw_connected_bonds(atom_b)
+    command.after_smiles_input = current_smiles_input_getter()
+    return command
 
 
 def delete_ring_with_history(
@@ -109,8 +117,9 @@ def delete_ring_with_history(
     remove_scene_item: Callable[[object], None],
 ) -> DeleteSceneItemsCommand:
     state = ring_state_getter(item)
+    command = DeleteSceneItemsCommand(item_states=[state], items=[item])
     remove_scene_item(item)
-    return DeleteSceneItemsCommand(item_states=[state], items=[item])
+    return command
 
 
 def flip_bond_direction_with_history(

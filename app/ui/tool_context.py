@@ -153,6 +153,9 @@ class ToolContext:
     def apply_color_to_item(self, item, color) -> None:
         self._call_port(self.color_mutation_service, "apply_color_to_item", item, color)
 
+    def apply_color_to_items(self, items, color) -> None:
+        self._call_port(self.color_mutation_service, "apply_color_to_items", items, color)
+
     def selected_scene_items(self, *, excluded_kinds: set[str]) -> list:
         if callable(self._selected_scene_items):
             return list(self._selected_scene_items(excluded_kinds=excluded_kinds))

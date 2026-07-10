@@ -1,6 +1,8 @@
+import copy
 import math
 import unittest
 from types import SimpleNamespace
+from unittest import mock
 
 from core.history import SetAtomPositionsCommand
 from core.model import Atom, Bond, MoleculeModel
@@ -703,6 +705,130 @@ class SelectionRotationControllerTest(unittest.TestCase):
         self.assertIsNone(canvas.rotation_state.start_projection_center_3d)
         self.assertIsNone(canvas.rotation_state.start_projection_anchor_2d)
         self.assertEqual(canvas.rotation_state.coord_atom_ids, set())
+
+    def _assert_end_rotation_failure_retry(self, failure_stage: str) -> None:
+        canvas = _FakeCanvas()
+        controller = _controller_for(canvas)
+        canvas.rotation_state.atom_ids = {0, 2}
+        canvas.rotation_state.selection_ids = ({0, 2}, {1})
+        canvas.rotation_state.base_coords = {0: (0.0, 0.0, 0.0)}
+        canvas.rotation_state.mode = "rigid"
+        canvas.rotation_state.start_positions = {
+            0: (0.0, 0.0),
+            2: (20.0, 5.0),
+        }
+        canvas.rotation_state.start_coords_3d = {
+            0: (0.0, 0.0, 0.0),
+            2: (20.0, 5.0, 3.0),
+        }
+        canvas.rotation_state.coord_atom_ids = {0, 2}
+        canvas.model.atoms[0].x = 1.0
+        canvas.model.atoms[2].x = 22.0
+        canvas.atom_coords_3d[0] = (1.0, 0.0, 1.0)
+        canvas.atom_coords_3d[2] = (22.0, 5.0, 4.0)
+        rotation_before = copy.deepcopy(canvas.rotation_state)
+
+        redo_marker = object()
+        history_state = SimpleNamespace(
+            history=canvas.pushed_commands,
+            redo_stack=[redo_marker],
+        )
+        history_list = history_state.history
+        redo_list = history_state.redo_stack
+        attempts = {"history": 0, "selection": 0, "selection_info": 0}
+
+        def push(command) -> None:
+            attempts["history"] += 1
+            history_state.history.append(command)
+            history_state.redo_stack.clear()
+            if failure_stage == "history" and attempts["history"] == 1:
+                raise RuntimeError("injected history failure")
+
+        history_service = SimpleNamespace(state=history_state, push=push)
+        controller.history = history_service
+
+        real_restore_selection = controller.restore_selection_from_ids
+
+        def restore_selection(atom_ids, bond_ids) -> None:
+            attempts["selection"] += 1
+            real_restore_selection(atom_ids, bond_ids)
+            if failure_stage == "selection" and attempts["selection"] == 1:
+                raise RuntimeError("injected selection failure")
+
+        controller.restore_selection_from_ids = restore_selection
+        real_emit_selection_info = controller.emit_selection_info
+
+        def emit_selection_info() -> None:
+            attempts["selection_info"] += 1
+            real_emit_selection_info()
+            if failure_stage == "selection_info" and attempts["selection_info"] == 1:
+                raise RuntimeError("injected selection-info failure")
+
+        controller.emit_selection_info = emit_selection_info
+
+        with self.assertRaisesRegex(RuntimeError, "injected"):
+            controller.end_selection_3d_rotation()
+
+        self.assertEqual(canvas.rotation_state, rotation_before)
+        self.assertIs(history_state.history, history_list)
+        self.assertIs(history_state.redo_stack, redo_list)
+        self.assertEqual(history_state.history, [])
+        self.assertEqual(history_state.redo_stack, [redo_marker])
+
+        controller.end_selection_3d_rotation()
+
+        self.assertEqual(len(history_state.history), 1)
+        self.assertIsInstance(history_state.history[0], SetAtomPositionsCommand)
+        self.assertEqual(history_state.redo_stack, [])
+        self.assertEqual(canvas.rotation_state.atom_ids, set())
+        self.assertIsNone(canvas.rotation_state.selection_ids)
+
+    def test_end_rotation_failure_keeps_session_and_retry_records_exactly_one_command(self) -> None:
+        for failure_stage in ("history", "selection", "selection_info"):
+            with self.subTest(failure_stage=failure_stage):
+                self._assert_end_rotation_failure_retry(failure_stage)
+
+    def test_end_rotation_preserves_original_error_when_runtime_rollback_also_fails(self) -> None:
+        canvas = _FakeCanvas()
+        controller = _controller_for(canvas)
+        canvas.rotation_state.atom_ids = {2}
+        canvas.rotation_state.selection_ids = ({2}, set())
+        canvas.rotation_state.start_positions = {2: (20.0, 5.0)}
+        canvas.rotation_state.start_coords_3d = {2: (20.0, 5.0, 3.0)}
+        canvas.rotation_state.coord_atom_ids = {2}
+        canvas.model.atoms[2].x = 22.0
+        canvas.atom_coords_3d[2] = (22.0, 5.0, 4.0)
+        rotation_before = copy.deepcopy(canvas.rotation_state)
+        history_error = RuntimeError("original history failure")
+        history_state = SimpleNamespace(history=[], redo_stack=["redo"])
+        history_list = history_state.history
+        redo_list = history_state.redo_stack
+
+        def append_then_raise(command) -> None:
+            history_state.history.append(command)
+            history_state.redo_stack.clear()
+            raise history_error
+
+        controller.history = SimpleNamespace(state=history_state, push=append_then_raise)
+
+        with (
+            mock.patch(
+                "ui.selection_rotation_controller._restore_scene_runtime_snapshot",
+                side_effect=RuntimeError("scene rollback failure"),
+            ),
+            self.assertRaises(RuntimeError) as raised,
+        ):
+            controller.end_selection_3d_rotation()
+
+        self.assertIs(raised.exception, history_error)
+        self.assertEqual(canvas.rotation_state, rotation_before)
+        self.assertIs(history_state.history, history_list)
+        self.assertIs(history_state.redo_stack, redo_list)
+        self.assertEqual(history_state.history, [])
+        self.assertEqual(history_state.redo_stack, ["redo"])
+        self.assertTrue(
+            any("scene rollback failure" in note for note in history_error.__notes__)
+        )
 
     def test_end_selection_3d_rotation_without_changes_skips_command_and_emits_selection(self) -> None:
         canvas = _FakeCanvas()

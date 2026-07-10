@@ -21,7 +21,12 @@ from ui.canvas_smiles_input_state import (
 from ui.graph_algorithms import find_rings
 from ui.graph_index_operations import first_matching_bond_id
 from ui.renderer_style_access import bond_length_px_for
-from ui.scene_item_access import attach_scene_item, remove_scene_item
+from ui.scene_item_access import (
+    attach_scene_item,
+    refresh_bond_geometry_for_ring_item,
+    remove_item_from_canvas_scene,
+    remove_scene_item,
+)
 from ui.structure_insert_access import (
     add_insert_atom_for,
     add_insert_bond_for,
@@ -84,14 +89,49 @@ class StructureBuildCommitter:
             kwargs["added_scene_items"] = merged_scene_items
         record_insert_additions_for(self.canvas, **kwargs)
 
-    def abort_recorded_change(self, snapshot: StructureBuildHistorySnapshot) -> None:
-        self._remove_new_scene_items(snapshot)
-        rollback_insert_mutation_for(
-            self.canvas,
-            before_next_atom_id=snapshot.before_next_atom_id,
-            before_bond_count=snapshot.before_bond_count,
-        )
-        set_last_smiles_input_for(self.canvas, snapshot.before_smiles_input)
+    def abort_recorded_change(
+        self,
+        snapshot: StructureBuildHistorySnapshot,
+        *,
+        original_error: BaseException | None = None,
+    ) -> None:
+        """Best-effort rollback for a recorded build.
+
+        Scene cleanup, model rollback, and SMILES restoration are independent
+        phases. A failure in one phase must not prevent the later phases from
+        running. When this is called while handling the mutation's original
+        exception, cleanup failures are attached as notes and the caller can
+        re-raise that original exception unchanged.
+        """
+
+        cleanup_errors: list[Exception] = []
+        try:
+            cleanup_errors.extend(self._remove_new_scene_items(snapshot))
+        except Exception as error:
+            cleanup_errors.append(error)
+        try:
+            rollback_insert_mutation_for(
+                self.canvas,
+                before_next_atom_id=snapshot.before_next_atom_id,
+                before_bond_count=snapshot.before_bond_count,
+            )
+        except Exception as error:
+            cleanup_errors.append(error)
+        try:
+            set_last_smiles_input_for(self.canvas, snapshot.before_smiles_input)
+        except Exception as error:
+            cleanup_errors.append(error)
+
+        if not cleanup_errors:
+            return
+        if original_error is not None:
+            for cleanup_error in cleanup_errors:
+                original_error.add_note(f"Rollback cleanup also failed: {cleanup_error!r}")
+            return
+        first_error, *additional_errors = cleanup_errors
+        for cleanup_error in additional_errors:
+            first_error.add_note(f"Additional rollback cleanup failure: {cleanup_error!r}")
+        raise first_error
 
     def _scene_item_snapshot(self) -> dict[str, tuple[Any, ...]]:
         return {
@@ -133,15 +173,51 @@ class StructureBuildCommitter:
             return None
         return merged
 
-    def _remove_new_scene_items(self, snapshot: StructureBuildHistorySnapshot) -> None:
+    def _remove_new_scene_items(self, snapshot: StructureBuildHistorySnapshot) -> list[Exception]:
+        errors: list[Exception] = []
         for item in reversed(self._new_scene_items_since(snapshot)):
             try:
                 remove_scene_item(self.canvas, item)
-            except AttributeError:
+            except Exception as error:
+                if not isinstance(error, AttributeError):
+                    errors.append(error)
+                # A lifecycle callback can raise before or after doing only part
+                # of the detach. Finish the basic registry/scene cleanup directly
+                # so a failed history record does not leave an orphan ring over a
+                # model that is about to be rolled back.
                 for name in SCENE_ITEM_COLLECTION_ATTRS:
-                    collection = scene_item_collection_for(self.canvas, name)
-                    if item in collection:
-                        collection.remove(item)
+                    try:
+                        collection = scene_item_collection_for(self.canvas, name)
+                        if item in collection:
+                            collection.remove(item)
+                    except Exception as fallback_error:
+                        errors.append(fallback_error)
+                scene_method = getattr(self.canvas, "scene", None)
+                try:
+                    scene = scene_method() if callable(scene_method) else None
+                except Exception as fallback_error:
+                    errors.append(fallback_error)
+                    scene = None
+                if callable(getattr(scene, "removeItem", None)):
+                    try:
+                        remove_item_from_canvas_scene(self.canvas, item)
+                    except Exception as fallback_error:
+                        errors.append(fallback_error)
+                data_method = getattr(item, "data", None)
+                try:
+                    kind = data_method(0) if callable(data_method) else None
+                except Exception as fallback_error:
+                    errors.append(fallback_error)
+                    kind = None
+                if kind == "ring":
+                    # Ring fills clip/offset their bound bond graphics. Whether
+                    # lifecycle removal failed before detach or during its own
+                    # refresh, retry while the model graph still exists.
+                    try:
+                        refresh_bond_geometry_for_ring_item(self.canvas, item)
+                    except Exception as fallback_error:
+                        errors.append(fallback_error)
+        return errors
 
     def add_bond_graphics(self, bond_id: int) -> None:
         add_insert_bond_graphics_for(self.canvas, bond_id)
@@ -223,10 +299,15 @@ class StructureBuildCommitter:
             self.add_bond(a_id, b_id, order)
         self.add_bond_graphics_range(bonds_start)
         self.label_non_carbon_atoms(atom_ids, elements or ["C"] * len(atom_ids))
-        if len(points) >= 3:
-            ring_item = create_ring_fill_item_for(self.canvas, list(points), atom_ids)
-            attach_scene_item(self.canvas, ring_item)
+        self.add_ring_fill(points, atom_ids)
         return atom_ids
+
+    def add_ring_fill(self, points, atom_ids: list[int]):
+        if len(points) < 3:
+            return None
+        ring_item = create_ring_fill_item_for(self.canvas, list(points), list(atom_ids))
+        attach_scene_item(self.canvas, ring_item)
+        return ring_item
 
     def resolved_ring_bond_orders(self, atom_ids: list[int], bond_orders: list[int] | None) -> list[int]:
         if not bond_orders:

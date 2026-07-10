@@ -106,3 +106,23 @@ def test_route_event_uses_input_controller_or_base(monkeypatch) -> None:
     assert router.route_event("view", event, base_event=base) is False
 
     base.assert_called_once_with(event)
+
+
+def test_route_scene_selection_callbacks_use_stable_callback_state(monkeypatch) -> None:
+    calls: list[str] = []
+    callbacks = SimpleNamespace(
+        scene_selection_group=lambda: calls.append("expand"),
+        scene_selection_outline=lambda: calls.append("outline"),
+    )
+    monkeypatch.setattr(
+        router,
+        "callback_state_for",
+        mock.Mock(return_value=callbacks),
+    )
+
+    view = object()
+    router.route_scene_selection_group_changed(view)
+    router.route_scene_selection_outline_changed(view)
+
+    assert calls == ["expand", "outline"]
+    assert router.callback_state_for.call_args_list == [mock.call(view), mock.call(view)]

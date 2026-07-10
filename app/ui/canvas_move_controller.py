@@ -158,6 +158,12 @@ class CanvasMoveController:
         for bond_id in self.bond_ids_for_atom_ids(atom_ids):
             self.redraw_bond(bond_id)
 
+    def update_bond_geometries_for_atoms(self, atom_ids: set[int]) -> None:
+        """Refresh coordinates in place when the graphics topology is unchanged."""
+
+        for bond_id in self.bond_ids_for_atom_ids(atom_ids):
+            update_bond_geometry_for(self.canvas, bond_id)
+
     def redraw_bond(self, bond_id: int) -> bool:
         return bond_renderer_for(self.canvas).redraw_bond(bond_id)
 

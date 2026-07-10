@@ -23,6 +23,18 @@ class PerspectiveTool(Tool):
         self.context.set_rubber_band_drag_mode()
 
     def deactivate(self) -> None:
+        self._commit_active_rotation()
+
+    def _commit_active_rotation(self) -> None:
+        if not self._rotating:
+            self._last_pos = None
+            self._axis_lock = None
+            return
+        # Keep the local drag session intact until the controller confirms the
+        # commit. If history/selection finalization raises, deactivate propagates
+        # the error and a delayed release (or explicit retry) can finish the same
+        # session instead of silently stranding it.
+        self.context.end_selection_3d_rotation()
         self._last_pos = None
         self._rotating = False
         self._axis_lock = None
@@ -62,11 +74,7 @@ class PerspectiveTool(Tool):
         return True
 
     def on_mouse_release(self, event) -> bool:
-        self._last_pos = None
-        self._axis_lock = None
-        if self._rotating:
-            self.context.end_selection_3d_rotation()
-        self._rotating = False
+        self._commit_active_rotation()
         return True
 
 

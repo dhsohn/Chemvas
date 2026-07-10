@@ -14,6 +14,7 @@ from ui.canvas_smiles_input_state import (
     last_smiles_input_for,
     set_last_smiles_input_for,
 )
+from ui.history_commands import AddSceneItemsCommand
 from ui.insert_template_commit_service import apply_template_commit_resolution
 from ui.structure_build_service import StructureBuildService
 from ui.structure_template_commands import apply_structure_template_command
@@ -348,6 +349,87 @@ class StructureBuildServiceTest(unittest.TestCase):
 
         with self.assertRaisesRegex(RuntimeError, "history"):
             service.run_recorded_build(action)
+
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertEqual(canvas.ring_items, [])
+        self.assertEqual(canvas.scene_items, [])
+        self.assertEqual(last_smiles_input_for(canvas), "before")
+
+    def _assert_recorded_build_cleanup_failure(self, fail_after_remove: bool) -> None:
+        canvas = _FakeCanvas()
+        service = _service_for(canvas)
+        history_error = RuntimeError("original history failure")
+        cleanup_error = RuntimeError("ring cleanup failure")
+        canvas.services.canvas_history_recording_service.record_additions = Mock(
+            side_effect=history_error
+        )
+        refresh_ring_geometry = Mock()
+        canvas.services.scene_item_controller.refresh_bond_geometry_for_ring_item = (
+            refresh_ring_geometry
+        )
+        canvas.scene = lambda: SimpleNamespace(
+            removeItem=lambda item: canvas.scene_items.remove(item)
+            if item in canvas.scene_items
+            else None
+        )
+        original_remove = canvas.remove_scene_item
+
+        def failing_remove(item) -> None:
+            if fail_after_remove:
+                original_remove(item)
+            raise cleanup_error
+
+        canvas.services.scene_item_controller.remove_scene_item = failing_remove
+        ring = _FakeRingItem(
+            False,
+            [QPointF(0.0, 0.0), QPointF(1.0, 0.0), QPointF(0.0, 1.0)],
+            [0],
+        )
+
+        def action() -> list:
+            service.committer.add_atom("C", 1.0, 2.0)
+            canvas.attach_scene_item(ring)
+            return [ring]
+
+        with self.assertRaises(RuntimeError) as raised:
+            service.run_recorded_build(action)
+
+        self.assertIs(raised.exception, history_error)
+        self.assertTrue(any("ring cleanup failure" in note for note in history_error.__notes__))
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertEqual(canvas.ring_items, [])
+        self.assertEqual(canvas.scene_items, [])
+        self.assertEqual(last_smiles_input_for(canvas), "before")
+        refresh_ring_geometry.assert_called_once_with(ring)
+
+    def test_recorded_build_preserves_original_error_and_finishes_rollback_after_scene_cleanup_failure(self) -> None:
+        for fail_after_remove in (False, True):
+            with self.subTest(fail_after_remove=fail_after_remove):
+                self._assert_recorded_build_cleanup_failure(fail_after_remove)
+
+    def test_explicit_abort_reports_cleanup_failure_after_restoring_model_and_smiles(self) -> None:
+        canvas = _FakeCanvas()
+        service = _service_for(canvas)
+        snapshot = service.committer.begin_recorded_change()
+        service.committer.add_atom("C", 1.0, 2.0)
+        ring = _FakeRingItem(
+            False,
+            [QPointF(0.0, 0.0), QPointF(1.0, 0.0), QPointF(0.0, 1.0)],
+            [0],
+        )
+        canvas.attach_scene_item(ring)
+        canvas.scene = lambda: SimpleNamespace(
+            removeItem=lambda item: canvas.scene_items.remove(item)
+            if item in canvas.scene_items
+            else None
+        )
+        canvas.services.scene_item_controller.remove_scene_item = Mock(
+            side_effect=RuntimeError("cleanup failure")
+        )
+        canvas.services.scene_item_controller.refresh_bond_geometry_for_ring_item = Mock()
+
+        with self.assertRaisesRegex(RuntimeError, "cleanup failure"):
+            service.committer.abort_recorded_change(snapshot)
 
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(canvas.ring_items, [])
@@ -736,6 +818,110 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertEqual(len([bond for bond in canvas.model.bonds if bond is not None]), 5)
         self.assertEqual(len(canvas.ring_items), 1)
         self.assertEqual(len(canvas.scene_items), 1)
+
+    def test_attached_template_insert_history_includes_exact_ring_item_for_all_generators(self) -> None:
+        cases = (
+            (
+                "atom_regular_ring",
+                "regular",
+                [(0.0, 0.0), (20.0, 0.0), (25.0, 15.0), (10.0, 25.0), (-5.0, 15.0)],
+            ),
+            (
+                "bond_regular_ring",
+                "regular",
+                [(-10.0, 0.0), (10.0, 0.0), (10.0, 20.0), (-10.0, 20.0)],
+            ),
+            (
+                "bond_template_shape",
+                "chair",
+                [(-10.0, 0.0), (10.0, 0.0), (20.0, 12.0), (8.0, 24.0), (-12.0, 20.0), (-20.0, 8.0)],
+            ),
+            (
+                "bond_template_shape",
+                "boat",
+                [(-10.0, 0.0), (10.0, 0.0), (20.0, 14.0), (0.0, 22.0), (-20.0, 14.0), (0.0, 8.0)],
+            ),
+        )
+
+        for generator, ring_style, point_pairs in cases:
+            with self.subTest(generator=generator, ring_style=ring_style):
+                canvas = _FakeCanvas()
+                points = [QPointF(x, y) for x, y in point_pairs]
+                if generator == "atom_regular_ring":
+                    atom_id = canvas.model.add_atom("C", points[0].x(), points[0].y())
+                    bond_id = None
+                else:
+                    atom_id = None
+                    left = canvas.model.add_atom("C", points[0].x(), points[0].y())
+                    right = canvas.model.add_atom("C", points[1].x(), points[1].y())
+                    bond_id = canvas.model.add_bond(left, right)
+                base_atom_count = len(canvas.model.atoms)
+                base_bond_count = len(canvas.model.bonds)
+                pushed_commands = []
+                canvas.services.canvas_history_recording_service = CanvasHistoryRecordingService(
+                    canvas,
+                    history_service=SimpleNamespace(push=pushed_commands.append),
+                )
+                service = _service_for(canvas)
+                canvas.services.structure_build_service = service
+                request = TemplateInsertRequest(
+                    ring_size=len(points),
+                    cursor_pos=(0.0, 0.0),
+                    bond_id=bond_id,
+                    atom_id=atom_id,
+                    ring_style=ring_style,
+                )
+                plan = TemplateInsertPlan(
+                    generator=generator,
+                    ring_size=len(points),
+                    ring_style=ring_style,
+                    bond_id=bond_id,
+                    atom_id=atom_id,
+                    template_shape=ring_style if generator == "bond_template_shape" else None,
+                )
+                resolution = TemplateInsertResolution(
+                    plan=plan,
+                    points=point_pairs,
+                )
+
+                applied = apply_template_commit_resolution(
+                    canvas,
+                    request,
+                    plan,
+                    resolution,
+                    before_smiles_input="before",
+                )
+
+                self.assertTrue(applied)
+                self.assertEqual(len(pushed_commands), 1)
+                command = pushed_commands[0]
+                self.assertIsInstance(command, CompositeCommand)
+                add_scene_commands = [
+                    child for child in command.commands if isinstance(child, AddSceneItemsCommand)
+                ]
+                self.assertEqual(len(add_scene_commands), 1)
+                self.assertEqual(len(canvas.ring_items), 1)
+                self.assertEqual(len(canvas.scene_items), 1)
+                ring_item = canvas.ring_items[0]
+                self.assertEqual(add_scene_commands[0].items, [ring_item])
+                ring_atom_ids = ring_item.data(2)
+                self.assertEqual(len(ring_atom_ids), len(points))
+                self.assertEqual(set(ring_atom_ids), set(canvas.model.atoms))
+
+                command.undo(canvas)
+
+                self.assertEqual(len(canvas.model.atoms), base_atom_count)
+                self.assertEqual(len(canvas.model.bonds), base_bond_count)
+                self.assertEqual(canvas.ring_items, [])
+                self.assertEqual(canvas.scene_items, [])
+
+                command.redo(canvas)
+
+                self.assertEqual(len(canvas.ring_items), 1)
+                self.assertIs(canvas.ring_items[0], ring_item)
+                self.assertEqual(ring_item.data(2), ring_atom_ids)
+                self.assertEqual(len(canvas.model.atoms), len(points))
+                self.assertEqual(len([bond for bond in canvas.model.bonds if bond is not None]), len(points))
 
     @unittest.skipUnless(_RealChem is not None, "RDKit is required for aromatic template identity tests")
     def test_named_aromatic_templates_round_trip_to_expected_canonical_smiles(self) -> None:

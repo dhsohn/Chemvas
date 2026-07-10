@@ -594,8 +594,10 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
     def test_regular_template_commit_on_bond_merges_existing_endpoints(self) -> None:
         add_bond_between_points_for(active_canvas_for_window(self.window), QPointF(-20.0, 0.0), QPointF(20.0, 0.0))
+        canvas = active_canvas_for_window(self.window)
         before_atom_count = len(active_canvas_for_window(self.window).model.atoms)
         before_bond_count = sum(1 for bond in active_canvas_for_window(self.window).model.bonds if bond is not None)
+        before_ring_count = len(ring_items_for(canvas))
 
         self._template_handler("Cyclobutane")()
         self._hover_scene_point(QPointF(0.0, 0.0))
@@ -613,10 +615,42 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             sum(1 for bond in active_canvas_for_window(self.window).model.bonds if bond is not None),
             before_bond_count + 3,
         )
+        self.assertEqual(len(ring_items_for(canvas)), before_ring_count + 1)
+        added_ring = ring_items_for(canvas)[-1]
+        added_ring_atom_ids = added_ring.data(2)
+        self.assertIsInstance(added_ring_atom_ids, list)
+        self.assertEqual(len(added_ring_atom_ids), 4)
+
+        canvas.runtime_state.history_service.undo()
+        self.assertEqual(len(ring_items_for(canvas)), before_ring_count)
+
+        canvas.runtime_state.history_service.redo()
+        self.assertEqual(len(ring_items_for(canvas)), before_ring_count + 1)
+        self.assertIs(ring_items_for(canvas)[-1], added_ring)
+        self.assertEqual(added_ring.data(2), added_ring_atom_ids)
+        added_color = added_ring.brush().color().name()
+        added_alpha = added_ring.brush().color().alphaF()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "attached-template.chemvas"
+            save_canvas_to_file_for(canvas, str(path))
+            document = read_document(path)
+            self.assertEqual(len(document.state["ring_fills"]), 1)
+            self.assertEqual(document.state["ring_fills"][0]["atom_ids"], added_ring_atom_ids)
+            clear_scene_for(canvas)
+            restore_canvas_state_for(canvas, document.state)
+
+        self.assertEqual(len(ring_items_for(canvas)), 1)
+        restored_ring = ring_items_for(canvas)[0]
+        self.assertEqual(restored_ring.data(2), added_ring_atom_ids)
+        self.assertEqual(restored_ring.brush().color().name(), added_color)
+        self.assertAlmostEqual(restored_ring.brush().color().alphaF(), added_alpha)
 
     def test_chair_template_commit_on_ring_bond_places_new_atoms_outside_existing_ring(self) -> None:
         add_benzene_ring_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
+        canvas = active_canvas_for_window(self.window)
         ring_item = ring_items_for(active_canvas_for_window(self.window))[0]
+        before_ring_count = len(ring_items_for(canvas))
         original_polygon = ring_item.polygon()
         ring_atom_ids = ring_item.data(2)
         self.assertIsInstance(ring_atom_ids, list)
@@ -643,6 +677,19 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             self.assertFalse(
                 original_polygon.containsPoint(QPointF(atom.x, atom.y), Qt.FillRule.WindingFill),
             )
+        self.assertEqual(len(ring_items_for(canvas)), before_ring_count + 1)
+        chair_ring = ring_items_for(canvas)[-1]
+        chair_atom_ids = chair_ring.data(2)
+        self.assertIsInstance(chair_atom_ids, list)
+        self.assertEqual(len(chair_atom_ids), 6)
+
+        canvas.runtime_state.history_service.undo()
+        self.assertEqual(len(ring_items_for(canvas)), before_ring_count)
+
+        canvas.runtime_state.history_service.redo()
+        self.assertEqual(len(ring_items_for(canvas)), before_ring_count + 1)
+        self.assertIs(ring_items_for(canvas)[-1], chair_ring)
+        self.assertEqual(chair_ring.data(2), chair_atom_ids)
 
     def test_escape_cancels_template_insert_and_prevents_commit(self) -> None:
         self._template_handler("Cyclopropane")()

@@ -79,7 +79,10 @@ def _history_port(**overrides):
 
 
 def _color_port(**overrides):
-    defaults = dict(apply_color_to_item=mock.Mock())
+    defaults = dict(
+        apply_color_to_item=mock.Mock(),
+        apply_color_to_items=mock.Mock(),
+    )
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
 
@@ -212,8 +215,10 @@ def test_tool_context_delegates_tool_specific_canvas_ports() -> None:
     )
 
     context.apply_color_to_item(item, color)
+    context.apply_color_to_items([item], color)
 
     color_service.apply_color_to_item.assert_called_once_with(item, color)
+    color_service.apply_color_to_items.assert_called_once_with([item], color)
     assert context.selected_scene_items(excluded_kinds={"selection_outline"}) == [selected_item]
     selected_scene_items.assert_called_once_with(excluded_kinds={"selection_outline"})
     assert context.select_single_structure_item(selected_item)
@@ -263,6 +268,7 @@ def test_tool_context_does_not_fallback_to_canvas_facade_when_ports_are_injected
         select_structure_for_item=mock.Mock(side_effect=AssertionError("canvas facade should not be used")),
         select_single_structure_item=mock.Mock(side_effect=AssertionError("canvas facade should not be used")),
         apply_color_to_item=mock.Mock(side_effect=AssertionError("canvas facade should not be used")),
+        apply_color_to_items=mock.Mock(side_effect=AssertionError("canvas facade should not be used")),
         get_atom_symbol=mock.Mock(side_effect=AssertionError("canvas facade should not be used")),
     )
     hit_testing = _hit_testing_port(
@@ -288,7 +294,10 @@ def test_tool_context_does_not_fallback_to_canvas_facade_when_ports_are_injected
         handle_controller=_handle_port(),
         selection_rotation_controller=_selection_rotation_port(),
         scene_transform_controller=_scene_transform_port(),
-        color_mutation_service=_color_port(apply_color_to_item=mock.Mock()),
+        color_mutation_service=_color_port(
+            apply_color_to_item=mock.Mock(),
+            apply_color_to_items=mock.Mock(),
+        ),
         selected_scene_items=mock.Mock(return_value=[item]),
         select_single_structure_item=mock.Mock(return_value=True),
         atom_symbol_provider=mock.Mock(return_value="N"),
@@ -306,6 +315,7 @@ def test_tool_context_does_not_fallback_to_canvas_facade_when_ports_are_injected
     assert not context.selection_hit_test(QPointF(1.0, 2.0))
     assert context.select_structure_for_item(item)
     context.apply_color_to_item(item, object())
+    context.apply_color_to_items([item], object())
     assert context.selected_scene_items(excluded_kinds=set()) == [item]
     assert context.select_single_structure_item(item)
     assert context.current_atom_symbol() == "N"
@@ -322,6 +332,7 @@ def test_tool_context_does_not_fallback_to_canvas_facade_when_ports_are_injected
     canvas.select_structure_for_item.assert_not_called()
     canvas.select_single_structure_item.assert_not_called()
     canvas.apply_color_to_item.assert_not_called()
+    canvas.apply_color_to_items.assert_not_called()
     canvas.get_atom_symbol.assert_not_called()
 
 

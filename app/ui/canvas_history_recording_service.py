@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from core.history import (
     AddAtomsCommand,
     AddBondCommand,
@@ -28,6 +30,37 @@ class CanvasHistoryRecordingService:
     def __init__(self, canvas, history_service=None) -> None:
         self.canvas = canvas
         self.history = history_service
+
+    def _history_runtime_rollback(self) -> Callable[[], None]:
+        state = getattr(self.history, "state", None)
+        history = getattr(state, "history", None)
+        redo_stack = getattr(state, "redo_stack", None)
+        if state is None or not isinstance(history, list) or not isinstance(redo_stack, list):
+            return lambda: None
+        history_items = list(history)
+        redo_items = list(redo_stack)
+
+        def restore() -> None:
+            history[:] = history_items
+            redo_stack[:] = redo_items
+            state.history = history
+            state.redo_stack = redo_stack
+            notify_change = getattr(self.history, "notify_change", None)
+            if callable(notify_change):
+                notify_change()
+
+        return restore
+
+    def _push_history(self, command: HistoryCommand) -> None:
+        restore_history = self._history_runtime_rollback()
+        try:
+            self.history.push(command)
+        except BaseException as error:
+            try:
+                restore_history()
+            except BaseException as rollback_error:
+                error.add_note(f"History stack rollback also failed: {rollback_error!r}")
+            raise
 
     def record_additions(
         self,
@@ -80,9 +113,9 @@ class CanvasHistoryRecordingService:
         if not commands:
             return
         if len(commands) == 1:
-            self.history.push(commands[0])
+            self._push_history(commands[0])
             return
-        self.history.push(CompositeCommand(commands))
+        self._push_history(CompositeCommand(commands))
 
     def record_bond_update(
         self,
@@ -96,7 +129,7 @@ class CanvasHistoryRecordingService:
             return
         if before_state == after_state and before_smiles_input == after_smiles_input:
             return
-        self.history.push(
+        self._push_history(
             UpdateBondCommand(
                 bond_id=bond_id,
                 before_state=before_state,

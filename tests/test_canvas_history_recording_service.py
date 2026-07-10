@@ -63,6 +63,46 @@ def _recording_service(canvas) -> CanvasHistoryRecordingService:
 
 
 class CanvasHistoryRecordingServiceTest(unittest.TestCase):
+    def test_push_failure_restores_exact_history_stacks(self) -> None:
+        canvas = _make_canvas(
+            atoms={0: Atom("C", 1.0, 2.0)},
+            next_atom_id=1,
+        )
+        old_history_entry = object()
+        old_redo_entry = object()
+        state = CanvasHistoryState(
+            history=[old_history_entry],
+            redo_stack=[old_redo_entry],
+        )
+        history_list = state.history
+        redo_list = state.redo_stack
+        push_error = RuntimeError("injected post-append failure")
+
+        def append_then_raise(command) -> None:
+            state.history.append(command)
+            state.redo_stack.clear()
+            raise push_error
+
+        history_service = SimpleNamespace(
+            state=state,
+            push=append_then_raise,
+            is_enabled=mock.Mock(return_value=True),
+        )
+        service = CanvasHistoryRecordingService(canvas, history_service=history_service)
+
+        with self.assertRaises(RuntimeError) as raised:
+            service.record_additions(
+                before_next_atom_id=0,
+                before_bond_count=0,
+                before_smiles_input="before-smiles",
+            )
+
+        self.assertIs(raised.exception, push_error)
+        self.assertIs(state.history, history_list)
+        self.assertIs(state.redo_stack, redo_list)
+        self.assertEqual(state.history, [old_history_entry])
+        self.assertEqual(state.redo_stack, [old_redo_entry])
+
     def test_record_additions_pushes_composite_command_for_atom_bond_and_scene_items(self) -> None:
         existing_bond = Bond(0, 1)
         new_bond = Bond(1, 2, 2, style="double_center", color="#336699")

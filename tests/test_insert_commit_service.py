@@ -5,6 +5,11 @@ from unittest import mock
 from core.model import Atom, Bond, MoleculeModel
 from PyQt6.QtCore import QPointF
 from ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
+from ui.canvas_scene_items_state import (
+    append_scene_item_for,
+    remove_scene_item_from_collection_for,
+    ring_items_for,
+)
 from ui.canvas_smiles_input_state import (
     last_smiles_input_for,
     set_last_smiles_input_for,
@@ -33,6 +38,24 @@ def _points(count: int, *, start: float = 1.0) -> list[tuple[float, float]]:
     return [(start + 2.0 * index, start + 2.0 * index + 1.0) for index in range(count)]
 
 
+class _FakeRingItem:
+    def __init__(self, points, atom_ids: list[int]) -> None:
+        self._data = {
+            0: "ring",
+            2: list(atom_ids),
+            9: {
+                "kind": "ring",
+                "points": [(point.x(), point.y()) for point in points],
+                "atom_ids": list(atom_ids),
+                "color": None,
+                "alpha": 0.0,
+            },
+        }
+
+    def data(self, key: int):
+        return self._data.get(key)
+
+
 class _FakeCanvas:
     def __init__(self) -> None:
         self.model = MoleculeModel()
@@ -58,7 +81,14 @@ class _FakeCanvas:
             canvas_graph_service=SimpleNamespace(bond_exists=self.bond_exists),
             canvas_history_recording_service=SimpleNamespace(record_additions=self._record_additions),
             canvas_mark_scene_service=SimpleNamespace(add_mark_for_atom=self.add_mark_for_atom),
-            scene_item_controller=SimpleNamespace(remove_scene_item=self.remove_scene_item),
+            canvas_ring_fill_scene_service=SimpleNamespace(
+                create_ring_fill_item=self.create_ring_fill_item,
+            ),
+            scene_item_controller=SimpleNamespace(
+                attach_scene_item=self.attach_scene_item,
+                remove_scene_item=self.remove_scene_item,
+                restore_scene_item=self.attach_scene_item,
+            ),
             structure_build_service=SimpleNamespace(
                 add_atom_with_merge=self.add_atom_with_merge,
                 add_ring_from_points=self.add_ring_from_points,
@@ -104,6 +134,14 @@ class _FakeCanvas:
     def remove_scene_item(self, item) -> None:
         if item in self.created_marks:
             self.created_marks.remove(item)
+        remove_scene_item_from_collection_for(self, "ring_items", item)
+
+    def attach_scene_item(self, item) -> None:
+        if item.data(0) == "ring":
+            append_scene_item_for(self, "ring_items", item)
+
+    def create_ring_fill_item(self, points, atom_ids: list[int]):
+        return _FakeRingItem(points, atom_ids)
 
     def bond_exists(self, a_id: int, b_id: int) -> bool:
         return any(
@@ -390,6 +428,10 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertTrue(applied)
         self.assertEqual(bond_canvas.ring_calls[-1][:2], [(0, 0.0, 0.0), (1, 10.0, 0.0)])
         self.assertEqual(bond_canvas.record_calls[0]["before_smiles_input"], "before-bond")
+        self.assertEqual(len(ring_items_for(bond_canvas)), 1)
+        ring_item = ring_items_for(bond_canvas)[0]
+        self.assertEqual(ring_item.data(2), [2, 3, 4, 5, 6, 7])
+        self.assertEqual(bond_canvas.record_calls[0]["added_scene_items"], [ring_item])
 
     def test_apply_template_commit_resolution_rejects_degenerate_point_sets(self) -> None:
         canvas = _FakeCanvas()
@@ -450,6 +492,44 @@ class InsertCommitServiceTest(unittest.TestCase):
                 None,
                 before_smiles_input="before-benzene",
             )
+        )
+
+    def test_benzene_template_preserves_original_error_when_outer_rollback_fails(self) -> None:
+        canvas = _FakeCanvas()
+        request = TemplateInsertRequest(
+            ring_size=6,
+            cursor_pos=(7.0, 8.0),
+            ring_style="benzene",
+        )
+        plan = TemplateInsertPlan(
+            generator="benzene",
+            ring_size=6,
+            ring_style="benzene",
+            bond_id=None,
+        )
+        original_error = RuntimeError("original benzene failure")
+        canvas.services.structure_build_service.add_benzene_ring = mock.Mock(
+            side_effect=original_error
+        )
+
+        with (
+            mock.patch(
+                "ui.insert_template_commit_service.rollback_insert_mutation",
+                side_effect=RuntimeError("outer rollback failure"),
+            ),
+            self.assertRaises(RuntimeError) as raised,
+        ):
+            apply_template_commit_resolution(
+                canvas,
+                request,
+                plan,
+                None,
+                before_smiles_input="before-benzene",
+            )
+
+        self.assertIs(raised.exception, original_error)
+        self.assertTrue(
+            any("outer rollback failure" in note for note in original_error.__notes__)
         )
 
     def test_apply_smiles_commit_plan_prefers_atom_label_service_over_canvas_wrapper(self) -> None:

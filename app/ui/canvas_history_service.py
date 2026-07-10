@@ -32,10 +32,10 @@ class CanvasHistoryService:
         command = self.state.history.pop()
         try:
             command.undo(self.canvas)
-        except Exception:
+        except BaseException as original_error:
             # The canvas no longer matches what the redo stack expects.
             self.state.redo_stack.clear()
-            self.notify_change()
+            self._notify_failed_operation(original_error)
             raise
         self.state.redo_stack.append(command)
         self.notify_change()
@@ -46,10 +46,10 @@ class CanvasHistoryService:
         command = self.state.redo_stack.pop()
         try:
             command.redo(self.canvas)
-        except Exception:
+        except BaseException as original_error:
             # Deeper redo entries assumed this command was applied.
             self.state.redo_stack.clear()
-            self.notify_change()
+            self._notify_failed_operation(original_error)
             raise
         self.state.history.append(command)
         self.notify_change()
@@ -71,6 +71,20 @@ class CanvasHistoryService:
                 self.state.change_callback()
             except Exception:
                 return
+
+    def _notify_failed_operation(self, original_error: BaseException) -> None:
+        try:
+            self.notify_change()
+        except BaseException as notification_error:
+            # A cancellation/termination raised by the command is the primary
+            # control-flow signal.  Stack cleanup still happens, and a broken
+            # observer cannot replace that signal while reporting the change.
+            add_note = getattr(original_error, "add_note", None)
+            if callable(add_note):
+                add_note(
+                    "History notification also encountered "
+                    f"{type(notification_error).__name__}: {notification_error}"
+                )
 
     def is_enabled(self) -> bool:
         return bool(self.state.enabled)

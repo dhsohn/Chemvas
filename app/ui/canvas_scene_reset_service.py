@@ -16,6 +16,7 @@ from ui.canvas_hover_state import (
 from ui.canvas_insert_state import insert_state_for
 from ui.canvas_mark_registry import mark_registry_for
 from ui.canvas_model_access import set_model_for
+from ui.canvas_rotation_preview_state import rotation_preview_state_for
 from ui.canvas_rotation_state import rotation_state_for
 from ui.canvas_scene_items_state import clear_scene_item_collections_for
 from ui.handle_state import set_active_handles_for, set_handle_target_for
@@ -35,14 +36,39 @@ class CanvasSceneResetService:
         self.hit_testing_service = hit_testing_service
         self.graph = graph_state_for(canvas)
         self.rotation = rotation_state_for(canvas)
+        self.rotation_preview = rotation_preview_state_for(canvas)
         self.insert_state = insert_state_for(canvas)
         self.marks = mark_registry_for(canvas)
+
+    def _clear_graphics_scene_without_callbacks(self) -> None:
+        scene_method = getattr(self.canvas, "scene", None)
+        scene = scene_method() if callable(scene_method) else None
+        clear_selection = getattr(scene, "clearSelection", None)
+        if callable(clear_selection):
+            # Let selection observers see the empty selection while every
+            # registered graphics item is still alive and safe to inspect.
+            clear_selection()
+        block_signals = getattr(scene, "blockSignals", None)
+        if not callable(block_signals):
+            clear_canvas_scene(self.canvas)
+            return
+        previously_blocked = block_signals(True)
+        try:
+            clear_canvas_scene(self.canvas)
+        finally:
+            block_signals(previously_blocked)
 
     def clear_scene(self) -> None:
         clear_selection_outlines_for(self.canvas)
         set_active_handles_for(self.canvas, [])
         set_handle_target_for(self.canvas, None)
-        clear_canvas_scene(self.canvas)
+        # A preview group owns references to graphics from the current model.
+        # Clear its registry before scene signals can observe deleted wrappers.
+        self.rotation_preview.reset()
+        # QGraphicsScene.clear() destroys C++ items before the registries below
+        # are reset. Suppress selectionChanged while that destruction is in
+        # progress so callbacks cannot dereference a just-deleted bond/atom.
+        self._clear_graphics_scene_without_callbacks()
         set_hover_items_for(self.canvas, [])
         set_hover_atom_id_for(self.canvas, None)
         set_hover_bond_id_for(self.canvas, None)
