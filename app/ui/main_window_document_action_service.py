@@ -27,6 +27,7 @@ from ui.main_window_path_logic import (
 from ui.main_window_path_logic import (
     resolve_save_path as default_resolve_save_path,
 )
+from ui.rdkit_export_job_state import rdkit_export_jobs_for
 
 
 class MainWindowDocumentActionService:
@@ -357,9 +358,17 @@ class MainWindowDocumentActionService:
         return True
 
     def confirm_close_canvas(self, window, canvas: CanvasView, *, message_box=None) -> bool:
+        message_box = QMessageBox if message_box is None else message_box
+        if rdkit_export_jobs_for(canvas):
+            name = self._canvas_documents.display_name(canvas)
+            message_box.warning(
+                window,
+                "XYZ Export in Progress",
+                f"Wait for the 3D XYZ export from {name} to finish before closing it.",
+            )
+            return False
         if not self._canvas_documents.is_dirty(canvas):
             return True
-        message_box = QMessageBox if message_box is None else message_box
         name = self._canvas_documents.display_name(canvas)
         choice = message_box.question(
             window,
