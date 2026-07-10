@@ -40,6 +40,41 @@ def test_find_rings_finds_both_fused_rings_and_ignores_substituents() -> None:
     assert sorted(sorted(r) for r in rings) == [[0, 1, 2, 3, 4, 5], [0, 5, 6, 7, 8, 9]]
 
 
+def test_find_rings_completes_cycle_basis_when_shortest_candidates_are_dependent() -> None:
+    # The four atoms 1-4 form K4 and atom 0 adds one more triangle on edge
+    # 3-4.  One-shortest-path-per-edge can choose dependent candidates here,
+    # but the graph's cycle rank is E - V + C = 8 - 5 + 1 = 4.
+    bonds = [
+        _bond(0, 3),
+        _bond(0, 4),
+        _bond(1, 2),
+        _bond(1, 3),
+        _bond(1, 4),
+        _bond(2, 3),
+        _bond(2, 4),
+        _bond(3, 4),
+    ]
+
+    rings = find_rings(bonds)
+
+    assert len(rings) == 4
+    edges = {frozenset((bond.a, bond.b)) for bond in bonds}
+    assert all(
+        frozenset((ring[index], ring[(index + 1) % len(ring)])) in edges
+        for ring in rings
+        for index in range(len(ring))
+    )
+
+
+def test_find_rings_accepts_single_pass_bond_iterables() -> None:
+    bonds = (_bond(a, b) for a, b in ((0, 1), (1, 2), (2, 0)))
+
+    rings = find_rings(bonds)
+
+    assert len(rings) == 1
+    assert frozenset(rings[0]) == {0, 1, 2}
+
+
 def test_find_rings_returns_empty_for_acyclic_graph() -> None:
     assert find_rings([_bond(0, 1), _bond(1, 2), _bond(2, 3)]) == []
     assert find_rings([]) == []

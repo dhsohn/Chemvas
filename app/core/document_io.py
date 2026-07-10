@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import stat
 import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -73,6 +74,10 @@ def _write_text_payload(path: Path, text: str, *, encoding: str) -> None:
 
 def atomic_write_via_temp(path: PathType, writer: Callable[[Path], None]) -> None:
     target = Path(path)
+    try:
+        target_mode = stat.S_IMODE(target.stat().st_mode)
+    except FileNotFoundError:
+        target_mode = None
     # Atomic write: render/write to a sibling temp file, flush to disk, then
     # replace. A crash/IO error mid-write leaves the previous file intact.
     with tempfile.NamedTemporaryFile(
@@ -84,6 +89,8 @@ def atomic_write_via_temp(path: PathType, writer: Callable[[Path], None]) -> Non
         tmp = Path(tmp_handle.name)
     try:
         writer(tmp)
+        if target_mode is not None:
+            os.chmod(tmp, target_mode)
         with tmp.open("rb+") as handle:
             os.fsync(handle.fileno())
         os.replace(tmp, target)

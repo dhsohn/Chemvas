@@ -1,5 +1,6 @@
 import json
 import os
+import stat
 import tempfile
 import unittest
 from decimal import Decimal
@@ -462,6 +463,17 @@ class DocumentIOTest(unittest.TestCase):
                 atomic_write_text(path, "NEW")
 
             fsync.assert_called_once()
+            self.assertEqual(path.read_text(encoding="utf-8"), "NEW")
+
+    def test_atomic_write_via_temp_preserves_existing_permission_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "shared.chemvas"
+            path.write_text("ORIGINAL", encoding="utf-8")
+            os.chmod(path, 0o664)
+
+            atomic_write_text(path, "NEW")
+
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o664)
             self.assertEqual(path.read_text(encoding="utf-8"), "NEW")
 
 

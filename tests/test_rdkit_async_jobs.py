@@ -1,4 +1,7 @@
 import os
+import stat
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -18,7 +21,11 @@ if QObject is not None:
     from ui import rdkit_async_jobs
     from ui.preview_3d_worker import Preview3DWorker
     from ui.rdkit_async_jobs import XYZExportWorker, export_xyz_in_thread
-    from ui.rdkit_export_job_state import rdkit_export_jobs_for
+    from ui.rdkit_export_job_state import (
+        normalized_export_target_path,
+        rdkit_export_jobs_for,
+        reset_rdkit_export_job_state_for_tests,
+    )
 
 
 @unittest.skipUnless(QObject is not None, "PyQt6 is required for async RDKit export tests")
@@ -128,7 +135,7 @@ class _FakeSignal:
 class _FakeThread:
     instances = []
 
-    def __init__(self, parent) -> None:
+    def __init__(self, parent=None) -> None:
         self.parent = parent
         self.started = _FakeSignal()
         self.finished = _FakeSignal()
@@ -177,79 +184,217 @@ class _FakeWorker:
 @unittest.skipUnless(QObject is not None, "PyQt6 is required for async RDKit export tests")
 class ExportXYZInThreadTest(unittest.TestCase):
     def setUp(self) -> None:
+        reset_rdkit_export_job_state_for_tests()
         _FakeThread.instances.clear()
         _FakeWorker.instances.clear()
+
+    def tearDown(self) -> None:
+        reset_rdkit_export_job_state_for_tests()
 
     def test_export_xyz_in_thread_wires_worker_and_cleans_finished_jobs(self) -> None:
         owner = QObject()
         succeeded = []
         failed = []
 
-        with (
-            mock.patch.object(rdkit_async_jobs, "QThread", new=_FakeThread),
-            mock.patch.object(rdkit_async_jobs, "XYZExportWorker", new=_FakeWorker),
-        ):
-            export_xyz_in_thread(
-                owner,
-                rdkit_adapter="rdkit",
-                model="model",
-                atom_annotations={"a": 1},
-                path="/tmp/export.xyz",
-                on_success=succeeded.append,
-                on_error=failed.append,
-            )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "export.xyz"
+            path.write_text("previous xyz", encoding="utf-8")
+            path.chmod(0o640)
+            with (
+                mock.patch.object(rdkit_async_jobs, "QThread", new=_FakeThread),
+                mock.patch.object(rdkit_async_jobs, "XYZExportWorker", new=_FakeWorker),
+            ):
+                export_xyz_in_thread(
+                    owner,
+                    rdkit_adapter="rdkit",
+                    model="model",
+                    atom_annotations={"a": 1},
+                    path=str(path),
+                    on_success=succeeded.append,
+                    on_error=failed.append,
+                )
 
-        thread = _FakeThread.instances[-1]
-        worker = _FakeWorker.instances[-1]
-        self.assertIs(thread.parent, owner)
-        self.assertEqual(worker.rdkit_adapter, "rdkit")
-        self.assertIsNone(worker.rdkit_adapter_factory)
-        self.assertEqual(worker.model, "model")
-        self.assertEqual(worker.atom_annotations, {"a": 1})
-        self.assertEqual(worker.path, "/tmp/export.xyz")
-        self.assertIs(worker.moved_to, thread)
-        self.assertEqual(rdkit_export_jobs_for(owner), [(thread, worker)])
-        self.assertTrue(thread.start_called)
+            thread = _FakeThread.instances[-1]
+            worker = _FakeWorker.instances[-1]
+            self.assertIsNone(thread.parent)
+            self.assertEqual(worker.rdkit_adapter, "rdkit")
+            self.assertIsNone(worker.rdkit_adapter_factory)
+            self.assertEqual(worker.model, "model")
+            self.assertEqual(worker.atom_annotations, {"a": 1})
+            self.assertNotEqual(worker.path, str(path))
+            self.assertEqual(Path(worker.path).parent, path.parent)
+            self.assertIs(worker.moved_to, thread)
+            self.assertEqual(rdkit_export_jobs_for(owner), [(thread, worker)])
+            self.assertTrue(thread.start_called)
 
-        thread.started.emit()
-        self.assertTrue(worker.run_called)
+            thread.started.emit()
+            self.assertTrue(worker.run_called)
 
-        worker.succeeded.emit("/tmp/export.xyz")
-        worker.failed.emit("failure")
-        self.assertEqual(succeeded, ["/tmp/export.xyz"])
-        self.assertEqual(failed, ["failure"])
+            Path(worker.path).write_text("new xyz", encoding="utf-8")
+            worker.succeeded.emit(worker.path)
+            worker.failed.emit("ignored duplicate result")
+            self.assertEqual(path.read_text(encoding="utf-8"), "new xyz")
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o640)
+            self.assertEqual(succeeded, [str(path)])
+            self.assertEqual(failed, [])
 
-        worker.finished.emit()
-        self.assertTrue(thread.quit_called)
-        self.assertTrue(worker.delete_later_called)
-        self.assertEqual(rdkit_export_jobs_for(owner), [(thread, worker)])
+            worker.finished.emit()
+            self.assertTrue(thread.quit_called)
+            self.assertTrue(worker.delete_later_called)
+            self.assertEqual(rdkit_export_jobs_for(owner), [(thread, worker)])
 
-        thread.finished.emit()
-        self.assertTrue(thread.delete_later_called)
-        self.assertEqual(rdkit_export_jobs_for(owner), [])
+            thread.finished.emit()
+            self.assertTrue(thread.delete_later_called)
+            self.assertEqual(rdkit_export_jobs_for(owner), [])
 
-    def test_export_xyz_in_thread_reuses_existing_job_list(self) -> None:
-        existing_job = ("old-thread", "old-worker")
+    def test_overlapping_same_path_publishes_only_latest_generation_when_completion_reverses(self) -> None:
         owner = QObject()
-        rdkit_export_jobs_for(owner).append(existing_job)
+        succeeded = []
+        failed = []
 
-        with (
-            mock.patch.object(rdkit_async_jobs, "QThread", new=_FakeThread),
-            mock.patch.object(rdkit_async_jobs, "XYZExportWorker", new=_FakeWorker),
-        ):
-            export_xyz_in_thread(
-                owner,
-                rdkit_adapter="rdkit",
-                model="model",
-                atom_annotations={},
-                path="/tmp/export.xyz",
-                on_success=lambda _path: None,
-                on_error=lambda _message: None,
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "export.xyz"
+            with (
+                mock.patch.object(rdkit_async_jobs, "QThread", new=_FakeThread),
+                mock.patch.object(rdkit_async_jobs, "XYZExportWorker", new=_FakeWorker),
+            ):
+                for model in ("older", "newer"):
+                    export_xyz_in_thread(
+                        owner,
+                        rdkit_adapter="rdkit",
+                        model=model,
+                        atom_annotations={},
+                        path=str(path),
+                        on_success=succeeded.append,
+                        on_error=failed.append,
+                    )
+
+            older_thread, newer_thread = _FakeThread.instances
+            older_worker, newer_worker = _FakeWorker.instances
+            Path(older_worker.path).write_text("older xyz", encoding="utf-8")
+            Path(newer_worker.path).write_text("newer xyz", encoding="utf-8")
+
+            newer_worker.succeeded.emit(newer_worker.path)
+            newer_worker.finished.emit()
+            newer_thread.finished.emit()
+            older_worker.succeeded.emit(older_worker.path)
+            older_worker.finished.emit()
+            older_thread.finished.emit()
+
+            self.assertEqual(path.read_text(encoding="utf-8"), "newer xyz")
+            self.assertEqual(succeeded, [str(path)])
+            self.assertEqual(failed, [])
+            self.assertFalse(Path(older_worker.path).exists())
+            self.assertFalse(Path(newer_worker.path).exists())
+            self.assertEqual(rdkit_export_jobs_for(owner), [])
+
+    def test_owner_destruction_suppresses_callbacks_but_keeps_latest_file_publication(self) -> None:
+        owner = QObject()
+        succeeded = []
+        failed = []
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "export.xyz"
+            with (
+                mock.patch.object(rdkit_async_jobs, "QThread", new=_FakeThread),
+                mock.patch.object(rdkit_async_jobs, "XYZExportWorker", new=_FakeWorker),
+            ):
+                export_xyz_in_thread(
+                    owner,
+                    rdkit_adapter="rdkit",
+                    model="model",
+                    atom_annotations={},
+                    path=str(path),
+                    on_success=succeeded.append,
+                    on_error=failed.append,
+                )
+
+            thread = _FakeThread.instances[-1]
+            worker = _FakeWorker.instances[-1]
+            Path(worker.path).write_text("finished after close", encoding="utf-8")
+            owner.destroyed.emit(owner)
+            worker.succeeded.emit(worker.path)
+            worker.finished.emit()
+            thread.finished.emit()
+
+            self.assertEqual(path.read_text(encoding="utf-8"), "finished after close")
+            self.assertEqual(succeeded, [])
+            self.assertEqual(failed, [])
+            self.assertEqual(rdkit_export_jobs_for(owner), [])
+
+    def test_normalized_target_collapses_relative_parent_segments(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            child = directory / "child"
+            child.mkdir()
+            direct = directory / "export.xyz"
+            aliased = child / ".." / "export.xyz"
+
+            self.assertEqual(
+                normalized_export_target_path(direct),
+                normalized_export_target_path(aliased),
             )
 
-        thread = _FakeThread.instances[-1]
-        worker = _FakeWorker.instances[-1]
-        self.assertEqual(rdkit_export_jobs_for(owner), [existing_job, (thread, worker)])
+    def test_owner_delete_and_shutdown_survive_running_qthread_and_clean_registry(self) -> None:
+        app_root = Path(__file__).resolve().parents[1] / "app"
+        script = r'''
+import sys
+import time
+from pathlib import Path
+
+from PyQt6.QtCore import QCoreApplication, QEvent, QObject
+
+from ui.rdkit_async_jobs import export_xyz_in_thread
+from ui.rdkit_export_job_state import active_rdkit_export_jobs
+
+
+class SlowAdapter:
+    def model_to_xyz_block(self, model, atom_annotations=None):
+        time.sleep(0.2)
+        return "0\ncompleted after owner close\n"
+
+
+app = QCoreApplication([])
+owner = QObject()
+target = Path(sys.argv[1])
+successes = []
+errors = []
+export_xyz_in_thread(
+    owner,
+    rdkit_adapter=SlowAdapter(),
+    model=None,
+    atom_annotations={},
+    path=str(target),
+    on_success=successes.append,
+    on_error=errors.append,
+)
+app.processEvents()
+time.sleep(0.03)
+owner.deleteLater()
+QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+app.aboutToQuit.emit()
+assert target.read_text(encoding="utf-8") == "0\ncompleted after owner close\n"
+assert successes == []
+assert errors == []
+assert active_rdkit_export_jobs() == ()
+assert list(target.parent.glob(f".{target.name}.*.stage")) == []
+'''
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "shutdown.xyz"
+            env = os.environ.copy()
+            env["PYTHONPATH"] = os.pathsep.join(
+                [str(app_root), env.get("PYTHONPATH", "")]
+            ).rstrip(os.pathsep)
+            completed = subprocess.run(
+                [sys.executable, "-c", script, str(path)],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                env=env,
+            )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
 
 
 @unittest.skipUnless(QObject is not None, "PyQt6 is required for async RDKit preview tests")

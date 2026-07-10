@@ -107,6 +107,11 @@ class Preview3D(QWidget):
         signature = self._payload_signature(model, atom_annotations)
         if signature == self._current_signature:
             return
+        # Invalidate an in-flight worker as soon as a newer payload arrives.
+        # Waiting until the replacement worker actually starts leaves a debounce
+        # window where the old result still matches the current request id and
+        # can overwrite the panel with stale molecule metadata.
+        self._preview_request_id += 1
         self._current_signature = signature
         self._pending_model = model
         self._pending_annotations = atom_annotations
@@ -196,7 +201,6 @@ class Preview3D(QWidget):
             self._preview_restart_pending = True
             return
         self._preview_restart_pending = False
-        self._preview_request_id += 1
         request_id = self._preview_request_id
         thread = QThread(self)
         worker = Preview3DWorker(

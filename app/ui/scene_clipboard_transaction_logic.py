@@ -134,6 +134,21 @@ def translated_scene_item_state(
         translated["end"] = translated_point_value(translated.get("end"), dx, dy)
         translated["control"] = translated_point_value(translated.get("control"), dx, dy)
         return translated
+    if kind == "ts_bracket":
+        rect = translated.get("rect")
+        if (
+            isinstance(rect, (list, tuple))
+            and len(rect) == 4
+            and all(isinstance(value, (int, float)) for value in rect)
+        ):
+            translated_rect = [
+                float(rect[0]) + dx,
+                float(rect[1]) + dy,
+                float(rect[2]),
+                float(rect[3]),
+            ]
+            translated["rect"] = tuple(translated_rect) if isinstance(rect, tuple) else translated_rect
+            return translated
     if kind in {"ts_bracket", "shape"}:
         for key in ("left", "right"):
             if isinstance(translated.get(key), (int, float)):

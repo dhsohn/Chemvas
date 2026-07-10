@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import deque
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 
@@ -135,6 +135,71 @@ def _shortest_cycle_through_edge(
     return None
 
 
+def _fundamental_cycle_candidates(
+    adjacency: Mapping[int, Iterable[int]],
+    edge_list: Sequence[tuple[int, int]],
+) -> list[list[int]]:
+    """Return a guaranteed cycle-basis candidate for every non-tree edge.
+
+    The shortest-cycle pass below deliberately chooses only one shortest path
+    per edge.  Ties can therefore leave those candidates linearly dependent.
+    Fundamental cycles from a spanning forest guarantee enough independent
+    fallbacks to reach the graph's cycle rank while still letting the shorter
+    candidates win during the length-sorted GF(2) selection.
+    """
+    parent: dict[int, int | None] = {}
+    depth: dict[int, int] = {}
+    tree_edges: set[frozenset[int]] = set()
+    for root in sorted(adjacency):
+        if root in parent:
+            continue
+        parent[root] = None
+        depth[root] = 0
+        stack = [root]
+        while stack:
+            current = stack.pop()
+            for neighbor in sorted(adjacency.get(current, ()), reverse=True):
+                if neighbor in parent:
+                    continue
+                parent[neighbor] = current
+                depth[neighbor] = depth[current] + 1
+                tree_edges.add(frozenset((current, neighbor)))
+                stack.append(neighbor)
+
+    cycles: list[list[int]] = []
+    for u, v in edge_list:
+        if frozenset((u, v)) in tree_edges:
+            continue
+        path_u = [u]
+        path_v = [v]
+        left = u
+        right = v
+        while depth[left] > depth[right]:
+            next_left = parent[left]
+            if next_left is None:
+                break
+            left = next_left
+            path_u.append(left)
+        while depth[right] > depth[left]:
+            next_right = parent[right]
+            if next_right is None:
+                break
+            right = next_right
+            path_v.append(right)
+        while left != right:
+            next_left = parent[left]
+            next_right = parent[right]
+            if next_left is None or next_right is None:
+                break
+            left = next_left
+            right = next_right
+            path_u.append(left)
+            path_v.append(right)
+        if left == right:
+            cycles.append(path_u + list(reversed(path_v[:-1])))
+    return cycles
+
+
 def find_rings(bonds: Iterable[Any]) -> list[list[int]]:
     """Smallest set of smallest rings for a bond graph.
 
@@ -143,19 +208,20 @@ def find_rings(bonds: Iterable[Any]) -> list[list[int]]:
     polygon. Uses a Horton-style candidate generation with GF(2) independence so
     fused systems yield the chemically expected smallest rings.
 
-    This is an SSSR *approximation*: candidates are limited to one shortest
-    cycle per edge (full Horton enumerates all shortest cycles per edge), so
-    heavily bridged polycycles can yield a valid-but-different basis than the
-    textbook SSSR. Common fused systems (6-6, 6-5, steroids) are unaffected;
-    revisit candidate generation before relying on this for ring perception in
-    exotic cage topologies.
+    This is an SSSR *approximation*: shortest candidates are limited to one
+    path per edge (full Horton enumerates every shortest-path tie). A spanning
+    forest contributes fundamental cycles so the result still reaches the full
+    cycle rank, but exotic cages can yield a valid basis that is not the
+    textbook minimum SSSR. Common fused systems (6-6, 6-5, steroids) are
+    unaffected.
     """
-    adjacency = adjacency_for_bonds(bonds)
+    bond_list = list(bonds)
+    adjacency = adjacency_for_bonds(bond_list)
     if not adjacency:
         return []
     edge_list: list[tuple[int, int]] = []
     seen_edges: set[frozenset[int]] = set()
-    for bond in bonds:
+    for bond in bond_list:
         if bond is None:
             continue
         key = frozenset((bond.a, bond.b))
@@ -175,16 +241,20 @@ def find_rings(bonds: Iterable[Any]) -> list[list[int]]:
         ring = _shortest_cycle_through_edge(adjacency, u, v)
         if ring is not None:
             candidates.append(ring)
+    candidates.extend(_fundamental_cycle_candidates(adjacency, edge_list))
 
-    unique: dict[frozenset[int], list[int]] = {}
+    unique: dict[frozenset[frozenset[int]], list[int]] = {}
     for ring in candidates:
-        key = frozenset(ring)
+        key = frozenset(
+            frozenset((ring[index], ring[(index + 1) % len(ring)]))
+            for index in range(len(ring))
+        )
         if key not in unique or len(ring) < len(unique[key]):
             unique[key] = ring
 
     chosen: list[list[int]] = []
     pivots: dict[int, int] = {}
-    for ring in sorted(unique.values(), key=len):
+    for ring in sorted(unique.values(), key=lambda candidate: (len(candidate), tuple(candidate))):
         vector = 0
         valid = True
         for index in range(len(ring)):

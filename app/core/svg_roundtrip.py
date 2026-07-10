@@ -32,6 +32,7 @@ _SOURCE_TAG = f"{{{CHEMVAS_SVG_NAMESPACE}}}source"
 _METADATA_TAG = f"{{{SVG_NAMESPACE}}}metadata"
 _MAX_SVG_SOURCE_TEXT_BYTES = 8 * 1024 * 1024
 _MAX_SVG_PAYLOAD_BYTES = 32 * 1024 * 1024
+_FORBIDDEN_XML_DECLARATIONS = ("<!DOCTYPE", "<!ENTITY")
 
 
 ET.register_namespace("", SVG_NAMESPACE)
@@ -108,13 +109,56 @@ def _parse_svg_tree(path: PathType, *, error_message: str) -> ET.ElementTree[ET.
         raise ValueError(error_message) from exc
     # xml.etree expands internal entities, so a crafted DTD ("billion laughs")
     # could exhaust memory. Chemvas-exported SVGs never carry a DOCTYPE, and
-    # entity declarations can only live inside one, so reject it outright.
-    if b"<!DOCTYPE" in data or b"<!ENTITY" in data:
+    # entity declarations can only live inside one, so reject them before the
+    # XML parser sees the document. A raw ASCII byte scan is insufficient for
+    # UTF-16/32 XML because each markup character is separated by NUL bytes.
+    try:
+        has_forbidden_declaration = _has_forbidden_xml_declaration(data)
+    except UnicodeError as exc:
+        raise ValueError(error_message) from exc
+    if has_forbidden_declaration:
         raise ValueError(error_message)
     try:
         return ET.ElementTree(ET.fromstring(data))
     except (ET.ParseError, LookupError) as exc:
         raise ValueError(error_message) from exc
+
+
+def _has_forbidden_xml_declaration(data: bytes) -> bool:
+    if any(marker.encode("ascii") in data for marker in _FORBIDDEN_XML_DECLARATIONS):
+        return True
+    encoding = _wide_xml_encoding(data)
+    if encoding is None:
+        return False
+    decoded = data.decode(encoding)
+    return any(marker in decoded for marker in _FORBIDDEN_XML_DECLARATIONS)
+
+
+def _wide_xml_encoding(data: bytes) -> str | None:
+    # Check UTF-32 signatures before UTF-16 because the UTF-32LE BOM begins with
+    # the UTF-16LE BOM. Explicit-endian XML can be BOM-less and may start with
+    # XML whitespace before its first '<', so inspect the first code unit rather
+    # than assuming markup is the first character.
+    if data.startswith(b"\x00\x00\xfe\xff"):
+        return "utf-32-be"
+    if data.startswith(b"\xff\xfe\x00\x00"):
+        return "utf-32-le"
+    if data.startswith(b"\xfe\xff"):
+        return "utf-16-be"
+    if data.startswith(b"\xff\xfe"):
+        return "utf-16-le"
+    xml_initial_ascii = b"\t\n\r <"
+    if len(data) >= 4:
+        if data[0] == data[1] == data[2] == 0 and data[3] in xml_initial_ascii:
+            return "utf-32-be"
+        if data[0] in xml_initial_ascii and data[1:4] == b"\x00\x00\x00":
+            return "utf-32-le"
+    if len(data) >= 2:
+        if data[0] == 0 and data[1] in xml_initial_ascii:
+            return "utf-16-be"
+        if data[0] in xml_initial_ascii and data[1] == 0:
+            return "utf-16-le"
+    return None
 
 
 def _root_metadata_elements(root: ET.Element) -> list[ET.Element]:
