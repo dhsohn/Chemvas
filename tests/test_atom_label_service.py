@@ -21,7 +21,7 @@ if QApplication is not None:
         UpdateBondCommand,
     )
     from core.model import Atom, Bond, MoleculeModel
-    from ui.atom_coords_access import set_atom_coords_3d_for
+    from ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
     from ui.atom_label_service import AtomLabelService
     from ui.canvas_atom_graphics_state import (
         atom_dots_for,
@@ -284,6 +284,61 @@ class AtomLabelServiceTest(unittest.TestCase):
             canvas.scene_obj.removed_items,
             [merged_label, merged_dot, deleted_self_loop_item, deleted_duplicate_item],
         )
+
+    def test_merge_overlapping_atoms_cleans_3d_coords_and_history_round_trip_matches(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={
+                1: Atom("C", 0.0, 0.0),
+                2: Atom("O", 0.2, 0.2),
+            }
+        )
+        set_atom_coords_3d_for(canvas, {2: (0.2, 0.2, 4.0)})
+
+        merge_ids, merge_info = _atom_label_service(canvas).merge_overlapping_atoms(1)
+
+        self.assertEqual(merge_ids, [2])
+        self.assertEqual(merge_info["atom_coords_3d"], {2: (0.2, 0.2, 4.0)})
+        after_merge_coords = dict(atom_coords_3d_for(canvas))
+        self.assertNotIn(2, after_merge_coords)
+
+        command = DeleteAtomsCommand(
+            atom_states=merge_info["atom_states"],
+            before_next_atom_id=canvas.model.next_atom_id,
+            after_next_atom_id=canvas.model.next_atom_id,
+            remove_marks=False,
+            atom_coords_3d=merge_info["atom_coords_3d"],
+        )
+
+        def restore_atom(_canvas, atom_id, state) -> None:
+            _canvas.model.atoms[atom_id] = Atom(
+                state["element"],
+                state["x"],
+                state["y"],
+                color=state["color"],
+                explicit_label=state["explicit_label"],
+            )
+
+        def restore_coords(_canvas, _positions, *, coords_3d=None, **_kwargs) -> None:
+            atom_coords_3d_for(_canvas).update(coords_3d or {})
+
+        def remove_atom(_canvas, atom_id, *, remove_marks=True) -> None:
+            del remove_marks
+            _canvas.model.atoms.pop(atom_id, None)
+            atom_coords_3d_for(_canvas).pop(atom_id, None)
+
+        history_port = SimpleNamespace(
+            restore_atom_from_state_for_history=restore_atom,
+            set_atom_positions_for_history=restore_coords,
+            remove_atom_for_history=remove_atom,
+            set_last_smiles_input_for_history=lambda _canvas, _value: None,
+        )
+        with patch("core.history._history_canvas_port", return_value=history_port):
+            command.undo(canvas)
+            self.assertEqual(atom_coords_3d_for(canvas)[2], (0.2, 0.2, 4.0))
+            command.redo(canvas)
+
+        self.assertEqual(atom_coords_3d_for(canvas), after_merge_coords)
 
     def test_merge_overlapping_atoms_keeps_special_style_on_same_order_duplicate(self) -> None:
         canvas = _FakeCanvas()

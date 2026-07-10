@@ -173,6 +173,33 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             self.assertTrue(self.service.confirm_close_canvas(self.window, canvas, message_box=message_box))
         save_canvas.assert_called_once_with(self.window, canvas=canvas)
 
+    def test_confirm_close_canvas_rejects_active_xyz_export_until_job_finishes(self) -> None:
+        canvas = active_canvas_for_window(self.window)
+        message_box = mock.Mock()
+
+        with mock.patch(
+            "ui.main_window_document_action_service.rdkit_export_jobs_for",
+            return_value=[(object(), object())],
+        ):
+            self.assertFalse(
+                self.service.confirm_close_canvas(self.window, canvas, message_box=message_box)
+            )
+
+        message_box.warning.assert_called_once_with(
+            self.window,
+            "XYZ Export in Progress",
+            "Wait for the 3D XYZ export from Canvas 1 to finish before closing it.",
+        )
+        message_box.question.assert_not_called()
+
+        with mock.patch(
+            "ui.main_window_document_action_service.rdkit_export_jobs_for",
+            return_value=[],
+        ):
+            self.assertTrue(
+                self.service.confirm_close_canvas(self.window, canvas, message_box=message_box)
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

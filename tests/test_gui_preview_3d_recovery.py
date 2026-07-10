@@ -388,6 +388,34 @@ class Preview3DRecoveryTest(unittest.TestCase):
         preview._scene = self._make_scene()
         preview.paintEvent(None)
 
+    def test_new_structure_invalidates_in_flight_preview_result_immediately(self) -> None:
+        preview = self._create_preview(SequencedAdapter([]))
+        first_model = self._make_model()
+        second_model = self._make_model()
+        second_model.atoms[1].x = 45.0
+        stale_scene = self._make_scene()
+
+        with mock.patch.object(preview._update_timer, "start"):
+            preview.set_structure(first_model)
+            first_request_id = preview._preview_request_id
+            preview.set_structure(second_model)
+
+        self.assertGreater(preview._preview_request_id, first_request_id)
+        preview._handle_preview_worker_finished(
+            first_request_id,
+            "CO",
+            28.01,
+            "C=O",
+            "STALE",
+            stale_scene,
+            None,
+        )
+
+        self.assertIsNone(preview._scene)
+        self.assertEqual(preview._formula_text, "")
+        self.assertEqual(preview._smiles_text, "")
+        self.assertEqual(preview._message, "Updating 3D preview...")
+
     def test_inspector_layout_and_state_helpers_cover_preview_panel_sections(self) -> None:
         preview = self._create_preview(SequencedAdapter([]))
         preview.resize(320, 260)

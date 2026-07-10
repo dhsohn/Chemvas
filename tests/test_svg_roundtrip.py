@@ -462,6 +462,52 @@ class SvgRoundtripTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Invalid editable Chemvas metadata"):
                 extract_chemvas_document_from_svg(path)
 
+    def test_extract_rejects_wide_encoded_dtd_and_entity_before_parsing(self) -> None:
+        encodings = ("utf-8", "utf-16-le", "utf-16-be", "utf-32-le", "utf-32-be")
+        declarations = (
+            "<!DOCTYPE svg>",
+            '<!ENTITY harmless "value">',
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._svg_path(tmp)
+            for codec in encodings:
+                for declaration in declarations:
+                    with self.subTest(codec=codec, declaration=declaration):
+                        source = (
+                            f"\n{declaration}"
+                            '<svg xmlns="http://www.w3.org/2000/svg"><metadata/></svg>'
+                        )
+                        path.write_bytes(source.encode(codec))
+                        with mock.patch("core.svg_roundtrip.ET.fromstring") as parser:
+                            with self.assertRaisesRegex(ValueError, "Invalid editable Chemvas metadata"):
+                                extract_chemvas_document_from_svg(path)
+                        parser.assert_not_called()
+
+    def test_extract_accepts_normal_utf16_editable_svg(self) -> None:
+        state = _sheet_state("wide encoded")
+        payload = create_editable_svg_payload(
+            state,
+            document_version=CANVAS_FILE_VERSION,
+            scope=CHEMVAS_SVG_SCOPE_SHEET,
+        )
+        encoded_payload = _encoded_payload(payload)
+        encodings = (("utf-16-le", "UTF-16LE"), ("utf-16-be", "UTF-16BE"))
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._svg_path(tmp)
+            for codec, xml_encoding in encodings:
+                with self.subTest(codec=codec):
+                    source = (
+                        f'<?xml version="1.0" encoding="{xml_encoding}"?>'
+                        '<svg xmlns="http://www.w3.org/2000/svg" '
+                        'xmlns:chemvas="https://chemvas.app/ns/svg-source/1">'
+                        "<metadata>"
+                        f'<chemvas:source encoding="base64+zlib+json">{encoded_payload}</chemvas:source>'
+                        "</metadata>"
+                        "</svg>"
+                    )
+                    path.write_bytes(source.encode(codec))
+                    self.assertEqual(extract_chemvas_document_from_svg(path).state, state)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -221,6 +221,15 @@ class SceneClipboardTransactionLogicTest(unittest.TestCase):
         )
         self.assertEqual(
             translated_scene_item_state(
+                {"kind": "ts_bracket", "rect": [1.0, 2.0, 3.0, 4.0]},
+                dx=2.0,
+                dy=-1.0,
+                atom_id_map={},
+            ),
+            {"kind": "ts_bracket", "rect": [3.0, 1.0, 3.0, 4.0]},
+        )
+        self.assertEqual(
+            translated_scene_item_state(
                 {"kind": "orbital", "center": (1.0, 2.0)},
                 dx=5.0,
                 dy=6.0,

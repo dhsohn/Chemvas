@@ -4,7 +4,7 @@ from typing import cast
 
 from core.model import Bond
 
-from ui.atom_coords_access import atom_coords_3d_for
+from ui.atom_coords_access import atom_coords_3d_for, pop_atom_coords_3d_for
 from ui.bond_style_logic import STANDARD_BOND_STYLES
 from ui.canvas_atom_graphics_state import pop_atom_dot_for, pop_atom_item_for
 from ui.canvas_bond_graphics_state import bond_items_for_id, pop_bond_items_for
@@ -52,6 +52,7 @@ class AtomLabelMergeService:
         self._delete_duplicate_bonds(merge_info)
         for other_id in merge_ids:
             remove_atom_direct_for(self.canvas, other_id)
+            pop_atom_coords_3d_for(self.canvas, other_id)
         self.graph_service.rebuild_bond_adjacency()
         return merge_ids, merge_info
 
