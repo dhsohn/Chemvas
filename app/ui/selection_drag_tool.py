@@ -497,10 +497,15 @@ class _DragMappingPort:
                     f"drag mapping value {self.name}[{entry.key!r}] changed"
                 )
             if entry.list_contents is not None:
-                if len(actual) != len(entry.list_contents) or any(
+                if type(actual) is not list:
+                    raise RuntimeError(
+                        f"drag mapping list {self.name}[{entry.key!r}] changed type"
+                    )
+                actual_list = cast(list[object], actual)
+                if len(actual_list) != len(entry.list_contents) or any(
                     current is not expected
                     for current, expected in zip(
-                        actual,
+                        actual_list,
                         entry.list_contents,
                         strict=True,
                     )

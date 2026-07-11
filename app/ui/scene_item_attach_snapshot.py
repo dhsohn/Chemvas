@@ -1460,6 +1460,7 @@ class SceneItemAttachSnapshot:
             )
             if current_collection is not collection:
                 mismatches.append("scene-item collection identity changed")
+        assert collection is not None
         if not self._identity_sequence_matches(
             collection,
             self.collection_contents,
