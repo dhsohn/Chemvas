@@ -283,6 +283,54 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         self.assertEqual(history.history, [])
         self.assertEqual(history.redo_stack, [])
 
+    def test_ring_batch_reuses_frozen_targets_without_second_graph_lookup(
+        self,
+    ) -> None:
+        canvas = CanvasView()
+        self.addCleanup(self._dispose_canvas, canvas)
+        atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
+            "C",
+            0.0,
+            0.0,
+        )
+        atom = canvas.model.atoms[atom_id]
+        original_color = atom.color
+        ring = QGraphicsPathItem()
+        ring.setData(0, "ring")
+        ring.setData(2, [atom_id])
+        canvas.scene().addItem(ring)
+
+        class SecondLookupPoisoningGraphService:
+            calls = 0
+
+            def bond_sets_for_atoms(self, _atom_ids):
+                self.calls += 1
+                if self.calls == 2:
+                    atom.color = "#abcdef"
+                return set(), set()
+
+        graph_service = SecondLookupPoisoningGraphService()
+        history_service = canvas.services.history_service
+        history = history_service.state
+        service = CanvasColorMutationService(
+            canvas,
+            graph_service=graph_service,
+            history_service=history_service,
+        )
+
+        service.apply_color_to_items([ring], QColor("#123456"))
+
+        self.assertEqual(graph_service.calls, 1)
+        self.assertEqual(atom.color, "#123456")
+        self.assertEqual(len(history.history), 1)
+        self.assertEqual(history.redo_stack, [])
+
+        history_service.undo()
+
+        self.assertEqual(atom.color, original_color)
+        self.assertEqual(history.history, [])
+        self.assertEqual(len(history.redo_stack), 1)
+
     def test_actual_qt_history_alias_replacement_rolls_back_single_and_batch(
         self,
     ) -> None:

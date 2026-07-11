@@ -717,6 +717,23 @@ class _SceneColorPeerAuthority:
             )
 
 
+@dataclass(frozen=True, slots=True)
+class _SceneColorPeerTransaction:
+    authority: _SceneColorPeerAuthority
+    allowed_graphics_ids: frozenset[int]
+    ring_targets: tuple[tuple[object, tuple[object, ...]], ...]
+
+    def targets_for_ring(self, item: object) -> tuple[object, ...] | None:
+        return next(
+            (
+                targets
+                for captured_item, targets in self.ring_targets
+                if captured_item is item
+            ),
+            None,
+        )
+
+
 class CanvasColorMutationService:
     def __init__(
         self, canvas: CanvasView, *, graph_service, history_service=None
@@ -724,9 +741,7 @@ class CanvasColorMutationService:
         self.canvas = canvas
         self.history = history_service
         self.graph_service = graph_service
-        self._scene_color_peer_transactions: list[
-            tuple[_SceneColorPeerAuthority, frozenset[int]]
-        ] = []
+        self._scene_color_peer_transactions: list[_SceneColorPeerTransaction] = []
 
     @staticmethod
     def _live_graphics_ids(
@@ -850,13 +865,17 @@ class CanvasColorMutationService:
             raise
         return authority
 
-    def _intended_scene_color_graphics_ids(
+    def _resolve_intended_scene_color_targets(
         self,
         items: Iterable[object],
         *,
         expand_ring_structures: bool,
-    ) -> frozenset[int]:
+    ) -> tuple[
+        frozenset[int],
+        tuple[tuple[object, tuple[object, ...]], ...],
+    ]:
         allowed: set[int] = set()
+        ring_targets: list[tuple[object, tuple[object, ...]]] = []
         for item in items:
             allowed.add(id(item))
             if not isinstance(item, QGraphicsItem) or sip.isdeleted(item):
@@ -878,11 +897,19 @@ class CanvasColorMutationService:
                     for candidate in bond_items_for_id(self.canvas, object_id)
                 )
             elif kind == "ring" and expand_ring_structures:
-                allowed.update(
-                    id(candidate)
-                    for candidate in self._ring_structure_targets(item)
+                targets = next(
+                    (
+                        captured_targets
+                        for captured_item, captured_targets in ring_targets
+                        if captured_item is item
+                    ),
+                    None,
                 )
-        return frozenset(allowed)
+                if targets is None:
+                    targets = self._resolve_ring_structure_targets(item)
+                    ring_targets.append((item, targets))
+                allowed.update(id(candidate) for candidate in targets)
+        return frozenset(allowed), tuple(ring_targets)
 
     @contextlib.contextmanager
     def _scene_color_peer_transaction(
@@ -917,7 +944,7 @@ class CanvasColorMutationService:
             yield
             return
         try:
-            allowed = self._intended_scene_color_graphics_ids(
+            allowed, ring_targets = self._resolve_intended_scene_color_targets(
                 items,
                 expand_ring_structures=expand_ring_structures,
             )
@@ -935,7 +962,13 @@ class CanvasColorMutationService:
                 phase="closing history after scene-color target resolution",
             )
             raise
-        transactions.append((authority, allowed))
+        transactions.append(
+            _SceneColorPeerTransaction(
+                authority=authority,
+                allowed_graphics_ids=allowed,
+                ring_targets=ring_targets,
+            )
+        )
         try:
             yield
             authority.verify_peers(allowed)
@@ -953,8 +986,8 @@ class CanvasColorMutationService:
     def _verify_active_scene_color_peers(self) -> None:
         if not self._scene_color_peer_transactions:
             return
-        authority, allowed = self._scene_color_peer_transactions[-1]
-        authority.verify_peers(allowed)
+        transaction = self._scene_color_peer_transactions[-1]
+        transaction.authority.verify_peers(transaction.allowed_graphics_ids)
 
     def apply_color_to_item(self, item, color: QColor) -> None:
         with self._scene_color_peer_transaction(
@@ -1927,12 +1960,22 @@ class CanvasColorMutationService:
         # captures this transaction's single command.
         self.apply_color_to_items(targets, color)
 
-    def _ring_structure_targets(self, item) -> list[object]:
+    def _ring_structure_targets(self, item) -> tuple[object, ...]:
+        if self._scene_color_peer_transactions:
+            targets = self._scene_color_peer_transactions[-1].targets_for_ring(item)
+            if targets is None:
+                raise RuntimeError(
+                    "ring color targets were not frozen before mutation"
+                )
+            return targets
+        return self._resolve_ring_structure_targets(item)
+
+    def _resolve_ring_structure_targets(self, item) -> tuple[object, ...]:
         ring_atom_ids = _graphics_item_data_for_capture(item, 2)
         if ring_atom_ids is _DELETED_GRAPHICS_ITEM:
-            return []
+            return ()
         if not isinstance(ring_atom_ids, list):
-            return []
+            return ()
         atom_ids = {
             atom_id
             for atom_id in ring_atom_ids
@@ -1940,7 +1983,7 @@ class CanvasColorMutationService:
             and atom_for_id(self.canvas, atom_id) is not None
         }
         if not atom_ids:
-            return []
+            return ()
         bond_ids, _ = self.graph_service.bond_sets_for_atoms(atom_ids)
         targets: list[object] = []
         for atom_id in sorted(atom_ids):
@@ -1951,7 +1994,7 @@ class CanvasColorMutationService:
             bond_items = bond_items_for_id(self.canvas, bond_id)
             if bond_items:
                 targets.append(bond_items[0])
-        return targets
+        return tuple(targets)
 
     def _graphics_runtime_rollback(self, item) -> Callable[[], None]:
         if _graphics_item_is_deleted(item):
