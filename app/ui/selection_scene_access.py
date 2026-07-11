@@ -3,17 +3,110 @@ from __future__ import annotations
 import inspect
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+from functools import partial
 from types import MemberDescriptorType
 from typing import Any, Protocol, cast
 
 from PyQt6 import sip
 from PyQt6.QtCore import QObject
-from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene
+from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene, QGraphicsView
 
 from ui.canvas_scene_items_state import selected_notes_for
 from ui.scene_signal_blocking import blocked_scene_signals
 
 _MISSING_SCENE_ATTRIBUTE = object()
+
+_RAW_SCENE_SELECTION_CONTAINER_FIELDS = frozenset(
+    {
+        "_selected_items",
+        "selected_items",
+    }
+)
+_RAW_SCENE_MEMBERSHIP_FIELDS = frozenset(
+    {
+        "items",
+        "_items",
+        "scene_items",
+        "_scene_items",
+        "members",
+        "_members",
+    }
+)
+_RAW_SCENE_DISTINCT_MEMBERSHIP_FIELDS = (
+    _RAW_SCENE_MEMBERSHIP_FIELDS - _RAW_SCENE_SELECTION_CONTAINER_FIELDS
+)
+_QT_STACKING_FLAG_MASK = (
+    QGraphicsItem.GraphicsItemFlag.ItemStacksBehindParent
+    | QGraphicsItem.GraphicsItemFlag.ItemNegativeZStacksBehindParent
+)
+
+
+def _nested_builtin_container_members(value: object) -> tuple[object, ...] | None:
+    """Flatten exact built-in containers without invoking overridable ports."""
+
+    if type(value) not in {dict, list, tuple, set}:
+        return None
+    pending = [value]
+    seen_containers: set[int] = set()
+    seen_members: set[int] = set()
+    members: list[object] = []
+    while pending:
+        candidate = pending.pop()
+        if type(candidate) is dict:
+            if id(candidate) in seen_containers:
+                continue
+            seen_containers.add(id(candidate))
+            children: list[object] = []
+            for key, child in tuple(dict.items(cast(dict, candidate))):
+                children.extend((key, child))
+            pending.extend(reversed(children))
+            continue
+        if type(candidate) in {list, tuple, set}:
+            if id(candidate) in seen_containers:
+                continue
+            seen_containers.add(id(candidate))
+            container_children = tuple(cast(Any, candidate))
+            pending.extend(reversed(container_children))
+            continue
+        if id(candidate) in seen_members:
+            continue
+        seen_members.add(id(candidate))
+        members.append(candidate)
+    return tuple(members)
+
+
+def _nested_mutable_builtin_container_ids(value: object) -> set[int]:
+    """Collect every mutable built-in container in a captured container graph."""
+
+    if type(value) not in {dict, list, tuple, set}:
+        return set()
+    pending = [value]
+    seen_containers: set[int] = set()
+    mutable_container_ids: set[int] = set()
+    while pending:
+        candidate = pending.pop()
+        if type(candidate) not in {dict, list, tuple, set}:
+            continue
+        candidate_id = id(candidate)
+        if candidate_id in seen_containers:
+            continue
+        seen_containers.add(candidate_id)
+        if type(candidate) is dict:
+            mutable_container_ids.add(candidate_id)
+            for key, child in tuple(dict.items(cast(dict, candidate))):
+                pending.extend((key, child))
+            continue
+        if type(candidate) in {list, set}:
+            mutable_container_ids.add(candidate_id)
+        pending.extend(tuple(cast(Any, candidate)))
+    return mutable_container_ids
+
+
+def _is_raw_signal_state_field(name: str) -> bool:
+    normalized = name.strip("_").lower()
+    return normalized == "blocked" or (
+        "signal" in normalized and ("block" in normalized or "flag" in normalized)
+    )
 
 
 class _SelectedNotesState(Protocol):
@@ -86,7 +179,7 @@ class _RawSelectionContainer:
             set.clear(members)
             set.update(members, self.contents)
 
-    def verify(self) -> None:
+    def is_exact(self) -> bool:
         if self.kind == "dict":
             actual = tuple(cast(dict, self.target).items())
             expected = cast(tuple[tuple[object, object], ...], self.contents)
@@ -107,7 +200,10 @@ class _RawSelectionContainer:
             exact = {id(value) for value in cast(set, self.target)} == {
                 id(value) for value in self.contents
             }
-        if not exact:
+        return exact
+
+    def verify(self) -> None:
+        if not self.is_exact():
             raise RuntimeError("selection capture changed a raw container")
 
 
@@ -197,6 +293,327 @@ class _RawSelectionObject:
             if not present or actual is not expected:
                 raise RuntimeError("selection capture changed a raw object slot")
 
+    def raw_fields_are_exact(self, names: frozenset[str]) -> bool:
+        """Compare selected raw fields without invoking live descriptors."""
+
+        expected_namespace = {
+            key: value for key, value in self.namespace_items if key in names
+        }
+        if self.namespace is None:
+            if expected_namespace:
+                return False
+        else:
+            actual_namespace = {
+                key: value for key, value in self.namespace.items() if key in names
+            }
+            if actual_namespace.keys() != expected_namespace.keys() or any(
+                actual_namespace[key] is not expected
+                for key, expected in expected_namespace.items()
+            ):
+                return False
+
+        expected_slots = {
+            descriptor.__name__: (present, value)
+            for descriptor, present, value in self.slots
+            if descriptor.__name__ in names
+        }
+        for owner in type(self.target).__mro__:
+            for name, descriptor in owner.__dict__.items():
+                if name not in names or not isinstance(descriptor, MemberDescriptorType):
+                    continue
+                expected = expected_slots.get(name)
+                if expected is None:
+                    return False
+                present, expected_value = expected
+                try:
+                    actual = descriptor.__get__(self.target, type(self.target))
+                except AttributeError:
+                    if present:
+                        return False
+                else:
+                    if not present or actual is not expected_value:
+                        return False
+        return True
+
+    def raw_container_ids_for(self, names: frozenset[str]) -> set[int]:
+        container_ids: set[int] = set()
+        for key, value in self.namespace_items:
+            if key in names:
+                container_ids.update(
+                    _nested_mutable_builtin_container_ids(value)
+                )
+        for descriptor, present, value in self.slots:
+            if present and descriptor.__name__ in names:
+                container_ids.update(
+                    _nested_mutable_builtin_container_ids(value)
+                )
+        return container_ids
+
+    def has_raw_container_field(self, names: frozenset[str]) -> bool:
+        return any(
+            key in names and type(value) in {dict, list, set, tuple}
+            for key, value in self.namespace_items
+        ) or any(
+            present
+            and descriptor.__name__ in names
+            and type(value) in {dict, list, set, tuple}
+            for descriptor, present, value in self.slots
+        )
+
+    def raw_container_fields_are_empty(self, names: frozenset[str]) -> bool:
+        """Check recognized live container fields without calling descriptors."""
+
+        expected_namespace_names = {
+            key
+            for key, value in self.namespace_items
+            if key in names and type(value) in {dict, list, set, tuple}
+        }
+        if self.namespace is None:
+            if expected_namespace_names:
+                return False
+        else:
+            actual_namespace_names = {
+                key for key in self.namespace if key in names
+            }
+            if not expected_namespace_names.issubset(actual_namespace_names):
+                return False
+            for name in actual_namespace_names:
+                value = dict.__getitem__(self.namespace, name)
+                if (
+                    type(value) not in {dict, list, set, tuple}
+                    or len(cast(Any, value)) != 0
+                ):
+                    return False
+
+        expected_slots = {
+            descriptor.__name__: present
+            for descriptor, present, value in self.slots
+            if (
+                descriptor.__name__ in names
+                and type(value) in {dict, list, set, tuple}
+            )
+        }
+        seen_slots: set[str] = set()
+        for owner in type(self.target).__mro__:
+            for name, descriptor in owner.__dict__.items():
+                if (
+                    name not in names
+                    or name in seen_slots
+                    or not isinstance(descriptor, MemberDescriptorType)
+                ):
+                    continue
+                seen_slots.add(name)
+                expected_present = expected_slots.get(name)
+                try:
+                    value = descriptor.__get__(self.target, type(self.target))
+                except AttributeError:
+                    if expected_present:
+                        return False
+                else:
+                    if type(value) not in {dict, list, set, tuple} or len(value) != 0:
+                        return False
+        return True
+
+    def callback_free_signal_state_reader(
+        self,
+        expected: bool,
+    ) -> Callable[[], object] | None:
+        """Return one unambiguous raw reader matching the live signal state."""
+
+        readers: list[Callable[[], object]] = []
+        if self.namespace is not None:
+            for name, captured in self.namespace_items:
+                if not _is_raw_signal_state_field(name) or type(captured) is not bool:
+                    continue
+                if captured is not expected:
+                    continue
+
+                def read_namespace_signal_state(
+                    *,
+                    namespace: dict[str, object] = self.namespace,
+                    field: str = name,
+                ) -> object:
+                    return dict.__getitem__(namespace, field)
+
+                readers.append(read_namespace_signal_state)
+
+        for descriptor, present, captured in self.slots:
+            if (
+                not present
+                or not _is_raw_signal_state_field(descriptor.__name__)
+                or type(captured) is not bool
+                or captured is not expected
+            ):
+                continue
+
+            def read_slot_signal_state(
+                *,
+                target: object = self.target,
+                member: MemberDescriptorType = descriptor,
+            ) -> object:
+                return member.__get__(target, type(target))
+
+            readers.append(read_slot_signal_state)
+
+        stable_readers: list[Callable[[], object]] = []
+        for reader in readers:
+            try:
+                if reader() is expected:
+                    stable_readers.append(reader)
+            except BaseException:
+                continue
+        return stable_readers[0] if len(stable_readers) == 1 else None
+
+
+def _callback_free_signal_state_getter_for(
+    scene: object | None,
+    raw_objects: Iterable[_RawSelectionObject],
+    captured: bool | None,
+) -> Callable[[], object] | None:
+    if captured is None:
+        return None
+    if isinstance(scene, QObject):
+        return partial(QObject.signalsBlocked, scene)
+    scene_raw = next(
+        (raw_object for raw_object in raw_objects if raw_object.target is scene),
+        None,
+    )
+    if scene_raw is None:
+        return None
+    return scene_raw.callback_free_signal_state_reader(captured)
+
+
+@dataclass(frozen=True, slots=True)
+class _QtSceneItemTopology:
+    item: QGraphicsItem
+    parent: QGraphicsItem | None
+    z_value: float
+    stacking_flags: QGraphicsItem.GraphicsItemFlag
+
+
+@dataclass(slots=True)
+class _QtSceneMembershipSnapshot:
+    scene: QGraphicsScene
+    ordered_items: tuple[QGraphicsItem, ...]
+    topology: tuple[_QtSceneItemTopology, ...]
+
+    @classmethod
+    def capture(cls, scene: QGraphicsScene) -> _QtSceneMembershipSnapshot:
+        ordered_items = tuple(QGraphicsScene.items(scene))
+        topology = tuple(
+            _QtSceneItemTopology(
+                item=item,
+                parent=QGraphicsItem.parentItem(item),
+                z_value=float(QGraphicsItem.zValue(item)),
+                stacking_flags=(QGraphicsItem.flags(item) & _QT_STACKING_FLAG_MASK),
+            )
+            for item in ordered_items
+        )
+        return cls(scene, ordered_items, topology)
+
+    def is_exact(self) -> bool:
+        try:
+            current = tuple(QGraphicsScene.items(self.scene))
+            if len(current) != len(self.ordered_items) or any(
+                actual is not expected
+                for actual, expected in zip(
+                    current,
+                    self.ordered_items,
+                    strict=True,
+                )
+            ):
+                return False
+            for state in self.topology:
+                if (
+                    sip.isdeleted(state.item)
+                    or QGraphicsItem.scene(state.item) is not self.scene
+                    or QGraphicsItem.parentItem(state.item) is not state.parent
+                    or float(QGraphicsItem.zValue(state.item)) != state.z_value
+                    or (
+                        QGraphicsItem.flags(state.item) & _QT_STACKING_FLAG_MASK
+                    )
+                    != state.stacking_flags
+                ):
+                    return False
+        except BaseException:
+            return False
+        return True
+
+    def _restore_membership(self) -> None:
+        expected_ids = {id(item) for item in self.ordered_items}
+        current = tuple(QGraphicsScene.items(self.scene))
+        unexpected = tuple(item for item in current if id(item) not in expected_ids)
+        unexpected_ids = {id(item) for item in unexpected}
+        for item in unexpected:
+            parent = QGraphicsItem.parentItem(item)
+            if parent is not None and id(parent) in unexpected_ids:
+                continue
+            QGraphicsScene.removeItem(self.scene, item)
+
+        topology_by_id = {id(state.item): state for state in self.topology}
+        for item in reversed(self.ordered_items):
+            state = topology_by_id[id(item)]
+            if state.parent is not None:
+                continue
+            if QGraphicsItem.scene(item) is not self.scene:
+                QGraphicsScene.addItem(self.scene, item)
+
+        pending = list(reversed(self.ordered_items))
+        for _sweep in range(len(pending) + 1):
+            if not pending:
+                break
+            next_pending: list[QGraphicsItem] = []
+            for item in pending:
+                state = topology_by_id[id(item)]
+                parent = state.parent
+                if parent is not None and QGraphicsItem.scene(parent) is not self.scene:
+                    next_pending.append(item)
+                    continue
+                if QGraphicsItem.parentItem(item) is not parent:
+                    QGraphicsItem.setParentItem(item, parent)
+                if QGraphicsItem.scene(item) is not self.scene:
+                    QGraphicsScene.addItem(self.scene, item)
+            if len(next_pending) == len(pending):
+                break
+            pending = next_pending
+        if pending:
+            raise RuntimeError("selection recovery could not reattach scene descendants")
+
+    def _restore_topology_and_order(self) -> None:
+        for state in self.topology:
+            item = state.item
+            current_flags = QGraphicsItem.flags(item)
+            restored_flags = (
+                current_flags & ~_QT_STACKING_FLAG_MASK
+            ) | state.stacking_flags
+            if restored_flags != current_flags:
+                QGraphicsItem.setFlags(item, restored_flags)
+            if float(QGraphicsItem.zValue(item)) != state.z_value:
+                QGraphicsItem.setZValue(item, state.z_value)
+
+        sibling_groups: dict[
+            tuple[int, float],
+            list[_QtSceneItemTopology],
+        ] = {}
+        for state in self.topology:
+            sibling_groups.setdefault(
+                (id(state.parent), state.z_value),
+                [],
+            ).append(state)
+        for siblings in sibling_groups.values():
+            for higher, lower in zip(siblings, siblings[1:], strict=False):
+                QGraphicsItem.stackBefore(lower.item, higher.item)
+
+    def restore(self) -> None:
+        for _attempt in range(2):
+            self._restore_membership()
+            self._restore_topology_and_order()
+            if self.is_exact():
+                return
+        raise RuntimeError(
+            "selection recovery did not restore exact Qt scene membership/order"
+        )
+
 
 @dataclass(slots=True)
 class _SelectionCaptureAuthority:
@@ -204,7 +621,11 @@ class _SelectionCaptureAuthority:
     raw_objects: tuple[_RawSelectionObject, ...]
     raw_containers: tuple[_RawSelectionContainer, ...]
     qt_selection: tuple[tuple[QGraphicsItem, bool], ...]
-    qt_signals_blocked: bool | None
+    qt_membership: _QtSceneMembershipSnapshot | None
+    signal_state_getter: Callable[[], object] | None
+    signal_state_setter: Callable[[bool], object] | None
+    callback_free_signal_state_getter: Callable[[], object] | None
+    captured_signal_state: bool | None
 
     @classmethod
     def capture(
@@ -252,10 +673,10 @@ class _SelectionCaptureAuthority:
                 namespace = None
             if isinstance(namespace, dict):
                 for value in tuple(namespace.values()):
-                    if type(value) not in {list, tuple, set, dict}:
+                    nested_members = _nested_builtin_container_members(value)
+                    if nested_members is None:
                         continue
-                    pending = list(value.values()) if type(value) is dict else list(value)
-                    for candidate in pending:
+                    for candidate in nested_members:
                         if not isinstance(candidate, (str, bytes, int, float, bool)):
                             raw_targets.append(candidate)
         raw_objects: list[_RawSelectionObject] = []
@@ -268,9 +689,14 @@ class _SelectionCaptureAuthority:
                 _RawSelectionObject.capture(target, capture_container)
             )
 
+        qt_membership = (
+            _QtSceneMembershipSnapshot.capture(scene)
+            if isinstance(scene, QGraphicsScene)
+            else None
+        )
         qt_items: list[QGraphicsItem] = []
-        if isinstance(scene, QGraphicsScene):
-            qt_items.extend(QGraphicsScene.items(scene))
+        if qt_membership is not None:
+            qt_items.extend(qt_membership.ordered_items)
         qt_items.extend(
             target for target in targets if isinstance(target, QGraphicsItem)
         )
@@ -281,17 +707,201 @@ class _SelectionCaptureAuthority:
                 continue
             seen_qt.add(id(item))
             qt_selection.append((item, bool(QGraphicsItem.isSelected(item))))
-        return cls(
+        authority = cls(
             scene=scene,
             raw_objects=tuple(raw_objects),
             raw_containers=tuple(containers),
             qt_selection=tuple(qt_selection),
-            qt_signals_blocked=(
-                bool(QObject.signalsBlocked(scene))
-                if isinstance(scene, QObject)
-                else None
-            ),
+            qt_membership=qt_membership,
+            signal_state_getter=None,
+            signal_state_setter=None,
+            callback_free_signal_state_getter=None,
+            captured_signal_state=None,
         )
+        try:
+            if isinstance(scene, QObject):
+                authority.signal_state_getter = partial(QObject.signalsBlocked, scene)
+                authority.signal_state_setter = partial(QObject.blockSignals, scene)
+            elif scene is not None:
+                signal_state_candidate = _optional_live_attribute(
+                    scene,
+                    "signalsBlocked",
+                    default=_MISSING_SCENE_ATTRIBUTE,
+                )
+                if callable(signal_state_candidate):
+                    authority.signal_state_getter = signal_state_candidate
+                signal_setter_candidate = _optional_live_attribute(
+                    scene,
+                    "blockSignals",
+                    default=_MISSING_SCENE_ATTRIBUTE,
+                )
+                if callable(signal_setter_candidate):
+                    authority.signal_state_setter = signal_setter_candidate
+            captured_signal_state = (
+                bool(authority.signal_state_getter())
+                if authority.signal_state_getter is not None
+                else None
+            )
+        except BaseException as capture_error:
+            authority.restore(capture_error)
+            raise
+        if not authority.raw_state_is_exact():
+            raw_capture_error = RuntimeError(
+                "selection signal-state capture changed raw authority"
+            )
+            authority.restore(raw_capture_error)
+            raise raw_capture_error
+        authority.callback_free_signal_state_getter = (
+            _callback_free_signal_state_getter_for(
+                scene,
+                authority.raw_objects,
+                captured_signal_state,
+            )
+        )
+        authority.captured_signal_state = captured_signal_state
+        return authority
+
+    def raw_state_is_exact(self) -> bool:
+        try:
+            for raw_object in self.raw_objects:
+                raw_object.verify()
+            for raw_container in self.raw_containers:
+                raw_container.verify()
+        except BaseException:
+            return False
+        return True
+
+    def _raw_containers_are_exact_for(
+        self,
+        names: frozenset[str],
+        *,
+        scene_only: bool,
+    ) -> bool:
+        container_ids: set[int] = set()
+        for raw_object in self.raw_objects:
+            if scene_only and raw_object.target is not self.scene:
+                continue
+            container_ids.update(raw_object.raw_container_ids_for(names))
+        return all(
+            raw_container.is_exact()
+            for raw_container in self.raw_containers
+            if id(raw_container.target) in container_ids
+        )
+
+    def selection_state_is_exact(
+        self,
+        item_snapshots: Iterable[_ItemSelectionSnapshot] = (),
+    ) -> bool:
+        """Compare selection authorities without calling overridable ports."""
+
+        try:
+            if any(
+                bool(QGraphicsItem.isSelected(item)) is not expected
+                for item, expected in self.qt_selection
+            ):
+                return False
+        except BaseException:
+            return False
+        try:
+            for snapshot in item_snapshots:
+                if not snapshot.capture_was_stable:
+                    return False
+                actual = snapshot.current_selected(callback_free=True)
+                if actual is not None and actual is not snapshot.selected:
+                    return False
+        except BaseException:
+            return False
+        return self._raw_containers_are_exact_for(
+            _RAW_SCENE_SELECTION_CONTAINER_FIELDS,
+            scene_only=True,
+        )
+
+    def raw_selection_containers_are_empty(self) -> bool:
+        scene_raw = next(
+            (
+                raw_object
+                for raw_object in self.raw_objects
+                if raw_object.target is self.scene
+            ),
+            None,
+        )
+        if scene_raw is None:
+            return True
+        # A selected-items-only list is a documented sparse compatibility
+        # frontier and may intentionally remain stale.  Once the scene also
+        # exposes a distinct raw membership container, the selection container
+        # is an exact authority and must be empty after a successful clear.
+        if not scene_raw.has_raw_container_field(
+            _RAW_SCENE_DISTINCT_MEMBERSHIP_FIELDS
+        ):
+            return True
+        return scene_raw.raw_container_fields_are_empty(
+            _RAW_SCENE_SELECTION_CONTAINER_FIELDS
+        )
+
+    def membership_state_is_exact(self) -> bool:
+        if self.qt_membership is not None and not self.qt_membership.is_exact():
+            return False
+        scene_raw = next(
+            (
+                raw_object
+                for raw_object in self.raw_objects
+                if raw_object.target is self.scene
+            ),
+            None,
+        )
+        if scene_raw is not None and not scene_raw.raw_fields_are_exact(
+            _RAW_SCENE_MEMBERSHIP_FIELDS
+        ):
+            return False
+        return self._raw_containers_are_exact_for(
+            _RAW_SCENE_MEMBERSHIP_FIELDS,
+            scene_only=True,
+        )
+
+    def signal_state_is_exact(self) -> bool:
+        """Compare state only through a callback-free captured authority."""
+
+        getter = self.callback_free_signal_state_getter
+        expected = self.captured_signal_state
+        if expected is None:
+            return True
+        if getter is None:
+            return False
+        try:
+            return bool(getter()) is expected
+        except BaseException:
+            return False
+
+    def authoritative_state_is_exact(
+        self,
+        item_snapshots: Iterable[_ItemSelectionSnapshot] = (),
+    ) -> bool:
+        return (
+            self.selection_state_is_exact(item_snapshots)
+            and self.membership_state_is_exact()
+            and self.signal_state_is_exact()
+        )
+
+    def require_unchanged_capture(
+        self,
+        item_snapshots: Iterable[_ItemSelectionSnapshot] = (),
+    ) -> None:
+        if self.authoritative_state_is_exact(item_snapshots):
+            return
+        capture_error = RuntimeError(
+            "selection capture changed authoritative selection or signal state"
+        )
+        self.restore(capture_error)
+        raise capture_error
+
+    def restore_if_authority_changed(
+        self,
+        original_error: BaseException,
+        item_snapshots: Iterable[_ItemSelectionSnapshot] = (),
+    ) -> None:
+        if not self.authoritative_state_is_exact(item_snapshots):
+            self.restore(original_error)
 
     def restore(self, original_error: BaseException) -> None:
         recorded: list[BaseException] = []
@@ -304,6 +914,8 @@ class _SelectionCaptureAuthority:
                     raw_object.restore()
                 for raw_container in self.raw_containers:
                     raw_container.restore()
+                if self.qt_membership is not None:
+                    self.qt_membership.restore()
                 for selected in (True, False):
                     for item, expected in self.qt_selection:
                         if expected is selected:
@@ -316,14 +928,11 @@ class _SelectionCaptureAuthority:
                 errors.append(error)
             finally:
                 if (
-                    isinstance(self.scene, QObject)
-                    and self.qt_signals_blocked is not None
+                    self.signal_state_setter is not None
+                    and self.captured_signal_state is not None
                 ):
                     try:
-                        QObject.blockSignals(
-                            self.scene,
-                            self.qt_signals_blocked,
-                        )
+                        self.signal_state_setter(self.captured_signal_state)
                     except BaseException as error:
                         errors.append(error)
             for raw_object in self.raw_objects:
@@ -344,14 +953,15 @@ class _SelectionCaptureAuthority:
                         )
                 except BaseException as error:
                     errors.append(error)
-            if (
-                isinstance(self.scene, QObject)
-                and self.qt_signals_blocked is not None
-                and bool(QObject.signalsBlocked(self.scene))
-                is not self.qt_signals_blocked
-            ):
+            if self.qt_membership is not None and not self.qt_membership.is_exact():
                 errors.append(
-                    RuntimeError("selection capture changed Qt signal state")
+                    RuntimeError(
+                        "selection capture changed Qt scene membership/order"
+                    )
+                )
+            if not self.signal_state_is_exact():
+                errors.append(
+                    RuntimeError("selection capture changed scene signal state")
                 )
             if not errors:
                 return
@@ -364,23 +974,189 @@ class _SelectionCaptureAuthority:
             )
 
 
+@dataclass(frozen=True, slots=True)
+class _SelectionReaderCandidate:
+    reader: Callable[[], bool]
+    captured: bool
+
+
+def _qt_item_has_python_item_change_override(item: QGraphicsItem) -> bool:
+    """Reject selection writes that can re-enter a Python virtual hook.
+
+    Calling ``QGraphicsItem.setSelected`` bypasses a Python ``setSelected``
+    override, but Qt still dispatches ``itemChange`` virtually.  A Python
+    override can irreversibly delete another C++ scene item before rollback.
+    Direct aliases of Qt's base implementation remain safe.
+    """
+
+    base_item_change = QGraphicsItem.__dict__["itemChange"]
+    qt_method_descriptor_type = type(base_item_change)
+    for owner in type(item).__mro__:
+        if owner is QGraphicsItem:
+            return False
+        candidate = owner.__dict__.get(
+            "itemChange",
+            _MISSING_SCENE_ATTRIBUTE,
+        )
+        if candidate is _MISSING_SCENE_ATTRIBUTE:
+            continue
+        if (
+            candidate is base_item_change
+            or type(candidate) is qt_method_descriptor_type
+        ):
+            # Standard Qt subclasses such as QGraphicsWidget expose their own
+            # C++ implementation through the same immutable sip descriptor.
+            continue
+        return True
+    return False
+
+
+def _callback_free_item_selection_candidates(
+    item: object,
+) -> tuple[_SelectionReaderCandidate, ...]:
+    if isinstance(item, QGraphicsItem):
+        def read_qt_selection() -> bool:
+            return bool(QGraphicsItem.isSelected(item))
+
+        return (
+            _SelectionReaderCandidate(
+                read_qt_selection,
+                read_qt_selection(),
+            ),
+        )
+
+    readers: list[Callable[[], bool]] = []
+    try:
+        namespace = object.__getattribute__(item, "__dict__")
+    except (AttributeError, TypeError):
+        namespace = None
+    if isinstance(namespace, dict):
+        for name in ("_selected", "selected"):
+            if dict.__contains__(namespace, name):
+
+                def read_namespace_selection(
+                    *,
+                    target: object = item,
+                    field: str = name,
+                ) -> bool:
+                    current_namespace = object.__getattribute__(target, "__dict__")
+                    if not isinstance(current_namespace, dict):
+                        raise RuntimeError("selection authority namespace disappeared")
+                    return bool(dict.__getitem__(current_namespace, field))
+
+                readers.append(read_namespace_selection)
+
+    if not isinstance(item, QObject):
+        seen_descriptors: set[int] = set()
+        for owner in type(item).__mro__:
+            for name in ("_selected", "selected"):
+                descriptor = owner.__dict__.get(name)
+                if (
+                    not isinstance(descriptor, MemberDescriptorType)
+                    or id(descriptor) in seen_descriptors
+                ):
+                    continue
+                seen_descriptors.add(id(descriptor))
+
+                def read_slot_selection(
+                    *,
+                    target: object = item,
+                    member: MemberDescriptorType = descriptor,
+                ) -> bool:
+                    return bool(member.__get__(target, type(target)))
+
+                readers.append(read_slot_selection)
+    return tuple(
+        _SelectionReaderCandidate(reader, reader())
+        for reader in readers
+    )
+
+
 @dataclass(slots=True)
 class _ItemSelectionSnapshot:
     item: object
     selected: bool
     is_selected: Callable[[], object]
     set_selected: Callable[[bool], object]
+    authoritative_is_selected: Callable[[], bool] | None
+    capture_was_stable: bool
 
     @classmethod
     def capture(cls, item: object) -> _ItemSelectionSnapshot:
-        is_selected = _required_live_method(item, "isSelected")
-        set_selected = _required_live_method(item, "setSelected")
+        is_selected: Callable[[], object]
+        set_selected: Callable[[bool], object]
+        if isinstance(item, QGraphicsItem):
+            # Qt's C++ selection state is the exact authority.  Calling a
+            # Python subclass override here would let an item delete or detach
+            # unrelated scene peers before topology recovery can protect their
+            # wrappers.  Match the Qt clear path and bind the base ports for
+            # capture, mutation, verification, and rollback.
+            is_selected = partial(QGraphicsItem.isSelected, item)
+            set_selected = partial(QGraphicsItem.setSelected, item)
+        else:
+            is_selected = _required_live_method(item, "isSelected")
+            set_selected = _required_live_method(item, "setSelected")
+        candidates = _callback_free_item_selection_candidates(item)
+        live_selected = bool(is_selected())
+        stable_candidates: list[_SelectionReaderCandidate] = []
+        capture_was_stable = True
+        for candidate in candidates:
+            current = candidate.reader()
+            if current is not candidate.captured:
+                capture_was_stable = False
+                continue
+            if candidate.captured is live_selected:
+                stable_candidates.append(candidate)
+        authoritative_candidate: _SelectionReaderCandidate | None
+        if isinstance(item, QGraphicsItem):
+            authoritative_candidate = candidates[0]
+        else:
+            authoritative_candidate = (
+                stable_candidates[0]
+                if len(stable_candidates) == 1
+                else None
+            )
+        authoritative_is_selected = (
+            authoritative_candidate.reader
+            if authoritative_candidate is not None
+            else None
+        )
         return cls(
             item=item,
-            selected=bool(is_selected()),
+            selected=(
+                authoritative_candidate.captured
+                if authoritative_candidate is not None
+                else live_selected
+            ),
             is_selected=is_selected,
             set_selected=set_selected,
+            authoritative_is_selected=authoritative_is_selected,
+            capture_was_stable=capture_was_stable,
         )
+
+    def current_selected(self, *, callback_free: bool) -> bool | None:
+        authoritative = (
+            self.authoritative_is_selected()
+            if self.authoritative_is_selected is not None
+            else None
+        )
+        if callback_free:
+            return authoritative
+        live = bool(self.is_selected())
+        if authoritative is not None and live is not authoritative:
+            raise RuntimeError(
+                "selection public getter disagrees with raw authority"
+            )
+        return live
+
+    def require_reversible_mutation_port(self) -> None:
+        if isinstance(self.item, QGraphicsItem) and (
+            _qt_item_has_python_item_change_override(self.item)
+        ):
+            raise RuntimeError(
+                "Qt selection item has a Python itemChange override without "
+                "an exact reversible mutation port"
+            )
 
     def restore(self, original_error: BaseException) -> None:
         for attempt in range(2):
@@ -397,7 +1173,11 @@ class _ItemSelectionSnapshot:
                     ),
                 )
             try:
-                if bool(self.is_selected()) == self.selected:
+                public_selected = self.current_selected(callback_free=False)
+                final_authority = self.current_selected(callback_free=True)
+                if public_selected == self.selected and (
+                    final_authority is None or final_authority is self.selected
+                ):
                     return
             except BaseException as verify_error:
                 _add_selection_recovery_note(
@@ -410,6 +1190,62 @@ class _ItemSelectionSnapshot:
             RuntimeError("item selection did not return to its captured state"),
             phase="verifying selection recovery after retry",
         )
+
+
+def _full_scene_selection_candidates(scene: object) -> tuple[object, ...]:
+    """Return callback-visible selection peers without trusting Qt overrides."""
+
+    if isinstance(scene, QGraphicsScene):
+        return tuple(QGraphicsScene.items(scene))
+
+    def candidates_from_container(value: object) -> tuple[object, ...] | None:
+        return _nested_builtin_container_members(value)
+
+    items_port = _optional_live_attribute(
+        scene,
+        "items",
+        default=_MISSING_SCENE_ATTRIBUTE,
+    )
+    if callable(items_port):
+        try:
+            signature = inspect.signature(items_port)
+            signature.bind()
+        except (TypeError, ValueError):
+            # Custom scenes can expose unrelated ``items(key)`` APIs. They are
+            # not a zero-argument membership authority and must not be invoked.
+            pass
+        else:
+            live_items = items_port()
+            candidates = candidates_from_container(live_items)
+            if candidates is not None:
+                return candidates
+            return tuple(cast(Iterable[object], live_items))
+    else:
+        candidates = candidates_from_container(items_port)
+        if candidates is not None:
+            return candidates
+
+    # Sparse legacy fakes commonly retain the selection frontier in a stale
+    # list. It is useful for rollback capture, but unlike ``items`` it is not a
+    # post-operation selectedItems authority.
+    try:
+        namespace = object.__getattribute__(scene, "__dict__")
+    except (AttributeError, TypeError):
+        namespace = None
+    if isinstance(namespace, dict):
+        for name in (
+            "_items",
+            "scene_items",
+            "_scene_items",
+            "selected_items",
+            "_selected_items",
+        ):
+            if not dict.__contains__(namespace, name):
+                continue
+            candidates = candidates_from_container(dict.__getitem__(namespace, name))
+            if candidates is not None:
+                return candidates
+    return ()
 
 
 def _optional_canvas_state_object(
@@ -695,27 +1531,42 @@ class _SelectionInfoRecoverySnapshot:
             )
 
 
-def _scene_for(canvas, *, strict: bool = False):
-    try:
-        scene = canvas.scene
-    except AttributeError:
-        if strict and inspect.getattr_static(
-            canvas,
-            "scene",
-            _MISSING_SCENE_ATTRIBUTE,
-        ) is not _MISSING_SCENE_ATTRIBUTE:
-            raise
-        return None
-    if not callable(scene):
-        return None
-    try:
-        scene_obj = scene()
-    except RuntimeError:
-        if isinstance(canvas, QObject) and sip.isdeleted(canvas):
+def _scene_for(
+    canvas,
+    *,
+    strict: bool = False,
+    callback_free_qt: bool = False,
+):
+    if callback_free_qt and isinstance(canvas, QGraphicsView):
+        try:
+            scene_obj = QGraphicsView.scene(canvas)
+        except RuntimeError:
+            if sip.isdeleted(canvas):
+                return None
+            if strict:
+                raise
             return None
-        if strict:
-            raise
-        return None
+    else:
+        try:
+            scene = canvas.scene
+        except AttributeError:
+            if strict and inspect.getattr_static(
+                canvas,
+                "scene",
+                _MISSING_SCENE_ATTRIBUTE,
+            ) is not _MISSING_SCENE_ATTRIBUTE:
+                raise
+            return None
+        if not callable(scene):
+            return None
+        try:
+            scene_obj = scene()
+        except RuntimeError:
+            if isinstance(canvas, QObject) and sip.isdeleted(canvas):
+                return None
+            if strict:
+                raise
+            return None
     if isinstance(scene_obj, QObject) and sip.isdeleted(scene_obj):
         return None
     return scene_obj
@@ -742,11 +1593,33 @@ class _SelectionMutationSnapshot:
         items: Iterable[object],
         *,
         block_signals: bool,
+        capture_full_scene: bool = False,
     ) -> _SelectionMutationSnapshot:
         targets = tuple(items)
         item_snapshots: dict[int, _ItemSelectionSnapshot] = {}
         for item in targets:
             if id(item) not in item_snapshots:
+                item_snapshots[id(item)] = _ItemSelectionSnapshot.capture(item)
+
+        if scene is not None and (block_signals or capture_full_scene):
+            for item in _full_scene_selection_candidates(scene):
+                if id(item) in item_snapshots:
+                    continue
+                if (
+                    inspect.getattr_static(
+                        item,
+                        "isSelected",
+                        _MISSING_SCENE_ATTRIBUTE,
+                    )
+                    is _MISSING_SCENE_ATTRIBUTE
+                    or inspect.getattr_static(
+                        item,
+                        "setSelected",
+                        _MISSING_SCENE_ATTRIBUTE,
+                    )
+                    is _MISSING_SCENE_ATTRIBUTE
+                ):
+                    continue
                 item_snapshots[id(item)] = _ItemSelectionSnapshot.capture(item)
 
         bound_block_signals: Callable[[bool], object] | None = None
@@ -758,9 +1631,27 @@ class _SelectionMutationSnapshot:
         derived_recovery: _SelectionInfoRecoverySnapshot | None = None
 
         if scene is not None:
-            block_method = _required_live_method(scene, "blockSignals")
-            bound_block_signals = block_method
-            signals_method = _optional_live_attribute(scene, "signalsBlocked")
+            if isinstance(scene, QObject):
+                bound_block_signals = partial(QObject.blockSignals, scene)
+            else:
+                block_method = _optional_live_attribute(
+                    scene,
+                    "blockSignals",
+                    default=_MISSING_SCENE_ATTRIBUTE,
+                )
+                if block_method is not _MISSING_SCENE_ATTRIBUTE:
+                    if not callable(block_method):
+                        raise TypeError(
+                            "Selection port 'blockSignals' is not callable"
+                        )
+                    bound_block_signals = block_method
+                elif block_signals:
+                    raise AttributeError("Selection item requires blockSignals")
+            signals_method = (
+                partial(QObject.signalsBlocked, scene)
+                if isinstance(scene, QObject)
+                else _optional_live_attribute(scene, "signalsBlocked")
+            )
             if callable(signals_method):
                 bound_signals_blocked = signals_method
                 previous_signals_blocked = bool(bound_signals_blocked())
@@ -769,8 +1660,16 @@ class _SelectionMutationSnapshot:
             # beyond ``targets``. Capture the whole selected frontier so a
             # downstream setter failure can remove callback-added selections.
             if not block_signals:
-                selected_method = _required_live_method(scene, "selectedItems")
-                clear_method = _required_live_method(scene, "clearSelection")
+                selected_method = (
+                    partial(QGraphicsScene.selectedItems, scene)
+                    if isinstance(scene, QGraphicsScene)
+                    else _required_live_method(scene, "selectedItems")
+                )
+                clear_method = (
+                    partial(QGraphicsScene.clearSelection, scene)
+                    if isinstance(scene, QGraphicsScene)
+                    else _required_live_method(scene, "clearSelection")
+                )
                 original_selected = tuple(selected_method())
                 for item in original_selected:
                     if id(item) not in item_snapshots:
@@ -802,6 +1701,38 @@ class _SelectionMutationSnapshot:
             return None
         return self.signals_blocked
 
+    def require_reversible_mutation_ports(
+        self,
+        selected: bool,
+        *,
+        recovery_peer_items: Iterable[object] = (),
+    ) -> None:
+        """Reject only Qt virtual ports that a real transition may enter."""
+
+        changing_targets: list[_ItemSelectionSnapshot] = []
+        for item in self.targets:
+            snapshot = self.item_snapshots[id(item)]
+            if snapshot.selected is selected:
+                continue
+            changing_targets.append(snapshot)
+            snapshot.require_reversible_mutation_port()
+        if not changing_targets:
+            return
+
+        # With live scene signals, a callback can select/deselect a peer and a
+        # later rollback may need to enter that peer's itemChange hook.  Blocked
+        # operations cannot publish that callback, so their unchanged peers do
+        # not needlessly lose safe no-op support.
+        changing_ids = {id(snapshot.item) for snapshot in changing_targets}
+        for item in recovery_peer_items:
+            if id(item) in changing_ids or not isinstance(item, QGraphicsItem):
+                continue
+            if _qt_item_has_python_item_change_override(item):
+                raise RuntimeError(
+                    "Qt selection peer has a Python itemChange override without "
+                    "an exact reversible rollback port"
+                )
+
     def mutate(self, selected: bool, *, block_signals: bool) -> None:
         def apply() -> None:
             for item in self.targets:
@@ -826,13 +1757,28 @@ class _SelectionMutationSnapshot:
         for snapshot in self.item_snapshots.values():
             try:
                 exact = exact and (
-                    bool(snapshot.is_selected()) == snapshot.selected
+                    snapshot.current_selected(callback_free=False)
+                    == snapshot.selected
                 )
             except BaseException as verify_error:
                 _add_selection_recovery_note(
                     original_error,
                     verify_error,
                     phase="verifying restored target selections",
+                )
+                exact = False
+        for snapshot in self.item_snapshots.values():
+            try:
+                final_authority = snapshot.current_selected(callback_free=True)
+                exact = exact and (
+                    final_authority is None
+                    or final_authority is snapshot.selected
+                )
+            except BaseException as verify_error:
+                _add_selection_recovery_note(
+                    original_error,
+                    verify_error,
+                    phase="verifying callback-free restored target selections",
                 )
                 exact = False
         return exact
@@ -854,9 +1800,121 @@ class _SelectionMutationSnapshot:
                 phase="verifying the restored scene selection",
             )
             return False
-        return actual_ids == expected_ids
+        scene_exact = actual_ids == expected_ids
+        item_exact = self._target_selection_is_exact(original_error)
+        return scene_exact and item_exact
 
-    def _restore_once(self, original_error: BaseException) -> None:
+    def verify_empty_selection(self) -> None:
+        """Cross-check the captured frontier through raw and public authorities."""
+
+        snapshots = tuple(self.item_snapshots.values())
+
+        def verify_items(values: Iterable[_ItemSelectionSnapshot]) -> None:
+            for snapshot in values:
+                selected = snapshot.current_selected(callback_free=False)
+                if selected is None:
+                    raise RuntimeError(
+                        "scene selection clear has no item selection authority"
+                    )
+                if selected:
+                    raise RuntimeError(
+                        "scene selection clear left a frontier item selected"
+                    )
+
+        verify_items(snapshots)
+        verify_items(reversed(snapshots))
+        for snapshot in snapshots:
+            selected = snapshot.current_selected(callback_free=True)
+            if selected is None:
+                raise RuntimeError(
+                    "scene selection clear has no callback-free item authority"
+                )
+            if selected:
+                raise RuntimeError(
+                    "scene selection clear left a callback-free item selected"
+                )
+        if isinstance(self.scene, QGraphicsScene):
+            actual = tuple(QGraphicsScene.selectedItems(self.scene))
+            if actual:
+                raise RuntimeError(
+                    "scene selection clear left selected scene items"
+                )
+
+    def verify_compatible_empty_selection(self) -> None:
+        """Verify public-only frontiers without requiring a raw authority."""
+
+        snapshots = tuple(self.item_snapshots.values())
+        for values in (snapshots, tuple(reversed(snapshots))):
+            for snapshot in values:
+                if snapshot.current_selected(callback_free=False):
+                    raise RuntimeError(
+                        "compatible scene selection clear left an item selected"
+                    )
+        for snapshot in snapshots:
+            selected = snapshot.current_selected(callback_free=True)
+            if selected:
+                raise RuntimeError(
+                    "compatible scene selection clear left a callback-free "
+                    "item selected"
+                )
+
+    def has_callback_free_selection_authority(self) -> bool:
+        return all(
+            snapshot.authoritative_is_selected is not None
+            for snapshot in self.item_snapshots.values()
+        )
+
+    def verify_selection_postcondition(
+        self,
+        expected: bool,
+        *,
+        preserve_peers: bool,
+    ) -> None:
+        target_ids = {id(item) for item in self.targets}
+        snapshots = (
+            tuple(self.item_snapshots.values())
+            if preserve_peers
+            else tuple(self.item_snapshots[id(item)] for item in self.targets)
+        )
+
+        def expected_for(snapshot: _ItemSelectionSnapshot) -> bool:
+            return expected if id(snapshot.item) in target_ids else snapshot.selected
+
+        def verify(values: Iterable[_ItemSelectionSnapshot]) -> None:
+            for snapshot in values:
+                actual = snapshot.current_selected(callback_free=False)
+                snapshot_expected = expected_for(snapshot)
+                if actual is not snapshot_expected:
+                    if id(snapshot.item) not in target_ids:
+                        raise RuntimeError(
+                            "scene item selection setter changed a non-target peer"
+                        )
+                    raise RuntimeError(
+                        "scene item selection setter did not apply the requested state"
+                    )
+
+        verify(snapshots)
+        verify(reversed(snapshots))
+        for snapshot in snapshots:
+            actual = snapshot.current_selected(callback_free=True)
+            snapshot_expected = expected_for(snapshot)
+            if actual is not None and actual is not snapshot_expected:
+                if id(snapshot.item) not in target_ids:
+                    raise RuntimeError(
+                        "scene item selection setter did not preserve a "
+                        "callback-free non-target peer"
+                    )
+                raise RuntimeError(
+                    "scene item selection setter did not preserve its "
+                    "callback-free postcondition"
+                )
+
+    def _restore_once(
+        self,
+        original_error: BaseException,
+        *,
+        reverse_order: bool,
+    ) -> None:
         if self.original_scene_selected_ids is not None:
             assert self.clear_selection is not None
             try:
@@ -867,17 +1925,24 @@ class _SelectionMutationSnapshot:
                     clear_error,
                     phase="clearing partial scene selection",
                 )
-        # Re-establish captured-true items first and captured-false peers last.
-        # A custom true setter can synchronously select another item; making
-        # false the final writer prevents that callback from repolluting peers.
-        for selected_state in (True, False):
-            for snapshot in self.item_snapshots.values():
+        # The forward pass makes captured-false peers final so a custom true
+        # setter cannot select one. The retry reverses both state groups and
+        # peer order so a synchronous writer cannot keep the same last word.
+        selection_states = (False, True) if reverse_order else (True, False)
+        snapshots = tuple(self.item_snapshots.values())
+        ordered_snapshots = (
+            tuple(reversed(snapshots)) if reverse_order else snapshots
+        )
+        for selected_state in selection_states:
+            for snapshot in ordered_snapshots:
                 if snapshot.selected is selected_state:
                     snapshot.restore(original_error)
 
     def _restore_selection_under_blocked_signals(
         self,
         original_error: BaseException,
+        *,
+        reverse_order: bool = False,
     ) -> None:
         if self.scene is not None and self.block_signals is not None:
             with blocked_scene_signals(
@@ -885,9 +1950,15 @@ class _SelectionMutationSnapshot:
                 block_signals=self.block_signals,
                 signals_blocked=self._signals_blocked_capture(),
             ):
-                self._restore_once(original_error)
+                self._restore_once(
+                    original_error,
+                    reverse_order=reverse_order,
+                )
             return
-        self._restore_once(original_error)
+        self._restore_once(
+            original_error,
+            reverse_order=reverse_order,
+        )
 
     def _restore_signal_state(self, original_error: BaseException) -> None:
         if (
@@ -966,7 +2037,10 @@ class _SelectionMutationSnapshot:
         for attempt in range(2):
             try:
                 if attempt == 0:
-                    self._restore_selection_under_blocked_signals(original_error)
+                    self._restore_selection_under_blocked_signals(
+                        original_error,
+                        reverse_order=False,
+                    )
                     derived._restore_note_runtime(
                         original_error,
                         refresh_boxes=False,
@@ -980,7 +2054,10 @@ class _SelectionMutationSnapshot:
                         original_error,
                         refresh_boxes=False,
                     )
-                    self._restore_selection_under_blocked_signals(original_error)
+                    self._restore_selection_under_blocked_signals(
+                        original_error,
+                        reverse_order=True,
+                    )
             except BaseException as restore_error:
                 _add_selection_recovery_note(
                     original_error,
@@ -1051,7 +2128,10 @@ class _SelectionMutationSnapshot:
             return
         for attempt in range(2):
             try:
-                self._restore_selection_under_blocked_signals(original_error)
+                self._restore_selection_under_blocked_signals(
+                    original_error,
+                    reverse_order=bool(attempt),
+                )
             except BaseException as rollback_error:
                 _add_selection_recovery_note(
                     original_error,
@@ -1101,15 +2181,178 @@ def selected_scene_notes_for(canvas):
     return notes
 
 
-def clear_scene_selection_for(canvas, *, block_signals: bool = False) -> bool:
-    scene_obj = _scene_for(canvas, strict=True)
-    if scene_obj is None:
-        return False
+def _clear_scene_selection_compatibly(
+    scene_obj: object,
+    clear_selection: Callable[[], object],
+    *,
+    block_signals: bool,
+) -> bool:
+    """Retain the sparse-scene contract when no exact snapshot is possible."""
+
     if block_signals:
         with blocked_scene_signals(scene_obj):
-            scene_obj.clearSelection()
-        return True
-    scene_obj.clearSelection()
+            clear_selection()
+    else:
+        clear_selection()
+    return True
+
+
+def clear_scene_selection_for(canvas, *, block_signals: bool = False) -> bool:
+    scene_obj = _scene_for(canvas, strict=True, callback_free_qt=True)
+    if scene_obj is None:
+        return False
+    clear_selection = (
+        partial(QGraphicsScene.clearSelection, scene_obj)
+        if isinstance(scene_obj, QGraphicsScene)
+        else _required_live_method(scene_obj, "clearSelection")
+    )
+    # Selection restoration needs all three scene ports. Lightweight renderer
+    # and structure-service fakes intentionally expose only ``clearSelection``;
+    # preserve that historical best-effort API instead of invoking item ports
+    # they do not claim to implement.
+    if (
+        inspect.getattr_static(
+            scene_obj,
+            "selectedItems",
+            _MISSING_SCENE_ATTRIBUTE,
+        )
+        is _MISSING_SCENE_ATTRIBUTE
+        or (
+            block_signals
+            and (
+                inspect.getattr_static(
+                    scene_obj,
+                    "blockSignals",
+                    _MISSING_SCENE_ATTRIBUTE,
+                )
+                is _MISSING_SCENE_ATTRIBUTE
+                or inspect.getattr_static(
+                    scene_obj,
+                    "signalsBlocked",
+                    _MISSING_SCENE_ATTRIBUTE,
+                )
+                is _MISSING_SCENE_ATTRIBUTE
+            )
+        )
+    ):
+        return _clear_scene_selection_compatibly(
+            scene_obj,
+            clear_selection,
+            block_signals=block_signals,
+        )
+    capture_authority = _SelectionCaptureAuthority.capture(scene_obj, ())
+    compatibility_required = False
+    snapshot: _SelectionMutationSnapshot | None = None
+    try:
+        selected_items = (
+            partial(QGraphicsScene.selectedItems, scene_obj)
+            if isinstance(scene_obj, QGraphicsScene)
+            else _required_live_method(scene_obj, "selectedItems")
+        )
+        targets = tuple(selected_items())
+        if any(
+            inspect.getattr_static(
+                item,
+                "isSelected",
+                _MISSING_SCENE_ATTRIBUTE,
+            )
+            is _MISSING_SCENE_ATTRIBUTE
+            or inspect.getattr_static(
+                item,
+                "setSelected",
+                _MISSING_SCENE_ATTRIBUTE,
+            )
+            is _MISSING_SCENE_ATTRIBUTE
+            for item in targets
+        ):
+            compatibility_required = True
+        else:
+            snapshot = _SelectionMutationSnapshot.capture(
+                canvas,
+                scene_obj,
+                targets,
+                block_signals=block_signals,
+                capture_full_scene=True,
+            )
+            if not snapshot.has_callback_free_selection_authority():
+                compatibility_required = True
+    except BaseException as original_error:
+        capture_authority.restore(original_error)
+        raise
+    captured_item_states = (
+        tuple(snapshot.item_snapshots.values())
+        if snapshot is not None
+        else ()
+    )
+    capture_authority.require_unchanged_capture(captured_item_states)
+    if compatibility_required:
+        try:
+            result = _clear_scene_selection_compatibly(
+                scene_obj,
+                clear_selection,
+                block_signals=block_signals,
+            )
+            if snapshot is not None:
+                snapshot.verify_compatible_empty_selection()
+            if not capture_authority.membership_state_is_exact():
+                raise RuntimeError(
+                    "compatible scene selection clear changed "
+                    "authoritative membership/order"
+                )
+            if not capture_authority.signal_state_is_exact():
+                raise RuntimeError(
+                    "compatible scene selection clear changed "
+                    "authoritative signal state"
+                )
+            return result
+        except BaseException as original_error:
+            if snapshot is not None:
+                snapshot.restore(original_error)
+            capture_authority.restore_if_authority_changed(
+                original_error,
+                captured_item_states,
+            )
+            raise
+    assert snapshot is not None
+    try:
+        snapshot.require_reversible_mutation_ports(
+            False,
+            recovery_peer_items=(
+                (item for item, _selected in capture_authority.qt_selection)
+                if not block_signals
+                else ()
+            ),
+        )
+        if block_signals:
+            assert snapshot.block_signals is not None
+            with blocked_scene_signals(
+                scene_obj,
+                block_signals=snapshot.block_signals,
+                signals_blocked=snapshot._signals_blocked_capture(),
+            ):
+                clear_selection()
+        else:
+            clear_selection()
+        snapshot.verify_empty_selection()
+        if not capture_authority.raw_selection_containers_are_empty():
+            raise RuntimeError(
+                "scene selection clear left a raw selection container populated"
+            )
+        if block_signals and not capture_authority.membership_state_is_exact():
+            raise RuntimeError(
+                "scene selection clear changed authoritative membership/order"
+            )
+        if not capture_authority.signal_state_is_exact():
+            raise RuntimeError(
+                "scene selection clear changed authoritative signal state"
+            )
+    except BaseException as original_error:
+        snapshot.restore(original_error)
+        capture_authority.restore_if_authority_changed(
+            original_error,
+            captured_item_states,
+        )
+        raise
     return True
 
 
@@ -1120,7 +2363,7 @@ def set_scene_items_selected_for(
     *,
     block_signals: bool = True,
 ) -> None:
-    scene_obj = _scene_for(canvas, strict=True)
+    scene_obj = _scene_for(canvas, strict=True, callback_free_qt=True)
     targets = tuple(items)
     capture_authority = _SelectionCaptureAuthority.capture(scene_obj, targets)
     try:
@@ -1133,10 +2376,36 @@ def set_scene_items_selected_for(
     except BaseException as original_error:
         capture_authority.restore(original_error)
         raise
+    captured_item_states = tuple(snapshot.item_snapshots.values())
+    capture_authority.require_unchanged_capture(captured_item_states)
     try:
+        snapshot.require_reversible_mutation_ports(
+            selected,
+            recovery_peer_items=(
+                (item for item, _selected in capture_authority.qt_selection)
+                if not block_signals
+                else ()
+            ),
+        )
         snapshot.mutate(selected, block_signals=block_signals)
+        snapshot.verify_selection_postcondition(
+            selected,
+            preserve_peers=block_signals,
+        )
+        if block_signals and not capture_authority.membership_state_is_exact():
+            raise RuntimeError(
+                "scene item selection changed authoritative membership/order"
+            )
+        if not capture_authority.signal_state_is_exact():
+            raise RuntimeError(
+                "scene item selection changed authoritative signal state"
+            )
     except BaseException as original_error:
         snapshot.restore(original_error)
+        capture_authority.restore_if_authority_changed(
+            original_error,
+            captured_item_states,
+        )
         raise
 
 

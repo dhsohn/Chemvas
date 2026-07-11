@@ -849,6 +849,8 @@ def _verify_raw_sheet_setup_success(
     expected_size: str,
     expected_orientation: str,
     expected_sheet_rect: QRectF,
+    *,
+    canonical_root_was_present: bool,
 ) -> None:
     runtime_present, runtime_state = _raw_sheet_attribute(canvas, "runtime_state")
     canonical_owner = (
@@ -858,6 +860,10 @@ def _verify_raw_sheet_setup_success(
         canonical_owner,
         "sheet_setup_state",
     )
+    if canonical_root_was_present and not root_present:
+        raise RuntimeError(
+            "raw sheet setup state root disappeared during finalization"
+        )
     if root_present and raw_state is not state:
         raise RuntimeError("raw sheet setup state root changed during finalization")
 
@@ -914,6 +920,14 @@ def _verify_sheet_setup_success(
     ):
         raise RuntimeError("sheet setup changed during successful finalization")
 
+    runtime_present, runtime_state = _raw_sheet_attribute(canvas, "runtime_state")
+    canonical_owner = (
+        runtime_state if runtime_present and runtime_state is not None else canvas
+    )
+    canonical_root_was_present, _canonical_state = _raw_sheet_attribute(
+        canonical_owner,
+        "sheet_setup_state",
+    )
     rect_snapshot = CanvasSceneRectStateSnapshot.capture(canvas)
     try:
         if (
@@ -938,6 +952,7 @@ def _verify_sheet_setup_success(
             expected_size,
             expected_orientation,
             expected_sheet_rect,
+            canonical_root_was_present=canonical_root_was_present,
         )
     finally:
         rect_snapshot.release()

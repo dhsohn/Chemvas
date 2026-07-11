@@ -16,7 +16,11 @@ from core.history import (
 )
 from core.model import Atom, Bond
 from ui.atom_coords_access import set_atom_coords_3d_for
-from ui.canvas_history_recording_service import CanvasHistoryRecordingService
+from ui.canvas_history_recording_service import (
+    CallbackFreeHistoryBaseline,
+    CanvasHistoryRecordingService,
+)
+from ui.canvas_history_service import CanvasHistoryService
 from ui.canvas_history_state import CanvasHistoryState
 from ui.canvas_smiles_input_state import CanvasSmilesInputState
 from ui.history_commands import AddSceneItemsCommand
@@ -134,6 +138,697 @@ def _recording_service(canvas) -> CanvasHistoryRecordingService:
 
 
 class CanvasHistoryRecordingServiceTest(unittest.TestCase):
+    def test_callback_free_baseline_restores_absent_policy_roots(self) -> None:
+        for policy_name, injected_value in (
+            ("enabled", False),
+            ("limit", 0),
+        ):
+            for storage_name in (policy_name, f"_{policy_name}"):
+                with self.subTest(
+                    policy=policy_name,
+                    storage=storage_name,
+                ):
+                    state = SimpleNamespace(history=[], redo_stack=[])
+                    history = SimpleNamespace(state=state)
+                    baseline = CallbackFreeHistoryBaseline.capture(history)
+                    self.assertIsNotNone(baseline)
+                    assert baseline is not None
+
+                    setattr(state, storage_name, injected_value)
+
+                    with self.assertRaisesRegex(
+                        RuntimeError,
+                        rf"raw history policy '{policy_name}' changed",
+                    ):
+                        baseline.verify()
+
+                    baseline.restore()
+
+                    self.assertFalse(hasattr(state, policy_name))
+                    self.assertFalse(hasattr(state, f"_{policy_name}"))
+                    self.assertEqual(state.history, [])
+                    self.assertEqual(state.redo_stack, [])
+
+    def test_canvas_services_property_cannot_redefine_raw_history_baseline(
+        self,
+    ) -> None:
+        state = CanvasHistoryState()
+        sentinel = object()
+
+        class Command(HistoryCommand):
+            def undo(self, target) -> None:
+                target.value = "before"
+
+            def redo(self, target) -> None:
+                target.value = "after"
+
+        class History:
+            def __init__(self) -> None:
+                self.state = state
+
+            @staticmethod
+            def push(command) -> bool:
+                state.history.append(command)
+                state.redo_stack.clear()
+                return True
+
+            @staticmethod
+            def notify_change() -> None:
+                return None
+
+        history = History()
+        services = SimpleNamespace(history_service=history)
+
+        class Canvas:
+            def __init__(self) -> None:
+                self.value = "after"
+                self.model = SimpleNamespace(
+                    atoms={},
+                    bonds=[],
+                    next_atom_id=0,
+                )
+                self.history_state = state
+                self.smiles_input_state = CanvasSmilesInputState(
+                    last_smiles_input="after-smiles"
+                )
+                self._services = services
+                self.services_reads = 0
+
+            @property
+            def services(self):
+                self.services_reads += 1
+                state.history.append(sentinel)
+                self.value = "descriptor poison"
+                return self._services
+
+        canvas = Canvas()
+        command = Command()
+        CanvasHistoryRecordingService(canvas, history).push_history(command)
+
+        self.assertEqual(canvas.services_reads, 0)
+        self.assertEqual(canvas.value, "after")
+        self.assertEqual(state.history, [command])
+        self.assertNotIn(sentinel, state.history)
+        self.assertEqual(state.redo_stack, [])
+
+    def test_canvas_history_alias_replacement_rolls_back_runtime_and_stacks(
+        self,
+    ) -> None:
+        for target in (
+            "canvas_state",
+            "runtime_state",
+            "runtime_service",
+            "services_service",
+        ):
+            with self.subTest(target=target):
+                canvas = SimpleNamespace(value="after")
+                state = CanvasHistoryState()
+                replacement = object()
+
+                class Command(HistoryCommand):
+                    def undo(self, target_canvas) -> None:
+                        target_canvas.value = "before"
+
+                    def redo(self, target_canvas) -> None:
+                        target_canvas.value = "after"
+
+                class History:
+                    def __init__(
+                        self,
+                        current_canvas,
+                        current_state,
+                        mutation_target: str,
+                        replacement_value: object,
+                    ) -> None:
+                        self.current_canvas = current_canvas
+                        self.state = current_state
+                        self.mutation_target = mutation_target
+                        self.replacement = replacement_value
+
+                    def push(self, command) -> bool:
+                        self.state.history.append(command)
+                        self.state.redo_stack.clear()
+                        if self.mutation_target == "canvas_state":
+                            self.current_canvas.history_state = self.replacement
+                        elif self.mutation_target == "runtime_state":
+                            self.current_canvas.runtime_state.history_state = (
+                                self.replacement
+                            )
+                        elif self.mutation_target == "runtime_service":
+                            self.current_canvas.runtime_state.history_service = (
+                                self.replacement
+                            )
+                        else:
+                            self.current_canvas.services.history_service = (
+                                self.replacement
+                            )
+                        return True
+
+                history = History(canvas, state, target, replacement)
+                canvas.history_state = state
+                canvas.runtime_state = SimpleNamespace(
+                    history_state=state,
+                    history_service=history,
+                )
+                canvas.services = SimpleNamespace(history_service=history)
+
+                with self.assertRaisesRegex(RuntimeError, "history .* alias"):
+                    CanvasHistoryRecordingService(canvas, history).push_history(
+                        Command()
+                    )
+
+                self.assertEqual(canvas.value, "before")
+                self.assertIs(canvas.history_state, state)
+                self.assertIs(canvas.runtime_state.history_state, state)
+                self.assertIs(canvas.runtime_state.history_service, history)
+                self.assertIs(canvas.services.history_service, history)
+                self.assertEqual(state.history, [])
+                self.assertEqual(state.redo_stack, [])
+
+    def test_record_bond_update_does_not_cross_live_enabled_getter(self) -> None:
+        bond = Bond(1, 2, order=2)
+        canvas = _make_canvas(bonds=[bond], history_enabled=True)
+        state = canvas.history_state
+
+        class History:
+            def __init__(self) -> None:
+                self.state = state
+                self.is_enabled = mock.Mock(side_effect=self.poison_runtime)
+
+            @staticmethod
+            def poison_runtime() -> bool:
+                bond.order = 3
+                return False
+
+            @staticmethod
+            def push(command) -> bool:
+                state.history.append(command)
+                state.redo_stack.clear()
+                return True
+
+        history = History()
+        canvas.services.history_service = history
+        CanvasHistoryRecordingService(canvas, history).record_bond_update(
+            bond_id=0,
+            before_state={
+                "a": 1,
+                "b": 2,
+                "order": 1,
+                "style": "single",
+                "color": "#000000",
+            },
+            after_state={
+                "a": 1,
+                "b": 2,
+                "order": 2,
+                "style": "single",
+                "color": "#000000",
+            },
+            before_smiles_input="before-smiles",
+            after_smiles_input="after-smiles",
+        )
+
+        history.is_enabled.assert_not_called()
+        self.assertEqual(bond.order, 2)
+        self.assertEqual(len(state.history), 1)
+
+    def test_ambiguous_raw_history_backings_fail_before_live_state_lookup(
+        self,
+    ) -> None:
+        canvas = SimpleNamespace(value="after")
+        decoy_state = CanvasHistoryState()
+        real_state = CanvasHistoryState()
+
+        class Command(HistoryCommand):
+            def undo(self, target) -> None:
+                target.value = "before"
+
+            def redo(self, target) -> None:
+                target.value = "after"
+
+        class History:
+            def __init__(self) -> None:
+                object.__setattr__(self, "state", decoy_state)
+                object.__setattr__(self, "_state", real_state)
+                object.__setattr__(self, "state_reads", 0)
+                object.__setattr__(self, "push_calls", 0)
+
+            def __getattribute__(self, name):
+                if name == "state":
+                    namespace = object.__getattribute__(self, "__dict__")
+                    namespace["state_reads"] += 1
+                    namespace["_state"].history.append(object())
+                    return namespace["_state"]
+                return object.__getattribute__(self, name)
+
+            def push(self, command) -> bool:
+                del command
+                self.push_calls += 1
+                return True
+
+        history = History()
+        runtime_capture = mock.Mock()
+        with (
+            mock.patch(
+                "ui.canvas_history_recording_service.capture_history_transaction_for_history",
+                runtime_capture,
+            ),
+            self.assertRaisesRegex(
+                RuntimeError,
+                "ambiguous callback-free history stack backings",
+            ),
+        ):
+            CanvasHistoryRecordingService(canvas, history).push_history(Command())
+
+        runtime_capture.assert_not_called()
+        self.assertEqual(history.state_reads, 0)
+        self.assertEqual(history.push_calls, 0)
+        self.assertEqual(canvas.value, "before")
+        self.assertEqual(decoy_state.history, [])
+        self.assertEqual(decoy_state.redo_stack, [])
+        self.assertEqual(real_state.history, [])
+        self.assertEqual(real_state.redo_stack, [])
+
+    def test_history_capture_getter_cannot_redefine_runtime_baseline(self) -> None:
+        canvas = SimpleNamespace(value="after")
+        state = CanvasHistoryState()
+        push = mock.Mock()
+
+        class Command(HistoryCommand):
+            def undo(self, target) -> None:
+                target.value = "before"
+
+            def redo(self, target) -> None:
+                target.value = "after"
+
+        class RuntimeSnapshot:
+            def __init__(self) -> None:
+                self.value = canvas.value
+
+            def verify_exact(self):
+                if canvas.value != self.value:
+                    return (RuntimeError("runtime changed"),)
+                return ()
+
+            def restore_with_result(self):
+                canvas.value = self.value
+                return HistoryTransactionRestoreResult(authoritative=True)
+
+            @staticmethod
+            def release() -> None:
+                return None
+
+        class History:
+            def __init__(self) -> None:
+                self._state = state
+                self.armed = True
+
+            @property
+            def state(self):
+                if self.armed:
+                    self.armed = False
+                    canvas.value = "history poison"
+                return self._state
+
+            def push(self, command) -> bool:
+                push(command)
+                return True
+
+            @staticmethod
+            def notify_change() -> None:
+                return None
+
+        with (
+            mock.patch(
+                "ui.canvas_history_recording_service.capture_history_transaction_for_history",
+                side_effect=lambda *_args, **_kwargs: RuntimeSnapshot(),
+            ),
+            self.assertRaisesRegex(
+                BaseExceptionGroup,
+                "history capture changed the canvas runtime",
+            ),
+        ):
+            CanvasHistoryRecordingService(canvas, History())._push_history(Command())
+
+        push.assert_not_called()
+        self.assertEqual(canvas.value, "before")
+        self.assertEqual(state.history, [])
+        self.assertEqual(state.redo_stack, [])
+
+    def test_enabled_recording_push_false_rolls_back_and_raises(self) -> None:
+        canvas = SimpleNamespace(value="after")
+        state = CanvasHistoryState(enabled=True)
+
+        class Command(HistoryCommand):
+            def undo(self, target) -> None:
+                target.value = "before"
+
+            def redo(self, target) -> None:
+                target.value = "after"
+
+        class RuntimeSnapshot:
+            def __init__(self) -> None:
+                self.value = canvas.value
+
+            def verify_exact(self):
+                return ()
+
+            def restore_with_result(self):
+                canvas.value = self.value
+                return HistoryTransactionRestoreResult(authoritative=True)
+
+            @staticmethod
+            def release() -> None:
+                return None
+
+        history = SimpleNamespace(
+            state=state,
+            push=lambda _command: False,
+            notify_change=lambda: None,
+        )
+        with (
+            mock.patch(
+                "ui.canvas_history_recording_service.capture_history_transaction_for_history",
+                side_effect=lambda *_args, **_kwargs: RuntimeSnapshot(),
+            ),
+            self.assertRaisesRegex(RuntimeError, "explicitly disabled policy"),
+        ):
+            CanvasHistoryRecordingService(canvas, history)._push_history(Command())
+
+        self.assertEqual(canvas.value, "before")
+        self.assertTrue(state.enabled)
+        self.assertEqual(state.history, [])
+        self.assertEqual(state.redo_stack, [])
+
+    def test_runtime_capture_scene_getter_cannot_poison_history_preflight(
+        self,
+    ) -> None:
+        old_history = object()
+        old_redo = object()
+        sentinel = object()
+        state = CanvasHistoryState(
+            history=[old_history],
+            redo_stack=[old_redo],
+        )
+        push = mock.Mock()
+        canvas = SimpleNamespace(value="after")
+
+        class Command(HistoryCommand):
+            def undo(self, target) -> None:
+                target.value = "before"
+
+            def redo(self, target) -> None:
+                target.value = "after"
+
+        class RuntimeSnapshot:
+            def __init__(self) -> None:
+                self.value = canvas.value
+
+            def verify_exact(self):
+                return ()
+
+            def restore_with_result(self):
+                canvas.value = self.value
+                return HistoryTransactionRestoreResult(authoritative=True)
+
+            @staticmethod
+            def release() -> None:
+                return None
+
+        def scene():
+            state.history.append(sentinel)
+            return object()
+
+        canvas.scene = scene
+
+        def capture_poisoned_runtime(*_args, **_kwargs):
+            canvas.scene()
+            return RuntimeSnapshot()
+
+        history = SimpleNamespace(
+            state=state,
+            push=push,
+            notify_change=lambda: None,
+        )
+        service = CanvasHistoryRecordingService(canvas, history_service=history)
+        with (
+            mock.patch(
+                "ui.canvas_history_recording_service.capture_history_transaction_for_history",
+                side_effect=capture_poisoned_runtime,
+            ),
+            mock.patch(
+                "ui.history_push_failure_recovery.capture_history_transaction_for_history",
+                side_effect=lambda *_args, **_kwargs: RuntimeSnapshot(),
+            ),
+            self.assertRaisesRegex(RuntimeError, "history stack contents"),
+        ):
+            service._push_history(Command())
+
+        push.assert_not_called()
+        self.assertEqual(canvas.value, "before")
+        self.assertEqual(state.history, [old_history])
+        self.assertEqual(state.redo_stack, [old_redo])
+
+    def test_runtime_verifier_cannot_poison_successful_history_publication(
+        self,
+    ) -> None:
+        old_history = object()
+        old_redo = object()
+        sentinel = object()
+        state = CanvasHistoryState(
+            history=[old_history],
+            redo_stack=[old_redo],
+        )
+        canvas = SimpleNamespace(value="after")
+
+        class Command(HistoryCommand):
+            def undo(self, target) -> None:
+                target.value = "before"
+
+            def redo(self, target) -> None:
+                target.value = "after"
+
+        class RuntimeSnapshot:
+            def __init__(self, *, poison: bool) -> None:
+                self.value = canvas.value
+                self.poison = poison
+                self.verify_calls = 0
+
+            def verify_exact(self):
+                self.verify_calls += 1
+                if self.poison and self.verify_calls == 2:
+                    state.history.append(sentinel)
+                return ()
+
+            def restore_with_result(self):
+                canvas.value = self.value
+                return HistoryTransactionRestoreResult(authoritative=True)
+
+            @staticmethod
+            def release() -> None:
+                return None
+
+        class History:
+            def __init__(self) -> None:
+                self.state = state
+
+            @staticmethod
+            def push(command) -> bool:
+                state.history.append(command)
+                state.redo_stack.clear()
+                return True
+
+            @staticmethod
+            def notify_change() -> None:
+                return None
+
+        service = CanvasHistoryRecordingService(canvas, history_service=History())
+        with (
+            mock.patch(
+                "ui.canvas_history_recording_service.capture_history_transaction_for_history",
+                side_effect=lambda *_args, **_kwargs: RuntimeSnapshot(poison=True),
+            ),
+            mock.patch(
+                "ui.history_push_failure_recovery.capture_history_transaction_for_history",
+                side_effect=lambda *_args, **_kwargs: RuntimeSnapshot(poison=False),
+            ),
+            self.assertRaisesRegex(RuntimeError, "history stack contents"),
+        ):
+            service._push_history(Command())
+
+        self.assertEqual(canvas.value, "before")
+        self.assertEqual(state.history, [old_history])
+        self.assertEqual(state.redo_stack, [old_redo])
+
+    def test_final_history_getter_cannot_poison_runtime_or_command(self) -> None:
+        for poison_target in ("runtime", "command"):
+            with self.subTest(target=poison_target):
+                canvas = SimpleNamespace(value="after")
+
+                class Command(HistoryCommand):
+                    def __init__(self) -> None:
+                        self.after = "after"
+
+                    def undo(self, target) -> None:
+                        target.value = "before"
+
+                    def redo(self, target) -> None:
+                        target.value = self.after
+
+                command = Command()
+
+                class State:
+                    def __init__(self) -> None:
+                        self.history = []
+                        self.redo_stack = []
+                        self.enabled = True
+                        self.limit = 100
+                        self.armed = False
+                        self.reads = 0
+
+                    def __getattribute__(
+                        self,
+                        name,
+                        _poison_target=poison_target,
+                        _canvas=canvas,
+                    ):
+                        if name == "history":
+                            namespace = object.__getattribute__(self, "__dict__")
+                            if dict.get(namespace, "armed", False):
+                                namespace["reads"] += 1
+                                if namespace["reads"] == 13:
+                                    if _poison_target == "runtime":
+                                        _canvas.value = "poison"
+                                    else:
+                                        namespace["history"][0].after = "poison"
+                            return namespace["history"]
+                        return object.__getattribute__(self, name)
+
+                state = State()
+
+                class RuntimeSnapshot:
+                    def __init__(self, _canvas=canvas) -> None:
+                        self.value = _canvas.value
+
+                    def verify_exact(self, _canvas=canvas):
+                        if _canvas.value != self.value:
+                            return (RuntimeError("runtime changed"),)
+                        return ()
+
+                    def restore_with_result(self, _canvas=canvas):
+                        _canvas.value = self.value
+                        return HistoryTransactionRestoreResult(authoritative=True)
+
+                    @staticmethod
+                    def release() -> None:
+                        return None
+
+                class History:
+                    def __init__(self, _state=state) -> None:
+                        self.state = _state
+
+                    @staticmethod
+                    def push(published, _state=state) -> bool:
+                        namespace = object.__getattribute__(_state, "__dict__")
+                        namespace["history"].append(published)
+                        namespace["redo_stack"].clear()
+                        namespace["armed"] = True
+                        return True
+
+                    @staticmethod
+                    def notify_change() -> None:
+                        return None
+
+                with (
+                    mock.patch(
+                        "ui.canvas_history_recording_service.capture_history_transaction_for_history",
+                        side_effect=lambda *_args, **_kwargs: RuntimeSnapshot(),
+                    ),
+                    mock.patch(
+                        "ui.history_push_failure_recovery.capture_history_transaction_for_history",
+                        side_effect=lambda *_args, **_kwargs: RuntimeSnapshot(),
+                    ),
+                    self.assertRaises(
+                        BaseExceptionGroup
+                        if poison_target == "runtime"
+                        else RuntimeError
+                    ),
+                ):
+                    CanvasHistoryRecordingService(canvas, History()).push_history(
+                        command
+                    )
+
+                namespace = object.__getattribute__(state, "__dict__")
+                self.assertEqual(canvas.value, "before")
+                self.assertEqual(command.after, "after")
+                self.assertEqual(namespace["history"], [])
+                self.assertEqual(namespace["redo_stack"], [])
+
+    def test_descriptor_backed_state_cannot_redefine_history_baseline(self) -> None:
+        canvas = SimpleNamespace(value="after")
+        sentinel = object()
+        state = CanvasHistoryState()
+
+        class Command(HistoryCommand):
+            def undo(self, target) -> None:
+                target.value = "before"
+
+            def redo(self, target) -> None:
+                target.value = "after"
+
+        class RuntimeSnapshot:
+            def __init__(self) -> None:
+                self.value = canvas.value
+
+            def verify_exact(self):
+                return ()
+
+            def restore_with_result(self):
+                canvas.value = self.value
+                return HistoryTransactionRestoreResult(authoritative=True)
+
+            @staticmethod
+            def release() -> None:
+                return None
+
+        class History:
+            def __init__(self) -> None:
+                self._state = state
+                self.armed = True
+
+            @property
+            def state(self):
+                if self.armed:
+                    self.armed = False
+                    self._state.history.append(sentinel)
+                return self._state
+
+            @state.setter
+            def state(self, value) -> None:
+                self._state = value
+
+            def push(self, command) -> bool:
+                self._state.history.append(command)
+                self._state.redo_stack.clear()
+                return True
+
+            @staticmethod
+            def notify_change() -> None:
+                return None
+
+        with (
+            mock.patch(
+                "ui.canvas_history_recording_service.capture_history_transaction_for_history",
+                side_effect=lambda *_args, **_kwargs: RuntimeSnapshot(),
+            ),
+            self.assertRaisesRegex(RuntimeError, "raw history stack contents"),
+        ):
+            CanvasHistoryRecordingService(canvas, History()).push_history(Command())
+
+        self.assertEqual(canvas.value, "before")
+        self.assertEqual(state.history, [])
+        self.assertEqual(state.redo_stack, [])
+
     def test_successful_push_command_payload_mutation_rolls_back_exactly(self) -> None:
         canvas = SimpleNamespace(value="after")
         old_history = object()
@@ -801,11 +1496,31 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
     def test_record_bond_update_skips_push_when_history_disabled_or_state_is_unchanged(
         self,
     ) -> None:
-        disabled_canvas = _make_canvas(history_enabled=False)
+        disabled_bond = Bond(1, 2, order=2)
+        disabled_canvas = _make_canvas(
+            bonds=[None, disabled_bond],
+            history_enabled=False,
+        )
+        disabled_canvas.services.history_service = CanvasHistoryService(
+            disabled_canvas,
+            disabled_canvas.history_state,
+        )
         _recording_service(disabled_canvas).record_bond_update(
             bond_id=1,
-            before_state={"order": 1},
-            after_state={"order": 2},
+            before_state={
+                "a": 1,
+                "b": 2,
+                "order": 1,
+                "style": "single",
+                "color": "#000000",
+            },
+            after_state={
+                "a": 1,
+                "b": 2,
+                "order": 2,
+                "style": "single",
+                "color": "#000000",
+            },
             before_smiles_input="before-smiles",
             after_smiles_input="after-smiles",
         )
