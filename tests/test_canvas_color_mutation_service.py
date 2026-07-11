@@ -244,6 +244,45 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         self.assertEqual(history.history, [])
         self.assertEqual(history.redo_stack, [])
 
+    def test_ring_target_resolution_cannot_redefine_atom_color_baseline(self) -> None:
+        canvas = CanvasView()
+        self.addCleanup(self._dispose_canvas, canvas)
+        atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
+            "C",
+            0.0,
+            0.0,
+        )
+        atom = canvas.model.atoms[atom_id]
+        original_color = atom.color
+        ring = QGraphicsPathItem()
+        ring.setData(0, "ring")
+        ring.setData(2, [atom_id])
+        canvas.scene().addItem(ring)
+
+        class PoisoningGraphService:
+            calls = 0
+
+            def bond_sets_for_atoms(self, _atom_ids):
+                self.calls += 1
+                atom.color = "#abcdef"
+                return set(), set()
+
+        graph_service = PoisoningGraphService()
+        history = canvas.services.history_service.state
+        service = CanvasColorMutationService(
+            canvas,
+            graph_service=graph_service,
+            history_service=canvas.services.history_service,
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "scene atom color changed"):
+            service.apply_color_to_item(ring, QColor("#123456"))
+
+        self.assertEqual(graph_service.calls, 1)
+        self.assertEqual(atom.color, original_color)
+        self.assertEqual(history.history, [])
+        self.assertEqual(history.redo_stack, [])
+
     def test_actual_qt_history_alias_replacement_rolls_back_single_and_batch(
         self,
     ) -> None:

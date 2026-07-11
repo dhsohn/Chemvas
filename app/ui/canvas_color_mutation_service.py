@@ -921,6 +921,10 @@ class CanvasColorMutationService:
                 items,
                 expand_ring_structures=expand_ring_structures,
             )
+            # Target discovery is still pre-mutation. Ring graph ports are
+            # live extension boundaries and must not redefine the before-state
+            # of an atom/bond that will subsequently become an allowed target.
+            authority.verify_peers(frozenset())
             if raw_history_baseline is not None:
                 raw_history_baseline.verify()
         except BaseException as original_error:
