@@ -30,6 +30,7 @@ if QApplication is not None:
         set_atom_items_for,
     )
     from ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
+    from ui.canvas_history_service import CanvasHistoryService
     from ui.canvas_history_state import CanvasHistoryState
     from ui.canvas_smiles_input_state import (
         last_smiles_input_for,
@@ -652,6 +653,544 @@ class AtomLabelServiceTest(unittest.TestCase):
             merge_info={"atom_states": {7: {"element": "C"}}},
         )
         self.assertEqual(canvas.pushed_commands, [])
+
+    def test_label_history_rejects_observer_payload_mutation_and_keeps_undo_exact(
+        self,
+    ) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(atoms={1: Atom("C", 1.0, 2.0)})
+        history = CanvasHistoryService(canvas, canvas.history_state)
+        canvas.services.history_service = history
+        service = _atom_label_service(canvas)
+        canvas.services.atom_label_service = service
+        service.ensure_carbon_dot(1)
+        callback_calls = 0
+
+        def corrupt_published_command() -> None:
+            nonlocal callback_calls
+            callback_calls += 1
+            if not canvas.history_state.history:
+                return
+            published = canvas.history_state.history[-1]
+            assert isinstance(published, ChangeAtomLabelCommand)
+            published.before_element = "O"
+
+        history.set_change_callback(corrupt_published_command)
+
+        with self.assertRaisesRegex(RuntimeError, "history command field"):
+            service.add_or_update_atom_label(1, "N", allow_merge=False)
+
+        self.assertGreaterEqual(callback_calls, 1)
+        self.assertEqual(canvas.model.atoms[1].element, "C")
+        self.assertEqual(canvas.history_state.history, [])
+        self.assertEqual(canvas.history_state.redo_stack, [])
+
+        history.set_change_callback(None)
+        service.add_or_update_atom_label(1, "N", allow_merge=False)
+
+        self.assertEqual(canvas.model.atoms[1].element, "N")
+        self.assertEqual(len(canvas.history_state.history), 1)
+        history.undo()
+        self.assertEqual(canvas.model.atoms[1].element, "C")
+        self.assertEqual(canvas.history_state.history, [])
+        self.assertEqual(len(canvas.history_state.redo_stack), 1)
+
+    def test_production_label_history_does_not_cross_live_enabled_getter(
+        self,
+    ) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(atoms={1: Atom("C", 1.0, 2.0)})
+        canvas.history_state.enabled = False
+        history = CanvasHistoryService(canvas, canvas.history_state)
+        canvas.services.history_service = history
+        service = _atom_label_service(canvas)
+        canvas.services.atom_label_service = service
+        service.ensure_carbon_dot(1)
+        sentinel = object()
+
+        def poison_before_savepoint() -> bool:
+            canvas.model.atoms[1].element = "O"
+            canvas.history_state.history.append(sentinel)
+            return False
+
+        with patch.object(
+            history,
+            "is_enabled",
+            side_effect=poison_before_savepoint,
+        ) as enabled_getter:
+            service.add_or_update_atom_label(1, "N", allow_merge=False)
+
+        enabled_getter.assert_not_called()
+        self.assertEqual(canvas.model.atoms[1].element, "N")
+        self.assertEqual(canvas.history_state.history, [])
+        self.assertEqual(canvas.history_state.redo_stack, [])
+
+    def test_dynamic_state_label_history_uses_exact_failed_push_rollback(
+        self,
+    ) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(atoms={1: Atom("C", 1.0, 2.0)})
+        redo_entry = object()
+        canvas.history_state.redo_stack.append(redo_entry)
+        primary = RuntimeError("dynamic label history push failed")
+
+        class DynamicHistory:
+            def __init__(self) -> None:
+                self._state = canvas.history_state
+                self.push_calls = 0
+
+            def __getattr__(self, name):
+                if name == "state":
+                    return self._state
+                raise AttributeError(name)
+
+            def is_enabled(self) -> bool:
+                return bool(self._state.enabled)
+
+            def push(self, command) -> bool:
+                self.push_calls += 1
+                self._state.history.append(command)
+                self._state.redo_stack.clear()
+                raise primary
+
+            @staticmethod
+            def notify_change() -> None:
+                return None
+
+        history = DynamicHistory()
+        canvas.services.history_service = history
+        service = _atom_label_service(canvas)
+        canvas.services.atom_label_service = service
+        service.ensure_carbon_dot(1)
+
+        with self.assertRaises(RuntimeError) as caught:
+            service.add_or_update_atom_label(1, "N", allow_merge=False)
+
+        self.assertIs(caught.exception, primary)
+        self.assertEqual(history.push_calls, 1)
+        self.assertEqual(canvas.model.atoms[1].element, "C")
+        self.assertFalse(canvas.model.atoms[1].explicit_label)
+        self.assertEqual(canvas.history_state.history, [])
+        self.assertEqual(canvas.history_state.redo_stack, [redo_entry])
+
+    def test_lightweight_label_history_restores_successfully_mutated_payload(
+        self,
+    ) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(atoms={1: Atom("C", 1.0, 2.0)})
+        service = _atom_label_service(canvas)
+        canvas.services.atom_label_service = service
+        service.ensure_carbon_dot(1)
+        published_commands = []
+
+        def mutate_published_payload(command) -> None:
+            canvas.pushed_commands.append(command)
+            published_commands.append(command)
+            command.before_element = "O"
+
+        canvas.services.history_service.push = mutate_published_payload
+
+        with self.assertRaisesRegex(RuntimeError, "history command field"):
+            service.add_or_update_atom_label(1, "N", allow_merge=False)
+
+        self.assertEqual(canvas.model.atoms[1].element, "C")
+        self.assertEqual(canvas.pushed_commands, [])
+        self.assertEqual(len(published_commands), 1)
+        published = published_commands[0]
+        self.assertIsInstance(published, ChangeAtomLabelCommand)
+        self.assertEqual(published.before_element, "C")
+
+    def test_lightweight_label_history_release_failure_restores_exactly(
+        self,
+    ) -> None:
+        import ui.atom_label_history_recorder as recorder_module
+
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={
+                1: Atom("C", 1.0, 2.0),
+                2: Atom("N", 3.0, 4.0),
+            }
+        )
+        service = _atom_label_service(canvas)
+        canvas.services.atom_label_service = service
+        service.ensure_carbon_dot(1)
+        primary = RuntimeError("atom-label snapshot release failed")
+        real_release = recorder_module.release_history_transaction_for_history
+        release_calls = 0
+
+        def poison_runtime_then_fail_release(canvas_arg, snapshot) -> None:
+            nonlocal release_calls
+            release_calls += 1
+            real_release(canvas_arg, snapshot)
+            canvas.model.atoms[2].element = "O"
+            raise primary
+
+        with (
+            patch.object(
+                recorder_module,
+                "release_history_transaction_for_history",
+                side_effect=poison_runtime_then_fail_release,
+            ),
+            self.assertRaises(RuntimeError) as caught,
+        ):
+            service.add_or_update_atom_label(1, "Cl", allow_merge=False)
+
+        self.assertIs(caught.exception, primary)
+        self.assertEqual(release_calls, 2)
+        self.assertEqual(canvas.model.atoms[1].element, "C")
+        self.assertFalse(canvas.model.atoms[1].explicit_label)
+        self.assertEqual(canvas.model.atoms[2].element, "N")
+        self.assertEqual(canvas.pushed_commands, [])
+
+    def test_disabled_lightweight_label_history_release_failure_rolls_back(
+        self,
+    ) -> None:
+        import ui.atom_label_history_recorder as recorder_module
+
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={
+                1: Atom("C", 1.0, 2.0),
+                2: Atom("N", 3.0, 4.0),
+            }
+        )
+        canvas.history_state.enabled = False
+        service = _atom_label_service(canvas)
+        canvas.services.atom_label_service = service
+        service.ensure_carbon_dot(1)
+        primary = RuntimeError("disabled atom-label snapshot release failed")
+        real_release = recorder_module.release_history_transaction_for_history
+        release_calls = 0
+
+        def poison_runtime_then_fail_release(canvas_arg, snapshot) -> None:
+            nonlocal release_calls
+            release_calls += 1
+            real_release(canvas_arg, snapshot)
+            canvas.model.atoms[2].element = "O"
+            raise primary
+
+        with (
+            patch.object(
+                recorder_module,
+                "release_history_transaction_for_history",
+                side_effect=poison_runtime_then_fail_release,
+            ),
+            self.assertRaises(RuntimeError) as caught,
+        ):
+            service.add_or_update_atom_label(1, "Cl", allow_merge=False)
+
+        self.assertIs(caught.exception, primary)
+        self.assertEqual(release_calls, 2)
+        self.assertEqual(canvas.model.atoms[1].element, "C")
+        self.assertFalse(canvas.model.atoms[1].explicit_label)
+        self.assertEqual(canvas.model.atoms[2].element, "N")
+        self.assertEqual(canvas.pushed_commands, [])
+
+    def test_lightweight_label_history_rejects_push_false_and_rolls_back(
+        self,
+    ) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(atoms={1: Atom("C", 1.0, 2.0)})
+        service = _atom_label_service(canvas)
+        canvas.services.atom_label_service = service
+        service.ensure_carbon_dot(1)
+        canvas.services.history_service.push = lambda _command: False
+
+        with self.assertRaisesRegex(RuntimeError, "without a provable disabled"):
+            service.add_or_update_atom_label(1, "N", allow_merge=False)
+
+        self.assertEqual(canvas.model.atoms[1].element, "C")
+        self.assertEqual(canvas.pushed_commands, [])
+
+    def test_lightweight_label_history_rejects_noop_successful_push(
+        self,
+    ) -> None:
+        for push_result in (None, True):
+            with self.subTest(push_result=push_result):
+                canvas = _FakeCanvas()
+                canvas.model = MoleculeModel(
+                    atoms={1: Atom("C", 1.0, 2.0)}
+                )
+                service = _atom_label_service(canvas)
+                canvas.services.atom_label_service = service
+                service.ensure_carbon_dot(1)
+                canvas.services.history_service.push = Mock(
+                    return_value=push_result
+                )
+
+                with self.assertRaisesRegex(
+                    RuntimeError,
+                    "lightweight history publication was not exact",
+                ):
+                    service.add_or_update_atom_label(
+                        1,
+                        "N",
+                        allow_merge=False,
+                    )
+
+                self.assertEqual(canvas.model.atoms[1].element, "C")
+                self.assertFalse(canvas.model.atoms[1].explicit_label)
+                self.assertEqual(canvas.pushed_commands, [])
+
+    def test_stateless_label_history_rejects_enabled_push_without_authority(
+        self,
+    ) -> None:
+        for push_result in (None, True):
+            with self.subTest(push_result=push_result):
+                canvas = _FakeCanvas()
+                del canvas.pushed_commands
+                canvas.model = MoleculeModel(
+                    atoms={1: Atom("C", 1.0, 2.0)}
+                )
+                push = Mock(return_value=push_result)
+                canvas.services.history_service.push = push
+                service = _atom_label_service(canvas)
+                canvas.services.atom_label_service = service
+                service.ensure_carbon_dot(1)
+
+                with self.assertRaisesRegex(
+                    RuntimeError,
+                    "no exact publication authority",
+                ):
+                    service.add_or_update_atom_label(
+                        1,
+                        "N",
+                        allow_merge=False,
+                    )
+
+                push.assert_not_called()
+                self.assertEqual(canvas.model.atoms[1].element, "C")
+                self.assertFalse(canvas.model.atoms[1].explicit_label)
+
+    def test_stateless_label_history_supports_service_publication_list(
+        self,
+    ) -> None:
+        for append_command in (False, True):
+            with self.subTest(append_command=append_command):
+                canvas = _FakeCanvas()
+                del canvas.pushed_commands
+                canvas.model = MoleculeModel(
+                    atoms={1: Atom("C", 1.0, 2.0)}
+                )
+
+                class History:
+                    def __init__(self, should_append: bool) -> None:
+                        self.commands = []
+                        self.should_append = should_append
+
+                    @staticmethod
+                    def is_enabled() -> bool:
+                        return True
+
+                    def push(self, command) -> bool:
+                        if self.should_append:
+                            self.commands.append(command)
+                        return True
+
+                history = History(append_command)
+                canvas.services.history_service = history
+                service = _atom_label_service(canvas)
+                canvas.services.atom_label_service = service
+                service.ensure_carbon_dot(1)
+
+                if append_command:
+                    service.add_or_update_atom_label(
+                        1,
+                        "N",
+                        allow_merge=False,
+                    )
+                    self.assertEqual(canvas.model.atoms[1].element, "N")
+                    self.assertEqual(len(history.commands), 1)
+                    self.assertIsInstance(
+                        history.commands[0],
+                        ChangeAtomLabelCommand,
+                    )
+                else:
+                    with self.assertRaisesRegex(
+                        RuntimeError,
+                        "lightweight history publication was not exact",
+                    ):
+                        service.add_or_update_atom_label(
+                            1,
+                            "N",
+                            allow_merge=False,
+                        )
+                    self.assertEqual(canvas.model.atoms[1].element, "C")
+                    self.assertEqual(history.commands, [])
+
+    def test_stateless_label_history_rejects_injected_service_publication_alias(
+        self,
+    ) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(atoms={1: Atom("C", 1.0, 2.0)})
+        history = canvas.services.history_service
+
+        def publish_through_two_distinct_roots(command) -> bool:
+            canvas.pushed_commands.append(command)
+            history.commands = [command]
+            return True
+
+        history.push = publish_through_two_distinct_roots
+        service = _atom_label_service(canvas)
+        canvas.services.atom_label_service = service
+        service.ensure_carbon_dot(1)
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "lightweight history publication root changed",
+        ):
+            service.add_or_update_atom_label(1, "N", allow_merge=False)
+
+        self.assertEqual(canvas.model.atoms[1].element, "C")
+        self.assertFalse(canvas.model.atoms[1].explicit_label)
+        self.assertEqual(canvas.pushed_commands, [])
+        self.assertFalse(hasattr(history, "commands"))
+
+    def test_stateless_label_history_restores_absent_or_none_slot_alias(
+        self,
+    ) -> None:
+        for initial_alias in ("absent", "none"):
+            with self.subTest(initial_alias=initial_alias):
+                canvas = _FakeCanvas()
+                canvas.model = MoleculeModel(
+                    atoms={1: Atom("C", 1.0, 2.0)}
+                )
+
+                class History:
+                    __slots__ = ("commands",)
+
+                    @staticmethod
+                    def is_enabled() -> bool:
+                        return True
+
+                    def push(self, command, _canvas=canvas) -> bool:
+                        _canvas.pushed_commands.append(command)
+                        self.commands = [command]
+                        return True
+
+                history = History()
+                if initial_alias == "none":
+                    history.commands = None
+                canvas.services.history_service = history
+                service = _atom_label_service(canvas)
+                canvas.services.atom_label_service = service
+                service.ensure_carbon_dot(1)
+
+                with self.assertRaisesRegex(
+                    RuntimeError,
+                    "lightweight history publication root changed",
+                ):
+                    service.add_or_update_atom_label(
+                        1,
+                        "N",
+                        allow_merge=False,
+                    )
+
+                self.assertEqual(canvas.model.atoms[1].element, "C")
+                self.assertFalse(canvas.model.atoms[1].explicit_label)
+                self.assertEqual(canvas.pushed_commands, [])
+                if initial_alias == "absent":
+                    self.assertFalse(hasattr(history, "commands"))
+                else:
+                    self.assertIsNone(history.commands)
+
+    def test_lightweight_label_history_rejects_successful_runtime_mutation(
+        self,
+    ) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(atoms={1: Atom("C", 1.0, 2.0)})
+        published = []
+
+        def mutate_runtime_after_push(command) -> bool:
+            canvas.pushed_commands.append(command)
+            published.append(command)
+            canvas.model.atoms[1].element = "O"
+            return True
+
+        canvas.services.history_service.push = mutate_runtime_after_push
+        service = _atom_label_service(canvas)
+        canvas.services.atom_label_service = service
+        service.ensure_carbon_dot(1)
+
+        with self.assertRaisesRegex(
+            BaseExceptionGroup,
+            "stateless atom-label history push changed",
+        ):
+            service.add_or_update_atom_label(1, "N", allow_merge=False)
+
+        self.assertEqual(canvas.model.atoms[1].element, "C")
+        self.assertEqual(len(published), 1)
+        self.assertEqual(published[0].after_element, "N")
+
+    def test_lightweight_label_history_failed_push_restores_unrelated_runtime(
+        self,
+    ) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={
+                1: Atom("C", 1.0, 2.0),
+                2: Atom("N", 3.0, 4.0),
+            }
+        )
+        primary = RuntimeError("lightweight label history push failed")
+
+        def mutate_unrelated_runtime_then_fail(_command) -> None:
+            canvas.model.atoms[2].element = "O"
+            raise primary
+
+        canvas.services.history_service.push = mutate_unrelated_runtime_then_fail
+        service = _atom_label_service(canvas)
+        canvas.services.atom_label_service = service
+        service.ensure_carbon_dot(1)
+
+        with self.assertRaises(RuntimeError) as caught:
+            service.add_or_update_atom_label(1, "N", allow_merge=False)
+
+        self.assertIs(caught.exception, primary)
+        self.assertEqual(canvas.model.atoms[1].element, "C")
+        self.assertEqual(canvas.model.atoms[2].element, "N")
+        self.assertEqual(canvas.pushed_commands, [])
+
+    def test_label_history_runtime_scene_capture_cannot_poison_history(self) -> None:
+        import ui.canvas_history_recording_service as recording_module
+
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(atoms={1: Atom("C", 1.0, 2.0)})
+        history = CanvasHistoryService(canvas, canvas.history_state)
+        canvas.services.history_service = history
+        service = _atom_label_service(canvas)
+        canvas.services.atom_label_service = service
+        service.ensure_carbon_dot(1)
+        sentinel = object()
+        real_capture = recording_module.capture_history_transaction_for_history
+        original_scene = canvas.scene
+        armed = True
+
+        def poisoned_scene():
+            nonlocal armed
+            if armed:
+                armed = False
+                canvas.history_state.history.append(sentinel)
+            return original_scene()
+
+        def capture_with_poisoned_scene(*args, **kwargs):
+            with patch.object(canvas, "scene", side_effect=poisoned_scene):
+                return real_capture(*args, **kwargs)
+
+        with (
+            patch.object(
+                recording_module,
+                "capture_history_transaction_for_history",
+                side_effect=capture_with_poisoned_scene,
+            ),
+            self.assertRaisesRegex(RuntimeError, "history stack contents"),
+        ):
+            service.add_or_update_atom_label(1, "N", allow_merge=False)
+
+        self.assertEqual(canvas.model.atoms[1].element, "C")
+        self.assertEqual(canvas.history_state.history, [])
+        self.assertEqual(canvas.history_state.redo_stack, [])
 
     def test_record_label_change_skips_none_and_unchanged_bond_states(self) -> None:
         canvas = _FakeCanvas()

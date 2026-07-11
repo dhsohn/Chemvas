@@ -22,7 +22,7 @@ from ui.sheet_setup_access import (
     sheet_setup_for,
     sheet_size_for,
 )
-from ui.sheet_setup_state import sheet_setup_state_for
+from ui.sheet_setup_state import SheetSetupState, sheet_setup_state_for
 
 _APP = QApplication.instance() or QApplication([])
 _APP.setQuitOnLastWindowClosed(False)
@@ -779,4 +779,41 @@ def test_sheet_success_final_compatibility_getter_cannot_poison_scene_rect() -> 
 
     _assert_sheet_configuration(canvas, scene, before)
     assert scene.sceneRect() != poisoned_rect
+    canvas.close()
+
+
+def test_sheet_success_final_scene_getter_cannot_delete_canonical_state_root() -> (
+    None
+):
+    class RootDeletingView(QGraphicsView):
+        def __init__(self, scene: QGraphicsScene) -> None:
+            super().__init__(scene)
+            self.runtime_state = SimpleNamespace(sheet_setup_state=SheetSetupState())
+            self.scene_reads = 0
+            self.delete_on_read = 0
+
+        def scene(self):
+            self.scene_reads += 1
+            if self.scene_reads == self.delete_on_read:
+                del self.runtime_state.sheet_setup_state
+            return QGraphicsView.scene(self)
+
+    scene = QGraphicsScene()
+    scene.addRect(0.0, 0.0, 10.0, 10.0)
+    canvas = RootDeletingView(scene)
+    set_sheet_setup_for(canvas, "A4", "landscape")
+    before = _sheet_configuration(canvas, scene)
+    canvas.scene_reads = 0
+    # Initial transaction capture, forward rect capture, then the final
+    # successful-result capture. Delete the canonical root in that last getter.
+    canvas.delete_on_read = 3
+
+    with pytest.raises(
+        RuntimeError,
+        match="state root disappeared during finalization",
+    ):
+        set_sheet_setup_for(canvas, "A4", "portrait")
+
+    assert canvas.runtime_state.sheet_setup_state is before[0]
+    _assert_sheet_configuration(canvas, scene, before)
     canvas.close()
