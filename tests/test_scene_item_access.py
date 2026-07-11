@@ -1,6 +1,9 @@
 import unittest
 from types import SimpleNamespace
 
+from PyQt6 import sip
+from PyQt6.QtCore import QObject, QRectF
+from PyQt6.QtWidgets import QGraphicsRectItem
 from ui.scene_item_access import (
     add_item_to_canvas_scene,
     apply_scene_item_state,
@@ -280,9 +283,30 @@ class SceneItemAccessTest(unittest.TestCase):
 
         self.assertTrue(item_is_in_canvas_scene(canvas, _SceneItem(scene)))
         self.assertFalse(item_is_in_canvas_scene(canvas, _SceneItem(_Scene())))
-        self.assertFalse(item_is_in_canvas_scene(canvas, _SceneItem(scene, raises=True)))
         self.assertFalse(item_is_in_canvas_scene(canvas, None))
-        self.assertFalse(item_is_in_canvas_scene(deleted_canvas, _SceneItem(scene)))
+        self.assertFalse(item_is_in_canvas_scene(deleted_canvas, None))
+        with self.assertRaisesRegex(RuntimeError, "deleted"):
+            item_is_in_canvas_scene(canvas, _SceneItem(scene, raises=True))
+        with self.assertRaisesRegex(RuntimeError, "deleted"):
+            item_is_in_canvas_scene(deleted_canvas, _SceneItem(scene))
+
+        class BrokenSceneDescriptor:
+            @property
+            def scene(self):
+                raise AttributeError("live item scene descriptor failed")
+
+        with self.assertRaisesRegex(AttributeError, "scene descriptor failed"):
+            item_is_in_canvas_scene(canvas, BrokenSceneDescriptor())
+
+        deleted_item = QGraphicsRectItem(QRectF(0.0, 0.0, 1.0, 1.0))
+        sip.delete(deleted_item)
+        self.assertFalse(item_is_in_canvas_scene(canvas, deleted_item))
+        self.assertFalse(item_is_in_canvas_scene(deleted_canvas, deleted_item))
+        deleted_qobject_canvas = QObject()
+        sip.delete(deleted_qobject_canvas)
+        self.assertFalse(
+            item_is_in_canvas_scene(deleted_qobject_canvas, _SceneItem(scene))
+        )
 
     def test_item_can_be_added_to_canvas_scene_distinguishes_attached_and_deleted_items(self) -> None:
         scene = _Scene()
@@ -294,10 +318,36 @@ class SceneItemAccessTest(unittest.TestCase):
 
         self.assertFalse(item_can_be_added_to_canvas_scene(canvas, _SceneItem(scene)))
         self.assertTrue(item_can_be_added_to_canvas_scene(canvas, _SceneItem(other_scene)))
-        self.assertFalse(item_can_be_added_to_canvas_scene(canvas, _SceneItem(scene, raises=True)))
         self.assertTrue(item_can_be_added_to_canvas_scene(canvas, object()))
         self.assertFalse(item_can_be_added_to_canvas_scene(canvas, None))
-        self.assertFalse(item_can_be_added_to_canvas_scene(deleted_canvas, _SceneItem(other_scene)))
+        self.assertFalse(item_can_be_added_to_canvas_scene(deleted_canvas, None))
+        with self.assertRaisesRegex(RuntimeError, "deleted"):
+            item_can_be_added_to_canvas_scene(canvas, _SceneItem(scene, raises=True))
+        with self.assertRaisesRegex(RuntimeError, "deleted"):
+            item_can_be_added_to_canvas_scene(deleted_canvas, _SceneItem(other_scene))
+
+        class BrokenSceneDescriptor:
+            @property
+            def scene(self):
+                raise AttributeError("live item scene descriptor failed")
+
+        with self.assertRaisesRegex(AttributeError, "scene descriptor failed"):
+            item_can_be_added_to_canvas_scene(canvas, BrokenSceneDescriptor())
+
+        deleted_item = QGraphicsRectItem(QRectF(0.0, 0.0, 1.0, 1.0))
+        sip.delete(deleted_item)
+        self.assertFalse(item_can_be_added_to_canvas_scene(canvas, deleted_item))
+        self.assertFalse(
+            item_can_be_added_to_canvas_scene(deleted_canvas, deleted_item)
+        )
+        deleted_qobject_canvas = QObject()
+        sip.delete(deleted_qobject_canvas)
+        self.assertFalse(
+            item_can_be_added_to_canvas_scene(
+                deleted_qobject_canvas,
+                _SceneItem(other_scene),
+            )
+        )
 
     def test_remove_item_from_canvas_scene_removes_only_attached_items(self) -> None:
         scene = _Scene()

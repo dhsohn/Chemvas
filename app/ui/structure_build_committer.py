@@ -16,10 +16,20 @@ from ui.canvas_scene_items_state import (
 from ui.canvas_smiles_input_state import (
     clear_last_smiles_input_for,
     last_smiles_input_for,
-    set_last_smiles_input_for,
 )
 from ui.graph_algorithms import find_rings
 from ui.graph_index_operations import first_matching_bond_id
+from ui.history_canvas_access import (
+    capture_history_transaction_for_history,
+    release_history_transaction_for_history,
+    restore_history_transaction_for_history,
+    verify_history_transaction_for_history,
+)
+from ui.history_restore_retry import restore_history_snapshot_with_retry
+from ui.insert_commit_rollback import (
+    SmilesInputRestoreAuthority,
+    capture_smiles_input_restore_authority,
+)
 from ui.renderer_style_access import bond_length_px_for
 from ui.scene_item_access import (
     attach_scene_item,
@@ -45,12 +55,29 @@ if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
 
 
+def _add_build_rollback_note(
+    original_error: BaseException,
+    cleanup_error: BaseException,
+    *,
+    phase: str,
+) -> None:
+    try:
+        add_note = getattr(original_error, "add_note", None)
+        if not callable(add_note):
+            return
+        add_note(f"{phase}: {cleanup_error!r}")
+    except BaseException:
+        return
+
+
 @dataclass(slots=True)
 class StructureBuildHistorySnapshot:
     before_smiles_input: str | None
     before_next_atom_id: int
     before_bond_count: int
     before_scene_items: dict[str, tuple[Any, ...]]
+    exact_transaction: Any
+    smiles_authority: SmilesInputRestoreAuthority
 
 
 class StructureBuildCommitter:
@@ -64,13 +91,82 @@ class StructureBuildCommitter:
     ) -> StructureBuildHistorySnapshot:
         if before_smiles_input is None:
             before_smiles_input = last_smiles_input_for(self.canvas)
+        services = getattr(self.canvas, "services", None)
+        history_service = getattr(services, "history_service", None)
+        smiles_authority = capture_smiles_input_restore_authority(self.canvas)
+        before_next_atom_id = insert_next_atom_id_for(self.canvas)
+        before_bond_count = insert_bond_count_for(self.canvas)
+        before_scene_items = self._scene_item_snapshot()
+        try:
+            # Exact capture crosses live extension getters (for example the
+            # renderer style).  Keep the capture itself inside the raw
+            # model/scene/SMILES baseline: a getter can poison one of those
+            # roots before terminating, even though the build body has not run.
+            exact_transaction = capture_history_transaction_for_history(
+                self.canvas,
+                history_service=history_service,
+            )
+        except BaseException as error:
+            capture_baseline = StructureBuildHistorySnapshot(
+                before_smiles_input=before_smiles_input,
+                before_next_atom_id=before_next_atom_id,
+                before_bond_count=before_bond_count,
+                before_scene_items=before_scene_items,
+                exact_transaction=None,
+                smiles_authority=smiles_authority,
+            )
+            cleanup_errors: list[BaseException] = []
+            try:
+                cleanup_errors.extend(self._remove_new_scene_items(capture_baseline))
+            except BaseException as scene_cleanup_error:
+                cleanup_errors.append(scene_cleanup_error)
+            try:
+                rollback_insert_mutation_for(
+                    self.canvas,
+                    before_next_atom_id=before_next_atom_id,
+                    before_bond_count=before_bond_count,
+                )
+            except BaseException as model_cleanup_error:
+                cleanup_errors.append(model_cleanup_error)
+            smiles_result = smiles_authority.restore(before_smiles_input)
+            cleanup_errors.extend(smiles_result.errors)
+            if not smiles_result.authoritative and not smiles_result.errors:
+                cleanup_errors.append(
+                    RuntimeError("build capture SMILES restore was non-authoritative")
+                )
+            for recorded_cleanup_error in cleanup_errors:
+                _add_build_rollback_note(
+                    error,
+                    recorded_cleanup_error,
+                    phase="Build capture rollback also failed",
+                )
+            raise
+
         snapshot = StructureBuildHistorySnapshot(
             before_smiles_input=before_smiles_input,
-            before_next_atom_id=insert_next_atom_id_for(self.canvas),
-            before_bond_count=insert_bond_count_for(self.canvas),
-            before_scene_items=self._scene_item_snapshot(),
+            before_next_atom_id=before_next_atom_id,
+            before_bond_count=before_bond_count,
+            before_scene_items=before_scene_items,
+            exact_transaction=exact_transaction,
+            smiles_authority=smiles_authority,
         )
-        clear_last_smiles_input_for(self.canvas)
+        try:
+            clear_last_smiles_input_for(self.canvas)
+        except BaseException as error:
+            restore_result = restore_history_snapshot_with_retry(
+                lambda: restore_history_transaction_for_history(
+                    self.canvas,
+                    snapshot.exact_transaction,
+                ),
+                description="build initialization transaction",
+            )
+            for caught_rollback_error in restore_result.errors:
+                _add_build_rollback_note(
+                    error,
+                    caught_rollback_error,
+                    phase="Build initialization rollback also failed",
+                )
+            raise
         return snapshot
 
     def record_additions(
@@ -87,7 +183,45 @@ class StructureBuildCommitter:
         merged_scene_items = self._merged_added_scene_items(snapshot, added_scene_items)
         if merged_scene_items is not None:
             kwargs["added_scene_items"] = merged_scene_items
-        record_insert_additions_for(self.canvas, **kwargs)
+        published_transaction = capture_history_transaction_for_history(
+            self.canvas,
+            history_service=None,
+            guard_scene_rect=False,
+        )
+        try:
+            record_insert_additions_for(self.canvas, **kwargs)
+            verify_history_transaction_for_history(
+                self.canvas,
+                published_transaction,
+            )
+        except BaseException as error:
+            try:
+                release_history_transaction_for_history(
+                    self.canvas,
+                    published_transaction,
+                )
+            except BaseException as cleanup_error:
+                _add_build_rollback_note(
+                    error,
+                    cleanup_error,
+                    phase="Build publication snapshot release also failed",
+                )
+            raise
+        else:
+            release_history_transaction_for_history(
+                self.canvas,
+                published_transaction,
+            )
+        self.release_recorded_change(snapshot)
+
+    def release_recorded_change(
+        self,
+        snapshot: StructureBuildHistorySnapshot,
+    ) -> None:
+        release_history_transaction_for_history(
+            self.canvas,
+            snapshot.exact_transaction,
+        )
 
     def abort_recorded_change(
         self,
@@ -104,10 +238,10 @@ class StructureBuildCommitter:
         re-raise that original exception unchanged.
         """
 
-        cleanup_errors: list[Exception] = []
+        cleanup_errors: list[BaseException] = []
         try:
             cleanup_errors.extend(self._remove_new_scene_items(snapshot))
-        except Exception as error:
+        except BaseException as error:
             cleanup_errors.append(error)
         try:
             rollback_insert_mutation_for(
@@ -115,22 +249,44 @@ class StructureBuildCommitter:
                 before_next_atom_id=snapshot.before_next_atom_id,
                 before_bond_count=snapshot.before_bond_count,
             )
-        except Exception as error:
+        except BaseException as error:
             cleanup_errors.append(error)
-        try:
-            set_last_smiles_input_for(self.canvas, snapshot.before_smiles_input)
-        except Exception as error:
-            cleanup_errors.append(error)
+        restore_result = restore_history_snapshot_with_retry(
+            lambda: restore_history_transaction_for_history(
+                self.canvas,
+                snapshot.exact_transaction,
+            ),
+            description="recorded build transaction",
+        )
+        if original_error is not None or not restore_result.authoritative:
+            cleanup_errors.extend(restore_result.errors)
+        # ``before_smiles_input`` may intentionally differ from the live value
+        # captured by the exact UI snapshot (callers can supply an explicit
+        # logical predecessor). Apply that contract after the raw restore.
+        smiles_result = snapshot.smiles_authority.restore(snapshot.before_smiles_input)
+        cleanup_errors.extend(smiles_result.errors)
+        if not smiles_result.authoritative and not smiles_result.errors:
+            cleanup_errors.append(
+                RuntimeError("recorded build SMILES restore was non-authoritative")
+            )
 
         if not cleanup_errors:
             return
         if original_error is not None:
             for cleanup_error in cleanup_errors:
-                original_error.add_note(f"Rollback cleanup also failed: {cleanup_error!r}")
+                _add_build_rollback_note(
+                    original_error,
+                    cleanup_error,
+                    phase="Rollback cleanup also failed",
+                )
             return
         first_error, *additional_errors = cleanup_errors
         for cleanup_error in additional_errors:
-            first_error.add_note(f"Additional rollback cleanup failure: {cleanup_error!r}")
+            _add_build_rollback_note(
+                first_error,
+                cleanup_error,
+                phase="Additional rollback cleanup failure",
+            )
         raise first_error
 
     def _scene_item_snapshot(self) -> dict[str, tuple[Any, ...]]:
@@ -139,7 +295,9 @@ class StructureBuildCommitter:
             for name in SCENE_ITEM_COLLECTION_ATTRS
         }
 
-    def _new_scene_items_since(self, snapshot: StructureBuildHistorySnapshot) -> list[Any]:
+    def _new_scene_items_since(
+        self, snapshot: StructureBuildHistorySnapshot
+    ) -> list[Any]:
         items: list[Any] = []
         seen_ids: set[int] = set()
         before_ids = {
@@ -163,7 +321,10 @@ class StructureBuildCommitter:
     ) -> list | None:
         merged: list[Any] = []
         seen_ids: set[int] = set()
-        for item in [*(added_scene_items or []), *self._new_scene_items_since(snapshot)]:
+        for item in [
+            *(added_scene_items or []),
+            *self._new_scene_items_since(snapshot),
+        ]:
             item_id = id(item)
             if item_id in seen_ids:
                 continue
@@ -173,50 +334,57 @@ class StructureBuildCommitter:
             return None
         return merged
 
-    def _remove_new_scene_items(self, snapshot: StructureBuildHistorySnapshot) -> list[Exception]:
-        errors: list[Exception] = []
+    def _remove_new_scene_items(
+        self, snapshot: StructureBuildHistorySnapshot
+    ) -> list[BaseException]:
+        errors: list[BaseException] = []
+        services = getattr(self.canvas, "services", None)
+        scene_item_controller = getattr(services, "scene_item_controller", None)
+        canonical_remove = getattr(scene_item_controller, "remove_scene_item", None)
         for item in reversed(self._new_scene_items_since(snapshot)):
-            try:
-                remove_scene_item(self.canvas, item)
-            except Exception as error:
-                if not isinstance(error, AttributeError):
+            if callable(canonical_remove):
+                try:
+                    remove_scene_item(self.canvas, item)
+                except BaseException as error:
                     errors.append(error)
-                # A lifecycle callback can raise before or after doing only part
-                # of the detach. Finish the basic registry/scene cleanup directly
-                # so a failed history record does not leave an orphan ring over a
-                # model that is about to be rolled back.
-                for name in SCENE_ITEM_COLLECTION_ATTRS:
-                    try:
-                        collection = scene_item_collection_for(self.canvas, name)
-                        if item in collection:
-                            collection.remove(item)
-                    except Exception as fallback_error:
-                        errors.append(fallback_error)
-                scene_method = getattr(self.canvas, "scene", None)
+                else:
+                    continue
+            # A lifecycle callback can raise before or after doing only part of
+            # the detach. Finish the basic registry/scene cleanup directly so a
+            # failed history record does not leave an orphan ring over a model
+            # that is about to be rolled back.
+            for name in SCENE_ITEM_COLLECTION_ATTRS:
                 try:
-                    scene = scene_method() if callable(scene_method) else None
-                except Exception as fallback_error:
+                    collection = scene_item_collection_for(self.canvas, name)
+                    if item in collection:
+                        collection.remove(item)
+                except BaseException as fallback_error:
                     errors.append(fallback_error)
-                    scene = None
-                if callable(getattr(scene, "removeItem", None)):
-                    try:
-                        remove_item_from_canvas_scene(self.canvas, item)
-                    except Exception as fallback_error:
-                        errors.append(fallback_error)
-                data_method = getattr(item, "data", None)
+            scene_method = getattr(self.canvas, "scene", None)
+            try:
+                scene = scene_method() if callable(scene_method) else None
+            except BaseException as fallback_error:
+                errors.append(fallback_error)
+                scene = None
+            if callable(getattr(scene, "removeItem", None)):
                 try:
-                    kind = data_method(0) if callable(data_method) else None
-                except Exception as fallback_error:
+                    remove_item_from_canvas_scene(self.canvas, item)
+                except BaseException as fallback_error:
                     errors.append(fallback_error)
-                    kind = None
-                if kind == "ring":
-                    # Ring fills clip/offset their bound bond graphics. Whether
-                    # lifecycle removal failed before detach or during its own
-                    # refresh, retry while the model graph still exists.
-                    try:
-                        refresh_bond_geometry_for_ring_item(self.canvas, item)
-                    except Exception as fallback_error:
-                        errors.append(fallback_error)
+            data_method = getattr(item, "data", None)
+            try:
+                kind = data_method(0) if callable(data_method) else None
+            except BaseException as fallback_error:
+                errors.append(fallback_error)
+                kind = None
+            if kind == "ring":
+                # Ring fills clip/offset their bound bond graphics. Whether
+                # lifecycle removal failed before detach or during its own
+                # refresh, retry while the model graph still exists.
+                try:
+                    refresh_bond_geometry_for_ring_item(self.canvas, item)
+                except BaseException as fallback_error:
+                    errors.append(fallback_error)
         return errors
 
     def add_bond_graphics(self, bond_id: int) -> None:
@@ -225,7 +393,9 @@ class StructureBuildCommitter:
     def add_atom(self, element: str, x: float, y: float) -> int:
         return add_insert_atom_for(self.canvas, element, x, y)
 
-    def add_bond(self, a_id: int, b_id: int, order: int = 1, *, style: str = "single") -> int:
+    def add_bond(
+        self, a_id: int, b_id: int, order: int = 1, *, style: str = "single"
+    ) -> int:
         bond_id = add_insert_bond_for(self.canvas, a_id, b_id, order)
         bond = insert_bond_for_id(self.canvas, bond_id)
         if bond is not None:
@@ -250,7 +420,9 @@ class StructureBuildCommitter:
         kwargs = {"record": record}
         if show_carbon:
             kwargs["show_carbon"] = True
-        atom_label_service(self.canvas).add_or_update_atom_label(atom_id, element, **kwargs)
+        atom_label_service(self.canvas).add_or_update_atom_label(
+            atom_id, element, **kwargs
+        )
 
     def label_non_carbon_atoms(self, atom_ids: list[int], elements: list[str]) -> None:
         for atom_id, element in zip(atom_ids, elements, strict=False):
@@ -309,35 +481,56 @@ class StructureBuildCommitter:
         attach_scene_item(self.canvas, ring_item)
         return ring_item
 
-    def resolved_ring_bond_orders(self, atom_ids: list[int], bond_orders: list[int] | None) -> list[int]:
+    def resolved_ring_bond_orders(
+        self, atom_ids: list[int], bond_orders: list[int] | None
+    ) -> list[int]:
         if not bond_orders:
             return [1] * len(atom_ids)
-        resolved = [bond_orders[index] if index < len(bond_orders) else 1 for index in range(len(atom_ids))]
+        resolved = [
+            bond_orders[index] if index < len(bond_orders) else 1
+            for index in range(len(atom_ids))
+        ]
         if not self._is_alternating_single_double_pattern(resolved):
             return resolved
         inverted = [1 if order == 2 else 2 for order in resolved]
         valid_candidates = [
-            (self._projected_ring_double_bond_count(atom_ids, candidate), index, candidate)
+            (
+                self._projected_ring_double_bond_count(atom_ids, candidate),
+                index,
+                candidate,
+            )
             for index, candidate in enumerate((resolved, inverted))
             if self._max_projected_bond_order_sum(atom_ids, candidate) <= 4
         ]
-        exact_benzene_candidates = [candidate for candidate in valid_candidates if candidate[0] == 3]
+        exact_benzene_candidates = [
+            candidate for candidate in valid_candidates if candidate[0] == 3
+        ]
         if exact_benzene_candidates:
             return min(exact_benzene_candidates, key=lambda candidate: candidate[1])[2]
-        under_benzene_candidates = [candidate for candidate in valid_candidates if candidate[0] < 3]
+        under_benzene_candidates = [
+            candidate for candidate in valid_candidates if candidate[0] < 3
+        ]
         if under_benzene_candidates:
-            return max(under_benzene_candidates, key=lambda candidate: (candidate[0], -candidate[1]))[2]
+            return max(
+                under_benzene_candidates,
+                key=lambda candidate: (candidate[0], -candidate[1]),
+            )[2]
         if valid_candidates:
-            return min(valid_candidates, key=lambda candidate: (candidate[0], candidate[1]))[2]
+            return min(
+                valid_candidates, key=lambda candidate: (candidate[0], candidate[1])
+            )[2]
         return resolved
 
     @staticmethod
     def _is_alternating_single_double_pattern(bond_orders: list[int]) -> bool:
         return all(order in (1, 2) for order in bond_orders) and all(
-            bond_orders[index] != bond_orders[(index + 1) % len(bond_orders)] for index in range(len(bond_orders))
+            bond_orders[index] != bond_orders[(index + 1) % len(bond_orders)]
+            for index in range(len(bond_orders))
         )
 
-    def _max_projected_bond_order_sum(self, atom_ids: list[int], bond_orders: list[int]) -> int:
+    def _max_projected_bond_order_sum(
+        self, atom_ids: list[int], bond_orders: list[int]
+    ) -> int:
         sums = {atom_id: 0 for atom_id in atom_ids}
         for bond in bonds_for(self.canvas):
             if bond is None:
@@ -355,12 +548,16 @@ class StructureBuildCommitter:
             sums[b_id] += order
         return max(sums.values(), default=0)
 
-    def _projected_ring_double_bond_count(self, atom_ids: list[int], bond_orders: list[int]) -> int:
+    def _projected_ring_double_bond_count(
+        self, atom_ids: list[int], bond_orders: list[int]
+    ) -> int:
         double_count = 0
         for index, order in enumerate(bond_orders):
             a_id = atom_ids[index]
             b_id = atom_ids[(index + 1) % len(atom_ids)]
-            existing_bond = insert_bond_for_id(self.canvas, self.bond_id_between(a_id, b_id))
+            existing_bond = insert_bond_for_id(
+                self.canvas, self.bond_id_between(a_id, b_id)
+            )
             if existing_bond is not None:
                 if existing_bond.order >= 2:
                     double_count += 1
@@ -368,7 +565,9 @@ class StructureBuildCommitter:
                 double_count += 1
         return double_count
 
-    def add_linear_chain(self, points: list[QPointF], elements: list[str], bonds: list[int]) -> list[int]:
+    def add_linear_chain(
+        self, points: list[QPointF], elements: list[str], bonds: list[int]
+    ) -> list[int]:
         atom_ids = []
         for point, element in zip(points, elements, strict=False):
             atom_ids.append(self.add_atom(element, point.x(), point.y()))

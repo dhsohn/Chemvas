@@ -184,6 +184,8 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertAlmostEqual(sheet_rect_for(canvas).height(), 595.0)
         self.assertAlmostEqual(canvas.sceneRect().width(), 1002.0)
         self.assertAlmostEqual(canvas.sceneRect().height(), 755.0)
+        self.assertEqual(canvas.scene().sceneRect(), canvas.sceneRect())
+        self.assertFalse(canvas.scene()._chemvas_scene_rect_automatic)
 
         set_sheet_setup_for(canvas, "A4", "portrait")
 
@@ -192,6 +194,7 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertAlmostEqual(sheet_rect_for(canvas).height(), 842.0)
         self.assertAlmostEqual(canvas.sceneRect().width(), 755.0)
         self.assertAlmostEqual(canvas.sceneRect().height(), 1002.0)
+        self.assertEqual(canvas.scene().sceneRect(), canvas.sceneRect())
 
     def test_history_fields_are_backed_by_state_holder(self) -> None:
         canvas = CanvasView()

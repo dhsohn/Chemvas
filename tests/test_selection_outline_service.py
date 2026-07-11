@@ -41,7 +41,12 @@ if QApplication is not None:
 def _outline_service(canvas):
     graph_service = getattr(getattr(canvas, "services", None), "canvas_graph_service", None)
     if graph_service is None:
-        graph_service = SimpleNamespace(connected_components=lambda atom_ids: [set(atom_ids)] if atom_ids else [])
+        graph_service = SimpleNamespace(
+            graph=SimpleNamespace(atom_bond_ids={}),
+            connected_components=lambda atom_ids: [set(atom_ids)] if atom_ids else [],
+        )
+    elif getattr(graph_service, "graph", None) is None:
+        graph_service.graph = SimpleNamespace(atom_bond_ids={})
 
     def active_tool_name() -> str | None:
         active_tool = getattr(getattr(canvas.services, "tools", None), "active", None)
@@ -97,11 +102,15 @@ class SelectionOutlineServiceTest(unittest.TestCase):
         object_item = _FakeItem("arrow")
         old_outline = _FakeItem("selection_outline")
         active_scene = _FakeScene([atom_item, bond_item, object_item])
+        graph_connected_components = mock.Mock(return_value=[{1, 2}])
         canvas = _make_canvas(
             scene=active_scene,
             selection_outlines=[old_outline],
             model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 2.0, 0.0)}, bonds=[Bond(1, 2, 1)]),
-            graph_connected_components=mock.Mock(return_value=[{1, 2}]),
+            canvas_graph_service=SimpleNamespace(
+                graph=SimpleNamespace(atom_bond_ids={1: {0}, 2: {0}}),
+                connected_components=graph_connected_components,
+            ),
         )
         service = _outline_service(canvas)
         service.add_selection_component_overlay = mock.Mock()
@@ -119,6 +128,58 @@ class SelectionOutlineServiceTest(unittest.TestCase):
         service.add_selection_center_marker.assert_called_once_with(QPointF(1.0, 0.0))
         service.add_selection_object_overlay.assert_called_once_with(object_item, mock.ANY)
         canvas.selection_info_callback.assert_called_once_with("", "")
+
+    def test_update_selection_outline_uses_adjacency_without_iterating_all_bonds(self) -> None:
+        class IndexOnlyBonds:
+            def __init__(self, bonds) -> None:
+                self._bonds = bonds
+
+            def __getitem__(self, bond_id: int):
+                return self._bonds[bond_id]
+
+            def __iter__(self):
+                raise AssertionError("selection outline must not scan the full bond collection")
+
+        atom_items = [_FakeItem("atom", data1=1), _FakeItem("atom", data1=2)]
+        bonds = IndexOnlyBonds(
+            [
+                Bond(1, 2, 1),
+                Bond(2, 3, 1),
+                None,
+                Bond(4, 5, 1),
+            ]
+        )
+        connected_components = mock.Mock(return_value=[{1, 2}])
+        canvas = _make_canvas(
+            scene=_FakeScene(atom_items),
+            model=SimpleNamespace(
+                atoms={
+                    1: Atom("C", 0.0, 0.0),
+                    2: Atom("C", 2.0, 0.0),
+                    3: Atom("C", 4.0, 0.0),
+                },
+                bonds=bonds,
+            ),
+            canvas_graph_service=SimpleNamespace(
+                graph=SimpleNamespace(
+                    atom_bond_ids={
+                        1: {-1, 0, 2, 3, 99},
+                        2: {0, 1},
+                    }
+                ),
+                connected_components=connected_components,
+            ),
+        )
+        service = _outline_service(canvas)
+        service.add_selection_component_overlay = mock.Mock()
+        service.selection_center_for_atoms = mock.Mock(return_value=None)
+
+        service.update_selection_outline()
+
+        connected_components.assert_called_once_with({1, 2})
+        service.add_selection_component_overlay.assert_called_once()
+        self.assertEqual(service.add_selection_component_overlay.call_args.args[0], {1, 2})
+        self.assertEqual(service.add_selection_component_overlay.call_args.args[1], {0})
 
     def test_shift_selection_outlines_and_center_helpers(self) -> None:
         outline = _FakeItem("selection_outline")

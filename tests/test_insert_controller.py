@@ -610,6 +610,47 @@ class InsertControllerTest(unittest.TestCase):
         self.assertEqual(atom_coords_3d_for(canvas), {0: (-5.0, -5.0, 0.0)})
         canvas.push_command.assert_not_called()
 
+    def test_load_smiles_rolls_back_control_flow_error_after_history_mutation(self) -> None:
+        for error_type in (KeyboardInterrupt, SystemExit):
+            with self.subTest(error_type=error_type.__name__):
+                canvas = _FakeCanvas()
+                set_last_smiles_input_for(canvas, "before")
+                canvas.model.add_atom("O", -5.0, -5.0)
+                original_model = canvas.model
+                canvas.pushed_commands = ["existing-command"]
+                original_history = canvas.pushed_commands
+                canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(
+                    atoms={0: Atom("C", 1.0, 2.0)}
+                )
+
+                def _clear_scene(current_canvas=canvas) -> None:
+                    current_canvas.model = MoleculeModel()
+
+                original_error = error_type("history push failed")
+
+                def _mutate_history_then_fail(
+                    command,
+                    current_canvas=canvas,
+                    error=original_error,
+                ) -> None:
+                    current_canvas.pushed_commands.append(command)
+                    raise error
+
+                canvas.clear_scene = Mock(side_effect=_clear_scene)
+                canvas.push_command.side_effect = _mutate_history_then_fail
+                controller = _controller_for(canvas)
+
+                with self.assertRaises(error_type) as caught:
+                    controller.load_smiles("C")
+
+                self.assertIs(caught.exception, original_error)
+                self.assertIs(canvas.model, original_model)
+                self.assertEqual(canvas.model.atoms, {0: Atom("O", -5.0, -5.0)})
+                self.assertEqual(canvas.model.next_atom_id, 1)
+                self.assertEqual(last_smiles_input_for(canvas), "before")
+                self.assertIs(canvas.pushed_commands, original_history)
+                self.assertEqual(canvas.pushed_commands, ["existing-command"])
+
     def test_load_smiles_rolls_back_if_annotation_mark_creation_raises(self) -> None:
         canvas = _FakeCanvas()
         set_last_smiles_input_for(canvas, "before")

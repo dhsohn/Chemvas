@@ -1,8 +1,12 @@
 from __future__ import annotations
 
-import contextlib
+import inspect
+from collections.abc import Callable
+from dataclasses import dataclass
+from functools import partial
 
-from PyQt6.QtCore import QPointF, Qt
+from core.history import CompositeCommand, HistoryCommand
+from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import (
     QBrush,
     QColor,
@@ -21,7 +25,12 @@ from ui.history_commands import (
     AddSceneItemsCommand,
     DeleteSceneItemsCommand,
     UpdateSceneItemCommand,
+    _restore_scene_runtime_snapshot,
+    _run_rollback_step,
+    _scene_runtime_snapshot,
+    _SceneRuntimeSnapshot,
 )
+from ui.history_stack_snapshot import HistoryStackSnapshot
 from ui.input_view_access import (
     focus_canvas_for,
     focused_scene_item_for,
@@ -36,11 +45,189 @@ from ui.note_item_access import (
 )
 from ui.note_selection_box import update_note_selection_box_for
 from ui.scene_item_access import attach_scene_item, remove_scene_item
+from ui.scene_item_attach_snapshot import SceneItemAttachSnapshot
 from ui.scene_item_state import note_state_dict_for
+from ui.scene_rect_snapshot import SceneRectSnapshot
 from ui.selection_service_access import (
     refresh_selection_outline_for,
     selection_service_from_canvas,
 )
+
+_MISSING_CAPTURE_ATTRIBUTE = object()
+
+
+def _capture_optional_attribute(target: object, name: str) -> object:
+    try:
+        return getattr(target, name)
+    except AttributeError:
+        if (
+            inspect.getattr_static(target, name, _MISSING_CAPTURE_ATTRIBUTE)
+            is not _MISSING_CAPTURE_ATTRIBUTE
+        ):
+            raise
+        return _MISSING_CAPTURE_ATTRIBUTE
+
+
+def _call_required_rollback_method(target: object, name: str, *args) -> object:
+    method = getattr(target, name)
+    if not callable(method):
+        raise TypeError(f"Rollback port {name!r} is not callable")
+    return method(*args)
+
+
+def _call_optional_rollback_method(target: object, name: str, *args) -> object | None:
+    method = _capture_optional_attribute(target, name)
+    if method is _MISSING_CAPTURE_ATTRIBUTE or not callable(method):
+        return None
+    return method(*args)
+
+
+@dataclass(slots=True)
+class _NoteMutationSnapshot:
+    item: QGraphicsTextItem
+    before_state: dict
+    committed_text: str
+    committed_html: str
+    interaction_flags: Qt.TextInteractionFlag
+
+
+@dataclass(slots=True)
+class _NoteBoxSnapshot:
+    role: int
+    box: QGraphicsRectItem | None
+    rect: QRectF | None
+    pen: QPen | None
+    brush: QBrush | None
+    visible: bool | None
+
+    @classmethod
+    def capture(cls, item: QGraphicsTextItem, role: int) -> _NoteBoxSnapshot:
+        box = item.data(role)
+        if not isinstance(box, QGraphicsRectItem):
+            return cls(role, None, None, None, None, None)
+        return cls(
+            role=role,
+            box=box,
+            rect=box.rect(),
+            pen=box.pen(),
+            brush=box.brush(),
+            visible=box.isVisible(),
+        )
+
+
+@dataclass(slots=True)
+class _EditingNoteSnapshot:
+    item: QGraphicsTextItem
+    html: str
+    committed_text: str
+    committed_html: str
+    interaction_flags: Qt.TextInteractionFlag
+    cursor_anchor: int
+    cursor_position: int
+    scene: object | None
+    focus_item: object | None
+    boxes: tuple[_NoteBoxSnapshot, ...]
+
+    @classmethod
+    def capture(cls, item: QGraphicsTextItem) -> _EditingNoteSnapshot:
+        cursor = item.textCursor()
+        scene = item.scene()
+        focus_item_getter = _capture_optional_attribute(scene, "focusItem")
+        return cls(
+            item=item,
+            html=item.toHtml(),
+            committed_text=committed_note_text_for(item),
+            committed_html=committed_note_html_for(item),
+            interaction_flags=item.textInteractionFlags(),
+            cursor_anchor=cursor.anchor(),
+            cursor_position=cursor.position(),
+            scene=scene,
+            focus_item=focus_item_getter() if callable(focus_item_getter) else None,
+            boxes=(
+                _NoteBoxSnapshot.capture(item, 20),
+                _NoteBoxSnapshot.capture(item, 21),
+            ),
+        )
+
+
+@dataclass(slots=True)
+class _NoteSceneRectTransaction:
+    snapshot: SceneRectSnapshot | None
+    items_bounding_rect: Callable[[], QRectF] | None
+
+    @classmethod
+    def capture(cls, scene: object | None) -> _NoteSceneRectTransaction:
+        items_bounding_rect = _capture_optional_attribute(
+            scene,
+            "itemsBoundingRect",
+        )
+        bound_items_bounding_rect = (
+            items_bounding_rect if callable(items_bounding_rect) else None
+        )
+        # SceneRectSnapshot temporarily fixes an automatic Qt scene. Open it
+        # only after the bounds port and every note snapshot are safely owned.
+        snapshot = SceneRectSnapshot.capture(scene)
+        return cls(snapshot, bound_items_bounding_rect)
+
+    def release(self) -> None:
+        snapshot = self.snapshot
+        if snapshot is None:
+            return
+        expanded_rect = None
+        if snapshot.automatic:
+            items_bounding_rect = self.items_bounding_rect
+            if not callable(items_bounding_rect):
+                raise AttributeError(
+                    "Automatic note-formatting scene requires itemsBoundingRect"
+                )
+            expanded_rect = QRectF(items_bounding_rect())
+        snapshot.release(expanded_rect)
+
+    def restore(self, original_error: BaseException) -> None:
+        snapshot = self.snapshot
+        if snapshot is None:
+            return
+        prior_recovery_count = len(snapshot.recovery_errors)
+        _run_rollback_step(
+            original_error,
+            "restoring the note-formatting scene rect",
+            snapshot.restore,
+        )
+        if not snapshot.active:
+            for recovery_error in snapshot.recovery_errors[
+                prior_recovery_count:
+            ]:
+                def report_recovered_error(
+                    error: BaseException = recovery_error,
+                ) -> None:
+                    raise error
+
+                _run_rollback_step(
+                    original_error,
+                    "restoring the note-formatting scene rect",
+                    report_recovered_error,
+                )
+        if snapshot.active:
+            prior_recovery_count = len(snapshot.recovery_errors)
+            _run_rollback_step(
+                original_error,
+                "retrying the note-formatting scene-rect restore",
+                snapshot.restore,
+            )
+            if not snapshot.active:
+                for recovery_error in snapshot.recovery_errors[
+                    prior_recovery_count:
+                ]:
+                    def report_retry_recovery(
+                        error: BaseException = recovery_error,
+                    ) -> None:
+                        raise error
+
+                    _run_rollback_step(
+                        original_error,
+                        "retrying the note-formatting scene-rect restore",
+                        report_retry_recovery,
+                    )
 
 
 class CanvasNoteController:
@@ -63,16 +250,27 @@ class CanvasNoteController:
         set_committed_note_text_for(item, text)
         item.setData(0, "note")
         item.setPos(pos)
-        attached = False
+        committed_text = committed_note_text_for(item)
+        committed_html = committed_note_html_for(item)
+        item_snapshot = SceneItemAttachSnapshot.capture(self.canvas, item)
         try:
             attach_scene_item(self.canvas, item)
-            attached = True
             self.apply_note_style(item)
             set_committed_note_html_for(item, item.toHtml())
-        except Exception:
-            if attached:
-                with contextlib.suppress(Exception):
-                    remove_scene_item(self.canvas, item)
+            item_snapshot.release()
+        except BaseException as original_error:
+            _run_rollback_step(
+                original_error,
+                "removing a partially created note",
+                partial(remove_scene_item, self.canvas, item),
+            )
+            item_snapshot.restore(original_error, phase="failed note creation")
+            for phase, rollback in self._restore_note_commit_metadata(
+                item,
+                committed_text=committed_text,
+                committed_html=committed_html,
+            ):
+                _run_rollback_step(original_error, phase, rollback)
             raise
         return item
 
@@ -97,13 +295,331 @@ class CanvasNoteController:
             remove_selected_note_for(self.canvas, item)
         update_note_selection_box_for(self.canvas, item)
 
-    def _push_history_or_rollback(self, command) -> None:
+    def _push_history_or_rollback(
+        self,
+        command: HistoryCommand,
+        *,
+        after_push: Callable[[], None] | None = None,
+        runtime_rollback: _SceneRuntimeSnapshot | None = None,
+        rollback_steps: tuple[tuple[str, Callable[[], object]], ...] = (),
+    ) -> None:
+        history_snapshot: HistoryStackSnapshot | None = None
         try:
+            history_snapshot = HistoryStackSnapshot.capture(self.history)
             self.history.push(command)
-        except Exception:
-            with contextlib.suppress(Exception):
-                command.undo(self.canvas)
+            if after_push is not None:
+                after_push()
+        except BaseException as original_error:
+            _run_rollback_step(
+                original_error,
+                "undoing a note command after its history push failed",
+                partial(
+                    _call_required_rollback_method,
+                    command,
+                    "undo",
+                    self.canvas,
+                ),
+            )
+            if runtime_rollback is not None:
+                self._restore_scene_runtime_step(runtime_rollback, original_error)
+            for phase, rollback in rollback_steps:
+                _run_rollback_step(original_error, phase, rollback)
+            if history_snapshot is not None:
+                history_snapshot.restore(original_error, phase="note mutation")
             raise
+
+    def _restore_note_mutation_snapshots(
+        self,
+        snapshots: list[_NoteMutationSnapshot],
+        original_error: BaseException,
+    ) -> None:
+        for snapshot in reversed(snapshots):
+            def restore_note_state(
+                snapshot_to_restore: _NoteMutationSnapshot = snapshot,
+            ) -> None:
+                command = UpdateSceneItemCommand(
+                    snapshot_to_restore.item,
+                    snapshot_to_restore.before_state,
+                    snapshot_to_restore.before_state,
+                )
+                _call_required_rollback_method(
+                    command,
+                    "undo",
+                    self.canvas,
+                )
+
+            _run_rollback_step(
+                original_error,
+                "restoring a note after a batch formatting failure",
+                restore_note_state,
+            )
+            for phase, rollback in self._restore_note_commit_metadata(
+                snapshot.item,
+                committed_text=snapshot.committed_text,
+                committed_html=snapshot.committed_html,
+            ):
+                _run_rollback_step(original_error, phase, rollback)
+            _run_rollback_step(
+                original_error,
+                "restoring a batch-formatted note's interaction flags",
+                partial(
+                    _call_required_rollback_method,
+                    snapshot.item,
+                    "setTextInteractionFlags",
+                    snapshot.interaction_flags,
+                ),
+            )
+
+    def _restore_editing_note_snapshot(
+        self,
+        snapshot: _EditingNoteSnapshot,
+        original_error: BaseException,
+    ) -> None:
+        item = snapshot.item
+
+        def restore_html() -> None:
+            document = item.document()
+            assert document is not None
+            signals_blocked = document.signalsBlocked()
+
+            def restore_signal_state(primary_error: BaseException) -> None:
+                try:
+                    document.blockSignals(signals_blocked)
+                except BaseException as secondary_error:
+                    try:
+                        add_note = getattr(primary_error, "add_note", None)
+                        if callable(add_note):
+                            add_note(
+                                "Editing-note signal-state restore also encountered "
+                                f"{type(secondary_error).__name__}: {secondary_error}"
+                            )
+                    except BaseException:
+                        pass
+
+            try:
+                document.blockSignals(True)
+            except BaseException as block_error:
+                restore_signal_state(block_error)
+                try:
+                    QGraphicsTextItem.setHtml(item, snapshot.html)
+                except BaseException as html_error:
+                    try:
+                        add_note = getattr(block_error, "add_note", None)
+                        if callable(add_note):
+                            add_note(
+                                "Unblocked editing-note HTML restore also encountered "
+                                f"{type(html_error).__name__}: {html_error}"
+                            )
+                    except BaseException:
+                        pass
+                raise
+            try:
+                QGraphicsTextItem.setHtml(item, snapshot.html)
+            except BaseException as html_error:
+                restore_signal_state(html_error)
+                raise
+            else:
+                try:
+                    document.blockSignals(signals_blocked)
+                except BaseException as signal_restore_error:
+                    restore_signal_state(signal_restore_error)
+                    raise
+
+        _run_rollback_step(
+            original_error,
+            "restoring editing-note HTML after a formatting failure",
+            restore_html,
+        )
+        for phase, rollback in self._restore_note_commit_metadata(
+            item,
+            committed_text=snapshot.committed_text,
+            committed_html=snapshot.committed_html,
+        ):
+            _run_rollback_step(original_error, phase, rollback)
+        _run_rollback_step(
+            original_error,
+            "restoring editing-note interaction flags",
+            partial(
+                _call_required_rollback_method,
+                item,
+                "setTextInteractionFlags",
+                snapshot.interaction_flags,
+            ),
+        )
+
+        for box_snapshot in snapshot.boxes:
+            current = _run_rollback_step(
+                original_error,
+                "reading a note-box reference during rollback",
+                partial(
+                    _call_required_rollback_method,
+                    item,
+                    "data",
+                    box_snapshot.role,
+                ),
+            )
+            if box_snapshot.box is None:
+                if isinstance(current, QGraphicsRectItem):
+                    _run_rollback_step(
+                        original_error,
+                        "removing a new note box after formatting failure",
+                        partial(
+                            _call_required_rollback_method,
+                            current,
+                            "setParentItem",
+                            None,
+                        ),
+                    )
+                    current_scene = _run_rollback_step(
+                        original_error,
+                        "reading a new note box's scene during rollback",
+                        partial(
+                            _call_required_rollback_method,
+                            current,
+                            "scene",
+                        ),
+                    )
+                    if current_scene is not None:
+                        _run_rollback_step(
+                            original_error,
+                            "detaching a new note box after formatting failure",
+                            partial(
+                                _call_required_rollback_method,
+                                current_scene,
+                                "removeItem",
+                                current,
+                            ),
+                        )
+                _run_rollback_step(
+                    original_error,
+                    "clearing a new note-box reference",
+                    partial(
+                        _call_required_rollback_method,
+                        item,
+                        "setData",
+                        box_snapshot.role,
+                        None,
+                    ),
+                )
+                continue
+            box = box_snapshot.box
+            operations: list[tuple[str, str, object]] = []
+            if box_snapshot.rect is not None:
+                operations.append(("rect", "setRect", box_snapshot.rect))
+            if box_snapshot.pen is not None:
+                operations.append(("pen", "setPen", box_snapshot.pen))
+            if box_snapshot.brush is not None:
+                operations.append(("brush", "setBrush", box_snapshot.brush))
+            if box_snapshot.visible is not None:
+                operations.append(
+                    ("visibility", "setVisible", box_snapshot.visible)
+                )
+            for phase, method_name, value in operations:
+                _run_rollback_step(
+                    original_error,
+                    f"restoring note-box {phase}",
+                    partial(
+                        _call_required_rollback_method,
+                        box,
+                        method_name,
+                        value,
+                    ),
+                )
+            _run_rollback_step(
+                original_error,
+                "restoring note-box identity",
+                partial(
+                    _call_required_rollback_method,
+                    item,
+                    "setData",
+                    box_snapshot.role,
+                    box,
+                ),
+            )
+        _run_rollback_step(
+            original_error,
+            "restoring editing-note focus",
+            partial(
+                _call_optional_rollback_method,
+                snapshot.scene,
+                "setFocusItem",
+                snapshot.focus_item,
+            ),
+        )
+
+        # Focus restoration can rewrite the QTextCursor selection. Reapply the
+        # exact anchor/position last so selection direction is authoritative.
+        def restore_cursor() -> None:
+            document = item.document()
+            assert document is not None
+            restored = QTextCursor(document)
+            restored.setPosition(snapshot.cursor_anchor)
+            restored.setPosition(
+                snapshot.cursor_position,
+                QTextCursor.MoveMode.KeepAnchor,
+            )
+            item.setTextCursor(restored)
+
+        _run_rollback_step(
+            original_error,
+            "restoring editing-note cursor selection",
+            restore_cursor,
+        )
+
+    def _restore_note_commit_metadata(
+        self,
+        item: QGraphicsTextItem,
+        *,
+        committed_text: str,
+        committed_html: str,
+    ) -> tuple[tuple[str, Callable[[], object]], ...]:
+        return (
+            (
+                "restoring committed note text",
+                partial(set_committed_note_text_for, item, committed_text),
+            ),
+            (
+                "restoring committed note HTML",
+                partial(set_committed_note_html_for, item, committed_html),
+            ),
+        )
+
+    def _restore_scene_runtime_step(
+        self,
+        snapshot: _SceneRuntimeSnapshot,
+        original_error: BaseException,
+    ) -> None:
+        _run_rollback_step(
+            original_error,
+            "restoring exact note scene/runtime state",
+            partial(
+                _restore_scene_runtime_snapshot,
+                snapshot,
+                original_error=original_error,
+            ),
+        )
+
+    def _deselect_note_atomically(self, item: QGraphicsTextItem) -> None:
+        runtime_snapshot = _scene_runtime_snapshot(self.canvas, strict=True)
+        try:
+            self._deselect_note(item)
+        except BaseException as original_error:
+            self._restore_scene_runtime_step(runtime_snapshot, original_error)
+            raise
+
+    def _remove_note_atomically(
+        self,
+        item: QGraphicsTextItem,
+    ) -> _SceneRuntimeSnapshot:
+        runtime_snapshot = _scene_runtime_snapshot(self.canvas, strict=True)
+        try:
+            self._deselect_note(item)
+            remove_scene_item(self.canvas, item)
+            refresh_selection_outline_for(self.canvas)
+        except BaseException as original_error:
+            self._restore_scene_runtime_step(runtime_snapshot, original_error)
+            raise
+        return runtime_snapshot
 
     def handle_note_focus_out(self, item: QGraphicsTextItem) -> None:
         self._end_note_editing(item)
@@ -116,17 +632,32 @@ class CanvasNoteController:
             if text != committed_text or html_changed:
                 after_state = note_state_dict_for(self.canvas, item)
                 if not committed_text:
-                    self._push_history_or_rollback(AddSceneItemsCommand(item_states=[after_state], items=[item]))
+                    command: HistoryCommand = AddSceneItemsCommand(
+                        item_states=[after_state],
+                        items=[item],
+                    )
                 else:
                     before_state = note_state_dict_for(self.canvas, item)
                     before_state["text"] = committed_text
                     before_state["html"] = committed_html
-                    self._push_history_or_rollback(UpdateSceneItemCommand(item, before_state, after_state))
-                set_committed_note_text_for(item, text)
-                set_committed_note_html_for(item, current_html)
+                    command = UpdateSceneItemCommand(item, before_state, after_state)
+
+                def commit_note_metadata() -> None:
+                    set_committed_note_text_for(item, text)
+                    set_committed_note_html_for(item, current_html)
+
+                self._push_history_or_rollback(
+                    command,
+                    after_push=commit_note_metadata,
+                    rollback_steps=self._restore_note_commit_metadata(
+                        item,
+                        committed_text=committed_text,
+                        committed_html=committed_html,
+                    ),
+                )
             # Clicking away from the text ends the selection too, so the dashed box
             # disappears instead of lingering after focus moves elsewhere.
-            self._deselect_note(item)
+            self._deselect_note_atomically(item)
             return
         if committed_text:
             before_state = note_state_dict_for(self.canvas, item)
@@ -137,16 +668,29 @@ class CanvasNoteController:
             # by attached members, so the pre-removal refresh still covered
             # this note and the lifecycle refresh skips already-deselected
             # notes.
-            self._deselect_note(item)
-            remove_scene_item(self.canvas, item)
-            refresh_selection_outline_for(self.canvas)
-            self._push_history_or_rollback(DeleteSceneItemsCommand(item_states=[before_state], items=[item]))
-            set_committed_note_text_for(item, "")
-            set_committed_note_html_for(item, "")
+            runtime_snapshot = self._remove_note_atomically(item)
+
+            def clear_note_metadata() -> None:
+                set_committed_note_text_for(item, "")
+                set_committed_note_html_for(item, "")
+
+            self._push_history_or_rollback(
+                DeleteSceneItemsCommand(
+                    item_states=[before_state],
+                    items=[item],
+                ),
+                after_push=clear_note_metadata,
+                runtime_rollback=runtime_snapshot,
+                rollback_steps=(
+                    *self._restore_note_commit_metadata(
+                        item,
+                        committed_text=committed_text,
+                        committed_html=committed_html,
+                    ),
+                ),
+            )
             return
-        self._deselect_note(item)
-        remove_scene_item(self.canvas, item)
-        refresh_selection_outline_for(self.canvas)
+        self._remove_note_atomically(item)
 
     def update_text_note(self, item: QGraphicsTextItem, text: str) -> None:
         item.setPlainText(text)
@@ -267,22 +811,129 @@ class CanvasNoteController:
 
         self._apply_to_target_notes(mutate)
 
+    def _scene_for_note_formatting(
+        self,
+        snapshots: list[_NoteMutationSnapshot],
+    ) -> object | None:
+        scene_getter = _capture_optional_attribute(self.canvas, "scene")
+        if callable(scene_getter):
+            return scene_getter()
+        if not snapshots:
+            return None
+        item_scene = _capture_optional_attribute(snapshots[0].item, "scene")
+        return item_scene() if callable(item_scene) else None
+
     def _apply_to_target_notes(self, mutate) -> None:
         editing = self._editing_note()
         if editing is not None:
-            mutate(editing)
-            self.update_note_box(editing)
-            update_note_selection_box_for(self.canvas, editing)
+            editing_snapshot = _EditingNoteSnapshot.capture(editing)
+            rect_transaction = _NoteSceneRectTransaction.capture(
+                editing_snapshot.scene
+            )
+            try:
+                mutate(editing)
+                self.update_note_box(editing)
+                update_note_selection_box_for(self.canvas, editing)
+                rect_transaction.release()
+            except BaseException as original_error:
+                self._restore_editing_note_snapshot(editing_snapshot, original_error)
+                rect_transaction.restore(original_error)
+                raise
             return
-        for item in selected_notes_for(self.canvas):
-            before_state = note_state_dict_for(self.canvas, item)
-            mutate(item)
-            self.update_note_box(item)
-            update_note_selection_box_for(self.canvas, item)
-            after_state = note_state_dict_for(self.canvas, item)
-            if before_state != after_state and self.history is not None:
-                self.history.push(UpdateSceneItemCommand(item, before_state, after_state))
-                set_committed_note_html_for(item, item.toHtml())
+        # Capture every input before the first mutation. In particular, a
+        # serializer or committed-metadata accessor for item N must not be able
+        # to strand already-formatted items 0..N-1 without history.
+        snapshots = [
+            _NoteMutationSnapshot(
+                item=item,
+                before_state=note_state_dict_for(self.canvas, item),
+                committed_text=committed_note_text_for(item),
+                committed_html=committed_note_html_for(item),
+                interaction_flags=item.textInteractionFlags(),
+            )
+            for item in list(selected_notes_for(self.canvas))
+        ]
+        if not snapshots:
+            return
+        scene = self._scene_for_note_formatting(snapshots)
+        rect_transaction = _NoteSceneRectTransaction.capture(scene)
+        commands: list[UpdateSceneItemCommand] = []
+        changed_snapshots: list[_NoteMutationSnapshot] = []
+        attempted_snapshots: list[_NoteMutationSnapshot] = []
+        try:
+            for batch_snapshot in snapshots:
+                item = batch_snapshot.item
+                attempted_snapshots.append(batch_snapshot)
+                mutate(item)
+                self.update_note_box(item)
+                update_note_selection_box_for(self.canvas, item)
+                after_state = note_state_dict_for(self.canvas, item)
+                if batch_snapshot.before_state != after_state:
+                    commands.append(
+                        UpdateSceneItemCommand(
+                            item,
+                            batch_snapshot.before_state,
+                            after_state,
+                        )
+                    )
+                    changed_snapshots.append(batch_snapshot)
+            if not commands or self.history is None:
+                rect_transaction.release()
+                return
+            command: HistoryCommand
+            if len(commands) == 1:
+                command = commands[0]
+            else:
+                command = CompositeCommand(list(commands))
+
+            def commit_note_html_and_scene_rect() -> None:
+                for snapshot in changed_snapshots:
+                    set_committed_note_html_for(
+                        snapshot.item,
+                        snapshot.item.toHtml(),
+                    )
+                # Finalize while the history savepoint still owns the pushed
+                # command. A failing finalizer then rolls back both the notes
+                # and append-then-raise history mutation before rect recovery.
+                rect_transaction.release()
+
+            rollback_metadata = tuple(
+                rollback
+                for snapshot in changed_snapshots
+                for rollback in self._restore_note_commit_metadata(
+                    snapshot.item,
+                    committed_text=snapshot.committed_text,
+                    committed_html=snapshot.committed_html,
+                )
+            )
+            rollback_interaction_flags = tuple(
+                (
+                    "restoring a batch-formatted note's interaction flags",
+                    partial(
+                        snapshot.item.setTextInteractionFlags,
+                        snapshot.interaction_flags,
+                    ),
+                )
+                for snapshot in changed_snapshots
+            )
+            self._push_history_or_rollback(
+                command,
+                after_push=commit_note_html_and_scene_rect,
+                rollback_steps=(
+                    *rollback_metadata,
+                    *rollback_interaction_flags,
+                ),
+            )
+        except BaseException as original_error:
+            self._restore_note_mutation_snapshots(
+                attempted_snapshots,
+                original_error,
+            )
+            # Scene rect is deliberately last: note state, boxes, metadata,
+            # interaction flags, and history may all expose temporary far
+            # geometry while they are being restored.
+            rect_transaction.restore(original_error)
+            raise
 
     def apply_text_style_to_selected(self) -> None:
         for item in selected_notes_for(self.canvas):

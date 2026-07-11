@@ -2586,7 +2586,7 @@ def test_scene_item_controller_delegates_lifecycle_registry_work_to_service() ->
         "remove_scene_item_from_collection_for",
         "remove_mark_item_for",
         "remove_attached_item_from_canvas_scene",
-        "add_item_to_canvas_scene",
+        "_add_item_with_attach_ports",
         "handle_target_for",
     ):
         assert forbidden not in controller_source
@@ -3322,6 +3322,125 @@ def test_production_window_helpers_do_not_reach_into_window_private_members() ->
 # --- Dependency contracts ------------------------------------------------
 
 
+def _static_app_import_graph() -> dict[str, set[str]]:
+    module_paths: dict[str, Path] = {}
+    for path in _app_python_files():
+        relative = path.relative_to(APP_ROOT).with_suffix("")
+        parts = list(relative.parts)
+        if parts[-1] == "__init__":
+            parts.pop()
+        module_paths[".".join(parts)] = path
+
+    graph = {module: set() for module in module_paths}
+    for module, path in module_paths.items():
+        tree = ast.parse(path.read_text())
+        for node in ast.walk(tree):
+            candidates: list[str] = []
+            if isinstance(node, ast.Import):
+                candidates.extend(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                if node.level:
+                    package = (
+                        module
+                        if path.name == "__init__.py"
+                        else module.rpartition(".")[0]
+                    )
+                    package_parts = package.split(".") if package else []
+                    keep_count = max(0, len(package_parts) - node.level + 1)
+                    imported_parts = package_parts[:keep_count]
+                    if node.module:
+                        imported_parts.extend(node.module.split("."))
+                    imported_from = ".".join(imported_parts)
+                else:
+                    imported_from = node.module or ""
+                candidates.append(imported_from)
+                candidates.extend(
+                    f"{imported_from}.{alias.name}"
+                    for alias in node.names
+                    if imported_from
+                )
+            graph[module].update(
+                candidate
+                for candidate in candidates
+                if candidate in module_paths and candidate != module
+            )
+    return graph
+
+
+def _strongly_connected_components(
+    graph: dict[str, set[str]],
+) -> list[set[str]]:
+    next_index = 0
+    indices: dict[str, int] = {}
+    low_links: dict[str, int] = {}
+    stack: list[str] = []
+    on_stack: set[str] = set()
+    components: list[set[str]] = []
+
+    def visit(module: str) -> None:
+        nonlocal next_index
+        indices[module] = next_index
+        low_links[module] = next_index
+        next_index += 1
+        stack.append(module)
+        on_stack.add(module)
+
+        for dependency in graph[module]:
+            if dependency not in indices:
+                visit(dependency)
+                low_links[module] = min(
+                    low_links[module],
+                    low_links[dependency],
+                )
+            elif dependency in on_stack:
+                low_links[module] = min(
+                    low_links[module],
+                    indices[dependency],
+                )
+
+        if low_links[module] != indices[module]:
+            return
+        component: set[str] = set()
+        while stack:
+            member = stack.pop()
+            on_stack.remove(member)
+            component.add(member)
+            if member == module:
+                break
+        components.append(component)
+
+    for module in graph:
+        if module not in indices:
+            visit(module)
+    return components
+
+
+def test_history_transaction_dependency_cluster_stays_acyclic() -> None:
+    graph = _static_app_import_graph()
+    protected_modules = {
+        "ui.canvas_delete_transaction",
+        "ui.history_atom_position_restore",
+        "ui.history_canvas_access",
+        "ui.history_commands",
+        "ui.history_recovery_note",
+        "ui.history_stack_snapshot",
+    }
+    assert protected_modules <= set(graph)
+    cyclic_components = [
+        sorted(component)
+        for component in _strongly_connected_components(graph)
+        if len(component) > 1 and component & protected_modules
+    ]
+
+    assert cyclic_components == []
+
+
+def test_history_stack_snapshot_does_not_depend_on_history_commands() -> None:
+    graph = _static_app_import_graph()
+
+    assert "ui.history_commands" not in graph["ui.history_stack_snapshot"]
+
+
 def test_core_does_not_import_ui_statically() -> None:
     """core stays importable without Qt: any ui dependency must be lazy."""
     violations: list[str] = []
@@ -3380,4 +3499,3 @@ def test_state_accessor_names_match_runtime_state_container() -> None:
                 violations.append(f"{path.name}: {name!r} is not a CanvasRuntimeState field")
 
     assert violations == []
-

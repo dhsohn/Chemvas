@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import contextlib
 import math
+from collections.abc import Callable
+from functools import partial
 
 from core.history import (
     CompositeCommand,
@@ -39,12 +40,14 @@ from ui.canvas_rotation_state import rotation_state_for
 from ui.canvas_scene_items_state import ring_items_for
 from ui.history_canvas_access import (
     capture_history_transaction_for_history,
+    release_history_transaction_for_history,
     restore_bond_length_for_history,
     restore_history_transaction_for_history,
     restore_projection_state_for_history,
     set_atom_positions_for_history,
     set_ring_polygons_for_history,
 )
+from ui.history_restore_retry import restore_history_snapshot_with_retry
 from ui.renderer_style_access import (
     atom_font_for,
     bond_length_px_for,
@@ -52,6 +55,25 @@ from ui.renderer_style_access import (
     renderer_for,
     set_bond_length_for,
 )
+
+
+def _add_bond_length_rollback_note(
+    original_error: BaseException,
+    rollback_error: BaseException,
+    *,
+    phase: str | None = None,
+) -> None:
+    try:
+        add_note = getattr(original_error, "add_note", None)
+        if not callable(add_note):
+            return
+        detail = f" while {phase}" if phase is not None else ""
+        add_note(
+            "Bond-length rollback also encountered an error"
+            f"{detail}: {type(rollback_error).__name__}: {rollback_error}"
+        )
+    except BaseException:
+        return
 
 
 class CanvasGeometryController:
@@ -290,6 +312,7 @@ class CanvasGeometryController:
                     )
                 )
             self.history.push(CompositeCommand(commands))
+            release_history_transaction_for_history(self.canvas, transaction)
         except BaseException as exc:
             self._restore_failed_bond_length_change(
                 old_length=old_length,
@@ -324,61 +347,106 @@ class CanvasGeometryController:
         # Each compensation is independent so one persistently broken graphics
         # item cannot prevent the model, projection, and remaining items from
         # being restored as far as possible.
-        with contextlib.suppress(BaseException):
-            restore_projection_state_for_history(
+        def run_compensation(
+            phase: str,
+            operation: Callable[[], object],
+        ) -> None:
+            try:
+                operation()
+            except BaseException as rollback_error:
+                _add_bond_length_rollback_note(
+                    original_error,
+                    rollback_error,
+                    phase=phase,
+                )
+
+        run_compensation(
+            "restoring projection state",
+            lambda: restore_projection_state_for_history(
                 self.canvas,
                 projection_center_3d,
                 projection_anchor_2d,
-            )
-        with contextlib.suppress(BaseException):
-            set_atom_positions_for_history(
+            ),
+        )
+        run_compensation(
+            "restoring atom positions",
+            lambda: set_atom_positions_for_history(
                 self.canvas,
                 positions,
                 coords_3d=coords_3d or None,
-            )
-        with contextlib.suppress(BaseException):
-            set_ring_polygons_for_history(self.canvas, ring_items, ring_polygons)
-        with contextlib.suppress(BaseException):
-            restore_bond_length_for_history(self.canvas, old_length)
+            ),
+        )
+        run_compensation(
+            "restoring ring polygons",
+            lambda: set_ring_polygons_for_history(
+                self.canvas,
+                ring_items,
+                ring_polygons,
+            ),
+        )
+        run_compensation(
+            "restoring the bond length",
+            lambda: restore_bond_length_for_history(self.canvas, old_length),
+        )
         # Renderer.set_bond_length replaces the immutable style object. Restore
         # the exact original object so external style references remain valid.
-        with contextlib.suppress(BaseException):
-            renderer.style = renderer_style
+        run_compensation(
+            "restoring the renderer style",
+            lambda: setattr(renderer, "style", renderer_style),
+        )
         # The transaction snapshot preserves model containers, but Atom objects
         # are mutable leaves. Restore their coordinates directly even when a
         # persistently broken graphics callback interrupted the UI compensation.
-        for atom_id, (x, y) in positions.items():
+        def restore_raw_atom_position(atom_id: int, x: float, y: float) -> None:
             atom = atom_for_id(self.canvas, atom_id)
             if atom is None:
-                continue
+                return
             atom.x = x
             atom.y = y
-        with contextlib.suppress(BaseException):
-            restore_projection_state_for_history(
+
+        for atom_id, (x, y) in positions.items():
+            run_compensation(
+                f"restoring raw atom {atom_id} coordinates",
+                partial(restore_raw_atom_position, atom_id, x, y),
+            )
+        run_compensation(
+            "reapplying projection state",
+            lambda: restore_projection_state_for_history(
                 self.canvas,
                 projection_center_3d,
                 projection_anchor_2d,
-            )
-        with contextlib.suppress(BaseException):
-            set_ring_polygons_for_history(self.canvas, ring_items, ring_polygons)
-        with contextlib.suppress(BaseException):
-            refresh_bond_length_graphics_for(self.canvas)
-        with contextlib.suppress(BaseException):
-            self.hit_testing_service.mark_spatial_index_dirty()
+            ),
+        )
+        run_compensation(
+            "reapplying ring polygons",
+            lambda: set_ring_polygons_for_history(
+                self.canvas,
+                ring_items,
+                ring_polygons,
+            ),
+        )
+        run_compensation(
+            "refreshing bond-length graphics",
+            lambda: refresh_bond_length_graphics_for(self.canvas),
+        )
+        run_compensation(
+            "invalidating the spatial index",
+            self.hit_testing_service.mark_spatial_index_dirty,
+        )
         # Apply the exact container/scene/history snapshot last. In particular,
         # its canonical bond refresh now observes the directly restored Atom
         # coordinates and original renderer style; a persistent failure in the
         # higher-level refresh callback cannot re-corrupt the raw state after
-        # this authoritative restore.
-        try:
-            restore_history_transaction_for_history(self.canvas, transaction)
-        except BaseException as rollback_error:
-            add_note = getattr(original_error, "add_note", None)
-            if callable(add_note):
-                add_note(
-                    "Bond-length rollback also encountered "
-                    f"{type(rollback_error).__name__}: {rollback_error}"
-                )
+        # this final absolute restore pass.
+        restore_result = restore_history_snapshot_with_retry(
+            lambda: restore_history_transaction_for_history(
+                self.canvas,
+                transaction,
+            ),
+            description="bond-length transaction",
+        )
+        for rollback_error in restore_result.errors:
+            _add_bond_length_rollback_note(original_error, rollback_error)
 
     def _atom_coords_3d_for_positions(self, positions: dict[int, tuple[float, float]]) -> dict[int, tuple[float, float, float]]:
         stored_coords = atom_coords_3d_for(self.canvas)

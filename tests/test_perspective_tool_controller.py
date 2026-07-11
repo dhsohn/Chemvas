@@ -366,6 +366,87 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
         self.assertIsNone(tool._last_pos)
         self.assertIsNone(tool._axis_lock)
 
+    def test_failed_move_retries_delta_and_axis_lock_before_publishing_locals(self) -> None:
+        canvas = _PerspectiveCanvas()
+        controller = canvas.services.selection_rotation_controller
+        controller.update_selection_3d_rotation = mock.Mock(
+            side_effect=[KeyboardInterrupt("injected preview failure"), None]
+        )
+        tool = PerspectiveTool(canvas, context=_tool_context_for(canvas))
+        previous_position = QPointF(2.0, 3.0)
+        current_position = QPointF(8.0, 4.0)
+        tool._rotating = True
+        tool._last_pos = previous_position
+
+        move_event = _Event(
+            current_position,
+            modifiers=Qt.KeyboardModifier.ShiftModifier,
+        )
+        with self.assertRaisesRegex(KeyboardInterrupt, "preview failure"):
+            tool.on_mouse_move(move_event)
+
+        self.assertEqual(tool._last_pos, previous_position)
+        self.assertIsNone(tool._axis_lock)
+        self.assertTrue(tool._rotating)
+
+        self.assertTrue(tool.on_mouse_move(move_event))
+
+        self.assertEqual(
+            controller.update_selection_3d_rotation.call_args_list,
+            [mock.call(6.0, 0.0), mock.call(6.0, 0.0)],
+        )
+        self.assertEqual(tool._last_pos, current_position)
+        self.assertEqual(tool._axis_lock, "x")
+        self.assertTrue(tool._rotating)
+
+    def test_new_press_retries_failed_release_before_beginning_another_rotation(self) -> None:
+        canvas = _PerspectiveCanvas()
+        controller = canvas.services.selection_rotation_controller
+        controller.end_selection_3d_rotation = mock.Mock(
+            side_effect=[
+                RuntimeError("release commit failure"),
+                RuntimeError("press retry failure"),
+                None,
+            ]
+        )
+        next_controller = mock.Mock()
+        next_controller.begin_selection_rotation.return_value = True
+        tool = PerspectiveTool(canvas, context=_tool_context_for(canvas))
+        old_position = QPointF(8.0, 4.0)
+        tool._rotating = True
+        tool._last_pos = old_position
+        tool._axis_lock = "x"
+
+        with self.assertRaisesRegex(RuntimeError, "release commit failure"):
+            tool.on_mouse_release(_Event(old_position))
+
+        new_event = _Event(QPointF(20.0, 12.0))
+        with (
+            mock.patch(
+                "ui.perspective_tool._perspective_tool_controller_for",
+                return_value=next_controller,
+            ),
+            self.assertRaisesRegex(RuntimeError, "press retry failure"),
+        ):
+            tool.on_mouse_press(new_event)
+
+        next_controller.begin_selection_rotation.assert_not_called()
+        self.assertTrue(tool._rotating)
+        self.assertEqual(tool._last_pos, old_position)
+        self.assertEqual(tool._axis_lock, "x")
+
+        with mock.patch(
+            "ui.perspective_tool._perspective_tool_controller_for",
+            return_value=next_controller,
+        ):
+            self.assertTrue(tool.on_mouse_press(new_event))
+
+        self.assertEqual(controller.end_selection_3d_rotation.call_count, 3)
+        next_controller.begin_selection_rotation.assert_called_once_with(new_event)
+        self.assertTrue(tool._rotating)
+        self.assertEqual(tool._last_pos, new_event.position())
+        self.assertIsNone(tool._axis_lock)
+
 
 if __name__ == "__main__":
     unittest.main()

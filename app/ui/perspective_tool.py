@@ -42,6 +42,13 @@ class PerspectiveTool(Tool):
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
             return False
+        if self._rotating:
+            # A release/finalization callback may have failed while the visual
+            # rotation remained active. Commit that same session before any
+            # shift-toggle or new begin call can overwrite its shared state.
+            # _commit_active_rotation deliberately preserves locals on failure,
+            # so the exception aborts this press and a later press can retry.
+            self._commit_active_rotation()
         if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
             item = self.context.item_at_event(event)
             if self.context.toggle_item_selection(item):
@@ -66,10 +73,15 @@ class PerspectiveTool(Tool):
             rotation_mode=rotation_state_for(self.canvas).mode,
             shift_pressed=bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier),
         )
-        self._axis_lock = update.axis_lock
         if not update.should_update:
+            self._axis_lock = update.axis_lock
             return True
         self.context.update_selection_3d_rotation(update.delta_x, update.delta_y)
+        # Publish both local drag cursors only after the controller confirms
+        # the preview update. A mutate-then-raise controller rolls its own
+        # preview back; retaining these values lets the next move retry the
+        # exact same delta and axis-lock decision.
+        self._axis_lock = update.axis_lock
         self._last_pos = current
         return True
 

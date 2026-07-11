@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from functools import wraps
+
 from ui.canvas_atom_graphics_state import visible_atom_item_for
 from ui.canvas_bond_graphics_state import bond_items_for_id
+from ui.canvas_delete_transaction import canvas_delete_transaction
 from ui.canvas_group_state import (
     group_ids_for_members_for,
     group_state_for,
@@ -37,7 +40,37 @@ from ui.selection_service_access import (
 )
 from ui.selection_style_access import selection_indicator_rect_for_atom_for
 
-GROUPABLE_STANDALONE_KINDS = frozenset({"note", "ts_bracket", "shape", "orbital"}) | frozenset(ARROW_KINDS)
+GROUPABLE_STANDALONE_KINDS = frozenset(
+    {"note", "ts_bracket", "shape", "orbital"}
+) | frozenset(ARROW_KINDS)
+
+
+def _atomic_group_change(operation):
+    @wraps(operation)
+    def run(canvas, *args, **kwargs):
+        history = history_service_for_canvas(canvas)
+        with canvas_delete_transaction(canvas, history_service=history):
+            return operation(canvas, *args, **kwargs)
+
+    return run
+
+
+def _push_group_command(canvas, command) -> None:
+    history = history_service_for_canvas(canvas)
+    try:
+        history.push(command)
+    except BaseException as original_error:
+        try:
+            command.undo(canvas)
+        except BaseException as rollback_error:
+            try:
+                original_error.add_note(
+                    "Group mutation rollback also encountered "
+                    f"{type(rollback_error).__name__}: {rollback_error}"
+                )
+            except BaseException:
+                pass
+        raise
 
 
 def _bound_mark_atom_id(canvas, item) -> int | None:
@@ -76,7 +109,9 @@ def _selected_group_members_for(canvas) -> tuple[set[int], list]:
     atom_ids |= selected_mark_atom_ids_for(canvas)
     items = [
         item
-        for item in selected_scene_items_for(canvas, excluded_kinds=TRANSFORM_SELECTION_EXCLUDED_KINDS)
+        for item in selected_scene_items_for(
+            canvas, excluded_kinds=TRANSFORM_SELECTION_EXCLUDED_KINDS
+        )
         if _is_groupable_standalone_item(canvas, item)
     ]
     return atom_ids, items
@@ -90,6 +125,7 @@ def _selection_unit_count_for(canvas, atom_ids: set[int], items: list) -> int:
     return len(components) + len(items)
 
 
+@_atomic_group_change
 def group_selection_for(canvas) -> bool:
     atom_ids, items = _selected_group_members_for(canvas)
     if not atom_ids and not items:
@@ -102,7 +138,9 @@ def group_selection_for(canvas) -> bool:
         # Selection adds nothing beyond the one group it overlaps: no-op.
         existing = state.groups[next(iter(overlapping))]
         existing_items = set(map(id, existing.items))
-        if atom_ids <= existing.atom_ids and all(id(item) in existing_items for item in items):
+        if atom_ids <= existing.atom_ids and all(
+            id(item) in existing_items for item in items
+        ):
             return False
     absorbed = [(group_id, state.groups[group_id]) for group_id in sorted(overlapping)]
     # Union semantics: an absorbed group's unselected members must join the
@@ -116,15 +154,18 @@ def group_selection_for(canvas) -> bool:
             if id(member) not in merged_item_ids:
                 merged_item_ids.add(id(member))
                 merged_items.append(member)
-    command = GroupSceneItemsCommand(atom_ids=set(merged_atom_ids), items=list(merged_items), absorbed=absorbed)
+    command = GroupSceneItemsCommand(
+        atom_ids=set(merged_atom_ids), items=list(merged_items), absorbed=absorbed
+    )
     for absorbed_id, _ in absorbed:
         remove_group_for(canvas, absorbed_id)
     command.group_id = register_group_for(canvas, merged_atom_ids, merged_items)
-    history_service_for_canvas(canvas).push(command)
+    _push_group_command(canvas, command)
     refresh_selection_outline_for(canvas)
     return True
 
 
+@_atomic_group_change
 def ungroup_selection_for(canvas) -> bool:
     atom_ids, items = _selected_group_members_for(canvas)
     state = group_state_for(canvas)
@@ -134,7 +175,7 @@ def ungroup_selection_for(canvas) -> bool:
     removed = [(group_id, state.groups[group_id]) for group_id in sorted(overlapping)]
     for group_id, _ in removed:
         remove_group_for(canvas, group_id)
-    history_service_for_canvas(canvas).push(UngroupSceneItemsCommand(removed=removed))
+    _push_group_command(canvas, UngroupSceneItemsCommand(removed=removed))
     refresh_selection_outline_for(canvas)
     return True
 
@@ -158,8 +199,10 @@ def _structure_items_for_atom_ids(canvas, atom_ids: set[int]) -> list:
         items.extend(bond_items_for_id(canvas, bond_id))
     for ring_item in ring_items_for(canvas):
         ring_atom_ids = ring_item.data(2)
-        if isinstance(ring_atom_ids, list) and ring_atom_ids and all(
-            atom_id in atom_ids for atom_id in ring_atom_ids
+        if (
+            isinstance(ring_atom_ids, list)
+            and ring_atom_ids
+            and all(atom_id in atom_ids for atom_id in ring_atom_ids)
         ):
             items.append(ring_item)
     return items
@@ -443,7 +486,9 @@ def expand_selection_to_groups_for(canvas) -> None:
         member_atom_ids.update(group.atom_ids)
         member_items.extend(attached_canvas_scene_items(canvas, group.items))
     member_atom_ids &= set(atoms_for(canvas))
-    selected_items = selected_scene_items_for(canvas, excluded_kinds=TRANSFORM_SELECTION_EXCLUDED_KINDS)
+    selected_items = selected_scene_items_for(
+        canvas, excluded_kinds=TRANSFORM_SELECTION_EXCLUDED_KINDS
+    )
     selected_ids = set(map(id, selected_items))
     missing_atoms = member_atom_ids - atom_ids
     missing_items = [item for item in member_items if id(item) not in selected_ids]

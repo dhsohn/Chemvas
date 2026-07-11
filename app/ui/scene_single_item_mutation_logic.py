@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 
 from core.history import (
     CompositeCommand,
@@ -30,10 +30,14 @@ def delete_atom_with_history(
     next_atom_id_getter: Callable[[], int],
     remove_atom_only: Callable[[int], None],
     atom_coords_3d_getter: Callable[[int], tuple[float, float, float] | None] | None = None,
+    bond_ids: Iterable[int] | None = None,
 ) -> HistoryCommand:
+    candidate_bond_ids = range(len(bonds)) if bond_ids is None else sorted(set(bond_ids))
     bond_snapshots = [
         (bond_id, bond.a, bond.b, bond_state_getter(bond))
-        for bond_id, bond in enumerate(bonds)
+        for bond_id in candidate_bond_ids
+        if 0 <= bond_id < len(bonds)
+        for bond in (bonds[bond_id],)
         if bond is not None and (bond.a == atom_id or bond.b == atom_id)
     ]
     mark_states = [mark_state_getter(mark) for mark in marks_by_atom.get(atom_id, [])]

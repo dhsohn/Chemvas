@@ -324,6 +324,7 @@ class _DeleteCanvas:
         self.services = SimpleNamespace(
             history_service=self.history_service,
             scene_delete_controller=SimpleNamespace(
+                begin_delete_tool_session=self.begin_delete_tool_session,
                 delete_atom=self.delete_atom,
                 delete_bond=self.delete_bond,
                 delete_ring=self.delete_ring,
@@ -340,6 +341,9 @@ class _DeleteCanvas:
 
     def item_at_event(self, event):
         return self.item
+
+    def begin_delete_tool_session(self):
+        return _DeleteCanvasSession(self)
 
     def delete_atom(self, atom_id: int, record: bool = True):
         self.deleted_atoms.append((atom_id, record))
@@ -360,6 +364,44 @@ class _DeleteCanvas:
         self.pushed_commands.append(command)
 
 
+class _DeleteCanvasSession:
+    def __init__(self, canvas: _DeleteCanvas) -> None:
+        self.canvas = canvas
+        self.deleted_atoms = list(canvas.deleted_atoms)
+        self.deleted_bonds = list(canvas.deleted_bonds)
+        self.deleted_rings = list(canvas.deleted_rings)
+        self.removed_items = list(canvas.removed_items)
+        self.pushed_commands = list(canvas.pushed_commands)
+        self.active = True
+
+    def delete_atom(self, atom_id: int):
+        return self.canvas.delete_atom(atom_id, record=False)
+
+    def delete_bond(self, bond_id: int):
+        return self.canvas.delete_bond(bond_id, record=False)
+
+    def delete_ring(self, item):
+        return self.canvas.delete_ring(item, record=False)
+
+    def delete_scene_item(self, item, state: dict):
+        self.canvas.remove_scene_item(item)
+        return DeleteSceneItemsCommand(item_states=[state], items=[item])
+
+    def commit(self, command=None) -> None:
+        if command is not None:
+            self.canvas.push_command(command)
+        self.active = False
+
+    def rollback(self) -> list[BaseException]:
+        self.canvas.deleted_atoms[:] = self.deleted_atoms
+        self.canvas.deleted_bonds[:] = self.deleted_bonds
+        self.canvas.deleted_rings[:] = self.deleted_rings
+        self.canvas.removed_items[:] = self.removed_items
+        self.canvas.pushed_commands[:] = self.pushed_commands
+        self.active = False
+        return []
+
+
 class _MoveCanvas:
     DragMode = SimpleNamespace(NoDrag="none")
 
@@ -371,7 +413,17 @@ class _MoveCanvas:
         self.model = SimpleNamespace(bonds=[Bond(1, 2, 1)])
         self.item = None
         self.pushed_commands = []
-        self.history_service = SimpleNamespace(push=self.push_command)
+        self.history_service = SimpleNamespace(
+            state=SimpleNamespace(
+                history=[],
+                redo_stack=[],
+                enabled=True,
+                limit=100,
+                change_callback=None,
+            ),
+            push=self.push_command,
+            notify_change=lambda: None,
+        )
         self.selection_outline_updates = 0
         self.services = SimpleNamespace(
             history_service=self.history_service,
@@ -397,6 +449,8 @@ class _MoveCanvas:
         self.selection_outline_updates += 1
 
     def push_command(self, command) -> None:
+        self.history_service.state.history.append(command)
+        self.history_service.state.redo_stack.clear()
         self.pushed_commands.append(command)
 
 
@@ -921,6 +975,45 @@ class ToolsAdditionalTest(unittest.TestCase):
         self.assertIsInstance(canvas.pushed_commands[-1].commands[0], SetSmilesInputCommand)
         self.assertEqual(canvas.pushed_commands[-1].commands[1], "atom-5")
 
+    def test_delete_tool_preserves_session_when_rollback_stays_active(self) -> None:
+        canvas = _DeleteCanvas()
+
+        class RetryableSession(_DeleteCanvasSession):
+            def __init__(self, target_canvas: _DeleteCanvas) -> None:
+                super().__init__(target_canvas)
+                self.rollback_calls = 0
+                self.can_complete = False
+
+            def rollback(self) -> list[BaseException]:
+                self.rollback_calls += 1
+                if not self.can_complete:
+                    return []
+                return super().rollback()
+
+        session = RetryableSession(canvas)
+        tool = DeleteTool(canvas, context=_tool_context_for(canvas))
+        tool._delete_session = session
+        tool._erasing = True
+        tool._changed = True
+        tool._commands = ["pending-delete"]
+
+        with self.assertRaisesRegex(RuntimeError, "remained active"):
+            tool.deactivate()
+
+        self.assertIs(tool._delete_session, session)
+        self.assertFalse(tool._erasing)
+        self.assertTrue(tool._changed)
+        self.assertEqual(tool._commands, ["pending-delete"])
+        self.assertEqual(session.rollback_calls, 2)
+
+        session.can_complete = True
+        tool.deactivate()
+
+        self.assertFalse(session.active)
+        self.assertIsNone(tool._delete_session)
+        self.assertFalse(tool._changed)
+        self.assertEqual(tool._commands, [])
+
     def test_misc_tool_guard_paths_cover_benzene_color_flip_edit_and_move_delete_edges(self) -> None:
         benzene_calls = []
         preview_calls = []
@@ -991,6 +1084,7 @@ class ToolsAdditionalTest(unittest.TestCase):
             self.assertTrue(move_tool.on_mouse_press(_Event(QPointF(1.0, 1.0))))
         move_tool._start_pos = QPointF(0.0, 0.0)
         self.assertTrue(move_tool.on_mouse_move(_Event(QPointF(1.0, 1.0))))
+        move_tool._begin_drag_transaction()
         move_tool._drag_item = _DataItem("arrow", 2)
         move_tool._start_pos = QPointF(1.0, 1.0)
         move_tool._moved = True
@@ -1020,7 +1114,8 @@ class ToolsAdditionalTest(unittest.TestCase):
                 raise RuntimeError("disposed")
 
         delete_canvas.item = _RuntimeSceneItem()
-        delete_tool._erase_at_event(_Event(QPointF()))
+        with self.assertRaisesRegex(RuntimeError, "disposed"):
+            delete_tool._erase_at_event(_Event(QPointF()))
 
         delete_canvas.item = _DataItem("atom", 2, scene_obj=delete_canvas.scene())
         with mock.patch.object(edit_tools_module, "erase_delete_tool_item", return_value=(False, None)):

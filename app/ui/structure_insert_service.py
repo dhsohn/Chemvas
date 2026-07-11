@@ -1,14 +1,21 @@
 from __future__ import annotations
 
-import contextlib
 from typing import TYPE_CHECKING
 
 from core.model import MoleculeModel
 from PyQt6.QtCore import QPointF
 
+from ui.canvas_service_access import canvas_services_for
 from ui.canvas_smiles_input_state import last_smiles_input_for
+from ui.history_canvas_access import (
+    capture_history_transaction_for_history,
+    release_history_transaction_for_history,
+)
 from ui.input_view_access import viewport_center_scene_pos_for
-from ui.insert_commit_rollback import rollback_insert_mutation
+from ui.insert_commit_rollback import (
+    capture_smiles_input_restore_authority,
+    rollback_insert_mutation,
+)
 from ui.renderer_style_access import bond_length_px_for
 from ui.scene_item_access import remove_scene_item
 from ui.structure_insert_access import (
@@ -33,6 +40,19 @@ if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
 
 
+def _add_structure_insert_rollback_note(
+    original_error: BaseException,
+    message: str,
+) -> None:
+    try:
+        add_note = getattr(original_error, "add_note", None)
+        if not callable(add_note):
+            return
+        add_note(message)
+    except BaseException:
+        return
+
+
 class StructureInsertService:
     def __init__(self, canvas: CanvasView, *, note_controller=None) -> None:
         self.canvas = canvas
@@ -54,9 +74,13 @@ class StructureInsertService:
         if not model.atoms:
             return set(), set()
         before_smiles_input = last_smiles_input_for(self.canvas)
+        smiles_authority = capture_smiles_input_restore_authority(self.canvas)
         before_next_atom_id = insert_next_atom_id_for(self.canvas)
         before_bond_count = insert_bond_count_for(self.canvas)
-
+        try:
+            history_service = canvas_services_for(self.canvas).history_service
+        except AttributeError:
+            history_service = None
         if center is None:
             center = viewport_center_scene_pos_for(self.canvas)
         left, top, right, bottom = model.bounds()
@@ -68,6 +92,10 @@ class StructureInsertService:
         inserted_atom_ids: set[int] = set()
         inserted_bond_ids: set[int] = set()
         added_scene_items = []
+        exact_transaction = capture_history_transaction_for_history(
+            self.canvas,
+            history_service=history_service,
+        )
         try:
             source_atom_annotations = getattr(model, "atom_annotations", {})
             if not hasattr(source_atom_annotations, "get"):
@@ -151,18 +179,40 @@ class StructureInsertService:
                 before_smiles_input=before_smiles_input,
                 added_scene_items=added_scene_items,
             )
-        except Exception:
-            for item in reversed(added_scene_items):
-                with contextlib.suppress(Exception):
-                    remove_scene_item(self.canvas, item)
-            rollback_insert_mutation(
+            restore_insert_selection_from_ids_for(
                 self.canvas,
-                before_next_atom_id=before_next_atom_id,
-                before_bond_count=before_bond_count,
-                before_smiles_input=before_smiles_input,
+                inserted_atom_ids,
+                inserted_bond_ids,
             )
+            release_history_transaction_for_history(
+                self.canvas,
+                exact_transaction,
+            )
+        except BaseException as error:
+            for item in reversed(added_scene_items):
+                try:
+                    remove_scene_item(self.canvas, item)
+                except BaseException as cleanup_error:
+                    _add_structure_insert_rollback_note(
+                        error,
+                        f"Structure insert scene cleanup also failed: {cleanup_error!r}",
+                    )
+            try:
+                rollback_insert_mutation(
+                    self.canvas,
+                    before_next_atom_id=before_next_atom_id,
+                    before_bond_count=before_bond_count,
+                    before_smiles_input=before_smiles_input,
+                    exact_transaction=exact_transaction,
+                    smiles_authority=smiles_authority,
+                    original_error=error,
+                )
+            except BaseException as cleanup_error:
+                _add_structure_insert_rollback_note(
+                    error,
+                    f"Structure insert rollback also failed: {cleanup_error!r}",
+                )
             raise
-        restore_insert_selection_from_ids_for(self.canvas, inserted_atom_ids, inserted_bond_ids)
         return inserted_atom_ids, inserted_bond_ids
 
 

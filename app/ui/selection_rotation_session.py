@@ -1,16 +1,64 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any
 
 from PyQt6.QtCore import QPointF
 
-from ui.atom_coords_access import set_atom_coords_3d_for_id
+from ui.atom_coords_access import (
+    set_atom_coords_3d_for_id,
+)
 from ui.canvas_rotation_state import CanvasRotationState
 from ui.selection_center_logic import bounding_box_center_for_atoms
 from ui.selection_rotation_logic import selected_rotation_atom_ids
+from ui.selection_rotation_preview_transaction import _CoreStateSnapshot
 
 Coords2D = tuple[float, float]
 Coords3D = tuple[float, float, float]
+
+
+@dataclass(slots=True)
+class _SelectionRotationBeginSnapshot:
+    exact_core: _CoreStateSnapshot
+
+    @classmethod
+    def capture(
+        cls,
+        canvas,
+        state: CanvasRotationState,
+    ) -> _SelectionRotationBeginSnapshot:
+        adapter = SimpleNamespace(canvas=canvas, rotation=state)
+        return cls(
+            exact_core=_CoreStateSnapshot.capture(adapter),
+        )
+
+    def restore(self) -> tuple[BaseException, ...]:
+        accumulated_errors: list[BaseException] = []
+        for _attempt in range(2):
+            operation_errors = self.exact_core.restore_once()
+            verification_errors = self.exact_core.verify()
+            if not verification_errors:
+                return tuple((*accumulated_errors, *operation_errors))
+            accumulated_errors.extend(operation_errors)
+            accumulated_errors.extend(verification_errors)
+        return tuple(accumulated_errors)
+
+
+def _add_rotation_begin_rollback_note(
+    original_error: BaseException,
+    rollback_error: BaseException,
+) -> None:
+    try:
+        add_note = getattr(original_error, "add_note", None)
+        if callable(add_note):
+            add_note(
+                "Selection-rotation begin rollback also encountered "
+                f"{type(rollback_error).__name__}: {rollback_error}"
+            )
+    except BaseException:
+        return
 
 
 def explicit_rotation_atom_ids_from_items(atom_ids: set[int], selected_items) -> set[int]:
@@ -152,39 +200,81 @@ def begin_selection_rotation_session(
     *,
     axis_hint: int | None = None,
     press_pos: QPointF | None = None,
+    on_session_started: (
+        Callable[[_SelectionRotationBeginSnapshot], None] | None
+    ) = None,
 ) -> bool:
-    start_projection_center_3d = state.projection_center_3d
-    start_projection_anchor_2d = state.projection_anchor_2d
-    state.start_coords_3d = {}
-    state.coord_atom_ids = set()
-    atom_ids, bond_ids = ports.selected_ids()
-    explicit_atom_ids = explicit_rotation_atom_ids_from_items(atom_ids, ports.selected_scene_items())
-    rotation_atom_ids = selected_rotation_atom_ids(explicit_atom_ids, bond_ids, bonds=ports.bonds)
-    if not rotation_atom_ids and not bond_ids:
-        return False
-    axis = None
-    if isinstance(axis_hint, int):
-        axis = ports.axis_from_rotation_hint(axis_hint, rotation_atom_ids, press_pos=press_pos)
-    selection_ids = (set(atom_ids), set(bond_ids))
-    if axis is not None:
-        bond_id, rotate_ids = axis
-        return begin_axis_rotation_session(
-            ports,
-            state,
-            bond_id=bond_id,
-            rotate_ids=rotate_ids,
-            selection_ids=selection_ids,
-            start_projection_center_3d=start_projection_center_3d,
-            start_projection_anchor_2d=start_projection_anchor_2d,
+    snapshot = _SelectionRotationBeginSnapshot.capture(ports.canvas, state)
+    try:
+        start_projection_center_3d = state.projection_center_3d
+        start_projection_anchor_2d = state.projection_anchor_2d
+        atom_ids, bond_ids = ports.selected_ids()
+        explicit_atom_ids = explicit_rotation_atom_ids_from_items(
+            atom_ids,
+            ports.selected_scene_items(),
         )
-    return begin_rigid_rotation_session(
-        ports,
-        state,
-        rotation_atom_ids=rotation_atom_ids,
-        selection_ids=selection_ids,
-        start_projection_center_3d=start_projection_center_3d,
-        start_projection_anchor_2d=start_projection_anchor_2d,
-    )
+        rotation_atom_ids = selected_rotation_atom_ids(
+            explicit_atom_ids,
+            bond_ids,
+            bonds=ports.bonds,
+        )
+        axis = None
+        if isinstance(axis_hint, int) and (rotation_atom_ids or bond_ids):
+            axis = ports.axis_from_rotation_hint(
+                axis_hint,
+                rotation_atom_ids,
+                press_pos=press_pos,
+            )
+        if not rotation_atom_ids and not bond_ids:
+            rotating = False
+        else:
+            # Publish a fresh session only after every selection/axis preflight
+            # above has completed. The remaining geometry reads and per-atom
+            # writes are protected by the exact savepoint.
+            state.start_coords_3d = {}
+            state.coord_atom_ids = set()
+            selection_ids = (set(atom_ids), set(bond_ids))
+            if axis is not None:
+                bond_id, rotate_ids = axis
+                rotating = begin_axis_rotation_session(
+                    ports,
+                    state,
+                    bond_id=bond_id,
+                    rotate_ids=rotate_ids,
+                    selection_ids=selection_ids,
+                    start_projection_center_3d=start_projection_center_3d,
+                    start_projection_anchor_2d=start_projection_anchor_2d,
+                )
+            else:
+                rotating = begin_rigid_rotation_session(
+                    ports,
+                    state,
+                    rotation_atom_ids=rotation_atom_ids,
+                    selection_ids=selection_ids,
+                    start_projection_center_3d=start_projection_center_3d,
+                    start_projection_anchor_2d=start_projection_anchor_2d,
+                )
+        if rotating and on_session_started is not None:
+            # The callback may capture additional session-wide authorities.
+            # It remains inside the begin savepoint so a failed capture cannot
+            # strand a partially published rotation.
+            on_session_started(snapshot)
+    except BaseException as original_error:
+        for rollback_error in snapshot.restore():
+            _add_rotation_begin_rollback_note(
+                original_error,
+                rollback_error,
+            )
+        raise
+    if rotating:
+        return True
+    rollback_errors = snapshot.restore()
+    if rollback_errors:
+        raise BaseExceptionGroup(
+            "selection-rotation begin rollback failed",
+            list(rollback_errors),
+        )
+    return False
 
 
 __all__ = [

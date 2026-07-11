@@ -2,9 +2,16 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from core.history import HistoryTransactionRestoreResult
 from core.model import Atom, Bond, MoleculeModel
-from PyQt6.QtCore import QPointF
+from PyQt6.QtCore import QCoreApplication, QEvent, QPointF
+from PyQt6.QtWidgets import QApplication
+from ui import insert_commit_rollback as insert_rollback_module
+from ui import insert_smiles_commit_service as insert_smiles_commit_service_module
 from ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
+from ui.canvas_atom_graphics_state import atom_items_for
+from ui.canvas_graph_state import graph_state_for
+from ui.canvas_lifecycle import schedule_canvas_deletion_for
 from ui.canvas_scene_items_state import (
     append_scene_item_for,
     remove_scene_item_from_collection_for,
@@ -13,6 +20,11 @@ from ui.canvas_scene_items_state import (
 from ui.canvas_smiles_input_state import (
     last_smiles_input_for,
     set_last_smiles_input_for,
+)
+from ui.canvas_view import CanvasView
+from ui.insert_commit_rollback import (
+    capture_smiles_input_restore_authority,
+    rollback_insert_mutation,
 )
 from ui.insert_commit_service import InsertCommitService
 from ui.insert_smiles_commit_service import apply_smiles_commit_plan
@@ -36,6 +48,16 @@ from ui.template_insert_logic import (
 
 def _points(count: int, *, start: float = 1.0) -> list[tuple[float, float]]:
     return [(start + 2.0 * index, start + 2.0 * index + 1.0) for index in range(count)]
+
+
+class _BrokenAddNoteInterrupt(KeyboardInterrupt):
+    def add_note(self, _note: str) -> None:
+        raise SystemExit("add_note failed")
+
+
+class _BrokenAddNoteSystemExit(SystemExit):
+    def add_note(self, _note: str) -> None:
+        raise SystemExit("add_note failed")
 
 
 class _FakeRingItem:
@@ -236,6 +258,228 @@ class _DetachingCanvas(_FakeCanvas):
 
 
 class InsertCommitServiceTest(unittest.TestCase):
+    def test_smiles_commit_capture_failure_restores_poisoned_input_authority(
+        self,
+    ) -> None:
+        canvas = _FakeCanvas()
+        set_last_smiles_input_for(canvas, "old")
+        primary = SystemExit("renderer style capture terminated")
+
+        class PoisoningRenderer:
+            @property
+            def style(self):
+                set_last_smiles_input_for(canvas, "poisoned-by-capture")
+                raise primary
+
+        canvas.renderer = PoisoningRenderer()
+        plan = SmilesCommitPlan(
+            offset=(0.0, 0.0),
+            atoms=[SmilesAtomPlacement(0, "N", 1.0, 2.0, "#111111", True)],
+            bonds=[],
+        )
+
+        with self.assertRaises(SystemExit) as raised:
+            apply_smiles_commit_plan(
+                canvas,
+                plan,
+                before_smiles_input="old",
+                after_smiles_input="new",
+            )
+
+        self.assertIs(raised.exception, primary)
+        self.assertEqual(last_smiles_input_for(canvas), "old")
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertEqual(canvas.model.next_atom_id, 0)
+
+    def test_benzene_capture_failure_restores_poisoned_input_authority(self) -> None:
+        canvas = _FakeCanvas()
+        set_last_smiles_input_for(canvas, "old")
+        primary = KeyboardInterrupt("benzene style capture interrupted")
+
+        class PoisoningRenderer:
+            @property
+            def style(self):
+                set_last_smiles_input_for(canvas, "poisoned-by-capture")
+                raise primary
+
+        canvas.renderer = PoisoningRenderer()
+        request = TemplateInsertRequest(
+            ring_size=6,
+            cursor_pos=(7.0, 8.0),
+            ring_style="benzene",
+        )
+        plan = TemplateInsertPlan(
+            generator="benzene",
+            ring_size=6,
+            ring_style="benzene",
+            bond_id=None,
+        )
+
+        with self.assertRaises(KeyboardInterrupt) as raised:
+            apply_template_commit_resolution(
+                canvas,
+                request,
+                plan,
+                None,
+                before_smiles_input="old",
+                after_smiles_input="new",
+            )
+
+        self.assertIs(raised.exception, primary)
+        self.assertEqual(last_smiles_input_for(canvas), "old")
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertEqual(canvas.model.next_atom_id, 0)
+
+    def test_insert_exact_restore_retries_authority_and_preserves_primary(self) -> None:
+        for behavior in ("fail_once", "persistent"):
+            with self.subTest(behavior=behavior):
+                canvas = _FakeCanvas()
+                primary = KeyboardInterrupt(f"{behavior} insert mutation failed")
+                first_error = SystemExit("first insert exact restore failed")
+                first = HistoryTransactionRestoreResult(
+                    authoritative=False,
+                    fallback_to_inverse=False,
+                    errors=(first_error,),
+                )
+                second = (
+                    HistoryTransactionRestoreResult(authoritative=True)
+                    if behavior == "fail_once"
+                    else HistoryTransactionRestoreResult(
+                        authoritative=False,
+                        fallback_to_inverse=False,
+                        errors=(RuntimeError("persistent insert restore failure"),),
+                    )
+                )
+
+                with (
+                    mock.patch.object(
+                        insert_rollback_module,
+                        "rollback_insert_mutation_for",
+                    ),
+                    mock.patch.object(
+                        insert_rollback_module,
+                        "restore_history_transaction_for_history",
+                        side_effect=(first, second),
+                    ) as restore,
+                ):
+                    rollback_insert_mutation(
+                        canvas,
+                        before_next_atom_id=0,
+                        before_bond_count=0,
+                        before_smiles_input="before",
+                        exact_transaction=object(),
+                        original_error=primary,
+                    )
+
+                self.assertEqual(restore.call_count, 2)
+                self.assertEqual(last_smiles_input_for(canvas), "before")
+                self.assertTrue(
+                    any(
+                        "first insert exact restore failed" in note
+                        for note in getattr(primary, "__notes__", [])
+                    )
+                )
+                if behavior == "persistent":
+                    self.assertTrue(
+                        any(
+                            "persistent insert restore failure" in note
+                            for note in getattr(primary, "__notes__", [])
+                        )
+                    )
+
+    def test_insert_smiles_target_persistent_noop_is_nonauthoritative_and_retryable(
+        self,
+    ) -> None:
+        blocked = False
+
+        class AdversarialSmilesState:
+            def __init__(self) -> None:
+                self._value = "captured"
+
+            @property
+            def last_smiles_input(self):
+                return self._value
+
+            @last_smiles_input.setter
+            def last_smiles_input(self, value) -> None:
+                if not blocked:
+                    self._value = value
+
+        canvas = _FakeCanvas()
+        state = AdversarialSmilesState()
+        canvas.smiles_input_state = state
+        authority = capture_smiles_input_restore_authority(canvas)
+        blocked = True
+        exact = HistoryTransactionRestoreResult(authoritative=True)
+
+        with (
+            mock.patch.object(
+                insert_rollback_module,
+                "rollback_insert_mutation_for",
+            ),
+            mock.patch.object(
+                insert_rollback_module,
+                "restore_history_transaction_for_history",
+                return_value=exact,
+            ),
+            self.assertRaisesRegex(BaseExceptionGroup, "Insert rollback failed"),
+        ):
+            rollback_insert_mutation(
+                canvas,
+                before_next_atom_id=0,
+                before_bond_count=0,
+                before_smiles_input="before",
+                exact_transaction=object(),
+                smiles_authority=authority,
+            )
+
+        self.assertEqual(state.last_smiles_input, "captured")
+        blocked = False
+        result = rollback_insert_mutation(
+            canvas,
+            before_next_atom_id=0,
+            before_bond_count=0,
+            before_smiles_input="before",
+            exact_transaction=None,
+            smiles_authority=authority,
+        )
+        self.assertTrue(result.authoritative)
+        self.assertEqual(state.last_smiles_input, "before")
+
+    def test_smiles_value_verifier_cannot_replace_root_and_report_authoritative(
+        self,
+    ) -> None:
+        replacement = SimpleNamespace(last_smiles_input="replacement")
+
+        class RootPoisoningSmilesState:
+            def __init__(self, owner) -> None:
+                self.owner = owner
+                self.value = "captured"
+                self.poison = False
+
+            @property
+            def last_smiles_input(self):
+                if self.poison:
+                    self.owner.smiles_input_state = replacement
+                return self.value
+
+            @last_smiles_input.setter
+            def last_smiles_input(self, value) -> None:
+                self.value = value
+
+        canvas = SimpleNamespace()
+        state = RootPoisoningSmilesState(canvas)
+        canvas.smiles_input_state = state
+        authority = capture_smiles_input_restore_authority(canvas)
+        state.poison = True
+
+        result = authority.restore("before")
+
+        self.assertFalse(result.authoritative)
+        self.assertIsNot(canvas.smiles_input_state, state)
+        self.assertTrue(result.errors)
+
+
     def test_structure_insert_access_routes_ring_build_to_structure_service(self) -> None:
         structure_build_service = SimpleNamespace(add_ring_from_points=mock.Mock(return_value=[7]))
         canvas = SimpleNamespace(
@@ -257,6 +501,95 @@ class InsertCommitServiceTest(unittest.TestCase):
 
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(atom_coords_3d_for(canvas), {})
+
+    def test_rollback_insert_mutation_continues_after_one_atom_removal_fails(self) -> None:
+        canvas = _FakeCanvas()
+        for offset in range(3):
+            canvas.model.add_atom("C", float(offset), 0.0)
+        removal_error = RuntimeError("atom rollback failure")
+        attempted_atom_ids: list[int] = []
+
+        def remove_atom(atom_id: int, *, remove_marks: bool = True) -> None:
+            del remove_marks
+            attempted_atom_ids.append(atom_id)
+            if atom_id == 2:
+                raise removal_error
+            canvas.model.atoms.pop(atom_id, None)
+
+        canvas.services.canvas_atom_mutation_service.remove_atom_only = remove_atom
+
+        with self.assertRaises(RuntimeError) as raised:
+            rollback_insert_mutation_for(
+                canvas,
+                before_next_atom_id=0,
+                before_bond_count=0,
+            )
+
+        self.assertIs(raised.exception, removal_error)
+        self.assertEqual(attempted_atom_ids, [2, 1, 0])
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertEqual(canvas.model.next_atom_id, 0)
+
+    def test_rollback_insert_mutation_raw_fallback_clears_graph_graphics_and_scene(self) -> None:
+        class _SceneItem:
+            def __init__(self, scene) -> None:
+                self._scene = scene
+
+            def scene(self):
+                return self._scene
+
+        class _Scene:
+            def __init__(self) -> None:
+                self.items: list[_SceneItem] = []
+
+            def removeItem(self, item) -> None:
+                self.items.remove(item)
+                item._scene = None
+
+        canvas = _FakeCanvas()
+        scene = _Scene()
+        canvas.scene = lambda: scene
+        atom_id = canvas.model.add_atom("N", 1.0, 2.0)
+        canvas.model.atom_annotations[atom_id] = {"formal_charge": 1}
+        set_atom_coords_3d_for(canvas, {atom_id: (1.0, 2.0, 3.0)})
+        graph = graph_state_for(canvas)
+        graph.atom_neighbors[atom_id] = set()
+        graph.atom_bond_ids[atom_id] = set()
+        label = _SceneItem(scene)
+        scene.items.append(label)
+        atom_items_for(canvas)[atom_id] = label
+        removal_error = KeyboardInterrupt("persistent atom lifecycle interruption")
+
+        def pop_graphics_then_raise(
+            removed_atom_id: int,
+            *,
+            remove_marks: bool = True,
+        ) -> None:
+            del remove_marks
+            atom_items_for(canvas).pop(removed_atom_id, None)
+            raise removal_error
+
+        canvas.services.canvas_atom_mutation_service.remove_atom_only = mock.Mock(
+            side_effect=pop_graphics_then_raise
+        )
+
+        with self.assertRaises(KeyboardInterrupt) as raised:
+            rollback_insert_mutation_for(
+                canvas,
+                before_next_atom_id=0,
+                before_bond_count=0,
+            )
+
+        self.assertIs(raised.exception, removal_error)
+        self.assertNotIn(atom_id, canvas.model.atoms)
+        self.assertNotIn(atom_id, canvas.model.atom_annotations)
+        self.assertNotIn(atom_id, atom_coords_3d_for(canvas))
+        self.assertNotIn(atom_id, graph.atom_neighbors)
+        self.assertNotIn(atom_id, graph.atom_bond_ids)
+        self.assertNotIn(atom_id, atom_items_for(canvas))
+        self.assertEqual(scene.items, [])
+        self.assertIsNone(label.scene())
+        self.assertEqual(canvas.model.next_atom_id, 0)
 
     def test_apply_smiles_commit_plan_builds_atoms_bonds_and_history(self) -> None:
         canvas = _FakeCanvas()
@@ -295,6 +628,142 @@ class InsertCommitServiceTest(unittest.TestCase):
                 }
             ],
         )
+
+    def test_apply_smiles_commit_plan_rolls_back_mutate_then_keyboard_interrupt(self) -> None:
+        canvas = _FakeCanvas()
+        plan = SmilesCommitPlan(
+            offset=(0.0, 0.0),
+            atoms=[SmilesAtomPlacement(0, "N", 10.0, 20.0, "#111111", True)],
+            bonds=[],
+        )
+        interruption = KeyboardInterrupt("SMILES insertion interrupted")
+        original_add_atom = insert_smiles_commit_service_module.add_insert_atom_for
+
+        def add_then_interrupt(target_canvas, element: str, x: float, y: float) -> int:
+            original_add_atom(target_canvas, element, x, y)
+            raise interruption
+
+        with (
+            mock.patch.object(
+                insert_smiles_commit_service_module,
+                "add_insert_atom_for",
+                side_effect=add_then_interrupt,
+            ),
+            self.assertRaises(KeyboardInterrupt) as raised,
+        ):
+            apply_smiles_commit_plan(
+                canvas,
+                plan,
+                before_smiles_input="old",
+                after_smiles_input="new",
+            )
+
+        self.assertIs(raised.exception, interruption)
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertEqual(canvas.model.bonds, [])
+        self.assertEqual(canvas.model.next_atom_id, 0)
+        self.assertEqual(last_smiles_input_for(canvas), "old")
+
+    def test_smiles_commit_history_record_failure_restores_model_and_input_root(
+        self,
+    ) -> None:
+        canvas = _FakeCanvas()
+        plan = SmilesCommitPlan(
+            offset=(0.0, 0.0),
+            atoms=[SmilesAtomPlacement(0, "N", 10.0, 20.0, "#111111", True)],
+            bonds=[],
+        )
+        primary = SystemExit("insert history push terminated")
+
+        def mutate_input_then_fail(**_kwargs) -> None:
+            set_last_smiles_input_for(canvas, "poisoned-after-push")
+            raise primary
+
+        canvas.services.canvas_history_recording_service.record_additions = (
+            mutate_input_then_fail
+        )
+
+        with self.assertRaises(SystemExit) as caught:
+            apply_smiles_commit_plan(
+                canvas,
+                plan,
+                before_smiles_input="old",
+                after_smiles_input="new",
+            )
+
+        self.assertIs(caught.exception, primary)
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertEqual(canvas.model.bonds, [])
+        self.assertEqual(canvas.model.next_atom_id, 0)
+        self.assertEqual(last_smiles_input_for(canvas), "old")
+
+    def test_smiles_commit_outer_rollback_and_broken_add_note_preserve_primary_and_retry(self) -> None:
+        plan = SmilesCommitPlan(
+            offset=(0.0, 0.0),
+            atoms=[SmilesAtomPlacement(0, "N", 10.0, 20.0, "#111111", True)],
+            bonds=[],
+        )
+        for error_type in (_BrokenAddNoteInterrupt, _BrokenAddNoteSystemExit):
+            with self.subTest(error_type=error_type.__name__):
+                canvas = _FakeCanvas()
+                primary_error = error_type("SMILES insertion interrupted")
+                original_add_atom = insert_smiles_commit_service_module.add_insert_atom_for
+                original_rollback = insert_smiles_commit_service_module.rollback_insert_mutation
+
+                def add_then_interrupt(
+                    target_canvas,
+                    element: str,
+                    x: float,
+                    y: float,
+                    error: BaseException = primary_error,
+                    add_atom=original_add_atom,
+                ) -> int:
+                    add_atom(target_canvas, element, x, y)
+                    raise error
+
+                def rollback_then_fail(
+                    *args,
+                    rollback=original_rollback,
+                    **kwargs,
+                ) -> None:
+                    rollback(*args, **kwargs)
+                    raise RuntimeError("outer rollback reported failure")
+
+                with (
+                    mock.patch.object(
+                        insert_smiles_commit_service_module,
+                        "add_insert_atom_for",
+                        side_effect=add_then_interrupt,
+                    ),
+                    mock.patch.object(
+                        insert_smiles_commit_service_module,
+                        "rollback_insert_mutation",
+                        side_effect=rollback_then_fail,
+                    ),
+                    self.assertRaises(error_type) as raised,
+                ):
+                    apply_smiles_commit_plan(
+                        canvas,
+                        plan,
+                        before_smiles_input="old",
+                        after_smiles_input="new",
+                    )
+
+                self.assertIs(raised.exception, primary_error)
+                self.assertEqual(canvas.model.atoms, {})
+                self.assertEqual(canvas.model.next_atom_id, 0)
+                self.assertEqual(last_smiles_input_for(canvas), "old")
+
+                self.assertTrue(
+                    apply_smiles_commit_plan(
+                        canvas,
+                        plan,
+                        before_smiles_input="old",
+                        after_smiles_input="new",
+                    )
+                )
+                self.assertEqual(set(canvas.model.atoms), {0})
+                self.assertEqual(last_smiles_input_for(canvas), "new")
 
     def test_apply_smiles_commit_plan_adds_annotation_marks_to_history(self) -> None:
         canvas = _FakeCanvas()
@@ -532,6 +1001,43 @@ class InsertCommitServiceTest(unittest.TestCase):
             any("outer rollback failure" in note for note in original_error.__notes__)
         )
 
+    def test_benzene_template_broken_add_note_preserves_control_flow_primary(self) -> None:
+        request = TemplateInsertRequest(
+            ring_size=6,
+            cursor_pos=(7.0, 8.0),
+            ring_style="benzene",
+        )
+        plan = TemplateInsertPlan(
+            generator="benzene",
+            ring_size=6,
+            ring_style="benzene",
+            bond_id=None,
+        )
+        for error_type in (_BrokenAddNoteInterrupt, _BrokenAddNoteSystemExit):
+            with self.subTest(error_type=error_type.__name__):
+                canvas = _FakeCanvas()
+                primary_error = error_type("benzene interrupted")
+                canvas.services.structure_build_service.add_benzene_ring = mock.Mock(
+                    side_effect=primary_error
+                )
+
+                with (
+                    mock.patch(
+                        "ui.insert_template_commit_service.rollback_insert_mutation",
+                        side_effect=RuntimeError("outer rollback failure"),
+                    ),
+                    self.assertRaises(error_type) as raised,
+                ):
+                    apply_template_commit_resolution(
+                        canvas,
+                        request,
+                        plan,
+                        None,
+                        before_smiles_input="before-benzene",
+                    )
+
+                self.assertIs(raised.exception, primary_error)
+
     def test_apply_smiles_commit_plan_prefers_atom_label_service_over_canvas_wrapper(self) -> None:
         canvas = _FakeCanvas()
         service_calls = []
@@ -700,6 +1206,118 @@ class InsertCommitServiceTest(unittest.TestCase):
         )
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(canvas.model.bonds, [])
+
+    def test_successful_insert_history_observer_cannot_rewrite_command_after_state(
+        self,
+    ) -> None:
+        app = QApplication.instance() or QApplication([])
+        app.setQuitOnLastWindowClosed(False)
+
+        def free_template(canvas: CanvasView) -> bool:
+            points = [
+                (0.0, 0.0),
+                (20.0, 0.0),
+                (25.0, 15.0),
+                (10.0, 25.0),
+                (-5.0, 15.0),
+            ]
+            request = TemplateInsertRequest(
+                ring_size=5,
+                cursor_pos=(0.0, 0.0),
+                ring_style="regular",
+            )
+            plan = TemplateInsertPlan(
+                generator="free_regular_ring",
+                ring_size=5,
+                ring_style="regular",
+                bond_id=None,
+                radius_mode="regular_polygon",
+            )
+            return apply_template_commit_resolution(
+                canvas,
+                request,
+                plan,
+                TemplateInsertResolution(plan=plan, points=points),
+                before_smiles_input="old",
+            )
+
+        def benzene_template(canvas: CanvasView) -> bool:
+            request = TemplateInsertRequest(
+                ring_size=6,
+                cursor_pos=(0.0, 0.0),
+                ring_style="benzene",
+            )
+            plan = TemplateInsertPlan(
+                generator="benzene",
+                ring_size=6,
+                ring_style="benzene",
+                bond_id=None,
+            )
+            return apply_template_commit_resolution(
+                canvas,
+                request,
+                plan,
+                None,
+                before_smiles_input="old",
+            )
+
+        def smiles(canvas: CanvasView) -> bool:
+            plan = SmilesCommitPlan(
+                offset=(0.0, 0.0),
+                atoms=[
+                    SmilesAtomPlacement(
+                        0,
+                        "N",
+                        1.0,
+                        2.0,
+                        "#123456",
+                        True,
+                    )
+                ],
+                bonds=[],
+            )
+            return apply_smiles_commit_plan(
+                canvas,
+                plan,
+                before_smiles_input="old",
+                after_smiles_input="new",
+            )
+
+        for label, operation in (
+            ("smiles", smiles),
+            ("free-template", free_template),
+            ("benzene-template", benzene_template),
+        ):
+            with self.subTest(label=label):
+                canvas = CanvasView()
+                history = canvas.services.history_service
+                before_history = tuple(history.state.history)
+                before_redo = tuple(history.state.redo_stack)
+
+                def poison_published_atom(target: CanvasView = canvas) -> None:
+                    if target.model.atoms:
+                        target.model.atoms[max(target.model.atoms)].color = "#abcdef"
+
+                history.set_change_callback(poison_published_atom)
+                try:
+                    with self.assertRaisesRegex(
+                        RuntimeError,
+                        "recorded atom state changed after history publication",
+                    ):
+                        operation(canvas)
+
+                    self.assertEqual(canvas.model.atoms, {})
+                    self.assertEqual(canvas.model.bonds, [])
+                    self.assertEqual(canvas.model.next_atom_id, 0)
+                    self.assertEqual(tuple(history.state.history), before_history)
+                    self.assertEqual(tuple(history.state.redo_stack), before_redo)
+                finally:
+                    history.set_change_callback(None)
+                    schedule_canvas_deletion_for(canvas)
+                    QCoreApplication.sendPostedEvents(
+                        canvas,
+                        QEvent.Type.DeferredDelete,
+                    )
 
 
 if __name__ == "__main__":

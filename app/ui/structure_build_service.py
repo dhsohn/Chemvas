@@ -45,6 +45,19 @@ if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
 
 
+def _add_recorded_build_rollback_note(
+    original_error: BaseException,
+    rollback_error: BaseException,
+) -> None:
+    try:
+        add_note = getattr(original_error, "add_note", None)
+        if not callable(add_note):
+            return
+        add_note(f"Recorded build rollback also failed: {rollback_error!r}")
+    except BaseException:
+        return
+
+
 class StructureBuildService:
     def __init__(
         self,
@@ -158,8 +171,11 @@ class StructureBuildService:
                 self.committer.abort_recorded_change(snapshot)
                 return []
             self.committer.record_additions(snapshot, added_scene_items=added_scene_items)
-        except Exception as error:
-            self.committer.abort_recorded_change(snapshot, original_error=error)
+        except BaseException as error:
+            try:
+                self.committer.abort_recorded_change(snapshot, original_error=error)
+            except BaseException as rollback_error:
+                _add_recorded_build_rollback_note(error, rollback_error)
             raise
         return added_scene_items
 
@@ -189,8 +205,11 @@ class StructureBuildService:
                 self.committer.abort_recorded_change(snapshot)
                 return False
             self.committer.record_additions(snapshot)
-        except Exception as error:
-            self.committer.abort_recorded_change(snapshot, original_error=error)
+        except BaseException as error:
+            try:
+                self.committer.abort_recorded_change(snapshot, original_error=error)
+            except BaseException as rollback_error:
+                _add_recorded_build_rollback_note(error, rollback_error)
             raise
         return True
 

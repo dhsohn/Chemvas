@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextlib
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -10,6 +9,11 @@ from ui.atom_coords_access import atom_coords_3d_for
 from ui.canvas_model_access import atom_for_id, bond_count_for, next_atom_id_for
 from ui.canvas_rotation_state import rotation_state_for
 from ui.canvas_smiles_input_state import last_smiles_input_for
+from ui.history_canvas_access import (
+    capture_history_transaction_for_history,
+    release_history_transaction_for_history,
+    restore_history_transaction_for_history,
+)
 from ui.history_recording_access import record_additions_for
 from ui.insert_commit_rollback import rollback_insert_mutation
 from ui.renderer_style_access import bond_length_px_for
@@ -48,6 +52,21 @@ class SceneClipboardPasteCallbacks:
     ]
 
 
+def _add_clipboard_rollback_note(
+    original_error: BaseException,
+    cleanup_error: BaseException,
+    *,
+    phase: str,
+) -> None:
+    try:
+        add_note = getattr(original_error, "add_note", None)
+        if not callable(add_note):
+            return
+        add_note(f"Clipboard {phase} rollback also failed: {cleanup_error!r}")
+    except BaseException:
+        return
+
+
 def paste_selection_from_clipboard_for_canvas(
     canvas,
     *,
@@ -55,11 +74,13 @@ def paste_selection_from_clipboard_for_canvas(
     callbacks: SceneClipboardPasteCallbacks,
 ) -> bool:
     payload, payload_json = payload_provider()
+    previous_source_json = clipboard_paste_source_json_for(canvas)
+    previous_paste_count = clipboard_paste_count_for(canvas)
     plan = build_clipboard_paste_plan(
         payload=payload,
         payload_json=payload_json,
-        previous_source_json=clipboard_paste_source_json_for(canvas),
-        previous_paste_count=clipboard_paste_count_for(canvas),
+        previous_source_json=previous_source_json,
+        previous_paste_count=previous_paste_count,
         bond_length_px=bond_length_px_for(canvas),
         clipboard_paste_offset=clipboard_paste_offset,
         before_next_atom_id=next_atom_id_for(canvas),
@@ -75,6 +96,7 @@ def paste_selection_from_clipboard_for_canvas(
         return False
     before_smiles_input = plan.before_smiles_input if isinstance(plan.before_smiles_input, str) else None
     selection_snapshot = capture_clipboard_selection_snapshot_for_canvas(canvas)
+    services = getattr(canvas, "services", None)
     tracked_scene_items: list[object] = []
 
     def create_tracked_scene_item_from_state(state: dict) -> object:
@@ -83,6 +105,10 @@ def paste_selection_from_clipboard_for_canvas(
             tracked_scene_items.append(item)
         return item
 
+    exact_transaction = capture_history_transaction_for_history(
+        canvas,
+        history_service=getattr(services, "history_service", None),
+    )
     try:
         result = apply_paste_payload(
             atoms=plan.atoms,
@@ -105,6 +131,7 @@ def paste_selection_from_clipboard_for_canvas(
         )
 
         if not result.has_changes():
+            release_history_transaction_for_history(canvas, exact_transaction)
             return False
 
         added_scene_items = [item for item in result.added_scene_items if isinstance(item, QGraphicsItem)]
@@ -116,22 +143,77 @@ def paste_selection_from_clipboard_for_canvas(
             before_smiles_input,
             added_scene_items=added_scene_items,
         )
-    except Exception:
+        set_clipboard_paste_source_json_for(canvas, plan.paste_source_json)
+        set_clipboard_paste_count_for(canvas, plan.paste_count)
+        release_history_transaction_for_history(canvas, exact_transaction)
+    except BaseException as error:
         for item in reversed(tracked_scene_items):
-            with contextlib.suppress(Exception):
+            try:
                 remove_scene_item(canvas, item)
-        rollback_insert_mutation(
-            canvas,
-            before_next_atom_id=plan.before_next_atom_id,
-            before_bond_count=plan.before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
-        with contextlib.suppress(Exception):
+            except BaseException as cleanup_error:
+                _add_clipboard_rollback_note(
+                    error,
+                    cleanup_error,
+                    phase="scene cleanup",
+                )
+        try:
+            rollback_insert_mutation(
+                canvas,
+                before_next_atom_id=plan.before_next_atom_id,
+                before_bond_count=plan.before_bond_count,
+                before_smiles_input=before_smiles_input,
+                exact_transaction=None,
+                original_error=error,
+            )
+        except BaseException as cleanup_error:
+            _add_clipboard_rollback_note(
+                error,
+                cleanup_error,
+                phase="mutation",
+            )
+        try:
             restore_clipboard_selection_snapshot_for_canvas(canvas, selection_snapshot)
+        except BaseException as cleanup_error:
+            _add_clipboard_rollback_note(
+                error,
+                cleanup_error,
+                phase="selection",
+            )
+        try:
+            set_clipboard_paste_source_json_for(canvas, previous_source_json)
+        except BaseException as cleanup_error:
+            _add_clipboard_rollback_note(
+                error,
+                cleanup_error,
+                phase="source",
+            )
+        try:
+            set_clipboard_paste_count_for(canvas, previous_paste_count)
+        except BaseException as cleanup_error:
+            _add_clipboard_rollback_note(
+                error,
+                cleanup_error,
+                phase="count",
+            )
+        try:
+            restore_result = restore_history_transaction_for_history(
+                canvas,
+                exact_transaction,
+            )
+            for exact_restore_error in restore_result.errors:
+                _add_clipboard_rollback_note(
+                    error,
+                    exact_restore_error,
+                    phase="exact",
+                )
+        except BaseException as cleanup_error:
+            _add_clipboard_rollback_note(
+                error,
+                cleanup_error,
+                phase="exact",
+            )
         raise
 
-    set_clipboard_paste_source_json_for(canvas, plan.paste_source_json)
-    set_clipboard_paste_count_for(canvas, plan.paste_count)
     return True
 
 
