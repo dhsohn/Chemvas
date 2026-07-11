@@ -28,9 +28,15 @@ from ui.bond_graphics_access import apply_color_to_bond_item_for
 from ui.canvas_atom_graphics_state import (
     atom_dots_for,
     atom_items_for,
+    set_atom_dots_for,
+    set_atom_items_for,
     visible_atom_item_for,
 )
-from ui.canvas_bond_graphics_state import bond_items_for_id
+from ui.canvas_bond_graphics_state import (
+    bond_items_for,
+    bond_items_for_id,
+    set_bond_items_for,
+)
 from ui.canvas_history_recording_service import CallbackFreeHistoryBaseline
 from ui.canvas_model_access import atom_for_id, atoms_for, bond_for_id, bonds_for
 from ui.graphics_items import AtomDotItem
@@ -661,10 +667,160 @@ class _SceneModelColorState:
 
 
 @dataclass(frozen=True, slots=True)
+class _SceneGraphicsRegistryAuthority:
+    canvas: object
+    atom_items: dict[int, object]
+    atom_item_entries: tuple[tuple[int, object], ...]
+    atom_dots: dict[int, object]
+    atom_dot_entries: tuple[tuple[int, object], ...]
+    bond_items: dict[int, list[object]]
+    bond_item_entries: tuple[tuple[int, list[object]], ...]
+    bond_list_contents: tuple[tuple[list[object], tuple[object, ...]], ...]
+    item_scenes: tuple[tuple[QGraphicsItem, QGraphicsScene | None], ...]
+
+    @classmethod
+    def capture(
+        cls,
+        canvas: object,
+        scene: QGraphicsScene,
+    ) -> _SceneGraphicsRegistryAuthority:
+        atom_items = cast(dict[int, object], atom_items_for(canvas))
+        atom_dots = cast(dict[int, object], atom_dots_for(canvas))
+        bond_items = cast(dict[int, list[object]], bond_items_for(canvas))
+        atom_item_entries = tuple(dict.items(atom_items))
+        atom_dot_entries = tuple(dict.items(atom_dots))
+        bond_item_entries = tuple(dict.items(bond_items))
+        bond_list_contents = tuple(
+            (items, tuple(list.__iter__(items)))
+            for _bond_id, items in bond_item_entries
+        )
+        scene_states: list[tuple[QGraphicsItem, QGraphicsScene | None]] = []
+        seen: set[int] = set()
+        for candidate in (
+            *(value for _key, value in atom_item_entries),
+            *(value for _key, value in atom_dot_entries),
+            *(
+                value
+                for _items, contents in bond_list_contents
+                for value in contents
+            ),
+        ):
+            if not isinstance(candidate, QGraphicsItem) or id(candidate) in seen:
+                continue
+            seen.add(id(candidate))
+            scene_states.append((candidate, QGraphicsItem.scene(candidate)))
+        return cls(
+            canvas=canvas,
+            atom_items=atom_items,
+            atom_item_entries=atom_item_entries,
+            atom_dots=atom_dots,
+            atom_dot_entries=atom_dot_entries,
+            bond_items=bond_items,
+            bond_item_entries=bond_item_entries,
+            bond_list_contents=bond_list_contents,
+            item_scenes=tuple(scene_states),
+        )
+
+    @staticmethod
+    def _mapping_is_exact(
+        mapping: dict[int, object],
+        entries: tuple[tuple[int, object], ...],
+    ) -> bool:
+        actual = tuple(dict.items(mapping))
+        return len(actual) == len(entries) and all(
+            actual_key == expected_key and actual_value is expected_value
+            for (actual_key, actual_value), (
+                expected_key,
+                expected_value,
+            ) in zip(actual, entries, strict=True)
+        )
+
+    def verify(self) -> None:
+        if atom_items_for(self.canvas) is not self.atom_items or not self._mapping_is_exact(
+            self.atom_items,
+            self.atom_item_entries,
+        ):
+            raise RuntimeError("atom graphics registry changed during color transaction")
+        if atom_dots_for(self.canvas) is not self.atom_dots or not self._mapping_is_exact(
+            self.atom_dots,
+            self.atom_dot_entries,
+        ):
+            raise RuntimeError("atom-dot registry changed during color transaction")
+        if bond_items_for(self.canvas) is not self.bond_items or not self._mapping_is_exact(
+            cast(dict[int, object], self.bond_items),
+            cast(tuple[tuple[int, object], ...], self.bond_item_entries),
+        ):
+            raise RuntimeError("bond graphics registry changed during color transaction")
+        for items, contents in self.bond_list_contents:
+            actual = tuple(list.__iter__(items))
+            if len(actual) != len(contents) or any(
+                value is not expected
+                for value, expected in zip(actual, contents, strict=True)
+            ):
+                raise RuntimeError(
+                    "bond graphics list changed during color transaction"
+                )
+        for item, expected_scene in self.item_scenes:
+            if sip.isdeleted(item) or QGraphicsItem.scene(item) is not expected_scene:
+                raise RuntimeError(
+                    "mapped graphics scene identity changed during color transaction"
+                )
+
+    def verify_frozen_targets(self, targets: Iterable[object]) -> None:
+        self.verify()
+        captured_scenes = {
+            id(item): expected_scene for item, expected_scene in self.item_scenes
+        }
+        for target in targets:
+            if not isinstance(target, QGraphicsItem):
+                continue
+            expected_scene = captured_scenes.get(
+                id(target),
+                _MISSING_CAPTURE_ATTRIBUTE,
+            )
+            if expected_scene is _MISSING_CAPTURE_ATTRIBUTE:
+                raise RuntimeError(
+                    "frozen ring target had no captured registry scene identity"
+                )
+            if (
+                sip.isdeleted(target)
+                or QGraphicsItem.scene(target) is not expected_scene
+            ):
+                raise RuntimeError(
+                    "frozen ring target scene identity changed before mutation"
+                )
+
+    def restore(self) -> None:
+        set_atom_items_for(self.canvas, self.atom_items)
+        set_atom_dots_for(self.canvas, self.atom_dots)
+        set_bond_items_for(self.canvas, self.bond_items)
+        for items, contents in self.bond_list_contents:
+            list.__setitem__(items, slice(None), contents)
+        dict.clear(self.atom_items)
+        dict.update(self.atom_items, self.atom_item_entries)
+        dict.clear(self.atom_dots)
+        dict.update(self.atom_dots, self.atom_dot_entries)
+        dict.clear(self.bond_items)
+        dict.update(self.bond_items, self.bond_item_entries)
+        for item, expected_scene in self.item_scenes:
+            if sip.isdeleted(item):
+                raise RuntimeError("mapped graphics item was deleted during color transaction")
+            current_scene = QGraphicsItem.scene(item)
+            if current_scene is expected_scene:
+                continue
+            if current_scene is not None:
+                QGraphicsScene.removeItem(current_scene, item)
+            if expected_scene is not None:
+                QGraphicsScene.addItem(expected_scene, item)
+        self.verify()
+
+
+@dataclass(frozen=True, slots=True)
 class _SceneColorPeerAuthority:
     service: CanvasColorMutationService
     item_states: tuple[_SceneColorItemState, ...]
     model_states: tuple[_SceneModelColorState, ...]
+    registry: _SceneGraphicsRegistryAuthority | None = None
 
     def _verify_model_state(self, state: _SceneModelColorState) -> None:
         current = (
@@ -678,6 +834,8 @@ class _SceneColorPeerAuthority:
             )
 
     def verify_peers(self, allowed_graphics_ids: frozenset[int]) -> None:
+        if self.registry is not None:
+            self.registry.verify()
         for item_state in self.item_states:
             if id(item_state.item) not in allowed_graphics_ids:
                 item_state.runtime.verify()
@@ -687,6 +845,8 @@ class _SceneColorPeerAuthority:
 
     def restore(self, original_error: BaseException) -> None:
         def restore_once() -> None:
+            if self.registry is not None:
+                self.registry.restore()
             for model_state in self.model_states:
                 current = (
                     atom_for_id(self.service.canvas, model_state.object_id)
@@ -700,8 +860,12 @@ class _SceneColorPeerAuthority:
                 cast(Any, current).color = model_state.color
             for item_state in reversed(self.item_states):
                 item_state.runtime.restore_once()
+            if self.registry is not None:
+                self.registry.restore()
 
         def verify_all() -> None:
+            if self.registry is not None:
+                self.registry.verify()
             for item_state in self.item_states:
                 item_state.runtime.verify()
             for model_state in self.model_states:
@@ -724,7 +888,7 @@ class _SceneColorPeerTransaction:
     ring_targets: tuple[tuple[object, tuple[object, ...]], ...]
 
     def targets_for_ring(self, item: object) -> tuple[object, ...] | None:
-        return next(
+        targets = next(
             (
                 targets
                 for captured_item, targets in self.ring_targets
@@ -732,6 +896,12 @@ class _SceneColorPeerTransaction:
             ),
             None,
         )
+        if targets is None:
+            return None
+        registry = self.authority.registry
+        if registry is not None:
+            registry.verify_frozen_targets(targets)
+        return targets
 
 
 class CanvasColorMutationService:
@@ -767,7 +937,8 @@ class CanvasColorMutationService:
 
         item_states: list[_SceneColorItemState] = []
         model_states: list[_SceneModelColorState] = []
-        authority = _SceneColorPeerAuthority(self, (), ())
+        registry = _SceneGraphicsRegistryAuthority.capture(self.canvas, scene)
+        authority = _SceneColorPeerAuthority(self, (), (), registry)
         try:
             for item in tuple(QGraphicsScene.items(scene)):
                 if isinstance(item, QGraphicsTextItem):
@@ -817,6 +988,7 @@ class CanvasColorMutationService:
                     self,
                     tuple(item_states),
                     tuple(model_states),
+                    registry,
                 )
 
             atom_items = atom_items_for(self.canvas)
@@ -838,6 +1010,7 @@ class CanvasColorMutationService:
                     self,
                     tuple(item_states),
                     tuple(model_states),
+                    registry,
                 )
             for bond_id, bond in enumerate(tuple(bonds_for(self.canvas))):
                 if bond is None:
@@ -858,6 +1031,7 @@ class CanvasColorMutationService:
                     self,
                     tuple(item_states),
                     tuple(model_states),
+                    registry,
                 )
             authority.verify_peers(frozenset())
         except BaseException as original_error:
@@ -1962,7 +2136,8 @@ class CanvasColorMutationService:
 
     def _ring_structure_targets(self, item) -> tuple[object, ...]:
         if self._scene_color_peer_transactions:
-            targets = self._scene_color_peer_transactions[-1].targets_for_ring(item)
+            transaction = self._scene_color_peer_transactions[-1]
+            targets = transaction.targets_for_ring(item)
             if targets is None:
                 raise RuntimeError(
                     "ring color targets were not frozen before mutation"

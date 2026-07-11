@@ -12,6 +12,7 @@ try:
     from PyQt6.QtWidgets import (
         QApplication,
         QGraphicsEllipseItem,
+        QGraphicsItem,
         QGraphicsPathItem,
         QGraphicsPolygonItem,
         QGraphicsScene,
@@ -282,6 +283,95 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         self.assertEqual(atom.color, original_color)
         self.assertEqual(history.history, [])
         self.assertEqual(history.redo_stack, [])
+
+    def test_ring_getter_cannot_unmap_a_frozen_atom_graphic(self) -> None:
+        canvas = CanvasView()
+        self.addCleanup(self._dispose_canvas, canvas)
+        atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
+            "C",
+            0.0,
+            0.0,
+        )
+        atom_dot = atom_dots_for(canvas)[atom_id]
+
+        class UnmappingRing(QGraphicsPathItem):
+            armed = True
+            metadata_reads = 0
+
+            def data(self, role: int):
+                if role == 2:
+                    self.metadata_reads += 1
+                    if self.armed:
+                        self.armed = False
+                        atom_dots_for(canvas).pop(atom_id)
+                return QGraphicsPathItem.data(self, role)
+
+        ring = UnmappingRing()
+        ring.setData(0, "ring")
+        ring.setData(2, [atom_id])
+        canvas.scene().addItem(ring)
+        history = canvas.services.history_service.state
+
+        with self.assertRaisesRegex(RuntimeError, "atom-dot registry changed"):
+            canvas.services.canvas_color_mutation_service.apply_color_to_item(
+                ring,
+                QColor("#123456"),
+            )
+
+        self.assertEqual(ring.metadata_reads, 1)
+        self.assertIs(atom_dots_for(canvas)[atom_id], atom_dot)
+        self.assertIs(QGraphicsItem.scene(atom_dot), canvas.scene())
+        self.assertEqual(history.history, [])
+        self.assertEqual(history.redo_stack, [])
+
+    def test_ring_batch_preflight_cannot_unmap_a_frozen_atom_graphic(
+        self,
+    ) -> None:
+        canvas = CanvasView()
+        self.addCleanup(self._dispose_canvas, canvas)
+        atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
+            "C",
+            0.0,
+            0.0,
+        )
+        atom = canvas.model.atoms[atom_id]
+        original_color = atom.color
+        atom_dot_registry = atom_dots_for(canvas)
+        atom_dot = atom_dot_registry[atom_id]
+        original_brush = QBrush(atom_dot.brush())
+
+        class LaterUnmappingRing(QGraphicsPathItem):
+            metadata_reads = 0
+
+            def data(self, role: int):
+                self.metadata_reads += 1
+                if self.metadata_reads == 2:
+                    atom_dots_for(canvas).pop(atom_id)
+                return QGraphicsPathItem.data(self, role)
+
+        ring = LaterUnmappingRing()
+        ring.setData(0, "ring")
+        ring.setData(2, [atom_id])
+        canvas.scene().addItem(ring)
+        history = canvas.services.history_service.state
+        history_before = tuple(history.history)
+        redo_before = tuple(history.redo_stack)
+
+        with self.assertRaisesRegex(RuntimeError, "atom-dot registry changed"):
+            canvas.services.canvas_color_mutation_service.apply_color_to_items(
+                [ring],
+                QColor("#123456"),
+            )
+
+        self.assertEqual(ring.metadata_reads, 2)
+        self.assertIs(canvas.model.atoms[atom_id], atom)
+        self.assertEqual(atom.color, original_color)
+        self.assertIs(atom_dots_for(canvas), atom_dot_registry)
+        self.assertIs(atom_dots_for(canvas)[atom_id], atom_dot)
+        self.assertIs(QGraphicsItem.scene(atom_dot), canvas.scene())
+        self.assertEqual(atom_dot.brush(), original_brush)
+        self.assertEqual(tuple(history.history), history_before)
+        self.assertEqual(tuple(history.redo_stack), redo_before)
 
     def test_ring_batch_reuses_frozen_targets_without_second_graph_lookup(
         self,
