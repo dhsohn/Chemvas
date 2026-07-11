@@ -24,15 +24,28 @@ def move_atoms_for(
     bond_ids: set[int] | None = None,
     redraw_bond_ids: set[int] | None = None,
     update_selection: bool = True,
+    affected_ring_items: tuple[object, ...] | None = None,
 ) -> None:
-    move_service_from_canvas(canvas).move_atoms(
-        atom_ids,
-        dx,
-        dy,
-        bond_ids=bond_ids,
-        redraw_bond_ids=redraw_bond_ids,
-        update_selection=update_selection,
-    )
+    move_service = move_service_from_canvas(canvas)
+    if affected_ring_items is None:
+        move_service.move_atoms(
+            atom_ids,
+            dx,
+            dy,
+            bond_ids=bond_ids,
+            redraw_bond_ids=redraw_bond_ids,
+            update_selection=update_selection,
+        )
+    else:
+        move_service.move_atoms(
+            atom_ids,
+            dx,
+            dy,
+            bond_ids=bond_ids,
+            redraw_bond_ids=redraw_bond_ids,
+            update_selection=update_selection,
+            affected_ring_items=affected_ring_items,
+        )
 
 
 def shift_selection_outlines_for(canvas, dx: float, dy: float) -> None:

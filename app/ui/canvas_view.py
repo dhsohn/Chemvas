@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import QRectF
+from PyQt6.QtCore import QRectF, pyqtSlot
 from PyQt6.QtGui import (
     QPainter,
 )
@@ -16,6 +16,8 @@ from ui.canvas_view_event_router import (
     route_mouse_move_event,
     route_mouse_press_event,
     route_mouse_release_event,
+    route_scene_selection_group_changed,
+    route_scene_selection_outline_changed,
     route_scroll_contents_by,
     route_viewport_event,
     route_wheel_event,
@@ -31,6 +33,21 @@ class CanvasView(QGraphicsView):
     def __init__(self) -> None:
         super().__init__()
         initialize_canvas_view(self)
+
+    @pyqtSlot()
+    def handle_scene_selection_group_changed(self) -> None:
+        """Route group expansion through this QObject receiver.
+
+        QGraphicsScene is owned by the view and is destroyed after the view has
+        begun tearing down.  Keeping the signal receiver on the view lets Qt
+        disconnect it before child graphics items emit selection changes from
+        their destructors.
+        """
+        route_scene_selection_group_changed(self)
+
+    @pyqtSlot()
+    def handle_scene_selection_outline_changed(self) -> None:
+        route_scene_selection_outline_changed(self)
 
     def drawBackground(self, painter: QPainter | None, rect: QRectF) -> None:
         if painter is None:

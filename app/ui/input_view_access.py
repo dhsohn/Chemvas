@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import inspect
 import time
+from dataclasses import dataclass, field
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QTransform
@@ -9,6 +11,12 @@ from PyQt6.QtWidgets import QGraphicsView
 from ui.canvas_callback_state import callback_state_for
 from ui.canvas_hover_state import hover_state_for
 from ui.input_view_state import input_view_state_for
+from ui.scene_rect_snapshot import (
+    SceneRectStateSnapshot,
+    ViewSceneRectStateSnapshot,
+    set_explicit_scene_rect,
+    set_explicit_view_scene_rect,
+)
 from ui.selection_info_state import selection_info_state_for
 
 # View magnification limits and the per-step multiplier shared by the toolbar
@@ -16,6 +24,117 @@ from ui.selection_info_state import selection_info_state_for
 ZOOM_MIN = 0.2
 ZOOM_MAX = 5.0
 ZOOM_STEP = 1.25
+_MISSING_CAPTURE_ATTRIBUTE = object()
+
+
+def _capture_optional_attribute(target: object, name: str) -> object:
+    try:
+        return getattr(target, name)
+    except AttributeError:
+        if (
+            inspect.getattr_static(target, name, _MISSING_CAPTURE_ATTRIBUTE)
+            is not _MISSING_CAPTURE_ATTRIBUTE
+        ):
+            raise
+        return _MISSING_CAPTURE_ATTRIBUTE
+
+
+def _add_scene_rect_recovery_note(
+    original_error: BaseException,
+    rollback_error: BaseException,
+) -> None:
+    try:
+        original_error.add_note(
+            "Scene/view rect rollback also failed: "
+            f"{type(rollback_error).__name__}: {rollback_error}"
+        )
+    except BaseException:
+        return
+
+
+@dataclass(slots=True)
+class CanvasSceneRectStateSnapshot:
+    canvas: object
+    scene: object | None
+    scene_state: SceneRectStateSnapshot | None
+    view_state: ViewSceneRectStateSnapshot | None
+    view_scene_rect_getter: object
+    view_set_scene_rect_setter: object
+    active: bool = True
+    recovery_errors: list[BaseException] = field(default_factory=list)
+
+    @classmethod
+    def capture(cls, canvas) -> CanvasSceneRectStateSnapshot:
+        scene_getter = _capture_optional_attribute(canvas, "scene")
+        scene = scene_getter() if callable(scene_getter) else None
+        scene_state = None
+        scene_rect = _capture_optional_attribute(scene, "sceneRect")
+        set_scene_rect = _capture_optional_attribute(scene, "setSceneRect")
+        if scene is not None and callable(scene_rect) and callable(set_scene_rect):
+            scene_state = SceneRectStateSnapshot.capture(
+                scene,
+                scene_rect_getter=scene_rect,
+                set_scene_rect_setter=set_scene_rect,
+            )
+        view_state = None
+        view_scene_rect = _capture_optional_attribute(canvas, "sceneRect")
+        view_set_scene_rect = _capture_optional_attribute(canvas, "setSceneRect")
+        if callable(view_scene_rect) and callable(view_set_scene_rect):
+            view_state = ViewSceneRectStateSnapshot.capture(
+                canvas,
+                scene_rect_getter=view_scene_rect,
+                set_scene_rect_setter=view_set_scene_rect,
+            )
+        return cls(
+            canvas=canvas,
+            scene=scene,
+            scene_state=scene_state,
+            view_state=view_state,
+            view_scene_rect_getter=view_scene_rect,
+            view_set_scene_rect_setter=view_set_scene_rect,
+        )
+
+    @staticmethod
+    def _restore_with_retry(snapshot) -> tuple[BaseException, ...]:
+        recovery_errors = getattr(snapshot, "recovery_errors", None)
+        prior_count = (
+            len(recovery_errors) if isinstance(recovery_errors, list) else 0
+        )
+        try:
+            snapshot.restore()
+        except BaseException as error:
+            return (error,)
+        if isinstance(recovery_errors, list):
+            return tuple(recovery_errors[prior_count:])
+        return ()
+
+    def restore(self) -> None:
+        if not self.active:
+            return
+        errors: list[BaseException] = []
+        # An inherited view reports its scene's live rect, so restore the scene
+        # first and then verify the view's inherited/explicit value.
+        for snapshot in (self.scene_state, self.view_state):
+            if snapshot is None:
+                continue
+            attempt_errors = self._restore_with_retry(snapshot)
+            if snapshot.active:
+                errors.extend(attempt_errors)
+            else:
+                self.recovery_errors.extend(attempt_errors)
+        if errors:
+            raise BaseExceptionGroup(
+                "scene/view rect rollback failed",
+                [*self.recovery_errors, *errors],
+            )
+        self.active = False
+
+    def release(self) -> None:
+        if self.view_state is not None:
+            self.view_state.release()
+        if self.scene_state is not None:
+            self.scene_state.release()
+        self.active = False
 
 
 def shortcut_modifiers_for(event) -> Qt.KeyboardModifier:
@@ -78,7 +197,37 @@ def focus_canvas_for(canvas, reason) -> None:
 
 
 def set_scene_rect_for(canvas, rect) -> None:
-    canvas.setSceneRect(rect)
+    snapshot = CanvasSceneRectStateSnapshot.capture(canvas)
+    try:
+        if snapshot.scene is not None and snapshot.scene_state is not None:
+            set_explicit_scene_rect(
+                snapshot.scene,
+                rect,
+                scene_rect_getter=snapshot.scene_state.scene_rect_getter,
+                set_scene_rect_setter=snapshot.scene_state.set_scene_rect_setter,
+            )
+        if snapshot.view_state is not None:
+            set_explicit_view_scene_rect(
+                canvas,
+                rect,
+                scene_rect_getter=snapshot.view_state.scene_rect_getter,
+                set_scene_rect_setter=snapshot.view_state.set_scene_rect_setter,
+            )
+        elif callable(snapshot.view_set_scene_rect_setter):
+            # Preserve the narrow legacy fallback for test doubles that expose
+            # only a raw setter. The bound port captured before mutation is
+            # still authoritative; live views take the verified branch above.
+            snapshot.view_set_scene_rect_setter(rect)
+        snapshot.release()
+    except BaseException as original_error:
+        try:
+            snapshot.restore()
+        except BaseException as rollback_error:
+            _add_scene_rect_recovery_note(original_error, rollback_error)
+        else:
+            for recovered_error in snapshot.recovery_errors:
+                _add_scene_rect_recovery_note(original_error, recovered_error)
+        raise
 
 
 def update_viewport_for(canvas) -> None:
@@ -268,6 +417,7 @@ __all__ = [
     "ZOOM_MAX",
     "ZOOM_MIN",
     "ZOOM_STEP",
+    "CanvasSceneRectStateSnapshot",
     "device_pixel_ratio_for",
     "fit_canvas_to_view_for",
     "focus_canvas_for",

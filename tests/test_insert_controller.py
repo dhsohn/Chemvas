@@ -72,8 +72,12 @@ class _FakeSceneItem:
         return self._scene_obj
 
     def data(self, role: int):
+        if role == 0:
+            return self.kind if self.kind == "ring" else None
         if role == 1:
             return dict(self._payload)
+        if role == 2:
+            return self._state.get("atom_ids") if self.kind == "ring" else None
         if role == 9:
             return dict(self._state)
         return None
@@ -157,9 +161,13 @@ class _FakeCanvas:
             ),
             canvas_history_recording_service=SimpleNamespace(record_additions=self._record_additions),
             canvas_mark_scene_service=SimpleNamespace(add_mark_for_atom=self.add_mark_for_atom),
+            canvas_ring_fill_scene_service=SimpleNamespace(
+                create_ring_fill_item=self.create_ring_fill_item,
+            ),
             canvas_scene_reset_service=SimpleNamespace(clear_scene=lambda: self.clear_scene()),
             hit_testing_service=SimpleNamespace(find_bond_near=Mock(return_value=None)),
             scene_item_controller=SimpleNamespace(
+                attach_scene_item=self.attach_scene_item,
                 create_scene_item_from_state=self.create_scene_item_from_state,
                 remove_scene_item=self.remove_scene_item,
                 restore_mark_from_state=self.restore_mark_from_state,
@@ -235,10 +243,34 @@ class _FakeCanvas:
     def create_scene_item_from_state(self, state: dict):
         return _FakeSceneItem(str(state.get("kind", "item")), state=state)
 
+    def create_ring_fill_item(self, points, atom_ids: list[int]) -> _FakeSceneItem:
+        return _FakeSceneItem(
+            "ring",
+            state={
+                "kind": "ring",
+                "points": [(point.x(), point.y()) for point in points],
+                "atom_ids": list(atom_ids),
+                "color": None,
+                "alpha": 0.0,
+            },
+        )
+
+    def attach_scene_item(self, item: _FakeSceneItem) -> None:
+        item._scene_obj = self._scene
+        if item.kind == "ring":
+            ring_items = scene_item_collection_for(self, "ring_items")
+            if item not in ring_items:
+                ring_items.append(item)
+
     def remove_scene_item(self, item: _FakeSceneItem) -> None:
         self.removed_scene_items.append(item)
+        item._scene_obj = None
         if item in self.created_marks:
             self.created_marks.remove(item)
+        if item.kind == "ring":
+            ring_items = scene_item_collection_for(self, "ring_items")
+            if item in ring_items:
+                ring_items.remove(item)
 
     def restore_mark_from_state(self, mark_state: dict) -> None:
         self.restored_marks.append(dict(mark_state))
@@ -253,6 +285,7 @@ class _FakeCanvas:
 
     def restore_scene_item(self, item: _FakeSceneItem) -> None:
         self.restored_scene_items.append(item)
+        self.attach_scene_item(item)
 
     def ensure_carbon_dot(self, atom_id: int) -> None:
         self.ensure_carbon_dot_calls.append(atom_id)
@@ -576,6 +609,47 @@ class InsertControllerTest(unittest.TestCase):
         self.assertEqual(last_smiles_input_for(canvas), "before")
         self.assertEqual(atom_coords_3d_for(canvas), {0: (-5.0, -5.0, 0.0)})
         canvas.push_command.assert_not_called()
+
+    def test_load_smiles_rolls_back_control_flow_error_after_history_mutation(self) -> None:
+        for error_type in (KeyboardInterrupt, SystemExit):
+            with self.subTest(error_type=error_type.__name__):
+                canvas = _FakeCanvas()
+                set_last_smiles_input_for(canvas, "before")
+                canvas.model.add_atom("O", -5.0, -5.0)
+                original_model = canvas.model
+                canvas.pushed_commands = ["existing-command"]
+                original_history = canvas.pushed_commands
+                canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(
+                    atoms={0: Atom("C", 1.0, 2.0)}
+                )
+
+                def _clear_scene(current_canvas=canvas) -> None:
+                    current_canvas.model = MoleculeModel()
+
+                original_error = error_type("history push failed")
+
+                def _mutate_history_then_fail(
+                    command,
+                    current_canvas=canvas,
+                    error=original_error,
+                ) -> None:
+                    current_canvas.pushed_commands.append(command)
+                    raise error
+
+                canvas.clear_scene = Mock(side_effect=_clear_scene)
+                canvas.push_command.side_effect = _mutate_history_then_fail
+                controller = _controller_for(canvas)
+
+                with self.assertRaises(error_type) as caught:
+                    controller.load_smiles("C")
+
+                self.assertIs(caught.exception, original_error)
+                self.assertIs(canvas.model, original_model)
+                self.assertEqual(canvas.model.atoms, {0: Atom("O", -5.0, -5.0)})
+                self.assertEqual(canvas.model.next_atom_id, 1)
+                self.assertEqual(last_smiles_input_for(canvas), "before")
+                self.assertIs(canvas.pushed_commands, original_history)
+                self.assertEqual(canvas.pushed_commands, ["existing-command"])
 
     def test_load_smiles_rolls_back_if_annotation_mark_creation_raises(self) -> None:
         canvas = _FakeCanvas()
@@ -1041,6 +1115,9 @@ class InsertControllerTest(unittest.TestCase):
             [1, 2, 3, 4, 5],
         )
         canvas.services.structure_build_service.add_ring_from_points.assert_not_called()
+        ring_items = scene_item_collection_for(canvas, "ring_items")
+        self.assertEqual(len(ring_items), 1)
+        self.assertEqual(ring_items[0].data(2), [10, 11, 12, 13, 14, 15])
         self.assertTrue(canvas.insert_state.template_active)
         self.assertEqual(canvas.insert_state.template_ring_size, 6)
         self.assertEqual(canvas.insert_state.template_ring_style, "chair")
@@ -1050,6 +1127,7 @@ class InsertControllerTest(unittest.TestCase):
             before_next_atom_id=3,
             before_bond_count=1,
             before_smiles_input="before",
+            added_scene_items=ring_items,
         )
 
     def test_commit_template_insert_merges_against_selected_atom_seed(self) -> None:
@@ -1101,10 +1179,14 @@ class InsertControllerTest(unittest.TestCase):
             [(1, 10, 1), (10, 11, 1), (11, 12, 1), (12, 13, 1), (13, 1, 1)],
         )
         self.assertEqual([call.args[0] for call in canvas._add_bond_graphics.call_args_list], [0, 1, 2, 3, 4])
+        ring_items = scene_item_collection_for(canvas, "ring_items")
+        self.assertEqual(len(ring_items), 1)
+        self.assertEqual(ring_items[0].data(2), [1, 10, 11, 12, 13])
         canvas._record_additions.assert_called_once_with(
             before_next_atom_id=2,
             before_bond_count=0,
             before_smiles_input="before",
+            added_scene_items=ring_items,
         )
 
     def test_template_helper_resolvers_and_request_roundtrip(self) -> None:

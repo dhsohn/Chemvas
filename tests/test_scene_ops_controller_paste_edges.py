@@ -1,6 +1,6 @@
 import os
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -14,6 +14,10 @@ if QApplication is not None:
     from ui.atom_coords_access import atom_coords_3d_for
     from ui.bond_graphics_access import project_point_3d_for
     from ui.canvas_rotation_state import rotation_state_for
+    from ui.canvas_smiles_input_state import (
+        last_smiles_input_for,
+        set_last_smiles_input_for,
+    )
 
     from tests.test_scene_ops_controller import (
         _FakeCanvas,
@@ -78,6 +82,11 @@ class _ZeroBoundsItem(QGraphicsItem):
 
     def paint(self, painter, option, widget=None) -> None:  # type: ignore[override]
         return None
+
+
+class _BrokenAddNoteInterrupt(KeyboardInterrupt):
+    def add_note(self, _note: str) -> None:
+        raise SystemExit("add_note failed")
 
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for scene ops controller paste edge tests")
@@ -254,6 +263,163 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
         self.assertTrue(existing_note.isSelected())
         self.assertEqual(canvas.selected_notes, [existing_note])
         self.assertNotIn(canvas.created_items[0], canvas.selected_notes)
+
+    def test_paste_selection_rolls_back_append_then_keyboard_interrupt_exactly(self) -> None:
+        canvas = _RecordingFakeCanvas()
+        canvas.scene_clipboard_state.paste_source_json = "old-source"
+        canvas.scene_clipboard_state.paste_count = 4
+        existing_note = _make_note_item("keep", 4.0, 6.0)
+        canvas.add_item(existing_note, selected=True)
+        canvas.selected_notes.append(existing_note)
+        controller = scene_clipboard_controller_for(canvas)
+        controller.clipboard_selection_payload = lambda: (
+            {
+                "format": "chemvas-selection",
+                "version": 1,
+                "atoms": [{"id": 10, "element": "N", "x": 5.0, "y": 7.0}],
+                "bonds": [],
+                "rings": [],
+                "marks": [],
+                "scene_items": [{"kind": "note", "text": "new", "x": 20.0, "y": 30.0}],
+            },
+            "fresh-source",
+        )
+        interruption = KeyboardInterrupt("history append interrupted")
+
+        def append_then_interrupt(*_args, **_kwargs) -> None:
+            canvas.pushed_commands.append("partial-history-entry")
+            raise interruption
+
+        canvas.services.canvas_history_recording_service.record_additions = append_then_interrupt
+
+        with self.assertRaises(KeyboardInterrupt) as raised:
+            controller.paste_selection_from_clipboard()
+
+        self.assertIs(raised.exception, interruption)
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertEqual(canvas.model.bonds, [])
+        self.assertEqual(canvas.model.next_atom_id, 0)
+        self.assertEqual(canvas.pushed_commands, [])
+        self.assertEqual(canvas.scene_clipboard_state.paste_source_json, "old-source")
+        self.assertEqual(canvas.scene_clipboard_state.paste_count, 4)
+        self.assertTrue(existing_note.isSelected())
+        self.assertEqual(canvas.selected_notes, [existing_note])
+        self.assertTrue(all(item.scene() is None for item in canvas.created_items))
+
+    def test_paste_exact_restore_is_final_after_every_manual_rollback_mutates_then_raises(self) -> None:
+        from ui import insert_commit_rollback as rollback_module
+        from ui import scene_clipboard_paste_service as paste_module
+        from ui import scene_clipboard_selection as selection_module
+
+        canvas = _RecordingFakeCanvas()
+        canvas.scene_clipboard_state.paste_source_json = "old-source"
+        canvas.scene_clipboard_state.paste_count = 6
+        set_last_smiles_input_for(canvas, "old-smiles")
+        existing_note = _make_note_item("keep", 4.0, 6.0)
+        canvas.add_item(existing_note, selected=True)
+        canvas.selected_notes.append(existing_note)
+        controller = scene_clipboard_controller_for(canvas)
+        controller.clipboard_selection_payload = lambda: (
+            {
+                "format": "chemvas-selection",
+                "version": 1,
+                "atoms": [{"id": 10, "element": "N", "x": 5.0, "y": 7.0}],
+                "bonds": [],
+                "rings": [],
+                "marks": [],
+                "scene_items": [{"kind": "note", "text": "new", "x": 20.0, "y": 30.0}],
+            },
+            "fresh-source",
+        )
+        interruption = _BrokenAddNoteInterrupt("history append interrupted")
+
+        def append_then_interrupt(*_args, **_kwargs) -> None:
+            canvas.pushed_commands.append("partial-history-entry")
+            raise interruption
+
+        canvas.services.canvas_history_recording_service.record_additions = append_then_interrupt
+        original_clear_selection = selection_module.clear_scene_selection_for
+        clear_selection_calls = 0
+        rollback_events: list[str] = []
+
+        def clear_selection_then_fail_on_rollback(*args, **kwargs):
+            nonlocal clear_selection_calls
+            clear_selection_calls += 1
+            result = original_clear_selection(*args, **kwargs)
+            if clear_selection_calls == 2:
+                rollback_events.append("selection")
+                raise SystemExit("selection restore failed after mutation")
+            return result
+
+        original_restore_smiles = (
+            rollback_module.SmilesInputRestoreAuthority.restore
+        )
+
+        def corrupt_smiles_then_fail(authority, value) -> None:
+            rollback_events.append("smiles")
+            original_restore_smiles(authority, value)
+            authority.value_setter("corrupt-smiles")
+            raise SystemExit("SMILES restore failed after mutation")
+
+        def corrupt_source_then_fail(target_canvas, _value) -> None:
+            rollback_events.append("source")
+            target_canvas.scene_clipboard_state.paste_source_json = "corrupt-source"
+            raise SystemExit("source restore failed after mutation")
+
+        def corrupt_count_then_fail(target_canvas, _value) -> None:
+            rollback_events.append("count")
+            target_canvas.scene_clipboard_state.paste_count = 999
+            raise SystemExit("count restore failed after mutation")
+
+        original_exact_restore = paste_module.restore_history_transaction_for_history
+
+        def restore_exact_last(*args, **kwargs):
+            rollback_events.append("exact")
+            return original_exact_restore(*args, **kwargs)
+
+        with (
+            patch.object(
+                selection_module,
+                "clear_scene_selection_for",
+                side_effect=clear_selection_then_fail_on_rollback,
+            ),
+            patch.object(
+                rollback_module.SmilesInputRestoreAuthority,
+                "restore",
+                new=corrupt_smiles_then_fail,
+            ),
+            patch.object(
+                paste_module,
+                "set_clipboard_paste_source_json_for",
+                side_effect=corrupt_source_then_fail,
+            ),
+            patch.object(
+                paste_module,
+                "set_clipboard_paste_count_for",
+                side_effect=corrupt_count_then_fail,
+            ),
+            patch.object(
+                paste_module,
+                "restore_history_transaction_for_history",
+                side_effect=restore_exact_last,
+            ) as exact_restore,
+            self.assertRaises(_BrokenAddNoteInterrupt) as raised,
+        ):
+            controller.paste_selection_from_clipboard()
+
+        self.assertIs(raised.exception, interruption)
+        self.assertEqual(rollback_events, ["smiles", "selection", "source", "count", "exact"])
+        exact_restore.assert_called_once()
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertEqual(canvas.model.bonds, [])
+        self.assertEqual(canvas.model.next_atom_id, 0)
+        self.assertEqual(canvas.pushed_commands, [])
+        self.assertEqual(last_smiles_input_for(canvas), "old-smiles")
+        self.assertEqual(canvas.scene_clipboard_state.paste_source_json, "old-source")
+        self.assertEqual(canvas.scene_clipboard_state.paste_count, 6)
+        self.assertTrue(existing_note.isSelected())
+        self.assertEqual(canvas.selected_notes, [existing_note])
+        self.assertTrue(all(item.scene() is None for item in canvas.created_items))
 
     def test_paste_selection_from_clipboard_remaps_perspective_state(self) -> None:
         canvas = _RecordingFakeCanvas()

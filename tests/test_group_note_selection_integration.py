@@ -4,7 +4,7 @@ import unittest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtCore import QPointF
+    from PyQt6.QtCore import QCoreApplication, QEvent, QPointF
     from PyQt6.QtWidgets import (
         QApplication,
         QGraphicsItem,
@@ -16,6 +16,7 @@ except ModuleNotFoundError:
 if QApplication is not None:
     from ui.canvas_atom_graphics_state import set_atom_item_for
     from ui.canvas_group_state import group_state_for
+    from ui.canvas_lifecycle import schedule_canvas_deletion_for
     from ui.canvas_model_access import model_for
     from ui.canvas_scene_items_state import append_scene_item_for, selected_notes_for
     from ui.canvas_view import CanvasView
@@ -41,8 +42,14 @@ class GroupedNoteSelectionIntegrationTest(unittest.TestCase):
         set_atom_item_for(canvas, atom_id, item)
         return atom_id, item
 
+    def _dispose_canvas(self, canvas) -> None:
+        schedule_canvas_deletion_for(canvas)
+        QCoreApplication.sendPostedEvents(canvas, QEvent.Type.DeferredDelete)
+        self.app.processEvents()
+
     def test_grouped_note_follows_shift_click_and_drag(self) -> None:
         canvas = CanvasView()
+        self.addCleanup(self._dispose_canvas, canvas)
         canvas.services.tools.set_active("select")
         _, atom_item_a = self._add_atom(canvas, 0.0)
         _, atom_item_b = self._add_atom(canvas, 80.0)

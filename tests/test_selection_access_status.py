@@ -25,6 +25,7 @@ class _Item:
         self._item_id = item_id
         self._ring_ids = ring_ids
         self._scene = scene
+        self._selected = False
         self.selected_calls = []
 
     def data(self, index: int):
@@ -41,6 +42,10 @@ class _Item:
 
     def setSelected(self, selected: bool) -> None:
         self.selected_calls.append(selected)
+        self._selected = selected
+
+    def isSelected(self) -> bool:
+        return self._selected
 
 
 class _Scene:

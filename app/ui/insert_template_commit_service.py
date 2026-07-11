@@ -6,7 +6,14 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QPointF
 
 from ui.canvas_smiles_input_state import set_last_smiles_input_for
-from ui.insert_commit_rollback import rollback_insert_mutation
+from ui.history_canvas_access import (
+    capture_history_transaction_for_history,
+    release_history_transaction_for_history,
+)
+from ui.insert_commit_rollback import (
+    capture_smiles_input_restore_authority,
+    rollback_insert_mutation,
+)
 from ui.structure_build_committer import StructureBuildCommitter
 from ui.structure_insert_access import (
     add_atom_with_merge_for,
@@ -30,6 +37,19 @@ from ui.template_insert_logic import (
 
 if TYPE_CHECKING:
     from ui.canvas_view import CanvasView
+
+
+def _add_template_rollback_note(
+    original_error: BaseException,
+    rollback_error: BaseException,
+) -> None:
+    try:
+        add_note = getattr(original_error, "add_note", None)
+        if not callable(add_note):
+            return
+        add_note(f"Template rollback also failed: {rollback_error!r}")
+    except BaseException:
+        return
 
 
 def apply_template_commit_resolution(
@@ -86,13 +106,17 @@ def apply_template_commit_resolution(
                 add_insert_bond_for(canvas, a_id, b_id)
             for new_bond_id in new_insert_bond_ids_from(canvas, bonds_start):
                 add_insert_bond_graphics_for(canvas, new_bond_id)
+            committer.add_ring_fill(points, atom_ids)
         else:
             set_last_smiles_input_for(canvas, after_smiles_input)
             add_insert_ring_from_points_for(canvas, points)
 
         committer.record_additions(snapshot)
-    except Exception:
-        committer.abort_recorded_change(snapshot)
+    except BaseException as error:
+        try:
+            committer.abort_recorded_change(snapshot, original_error=error)
+        except BaseException as rollback_error:
+            _add_template_rollback_note(error, rollback_error)
         raise
     return True
 
@@ -108,7 +132,17 @@ def _apply_benzene_template_commit(
     center = QPointF(*request.cursor_pos)
     before_next_atom_id = insert_next_atom_id_for(canvas)
     before_bond_count = insert_bond_count_for(canvas)
+    smiles_authority = capture_smiles_input_restore_authority(canvas)
+    services = getattr(canvas, "services", None)
+    exact_transaction = None
     try:
+        # Exact capture is itself fallible extension code.  If a live capture
+        # port mutates the SMILES input and then raises, the same rollback path
+        # must restore the authority even though no ring atom exists yet.
+        exact_transaction = capture_history_transaction_for_history(
+            canvas,
+            history_service=getattr(services, "history_service", None),
+        )
         set_last_smiles_input_for(canvas, after_smiles_input)
         add_insert_benzene_ring_for(
             canvas,
@@ -124,15 +158,24 @@ def _apply_benzene_template_commit(
                 before_next_atom_id=before_next_atom_id,
                 before_bond_count=before_bond_count,
                 before_smiles_input=before_smiles_input,
+                exact_transaction=exact_transaction,
+                smiles_authority=smiles_authority,
             )
             return False
-    except Exception:
-        rollback_insert_mutation(
-            canvas,
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_smiles_input=before_smiles_input,
-        )
+        release_history_transaction_for_history(canvas, exact_transaction)
+    except BaseException as error:
+        try:
+            rollback_insert_mutation(
+                canvas,
+                before_next_atom_id=before_next_atom_id,
+                before_bond_count=before_bond_count,
+                before_smiles_input=before_smiles_input,
+                exact_transaction=exact_transaction,
+                smiles_authority=smiles_authority,
+                original_error=error,
+            )
+        except BaseException as rollback_error:
+            _add_template_rollback_note(error, rollback_error)
         raise
     return True
 

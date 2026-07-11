@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from functools import wraps
 from typing import Any, ClassVar
 
 from ui.bracket_types import BRACKET_KIND_VALUES
 from ui.canvas_callback_state import callback_state_for
+from ui.canvas_delete_transaction import canvas_delete_transaction
 from ui.canvas_insert_state import insert_state_for
 from ui.canvas_tool_settings_state import set_tool_setting_for, tool_settings_state_for
 from ui.canvas_window_access import history_service_for_canvas
@@ -16,8 +18,27 @@ from ui.selection_service_access import refresh_selection_outline_for
 from ui.shape_geometry import SHAPE_KINDS, STROKE_STYLES
 
 
+def _atomic_shape_style_change(operation):
+    @wraps(operation)
+    def run(controller, *args, **kwargs):
+        history = history_service_for_canvas(controller.canvas)
+        with canvas_delete_transaction(
+            controller.canvas,
+            history_service=history,
+        ):
+            return operation(controller, *args, **kwargs)
+
+    return run
+
+
 class CanvasToolModeController:
-    MARK_KINDS: ClassVar[set[str]] = {"plus", "minus", "circled_plus", "circled_minus", "radical"}
+    MARK_KINDS: ClassVar[set[str]] = {
+        "plus",
+        "minus",
+        "circled_plus",
+        "circled_minus",
+        "radical",
+    }
 
     def __init__(
         self,
@@ -124,6 +145,7 @@ class CanvasToolModeController:
             if item.data(0) == "shape"
         ]
 
+    @_atomic_shape_style_change
     def _apply_shape_stroke_to_selected(self, stroke_style: str) -> bool:
         shapes = self._selected_shape_items()
         if not shapes:
@@ -206,5 +228,6 @@ class CanvasToolModeController:
         set_tool_setting_for(self.canvas, "snap_angle_step", step)
         self._set_active_tool("bond")
         refresh_selection_outline_for(self.canvas)
+
 
 __all__ = ["CanvasToolModeController"]

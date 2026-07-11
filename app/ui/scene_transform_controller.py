@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from functools import wraps
 from typing import TYPE_CHECKING, Any
 
 from core.history import (
@@ -14,6 +15,7 @@ from core.history import (
 from ui.bond_graphics_access import add_bond_graphics_for
 from ui.bond_graphics_logic import refresh_bond_graphics
 from ui.canvas_bond_graphics_state import bond_items_for
+from ui.canvas_delete_transaction import canvas_delete_transaction
 from ui.canvas_graph_state import graph_state_for
 from ui.canvas_mark_registry import mark_registry_for
 from ui.canvas_model_access import (
@@ -84,7 +86,21 @@ class RotationSelectionPreview:
 
 ROTATION_GROUP_PREVIEW_KINDS = ARROW_KINDS | {"orbital"}
 ROTATION_POSITION_PREVIEW_KINDS = {"mark"}
-ROTATION_STATE_ITEM_KINDS = ROTATION_GROUP_PREVIEW_KINDS | ROTATION_POSITION_PREVIEW_KINDS
+ROTATION_STATE_ITEM_KINDS = (
+    ROTATION_GROUP_PREVIEW_KINDS | ROTATION_POSITION_PREVIEW_KINDS
+)
+
+
+def _atomic_history_transform(operation):
+    @wraps(operation)
+    def run(controller, *args, **kwargs):
+        with canvas_delete_transaction(
+            controller.canvas,
+            history_service=controller.history,
+        ):
+            return operation(controller, *args, **kwargs)
+
+    return run
 
 
 class SceneTransformController:
@@ -120,12 +136,23 @@ class SceneTransformController:
     def _add_bond_graphics(self, bond_id: int) -> None:
         add_bond_graphics_for(self.canvas, bond_id)
 
-    def _set_atom_positions(self, positions: dict[int, tuple[float, float]], *, update_selection: bool = True) -> None:
-        set_atom_positions_for_history(self.canvas, positions, update_selection=update_selection)
+    def _set_atom_positions(
+        self,
+        positions: dict[int, tuple[float, float]],
+        *,
+        update_selection: bool = True,
+    ) -> None:
+        set_atom_positions_for_history(
+            self.canvas, positions, update_selection=update_selection
+        )
 
-    def _redraw_connected_bonds(self, atom_id: int, skip_bond_id: int | None = None) -> None:
+    def _redraw_connected_bonds(
+        self, atom_id: int, skip_bond_id: int | None = None
+    ) -> None:
         if self.move_controller is not None:
-            self.move_controller.redraw_connected_bonds(atom_id, skip_bond_id=skip_bond_id)
+            self.move_controller.redraw_connected_bonds(
+                atom_id, skip_bond_id=skip_bond_id
+            )
 
     def _bond_state(self, bond) -> dict:
         return bond_state_dict(bond)
@@ -154,7 +181,9 @@ class SceneTransformController:
             bond_id,
             bonds=self._bonds,
             bond_items=bond_items_for(self.canvas),
-            remove_scene_item=lambda item: remove_item_from_canvas_scene(self.canvas, item),
+            remove_scene_item=lambda item: remove_item_from_canvas_scene(
+                self.canvas, item
+            ),
             add_bond_graphics=self._add_bond_graphics,
             redraw_connected=redraw_connected,
             redraw_connected_bonds=self._redraw_connected_bonds,
@@ -195,15 +224,20 @@ class SceneTransformController:
             record_bond_update=self._record_bond_update,
         )
 
-    def selected_atom_components_for_transform(self, atom_ids: set[int]) -> list[set[int]]:
+    def selected_atom_components_for_transform(
+        self, atom_ids: set[int]
+    ) -> list[set[int]]:
         if not atom_ids:
             return []
         component_key = (frozenset(atom_ids), self.graph.graph_version)
         if component_key != self.graph.selection_component_cache_signature:
             self.graph.selection_component_cache_signature = component_key
-            self.graph.selection_component_cache = self._graph_service().connected_components(atom_ids)
+            self.graph.selection_component_cache = (
+                self._graph_service().connected_components(atom_ids)
+            )
         return [set(component) for component in self.graph.selection_component_cache]
 
+    @_atomic_history_transform
     def flip_selected_items(self, horizontal: bool) -> None:
         items = selected_items_for_transform_for(self.canvas)
         atom_ids = selected_atom_ids_for_transform_for(self.canvas)
@@ -238,7 +272,9 @@ class SceneTransformController:
                 ts_bracket_rect_from_state=ts_bracket_rect_from_state,
             )
 
-        for component, component_items in zip(atom_components, groups.component_items, strict=False):
+        for component, component_items in zip(
+            atom_components, groups.component_items, strict=False
+        ):
             center = center_for_flip_group(
                 component,
                 component_items,
@@ -251,7 +287,9 @@ class SceneTransformController:
                 sorted(component),
                 atoms=self._atoms,
                 center=center,
-                flip_point=lambda point, pivot: flip_point_logic(point, pivot, horizontal),
+                flip_point=lambda point, pivot: flip_point_logic(
+                    point, pivot, horizontal
+                ),
             )
             commands.extend(
                 apply_component_flip_transform(
@@ -295,11 +333,14 @@ class SceneTransformController:
             return
         self.history.push(CompositeCommand(commands))
 
+    @_atomic_history_transform
     def translate_selected_items(self, dx: float, dy: float) -> bool:
         if not dx and not dy:
             return False
         atom_ids = selected_atom_ids_for_transform_for(self.canvas)
-        items = independent_selection_items(selected_items_for_transform_for(self.canvas), atom_ids)
+        items = independent_selection_items(
+            selected_items_for_transform_for(self.canvas), atom_ids
+        )
         if not atom_ids and not items:
             return False
         commands: list[HistoryCommand] = []
@@ -342,7 +383,9 @@ class SceneTransformController:
     def _rotation_selection(self) -> tuple[set[int], list, list]:
         atom_ids = selected_atom_ids_for_transform_for(self.canvas)
         items = self._rotation_state_items(
-            independent_selection_items(selected_items_for_transform_for(self.canvas), atom_ids)
+            independent_selection_items(
+                selected_items_for_transform_for(self.canvas), atom_ids
+            )
         )
         transform_items = self._atom_bound_marks(atom_ids) + items
         return atom_ids, items, transform_items
@@ -361,7 +404,9 @@ class SceneTransformController:
         independent_items_for_center = self._rotation_state_items(
             independent_selection_items(selection_items, atom_ids)
         )
-        transform_items = self._atom_bound_marks(atom_ids) + independent_items_for_center
+        transform_items = (
+            self._atom_bound_marks(atom_ids) + independent_items_for_center
+        )
         if not atom_ids and not transform_items:
             return None
         center = self._rotation_center(atom_ids, independent_items_for_center)
@@ -388,7 +433,9 @@ class SceneTransformController:
             position_items=position_items,
         )
 
-    def rotation_position_preview_snapshots(self, items: list) -> list[RotationPreviewItemSnapshot]:
+    def rotation_position_preview_snapshots(
+        self, items: list
+    ) -> list[RotationPreviewItemSnapshot]:
         snapshots: list[RotationPreviewItemSnapshot] = []
         for item in items:
             state = self._scene_item_state(item)
@@ -396,7 +443,9 @@ class SceneTransformController:
                 snapshots.append(RotationPreviewItemSnapshot(item=item, state=state))
         return snapshots
 
-    def _rotation_preview_atom_positions(self, center: Any, angle_degrees: float) -> dict[int, tuple[float, float]]:
+    def _rotation_preview_atom_positions(
+        self, center: Any, angle_degrees: float
+    ) -> dict[int, tuple[float, float]]:
         atom_ids = selected_atom_ids_for_transform_for(self.canvas)
         if not atom_ids:
             return {}
@@ -414,7 +463,9 @@ class SceneTransformController:
         center: Any,
         angle_degrees: float,
     ) -> None:
-        transformed_atom_positions = self._rotation_preview_atom_positions(center, angle_degrees)
+        transformed_atom_positions = self._rotation_preview_atom_positions(
+            center, angle_degrees
+        )
         for snapshot in snapshots:
             after_state = rotate_scene_item_state(
                 snapshot.item,
@@ -435,6 +486,7 @@ class SceneTransformController:
         for snapshot in snapshots:
             self._apply_scene_item_state(snapshot.item, snapshot.state)
 
+    @_atomic_history_transform
     def rotate_selected_items(self, angle_degrees: float) -> None:
         if not angle_degrees:
             return

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from typing import Any
 
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QPen, QPolygonF
@@ -16,10 +17,16 @@ class CanvasRingFillSceneService:
     def __init__(self, canvas) -> None:
         self.canvas = canvas
 
-    def update_ring_fills_for_atoms(self, atom_ids: set[int]) -> None:
+    def update_ring_fills_for_atoms(
+        self,
+        atom_ids: set[int],
+        *,
+        ring_items: tuple[Any, ...] | None = None,
+    ) -> None:
         if not atom_ids:
             return
-        for ring_item in ring_items_for(self.canvas):
+        candidates = ring_items_for(self.canvas) if ring_items is None else ring_items
+        for ring_item in candidates:
             ring_atom_ids = ring_item.data(2)
             if not isinstance(ring_atom_ids, list):
                 continue
@@ -75,7 +82,9 @@ class CanvasRingFillSceneService:
                 rotated.append(QPointF(rx + cx, ry + cy))
             ring_item.setPolygon(rotated)
 
-    def rotate_ring_fills(self, atom_ids: set[int], center: QPointF, angle_rad: float) -> None:
+    def rotate_ring_fills(
+        self, atom_ids: set[int], center: QPointF, angle_rad: float
+    ) -> None:
         cos_a = math.cos(angle_rad)
         sin_a = math.sin(angle_rad)
         tol = bond_length_px_for(self.canvas) * 0.25
@@ -123,7 +132,9 @@ class CanvasRingFillSceneService:
             atom_points.append(QPointF(atom.x, atom.y))
         return atom_points
 
-    def _ring_polygon_points_for_atom_ids(self, ring_atom_ids: list[int]) -> list[QPointF]:
+    def _ring_polygon_points_for_atom_ids(
+        self, ring_atom_ids: list[int]
+    ) -> list[QPointF]:
         points: list[QPointF] = []
         for atom_id in ring_atom_ids:
             atom = atom_for_id(self.canvas, atom_id)
@@ -133,10 +144,15 @@ class CanvasRingFillSceneService:
         return points
 
     @staticmethod
-    def _polygon_matches_atom_points(polygon, atom_points: list[QPointF], tol: float) -> bool:
+    def _polygon_matches_atom_points(
+        polygon, atom_points: list[QPointF], tol: float
+    ) -> bool:
         for point in polygon:
             for atom_point in atom_points:
-                if math.hypot(point.x() - atom_point.x(), point.y() - atom_point.y()) <= tol:
+                if (
+                    math.hypot(point.x() - atom_point.x(), point.y() - atom_point.y())
+                    <= tol
+                ):
                     return True
         return False
 
