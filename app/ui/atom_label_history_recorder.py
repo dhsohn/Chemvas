@@ -11,13 +11,52 @@ from core.history import (
 from ui.canvas_model_access import bond_for_id, next_atom_id_for
 from ui.canvas_smiles_input_state import last_smiles_input_for
 from ui.history_commands import ChangeAtomLabelCommand
+from ui.history_push_failure_recovery import (
+    RecordingHistoryPolicySnapshot,
+    recover_failed_recording_push,
+)
+from ui.history_stack_snapshot import HistoryStackSnapshot
 from ui.scene_item_state import bond_state_dict
+
+
+def _add_label_history_rollback_note(
+    original_error: BaseException,
+    rollback_error: BaseException,
+) -> None:
+    try:
+        original_error.add_note(
+            "Atom-label history rollback also encountered "
+            f"{type(rollback_error).__name__}: {rollback_error}"
+        )
+    except BaseException:
+        return
 
 
 class AtomLabelHistoryRecorder:
     def __init__(self, canvas, *, history_service) -> None:
         self.canvas = canvas
         self.history = history_service
+
+    def _push_or_rollback(self, command: HistoryCommand) -> None:
+        history_snapshot: HistoryStackSnapshot | None = None
+        policy_snapshot: RecordingHistoryPolicySnapshot | None = None
+        try:
+            history_snapshot = HistoryStackSnapshot.capture(self.history)
+            if history_snapshot is not None:
+                policy_snapshot = RecordingHistoryPolicySnapshot.capture(
+                    history_snapshot
+                )
+            self.history.push(command)
+        except BaseException as original_error:
+            recover_failed_recording_push(
+                self.canvas,
+                command,
+                history_snapshot,
+                original_error,
+                phase="atom-label history recording",
+                policy_snapshot=policy_snapshot,
+            )
+            raise
 
     def record_label_change(
         self,
@@ -62,9 +101,9 @@ class AtomLabelHistoryRecorder:
         if not commands:
             return
         if len(commands) == 1:
-            self.history.push(commands[0])
+            self._push_or_rollback(commands[0])
             return
-        self.history.push(CompositeCommand(commands))
+        self._push_or_rollback(CompositeCommand(commands))
 
     def _merge_history_commands(
         self,

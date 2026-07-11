@@ -53,9 +53,18 @@ def append_selected_item_ids(canvas, atom_ids: set[int], bond_ids: set[int], ite
 
 
 def selected_ids_for(canvas) -> tuple[set[int], set[int]]:
+    return selected_ids_from_items_for(canvas, scene_selected_items_for(canvas))
+
+
+def selected_ids_from_items_for(
+    canvas,
+    selected_items,
+) -> tuple[set[int], set[int]]:
+    """Derive structure ids from one already-captured selection generation."""
+
     atom_ids: set[int] = set()
     bond_ids: set[int] = set()
-    for item in scene_selected_items_for(canvas):
+    for item in selected_items:
         append_selected_item_ids(canvas, atom_ids, bond_ids, item)
     return atom_ids, bond_ids
 
@@ -120,7 +129,12 @@ def selection_snapshot_for(canvas):
     notes = tuple(selected_scene_notes_for(canvas))
     if not selected and not notes:
         return None
-    atom_ids, bond_ids = selected_ids_for(canvas)
+    # Do not query QGraphicsScene.selectedItems() a second time. A selection
+    # observer or custom scene can publish a new generation between reads;
+    # mixing the first generation's items with the second generation's ids
+    # would let one drag command move targets that were never selected
+    # together.
+    atom_ids, bond_ids = selected_ids_from_items_for(canvas, selected)
     selection_items = [item for item in selected if selection_target_item(item)]
     selection_items.extend(notes)
     return build_selection_snapshot(
@@ -261,6 +275,7 @@ __all__ = [
     "selected_bond_atom_ids_for",
     "selected_chemical_ids_for",
     "selected_ids_for",
+    "selected_ids_from_items_for",
     "selected_items_for_transform_for",
     "selected_mark_atom_ids_for",
     "selected_scene_items_for",

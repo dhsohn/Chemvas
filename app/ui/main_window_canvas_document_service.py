@@ -10,6 +10,7 @@ from ui.canvas_document_metadata_state import (
     set_document_display_name_for,
     set_document_file_path_for,
 )
+from ui.canvas_lifecycle import schedule_canvas_deletion_for
 from ui.canvas_view import CanvasView
 from ui.canvas_window_access import restore_canvas_state_for, snapshot_canvas_state_for
 from ui.main_window_canvas_logic import copy_canvas_template_settings
@@ -141,7 +142,7 @@ class MainWindowCanvasDocumentService:
         if index < 0:
             return
         tab_refs.canvas_tabs.removeTab(index)
-        canvas.deleteLater()
+        schedule_canvas_deletion_for(canvas)
         if tab_refs.canvas_count() == 0:
             self.add_canvas(window, name=self._next_canvas_name_for_window(window), select=True)
             return

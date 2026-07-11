@@ -3,6 +3,7 @@ from __future__ import annotations
 from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QNativeGestureEvent
 
+from ui.canvas_callback_state import callback_state_for
 from ui.canvas_view_ports import input_controller_for_view, pointer_controller_for_view
 
 
@@ -99,6 +100,18 @@ def route_scroll_contents_by(view, dx: int, dy: int, *, base_scroll_contents_by)
     )
 
 
+def route_scene_selection_group_changed(view) -> None:
+    callback = callback_state_for(view).scene_selection_group
+    if callback is not None:
+        callback()
+
+
+def route_scene_selection_outline_changed(view) -> None:
+    callback = callback_state_for(view).scene_selection_outline
+    if callback is not None:
+        callback()
+
+
 __all__ = [
     "route_event",
     "route_key_press_event",
@@ -106,6 +119,8 @@ __all__ = [
     "route_mouse_move_event",
     "route_mouse_press_event",
     "route_mouse_release_event",
+    "route_scene_selection_group_changed",
+    "route_scene_selection_outline_changed",
     "route_scroll_contents_by",
     "route_viewport_event",
     "route_wheel_event",

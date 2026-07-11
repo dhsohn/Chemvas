@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QPolygonF
 
@@ -134,6 +136,7 @@ class CanvasMoveController:
         bond_ids: set[int] | None = None,
         redraw_bond_ids: set[int] | None = None,
         update_selection: bool = True,
+        affected_ring_items: tuple[Any, ...] | None = None,
     ) -> None:
         if not atom_ids:
             return
@@ -150,13 +153,27 @@ class CanvasMoveController:
                     update_bond_geometry_for(self.canvas, bond_id)
         else:
             self.redraw_bonds_for_atoms(atom_ids)
-        self.move_rings_for_atoms(atom_ids, dx, dy)
+        if affected_ring_items is None:
+            self.move_rings_for_atoms(atom_ids, dx, dy)
+        else:
+            self.move_rings_for_atoms(
+                atom_ids,
+                dx,
+                dy,
+                affected_ring_items=affected_ring_items,
+            )
         if update_selection:
             refresh_selection_outline_for(self.canvas)
 
     def redraw_bonds_for_atoms(self, atom_ids: set[int]) -> None:
         for bond_id in self.bond_ids_for_atom_ids(atom_ids):
             self.redraw_bond(bond_id)
+
+    def update_bond_geometries_for_atoms(self, atom_ids: set[int]) -> None:
+        """Refresh coordinates in place when the graphics topology is unchanged."""
+
+        for bond_id in self.bond_ids_for_atom_ids(atom_ids):
+            update_bond_geometry_for(self.canvas, bond_id)
 
     def redraw_bond(self, bond_id: int) -> bool:
         return bond_renderer_for(self.canvas).redraw_bond(bond_id)
@@ -171,8 +188,20 @@ class CanvasMoveController:
             bond_ids.update(graph.atom_bond_ids.get(atom_id, ()))
         return bond_ids
 
-    def move_rings_for_atoms(self, atom_ids: set[int], _dx: float, _dy: float) -> None:
-        for ring_item in ring_items_for(self.canvas):
+    def move_rings_for_atoms(
+        self,
+        atom_ids: set[int],
+        _dx: float,
+        _dy: float,
+        *,
+        affected_ring_items: tuple[Any, ...] | None = None,
+    ) -> None:
+        ring_items = (
+            ring_items_for(self.canvas)
+            if affected_ring_items is None
+            else affected_ring_items
+        )
+        for ring_item in ring_items:
             ring_atom_ids = ring_item.data(2)
             if not isinstance(ring_atom_ids, list):
                 continue

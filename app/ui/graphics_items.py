@@ -78,6 +78,10 @@ class AtomDotItem(NoSelectEllipseItem):
         super().__init__(*args)
         self._hit_padding = max(0.0, float(hit_padding))
 
+    def set_hit_padding(self, hit_padding: float) -> None:
+        self.prepareGeometryChange()
+        self._hit_padding = max(0.0, float(hit_padding))
+
     def boundingRect(self):
         rect = super().boundingRect()
         if self._hit_padding <= 0.0:

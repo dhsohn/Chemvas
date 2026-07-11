@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 import ui.canvas_view_setup as setup
+from ui.canvas_callback_state import CanvasCallbackState
 
 
 def test_initialize_canvas_view_configures_view_runtime_and_services(monkeypatch) -> None:
@@ -16,6 +17,7 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(monkeypatch
         history_service="history-service",
         tool_settings_state=SimpleNamespace(arrow_line_width=0.0),
     )
+    callback_state = CanvasCallbackState()
     services = SimpleNamespace(
         selection_controller=SimpleNamespace(update_selection_outline=mock.Mock()),
         tools=SimpleNamespace(set_active=mock.Mock()),
@@ -32,9 +34,9 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(monkeypatch
     monkeypatch.setattr(setup, "bond_line_width_for", lambda canvas: 2.5)
     monkeypatch.setattr(setup, "build_canvas_services", mock.Mock(return_value=services))
     monkeypatch.setattr(setup, "attach_canvas_services", mock.Mock())
+    monkeypatch.setattr(setup, "callback_state_for", mock.Mock(return_value=callback_state))
     monkeypatch.setattr(setup, "QGraphicsScene", mock.Mock(return_value="scene"))
     monkeypatch.setattr(setup, "expand_selection_to_groups_for", mock.Mock())
-
     setup.initialize_canvas_view(canvas)
 
     setup.QGraphicsScene.assert_called_once_with(canvas)
@@ -49,9 +51,12 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(monkeypatch
     )
     setup.attach_canvas_services.assert_called_once_with(canvas, services)
     selection_connect = canvas.scene.return_value.selectionChanged.connect
-    assert selection_connect.call_count == 2
-    expand_slot = selection_connect.call_args_list[0].args[0]
-    expand_slot()
+    assert selection_connect.call_args_list == [
+        mock.call(canvas.handle_scene_selection_group_changed),
+        mock.call(canvas.handle_scene_selection_outline_changed),
+    ]
+    assert callback_state.scene_selection_group is not None
+    callback_state.scene_selection_group()
     setup.expand_selection_to_groups_for.assert_called_once_with(canvas)
-    assert selection_connect.call_args_list[1].args[0] is services.selection_controller.update_selection_outline
+    assert callback_state.scene_selection_outline is services.selection_controller.update_selection_outline
     services.tools.set_active.assert_called_once_with("bond")

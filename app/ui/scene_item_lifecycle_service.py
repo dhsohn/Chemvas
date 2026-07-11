@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import suppress
+from functools import partial
 
 from PyQt6.QtCore import Qt
 
@@ -14,16 +14,32 @@ from ui.canvas_scene_items_state import (
 )
 from ui.handle_overlay_access import clear_handles_for
 from ui.handle_state import handle_target_for
+from ui.history_commands import (
+    _restore_scene_runtime_snapshot,
+    _run_rollback_step,
+    _scene_runtime_snapshot,
+    _SceneRuntimeSnapshot,
+)
 from ui.mark_item_access import remove_mark_item_for
 from ui.note_selection_box import update_note_selection_box_for
 from ui.scene_item_access import (
-    add_item_to_canvas_scene,
-    item_can_be_added_to_canvas_scene,
+    canvas_scene_for_item_operation,
+    item_is_unavailable_for_scene_operation,
     remove_attached_item_from_canvas_scene,
 )
+from ui.scene_item_attach_snapshot import (
+    SceneItemAttachPorts,
+    SceneItemAttachSnapshot,
+)
 from ui.scene_item_state import ARROW_KINDS
-from ui.scene_selectability import make_item_selectable
 from ui.selection_service_access import refresh_selection_outline_for
+
+
+def _add_item_with_attach_ports(
+    attach_ports: SceneItemAttachPorts,
+    item: object,
+) -> None:
+    attach_ports.add_item(item)
 
 
 class SceneItemLifecycleService:
@@ -53,36 +69,90 @@ class SceneItemLifecycleService:
         for bond_id in bond_ids:
             update_bond_geometry_for(self.canvas, bond_id)
 
-    def _refresh_bond_geometry_best_effort(self, bond_ids: set[int]) -> None:
+    def _refresh_bond_geometry_best_effort(
+        self,
+        bond_ids: set[int],
+        *,
+        original_error: BaseException,
+    ) -> None:
         for bond_id in bond_ids:
-            with suppress(Exception):
-                update_bond_geometry_for(self.canvas, bond_id)
+            _run_rollback_step(
+                original_error,
+                f"refreshing bond {bond_id} after a failed ring attach",
+                partial(update_bond_geometry_for, self.canvas, bond_id),
+            )
 
     def attach_scene_item(self, item) -> None:
-        if not item_can_be_added_to_canvas_scene(self.canvas, item):
+        if item_is_unavailable_for_scene_operation(item):
             return
-        kind = item.data(0)
+        scene = canvas_scene_for_item_operation(self.canvas)
+        if scene is None:
+            return
+        attach_ports = SceneItemAttachPorts.capture(scene, item)
+        if not attach_ports.item_can_be_added():
+            return
+        kind = attach_ports.item_kind_for_attach()
+        attach_ports.validate_attachment_contract(
+            require_text_interaction=kind == "note",
+        )
+        ring_runtime = (
+            _scene_runtime_snapshot(
+                self.canvas,
+                strict=True,
+                scene_override=scene,
+            )
+            if kind == "ring"
+            else None
+        )
+        snapshot = SceneItemAttachSnapshot.capture(
+            self.canvas,
+            item,
+            scene=scene,
+            attach_ports=attach_ports,
+        )
+        ring_bond_ids: set[int] = set()
         try:
-            self._register_scene_item(item, kind)
-            make_item_selectable(item)
-            add_item_to_canvas_scene(self.canvas, item)
             if kind == "ring":
-                self.refresh_bond_geometry_for_ring_item(item)
-        except Exception:
-            self._rollback_failed_attach(item, kind)
+                ring_bond_ids = self.bond_ids_for_ring_item(item)
+            if kind == "note":
+                attach_ports.apply_text_interaction_flags(
+                    Qt.TextInteractionFlag.NoTextInteraction
+                )
+            self._register_scene_item(
+                item,
+                kind,
+                mark_atom_id=snapshot.mark_atom_id,
+            )
+            attach_ports.apply_selectable()
+            _add_item_with_attach_ports(attach_ports, item)
+            if kind == "ring":
+                self._refresh_bond_geometry_for_bond_ids(ring_bond_ids)
+            snapshot.release()
+        except BaseException as original_error:
+            self._rollback_failed_attach(
+                item,
+                kind,
+                snapshot=snapshot,
+                ring_runtime=ring_runtime,
+                ring_bond_ids=ring_bond_ids,
+                original_error=original_error,
+            )
             raise
 
-    def _register_scene_item(self, item, kind) -> None:
+    def _register_scene_item(
+        self,
+        item,
+        kind,
+        *,
+        mark_atom_id: int | None,
+    ) -> None:
         if kind == "ring":
             append_scene_item_for(self.canvas, "ring_items", item)
         elif kind == "mark":
             append_scene_item_for(self.canvas, "mark_items", item)
-            data = item.data(1) or {}
-            atom_id = data.get("atom_id")
-            if isinstance(atom_id, int):
-                self.marks.add_for_atom(atom_id, item)
+            if mark_atom_id is not None:
+                self.marks.add_for_atom(mark_atom_id, item)
         elif kind == "note":
-            item.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
             append_scene_item_for(self.canvas, "note_items", item)
         elif kind in ARROW_KINDS:
             append_scene_item_for(self.canvas, "arrow_items", item)
@@ -93,31 +163,80 @@ class SceneItemLifecycleService:
         elif kind == "orbital":
             append_scene_item_for(self.canvas, "orbital_items", item)
 
-    def _rollback_failed_attach(self, item, kind) -> None:
-        ring_bond_ids: set[int] = set()
-        if kind == "ring":
-            with suppress(Exception):
-                ring_bond_ids = self.bond_ids_for_ring_item(item)
-        with suppress(Exception):
-            self._remove_scene_item_registration(item, kind)
-        with suppress(Exception):
-            remove_attached_item_from_canvas_scene(self.canvas, item)
+    def _rollback_failed_attach(
+        self,
+        item,
+        kind,
+        *,
+        snapshot: SceneItemAttachSnapshot,
+        ring_runtime: _SceneRuntimeSnapshot | None,
+        ring_bond_ids: set[int],
+        original_error: BaseException,
+    ) -> None:
+        attach_ports = snapshot.attach_ports
+        if attach_ports is None:
+            raise RuntimeError("scene-item attach snapshot has no bound ports")
+        _run_rollback_step(
+            original_error,
+            "removing a partial scene-item registration",
+            partial(
+                self._remove_scene_item_registration,
+                item,
+                kind,
+                mark_atom_id=snapshot.mark_atom_id,
+            ),
+        )
+        _run_rollback_step(
+            original_error,
+            "detaching a partially attached scene item",
+            partial(attach_ports.remove_item, item),
+        )
         if ring_bond_ids:
-            self._refresh_bond_geometry_best_effort(ring_bond_ids)
+            self._refresh_bond_geometry_best_effort(
+                ring_bond_ids,
+                original_error=original_error,
+            )
+        snapshot.restore(
+            original_error,
+            phase="a failed scene-item attach",
+            restore_scene_rect=ring_runtime is None,
+        )
+        if ring_runtime is not None:
+            _run_rollback_step(
+                original_error,
+                "restoring exact ring-attach scene/runtime state",
+                partial(
+                    _restore_scene_runtime_snapshot,
+                    ring_runtime,
+                    original_error=original_error,
+                ),
+            )
+            # Raw bond primitives are the final geometric authority. Only
+            # release/restore automatic scene bounds after those primitives
+            # are exact again, otherwise a sceneRect observer can permanently
+            # cache a transiently expanded line/path extent.
+            snapshot.restore_scene_rect(
+                original_error,
+                phase="a failed ring attach",
+            )
 
-    def _remove_scene_item_registration(self, item, kind) -> None:
+    def _remove_scene_item_registration(
+        self,
+        item,
+        kind,
+        *,
+        mark_atom_id: int | None = None,
+    ) -> None:
         if kind == "ring":
             remove_scene_item_from_collection_for(self.canvas, "ring_items", item)
         elif kind == "mark":
-            data = item.data(1) or {}
-            atom_id = data.get("atom_id") if isinstance(data, dict) else None
             remove_scene_item_from_collection_for(self.canvas, "mark_items", item)
-            if isinstance(atom_id, int):
-                marks = self.marks.get_for_atom(atom_id)
+            if mark_atom_id is not None:
+                marks = self.marks.get_for_atom(mark_atom_id)
                 if marks is not None and item in marks:
                     marks.remove(item)
                 if not marks:
-                    self.marks.by_atom.pop(atom_id, None)
+                    self.marks.by_atom.pop(mark_atom_id, None)
         elif kind == "note":
             remove_selected_note_for(self.canvas, item)
             remove_scene_item_from_collection_for(self.canvas, "note_items", item)
@@ -148,7 +267,12 @@ class SceneItemLifecycleService:
         self._remove_scene_item_registration(item, kind)
         if kind == "note":
             update_note_selection_box_for(self.canvas, item)
-        if kind in {"shape", "orbital", "curved_single", "curved_double"} and item is handle_target_for(self.canvas):
+        if kind in {
+            "shape",
+            "orbital",
+            "curved_single",
+            "curved_double",
+        } and item is handle_target_for(self.canvas):
             clear_handles_for(self.canvas)
         removed = remove_attached_item_from_canvas_scene(self.canvas, item)
         if was_selected_note:

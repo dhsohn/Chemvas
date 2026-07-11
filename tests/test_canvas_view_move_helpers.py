@@ -302,6 +302,40 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         self.assertEqual(non_matching_ring.polygons, [])
         self.assertEqual(invalid_ring.polygons, [])
 
+    def test_move_atoms_uses_capture_bound_rings_without_registry_reads(self) -> None:
+        matching_ring = _FakeRingItem([1, 2, 3])
+        unrelated_ring = _FakeRingItem([4, 5, 6])
+        view = SimpleNamespace(
+            model=SimpleNamespace(
+                atoms={
+                    1: Atom("C", 0.0, 0.0),
+                    2: Atom("C", 2.0, 0.0),
+                    3: Atom("C", 1.0, 1.0),
+                }
+            ),
+            refresh_selection_outline=mock.Mock(),
+        )
+        controller = self._bind_move_controller(view)
+        controller.move_atom = mock.Mock()
+        controller.redraw_bonds_for_atoms = mock.Mock()
+
+        with mock.patch(
+            "ui.canvas_move_controller.ring_items_for",
+            side_effect=AssertionError("ring registry was rescanned"),
+        ) as ring_items_for_port:
+            for _ in range(5):
+                controller.move_atoms(
+                    {1, 2, 3},
+                    1.0,
+                    -1.0,
+                    update_selection=False,
+                    affected_ring_items=(matching_ring,),
+                )
+
+        ring_items_for_port.assert_not_called()
+        self.assertEqual(len(matching_ring.polygons), 5)
+        self.assertEqual(unrelated_ring.polygons, [])
+
     def test_move_atom_updates_model_3d_labels_dots_and_marks(self) -> None:
         label = _FakeItem("atom")
         dot = _FakeItem("dot")
@@ -344,6 +378,26 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
             bond_ids={5},
             redraw_bond_ids={6},
             update_selection=False,
+        )
+
+        controller.reset_mock()
+        affected_rings = (object(),)
+        move_atoms_for(
+            view,
+            {1},
+            2.0,
+            -3.0,
+            affected_ring_items=affected_rings,
+        )
+
+        controller.move_atoms.assert_called_once_with(
+            {1},
+            2.0,
+            -3.0,
+            bond_ids=None,
+            redraw_bond_ids=None,
+            update_selection=True,
+            affected_ring_items=affected_rings,
         )
 
 

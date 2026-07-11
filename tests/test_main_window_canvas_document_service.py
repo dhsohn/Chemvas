@@ -4,7 +4,7 @@ import unittest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtCore import QPointF
+    from PyQt6.QtCore import QCoreApplication, QEvent, QPointF
     from PyQt6.QtTest import QTest
     from PyQt6.QtWidgets import QApplication
 except ModuleNotFoundError:
@@ -13,6 +13,7 @@ except ModuleNotFoundError:
     QTest = None
 
 if QApplication is not None:
+    from ui.canvas_bond_graphics_state import bond_items_for_id
     from ui.canvas_document_metadata_state import document_file_path_for
     from ui.canvas_window_access import snapshot_canvas_state_for
     from ui.main_window import MainWindow
@@ -87,6 +88,29 @@ class MainWindowCanvasDocumentServiceTest(unittest.TestCase):
         self.assertTrue(self.service.is_dirty(canvas))
         self.service.mark_clean(canvas)
         self.assertFalse(self.service.is_dirty(canvas))
+
+    def test_remove_canvas_clears_selected_graphics_before_deferred_delete(self) -> None:
+        canvas = active_canvas_for_window(self.window)
+        add_bond_between_points_for(
+            canvas,
+            QPointF(-20.0, 0.0),
+            QPointF(20.0, 0.0),
+        )
+        bond_item = bond_items_for_id(canvas, 0)[0]
+        bond_item.setSelected(True)
+        scene = canvas.scene()
+        selection_events: list[None] = []
+        scene.selectionChanged.connect(lambda: selection_events.append(None))
+        selection_events.clear()
+
+        self.service.remove_canvas(self.window, canvas)
+
+        self.assertTrue(scene.signalsBlocked())
+        self.assertEqual(scene.items(), [])
+        self.assertEqual(selection_events, [])
+        QCoreApplication.sendPostedEvents(canvas, QEvent.Type.DeferredDelete)
+        with self.assertRaises(RuntimeError):
+            canvas.scene()
 
 
 if __name__ == "__main__":

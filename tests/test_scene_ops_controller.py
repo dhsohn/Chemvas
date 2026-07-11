@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
     from PyQt6.QtCore import QPointF, QRectF
-    from PyQt6.QtGui import QFont, QImage, QPolygonF
+    from PyQt6.QtGui import QBrush, QColor, QFont, QImage, QPolygonF
     from PyQt6.QtWidgets import (
         QApplication,
         QGraphicsItem,
@@ -101,6 +101,23 @@ def _make_ring_item() -> QGraphicsPolygonItem:
     item = _set_selectable(QGraphicsPolygonItem(polygon))
     item.setData(0, "ring")
     item.setData(9, {"kind": "ring", "points": [(0.0, 0.0), (12.0, 0.0), (6.0, 10.0)]})
+    return item
+
+
+def _make_model_ring_item(
+    model: MoleculeModel,
+    atom_ids: list[int],
+    *,
+    color: str,
+    alpha: float,
+) -> QGraphicsPolygonItem:
+    points = [QPointF(model.atoms[atom_id].x, model.atoms[atom_id].y) for atom_id in atom_ids]
+    item = _set_selectable(QGraphicsPolygonItem(QPolygonF(points)))
+    fill = QColor(color)
+    fill.setAlphaF(alpha)
+    item.setBrush(QBrush(fill))
+    item.setData(0, "ring")
+    item.setData(2, list(atom_ids))
     return item
 
 
@@ -328,6 +345,203 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertIsInstance(command, DeleteSceneItemsCommand)
         self.assertEqual(canvas.removed_scene_items, [ring_item])
         self.assertEqual(canvas.pushed_commands, [command])
+
+    def test_delete_bond_removes_only_broken_ring_fill_and_restores_exact_state(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={
+                0: Atom("C", 0.0, 0.0),
+                1: Atom("C", 20.0, 0.0),
+                2: Atom("C", 10.0, 16.0),
+                3: Atom("C", 40.0, 0.0),
+                4: Atom("C", 60.0, 0.0),
+                5: Atom("C", 50.0, 16.0),
+            },
+            bonds=[
+                Bond(0, 1),
+                Bond(1, 2),
+                Bond(2, 0),
+                Bond(3, 4),
+                Bond(4, 5),
+                Bond(5, 3),
+            ],
+            next_atom_id=6,
+        )
+
+        broken_ring = _make_model_ring_item(canvas.model, [0, 1, 2], color="#a1b2c3", alpha=0.37)
+        valid_ring = _make_model_ring_item(canvas.model, [3, 4, 5], color="#d4e5f6", alpha=0.23)
+        for item in (broken_ring, valid_ring):
+            canvas.ring_items.append(item)
+            canvas.add_item(item)
+        original_alpha = broken_ring.brush().color().alphaF()
+
+        command = scene_delete_controller_for(canvas).delete_bond(0, record=False)
+
+        self.assertIsInstance(command, CompositeCommand)
+        assert isinstance(command, CompositeCommand)
+        self.assertEqual([type(child) for child in command.commands], [DeleteSceneItemsCommand, DeleteBondCommand])
+        ring_delete = command.commands[0]
+        assert isinstance(ring_delete, DeleteSceneItemsCommand)
+        self.assertEqual(ring_delete.item_states[0]["atom_ids"], [0, 1, 2])
+        self.assertEqual(ring_delete.item_states[0]["color"], "#a1b2c3")
+        self.assertAlmostEqual(ring_delete.item_states[0]["alpha"], original_alpha)
+        self.assertNotIn(broken_ring, canvas.ring_items)
+        self.assertIsNone(broken_ring.scene())
+        self.assertIn(valid_ring, canvas.ring_items)
+        self.assertIs(valid_ring.scene(), canvas.scene())
+
+        command.undo(canvas)
+
+        self.assertIsNotNone(canvas.model.bonds[0])
+        self.assertIn(broken_ring, canvas.ring_items)
+        self.assertIs(broken_ring.scene(), canvas.scene())
+        self.assertEqual(broken_ring.data(2), [0, 1, 2])
+        self.assertEqual(broken_ring.brush().color().name(), "#a1b2c3")
+        self.assertAlmostEqual(broken_ring.brush().color().alphaF(), original_alpha)
+        self.assertIn(valid_ring, canvas.ring_items)
+
+        command.redo(canvas)
+
+        self.assertIsNone(canvas.model.bonds[0])
+        self.assertNotIn(broken_ring, canvas.ring_items)
+        self.assertIsNone(broken_ring.scene())
+        self.assertIn(valid_ring, canvas.ring_items)
+
+    def test_delete_atom_removes_and_restores_its_ring_fill_with_the_atom_transaction(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={
+                0: Atom("C", 0.0, 0.0),
+                1: Atom("C", 20.0, 0.0),
+                2: Atom("C", 10.0, 16.0),
+            },
+            bonds=[Bond(0, 1), Bond(1, 2), Bond(2, 0)],
+            next_atom_id=3,
+        )
+        ring_item = _make_model_ring_item(canvas.model, [0, 1, 2], color="#6a5acd", alpha=0.41)
+        canvas.ring_items.append(ring_item)
+        canvas.add_item(ring_item)
+
+        command = scene_delete_controller_for(canvas).delete_atom(0, record=False)
+
+        self.assertIsInstance(command, CompositeCommand)
+        assert isinstance(command, CompositeCommand)
+        self.assertIsInstance(command.commands[0], DeleteSceneItemsCommand)
+        self.assertNotIn(0, canvas.model.atoms)
+        self.assertNotIn(ring_item, canvas.ring_items)
+        self.assertIsNone(ring_item.scene())
+
+        command.undo(canvas)
+
+        self.assertIn(0, canvas.model.atoms)
+        self.assertTrue(all(canvas.model.bonds[bond_id] is not None for bond_id in (0, 1, 2)))
+        self.assertIn(ring_item, canvas.ring_items)
+        self.assertIs(ring_item.scene(), canvas.scene())
+        self.assertEqual(ring_item.data(2), [0, 1, 2])
+
+        command.redo(canvas)
+
+        self.assertNotIn(0, canvas.model.atoms)
+        self.assertNotIn(ring_item, canvas.ring_items)
+        self.assertIsNone(ring_item.scene())
+
+    def test_broken_ring_cleanup_rolls_back_all_rings_and_bond_when_second_remove_raises(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={
+                0: Atom("C", 0.0, 0.0),
+                1: Atom("C", 20.0, 0.0),
+                2: Atom("C", 10.0, 16.0),
+            },
+            bonds=[Bond(0, 1), Bond(1, 2), Bond(2, 0)],
+            next_atom_id=3,
+        )
+        first_ring = _make_model_ring_item(canvas.model, [0, 1, 2], color="#aa3300", alpha=0.21)
+        second_ring = _make_model_ring_item(canvas.model, [0, 1, 2], color="#0033aa", alpha=0.43)
+        for item in (first_ring, second_ring):
+            canvas.ring_items.append(item)
+            canvas.add_item(item)
+        controller = scene_delete_controller_for(canvas)
+        remove_calls = 0
+        original_remove = controller._remove_scene_item
+
+        def remove_then_fail(item) -> None:
+            nonlocal remove_calls
+            original_remove(item)
+            remove_calls += 1
+            if remove_calls == 2:
+                raise RuntimeError("second ring remove failed")
+
+        controller._remove_scene_item = remove_then_fail
+
+        with self.assertRaisesRegex(RuntimeError, "second ring remove failed"):
+            controller.delete_bond(0, record=False)
+
+        self.assertIsNotNone(canvas.model.bonds[0])
+        self.assertEqual(canvas.ring_items, [first_ring, second_ring])
+        self.assertIs(first_ring.scene(), canvas.scene())
+        self.assertIs(second_ring.scene(), canvas.scene())
+        self.assertEqual(first_ring.data(2), [0, 1, 2])
+        self.assertEqual(second_ring.data(2), [0, 1, 2])
+
+    def test_multi_selection_deletion_auto_removes_broken_ring_and_preserves_valid_ring(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={
+                0: Atom("C", 0.0, 0.0),
+                1: Atom("C", 20.0, 0.0),
+                2: Atom("C", 10.0, 16.0),
+                3: Atom("C", 40.0, 0.0),
+                4: Atom("C", 60.0, 0.0),
+                5: Atom("C", 50.0, 16.0),
+            },
+            bonds=[
+                Bond(0, 1),
+                Bond(1, 2),
+                Bond(2, 0),
+                Bond(3, 4),
+                Bond(4, 5),
+                Bond(5, 3),
+            ],
+            next_atom_id=6,
+        )
+        broken_ring = _make_model_ring_item(canvas.model, [0, 1, 2], color="#ff8800", alpha=0.31)
+        valid_ring = _make_model_ring_item(canvas.model, [3, 4, 5], color="#0088ff", alpha=0.27)
+        for item in (broken_ring, valid_ring):
+            canvas.ring_items.append(item)
+            canvas.add_item(item)
+        atom_item = _make_rect_item("atom", data1=0)
+        note_item = _make_note_item("delete together", 80.0, 30.0)
+        canvas.add_item(atom_item, selected=True)
+        canvas.add_item(note_item, selected=True)
+
+        self.assertTrue(scene_delete_controller_for(canvas).delete_selected_items())
+
+        self.assertEqual(len(canvas.pushed_commands), 1)
+        command = canvas.pushed_commands[0]
+        self.assertIsInstance(command, CompositeCommand)
+        self.assertNotIn(broken_ring, canvas.ring_items)
+        self.assertIn(valid_ring, canvas.ring_items)
+        self.assertIsNone(broken_ring.scene())
+        self.assertIs(valid_ring.scene(), canvas.scene())
+        self.assertIsNone(note_item.scene())
+
+        command.undo(canvas)
+
+        self.assertIn(0, canvas.model.atoms)
+        self.assertIn(broken_ring, canvas.ring_items)
+        self.assertIn(valid_ring, canvas.ring_items)
+        self.assertIs(broken_ring.scene(), canvas.scene())
+        self.assertIs(note_item.scene(), canvas.scene())
+
+        command.redo(canvas)
+
+        self.assertNotIn(0, canvas.model.atoms)
+        self.assertNotIn(broken_ring, canvas.ring_items)
+        self.assertIn(valid_ring, canvas.ring_items)
+        self.assertIsNone(broken_ring.scene())
+        self.assertIsNone(note_item.scene())
+        self.assertIs(valid_ring.scene(), canvas.scene())
 
     def test_clipboard_selection_payload_rejects_wrong_type_and_version(self) -> None:
         canvas = _FakeCanvas()
@@ -822,13 +1036,17 @@ class _FakeCanvas:
 
     def remove_scene_item(self, item: QGraphicsItem) -> None:
         self.removed_scene_items.append(item)
+        if item.data(0) == "ring" and item in self.ring_items:
+            self.ring_items.remove(item)
         self._scene.removeItem(item)
 
     def attach_scene_item(self, item: QGraphicsItem) -> None:
+        if item.data(0) == "ring" and item not in self.ring_items:
+            self.ring_items.append(item)
         self.add_item(item)
 
     def restore_scene_item(self, item: QGraphicsItem) -> None:
-        self.add_item(item)
+        self.attach_scene_item(item)
 
     def clear_handles(self) -> None:
         self.clear_handles_calls += 1

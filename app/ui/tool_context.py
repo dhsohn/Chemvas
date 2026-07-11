@@ -1,10 +1,28 @@
 from __future__ import annotations
 
 import contextlib
+import inspect
 
 from PyQt6.QtCore import QPointF
 
+from ui.history_push_failure_recovery import (
+    RecordingHistoryPolicySnapshot,
+    recover_failed_recording_push,
+)
+from ui.history_stack_snapshot import HistoryStackSnapshot
+
 _MISSING = object()
+
+
+class _DeleteSessionRollbackErrors(list[BaseException]):
+    def __init__(
+        self,
+        errors: list[BaseException],
+        *,
+        completed: bool,
+    ) -> None:
+        super().__init__(errors)
+        self.completed = completed
 
 
 class ToolContext:
@@ -66,35 +84,53 @@ class ToolContext:
         method = self._callable_attr(self.hit_testing_service, "scene_pos_from_event")
         if method is not None:
             return method(event)
-        raise AttributeError("ToolContext requires an injected 'scene_pos_from_event' port")
+        raise AttributeError(
+            "ToolContext requires an injected 'scene_pos_from_event' port"
+        )
 
     def item_at_scene_pos(self, pos: QPointF):
-        return self._call_port(self.hit_testing_service, "item_at_scene_pos", pos, default=None)
+        return self._call_port(
+            self.hit_testing_service, "item_at_scene_pos", pos, default=None
+        )
 
     def item_at_event(self, event):
         method = self._callable_attr(self.hit_testing_service, "item_at_event")
         if method is not None:
             return method(event)
-        item_at_scene_pos = self._callable_attr(self.hit_testing_service, "item_at_scene_pos")
+        item_at_scene_pos = self._callable_attr(
+            self.hit_testing_service, "item_at_scene_pos"
+        )
         if item_at_scene_pos is not None:
             scene_pos = _MISSING
             with contextlib.suppress(AttributeError):
                 scene_pos = self.scene_pos_from_event(event)
             if scene_pos is not _MISSING:
                 return item_at_scene_pos(scene_pos)
-        return self._call_port(self.hit_testing_service, "item_at_event", event, default=None)
+        return self._call_port(
+            self.hit_testing_service, "item_at_event", event, default=None
+        )
 
     def find_atom_near(self, x: float, y: float, max_dist: float) -> int | None:
-        return self._call_port(self.hit_testing_service, "find_atom_near", x, y, max_dist, default=None)
+        return self._call_port(
+            self.hit_testing_service, "find_atom_near", x, y, max_dist, default=None
+        )
 
     def find_bond_near(self, pos: QPointF, max_dist: float) -> int | None:
-        return self._call_port(self.hit_testing_service, "find_bond_near", pos, max_dist, default=None)
+        return self._call_port(
+            self.hit_testing_service, "find_bond_near", pos, max_dist, default=None
+        )
 
     def bond_id_from_event(self, event) -> int | None:
-        return self._call_port(self.hit_testing_service, "bond_id_from_event", event, default=None)
+        return self._call_port(
+            self.hit_testing_service, "bond_id_from_event", event, default=None
+        )
 
     def toggle_item_selection(self, item) -> bool:
-        return bool(self._call_port(self.selection_controller, "toggle_item_selection", item, default=False))
+        return bool(
+            self._call_port(
+                self.selection_controller, "toggle_item_selection", item, default=False
+            )
+        )
 
     def preferred_structure_hit_at_scene_pos(self, pos: QPointF):
         return self._call_port(
@@ -124,7 +160,14 @@ class ToolContext:
             raise
 
     def select_structure_for_item(self, item) -> bool:
-        return bool(self._call_port(self.selection_controller, "select_structure_for_item", item, default=False))
+        return bool(
+            self._call_port(
+                self.selection_controller,
+                "select_structure_for_item",
+                item,
+                default=False,
+            )
+        )
 
     def select_single_structure_item(self, item) -> bool:
         if callable(self._select_single_structure_item):
@@ -140,18 +183,221 @@ class ToolContext:
     def push_history(self, command) -> None:
         if self.history_service is None:
             raise AttributeError("ToolContext requires an injected history_service")
-        self.history_service.push(command)
+        history_snapshot: HistoryStackSnapshot | None = None
+        policy_snapshot: RecordingHistoryPolicySnapshot | None = None
+        try:
+            history_snapshot = HistoryStackSnapshot.capture(self.history_service)
+            if history_snapshot is not None:
+                policy_snapshot = RecordingHistoryPolicySnapshot.capture(
+                    history_snapshot
+                )
+            self.history_service.push(command)
+        except BaseException as original_error:
+            recover_failed_recording_push(
+                self.canvas,
+                command,
+                history_snapshot,
+                original_error,
+                phase="tool history recording",
+                policy_snapshot=policy_snapshot,
+            )
+            raise
+
+    def begin_delete_tool_session(self):
+        session = self._call_port(
+            self.scene_delete_controller,
+            "begin_delete_tool_session",
+        )
+        try:
+            if session is None:
+                raise RuntimeError("Delete tool session factory returned no session")
+            required_ports = (
+                "delete_atom",
+                "delete_bond",
+                "delete_ring",
+                "delete_scene_item",
+                "commit",
+                "rollback",
+            )
+            missing_ports = [
+                name
+                for name in required_ports
+                if not callable(getattr(session, name, None))
+            ]
+            if missing_ports:
+                raise AttributeError(
+                    "Delete tool session requires callable ports: "
+                    + ", ".join(missing_ports)
+                )
+        except BaseException as validation_error:
+            if session is not None:
+                self._rollback_rejected_delete_tool_session(
+                    session,
+                    validation_error,
+                )
+            raise
+        return session
+
+    @staticmethod
+    def _add_delete_session_rollback_notes(
+        primary_error: BaseException,
+        rollback_errors: list[BaseException],
+    ) -> None:
+        for rollback_error in rollback_errors:
+            try:
+                add_note = getattr(primary_error, "add_note", None)
+                if callable(add_note):
+                    add_note(
+                        "Delete tool session recovery also encountered "
+                        f"{type(rollback_error).__name__}: {rollback_error}"
+                    )
+            except BaseException:
+                # A broken diagnostic hook must never replace validation,
+                # cancellation, or termination from the owning operation.
+                continue
+
+    @staticmethod
+    def _returned_delete_session_rollback_errors(result) -> list[BaseException]:
+        try:
+            returned_errors = list(result or [])
+        except BaseException as result_error:
+            return [result_error]
+        errors: list[BaseException] = []
+        for returned_error in returned_errors:
+            if isinstance(returned_error, BaseException):
+                errors.append(returned_error)
+            else:
+                errors.append(
+                    TypeError(
+                        "Delete tool session rollback returned a non-exception error"
+                    )
+                )
+        return errors
+
+    @staticmethod
+    def _delete_session_active_state(session) -> bool | None:
+        try:
+            active = session.active
+        except AttributeError:
+            if inspect.getattr_static(session, "active", _MISSING) is not _MISSING:
+                raise
+            # Legacy injected sessions predate the active lifecycle port. A
+            # successful rollback return remains their completion contract.
+            return None
+        return bool(active)
+
+    @classmethod
+    def _attempt_delete_tool_session_rollback(
+        cls,
+        session,
+    ) -> tuple[bool, list[BaseException]]:
+        errors: list[BaseException] = []
+        for _attempt in range(2):
+            try:
+                rollback = getattr(session, "rollback", None)
+                if not callable(rollback):
+                    raise AttributeError(
+                        "Delete tool session requires a callable 'rollback' port"
+                    )
+                result = rollback()
+            except BaseException as rollback_error:
+                errors.append(rollback_error)
+                continue
+            errors.extend(cls._returned_delete_session_rollback_errors(result))
+            for _status_attempt in range(2):
+                try:
+                    still_active = cls._delete_session_active_state(session)
+                except BaseException as active_error:
+                    errors.append(active_error)
+                    continue
+                if still_active is not True:
+                    return True, errors
+                break
+            else:
+                continue
+            # Production sessions keep ``active=True`` when their absolute
+            # rollback or callback-port restore is not yet authoritative.
+            # Preserve returned diagnostics and spend the second attempt on
+            # that same live savepoint instead of declaring completion.
+            continue
+        errors.append(
+            RuntimeError("Delete tool session remained active after rollback retries")
+        )
+        return False, errors
+
+    def _rollback_rejected_delete_tool_session(
+        self,
+        session,
+        validation_error: BaseException,
+    ) -> None:
+        completed, rollback_errors = self._attempt_delete_tool_session_rollback(session)
+        if not completed:
+            # A controller-owned fallback can recover a malformed session whose
+            # own rollback port is the missing/broken port. The production
+            # session owns rollback directly; this hook keeps the boundary safe
+            # for alternate injected implementations.
+            for _attempt in range(2):
+                try:
+                    controller_rollback = getattr(
+                        self.scene_delete_controller,
+                        "rollback_transaction_session",
+                        None,
+                    )
+                    if not callable(controller_rollback):
+                        break
+                    result = controller_rollback(session)
+                except BaseException as rollback_error:
+                    rollback_errors.append(rollback_error)
+                    continue
+                rollback_errors.extend(
+                    self._returned_delete_session_rollback_errors(result)
+                )
+                break
+        self._add_delete_session_rollback_notes(
+            validation_error,
+            rollback_errors,
+        )
+
+    @staticmethod
+    def commit_delete_tool_session(session, command=None) -> None:
+        if session is None:
+            raise ValueError("Delete tool session is required for commit")
+        commit = getattr(session, "commit", None)
+        if not callable(commit):
+            raise AttributeError(
+                "Delete tool session requires a callable 'commit' port"
+            )
+        commit(command)
+
+    @staticmethod
+    def rollback_delete_tool_session(session) -> list[BaseException]:
+        if session is None:
+            raise ValueError("Delete tool session is required for rollback")
+        completed, rollback_errors = ToolContext._attempt_delete_tool_session_rollback(
+            session
+        )
+        return _DeleteSessionRollbackErrors(
+            rollback_errors,
+            completed=completed,
+        )
 
     def bond_sets_for_atoms(self, atom_ids: set[int]) -> tuple[set[int], set[int]]:
         if callable(self._bond_sets_for_atoms):
             return self._bond_sets_for_atoms(atom_ids)
-        raise AttributeError("ToolContext requires an injected 'bond_sets_for_atoms' port")
+        raise AttributeError(
+            "ToolContext requires an injected 'bond_sets_for_atoms' port"
+        )
 
     def suspend_selection_outline(self, suspend: bool) -> None:
         self._call_port(self.style_controller, "suspend_selection_outline", suspend)
 
     def apply_color_to_item(self, item, color) -> None:
         self._call_port(self.color_mutation_service, "apply_color_to_item", item, color)
+
+    def apply_color_to_items(self, items, color) -> None:
+        self._call_port(
+            self.color_mutation_service, "apply_color_to_items", items, color
+        )
 
     def selected_scene_items(self, *, excluded_kinds: set[str]) -> list:
         if callable(self._selected_scene_items):
@@ -172,13 +418,17 @@ class ToolContext:
     def set_rubber_band_drag_mode(self) -> None:
         mode = self._rubber_band_drag_mode
         if mode is None:
-            raise AttributeError("ToolContext requires an injected 'rubber_band_drag_mode' port")
+            raise AttributeError(
+                "ToolContext requires an injected 'rubber_band_drag_mode' port"
+            )
         self.set_drag_mode(mode)
 
     def update_handle_drag(self, handle, scene_pos: QPointF) -> None:
         self.handle_controller.update_handle_drag(handle, scene_pos)
 
-    def begin_selection_3d_rotation(self, *, axis_hint: int | None = None, press_pos=None) -> bool:
+    def begin_selection_3d_rotation(
+        self, *, axis_hint: int | None = None, press_pos=None
+    ) -> bool:
         return bool(
             self.selection_rotation_controller.begin_selection_3d_rotation(
                 axis_hint=axis_hint,
@@ -187,7 +437,9 @@ class ToolContext:
         )
 
     def update_selection_3d_rotation(self, delta_x: float, delta_y: float) -> None:
-        self.selection_rotation_controller.update_selection_3d_rotation(delta_x, delta_y)
+        self.selection_rotation_controller.update_selection_3d_rotation(
+            delta_x, delta_y
+        )
 
     def end_selection_3d_rotation(self) -> None:
         self.selection_rotation_controller.end_selection_3d_rotation()

@@ -160,10 +160,13 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
         with (
             mock.patch("ui.main_window_tool_routing_service.QTimer.singleShot", side_effect=lambda _delay, callback: callback()),
             mock.patch.object(active_canvas_for_window(self.window).services.tool_mode_controller, "set_tool") as set_tool,
-            mock.patch.object(active_canvas_for_window(self.window).services.canvas_color_mutation_service, "apply_color_to_item") as apply_color,
             mock.patch.object(
                 active_canvas_for_window(self.window).services.canvas_color_mutation_service,
-                "apply_ring_fill_color",
+                "apply_color_to_items",
+            ) as apply_color,
+            mock.patch.object(
+                active_canvas_for_window(self.window).services.canvas_color_mutation_service,
+                "apply_ring_fill_color_to_items",
             ) as apply_fill,
         ):
             self.service.apply_color_preset(self.window, "#2f6ed3")
@@ -173,14 +176,14 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
         self.assertEqual(color_tool.set_color.call_args.args[0].name(), "#2f6ed3")
         set_tool.assert_called_once_with("color")
         self.assertEqual(
-            [call.args[0].data(0) for call in apply_color.call_args_list], ["atom", "ring", "note", "shape"]
+            [item.data(0) for item in apply_color.call_args.args[0]],
+            ["atom", "ring", "note", "shape"],
         )
-        self.assertEqual(
-            [call.args[1].name() for call in apply_color.call_args_list],
-            ["#2f6ed3", "#2f6ed3", "#2f6ed3", "#2f6ed3"],
-        )
-        self.assertEqual([call.args[0].data(0) for call in apply_fill.call_args_list], ["ring"])
-        self.assertEqual([call.args[1].name() for call in apply_fill.call_args_list], ["#f4d06f"])
+        self.assertEqual(apply_color.call_args.args[1].name(), "#2f6ed3")
+        apply_color.assert_called_once()
+        self.assertEqual([item.data(0) for item in apply_fill.call_args.args[0]], ["ring"])
+        self.assertEqual(apply_fill.call_args.args[1].name(), "#f4d06f")
+        apply_fill.assert_called_once()
         self.color_tool_for_window.assert_called_once_with(self.window)
         self.tool_mode_controller_for_window.assert_called_once_with(self.window)
         self.assertEqual(self.color_mutation_service_for_window.call_count, 2)

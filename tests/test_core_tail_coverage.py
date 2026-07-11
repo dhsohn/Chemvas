@@ -23,6 +23,16 @@ if QApplication is not None:
 def _tool_context_for(canvas):
     services = getattr(canvas, "services", None)
     tool_mode_controller = getattr(services, "tool_mode_controller", None)
+    fallback_history_items = getattr(canvas, "pushed_commands", [])
+    fallback_history = SimpleNamespace(
+        state=SimpleNamespace(
+            history=fallback_history_items,
+            redo_stack=[],
+            enabled=True,
+            limit=100,
+        ),
+        push=getattr(canvas, "push_command", lambda _command: None),
+    )
 
     def selected_items(*, excluded_kinds):
         scene = getattr(canvas, "scene", None)
@@ -65,6 +75,11 @@ def _tool_context_for(canvas):
         selected_scene_items=selected_items,
         select_single_structure_item=getattr(canvas, "select_structure_for_item", None),
         atom_symbol_provider=getattr(tool_mode_controller, "get_atom_symbol", None),
+        history_service=getattr(
+            services,
+            "history_service",
+            fallback_history,
+        ),
         set_drag_mode=getattr(canvas, "setDragMode", None),
         rubber_band_drag_mode=getattr(getattr(canvas, "DragMode", None), "RubberBandDrag", None),
     )
@@ -486,7 +501,10 @@ class ToolsTailCoverageTest(unittest.TestCase):
 
         canvas.snapshot = SimpleNamespace(selected_atom_ids=set(), selection_items=[curved])
         canvas.scene_obj.selected_items = []
-        self.assertIsNone(tool._selected_curved_item_for_handle_toggle(canvas.snapshot))
+        self.assertIs(
+            tool._selected_curved_item_for_handle_toggle(canvas.snapshot),
+            curved,
+        )
 
         canvas.handle_state.target = object()
         canvas.scene_obj.selected_items = [curved]
@@ -510,6 +528,8 @@ class ToolsTailCoverageTest(unittest.TestCase):
         handle = _Item("handle")
         target = _Item("curved_single")
         target.setData(9, {"state": 1})
+        tool._cancel_selection_drag()
+        tool._begin_drag_transaction()
         tool._active_handle = handle
         tool._handle_target = target
         tool._handle_before_state = {"state": 1}
@@ -518,11 +538,18 @@ class ToolsTailCoverageTest(unittest.TestCase):
 
         tool._pending_curved_handle_item = curved
         tool._pending_curved_handle_action = "noop"
+        tool._begin_drag_transaction()
         self.assertTrue(tool.on_mouse_release(_Event(QPointF(2.0, 2.0))))
         self.assertEqual(canvas.clear_handles_calls, 2)
         self.assertEqual(canvas.curved_handles, [])
 
-        tool._drag_selection = True
+        self.assertTrue(
+            tool._begin_selection_drag(
+                set(),
+                [curved],
+                QPointF(2.0, 2.0),
+            )
+        )
         tool._start_pos = None
         self.assertTrue(tool.on_mouse_release(_Event(QPointF(2.0, 2.0))))
         self.assertFalse(tool._drag_selection)

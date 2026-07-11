@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from functools import partial
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtWidgets import QGraphicsScene, QGraphicsView
 
 from ui.canvas_bond_renderer_state import bond_renderer_for
+from ui.canvas_callback_state import callback_state_for
 from ui.canvas_model_state import model_for
 from ui.canvas_rdkit_state import rdkit_adapter_for
 from ui.canvas_renderer_state import renderer_for
@@ -43,8 +46,11 @@ def initialize_canvas_view(canvas) -> None:
         history_service=runtime_state.history_service,
     )
     attach_canvas_services(canvas, services)
-    canvas.scene().selectionChanged.connect(lambda: expand_selection_to_groups_for(canvas))
-    canvas.scene().selectionChanged.connect(services.selection_controller.update_selection_outline)
+    callbacks = callback_state_for(canvas)
+    callbacks.scene_selection_group = partial(expand_selection_to_groups_for, canvas)
+    callbacks.scene_selection_outline = services.selection_controller.update_selection_outline
+    canvas.scene().selectionChanged.connect(canvas.handle_scene_selection_group_changed)
+    canvas.scene().selectionChanged.connect(canvas.handle_scene_selection_outline_changed)
     services.tools.set_active("bond")
 
 

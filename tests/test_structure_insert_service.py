@@ -1,9 +1,13 @@
+import os
 import unittest
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from core.model import Atom, Bond, MoleculeModel
-from PyQt6.QtCore import QPointF
+from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtWidgets import QApplication, QGraphicsScene
 from ui.canvas_atom_graphics_state import (
     atom_dots_for,
     atom_items_for,
@@ -15,11 +19,22 @@ from ui.canvas_smiles_input_state import (
     last_smiles_input_for,
     set_last_smiles_input_for,
 )
+from ui.scene_rect_snapshot import SceneRectSnapshot
 from ui.structure_insert_service import StructureInsertService
 
 
 def _point_tuple(point: QPointF) -> tuple[float, float]:
     return (point.x(), point.y())
+
+
+class _BrokenAddNoteInterrupt(KeyboardInterrupt):
+    def add_note(self, _note: str) -> None:
+        raise SystemExit("add_note failed")
+
+
+class _BrokenAddNoteSystemExit(SystemExit):
+    def add_note(self, _note: str) -> None:
+        raise SystemExit("add_note failed")
 
 
 class _FakeRect:
@@ -408,6 +423,129 @@ class StructureInsertServiceTest(unittest.TestCase):
         self.assertEqual(last_smiles_input_for(canvas), "before")
         self.assertEqual(canvas.selected_atom_ids(), set())
         self.assertEqual(canvas.selected_bond_ids(), set())
+
+    def test_insert_structure_model_rolls_back_mutate_then_keyboard_interrupt(self) -> None:
+        canvas = _FakeCanvas()
+        interruption = KeyboardInterrupt("structure graphics interrupted")
+        canvas.bond_renderer.add_bond_graphics = Mock(side_effect=interruption)
+        service = _structure_insert_service(canvas)
+        model = MoleculeModel(
+            atoms={
+                2: Atom("C", 0.0, 0.0),
+                4: Atom("N", 10.0, 0.0, explicit_label=True),
+            },
+            bonds=[Bond(2, 4, order=1)],
+        )
+
+        with self.assertRaises(KeyboardInterrupt) as raised:
+            service.insert_structure_model(model, center=QPointF(5.0, 0.0))
+
+        self.assertIs(raised.exception, interruption)
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertEqual(canvas.model.bonds, [])
+        self.assertEqual(canvas.model.next_atom_id, 0)
+        self.assertEqual(canvas.atom_items, {})
+        self.assertEqual(canvas.bond_items, {})
+        self.assertEqual(last_smiles_input_for(canvas), "before")
+
+    def test_structure_insert_outer_rollback_and_broken_add_note_preserve_primary_and_retry(self) -> None:
+        from ui import structure_insert_service as service_module
+
+        model = MoleculeModel(
+            atoms={
+                2: Atom("C", 0.0, 0.0),
+                4: Atom("N", 10.0, 0.0, explicit_label=True),
+            },
+            bonds=[Bond(2, 4, order=1)],
+        )
+        for error_type in (_BrokenAddNoteInterrupt, _BrokenAddNoteSystemExit):
+            with self.subTest(error_type=error_type.__name__):
+                canvas = _FakeCanvas()
+                service = _structure_insert_service(canvas)
+                primary_error = error_type("structure graphics interrupted")
+                original_add_graphics = service_module.add_insert_bond_graphics_for
+                original_rollback = service_module.rollback_insert_mutation
+
+                def add_graphics_then_interrupt(
+                    target_canvas,
+                    bond_id: int,
+                    error: BaseException = primary_error,
+                    add_graphics=original_add_graphics,
+                ) -> None:
+                    add_graphics(target_canvas, bond_id)
+                    raise error
+
+                def rollback_then_fail(
+                    *args,
+                    rollback=original_rollback,
+                    **kwargs,
+                ) -> None:
+                    rollback(*args, **kwargs)
+                    raise RuntimeError("outer rollback reported failure")
+
+                with (
+                    patch.object(
+                        service_module,
+                        "add_insert_bond_graphics_for",
+                        side_effect=add_graphics_then_interrupt,
+                    ),
+                    patch.object(
+                        service_module,
+                        "rollback_insert_mutation",
+                        side_effect=rollback_then_fail,
+                    ),
+                    self.assertRaises(error_type) as raised,
+                ):
+                    service.insert_structure_model(model, center=QPointF(5.0, 0.0))
+
+                self.assertIs(raised.exception, primary_error)
+                self.assertEqual(canvas.model.atoms, {})
+                self.assertEqual(canvas.model.bonds, [])
+                self.assertEqual(canvas.model.next_atom_id, 0)
+                self.assertEqual(last_smiles_input_for(canvas), "before")
+
+                inserted_atom_ids, inserted_bond_ids = service.insert_structure_model(
+                    model,
+                    center=QPointF(5.0, 0.0),
+                )
+                self.assertEqual(inserted_atom_ids, {0, 1})
+                self.assertEqual(inserted_bond_ids, {0})
+
+    def test_structure_bounds_exit_precedes_exact_scene_guard(self) -> None:
+        app = QApplication.instance() or QApplication([])
+        app.setQuitOnLastWindowClosed(False)
+        scene = QGraphicsScene()
+        scene.addRect(QRectF(0.0, 0.0, 10.0, 10.0))
+        canvas = _FakeCanvas()
+        canvas._scene = scene
+        service = _structure_insert_service(canvas)
+        model = MoleculeModel(atoms={0: Atom("C", 0.0, 0.0)})
+
+        with (
+            patch.object(
+                model,
+                "bounds",
+                side_effect=SystemExit("structure bounds capture terminated"),
+            ),
+            patch(
+                "ui.structure_insert_service.capture_history_transaction_for_history",
+                side_effect=lambda *_args, **_kwargs: SceneRectSnapshot.capture(
+                    scene
+                ),
+            ) as capture,
+        ):
+            with self.assertRaisesRegex(
+                SystemExit,
+                "structure bounds capture terminated",
+            ):
+                service.insert_structure_model(model, center=QPointF(5.0, 0.0))
+
+        capture.assert_not_called()
+        tracker = getattr(scene, "_chemvas_scene_rect_tracker", None)
+        self.assertTrue(tracker is None or tracker.depth == 0)
+        far = scene.addRect(QRectF(10_000.0, 0.0, 10.0, 10.0))
+        self.assertGreater(scene.sceneRect().right(), 10_000.0)
+        scene.removeItem(far)
 
     def test_insert_structure_model_prefers_atom_label_service_over_canvas_wrapper(self) -> None:
         canvas = _FakeCanvas()

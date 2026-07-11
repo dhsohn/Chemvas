@@ -26,28 +26,46 @@ DELETE_SCENE_ITEM_KINDS = frozenset(
 )
 
 
-def erase_delete_tool_item(canvas, item, *, scene_ops=None):
+def erase_delete_tool_item(canvas, item, *, scene_ops=None, delete_session=None):
     kind = item.data(0)
     scene_ops = scene_ops or canvas
     if kind == "atom":
         atom_id = item.data(1)
         if not isinstance(atom_id, int):
             return False, None
-        return True, scene_ops.delete_atom(atom_id, record=False)
+        command = (
+            delete_session.delete_atom(atom_id)
+            if delete_session is not None
+            else scene_ops.delete_atom(atom_id, record=False)
+        )
+        return command is not None, command
 
     if kind == "bond":
         bond_id = item.data(1)
         if not isinstance(bond_id, int):
             return False, None
-        return True, scene_ops.delete_bond(bond_id, record=False)
+        command = (
+            delete_session.delete_bond(bond_id)
+            if delete_session is not None
+            else scene_ops.delete_bond(bond_id, record=False)
+        )
+        return command is not None, command
 
     if kind == "ring":
-        return True, scene_ops.delete_ring(item, record=False)
+        command = (
+            delete_session.delete_ring(item)
+            if delete_session is not None
+            else scene_ops.delete_ring(item, record=False)
+        )
+        return command is not None, command
 
     if kind not in DELETE_SCENE_ITEM_KINDS:
         return False, None
 
     state = scene_item_state_for(canvas, item)
+    if delete_session is not None:
+        command = delete_session.delete_scene_item(item, state)
+        return command is not None, command
     remove_scene_item(canvas, item)
     return True, DeleteSceneItemsCommand(item_states=[state], items=[item])
 

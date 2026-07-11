@@ -42,8 +42,11 @@ if QApplication is not None:
 class _History:
     def __init__(self) -> None:
         self.commands = []
+        self.push_error: BaseException | None = None
 
     def push(self, command) -> None:
+        if self.push_error is not None:
+            raise self.push_error
         self.commands.append(command)
 
 
@@ -59,7 +62,9 @@ if QApplication is not None:
                 toggle_note_selection=mock.Mock(),
                 update_selection_outline=mock.Mock(),
             )
-            self.services = SimpleNamespace(selection_controller=self.selection_controller)
+            self.services = SimpleNamespace(
+                selection_controller=self.selection_controller
+            )
 
         def add_scene_item(self, kind: str, *, selected: bool = False):
             item = QGraphicsRectItem(0.0, 0.0, 5.0, 5.0)
@@ -115,7 +120,9 @@ def _add_note(canvas, *, selected: bool = False):
     return item
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for scene group operation tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for scene group operation tests"
+)
 class SceneGroupOperationsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -154,6 +161,20 @@ class SceneGroupOperationsTest(unittest.TestCase):
         self.assertEqual({id(item) for item in group.items}, {id(arrow), id(note)})
         self.assertEqual(len(canvas.history.commands), 1)
         self.assertIsInstance(canvas.history.commands[0], GroupSceneItemsCommand)
+
+    def test_blocked_group_history_push_restores_group_runtime(self) -> None:
+        canvas = _Canvas()
+        _add_atom(canvas, selected=True)
+        _add_arrow(canvas, selected=True)
+        primary = RuntimeError("re-entrant history mutation is not allowed")
+        canvas.history.push_error = primary
+
+        with self.assertRaises(RuntimeError) as caught:
+            group_selection_for(canvas)
+
+        self.assertIs(caught.exception, primary)
+        self.assertEqual(group_state_for(canvas).groups, {})
+        self.assertEqual(canvas.history.commands, [])
 
     def test_group_selection_includes_standalone_marks(self) -> None:
         canvas = _Canvas()
@@ -207,9 +228,13 @@ class SceneGroupOperationsTest(unittest.TestCase):
         self.assertEqual(next(iter(state.groups.values())).atom_ids, {atom_a, atom_b})
         command.redo(canvas)
         self.assertEqual(len(state.groups), 1)
-        self.assertEqual(next(iter(state.groups.values())).atom_ids, {atom_a, atom_b, atom_c})
+        self.assertEqual(
+            next(iter(state.groups.values())).atom_ids, {atom_a, atom_b, atom_c}
+        )
 
-    def test_group_selection_union_keeps_unselected_members_of_absorbed_group(self) -> None:
+    def test_group_selection_union_keeps_unselected_members_of_absorbed_group(
+        self,
+    ) -> None:
         canvas = _Canvas()
         atom_a, _ = _add_atom(canvas)
         atom_b, _ = _add_atom(canvas, 10.0, 0.0, selected=True)
@@ -276,7 +301,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         self.assertTrue(item_b.isSelected())
         self.assertTrue(bond_item.isSelected())
         self.assertTrue(arrow.isSelected())
-        canvas.selection_controller.select_note.assert_called_once_with(note, additive=True)
+        canvas.selection_controller.select_note.assert_called_once_with(
+            note, additive=True
+        )
         canvas.selection_controller.update_selection_outline.assert_called_once_with()
         self.assertFalse(group_state_for(canvas).expanding)
 
@@ -292,7 +319,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
 
         canvas.selection_controller.update_selection_outline.assert_not_called()
 
-    def test_expand_selection_deselects_stale_group_note_when_group_leaves_selection(self) -> None:
+    def test_expand_selection_deselects_stale_group_note_when_group_leaves_selection(
+        self,
+    ) -> None:
         canvas = _Canvas()
         atom_a, item_a = _add_atom(canvas)
         arrow = _add_arrow(canvas)
@@ -347,7 +376,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         extended = group_selection_targets_for(canvas, [item_a])
 
         extended_ids = {id(item) for item in extended}
-        self.assertEqual(extended_ids, {id(item_a), id(item_b), id(bond_item), id(arrow)})
+        self.assertEqual(
+            extended_ids, {id(item_a), id(item_b), id(bond_item), id(arrow)}
+        )
 
     def test_group_selection_targets_expands_from_ring_atom_ids(self) -> None:
         canvas = _Canvas()
@@ -376,7 +407,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         canvas.selection_controller.update_selection_outline.assert_called_once_with()
 
         self.assertTrue(ungroup_selection_for(canvas))
-        self.assertEqual(canvas.selection_controller.update_selection_outline.call_count, 2)
+        self.assertEqual(
+            canvas.selection_controller.update_selection_outline.call_count, 2
+        )
 
     def test_selected_group_rects_cover_all_group_members(self) -> None:
         canvas = _Canvas()
@@ -403,7 +436,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         command.undo(canvas)
         command.redo(canvas)
 
-        self.assertEqual(canvas.selection_controller.update_selection_outline.call_count, 3)
+        self.assertEqual(
+            canvas.selection_controller.update_selection_outline.call_count, 3
+        )
 
     def test_ungroup_command_undo_redo_refreshes_outline(self) -> None:
         canvas = _Canvas()
@@ -415,7 +450,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         command.undo(canvas)
         command.redo(canvas)
 
-        self.assertEqual(canvas.selection_controller.update_selection_outline.call_count, 3)
+        self.assertEqual(
+            canvas.selection_controller.update_selection_outline.call_count, 3
+        )
 
     def test_selected_group_rects_for_notes_only_group(self) -> None:
         canvas = _Canvas()
@@ -427,7 +464,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
 
         self.assertEqual(len(rects), 1)
 
-    def test_selected_group_rects_ignore_qt_selected_note_of_notes_only_group(self) -> None:
+    def test_selected_group_rects_ignore_qt_selected_note_of_notes_only_group(
+        self,
+    ) -> None:
         canvas = _Canvas()
         note_a = _add_note(canvas)
         note_b = _add_note(canvas)
@@ -438,7 +477,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
 
         self.assertEqual(selected_group_rects_for(canvas), [])
 
-    def test_expand_selection_ignores_qt_selected_note_of_notes_only_group(self) -> None:
+    def test_expand_selection_ignores_qt_selected_note_of_notes_only_group(
+        self,
+    ) -> None:
         canvas = _Canvas()
         note_a = _add_note(canvas)
         note_b = _add_note(canvas)
@@ -503,7 +544,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
 
         expand_note_selection_to_groups_for(canvas, note_a)
 
-        canvas.selection_controller.select_note.assert_called_once_with(note_b, additive=True)
+        canvas.selection_controller.select_note.assert_called_once_with(
+            note_b, additive=True
+        )
         self.assertFalse(group_state_for(canvas).expanding)
 
     def test_expand_note_selection_skips_mixed_groups_and_reentry(self) -> None:
@@ -590,7 +633,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         # Ungrouped scene selection is untouched.
         self.assertTrue(item_b.isSelected())
 
-    def test_selected_group_rects_ignore_note_only_selection_of_mixed_group(self) -> None:
+    def test_selected_group_rects_ignore_note_only_selection_of_mixed_group(
+        self,
+    ) -> None:
         canvas = _Canvas()
         atom_a, _ = _add_atom(canvas)
         note = _add_note(canvas, selected=True)

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import contextlib
 import math
+from collections.abc import Callable
+from functools import partial
 
 from PyQt6.QtCore import QPointF
 
@@ -12,6 +13,19 @@ from ui.history_recording_access import record_bond_update_for
 from ui.renderer_style_access import bond_length_px_for
 from ui.scene_item_state import bond_state_dict
 from ui.structure_build_committer import StructureBuildCommitter
+
+
+def _add_bond_build_rollback_note(
+    original_error: BaseException,
+    message: str,
+) -> None:
+    try:
+        add_note = getattr(original_error, "add_note", None)
+        if not callable(add_note):
+            return
+        add_note(message)
+    except BaseException:
+        return
 
 
 class StructureBondBuildService:
@@ -70,10 +84,18 @@ class StructureBondBuildService:
                 )
                 if result is None:
                     self.committer.abort_recorded_change(snapshot)
+                else:
+                    self.committer.release_recorded_change(snapshot)
                 return result
             return self._add_new_bond(snapshot, start_id, end_id, style, order)
-        except Exception:
-            self.committer.abort_recorded_change(snapshot)
+        except BaseException as error:
+            try:
+                self.committer.abort_recorded_change(snapshot, original_error=error)
+            except BaseException as rollback_error:
+                _add_bond_build_rollback_note(
+                    error,
+                    f"Bond build rollback also failed: {rollback_error!r}",
+                )
             raise
 
     def _update_existing_bond(
@@ -110,15 +132,47 @@ class StructureBondBuildService:
                 before_smiles_input,
                 last_smiles_input_for(self.canvas),
             )
-        except Exception:
-            bond.order = before_state["order"]
-            bond.style = before_state["style"]
-            bond.color = before_state.get("color", bond.color)
-            with contextlib.suppress(Exception):
-                self.move_controller.redraw_bond(bond_id)
+        except BaseException as caught_error:
+            original_error = caught_error
+
+            def run_compensation(
+                phase: str,
+                operation: Callable[[], object],
+            ) -> None:
+                try:
+                    operation()
+                except BaseException as rollback_error:
+                    _add_bond_build_rollback_note(
+                        original_error,
+                        "Existing-bond rollback also encountered an error while "
+                        f"{phase}: {type(rollback_error).__name__}: {rollback_error}",
+                    )
+
+            run_compensation(
+                "restoring the bond order",
+                lambda: setattr(bond, "order", before_state["order"]),
+            )
+            run_compensation(
+                "restoring the bond style",
+                lambda: setattr(bond, "style", before_state["style"]),
+            )
+            run_compensation(
+                "restoring the bond color",
+                lambda: setattr(bond, "color", before_state.get("color", bond.color)),
+            )
+            run_compensation(
+                "redrawing the restored bond",
+                lambda: self.move_controller.redraw_bond(bond_id),
+            )
             for atom_id in (bond.a, bond.b):
-                with contextlib.suppress(Exception):
-                    self.move_controller.redraw_connected_bonds(atom_id, skip_bond_id=bond_id)
+                run_compensation(
+                    f"redrawing bonds connected to atom {atom_id}",
+                    partial(
+                        self.move_controller.redraw_connected_bonds,
+                        atom_id,
+                        skip_bond_id=bond_id,
+                    ),
+                )
             raise
         return start_id, end_id
 

@@ -45,9 +45,22 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
             removed_atoms.append((atom_id, remove_marks))
             model.atoms.pop(atom_id, None)
 
+        class _IndexedBondSequence:
+            def __init__(self, values) -> None:
+                self.values = values
+
+            def __len__(self) -> int:
+                return len(self.values)
+
+            def __getitem__(self, index: int):
+                return self.values[index]
+
+            def __iter__(self):
+                raise AssertionError("indexed delete must not scan the full bond sequence")
+
         command = delete_atom_with_history(
             1,
-            bonds=model.bonds,
+            bonds=_IndexedBondSequence(model.bonds),
             marks_by_atom=marks_by_atom,
             before_smiles_input="CO",
             current_smiles_input_getter=lambda: smiles_state["value"],
@@ -64,6 +77,7 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
             next_atom_id_getter=lambda: model.next_atom_id,
             remove_atom_only=remove_atom_only,
             atom_coords_3d_getter=lambda atom_id: {1: (0.0, 0.0, 2.0)}.get(atom_id),
+            bond_ids={0, 1},
         )
 
         self.assertIsInstance(command, CompositeCommand)

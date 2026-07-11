@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import QGraphicsLineItem
 from ui.bond_graphics_access import ring_center_for_bond_for
 from ui.bond_label_geometry_access import trim_line_for_labels_for
 from ui.canvas_bond_graphics_state import bond_items_for_id
-from ui.canvas_model_access import atom_for_id, atoms_for, bond_for_id, bonds_for
+from ui.canvas_model_access import atom_for_id, atoms_for, bond_for_id
 from ui.mark_item_access import mark_center_for, mark_selection_radius_for
 from ui.pick_radius_access import atom_pick_radius_for
 from ui.renderer_style_access import bond_length_px_for
@@ -110,11 +110,16 @@ class SelectionOutlineService:
         atom_fill.setAlpha(45)
         object_fill = QColor(selection_color_for(self.canvas))
         object_fill.setAlpha(45)
-        overlay_bond_ids = {
-            bond_id
-            for bond_id, bond in enumerate(bonds_for(self.canvas))
-            if bond is not None and bond.a in atom_ids and bond.b in atom_ids
-        }
+        candidate_bond_ids = set(bond_ids)
+        graph = getattr(self.graph_service, "graph", None)
+        atom_bond_ids = getattr(graph, "atom_bond_ids", {})
+        for atom_id in atom_ids:
+            candidate_bond_ids.update(atom_bond_ids.get(atom_id, ()))
+        overlay_bond_ids: set[int] = set()
+        for bond_id in candidate_bond_ids:
+            bond = bond_for_id(self.canvas, bond_id)
+            if bond is not None and bond.a in atom_ids and bond.b in atom_ids:
+                overlay_bond_ids.add(bond_id)
         for component in self.graph_service.connected_components(atom_ids):
             component_bond_ids = {
                 bond_id

@@ -1,12 +1,22 @@
 from __future__ import annotations
 
-import contextlib
 from typing import Any
 
+from ui.atom_coords_access import pop_atom_coords_3d_for
 from ui.atom_label_access import add_or_update_atom_label, atom_label_service
 from ui.bond_graphics_access import add_bond_graphics_for
+from ui.canvas_atom_graphics_state import (
+    atom_dots_for,
+    atom_items_for,
+    pop_atom_dot_for,
+    pop_atom_item_for,
+)
+from ui.canvas_bond_graphics_state import bond_items_for_id, pop_bond_items_for
+from ui.canvas_graph_state import graph_state_for
+from ui.canvas_mark_registry import mark_registry_for
 from ui.canvas_model_access import (
     atom_for_id,
+    atoms_for,
     bond_count_for,
     bond_for_id,
     bond_ids_from,
@@ -18,9 +28,12 @@ from ui.canvas_model_access import (
     set_next_atom_id_for,
     trim_bonds_direct_for,
 )
+from ui.canvas_scene_items_state import remove_scene_item_from_collection_for
 from ui.canvas_service_ports import structure_insert_build_service_for_access
+from ui.graph_index_operations import build_bond_adjacency_index
 from ui.history_canvas_access import remove_atom_for_history, trim_bonds_for_history
 from ui.history_recording_access import record_additions_for
+from ui.scene_item_access import remove_item_from_canvas_scene
 from ui.selection_style_access import restore_selection_from_ids_for
 from ui.structure_mutation_access import (
     add_atom_for,
@@ -165,22 +178,185 @@ def restore_insert_selection_from_ids_for(canvas, atom_ids: set[int], bond_ids: 
 
 
 def rollback_insert_mutation_for(canvas, *, before_next_atom_id: int, before_bond_count: int) -> None:
-    try:
-        trim_bonds_for_history(canvas, before_bond_count)
-    except AttributeError:
-        trim_bonds_direct_for(canvas, before_bond_count)
+    rollback_errors: list[BaseException] = []
+    created_atom_ids = created_atom_ids_from(canvas, before_next_atom_id)
+    created_bond_ids = list(bond_ids_from(canvas, before_bond_count))
 
-    for atom_id in created_atom_ids_from(canvas, before_next_atom_id):
+    def record_failure(error: BaseException) -> None:
+        rollback_errors.append(error)
+
+    atom_graphics = {
+        atom_id: (
+            atom_items_for(canvas).get(atom_id),
+            atom_dots_for(canvas).get(atom_id),
+        )
+        for atom_id in created_atom_ids
+    }
+    marks = mark_registry_for(canvas)
+    atom_marks = {
+        atom_id: tuple(marks.get_for_atom(atom_id) or ())
+        for atom_id in created_atom_ids
+    }
+    bond_graphics = {
+        bond_id: tuple(bond_items_for_id(canvas, bond_id))
+        for bond_id in created_bond_ids
+    }
+
+    def trim_bonds_directly() -> None:
         try:
-            remove_atom_for_history(canvas, atom_id)
-        except AttributeError:
-            remove_atom_direct_for(canvas, atom_id)
-            with contextlib.suppress(Exception):
-                from ui.atom_coords_access import pop_atom_coords_3d_for
+            trim_bonds_direct_for(canvas, before_bond_count)
+        except BaseException as error:
+            record_failure(error)
 
-                pop_atom_coords_3d_for(canvas, atom_id)
+    services = getattr(canvas, "services", None)
+    bond_service = getattr(services, "canvas_bond_mutation_service", None)
+    if callable(getattr(bond_service, "trim_bonds_to_length", None)):
+        try:
+            trim_bonds_for_history(canvas, before_bond_count)
+        except BaseException as error:
+            # A service callback can mutate the model and then raise while cleaning
+            # graph/graphics state. Preserve that failure, make the raw model
+            # truncation idempotently authoritative, and continue with atom cleanup.
+            record_failure(error)
+    trim_bonds_directly()
+    _remove_insert_bond_graphics_directly(
+        canvas,
+        created_bond_ids,
+        bond_graphics,
+        rollback_errors,
+    )
 
-    set_next_atom_id_for(canvas, before_next_atom_id)
+    for atom_id in created_atom_ids:
+        atom_service = getattr(services, "canvas_atom_mutation_service", None)
+        if callable(getattr(atom_service, "remove_atom_only", None)):
+            try:
+                remove_atom_for_history(canvas, atom_id)
+            except BaseException as error:
+                # Do not let one broken lifecycle callback strand every later atom
+                # or prevent next_atom_id from returning to its savepoint.
+                record_failure(error)
+        _remove_insert_atom_directly(
+            canvas,
+            atom_id,
+            atom_graphics.get(atom_id, (None, None)),
+            atom_marks.get(atom_id, ()),
+            rollback_errors,
+        )
+
+    _rebuild_insert_graph_directly(canvas, rollback_errors)
+
+    try:
+        set_next_atom_id_for(canvas, before_next_atom_id)
+    except BaseException as error:
+        record_failure(error)
+
+    if len(rollback_errors) == 1:
+        raise rollback_errors[0]
+    if rollback_errors:
+        raise BaseExceptionGroup("Insert mutation rollback failed", rollback_errors)
+
+
+def _remove_insert_atom_directly(
+    canvas,
+    atom_id: int,
+    known_graphics: tuple[object | None, object | None],
+    known_marks: tuple[object, ...],
+    rollback_errors: list[BaseException],
+) -> None:
+    try:
+        remove_atom_direct_for(canvas, atom_id)
+    except BaseException as error:
+        rollback_errors.append(error)
+    try:
+        pop_atom_coords_3d_for(canvas, atom_id)
+    except BaseException as error:
+        rollback_errors.append(error)
+    graphics_items: list[object] = [
+        item
+        for item in known_graphics
+        if item is not None
+    ]
+    for pop_item in (pop_atom_item_for, pop_atom_dot_for):
+        try:
+            item = pop_item(canvas, atom_id)
+        except BaseException as error:
+            rollback_errors.append(error)
+            continue
+        if item is not None:
+            graphics_items.append(item)
+    for item in _unique_insert_items(graphics_items):
+        _remove_insert_scene_item_directly(canvas, item, rollback_errors)
+    try:
+        current_marks = mark_registry_for(canvas).pop_for_atom(atom_id)
+    except BaseException as error:
+        rollback_errors.append(error)
+        current_marks = []
+    for mark in _unique_insert_items((*known_marks, *current_marks)):
+        try:
+            remove_scene_item_from_collection_for(canvas, "mark_items", mark)
+        except BaseException as error:
+            rollback_errors.append(error)
+        _remove_insert_scene_item_directly(canvas, mark, rollback_errors)
+
+
+def _remove_insert_bond_graphics_directly(
+    canvas,
+    bond_ids: list[int],
+    known_graphics: dict[int, tuple[object, ...]],
+    rollback_errors: list[BaseException],
+) -> None:
+    for bond_id in bond_ids:
+        items = list(known_graphics.get(bond_id, ()))
+        try:
+            items.extend(pop_bond_items_for(canvas, bond_id) or ())
+        except BaseException as error:
+            rollback_errors.append(error)
+        for item in _unique_insert_items(items):
+            _remove_insert_scene_item_directly(canvas, item, rollback_errors)
+
+
+def _unique_insert_items(items) -> list[object]:
+    unique: list[object] = []
+    seen: set[int] = set()
+    for item in items:
+        if item is None or id(item) in seen:
+            continue
+        seen.add(id(item))
+        unique.append(item)
+    return unique
+
+
+def _remove_insert_scene_item_directly(
+    canvas,
+    item,
+    rollback_errors: list[BaseException],
+) -> None:
+    if item is None:
+        return
+    try:
+        remove_item_from_canvas_scene(canvas, item)
+    except BaseException as error:
+        rollback_errors.append(error)
+
+
+def _rebuild_insert_graph_directly(
+    canvas,
+    rollback_errors: list[BaseException],
+) -> None:
+    try:
+        atom_neighbors, atom_bond_ids = build_bond_adjacency_index(
+            atoms_for(canvas),
+            bonds_for(canvas),
+        )
+        graph = graph_state_for(canvas)
+        graph.atom_neighbors.clear()
+        graph.atom_neighbors.update(atom_neighbors)
+        graph.atom_bond_ids.clear()
+        graph.atom_bond_ids.update(atom_bond_ids)
+        graph.bump_version()
+        graph.selection_component_cache = []
+    except BaseException as error:
+        rollback_errors.append(error)
 
 
 __all__ = [
