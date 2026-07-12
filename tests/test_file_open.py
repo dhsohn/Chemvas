@@ -1,5 +1,6 @@
 import os
 import unittest
+from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -10,7 +11,7 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from chemvas.file_open import FileOpenEventFilter
+    from chemvas.file_open import FileOpenEventFilter, open_document
 
 
 class _FakeEvent:
@@ -58,6 +59,59 @@ class FileOpenEventFilterTest(unittest.TestCase):
 
         self.assertFalse(handled)
         self.assertEqual(opened, [])
+
+
+@unittest.skipUnless(QApplication is not None, "PyQt6 is required for open-document routing tests")
+class OpenDocumentRoutingTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.app = QApplication.instance() or QApplication([])
+        cls.app.setQuitOnLastWindowClosed(False)
+        cls.example = str(Path(__file__).resolve().parents[1] / "examples" / "template1.chemvas")
+
+    def setUp(self) -> None:
+        from ui.main_window_app import reset_window_registry
+
+        reset_window_registry()
+
+    def tearDown(self) -> None:
+        from ui.main_window_app import open_windows, reset_window_registry
+        from ui.main_window_ports import services_for_window
+
+        for window in list(open_windows()):
+            documents = services_for_window(window).canvas_document_service
+            for canvas in window.tab_references.all_canvases():
+                documents.mark_clean(canvas)
+            window.close()
+        reset_window_registry()
+        self.app.processEvents()
+
+    def test_reuses_blank_startup_window(self) -> None:
+        from ui.main_window_app import open_new_window, open_windows
+
+        window = open_new_window()
+        self.assertEqual(len(open_windows()), 1)
+
+        open_document(self.example)
+
+        # A blank startup window is reused in place — no extra window.
+        self.assertEqual(len(open_windows()), 1)
+        self.assertIs(open_windows()[0], window)
+
+    def test_opens_new_window_when_current_holds_a_document(self) -> None:
+        from ui.main_window_app import open_new_window, open_windows
+        from ui.main_window_ports import services_for_window
+
+        window = open_new_window()
+        services_for_window(window).document_action_service.load_canvas_from_path(window, self.example)
+        self.assertEqual(len(open_windows()), 1)
+
+        open_document(self.example)
+
+        # The occupied window keeps its document; the file opens in a new window
+        # rather than as another tab (single-document-per-window).
+        self.assertEqual(len(open_windows()), 2)
+        self.assertIs(open_windows()[0], window)
 
 
 if __name__ == "__main__":
