@@ -4,6 +4,21 @@ The README's hero image is **`demo.png`** (already in place — a reaction schem
 several organocatalyst structures). The items below are optional extras you can add
 later to enrich the README.
 
+## Branding images (generated)
+
+**`banner.png`** (README header) and **`social-preview.png`** (1280×640, GitHub's
+Open Graph card) are generated from the app icon by
+[`scripts/generate_branding_images.py`](../../scripts/generate_branding_images.py).
+Regenerate both after editing the mark or the wordmark strings:
+
+```bash
+QT_QPA_PLATFORM=offscreen .venv/bin/python scripts/generate_branding_images.py
+```
+
+`social-preview.png` isn't referenced from the README — upload it once under
+**GitHub ▸ Settings ▸ General ▸ Social preview**. The app icon assets themselves
+live in `app/chemvas/assets/icon/` (see [`packaging/README.md`](../../packaging/README.md)).
+
 ## Nice-to-have extras
 
 | File | What it should show | Suggested size |

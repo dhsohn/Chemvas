@@ -7,10 +7,12 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction, QIcon
 from PyQt6.QtWidgets import (
     QMenu,
+    QMenuBar,
     QToolBar,
     QToolButton,
 )
 
+from ui.main_window_menu_bar import build_menu_bar
 from ui.main_window_panel_toolbar import (
     MainWindowPanelToolbarCallbacks,
     build_panel_toolbar,
@@ -148,6 +150,9 @@ class MainWindowUIAssemblyService:
             undo_button=panel_toolbar.undo_button,
             redo_button=panel_toolbar.redo_button,
         )
+
+    def init_menu_bar(self, window) -> QMenuBar:
+        return build_menu_bar(window)
 
     def apply_theme(self, window) -> None:
         window.setStyleSheet(MAIN_WINDOW_STYLESHEET)

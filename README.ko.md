@@ -1,6 +1,8 @@
-# Chemvas
+<p align="center">
+  <img src="docs/images/banner.png" alt="Chemvas — 2D 화학 구조 드로잉 캔버스" width="680">
+</p>
 
-[English](README.md) · **한국어**
+<p align="center"><a href="README.md">English</a> · <b>한국어</b></p>
 
 ![Chemvas — Base/THF 반응 스킴과 여러 유기촉매 구조를 그린 캔버스](docs/images/demo.png)
 

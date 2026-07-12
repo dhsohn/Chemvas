@@ -50,6 +50,7 @@ def test_bootstrap_main_window_initializes_runtime_references_and_services() -> 
     services = SimpleNamespace(
         ui_assembly_service=SimpleNamespace(
             init_toolbars=mock.Mock(return_value=toolbar_assembly),
+            init_menu_bar=mock.Mock(),
             apply_theme=mock.Mock(),
         ),
         context_bar_service=SimpleNamespace(
@@ -135,6 +136,7 @@ def test_bootstrap_main_window_initializes_runtime_references_and_services() -> 
     assert window.ui_references.require_icon_factory() is icon_factory_instance
     assert window.ui_references.tool_actions == toolbar_assembly.tool_actions
     services.ui_assembly_service.init_toolbars.assert_called_once_with(window)
+    services.ui_assembly_service.init_menu_bar.assert_called_once_with(window)
     services.action_availability_service.update_action_availability.assert_called_once_with(window)
     services.context_bar_service.init_context_bar.assert_called_once_with(window)
     services.panel_service.init_panels.assert_called_once_with(window)
