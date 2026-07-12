@@ -389,6 +389,33 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.scene_transform_controller_for_window.assert_has_calls([mock.call(window), mock.call(window)])
         self.assertEqual(self.history_service_for_window.call_args_list, [mock.call(window), mock.call(window)])
 
+    def test_init_menu_bar_builds_help_menu_with_about_actions(self) -> None:
+        window = QMainWindow()
+        self.addCleanup(window.close)
+
+        with mock.patch("ui.main_window_menu_bar.show_about_dialog") as show_about:
+            menu_bar = self.service.init_menu_bar(window)
+
+            help_menu = next(
+                menu
+                for action in menu_bar.actions()
+                if (menu := action.menu()) is not None and menu.title() == "Help"
+            )
+            actions = [action for action in help_menu.actions() if not action.isSeparator()]
+            self.assertEqual(
+                [action.text() for action in actions],
+                ["About Chemvas", "About Qt", "Chemvas on GitHub"],
+            )
+
+            about_action = next(action for action in actions if action.text() == "About Chemvas")
+            self.assertEqual(about_action.menuRole(), QAction.MenuRole.AboutRole)
+            about_qt_action = next(action for action in actions if action.text() == "About Qt")
+            self.assertEqual(about_qt_action.menuRole(), QAction.MenuRole.AboutQtRole)
+
+            show_about.assert_not_called()
+            about_action.trigger()
+            show_about.assert_called_once_with(window)
+
     def test_apply_theme_sets_stylesheet(self) -> None:
         window = QMainWindow()
         self.addCleanup(window.close)

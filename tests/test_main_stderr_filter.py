@@ -6,8 +6,40 @@ import unittest
 from contextlib import contextmanager
 from unittest import mock
 
+import chemvas.branding
 import chemvas.main as chemvas_main
 import main as app_main
+from chemvas.file_open import FileOpenEventFilter
+
+
+class _QApplicationMetadataStub:
+    """Records the app-surface calls main() makes on the QApplication.
+
+    The real QApplication carries these; the fakes below mirror that surface so
+    main()'s branding/identity and file-open wiring is exercised rather than
+    raising.
+    """
+
+    def installEventFilter(self, event_filter: object) -> None:
+        self.installed_event_filter = event_filter
+
+    def setApplicationName(self, name: str) -> None:
+        self.application_name = name
+
+    def setApplicationDisplayName(self, name: str) -> None:
+        self.application_display_name = name
+
+    def setApplicationVersion(self, version: str) -> None:
+        self.application_version = version
+
+    def setOrganizationName(self, name: str) -> None:
+        self.organization_name = name
+
+    def setDesktopFileName(self, name: str) -> None:
+        self.desktop_file_name = name
+
+    def setWindowIcon(self, icon: object) -> None:
+        self.window_icon = icon
 
 
 class MainStderrFilterTest(unittest.TestCase):
@@ -70,7 +102,7 @@ class MainStderrFilterTest(unittest.TestCase):
     def test_main_constructs_window_and_executes_application(self) -> None:
         events: list[tuple[str, object]] = []
 
-        class FakeApplication:
+        class FakeApplication(_QApplicationMetadataStub):
             instances: list["FakeApplication"] = []
 
             def __init__(self, args) -> None:
@@ -104,6 +136,7 @@ class MainStderrFilterTest(unittest.TestCase):
             yield
             events.append(("exit", None))
 
+        sentinel_icon = object()
         argv = ["chemvas", "--style", "Fusion"]
         with (
             mock.patch.dict(
@@ -114,6 +147,7 @@ class MainStderrFilterTest(unittest.TestCase):
                 },
             ),
             mock.patch.object(sys, "argv", argv),
+            mock.patch.object(chemvas.branding, "app_icon", lambda: sentinel_icon),
         ):
             with mock.patch.object(chemvas_main, "_filtered_stderr", fake_filtered_stderr):
                 app_main.main()
@@ -121,12 +155,19 @@ class MainStderrFilterTest(unittest.TestCase):
         self.assertEqual(FakeApplication.instances[0].args, argv)
         self.assertTrue(FakeApplication.instances[0].exec_called)
         self.assertTrue(FakeMainWindow.instances[0].shown)
+        application = FakeApplication.instances[0]
+        self.assertEqual(application.application_name, "Chemvas")
+        self.assertEqual(application.application_display_name, "Chemvas")
+        self.assertEqual(application.application_version, chemvas.__version__)
+        self.assertEqual(application.desktop_file_name, "chemvas")
+        self.assertIs(application.window_icon, sentinel_icon)
+        self.assertIsInstance(application.installed_event_filter, FileOpenEventFilter)
         self.assertEqual([event[0] for event in events], ["enter", "show", "exec", "exit"])
 
     def test_main_loads_startup_canvas_file_argument(self) -> None:
         events: list[tuple[str, object]] = []
 
-        class FakeApplication:
+        class FakeApplication(_QApplicationMetadataStub):
             def __init__(self, args) -> None:
                 self.args = args
 
@@ -165,6 +206,7 @@ class MainStderrFilterTest(unittest.TestCase):
             ),
             mock.patch.object(sys, "argv", argv),
             mock.patch.object(chemvas_main, "_filtered_stderr", fake_filtered_stderr),
+            mock.patch.object(chemvas.branding, "app_icon", lambda: object()),
         ):
             app_main.main()
 
@@ -173,7 +215,7 @@ class MainStderrFilterTest(unittest.TestCase):
     def test_main_module_executes_main_when_run_as_script(self) -> None:
         events: list[str] = []
 
-        class FakeApplication:
+        class FakeApplication(_QApplicationMetadataStub):
             def __init__(self, args) -> None:
                 self.args = args
                 events.append("app")
@@ -209,6 +251,7 @@ class MainStderrFilterTest(unittest.TestCase):
             with (
                 mock.patch.object(sys, "platform", "linux"),
                 mock.patch.object(sys, "argv", ["python", "app/main.py"]),
+                mock.patch.object(chemvas.branding, "app_icon", lambda: object()),
             ):
                 runpy.run_module("main", run_name="__main__")
 

@@ -74,6 +74,7 @@ def bootstrap_main_window(window, runtime: MainWindowBootstrapRuntime) -> None:
     runtime.ui_refs.icon_factory = runtime.icon_factory(window)
     toolbar_assembly = runtime.services.ui_assembly_service.init_toolbars(window)
     runtime.ui_refs.apply_toolbar_assembly(toolbar_assembly)
+    runtime.services.ui_assembly_service.init_menu_bar(window)
     runtime.services.action_availability_service.update_action_availability(window)
     runtime.services.context_bar_service.init_context_bar(window)
     runtime.services.panel_service.init_panels(window)

@@ -65,5 +65,13 @@ On the first tagged release, rename the "Unreleased" section below to
   older files still load).
 - `.chemvas` JSON document save/load (`{"type":"chemvas","version":1,...}`).
 - ACS 1996 default style and color palette.
+- **Application icon and OS identity**: a benzene-hexagon app icon in the window,
+  Dock, and taskbar, plus the application name and version reported to the OS.
+- **About Chemvas** dialog, reached from a **Help** menu (the native application
+  menu on macOS): shows the version, MIT license, RDKit availability, and the
+  Qt/Python versions in use.
+- Desktop packaging: a PyInstaller spec, a macOS `.app` that registers the
+  `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
+  Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
 [Unreleased]: https://github.com/dhsohn/Chemvas/commits/main

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "chemvas"
-version = "0.1.0"
+dynamic = ["version"]
 description = "A PyQt-based chemical drawing canvas."
 readme = "README.md"
 requires-python = ">=3.13"
@@ -27,8 +27,14 @@ rdkit = [
 [project.scripts]
 chemvas = "chemvas.main:main"
 
+[tool.setuptools.dynamic]
+version = { attr = "chemvas.__version__" }
+
 [tool.setuptools.packages.find]
 where = ["app"]
+
+[tool.setuptools.package-data]
+chemvas = ["assets/icon/*.svg", "assets/icon/*.png"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
