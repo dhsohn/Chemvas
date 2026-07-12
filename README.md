@@ -1,13 +1,17 @@
-# Chemvas
+<p align="center">
+  <img src="docs/images/banner.png" alt="Chemvas — 2D chemical structure drawing canvas" width="680">
+</p>
+
+<p align="center">
+  <a href="https://github.com/dhsohn/Chemvas/actions/workflows/ci.yml"><img src="https://github.com/dhsohn/Chemvas/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.13%2B-blue.svg" alt="Python 3.13+"></a>
+</p>
+
+<p align="center"><b>English</b> · <a href="README.ko.md">한국어</a></p>
 
 A lightweight, PyQt6-based 2D chemical structure drawing app for quickly sketching
 molecules and reaction schemes — and exporting publication-ready figures.
-
-[![CI](https://github.com/dhsohn/Chemvas/actions/workflows/ci.yml/badge.svg)](https://github.com/dhsohn/Chemvas/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.13%2B-blue.svg)](https://www.python.org/)
-
-**English** · [한국어](README.ko.md)
 
 ![Chemvas — a Base/THF reaction scheme and several organocatalyst structures drawn on the canvas](docs/images/demo.png)
 

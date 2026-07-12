@@ -68,7 +68,20 @@ def main() -> None:
         from PyQt6.QtWidgets import QApplication
         from ui.main_window_app import open_new_window
 
+        from chemvas.branding import APP_NAME, APP_VERSION, app_icon
+        from chemvas.file_open import FileOpenEventFilter, open_document
+
         app = QApplication(sys.argv)
+        app.setApplicationName(APP_NAME)
+        app.setApplicationDisplayName(APP_NAME)
+        app.setApplicationVersion(APP_VERSION)
+        app.setOrganizationName(APP_NAME)
+        app.setDesktopFileName("chemvas")
+        app.setWindowIcon(app_icon())
+
+        file_open_filter = FileOpenEventFilter(open_document)
+        app.installEventFilter(file_open_filter)
+
         window = open_new_window()
         startup_document_path = _startup_document_path(sys.argv)
         if startup_document_path is not None:
