@@ -391,6 +391,11 @@ class MainWindowDocumentActionService:
         if not self.confirm_close_canvas(window, widget):
             return False
         self._canvas_documents.remove_canvas(window, widget)
+        # The open-document set changed: drop the closed document from the session
+        # so a clean quit does not reopen it. (This explicit close path is never
+        # taken during Cmd+Q, which closes whole windows, so it cannot truncate a
+        # multi-window quit.)
+        request_snapshot()
         return True
 
     def confirm_close_window(self, window) -> bool:

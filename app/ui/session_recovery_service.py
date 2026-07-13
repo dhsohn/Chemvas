@@ -107,11 +107,13 @@ class SessionRecoveryService:
         """Begin this session, snapshot immediately, and arm the periodic timer,
         the save hook, and the clean-exit hook."""
         self._store.begin()
-        self.snapshot_now()
-        # The recovered work is now persisted in this session; releasing the old
-        # source sessions is finally safe.
-        self._store.prune_sessions(self._pending_prune)
-        self._pending_prune = []
+        # Release the old source sessions only once the recovered work is
+        # *confirmed* persisted here. A failed snapshot (unwritable app-data,
+        # full disk, serialization error) leaves them in place so the next
+        # launch can still recover.
+        if self.snapshot_now():
+            self._store.prune_sessions(self._pending_prune)
+            self._pending_prune = []
         set_snapshot_hook(self.snapshot_now)
         about_to_quit = getattr(app, "aboutToQuit", None)
         connect = getattr(about_to_quit, "connect", None)
@@ -122,12 +124,15 @@ class SessionRecoveryService:
         self._timer.timeout.connect(self.snapshot_now)
         self._timer.start()
 
-    def snapshot_now(self) -> None:
+    def snapshot_now(self) -> bool:
+        """Persist the current open set. Returns True on success; a failure is
+        swallowed (autosave must never disrupt editing) and reported as False so
+        callers can avoid destructive follow-ups like pruning source sessions."""
         try:
             self._store.save_documents(self._current_documents())
         except Exception:
-            # Autosave is a safety net; a failure here must never disrupt editing.
-            pass
+            return False
+        return True
 
     def _on_about_to_quit(self) -> None:
         try:

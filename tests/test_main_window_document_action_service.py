@@ -124,6 +124,16 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         self.assertTrue(ok)
         self.assertEqual(calls, [1])
 
+    def test_close_canvas_tab_refreshes_the_autosave_snapshot(self) -> None:
+        services_for_window(self.window).canvas_document_service.new_canvas(self.window)
+        calls: list[int] = []
+        with mock.patch("ui.main_window_document_action_service.request_snapshot", lambda: calls.append(1)):
+            closed = self.service.close_canvas_tab(self.window, 0)
+        # Closing a document must drop it from the session so a clean quit does
+        # not reopen it.
+        self.assertTrue(closed)
+        self.assertEqual(calls, [1])
+
     def test_save_canvas_to_path_refreshes_the_autosave_snapshot(self) -> None:
         calls: list[int] = []
         with mock.patch("ui.main_window_document_action_service.request_snapshot", lambda: calls.append(1)):

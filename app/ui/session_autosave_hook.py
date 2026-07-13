@@ -14,10 +14,12 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-_snapshot_hook: Callable[[], None] | None = None
+# The hook may return a value (snapshot_now reports success); the return is
+# ignored here.
+_snapshot_hook: Callable[[], object] | None = None
 
 
-def set_snapshot_hook(hook: Callable[[], None] | None) -> None:
+def set_snapshot_hook(hook: Callable[[], object] | None) -> None:
     global _snapshot_hook
     _snapshot_hook = hook
 

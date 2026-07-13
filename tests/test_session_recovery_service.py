@@ -174,7 +174,7 @@ def test_snapshot_now_persists_the_current_documents():
     assert service._store.saved == [sentinel]
 
 
-def test_snapshot_now_swallows_store_errors():
+def test_snapshot_now_swallows_store_errors_and_reports_failure():
     store = _FakeStore(RestoreResult())
 
     def boom(_docs):
@@ -183,7 +183,25 @@ def test_snapshot_now_swallows_store_errors():
     store.save_documents = boom  # type: ignore[method-assign]
     service, _ = _service(store)
 
-    service.snapshot_now()  # must not raise
+    assert service.snapshot_now() is False  # must not raise; reports the failure
+
+
+def test_start_keeps_source_sessions_when_the_snapshot_fails(qapp):
+    store = _FakeStore(RestoreResult(prune_ids=["old-1"]))
+
+    def boom(_docs):
+        raise RuntimeError("disk full")
+
+    store.save_documents = boom  # type: ignore[method-assign]
+    service, _ = _service(store, current_documents=lambda: ["doc"])
+    fake_app = SimpleNamespace(aboutToQuit=_FakeSignal())
+
+    service.restore_previous(_FakeWindow("first"))
+    service.start(fake_app)
+
+    assert store.pruned == []  # a failed re-snapshot must not delete the sources
+    assert service._timer is not None
+    service._timer.stop()
 
 
 def test_start_begins_session_snapshots_and_arms_hooks(qapp):
