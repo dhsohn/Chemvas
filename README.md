@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://github.com/dhsohn/Chemvas/actions/workflows/ci.yml"><img src="https://github.com/dhsohn/Chemvas/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
-  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.13%2B-blue.svg" alt="Python 3.13+"></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.12%2B-blue.svg" alt="Python 3.12+"></a>
 </p>
 
 <p align="center"><b>English</b> · <a href="README.ko.md">한국어</a></p>
@@ -51,7 +51,7 @@ conversion — Chemvas runs without it.
 
 ## Install
 
-Requires **Python 3.13+** and **PyQt6**.
+Requires **Python 3.12+** and **PyQt6**.
 
 ```bash
 # from a clone of this repo
