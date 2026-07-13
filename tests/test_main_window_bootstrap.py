@@ -90,7 +90,7 @@ def test_bootstrap_main_window_initializes_runtime_references_and_services() -> 
     )
 
     window.setWindowTitle.assert_called_once_with("Chemvas")
-    window.resize.assert_called_once_with(1100, 760)
+    window.resize.assert_called_once_with(1280, 760)
     build_tabs.assert_called_once()
     assert build_tabs.call_args.args == (window,)
     tab_callbacks = build_tabs.call_args.kwargs

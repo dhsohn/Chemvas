@@ -211,6 +211,13 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
             ["flip_horizontal_button", "flip_vertical_button", "rotate_button"],
             self._toolbar_widget_groups(assembly.panel_bar),
         )
+        # The SMILES quick-insert bar sits between the transform tools and the
+        # history buttons. Its "SMILES" QLabel is neither a tool button nor a line
+        # edit, so the widget group is just the input placeholder and Render button.
+        self.assertIn(
+            ["CC(=O)Oc1ccccc1C(=O)O", "smiles_render_button"],
+            self._toolbar_widget_groups(assembly.panel_bar),
+        )
         self.assertEqual(
             self._toolbar_widget_groups(assembly.panel_bar)[-1],
             ["preview_panel_button", "open_button", "File", "new_canvas_button"],
@@ -235,7 +242,7 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         self.assertTrue(font_actions)
         self.assertTrue(all(action.font().family() == action.text() for action in font_actions))
         line_edits = assembly.panel_bar.findChildren(QLineEdit)
-        self.assertEqual(line_edits, [])
+        self.assertEqual([line_edit.objectName() for line_edit in line_edits], ["contextSmilesInput"])
         self.assertIsNone(assembly.panel_bar.findChild(QLineEdit, "atomInput"))
 
         assembly.save_action.trigger()

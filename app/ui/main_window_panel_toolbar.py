@@ -6,7 +6,7 @@ from typing import Any
 
 from PyQt6.QtCore import QSize, Qt
 from PyQt6.QtGui import QAction, QActionGroup, QFont, QKeySequence
-from PyQt6.QtWidgets import QMenu, QSizePolicy, QToolBar, QToolButton, QWidget
+from PyQt6.QtWidgets import QLabel, QLineEdit, QMenu, QSizePolicy, QToolBar, QToolButton
 
 from ui.main_window_config import (
     TEXT_FONT_FAMILY_CHOICES,
@@ -15,6 +15,8 @@ from ui.main_window_config import (
 )
 from ui.main_window_ports import icon_factory_for_window
 from ui.main_window_theme import (
+    CONTEXT_BAR_BUTTON_HEIGHT,
+    SMILES_RENDER_BUTTON_STYLE,
     TOOLBAR_BUTTON_SIZE,
     TOOLBAR_BUTTON_STYLE,
     TOOLBAR_ICON_SIZE,
@@ -82,10 +84,37 @@ def _normalize_tool_action_button(
     widget.setFixedWidth(TOOLBAR_BUTTON_SIZE)
 
 
-def _toolbar_spacer() -> QWidget:
-    spacer = QWidget()
-    spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-    return spacer
+def _add_smiles_controls(panel_bar: QToolBar, window, insert_controller_for_window) -> None:
+    label = QLabel("SMILES")
+    label.setObjectName("toolbarSectionLabel")
+    panel_bar.addWidget(label)
+    smiles_input = QLineEdit()
+    smiles_input.setObjectName("contextSmilesInput")
+    smiles_input.setPlaceholderText("CC(=O)Oc1ccccc1C(=O)O")
+    # The input stretches to fill the gap between the drawing tools and the
+    # file/history cluster (in place of a plain spacer), so it never forces the
+    # top toolbar to overflow: it shrinks to its minimum on narrow windows.
+    smiles_input.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+    smiles_input.setMinimumWidth(140)
+    smiles_input.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT)
+    smiles_input.setToolTip("SMILES")
+    smiles_input.setStatusTip("Type a SMILES string to insert")
+    render_button = QToolButton()
+    render_button.setObjectName("smiles_render_button")
+    render_button.setText("Render")
+    render_button.setToolTip("Insert SMILES")
+    render_button.setStatusTip("Insert the typed SMILES structure")
+    render_button.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT)
+    render_button.setStyleSheet(SMILES_RENDER_BUTTON_STYLE)
+    render_button.setCursor(Qt.CursorShape.PointingHandCursor)
+    render_button.clicked.connect(
+        lambda _checked=False: insert_controller_for_window(window).begin_smiles_insert(smiles_input.text())
+    )
+    smiles_input.returnPressed.connect(
+        lambda: insert_controller_for_window(window).begin_smiles_insert(smiles_input.text())
+    )
+    panel_bar.addWidget(smiles_input)
+    panel_bar.addWidget(render_button)
 
 
 def _build_note_font_menu_button(
@@ -266,7 +295,8 @@ def build_panel_toolbar(
     panel_bar.addWidget(flip_v_btn)
     panel_bar.addWidget(rotate_btn)
     panel_bar.addSeparator()
-    panel_bar.addWidget(_toolbar_spacer())
+    _add_smiles_controls(panel_bar, window, insert_controller_for_window)
+    panel_bar.addSeparator()
     panel_bar.addWidget(undo_btn)
     panel_bar.addWidget(redo_btn)
     panel_bar.addSeparator()
