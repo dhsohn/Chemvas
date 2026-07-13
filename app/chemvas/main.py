@@ -82,12 +82,10 @@ def main() -> None:
         file_open_filter = FileOpenEventFilter(open_document)
         app.installEventFilter(file_open_filter)
 
-        from ui.app_data_paths import sessions_dir
-        from ui.session_recovery_service import SessionRecoveryService
-        from ui.session_snapshot_store import new_session_store
+        from ui.session_recovery_service import create_session_recovery_service
 
         window = open_new_window()
-        recovery = SessionRecoveryService(new_session_store(sessions_dir()))
+        recovery = create_session_recovery_service()
         startup_document_path = _startup_document_path(sys.argv)
         if startup_document_path is not None:
             # An explicit file (e.g. a double-clicked document) wins; skip

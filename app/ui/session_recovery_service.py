@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QTimer
 
+from ui.app_data_paths import sessions_dir
 from ui.canvas_document_metadata_state import (
     document_display_name_for,
     document_file_path_for,
@@ -21,6 +22,7 @@ from ui.main_window_app import open_new_window as default_open_new_window
 from ui.main_window_app import open_windows
 from ui.main_window_ports import services_for_window as default_services_for_window
 from ui.session_snapshot_logic import DocDescriptor
+from ui.session_snapshot_store import new_session_store
 
 AUTOSAVE_INTERVAL_MS = 15_000
 
@@ -118,4 +120,18 @@ class SessionRecoveryService:
         status_bar().showMessage(f"Recovered {count} unsaved {noun} from your last session.", 8000)
 
 
-__all__ = ["AUTOSAVE_INTERVAL_MS", "SessionRecoveryService", "collect_open_documents"]
+def create_session_recovery_service() -> SessionRecoveryService:
+    """Build the production recovery service, rooted at the app-data sessions dir.
+
+    A single entry point keeps ``chemvas.main`` decoupled from the store/paths
+    modules (it imports only this factory).
+    """
+    return SessionRecoveryService(new_session_store(sessions_dir()))
+
+
+__all__ = [
+    "AUTOSAVE_INTERVAL_MS",
+    "SessionRecoveryService",
+    "collect_open_documents",
+    "create_session_recovery_service",
+]

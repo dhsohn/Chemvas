@@ -239,6 +239,17 @@ class MainStderrFilterTest(unittest.TestCase):
         main_window_module.MainWindow = FakeMainWindow
         ui_module.main_window = main_window_module
 
+        class FakeRecoveryService:
+            def restore_previous(self, window) -> None:
+                events.append("restore")
+
+            def start(self, app) -> None:
+                events.append("start")
+
+        recovery_module = types.ModuleType("ui.session_recovery_service")
+        recovery_module.create_session_recovery_service = lambda: FakeRecoveryService()
+        ui_module.session_recovery_service = recovery_module
+
         with mock.patch.dict(
             sys.modules,
             {
@@ -246,6 +257,7 @@ class MainStderrFilterTest(unittest.TestCase):
                 "PyQt6.QtWidgets": qt_widgets_module,
                 "ui": ui_module,
                 "ui.main_window": main_window_module,
+                "ui.session_recovery_service": recovery_module,
             },
         ):
             with (
@@ -255,7 +267,7 @@ class MainStderrFilterTest(unittest.TestCase):
             ):
                 runpy.run_module("main", run_name="__main__")
 
-        self.assertEqual(events, ["app", "show", "exec"])
+        self.assertEqual(events, ["app", "show", "restore", "start", "exec"])
 
 
 if __name__ == "__main__":
