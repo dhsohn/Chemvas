@@ -5,12 +5,9 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-<!--
-On the first tagged release, rename the "Unreleased" section below to
-"## [0.1.0] - YYYY-MM-DD" and start a fresh empty "Unreleased" section above it.
--->
-
 ## [Unreleased]
+
+## [0.1.0] - 2026-07-13
 
 ### Added
 - 2D drawing canvas: bonds (single/double/triple, bold, wedge, hash) with 30° angle
@@ -74,4 +71,5 @@ On the first tagged release, rename the "Unreleased" section below to
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/commits/main
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/dhsohn/Chemvas/releases/tag/v0.1.0
