@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 
 from core.document_io import write_document
 from core.document_state import CANVAS_FILE_VERSION, serialize_settings
@@ -305,15 +306,32 @@ def test_pid_liveness_uses_a_safe_probe_on_windows_never_os_kill(monkeypatch):
     assert seen["pid"] == 4321
 
 
-def test_corrupt_sibling_dir_is_pruned(tmp_path, monkeypatch):
+def test_old_corrupt_sibling_dir_is_pruned(tmp_path, monkeypatch):
     root = tmp_path / "sessions"
     root.mkdir()
     junk = root / "garbage"
     junk.mkdir()
     (junk / "session.json").write_text("{ not json")
+    old = time.time() - 3600
+    os.utime(junk, (old, old))  # clearly old → a real orphan
 
     _dead_pids(monkeypatch)
     result = _store(root, "cur").consume_previous_sessions()
 
     assert result.docs == []
     assert not junk.exists()
+
+
+def test_recently_created_unreadable_sibling_is_left_alone(tmp_path, monkeypatch):
+    # A sibling that just made its dir but has not written session.json yet
+    # (another instance mid-begin) must not be reaped as if it were an orphan.
+    root = tmp_path / "sessions"
+    root.mkdir()
+    starting = root / "starting-up"
+    starting.mkdir()  # freshly created, no manifest
+
+    _dead_pids(monkeypatch)
+    result = _store(root, "cur").consume_previous_sessions()
+
+    assert result.docs == []
+    assert starting.exists()

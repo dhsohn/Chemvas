@@ -242,3 +242,16 @@ def test_about_to_quit_marks_the_session_clean():
     service._on_about_to_quit()
 
     assert store.clean_exit is True
+
+
+def test_about_to_quit_sets_the_quitting_flag():
+    from ui import session_autosave_hook
+
+    session_autosave_hook.reset_quitting()
+    store = _FakeStore(RestoreResult())
+    service, _ = _service(store)
+
+    service._on_about_to_quit()
+
+    # So deferred window-close snapshots become no-ops and the open set is kept.
+    assert session_autosave_hook.is_quitting() is True

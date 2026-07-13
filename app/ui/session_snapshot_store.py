@@ -13,6 +13,7 @@ import json
 import os
 import shutil
 import sys
+import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -35,6 +36,18 @@ from ui.session_snapshot_logic import (
 )
 
 MANIFEST_NAME = "session.json"
+
+# A session dir with no readable manifest is only reaped once it is clearly old:
+# a just-started instance creates its dir before atomically writing session.json,
+# and that transient window must not be mistaken for an orphan and deleted.
+_ORPHAN_REAP_AGE_SECONDS = 60.0
+
+
+def _is_old_orphan(child: Path) -> bool:
+    try:
+        return (time.time() - child.stat().st_mtime) > _ORPHAN_REAP_AGE_SECONDS
+    except OSError:
+        return False
 
 
 @dataclass
@@ -167,7 +180,11 @@ class SessionSnapshotStore:
         for child in self._sibling_dirs():
             manifest = self._read_manifest(child)
             if manifest is None:
-                shutil.rmtree(child, ignore_errors=True)  # orphan / corrupt dir
+                # Unreadable: a real orphan/corrupt dir, or a sibling instance
+                # that just created its dir but has not written session.json yet.
+                # Only delete the former (clearly old); leave the latter alone.
+                if _is_old_orphan(child):
+                    shutil.rmtree(child, ignore_errors=True)
                 continue
             try:
                 mtime = child.stat().st_mtime

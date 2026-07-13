@@ -21,7 +21,7 @@ from ui.canvas_window_access import snapshot_canvas_state_for
 from ui.main_window_app import open_new_window as default_open_new_window
 from ui.main_window_app import open_windows
 from ui.main_window_ports import services_for_window as default_services_for_window
-from ui.session_autosave_hook import set_snapshot_hook
+from ui.session_autosave_hook import mark_quitting, set_snapshot_hook
 from ui.session_snapshot_logic import DocDescriptor
 from ui.session_snapshot_store import new_session_store
 
@@ -135,6 +135,9 @@ class SessionRecoveryService:
         return True
 
     def _on_about_to_quit(self) -> None:
+        # Signal quit before windows finish closing so their deferred close
+        # snapshots become no-ops and the full open set is preserved.
+        mark_quitting()
         try:
             self._store.mark_clean_exit()
         except Exception:

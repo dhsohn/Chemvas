@@ -10,13 +10,20 @@ of the same file still match.
 from __future__ import annotations
 
 import os
+import sys
 
 from ui.canvas_document_metadata_state import document_file_path_for
 from ui.main_window_app import open_windows
 
 
 def normalized_path_key(path: str) -> str:
-    return os.path.normcase(os.path.abspath(path))
+    # os.path.normcase already case-folds on Windows; on macOS it is a no-op even
+    # though the default volume is case-insensitive, so fold explicitly there.
+    # Linux is case-sensitive and left as-is.
+    key = os.path.normcase(os.path.abspath(path))
+    if sys.platform == "darwin":
+        key = key.casefold()
+    return key
 
 
 def find_open_document(target_path: str, *, windows=None, path_of=document_file_path_for):

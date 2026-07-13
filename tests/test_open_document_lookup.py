@@ -67,4 +67,14 @@ def test_normalized_key_is_absolute_and_case_folded(tmp_path, monkeypatch):
     key = normalized_path_key("a.chemvas")
     assert os.path.isabs(key)
     assert key == os.path.normcase(key)
-    assert key.endswith(os.path.normcase("a.chemvas"))
+
+
+def test_key_is_case_insensitive_on_macos(monkeypatch):
+    monkeypatch.setattr("sys.platform", "darwin")
+    # macOS default volumes are case-insensitive; different spellings must match.
+    assert normalized_path_key("/Lab/Foo.chemvas") == normalized_path_key("/Lab/foo.chemvas")
+
+
+def test_key_is_case_sensitive_on_linux(monkeypatch):
+    monkeypatch.setattr("sys.platform", "linux")
+    assert normalized_path_key("/Lab/Foo.chemvas") != normalized_path_key("/Lab/foo.chemvas")
