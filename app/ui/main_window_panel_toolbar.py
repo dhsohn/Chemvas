@@ -114,7 +114,7 @@ def _add_smiles_controls(panel_bar: QToolBar, window, insert_controller_for_wind
     smiles_input.setStatusTip("Type a SMILES string to insert")
     render_button = QToolButton()
     render_button.setObjectName("smiles_render_button")
-    render_button.setText("Render")
+    render_button.setText("Insert")
     render_button.setToolTip("Insert SMILES")
     render_button.setStatusTip("Insert the typed SMILES structure")
     render_button.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT)
