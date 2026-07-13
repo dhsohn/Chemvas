@@ -92,6 +92,26 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             message_box.warning.assert_not_called()
             self.assertIn("Already open", self.window.statusBar().currentMessage())
 
+    def test_load_canvas_from_path_stores_an_absolute_file_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            abs_path = str(Path(temp_dir) / "rel.chemvas")
+            write_document(abs_path, snapshot_canvas_state_for(active_canvas_for_window(self.window)), CANVAS_FILE_VERSION)
+            cwd = os.getcwd()
+            os.chdir(temp_dir)
+            try:
+                ok = self.service.load_canvas_from_path(self.window, "rel.chemvas", target_provider=lambda: self.window)
+            finally:
+                os.chdir(cwd)
+
+        self.assertTrue(ok)
+        stored = document_file_path_for(active_canvas_for_window(self.window))
+        # A relative CLI path must be resolved so the session/recent entries
+        # survive a restore from a different working directory.
+        self.assertIsNotNone(stored)
+        assert stored is not None
+        self.assertTrue(os.path.isabs(stored))
+        self.assertTrue(stored.endswith("rel.chemvas"))
+
     def test_load_canvas_from_path_refreshes_the_autosave_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = str(Path(temp_dir) / "open.chemvas")

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from core.document_io import read_document as default_read_document
@@ -93,6 +94,9 @@ class MainWindowDocumentActionService:
         message_box=None,
     ) -> bool:
         message_box = QMessageBox if message_box is None else message_box
+        # Store an absolute path so the session/recent entries resolve regardless
+        # of the working directory at restore time.
+        path = os.path.abspath(path)
         target = self._active_canvas_for_window(window) if canvas is None else canvas
         try:
             warnings = save_canvas_to_file_for(target, path)
@@ -322,6 +326,11 @@ class MainWindowDocumentActionService:
         message_box = QMessageBox if message_box is None else message_box
         read_document = default_read_document if read_document is None else read_document
         read_editable_svg = default_read_editable_svg if read_editable_svg is None else read_editable_svg
+        # Bind the document to an absolute path up front: a relative path (e.g. a
+        # CLI "chemvas ./file.chemvas") would otherwise be stored as the file
+        # path and autosaved into the session, then fail to resolve on restore
+        # from a different working directory.
+        path = os.path.abspath(path)
         # If this exact file is already open, switch to that window instead of
         # spawning a second, independently-editable copy. (Editable SVGs open
         # unbound to their path, so this only matches real .chemvas documents.)
