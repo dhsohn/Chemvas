@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from the **Text** annotation tool's `T`.
 - Gave the status-bar zoom **Fit** control a subtle border and hover state so it reads
   as a button rather than plain text, matching the `−` / `+` controls beside it.
+- Grouped the pick-one **mode tools** (select, bond, ring, arrow, …) inside a subtle
+  painted "well" on the top toolbar, so they read as one set — visually distinct from
+  the loose one-shot command buttons beside them (flip, rotate, undo, redo).
 
 ## [0.1.0] - 2026-07-13
 
