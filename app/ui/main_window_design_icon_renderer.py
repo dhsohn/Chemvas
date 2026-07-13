@@ -31,7 +31,33 @@ _SVG_BY_NAME: dict[str, str] = {
     "arrow": '<line x1="3" y1="12" x2="20" y2="12"/><polyline points="15,7 20.5,12 15,17"/>',
     "bracket": '<path d="M9 4 H6 V20 H9"/><path d="M15 4 H18 V20 H15"/>',
     "orbital": '<ellipse cx="8" cy="12" rx="5" ry="7"/><ellipse cx="16" cy="12" rx="5" ry="7"/>',
-    "atom": '<path d="M5 20 12 4 19 20 M8 14 H16"/>',
+    # Periodic-table silhouette — the "choose a specific element" tool. Filled
+    # cells on the 24 box: row 1 corner pair (H/He), row 2 two towers with the
+    # central notch, row 3 full row, row 4 left block. Cells run slightly tall
+    # (3.0 x 3.7) so the landscape grid fills the icon box and stays legible at
+    # the 18 px toolbar size.
+    "atom": (
+        '<g fill="currentColor" stroke="none">'
+        '<rect x="0.3" y="4.0" width="3.0" height="3.7" rx="0.4"/>'
+        '<rect x="20.7" y="4.0" width="3.0" height="3.7" rx="0.4"/>'
+        '<rect x="0.3" y="8.1" width="3.0" height="3.7" rx="0.4"/>'
+        '<rect x="3.7" y="8.1" width="3.0" height="3.7" rx="0.4"/>'
+        '<rect x="13.9" y="8.1" width="3.0" height="3.7" rx="0.4"/>'
+        '<rect x="17.3" y="8.1" width="3.0" height="3.7" rx="0.4"/>'
+        '<rect x="20.7" y="8.1" width="3.0" height="3.7" rx="0.4"/>'
+        '<rect x="0.3" y="12.2" width="3.0" height="3.7" rx="0.4"/>'
+        '<rect x="3.7" y="12.2" width="3.0" height="3.7" rx="0.4"/>'
+        '<rect x="7.1" y="12.2" width="3.0" height="3.7" rx="0.4"/>'
+        '<rect x="10.5" y="12.2" width="3.0" height="3.7" rx="0.4"/>'
+        '<rect x="13.9" y="12.2" width="3.0" height="3.7" rx="0.4"/>'
+        '<rect x="17.3" y="12.2" width="3.0" height="3.7" rx="0.4"/>'
+        '<rect x="20.7" y="12.2" width="3.0" height="3.7" rx="0.4"/>'
+        '<rect x="0.3" y="16.3" width="3.0" height="3.7" rx="0.4"/>'
+        '<rect x="3.7" y="16.3" width="3.0" height="3.7" rx="0.4"/>'
+        '<rect x="7.1" y="16.3" width="3.0" height="3.7" rx="0.4"/>'
+        '<rect x="10.5" y="16.3" width="3.0" height="3.7" rx="0.4"/>'
+        '</g>'
+    ),
     "note": (
         '<g transform="translate(12 12) skewX(-14) translate(-12 -12)">'
         '<path d="M5 4 H19 M12 4 V20"/></g>'
