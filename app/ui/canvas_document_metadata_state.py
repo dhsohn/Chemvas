@@ -38,6 +38,16 @@ def mark_document_clean_for(canvas: Any, state: dict) -> None:
     document_metadata_state_for(canvas).clean_digest = canonical_document_digest(state)
 
 
+# A non-hex sentinel that no real SHA-256 digest can equal, so the document
+# reads as dirty until the next genuine save. Used when restoring recovered
+# unsaved work, whose "last saved" baseline is unknown.
+_RECOVERED_DIRTY_DIGEST = "recovered-unsaved"
+
+
+def mark_document_dirty_for(canvas: Any) -> None:
+    document_metadata_state_for(canvas).clean_digest = _RECOVERED_DIRTY_DIGEST
+
+
 def set_document_file_path_for(canvas: Any, path: str | None) -> None:
     document_metadata_state_for(canvas).file_path = path
 
@@ -67,6 +77,7 @@ __all__ = [
     "document_is_dirty_for",
     "document_metadata_state_for",
     "mark_document_clean_for",
+    "mark_document_dirty_for",
     "set_document_display_name_for",
     "set_document_file_path_for",
 ]

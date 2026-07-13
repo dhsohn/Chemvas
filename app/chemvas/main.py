@@ -82,10 +82,19 @@ def main() -> None:
         file_open_filter = FileOpenEventFilter(open_document)
         app.installEventFilter(file_open_filter)
 
+        from ui.session_recovery_service import create_session_recovery_service
+
         window = open_new_window()
+        recovery = create_session_recovery_service()
+        # Auto-restore the previous session (recovered crash work + last
+        # workspace) on every launch, then open any explicitly-requested file the
+        # same way a macOS double-click does — through open_document, which
+        # reuses a blank window or opens its own and, via the duplicate-open
+        # guard, switches to the file if the restore already reopened it. Both
+        # the argv and the QEvent.FileOpen paths therefore behave identically.
+        recovery.restore_previous(window)
         startup_document_path = _startup_document_path(sys.argv)
         if startup_document_path is not None:
-            from ui.main_window_ports import services_for_window
-
-            services_for_window(window).document_action_service.load_canvas_from_path(window, startup_document_path)
+            open_document(startup_document_path)
+        recovery.start(app)
         app.exec()

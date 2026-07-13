@@ -123,6 +123,7 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
             new_canvas=mock.Mock(),
             show_rotate_options=mock.Mock(),
             set_note_font_family=mock.Mock(),
+            open_recent_path=mock.Mock(),
         )
         self.button_service = MainWindowUIAssemblyService(
             scene_transform_controller_for_window=self.scene_transform_controller_for_window,

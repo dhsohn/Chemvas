@@ -161,9 +161,12 @@ class MainWindowToolbarButtonFactory:
         load_action: QAction,
         save_as_action: QAction,
         *export_actions: QAction,
+        recent_menu: QMenu | None = None,
     ) -> CornerMenuButton:
         def build_menu(menu: QMenu) -> None:
             menu.addAction(load_action)
+            if recent_menu is not None:
+                menu.addMenu(recent_menu)
             menu.addAction(save_action)
             menu.addAction(save_as_action)
             if export_actions:

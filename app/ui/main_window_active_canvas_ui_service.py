@@ -25,6 +25,7 @@ class MainWindowActiveCanvasUIService:
         atom_input_for_window,
         tab_reactions_suspended_for_window,
         set_last_canvas_tab_index_for_window,
+        refresh_document_chrome_for_window,
     ) -> None:
         self._tool_mode_controller_for_window = tool_mode_controller_for_window
         self._active_canvas_for_window = active_canvas_for_window
@@ -39,6 +40,7 @@ class MainWindowActiveCanvasUIService:
         self._atom_input_for_window = atom_input_for_window
         self._tab_reactions_suspended_for_window = tab_reactions_suspended_for_window
         self._set_last_canvas_tab_index_for_window = set_last_canvas_tab_index_for_window
+        self._refresh_document_chrome_for_window = refresh_document_chrome_for_window
 
     def bind_active_canvas(self, window) -> None:
         active_canvas = self._active_canvas_for_window(window)
@@ -58,6 +60,9 @@ class MainWindowActiveCanvasUIService:
         # Undo/redo can change the bond length without re-showing the bond page,
         # so keep its spin box in sync to avoid writing a stale value later.
         self._context_bar.reflect_bond_length(window)
+        # Every edit can flip the document's saved/unsaved state, so refresh the
+        # tab's unsaved marker (and window-modified hint) live.
+        self._refresh_document_chrome_for_window(window)
 
     def handle_selection_info(self, window) -> None:
         try:

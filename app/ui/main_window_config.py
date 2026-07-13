@@ -44,7 +44,7 @@ TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
     ("text", "Atom", "text", "icon_text", "Atom (ChemDraw: A)"),
     ("note", "Text", "note", "icon_note", "Text / Annotation (ChemDraw: T)"),
     ("mark", "Mark", "mark", "icon_mark", "Charge / Radical"),
-    ("ts_bracket", "Brackets", "ts_bracket", "icon_ts_bracket", "Brackets (ChemDraw: Shift+G)"),
+    ("ts_bracket", "Brackets", "ts_bracket", "icon_ts_bracket", "Brackets (ChemDraw: Shift+T)"),
     ("shape", "Shape", "shape", "icon_shape", "Shapes / decoration (circle, ellipse, box)"),
     ("orbital", "Orbital", "orbital", "icon_orbital", "Orbital"),
     (

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Autosave & crash recovery**: open documents are snapshotted to a per-user
+  app-data folder every few seconds. After an abnormal exit the next launch
+  restores the unsaved work — flagged unsaved with a `●` and a status-bar note —
+  while a clean quit reopens whatever files were open, so the last session comes
+  back automatically. Snapshots are pruned once a session is restored or closed
+  cleanly, and a still-running instance's session is never touched.
+- **Open Recent**: the File menu lists recently opened/saved documents (entries
+  whose file has disappeared are pruned) with a **Clear Recent Files** action.
+- **Unsaved indicator**: a modified document shows a `●` dot on its tab and the
+  platform's native modified marker in the window title, cleared on save.
+- **Duplicate-open guard**: opening a file that is already open switches to its
+  window instead of creating a second, independently-editable copy.
+
 ### Changed
 - Moved the SMILES quick-insert field from the tool-options bar up to the main top
   toolbar, so it stays visible regardless of the active tool. The field stretches to
@@ -77,7 +91,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   together. Grouping is undoable, absorbs overlapping groups, and group
   membership is persisted in `.chemvas` documents (file format version 3;
   older files still load).
-- `.chemvas` JSON document save/load (`{"type":"chemvas","version":1,...}`).
+- `.chemvas` JSON document save/load (`{"type":"chemvas","version":4,...}`;
+  older version 1–3 files still load).
 - ACS 1996 default style and color palette.
 - **Application icon and OS identity**: a benzene-hexagon app icon in the window,
   Dock, and taskbar, plus the application name and version reported to the OS.

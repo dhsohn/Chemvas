@@ -54,6 +54,7 @@ def _panel_toolbar_callbacks() -> "MainWindowPanelToolbarCallbacks":
         new_canvas=mock.Mock(),
         show_rotate_options=mock.Mock(),
             set_note_font_family=mock.Mock(),
+        open_recent_path=mock.Mock(),
     )
 
 

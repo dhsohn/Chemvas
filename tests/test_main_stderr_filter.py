@@ -177,9 +177,15 @@ class MainStderrFilterTest(unittest.TestCase):
         class FakeMainWindow:
             def __init__(self) -> None:
                 document_action_service = types.SimpleNamespace(
-                    load_canvas_from_path=lambda window, path: events.append(("load", path))
+                    load_canvas_from_path=lambda window, path, target_provider=None: events.append(("load", path))
                 )
-                self._services = types.SimpleNamespace(document_action_service=document_action_service)
+                # open_document reuses a blank window when reusable_open_target is
+                # non-None; return a truthy sentinel so the startup file reuses it.
+                canvas_document_service = types.SimpleNamespace(reusable_open_target=lambda window: object())
+                self._services = types.SimpleNamespace(
+                    document_action_service=document_action_service,
+                    canvas_document_service=canvas_document_service,
+                )
 
             def show(self) -> None:
                 events.append(("show", None))
@@ -239,6 +245,17 @@ class MainStderrFilterTest(unittest.TestCase):
         main_window_module.MainWindow = FakeMainWindow
         ui_module.main_window = main_window_module
 
+        class FakeRecoveryService:
+            def restore_previous(self, window, *, include_clean_session: bool = True) -> None:
+                events.append("restore")
+
+            def start(self, app) -> None:
+                events.append("start")
+
+        recovery_module = types.ModuleType("ui.session_recovery_service")
+        recovery_module.create_session_recovery_service = lambda: FakeRecoveryService()
+        ui_module.session_recovery_service = recovery_module
+
         with mock.patch.dict(
             sys.modules,
             {
@@ -246,6 +263,7 @@ class MainStderrFilterTest(unittest.TestCase):
                 "PyQt6.QtWidgets": qt_widgets_module,
                 "ui": ui_module,
                 "ui.main_window": main_window_module,
+                "ui.session_recovery_service": recovery_module,
             },
         ):
             with (
@@ -255,7 +273,7 @@ class MainStderrFilterTest(unittest.TestCase):
             ):
                 runpy.run_module("main", run_name="__main__")
 
-        self.assertEqual(events, ["app", "show", "exec"])
+        self.assertEqual(events, ["app", "show", "restore", "start", "exec"])
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from core.document_io import read_document as default_read_document
@@ -27,7 +28,10 @@ from ui.main_window_path_logic import (
 from ui.main_window_path_logic import (
     resolve_save_path as default_resolve_save_path,
 )
+from ui.open_document_lookup import find_open_document
 from ui.rdkit_export_job_state import rdkit_export_jobs_for
+from ui.recent_documents_store import record_recent
+from ui.session_autosave_hook import request_snapshot
 
 
 class MainWindowDocumentActionService:
@@ -90,6 +94,9 @@ class MainWindowDocumentActionService:
         message_box=None,
     ) -> bool:
         message_box = QMessageBox if message_box is None else message_box
+        # Store an absolute path so the session/recent entries resolve regardless
+        # of the working directory at restore time.
+        path = os.path.abspath(path)
         target = self._active_canvas_for_window(window) if canvas is None else canvas
         try:
             warnings = save_canvas_to_file_for(target, path)
@@ -100,6 +107,11 @@ class MainWindowDocumentActionService:
         self._canvas_documents.set_display_name(target, self._canvas_documents.display_name_for_path(path) or path)
         self._canvas_documents.mark_clean(target)
         self._canvas_documents.refresh_tab_title(window, target)
+        record_recent(path)
+        # Refresh the autosave manifest now that this document has a (new) path,
+        # so a Save chosen from the quit close-prompt is reflected before the
+        # clean-exit flag is written.
+        request_snapshot()
         window.statusBar().showMessage(f"Saved: {path}", 4000)
         if warnings:
             message_box.warning(
@@ -314,6 +326,19 @@ class MainWindowDocumentActionService:
         message_box = QMessageBox if message_box is None else message_box
         read_document = default_read_document if read_document is None else read_document
         read_editable_svg = default_read_editable_svg if read_editable_svg is None else read_editable_svg
+        # Bind the document to an absolute path up front: a relative path (e.g. a
+        # CLI "chemvas ./file.chemvas") would otherwise be stored as the file
+        # path and autosaved into the session, then fail to resolve on restore
+        # from a different working directory.
+        path = os.path.abspath(path)
+        # If this exact file is already open, switch to that window instead of
+        # spawning a second, independently-editable copy. (Editable SVGs open
+        # unbound to their path, so this only matches real .chemvas documents.)
+        already_open = find_open_document(path)
+        if already_open is not None:
+            open_window, open_canvas = already_open
+            self._activate_open_document(open_window, open_canvas, path)
+            return True
         # Resolve the destination window only after the file reads successfully so
         # a missing or unreadable file never spawns an empty window.
         target = window
@@ -328,6 +353,8 @@ class MainWindowDocumentActionService:
                     display_name=Path(path).name,
                 )
                 target.statusBar().showMessage(f"Loaded editable SVG: {path}", 4000)
+                record_recent(path)
+                request_snapshot()
                 return True
             document = read_document(path)
             target = target_provider() if target_provider is not None else window
@@ -336,7 +363,25 @@ class MainWindowDocumentActionService:
             message_box.warning(window, "Load Error", f"Failed to load file:\n{exc}")
             return False
         target.statusBar().showMessage(f"Loaded: {path}", 4000)
+        record_recent(path)
+        # Capture the newly-opened document in the session now, so opening a file
+        # and quitting before the next timer tick does not drop it from restore.
+        request_snapshot()
         return True
+
+    def _activate_open_document(self, window, canvas: CanvasView, path: str) -> None:
+        """Bring the window already showing ``path`` to the front and select its
+        tab, then note it — used instead of opening a duplicate."""
+        tab_references = getattr(window, "tab_references", None)
+        if tab_references is not None:
+            tab_references.canvas_tabs.setCurrentWidget(canvas)
+        for method_name in ("show", "raise_", "activateWindow"):
+            method = getattr(window, method_name, None)
+            if callable(method):
+                method()
+        status_bar = getattr(window, "statusBar", None)
+        if callable(status_bar):
+            status_bar().showMessage(f"Already open: {path}", 4000)
 
     def close_canvas_tab(self, window, index: int) -> bool:
         tab_refs = window.tab_references
@@ -346,6 +391,11 @@ class MainWindowDocumentActionService:
         if not self.confirm_close_canvas(window, widget):
             return False
         self._canvas_documents.remove_canvas(window, widget)
+        # The open-document set changed: drop the closed document from the session
+        # so a clean quit does not reopen it. (This explicit close path is never
+        # taken during Cmd+Q, which closes whole windows, so it cannot truncate a
+        # multi-window quit.)
+        request_snapshot()
         return True
 
     def confirm_close_window(self, window) -> bool:

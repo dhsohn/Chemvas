@@ -40,6 +40,7 @@ from ui.main_window_theme import (
     TOOLBAR_THICKNESS,
 )
 from ui.main_window_toolbar_buttons import CornerMenuToolButton
+from ui.recent_menu import build_recent_menu
 
 _NOTE_TOOL_MENU_BUTTON_STYLE = (
     TOOLBAR_BUTTON_STYLE + "QToolButton::menu-indicator { image: none; width: 0px; height: 0px; }"
@@ -115,6 +116,7 @@ class MainWindowPanelToolbarCallbacks:
     new_canvas: Callable[[object], Any]
     show_rotate_options: Callable[[object], None]
     set_note_font_family: Callable[[object, str], None]
+    open_recent_path: Callable[[object, str], Any]
 
 
 def _normalize_tool_action_button(
@@ -278,8 +280,17 @@ def build_panel_toolbar(
     export_mol_action.triggered.connect(lambda _checked=False: callbacks.export_mol(window))
     window.addAction(export_mol_action)
 
+    recent_menu = build_recent_menu(
+        window,
+        open_path=lambda path: callbacks.open_recent_path(window, path),
+    )
     save_button = create_file_project_menu_button(
-        save_action, load_action, save_as_action, export_figure_action, export_mol_action
+        save_action,
+        load_action,
+        save_as_action,
+        export_figure_action,
+        export_mol_action,
+        recent_menu=recent_menu,
     )
     preview_panel_btn = create_toolbar_button(
         icon=icon_factory.icon_preview_panel(),
