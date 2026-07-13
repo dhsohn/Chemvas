@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Moved the SMILES quick-insert field from the tool-options bar up to the main top
+  toolbar, so it stays visible regardless of the active tool. The field stretches to
+  fill the space between the drawing tools and the file/history buttons (up to a
+  maximum width so it does not sprawl on wide monitors) and shrinks on narrow windows
+  instead of pushing buttons into the overflow menu.
+
 ## [0.1.0] - 2026-07-13
 
 ### Added

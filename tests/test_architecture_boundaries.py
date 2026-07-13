@@ -881,7 +881,9 @@ def test_main_window_ui_assembly_delegates_panel_toolbar_to_module() -> None:
     assert "topRoleToolbar" not in service_source
     assert "smiles_render_button" not in service_source
     assert "QKeySequence" not in service_source
-    assert "smiles_render_button" not in panel_toolbar_source
+    # The SMILES quick-insert field is built in the panel toolbar module (it lives
+    # on the top toolbar), so smiles_render_button is expected there — only the
+    # assembly service must stay free of it.
     assert "callbacks.set_bond_length(window)" not in panel_toolbar_source
     assert "window.set_bond_length" not in panel_toolbar_source
     assert _matching_lines(pattern, [panel_toolbar]) == []

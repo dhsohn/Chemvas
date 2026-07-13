@@ -303,7 +303,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.assertIsNotNone(note_button.menu())
         self.assertEqual(
             sum(1 for action in assembly.panel_bar.actions() if action.isSeparator()),
-            5,
+            6,
         )
         self.assertTrue(assembly.tool_actions["bond"].isChecked())
         self.assertIs(assembly.save_button.defaultAction(), assembly.save_action)
@@ -329,6 +329,9 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             [button.toolTip() for button in assembly.panel_bar.findChildren(QToolButton)],
         )
 
+        # The SMILES quick-insert bar now lives on the top toolbar. It has no
+        # section label (the field is self-describing via placeholder/tooltip),
+        # so the only section labels remain on the tool-options bar.
         section_labels = [
             label.text()
             for label in assembly.panel_bar.findChildren(QLabel)
@@ -337,8 +340,11 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.assertEqual(section_labels, [])
 
         self.assertIsNone(assembly.panel_bar.findChild(QLineEdit, "atomInput"))
-        self.assertEqual(assembly.panel_bar.findChildren(QLineEdit), [])
-        self.assertIsNone(assembly.panel_bar.findChild(QToolButton, "smiles_render_button"))
+        self.assertEqual(
+            [line_edit.objectName() for line_edit in assembly.panel_bar.findChildren(QLineEdit)],
+            ["contextSmilesInput"],
+        )
+        self.assertIsNotNone(assembly.panel_bar.findChild(QToolButton, "smiles_render_button"))
         self.assertIsNone(assembly.export_xyz_button)
         self.assertIsNone(assembly.panel_bar.findChild(QToolButton, "export_xyz_button"))
         self.assertIs(
