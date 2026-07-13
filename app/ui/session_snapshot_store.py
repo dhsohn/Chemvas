@@ -66,14 +66,20 @@ class SessionSnapshotStore:
         self._pid = pid
         self._dir = sessions_root / session_id
         self._last_signature: object = None
+        self._generation = 0
 
     @property
     def session_dir(self) -> Path:
         return self._dir
 
     def begin(self) -> None:
-        self._dir.mkdir(parents=True, exist_ok=True)
-        self._write_manifest(SessionManifest(pid=self._pid, clean_exit=False, docs=[]))
+        # Best-effort: a read-only or broken app-data dir must not prevent the
+        # editor from opening. Autosave simply becomes a no-op in that case.
+        try:
+            self._dir.mkdir(parents=True, exist_ok=True)
+            self._write_manifest(SessionManifest(pid=self._pid, clean_exit=False, docs=[]))
+        except OSError:
+            pass
 
     def save_documents(self, docs: list[DocDescriptor]) -> None:
         """Rewrite the manifest + dirty-doc snapshots for the current open set.
@@ -88,14 +94,21 @@ class SessionSnapshotStore:
         if signature == self._last_signature:
             return
 
+        # Each generation writes payloads under fresh, unique names and only
+        # prunes the previous generation *after* the new manifest is committed.
+        # A crash mid-write therefore always leaves the on-disk manifest pointing
+        # at intact payloads — never at a name that has been overwritten with a
+        # different document's state.
+        self._generation += 1
+        generation = self._generation
         entries: list[DocEntry] = []
-        keep: set[str] = set()
+        referenced: set[str] = set()
         for index, doc in enumerate(persisted):
             snapshot_name: str | None = None
             if needs_snapshot(dirty=doc.dirty):
-                snapshot_name = f"doc-{index}.json"
+                snapshot_name = f"doc-{generation}-{index}.json"
                 self._write_snapshot(snapshot_name, doc.state)
-                keep.add(snapshot_name)
+                referenced.add(snapshot_name)
             entries.append(
                 DocEntry(
                     file_path=doc.file_path,
@@ -104,8 +117,8 @@ class SessionSnapshotStore:
                     snapshot=snapshot_name,
                 )
             )
-        self._prune_snapshots(keep)
         self._write_manifest(SessionManifest(pid=self._pid, clean_exit=False, docs=entries))
+        self._prune_snapshots(referenced)
         self._last_signature = signature
 
     def mark_clean_exit(self) -> None:

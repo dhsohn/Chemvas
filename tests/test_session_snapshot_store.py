@@ -161,6 +161,31 @@ def test_pristine_untitled_canvas_is_not_persisted(tmp_path):
     assert manifest["docs"] == []
 
 
+def test_snapshot_names_are_generation_unique_and_pruned_after_commit(tmp_path):
+    # A new generation must never overwrite the previous generation's payloads
+    # (a crash mid-save would otherwise leave the old manifest pointing at
+    # foreign content). Old files are pruned only after the new manifest lands.
+    root = tmp_path / "sessions"
+    store = _store(root, "cur")
+    store.begin()
+    session = store.session_dir
+
+    store.save_documents(
+        [
+            DocDescriptor(state=_valid_state("A"), file_path=None, display_name="A", dirty=True),
+            DocDescriptor(state=_valid_state("B"), file_path=None, display_name="B", dirty=True),
+        ]
+    )
+    assert sorted(p.name for p in session.glob("doc-*.json")) == ["doc-1-0.json", "doc-1-1.json"]
+
+    # Close the first doc: only B persists now, under a fresh generation name.
+    store.save_documents([DocDescriptor(state=_valid_state("B"), file_path=None, display_name="B", dirty=True)])
+
+    assert sorted(p.name for p in session.glob("doc-*.json")) == ["doc-2-0.json"]  # gen 1 pruned
+    manifest = json.loads((session / "session.json").read_text())
+    assert [entry["snapshot"] for entry in manifest["docs"]] == ["doc-2-0.json"]
+
+
 def test_unchanged_tick_is_a_no_op(tmp_path, monkeypatch):
     root = tmp_path / "sessions"
     store = _store(root, "cur")
