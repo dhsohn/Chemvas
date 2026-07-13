@@ -9,7 +9,7 @@ By participating you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md)
 
 ## Development setup
 
-Requires **Python 3.13+**.
+Requires **Python 3.12+**.
 
 ```bash
 git clone https://github.com/dhsohn/Chemvas.git

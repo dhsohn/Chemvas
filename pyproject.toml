@@ -7,7 +7,7 @@ name = "chemvas"
 dynamic = ["version"]
 description = "A PyQt-based chemical drawing canvas."
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
     "Pillow>=10",
     "PyQt6>=6.7",
@@ -51,7 +51,7 @@ show_missing = true
 skip_covered = true
 
 [tool.ruff]
-target-version = "py313"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I", "B", "C901", "UP", "RUF012", "RUF021", "RUF022", "RUF046"]
@@ -64,7 +64,7 @@ max-complexity = 30
 "tests/*.py" = ["E402", "RUF012"]
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.12"
 mypy_path = "app"
 files = ["app/core", "app/ui"]
 warn_unused_ignores = true
