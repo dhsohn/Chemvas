@@ -132,6 +132,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             new_canvas=mock.Mock(),
             show_rotate_options=mock.Mock(),
             set_note_font_family=mock.Mock(),
+            open_recent_path=mock.Mock(),
         )
         self.service = MainWindowUIAssemblyService(
             scene_transform_controller_for_window=self.scene_transform_controller_for_window,
@@ -310,11 +311,13 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         menu_actions = [
             action for action in assembly.save_button.menu().actions() if not action.isSeparator()
         ]
-        self.assertEqual(
-            menu_actions[:3],
-            [assembly.load_action, assembly.save_action, assembly.save_as_action],
-        )
-        self.assertEqual(menu_actions[3].text(), "Export Figure...")
+        # File menu order: Load, Open Recent (submenu), Save, Save As, exports.
+        self.assertIs(menu_actions[0], assembly.load_action)
+        self.assertEqual(menu_actions[1].text(), "Open Recent")
+        self.assertIsNotNone(menu_actions[1].menu())
+        self.assertIs(menu_actions[2], assembly.save_action)
+        self.assertIs(menu_actions[3], assembly.save_as_action)
+        self.assertEqual(menu_actions[4].text(), "Export Figure...")
         self.assertEqual(assembly.save_button.toolTip(), "File")
         self.assertEqual(assembly.load_action.statusTip(), "Open a drawing")
         self.assertEqual(assembly.save_action.statusTip(), "Save the current drawing")

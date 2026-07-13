@@ -82,10 +82,20 @@ def main() -> None:
         file_open_filter = FileOpenEventFilter(open_document)
         app.installEventFilter(file_open_filter)
 
+        from ui.app_data_paths import sessions_dir
+        from ui.session_recovery_service import SessionRecoveryService
+        from ui.session_snapshot_store import new_session_store
+
         window = open_new_window()
+        recovery = SessionRecoveryService(new_session_store(sessions_dir()))
         startup_document_path = _startup_document_path(sys.argv)
         if startup_document_path is not None:
+            # An explicit file (e.g. a double-clicked document) wins; skip
+            # auto-restore so the user gets exactly what they asked for.
             from ui.main_window_ports import services_for_window
 
             services_for_window(window).document_action_service.load_canvas_from_path(window, startup_document_path)
+        else:
+            recovery.restore_previous(window)
+        recovery.start(app)
         app.exec()

@@ -22,6 +22,7 @@ if QApplication is not None:
     from ui.canvas_document_metadata_state import document_file_path_for
     from ui.canvas_window_access import snapshot_canvas_state_for
     from ui.main_window import MainWindow
+    from ui.main_window_app import forget_window, open_windows, register_window
     from ui.main_window_path_logic import (
         resolve_save_as_path,
         resolve_save_path,
@@ -64,6 +65,31 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             self.assertEqual(document_file_path_for(canvas), str(path))
             self.assertEqual(self.window.tab_references.canvas_tabs.tabText(0), "new.chemvas")
             self.assertFalse(services_for_window(self.window).canvas_document_service.is_dirty(canvas))
+
+    def test_load_canvas_from_path_switches_to_an_already_open_document(self) -> None:
+        register_window(self.window)
+        self.addCleanup(lambda: forget_window(self.window))
+        add_bond_between_points_for(active_canvas_for_window(self.window), QPointF(-20.0, 0.0), QPointF(20.0, 0.0))
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = str(Path(temp_dir) / "dup.chemvas")
+            self.assertTrue(self.service.save_canvas_to_path(self.window, path))
+            windows_before = set(open_windows())
+            spawned: list = []
+            message_box = mock.Mock()
+
+            result = self.service.load_canvas_from_path(
+                self.window,
+                path,
+                message_box=message_box,
+                target_provider=lambda: spawned.append(object()),
+            )
+
+            self.assertTrue(result)
+            self.assertEqual(spawned, [])  # no duplicate window opened
+            self.assertEqual(set(open_windows()), windows_before)
+            self.assertEqual(self.window.tab_references.canvas_count(), 1)
+            message_box.warning.assert_not_called()
+            self.assertIn("Already open", self.window.statusBar().currentMessage())
 
     def test_save_canvas_to_path_reports_document_adjustments(self) -> None:
         message_box = mock.Mock()

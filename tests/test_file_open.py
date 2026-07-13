@@ -67,7 +67,9 @@ class OpenDocumentRoutingTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
-        cls.example = str(Path(__file__).resolve().parents[1] / "examples" / "template1.chemvas")
+        examples = Path(__file__).resolve().parents[1] / "examples"
+        cls.example = str(examples / "template1.chemvas")
+        cls.other = str(examples / "template2.chemvas")
 
     def setUp(self) -> None:
         from ui.main_window_app import reset_window_registry
@@ -106,11 +108,25 @@ class OpenDocumentRoutingTest(unittest.TestCase):
         services_for_window(window).document_action_service.load_canvas_from_path(window, self.example)
         self.assertEqual(len(open_windows()), 1)
 
+        open_document(self.other)
+
+        # The occupied window keeps its document; a *different* file opens in a
+        # new window rather than as another tab (single-document-per-window).
+        self.assertEqual(len(open_windows()), 2)
+        self.assertIs(open_windows()[0], window)
+
+    def test_reopening_the_same_file_switches_instead_of_duplicating(self) -> None:
+        from ui.main_window_app import open_new_window, open_windows
+        from ui.main_window_ports import services_for_window
+
+        window = open_new_window()
+        services_for_window(window).document_action_service.load_canvas_from_path(window, self.example)
+        self.assertEqual(len(open_windows()), 1)
+
         open_document(self.example)
 
-        # The occupied window keeps its document; the file opens in a new window
-        # rather than as another tab (single-document-per-window).
-        self.assertEqual(len(open_windows()), 2)
+        # The file is already open, so we switch to its window — no duplicate.
+        self.assertEqual(len(open_windows()), 1)
         self.assertIs(open_windows()[0], window)
 
 

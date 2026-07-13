@@ -48,21 +48,31 @@ conversion — Chemvas runs without it.
   and delta-based undo/redo.
 - **ChemDraw-compatible shortcuts** — a substantial subset (see below).
 - **Save / load** — `.chemvas` JSON documents preserve the full working state.
+- **Autosave & recovery** — open documents are snapshotted every few seconds, so
+  an unexpected exit costs you almost nothing: the next launch restores your
+  unsaved work and reopens your last session automatically. Unsaved tabs show a
+  `●` marker, the File menu keeps an **Open Recent** list, and reopening an
+  already-open file switches to its window instead of duplicating it.
 
 ## Install
 
 Requires **Python 3.12+** and **PyQt6**.
 
 ```bash
-# from a clone of this repo
-python -m pip install -e .
+pip install chemvas
 
 # optional: enable SMILES / formula / 3D features
-python -m pip install -e ".[rdkit]"
+pip install "chemvas[rdkit]"
 ```
 
-> A PyPI release and prebuilt binaries are on the roadmap (see below). For now,
-> install from source.
+Or install from a clone of this repo — append `".[rdkit]"` for the optional
+features:
+
+```bash
+python -m pip install -e .
+```
+
+> Prebuilt one-file desktop binaries are still on the roadmap (see below).
 
 ## Running
 
@@ -72,7 +82,7 @@ chemvas               # after install
 ```
 
 Pick a tool from the left toolbar and click/drag on the canvas to draw. Enter a
-SMILES string in the top input and press **Render** to enter placement mode: move
+SMILES string in the top input and press **Insert** to enter placement mode: move
 the mouse to preview, click to insert, `Esc` to cancel. Templates work the same
 preview-and-click way.
 
@@ -88,12 +98,20 @@ File ▸ Save / Open works with `.chemvas` files — a JSON-based format holding
 molecule model, annotations, arrows, bracket annotations, and settings:
 
 ```json
-{ "type": "chemvas", "version": 1, "state": { /* ... */ } }
+{ "type": "chemvas", "version": 4, "state": { /* ... */ } }
 ```
 
 Figure export defaults to plain SVG without Chemvas source metadata. Choose
 **Editable Chemvas SVG** only when you want the SVG to carry the original
 document payload for round-tripping back into Chemvas.
+
+## Autosave & recovery
+
+Chemvas snapshots every open document to a per-user app-data folder every few
+seconds — nothing is written next to your own files. If the app is killed or
+crashes, the next launch restores those documents (unsaved ones flagged with a
+`●` and a status-bar note); a clean quit simply reopens whatever files were
+open. Snapshots are pruned once a session has been restored or closed cleanly.
 
 ## 3D export & Molecule Info
 
@@ -110,8 +128,8 @@ document payload for round-tripping back into Chemvas.
 
 Chemvas supports a major subset of ChemDraw-compatible shortcuts.
 
-- **Empty canvas (tool hotkeys):** Select/Marquee `Space`, Bond `X`, Atom/Text `T`,
-  Arrow `E`, Benzene `J`, Brackets `Shift+T`, Orbitals `Shift+G`,
+- **Empty canvas (tool hotkeys):** Select/Marquee `Space`, Bond `X`, Atom `A`,
+  Text `T`, Arrow `E`, Benzene `J`, Brackets `Shift+T`, Orbitals `Shift+G`,
   Chemical symbols `Shift+E`, Perspective `Alt+D`
 - **Atom hotkeys (hover over an atom):** element/alias labels
   `c n o s p f h b i l m e r x d` and `Shift+f/p/a/b/s/n/e/z/m/l/o/q/h/y`, charge `+`/`-`,
@@ -149,7 +167,8 @@ These are known gaps, not bugs — contributions welcome:
   `.mol` export, SMILES export ("copy as SMILES"), and InChI / InChIKey have landed.
 - **Vector clipboard:** `Ctrl+C` currently copies a PNG only; PDF/SVG clipboard
   flavors (for pasting into Illustrator / Office as vector) are planned.
-- **Distribution:** PyPI release and one-file desktop binaries.
+- **Distribution:** one-file desktop binaries (Chemvas is already on PyPI —
+  `pip install chemvas`).
 - **Multi-molecule / reaction-scheme 3D export** and richer template libraries.
 
 ## License

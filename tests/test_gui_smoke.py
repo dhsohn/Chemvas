@@ -336,7 +336,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         # The current window keeps its single document; the new canvas is its own window.
         self.assertEqual(self.window.tab_references.canvas_count(), before_count)
         self.assertEqual(spawned[0].tab_references.canvas_count(), 1)
-        self.assertTrue(spawned[0].windowTitle().endswith("— Chemvas"))
+        self.assertTrue(spawned[0].windowTitle().endswith("— Chemvas[*]"))
 
     def test_close_canvas_tab_removes_clean_target_canvas(self) -> None:
         services_for_window(self.window).canvas_document_service.new_canvas(self.window)

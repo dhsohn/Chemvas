@@ -27,7 +27,9 @@ from ui.main_window_path_logic import (
 from ui.main_window_path_logic import (
     resolve_save_path as default_resolve_save_path,
 )
+from ui.open_document_lookup import find_open_document
 from ui.rdkit_export_job_state import rdkit_export_jobs_for
+from ui.recent_documents_store import record_recent
 
 
 class MainWindowDocumentActionService:
@@ -100,6 +102,7 @@ class MainWindowDocumentActionService:
         self._canvas_documents.set_display_name(target, self._canvas_documents.display_name_for_path(path) or path)
         self._canvas_documents.mark_clean(target)
         self._canvas_documents.refresh_tab_title(window, target)
+        record_recent(path)
         window.statusBar().showMessage(f"Saved: {path}", 4000)
         if warnings:
             message_box.warning(
@@ -314,6 +317,14 @@ class MainWindowDocumentActionService:
         message_box = QMessageBox if message_box is None else message_box
         read_document = default_read_document if read_document is None else read_document
         read_editable_svg = default_read_editable_svg if read_editable_svg is None else read_editable_svg
+        # If this exact file is already open, switch to that window instead of
+        # spawning a second, independently-editable copy. (Editable SVGs open
+        # unbound to their path, so this only matches real .chemvas documents.)
+        already_open = find_open_document(path)
+        if already_open is not None:
+            open_window, open_canvas = already_open
+            self._activate_open_document(open_window, open_canvas, path)
+            return True
         # Resolve the destination window only after the file reads successfully so
         # a missing or unreadable file never spawns an empty window.
         target = window
@@ -328,6 +339,7 @@ class MainWindowDocumentActionService:
                     display_name=Path(path).name,
                 )
                 target.statusBar().showMessage(f"Loaded editable SVG: {path}", 4000)
+                record_recent(path)
                 return True
             document = read_document(path)
             target = target_provider() if target_provider is not None else window
@@ -336,7 +348,22 @@ class MainWindowDocumentActionService:
             message_box.warning(window, "Load Error", f"Failed to load file:\n{exc}")
             return False
         target.statusBar().showMessage(f"Loaded: {path}", 4000)
+        record_recent(path)
         return True
+
+    def _activate_open_document(self, window, canvas: CanvasView, path: str) -> None:
+        """Bring the window already showing ``path`` to the front and select its
+        tab, then note it — used instead of opening a duplicate."""
+        tab_references = getattr(window, "tab_references", None)
+        if tab_references is not None:
+            tab_references.canvas_tabs.setCurrentWidget(canvas)
+        for method_name in ("show", "raise_", "activateWindow"):
+            method = getattr(window, method_name, None)
+            if callable(method):
+                method()
+        status_bar = getattr(window, "statusBar", None)
+        if callable(status_bar):
+            status_bar().showMessage(f"Already open: {path}", 4000)
 
     def close_canvas_tab(self, window, index: int) -> bool:
         tab_refs = window.tab_references

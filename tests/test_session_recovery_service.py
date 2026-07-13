@@ -1,0 +1,167 @@
+from __future__ import annotations
+
+from types import SimpleNamespace
+
+import pytest
+from PyQt6.QtWidgets import QApplication
+from ui.session_recovery_service import SessionRecoveryService
+from ui.session_snapshot_logic import RestoredDoc
+from ui.session_snapshot_store import RestoreResult
+
+
+@pytest.fixture(scope="module")
+def qapp():
+    return QApplication.instance() or QApplication([])
+
+
+class _FakeStatusBar:
+    def __init__(self) -> None:
+        self.messages: list[tuple[str, int]] = []
+
+    def showMessage(self, message: str, timeout: int = 0) -> None:
+        self.messages.append((message, timeout))
+
+
+class _FakeWindow:
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self._status_bar = _FakeStatusBar()
+
+    def statusBar(self) -> _FakeStatusBar:
+        return self._status_bar
+
+
+class _FakeDocService:
+    def __init__(self) -> None:
+        self.opened: list = []
+        self.dirtied: list = []
+        self.refreshed: list = []
+
+    def open_state(self, window, *, state, file_path, display_name=None):
+        canvas = SimpleNamespace(window=window, state=state, file_path=file_path, display_name=display_name)
+        self.opened.append(canvas)
+        return canvas
+
+    def mark_dirty(self, canvas) -> None:
+        self.dirtied.append(canvas)
+
+    def refresh_tab_title(self, window, canvas) -> None:
+        self.refreshed.append((window, canvas))
+
+
+class _FakeStore:
+    def __init__(self, result: RestoreResult) -> None:
+        self._result = result
+        self.begun = False
+        self.saved: list = []
+        self.clean_exit = False
+
+    def consume_previous_sessions(self) -> RestoreResult:
+        return self._result
+
+    def begin(self) -> None:
+        self.begun = True
+
+    def save_documents(self, docs) -> None:
+        self.saved.append(docs)
+
+    def mark_clean_exit(self) -> None:
+        self.clean_exit = True
+
+
+class _FakeSignal:
+    def __init__(self) -> None:
+        self.slots: list = []
+
+    def connect(self, slot) -> None:
+        self.slots.append(slot)
+
+
+def _service(store, *, extra_windows=None, current_documents=lambda: []):
+    doc_service = _FakeDocService()
+    services = SimpleNamespace(canvas_document_service=doc_service)
+    spawned = list(extra_windows or [])
+    service = SessionRecoveryService(
+        store,
+        open_new_window=lambda reference: spawned.pop(0),
+        services_for_window=lambda window: services,
+        current_documents=current_documents,
+    )
+    return service, doc_service
+
+
+def test_restore_previous_rebuilds_windows_and_marks_recovered_dirty():
+    first = _FakeWindow("first")
+    second = _FakeWindow("second")
+    result = RestoreResult(
+        docs=[
+            RestoredDoc(state={"m": 1}, file_path=None, display_name="Canvas 1", dirty=True),
+            RestoredDoc(state={"m": 2}, file_path="/a/x.chemvas", display_name="x.chemvas", dirty=False),
+        ],
+        recovered_unsaved=1,
+    )
+    service, doc_service = _service(_FakeStore(result), extra_windows=[second])
+
+    recovered = service.restore_previous(first)
+
+    assert recovered == 1
+    # First doc reuses the first window; the second spawns a new one.
+    assert [c.window for c in doc_service.opened] == [first, second]
+    assert [c.display_name for c in doc_service.opened] == ["Canvas 1", "x.chemvas"]
+    # Only the unsaved doc is forced dirty.
+    assert doc_service.dirtied == [doc_service.opened[0]]
+    assert first.statusBar().messages
+    assert "Recovered 1 unsaved document" in first.statusBar().messages[0][0]
+
+
+def test_restore_previous_is_silent_when_nothing_to_recover():
+    first = _FakeWindow("first")
+    service, doc_service = _service(_FakeStore(RestoreResult()))
+
+    assert service.restore_previous(first) == 0
+    assert doc_service.opened == []
+    assert first.statusBar().messages == []
+
+
+def test_snapshot_now_persists_the_current_documents():
+    sentinel = [object()]
+    service, _ = _service(_FakeStore(RestoreResult()), current_documents=lambda: sentinel)
+
+    service.snapshot_now()
+
+    assert service._store.saved == [sentinel]
+
+
+def test_snapshot_now_swallows_store_errors():
+    store = _FakeStore(RestoreResult())
+
+    def boom(_docs):
+        raise RuntimeError("disk full")
+
+    store.save_documents = boom  # type: ignore[method-assign]
+    service, _ = _service(store)
+
+    service.snapshot_now()  # must not raise
+
+
+def test_start_begins_session_snapshots_and_arms_hooks(qapp):
+    store = _FakeStore(RestoreResult())
+    service, _ = _service(store, current_documents=lambda: ["doc"])
+    fake_app = SimpleNamespace(aboutToQuit=_FakeSignal())
+
+    service.start(fake_app)
+
+    assert store.begun is True
+    assert store.saved == [["doc"]]  # immediate snapshot after begin
+    assert service._timer is not None and service._timer.isActive()
+    assert fake_app.aboutToQuit.slots == [service._on_about_to_quit]
+    service._timer.stop()
+
+
+def test_about_to_quit_marks_the_session_clean():
+    store = _FakeStore(RestoreResult())
+    service, _ = _service(store)
+
+    service._on_about_to_quit()
+
+    assert store.clean_exit is True

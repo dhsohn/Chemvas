@@ -7,6 +7,7 @@ from ui.canvas_document_metadata_state import (
     document_file_path_for,
     document_is_dirty_for,
     mark_document_clean_for,
+    mark_document_dirty_for,
     set_document_display_name_for,
     set_document_file_path_for,
 )
@@ -14,6 +15,7 @@ from ui.canvas_lifecycle import schedule_canvas_deletion_for
 from ui.canvas_view import CanvasView
 from ui.canvas_window_access import restore_canvas_state_for, snapshot_canvas_state_for
 from ui.main_window_canvas_logic import copy_canvas_template_settings
+from ui.tab_title_logic import decorate_tab_title, window_title
 
 
 class MainWindowCanvasDocumentService:
@@ -157,6 +159,11 @@ class MainWindowCanvasDocumentService:
     def mark_clean(self, canvas: CanvasView) -> None:
         mark_document_clean_for(canvas, snapshot_canvas_state_for(canvas))
 
+    def mark_dirty(self, canvas: CanvasView) -> None:
+        """Force a document to read as unsaved — used when restoring recovered
+        work whose last-saved baseline is unknown."""
+        mark_document_dirty_for(canvas)
+
     def file_path(self, canvas: CanvasView) -> str | None:
         return document_file_path_for(canvas)
 
@@ -171,15 +178,21 @@ class MainWindowCanvasDocumentService:
 
     def refresh_tab_title(self, window, canvas: CanvasView) -> None:
         tab_refs = self._tab_refs_for_window(window)
+        dirty = self.is_dirty(canvas)
         index = tab_refs.active_canvas_tab_index(canvas)
         if index >= 0:
-            tab_refs.canvas_tabs.setTabText(index, self.display_name(canvas))
-        self._refresh_window_title(window, canvas)
+            tab_refs.canvas_tabs.setTabText(index, decorate_tab_title(self.display_name(canvas), dirty=dirty))
+        self._refresh_window_title(window, canvas, dirty=dirty)
 
-    def _refresh_window_title(self, window, canvas: CanvasView) -> None:
+    def _refresh_window_title(self, window, canvas: CanvasView, *, dirty: bool | None = None) -> None:
+        if dirty is None:
+            dirty = self.is_dirty(canvas)
+        set_modified = getattr(window, "setWindowModified", None)
+        if callable(set_modified):
+            set_modified(dirty)
         set_title = getattr(window, "setWindowTitle", None)
         if callable(set_title):
-            set_title(f"{self.display_name(canvas)} — Chemvas")
+            set_title(window_title(self.display_name(canvas)))
 
     @staticmethod
     def display_name_for_path(path: str | None) -> str | None:
