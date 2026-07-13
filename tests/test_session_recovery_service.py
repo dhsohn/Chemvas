@@ -55,8 +55,10 @@ class _FakeStore:
         self.begun = False
         self.saved: list = []
         self.clean_exit = False
+        self.include_clean_session: bool | None = None
 
-    def consume_previous_sessions(self) -> RestoreResult:
+    def consume_previous_sessions(self, *, include_clean_session: bool = True) -> RestoreResult:
+        self.include_clean_session = include_clean_session
         return self._result
 
     def begin(self) -> None:
@@ -112,6 +114,15 @@ def test_restore_previous_rebuilds_windows_and_marks_recovered_dirty():
     assert doc_service.dirtied == [doc_service.opened[0]]
     assert first.statusBar().messages
     assert "Recovered 1 unsaved document" in first.statusBar().messages[0][0]
+
+
+def test_restore_previous_forwards_include_clean_session():
+    store = _FakeStore(RestoreResult())
+    service, _ = _service(store)
+
+    service.restore_previous(_FakeWindow("first"), include_clean_session=False)
+
+    assert store.include_clean_session is False
 
 
 def test_restore_previous_is_silent_when_nothing_to_recover():

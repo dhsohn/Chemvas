@@ -91,6 +91,16 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             message_box.warning.assert_not_called()
             self.assertIn("Already open", self.window.statusBar().currentMessage())
 
+    def test_save_canvas_to_path_refreshes_the_autosave_snapshot(self) -> None:
+        calls: list[int] = []
+        with mock.patch("ui.main_window_document_action_service.request_snapshot", lambda: calls.append(1)):
+            with tempfile.TemporaryDirectory() as temp_dir:
+                path = str(Path(temp_dir) / "snap.chemvas")
+                self.assertTrue(self.service.save_canvas_to_path(self.window, path))
+        # A save must nudge the session manifest so a path change is captured
+        # before any clean-exit flag is written.
+        self.assertEqual(calls, [1])
+
     def test_save_canvas_to_path_reports_document_adjustments(self) -> None:
         message_box = mock.Mock()
 

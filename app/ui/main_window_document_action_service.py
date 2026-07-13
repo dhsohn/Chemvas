@@ -30,6 +30,7 @@ from ui.main_window_path_logic import (
 from ui.open_document_lookup import find_open_document
 from ui.rdkit_export_job_state import rdkit_export_jobs_for
 from ui.recent_documents_store import record_recent
+from ui.session_autosave_hook import request_snapshot
 
 
 class MainWindowDocumentActionService:
@@ -103,6 +104,10 @@ class MainWindowDocumentActionService:
         self._canvas_documents.mark_clean(target)
         self._canvas_documents.refresh_tab_title(window, target)
         record_recent(path)
+        # Refresh the autosave manifest now that this document has a (new) path,
+        # so a Save chosen from the quit close-prompt is reflected before the
+        # clean-exit flag is written.
+        request_snapshot()
         window.statusBar().showMessage(f"Saved: {path}", 4000)
         if warnings:
             message_box.warning(

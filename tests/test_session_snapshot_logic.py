@@ -9,7 +9,7 @@ from ui.session_snapshot_logic import (
     manifest_from_json,
     manifest_to_json,
     needs_snapshot,
-    select_restorable,
+    plan_restore,
     should_persist,
 )
 
@@ -45,25 +45,50 @@ def test_is_consumable_leaves_live_instances_alone():
     assert is_consumable(crashed, is_alive=alive) is False  # still running elsewhere
 
 
-def test_select_restorable_picks_newest_and_prunes_all_consumable():
+def test_plan_restore_reopens_only_the_newest_clean_session_and_prunes_all():
     a = SessionManifest(pid=1, clean_exit=True)
     b = SessionManifest(pid=2, clean_exit=True)
     candidates = [("old", a, 100.0), ("new", b, 200.0)]
 
-    chosen, prune = select_restorable(candidates, is_alive=lambda pid: False)
+    plan = plan_restore(candidates, is_alive=lambda pid: False)
 
-    assert chosen == ("new", b)
-    assert set(prune) == {"old", "new"}
+    assert plan.restore == ["new"]  # older clean session is pruned, not reopened
+    assert set(plan.prune) == {"old", "new"}
 
 
-def test_select_restorable_ignores_live_sessions():
+def test_plan_restore_recovers_every_crash_session_plus_newest_clean():
+    crash_old = SessionManifest(pid=1, clean_exit=False)
+    crash_new = SessionManifest(pid=2, clean_exit=False)
+    clean = SessionManifest(pid=3, clean_exit=True)
+    candidates = [("c_old", crash_old, 100.0), ("c_new", crash_new, 300.0), ("clean", clean, 200.0)]
+
+    plan = plan_restore(candidates, is_alive=lambda pid: False)
+
+    # Every crash is restored (unsaved work is never dropped) + newest clean,
+    # ordered newest-first so the most recent session reuses the blank window.
+    assert plan.restore == ["c_new", "clean", "c_old"]
+    assert set(plan.prune) == {"c_old", "c_new", "clean"}
+
+
+def test_plan_restore_suppresses_clean_session_but_still_recovers_crashes():
+    # This is the startup-file case: a P1 regression would drop the crash here.
+    crash = SessionManifest(pid=1, clean_exit=False)
+    clean = SessionManifest(pid=2, clean_exit=True)
+    candidates = [("crash", crash, 100.0), ("clean", clean, 200.0)]
+
+    plan = plan_restore(candidates, is_alive=lambda pid: False, include_clean_session=False)
+
+    assert plan.restore == ["crash"]  # crash recovered even though a file was opened
+    assert set(plan.prune) == {"crash", "clean"}  # clean pruned (its files are safe on disk)
+
+
+def test_plan_restore_ignores_live_sessions():
     live = SessionManifest(pid=7, clean_exit=False)
-    candidates = [("live", live, 100.0)]
 
-    chosen, prune = select_restorable(candidates, is_alive=lambda pid: True)
+    plan = plan_restore([("live", live, 100.0)], is_alive=lambda pid: True)
 
-    assert chosen is None
-    assert prune == []
+    assert plan.restore == []
+    assert plan.prune == []
 
 
 def test_entries_to_restore_clean_exit_keeps_only_saved_paths():

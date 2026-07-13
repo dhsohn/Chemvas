@@ -30,7 +30,7 @@ from ui.session_snapshot_logic import (
     manifest_from_json,
     manifest_to_json,
     needs_snapshot,
-    select_restorable,
+    plan_restore,
     should_persist,
 )
 
@@ -115,27 +115,35 @@ class SessionSnapshotStore:
         manifest.clean_exit = True
         self._write_manifest(manifest)
 
-    def consume_previous_sessions(self) -> RestoreResult:
-        """Restore the newest recoverable sibling session and delete every
-        consumable one. Live instances' sessions are left untouched."""
-        candidates = []
+    def consume_previous_sessions(self, *, include_clean_session: bool = True) -> RestoreResult:
+        """Reopen recoverable sibling sessions and delete every consumable one.
+
+        Crashed sessions are always restored (unsaved work is never pruned
+        unrecovered); the newest clean session is reopened only when
+        ``include_clean_session`` is set. Live instances' sessions are untouched.
+        """
+        manifests: dict[str, SessionManifest] = {}
+        order: dict[str, float] = {}
         for child in self._sibling_dirs():
             manifest = self._read_manifest(child)
             if manifest is None:
                 shutil.rmtree(child, ignore_errors=True)  # orphan / corrupt dir
                 continue
-            candidates.append((child.name, manifest, child.stat().st_mtime))
+            manifests[child.name] = manifest
+            order[child.name] = child.stat().st_mtime
 
-        chosen, prune_ids = select_restorable(candidates, is_alive=_pid_alive)
+        candidates = [(session_id, manifests[session_id], order[session_id]) for session_id in manifests]
+        plan = plan_restore(candidates, is_alive=_pid_alive, include_clean_session=include_clean_session)
+
         result = RestoreResult()
-        if chosen is not None:
-            session_id, manifest = chosen
-            result.recovered_unsaved = count_recovered_unsaved(manifest)
+        for session_id in plan.restore:
+            manifest = manifests[session_id]
+            result.recovered_unsaved += count_recovered_unsaved(manifest)
             for entry in entries_to_restore(manifest):
                 restored = self._restore_entry(self._root / session_id, entry, clean_exit=manifest.clean_exit)
                 if restored is not None:
                     result.docs.append(restored)
-        for session_id in prune_ids:
+        for session_id in plan.prune:
             shutil.rmtree(self._root / session_id, ignore_errors=True)
         return result
 

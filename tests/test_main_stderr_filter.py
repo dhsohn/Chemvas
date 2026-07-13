@@ -240,7 +240,7 @@ class MainStderrFilterTest(unittest.TestCase):
         ui_module.main_window = main_window_module
 
         class FakeRecoveryService:
-            def restore_previous(self, window) -> None:
+            def restore_previous(self, window, *, include_clean_session: bool = True) -> None:
                 events.append("restore")
 
             def start(self, app) -> None:

@@ -94,6 +94,34 @@ def test_clean_exit_drops_unsaved_untitled_docs(tmp_path, monkeypatch):
     assert result.docs == []
 
 
+def test_crash_is_recovered_even_when_clean_session_is_suppressed(tmp_path, monkeypatch):
+    # The startup-file case (include_clean_session=False): the clean workspace is
+    # not reopened, but a crashed session's unsaved work must still be recovered
+    # rather than silently pruned.
+    root = tmp_path / "sessions"
+    saved = tmp_path / "kept.chemvas"
+    write_document(saved, _valid_state("disk"), CANVAS_FILE_VERSION)
+
+    clean = _store(root, "clean-session", pid=10)
+    clean.begin()
+    clean.save_documents([DocDescriptor(state=_valid_state("disk"), file_path=str(saved), display_name="kept.chemvas", dirty=False)])
+    clean.mark_clean_exit()
+
+    crash = _store(root, "crash-session", pid=11)
+    crash.begin()
+    crash.save_documents([DocDescriptor(state=_valid_state("unsaved"), file_path=None, display_name="Canvas 1", dirty=True)])
+
+    _dead_pids(monkeypatch)
+    result = _store(root, "cur").consume_previous_sessions(include_clean_session=False)
+
+    assert result.recovered_unsaved == 1
+    assert [doc.dirty for doc in result.docs] == [True]
+    assert result.docs[0].state["last_smiles_input"] == "unsaved"
+    # Both siblings are pruned (the clean one's file is safe on disk).
+    assert not (root / "clean-session").exists()
+    assert not (root / "crash-session").exists()
+
+
 def test_live_instance_session_is_left_untouched(tmp_path, monkeypatch):
     root = tmp_path / "sessions"
     prev = _store(root, "prev", pid=444)

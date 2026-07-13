@@ -21,6 +21,7 @@ from ui.canvas_window_access import snapshot_canvas_state_for
 from ui.main_window_app import open_new_window as default_open_new_window
 from ui.main_window_app import open_windows
 from ui.main_window_ports import services_for_window as default_services_for_window
+from ui.session_autosave_hook import set_snapshot_hook
 from ui.session_snapshot_logic import DocDescriptor
 from ui.session_snapshot_store import new_session_store
 
@@ -64,11 +65,16 @@ class SessionRecoveryService:
         self._interval_ms = interval_ms
         self._timer: QTimer | None = None
 
-    def restore_previous(self, first_window) -> int:
+    def restore_previous(self, first_window, *, include_clean_session: bool = True) -> int:
         """Reopen the previous session's documents, reusing ``first_window``'s
         blank tab for the first one. Returns the count of recovered unsaved
-        documents (a crash), which is also surfaced in the status bar."""
-        result = self._store.consume_previous_sessions()
+        documents (a crash), which is also surfaced in the status bar.
+
+        ``include_clean_session`` is set False when the launch already has a
+        startup file: crashed work is still recovered, but a cleanly-closed
+        workspace is not dragged back on top of the requested document.
+        """
+        result = self._store.consume_previous_sessions(include_clean_session=include_clean_session)
         for index, document in enumerate(result.docs):
             window = first_window if index == 0 else self._open_new_window(first_window)
             services = self._services_for_window(window)
@@ -86,10 +92,11 @@ class SessionRecoveryService:
         return result.recovered_unsaved
 
     def start(self, app) -> None:
-        """Begin this session, snapshot immediately, and arm the periodic timer
-        plus the clean-exit hook."""
+        """Begin this session, snapshot immediately, and arm the periodic timer,
+        the save hook, and the clean-exit hook."""
         self._store.begin()
         self.snapshot_now()
+        set_snapshot_hook(self.snapshot_now)
         about_to_quit = getattr(app, "aboutToQuit", None)
         connect = getattr(about_to_quit, "connect", None)
         if callable(connect):

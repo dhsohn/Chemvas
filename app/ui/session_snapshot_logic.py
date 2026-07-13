@@ -84,21 +84,35 @@ def is_consumable(manifest: SessionManifest, *, is_alive) -> bool:
     return manifest.clean_exit or not is_alive(manifest.pid)
 
 
-def select_restorable(candidates, *, is_alive):
-    """Pick which previous session to restore and which to prune.
+@dataclass(frozen=True)
+class RestorePlan:
+    restore: list[str]  # session ids to reopen, newest-first
+    prune: list[str]  # session ids to delete (a superset of `restore`)
+
+
+def plan_restore(candidates, *, is_alive, include_clean_session: bool = True) -> RestorePlan:
+    """Decide which previous sessions to reopen and which to delete.
 
     ``candidates`` is an iterable of ``(session_id, manifest, order_key)`` for
-    sessions other than our own; ``order_key`` sorts most-recent-last. Returns
-    ``((session_id, manifest) | None, prune_ids)`` — the newest consumable
-    session to restore, plus every consumable session id to delete (including
-    the restored one). Live instances' sessions are neither restored nor pruned.
+    sessions other than our own (``order_key`` sorts most-recent-last).
+
+    *Every* crashed session (unclean + dead pid) is restored so unsaved work is
+    never pruned unrecovered — even when the user launched with a file. At most
+    one *clean* session is reopened (the newest, for last-session continuity),
+    and only when ``include_clean_session`` is set (a startup file suppresses it
+    so opening a document does not drag the whole previous workspace back).
+    Every consumable session is pruned; a live instance's session is untouched.
     """
     consumable = [(sid, manifest, key) for (sid, manifest, key) in candidates if is_consumable(manifest, is_alive=is_alive)]
-    prune_ids = [sid for (sid, _manifest, _key) in consumable]
-    if not consumable:
-        return None, prune_ids
-    sid, manifest, _key = max(consumable, key=lambda item: item[2])
-    return (sid, manifest), prune_ids
+    prune = [sid for (sid, _manifest, _key) in consumable]
+    restore_items = [(sid, key) for (sid, manifest, key) in consumable if not manifest.clean_exit]
+    if include_clean_session:
+        clean = [(sid, manifest, key) for (sid, manifest, key) in consumable if manifest.clean_exit]
+        if clean:
+            sid, _manifest, key = max(clean, key=lambda item: item[2])
+            restore_items.append((sid, key))
+    restore_items.sort(key=lambda item: item[1], reverse=True)
+    return RestorePlan(restore=[sid for (sid, _key) in restore_items], prune=prune)
 
 
 def entries_to_restore(manifest: SessionManifest) -> list[DocEntry]:
@@ -165,6 +179,7 @@ __all__ = [
     "SESSION_SCHEMA_VERSION",
     "DocDescriptor",
     "DocEntry",
+    "RestorePlan",
     "RestoredDoc",
     "SessionManifest",
     "count_recovered_unsaved",
@@ -173,6 +188,6 @@ __all__ = [
     "manifest_from_json",
     "manifest_to_json",
     "needs_snapshot",
-    "select_restorable",
+    "plan_restore",
     "should_persist",
 ]
