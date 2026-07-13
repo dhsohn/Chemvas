@@ -64,6 +64,7 @@ class SessionRecoveryService:
         self._current_documents = current_documents
         self._interval_ms = interval_ms
         self._timer: QTimer | None = None
+        self._pending_prune: list[str] = []
 
     def restore_previous(self, first_window, *, include_clean_session: bool = True) -> int:
         """Reopen the previous session's documents, reusing ``first_window``'s
@@ -75,6 +76,9 @@ class SessionRecoveryService:
         workspace is not dragged back on top of the requested document.
         """
         result = self._store.consume_previous_sessions(include_clean_session=include_clean_session)
+        # Prune the consumed source sessions only after start() re-snapshots the
+        # restored docs, so a crash mid-restore keeps the recoverable copies.
+        self._pending_prune = result.prune_ids
         for index, document in enumerate(result.docs):
             reuse_first = index == 0 and self._is_reusable(first_window)
             window = first_window if reuse_first else self._open_new_window(first_window)
@@ -104,6 +108,10 @@ class SessionRecoveryService:
         the save hook, and the clean-exit hook."""
         self._store.begin()
         self.snapshot_now()
+        # The recovered work is now persisted in this session; releasing the old
+        # source sessions is finally safe.
+        self._store.prune_sessions(self._pending_prune)
+        self._pending_prune = []
         set_snapshot_hook(self.snapshot_now)
         about_to_quit = getattr(app, "aboutToQuit", None)
         connect = getattr(about_to_quit, "connect", None)

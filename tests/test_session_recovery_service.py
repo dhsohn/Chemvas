@@ -58,8 +58,10 @@ class _FakeStore:
         self._result = result
         self.begun = False
         self.saved: list = []
+        self.pruned: list = []
         self.clean_exit = False
         self.include_clean_session: bool | None = None
+        self.events: list[str] = []
 
     def consume_previous_sessions(self, *, include_clean_session: bool = True) -> RestoreResult:
         self.include_clean_session = include_clean_session
@@ -67,9 +69,15 @@ class _FakeStore:
 
     def begin(self) -> None:
         self.begun = True
+        self.events.append("begin")
 
     def save_documents(self, docs) -> None:
         self.saved.append(docs)
+        self.events.append("save")
+
+    def prune_sessions(self, session_ids) -> None:
+        self.pruned.append(list(session_ids))
+        self.events.append("prune")
 
     def mark_clean_exit(self) -> None:
         self.clean_exit = True
@@ -189,6 +197,23 @@ def test_start_begins_session_snapshots_and_arms_hooks(qapp):
     assert store.saved == [["doc"]]  # immediate snapshot after begin
     assert service._timer is not None and service._timer.isActive()
     assert fake_app.aboutToQuit.slots == [service._on_about_to_quit]
+    service._timer.stop()
+
+
+def test_consumed_sessions_are_pruned_only_after_resnapshot(qapp):
+    # A crash mid-restore must not destroy the recovered work: the old source
+    # sessions are deleted only after start() snapshots them into the new one.
+    store = _FakeStore(RestoreResult(prune_ids=["old-1", "old-2"]))
+    service, _ = _service(store, current_documents=lambda: ["doc"])
+    fake_app = SimpleNamespace(aboutToQuit=_FakeSignal())
+
+    service.restore_previous(_FakeWindow("first"))  # captures the deferred prune list
+    assert store.pruned == []  # nothing deleted yet
+
+    service.start(fake_app)
+
+    assert store.pruned == [["old-1", "old-2"]]
+    assert store.events.index("save") < store.events.index("prune")  # snapshot, then prune
     service._timer.stop()
 
 

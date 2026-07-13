@@ -58,7 +58,10 @@ def test_crash_restore_round_trips_unsaved_work(tmp_path, monkeypatch):
     assert restored.file_path is None
     assert restored.state is not None
     assert restored.state["last_smiles_input"] == "scratch"
-    assert not (root / "prev").exists()  # consumed
+    # Deferred prune: the source dir is only scheduled for deletion, not yet gone
+    # (the caller prunes after re-snapshotting the recovered work).
+    assert result.prune_ids == ["prev"]
+    assert (root / "prev").exists()
 
 
 def test_clean_exit_reopens_saved_files_from_disk(tmp_path, monkeypatch):
@@ -118,9 +121,10 @@ def test_crash_is_recovered_even_when_clean_session_is_suppressed(tmp_path, monk
     assert result.recovered_unsaved == 1
     assert [doc.dirty for doc in result.docs] == [True]
     assert result.docs[0].state["last_smiles_input"] == "unsaved"
-    # Both siblings are pruned (the clean one's file is safe on disk).
-    assert not (root / "clean-session").exists()
-    assert not (root / "crash-session").exists()
+    # Both siblings are scheduled for prune (deferred), not yet deleted.
+    assert set(result.prune_ids) == {"clean-session", "crash-session"}
+    assert (root / "clean-session").exists()
+    assert (root / "crash-session").exists()
 
 
 def test_unreadable_snapshot_does_not_inflate_recovered_count(tmp_path, monkeypatch):
@@ -144,6 +148,42 @@ def test_unreadable_snapshot_does_not_inflate_recovered_count(tmp_path, monkeypa
 
     assert result.recovered_unsaved == 1
     assert [doc.display_name for doc in result.docs] == ["Good"]
+
+
+def test_prune_sessions_deletes_the_given_dirs(tmp_path):
+    root = tmp_path / "sessions"
+    (root / "a").mkdir(parents=True)
+    (root / "b").mkdir(parents=True)
+
+    _store(root, "cur").prune_sessions(["a", "b"])
+
+    assert not (root / "a").exists()
+    assert not (root / "b").exists()
+
+
+def test_consume_tolerates_a_sibling_vanishing_mid_scan(tmp_path, monkeypatch):
+    import shutil
+
+    # Another instance can delete a sibling between _read_manifest and stat().
+    root = tmp_path / "sessions"
+    prev = _store(root, "prev", pid=77)
+    prev.begin()
+    prev.save_documents([DocDescriptor(state=_valid_state("x"), file_path=None, display_name="X", dirty=True)])
+
+    cur = _store(root, "cur")
+    original_read = cur._read_manifest
+
+    def read_then_vanish(session_dir):
+        manifest = original_read(session_dir)
+        shutil.rmtree(session_dir, ignore_errors=True)  # concurrent prune after the read
+        return manifest
+
+    monkeypatch.setattr(cur, "_read_manifest", read_then_vanish)
+    _dead_pids(monkeypatch)
+
+    result = cur.consume_previous_sessions()  # must not raise FileNotFoundError
+
+    assert result.docs == []
 
 
 def test_live_instance_session_is_left_untouched(tmp_path, monkeypatch):

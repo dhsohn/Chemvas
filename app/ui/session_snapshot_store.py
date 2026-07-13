@@ -41,6 +41,9 @@ MANIFEST_NAME = "session.json"
 class RestoreResult:
     docs: list[RestoredDoc] = field(default_factory=list)
     recovered_unsaved: int = 0
+    # Consumed session ids to delete only *after* the restored documents have
+    # been re-snapshotted into the new session (see SessionRecoveryService).
+    prune_ids: list[str] = field(default_factory=list)
 
 
 def _pid_alive(pid: int) -> bool:
@@ -166,8 +169,13 @@ class SessionSnapshotStore:
             if manifest is None:
                 shutil.rmtree(child, ignore_errors=True)  # orphan / corrupt dir
                 continue
+            try:
+                mtime = child.stat().st_mtime
+            except OSError:
+                # Another instance consumed this sibling between listing and now.
+                continue
             manifests[child.name] = manifest
-            order[child.name] = child.stat().st_mtime
+            order[child.name] = mtime
 
         candidates = [(session_id, manifests[session_id], order[session_id]) for session_id in manifests]
         plan = plan_restore(candidates, is_alive=_pid_alive, include_clean_session=include_clean_session)
@@ -186,9 +194,15 @@ class SessionSnapshotStore:
                 # inflate the "Recovered N unsaved" message.
                 if restored.dirty:
                     result.recovered_unsaved += 1
-        for session_id in plan.prune:
-            shutil.rmtree(self._root / session_id, ignore_errors=True)
+        # Defer deletion: the caller prunes only after these documents are safely
+        # snapshotted into the new session, so a crash mid-restore cannot destroy
+        # the last on-disk copy of the recovered work.
+        result.prune_ids = plan.prune
         return result
+
+    def prune_sessions(self, session_ids: list[str]) -> None:
+        for session_id in session_ids:
+            shutil.rmtree(self._root / session_id, ignore_errors=True)
 
     # --- internals --------------------------------------------------------
 

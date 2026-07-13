@@ -82,8 +82,9 @@ class SessionRecoveryIntegrationTest(unittest.TestCase):
             self.assertTrue(restored_state["model"]["atoms"])
             # ...and the restored document is flagged unsaved for the user.
             self.assertTrue(self._document_service(new_window).is_dirty(restored_canvas))
-            # The previous session directory was consumed.
-            self.assertFalse((sessions_dir() / "prev-session").exists())
+            # Deferred prune: the source dir survives restore_previous and is only
+            # deleted by start() after the recovered work is re-snapshotted.
+            self.assertTrue((sessions_dir() / "prev-session").exists())
         finally:
             if restored_canvas is not None:
                 self._document_service(new_window).mark_clean(restored_canvas)
