@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fill the space between the drawing tools and the file/history buttons (up to a
   maximum width so it does not sprawl on wide monitors) and shrinks on narrow windows
   instead of pushing buttons into the overflow menu.
+- Renamed the SMILES insert button from **Render** to **Insert**, so its label matches
+  what it does — placing the typed structure on the canvas.
+- Redrew the **Atom** tool icon as a periodic-table glyph (previously an `A`
+  letterform) to signal "choose a specific element" and to keep it visually distinct
+  from the **Text** annotation tool's `T`.
+- Gave the status-bar zoom **Fit** control a subtle border and hover state so it reads
+  as a button rather than plain text, matching the `−` / `+` controls beside it.
 
 ## [0.1.0] - 2026-07-13
 

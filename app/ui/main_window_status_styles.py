@@ -50,8 +50,23 @@ def main_window_status_stylesheet(palette) -> str:
                 background: {_P["pressed"]};
             }}
             QStatusBar QToolButton#statusZoomFitButton {{
+                color: {_P["text_muted"]};
+                background: transparent;
+                border: 1px solid {_P["border_strong"]};
+                border-radius: 4px;
                 font-size: 12px;
                 font-weight: 500;
+                min-width: 18px;
+                padding: 1px 7px;
+                margin: 0 0 0 3px;
+            }}
+            QStatusBar QToolButton#statusZoomFitButton:hover {{
+                background: {_P["hover"]};
+                color: {_P["text"]};
+                border-color: {_P["scrollbar_hover"]};
+            }}
+            QStatusBar QToolButton#statusZoomFitButton:pressed {{
+                background: {_P["pressed"]};
             }}
 """
 
