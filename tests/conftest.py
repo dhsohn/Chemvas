@@ -4,6 +4,34 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
+def _isolate_chemvas_app_data(tmp_path_factory, monkeypatch):
+    """Redirect Chemvas's writable app-data dir (recent files, autosave
+    snapshots) to a throwaway per-test location.
+
+    Saving/opening now records recent files and autosaves snapshots under
+    ``QStandardPaths.AppDataLocation``. Patching the single ``app_data_dir()``
+    source keeps every test from reading or writing the real user profile, and
+    isolates tests from each other.
+    """
+    try:
+        from ui import app_data_paths, session_autosave_hook
+    except ModuleNotFoundError:
+        yield
+        return
+    base = tmp_path_factory.mktemp("chemvas_app_data")
+    # Patch the candidate list (not app_data_dir itself) so the real fallback
+    # logic still runs while every write lands in the throwaway dir.
+    monkeypatch.setattr(app_data_paths, "_candidate_dirs", lambda: [base])
+    # A recovery service's start() installs a global save hook, and aboutToQuit
+    # sets a process-wide quitting flag; keep both from leaking across tests.
+    session_autosave_hook.set_snapshot_hook(None)
+    session_autosave_hook.reset_quitting()
+    yield
+    session_autosave_hook.set_snapshot_hook(None)
+    session_autosave_hook.reset_quitting()
+
+
+@pytest.fixture(autouse=True)
 def _reset_chemvas_window_registry():
     """Keep the app-level window registry from leaking between tests.
 

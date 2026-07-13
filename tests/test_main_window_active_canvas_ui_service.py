@@ -119,6 +119,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.set_last_canvas_tab_index_for_window = mock.Mock(
             side_effect=lambda window, index: setattr(window, "last_canvas_tab_index", index)
         )
+        self.refresh_document_chrome_for_window = mock.Mock()
         self.service = MainWindowActiveCanvasUIService(
             tool_mode_controller_for_window=self.tool_mode_controller_for_window,
             active_canvas_for_window=self.active_canvas_for_window,
@@ -133,6 +134,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
             atom_input_for_window=self.atom_input_for_window,
             tab_reactions_suspended_for_window=self.tab_reactions_suspended_for_window,
             set_last_canvas_tab_index_for_window=self.set_last_canvas_tab_index_for_window,
+            refresh_document_chrome_for_window=self.refresh_document_chrome_for_window,
         )
 
     def tearDown(self) -> None:
@@ -188,6 +190,8 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.action_availability_service.update_action_availability.assert_has_calls(
             [mock.call(self.window), mock.call(self.window)],
         )
+        # The history-change callback must refresh the unsaved marker live.
+        self.refresh_document_chrome_for_window.assert_called_once_with(self.window)
         self.status_service.show_error_message.assert_called_once_with(
             self.window,
             "Invalid molecule",

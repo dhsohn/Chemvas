@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import QMainWindow
 
 from ui.main_window_app import forget_window
 from ui.main_window_bootstrap import bootstrap_main_window, build_main_window_runtime
+from ui.session_autosave_hook import request_snapshot_on_window_close
 
 if TYPE_CHECKING:
     from ui.main_window_state import MainWindowState
@@ -47,4 +48,9 @@ class MainWindow(QMainWindow):
         if callable(shutdown_preview):
             shutdown_preview()
         forget_window(self)
+        # Defer a session refresh: it runs only if the app keeps running (a
+        # standalone window close drops the closed document from the restore
+        # set). During app-wide quit, aboutToQuit sets the quitting flag before
+        # this fires, so it no-ops and the full open set is preserved.
+        request_snapshot_on_window_close()
         super().closeEvent(event)

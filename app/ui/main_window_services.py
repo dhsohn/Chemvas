@@ -188,6 +188,15 @@ def build_main_window_services() -> MainWindowServices:
         set_context_bar_page_override_for_window=set_context_bar_page_override_for_window,
         tool_action_for_window=tool_action_for_window,
     )
+    canvas_document_service: MainWindowCanvasDocumentService
+
+    def refresh_document_chrome_for_window(window) -> None:
+        # Late-bound: canvas_document_service is assigned just below. Refreshes
+        # the active tab's unsaved marker + the window-modified title after edits.
+        canvas = active_canvas_or_none_for_window(window)
+        if canvas is not None:
+            canvas_document_service.refresh_tab_title(window, canvas)
+
     active_canvas_ui_service = MainWindowActiveCanvasUIService(
         tool_mode_controller_for_window=tool_mode_controller_for_window,
         active_canvas_for_window=active_canvas_for_window,
@@ -202,6 +211,7 @@ def build_main_window_services() -> MainWindowServices:
         atom_input_for_window=atom_input_for_window,
         tab_reactions_suspended_for_window=tab_reactions_suspended_for_window,
         set_last_canvas_tab_index_for_window=set_last_canvas_tab_index_for_window,
+        refresh_document_chrome_for_window=refresh_document_chrome_for_window,
     )
     canvas_document_service = MainWindowCanvasDocumentService(
         active_canvas_ui=active_canvas_ui_service,
@@ -255,6 +265,9 @@ def build_main_window_services() -> MainWindowServices:
         new_canvas=open_new_window,
         show_rotate_options=lambda window: context_page_state_service.show_context_page(window, "rotate"),
         set_note_font_family=set_note_font_family_for_window,
+        open_recent_path=lambda window, path: document_action_service.load_canvas_from_path(
+            window, path, target_provider=lambda: open_new_window(window)
+        ),
     )
     ui_assembly_service = MainWindowUIAssemblyService(
         scene_transform_controller_for_window=scene_transform_controller_for_window,
