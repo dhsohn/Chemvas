@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sys
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -47,14 +48,38 @@ def _pid_alive(pid: int) -> bool:
     delete) a session another running instance still owns."""
     if pid <= 0:
         return False
+    if sys.platform == "win32":
+        return _pid_alive_windows(pid)
+    return _pid_alive_posix(pid)
+
+
+def _pid_alive_posix(pid: int) -> bool:
+    # Signal 0 is a genuine no-op existence probe on POSIX.
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
         return False
     except PermissionError:
-        return True
+        return True  # exists but owned by another user
     except OSError:
         return True
+    return True
+
+
+def _pid_alive_windows(pid: int) -> bool:  # pragma: no cover - Windows-only
+    # CRITICAL: os.kill(pid, 0) on Windows is not a probe — it routes to
+    # TerminateProcess and would kill the target. Query existence via
+    # OpenProcess instead. windll is absent from ctypes' cross-platform type
+    # stubs (this branch only runs on Windows), so the attr-defined ignore is
+    # used on the Linux CI type-check.
+    import ctypes
+
+    kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+    process_query_limited_information = 0x1000
+    handle = kernel32.OpenProcess(process_query_limited_information, False, pid)
+    if not handle:
+        return False
+    kernel32.CloseHandle(handle)
     return True
 
 

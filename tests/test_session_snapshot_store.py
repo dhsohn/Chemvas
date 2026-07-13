@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 
 from core.document_io import write_document
 from core.document_state import CANVAS_FILE_VERSION, serialize_settings
@@ -235,6 +236,33 @@ def test_consume_tolerates_a_non_directory_sessions_root(tmp_path, monkeypatch):
     result = _store(root, "cur").consume_previous_sessions()
 
     assert result.docs == []
+
+
+def test_pid_liveness_rejects_nonpositive_pids():
+    assert session_snapshot_store._pid_alive(0) is False
+    assert session_snapshot_store._pid_alive(-1) is False
+
+
+def test_pid_liveness_reports_the_current_process_alive():
+    assert session_snapshot_store._pid_alive(os.getpid()) is True
+
+
+def test_pid_liveness_uses_a_safe_probe_on_windows_never_os_kill(monkeypatch):
+    seen: dict = {}
+
+    def _fake_windows(pid):
+        seen["pid"] = pid
+        return True
+
+    def _forbidden_kill(*_args, **_kwargs):
+        raise AssertionError("os.kill must never be used on Windows (it terminates the target)")
+
+    monkeypatch.setattr("sys.platform", "win32")
+    monkeypatch.setattr(session_snapshot_store, "_pid_alive_windows", _fake_windows)
+    monkeypatch.setattr(session_snapshot_store.os, "kill", _forbidden_kill)
+
+    assert session_snapshot_store._pid_alive(4321) is True
+    assert seen["pid"] == 4321
 
 
 def test_corrupt_sibling_dir_is_pruned(tmp_path, monkeypatch):
