@@ -86,15 +86,15 @@ def main() -> None:
 
         window = open_new_window()
         recovery = create_session_recovery_service()
+        # Auto-restore the previous session (recovered crash work + last
+        # workspace) on every launch, then open any explicitly-requested file the
+        # same way a macOS double-click does — through open_document, which
+        # reuses a blank window or opens its own and, via the duplicate-open
+        # guard, switches to the file if the restore already reopened it. Both
+        # the argv and the QEvent.FileOpen paths therefore behave identically.
+        recovery.restore_previous(window)
         startup_document_path = _startup_document_path(sys.argv)
-        # Load an explicit file (e.g. a double-clicked document) into the initial
-        # window first, then recover crashed work into its own additional
-        # windows. A clean workspace is not reopened when a file is given, so the
-        # user gets what they asked for without losing any unsaved work.
         if startup_document_path is not None:
-            from ui.main_window_ports import services_for_window
-
-            services_for_window(window).document_action_service.load_canvas_from_path(window, startup_document_path)
-        recovery.restore_previous(window, include_clean_session=startup_document_path is None)
+            open_document(startup_document_path)
         recovery.start(app)
         app.exec()

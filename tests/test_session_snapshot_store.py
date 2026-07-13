@@ -225,6 +225,18 @@ def test_unchanged_tick_is_a_no_op(tmp_path, monkeypatch):
     assert writes == []  # identical open set → nothing rewritten
 
 
+def test_consume_tolerates_a_non_directory_sessions_root(tmp_path, monkeypatch):
+    # A broken profile can leave <app-data>/sessions as a regular file; consuming
+    # must not raise NotADirectoryError before the editor opens.
+    root = tmp_path / "sessions"
+    root.write_text("not a directory")
+
+    _dead_pids(monkeypatch)
+    result = _store(root, "cur").consume_previous_sessions()
+
+    assert result.docs == []
+
+
 def test_corrupt_sibling_dir_is_pruned(tmp_path, monkeypatch):
     root = tmp_path / "sessions"
     root.mkdir()

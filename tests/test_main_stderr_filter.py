@@ -177,9 +177,15 @@ class MainStderrFilterTest(unittest.TestCase):
         class FakeMainWindow:
             def __init__(self) -> None:
                 document_action_service = types.SimpleNamespace(
-                    load_canvas_from_path=lambda window, path: events.append(("load", path))
+                    load_canvas_from_path=lambda window, path, target_provider=None: events.append(("load", path))
                 )
-                self._services = types.SimpleNamespace(document_action_service=document_action_service)
+                # open_document reuses a blank window when reusable_open_target is
+                # non-None; return a truthy sentinel so the startup file reuses it.
+                canvas_document_service = types.SimpleNamespace(reusable_open_target=lambda window: object())
+                self._services = types.SimpleNamespace(
+                    document_action_service=document_action_service,
+                    canvas_document_service=canvas_document_service,
+                )
 
             def show(self) -> None:
                 events.append(("show", None))

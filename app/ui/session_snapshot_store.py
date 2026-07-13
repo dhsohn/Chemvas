@@ -168,9 +168,14 @@ class SessionSnapshotStore:
     # --- internals --------------------------------------------------------
 
     def _sibling_dirs(self) -> list[Path]:
-        if not self._root.exists():
+        # Best-effort: the sessions root may be missing, or (if app-data is
+        # broken) be a regular file — iterdir raises NotADirectoryError then.
+        # Either way there are no recoverable sessions; never block startup.
+        try:
+            children = list(self._root.iterdir())
+        except OSError:
             return []
-        return [child for child in self._root.iterdir() if child.is_dir() and child.name != self._id]
+        return [child for child in children if child.is_dir() and child.name != self._id]
 
     def _restore_entry(self, session_dir: Path, entry: DocEntry, *, clean_exit: bool) -> RestoredDoc | None:
         # A crash prefers the snapshot (it holds unsaved edits); a clean exit

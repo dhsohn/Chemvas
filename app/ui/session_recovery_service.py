@@ -56,12 +56,14 @@ class SessionRecoveryService:
         open_new_window=default_open_new_window,
         services_for_window=default_services_for_window,
         current_documents=collect_open_documents,
+        list_open_windows=open_windows,
         interval_ms: int = AUTOSAVE_INTERVAL_MS,
     ) -> None:
         self._store = store
         self._open_new_window = open_new_window
         self._services_for_window = services_for_window
         self._current_documents = current_documents
+        self._list_open_windows = list_open_windows
         self._interval_ms = interval_ms
         self._timer: QTimer | None = None
 
@@ -115,6 +117,12 @@ class SessionRecoveryService:
         self._timer.start()
 
     def snapshot_now(self) -> None:
+        # No open windows means the app is quitting (the last window just
+        # closed): keep the manifest as-is so the session that was open is
+        # restored, rather than overwriting it with an empty set. The timer and
+        # save/open callers always run with a window present.
+        if not self._list_open_windows():
+            return
         try:
             self._store.save_documents(self._current_documents())
         except Exception:
