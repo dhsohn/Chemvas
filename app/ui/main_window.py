@@ -6,7 +6,6 @@ from PyQt6.QtWidgets import QMainWindow
 
 from ui.main_window_app import forget_window
 from ui.main_window_bootstrap import bootstrap_main_window, build_main_window_runtime
-from ui.session_autosave_hook import request_snapshot
 
 if TYPE_CHECKING:
     from ui.main_window_state import MainWindowState
@@ -48,9 +47,4 @@ class MainWindow(QMainWindow):
         if callable(shutdown_preview):
             shutdown_preview()
         forget_window(self)
-        # Refresh the session now that this window is gone, so a document closed
-        # while others remain drops out of the restore set. When this is the last
-        # window (a quit), snapshot_now sees no windows and leaves the manifest
-        # intact, so the session that was open is still restored next launch.
-        request_snapshot()
         super().closeEvent(event)

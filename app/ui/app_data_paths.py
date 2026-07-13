@@ -7,6 +7,7 @@ testable against a ``tmp_path``.
 
 from __future__ import annotations
 
+import os
 import tempfile
 from pathlib import Path
 
@@ -26,22 +27,37 @@ def _candidate_dirs() -> list[Path]:
     return candidates
 
 
+def _is_usable(directory: Path) -> bool:
+    """Create ``directory`` and confirm it is actually writable.
+
+    ``mkdir(exist_ok=True)`` also "succeeds" for an existing read-only directory,
+    so a broken profile would be selected and every autosave/recent write would
+    then silently fail. Prove write access with a throwaway probe file instead.
+    """
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        probe = directory / f".chemvas-write-test-{os.getpid()}"
+        probe.write_text("")
+        probe.unlink(missing_ok=True)
+    except OSError:
+        return False
+    return True
+
+
 def app_data_dir() -> Path:
     """Return Chemvas's writable app-data directory, creating it if possible.
 
     On macOS this is ``~/Library/Application Support/Chemvas``, on Linux
-    ``~/.local/share/Chemvas``. Never raises: it walks a fallback chain and, if
-    none can be created, returns the last candidate anyway — callers tolerate a
-    directory that does not exist and simply skip their best-effort writes.
+    ``~/.local/share/Chemvas``. Never raises: it walks a fallback chain, probing
+    each candidate for real write access, and if none is usable returns the last
+    one anyway — callers tolerate a directory they cannot write and skip their
+    best-effort writes.
     """
     last = Path(tempfile.gettempdir()) / "chemvas"
     for candidate in _candidate_dirs():
         last = candidate
-        try:
-            candidate.mkdir(parents=True, exist_ok=True)
+        if _is_usable(candidate):
             return candidate
-        except OSError:
-            continue
     return last
 
 

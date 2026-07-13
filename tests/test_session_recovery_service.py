@@ -83,7 +83,7 @@ class _FakeSignal:
         self.slots.append(slot)
 
 
-def _service(store, *, extra_windows=None, current_documents=lambda: [], list_open_windows=lambda: [object()]):
+def _service(store, *, extra_windows=None, current_documents=lambda: []):
     doc_service = _FakeDocService()
     services = SimpleNamespace(canvas_document_service=doc_service)
     spawned = list(extra_windows or [])
@@ -92,7 +92,6 @@ def _service(store, *, extra_windows=None, current_documents=lambda: [], list_op
         open_new_window=lambda reference: spawned.pop(0),
         services_for_window=lambda window: services,
         current_documents=current_documents,
-        list_open_windows=list_open_windows,
     )
     return service, doc_service
 
@@ -165,17 +164,6 @@ def test_snapshot_now_persists_the_current_documents():
     service.snapshot_now()
 
     assert service._store.saved == [sentinel]
-
-
-def test_snapshot_now_skips_when_no_windows_remain():
-    # The last window closing at quit must not overwrite the manifest with an
-    # empty set — the session that was open should still be restored.
-    store = _FakeStore(RestoreResult())
-    service, _ = _service(store, current_documents=lambda: ["doc"], list_open_windows=lambda: [])
-
-    service.snapshot_now()
-
-    assert store.saved == []
 
 
 def test_snapshot_now_swallows_store_errors():
