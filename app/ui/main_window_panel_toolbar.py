@@ -4,8 +4,17 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from PyQt6.QtCore import QSize, Qt
-from PyQt6.QtGui import QAction, QActionGroup, QFont, QKeySequence
+from PyQt6.QtCore import QRectF, QSize, Qt
+from PyQt6.QtGui import (
+    QAction,
+    QActionGroup,
+    QColor,
+    QFont,
+    QKeySequence,
+    QPainter,
+    QPaintEvent,
+    QPen,
+)
 from PyQt6.QtWidgets import (
     QLineEdit,
     QMenu,
@@ -20,6 +29,7 @@ from ui.main_window_config import (
     TOOLBAR_PRIMARY_TOOL_GROUP,
     TOOLBAR_TOOL_GROUPS,
 )
+from ui.main_window_palette import PALETTE
 from ui.main_window_ports import icon_factory_for_window
 from ui.main_window_theme import (
     CONTEXT_BAR_BUTTON_HEIGHT,
@@ -34,6 +44,49 @@ from ui.main_window_toolbar_buttons import CornerMenuToolButton
 _NOTE_TOOL_MENU_BUTTON_STYLE = (
     TOOLBAR_BUTTON_STYLE + "QToolButton::menu-indicator { image: none; width: 0px; height: 0px; }"
 )
+
+
+class _ModeWellToolBar(QToolBar):
+    """Top toolbar that paints a subtle inset "well" behind the modal tool
+    buttons.
+
+    The pick-one mode tools (select, bond, ring, arrow, ...) then read as one
+    grouped set — visually distinct from the loose one-shot command buttons
+    beside them (flip, rotate, undo, redo), which sit on the bare bar. The
+    buttons and actions are untouched; this is decoration painted behind them,
+    so an active tool's checked highlight still draws on top as usual.
+    """
+
+    def __init__(self, *args: Any) -> None:
+        super().__init__(*args)
+        self._first_mode_widget: QWidget | None = None
+        self._last_mode_widget: QWidget | None = None
+
+    def set_mode_well(self, first_widget: QWidget, last_widget: QWidget) -> None:
+        self._first_mode_widget = first_widget
+        self._last_mode_widget = last_widget
+        self.update()
+
+    def paintEvent(self, event: QPaintEvent | None) -> None:
+        super().paintEvent(event)
+        first = self._first_mode_widget
+        last = self._last_mode_widget
+        if first is None or last is None or not first.isVisible() or not last.isVisible():
+            return
+        region = first.geometry().united(last.geometry())
+        # A small vertical inset lets the tray float clear of the toolbar's top
+        # and bottom edges rather than sitting flush, which reads as breathing
+        # room without needing a tall toolbar.
+        well = QRectF(region).adjusted(-4.0, -1.0, 4.0, 1.0)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        # Fill stays lighter than the button hover tint so hovering a tool in
+        # the well still darkens visibly; the defined border carries the
+        # grouping. The active tool's teal check reads clearly on top.
+        painter.setPen(QPen(QColor(PALETTE["border_strong"]), 1.0))
+        painter.setBrush(QColor(PALETTE["surface_app"]))
+        painter.drawRoundedRect(well, 8.0, 8.0)
+        painter.end()
 
 
 @dataclass(frozen=True)
@@ -177,7 +230,7 @@ def build_panel_toolbar(
     history_service_for_window,
     callbacks: MainWindowPanelToolbarCallbacks,
 ) -> MainWindowPanelToolbarAssembly:
-    panel_bar = QToolBar("Panels", window)
+    panel_bar = _ModeWellToolBar("Panels", window)
     panel_bar.setObjectName("topRoleToolbar")
     panel_bar.setMovable(False)
     panel_bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
@@ -287,13 +340,20 @@ def build_panel_toolbar(
         object_name="rotate_button",
     )
 
+    mode_widgets: list[QWidget] = []
+
     def add_tool(action_key: str, *, primary: bool) -> None:
         action = tool_actions[action_key]
         if action_key == "note":
-            panel_bar.addWidget(_build_note_font_menu_button(panel_bar, window, action, callbacks))
+            note_button = _build_note_font_menu_button(panel_bar, window, action, callbacks)
+            panel_bar.addWidget(note_button)
+            mode_widgets.append(note_button)
             return
         panel_bar.addAction(action)
         _normalize_tool_action_button(panel_bar, action, action_key, primary=primary)
+        tool_widget = panel_bar.widgetForAction(action)
+        if tool_widget is not None:
+            mode_widgets.append(tool_widget)
 
     for action_key in TOOLBAR_PRIMARY_TOOL_GROUP:
         add_tool(action_key, primary=True)
@@ -303,6 +363,10 @@ def build_panel_toolbar(
             add_tool(action_key, primary=False)
         if group_index < len(TOOLBAR_TOOL_GROUPS[1:]) - 1:
             panel_bar.addSeparator()
+    # The modal tools now sit inside a painted "well" (see _ModeWellToolBar) so
+    # they read as one pick-one set, distinct from the loose command buttons.
+    if mode_widgets:
+        panel_bar.set_mode_well(mode_widgets[0], mode_widgets[-1])
     panel_bar.addSeparator()
     panel_bar.addWidget(flip_h_btn)
     panel_bar.addWidget(flip_v_btn)
