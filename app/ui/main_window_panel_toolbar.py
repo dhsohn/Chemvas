@@ -6,7 +6,14 @@ from typing import Any
 
 from PyQt6.QtCore import QSize, Qt
 from PyQt6.QtGui import QAction, QActionGroup, QFont, QKeySequence
-from PyQt6.QtWidgets import QLabel, QLineEdit, QMenu, QSizePolicy, QToolBar, QToolButton
+from PyQt6.QtWidgets import (
+    QLineEdit,
+    QMenu,
+    QSizePolicy,
+    QToolBar,
+    QToolButton,
+    QWidget,
+)
 
 from ui.main_window_config import (
     TEXT_FONT_FAMILY_CHOICES,
@@ -84,18 +91,24 @@ def _normalize_tool_action_button(
     widget.setFixedWidth(TOOLBAR_BUTTON_SIZE)
 
 
+def _toolbar_spacer() -> QWidget:
+    spacer = QWidget()
+    spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+    return spacer
+
+
 def _add_smiles_controls(panel_bar: QToolBar, window, insert_controller_for_window) -> None:
-    label = QLabel("SMILES")
-    label.setObjectName("toolbarSectionLabel")
-    panel_bar.addWidget(label)
     smiles_input = QLineEdit()
     smiles_input.setObjectName("contextSmilesInput")
     smiles_input.setPlaceholderText("CC(=O)Oc1ccccc1C(=O)O")
-    # The input stretches to fill the gap between the drawing tools and the
-    # file/history cluster (in place of a plain spacer), so it never forces the
-    # top toolbar to overflow: it shrinks to its minimum on narrow windows.
+    # The input stretches toward the file/history cluster so it never forces the
+    # top toolbar to overflow (it shrinks to its minimum on narrow windows), but
+    # it is capped so it does not sprawl across very wide monitors. A trailing
+    # spacer takes up any slack past the cap, keeping the file buttons pinned
+    # to the right edge.
     smiles_input.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-    smiles_input.setMinimumWidth(140)
+    smiles_input.setMinimumWidth(120)
+    smiles_input.setMaximumWidth(340)
     smiles_input.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT)
     smiles_input.setToolTip("SMILES")
     smiles_input.setStatusTip("Type a SMILES string to insert")
@@ -296,6 +309,7 @@ def build_panel_toolbar(
     panel_bar.addWidget(rotate_btn)
     panel_bar.addSeparator()
     _add_smiles_controls(panel_bar, window, insert_controller_for_window)
+    panel_bar.addWidget(_toolbar_spacer())
     panel_bar.addSeparator()
     panel_bar.addWidget(undo_btn)
     panel_bar.addWidget(redo_btn)

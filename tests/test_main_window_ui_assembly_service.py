@@ -329,14 +329,15 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             [button.toolTip() for button in assembly.panel_bar.findChildren(QToolButton)],
         )
 
-        # The SMILES quick-insert bar now lives on the top toolbar, so its
-        # section label, input, and Render button are children of the panel bar.
+        # The SMILES quick-insert bar now lives on the top toolbar. It has no
+        # section label (the field is self-describing via placeholder/tooltip),
+        # so the only section labels remain on the tool-options bar.
         section_labels = [
             label.text()
             for label in assembly.panel_bar.findChildren(QLabel)
             if label.objectName() == "toolbarSectionLabel"
         ]
-        self.assertEqual(section_labels, ["SMILES"])
+        self.assertEqual(section_labels, [])
 
         self.assertIsNone(assembly.panel_bar.findChild(QLineEdit, "atomInput"))
         self.assertEqual(

@@ -31,9 +31,7 @@ def build_main_window_runtime(
     icon_factory=MainWindowIconFactory,
 ) -> MainWindowBootstrapRuntime:
     window.setWindowTitle("Chemvas")
-    # Wide enough to show the full top toolbar — including the SMILES quick-insert
-    # field and the file/history buttons — without spilling into the overflow menu.
-    window.resize(1280, 760)
+    window.resize(1100, 760)
 
     state = MainWindowState()
     ui_refs = MainWindowUiReferences()
