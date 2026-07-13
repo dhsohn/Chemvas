@@ -122,6 +122,29 @@ def test_crash_is_recovered_even_when_clean_session_is_suppressed(tmp_path, monk
     assert not (root / "crash-session").exists()
 
 
+def test_unreadable_snapshot_does_not_inflate_recovered_count(tmp_path, monkeypatch):
+    # A dirty entry whose payload is missing/truncated must not be counted as a
+    # recovered document nor claimed in the "Recovered N unsaved" message.
+    root = tmp_path / "sessions"
+    prev = _store(root, "prev", pid=55)
+    prev.begin()
+    prev.save_documents(
+        [
+            DocDescriptor(state=_valid_state("good"), file_path=None, display_name="Good", dirty=True),
+            DocDescriptor(state=_valid_state("lost"), file_path=None, display_name="Lost", dirty=True),
+        ]
+    )
+    manifest = json.loads((root / "prev" / "session.json").read_text())
+    lost_snapshot = next(entry["snapshot"] for entry in manifest["docs"] if entry["display_name"] == "Lost")
+    (root / "prev" / lost_snapshot).unlink()  # simulate a truncated/missing payload
+
+    _dead_pids(monkeypatch)
+    result = _store(root, "cur").consume_previous_sessions()
+
+    assert result.recovered_unsaved == 1
+    assert [doc.display_name for doc in result.docs] == ["Good"]
+
+
 def test_live_instance_session_is_left_untouched(tmp_path, monkeypatch):
     root = tmp_path / "sessions"
     prev = _store(root, "prev", pid=444)

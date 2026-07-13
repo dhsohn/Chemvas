@@ -3,7 +3,6 @@ from __future__ import annotations
 from ui.session_snapshot_logic import (
     DocEntry,
     SessionManifest,
-    count_recovered_unsaved,
     entries_to_restore,
     is_consumable,
     manifest_from_json,
@@ -108,12 +107,6 @@ def test_entries_to_restore_crash_keeps_everything():
         docs=[_entry(file_path="/a/x.chemvas"), _entry(file_path=None, dirty=True, snapshot="doc-0.json")],
     )
     assert len(entries_to_restore(manifest)) == 2
-
-
-def test_count_recovered_unsaved_only_counts_on_crash():
-    docs = [_entry(dirty=True, snapshot="doc-0.json"), _entry(file_path="/a/x.chemvas")]
-    assert count_recovered_unsaved(SessionManifest(pid=1, clean_exit=False, docs=docs)) == 1
-    assert count_recovered_unsaved(SessionManifest(pid=1, clean_exit=True, docs=docs)) == 0
 
 
 def test_manifest_json_round_trips():

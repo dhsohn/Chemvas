@@ -25,7 +25,6 @@ from ui.session_snapshot_logic import (
     DocEntry,
     RestoredDoc,
     SessionManifest,
-    count_recovered_unsaved,
     entries_to_restore,
     manifest_from_json,
     manifest_to_json,
@@ -151,11 +150,17 @@ class SessionSnapshotStore:
         result = RestoreResult()
         for session_id in plan.restore:
             manifest = manifests[session_id]
-            result.recovered_unsaved += count_recovered_unsaved(manifest)
             for entry in entries_to_restore(manifest):
                 restored = self._restore_entry(self._root / session_id, entry, clean_exit=manifest.clean_exit)
-                if restored is not None:
-                    result.docs.append(restored)
+                if restored is None:
+                    continue
+                result.docs.append(restored)
+                # Count only work actually reopened as unsaved: an entry whose
+                # snapshot is missing/truncated (restored is None) or that fell
+                # back to its on-disk file (restored.dirty is False) must not
+                # inflate the "Recovered N unsaved" message.
+                if restored.dirty:
+                    result.recovered_unsaved += 1
         for session_id in plan.prune:
             shutil.rmtree(self._root / session_id, ignore_errors=True)
         return result

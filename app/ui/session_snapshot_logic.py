@@ -123,13 +123,6 @@ def entries_to_restore(manifest: SessionManifest) -> list[DocEntry]:
     return list(manifest.docs)
 
 
-def count_recovered_unsaved(manifest: SessionManifest) -> int:
-    """Unsaved docs a crash restore brings back (0 for a clean exit)."""
-    if manifest.clean_exit:
-        return 0
-    return sum(1 for entry in manifest.docs if entry.dirty)
-
-
 def manifest_to_json(manifest: SessionManifest) -> dict:
     return {
         "version": SESSION_SCHEMA_VERSION,
@@ -182,7 +175,6 @@ __all__ = [
     "RestorePlan",
     "RestoredDoc",
     "SessionManifest",
-    "count_recovered_unsaved",
     "entries_to_restore",
     "is_consumable",
     "manifest_from_json",
