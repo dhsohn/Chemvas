@@ -345,6 +345,7 @@ class MainWindowDocumentActionService:
                 )
                 target.statusBar().showMessage(f"Loaded editable SVG: {path}", 4000)
                 record_recent(path)
+                request_snapshot()
                 return True
             document = read_document(path)
             target = target_provider() if target_provider is not None else window
@@ -354,6 +355,9 @@ class MainWindowDocumentActionService:
             return False
         target.statusBar().showMessage(f"Loaded: {path}", 4000)
         record_recent(path)
+        # Capture the newly-opened document in the session now, so opening a file
+        # and quitting before the next timer tick does not drop it from restore.
+        request_snapshot()
         return True
 
     def _activate_open_document(self, window, canvas: CanvasView, path: str) -> None:

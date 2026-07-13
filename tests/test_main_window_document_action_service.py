@@ -19,6 +19,7 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from core.document_io import write_document
+    from core.document_state import CANVAS_FILE_VERSION
     from ui.canvas_document_metadata_state import document_file_path_for
     from ui.canvas_window_access import snapshot_canvas_state_for
     from ui.main_window import MainWindow
@@ -90,6 +91,18 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             self.assertEqual(self.window.tab_references.canvas_count(), 1)
             message_box.warning.assert_not_called()
             self.assertIn("Already open", self.window.statusBar().currentMessage())
+
+    def test_load_canvas_from_path_refreshes_the_autosave_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = str(Path(temp_dir) / "open.chemvas")
+            write_document(path, snapshot_canvas_state_for(active_canvas_for_window(self.window)), CANVAS_FILE_VERSION)
+            calls: list[int] = []
+            with mock.patch("ui.main_window_document_action_service.request_snapshot", lambda: calls.append(1)):
+                ok = self.service.load_canvas_from_path(self.window, path, target_provider=lambda: self.window)
+        # Opening a file must nudge the session so it survives a quit before the
+        # next timer tick, symmetric with Save.
+        self.assertTrue(ok)
+        self.assertEqual(calls, [1])
 
     def test_save_canvas_to_path_refreshes_the_autosave_snapshot(self) -> None:
         calls: list[int] = []

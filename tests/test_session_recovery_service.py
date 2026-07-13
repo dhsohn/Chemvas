@@ -36,6 +36,10 @@ class _FakeDocService:
         self.opened: list = []
         self.dirtied: list = []
         self.refreshed: list = []
+        self.reusable = True
+
+    def reusable_open_target(self, window):
+        return object() if self.reusable else None
 
     def open_state(self, window, *, state, file_path, display_name=None):
         canvas = SimpleNamespace(window=window, state=state, file_path=file_path, display_name=display_name)
@@ -114,6 +118,25 @@ def test_restore_previous_rebuilds_windows_and_marks_recovered_dirty():
     assert doc_service.dirtied == [doc_service.opened[0]]
     assert first.statusBar().messages
     assert "Recovered 1 unsaved document" in first.statusBar().messages[0][0]
+
+
+def test_restore_gives_each_doc_its_own_window_when_first_is_occupied():
+    # e.g. a crash-recovery launch that also opened a startup file: the first
+    # window is taken, so recovered docs must not pile up as tabs there.
+    first = _FakeWindow("first")
+    spawned = [_FakeWindow("w1"), _FakeWindow("w2")]
+    result = RestoreResult(
+        docs=[
+            RestoredDoc(state={"m": 1}, file_path="/a.chemvas", display_name="a", dirty=False),
+            RestoredDoc(state={"m": 2}, file_path="/b.chemvas", display_name="b", dirty=False),
+        ]
+    )
+    service, doc_service = _service(_FakeStore(result), extra_windows=list(spawned))
+    doc_service.reusable = False  # first window already holds a document
+
+    service.restore_previous(first)
+
+    assert [canvas.window for canvas in doc_service.opened] == spawned  # never `first`
 
 
 def test_restore_previous_forwards_include_clean_session():

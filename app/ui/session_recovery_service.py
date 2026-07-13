@@ -76,7 +76,8 @@ class SessionRecoveryService:
         """
         result = self._store.consume_previous_sessions(include_clean_session=include_clean_session)
         for index, document in enumerate(result.docs):
-            window = first_window if index == 0 else self._open_new_window(first_window)
+            reuse_first = index == 0 and self._is_reusable(first_window)
+            window = first_window if reuse_first else self._open_new_window(first_window)
             services = self._services_for_window(window)
             canvas = services.canvas_document_service.open_state(
                 window,
@@ -90,6 +91,13 @@ class SessionRecoveryService:
         if result.recovered_unsaved:
             self._show_recovered_note(first_window, result.recovered_unsaved)
         return result.recovered_unsaved
+
+    def _is_reusable(self, window) -> bool:
+        # A blank, untitled first window can host the first restored doc; once a
+        # startup file (or an earlier restored doc) occupies it, later docs get
+        # their own windows so single-document-per-window still holds.
+        services = self._services_for_window(window)
+        return services.canvas_document_service.reusable_open_target(window) is not None
 
     def start(self, app) -> None:
         """Begin this session, snapshot immediately, and arm the periodic timer,

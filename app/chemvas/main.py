@@ -87,13 +87,14 @@ def main() -> None:
         window = open_new_window()
         recovery = create_session_recovery_service()
         startup_document_path = _startup_document_path(sys.argv)
-        # Always recover crashed work; when an explicit file is given (e.g. a
-        # double-clicked document) suppress reopening a cleanly-closed workspace
-        # so the user gets what they asked for without losing any unsaved work.
-        recovery.restore_previous(window, include_clean_session=startup_document_path is None)
+        # Load an explicit file (e.g. a double-clicked document) into the initial
+        # window first, then recover crashed work into its own additional
+        # windows. A clean workspace is not reopened when a file is given, so the
+        # user gets what they asked for without losing any unsaved work.
         if startup_document_path is not None:
             from ui.main_window_ports import services_for_window
 
             services_for_window(window).document_action_service.load_canvas_from_path(window, startup_document_path)
+        recovery.restore_previous(window, include_clean_session=startup_document_path is None)
         recovery.start(app)
         app.exec()
