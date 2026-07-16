@@ -1638,6 +1638,7 @@ class _SceneSnapshot:
         include_selection_info: bool = True,
         include_outline: bool = True,
         ignored_item_ids: frozenset[int] = frozenset(),
+        ignored_selection_item_ids: frozenset[int] = frozenset(),
     ) -> list[BaseException]:
         errors: list[BaseException] = []
         if self.bond_mapping is not None:
@@ -1719,7 +1720,10 @@ class _SceneSnapshot:
                     is not snapshot.attached
                 ):
                     raise RuntimeError("rotation-preview item membership changed")
-                if snapshot.selected is not None:
+                if (
+                    snapshot.selected is not None
+                    and id(snapshot.item) not in ignored_selection_item_ids
+                ):
                     getter = _optional_live_attribute(snapshot.item, "isSelected")
                     if not callable(getter) or bool(getter()) != snapshot.selected:
                         raise RuntimeError("rotation-preview item selection changed")
@@ -2274,14 +2278,20 @@ class _RotationPreviewAuthority:
         rolling_outline_ids = frozenset(
             id(item) for item in rolling_targeted.outline_contents
         )
+        final_selection_item_ids = frozenset(
+            id(runtime.item) for runtime in final_targeted.item_runtime
+        )
         # Final selection restoration may replace only the outline objects and
-        # their registry list. Keep the rolling checkpoint authoritative for
-        # every affected atom/bond/ring primitive and model-facing selection.
+        # their registry list, and it may republish a semantic ring selection
+        # as its atom graphics. Keep the rolling checkpoint authoritative for
+        # every affected atom/bond/ring primitive, while delegating selection
+        # flags to the final snapshot captured after that publication.
         errors.extend(
             rolling_targeted.verify(
                 include_selection_info=False,
                 include_outline=False,
                 ignored_item_ids=rolling_outline_ids,
+                ignored_selection_item_ids=final_selection_item_ids,
             )
         )
         errors.extend(final_targeted.verify())

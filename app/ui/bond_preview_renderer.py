@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
     QGraphicsPolygonItem,
 )
 
+from ui.bond_geometry_primitives import normal_away_from_parallel_segment
 from ui.bond_preview_geometry import (
     LineSegment,
     apply_plain_double_preview_variant,
@@ -21,7 +22,9 @@ from ui.bond_preview_geometry import (
 )
 from ui.bond_preview_scene_items import add_bond_preview_items, clear_bond_preview_items
 from ui.bond_style_logic import (
+    BOLD_BOND_STYLES,
     PLAIN_DOUBLE_STYLES,
+    double_position_for_style,
     normalized_plain_double_style,
 )
 from ui.graphics_items import NoSelectLineItem
@@ -83,8 +86,9 @@ def _bold_strip_item(
     config: BondPreviewConfig,
     resolvers: BondPreviewBuildResolvers,
     bold_outward: bool,
+    normal: tuple[float, float] | None = None,
 ):
-    nx, ny = _bold_normal(resolvers.line_normal, segment, bold_outward)
+    nx, ny = normal or _bold_normal(resolvers.line_normal, segment, bold_outward)
     return resolvers.one_sided_bond_strip(
         segment[0],
         segment[1],
@@ -104,9 +108,10 @@ def _update_bold_first_item(
     config: BondPreviewConfig,
     resolvers: BondPreviewUpdateResolvers,
     bold_outward: bool,
+    normal: tuple[float, float] | None = None,
 ) -> bool:
     x1, y1, x2, y2 = segment
-    nx, ny = _bold_normal(resolvers.line_normal, segment, bold_outward)
+    nx, ny = normal or _bold_normal(resolvers.line_normal, segment, bold_outward)
     if isinstance(first, QGraphicsPolygonItem):
         first.setPolygon(
             resolvers.strip_polygon(
@@ -144,8 +149,26 @@ def build_bond_preview_items(
         return resolvers.draw_hash_bond(start.x(), start.y(), end.x(), end.y(), a_id, b_id)
     if style == "dotted":
         return resolvers.draw_dotted_bond(start.x(), start.y(), end.x(), end.y(), a_id, b_id)
-    if style in {"bold", "bold_in", "bold_out"}:
+    if style in BOLD_BOND_STYLES:
         bold_outward = style == "bold_out"
+        if order == 2:
+            items = resolvers.draw_parallel_bonds(start.x(), start.y(), end.x(), end.y(), order, a_id, b_id)
+            items = apply_plain_double_preview_variant(items, double_position_for_style(style, order))
+            if len(items) == 2 and all(isinstance(item, QGraphicsLineItem) for item in items):
+                first_line = items[0].line()
+                second_line = items[1].line()
+                first_segment = (first_line.x1(), first_line.y1(), first_line.x2(), first_line.y2())
+                second_segment = (second_line.x1(), second_line.y1(), second_line.x2(), second_line.y2())
+                base_normal = resolvers.line_normal(*first_segment, None)
+                normal = normal_away_from_parallel_segment(first_segment, second_segment, *base_normal)
+                items[0] = _bold_strip_item(
+                    first_segment,
+                    config=config,
+                    resolvers=resolvers,
+                    bold_outward=False,
+                    normal=normal,
+                )
+            return items
         if order >= 2:
             items = resolvers.draw_parallel_bonds(start.x(), start.y(), end.x(), end.y(), order, a_id, b_id)
             if items and isinstance(items[0], QGraphicsLineItem):
@@ -201,8 +224,42 @@ def update_bond_preview_items(
             return False
         items[0].setPath(resolvers.dotted_bond_path(start.x(), start.y(), end.x(), end.y(), a_id, b_id))
         return True
-    if style in {"bold", "bold_in", "bold_out"}:
+    if style in BOLD_BOND_STYLES:
         bold_outward = style == "bold_out"
+        if order == 2:
+            segments = tuple(
+                resolvers.parallel_bond_segments(
+                    start.x(),
+                    start.y(),
+                    end.x(),
+                    end.y(),
+                    order,
+                    a_id,
+                    b_id,
+                )
+            )
+            updated_segments = plain_double_preview_segments(
+                segments,
+                double_position_for_style(style, order),
+            )
+            if len(updated_segments) != 2 or len(items) != 2:
+                return False
+            base_normal = resolvers.line_normal(*updated_segments[0], None)
+            normal = normal_away_from_parallel_segment(
+                updated_segments[0],
+                updated_segments[1],
+                *base_normal,
+            )
+            if not _update_bold_first_item(
+                items[0],
+                updated_segments[0],
+                config=config,
+                resolvers=resolvers,
+                bold_outward=False,
+                normal=normal,
+            ):
+                return False
+            return _set_line_segments(items[1:], updated_segments[1:])
         if order >= 2:
             segments = tuple(resolvers.parallel_bond_segments(start.x(), start.y(), end.x(), end.y(), order, a_id, b_id))
             if not segments or len(items) != len(segments):

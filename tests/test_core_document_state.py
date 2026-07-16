@@ -128,6 +128,30 @@ class DocumentStateTest(unittest.TestCase):
         self.assertEqual(state["atom_annotations"], {0: {"formal_charge": 1, "radical_electrons": 1}})
         self.assertEqual(restored.atom_annotations, {0: {"formal_charge": 1, "radical_electrons": 1}})
 
+    def test_bold_double_positions_round_trip_through_document_payload(self) -> None:
+        model = MoleculeModel(
+            atoms={
+                0: Atom("C", 0.0, 0.0),
+                1: Atom("C", 10.0, 0.0),
+                2: Atom("C", 20.0, 0.0),
+                3: Atom("C", 30.0, 0.0),
+            },
+            bonds=[
+                Bond(0, 1, 2, style="bold_in"),
+                Bond(1, 2, 2, style="bold_center"),
+                Bond(2, 3, 2, style="bold_out"),
+            ],
+        )
+
+        state = serialize_model_state(model)
+        payload = build_document_payload(_canvas_state(state), version=CANVAS_FILE_VERSION)
+        restored = deserialize_model_state(payload["state"]["model"])
+
+        self.assertEqual(
+            [bond.style for bond in restored.bonds if bond is not None],
+            ["bold_in", "bold_center", "bold_out"],
+        )
+
     def test_serialize_model_state_with_warnings_reports_repairs(self) -> None:
         model = MoleculeModel(
             atoms={

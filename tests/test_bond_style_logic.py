@@ -1,21 +1,54 @@
 import unittest
 
 from ui.bond_style_logic import (
+    BOLD_STYLE_CENTER,
+    BOLD_STYLE_DEFAULT,
+    BOLD_STYLE_OUTER,
     DOTTED_DOUBLE_STYLE_DEFAULT,
     DOTTED_DOUBLE_STYLE_OUTER,
+    DOUBLE_STYLE_CENTER,
     DOUBLE_STYLE_DEFAULT,
     DOUBLE_STYLE_OUTER,
     base_plain_double_style_for_dotted_variant,
+    bold_double_style_for_position,
+    bold_double_style_for_style,
     cycle_plain_bond_style,
     dotted_double_variant_for_style,
+    double_position_for_style,
+    is_bold_double_bond_style,
     is_dotted_double_bond_style,
     is_plain_double_bond_style,
+    is_positionable_double_bond_style,
+    normalized_bold_double_style,
     normalized_plain_double_style,
+    style_for_double_position,
     style_for_existing_bond_overlay,
 )
 
 
 class BondStyleLogicTest(unittest.TestCase):
+    def test_bold_double_helpers_share_plain_double_position_contract(self) -> None:
+        pairs = (
+            (DOUBLE_STYLE_DEFAULT, BOLD_STYLE_DEFAULT),
+            (DOUBLE_STYLE_CENTER, BOLD_STYLE_CENTER),
+            (DOUBLE_STYLE_OUTER, BOLD_STYLE_OUTER),
+        )
+        for plain_style, bold_style in pairs:
+            with self.subTest(plain_style=plain_style, bold_style=bold_style):
+                self.assertTrue(is_bold_double_bond_style(bold_style, 2))
+                self.assertTrue(is_positionable_double_bond_style(bold_style, 2))
+                self.assertEqual(bold_double_style_for_position(plain_style), bold_style)
+                self.assertEqual(bold_double_style_for_style(plain_style, 2), bold_style)
+                self.assertEqual(double_position_for_style(bold_style, 2), plain_style)
+                self.assertEqual(style_for_double_position(bold_style, 2, plain_style), bold_style)
+                self.assertEqual(style_for_double_position(plain_style, 2, plain_style), plain_style)
+
+        self.assertEqual(normalized_bold_double_style("bold", 2), BOLD_STYLE_DEFAULT)
+        self.assertEqual(double_position_for_style("bold", 2), DOUBLE_STYLE_DEFAULT)
+        self.assertFalse(is_bold_double_bond_style(BOLD_STYLE_CENTER, 1))
+        self.assertFalse(is_positionable_double_bond_style("dotted_double", 2))
+        self.assertIsNone(style_for_double_position("dotted_double", 2, DOUBLE_STYLE_CENTER))
+
     def test_double_style_helpers_cover_plain_dotted_and_base_variant_resolution(self) -> None:
         self.assertTrue(is_plain_double_bond_style("single", 2))
         self.assertTrue(is_plain_double_bond_style("double_outer", 2))

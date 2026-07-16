@@ -3,6 +3,9 @@ from __future__ import annotations
 DOUBLE_STYLE_DEFAULT = "double"
 DOUBLE_STYLE_CENTER = "double_center"
 DOUBLE_STYLE_OUTER = "double_outer"
+BOLD_STYLE_DEFAULT = "bold_in"
+BOLD_STYLE_CENTER = "bold_center"
+BOLD_STYLE_OUTER = "bold_out"
 DOTTED_DOUBLE_STYLE_DEFAULT = "dotted_double"
 DOTTED_DOUBLE_STYLE_OUTER = "dotted_double_outer"
 
@@ -15,10 +18,18 @@ DOTTED_DOUBLE_STYLE_SEQUENCE = (
     DOTTED_DOUBLE_STYLE_DEFAULT,
     DOTTED_DOUBLE_STYLE_OUTER,
 )
+BOLD_DOUBLE_STYLE_SEQUENCE = (
+    BOLD_STYLE_DEFAULT,
+    BOLD_STYLE_CENTER,
+    BOLD_STYLE_OUTER,
+)
 
 PLAIN_DOUBLE_STYLES = frozenset(DOUBLE_STYLE_SEQUENCE)
 DOTTED_DOUBLE_STYLES = frozenset(DOTTED_DOUBLE_STYLE_SEQUENCE)
-BOLD_BOND_STYLES = frozenset({"bold", "bold_in", "bold_out"})
+BOLD_DOUBLE_STYLES = frozenset(BOLD_DOUBLE_STYLE_SEQUENCE)
+# ``bold`` remains a readable legacy/default alias. For order-2 bonds it adopts
+# the unified Inward position; new centered bold doubles use ``bold_center``.
+BOLD_BOND_STYLES = frozenset({"bold", *BOLD_DOUBLE_STYLE_SEQUENCE})
 STANDARD_BOND_STYLES = frozenset(
     {
         "single",
@@ -38,6 +49,57 @@ def normalized_plain_double_style(style: str, order: int) -> str:
     if is_plain_double_bond_style(style, order) and style in PLAIN_DOUBLE_STYLES:
         return style
     return DOUBLE_STYLE_DEFAULT
+
+
+def is_bold_double_bond_style(style: str, order: int) -> bool:
+    return order == 2 and style in BOLD_BOND_STYLES
+
+
+def normalized_bold_double_style(style: str, order: int) -> str:
+    if not is_bold_double_bond_style(style, order) or style == "bold":
+        return BOLD_STYLE_DEFAULT
+    return style
+
+
+def is_positionable_double_bond_style(style: str, order: int) -> bool:
+    return is_plain_double_bond_style(style, order) or is_bold_double_bond_style(style, order)
+
+
+def double_position_for_style(style: str, order: int) -> str:
+    """Return the plain-double position token for either plain or bold families."""
+    if is_bold_double_bond_style(style, order):
+        return {
+            BOLD_STYLE_DEFAULT: DOUBLE_STYLE_DEFAULT,
+            BOLD_STYLE_CENTER: DOUBLE_STYLE_CENTER,
+            BOLD_STYLE_OUTER: DOUBLE_STYLE_OUTER,
+        }[normalized_bold_double_style(style, order)]
+    return normalized_plain_double_style(style, order)
+
+
+def bold_double_style_for_position(position_style: str) -> str:
+    position = normalized_plain_double_style(position_style, 2)
+    return {
+        DOUBLE_STYLE_DEFAULT: BOLD_STYLE_DEFAULT,
+        DOUBLE_STYLE_CENTER: BOLD_STYLE_CENTER,
+        DOUBLE_STYLE_OUTER: BOLD_STYLE_OUTER,
+    }[position]
+
+
+def style_for_double_position(style: str, order: int, position_style: str) -> str | None:
+    """Preserve the plain/bold family while changing a double bond's position."""
+    if not is_positionable_double_bond_style(style, order):
+        return None
+    position = normalized_plain_double_style(position_style, 2)
+    if is_bold_double_bond_style(style, order):
+        return bold_double_style_for_position(position)
+    return position
+
+
+def bold_double_style_for_style(style: str, order: int) -> str:
+    """Apply Bold to an order-2 bond without discarding its current position."""
+    if is_positionable_double_bond_style(style, order):
+        return bold_double_style_for_position(double_position_for_style(style, order))
+    return BOLD_STYLE_DEFAULT
 
 
 def is_dotted_double_bond_style(style: str, order: int) -> bool:
@@ -109,6 +171,11 @@ def style_for_existing_bond_overlay(
 
 __all__ = [
     "BOLD_BOND_STYLES",
+    "BOLD_DOUBLE_STYLES",
+    "BOLD_DOUBLE_STYLE_SEQUENCE",
+    "BOLD_STYLE_CENTER",
+    "BOLD_STYLE_DEFAULT",
+    "BOLD_STYLE_OUTER",
     "DOTTED_DOUBLE_STYLES",
     "DOTTED_DOUBLE_STYLE_DEFAULT",
     "DOTTED_DOUBLE_STYLE_OUTER",
@@ -120,10 +187,17 @@ __all__ = [
     "PLAIN_DOUBLE_STYLES",
     "STANDARD_BOND_STYLES",
     "base_plain_double_style_for_dotted_variant",
+    "bold_double_style_for_position",
+    "bold_double_style_for_style",
     "cycle_plain_bond_style",
     "dotted_double_variant_for_style",
+    "double_position_for_style",
+    "is_bold_double_bond_style",
     "is_dotted_double_bond_style",
     "is_plain_double_bond_style",
+    "is_positionable_double_bond_style",
+    "normalized_bold_double_style",
     "normalized_plain_double_style",
+    "style_for_double_position",
     "style_for_existing_bond_overlay",
 ]

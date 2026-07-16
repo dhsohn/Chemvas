@@ -1985,6 +1985,78 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertLess(left_z * right_z, 0.0)
         active_canvas_for_window(self.window).services.selection_rotation_controller.end_selection_3d_rotation()
 
+    def test_perspective_drag_clears_hover_before_rotation_snapshot(self) -> None:
+        canvas = active_canvas_for_window(self.window)
+        left_id = add_atom_for(canvas, "C", -80.0, 0.0)
+        right_id = add_atom_for(canvas, "C", 80.0, 0.0)
+        add_bond_for(canvas, left_id, right_id)
+        canvas.services.structure_build_service.render_model()
+        self._select_atom_ids(left_id, right_id)
+        canvas_services_for(canvas).tool_mode_controller.set_tool("perspective")
+        canvas.services.hover_scene_service.add_atom_hover_indicator(left_id)
+        self.assertTrue(hover_state_for(canvas).items)
+
+        self._drag_scene_point(QPointF(-40.0, 0.0), QPointF(40.0, 30.0))
+
+        self.assertFalse(rotation_state_for(canvas).atom_ids)
+        perspective = canvas.services.tools.tools["perspective"]
+        self.assertFalse(perspective._rotating)
+
+    def test_perspective_drag_commits_selected_ring_item_on_release(self) -> None:
+        canvas = active_canvas_for_window(self.window)
+        add_benzene_ring_for(canvas, QPointF(0.0, 0.0))
+        ring_item = ring_items_for(canvas)[0]
+        ring_atom_ids = ring_item.data(2)
+        self.assertIsInstance(ring_atom_ids, list)
+        self._select_items(ring_item)
+        canvas_services_for(canvas).tool_mode_controller.set_tool("perspective")
+        history_count = len(canvas.services.history_service.state.history)
+
+        self._drag_scene_point(QPointF(0.0, 0.0), QPointF(80.0, 50.0))
+
+        perspective = canvas.services.tools.tools["perspective"]
+        self.assertFalse(perspective._rotating)
+        self.assertEqual(rotation_state_for(canvas).atom_ids, set())
+        self.assertEqual(len(canvas.services.history_service.state.history), history_count + 1)
+        selected_atom_ids, selected_bond_ids = selected_ids_for(canvas)
+        self.assertEqual(selected_atom_ids, set(ring_atom_ids))
+        self.assertEqual(selected_bond_ids, set())
+
+    def test_perspective_drag_commits_with_all_bold_double_positions(self) -> None:
+        canvas = active_canvas_for_window(self.window)
+        atom_ids: list[int] = []
+        for index, style in enumerate(("bold_in", "bold_center", "bold_out")):
+            y = float((index - 1) * 100)
+            left_id = add_atom_for(canvas, "C", -80.0, y)
+            right_id = add_atom_for(canvas, "C", 80.0, y)
+            bond_id = add_bond_for(canvas, left_id, right_id, 2)
+            canvas.model.bonds[bond_id].style = style
+            atom_ids.extend((left_id, right_id))
+        canvas.services.structure_build_service.render_model()
+
+        self._select_atom_ids(*atom_ids)
+        canvas_services_for(canvas).tool_mode_controller.set_tool("perspective")
+        self._drag_scene_point(QPointF(0.0, 0.0), QPointF(120.0, 80.0))
+
+        self.assertFalse(rotation_state_for(canvas).atom_ids)
+
+    def test_perspective_drag_commits_with_bold_ring_double_positions(self) -> None:
+        canvas = active_canvas_for_window(self.window)
+        add_benzene_ring_for(canvas, QPointF(0.0, 0.0))
+        ring_atom_ids = ring_items_for(canvas)[0].data(2)
+        self.assertIsInstance(ring_atom_ids, list)
+        styles = iter(("bold_in", "bold_center", "bold_out"))
+        for bond in canvas.model.bonds:
+            if bond is not None and bond.order == 2:
+                bond.style = next(styles)
+        canvas.services.structure_build_service.render_model()
+
+        self._select_atom_ids(*ring_atom_ids)
+        canvas_services_for(canvas).tool_mode_controller.set_tool("perspective")
+        self._drag_scene_point(QPointF(0.0, 20.0), QPointF(120.0, 100.0))
+
+        self.assertFalse(rotation_state_for(canvas).atom_ids)
+
     def test_select_drag_after_perspective_rebuilds_selection_overlay_at_current_position(self) -> None:
         add_benzene_ring_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
         ring_atom_ids = ring_items_for(active_canvas_for_window(self.window))[0].data(2)

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from PyQt6.QtCore import QRectF, pyqtSlot
 from PyQt6.QtGui import (
     QPainter,
@@ -23,6 +25,9 @@ from ui.canvas_view_event_router import (
     route_wheel_event,
 )
 from ui.canvas_view_setup import initialize_canvas_view
+from ui.canvas_window_access import notify_error_for
+
+logger = logging.getLogger(__name__)
 
 
 class CanvasView(QGraphicsView):
@@ -57,21 +62,59 @@ class CanvasView(QGraphicsView):
     def keyPressEvent(self, event) -> None:
         route_key_press_event(self, event, base_key_press_event=super().keyPressEvent)
 
+    def _report_mouse_event_failure(self, event, phase: str) -> None:
+        # PyQt6 treats an exception escaping a Python virtual-method override
+        # as fatal (qFatal/SIGABRT). Perspective preserves its transaction and
+        # local cursor on failure so a later pointer event can retry it; contain
+        # the exception only at this outer Qt boundary.
+        try:
+            logger.exception("Canvas mouse-%s handling failed", phase)
+        except BaseException:
+            pass
+        try:
+            notify_error_for(
+                self,
+                "The current interaction could not be completed. Try again.",
+            )
+        except BaseException:
+            try:
+                logger.exception("Canvas mouse-event error notification failed")
+            except BaseException:
+                pass
+        try:
+            accept = getattr(event, "accept", None)
+            if callable(accept):
+                accept()
+        except BaseException:
+            pass
+
     def mousePressEvent(self, event) -> None:
-        route_mouse_press_event(self, event, base_mouse_press_event=super().mousePressEvent)
+        try:
+            route_mouse_press_event(self, event, base_mouse_press_event=super().mousePressEvent)
+        except BaseException:
+            self._report_mouse_event_failure(event, "press")
 
     def mouseDoubleClickEvent(self, event) -> None:
-        route_mouse_double_click_event(
-            self,
-            event,
-            base_mouse_double_click_event=super().mouseDoubleClickEvent,
-        )
+        try:
+            route_mouse_double_click_event(
+                self,
+                event,
+                base_mouse_double_click_event=super().mouseDoubleClickEvent,
+            )
+        except BaseException:
+            self._report_mouse_event_failure(event, "double-click")
 
     def mouseMoveEvent(self, event) -> None:
-        route_mouse_move_event(self, event, base_mouse_move_event=super().mouseMoveEvent)
+        try:
+            route_mouse_move_event(self, event, base_mouse_move_event=super().mouseMoveEvent)
+        except BaseException:
+            self._report_mouse_event_failure(event, "move")
 
     def mouseReleaseEvent(self, event) -> None:
-        route_mouse_release_event(self, event, base_mouse_release_event=super().mouseReleaseEvent)
+        try:
+            route_mouse_release_event(self, event, base_mouse_release_event=super().mouseReleaseEvent)
+        except BaseException:
+            self._report_mouse_event_failure(event, "release")
 
     def viewportEvent(self, event) -> bool:
         return route_viewport_event(self, event, base_viewport_event=super().viewportEvent)

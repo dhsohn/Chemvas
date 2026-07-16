@@ -23,14 +23,20 @@ from ui.atom_coords_access import CanvasAtomCoords3DState
 from ui.canvas_atom_graphics_state import visible_atom_item_for
 from ui.canvas_lifecycle import schedule_canvas_deletion_for
 from ui.canvas_rotation_state import CanvasRotationState
+from ui.canvas_scene_items_state import ring_items_for
 from ui.canvas_view import CanvasView
+from ui.selection_collection_access import selected_ids_for
 from ui.selection_outline_state import selection_outlines_for
 from ui.selection_rotation_controller import SelectionRotationController
 from ui.selection_rotation_preview_transaction import (
     _CoreStateSnapshot,
     run_rotation_preview_update,
 )
-from ui.structure_mutation_access import add_atom_for, add_bond_for
+from ui.structure_mutation_access import (
+    add_atom_for,
+    add_benzene_ring_for,
+    add_bond_for,
+)
 
 
 class _BrokenAddNoteInterrupt(KeyboardInterrupt):
@@ -2358,6 +2364,44 @@ class SelectionRotationControllerTest(unittest.TestCase):
             self.assertEqual(controller.rotation.atom_ids, set())
             self.assertIsNone(controller._rotation_transaction)
             self.assertIsNone(controller._rotation_preview_authority)
+        finally:
+            schedule_canvas_deletion_for(canvas)
+            self.app.processEvents()
+
+    def test_actual_end_accepts_ring_selection_republication(self) -> None:
+        canvas = CanvasView()
+        controller = canvas.services.selection_rotation_controller
+        try:
+            add_benzene_ring_for(canvas, QPointF(0.0, 0.0))
+            ring_item = ring_items_for(canvas)[0]
+            ring_atom_ids = ring_item.data(2)
+            self.assertIsInstance(ring_atom_ids, list)
+            ring_item.setSelected(True)
+            self.app.processEvents()
+            history_count = len(canvas.services.history_service.state.history)
+
+            self.assertEqual(len(canvas.scene().selectedItems()), 1)
+            self.assertTrue(
+                controller.begin_selection_3d_rotation(
+                    press_pos=QPointF(0.0, 20.0),
+                )
+            )
+            controller.update_selection_3d_rotation(80.0, 50.0)
+
+            # Finalization republishes the semantic ring selection through its
+            # atom graphics. That is an expected final selection generation,
+            # not an external mutation of the rotation preview.
+            controller.end_selection_3d_rotation()
+
+            selected_atom_ids, selected_bond_ids = selected_ids_for(canvas)
+            self.assertEqual(selected_atom_ids, set(ring_atom_ids))
+            self.assertEqual(selected_bond_ids, set())
+            self.assertEqual(controller.rotation.atom_ids, set())
+            self.assertIsNone(controller._rotation_transaction)
+            self.assertEqual(
+                len(canvas.services.history_service.state.history),
+                history_count + 1,
+            )
         finally:
             schedule_canvas_deletion_for(canvas)
             self.app.processEvents()
