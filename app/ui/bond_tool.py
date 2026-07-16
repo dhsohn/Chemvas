@@ -14,7 +14,11 @@ from ui.bond_preview_access import (
     clear_bond_preview_items_for,
     update_bond_preview_items_for,
 )
-from ui.bond_style_logic import style_for_existing_bond_overlay
+from ui.bond_style_logic import (
+    BOLD_BOND_STYLES,
+    bold_double_style_for_style,
+    style_for_existing_bond_overlay,
+)
 from ui.canvas_hover_state import hover_state_for
 from ui.canvas_model_access import bond_for_id, model_for
 from ui.canvas_scene_items_state import selected_notes_for
@@ -87,8 +91,12 @@ class BondTool(Tool):
         if active_bond_style in {"wedge", "hash"}:
             self.context.apply_bond_style(bond_id, active_bond_style, 1)
             return True
-        if active_bond_style in {"bold", "bold_in", "bold_out"}:
-            if bond.style in {"bold_in", "bold"}:
+        if active_bond_style in BOLD_BOND_STYLES:
+            if bond.order == 2:
+                # Position is chosen from the shared double-bond context menu;
+                # applying Bold again must not run the legacy in/out strip flip.
+                next_style = bold_double_style_for_style(bond.style, bond.order)
+            elif bond.style in {"bold_in", "bold"}:
                 next_style = "bold_out"
             elif bond.style == "bold_out":
                 next_style = "bold_in"

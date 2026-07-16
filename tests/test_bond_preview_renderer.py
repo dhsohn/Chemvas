@@ -286,7 +286,7 @@ class BondPreviewRendererTest(unittest.TestCase):
         self.assertEqual(items, [first, second])
         draw_parallel.assert_called_once()
 
-    def test_build_bold_preview_without_outward_flag_keeps_normal_direction(self) -> None:
+    def test_build_bold_default_preview_uses_inward_double_position(self) -> None:
         strip = QGraphicsPolygonItem()
         line_normal = mock.Mock(return_value=(0.25, 0.75))
         one_sided = mock.Mock(return_value=strip)
@@ -311,7 +311,7 @@ class BondPreviewRendererTest(unittest.TestCase):
         )
 
         self.assertIsInstance(items[0], QGraphicsPolygonItem)
-        one_sided.assert_called_once_with(0.0, 0.0, 10.0, 0.0, 0.25, 0.75, 1.2, 2.4)
+        one_sided.assert_called_once_with(0.0, 0.5, 10.0, 0.5, -0.25, -0.75, 1.2, 2.4)
 
     def test_build_parallel_nonbold_preview_uses_parallel_resolver(self) -> None:
         expected = [QGraphicsLineItem(0.0, 0.0, 8.0, 0.0), QGraphicsLineItem(0.0, 1.0, 8.0, 1.0)]
@@ -480,7 +480,10 @@ class BondPreviewRendererTest(unittest.TestCase):
         points = [(point.x(), point.y()) for point in items[0].polygon()]
         self.assertTrue(updated)
         self.assertEqual(points, [(0.0, 0.0), (10.0, 0.0), (10.0, 2.0), (0.0, 2.0)])
-        self.assertEqual((items[1].line().x1(), items[1].line().y1(), items[1].line().x2(), items[1].line().y2()), (0.0, 1.0, 10.0, 1.0))
+        self.assertEqual(
+            (items[1].line().x1(), items[1].line().y1(), items[1].line().x2(), items[1].line().y2()),
+            (1.2, -0.6000000000000001, 8.8, -0.6000000000000001),
+        )
 
     def test_update_bold_parallel_preview_updates_line_first_item(self) -> None:
         items = [
@@ -499,7 +502,10 @@ class BondPreviewRendererTest(unittest.TestCase):
         )
 
         self.assertTrue(updated)
-        self.assertEqual((items[0].line().x1(), items[0].line().y1(), items[0].line().x2(), items[0].line().y2()), (0.0, 0.0, 10.0, 0.0))
+        self.assertEqual(
+            (items[0].line().x1(), items[0].line().y1(), items[0].line().x2(), items[0].line().y2()),
+            (0.0, 0.5, 10.0, 0.5),
+        )
 
     def test_update_bold_parallel_preview_returns_false_for_bad_item_shapes(self) -> None:
         updated = update_bond_preview_items(
