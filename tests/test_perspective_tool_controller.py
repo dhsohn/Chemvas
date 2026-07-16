@@ -23,10 +23,12 @@ class _Event:
         pos: QPointF | None = None,
         *,
         button=Qt.MouseButton.LeftButton,
+        buttons=Qt.MouseButton.LeftButton,
         modifiers=Qt.KeyboardModifier.NoModifier,
     ) -> None:
         self._pos = QPointF(pos or QPointF())
         self._button = button
+        self._buttons = buttons
         self._modifiers = modifiers
 
     def button(self):
@@ -34,6 +36,9 @@ class _Event:
 
     def modifiers(self):
         return self._modifiers
+
+    def buttons(self):
+        return self._buttons
 
     def position(self):
         return QPointF(self._pos)
@@ -266,6 +271,8 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
             self.assertEqual(tool._last_pos, QPointF(8.0, 4.0))
             self.assertTrue(tool._rotating)
 
+            self.assertTrue(tool.on_mouse_release(first_event))
+
             self.assertFalse(tool.on_mouse_press(second_event))
             self.assertIsNone(tool._last_pos)
             self.assertFalse(tool._rotating)
@@ -399,7 +406,29 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
         self.assertEqual(tool._axis_lock, "x")
         self.assertTrue(tool._rotating)
 
-    def test_new_press_retries_failed_release_before_beginning_another_rotation(self) -> None:
+    def test_move_without_left_button_does_not_continue_stranded_rotation(self) -> None:
+        canvas = _PerspectiveCanvas()
+        controller = canvas.services.selection_rotation_controller
+        tool = PerspectiveTool(canvas, context=_tool_context_for(canvas))
+        old_position = QPointF(8.0, 4.0)
+        tool._rotating = True
+        tool._last_pos = old_position
+        tool._axis_lock = "x"
+
+        handled = tool.on_mouse_move(
+            _Event(
+                QPointF(20.0, 12.0),
+                buttons=Qt.MouseButton.NoButton,
+            )
+        )
+
+        self.assertFalse(handled)
+        controller.update_selection_3d_rotation.assert_not_called()
+        self.assertTrue(tool._rotating)
+        self.assertEqual(tool._last_pos, old_position)
+        self.assertEqual(tool._axis_lock, "x")
+
+    def test_new_press_retries_failed_release_without_restarting_rotation(self) -> None:
         canvas = _PerspectiveCanvas()
         controller = canvas.services.selection_rotation_controller
         controller.end_selection_3d_rotation = mock.Mock(
@@ -442,6 +471,24 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
             self.assertTrue(tool.on_mouse_press(new_event))
 
         self.assertEqual(controller.end_selection_3d_rotation.call_count, 3)
+        next_controller.begin_selection_rotation.assert_not_called()
+        self.assertFalse(tool._rotating)
+        self.assertIsNone(tool._last_pos)
+        self.assertIsNone(tool._axis_lock)
+
+        # Moving after the consumed commit click must not keep rotating the
+        # structure, even though the structure itself remains selected.
+        self.assertFalse(tool.on_mouse_move(_Event(QPointF(30.0, 20.0))))
+        controller.update_selection_3d_rotation.assert_not_called()
+
+        # The commit click is consumed. Only a later click may start another
+        # rotation session from the still-selected structure.
+        with mock.patch(
+            "ui.perspective_tool._perspective_tool_controller_for",
+            return_value=next_controller,
+        ):
+            self.assertTrue(tool.on_mouse_press(new_event))
+
         next_controller.begin_selection_rotation.assert_called_once_with(new_event)
         self.assertTrue(tool._rotating)
         self.assertEqual(tool._last_pos, new_event.position())

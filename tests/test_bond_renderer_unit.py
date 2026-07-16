@@ -707,19 +707,19 @@ class BondRendererUnitTest(unittest.TestCase):
         self.assertEqual((single.line().x1(), single.line().x2()), (1.0, 9.0))
 
     def test_update_bond_geometry_updates_bold_ring_parallel_and_single_paths(self) -> None:
-        outer_polygon = QGraphicsPolygonItem(QPolygonF())
-        inner_line = QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)
+        inner_polygon = QGraphicsPolygonItem(QPolygonF())
+        outer_line = QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)
         self._set_bond(Bond(0, 1, 2, style="bold_out"))
         self.canvas._ring_center = QPointF(5.0, 5.0)
-        self.canvas.bond_items[0] = [outer_polygon, inner_line]
+        self.canvas.bond_items[0] = [inner_polygon, outer_line]
         with mock.patch.object(
             self.renderer,
             "ring_double_segments",
             return_value=((0.0, 0.0, 10.0, 0.0), (1.0, 1.0, 9.0, 1.0), (0.0, 1.0)),
         ):
             self.renderer.update_bond_geometry(0)
-        self.assertEqual(len(outer_polygon.polygon()), 4)
-        self.assertEqual((inner_line.line().x1(), inner_line.line().y1()), (1.0, 1.0))
+        self.assertEqual(len(inner_polygon.polygon()), 4)
+        self.assertEqual((outer_line.line().x1(), outer_line.line().y1()), (0.0, 0.0))
 
         first = QGraphicsPolygonItem(QPolygonF())
         second = QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)
@@ -835,7 +835,8 @@ class BondRendererUnitTest(unittest.TestCase):
             return_value=((0.0, 0.0, 10.0, 0.0), (1.0, 1.0, 9.0, 1.0), (0.0, 1.0)),
         ):
             self.renderer.update_bond_geometry(0)
-        self.assertEqual((ring_outer_line.line().x1(), ring_outer_line.line().x2()), (0.0, 10.0))
+        self.assertEqual((ring_outer_line.line().x1(), ring_outer_line.line().x2()), (1.0, 9.0))
+        self.assertEqual(len(ring_inner_polygon.polygon()), 0)
 
         empty_parallel_item = QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)
         self._set_bond(Bond(0, 1, 3, style="bold"))
@@ -974,6 +975,90 @@ class BondRendererUnitTest(unittest.TestCase):
         self.renderer.add_bond_graphics(0)
         self.assertEqual(len(self.canvas.bond_items[0]), 1)
         self.assertIsInstance(self.canvas.bond_items[0][0], (NoSelectPolygonItem, NoSelectLineItem))
+
+    def test_nonring_bold_double_positions_share_plain_double_geometry_on_build_and_update(self) -> None:
+        cases = (
+            ("bold_in", "double", 4.4, -1),
+            ("bold_center", "double_center", 2.2, -1),
+            ("bold_out", "double_outer", -4.4, 1),
+        )
+        for bold_style, plain_style, thin_y, bold_side in cases:
+            with self.subTest(bold_style=bold_style):
+                self.canvas._scene.clear()
+                self._set_bond(Bond(0, 1, 2, style=bold_style))
+                with mock.patch.object(
+                    self.renderer,
+                    "plain_double_segments",
+                    wraps=self.renderer.plain_double_segments,
+                ) as segments:
+                    self.renderer.add_bond_graphics(0)
+                    items = self.canvas.bond_items[0]
+                    self.assertIsInstance(items[0], QGraphicsPolygonItem)
+                    self.assertIsInstance(items[1], QGraphicsLineItem)
+                    self.assertAlmostEqual(items[1].line().y1(), thin_y)
+                    polygon_mid_y = sum(point.y() for point in items[0].polygon()) / len(items[0].polygon())
+                    self.assertEqual(-1 if polygon_mid_y < thin_y else 1, bold_side)
+                    self.assertEqual(segments.call_args.kwargs["style"], plain_style)
+
+                    self.canvas.model.atoms[1].y = 2.0
+                    self.renderer.update_bond_geometry(0)
+                    self.assertEqual(segments.call_args.kwargs["style"], plain_style)
+                    self.assertEqual(len(items[0].polygon()), 4)
+
+                self.canvas.model.atoms[1].y = 0.0
+
+    def test_ring_bold_double_positions_switch_primary_line_like_plain_double(self) -> None:
+        cases = (
+            ("bold_in", "double", (QGraphicsPolygonItem, QGraphicsLineItem)),
+            ("bold_center", "double_center", (QGraphicsPolygonItem, QGraphicsLineItem)),
+            ("bold_out", "double_outer", (QGraphicsPolygonItem, QGraphicsLineItem)),
+        )
+        self.canvas._ring_center = QPointF(5.0, 5.0)
+        for bold_style, plain_style, item_types in cases:
+            with self.subTest(bold_style=bold_style):
+                self.canvas._scene.clear()
+                self._set_bond(Bond(0, 1, 2, style=bold_style))
+                with mock.patch.object(
+                    self.renderer,
+                    "ring_double_segments",
+                    wraps=self.renderer.ring_double_segments,
+                ) as segments:
+                    self.renderer.add_bond_graphics(0)
+                    items = self.canvas.bond_items[0]
+                    self.assertIsInstance(items[0], item_types[0])
+                    self.assertIsInstance(items[1], item_types[1])
+                    self.assertEqual(segments.call_args.kwargs["style"], plain_style)
+
+                    self.canvas.model.atoms[1].y = 2.0
+                    self.renderer.update_bond_geometry(0)
+                    self.assertEqual(segments.call_args.kwargs["style"], plain_style)
+                    self.assertEqual(len(items[0].polygon()), 4)
+
+                self.canvas.model.atoms[1].y = 0.0
+
+    def test_bold_out_update_keeps_polygon_current_when_ring_is_attached_and_removed(self) -> None:
+        self._set_bond(Bond(0, 1, 2, style="bold_out"))
+        self.renderer.add_bond_graphics(0)
+        items = self.canvas.bond_items[0]
+        self.assertIsInstance(items[0], QGraphicsPolygonItem)
+        self.assertIsInstance(items[1], QGraphicsLineItem)
+        self.assertAlmostEqual(items[1].line().y1(), -4.4)
+
+        self.canvas._ring_center = QPointF(5.0, 5.0)
+        self.renderer.update_bond_geometry(0)
+
+        self.assertEqual(len(items[0].polygon()), 4)
+        self.assertAlmostEqual(items[1].line().y1(), 0.0)
+        self.assertGreater(
+            sum(point.y() for point in items[0].polygon()) / len(items[0].polygon()),
+            items[1].line().y1(),
+        )
+
+        self.canvas._ring_center = None
+        self.renderer.update_bond_geometry(0)
+
+        self.assertEqual(len(items[0].polygon()), 4)
+        self.assertAlmostEqual(items[1].line().y1(), -4.4)
 
     def test_add_bond_graphics_covers_double_and_higher_order_nonbold_paths(self) -> None:
         self.canvas._ring_center = QPointF(5.0, 5.0)

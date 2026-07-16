@@ -10,6 +10,8 @@ from ui.bond_style_logic import (
     DOUBLE_STYLE_CENTER,
     DOUBLE_STYLE_DEFAULT,
     DOUBLE_STYLE_OUTER,
+    bold_double_style_for_style,
+    style_for_double_position,
 )
 from ui.bracket_types import DEFAULT_BRACKET_KIND
 from ui.canvas_hover_state import hover_state_for
@@ -250,7 +252,11 @@ class CanvasChemdrawShortcutService:
             if event.key() == Qt.Key.Key_B:
                 # 'b' applies a bold single; Shift+B upgrades to a bold double
                 # (order 2 renders via the bold multi-line path).
-                self.scene_transform.apply_bond_style(bond_id, "bold_in", 2)
+                self.scene_transform.apply_bond_style(
+                    bond_id,
+                    bold_double_style_for_style(bond.style, bond.order),
+                    2,
+                )
                 return True
             if event.key() == Qt.Key.Key_H:
                 self.scene_transform.apply_bond_style(bond_id, "hash", 1)
@@ -265,7 +271,11 @@ class CanvasChemdrawShortcutService:
         if text in self.DOUBLE_POSITION_STYLES:
             if bond.order != 2:
                 return False
-            self.scene_transform.apply_bond_style(bond_id, self.DOUBLE_POSITION_STYLES[text], 2)
+            position_style = self.DOUBLE_POSITION_STYLES[text]
+            target_style = style_for_double_position(bond.style, bond.order, position_style)
+            # Preserve the previous shortcut behavior for other order-2 styles:
+            # l/c/r converts those bonds back to an ordinary double.
+            self.scene_transform.apply_bond_style(bond_id, target_style or position_style, 2)
             return True
         if text == "1":
             self.scene_transform.apply_bond_style(bond_id, "single", 1)

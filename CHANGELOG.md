@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   window instead of creating a second, independently-editable copy.
 
 ### Changed
+- Unified one-sided Bold double bonds with the ordinary double-bond positioning
+  model: right-click now offers **Inward**, **Centered**, and **Outward** without
+  dropping the Bold style, and `l` / `c` / `r` preserve it as well.
 - Moved the SMILES quick-insert field from the tool-options bar up to the main top
   toolbar, so it stays visible regardless of the active tool. The field stretches to
   fill the space between the drawing tools and the file/history buttons (up to a
@@ -37,6 +40,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Grouped the pick-one **mode tools** (select, bond, ring, arrow, …) inside a subtle
   painted "well" on the top toolbar, so they read as one set — visually distinct from
   the loose one-shot command buttons beside them (flip, rotate, undo, redo).
+
+### Fixed
+- Cleared transient hover indicators before Perspective rotation captures its
+  scene snapshot, preventing a false scene-mutation failure at release. Failed
+  press, preview, or finalization callbacks are also contained at the PyQt6
+  boundary and reported in the status bar instead of aborting the app.
+- A left-click that successfully retries an interrupted Perspective rotation
+  commit is now consumed instead of immediately starting another rotation;
+  button-free mouse movement can no longer extend a stranded drag either.
+- Perspective rotation now accepts the expected selection-state republication
+  that occurs when a selected ring is restored through its atom graphics, so
+  releasing the left mouse button commits instead of reporting a false global
+  authority change.
 
 ## [0.1.0] - 2026-07-13
 

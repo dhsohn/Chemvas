@@ -169,6 +169,48 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
             base_press.assert_called_once()
             tool_view.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
 
+    def test_mouse_press_clears_hover_before_perspective_captures_scene(self) -> None:
+        tool = SimpleNamespace(
+            name="perspective",
+            on_mouse_press=mock.Mock(return_value=True),
+        )
+        view = self._new_view(tool_active=tool)
+        event = _FakeEvent(button=Qt.MouseButton.LeftButton)
+        calls = mock.Mock()
+        calls.attach_mock(
+            view.services.hover_scene_service.clear_hover_highlight,
+            "clear_hover",
+        )
+        calls.attach_mock(tool.on_mouse_press, "begin_rotation")
+
+        CanvasView.mousePressEvent(view, event)
+
+        self.assertEqual(
+            calls.mock_calls,
+            [mock.call.clear_hover(), mock.call.begin_rotation(event)],
+        )
+
+    def test_mouse_press_preserves_hover_until_non_perspective_tool_handles_target(self) -> None:
+        tool = SimpleNamespace(
+            name="bond",
+            on_mouse_press=mock.Mock(return_value=True),
+        )
+        view = self._new_view(tool_active=tool)
+        event = _FakeEvent(button=Qt.MouseButton.LeftButton)
+        calls = mock.Mock()
+        calls.attach_mock(tool.on_mouse_press, "handle_target")
+        calls.attach_mock(
+            view.services.hover_scene_service.clear_hover_highlight,
+            "clear_hover",
+        )
+
+        CanvasView.mousePressEvent(view, event)
+
+        self.assertEqual(
+            calls.mock_calls,
+            [mock.call.handle_target(event), mock.call.clear_hover()],
+        )
+
     def test_mouse_press_event_right_click_on_double_bond_shows_variant_menu(self) -> None:
         from core.model import Atom, Bond
         view = self._new_view()
@@ -207,6 +249,56 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
 
         scene_transform_controller.apply_bond_style.assert_called_once_with(0, "double_outer", 2)
         view.apply_bond_style.assert_not_called()
+
+    def test_right_click_on_bold_double_preserves_bold_family_for_all_positions(self) -> None:
+        from core.model import Atom, Bond
+
+        cases = (
+            ("bold_in", [True, False, False]),
+            ("bold_center", [False, True, False]),
+            ("bold_out", [False, False, True]),
+            ("bold", [True, False, False]),
+        )
+        for current_style, checked in cases:
+            with self.subTest(current_style=current_style):
+                view = self._new_view()
+                view.model.atoms = {
+                    1: Atom("C", 0.0, 0.0),
+                    2: Atom("C", 20.0, 0.0),
+                }
+                view.model.bonds = [Bond(1, 2, 2, style=current_style)]
+                view.services.hit_testing_service.item_at_event.return_value = None
+                view.services.hit_testing_service.bond_id_from_event.return_value = 0
+                scene_transform_controller = SimpleNamespace(apply_bond_style=mock.Mock())
+                controller = CanvasPointerController(
+                    view,
+                    hit_testing_service=view.services.hit_testing_service,
+                    insert_controller=view.services.insert_controller,
+                    hover_interaction_service=view.services.hover_interaction_service,
+                    tool_controller=view.services.tools,
+                    scene_transform_controller=scene_transform_controller,
+                )
+                _FakeMenu.instances = []
+
+                handled = controller._show_double_bond_context_menu(
+                    _FakeEvent(button=Qt.MouseButton.RightButton, global_pos=QPointF(30.0, 40.0)),
+                    menu_factory=_FakeMenu,
+                )
+
+                self.assertTrue(handled)
+                menu = _FakeMenu.instances[-1]
+                self.assertEqual([action.label for action in menu.actions], ["Inward", "Centered", "Outward"])
+                self.assertEqual([action.checked for action in menu.actions], checked)
+                for action in menu.actions:
+                    action.trigger()
+                self.assertEqual(
+                    scene_transform_controller.apply_bond_style.call_args_list,
+                    [
+                        mock.call(0, "bold_in", 2),
+                        mock.call(0, "bold_center", 2),
+                        mock.call(0, "bold_out", 2),
+                    ],
+                )
 
     def test_mouse_double_click_event_routes_non_select_tools_and_select_tool_falls_through(self) -> None:
         with mock.patch.object(

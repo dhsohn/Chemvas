@@ -44,11 +44,12 @@ class PerspectiveTool(Tool):
             return False
         if self._rotating:
             # A release/finalization callback may have failed while the visual
-            # rotation remained active. Commit that same session before any
-            # shift-toggle or new begin call can overwrite its shared state.
-            # _commit_active_rotation deliberately preserves locals on failure,
-            # so the exception aborts this press and a later press can retry.
+            # rotation remained active. This click is the user's explicit
+            # commit/retry action, so consume it after finalizing the existing
+            # session instead of immediately starting another rotation from
+            # the same press event. A later click may begin a new session.
             self._commit_active_rotation()
+            return True
         if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
             item = self.context.item_at_event(event)
             if self.context.toggle_item_selection(item):
@@ -64,6 +65,12 @@ class PerspectiveTool(Tool):
     def on_mouse_move(self, event) -> bool:
         if self._last_pos is None or not self._rotating:
             return self._rotating
+        buttons = getattr(event, "buttons", None)
+        if callable(buttons) and not buttons() & Qt.MouseButton.LeftButton:
+            # Rotation is a left-button drag. If Qt delivered a move after a
+            # failed/delayed release callback, keep the session available for
+            # an explicit commit retry but never rotate from plain hovering.
+            return False
         current = event.position()
         delta = current - self._last_pos
         update = resolve_perspective_drag_update(

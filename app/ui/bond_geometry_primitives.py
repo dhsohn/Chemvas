@@ -68,6 +68,23 @@ def trim_segment(segment: LineSegment, trim: float) -> LineSegment:
     )
 
 
+def normal_away_from_parallel_segment(
+    segment: LineSegment,
+    other: LineSegment,
+    nx: float,
+    ny: float,
+) -> tuple[float, float]:
+    """Orient a strip normal away from the other line of a multiple bond."""
+    segment_mid_x = (segment[0] + segment[2]) * 0.5
+    segment_mid_y = (segment[1] + segment[3]) * 0.5
+    other_mid_x = (other[0] + other[2]) * 0.5
+    other_mid_y = (other[1] + other[3]) * 0.5
+    toward_other = (other_mid_x - segment_mid_x) * nx + (other_mid_y - segment_mid_y) * ny
+    if toward_other >= 0.0:
+        return -nx, -ny
+    return nx, ny
+
+
 def line_intersection(
     px: float,
     py: float,
@@ -129,6 +146,7 @@ __all__ = [
     "bold_out_scale",
     "extend_segment",
     "line_intersection",
+    "normal_away_from_parallel_segment",
     "normalize_3d",
     "offset_segment",
     "scale_segment",

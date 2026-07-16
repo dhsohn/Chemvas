@@ -8,6 +8,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 try:
     from PyQt6.QtCore import QEvent, QPointF, Qt
     from PyQt6.QtGui import QMouseEvent, QTransform
+    from PyQt6.QtTest import QTest
     from PyQt6.QtWidgets import QApplication, QGraphicsView
 except ModuleNotFoundError:
     QApplication = None
@@ -17,6 +18,7 @@ if QApplication is not None:
     from ui.canvas_insert_state import insert_state_for
     from ui.canvas_pointer_controller import CanvasPointerController
     from ui.canvas_view import CanvasView
+    from ui.canvas_window_access import set_error_callback_for
     from ui.input_view_state import input_view_state_for
 
 
@@ -248,6 +250,212 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         tool.on_mouse_release.assert_called_once_with(release_event)
         view.hover_refresh.assert_called_once_with()
         view.services.hover_interaction_service.update_hover_highlight.assert_not_called()
+
+    def test_mouse_release_event_contains_perspective_finalization_errors_at_qt_boundary(self) -> None:
+        error_callback = mock.Mock()
+        tool = SimpleNamespace(
+            name="perspective",
+            on_mouse_release=mock.Mock(
+                side_effect=RuntimeError("injected rotation finalization failure")
+            ),
+        )
+        view = self._new_view(tool_active=tool)
+        set_error_callback_for(view, error_callback)
+        release_event = _FakeEvent(
+            button=Qt.MouseButton.LeftButton,
+            buttons=Qt.MouseButton.NoButton,
+        )
+
+        with mock.patch("ui.canvas_view.logger.exception") as log_exception:
+            CanvasView.mouseReleaseEvent(view, release_event)
+
+        tool.on_mouse_release.assert_called_once_with(release_event)
+        log_exception.assert_called_once_with(
+            "Canvas mouse-%s handling failed",
+            "release",
+        )
+        error_callback.assert_called_once_with(
+            "The current interaction could not be completed. Try again."
+        )
+        release_event.accept.assert_called_once_with()
+        view.hover_refresh.assert_not_called()
+
+    def test_mouse_release_event_contains_error_callback_failures_too(self) -> None:
+        tool = SimpleNamespace(
+            name="perspective",
+            on_mouse_release=mock.Mock(side_effect=KeyboardInterrupt("release failure")),
+        )
+        view = self._new_view(tool_active=tool)
+        set_error_callback_for(
+            view,
+            mock.Mock(side_effect=RuntimeError("notification failure")),
+        )
+        release_event = _FakeEvent(
+            button=Qt.MouseButton.LeftButton,
+            buttons=Qt.MouseButton.NoButton,
+        )
+
+        with mock.patch("ui.canvas_view.logger.exception") as log_exception:
+            CanvasView.mouseReleaseEvent(view, release_event)
+
+        self.assertEqual(
+            log_exception.call_args_list,
+            [
+                mock.call("Canvas mouse-%s handling failed", "release"),
+                mock.call("Canvas mouse-event error notification failed"),
+            ],
+        )
+        release_event.accept.assert_called_once_with()
+
+    def test_qt_mouse_release_callback_contains_perspective_finalization_error(self) -> None:
+        error_callback = mock.Mock()
+        tool = SimpleNamespace(
+            name="perspective",
+            on_mouse_press=mock.Mock(return_value=True),
+            on_mouse_release=mock.Mock(
+                side_effect=BaseExceptionGroup(
+                    "rotation finalization failed",
+                    [RuntimeError("release failure")],
+                )
+            ),
+        )
+        view = self._new_view(tool_active=tool)
+        set_error_callback_for(view, error_callback)
+        view.resize(240, 180)
+        view.show()
+        self.app.processEvents()
+        position = view.viewport().rect().center()
+
+        with mock.patch("ui.canvas_view.logger.exception"):
+            QTest.mousePress(
+                view.viewport(),
+                Qt.MouseButton.LeftButton,
+                Qt.KeyboardModifier.NoModifier,
+                position,
+            )
+            QTest.mouseRelease(
+                view.viewport(),
+                Qt.MouseButton.LeftButton,
+                Qt.KeyboardModifier.NoModifier,
+                position,
+            )
+            self.app.processEvents()
+
+        error_callback.assert_called_once_with(
+            "The current interaction could not be completed. Try again."
+        )
+        view.close()
+
+    def test_qt_mouse_press_callback_contains_perspective_retry_error(self) -> None:
+        error_callback = mock.Mock()
+        tool = SimpleNamespace(
+            name="perspective",
+            on_mouse_press=mock.Mock(
+                side_effect=BaseExceptionGroup(
+                    "rotation retry failed",
+                    [RuntimeError("press retry failure")],
+                )
+            ),
+            on_mouse_release=mock.Mock(return_value=True),
+        )
+        view = self._new_view(tool_active=tool)
+        set_error_callback_for(view, error_callback)
+        view.resize(240, 180)
+        view.show()
+        self.app.processEvents()
+        position = view.viewport().rect().center()
+
+        with mock.patch("ui.canvas_view.logger.exception"):
+            QTest.mousePress(
+                view.viewport(),
+                Qt.MouseButton.LeftButton,
+                Qt.KeyboardModifier.NoModifier,
+                position,
+            )
+            QTest.mouseRelease(
+                view.viewport(),
+                Qt.MouseButton.LeftButton,
+                Qt.KeyboardModifier.NoModifier,
+                position,
+            )
+            self.app.processEvents()
+
+        tool.on_mouse_press.assert_called_once()
+        error_callback.assert_called_once_with(
+            "The current interaction could not be completed. Try again."
+        )
+        view.close()
+
+    def test_qt_mouse_double_click_callback_contains_perspective_retry_error(self) -> None:
+        error_callback = mock.Mock()
+        tool = SimpleNamespace(
+            name="perspective",
+            on_mouse_press=mock.Mock(
+                side_effect=BaseExceptionGroup(
+                    "rotation double-click retry failed",
+                    [RuntimeError("double-click retry failure")],
+                )
+            ),
+        )
+        view = self._new_view(tool_active=tool)
+        set_error_callback_for(view, error_callback)
+        view.resize(240, 180)
+        view.show()
+        self.app.processEvents()
+        position = view.viewport().rect().center()
+
+        with mock.patch("ui.canvas_view.logger.exception"):
+            QTest.mouseDClick(
+                view.viewport(),
+                Qt.MouseButton.LeftButton,
+                Qt.KeyboardModifier.NoModifier,
+                position,
+            )
+            self.app.processEvents()
+
+        tool.on_mouse_press.assert_called_once()
+        error_callback.assert_called_once_with(
+            "The current interaction could not be completed. Try again."
+        )
+        view.close()
+
+    def test_qt_mouse_move_callback_contains_perspective_preview_error(self) -> None:
+        error_callback = mock.Mock()
+        tool = SimpleNamespace(
+            name="perspective",
+            on_mouse_press=mock.Mock(return_value=True),
+            on_mouse_move=mock.Mock(side_effect=KeyboardInterrupt("preview failure")),
+            on_mouse_release=mock.Mock(return_value=True),
+        )
+        view = self._new_view(tool_active=tool)
+        set_error_callback_for(view, error_callback)
+        view.resize(240, 180)
+        view.show()
+        self.app.processEvents()
+        start = view.viewport().rect().center()
+        end = start + QPointF(20.0, 10.0).toPoint()
+
+        with mock.patch("ui.canvas_view.logger.exception"):
+            QTest.mousePress(
+                view.viewport(),
+                Qt.MouseButton.LeftButton,
+                Qt.KeyboardModifier.NoModifier,
+                start,
+            )
+            QTest.mouseMove(view.viewport(), end)
+            QTest.mouseRelease(
+                view.viewport(),
+                Qt.MouseButton.LeftButton,
+                Qt.KeyboardModifier.NoModifier,
+                end,
+            )
+            self.app.processEvents()
+
+        tool.on_mouse_move.assert_called_once()
+        error_callback.assert_called_once_with(
+            "The current interaction could not be completed. Try again."
+        )
+        view.close()
 
     def test_mouse_release_event_cancels_drawing_tool_outside_sheet(self) -> None:
         tool = SimpleNamespace(

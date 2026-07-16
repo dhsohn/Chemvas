@@ -5,12 +5,18 @@ import math
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QPolygonF
 
-from ui.bond_geometry_primitives import line_intersection, strip_polygon
+from ui.bond_geometry_primitives import (
+    line_intersection,
+    normal_away_from_parallel_segment,
+    strip_polygon,
+)
 from ui.bond_style_logic import (
     BOLD_BOND_STYLES,
     DOUBLE_STYLE_DEFAULT,
     DOUBLE_STYLE_OUTER,
     base_plain_double_style_for_dotted_variant,
+    double_position_for_style,
+    is_bold_double_bond_style,
 )
 from ui.canvas_graph_state import graph_state_for
 from ui.canvas_model_access import atom_for_id, bond_for_id
@@ -118,6 +124,33 @@ class BondGraphicsDrawService:
         return QPolygonF([outer_start, outer_end, inner_end, inner_start])
 
     def _bold_strip_normal(self, bond, a, b) -> tuple[float, float]:
+        if is_bold_double_bond_style(bond.style, bond.order):
+            variant = double_position_for_style(bond.style, bond.order)
+            ring_center = self.renderer.ring_center_for_bond(bond)
+            if ring_center is not None:
+                segments = self.renderer.ring_double_segments(
+                    a,
+                    b,
+                    ring_center,
+                    bond.a,
+                    bond.b,
+                    center_3d=self.renderer.ring_center_3d_for_bond(bond),
+                    style=variant,
+                )
+            else:
+                segments = self.renderer.plain_double_segments(
+                    a.x,
+                    a.y,
+                    b.x,
+                    b.y,
+                    style=variant,
+                    a_id=bond.a,
+                    b_id=bond.b,
+                )
+            outer_seg, inner_seg, normal = segments
+            bold_index = 1 if ring_center is not None and variant == DOUBLE_STYLE_OUTER else 0
+            pair = (outer_seg, inner_seg)
+            return normal_away_from_parallel_segment(pair[bold_index], pair[1 - bold_index], *normal)
         ring_center = self.renderer.ring_center_for_bond(bond)
         nx, ny = self.renderer.line_normal(a.x, a.y, b.x, b.y, ring_center)
         if bond.style == "bold_out":

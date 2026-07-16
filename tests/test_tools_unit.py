@@ -2953,11 +2953,20 @@ class ToolsUnitTest(unittest.TestCase):
         canvas.model.bonds[0] = Bond(1, 2, 2, style="bold_out")
         set_tool_setting_for(canvas, "active_bond_style", "bold")
         self.assertTrue(tool._apply_active_style_to_bond(0))
-        self.assertEqual(canvas.bond_style_calls[-1], (0, "bold_in", 2))
+        self.assertEqual(canvas.bond_style_calls[-1], (0, "bold_out", 2))
 
         canvas.model.bonds[0] = Bond(1, 2, 2, style="single")
         self.assertTrue(tool._apply_active_style_to_bond(0))
         self.assertEqual(canvas.bond_style_calls[-1], (0, "bold_in", 2))
+
+        for plain_style, bold_style in (
+            ("double", "bold_in"),
+            ("double_center", "bold_center"),
+            ("double_outer", "bold_out"),
+        ):
+            canvas.model.bonds[0] = Bond(1, 2, 2, style=plain_style)
+            self.assertTrue(tool._apply_active_style_to_bond(0))
+            self.assertEqual(canvas.bond_style_calls[-1], (0, bold_style, 2))
         self.assertFalse(tool.on_mouse_press(_FakeEvent(button=Qt.MouseButton.RightButton)))
 
         with mock.patch.object(tool, "_clear_preview_items") as clear_preview, \
@@ -3009,7 +3018,7 @@ class ToolsUnitTest(unittest.TestCase):
 
         set_tool_setting_for(canvas, "active_bond_style", "bold")
         self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
-        self.assertEqual(canvas.bond_style_calls[-1], (0, "bold_out", 2))
+        self.assertEqual(canvas.bond_style_calls[-1], (0, "bold_in", 2))
 
         set_tool_setting_for(canvas, "active_bond_style", "single")
         self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
@@ -3025,7 +3034,7 @@ class ToolsUnitTest(unittest.TestCase):
         set_hover_bond_id_for(canvas, 0)
         set_tool_setting_for(canvas, "active_bond_style", "bold")
         self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
-        self.assertEqual(canvas.bond_style_calls[-1], (0, "bold_out", 2))
+        self.assertEqual(canvas.bond_style_calls[-1], (0, "bold_in", 2))
 
         set_hover_bond_id_for(canvas, None)
         canvas.atom_near = 1

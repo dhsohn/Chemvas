@@ -259,7 +259,9 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
             return_value=((0.0, 0.0, 10.0, 0.0), (1.0, 1.0, 9.0, 1.0), (0.0, 1.0)),
         ):
             self.renderer.update_bond_geometry(0)
-        self.assertEqual((ring_outer_line.line().x1(), ring_outer_line.line().x2()), (0.0, 10.0))
+        # The first scene-item slot is always the bold segment, even when the
+        # ring-outward ordinary-double geometry selects its second segment.
+        self.assertEqual((ring_outer_line.line().x1(), ring_outer_line.line().x2()), (1.0, 9.0))
 
         first_line = QGraphicsLineItem(0.0, 0.0, 0.0, 0.0)
         second_line = QGraphicsLineItem(0.0, 0.0, 0.0, 0.0)

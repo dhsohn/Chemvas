@@ -103,6 +103,7 @@ VALID_BOND_STYLES = frozenset(
         "dotted_double_outer",
         "bold",
         "bold_in",
+        "bold_center",
         "bold_out",
     )
 )

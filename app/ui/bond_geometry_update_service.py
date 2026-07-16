@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from PyQt6.QtWidgets import QGraphicsLineItem, QGraphicsPathItem, QGraphicsPolygonItem
 
+from ui.bond_geometry_primitives import normal_away_from_parallel_segment
 from ui.bond_style_logic import (
+    BOLD_BOND_STYLES,
     DOUBLE_STYLE_OUTER,
     base_plain_double_style_for_dotted_variant,
+    double_position_for_style,
     is_dotted_double_bond_style,
     is_plain_double_bond_style,
     normalized_plain_double_style,
@@ -100,39 +103,67 @@ class BondGeometryUpdateService:
         if isinstance(items[1], QGraphicsPathItem):
             items[1].setPath(self.renderer.dotted_bond_path(*inner_seg, bond.a, bond.b))
 
-    def _update_ring_bold_double_geometry(self, bond, items, a, b, ring_center, bold_outward: bool) -> None:
-        ring_center_3d = self.renderer.ring_center_3d_for_bond(bond)
-        outer_seg, inner_seg, (nx, ny) = self.renderer.ring_double_segments(
-            a,
-            b,
-            ring_center,
-            bond.a,
-            bond.b,
-            center_3d=ring_center_3d,
-        )
-        use_nx, use_ny = (nx, ny) if not bold_outward else (-nx, -ny)
-        outer_item = items[0]
-        if isinstance(outer_item, QGraphicsPolygonItem):
-            polygon = self.renderer.graphics_drawer.bold_strip_polygon(
-                *outer_seg,
-                use_nx,
-                use_ny,
-                self._bond_line_width(),
-                self._bold_bond_width(),
+    def _update_bold_double_geometry(self, bond, items, a, b) -> None:
+        if len(items) < 2:
+            return
+        variant = double_position_for_style(bond.style, bond.order)
+        ring_center = self.renderer.ring_center_for_bond(bond)
+        if ring_center is not None:
+            ring_center_3d = self.renderer.ring_center_3d_for_bond(bond)
+            outer_seg, inner_seg, normal = self.renderer.ring_double_segments(
+                a,
+                b,
+                ring_center,
                 bond.a,
                 bond.b,
+                center_3d=ring_center_3d,
+                style=variant,
             )
-            outer_item.setPolygon(polygon)
-        elif isinstance(outer_item, QGraphicsLineItem):
-            outer_item.setLine(*outer_seg)
-        inner_item = items[1]
-        if isinstance(inner_item, QGraphicsLineItem):
-            inner_item.setLine(*inner_seg)
+        else:
+            outer_seg, inner_seg, normal = self.renderer.plain_double_segments(
+                a.x,
+                a.y,
+                b.x,
+                b.y,
+                style=variant,
+                a_id=bond.a,
+                b_id=bond.b,
+            )
+
+        segments = (outer_seg, inner_seg)
+        bold_index = 1 if ring_center is not None and variant == DOUBLE_STYLE_OUTER else 0
+        bold_segment = segments[bold_index]
+        other_segment = segments[1 - bold_index]
+        nx, ny = normal_away_from_parallel_segment(bold_segment, other_segment, *normal)
+        bold_item, other_item = items[:2]
+        if isinstance(bold_item, QGraphicsPolygonItem):
+            if ring_center is not None and bold_index == 0:
+                polygon = self.renderer.graphics_drawer.bold_strip_polygon(
+                    *bold_segment,
+                    nx,
+                    ny,
+                    self._bond_line_width(),
+                    self._bold_bond_width(),
+                    bond.a,
+                    bond.b,
+                )
+            else:
+                polygon = self.renderer.strip_polygon(
+                    *bold_segment,
+                    nx,
+                    ny,
+                    self._bond_line_width(),
+                    self._bold_bond_width(),
+                )
+            bold_item.setPolygon(polygon)
+        elif isinstance(bold_item, QGraphicsLineItem):
+            bold_item.setLine(*bold_segment)
+        if isinstance(other_item, QGraphicsLineItem):
+            other_item.setLine(*other_segment)
 
     def _update_bold_multi_geometry(self, bond, items, a, b, bold_outward: bool) -> None:
-        ring_center = self.renderer.ring_center_for_bond(bond) if bond.order == 2 else None
-        if bond.order == 2 and ring_center is not None and len(items) >= 2:
-            self._update_ring_bold_double_geometry(bond, items, a, b, ring_center, bold_outward)
+        if bond.order == 2:
+            self._update_bold_double_geometry(bond, items, a, b)
             return
         segments = self.renderer.parallel_bond_segments(a.x, a.y, b.x, b.y, bond.order, bond.a, bond.b)
         if not segments:
@@ -256,7 +287,7 @@ class BondGeometryUpdateService:
             self._update_dotted_geometry(bond, items, a, b)
         elif is_dotted_double_bond_style(bond.style, bond.order):
             self._update_dotted_double_geometry(bond, items, a, b)
-        elif bond.style in {"bold", "bold_in", "bold_out"}:
+        elif bond.style in BOLD_BOND_STYLES:
             self._update_bold_geometry(bond, items, a, b)
         elif is_plain_double_bond_style(bond.style, bond.order):
             self._update_plain_double_geometry(bond, items, a, b)

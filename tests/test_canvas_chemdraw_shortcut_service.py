@@ -266,7 +266,7 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         canvas = SimpleNamespace(
             model=SimpleNamespace(
                 atoms={1: Atom("C", 1.0, 2.0), 2: Atom("O", 4.0, 5.0)},
-                bonds=[Bond(1, 2, 1), None, Bond(1, 2, 2)],
+                bonds=[Bond(1, 2, 1), None, Bond(1, 2, 2), Bond(1, 2, 2, style="bold_center")],
             ),
             _shortcut_modifiers=shortcut_modifiers_for,
             services=SimpleNamespace(
@@ -295,6 +295,9 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         self.assertTrue(service.handle_bond_hotkey(_FakeKeyEvent(Qt.Key.Key_C, text="c"), 2))
         self.assertTrue(service.handle_bond_hotkey(_FakeKeyEvent(Qt.Key.Key_L, text="l"), 2))
         self.assertTrue(service.handle_bond_hotkey(_FakeKeyEvent(Qt.Key.Key_R, text="r"), 2))
+        self.assertTrue(service.handle_bond_hotkey(_FakeKeyEvent(Qt.Key.Key_L, text="l"), 3))
+        self.assertTrue(service.handle_bond_hotkey(_FakeKeyEvent(Qt.Key.Key_C, text="c"), 3))
+        self.assertTrue(service.handle_bond_hotkey(_FakeKeyEvent(Qt.Key.Key_R, text="r"), 3))
         self.assertTrue(service.handle_bond_hotkey(_FakeKeyEvent(Qt.Key.Key_1, text="1"), 0))
         self.assertTrue(service.handle_bond_hotkey(_FakeKeyEvent(Qt.Key.Key_2, text="2"), 0))
         self.assertTrue(service.handle_bond_hotkey(_FakeKeyEvent(Qt.Key.Key_3, text="3"), 0))
@@ -313,6 +316,9 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         self.assertIn(("style", 2, "double_center", 2), calls)
         self.assertIn(("style", 2, "double", 2), calls)
         self.assertIn(("style", 2, "double_outer", 2), calls)
+        self.assertIn(("style", 3, "bold_in", 2), calls)
+        self.assertIn(("style", 3, "bold_center", 2), calls)
+        self.assertIn(("style", 3, "bold_out", 2), calls)
         self.assertIn(("style", 0, "single", 1), calls)
         self.assertIn(("style", 0, "double", 2), calls)
         self.assertIn(("style", 0, "triple", 3), calls)

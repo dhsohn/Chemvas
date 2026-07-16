@@ -3,8 +3,12 @@ from __future__ import annotations
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QGraphicsLineItem
 
+from ui.bond_geometry_primitives import normal_away_from_parallel_segment
 from ui.bond_graphics_access import apply_color_to_bond_item_for
 from ui.bond_style_logic import (
+    BOLD_BOND_STYLES,
+    DOUBLE_STYLE_OUTER,
+    double_position_for_style,
     is_dotted_double_bond_style,
     is_plain_double_bond_style,
     normalized_plain_double_style,
@@ -35,21 +39,56 @@ class BondGraphicsBuildService:
     def _bold_bond_width(self) -> float:
         return renderer_bold_bond_width_for(self.canvas)
 
+    def _bold_double_items(self, bond, a, b) -> list:
+        variant = double_position_for_style(bond.style, bond.order)
+        ring_center = self.renderer.ring_center_for_bond(bond)
+        if ring_center is not None:
+            ring_center_3d = self.renderer.ring_center_3d_for_bond(bond)
+            outer_seg, inner_seg, normal = self.renderer.ring_double_segments(
+                a,
+                b,
+                ring_center,
+                bond.a,
+                bond.b,
+                center_3d=ring_center_3d,
+                style=variant,
+            )
+        else:
+            outer_seg, inner_seg, normal = self.renderer.plain_double_segments(
+                a.x,
+                a.y,
+                b.x,
+                b.y,
+                style=variant,
+                a_id=bond.a,
+                b_id=bond.b,
+            )
+
+        segments = (outer_seg, inner_seg)
+        # Ring doubles encode Outward by making the inward line full-length and
+        # the outer line short. Bold the same primary/full line that an ordinary
+        # double uses; non-ring variants keep the first line as the primary.
+        bold_index = 1 if ring_center is not None and variant == DOUBLE_STYLE_OUTER else 0
+        bold_segment = segments[bold_index]
+        other_segment = segments[1 - bold_index]
+        nx, ny = normal_away_from_parallel_segment(bold_segment, other_segment, *normal)
+        bold_kwargs = {"a_id": bond.a, "b_id": bond.b} if ring_center is not None and bold_index == 0 else {}
+        bold_item = self.drawer.one_sided_bond_strip(
+            *bold_segment,
+            nx,
+            ny,
+            self._bond_line_width(),
+            self._bold_bond_width(),
+            **bold_kwargs,
+        )
+        # Keep the polygon first regardless of which ordinary-double segment is
+        # primary. Ring attachment/removal updates geometry in place, so a stable
+        # item shape avoids needing to swap line/polygon scene items mid-update.
+        return [bold_item, self._line_item(*other_segment)]
+
     def _bold_multi_items(self, bond, a, b, *, bold_outward: bool) -> list:
         if bond.order == 2:
-            ring_center = self.renderer.ring_center_for_bond(bond)
-            if ring_center is not None:
-                ring_center_3d = self.renderer.ring_center_3d_for_bond(bond)
-                outer_style = "bold_outward" if bold_outward else "bold_inward"
-                return self.drawer.draw_ring_double_bond(
-                    a,
-                    b,
-                    ring_center,
-                    bond.a,
-                    bond.b,
-                    outer_style=outer_style,
-                    center_3d=ring_center_3d,
-                )
+            return self._bold_double_items(bond, a, b)
 
         items = self.drawer.draw_parallel_bonds(a.x, a.y, b.x, b.y, bond.order, bond.a, bond.b)
         if items and isinstance(items[0], QGraphicsLineItem):
@@ -159,7 +198,7 @@ class BondGraphicsBuildService:
             return self.drawer.draw_dotted_bond(a.x, a.y, b.x, b.y, bond.a, bond.b)
         if is_dotted_double_bond_style(bond.style, bond.order):
             return self._dotted_double_items(bond, a, b)
-        if bond.style in {"bold", "bold_in", "bold_out"}:
+        if bond.style in BOLD_BOND_STYLES:
             return self._bold_items(bond, a, b)
         if is_plain_double_bond_style(bond.style, bond.order):
             return self._plain_double_items(bond, a, b)

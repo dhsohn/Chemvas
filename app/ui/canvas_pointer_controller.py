@@ -9,8 +9,9 @@ from ui.bond_style_logic import (
     DOUBLE_STYLE_CENTER,
     DOUBLE_STYLE_DEFAULT,
     DOUBLE_STYLE_OUTER,
-    is_plain_double_bond_style,
-    normalized_plain_double_style,
+    double_position_for_style,
+    is_positionable_double_bond_style,
+    style_for_double_position,
 )
 from ui.canvas_insert_state import insert_state_for
 from ui.canvas_model_access import bond_for_id
@@ -119,8 +120,21 @@ class CanvasPointerController:
                 clear_hover_highlight_for(self.canvas)
                 self._accept_event(event)
                 return
-        if active_tool and (allow_select_tool or active_tool.name != "select") and active_tool.on_mouse_press(event):
-            clear_hover_highlight_for(self.canvas)
+        if active_tool and (allow_select_tool or active_tool.name != "select"):
+            clear_before_press = getattr(active_tool, "name", None) == "perspective"
+            if clear_before_press:
+                # Perspective captures an exact scene snapshot on press.
+                # Remove transient hover items before that boundary so their
+                # normal cleanup is not treated as an external scene mutation.
+                clear_hover_highlight_for(self.canvas)
+            handled = active_tool.on_mouse_press(event)
+            if not clear_before_press:
+                # Other tools still consume hover atom/bond IDs while handling
+                # their press, so preserve the established clear-after contract.
+                clear_hover_highlight_for(self.canvas)
+            if handled:
+                return
+            base_event(event)
             return
         base_event(event)
         clear_hover_highlight_for(self.canvas)
@@ -128,17 +142,20 @@ class CanvasPointerController:
     def _show_double_bond_context_menu(self, event, *, menu_factory=QMenu) -> bool:
         bond_id = self._context_bond_id(event)
         bond = bond_for_id(self.canvas, bond_id)
-        if bond is None or not is_plain_double_bond_style(bond.style, bond.order):
+        if bond is None or not is_positionable_double_bond_style(bond.style, bond.order):
             return False
 
-        current_style = normalized_plain_double_style(bond.style, bond.order)
+        current_position = double_position_for_style(bond.style, bond.order)
         menu = menu_factory(self.canvas)
-        for label, style in DOUBLE_BOND_CONTEXT_STYLES:
+        for label, position_style in DOUBLE_BOND_CONTEXT_STYLES:
+            target_style = style_for_double_position(bond.style, bond.order, position_style)
+            if target_style is None:
+                continue
             action = menu.addAction(label)
             action.setCheckable(True)
-            action.setChecked(style == current_style)
+            action.setChecked(position_style == current_position)
             action.triggered.connect(
-                lambda _checked=False, target_style=style: self.scene_transform.apply_bond_style(
+                lambda _checked=False, target_style=target_style: self.scene_transform.apply_bond_style(
                     bond_id,
                     target_style,
                     2,
