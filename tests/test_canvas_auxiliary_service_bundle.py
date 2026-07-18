@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import ui.canvas_auxiliary_service_bundle as canvas_auxiliary_service_bundle
-from ui.canvas_auxiliary_service_bundle import (
+import chemvas.ui.canvas_auxiliary_service_bundle as canvas_auxiliary_service_bundle
+from chemvas.ui.canvas_auxiliary_service_bundle import (
     CanvasAuxiliaryServiceBundle,
     build_canvas_auxiliary_services,
 )
@@ -19,13 +19,17 @@ def _stub_service_class(name: str):
     return StubService
 
 
-def test_build_canvas_auxiliary_services_wires_explicit_collaborators(monkeypatch) -> None:
+def test_build_canvas_auxiliary_services_wires_explicit_collaborators(
+    monkeypatch,
+) -> None:
     for class_name in (
         "AtomLabelService",
         "BenzenePreviewService",
         "StructureInsertService",
     ):
-        monkeypatch.setattr(canvas_auxiliary_service_bundle, class_name, _stub_service_class(class_name))
+        monkeypatch.setattr(
+            canvas_auxiliary_service_bundle, class_name, _stub_service_class(class_name)
+        )
 
     canvas = SimpleNamespace()
     move_controller = object()
@@ -55,4 +59,6 @@ def test_build_canvas_auxiliary_services_wires_explicit_collaborators(monkeypatc
     assert services.benzene_preview_service.kwargs == {
         "structure_build_service": structure_build_service
     }
-    assert services.structure_insert_service.kwargs == {"note_controller": note_controller}
+    assert services.structure_insert_service.kwargs == {
+        "note_controller": note_controller
+    }

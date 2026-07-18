@@ -10,7 +10,7 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.scene_clipboard_transaction_logic import (
+    from chemvas.ui.scene_clipboard_transaction_logic import (
         build_clipboard_copy_plan,
         build_clipboard_paste_plan,
         clipboard_copy_cache_values,
@@ -39,14 +39,19 @@ def _make_rect_item(rect: QRectF, *, visible: bool = True) -> QGraphicsItem:
     return _BoundsItem(rect, visible=visible)
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for scene clipboard transaction logic tests")
+@unittest.skipUnless(
+    QApplication is not None,
+    "PyQt6 is required for scene clipboard transaction logic tests",
+)
 class SceneClipboardTransactionLogicTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
 
-    def test_build_clipboard_copy_plan_returns_none_when_items_have_no_valid_bounds(self) -> None:
+    def test_build_clipboard_copy_plan_returns_none_when_items_have_no_valid_bounds(
+        self,
+    ) -> None:
         flat = _make_rect_item(QRectF(0.0, 0.0, 0.0, 0.0))
 
         plan = build_clipboard_copy_plan(
@@ -58,13 +63,19 @@ class SceneClipboardTransactionLogicTest(unittest.TestCase):
 
         self.assertIsNone(plan)
 
-    def test_build_clipboard_copy_plan_computes_padded_source_scale_image_size_and_payload_json(self) -> None:
+    def test_build_clipboard_copy_plan_computes_padded_source_scale_image_size_and_payload_json(
+        self,
+    ) -> None:
         first = _make_rect_item(QRectF(10.0, 20.0, 30.0, 15.0))
         second = _make_rect_item(QRectF(60.0, 25.0, 10.0, 20.0))
 
         plan = build_clipboard_copy_plan(
             [first, second],
-            payload={"scene_items": [{"kind": "note"}], "format": "chemvas-selection", "version": 1},
+            payload={
+                "scene_items": [{"kind": "note"}],
+                "format": "chemvas-selection",
+                "version": 1,
+            },
             bond_line_width=2.0,
             device_pixel_ratio=1.5,
         )
@@ -87,7 +98,9 @@ class SceneClipboardTransactionLogicTest(unittest.TestCase):
         )
         self.assertEqual(clipboard_copy_cache_values(None), (None, 0))
 
-    def test_visible_items_to_hide_for_copy_skips_selected_and_invisible_items(self) -> None:
+    def test_visible_items_to_hide_for_copy_skips_selected_and_invisible_items(
+        self,
+    ) -> None:
         selected = _make_rect_item(QRectF(0.0, 0.0, 10.0, 10.0))
         visible_other = _make_rect_item(QRectF(12.0, 0.0, 10.0, 10.0))
         hidden_other = _make_rect_item(QRectF(24.0, 0.0, 10.0, 10.0), visible=False)
@@ -99,7 +112,9 @@ class SceneClipboardTransactionLogicTest(unittest.TestCase):
 
         self.assertEqual(items_to_hide, [visible_other])
 
-    def test_build_clipboard_paste_plan_resets_or_advances_count_and_captures_snapshots(self) -> None:
+    def test_build_clipboard_paste_plan_resets_or_advances_count_and_captures_snapshots(
+        self,
+    ) -> None:
         calls: list[tuple[int, float]] = []
 
         def paste_offset(step: int, bond_length_px: float) -> tuple[float, float]:
@@ -126,7 +141,9 @@ class SceneClipboardTransactionLogicTest(unittest.TestCase):
         self.assertEqual(plan.paste_count, 1)
         self.assertEqual((plan.dx, plan.dy), (3.0, 4.0))
         self.assertEqual(plan.atoms, [{"id": 1, "element": "C", "x": 1.0, "y": 2.0}])
-        self.assertEqual(plan.scene_items, [{"kind": "note", "text": "copy", "x": 5.0, "y": 6.0}])
+        self.assertEqual(
+            plan.scene_items, [{"kind": "note", "text": "copy", "x": 5.0, "y": 6.0}]
+        )
         self.assertEqual(plan.before_next_atom_id, 9)
         self.assertEqual(plan.before_bond_count, 3)
         self.assertEqual(plan.before_smiles_input, "C=C")
@@ -134,7 +151,13 @@ class SceneClipboardTransactionLogicTest(unittest.TestCase):
         self.assertEqual(calls, [(1, 40.0)])
 
         repeated = build_clipboard_paste_plan(
-            payload={"atoms": [], "bonds": [], "rings": [], "marks": [], "scene_items": []},
+            payload={
+                "atoms": [],
+                "bonds": [],
+                "rings": [],
+                "marks": [],
+                "scene_items": [],
+            },
             payload_json="source-a",
             previous_source_json="source-a",
             previous_paste_count=1,
@@ -151,7 +174,9 @@ class SceneClipboardTransactionLogicTest(unittest.TestCase):
         self.assertFalse(repeated.has_payload_content())
         self.assertEqual(calls, [(1, 40.0), (2, 40.0)])
 
-    def test_build_clipboard_paste_plan_returns_none_without_payload_or_json(self) -> None:
+    def test_build_clipboard_paste_plan_returns_none_without_payload_or_json(
+        self,
+    ) -> None:
         self.assertIsNone(
             build_clipboard_paste_plan(
                 payload=None,
@@ -179,14 +204,20 @@ class SceneClipboardTransactionLogicTest(unittest.TestCase):
             )
         )
 
-    def test_clipboard_offset_and_translated_scene_item_state_cover_supported_kinds(self) -> None:
+    def test_clipboard_offset_and_translated_scene_item_state_cover_supported_kinds(
+        self,
+    ) -> None:
         self.assertEqual(clipboard_paste_offset(2, 20.0), (36.0, 36.0))
         self.assertEqual(translated_point_value((1, 2), 3.0, -4.0), (4.0, -2.0))
         self.assertEqual(translated_point_value("bad", 3.0, -4.0), "bad")
 
         self.assertEqual(
             translated_scene_item_state(
-                {"kind": "ring", "atom_ids": [1, 2], "points": [(0.0, 0.0), (1.0, 2.0)]},
+                {
+                    "kind": "ring",
+                    "atom_ids": [1, 2],
+                    "points": [(0.0, 0.0), (1.0, 2.0)],
+                },
                 dx=2.0,
                 dy=3.0,
                 atom_id_map={1: 10, 2: 20},
@@ -212,12 +243,24 @@ class SceneClipboardTransactionLogicTest(unittest.TestCase):
         )
         self.assertEqual(
             translated_scene_item_state(
-                {"kind": "ts_bracket", "left": 1.0, "right": 3.0, "top": 2.0, "bottom": 4.0},
+                {
+                    "kind": "ts_bracket",
+                    "left": 1.0,
+                    "right": 3.0,
+                    "top": 2.0,
+                    "bottom": 4.0,
+                },
                 dx=2.0,
                 dy=-1.0,
                 atom_id_map={},
             ),
-            {"kind": "ts_bracket", "left": 3.0, "right": 5.0, "top": 1.0, "bottom": 3.0},
+            {
+                "kind": "ts_bracket",
+                "left": 3.0,
+                "right": 5.0,
+                "top": 1.0,
+                "bottom": 3.0,
+            },
         )
         self.assertEqual(
             translated_scene_item_state(
@@ -237,7 +280,9 @@ class SceneClipboardTransactionLogicTest(unittest.TestCase):
             ),
             {"kind": "orbital", "center": (6.0, 8.0)},
         )
-        self.assertIsNone(translated_scene_item_state("bad", dx=0.0, dy=0.0, atom_id_map={}))
+        self.assertIsNone(
+            translated_scene_item_state("bad", dx=0.0, dy=0.0, atom_id_map={})
+        )
 
 
 if __name__ == "__main__":

@@ -11,15 +11,18 @@ except ModuleNotFoundError:
     QTest = None
 
 if QApplication is not None:
-    from ui.main_window import MainWindow
-    from ui.main_window_ports import (
+    from chemvas.bootstrap.main_window import build_main_window
+    from chemvas.ui.main_window_ports import (
         active_canvas_for_window,
         preview_for_window,
         services_for_window,
     )
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 and MainWindow are required for GUI canvas tab tests")
+@unittest.skipUnless(
+    QApplication is not None,
+    "PyQt6 and build_main_window are required for GUI canvas tab tests",
+)
 class MainWindowCanvasTabsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -27,7 +30,7 @@ class MainWindowCanvasTabsTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def setUp(self) -> None:
-        self.window = MainWindow()
+        self.window = build_main_window()
         self.window.show()
         active_canvas_for_window(self.window).setFocus()
         self.app.processEvents()
@@ -44,12 +47,17 @@ class MainWindowCanvasTabsTest(unittest.TestCase):
     def test_new_canvas_creates_independent_document_tab(self) -> None:
         first_canvas = active_canvas_for_window(self.window)
 
-        second_canvas = services_for_window(self.window).canvas_document_service.new_canvas(self.window)
+        second_canvas = services_for_window(
+            self.window
+        ).canvas_document_service.new_canvas(self.window)
 
         self.assertIsNot(first_canvas, second_canvas)
         self.assertEqual(self.window.tab_references.canvas_count(), 2)
         self.assertEqual(
-            [self.window.tab_references.canvas_tabs.tabText(index) for index in range(2)],
+            [
+                self.window.tab_references.canvas_tabs.tabText(index)
+                for index in range(2)
+            ],
             ["Canvas 1", "Canvas 2"],
         )
         self.assertIs(active_canvas_for_window(self.window), second_canvas)
@@ -58,11 +66,15 @@ class MainWindowCanvasTabsTest(unittest.TestCase):
         first_canvas = active_canvas_for_window(self.window)
         self.assertIs(preview_for_window(self.window).rdkit_adapter, first_canvas.rdkit)
 
-        second_canvas = services_for_window(self.window).canvas_document_service.new_canvas(self.window)
+        second_canvas = services_for_window(
+            self.window
+        ).canvas_document_service.new_canvas(self.window)
         self.app.processEvents()
         QTest.qWait(10)
 
-        self.assertIs(preview_for_window(self.window).rdkit_adapter, second_canvas.rdkit)
+        self.assertIs(
+            preview_for_window(self.window).rdkit_adapter, second_canvas.rdkit
+        )
 
         self.window.tab_references.canvas_tabs.setCurrentIndex(0)
         self.app.processEvents()

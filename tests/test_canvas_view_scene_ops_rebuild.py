@@ -11,15 +11,15 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.canvas_atom_graphics_state import (
+    from chemvas.ui.canvas_atom_graphics_state import (
         atom_dots_for,
         atom_items_for,
         set_atom_dots_for,
         set_atom_items_for,
     )
-    from ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
-    from ui.canvas_model_access import rebuild_graphics_for
-    from ui.scene_item_access import (
+    from chemvas.ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
+    from chemvas.ui.canvas_model_access import rebuild_graphics_for
+    from chemvas.ui.scene_item_access import (
         clear_scene_item_list_map,
         clear_scene_item_map,
         remove_scene_items,
@@ -31,7 +31,9 @@ class _FakeScene:
         self.removeItem = mock.Mock()
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas view tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for canvas view tests"
+)
 class CanvasViewSceneOpsRebuildTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -46,7 +48,9 @@ class CanvasViewSceneOpsRebuildTest(unittest.TestCase):
         scene = _FakeScene()
         view = SimpleNamespace(
             scene=lambda: scene,
-            services=SimpleNamespace(structure_build_service=SimpleNamespace(render_model=mock.Mock())),
+            services=SimpleNamespace(
+                structure_build_service=SimpleNamespace(render_model=mock.Mock())
+            ),
         )
         set_atom_items_for(view, {3: atom_label})
         set_atom_dots_for(view, {4: atom_dot})
@@ -54,7 +58,15 @@ class CanvasViewSceneOpsRebuildTest(unittest.TestCase):
 
         rebuild_graphics_for(view)
 
-        self.assertEqual(scene.removeItem.call_args_list, [mock.call(bond_a), mock.call(bond_b), mock.call(atom_label), mock.call(atom_dot)])
+        self.assertEqual(
+            scene.removeItem.call_args_list,
+            [
+                mock.call(bond_a),
+                mock.call(bond_b),
+                mock.call(atom_label),
+                mock.call(atom_dot),
+            ],
+        )
         self.assertEqual(bond_items_for(view), {})
         self.assertEqual(atom_items_for(view), {})
         self.assertEqual(atom_dots_for(view), {})

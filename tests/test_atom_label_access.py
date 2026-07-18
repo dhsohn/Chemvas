@@ -1,7 +1,7 @@
 import unittest
 from types import SimpleNamespace
 
-from ui.atom_label_access import add_or_update_atom_label, clear_atom_label_for
+from chemvas.ui.atom_label_access import add_or_update_atom_label, clear_atom_label_for
 
 
 class _FakeCanvas:
@@ -18,7 +18,9 @@ class _FakeCanvas:
         allow_merge: bool = True,
         show_carbon: bool = False,
     ) -> None:
-        self.wrapper_calls.append((atom_id, text, clear_smiles, record, allow_merge, show_carbon))
+        self.wrapper_calls.append(
+            (atom_id, text, clear_smiles, record, allow_merge, show_carbon)
+        )
 
 
 class AtomLabelAccessTest(unittest.TestCase):
@@ -27,7 +29,9 @@ class AtomLabelAccessTest(unittest.TestCase):
         canvas = _FakeCanvas()
         canvas.services = SimpleNamespace(
             atom_label_service=SimpleNamespace(
-                add_or_update_atom_label=lambda atom_id, text, **kwargs: service_calls.append((atom_id, text, kwargs))
+                add_or_update_atom_label=lambda atom_id, text, **kwargs: (
+                    service_calls.append((atom_id, text, kwargs))
+                )
             )
         )
 
@@ -70,8 +74,8 @@ class AtomLabelAccessTest(unittest.TestCase):
             model=SimpleNamespace(atoms={1: object()}),
             services=SimpleNamespace(
                 atom_label_service=SimpleNamespace(
-                    add_or_update_atom_label=lambda atom_id, text, **kwargs: service_calls.append(
-                        (atom_id, text, kwargs)
+                    add_or_update_atom_label=lambda atom_id, text, **kwargs: (
+                        service_calls.append((atom_id, text, kwargs))
                     )
                 )
             ),

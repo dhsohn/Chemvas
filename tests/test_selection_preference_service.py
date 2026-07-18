@@ -12,10 +12,10 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from core.model import Atom
-    from ui.selection_hit_logic import StructureHit
-    from ui.selection_preference_service import SelectionPreferenceService
-    from ui.selection_structure_service import SelectionStructureService
+    from chemvas.domain.document import Atom
+    from chemvas.features.selection import StructureHit
+    from chemvas.ui.selection_preference_service import SelectionPreferenceService
+    from chemvas.ui.selection_structure_service import SelectionStructureService
 
     from tests.test_selection_controller_additional import _FakeItem, _make_canvas
 
@@ -35,7 +35,9 @@ def _make_service(canvas, *, hit_testing_service=None, structure_service=None):
     )
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for selection preference service tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for selection preference service tests"
+)
 class SelectionPreferenceServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -68,7 +70,10 @@ class SelectionPreferenceServiceTest(unittest.TestCase):
             ),
         )
 
-        self.assertEqual(service.preferred_structure_hit_at_scene_pos(QPointF(0.0, 0.0)), StructureHit(kind="atom", id=1))
+        self.assertEqual(
+            service.preferred_structure_hit_at_scene_pos(QPointF(0.0, 0.0)),
+            StructureHit(kind="atom", id=1),
+        )
 
     def test_preferred_structure_hit_handles_ring_atom_and_ring_fallback(self) -> None:
         ring_item = _FakeItem("ring", data2=[1, 2, 3])
@@ -87,8 +92,14 @@ class SelectionPreferenceServiceTest(unittest.TestCase):
         service = _make_service(canvas)
 
         with (
-            mock.patch("ui.selection_preference_service.choose_preferred_structure_hit", return_value=None),
-            mock.patch("ui.selection_preference_service.nearest_ring_atom_id", return_value=2),
+            mock.patch(
+                "chemvas.ui.selection_preference_service.choose_preferred_structure_hit",
+                return_value=None,
+            ),
+            mock.patch(
+                "chemvas.ui.selection_preference_service.nearest_ring_atom_id",
+                return_value=2,
+            ),
         ):
             self.assertEqual(
                 service.preferred_structure_hit_at_scene_pos(QPointF(1.5, 0.2)),
@@ -97,15 +108,23 @@ class SelectionPreferenceServiceTest(unittest.TestCase):
 
         canvas.atom_items = {}
         with (
-            mock.patch("ui.selection_preference_service.choose_preferred_structure_hit", return_value=None),
-            mock.patch("ui.selection_preference_service.nearest_ring_atom_id", return_value=2),
+            mock.patch(
+                "chemvas.ui.selection_preference_service.choose_preferred_structure_hit",
+                return_value=None,
+            ),
+            mock.patch(
+                "chemvas.ui.selection_preference_service.nearest_ring_atom_id",
+                return_value=2,
+            ),
         ):
             self.assertEqual(
                 service.preferred_structure_hit_at_scene_pos(QPointF(1.5, 0.2)),
                 StructureHit(kind="ring"),
             )
 
-    def test_preferred_structure_hit_uses_nearby_preferred_hit_only_when_graphic_exists(self) -> None:
+    def test_preferred_structure_hit_uses_nearby_preferred_hit_only_when_graphic_exists(
+        self,
+    ) -> None:
         fallback_item = _FakeItem("note")
         service = _make_service(
             _make_canvas(
@@ -115,7 +134,7 @@ class SelectionPreferenceServiceTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "ui.selection_preference_service.choose_preferred_structure_hit",
+            "chemvas.ui.selection_preference_service.choose_preferred_structure_hit",
             return_value=StructureHit(kind="atom", id=1),
         ):
             self.assertEqual(
@@ -127,14 +146,27 @@ class SelectionPreferenceServiceTest(unittest.TestCase):
         ring_item = _FakeItem("ring")
         atom_item = _FakeItem("atom", data1=1)
         service = _make_service(
-            _make_canvas(atom_items={1: atom_item}, item_at_scene_pos=mock.Mock(return_value=ring_item))
+            _make_canvas(
+                atom_items={1: atom_item},
+                item_at_scene_pos=mock.Mock(return_value=ring_item),
+            )
         )
 
-        service.preferred_structure_hit_at_scene_pos = mock.Mock(return_value=StructureHit(kind="atom", id=1))
-        self.assertIs(service.preferred_structure_item_at_scene_pos(QPointF(0.0, 0.0)), atom_item)
+        service.preferred_structure_hit_at_scene_pos = mock.Mock(
+            return_value=StructureHit(kind="atom", id=1)
+        )
+        self.assertIs(
+            service.preferred_structure_item_at_scene_pos(QPointF(0.0, 0.0)), atom_item
+        )
 
-        service.preferred_structure_hit_at_scene_pos = mock.Mock(return_value=StructureHit(kind="ring"))
-        self.assertIs(service.preferred_structure_item_at_scene_pos(QPointF(1.0, 1.0)), ring_item)
+        service.preferred_structure_hit_at_scene_pos = mock.Mock(
+            return_value=StructureHit(kind="ring")
+        )
+        self.assertIs(
+            service.preferred_structure_item_at_scene_pos(QPointF(1.0, 1.0)), ring_item
+        )
 
         service.preferred_structure_hit_at_scene_pos = mock.Mock(return_value=None)
-        self.assertIsNone(service.preferred_structure_item_at_scene_pos(QPointF(2.0, 2.0)))
+        self.assertIsNone(
+            service.preferred_structure_item_at_scene_pos(QPointF(2.0, 2.0))
+        )

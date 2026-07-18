@@ -13,59 +13,63 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from core.model import Atom, Bond
-    from ui.atom_label_access import (
+    from chemvas.domain.document import Atom, Bond
+    from chemvas.features.insertion import (
+        build_atom_annotations,
+        expand_atom_ids_for_structure,
+    )
+    from chemvas.ui.atom_label_access import (
         atom_has_visible_label_for,
         implicit_carbon_dot_brush_for,
         uses_compact_label_hit_shape_for,
     )
-    from ui.canvas_atom_graphics_state import set_atom_items_for
-    from ui.canvas_history_state import CanvasHistoryState, history_state_for
-    from ui.canvas_hit_testing_service import CanvasHitTestingService
-    from ui.canvas_insert_state import CanvasInsertState, insert_state_for
-    from ui.canvas_mark_registry import CanvasMarkRegistry
-    from ui.canvas_note_controller import CanvasNoteController
-    from ui.canvas_scene_items_state import (
+    from chemvas.ui.canvas_atom_graphics_state import set_atom_items_for
+    from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_for
+    from chemvas.ui.canvas_hit_testing_service import CanvasHitTestingService
+    from chemvas.ui.canvas_insert_state import CanvasInsertState, insert_state_for
+    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+    from chemvas.ui.canvas_note_controller import CanvasNoteController
+    from chemvas.ui.canvas_scene_items_state import (
         ring_items_for,
         selected_notes_for,
         set_scene_item_collection_for,
         set_selected_notes_for,
     )
-    from ui.canvas_service_access import canvas_services_for
-    from ui.canvas_tool_settings_state import tool_settings_state_for
-    from ui.canvas_view import CanvasView
-    from ui.history_commands import (
+    from chemvas.ui.canvas_service_access import canvas_services_for
+    from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
+    from chemvas.ui.canvas_view import CanvasView
+    from chemvas.ui.history_commands import (
         AddSceneItemsCommand,
         DeleteSceneItemsCommand,
         UpdateSceneItemCommand,
     )
-    from ui.input_view_access import (
+    from chemvas.ui.input_view_access import (
         shortcut_modifiers_for,
     )
-    from ui.note_item import NoteItem
-    from ui.note_item_access import committed_note_text_for
-    from ui.scene_clipboard_transaction_logic import (
+    from chemvas.ui.note_item import NoteItem
+    from chemvas.ui.note_item_access import committed_note_text_for
+    from chemvas.ui.scene_clipboard_transaction_logic import (
         clipboard_paste_offset,
         translated_point_value,
         translated_scene_item_state,
     )
-    from ui.scene_transform_logic import bounds_from_points, flip_point
-    from ui.selection_collection_access import (
+    from chemvas.ui.scene_transform_logic import bounds_from_points, flip_point
+    from chemvas.ui.selection_collection_access import (
         selected_bond_atom_ids_for,
         selected_structure_ids_for,
         selection_signature_for,
         selection_snapshot_for,
         selection_target_item,
     )
-    from ui.selection_service_access import (
+    from chemvas.ui.selection_service_access import (
         structure_item_is_selected_for,
     )
-    from ui.selection_style_access import (
+    from chemvas.ui.selection_style_access import (
         selection_bond_overlay_width_for,
         selection_indicator_rect_for_atom_for,
     )
-    from ui.sheet_setup_access import set_sheet_setup_for, sheet_rect_for
-    from ui.structure_geometry_access import (
+    from chemvas.ui.sheet_setup_access import set_sheet_setup_for, sheet_rect_for
+    from chemvas.ui.structure_geometry_access import (
         atom_point_for,
         regular_ring_points_for_atom_for,
         regular_ring_points_for_bond_for,
@@ -73,14 +77,10 @@ if QApplication is not None:
         sprout_bond_endpoint_for,
         template_points_for_bond_for,
     )
-    from ui.structure_payload_access import (
+    from chemvas.ui.structure_payload_access import (
         build_3d_conversion_payload_for,
         build_selected_structure_payload_for,
         build_structure_payload_for,
-    )
-    from ui.structure_payload_logic import (
-        build_atom_annotations,
-        expand_atom_ids_for_structure,
     )
 
 
@@ -93,8 +93,12 @@ class _FakeNoteCanvas:
         self.history_service = SimpleNamespace(push=self.push_command)
         self.services = SimpleNamespace(
             history_service=self.history_service,
-            scene_item_controller=SimpleNamespace(remove_scene_item=self.removed_items.append),
-            selection_controller=SimpleNamespace(update_note_selection_box=self.record_note_selection_box_updated),
+            scene_item_controller=SimpleNamespace(
+                remove_scene_item=self.removed_items.append
+            ),
+            selection_controller=SimpleNamespace(
+                update_note_selection_box=self.record_note_selection_box_updated
+            ),
         )
         self.services.note_controller = CanvasNoteController(
             self,
@@ -128,7 +132,9 @@ class _FakeNoteCanvas:
 
 
 class _FakeKeyEvent:
-    def __init__(self, key, modifiers=Qt.KeyboardModifier.NoModifier, text: str = "") -> None:
+    def __init__(
+        self, key, modifiers=Qt.KeyboardModifier.NoModifier, text: str = ""
+    ) -> None:
         self._key = key
         self._modifiers = modifiers
         self._text = text
@@ -159,7 +165,9 @@ class _FakeItem:
         return None
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas view tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for canvas view tests"
+)
 class CanvasViewUnitTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -174,7 +182,9 @@ class CanvasViewUnitTest(unittest.TestCase):
         # above it (the page itself is painted white in drawBackground).
         self.assertEqual(canvas.backgroundBrush().color(), QColor("#e7e7e4"))
 
-    def test_canvas_defaults_to_a4_landscape_sheet_and_can_switch_portrait(self) -> None:
+    def test_canvas_defaults_to_a4_landscape_sheet_and_can_switch_portrait(
+        self,
+    ) -> None:
         canvas = CanvasView()
         self.addCleanup(canvas.close)
 
@@ -242,7 +252,9 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertTrue(canvas.runtime_state.insert_state.template_active)
         self.assertEqual(canvas.runtime_state.insert_state.template_ring_size, 6)
         self.assertEqual(canvas.runtime_state.insert_state.template_ring_style, "chair")
-        self.assertEqual(canvas.runtime_state.insert_state.template_preview_items, ["template"])
+        self.assertEqual(
+            canvas.runtime_state.insert_state.template_preview_items, ["template"]
+        )
 
     def test_tool_changes_cancel_pending_insert_modes(self) -> None:
         canvas = CanvasView()
@@ -296,7 +308,9 @@ class CanvasViewUnitTest(unittest.TestCase):
 
         self.assertFalse(insert_state_for(canvas).template_active)
         self.assertFalse(insert_state_for(canvas).smiles_active)
-        self.assertEqual(tool_settings_state_for(canvas).active_arrow_type, "curved_double")
+        self.assertEqual(
+            tool_settings_state_for(canvas).active_arrow_type, "curved_double"
+        )
         self.assertEqual(canvas.services.tools.active.name, "arrow")
 
         prime_insert_modes()
@@ -327,7 +341,9 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertEqual(canvas.removed_items[-1], item)
         self.assertEqual(committed_note_text_for(item), "")
 
-    def test_note_item_focus_out_removes_empty_untracked_note_and_selection_box(self) -> None:
+    def test_note_item_focus_out_removes_empty_untracked_note_and_selection_box(
+        self,
+    ) -> None:
         canvas = _FakeNoteCanvas()
         item = NoteItem(canvas)
         canvas.selected_notes.append(item)
@@ -354,10 +370,21 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertTrue(selection_target_item(_FakeItem("atom")))
         self.assertFalse(selection_target_item(_FakeItem("handle")))
 
-        fake_view = SimpleNamespace(model=SimpleNamespace(bonds=[Bond(0, 1, 1), None, Bond(1, 2, 2)]))
-        self.assertEqual(selected_bond_atom_ids_for(fake_view, {0, 1, 2, 99}), ((0, 1), (1, 2)))
+        fake_view = SimpleNamespace(
+            model=SimpleNamespace(bonds=[Bond(0, 1, 1), None, Bond(1, 2, 2)])
+        )
+        self.assertEqual(
+            selected_bond_atom_ids_for(fake_view, {0, 1, 2, 99}), ((0, 1), (1, 2))
+        )
 
-        scene = SimpleNamespace(selectedItems=lambda: (_FakeItem("atom", 1), _FakeItem("bond", 0), _FakeItem("handle"), _FakeItem("note")))
+        scene = SimpleNamespace(
+            selectedItems=lambda: (
+                _FakeItem("atom", 1),
+                _FakeItem("bond", 0),
+                _FakeItem("handle"),
+                _FakeItem("note"),
+            )
+        )
         snapshot_view = SimpleNamespace(
             scene=lambda: scene,
             model=SimpleNamespace(bonds=[Bond(1, 2, 1)]),
@@ -366,13 +393,30 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertEqual(snapshot.selected_atom_ids, frozenset({1, 2}))
         self.assertEqual(len(snapshot.selection_items), 3)
 
-        self.assertEqual((flip_point(QPointF(8.0, 4.0), QPointF(2.0, 1.0), True).x(), flip_point(QPointF(8.0, 4.0), QPointF(2.0, 1.0), True).y()), (-4.0, 4.0))
-        self.assertEqual((flip_point(QPointF(8.0, 4.0), QPointF(2.0, 1.0), False).x(), flip_point(QPointF(8.0, 4.0), QPointF(2.0, 1.0), False).y()), (8.0, -2.0))
+        self.assertEqual(
+            (
+                flip_point(QPointF(8.0, 4.0), QPointF(2.0, 1.0), True).x(),
+                flip_point(QPointF(8.0, 4.0), QPointF(2.0, 1.0), True).y(),
+            ),
+            (-4.0, 4.0),
+        )
+        self.assertEqual(
+            (
+                flip_point(QPointF(8.0, 4.0), QPointF(2.0, 1.0), False).x(),
+                flip_point(QPointF(8.0, 4.0), QPointF(2.0, 1.0), False).y(),
+            ),
+            (8.0, -2.0),
+        )
         self.assertIsNone(bounds_from_points([]))
         bounds = bounds_from_points([QPointF(-2.0, 3.0), QPointF(4.0, -1.0)])
-        self.assertEqual((bounds.left(), bounds.top(), bounds.right(), bounds.bottom()), (-2.0, -1.0, 4.0, 3.0))
+        self.assertEqual(
+            (bounds.left(), bounds.top(), bounds.right(), bounds.bottom()),
+            (-2.0, -1.0, 4.0, 3.0),
+        )
 
-    def test_structure_selection_and_payload_helpers_cover_selected_and_empty_cases(self) -> None:
+    def test_structure_selection_and_payload_helpers_cover_selected_and_empty_cases(
+        self,
+    ) -> None:
         selected_item = SimpleNamespace(isSelected=lambda: True)
         selection_controller = mock.Mock()
         selection_controller.structure_hit_from_item.side_effect = [
@@ -382,15 +426,21 @@ class CanvasViewUnitTest(unittest.TestCase):
             (SimpleNamespace(kind="other", id=None), None, ()),
             (None, None, ()),
         ]
-        view = SimpleNamespace(services=SimpleNamespace(selection_controller=selection_controller))
+        view = SimpleNamespace(
+            services=SimpleNamespace(selection_controller=selection_controller)
+        )
 
         self.assertTrue(structure_item_is_selected_for(view, selected_item, {1}, set()))
         self.assertTrue(structure_item_is_selected_for(view, selected_item, {1}, set()))
         self.assertTrue(structure_item_is_selected_for(view, selected_item, {7}, set()))
-        self.assertTrue(structure_item_is_selected_for(view, selected_item, set(), set()))
+        self.assertTrue(
+            structure_item_is_selected_for(view, selected_item, set(), set())
+        )
         self.assertFalse(structure_item_is_selected_for(view, None, set(), set()))
 
-        selected_scene = SimpleNamespace(selectedItems=lambda: (_FakeItem("atom", 3), _FakeItem("bond", 4)))
+        selected_scene = SimpleNamespace(
+            selectedItems=lambda: (_FakeItem("atom", 3), _FakeItem("bond", 4))
+        )
         selected_ids_view = SimpleNamespace(scene=lambda: selected_scene)
         self.assertEqual(selected_structure_ids_for(selected_ids_view), ({3}, {4}))
         with self.assertRaisesRegex(ValueError, "Select a molecular structure"):
@@ -399,13 +449,15 @@ class CanvasViewUnitTest(unittest.TestCase):
                 require_non_empty=True,
             )
 
-        selected_payload_scene = SimpleNamespace(selectedItems=lambda: (_FakeItem("atom", 5), _FakeItem("bond", 6)))
+        selected_payload_scene = SimpleNamespace(
+            selectedItems=lambda: (_FakeItem("atom", 5), _FakeItem("bond", 6))
+        )
         selected_payload_view = SimpleNamespace(
             scene=lambda: selected_payload_scene,
             model=SimpleNamespace(atoms={}, bonds=[]),
         )
         with mock.patch(
-            "ui.structure_payload_access.build_structure_payload_state",
+            "chemvas.ui.structure_payload_access.build_structure_payload_state",
             return_value=("payload", {}, (0.0, 0.0, 1.0, 1.0)),
         ) as build_structure:
             self.assertEqual(
@@ -413,17 +465,23 @@ class CanvasViewUnitTest(unittest.TestCase):
                 ("payload", {}, (0.0, 0.0, 1.0, 1.0)),
             )
         build_structure.assert_called_once()
-        self.assertEqual(build_structure.call_args.args, (selected_payload_view.model, {5}, {6}, {}))
+        self.assertEqual(
+            build_structure.call_args.args, (selected_payload_view.model, {5}, {6}, {})
+        )
 
         payload_view = SimpleNamespace()
         with mock.patch(
-            "ui.structure_payload_access.build_3d_conversion_payload_state",
+            "chemvas.ui.structure_payload_access.build_3d_conversion_payload_state",
             return_value=("export", {"a": 1}),
         ) as build_3d:
             payload_view.model = "model"
-            payload_scene = SimpleNamespace(selectedItems=lambda: (_FakeItem("atom", 1), _FakeItem("bond", 2)))
+            payload_scene = SimpleNamespace(
+                selectedItems=lambda: (_FakeItem("atom", 1), _FakeItem("bond", 2))
+            )
             payload_view.scene = lambda: payload_scene
-            self.assertEqual(build_3d_conversion_payload_for(payload_view), ("export", {"a": 1}))
+            self.assertEqual(
+                build_3d_conversion_payload_for(payload_view), ("export", {"a": 1})
+            )
         build_3d.assert_called_once()
         self.assertEqual(build_3d.call_args.args, ("model", {1}, {2}, {}))
 
@@ -433,10 +491,12 @@ class CanvasViewUnitTest(unittest.TestCase):
         )
         structure_payload_view = SimpleNamespace(
             model=structure_payload_model,
-            mark_registry=CanvasMarkRegistry({9: [_FakeItem("mark", {"kind": "minus"})]}),
+            mark_registry=CanvasMarkRegistry(
+                {9: [_FakeItem("mark", {"kind": "minus"})]}
+            ),
         )
         with mock.patch(
-            "ui.structure_payload_access.build_structure_payload_state",
+            "chemvas.ui.structure_payload_access.build_structure_payload_state",
             return_value=("export", {"b": 2}, (1.0, 2.0, 3.0, 4.0)),
         ) as build_structure:
             self.assertEqual(
@@ -444,11 +504,16 @@ class CanvasViewUnitTest(unittest.TestCase):
                 ("export", {"b": 2}, (1.0, 2.0, 3.0, 4.0)),
             )
         build_structure.assert_called_once()
-        self.assertEqual(build_structure.call_args.args, (structure_payload_model, {9}, {10}, {9: ["minus"]}))
+        self.assertEqual(
+            build_structure.call_args.args,
+            (structure_payload_model, {9}, {10}, {9: ["minus"]}),
+        )
         bounds_getter = build_structure.call_args.kwargs["bounds_getter"]
         self.assertEqual(bounds_getter({9}, include_labels=True), (4.0, 5.0, 4.0, 5.0))
 
-    def test_translation_helpers_compact_labels_and_selection_overlay_values(self) -> None:
+    def test_translation_helpers_compact_labels_and_selection_overlay_values(
+        self,
+    ) -> None:
         self.assertEqual(translated_point_value((1, 2), 3.0, -4.0), (4.0, -2.0))
         self.assertEqual(translated_point_value("bad", 3.0, -4.0), "bad")
 
@@ -488,12 +553,24 @@ class CanvasViewUnitTest(unittest.TestCase):
         )
         self.assertEqual(
             translated_scene_item_state(
-                {"kind": "ts_bracket", "left": 1.0, "right": 3.0, "top": 2.0, "bottom": 4.0},
+                {
+                    "kind": "ts_bracket",
+                    "left": 1.0,
+                    "right": 3.0,
+                    "top": 2.0,
+                    "bottom": 4.0,
+                },
                 dx=2.0,
                 dy=-1.0,
                 atom_id_map={},
             ),
-            {"kind": "ts_bracket", "left": 3.0, "right": 5.0, "top": 1.0, "bottom": 3.0},
+            {
+                "kind": "ts_bracket",
+                "left": 3.0,
+                "right": 5.0,
+                "top": 1.0,
+                "bottom": 3.0,
+            },
         )
         self.assertIsNone(
             translated_scene_item_state(
@@ -541,12 +618,24 @@ class CanvasViewUnitTest(unittest.TestCase):
         )
         self.assertEqual(
             translated_scene_item_state(
-                {"kind": "ts_bracket", "left": "bad", "right": 3.0, "top": "bad", "bottom": 4.0},
+                {
+                    "kind": "ts_bracket",
+                    "left": "bad",
+                    "right": 3.0,
+                    "top": "bad",
+                    "bottom": 4.0,
+                },
                 dx=2.0,
                 dy=-1.0,
                 atom_id_map={},
             ),
-            {"kind": "ts_bracket", "left": "bad", "right": 5.0, "top": "bad", "bottom": 3.0},
+            {
+                "kind": "ts_bracket",
+                "left": "bad",
+                "right": 5.0,
+                "top": "bad",
+                "bottom": 3.0,
+            },
         )
         self.assertEqual(
             translated_scene_item_state(
@@ -557,24 +646,35 @@ class CanvasViewUnitTest(unittest.TestCase):
             ),
             {"kind": "other", "value": 1},
         )
-        self.assertIsNone(translated_scene_item_state("bad", dx=0.0, dy=0.0, atom_id_map={}))
+        self.assertIsNone(
+            translated_scene_item_state("bad", dx=0.0, dy=0.0, atom_id_map={})
+        )
 
         self.assertTrue(uses_compact_label_hit_shape_for(SimpleNamespace(), "C"))
         self.assertTrue(uses_compact_label_hit_shape_for(SimpleNamespace(), "Cl"))
         self.assertFalse(uses_compact_label_hit_shape_for(SimpleNamespace(), "CH3"))
         self.assertEqual(implicit_carbon_dot_brush_for(SimpleNamespace()).alpha(), 0)
         self.assertEqual(clipboard_paste_offset(2, 20.0), (36.0, 36.0))
-        self.assertEqual(selection_signature_for({1, 2}, {3}), (frozenset({1, 2}), frozenset({3})))
+        self.assertEqual(
+            selection_signature_for({1, 2}, {3}), (frozenset({1, 2}), frozenset({3}))
+        )
 
-    def test_structure_payload_logic_helpers_cover_selection_expansion_and_annotations(self) -> None:
+    def test_structure_payload_logic_helpers_cover_selection_expansion_and_annotations(
+        self,
+    ) -> None:
         model = SimpleNamespace(bonds=[Bond(1, 2, 1), None])
         self.assertEqual(expand_atom_ids_for_structure(model, {1}, {0, 99}), {1, 2})
-        self.assertEqual(build_atom_annotations({5}, {5: 9}, {5: ["plus"]}), {9: {"formal_charge": 1}})
+        self.assertEqual(
+            build_atom_annotations({5}, {5: 9}, {5: ["plus"]}),
+            {9: {"formal_charge": 1}},
+        )
 
     def test_selection_indicator_overlay_width_and_segment_distance(self) -> None:
         fake_view = SimpleNamespace(
             renderer=SimpleNamespace(
-                style=SimpleNamespace(bond_spacing_px=4.0, bond_line_width=1.0, bond_length_px=15.625)
+                style=SimpleNamespace(
+                    bond_spacing_px=4.0, bond_line_width=1.0, bond_length_px=15.625
+                )
             ),
             model=SimpleNamespace(atoms={1: Atom("C", 7.0, -2.0)}),
         )
@@ -583,7 +683,10 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertEqual(selection_bond_overlay_width_for(fake_view, pen), 5.7)
 
         rect = selection_indicator_rect_for_atom_for(fake_view, 1)
-        self.assertEqual((rect.left(), rect.top(), rect.right(), rect.bottom()), (2.0, -7.0, 12.0, 3.0))
+        self.assertEqual(
+            (rect.left(), rect.top(), rect.right(), rect.bottom()),
+            (2.0, -7.0, 12.0, 3.0),
+        )
         self.assertIsNone(selection_indicator_rect_for_atom_for(fake_view, 99))
 
         self.assertAlmostEqual(
@@ -620,7 +723,10 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertFalse(atom_has_visible_label_for(fake_view, 1))
         self.assertTrue(atom_has_visible_label_for(fake_view, 2))
         self.assertFalse(atom_has_visible_label_for(fake_view, 99))
-        self.assertEqual((atom_point_for(fake_view, 2).x(), atom_point_for(fake_view, 2).y()), (4.0, 5.0))
+        self.assertEqual(
+            (atom_point_for(fake_view, 2).x(), atom_point_for(fake_view, 2).y()),
+            (4.0, 5.0),
+        )
 
     def test_sprout_bond_endpoint_handles_default_and_cyclic_cases(self) -> None:
         fake_view = SimpleNamespace(
@@ -665,27 +771,32 @@ class CanvasViewUnitTest(unittest.TestCase):
         )
 
         with (
-            mock.patch("ui.structure_geometry_access.compute_sprout_bond_endpoint", return_value=(7.0, 8.0)) as sprout,
             mock.patch(
-                "ui.structure_geometry_access.ring_polygon_points_for_bond",
+                "chemvas.ui.structure_geometry_access.compute_sprout_bond_endpoint",
+                return_value=(7.0, 8.0),
+            ) as sprout,
+            mock.patch(
+                "chemvas.ui.structure_geometry_access.ring_polygon_points_for_bond",
                 return_value=[(0.0, 0.0), (1.0, 1.0)],
             ),
             mock.patch(
-                "ui.structure_geometry_access.compute_regular_ring_points_for_atom",
+                "chemvas.ui.structure_geometry_access.compute_regular_ring_points_for_atom",
                 return_value=([(1.0, 2.0)], [(1, 0.0, 0.0)]),
             ) as atom_ring,
             mock.patch(
-                "ui.structure_geometry_access.compute_regular_ring_points_for_bond",
+                "chemvas.ui.structure_geometry_access.compute_regular_ring_points_for_bond",
                 return_value=([(3.0, 4.0)], [(1, 0.0, 0.0), (2, 10.0, 0.0)]),
             ) as bond_ring,
             mock.patch(
-                "ui.structure_geometry_access.compute_template_points_for_bond",
+                "chemvas.ui.structure_geometry_access.compute_template_points_for_bond",
                 return_value=([(5.0, 6.0)], [(1, 0.0, 0.0), (2, 10.0, 0.0)]),
             ) as template,
         ):
             endpoint = sprout_bond_endpoint_for(fake_view, 1, cyclic=False)
             atom_result = regular_ring_points_for_atom_for(fake_view, 6, 1)
-            bond_result = regular_ring_points_for_bond_for(fake_view, 6, 0, QPointF(9.0, 10.0))
+            bond_result = regular_ring_points_for_bond_for(
+                fake_view, 6, 0, QPointF(9.0, 10.0)
+            )
             template_result = template_points_for_bond_for(
                 fake_view,
                 [QPointF(1.0, 1.0), QPointF(2.0, 2.0)],
@@ -699,7 +810,9 @@ class CanvasViewUnitTest(unittest.TestCase):
         assert template_result is not None
         self.assertEqual((atom_result[0][0].x(), atom_result[0][0].y()), (1.0, 2.0))
         self.assertEqual((bond_result[0][0].x(), bond_result[0][0].y()), (3.0, 4.0))
-        self.assertEqual((template_result[0][0].x(), template_result[0][0].y()), (5.0, 6.0))
+        self.assertEqual(
+            (template_result[0][0].x(), template_result[0][0].y()), (5.0, 6.0)
+        )
         sprout.assert_called_once()
         self.assertEqual(sprout.call_args.args, (1,))
         self.assertIs(sprout.call_args.kwargs["atoms"], fake_view.model.atoms)
@@ -733,23 +846,30 @@ class CanvasViewUnitTest(unittest.TestCase):
             occupied_polygon=[(0.0, 0.0), (1.0, 1.0)],
         )
 
-    def test_regular_ring_points_for_atom_wrapper_returns_none_when_logic_fails(self) -> None:
+    def test_regular_ring_points_for_atom_wrapper_returns_none_when_logic_fails(
+        self,
+    ) -> None:
         fake_view = SimpleNamespace(
             model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[]),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
         )
 
-        with mock.patch("ui.structure_geometry_access.compute_regular_ring_points_for_atom", return_value=None):
+        with mock.patch(
+            "chemvas.ui.structure_geometry_access.compute_regular_ring_points_for_atom",
+            return_value=None,
+        ):
             self.assertIsNone(regular_ring_points_for_atom_for(fake_view, 6, 1))
 
-    def test_ring_polygon_points_for_bond_wrapper_delegates_to_occupancy_helper(self) -> None:
+    def test_ring_polygon_points_for_bond_wrapper_delegates_to_occupancy_helper(
+        self,
+    ) -> None:
         fake_view = SimpleNamespace(
             model=SimpleNamespace(bonds=[Bond(1, 2, 1)]),
         )
         set_scene_item_collection_for(fake_view, "ring_items", ["ring"])
 
         with mock.patch(
-            "ui.structure_geometry_access.ring_polygon_points_for_bond",
+            "chemvas.ui.structure_geometry_access.ring_polygon_points_for_bond",
             return_value=[(1.0, 2.0), (3.0, 4.0)],
         ) as occupancy:
             result = ring_polygon_points_for_bond_for(fake_view, 0)

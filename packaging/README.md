@@ -39,7 +39,7 @@ pyinstaller packaging/chemvas.spec
 Output is `dist/Chemvas.app` (macOS) or `dist/chemvas/` (Windows/Linux). Opening
 a `.chemvas` file is handled cross-platform: Windows/Linux pass the path in `argv`
 (read by `_startup_document_path`), and macOS delivers a `QEvent.FileOpen` that
-`chemvas.file_open.FileOpenEventFilter` routes to the loader.
+`chemvas.adapters.qt.FileOpenEventFilter` routes to the bootstrap loader.
 
 ## Linux desktop integration
 

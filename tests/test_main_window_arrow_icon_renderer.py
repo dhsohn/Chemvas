@@ -13,7 +13,7 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.main_window_arrow_icon_renderer import MainWindowArrowIconRenderer
+    from chemvas.ui.main_window_arrow_icon_renderer import MainWindowArrowIconRenderer
 
 
 def _opaque_bounds(image) -> tuple[int, int, int, int] | None:
@@ -39,7 +39,10 @@ def _icon_pen(width: float | None = None, *, color=None, style=None) -> QPen:
     return pen
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for main window arrow icon renderer tests")
+@unittest.skipUnless(
+    QApplication is not None,
+    "PyQt6 is required for main window arrow icon renderer tests",
+)
 class MainWindowArrowIconRendererTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -65,16 +68,40 @@ class MainWindowArrowIconRendererTest(unittest.TestCase):
         return _opaque_bounds(pixmap.toImage())
 
     def test_arrow_preview_matrix_renders_special_cases(self) -> None:
-        for kind in ("reaction", "dotted", "curved_single", "curved_double", "equilibrium", "resonance", "inhibit"):
+        for kind in (
+            "reaction",
+            "dotted",
+            "curved_single",
+            "curved_double",
+            "equilibrium",
+            "resonance",
+            "inhibit",
+        ):
             with self.subTest(kind=kind):
-                bounds = self._render(lambda painter, kind=kind: self.renderer.draw_arrow_preview(painter, kind))
+                bounds = self._render(
+                    lambda painter, kind=kind: self.renderer.draw_arrow_preview(
+                        painter, kind
+                    )
+                )
                 self.assertIsNotNone(bounds)
 
     def test_arrow_head_and_basic_arrow_render_non_empty_shapes(self) -> None:
         self.assertIsNotNone(self._render(self.renderer.draw_arrow))
-        self.assertIsNotNone(self._render(lambda painter: self.renderer.draw_arrow_preset(painter, "Default")))
-        self.assertIsNotNone(self._render(lambda painter: self.renderer.draw_arrow_preset(painter, "Bold")))
-        self.assertIsNotNone(self._render(lambda painter: self.renderer.draw_arrow_preset(painter, "Fine")))
+        self.assertIsNotNone(
+            self._render(
+                lambda painter: self.renderer.draw_arrow_preset(painter, "Default")
+            )
+        )
+        self.assertIsNotNone(
+            self._render(
+                lambda painter: self.renderer.draw_arrow_preset(painter, "Bold")
+            )
+        )
+        self.assertIsNotNone(
+            self._render(
+                lambda painter: self.renderer.draw_arrow_preset(painter, "Fine")
+            )
+        )
         self.assertIsNotNone(self._render(self.renderer.draw_arrow_width_control))
         self.assertIsNotNone(self._render(self.renderer.draw_arrow_head_control))
         self.assertIsNotNone(

@@ -19,8 +19,8 @@ except ModuleNotFoundError:
     QGraphicsTextItem = None
 
 if QApplication is not None:
-    from core.model import Atom, Bond
-    from ui.canvas_hover_state import (
+    from chemvas.domain.document import Atom, Bond
+    from chemvas.ui.canvas_hover_state import (
         HoverPreviewState,
         hover_preview_state_for,
         hover_state_for,
@@ -28,24 +28,30 @@ if QApplication is not None:
         set_hover_bond_id_for,
         set_hover_items_for,
     )
-    from ui.hover_scene_service import HoverSceneService
+    from chemvas.ui.hover_scene_service import HoverSceneService
 
 
 class _CanvasStub:
-    def __init__(self, scene, *, atoms=None, bonds=None, bond_length_px: float = 20.0) -> None:
+    def __init__(
+        self, scene, *, atoms=None, bonds=None, bond_length_px: float = 20.0
+    ) -> None:
         self._scene = scene
         self.model = SimpleNamespace(
             atoms={} if atoms is None else atoms,
             bonds=[] if bonds is None else bonds,
         )
-        self.renderer = SimpleNamespace(style=SimpleNamespace(bond_length_px=bond_length_px))
+        self.renderer = SimpleNamespace(
+            style=SimpleNamespace(bond_length_px=bond_length_px)
+        )
         self.hover_preview_state = HoverPreviewState()
 
     def scene(self):
         return self._scene
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for hover scene service tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for hover scene service tests"
+)
 class HoverSceneServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -120,7 +126,9 @@ class HoverSceneServiceTest(unittest.TestCase):
         self.assertAlmostEqual(rect.width(), 10.0)
         self.assertAlmostEqual(rect.height(), 10.0)
 
-    def test_add_bond_hover_indicator_adds_midpoint_circle_for_existing_bond(self) -> None:
+    def test_add_bond_hover_indicator_adds_midpoint_circle_for_existing_bond(
+        self,
+    ) -> None:
         canvas = _CanvasStub(
             self.scene,
             atoms={

@@ -11,16 +11,18 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from PyQt6.QtCore import QRectF
-    from ui.selection_outline_items import (
+    from chemvas.ui.selection_outline_items import (
         selection_center_outline_items,
         selection_component_outline_item,
         selection_group_outline_item,
         selection_object_outline_item,
     )
+    from PyQt6.QtCore import QRectF
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for selection outline item tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for selection outline item tests"
+)
 class SelectionOutlineItemsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -28,7 +30,9 @@ class SelectionOutlineItemsTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def test_selection_group_outline_item_draws_dashed_unfilled_box(self) -> None:
-        item = selection_group_outline_item(QRectF(0.0, 0.0, 40.0, 20.0), QColor("#1f5eff"))
+        item = selection_group_outline_item(
+            QRectF(0.0, 0.0, 40.0, 20.0), QColor("#1f5eff")
+        )
 
         self.assertEqual(item.data(0), "selection_outline")
         self.assertEqual(item.data(2), {"kind": "group"})
@@ -54,7 +58,9 @@ class SelectionOutlineItemsTest(unittest.TestCase):
         path = QPainterPath()
         path.addRect(0.0, 0.0, 10.0, 5.0)
 
-        item = selection_component_outline_item(path, color=QColor("#123456"), atom_ids={3, 1, 2})
+        item = selection_component_outline_item(
+            path, color=QColor("#123456"), atom_ids={3, 1, 2}
+        )
 
         self.assertEqual(item.data(0), "selection_outline")
         self.assertEqual(item.data(2), {"kind": "component", "atom_ids": [1, 2, 3]})
@@ -62,8 +68,12 @@ class SelectionOutlineItemsTest(unittest.TestCase):
         self.assertEqual(item.pen().style(), Qt.PenStyle.NoPen)
         self.assertEqual(item.brush().color().name(), "#123456")
 
-    def test_selection_center_outline_items_return_outer_and_inner_markers(self) -> None:
-        outer, inner = selection_center_outline_items(QPointF(10.0, 12.0), outer_radius=4.0, inner_radius=1.5)
+    def test_selection_center_outline_items_return_outer_and_inner_markers(
+        self,
+    ) -> None:
+        outer, inner = selection_center_outline_items(
+            QPointF(10.0, 12.0), outer_radius=4.0, inner_radius=1.5
+        )
 
         self.assertEqual(outer.data(0), "selection_outline")
         self.assertEqual(inner.data(0), "selection_outline")

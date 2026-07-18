@@ -18,19 +18,21 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.main_window_config import TOOLBAR_TOOL_ACTION_ORDER
-    from ui.main_window_panel_toolbar import (
+    from chemvas.ui.main_window_config import TOOLBAR_TOOL_ACTION_ORDER
+    from chemvas.ui.main_window_panel_toolbar import (
         MainWindowPanelToolbarCallbacks,
         build_panel_toolbar,
     )
-    from ui.main_window_theme import TOOLBAR_ICON_SIZE
-    from ui.main_window_ui_assembly_service import MainWindowUIAssemblyService
+    from chemvas.ui.main_window_theme import TOOLBAR_ICON_SIZE
+    from chemvas.ui.main_window_ui_assembly_service import MainWindowUIAssemblyService
 
 
 class _HarnessCanvas:
     def __init__(self) -> None:
         self.insert_controller = SimpleNamespace(begin_smiles_insert=mock.Mock())
-        self.scene_transform_controller = SimpleNamespace(flip_selected_items=mock.Mock())
+        self.scene_transform_controller = SimpleNamespace(
+            flip_selected_items=mock.Mock()
+        )
         self.tool_mode_controller = SimpleNamespace(
             get_atom_symbol=mock.Mock(return_value="N"),
             set_atom_symbol=mock.Mock(),
@@ -75,7 +77,9 @@ class _HarnessWindow(QMainWindow):
             icon_ring_fill=self._blank_icon,
             icon_orbital=self._blank_icon,
         )
-        self.ui_references = SimpleNamespace(require_icon_factory=lambda: self._icon_factory)
+        self.ui_references = SimpleNamespace(
+            require_icon_factory=lambda: self._icon_factory
+        )
 
     def _blank_icon(self) -> QIcon:
         return QIcon()
@@ -95,7 +99,9 @@ def _build_tool_actions(window, tool_group) -> dict[str, QAction]:
     return actions
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for panel toolbar tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for panel toolbar tests"
+)
 class MainWindowPanelToolbarTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -104,7 +110,9 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
 
     def setUp(self) -> None:
         self.scene_transform_controller_for_window = mock.Mock(
-            side_effect=lambda window: window.canvas.services.scene_transform_controller,
+            side_effect=lambda window: (
+                window.canvas.services.scene_transform_controller
+            ),
         )
         self.insert_controller_for_window = mock.Mock(
             side_effect=lambda window: window.canvas.services.insert_controller,
@@ -145,7 +153,11 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
                     groups.append(group)
                     group = []
                 continue
-            widget = action.defaultWidget() if hasattr(action, "defaultWidget") else toolbar.widgetForAction(action)
+            widget = (
+                action.defaultWidget()
+                if hasattr(action, "defaultWidget")
+                else toolbar.widgetForAction(action)
+            )
             if widget is None:
                 continue
             if isinstance(widget, QLineEdit):
@@ -181,12 +193,24 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         self.assertFalse(assembly.preview_panel_button.isCheckable())
         self.assertEqual(assembly.preview_panel_button.toolTip(), "Molecule Info")
         self.assertIsNone(assembly.export_xyz_button)
-        self.assertIsNone(assembly.panel_bar.findChild(QToolButton, "export_xyz_button"))
-        self.assertIsNone(assembly.panel_bar.findChild(QToolButton, "setup_sheet_button"))
-        self.assertIsNotNone(assembly.panel_bar.findChild(QToolButton, "new_canvas_button"))
+        self.assertIsNone(
+            assembly.panel_bar.findChild(QToolButton, "export_xyz_button")
+        )
+        self.assertIsNone(
+            assembly.panel_bar.findChild(QToolButton, "setup_sheet_button")
+        )
+        self.assertIsNotNone(
+            assembly.panel_bar.findChild(QToolButton, "new_canvas_button")
+        )
         self.assertIsNotNone(assembly.panel_bar.findChild(QToolButton, "open_button"))
-        self.assertIs(assembly.undo_button, assembly.panel_bar.findChild(QToolButton, "undo_button"))
-        self.assertIs(assembly.redo_button, assembly.panel_bar.findChild(QToolButton, "redo_button"))
+        self.assertIs(
+            assembly.undo_button,
+            assembly.panel_bar.findChild(QToolButton, "undo_button"),
+        )
+        self.assertIs(
+            assembly.redo_button,
+            assembly.panel_bar.findChild(QToolButton, "redo_button"),
+        )
         self.assertEqual(
             self._toolbar_widget_groups(assembly.panel_bar)[0],
             [
@@ -232,29 +256,45 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
             "toolButton_arrow",
             "toolButton_ts_bracket",
         )
-        primary_buttons = [assembly.panel_bar.findChild(QToolButton, name) for name in primary_button_names]
-        self.assertEqual([button.text() for button in primary_buttons], [""] * len(primary_button_names))
-        self.assertTrue(all(button.width() == button.height() for button in primary_buttons))
+        primary_buttons = [
+            assembly.panel_bar.findChild(QToolButton, name)
+            for name in primary_button_names
+        ]
+        self.assertEqual(
+            [button.text() for button in primary_buttons],
+            [""] * len(primary_button_names),
+        )
+        self.assertTrue(
+            all(button.width() == button.height() for button in primary_buttons)
+        )
         note_button = assembly.panel_bar.findChild(QToolButton, "toolButton_note")
         self.assertIsNotNone(note_button.menu())
         self.assertIs(note_button.defaultAction(), assembly.tool_actions["note"])
         # Each font option is previewed in its own family.
         font_actions = note_button.menu().actions()
         self.assertTrue(font_actions)
-        self.assertTrue(all(action.font().family() == action.text() for action in font_actions))
+        self.assertTrue(
+            all(action.font().family() == action.text() for action in font_actions)
+        )
         line_edits = assembly.panel_bar.findChildren(QLineEdit)
-        self.assertEqual([line_edit.objectName() for line_edit in line_edits], ["contextSmilesInput"])
+        self.assertEqual(
+            [line_edit.objectName() for line_edit in line_edits], ["contextSmilesInput"]
+        )
         self.assertIsNone(assembly.panel_bar.findChild(QLineEdit, "atomInput"))
 
         assembly.save_action.trigger()
         assembly.save_as_action.trigger()
         assembly.load_action.trigger()
         export_figure_action = next(
-            action for action in assembly.save_button.menu().actions() if action.text() == "Export Figure..."
+            action
+            for action in assembly.save_button.menu().actions()
+            if action.text() == "Export Figure..."
         )
         export_figure_action.trigger()
         export_mol_action = next(
-            action for action in assembly.save_button.menu().actions() if action.text() == "Export MOL..."
+            action
+            for action in assembly.save_button.menu().actions()
+            if action.text() == "Export MOL..."
         )
         export_mol_action.trigger()
         self.panel_callbacks.save_canvas.assert_called_once_with(window)
@@ -284,7 +324,10 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         window.canvas.history_service.redo.assert_called_once_with()
         removed_tooltips = {"Bond Length"}
         self.assertFalse(
-            any(button.toolTip() in removed_tooltips for button in assembly.panel_bar.findChildren(QToolButton))
+            any(
+                button.toolTip() in removed_tooltips
+                for button in assembly.panel_bar.findChildren(QToolButton)
+            )
         )
         window.set_bond_length.assert_not_called()
 

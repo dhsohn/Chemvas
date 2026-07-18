@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from ui.atom_coords_access import (
+from chemvas.ui.atom_coords_access import (
     CanvasAtomCoords3DState,
     atom_coords_3d_for,
     atom_coords_3d_for_id,
@@ -23,7 +23,9 @@ def _canvas_with_atom(x: float = 1.0, y: float = 2.0):
 
 def test_atom_coords_3d_state_for_uses_runtime_state() -> None:
     runtime_state = SimpleNamespace(
-        atom_coords_3d_state=CanvasAtomCoords3DState(atom_coords_3d={1: (1.0, 2.0, 3.0)})
+        atom_coords_3d_state=CanvasAtomCoords3DState(
+            atom_coords_3d={1: (1.0, 2.0, 3.0)}
+        )
     )
     canvas = SimpleNamespace(runtime_state=runtime_state)
 

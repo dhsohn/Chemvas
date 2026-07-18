@@ -7,33 +7,27 @@ from types import SimpleNamespace
 from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-from core.model import MoleculeModel
-from PyQt6 import sip
-from PyQt6.QtWidgets import (
-    QApplication,
-    QGraphicsScene,
-    QGraphicsTextItem,
-    QGraphicsView,
-)
-from ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
-from ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
-from ui.canvas_bond_graphics_state import bond_items_for
-from ui.canvas_graph_state import CanvasGraphState, graph_state_for
-from ui.canvas_history_state import CanvasHistoryState, history_state_for
-from ui.canvas_hover_state import (
+from chemvas.domain.document import MoleculeModel
+from chemvas.domain.transactions import HistoryStackSnapshot
+from chemvas.ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
+from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
+from chemvas.ui.canvas_bond_graphics_state import bond_items_for
+from chemvas.ui.canvas_graph_state import CanvasGraphState, graph_state_for
+from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_for
+from chemvas.ui.canvas_hover_state import (
     hover_state_for,
     set_hover_atom_id_for,
     set_hover_bond_id_for,
     set_hover_items_for,
 )
-from ui.canvas_insert_state import CanvasInsertState, insert_state_for
-from ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
-from ui.canvas_rotation_preview_state import (
+from chemvas.ui.canvas_insert_state import CanvasInsertState, insert_state_for
+from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
+from chemvas.ui.canvas_rotation_preview_state import (
     CanvasRotationPreviewState,
     rotation_preview_state_for,
 )
-from ui.canvas_rotation_state import CanvasRotationState, rotation_state_for
-from ui.canvas_scene_items_state import (
+from chemvas.ui.canvas_rotation_state import CanvasRotationState, rotation_state_for
+from chemvas.ui.canvas_scene_items_state import (
     arrow_items_for,
     mark_items_for,
     note_items_for,
@@ -42,24 +36,33 @@ from ui.canvas_scene_items_state import (
     shape_items_for,
     ts_bracket_items_for,
 )
-from ui.canvas_scene_reset_service import CanvasSceneResetService
-from ui.canvas_view import CanvasView
-from ui.canvas_window_access import history_service_for_canvas
-from ui.handle_state import (
+from chemvas.ui.canvas_scene_reset_service import CanvasSceneResetService
+from chemvas.ui.canvas_view import CanvasView
+from chemvas.ui.canvas_window_access import history_service_for_canvas
+from chemvas.ui.handle_state import (
     active_handles_for,
     handle_target_for,
     set_active_handles_for,
     set_handle_target_for,
 )
-from ui.history_commands import AddSceneItemsCommand
-from ui.history_stack_snapshot import HistoryStackSnapshot
-from ui.insert_mode_logic import clear_insert_session
-from ui.selection_info_state import SelectionInfoState, selection_info_state_for
-from ui.selection_outline_state import (
+from chemvas.ui.history_commands import AddSceneItemsCommand
+from chemvas.ui.insert_mode_logic import clear_insert_session
+from chemvas.ui.selection_info_state import SelectionInfoState, selection_info_state_for
+from chemvas.ui.selection_outline_state import (
     selection_outlines_for,
     set_selection_outlines_for,
 )
-from ui.selection_style_state import SelectionStyleState, selection_style_state_for
+from chemvas.ui.selection_style_state import (
+    SelectionStyleState,
+    selection_style_state_for,
+)
+from PyQt6 import sip
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsScene,
+    QGraphicsTextItem,
+    QGraphicsView,
+)
 
 
 class _FakeScene:
@@ -1039,9 +1042,9 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             import os
             os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
             from PyQt6.QtWidgets import QApplication
-            from ui.canvas_view import CanvasView
-            from ui.history_commands import AddSceneItemsCommand
-            from ui.selection_info_state import selection_info_state_for
+            from chemvas.ui.canvas_view import CanvasView
+            from chemvas.ui.history_commands import AddSceneItemsCommand
+            from chemvas.ui.selection_info_state import selection_info_state_for
             app = QApplication.instance() or QApplication([])
             canvas = CanvasView()
             item = canvas.scene().addRect(0, 0, 10, 10)
@@ -2024,9 +2027,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
                         self.armed = True
                         self.model = MoleculeModel()
                         self.model.add_atom("C", 1.0, 2.0)
-                        self.history_state = CanvasHistoryState(
-                            history=[_original]
-                        )
+                        self.history_state = CanvasHistoryState(history=[_original])
                         self.history_service = SimpleNamespace(
                             state=self.history_state,
                             notify_change=lambda: None,
@@ -2047,11 +2048,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
                         if self.armed:
                             self.armed = False
                             self.history_state.history.append(_poison)
-                        target = (
-                            self._scene
-                            if _raw_backing
-                            else self._scene_target
-                        )
+                        target = self._scene if _raw_backing else self._scene_target
                         return lambda: target
 
                 canvas = Canvas()

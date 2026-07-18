@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import ui.scene_operation_service_bundle as scene_operation_service_bundle
-from ui.scene_operation_service_bundle import (
+import chemvas.ui.scene_operation_service_bundle as scene_operation_service_bundle
+from chemvas.ui.scene_operation_service_bundle import (
     SceneOperationServiceBundle,
     build_scene_operation_services,
 )
@@ -19,7 +19,9 @@ def _stub_service_class(name: str):
     return StubService
 
 
-def test_build_scene_operation_services_wires_explicit_collaborators(monkeypatch) -> None:
+def test_build_scene_operation_services_wires_explicit_collaborators(
+    monkeypatch,
+) -> None:
     for class_name in (
         "CanvasColorMutationService",
         "CanvasStyleController",
@@ -27,7 +29,9 @@ def test_build_scene_operation_services_wires_explicit_collaborators(monkeypatch
         "SceneDeleteController",
         "SceneTransformController",
     ):
-        monkeypatch.setattr(scene_operation_service_bundle, class_name, _stub_service_class(class_name))
+        monkeypatch.setattr(
+            scene_operation_service_bundle, class_name, _stub_service_class(class_name)
+        )
 
     canvas = SimpleNamespace()
     selection_controller = object()

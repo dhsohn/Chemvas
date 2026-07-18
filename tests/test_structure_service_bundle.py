@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import ui.structure_service_bundle as structure_service_bundle
-from ui.structure_service_bundle import StructureServiceBundle, build_structure_services
+import chemvas.ui.structure_service_bundle as structure_service_bundle
+from chemvas.ui.structure_service_bundle import (
+    StructureServiceBundle,
+    build_structure_services,
+)
 
 
 def _stub_service_class(name: str):
@@ -23,7 +26,9 @@ def test_build_structure_services_wires_explicit_collaborators(monkeypatch) -> N
         "InsertController",
         "StructureBuildService",
     ):
-        monkeypatch.setattr(structure_service_bundle, class_name, _stub_service_class(class_name))
+        monkeypatch.setattr(
+            structure_service_bundle, class_name, _stub_service_class(class_name)
+        )
 
     canvas = SimpleNamespace()
     hit_testing_service = object()

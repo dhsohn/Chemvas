@@ -9,11 +9,15 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from core.history import CompositeCommand, DeleteAtomsCommand, DeleteBondCommand
-    from core.model import Atom, Bond, MoleculeModel
-    from ui.canvas_smiles_input_state import last_smiles_input_for
-    from ui.history_commands import DeleteSceneItemsCommand
-    from ui.scene_delete_logic import (
+    from chemvas.core.history import (
+        CompositeCommand,
+        DeleteAtomsCommand,
+        DeleteBondCommand,
+    )
+    from chemvas.domain.document import Atom, Bond, MoleculeModel
+    from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
+    from chemvas.ui.history_commands import DeleteSceneItemsCommand
+    from chemvas.ui.scene_delete_logic import (
         build_delete_selection_plan,
         classify_delete_selection,
     )
@@ -27,7 +31,9 @@ if QApplication is not None:
     )
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for scene ops controller tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for scene ops controller tests"
+)
 class SceneDeleteLogicTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -42,12 +48,16 @@ class SceneDeleteLogicTest(unittest.TestCase):
         clipboard = QApplication.clipboard()
         clipboard.clear(mode=clipboard.Mode.Clipboard)
 
-    def test_classify_delete_selection_groups_supported_items_and_ignores_ui_only_items(self) -> None:
+    def test_classify_delete_selection_groups_supported_items_and_ignores_ui_only_items(
+        self,
+    ) -> None:
         atom_item = _make_rect_item("atom", data1=1)
         bond_item = _make_rect_item("bond", data1=2)
         ring_item = _make_ring_item()
         note_item = _make_note_item("Mechanism", 12.0, 18.0)
-        mark_item = _make_rect_item("mark", data1={"atom_id": None}, state={"kind": "mark"})
+        mark_item = _make_rect_item(
+            "mark", data1={"atom_id": None}, state={"kind": "mark"}
+        )
         arrow_item = _make_rect_item("arrow", state={"kind": "arrow"})
         ts_bracket_item = _make_rect_item("ts_bracket", state={"kind": "ts_bracket"})
         orbital_item = _make_rect_item("orbital", state={"kind": "orbital"})
@@ -122,7 +132,9 @@ class SceneDeleteLogicTest(unittest.TestCase):
         self.assertEqual(plan.bond_ids_to_remove, [])
         self.assertEqual(plan.scene_items, [])
 
-    def test_build_delete_selection_plan_single_bond_fast_path_skips_missing_bond(self) -> None:
+    def test_build_delete_selection_plan_single_bond_fast_path_skips_missing_bond(
+        self,
+    ) -> None:
         selection = classify_delete_selection([_make_rect_item("bond", data1=0)])
 
         plan = build_delete_selection_plan(
@@ -151,7 +163,9 @@ class SceneDeleteLogicTest(unittest.TestCase):
         self.assertEqual(plan.atom_ids, [1])
         self.assertTrue(plan.clear_smiles_input)
 
-    def test_build_delete_selection_plan_filters_atom_bound_marks_and_requests_handle_clear(self) -> None:
+    def test_build_delete_selection_plan_filters_atom_bound_marks_and_requests_handle_clear(
+        self,
+    ) -> None:
         atom_item = _make_rect_item("atom", data1=1)
         linked_mark = _make_rect_item(
             "mark",
@@ -174,7 +188,15 @@ class SceneDeleteLogicTest(unittest.TestCase):
         other_item = _make_rect_item("other", state={"kind": "other"})
 
         selection = classify_delete_selection(
-            [atom_item, linked_mark, free_mark, arrow_item, ts_bracket_item, orbital_item, other_item]
+            [
+                atom_item,
+                linked_mark,
+                free_mark,
+                arrow_item,
+                ts_bracket_item,
+                orbital_item,
+                other_item,
+            ]
         )
         plan = build_delete_selection_plan(
             selection,
@@ -193,12 +215,17 @@ class SceneDeleteLogicTest(unittest.TestCase):
                 {"kind": "mark", "atom_id": 1, "x": -2.0, "y": 7.0},
             ],
         )
-        self.assertEqual(plan.scene_items, [free_mark, arrow_item, ts_bracket_item, orbital_item, other_item])
+        self.assertEqual(
+            plan.scene_items,
+            [free_mark, arrow_item, ts_bracket_item, orbital_item, other_item],
+        )
         self.assertTrue(plan.clear_handles)
         self.assertTrue(plan.clear_smiles_input)
         self.assertTrue(plan.has_work())
 
-    def test_delete_selected_items_uses_single_bond_fast_path_with_only_ignored_ui_items(self) -> None:
+    def test_delete_selected_items_uses_single_bond_fast_path_with_only_ignored_ui_items(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.model.atoms = {
             1: Atom("C", 0.0, 0.0),
@@ -223,7 +250,9 @@ class SceneDeleteLogicTest(unittest.TestCase):
         self.assertEqual(len(canvas.pushed_commands), 1)
         self.assertIsInstance(canvas.pushed_commands[0], DeleteBondCommand)
 
-    def test_delete_selected_items_rolls_back_scene_item_when_history_push_fails(self) -> None:
+    def test_delete_selected_items_rolls_back_scene_item_when_history_push_fails(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         note_item = _make_note_item("Mechanism", 12.0, 18.0)
         canvas.add_item(note_item, selected=True)
@@ -241,7 +270,9 @@ class SceneDeleteLogicTest(unittest.TestCase):
         self.assertEqual(canvas.removed_scene_items, [note_item])
         self.assertEqual(canvas.pushed_commands, [])
 
-    def test_delete_selected_items_classifies_scene_items_and_moves_atom_bound_marks_into_atom_delete_state(self) -> None:
+    def test_delete_selected_items_classifies_scene_items_and_moves_atom_bound_marks_into_atom_delete_state(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
             atoms={
@@ -276,7 +307,13 @@ class SceneDeleteLogicTest(unittest.TestCase):
         )
         ts_bracket_item = _make_rect_item(
             "ts_bracket",
-            state={"kind": "ts_bracket", "left": 1.0, "top": 2.0, "right": 3.0, "bottom": 4.0},
+            state={
+                "kind": "ts_bracket",
+                "left": 1.0,
+                "top": 2.0,
+                "right": 3.0,
+                "bottom": 4.0,
+            },
         )
         orbital_item = _make_rect_item(
             "orbital",
@@ -317,11 +354,15 @@ class SceneDeleteLogicTest(unittest.TestCase):
         self.assertEqual(canvas.remove_atom_calls, [(1, True)])
         self.assertIsNone(last_smiles_input_for(canvas))
 
-        delete_bond_commands = [child for child in command.commands if isinstance(child, DeleteBondCommand)]
+        delete_bond_commands = [
+            child for child in command.commands if isinstance(child, DeleteBondCommand)
+        ]
         self.assertEqual(len(delete_bond_commands), 1)
         self.assertEqual(delete_bond_commands[0].bond_id, 0)
 
-        delete_atom_commands = [child for child in command.commands if isinstance(child, DeleteAtomsCommand)]
+        delete_atom_commands = [
+            child for child in command.commands if isinstance(child, DeleteAtomsCommand)
+        ]
         self.assertEqual(len(delete_atom_commands), 1)
         atom_delete = delete_atom_commands[0]
         self.assertEqual(set(atom_delete.atom_states), {1})
@@ -333,7 +374,11 @@ class SceneDeleteLogicTest(unittest.TestCase):
             ],
         )
 
-        delete_scene_item_commands = [child for child in command.commands if isinstance(child, DeleteSceneItemsCommand)]
+        delete_scene_item_commands = [
+            child
+            for child in command.commands
+            if isinstance(child, DeleteSceneItemsCommand)
+        ]
         self.assertEqual(len(delete_scene_item_commands), 1)
         scene_delete = delete_scene_item_commands[0]
         self.assertEqual(
@@ -346,7 +391,9 @@ class SceneDeleteLogicTest(unittest.TestCase):
         self.assertNotIn(note_box_item, scene_delete.items)
         self.assertNotIn(note_select_item, scene_delete.items)
 
-    def test_delete_selected_items_keeps_supported_and_ignored_items_separated_from_scene_delete_plan(self) -> None:
+    def test_delete_selected_items_keeps_supported_and_ignored_items_separated_from_scene_delete_plan(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         note_item = _make_note_item("Solo", 12.0, 14.0)
         ring_item = _make_ring_item()
@@ -355,7 +402,14 @@ class SceneDeleteLogicTest(unittest.TestCase):
         note_select_item = _make_rect_item("note_select")
         other_item = _make_rect_item("other", state={"kind": "other", "tag": "x"})
 
-        for item in (note_item, ring_item, handle_item, note_box_item, note_select_item, other_item):
+        for item in (
+            note_item,
+            ring_item,
+            handle_item,
+            note_box_item,
+            note_select_item,
+            other_item,
+        ):
             canvas.add_item(item, selected=True)
 
         controller = scene_delete_controller_for(canvas)
@@ -367,7 +421,10 @@ class SceneDeleteLogicTest(unittest.TestCase):
         self.assertEqual(len(canvas.pushed_commands), 1)
         self.assertIsInstance(canvas.pushed_commands[0], DeleteSceneItemsCommand)
         scene_delete = canvas.pushed_commands[0]
-        self.assertEqual([state["kind"] for state in scene_delete.item_states], ["ring", "note", "other"])
+        self.assertEqual(
+            [state["kind"] for state in scene_delete.item_states],
+            ["ring", "note", "other"],
+        )
         self.assertIn(note_item, scene_delete.items)
         self.assertIn(ring_item, scene_delete.items)
         self.assertIn(other_item, scene_delete.items)

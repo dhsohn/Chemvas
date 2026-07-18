@@ -1,6 +1,6 @@
 import unittest
 
-from ui.main_window_path_logic import (
+from chemvas.ui.main_window_path_logic import (
     resolve_load_path,
     resolve_save_as_path,
     resolve_save_path,
@@ -8,13 +8,19 @@ from ui.main_window_path_logic import (
 
 
 class MainWindowPathLogicTest(unittest.TestCase):
-    def test_resolve_save_path_reuses_current_path_without_normalizing_extension(self) -> None:
+    def test_resolve_save_path_reuses_current_path_without_normalizing_extension(
+        self,
+    ) -> None:
         self.assertEqual(
-            resolve_save_path(current_path="/tmp/current", dialog_path="/tmp/ignored.json"),
+            resolve_save_path(
+                current_path="/tmp/current", dialog_path="/tmp/ignored.json"
+            ),
             "/tmp/current",
         )
 
-    def test_resolve_save_path_appends_default_extension_for_extensionless_dialog_path(self) -> None:
+    def test_resolve_save_path_appends_default_extension_for_extensionless_dialog_path(
+        self,
+    ) -> None:
         self.assertEqual(
             resolve_save_path(dialog_path="/tmp/example"),
             "/tmp/example.chemvas",
@@ -30,7 +36,9 @@ class MainWindowPathLogicTest(unittest.TestCase):
         self.assertIsNone(resolve_save_path(dialog_path=""))
         self.assertIsNone(resolve_save_path(dialog_path=None))
 
-    def test_resolve_save_as_path_appends_default_extension_for_extensionless_dialog_path(self) -> None:
+    def test_resolve_save_as_path_appends_default_extension_for_extensionless_dialog_path(
+        self,
+    ) -> None:
         self.assertEqual(
             resolve_save_as_path("/tmp/example"),
             "/tmp/example.chemvas",
@@ -42,12 +50,16 @@ class MainWindowPathLogicTest(unittest.TestCase):
             "/tmp/example.json",
         )
 
-    def test_resolve_save_as_path_returns_none_when_save_dialog_is_cancelled(self) -> None:
+    def test_resolve_save_as_path_returns_none_when_save_dialog_is_cancelled(
+        self,
+    ) -> None:
         self.assertIsNone(resolve_save_as_path(""))
         self.assertIsNone(resolve_save_as_path(None))
 
     def test_resolve_load_path_returns_selected_path(self) -> None:
-        self.assertEqual(resolve_load_path("/tmp/drawing.chemvas"), "/tmp/drawing.chemvas")
+        self.assertEqual(
+            resolve_load_path("/tmp/drawing.chemvas"), "/tmp/drawing.chemvas"
+        )
 
     def test_resolve_load_path_returns_none_when_load_dialog_is_cancelled(self) -> None:
         self.assertIsNone(resolve_load_path(""))

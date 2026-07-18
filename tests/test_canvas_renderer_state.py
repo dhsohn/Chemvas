@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from core.renderer import Renderer
-from ui.canvas_renderer_state import renderer_for, set_renderer_for
+from chemvas.core.renderer import Renderer
+from chemvas.ui.canvas_renderer_state import renderer_for, set_renderer_for
 
 
 def test_renderer_state_returns_existing_public_renderer() -> None:
@@ -16,7 +16,10 @@ def test_renderer_state_returns_existing_public_renderer() -> None:
 def test_renderer_state_prefers_runtime_state_renderer() -> None:
     public_renderer = object()
     runtime_renderer = object()
-    canvas = SimpleNamespace(renderer=public_renderer, runtime_state=SimpleNamespace(renderer=runtime_renderer))
+    canvas = SimpleNamespace(
+        renderer=public_renderer,
+        runtime_state=SimpleNamespace(renderer=runtime_renderer),
+    )
 
     assert renderer_for(canvas) is runtime_renderer
 

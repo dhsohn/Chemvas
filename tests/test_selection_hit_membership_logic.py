@@ -1,7 +1,7 @@
 import unittest
 
 try:
-    from ui.selection_hit_logic import (
+    from chemvas.features.selection import (
         SelectionHitRequest,
         SelectionRect,
         StructureHit,
@@ -22,7 +22,7 @@ else:  # pragma: no cover - trivial import branch
     or SelectionRect is None
     or selection_hit_matches is None
     or StructureHit is None,
-    f"could not import selection-hit matching API from 'ui.selection_hit_logic': {IMPORT_ERROR}",
+    f"could not import selection-hit matching API from 'chemvas.features.selection': {IMPORT_ERROR}",
 )
 class SelectionHitMembershipLogicTest(unittest.TestCase):
     def _request(
@@ -64,7 +64,9 @@ class SelectionHitMembershipLogicTest(unittest.TestCase):
 
         self.assertTrue(selection_hit_matches(request))
 
-    def test_missed_outline_and_rects_fall_back_to_false_without_selected_hit(self) -> None:
+    def test_missed_outline_and_rects_fall_back_to_false_without_selected_hit(
+        self,
+    ) -> None:
         request = self._request(
             point=(50.0, 50.0),
             rects=((0.0, 0.0, 10.0, 20.0),),

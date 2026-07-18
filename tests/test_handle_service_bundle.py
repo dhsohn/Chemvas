@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import ui.handle_service_bundle as handle_service_bundle
-from ui.handle_service_bundle import HandleServiceBundle, build_handle_services
+import chemvas.ui.handle_service_bundle as handle_service_bundle
+from chemvas.ui.handle_service_bundle import HandleServiceBundle, build_handle_services
 
 
 def _stub_service_class(name: str):
@@ -23,7 +23,9 @@ def test_build_handle_services_wires_explicit_collaborators(monkeypatch) -> None
         "HandleMutationService",
         "HandleOverlayService",
     ):
-        monkeypatch.setattr(handle_service_bundle, class_name, _stub_service_class(class_name))
+        monkeypatch.setattr(
+            handle_service_bundle, class_name, _stub_service_class(class_name)
+        )
 
     canvas = SimpleNamespace()
 

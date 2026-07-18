@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from ui.canvas_group_state import (
+from chemvas.ui.canvas_group_state import (
     CanvasSceneGroup,
     clear_groups_for,
     group_ids_for_members_for,

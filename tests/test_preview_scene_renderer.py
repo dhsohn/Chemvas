@@ -13,17 +13,21 @@ except ModuleNotFoundError:
     QGraphicsScene = None
 
 if QApplication is not None:
-    from ui.preview_scene_renderer import (
+    from chemvas.features.insertion import (
+        SmilesPreviewGeometry,
+        TemplatePreviewGeometry,
+    )
+    from chemvas.ui.preview_scene_renderer import (
         apply_smiles_preview_geometry,
         apply_template_preview_geometry,
         clear_smiles_preview,
         clear_template_preview,
     )
-    from ui.smiles_insert_logic import SmilesPreviewGeometry
-    from ui.template_preview_logic import TemplatePreviewGeometry
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for preview renderer tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for preview renderer tests"
+)
 class PreviewSceneRendererTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -36,15 +40,21 @@ class PreviewSceneRendererTest(unittest.TestCase):
 
     def test_clear_smiles_preview_ignores_items_from_other_scenes(self) -> None:
         foreign_item = SimpleNamespace(scene=lambda: object())
-        broken_item = SimpleNamespace(scene=lambda: (_ for _ in ()).throw(RuntimeError("disposed")))
+        broken_item = SimpleNamespace(
+            scene=lambda: (_ for _ in ()).throw(RuntimeError("disposed"))
+        )
 
-        cleared_items, bond_items, atom_items = clear_smiles_preview(self.scene, [foreign_item, broken_item])
+        cleared_items, bond_items, atom_items = clear_smiles_preview(
+            self.scene, [foreign_item, broken_item]
+        )
 
         self.assertEqual(cleared_items, [])
         self.assertEqual(bond_items, {})
         self.assertEqual(atom_items, {})
 
-    def test_apply_smiles_preview_geometry_reuses_existing_items_on_update(self) -> None:
+    def test_apply_smiles_preview_geometry_reuses_existing_items_on_update(
+        self,
+    ) -> None:
         geometry = SmilesPreviewGeometry(
             bond_segments={0: ((0.0, 0.0, 10.0, 0.0),)},
             atom_rects={0: (-1.0, -1.0, 2.0, 2.0), 1: (9.0, -1.0, 2.0, 2.0)},
@@ -65,14 +75,16 @@ class PreviewSceneRendererTest(unittest.TestCase):
             bond_segments={0: ((5.0, 3.0, 15.0, 3.0),)},
             atom_rects={0: (4.0, 2.0, 2.0, 2.0), 1: (14.0, 2.0, 2.0, 2.0)},
         )
-        updated_items, updated_bond_items, updated_atom_items = apply_smiles_preview_geometry(
-            self.scene,
-            moved_geometry,
-            base_pen=self.base_pen,
-            existing_items=items,
-            existing_bond_items=bond_items,
-            existing_atom_items=atom_items,
-            action="update",
+        updated_items, updated_bond_items, updated_atom_items = (
+            apply_smiles_preview_geometry(
+                self.scene,
+                moved_geometry,
+                base_pen=self.base_pen,
+                existing_items=items,
+                existing_bond_items=bond_items,
+                existing_atom_items=atom_items,
+                action="update",
+            )
         )
 
         self.assertIs(updated_items[0], line)
@@ -83,7 +95,9 @@ class PreviewSceneRendererTest(unittest.TestCase):
         self.assertEqual(dot.rect().x(), 4.0)
         self.assertEqual(dot.rect().y(), 2.0)
 
-    def test_apply_smiles_preview_geometry_rebuilds_when_existing_pool_is_invalid(self) -> None:
+    def test_apply_smiles_preview_geometry_rebuilds_when_existing_pool_is_invalid(
+        self,
+    ) -> None:
         geometry = SmilesPreviewGeometry(
             bond_segments={0: ((0.0, 0.0, 10.0, 0.0),)},
             atom_rects={0: (-1.0, -1.0, 2.0, 2.0), 1: (9.0, -1.0, 2.0, 2.0)},
@@ -100,14 +114,16 @@ class PreviewSceneRendererTest(unittest.TestCase):
         old_line = bond_items[0][0]
         bond_items[0] = [QGraphicsEllipseItem(0.0, 0.0, 1.0, 1.0)]
 
-        rebuilt_items, rebuilt_bond_items, rebuilt_atom_items = apply_smiles_preview_geometry(
-            self.scene,
-            geometry,
-            base_pen=self.base_pen,
-            existing_items=items,
-            existing_bond_items=bond_items,
-            existing_atom_items=atom_items,
-            action="update",
+        rebuilt_items, rebuilt_bond_items, rebuilt_atom_items = (
+            apply_smiles_preview_geometry(
+                self.scene,
+                geometry,
+                base_pen=self.base_pen,
+                existing_items=items,
+                existing_bond_items=bond_items,
+                existing_atom_items=atom_items,
+                action="update",
+            )
         )
 
         self.assertIsNot(rebuilt_bond_items[0][0], old_line)
@@ -115,7 +131,9 @@ class PreviewSceneRendererTest(unittest.TestCase):
         self.assertEqual(len(rebuilt_atom_items), 2)
         self.assertEqual(len(self.scene.items()), 3)
 
-    def test_apply_smiles_preview_geometry_rebuilds_when_segments_or_atom_pool_mismatch(self) -> None:
+    def test_apply_smiles_preview_geometry_rebuilds_when_segments_or_atom_pool_mismatch(
+        self,
+    ) -> None:
         geometry = SmilesPreviewGeometry(
             bond_segments={0: ((0.0, 0.0, 10.0, 0.0),)},
             atom_rects={0: (-1.0, -1.0, 2.0, 2.0)},
@@ -132,34 +150,48 @@ class PreviewSceneRendererTest(unittest.TestCase):
         old_line = bond_items[0][0]
         old_dot = atom_items[0]
 
-        rebuilt_items, rebuilt_bond_items, rebuilt_atom_items = apply_smiles_preview_geometry(
-            self.scene,
-            geometry,
-            base_pen=self.base_pen,
-            existing_items=items,
-            existing_bond_items={0: []},
-            existing_atom_items=atom_items,
-            action="update",
+        rebuilt_items, rebuilt_bond_items, rebuilt_atom_items = (
+            apply_smiles_preview_geometry(
+                self.scene,
+                geometry,
+                base_pen=self.base_pen,
+                existing_items=items,
+                existing_bond_items={0: []},
+                existing_atom_items=atom_items,
+                action="update",
+            )
         )
         self.assertIsNot(rebuilt_bond_items[0][0], old_line)
 
-        rebuilt_items, rebuilt_bond_items, rebuilt_atom_items = apply_smiles_preview_geometry(
-            self.scene,
-            geometry,
-            base_pen=self.base_pen,
-            existing_items=rebuilt_items,
-            existing_bond_items=rebuilt_bond_items,
-            existing_atom_items={},
-            action="update",
+        rebuilt_items, rebuilt_bond_items, rebuilt_atom_items = (
+            apply_smiles_preview_geometry(
+                self.scene,
+                geometry,
+                base_pen=self.base_pen,
+                existing_items=rebuilt_items,
+                existing_bond_items=rebuilt_bond_items,
+                existing_atom_items={},
+                action="update",
+            )
         )
 
         self.assertIsNot(rebuilt_atom_items[0], old_dot)
         self.assertEqual(len(rebuilt_items), 2)
 
-    def test_apply_template_preview_geometry_reuses_existing_items_on_update(self) -> None:
+    def test_apply_template_preview_geometry_reuses_existing_items_on_update(
+        self,
+    ) -> None:
         geometry = TemplatePreviewGeometry(
-            line_segments=[(0.0, 0.0, 12.0, 0.0), (12.0, 0.0, 6.0, 10.0), (6.0, 10.0, 0.0, 0.0)],
-            dot_rects=[(-1.0, -1.0, 2.0, 2.0), (11.0, -1.0, 2.0, 2.0), (5.0, 9.0, 2.0, 2.0)],
+            line_segments=[
+                (0.0, 0.0, 12.0, 0.0),
+                (12.0, 0.0, 6.0, 10.0),
+                (6.0, 10.0, 0.0, 0.0),
+            ],
+            dot_rects=[
+                (-1.0, -1.0, 2.0, 2.0),
+                (11.0, -1.0, 2.0, 2.0),
+                (5.0, 9.0, 2.0, 2.0),
+            ],
         )
         items, lines, dots = apply_template_preview_geometry(
             self.scene,
@@ -174,8 +206,16 @@ class PreviewSceneRendererTest(unittest.TestCase):
         dot = dots[0]
 
         moved_geometry = TemplatePreviewGeometry(
-            line_segments=[(5.0, 4.0, 17.0, 4.0), (17.0, 4.0, 11.0, 14.0), (11.0, 14.0, 5.0, 4.0)],
-            dot_rects=[(4.0, 3.0, 2.0, 2.0), (16.0, 3.0, 2.0, 2.0), (10.0, 13.0, 2.0, 2.0)],
+            line_segments=[
+                (5.0, 4.0, 17.0, 4.0),
+                (17.0, 4.0, 11.0, 14.0),
+                (11.0, 14.0, 5.0, 4.0),
+            ],
+            dot_rects=[
+                (4.0, 3.0, 2.0, 2.0),
+                (16.0, 3.0, 2.0, 2.0),
+                (10.0, 13.0, 2.0, 2.0),
+            ],
         )
         updated_items, updated_lines, updated_dots = apply_template_preview_geometry(
             self.scene,
@@ -193,7 +233,9 @@ class PreviewSceneRendererTest(unittest.TestCase):
         self.assertEqual(line.line().x1(), 5.0)
         self.assertEqual(dot.rect().x(), 4.0)
 
-    def test_apply_template_preview_geometry_rebuilds_when_counts_do_not_match(self) -> None:
+    def test_apply_template_preview_geometry_rebuilds_when_counts_do_not_match(
+        self,
+    ) -> None:
         geometry = TemplatePreviewGeometry(
             line_segments=[(0.0, 0.0, 12.0, 0.0)],
             dot_rects=[(-1.0, -1.0, 2.0, 2.0)],
@@ -225,8 +267,16 @@ class PreviewSceneRendererTest(unittest.TestCase):
 
     def test_clear_template_preview_removes_scene_items(self) -> None:
         geometry = TemplatePreviewGeometry(
-            line_segments=[(0.0, 0.0, 10.0, 0.0), (10.0, 0.0, 5.0, 8.0), (5.0, 8.0, 0.0, 0.0)],
-            dot_rects=[(-1.0, -1.0, 2.0, 2.0), (9.0, -1.0, 2.0, 2.0), (4.0, 7.0, 2.0, 2.0)],
+            line_segments=[
+                (0.0, 0.0, 10.0, 0.0),
+                (10.0, 0.0, 5.0, 8.0),
+                (5.0, 8.0, 0.0, 0.0),
+            ],
+            dot_rects=[
+                (-1.0, -1.0, 2.0, 2.0),
+                (9.0, -1.0, 2.0, 2.0),
+                (4.0, 7.0, 2.0, 2.0),
+            ],
         )
         items, _, _ = apply_template_preview_geometry(
             self.scene,
@@ -238,7 +288,9 @@ class PreviewSceneRendererTest(unittest.TestCase):
             action="rebuild",
         )
 
-        cleared_items, cleared_lines, cleared_dots = clear_template_preview(self.scene, items)
+        cleared_items, cleared_lines, cleared_dots = clear_template_preview(
+            self.scene, items
+        )
 
         self.assertEqual(cleared_items, [])
         self.assertEqual(cleared_lines, [])

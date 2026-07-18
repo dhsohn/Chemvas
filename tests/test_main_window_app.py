@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from ui.main_window_app import (
+from chemvas.bootstrap.window_registry import (
     forget_window,
     open_new_window,
     open_windows,

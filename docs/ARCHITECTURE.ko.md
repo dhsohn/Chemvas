@@ -1,28 +1,49 @@
 # 아키텍처
 
-## 책임 경계 (Responsibility Boundaries)
-- CanvasView (`app/ui/canvas_view.py`): 입력 처리, 도구(tool) 디스패치, 선택 상태 관리, 그리고 모델/렌더/히스토리 업데이트의 조율을 담당한다. 저수준 드로잉 프리미티브(low-level drawing primitives)를 직접 소유해서는 안 된다.
-- MoleculeModel (`app/core/model.py`): 순수한 원자/결합 데이터와 ID. Qt 의존성이 없다.
-- RDKitAdapter (`app/core/rdkit_adapter.py`): SMILES 가져오기, 물성 계산, 3D 좌표 생성, 별칭(alias) 확장, 미리보기 씬(preview scene) 구성을 담당하는 선택적 화학 백엔드. UI 코드는 이를 필수 시작 의존성이 아니라 최선 노력(best-effort) 서비스로 취급해야 한다.
-- Renderer (`app/core/renderer.py`): 스타일, 펜/브러시, 폰트 설정.
-- HistoryCommand (`app/core/history.py`): 델타 기반 실행 취소/다시 실행(undo/redo). 다중 엔티티(multi-entity) 연산은 `CompositeCommand`로 그룹화되며, 이는 다시 실행 시 자식 델타 커맨드를 순서대로 적용하고 실행 취소 시 역순으로 적용한다.
-- BondRenderer (`app/ui/bond_renderer.py`): 결합 QGraphicsItem 생성/업데이트 및 기하 헬퍼(geometry helpers)로, CanvasView 컨텍스트에 의해 구동된다.
-- Graphics items (`app/ui/graphics_items.py`): 선택 불가능한 QGraphicsItem 래퍼(wrapper).
-- Label layout (`app/ui/label_layout_logic.py`): 원자 레이블 원시 문자열을 조판 런(typographic runs, 아래첨자 포함)과 그 배치로 파싱하는 순수(Qt-free) 로직. 레이블 타이포그래피의 단일 진실 공급원(single source of truth)이다: `AtomLabelItem`은 화면 그리기를 위해 이를 소비하고, 벡터 내보내기(vector export)는 글리프를 아웃라인 처리할 때 동일한 배치를 소비하므로 화면과 내보내기가 결코 어긋나지 않는다. 표시 텍스트에 대해서만 동작하며 저장된 `element` 문자열을 절대 변경하지 않는다.
-- Figure export (`app/ui/export_plan_logic.py` + `app/ui/export_dialog_logic.py` + `app/ui/export_render_service.py`): 두 개의 순수 모듈은 패딩이 적용된 소스 사각형(source rect) / 물리적 출력 크기(포인트 단위)를 계산하고 대화상자의 포맷/크기/경로 규칙을 소유한다. Qt 서비스(`export_scene`)는 보이는 콘텐츠 항목을 수집하고(일시적 오버레이는 클립보드 복사와 동일한 방식으로 제외), 항목별 내보내기 잉크/콘텐츠 사각형(export ink/content rects)이 가능한 경우 이를 사용해 경계를 계산하며(따라서 레이블 히트 타겟과 투명한 암시적 탄소 점(implicit-carbon dots)이 물리적 크기에 영향을 주지 않도록), 나머지 모든 것을 숨기고, 원자 레이블을 아웃라인 모드로 전환하며, 씬 영역을 네 가지 싱크(sink) 중 하나로 렌더링한다 — `QSvgGenerator`(72 dpi의 SVG로 1 단위 = 1 pt), `QPdfWriter`(PDF, 페이지가 콘텐츠에 맞춰 포인트 단위로 크기 설정), 또는 `QImage`(DPI 메타데이터가 포함된 PNG/TIFF). `unit_scale`(씬 단위당 포인트) 또는 `target_width_pt`는 줌과 무관하게 결정적인 물리적 크기를 제공한다: 결합 길이 모드(bond-length mode)는 스타일의 `bond_length_pt`를 사용하고, 컬럼 모드(column modes)는 84/174 mm에 맞춘다. `scope`는 전체 캔버스 대 선택 영역을 선택하고, `background`는 투명 대 흰색을 선택한다. 아웃라인 처리된 레이블은 어떤 포맷도 폰트 의존적인 `<text>`를 포함하지 않음을 의미하므로 화면/SVG/PDF/래스터 모두 동일한 글리프를 표시한다.
+## 현재 구현 지도 (규범 아님)
 
-## UI 계층 규율 (ports / access / state / services)
-`app/ui` 패키지는 역할이 고정된 다수의 작은 모듈로 의도적으로 분리되어 있다. 목표는 `CanvasView`와 `MainWindow`를 얇은 Qt 셸로 유지하고(갓 오브젝트 금지), 모든 서비스를 헤드리스로 생성 가능하게 하며(전체 테스트 스위트가 `SimpleNamespace` 캔버스로 약 20초에 실행), 모든 의존성을 명시적으로 만드는 것이다.
+이 절은 마이그레이션 중인 현재 코드를 설명한다. 목표 패키지 경계와
+의존 방향은 [ADR 0001](adr/0001-feature-oriented-modularization.md)에 정의되어
+있다. 신규 기능은 아래의 평면 `core` / `ui` 배치를 복제하지 않고 ADR을
+따른다.
+- CanvasView (`app/chemvas/ui/canvas_view.py`): 입력 처리, 도구(tool) 디스패치, 선택 상태 관리, 그리고 모델/렌더/히스토리 업데이트의 조율을 담당한다. 저수준 드로잉 프리미티브(low-level drawing primitives)를 직접 소유해서는 안 된다.
+- MoleculeModel (`app/chemvas/domain/document/model.py`): 순수한 원자/결합 데이터와 ID. Qt 의존성이 없다.
+- RDKitAdapter (`app/chemvas/core/rdkit_adapter.py`): SMILES 가져오기, 물성 계산, 3D 좌표 생성, 별칭(alias) 확장, 미리보기 씬(preview scene) 구성을 담당하는 선택적 화학 백엔드. UI 코드는 이를 필수 시작 의존성이 아니라 최선 노력(best-effort) 서비스로 취급해야 한다.
+- Renderer (`app/chemvas/core/renderer.py`): 스타일, 펜/브러시, 폰트 설정.
+- HistoryCommand (`app/chemvas/core/history.py`): 델타 기반 실행 취소/다시 실행(undo/redo). 다중 엔티티(multi-entity) 연산은 `CompositeCommand`로 그룹화되며, 이는 다시 실행 시 자식 델타 커맨드를 순서대로 적용하고 실행 취소 시 역순으로 적용한다.
+- BondRenderer (`app/chemvas/ui/bond_renderer.py`): 결합 QGraphicsItem 생성/업데이트 및 기하 헬퍼(geometry helpers)로, CanvasView 컨텍스트에 의해 구동된다.
+- Graphics items (`app/chemvas/ui/graphics_items.py`): 선택 불가능한 QGraphicsItem 래퍼(wrapper).
+- Label layout (`app/chemvas/features/annotations`): 원자 레이블을 조판 런과 배치로 파싱하는 순수(Qt-free) 공개 API이며 화면과 아웃라인 내보내기 타이포그래피의 단일 소유자다.
+- Figure export (`app/chemvas/features/export`): feature 패키지가 공개 API, Qt-free 대화상자/계획 규칙, 씬 범위 처리, SVG/PDF/raster 렌더러를 소유한다. 외부 호출자는 `chemvas.features.export`만 import하고 렌더러 모듈은 비공개 구현 세부사항으로 남는다. 순수 plan은 패딩이 적용된 소스 사각형과 물리 출력 크기를 포인트 단위로 계산한다. Qt 서비스는 보이는 콘텐츠를 수집하고, 일시적 오버레이를 제외하며, 가능한 경우 항목별 export bounds를 사용하고, 레이블을 아웃라인 처리한 뒤 SVG/PDF/PNG/TIFF로 렌더링한다. `unit_scale` 또는 `target_width_pt`로 줌과 무관한 크기를 결정하고 `scope`와 `background`로 내용과 배경을 선택한다.
+- Domain document (`app/chemvas/domain/document`): Qt-free 분자 모델과 버전이 있는 문서/클립보드 직렬화·검증 정책을 소유한다. 기존 `chemvas.core.model`과 `document_state` 경로는 삭제되었다.
+- 이전된 feature 정책 (`app/chemvas/features/{export,session,annotations,rendering,insertion,selection}`): 각 패키지는 응집된 planning/geometry/state 계약을 하나의 공개 API로 제공한다. 기존 평면 호환 모듈은 삭제되었고 `test_package_dependencies.py`가 재도입을 막는다.
+- 메인 창 조립: `chemvas.shell.main_window`가 얇은 Qt 셸을 소유하고, `chemvas.bootstrap`이 runtime/service 조립·창 등록·문서 열기·앱 시작을 소유한다. Qt 파일 열기 이벤트는 `chemvas.adapters.qt`를 통해 들어온다.
 
-- **State 모듈** (`*_state.py`): 관심사당 dataclass 하나와 `<name>_state_for(canvas)` 접근자. 모든 상태 접근자는 `ensure_canvas_state(canvas, name, factory)`(`ui/canvas_state_lookup.py`)를 거치며, 조회와 부착에 하나의 이름만 사용한다. 실제 캔버스에서는 모든 상태가 eager 생성되는 `CanvasRuntimeState` 컨테이너(`ui/canvas_runtime_state.py`)의 필드로 존재한다. 컨테이너는 strict하다 — 컨테이너에 없는 필드를 요청하는 접근자는 그림자 사본을 조용히 부착하는 대신 즉시 실패한다. 일부 상태(`model`, `renderer`, `bond_renderer`, `rdkit`)는 의도적으로 캔버스 직접 속성으로 저장되며 `runtime_field=False`를 사용한다. 새 상태 추가 시: dataclass + 접근자 + `CanvasRuntimeState` 필드가 세트이며, `test_state_accessor_names_match_runtime_state_container`가 동기화를 강제한다.
+## 전환기 레거시 UI 규율 (ports / access / state / services)
+`app/chemvas/ui` 패키지는 역할이 고정된 다수의 작은 모듈로 의도적으로 분리되어 있다. 목표는 `CanvasView`와 `MainWindow`를 얇은 Qt 셸로 유지하고(갓 오브젝트 금지), 모든 서비스를 헤드리스로 생성 가능하게 하며(전체 테스트 스위트가 `SimpleNamespace` 캔버스로 약 20초에 실행), 모든 의존성을 명시적으로 만드는 것이다.
+
+이 규칙들은 평면 레거시 패키지에 남아 있는 코드의 마이그레이션 제약으로
+유지한다. 모든 신규 기능이 복제할 템플릿은 아니며, 신규 feature 패키지는
+실제 경계가 필요할 때만 역할별 모듈을 만든다.
+
+- **State 모듈** (`*_state.py`): 관심사당 dataclass 하나와 `<name>_state_for(canvas)` 접근자. 모든 상태 접근자는 `ensure_canvas_state(canvas, name, factory)`(`chemvas.ui.canvas_state_lookup.py`)를 거치며, 조회와 부착에 하나의 이름만 사용한다. 실제 캔버스에서는 모든 상태가 eager 생성되는 `CanvasRuntimeState` 컨테이너(`chemvas.ui.canvas_runtime_state.py`)의 필드로 존재한다. 컨테이너는 strict하다 — 컨테이너에 없는 필드를 요청하는 접근자는 그림자 사본을 조용히 부착하는 대신 즉시 실패한다. 일부 상태(`model`, `renderer`, `bond_renderer`, `rdkit`)는 의도적으로 캔버스 직접 속성으로 저장되며 `runtime_field=False`를 사용한다. 새 상태 추가 시: dataclass + 접근자 + `CanvasRuntimeState` 필드가 세트이며, `test_state_accessor_names_match_runtime_state_container`가 동기화를 강제한다.
 - **Access 모듈** (`*_access.py`): 연산 하나를 감싸는 자유 함수(`foo_for(canvas)`). `canvas.services`에 직접 접근할 수 없고, 서비스 조회는 대응하는 ports 모듈에 위임한다.
-- **Ports 모듈** (`*_ports.py`): 서비스 컨테이너(`canvas_services_for` / window 비공개 저장소)를 해석할 수 있는 유일한 모듈. 그 외 모든 코드는 협력자를 주입받거나 port를 호출한다.
-- **서비스와 컨트롤러**: `ui/canvas_service_composer.py`에서 캔버스당 한 번, 명시적 키워드 주입으로 조립된다 — 서비스 내부의 서비스 로케이터 금지, 누락된 배선을 숨기는 `=None` 협력자 기본값 금지.
-- **core는 Qt-free이자 ui-free**: `app/core`는 모듈 수준에서 `ui`를 import할 수 없다(지연 해석되는 프로토콜 구현이 유일한 승인된 예외, `core/history.py` 참고).
+- **Ports 모듈** (`*_ports.py`): 서비스 컨테이너(`canvas_services_for` / window 비공개 저장소)를 해석할 수 있는 유일한 모듈. 그 외 모든 코드는 협력자를 주입받거나 port를 호출한다. 생산 코드의 port는 묶음형 `CanvasRuntimeServices` API(예: `services.auxiliary.atom_label_service`)만 사용한다. 기존 평면 서비스 이름은 경량 테스트 fixture를 위한 임시 호환 표면이며, 생산 소비자에서의 사용은 아키텍처 ratchet이 금지한다.
+- **서비스와 컨트롤러**: `chemvas.ui.canvas_service_composer.py`에서 캔버스당 한 번, 명시적 키워드 주입으로 조립된다 — 서비스 내부의 서비스 로케이터 금지, 누락된 배선을 숨기는 `=None` 협력자 기본값 금지. composer는 기존 기능 bundle들을 `CanvasRuntimeServices`에 그대로 보관하여 수십 개 협력자를 평면화하지 않고 캔버스마다 안정적인 bundle identity 하나를 유지한다.
+- **core는 UI와 분리되며, Qt 마이그레이션 부채는 하나만 허용한다**: `app/chemvas/core`는 모듈 수준에서 `ui`를 import하지 않는다(`chemvas.core.history.py`의 지연 해석 프로토콜 구현만 예외). `chemvas.core.renderer.py`는 현재 유일한 직접 Qt 의존성으로, 네임스페이스 이전 중 Qt 어댑터로 이동할 전환 부채다. 새로운 core-to-Qt 의존성은 금지한다.
 
-이 규칙들은 `tests/test_architecture_boundaries.py`가 강제한다. 이 파일은 *규칙*(금지 접근 패턴, 제거된 표면의 유지, 의존성 계약)만 담는다 — 특정 구현 문구가 존재한다는 단언은 두지 않는다. 규칙을 추가할 때는 새 코드가 자동으로 적용받는 패턴 금지 또는 의존성 계약으로 표현한다.
+이 규칙들은 `tests/test_architecture_boundaries.py`가 강제한다. 신규 규칙은
+의존성 계약이나 일반 패턴 금지로 작성한다. 일부 레거시 검사는 아직 제거된
+이름이나 구현 위치를 고정하고 있으므로, 각 feature 이전 시 패키지/공개 API
+계약으로 교체한 뒤 퇴역시킨다.
 
-이 규율의 알려진 트레이드오프(의도적으로 수용): 실재하는 간접 비용(ui LOC의 약 20%가 배선)과 캔버스 seam의 약한 정적 타이핑(`canvas: Any`). 하나의 불변식이 여러 작은 모듈에 걸칠 때는 일관성 계약을 소유 모듈 한 곳에 문서화해야 한다 — 파생 그래프 인덱스의 예로 `ui/graph_index_operations.py`와 `CanvasGraphService.bond_id_between_with_repair` 패턴을 참고.
+이 규율의 알려진 트레이드오프(의도적으로 수용): 실재하는 간접 비용(ui LOC의 약 20%가 배선)과 캔버스 seam의 약한 정적 타이핑(`canvas: Any`). 하나의 불변식이 여러 작은 모듈에 걸칠 때는 일관성 계약을 소유 모듈 한 곳에 문서화해야 한다 — 파생 그래프 인덱스의 예로 `chemvas.ui.graph_index_operations.py`와 `CanvasGraphService.bond_id_between_with_repair` 패턴을 참고.
+
+## 트랜잭션과 복구 소유권
+
+- `chemvas.domain.transactions`는 프레임워크와 무관한 복구 결과, hostile descriptor에도 안전한 bound attribute port, 재시도/오류 보존, 정확한 history stack authority snapshot을 소유한다.
+- `chemvas.ui.transactions`는 Qt-aware command payload, 객체 그래프, scene-item attach, scene-rect savepoint를 소유한다. 기존 평면 snapshot 모듈은 삭제되었고 아키텍처 ratchet이 재도입을 막는다.
+- 트랜잭션 동작을 하나의 범용 context manager로 합치지 않는다. 되돌릴 수 있는 mutation은 절대 snapshot을 복원하고, 문서 교체는 이전 문서를 복원하거나 fail-closed하며, 장시간 drag는 savepoint형 authority를 사용하고, scene reset은 Qt item 파괴 후 빈 상태로 수렴한다. 의미가 같은 부분에만 공통 primitive를 사용한다.
 
 ## 데이터/렌더 흐름 (Data/Render Flow)
 Tools -> CanvasView -> MoleculeModel 변경(mutation) -> Renderer/BondRenderer -> QGraphicsScene 업데이트 -> HistoryCommand 푸시.
@@ -44,9 +65,7 @@ Tools -> CanvasView -> MoleculeModel 변경(mutation) -> Renderer/BondRenderer -
 - 열려 있는 각 캔버스 탭은 자체 파일 경로와 clean/dirty 다이제스트(digest)를 가진 독립적인 문서다. `.chemvas` 로딩은 표준 단일 캔버스 페이로드만 허용한다.
 - `.chemvas` 문서는 버전이 붙는다(현재 v4; v1–v3도 계속 로드 가능). v4는 결합을 컴팩트 배열로 저장한다: 삭제된 슬롯의 tombstone(v4 이전 파일의 `null` 항목)은 런타임 관리용이며 문서에는 더 이상 나타나지 않는다. 결합 identity는 런타임 범위다 — 문서의 어떤 섹션도 결합을 위치나 id로 참조하지 않는다(원자는 마크·링 채우기·그룹·perspective 상태가 참조하므로 명시적 id를 갖는다).
 
-## 계획된 다음 슬라이스 (Planned Next Slices)
-- 미리보기 렌더링(결합/SMILES/템플릿)을 전용 렌더러 모듈로 추출.
-- 다중 항목 연산(선택, 대량 이동, 템플릿 삽입) 주위의 씬 업데이트를 배치(batch) 처리.
-- 출판용 내보내기(publication export)가 도입됨(`export_scene`): SVG/PDF/PNG/TIFF, 아웃라인 레이블, 포맷/범위/DPI/배경 대화상자, 물리적 단위 크기 조정(결합 길이 + 84/174 mm 컬럼 맞춤). 이 경로의 다음 작업:
-- 클립보드 벡터(Clipboard vector): 클립보드에 PDF/SVG 형식도 함께 배치(현재는 PNG만 복사됨)하여 Illustrator / macOS Office로 붙여넣기 시 벡터를 유지.
-- 형식 전하를 레이블 위첨자(superscript)로 접기(`place_runs`가 이미 `super` 역할을 지원함); 인라인 텍스트를 파싱하는 대신 기존 전하 마크/속성을 사용해 인라인 전하 대 아래첨자 모호성을 해결.
+## 리팩토링 순서
+
+현재 모듈화 순서, 완료 조건, 의존성 규칙은
+[ADR 0001](adr/0001-feature-oriented-modularization.md)에서 관리한다.

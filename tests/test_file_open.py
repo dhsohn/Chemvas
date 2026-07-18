@@ -11,7 +11,8 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from chemvas.file_open import FileOpenEventFilter, open_document
+    from chemvas.adapters.qt import FileOpenEventFilter
+    from chemvas.bootstrap.file_open import open_document
 
 
 class _FakeEvent:
@@ -26,7 +27,9 @@ class _FakeEvent:
         return self._path
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for file-open filter tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for file-open filter tests"
+)
 class FileOpenEventFilterTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -37,7 +40,9 @@ class FileOpenEventFilterTest(unittest.TestCase):
         opened: list[str] = []
         event_filter = FileOpenEventFilter(opened.append)
 
-        handled = event_filter.eventFilter(None, _FakeEvent(QEvent.Type.FileOpen, "/tmp/molecule.chemvas"))
+        handled = event_filter.eventFilter(
+            None, _FakeEvent(QEvent.Type.FileOpen, "/tmp/molecule.chemvas")
+        )
 
         self.assertTrue(handled)
         self.assertEqual(opened, ["/tmp/molecule.chemvas"])
@@ -61,7 +66,9 @@ class FileOpenEventFilterTest(unittest.TestCase):
         self.assertEqual(opened, [])
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for open-document routing tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for open-document routing tests"
+)
 class OpenDocumentRoutingTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -72,13 +79,16 @@ class OpenDocumentRoutingTest(unittest.TestCase):
         cls.other = str(examples / "template2.chemvas")
 
     def setUp(self) -> None:
-        from ui.main_window_app import reset_window_registry
+        from chemvas.bootstrap.window_registry import reset_window_registry
 
         reset_window_registry()
 
     def tearDown(self) -> None:
-        from ui.main_window_app import open_windows, reset_window_registry
-        from ui.main_window_ports import services_for_window
+        from chemvas.bootstrap.window_registry import (
+            open_windows,
+            reset_window_registry,
+        )
+        from chemvas.ui.main_window_ports import services_for_window
 
         for window in list(open_windows()):
             documents = services_for_window(window).canvas_document_service
@@ -89,7 +99,7 @@ class OpenDocumentRoutingTest(unittest.TestCase):
         self.app.processEvents()
 
     def test_reuses_blank_startup_window(self) -> None:
-        from ui.main_window_app import open_new_window, open_windows
+        from chemvas.bootstrap.window_registry import open_new_window, open_windows
 
         window = open_new_window()
         self.assertEqual(len(open_windows()), 1)
@@ -101,11 +111,13 @@ class OpenDocumentRoutingTest(unittest.TestCase):
         self.assertIs(open_windows()[0], window)
 
     def test_opens_new_window_when_current_holds_a_document(self) -> None:
-        from ui.main_window_app import open_new_window, open_windows
-        from ui.main_window_ports import services_for_window
+        from chemvas.bootstrap.window_registry import open_new_window, open_windows
+        from chemvas.ui.main_window_ports import services_for_window
 
         window = open_new_window()
-        services_for_window(window).document_action_service.load_canvas_from_path(window, self.example)
+        services_for_window(window).document_action_service.load_canvas_from_path(
+            window, self.example
+        )
         self.assertEqual(len(open_windows()), 1)
 
         open_document(self.other)
@@ -116,11 +128,13 @@ class OpenDocumentRoutingTest(unittest.TestCase):
         self.assertIs(open_windows()[0], window)
 
     def test_reopening_the_same_file_switches_instead_of_duplicating(self) -> None:
-        from ui.main_window_app import open_new_window, open_windows
-        from ui.main_window_ports import services_for_window
+        from chemvas.bootstrap.window_registry import open_new_window, open_windows
+        from chemvas.ui.main_window_ports import services_for_window
 
         window = open_new_window()
-        services_for_window(window).document_action_service.load_canvas_from_path(window, self.example)
+        services_for_window(window).document_action_service.load_canvas_from_path(
+            window, self.example
+        )
         self.assertEqual(len(open_windows()), 1)
 
         open_document(self.example)

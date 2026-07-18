@@ -13,10 +13,10 @@ except ModuleNotFoundError:
     QPolygonF = None
 
 if QApplication is not None:
-    from ui import scene_item_state as facade
-    from ui import scene_item_state_serialization as serialization
-    from ui.note_html_sanitizer import sanitize_note_html
-    from ui.scene_item_restore import create_note_item_from_state
+    from chemvas.features.annotations import sanitize_note_html
+    from chemvas.ui import scene_item_state as facade
+    from chemvas.ui import scene_item_state_serialization as serialization
+    from chemvas.ui.scene_item_restore import create_note_item_from_state
 
 
 class EmbeddedStateItem:
@@ -27,7 +27,9 @@ class EmbeddedStateItem:
         return self.state if role == 9 else None
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for scene item state tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for scene item state tests"
+)
 class SceneItemStateSerializationTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -48,14 +50,18 @@ class SceneItemStateSerializationTest(unittest.TestCase):
         note.setData(0, "note")
         note.setPos(QPointF(4.0, -3.0))
 
-        state = serialization.scene_item_state(note, mark_center_getter=lambda _: QPointF())
+        state = serialization.scene_item_state(
+            note, mark_center_getter=lambda _: QPointF()
+        )
         self.assertEqual(
             {key: state[key] for key in ("kind", "text", "x", "y")},
             {"kind": "note", "text": "direct", "x": 4.0, "y": -3.0},
         )
         self.assertIn("direct", state["html"])
 
-    def test_note_state_serializes_same_sanitized_subset_restored_notes_accept(self) -> None:
+    def test_note_state_serializes_same_sanitized_subset_restored_notes_accept(
+        self,
+    ) -> None:
         note = QGraphicsTextItem()
         note.setData(0, "note")
         note.setHtml(
@@ -91,13 +97,17 @@ class SceneItemStateSerializationTest(unittest.TestCase):
         self.assertEqual(resaved["html"], state["html"])
 
     def test_state_dict_for_prefers_embedded_scene_state(self) -> None:
-        ring = QGraphicsPolygonItem(QPolygonF([QPointF(0.0, 0.0), QPointF(3.0, 0.0), QPointF(1.5, 2.0)]))
+        ring = QGraphicsPolygonItem(
+            QPolygonF([QPointF(0.0, 0.0), QPointF(3.0, 0.0), QPointF(1.5, 2.0)])
+        )
         ring.setData(0, "ring")
         ring.setData(9, {"kind": "ring", "points": [(9.0, 9.0)], "atom_ids": [42]})
 
         state = serialization.ring_state_dict_for(object(), ring)
 
-        self.assertEqual(state, {"kind": "ring", "points": [(9.0, 9.0)], "atom_ids": [42]})
+        self.assertEqual(
+            state, {"kind": "ring", "points": [(9.0, 9.0)], "atom_ids": [42]}
+        )
 
     def test_scene_item_state_facade_reexports_serialization_contract(self) -> None:
         self.assertIs(facade.scene_item_state, serialization.scene_item_state)

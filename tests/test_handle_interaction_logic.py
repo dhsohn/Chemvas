@@ -13,7 +13,7 @@ except ModuleNotFoundError:
     Qt = None
 
 if QApplication is not None:
-    from ui.handle_interaction_logic import (
+    from chemvas.features.selection import (
         clamp_curved_midpoint,
         clear_handle_items,
         control_from_midpoint,
@@ -31,7 +31,9 @@ class _BrokenHandle:
         raise RuntimeError("wrapped C/C++ object has been deleted")
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for handle interaction tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for handle interaction tests"
+)
 class HandleInteractionLogicTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -68,10 +70,14 @@ class HandleInteractionLogicTest(unittest.TestCase):
         self.assertIsNone(handle_b.scene())
         self.assertEqual(len(scene.items()), 0)
 
-    def test_clear_handle_items_ignores_off_scene_and_runtime_error_handles(self) -> None:
+    def test_clear_handle_items_ignores_off_scene_and_runtime_error_handles(
+        self,
+    ) -> None:
         scene = QGraphicsScene()
         other_scene = QGraphicsScene()
-        off_scene_handle = create_handle_item(QPointF(4.0, 0.0), "orbital_scale", object())
+        off_scene_handle = create_handle_item(
+            QPointF(4.0, 0.0), "orbital_scale", object()
+        )
         other_scene.addItem(off_scene_handle)
 
         cleared = clear_handle_items(scene, [off_scene_handle, _BrokenHandle()])
@@ -86,13 +92,19 @@ class HandleInteractionLogicTest(unittest.TestCase):
 
         self.assertEqual((scale_pos.x(), scale_pos.y()), (25.0, -3.0))
         self.assertEqual((rotate_pos.x(), rotate_pos.y()), (5.0, -23.0))
-        self.assertAlmostEqual(orbital_scale_factor(center, QPointF(35.0, -3.0), 20.0), 1.5)
         self.assertAlmostEqual(
-            orbital_rotation_angle(center, QPointF(5.0, 17.0), snap_enabled=False, snap_step=15),
+            orbital_scale_factor(center, QPointF(35.0, -3.0), 20.0), 1.5
+        )
+        self.assertAlmostEqual(
+            orbital_rotation_angle(
+                center, QPointF(5.0, 17.0), snap_enabled=False, snap_step=15
+            ),
             90.0,
         )
         self.assertAlmostEqual(
-            orbital_rotation_angle(center, QPointF(16.0, 8.0), snap_enabled=True, snap_step=15),
+            orbital_rotation_angle(
+                center, QPointF(16.0, 8.0), snap_enabled=True, snap_step=15
+            ),
             45.0,
         )
 

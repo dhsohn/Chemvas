@@ -6,10 +6,10 @@ import unittest
 from contextlib import contextmanager
 from unittest import mock
 
+import chemvas.bootstrap.application as chemvas_main
 import chemvas.branding
-import chemvas.main as chemvas_main
 import main as app_main
-from chemvas.file_open import FileOpenEventFilter
+from chemvas.adapters.qt import FileOpenEventFilter
 
 
 class _QApplicationMetadataStub:
@@ -44,9 +44,13 @@ class _QApplicationMetadataStub:
 
 class MainStderrFilterTest(unittest.TestCase):
     def test_app_main_reexports_chemvas_main_symbols(self) -> None:
-        self.assertIs(app_main.IGNORED_STDERR_SUBSTRINGS, chemvas_main.IGNORED_STDERR_SUBSTRINGS)
+        self.assertIs(
+            app_main.IGNORED_STDERR_SUBSTRINGS, chemvas_main.IGNORED_STDERR_SUBSTRINGS
+        )
         self.assertIs(app_main._filtered_stderr, chemvas_main._filtered_stderr)
-        self.assertIs(app_main._should_filter_stderr, chemvas_main._should_filter_stderr)
+        self.assertIs(
+            app_main._should_filter_stderr, chemvas_main._should_filter_stderr
+        )
         self.assertIs(app_main._stderr_filter_loop, chemvas_main._stderr_filter_loop)
         self.assertIs(app_main.main, chemvas_main.main)
 
@@ -91,7 +95,9 @@ class MainStderrFilterTest(unittest.TestCase):
             lines=["qt.qpa.keymapper: Mismatch between Cocoa should remain visible\n"],
         )
 
-        self.assertIn("qt.qpa.keymapper: Mismatch between Cocoa should remain visible", output)
+        self.assertIn(
+            "qt.qpa.keymapper: Mismatch between Cocoa should remain visible", output
+        )
 
     def test_should_filter_stderr_uses_current_platform_by_default(self) -> None:
         with mock.patch.object(chemvas_main.sys, "platform", "darwin"):
@@ -127,8 +133,9 @@ class MainStderrFilterTest(unittest.TestCase):
 
         qt_widgets_module = types.ModuleType("PyQt6.QtWidgets")
         qt_widgets_module.QApplication = FakeApplication
-        main_window_module = types.ModuleType("ui.main_window")
-        main_window_module.MainWindow = FakeMainWindow
+        main_window_module = types.ModuleType("chemvas.bootstrap.main_window")
+        main_window_module.build_main_window = FakeMainWindow
+        main_window_module.initialize_main_window_document = lambda window: None
 
         @contextmanager
         def fake_filtered_stderr(*args, **kwargs):
@@ -143,13 +150,15 @@ class MainStderrFilterTest(unittest.TestCase):
                 sys.modules,
                 {
                     "PyQt6.QtWidgets": qt_widgets_module,
-                    "ui.main_window": main_window_module,
+                    "chemvas.bootstrap.main_window": main_window_module,
                 },
             ),
             mock.patch.object(sys, "argv", argv),
             mock.patch.object(chemvas.branding, "app_icon", lambda: sentinel_icon),
         ):
-            with mock.patch.object(chemvas_main, "_filtered_stderr", fake_filtered_stderr):
+            with mock.patch.object(
+                chemvas_main, "_filtered_stderr", fake_filtered_stderr
+            ):
                 app_main.main()
 
         self.assertEqual(FakeApplication.instances[0].args, argv)
@@ -162,7 +171,9 @@ class MainStderrFilterTest(unittest.TestCase):
         self.assertEqual(application.desktop_file_name, "chemvas")
         self.assertIs(application.window_icon, sentinel_icon)
         self.assertIsInstance(application.installed_event_filter, FileOpenEventFilter)
-        self.assertEqual([event[0] for event in events], ["enter", "show", "exec", "exit"])
+        self.assertEqual(
+            [event[0] for event in events], ["enter", "show", "exec", "exit"]
+        )
 
     def test_main_loads_startup_canvas_file_argument(self) -> None:
         events: list[tuple[str, object]] = []
@@ -177,11 +188,15 @@ class MainStderrFilterTest(unittest.TestCase):
         class FakeMainWindow:
             def __init__(self) -> None:
                 document_action_service = types.SimpleNamespace(
-                    load_canvas_from_path=lambda window, path, target_provider=None: events.append(("load", path))
+                    load_canvas_from_path=lambda window, path, target_provider=None: (
+                        events.append(("load", path))
+                    )
                 )
                 # open_document reuses a blank window when reusable_open_target is
                 # non-None; return a truthy sentinel so the startup file reuses it.
-                canvas_document_service = types.SimpleNamespace(reusable_open_target=lambda window: object())
+                canvas_document_service = types.SimpleNamespace(
+                    reusable_open_target=lambda window: object()
+                )
                 self._services = types.SimpleNamespace(
                     document_action_service=document_action_service,
                     canvas_document_service=canvas_document_service,
@@ -192,8 +207,9 @@ class MainStderrFilterTest(unittest.TestCase):
 
         qt_widgets_module = types.ModuleType("PyQt6.QtWidgets")
         qt_widgets_module.QApplication = FakeApplication
-        main_window_module = types.ModuleType("ui.main_window")
-        main_window_module.MainWindow = FakeMainWindow
+        main_window_module = types.ModuleType("chemvas.bootstrap.main_window")
+        main_window_module.build_main_window = FakeMainWindow
+        main_window_module.initialize_main_window_document = lambda window: None
 
         @contextmanager
         def fake_filtered_stderr(*args, **kwargs):
@@ -207,7 +223,7 @@ class MainStderrFilterTest(unittest.TestCase):
                 sys.modules,
                 {
                     "PyQt6.QtWidgets": qt_widgets_module,
-                    "ui.main_window": main_window_module,
+                    "chemvas.bootstrap.main_window": main_window_module,
                 },
             ),
             mock.patch.object(sys, "argv", argv),
@@ -216,7 +232,16 @@ class MainStderrFilterTest(unittest.TestCase):
         ):
             app_main.main()
 
-        self.assertEqual(events, [("enter", {}), ("show", None), ("load", "/tmp/start.chemvas"), ("exec", argv), ("exit", None)])
+        self.assertEqual(
+            events,
+            [
+                ("enter", {}),
+                ("show", None),
+                ("load", "/tmp/start.chemvas"),
+                ("exec", argv),
+                ("exit", None),
+            ],
+        )
 
     def test_main_module_executes_main_when_run_as_script(self) -> None:
         events: list[str] = []
@@ -241,18 +266,20 @@ class MainStderrFilterTest(unittest.TestCase):
 
         ui_module = types.ModuleType("ui")
         ui_module.__path__ = []
-        main_window_module = types.ModuleType("ui.main_window")
-        main_window_module.MainWindow = FakeMainWindow
-        ui_module.main_window = main_window_module
+        main_window_module = types.ModuleType("chemvas.bootstrap.main_window")
+        main_window_module.build_main_window = FakeMainWindow
+        main_window_module.initialize_main_window_document = lambda window: None
 
         class FakeRecoveryService:
-            def restore_previous(self, window, *, include_clean_session: bool = True) -> None:
+            def restore_previous(
+                self, window, *, include_clean_session: bool = True
+            ) -> None:
                 events.append("restore")
 
             def start(self, app) -> None:
                 events.append("start")
 
-        recovery_module = types.ModuleType("ui.session_recovery_service")
+        recovery_module = types.ModuleType("chemvas.ui.session_recovery_service")
         recovery_module.create_session_recovery_service = lambda: FakeRecoveryService()
         ui_module.session_recovery_service = recovery_module
 
@@ -262,8 +289,8 @@ class MainStderrFilterTest(unittest.TestCase):
                 "PyQt6": pyqt6_module,
                 "PyQt6.QtWidgets": qt_widgets_module,
                 "ui": ui_module,
-                "ui.main_window": main_window_module,
-                "ui.session_recovery_service": recovery_module,
+                "chemvas.bootstrap.main_window": main_window_module,
+                "chemvas.ui.session_recovery_service": recovery_module,
             },
         ):
             with (

@@ -11,17 +11,21 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from core.history import CompositeCommand, DeleteAtomsCommand, DeleteBondCommand
-    from core.model import Atom, Bond
-    from ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
-    from ui.canvas_mark_registry import CanvasMarkRegistry
-    from ui.canvas_smiles_input_state import (
+    from chemvas.core.history import (
+        CompositeCommand,
+        DeleteAtomsCommand,
+        DeleteBondCommand,
+    )
+    from chemvas.domain.document import Atom, Bond
+    from chemvas.ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
+    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+    from chemvas.ui.canvas_smiles_input_state import (
         CanvasSmilesInputState,
         last_smiles_input_for,
     )
-    from ui.history_commands import DeleteSceneItemsCommand
-    from ui.scene_delete_controller import SceneDeleteController
-    from ui.scene_transform_controller import SceneTransformController
+    from chemvas.ui.history_commands import DeleteSceneItemsCommand
+    from chemvas.ui.scene_delete_controller import SceneDeleteController
+    from chemvas.ui.scene_transform_controller import SceneTransformController
 
 
 class _FakeScene:
@@ -72,30 +76,40 @@ def _scene_transform_controller_for(view) -> SceneTransformController:
     )
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas view tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for canvas view tests"
+)
 class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
 
-    def test_scene_ops_delete_atom_returns_single_delete_atoms_command_without_bonds(self) -> None:
+    def test_scene_ops_delete_atom_returns_single_delete_atoms_command_without_bonds(
+        self,
+    ) -> None:
         def remove_atom_only(atom_id: int, remove_marks: bool = True) -> None:
             del view.model.atoms[atom_id]
             view.model.next_atom_id = 4
 
         remove_bond_by_id = mock.Mock()
-        atom_mutation_service = SimpleNamespace(remove_atom_only=mock.Mock(side_effect=remove_atom_only))
+        atom_mutation_service = SimpleNamespace(
+            remove_atom_only=mock.Mock(side_effect=remove_atom_only)
+        )
         move_controller = SimpleNamespace(redraw_connected_bonds=mock.Mock())
         mark_item = _StateItem({"mark": 1})
         view = SimpleNamespace(
-            model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[], next_atom_id=5),
+            model=SimpleNamespace(
+                atoms={1: Atom("C", 0.0, 0.0)}, bonds=[], next_atom_id=5
+            ),
             smiles_input_state=CanvasSmilesInputState(last_smiles_input="C"),
             mark_registry=CanvasMarkRegistry({1: [mark_item]}),
             _bond_state_dict=mock.Mock(),
             services=SimpleNamespace(
                 canvas_atom_mutation_service=atom_mutation_service,
-                canvas_bond_mutation_service=SimpleNamespace(remove_bond_by_id=remove_bond_by_id),
+                canvas_bond_mutation_service=SimpleNamespace(
+                    remove_bond_by_id=remove_bond_by_id
+                ),
                 move_controller=move_controller,
             ),
             push_command=mock.Mock(),
@@ -111,7 +125,15 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         self.assertIsInstance(command, DeleteAtomsCommand)
         self.assertEqual(
             command.atom_states,
-            {1: {"element": "C", "x": 0.0, "y": 0.0, "color": "#000000", "explicit_label": False}},
+            {
+                1: {
+                    "element": "C",
+                    "x": 0.0,
+                    "y": 0.0,
+                    "color": "#000000",
+                    "explicit_label": False,
+                }
+            },
         )
         self.assertEqual(command.mark_states, [{"mark": 1}])
         self.assertEqual(command.before_next_atom_id, 5)
@@ -120,28 +142,40 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         remove_bond_by_id.assert_not_called()
         view.push_command.assert_called_once_with(command)
 
-    def test_scene_ops_delete_atom_builds_composite_command_for_connected_bonds(self) -> None:
+    def test_scene_ops_delete_atom_builds_composite_command_for_connected_bonds(
+        self,
+    ) -> None:
         def remove_atom_only(atom_id: int, remove_marks: bool = True) -> None:
             view.model.atoms.pop(atom_id, None)
             view.model.next_atom_id = 9
 
         bonds = [Bond(1, 2, 1), Bond(3, 1, 2), None]
         remove_bond_by_id = mock.Mock()
-        atom_mutation_service = SimpleNamespace(remove_atom_only=mock.Mock(side_effect=remove_atom_only))
+        atom_mutation_service = SimpleNamespace(
+            remove_atom_only=mock.Mock(side_effect=remove_atom_only)
+        )
         move_controller = SimpleNamespace(redraw_connected_bonds=mock.Mock())
         view = SimpleNamespace(
             model=SimpleNamespace(
-                atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 1.0, 0.0), 3: Atom("N", -1.0, 0.0)},
+                atoms={
+                    1: Atom("C", 0.0, 0.0),
+                    2: Atom("O", 1.0, 0.0),
+                    3: Atom("N", -1.0, 0.0),
+                },
                 bonds=bonds,
                 next_atom_id=10,
             ),
             smiles_input_state=CanvasSmilesInputState(last_smiles_input="CO"),
             mark_registry=CanvasMarkRegistry({1: []}),
             _atom_state_dict=mock.Mock(return_value={"atom": 1}),
-            _bond_state_dict=mock.Mock(side_effect=lambda bond: {"a": bond.a, "b": bond.b, "order": bond.order}),
+            _bond_state_dict=mock.Mock(
+                side_effect=lambda bond: {"a": bond.a, "b": bond.b, "order": bond.order}
+            ),
             services=SimpleNamespace(
                 canvas_atom_mutation_service=atom_mutation_service,
-                canvas_bond_mutation_service=SimpleNamespace(remove_bond_by_id=remove_bond_by_id),
+                canvas_bond_mutation_service=SimpleNamespace(
+                    remove_bond_by_id=remove_bond_by_id
+                ),
                 move_controller=move_controller,
             ),
             push_command=mock.Mock(),
@@ -152,7 +186,10 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         command = controller.delete_atom(1, record=False)
 
         self.assertIsInstance(command, CompositeCommand)
-        self.assertEqual([type(child) for child in command.commands], [DeleteBondCommand, DeleteBondCommand, DeleteAtomsCommand])
+        self.assertEqual(
+            [type(child) for child in command.commands],
+            [DeleteBondCommand, DeleteBondCommand, DeleteAtomsCommand],
+        )
         self.assertEqual([child.bond_id for child in command.commands[:2]], [1, 0])
         remove_bond_by_id.assert_has_calls([mock.call(1), mock.call(0)])
         move_controller.redraw_connected_bonds.assert_has_calls(
@@ -174,7 +211,9 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
             smiles_input_state=CanvasSmilesInputState(last_smiles_input="CC"),
             _bond_state_dict=mock.Mock(return_value={"bond": 0}),
             services=SimpleNamespace(
-                canvas_bond_mutation_service=SimpleNamespace(remove_bond_by_id=remove_bond_by_id),
+                canvas_bond_mutation_service=SimpleNamespace(
+                    remove_bond_by_id=remove_bond_by_id
+                ),
                 move_controller=move_controller,
             ),
             push_command=mock.Mock(),
@@ -214,7 +253,9 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         scene_item_controller.remove_scene_item.assert_called_once_with(ring_item)
         view.push_command.assert_not_called()
 
-    def test_scene_ops_flip_bond_direction_requires_directional_style_and_updates_graphics(self) -> None:
+    def test_scene_ops_flip_bond_direction_requires_directional_style_and_updates_graphics(
+        self,
+    ) -> None:
         scene = _FakeScene()
         wedge_bond = Bond(1, 2, 1, style="wedge")
         plain_bond = Bond(3, 4, 1, style="single")
@@ -226,17 +267,23 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
             model=SimpleNamespace(bonds=[wedge_bond, plain_bond]),
             scene=lambda: scene,
             smiles_input_state=CanvasSmilesInputState(last_smiles_input="C=C"),
-            _bond_state_dict=mock.Mock(side_effect=lambda bond: {"a": bond.a, "b": bond.b, "style": bond.style}),
+            _bond_state_dict=mock.Mock(
+                side_effect=lambda bond: {"a": bond.a, "b": bond.b, "style": bond.style}
+            ),
             services=SimpleNamespace(
                 history_service=SimpleNamespace(push=mock.Mock()),
                 move_controller=move_controller,
-                canvas_history_recording_service=SimpleNamespace(record_bond_update=record_bond_update),
+                canvas_history_recording_service=SimpleNamespace(
+                    record_bond_update=record_bond_update
+                ),
             ),
         )
         set_bond_items_for(view, {0: [original_selected_item, "old-b"], 1: ["old-c"]})
         view.bond_renderer = SimpleNamespace(
             add_bond_graphics=mock.Mock(
-                side_effect=lambda bond_id: bond_items_for(view).__setitem__(bond_id, [replacement_item])
+                side_effect=lambda bond_id: bond_items_for(view).__setitem__(
+                    bond_id, [replacement_item]
+                )
             )
         )
         controller = _scene_transform_controller_for(view)
@@ -248,14 +295,18 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         self.assertEqual((wedge_bond.a, wedge_bond.b), (2, 1))
         self.assertEqual(bond_items_for(view)[0], [replacement_item])
         self.assertTrue(replacement_item.isSelected())
-        scene.removeItem.assert_has_calls([mock.call(original_selected_item), mock.call("old-b")])
+        scene.removeItem.assert_has_calls(
+            [mock.call(original_selected_item), mock.call("old-b")]
+        )
         view.bond_renderer.add_bond_graphics.assert_called_once_with(0)
         move_controller.redraw_connected_bonds.assert_has_calls(
             [mock.call(2, skip_bond_id=0), mock.call(1, skip_bond_id=0)]
         )
         record_bond_update.assert_called_once()
 
-    def test_scene_ops_apply_and_cycle_bond_style_refresh_graphics_and_record_update(self) -> None:
+    def test_scene_ops_apply_and_cycle_bond_style_refresh_graphics_and_record_update(
+        self,
+    ) -> None:
         scene = _FakeScene()
         styled_bond = Bond(1, 2, 1, style="single")
         cycled_bond = Bond(3, 4, 1, style="single")
@@ -269,11 +320,20 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
             model=SimpleNamespace(bonds=[styled_bond, cycled_bond]),
             scene=lambda: scene,
             smiles_input_state=CanvasSmilesInputState(last_smiles_input="CN"),
-            _bond_state_dict=mock.Mock(side_effect=lambda bond: {"a": bond.a, "b": bond.b, "style": bond.style, "order": bond.order}),
+            _bond_state_dict=mock.Mock(
+                side_effect=lambda bond: {
+                    "a": bond.a,
+                    "b": bond.b,
+                    "style": bond.style,
+                    "order": bond.order,
+                }
+            ),
             services=SimpleNamespace(
                 history_service=SimpleNamespace(push=mock.Mock()),
                 move_controller=move_controller,
-                canvas_history_recording_service=SimpleNamespace(record_bond_update=record_bond_update),
+                canvas_history_recording_service=SimpleNamespace(
+                    record_bond_update=record_bond_update
+                ),
             ),
         )
         set_bond_items_for(view, {0: [original_style_item], 1: [original_cycle_item]})
@@ -297,14 +357,19 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
             [mock.call(1, skip_bond_id=0), mock.call(2, skip_bond_id=0)]
         )
 
-        with mock.patch("ui.scene_single_item_mutation_logic.cycle_plain_bond_style", return_value=("aromatic", 3)) as cycle_style:
+        with mock.patch(
+            "chemvas.ui.scene_single_item_mutation_logic.cycle_plain_bond_style",
+            return_value=("aromatic", 3),
+        ) as cycle_style:
             controller.cycle_bond_style(1)
 
         cycle_style.assert_called_once_with("single", 1, allow_double_variants=False)
         self.assertEqual((cycled_bond.style, cycled_bond.order), ("aromatic", 3))
         self.assertEqual(bond_items_for(view)[1], [cycled_replacement])
         self.assertTrue(cycled_replacement.isSelected())
-        self.assertEqual(view.bond_renderer.add_bond_graphics.call_args_list[-1], mock.call(1))
+        self.assertEqual(
+            view.bond_renderer.add_bond_graphics.call_args_list[-1], mock.call(1)
+        )
         self.assertEqual(record_bond_update.call_count, 2)
 
     def test_delete_and_transform_services_stay_split(self) -> None:

@@ -10,11 +10,11 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from core.model import Atom, MoleculeModel
-    from ui.canvas_document_state import _snapshot_groups as snapshot_groups
-    from ui.canvas_document_state import restore_document_groups
-    from ui.canvas_group_state import group_state_for, register_group_for
-    from ui.canvas_scene_items_state import CanvasSceneItemsState
+    from chemvas.domain.document import Atom, MoleculeModel
+    from chemvas.ui.canvas_document_state import _snapshot_groups as snapshot_groups
+    from chemvas.ui.canvas_document_state import restore_document_groups
+    from chemvas.ui.canvas_group_state import group_state_for, register_group_for
+    from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 
 
 class _SceneItem:
@@ -33,8 +33,12 @@ class _SceneItem:
 
 def _canvas_with_items(scene_obj):
     note_item = _SceneItem(scene_obj, {"text": "note", "x": 1.0, "y": 2.0})
-    arrow_item = _SceneItem(scene_obj, {"kind": "arrow", "start": (0.0, 0.0), "end": (1.0, 1.0)})
-    mark_item = _SceneItem(scene_obj, {"kind": "mark", "mark_kind": "plus", "atom_id": None})
+    arrow_item = _SceneItem(
+        scene_obj, {"kind": "arrow", "start": (0.0, 0.0), "end": (1.0, 1.0)}
+    )
+    mark_item = _SceneItem(
+        scene_obj, {"kind": "mark", "mark_kind": "plus", "atom_id": None}
+    )
     canvas = SimpleNamespace(
         model=MoleculeModel(atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 5.0, 0.0)}),
         scene_items_state=CanvasSceneItemsState(
@@ -47,7 +51,9 @@ def _canvas_with_items(scene_obj):
     return canvas, note_item, arrow_item, mark_item
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for document group tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for document group tests"
+)
 class CanvasDocumentGroupsTest(unittest.TestCase):
     def test_snapshot_groups_maps_members_to_stable_references(self) -> None:
         scene_obj = object()
@@ -94,7 +100,9 @@ class CanvasDocumentGroupsTest(unittest.TestCase):
         self.assertEqual(len(groups), 1)
         group = next(iter(groups.values()))
         self.assertEqual(group.atom_ids, {2})
-        self.assertEqual({id(item) for item in group.items}, {id(arrow_item), id(note_item)})
+        self.assertEqual(
+            {id(item) for item in group.items}, {id(arrow_item), id(note_item)}
+        )
 
     def test_snapshot_and_restore_group_with_standalone_mark(self) -> None:
         scene_obj = object()
@@ -129,7 +137,9 @@ class CanvasDocumentGroupsTest(unittest.TestCase):
 
         groups_state = snapshot_groups(canvas)
         restored_scene = object()
-        restored_canvas, restored_note, restored_arrow, _ = _canvas_with_items(restored_scene)
+        restored_canvas, restored_note, restored_arrow, _ = _canvas_with_items(
+            restored_scene
+        )
         restore_document_groups(restored_canvas, {"groups": groups_state})
 
         groups = group_state_for(restored_canvas).groups

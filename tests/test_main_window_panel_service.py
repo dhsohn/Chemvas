@@ -15,12 +15,12 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.main_window_panel_service import MainWindowPanelService
-    from ui.main_window_ports import (
+    from chemvas.ui.main_window_panel_service import MainWindowPanelService
+    from chemvas.ui.main_window_ports import (
         apply_preview_window_assembly_for_window,
         preview_window_for_window,
     )
-    from ui.main_window_ui_references import MainWindowUiReferences
+    from chemvas.ui.main_window_ui_references import MainWindowUiReferences
 
     class _PreviewWidget(QWidget):
         def __init__(self) -> None:
@@ -28,7 +28,9 @@ if QApplication is not None:
             self.set_export_xyz_action = mock.Mock()
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for main window panel service tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for main window panel service tests"
+)
 class MainWindowPanelServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -67,10 +69,14 @@ class MainWindowPanelServiceTest(unittest.TestCase):
             status_sink=preview_window.show_export_status,
         )
 
-    def test_open_preview_window_handles_missing_window_and_refreshes_selected_canvas(self) -> None:
+    def test_open_preview_window_handles_missing_window_and_refreshes_selected_canvas(
+        self,
+    ) -> None:
         preview = mock.Mock()
         preview_for_window = mock.Mock(return_value=preview)
-        active_canvas_for_window = mock.Mock(return_value=SimpleNamespace(rdkit=object()))
+        active_canvas_for_window = mock.Mock(
+            return_value=SimpleNamespace(rdkit=object())
+        )
         service = MainWindowPanelService(
             preview_for_window=preview_for_window,
             active_canvas_for_window=active_canvas_for_window,
@@ -85,12 +91,18 @@ class MainWindowPanelServiceTest(unittest.TestCase):
         preview.set_rdkit_adapter.assert_not_called()
 
         preview_window = mock.Mock()
-        window = SimpleNamespace(ui_references=SimpleNamespace(preview_window=preview_window))
+        window = SimpleNamespace(
+            ui_references=SimpleNamespace(preview_window=preview_window)
+        )
 
         service.open_preview_window(window)
 
-        preview.set_rdkit_adapter.assert_called_once_with(active_canvas_for_window.return_value.rdkit)
-        preview.refresh_selected_from_canvas.assert_called_once_with(active_canvas_for_window.return_value)
+        preview.set_rdkit_adapter.assert_called_once_with(
+            active_canvas_for_window.return_value.rdkit
+        )
+        preview.refresh_selected_from_canvas.assert_called_once_with(
+            active_canvas_for_window.return_value
+        )
         preview_window.show.assert_called_once_with()
         preview_window.raise_.assert_called_once_with()
         preview_window.activateWindow.assert_called_once_with()

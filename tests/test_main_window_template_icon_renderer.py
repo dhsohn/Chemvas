@@ -14,7 +14,9 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.main_window_template_icon_renderer import MainWindowTemplateIconRenderer
+    from chemvas.ui.main_window_template_icon_renderer import (
+        MainWindowTemplateIconRenderer,
+    )
 
 
 def _opaque_bounds(image) -> tuple[int, int, int, int] | None:
@@ -55,7 +57,10 @@ class _FakePainter:
         self.lines += 1
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for main window template icon renderer tests")
+@unittest.skipUnless(
+    QApplication is not None,
+    "PyQt6 is required for main window template icon renderer tests",
+)
 class MainWindowTemplateIconRendererTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -78,7 +83,9 @@ class MainWindowTemplateIconRendererTest(unittest.TestCase):
         painter.end()
         return _opaque_bounds(pixmap.toImage())
 
-    def test_template_preview_matrix_covers_ring_fragment_and_text_variants(self) -> None:
+    def test_template_preview_matrix_covers_ring_fragment_and_text_variants(
+        self,
+    ) -> None:
         labels = (
             "Benzene",
             "Naphthalene",
@@ -93,7 +100,11 @@ class MainWindowTemplateIconRendererTest(unittest.TestCase):
         )
         for label in labels:
             with self.subTest(label=label):
-                bounds = self._render(lambda painter, label=label: self.renderer.draw_template_preview(painter, label))
+                bounds = self._render(
+                    lambda painter, label=label: self.renderer.draw_template_preview(
+                        painter, label
+                    )
+                )
                 self.assertIsNotNone(bounds)
 
     def test_benzene_preview_icon_draws_aromatic_inner_bonds(self) -> None:
@@ -109,7 +120,10 @@ class MainWindowTemplateIconRendererTest(unittest.TestCase):
         self.assertEqual(cyclopentane.lines, 0)
 
     def test_templates_and_chair_preview_tolerate_empty_chair_geometry(self) -> None:
-        with mock.patch("ui.main_window_template_icon_renderer.chair_icon_points", return_value=QPolygonF()):
+        with mock.patch(
+            "chemvas.ui.main_window_template_icon_renderer.chair_icon_points",
+            return_value=QPolygonF(),
+        ):
             self.assertIsNone(self._render(self.renderer.draw_templates))
             self.assertIsNone(
                 self._render(

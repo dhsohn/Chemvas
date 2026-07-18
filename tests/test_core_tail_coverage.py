@@ -10,14 +10,14 @@ try:
 except ModuleNotFoundError:
     QApplication = None
 
-from core.model import Atom, Bond, MoleculeModel
-from core.rdkit_adapter import RDKitAdapter
+from chemvas.core.rdkit_adapter import RDKitAdapter
+from chemvas.domain.document import Atom, Bond, MoleculeModel
 
 if QApplication is not None:
-    from ui.canvas_tool_settings_state import CanvasToolSettingsState
-    from ui.handle_state import CanvasHandleState
-    from ui.tool_context import ToolContext
-    from ui.tools import MoveTool, SelectTool, TextTool
+    from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+    from chemvas.ui.handle_state import CanvasHandleState
+    from chemvas.ui.tool_context import ToolContext
+    from chemvas.ui.tools import MoveTool, SelectTool, TextTool
 
 
 def _tool_context_for(canvas):
@@ -38,7 +38,11 @@ def _tool_context_for(canvas):
         scene = getattr(canvas, "scene", None)
         if not callable(scene):
             return []
-        return [item for item in scene().selectedItems() if item.data(0) not in excluded_kinds]
+        return [
+            item
+            for item in scene().selectedItems()
+            if item.data(0) not in excluded_kinds
+        ]
 
     return ToolContext(
         canvas,
@@ -47,7 +51,10 @@ def _tool_context_for(canvas):
         note_controller=getattr(
             services,
             "note_controller",
-            SimpleNamespace(create_text_note=lambda _pos, _text: None, begin_note_edit=lambda _item: None),
+            SimpleNamespace(
+                create_text_note=lambda _pos, _text: None,
+                begin_note_edit=lambda _item: None,
+            ),
         ),
         handle_controller=getattr(
             services,
@@ -81,7 +88,9 @@ def _tool_context_for(canvas):
             fallback_history,
         ),
         set_drag_mode=getattr(canvas, "setDragMode", None),
-        rubber_band_drag_mode=getattr(getattr(canvas, "DragMode", None), "RubberBandDrag", None),
+        rubber_band_drag_mode=getattr(
+            getattr(canvas, "DragMode", None), "RubberBandDrag", None
+        ),
     )
 
 
@@ -212,7 +221,9 @@ class RDKitConversionTailCoverageTest(unittest.TestCase):
         model = MoleculeModel()
         atom_ids = [model.add_atom("C", float(index), 0.0) for index in range(7)]
         for index in range(6):
-            model.bonds.append(Bond(atom_ids[index], atom_ids[index + 1], 1, style="wedge"))
+            model.bonds.append(
+                Bond(atom_ids[index], atom_ids[index + 1], 1, style="wedge")
+            )
 
         mol, atom_map = adapter._conversion_helper._build_rdkit_mol_with_map(
             model,
@@ -311,7 +322,9 @@ class _Event:
     ) -> None:
         self._pos = QPointF(pos or QPointF())
         self._button = button if button is not None else Qt.MouseButton.LeftButton
-        self._modifiers = modifiers if modifiers is not None else Qt.KeyboardModifier.NoModifier
+        self._modifiers = (
+            modifiers if modifiers is not None else Qt.KeyboardModifier.NoModifier
+        )
 
     def button(self):
         return self._button
@@ -352,7 +365,9 @@ class _SelectCanvas:
                 update_selection_outline=self._update_selection_outline,
                 shift_selection_outlines=self.shift_selection_outlines,
             ),
-            style_controller=SimpleNamespace(suspend_selection_outline=self.suspend_selection_outline),
+            style_controller=SimpleNamespace(
+                suspend_selection_outline=self.suspend_selection_outline
+            ),
             handle_overlay_service=SimpleNamespace(
                 clear_handles=self.clear_handles,
                 show_curved_handles=self.show_curved_handles,
@@ -435,8 +450,12 @@ class _TextCanvas:
         self.tool_settings_state = CanvasToolSettingsState(atom_symbol="N")
         self.model = MoleculeModel(atoms={1: Atom("C", 5.0, 6.0)}, bonds=[])
         self.services = SimpleNamespace(
-            atom_label_service=SimpleNamespace(add_or_update_atom_label=self.add_or_update_atom_label),
-            tool_mode_controller=SimpleNamespace(get_atom_symbol=lambda: self.tool_settings_state.atom_symbol),
+            atom_label_service=SimpleNamespace(
+                add_or_update_atom_label=self.add_or_update_atom_label
+            ),
+            tool_mode_controller=SimpleNamespace(
+                get_atom_symbol=lambda: self.tool_settings_state.atom_symbol
+            ),
             hit_testing_service=SimpleNamespace(
                 scene_pos_from_event=self.scene_pos_from_event,
                 item_at_event=self.item_at_event,
@@ -497,9 +516,13 @@ class ToolsTailCoverageTest(unittest.TestCase):
         curved = _Item("curved_single")
 
         canvas.snapshot = SimpleNamespace(selected_atom_ids=set(), selection_items=[])
-        self.assertFalse(tool._begin_curved_handle_toggle_or_drag(curved, QPointF(1.0, 1.0)))
+        self.assertFalse(
+            tool._begin_curved_handle_toggle_or_drag(curved, QPointF(1.0, 1.0))
+        )
 
-        canvas.snapshot = SimpleNamespace(selected_atom_ids=set(), selection_items=[curved])
+        canvas.snapshot = SimpleNamespace(
+            selected_atom_ids=set(), selection_items=[curved]
+        )
         canvas.scene_obj.selected_items = []
         self.assertIs(
             tool._selected_curved_item_for_handle_toggle(canvas.snapshot),
@@ -508,13 +531,17 @@ class ToolsTailCoverageTest(unittest.TestCase):
 
         canvas.handle_state.target = object()
         canvas.scene_obj.selected_items = [curved]
-        self.assertTrue(tool._begin_curved_handle_toggle_or_drag(curved, QPointF(1.0, 1.0)))
+        self.assertTrue(
+            tool._begin_curved_handle_toggle_or_drag(curved, QPointF(1.0, 1.0))
+        )
         self.assertEqual(canvas.clear_handles_calls, 1)
 
         tool._pending_curved_handle_item = None
         canvas.handle_state.target = curved
         canvas.handle_state.active_handles = [object()]
-        self.assertTrue(tool._begin_curved_handle_toggle_or_drag(curved, QPointF(1.0, 1.0)))
+        self.assertTrue(
+            tool._begin_curved_handle_toggle_or_drag(curved, QPointF(1.0, 1.0))
+        )
         self.assertTrue(tool.on_mouse_release(_Event(QPointF(1.0, 1.0))))
         self.assertEqual(canvas.clear_handles_calls, 2)
         self.assertEqual(canvas.curved_handles, [])
@@ -575,7 +602,9 @@ class ToolsTailCoverageTest(unittest.TestCase):
         self.assertEqual(len(canvas.nearby_atom_calls), 1)
         self.assertEqual(canvas.label_calls, [(1, "N", True, True)])
 
-    def test_move_tool_release_covers_idle_and_moved_without_target_states(self) -> None:
+    def test_move_tool_release_covers_idle_and_moved_without_target_states(
+        self,
+    ) -> None:
         canvas = _MoveCanvas()
         tool = MoveTool(canvas, context=_tool_context_for(canvas))
 

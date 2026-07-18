@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 from unittest import mock
 
-from ui.rdkit_adapter_access import (
+from chemvas.ui.rdkit_adapter_access import (
     compute_props_for,
     model_to_xyz_block_for,
     preload_rdkit_for,
@@ -28,14 +28,19 @@ def test_rdkit_adapter_access_delegates_to_canvas_adapter() -> None:
     assert rdkit_adapter_for(canvas) is adapter
     assert rdkit_last_error_for(canvas) == "bad input"
     assert smiles_to_2d_for(canvas, "CCO", scale=24.0) == "model-2d"
-    assert model_to_xyz_block_for(canvas, "model-3d", atom_annotations={1: {"atom": 1}}) == "xyz"
+    assert (
+        model_to_xyz_block_for(canvas, "model-3d", atom_annotations={1: {"atom": 1}})
+        == "xyz"
+    )
     assert rdkit_is_loaded_for(canvas) is True
     assert rdkit_is_unavailable_for(canvas) is False
     assert preload_rdkit_for(canvas) is True
     assert compute_props_for(canvas, "submodel") == ("H2O", 18.015, "O")
 
     adapter.smiles_to_2d.assert_called_once_with("CCO", scale=24.0)
-    adapter.model_to_xyz_block.assert_called_once_with("model-3d", atom_annotations={1: {"atom": 1}})
+    adapter.model_to_xyz_block.assert_called_once_with(
+        "model-3d", atom_annotations={1: {"atom": 1}}
+    )
     adapter.is_loaded.assert_called_once_with()
     adapter.is_unavailable.assert_called_once_with()
     adapter.preload.assert_called_once_with()

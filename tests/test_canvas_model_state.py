@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from core.model import MoleculeModel
-from ui.canvas_model_state import model_for, set_model_for
+from chemvas.domain.document import MoleculeModel
+from chemvas.ui.canvas_model_state import model_for, set_model_for
 
 
 def test_canvas_model_state_returns_and_replaces_canvas_model() -> None:

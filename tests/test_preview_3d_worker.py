@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from core.model import MoleculeModel
-from core.rdkit_types import (
+from chemvas.domain.document import MoleculeModel
+from chemvas.features.insertion import (
     Molecule3DAtom,
     Molecule3DScene,
     MoleculeIdentifiers,
     RDKitResult,
 )
-from ui.preview_3d_worker import Preview3DWorker
+from chemvas.ui.preview_3d_worker import Preview3DWorker
 
 
 class RecordingPreviewAdapter:
@@ -20,8 +20,12 @@ class RecordingPreviewAdapter:
         self.identifier_annotations.append(
             {atom_id: dict(values) for atom_id, values in annotations.items()}
         )
-        formal_charge = sum(values.get("formal_charge", 0) for values in annotations.values())
-        radical_electrons = sum(values.get("radical_electrons", 0) for values in annotations.values())
+        formal_charge = sum(
+            values.get("formal_charge", 0) for values in annotations.values()
+        )
+        radical_electrons = sum(
+            values.get("radical_electrons", 0) for values in annotations.values()
+        )
         return MoleculeIdentifiers(
             formula=f"charge={formal_charge};radical={radical_electrons}",
             mw=42.5 + formal_charge + radical_electrons,
@@ -40,7 +44,9 @@ class RecordingPreviewAdapter:
         )
 
 
-def test_preview_worker_uses_payload_annotations_for_charged_radical_identifiers() -> None:
+def test_preview_worker_uses_payload_annotations_for_charged_radical_identifiers() -> (
+    None
+):
     model = MoleculeModel()
     nitrogen_id = model.add_atom("N", 0.0, 0.0)
     carbon_id = model.add_atom("C", 1.0, 0.0)

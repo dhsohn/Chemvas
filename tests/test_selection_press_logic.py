@@ -1,6 +1,6 @@
 import unittest
 
-from ui.selection_press_logic import (
+from chemvas.features.selection import (
     SelectionPressContext,
     SelectionPressDecision,
     plan_selection_press,
@@ -17,7 +17,9 @@ class SelectionPressLogicTest(unittest.TestCase):
             )
         )
 
-        self.assertEqual(decision, SelectionPressDecision(action="drag_current_selection"))
+        self.assertEqual(
+            decision, SelectionPressDecision(action="drag_current_selection")
+        )
 
     def test_reselect_preferred_when_current_selection_missed(self) -> None:
         decision = plan_selection_press(
@@ -28,7 +30,9 @@ class SelectionPressLogicTest(unittest.TestCase):
             )
         )
 
-        self.assertEqual(decision, SelectionPressDecision(action="reselect_preferred_and_drag"))
+        self.assertEqual(
+            decision, SelectionPressDecision(action="reselect_preferred_and_drag")
+        )
 
     def test_reselect_preferred_when_no_current_selection_target_exists(self) -> None:
         decision = plan_selection_press(
@@ -39,7 +43,9 @@ class SelectionPressLogicTest(unittest.TestCase):
             )
         )
 
-        self.assertEqual(decision, SelectionPressDecision(action="reselect_preferred_and_drag"))
+        self.assertEqual(
+            decision, SelectionPressDecision(action="reselect_preferred_and_drag")
+        )
 
     def test_ignore_when_no_selection_target_and_no_preferred_structure(self) -> None:
         decision = plan_selection_press(

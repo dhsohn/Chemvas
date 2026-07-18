@@ -14,12 +14,12 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.canvas_hover_state import set_hover_atom_id_for
-    from ui.canvas_insert_state import insert_state_for
-    from ui.canvas_pointer_controller import CanvasPointerController
-    from ui.canvas_view import CanvasView
-    from ui.canvas_window_access import set_error_callback_for
-    from ui.input_view_state import input_view_state_for
+    from chemvas.ui.canvas_hover_state import set_hover_atom_id_for
+    from chemvas.ui.canvas_insert_state import insert_state_for
+    from chemvas.ui.canvas_pointer_controller import CanvasPointerController
+    from chemvas.ui.canvas_view import CanvasView
+    from chemvas.ui.canvas_window_access import set_error_callback_for
+    from chemvas.ui.input_view_state import input_view_state_for
 
 
 class _FakeEvent:
@@ -65,7 +65,9 @@ class _FakeEvent:
         return self._gesture_type
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas view tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for canvas view tests"
+)
 class CanvasViewEventWrapperTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -117,24 +119,40 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
 
         template_view = self._new_view(
             tool_active=SimpleNamespace(
-                on_mouse_press=mock.Mock(side_effect=AssertionError("tool should not run"))
+                on_mouse_press=mock.Mock(
+                    side_effect=AssertionError("tool should not run")
+                )
             )
         )
         insert_state_for(template_view).template_active = True
         CanvasView.mousePressEvent(template_view, press_event)
-        self.assertEqual(template_view.services.insert_controller.commit_template_insert.call_count, 1)
-        self.assertEqual(template_view.services.hover_scene_service.clear_hover_highlight.call_count, 1)
-        self.assertEqual(template_view.services.tools.active.on_mouse_press.call_count, 0)
+        self.assertEqual(
+            template_view.services.insert_controller.commit_template_insert.call_count,
+            1,
+        )
+        self.assertEqual(
+            template_view.services.hover_scene_service.clear_hover_highlight.call_count,
+            1,
+        )
+        self.assertEqual(
+            template_view.services.tools.active.on_mouse_press.call_count, 0
+        )
 
         smiles_view = self._new_view(
             tool_active=SimpleNamespace(
-                on_mouse_press=mock.Mock(side_effect=AssertionError("tool should not run"))
+                on_mouse_press=mock.Mock(
+                    side_effect=AssertionError("tool should not run")
+                )
             )
         )
         insert_state_for(smiles_view).smiles_active = True
         CanvasView.mousePressEvent(smiles_view, press_event)
-        self.assertEqual(smiles_view.services.insert_controller.commit_smiles_insert.call_count, 1)
-        self.assertEqual(smiles_view.services.hover_scene_service.clear_hover_highlight.call_count, 1)
+        self.assertEqual(
+            smiles_view.services.insert_controller.commit_smiles_insert.call_count, 1
+        )
+        self.assertEqual(
+            smiles_view.services.hover_scene_service.clear_hover_highlight.call_count, 1
+        )
         self.assertEqual(smiles_view.services.tools.active.on_mouse_press.call_count, 0)
 
         tool = SimpleNamespace(
@@ -143,20 +161,32 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         tool_view = self._new_view(tool_active=tool)
         CanvasView.mousePressEvent(tool_view, press_event)
         tool.on_mouse_press.assert_called_once_with(press_event)
-        self.assertEqual(tool_view.services.hover_scene_service.clear_hover_highlight.call_count, 1)
-        self.assertEqual(tool_view.services.insert_controller.commit_template_insert.call_count, 0)
-        self.assertEqual(tool_view.services.insert_controller.commit_smiles_insert.call_count, 0)
+        self.assertEqual(
+            tool_view.services.hover_scene_service.clear_hover_highlight.call_count, 1
+        )
+        self.assertEqual(
+            tool_view.services.insert_controller.commit_template_insert.call_count, 0
+        )
+        self.assertEqual(
+            tool_view.services.insert_controller.commit_smiles_insert.call_count, 0
+        )
 
-    def test_mouse_press_event_blocks_insert_and_drawing_tools_outside_sheet(self) -> None:
+    def test_mouse_press_event_blocks_insert_and_drawing_tools_outside_sheet(
+        self,
+    ) -> None:
         press_event = _FakeEvent(button=Qt.MouseButton.LeftButton)
         outside_pos = QPointF(999.0, 999.0)
 
         template_tool = SimpleNamespace(
             name="bond",
-            on_mouse_press=mock.Mock(side_effect=AssertionError("tool should not run outside sheet")),
+            on_mouse_press=mock.Mock(
+                side_effect=AssertionError("tool should not run outside sheet")
+            ),
         )
         template_view = self._new_view(tool_active=template_tool)
-        template_view.services.hit_testing_service.scene_pos_from_event.return_value = outside_pos
+        template_view.services.hit_testing_service.scene_pos_from_event.return_value = (
+            outside_pos
+        )
         insert_state_for(template_view).template_active = True
 
         CanvasView.mousePressEvent(template_view, press_event)
@@ -170,10 +200,14 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         tool_event = _FakeEvent(button=Qt.MouseButton.LeftButton)
         drawing_tool = SimpleNamespace(
             name="mark",
-            on_mouse_press=mock.Mock(side_effect=AssertionError("drawing tool should not run outside sheet")),
+            on_mouse_press=mock.Mock(
+                side_effect=AssertionError("drawing tool should not run outside sheet")
+            ),
         )
         tool_view = self._new_view(tool_active=drawing_tool)
-        tool_view.services.hit_testing_service.scene_pos_from_event.return_value = outside_pos
+        tool_view.services.hit_testing_service.scene_pos_from_event.return_value = (
+            outside_pos
+        )
 
         CanvasView.mousePressEvent(tool_view, tool_event)
 
@@ -187,14 +221,18 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         template_view = self._new_view()
         insert_state_for(template_view).template_active = True
         CanvasView.mouseMoveEvent(template_view, move_event)
-        template_view.services.insert_controller.render_template_preview.assert_called_once_with(QPointF(4.0, 5.0))
+        template_view.services.insert_controller.render_template_preview.assert_called_once_with(
+            QPointF(4.0, 5.0)
+        )
         template_view.services.insert_controller.render_smiles_preview.assert_not_called()
         template_view.services.hover_interaction_service.update_hover_highlight.assert_not_called()
 
         smiles_view = self._new_view()
         insert_state_for(smiles_view).smiles_active = True
         CanvasView.mouseMoveEvent(smiles_view, move_event)
-        smiles_view.services.insert_controller.render_smiles_preview.assert_called_once_with(QPointF(4.0, 5.0))
+        smiles_view.services.insert_controller.render_smiles_preview.assert_called_once_with(
+            QPointF(4.0, 5.0)
+        )
         smiles_view.services.insert_controller.render_template_preview.assert_not_called()
         smiles_view.services.hover_interaction_service.update_hover_highlight.assert_not_called()
 
@@ -209,7 +247,9 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             Qt.KeyboardModifier.NoModifier,
         )
         CanvasView.mouseMoveEvent(hover_view, hover_event)
-        hover_view.services.hover_interaction_service.update_hover_highlight.assert_called_once_with(QPointF(4.0, 5.0))
+        hover_view.services.hover_interaction_service.update_hover_highlight.assert_called_once_with(
+            QPointF(4.0, 5.0)
+        )
         hover_view.services.hover_scene_service.clear_hover_highlight.assert_not_called()
 
         tool = SimpleNamespace(on_mouse_move=mock.Mock(return_value=True))
@@ -217,7 +257,9 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         drag_event = _FakeEvent(buttons=Qt.MouseButton.LeftButton)
         CanvasView.mouseMoveEvent(tool_view, drag_event)
         tool.on_mouse_move.assert_called_once_with(drag_event)
-        self.assertEqual(tool_view.services.hover_scene_service.clear_hover_highlight.call_count, 1)
+        self.assertEqual(
+            tool_view.services.hover_scene_service.clear_hover_highlight.call_count, 1
+        )
         tool_view.services.hover_interaction_service.update_hover_highlight.assert_not_called()
 
     def test_mouse_move_event_clears_previews_and_hover_outside_sheet(self) -> None:
@@ -225,7 +267,9 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         move_event = _FakeEvent(buttons=Qt.MouseButton.NoButton)
 
         template_view = self._new_view()
-        template_view.services.hit_testing_service.scene_pos_from_event.return_value = outside_pos
+        template_view.services.hit_testing_service.scene_pos_from_event.return_value = (
+            outside_pos
+        )
         insert_state_for(template_view).template_active = True
         CanvasView.mouseMoveEvent(template_view, move_event)
 
@@ -234,7 +278,9 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         template_view.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
 
         hover_view = self._new_view()
-        hover_view.services.hit_testing_service.scene_pos_from_event.return_value = outside_pos
+        hover_view.services.hit_testing_service.scene_pos_from_event.return_value = (
+            outside_pos
+        )
         CanvasView.mouseMoveEvent(hover_view, move_event)
 
         hover_view.services.hover_interaction_service.update_hover_highlight.assert_not_called()
@@ -243,7 +289,9 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
     def test_mouse_release_event_refreshes_hover_after_tool_handler(self) -> None:
         tool = SimpleNamespace(on_mouse_release=mock.Mock(return_value=True))
         view = self._new_view(tool_active=tool)
-        release_event = _FakeEvent(button=Qt.MouseButton.LeftButton, buttons=Qt.MouseButton.NoButton)
+        release_event = _FakeEvent(
+            button=Qt.MouseButton.LeftButton, buttons=Qt.MouseButton.NoButton
+        )
 
         CanvasView.mouseReleaseEvent(view, release_event)
 
@@ -251,7 +299,9 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         view.hover_refresh.assert_called_once_with()
         view.services.hover_interaction_service.update_hover_highlight.assert_not_called()
 
-    def test_mouse_release_event_contains_perspective_finalization_errors_at_qt_boundary(self) -> None:
+    def test_mouse_release_event_contains_perspective_finalization_errors_at_qt_boundary(
+        self,
+    ) -> None:
         error_callback = mock.Mock()
         tool = SimpleNamespace(
             name="perspective",
@@ -266,7 +316,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             buttons=Qt.MouseButton.NoButton,
         )
 
-        with mock.patch("ui.canvas_view.logger.exception") as log_exception:
+        with mock.patch("chemvas.ui.canvas_view.logger.exception") as log_exception:
             CanvasView.mouseReleaseEvent(view, release_event)
 
         tool.on_mouse_release.assert_called_once_with(release_event)
@@ -283,7 +333,9 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
     def test_mouse_release_event_contains_error_callback_failures_too(self) -> None:
         tool = SimpleNamespace(
             name="perspective",
-            on_mouse_release=mock.Mock(side_effect=KeyboardInterrupt("release failure")),
+            on_mouse_release=mock.Mock(
+                side_effect=KeyboardInterrupt("release failure")
+            ),
         )
         view = self._new_view(tool_active=tool)
         set_error_callback_for(
@@ -295,7 +347,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             buttons=Qt.MouseButton.NoButton,
         )
 
-        with mock.patch("ui.canvas_view.logger.exception") as log_exception:
+        with mock.patch("chemvas.ui.canvas_view.logger.exception") as log_exception:
             CanvasView.mouseReleaseEvent(view, release_event)
 
         self.assertEqual(
@@ -307,7 +359,9 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         )
         release_event.accept.assert_called_once_with()
 
-    def test_qt_mouse_release_callback_contains_perspective_finalization_error(self) -> None:
+    def test_qt_mouse_release_callback_contains_perspective_finalization_error(
+        self,
+    ) -> None:
         error_callback = mock.Mock()
         tool = SimpleNamespace(
             name="perspective",
@@ -326,7 +380,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         self.app.processEvents()
         position = view.viewport().rect().center()
 
-        with mock.patch("ui.canvas_view.logger.exception"):
+        with mock.patch("chemvas.ui.canvas_view.logger.exception"):
             QTest.mousePress(
                 view.viewport(),
                 Qt.MouseButton.LeftButton,
@@ -365,7 +419,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         self.app.processEvents()
         position = view.viewport().rect().center()
 
-        with mock.patch("ui.canvas_view.logger.exception"):
+        with mock.patch("chemvas.ui.canvas_view.logger.exception"):
             QTest.mousePress(
                 view.viewport(),
                 Qt.MouseButton.LeftButton,
@@ -386,7 +440,9 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         )
         view.close()
 
-    def test_qt_mouse_double_click_callback_contains_perspective_retry_error(self) -> None:
+    def test_qt_mouse_double_click_callback_contains_perspective_retry_error(
+        self,
+    ) -> None:
         error_callback = mock.Mock()
         tool = SimpleNamespace(
             name="perspective",
@@ -404,7 +460,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         self.app.processEvents()
         position = view.viewport().rect().center()
 
-        with mock.patch("ui.canvas_view.logger.exception"):
+        with mock.patch("chemvas.ui.canvas_view.logger.exception"):
             QTest.mouseDClick(
                 view.viewport(),
                 Qt.MouseButton.LeftButton,
@@ -435,7 +491,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         start = view.viewport().rect().center()
         end = start + QPointF(20.0, 10.0).toPoint()
 
-        with mock.patch("ui.canvas_view.logger.exception"):
+        with mock.patch("chemvas.ui.canvas_view.logger.exception"):
             QTest.mousePress(
                 view.viewport(),
                 Qt.MouseButton.LeftButton,
@@ -462,11 +518,17 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             name="arrow",
             deactivate=mock.Mock(),
             activate=mock.Mock(),
-            on_mouse_release=mock.Mock(side_effect=AssertionError("release should not commit outside sheet")),
+            on_mouse_release=mock.Mock(
+                side_effect=AssertionError("release should not commit outside sheet")
+            ),
         )
         view = self._new_view(tool_active=tool)
-        view.services.hit_testing_service.scene_pos_from_event.return_value = QPointF(999.0, 999.0)
-        release_event = _FakeEvent(button=Qt.MouseButton.LeftButton, buttons=Qt.MouseButton.NoButton)
+        view.services.hit_testing_service.scene_pos_from_event.return_value = QPointF(
+            999.0, 999.0
+        )
+        release_event = _FakeEvent(
+            button=Qt.MouseButton.LeftButton, buttons=Qt.MouseButton.NoButton
+        )
 
         CanvasView.mouseReleaseEvent(view, release_event)
 
@@ -477,12 +539,19 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         view.hover_refresh.assert_called_once_with()
         release_event.accept.assert_called_once_with()
 
-    def test_viewport_event_clears_or_refreshes_hover_on_enter_leave_and_hide(self) -> None:
-        with mock.patch("ui.canvas_view_event_router.QTimer.singleShot") as single_shot, mock.patch.object(
-            QGraphicsView,
-            "viewportEvent",
-            new=mock.Mock(return_value=False),
-        ) as base_event:
+    def test_viewport_event_clears_or_refreshes_hover_on_enter_leave_and_hide(
+        self,
+    ) -> None:
+        with (
+            mock.patch(
+                "chemvas.ui.canvas_view_event_router.QTimer.singleShot"
+            ) as single_shot,
+            mock.patch.object(
+                QGraphicsView,
+                "viewportEvent",
+                new=mock.Mock(return_value=False),
+            ) as base_event,
+        ):
             enter_view = self._new_view()
             base_event.reset_mock()
             enter_event = _FakeEvent(QEvent.Type.Enter)
@@ -494,7 +563,10 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             callback()
             enter_view.hover_refresh.assert_called_once_with()
             enter_view.services.hover_interaction_service.update_hover_highlight.assert_not_called()
-            self.assertEqual(enter_view.services.hover_scene_service.clear_hover_highlight.call_count, 0)
+            self.assertEqual(
+                enter_view.services.hover_scene_service.clear_hover_highlight.call_count,
+                0,
+            )
             self.assertEqual(base_event.call_count, 1)
 
             for event_type in (QEvent.Type.Leave, QEvent.Type.Hide):
@@ -514,22 +586,32 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             template_view = self._new_view()
             base_event.reset_mock()
             insert_state_for(template_view).template_active = True
-            template_event = _FakeEvent(QEvent.Type.MouseMove, buttons=Qt.MouseButton.NoButton)
+            template_event = _FakeEvent(
+                QEvent.Type.MouseMove, buttons=Qt.MouseButton.NoButton
+            )
             self.assertFalse(CanvasView.viewportEvent(template_view, template_event))
-            template_view.services.insert_controller.render_template_preview.assert_called_once_with(QPointF(4.0, 5.0))
+            template_view.services.insert_controller.render_template_preview.assert_called_once_with(
+                QPointF(4.0, 5.0)
+            )
             self.assertEqual(base_event.call_count, 1)
 
             smiles_view = self._new_view()
             base_event.reset_mock()
             insert_state_for(smiles_view).smiles_active = True
-            smiles_event = _FakeEvent(QEvent.Type.MouseMove, buttons=Qt.MouseButton.NoButton)
+            smiles_event = _FakeEvent(
+                QEvent.Type.MouseMove, buttons=Qt.MouseButton.NoButton
+            )
             self.assertFalse(CanvasView.viewportEvent(smiles_view, smiles_event))
-            smiles_view.services.insert_controller.render_smiles_preview.assert_called_once_with(QPointF(4.0, 5.0))
+            smiles_view.services.insert_controller.render_smiles_preview.assert_called_once_with(
+                QPointF(4.0, 5.0)
+            )
             self.assertEqual(base_event.call_count, 1)
 
             hover_view = self._new_view()
             base_event.reset_mock()
-            hover_event = _FakeEvent(QEvent.Type.MouseMove, buttons=Qt.MouseButton.NoButton)
+            hover_event = _FakeEvent(
+                QEvent.Type.MouseMove, buttons=Qt.MouseButton.NoButton
+            )
             self.assertFalse(CanvasView.viewportEvent(hover_view, hover_event))
             hover_view.services.hover_interaction_service.update_hover_highlight.assert_called_once_with(
                 QPointF(4.0, 5.0)
@@ -538,13 +620,17 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
 
             drag_view = self._new_view()
             base_event.reset_mock()
-            drag_event = _FakeEvent(QEvent.Type.MouseMove, buttons=Qt.MouseButton.LeftButton)
+            drag_event = _FakeEvent(
+                QEvent.Type.MouseMove, buttons=Qt.MouseButton.LeftButton
+            )
             self.assertFalse(CanvasView.viewportEvent(drag_view, drag_event))
             drag_view.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
             self.assertEqual(base_event.call_count, 1)
 
     def test_event_accepts_shortcut_override_and_native_gesture(self) -> None:
-        with mock.patch.object(QGraphicsView, "event", new=mock.Mock(return_value=False)) as base_event:
+        with mock.patch.object(
+            QGraphicsView, "event", new=mock.Mock(return_value=False)
+        ) as base_event:
             shortcut_view = self._new_view()
             base_event.reset_mock()
             set_hover_atom_id_for(shortcut_view, 7)
@@ -554,7 +640,9 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
                 key=Qt.Key.Key_Return,
                 text="",
             )
-            with mock.patch("ui.hover_service_bundle.refresh_hover_from_cursor_for") as refresh_hover:
+            with mock.patch(
+                "chemvas.ui.hover_service_bundle.refresh_hover_from_cursor_for"
+            ) as refresh_hover:
                 self.assertTrue(CanvasView.event(shortcut_view, shortcut_event))
             shortcut_event.accept.assert_called_once_with()
             refresh_hover.assert_called_once()
@@ -572,10 +660,15 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
                 QEvent.Type.NativeGesture,
                 gesture_type=Qt.NativeGestureType.PanNativeGesture,
             )
-            with mock.patch("ui.canvas_view_event_router.QNativeGestureEvent", _FakeNativeGestureEvent):
+            with mock.patch(
+                "chemvas.ui.canvas_view_event_router.QNativeGestureEvent",
+                _FakeNativeGestureEvent,
+            ):
                 self.assertTrue(CanvasView.event(native_view, native_event))
             native_event.accept.assert_called_once_with()
-            self.assertTrue(input_view_state_for(native_view).base_transform.isIdentity())
+            self.assertTrue(
+                input_view_state_for(native_view).base_transform.isIdentity()
+            )
             self.assertTrue(native_view.transform().isIdentity())
             self.assertEqual(base_event.call_count, 0)
 

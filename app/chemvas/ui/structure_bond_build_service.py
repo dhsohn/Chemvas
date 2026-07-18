@@ -1,0 +1,205 @@
+from __future__ import annotations
+
+import math
+from collections.abc import Callable
+from functools import partial
+
+from PyQt6.QtCore import QPointF
+
+from chemvas.features.rendering import style_for_existing_bond_overlay
+from chemvas.ui.canvas_model_access import bond_for_id
+from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
+from chemvas.ui.history_recording_access import record_bond_update_for
+from chemvas.ui.renderer_style_access import bond_length_px_for
+from chemvas.ui.scene_item_state import bond_state_dict
+from chemvas.ui.structure_build_committer import StructureBuildCommitter
+
+
+def _add_bond_build_rollback_note(
+    original_error: BaseException,
+    message: str,
+) -> None:
+    try:
+        add_note = getattr(original_error, "add_note", None)
+        if not callable(add_note):
+            return
+        add_note(message)
+    except BaseException:
+        return
+
+
+class StructureBondBuildService:
+    def __init__(
+        self,
+        canvas,
+        committer: StructureBuildCommitter,
+        *,
+        hit_testing_service,
+        move_controller,
+        graph_service,
+    ) -> None:
+        self.canvas = canvas
+        self.committer = committer
+        self.hit_testing_service = hit_testing_service
+        self.move_controller = move_controller
+        self.graph_service = graph_service
+
+    def add_bond_between_points(
+        self,
+        start: QPointF,
+        end: QPointF,
+        style: str,
+        order: int,
+    ) -> tuple[int, int] | None:
+        snap_tol = bond_length_px_for(self.canvas) * 0.1
+        if (
+            start == end
+            or math.hypot(start.x() - end.x(), start.y() - end.y()) <= snap_tol
+        ):
+            return None
+        start_id = self.hit_testing_service.find_atom_near(
+            start.x(), start.y(), snap_tol
+        )
+        end_id = self.hit_testing_service.find_atom_near(end.x(), end.y(), snap_tol)
+        if start_id is not None and start_id == end_id:
+            return None
+        existing_bond_id = None
+        if start_id is not None and end_id is not None:
+            # bond_id_between only ever returns ids whose bond slot is live
+            # (tombstones fail its atom-match check), so no stale-id guard is
+            # needed here; a missing bond simply means "draw a new one".
+            existing_bond_id = self.graph_service.bond_id_between(start_id, end_id)
+        snapshot = self.committer.begin_recorded_change()
+        before_smiles_input = snapshot.before_smiles_input
+        try:
+            if start_id is None:
+                start_id = self.committer.add_atom("C", start.x(), start.y())
+            if end_id is None:
+                end_id = self.committer.add_atom("C", end.x(), end.y())
+            if existing_bond_id is None:
+                existing_bond_id = self.graph_service.bond_id_between(start_id, end_id)
+            if existing_bond_id is not None:
+                result = self._update_existing_bond(
+                    existing_bond_id,
+                    style,
+                    order,
+                    before_smiles_input,
+                    start_id,
+                    end_id,
+                )
+                if result is None:
+                    self.committer.abort_recorded_change(snapshot)
+                else:
+                    self.committer.release_recorded_change(snapshot)
+                return result
+            return self._add_new_bond(snapshot, start_id, end_id, style, order)
+        except BaseException as error:
+            try:
+                self.committer.abort_recorded_change(snapshot, original_error=error)
+            except BaseException as rollback_error:
+                _add_bond_build_rollback_note(
+                    error,
+                    f"Bond build rollback also failed: {rollback_error!r}",
+                )
+            raise
+
+    def _update_existing_bond(
+        self,
+        bond_id: int,
+        style: str,
+        order: int,
+        before_smiles_input: str | None,
+        start_id: int,
+        end_id: int,
+    ) -> tuple[int, int] | None:
+        bond = bond_for_id(self.canvas, bond_id)
+        if bond is None:
+            return None
+        before_state = bond_state_dict(bond)
+        next_style, next_order = style_for_existing_bond_overlay(
+            bond.style,
+            bond.order,
+            style,
+            order,
+        )
+        try:
+            bond.style = next_style
+            bond.order = next_order
+            self.move_controller.redraw_bond(bond_id)
+            self.move_controller.redraw_connected_bonds(bond.a, skip_bond_id=bond_id)
+            self.move_controller.redraw_connected_bonds(bond.b, skip_bond_id=bond_id)
+            after_state = bond_state_dict(bond)
+            record_bond_update_for(
+                self.canvas,
+                bond_id,
+                before_state,
+                after_state,
+                before_smiles_input,
+                last_smiles_input_for(self.canvas),
+            )
+        except BaseException as caught_error:
+            original_error = caught_error
+
+            def run_compensation(
+                phase: str,
+                operation: Callable[[], object],
+            ) -> None:
+                try:
+                    operation()
+                except BaseException as rollback_error:
+                    _add_bond_build_rollback_note(
+                        original_error,
+                        "Existing-bond rollback also encountered an error while "
+                        f"{phase}: {type(rollback_error).__name__}: {rollback_error}",
+                    )
+
+            run_compensation(
+                "restoring the bond order",
+                lambda: setattr(bond, "order", before_state["order"]),
+            )
+            run_compensation(
+                "restoring the bond style",
+                lambda: setattr(bond, "style", before_state["style"]),
+            )
+            run_compensation(
+                "restoring the bond color",
+                lambda: setattr(bond, "color", before_state.get("color", bond.color)),
+            )
+            run_compensation(
+                "redrawing the restored bond",
+                lambda: self.move_controller.redraw_bond(bond_id),
+            )
+            for atom_id in (bond.a, bond.b):
+                run_compensation(
+                    f"redrawing bonds connected to atom {atom_id}",
+                    partial(
+                        self.move_controller.redraw_connected_bonds,
+                        atom_id,
+                        skip_bond_id=bond_id,
+                    ),
+                )
+            raise
+        return start_id, end_id
+
+    def _add_new_bond(
+        self,
+        snapshot,
+        start_id: int,
+        end_id: int,
+        style: str,
+        order: int,
+    ) -> tuple[int, int] | None:
+        bond_id = self.committer.add_bond(start_id, end_id, order)
+        bond = bond_for_id(self.canvas, bond_id)
+        if bond is None:
+            self.committer.abort_recorded_change(snapshot)
+            return None
+        bond.style = style
+        self.committer.add_bond_graphics(bond_id)
+        self.move_controller.redraw_connected_bonds(start_id, skip_bond_id=bond_id)
+        self.move_controller.redraw_connected_bonds(end_id, skip_bond_id=bond_id)
+        self.committer.record_additions(snapshot)
+        return start_id, end_id
+
+
+__all__ = ["StructureBondBuildService"]

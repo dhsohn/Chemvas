@@ -1,12 +1,12 @@
 import math
 import unittest
 
-from core.model import Atom, Bond
-from PyQt6.QtCore import QPointF
-from ui.selection_rotation_logic import (
+from chemvas.domain.document import Atom, Bond
+from chemvas.features.selection import (
     rotated_atom_positions,
     selected_rotation_atom_ids,
 )
+from PyQt6.QtCore import QPointF
 
 
 class SelectionRotationLogicTest(unittest.TestCase):
@@ -19,7 +19,9 @@ class SelectionRotationLogicTest(unittest.TestCase):
 
         self.assertEqual(atom_ids, {1, 2, 3, 4})
 
-    def test_rotated_atom_positions_rotates_about_center_and_skips_missing_atoms(self) -> None:
+    def test_rotated_atom_positions_rotates_about_center_and_skips_missing_atoms(
+        self,
+    ) -> None:
         rotated = rotated_atom_positions(
             {1, 2, 99},
             atoms={

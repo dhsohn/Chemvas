@@ -20,15 +20,17 @@ except ModuleNotFoundError:
     QGraphicsScene = None
 
 if QApplication is not None:
-    from ui.benzene_preview_renderer import (
+    from chemvas.ui.benzene_preview_renderer import (
         _apply_preview_style,
         clear_benzene_preview,
         rebuild_benzene_preview,
     )
-    from ui.graphics_items import NoSelectLineItem
+    from chemvas.ui.graphics_items import NoSelectLineItem
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for benzene preview renderer tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for benzene preview renderer tests"
+)
 class BenzenePreviewRendererTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -43,7 +45,9 @@ class BenzenePreviewRendererTest(unittest.TestCase):
         ring_points = _hexagon_points(radius=10.0)
         calls: list[tuple[QPointF, QPointF, QPointF]] = []
 
-        def create_inner_bond_item(point: QPointF, next_point: QPointF, center: QPointF) -> QGraphicsLineItem:
+        def create_inner_bond_item(
+            point: QPointF, next_point: QPointF, center: QPointF
+        ) -> QGraphicsLineItem:
             calls.append((point, next_point, center))
             return QGraphicsLineItem(point.x(), point.y(), center.x(), center.y())
 
@@ -56,7 +60,12 @@ class BenzenePreviewRendererTest(unittest.TestCase):
         )
 
         outer_lines = [item for item in items if isinstance(item, NoSelectLineItem)]
-        inner_lines = [item for item in items if isinstance(item, QGraphicsLineItem) and not isinstance(item, NoSelectLineItem)]
+        inner_lines = [
+            item
+            for item in items
+            if isinstance(item, QGraphicsLineItem)
+            and not isinstance(item, NoSelectLineItem)
+        ]
         dots = [item for item in items if isinstance(item, QGraphicsEllipseItem)]
 
         self.assertEqual(len(calls), 3)
@@ -73,7 +82,9 @@ class BenzenePreviewRendererTest(unittest.TestCase):
         self.assertAlmostEqual(calls[0][2].x(), 0.0, places=4)
         self.assertAlmostEqual(calls[0][2].y(), 0.0, places=4)
 
-    def test_rebuild_benzene_preview_replaces_existing_items_when_pool_is_passed(self) -> None:
+    def test_rebuild_benzene_preview_replaces_existing_items_when_pool_is_passed(
+        self,
+    ) -> None:
         original_items = rebuild_benzene_preview(
             self.scene,
             _hexagon_points(radius=8.0),
@@ -100,11 +111,15 @@ class BenzenePreviewRendererTest(unittest.TestCase):
         self.assertTrue(all(item.scene() is None for item in original_items))
         self.assertTrue(all(item.scene() is self.scene for item in moved_items))
         self.assertEqual(len(self.scene.items()), 15)
-        moved_dots = [item for item in moved_items if isinstance(item, QGraphicsEllipseItem)]
+        moved_dots = [
+            item for item in moved_items if isinstance(item, QGraphicsEllipseItem)
+        ]
         self.assertAlmostEqual(moved_dots[0].rect().center().x(), 32.0, places=3)
         self.assertAlmostEqual(moved_dots[0].rect().center().y(), -5.0, places=3)
 
-    def test_clear_benzene_preview_removes_scene_items_and_returns_empty_pool(self) -> None:
+    def test_clear_benzene_preview_removes_scene_items_and_returns_empty_pool(
+        self,
+    ) -> None:
         items = rebuild_benzene_preview(
             self.scene,
             _hexagon_points(radius=6.0),
@@ -135,7 +150,9 @@ class BenzenePreviewRendererTest(unittest.TestCase):
         self.assertEqual(cleared_items, [])
         self.assertIs(detached.scene(), other_scene)
 
-    def test_rebuild_benzene_preview_covers_empty_ring_inner_none_and_brush_style_updates(self) -> None:
+    def test_rebuild_benzene_preview_covers_empty_ring_inner_none_and_brush_style_updates(
+        self,
+    ) -> None:
         original_items = rebuild_benzene_preview(
             self.scene,
             _hexagon_points(radius=7.0),
@@ -161,7 +178,9 @@ class BenzenePreviewRendererTest(unittest.TestCase):
 
         call_count = 0
 
-        def create_inner_bond_item(point: QPointF, next_point: QPointF, center: QPointF):
+        def create_inner_bond_item(
+            point: QPointF, next_point: QPointF, center: QPointF
+        ):
             nonlocal call_count
             call_count += 1
             if call_count == 2:
@@ -179,15 +198,25 @@ class BenzenePreviewRendererTest(unittest.TestCase):
             create_inner_bond_item=create_inner_bond_item,
         )
 
-        inner_dots = [item for item in items if isinstance(item, QGraphicsEllipseItem) and item.rect().width() == 2.0]
-        atom_dots = [item for item in items if isinstance(item, QGraphicsEllipseItem) and item.rect().width() == 0.0]
+        inner_dots = [
+            item
+            for item in items
+            if isinstance(item, QGraphicsEllipseItem) and item.rect().width() == 2.0
+        ]
+        atom_dots = [
+            item
+            for item in items
+            if isinstance(item, QGraphicsEllipseItem) and item.rect().width() == 0.0
+        ]
         self.assertEqual(call_count, 3)
         self.assertEqual(len(inner_dots), 2)
         self.assertEqual(len(atom_dots), 6)
         self.assertEqual(inner_dots[0].pen().color(), QColor(120, 120, 120, 140))
         self.assertEqual(inner_dots[0].brush().color(), QColor(120, 120, 120, 140))
 
-    def test_apply_preview_style_skips_items_without_pen_and_no_brush_fill(self) -> None:
+    def test_apply_preview_style_skips_items_without_pen_and_no_brush_fill(
+        self,
+    ) -> None:
         class _BrushOnlyItem:
             def __init__(self) -> None:
                 self._brush = QBrush(Qt.BrushStyle.NoBrush)
@@ -207,7 +236,9 @@ class BenzenePreviewRendererTest(unittest.TestCase):
         self.assertEqual(item.set_brush_calls, 0)
 
 
-def _hexagon_points(*, radius: float, center: tuple[float, float] = (0.0, 0.0)) -> list[QPointF]:
+def _hexagon_points(
+    *, radius: float, center: tuple[float, float] = (0.0, 0.0)
+) -> list[QPointF]:
     cx, cy = center
     return [
         QPointF(

@@ -1,10 +1,7 @@
 import unittest
 from types import SimpleNamespace
 
-from PyQt6 import sip
-from PyQt6.QtCore import QObject, QRectF
-from PyQt6.QtWidgets import QGraphicsRectItem
-from ui.scene_item_access import (
+from chemvas.ui.scene_item_access import (
     add_item_to_canvas_scene,
     apply_scene_item_state,
     attach_scene_item,
@@ -31,6 +28,9 @@ from ui.scene_item_access import (
     restore_scene_item,
     restore_ts_bracket_from_state,
 )
+from PyQt6 import sip
+from PyQt6.QtCore import QObject, QRectF
+from PyQt6.QtWidgets import QGraphicsRectItem
 
 
 class _Canvas:
@@ -176,15 +176,26 @@ class SceneItemAccessTest(unittest.TestCase):
         canvas.services = SimpleNamespace(scene_item_controller=_Controller(canvas))
         item = object()
 
-        self.assertEqual(restore_ring_from_state(canvas, {"kind": "ring"}), ("controller_ring", {"kind": "ring"}))
-        self.assertEqual(restore_note_from_state(canvas, {"kind": "note"}), ("controller_note", {"kind": "note"}))
-        self.assertEqual(create_scene_item_from_state(canvas, {"id": 1}), ("controller", {"id": 1}))
+        self.assertEqual(
+            restore_ring_from_state(canvas, {"kind": "ring"}),
+            ("controller_ring", {"kind": "ring"}),
+        )
+        self.assertEqual(
+            restore_note_from_state(canvas, {"kind": "note"}),
+            ("controller_note", {"kind": "note"}),
+        )
+        self.assertEqual(
+            create_scene_item_from_state(canvas, {"id": 1}), ("controller", {"id": 1})
+        )
         attach_scene_item(canvas, item)
         restore_scene_item(canvas, item)
         remove_scene_item(canvas, item)
         apply_scene_item_state(canvas, item, {"x": 2})
         self.assertIsNone(restore_mark_from_state(canvas, {"atom_id": 3}))
-        self.assertEqual(restore_arrow_from_state(canvas, {"kind": "arrow"}), ("controller_arrow", {"kind": "arrow"}))
+        self.assertEqual(
+            restore_arrow_from_state(canvas, {"kind": "arrow"}),
+            ("controller_arrow", {"kind": "arrow"}),
+        )
         self.assertEqual(
             restore_ts_bracket_from_state(canvas, {"kind": "ts"}),
             ("controller_ts", {"kind": "ts"}),
@@ -239,7 +250,9 @@ class SceneItemAccessTest(unittest.TestCase):
         destroy_scene_item_group(canvas, group)
 
         self.assertEqual(group, ("group", tuple(items)))
-        self.assertEqual(scene.calls, [("create_group", items), ("destroy_group", group)])
+        self.assertEqual(
+            scene.calls, [("create_group", items), ("destroy_group", group)]
+        )
 
     def test_add_item_to_canvas_scene_adds_and_returns_item(self) -> None:
         scene = _Scene()
@@ -261,7 +274,9 @@ class SceneItemAccessTest(unittest.TestCase):
 
         self.assertEqual(scene.clear_calls, 1)
 
-    def test_canvas_scene_item_map_helpers_remove_items_and_return_empty_maps(self) -> None:
+    def test_canvas_scene_item_map_helpers_remove_items_and_return_empty_maps(
+        self,
+    ) -> None:
         scene = _Scene()
         canvas = _Canvas()
         canvas.scene = lambda: scene
@@ -269,12 +284,16 @@ class SceneItemAccessTest(unittest.TestCase):
         second = object()
         label = object()
 
-        self.assertEqual(clear_canvas_scene_item_list_map(canvas, {1: [first], 2: [second]}), {})
+        self.assertEqual(
+            clear_canvas_scene_item_list_map(canvas, {1: [first], 2: [second]}), {}
+        )
         self.assertEqual(clear_canvas_scene_item_map(canvas, {3: label}), {})
 
         self.assertEqual(scene.removed_items, [first, second, label])
 
-    def test_item_is_in_canvas_scene_handles_attached_detached_and_deleted_items(self) -> None:
+    def test_item_is_in_canvas_scene_handles_attached_detached_and_deleted_items(
+        self,
+    ) -> None:
         scene = _Scene()
         canvas = _Canvas()
         canvas.scene = lambda: scene
@@ -308,7 +327,9 @@ class SceneItemAccessTest(unittest.TestCase):
             item_is_in_canvas_scene(deleted_qobject_canvas, _SceneItem(scene))
         )
 
-    def test_item_can_be_added_to_canvas_scene_distinguishes_attached_and_deleted_items(self) -> None:
+    def test_item_can_be_added_to_canvas_scene_distinguishes_attached_and_deleted_items(
+        self,
+    ) -> None:
         scene = _Scene()
         other_scene = _Scene()
         canvas = _Canvas()
@@ -317,7 +338,9 @@ class SceneItemAccessTest(unittest.TestCase):
         deleted_canvas.scene = lambda: (_ for _ in ()).throw(RuntimeError("deleted"))
 
         self.assertFalse(item_can_be_added_to_canvas_scene(canvas, _SceneItem(scene)))
-        self.assertTrue(item_can_be_added_to_canvas_scene(canvas, _SceneItem(other_scene)))
+        self.assertTrue(
+            item_can_be_added_to_canvas_scene(canvas, _SceneItem(other_scene))
+        )
         self.assertTrue(item_can_be_added_to_canvas_scene(canvas, object()))
         self.assertFalse(item_can_be_added_to_canvas_scene(canvas, None))
         self.assertFalse(item_can_be_added_to_canvas_scene(deleted_canvas, None))
@@ -372,7 +395,9 @@ class SceneItemAccessTest(unittest.TestCase):
 
         self.assertEqual(scene.removed_items, [attached, fake_item])
 
-    def test_remove_attached_item_from_canvas_scene_reports_detached_and_deleted_items(self) -> None:
+    def test_remove_attached_item_from_canvas_scene_reports_detached_and_deleted_items(
+        self,
+    ) -> None:
         scene = _Scene()
         other_scene = _Scene()
         canvas = _Canvas()
@@ -389,7 +414,9 @@ class SceneItemAccessTest(unittest.TestCase):
         self.assertIsNone(remove_attached_item_from_canvas_scene(canvas, deleted))
         self.assertTrue(remove_attached_item_from_canvas_scene(canvas, fake_item))
         self.assertFalse(remove_attached_item_from_canvas_scene(canvas, None))
-        self.assertIsNone(remove_attached_item_from_canvas_scene(deleted_canvas, attached))
+        self.assertIsNone(
+            remove_attached_item_from_canvas_scene(deleted_canvas, attached)
+        )
 
         self.assertEqual(scene.removed_items, [attached, fake_item])
 
@@ -404,7 +431,9 @@ class SceneItemAccessTest(unittest.TestCase):
 
         self.assertEqual(scene.removed_items, [first, second])
 
-    def test_attached_canvas_scene_items_filters_detached_and_deleted_items(self) -> None:
+    def test_attached_canvas_scene_items_filters_detached_and_deleted_items(
+        self,
+    ) -> None:
         scene = _Scene()
         other_scene = _Scene()
         canvas = _Canvas()
@@ -415,7 +444,10 @@ class SceneItemAccessTest(unittest.TestCase):
         detached = _SceneItem(other_scene)
         deleted = _SceneItem(scene, raises=True)
 
-        self.assertEqual(attached_canvas_scene_items(canvas, [attached, detached, deleted]), [attached])
+        self.assertEqual(
+            attached_canvas_scene_items(canvas, [attached, detached, deleted]),
+            [attached],
+        )
         self.assertEqual(attached_canvas_scene_items(deleted_canvas, [attached]), [])
 
 

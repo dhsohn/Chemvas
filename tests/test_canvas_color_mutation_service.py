@@ -22,35 +22,35 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from core.history import CompositeCommand, UpdateAtomColorCommand
-    from core.model import Atom, Bond
-    from ui.bond_graphics_access import add_bond_graphics_for
-    from ui.canvas_atom_graphics_state import (
+    from chemvas.core.history import CompositeCommand, UpdateAtomColorCommand
+    from chemvas.domain.document import Atom, Bond
+    from chemvas.ui.bond_graphics_access import add_bond_graphics_for
+    from chemvas.ui.canvas_atom_graphics_state import (
         atom_dots_for,
         atom_items_for,
         set_atom_dots_for,
         set_atom_items_for,
     )
-    from ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
-    from ui.canvas_color_mutation_service import (
+    from chemvas.ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
+    from chemvas.ui.canvas_color_mutation_service import (
         CanvasColorMutationService,
         UpdateBondColorCommand,
         UpdateNoteColorCommand,
     )
-    from ui.canvas_history_state import CanvasHistoryState
-    from ui.canvas_lifecycle import schedule_canvas_deletion_for
-    from ui.canvas_smiles_input_state import CanvasSmilesInputState
-    from ui.canvas_view import CanvasView
-    from ui.graphics_items import AtomDotItem
-    from ui.history_commands import UpdateSceneItemCommand
-    from ui.note_item import NoteItem
-    from ui.note_item_access import (
+    from chemvas.ui.canvas_history_state import CanvasHistoryState
+    from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
+    from chemvas.ui.canvas_smiles_input_state import CanvasSmilesInputState
+    from chemvas.ui.canvas_view import CanvasView
+    from chemvas.ui.graphics_items import AtomDotItem
+    from chemvas.ui.history_commands import UpdateSceneItemCommand
+    from chemvas.ui.note_item import NoteItem
+    from chemvas.ui.note_item_access import (
         committed_note_html_for,
         committed_note_text_for,
         set_committed_note_html_for,
         set_committed_note_text_for,
     )
-    from ui.scene_item_state import note_state_dict_for
+    from chemvas.ui.scene_item_state import note_state_dict_for
 
 
 def _history_service(push=None):
@@ -662,9 +662,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         self.addCleanup(self._dispose_canvas, canvas)
         service = canvas.services.canvas_color_mutation_service
         color = QColor("#2f6ed3")
-        original_brush = QBrush(
-            service._pastel_fill(color, service.SHAPE_FILL_TINT)
-        )
+        original_brush = QBrush(service._pastel_fill(color, service.SHAPE_FILL_TINT))
         poisoned_brush = QBrush(QColor("#ff00ff"))
         history_holder: dict[str, object] = {}
 
@@ -1438,7 +1436,9 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
             raise primary
 
         with (
-            mock.patch.object(service, "apply_color_to_item", side_effect=fail_mutation),
+            mock.patch.object(
+                service, "apply_color_to_item", side_effect=fail_mutation
+            ),
             self.assertRaises(RuntimeError) as caught,
         ):
             service.apply_color_to_items([note], QColor("#2f6ed3"))

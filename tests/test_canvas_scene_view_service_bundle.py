@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import ui.canvas_scene_view_service_bundle as canvas_scene_view_service_bundle
-from ui.canvas_scene_view_service_bundle import (
+import chemvas.ui.canvas_scene_view_service_bundle as canvas_scene_view_service_bundle
+from chemvas.ui.canvas_scene_view_service_bundle import (
     CanvasSceneViewServiceBundle,
     build_canvas_scene_view_services,
 )
@@ -19,7 +19,9 @@ def _stub_service_class(name: str):
     return StubService
 
 
-def test_build_canvas_scene_view_services_wires_explicit_collaborators(monkeypatch) -> None:
+def test_build_canvas_scene_view_services_wires_explicit_collaborators(
+    monkeypatch,
+) -> None:
     for class_name in (
         "CanvasGeometryController",
         "CanvasRingFillSceneService",
@@ -28,7 +30,11 @@ def test_build_canvas_scene_view_services_wires_explicit_collaborators(monkeypat
         "SceneItemLifecycleService",
         "SelectionHighlightStyler",
     ):
-        monkeypatch.setattr(canvas_scene_view_service_bundle, class_name, _stub_service_class(class_name))
+        monkeypatch.setattr(
+            canvas_scene_view_service_bundle,
+            class_name,
+            _stub_service_class(class_name),
+        )
 
     canvas = SimpleNamespace()
     graph_service = object()

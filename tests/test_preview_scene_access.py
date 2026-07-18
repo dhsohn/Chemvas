@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import mock
 
-from ui.preview_scene_access import (
+from chemvas.ui.preview_scene_access import (
     apply_smiles_preview_geometry_for,
     apply_template_preview_geometry_for,
     clear_smiles_preview_for,
@@ -15,7 +15,10 @@ def test_clear_smiles_preview_for_delegates_with_canvas_scene() -> None:
     scene = object()
     canvas = SimpleNamespace(scene=mock.Mock(return_value=scene))
 
-    with mock.patch("ui.preview_scene_access.clear_smiles_preview_helper", return_value=([], {}, {})) as clear_helper:
+    with mock.patch(
+        "chemvas.ui.preview_scene_access.clear_smiles_preview_helper",
+        return_value=([], {}, {}),
+    ) as clear_helper:
         assert clear_smiles_preview_for(canvas, ["old"]) == ([], {}, {})
 
     canvas.scene.assert_called_once_with()
@@ -27,7 +30,10 @@ def test_apply_smiles_preview_geometry_for_delegates_with_canvas_scene() -> None
     canvas = SimpleNamespace(scene=mock.Mock(return_value=scene))
     result = (["items"], {0: ["bond"]}, {0: "atom"})
 
-    with mock.patch("ui.preview_scene_access.apply_smiles_preview_geometry_helper", return_value=result) as apply_helper:
+    with mock.patch(
+        "chemvas.ui.preview_scene_access.apply_smiles_preview_geometry_helper",
+        return_value=result,
+    ) as apply_helper:
         assert (
             apply_smiles_preview_geometry_for(
                 canvas,
@@ -57,7 +63,10 @@ def test_clear_template_preview_for_delegates_with_canvas_scene() -> None:
     scene = object()
     canvas = SimpleNamespace(scene=mock.Mock(return_value=scene))
 
-    with mock.patch("ui.preview_scene_access.clear_template_preview_helper", return_value=([], [], [])) as clear_helper:
+    with mock.patch(
+        "chemvas.ui.preview_scene_access.clear_template_preview_helper",
+        return_value=([], [], []),
+    ) as clear_helper:
         assert clear_template_preview_for(canvas, ["old"]) == ([], [], [])
 
     canvas.scene.assert_called_once_with()
@@ -69,7 +78,10 @@ def test_apply_template_preview_geometry_for_delegates_with_canvas_scene() -> No
     canvas = SimpleNamespace(scene=mock.Mock(return_value=scene))
     result = (["items"], ["line"], ["dot"])
 
-    with mock.patch("ui.preview_scene_access.apply_template_preview_geometry_helper", return_value=result) as apply_helper:
+    with mock.patch(
+        "chemvas.ui.preview_scene_access.apply_template_preview_geometry_helper",
+        return_value=result,
+    ) as apply_helper:
         assert (
             apply_template_preview_geometry_for(
                 canvas,

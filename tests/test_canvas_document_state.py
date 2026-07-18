@@ -2,23 +2,29 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from core.model import Atom, Bond, MoleculeModel
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor
-from ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
-from ui.canvas_atom_graphics_state import set_atom_items_for
-from ui.canvas_document_state import (
+from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
+from chemvas.ui.canvas_atom_graphics_state import set_atom_items_for
+from chemvas.ui.canvas_document_state import (
     apply_document_settings,
     restore_document_post_model_items,
     restore_document_pre_model_items,
     restore_document_projection_state,
     snapshot_canvas_document_state,
 )
-from ui.canvas_rotation_state import rotation_state_for
-from ui.canvas_scene_items_state import CanvasSceneItemsState
-from ui.canvas_smiles_input_state import CanvasSmilesInputState, last_smiles_input_for
-from ui.canvas_text_style_state import CanvasTextStyleState, text_style_state_for
-from ui.canvas_tool_settings_state import tool_settings_state_for
+from chemvas.ui.canvas_rotation_state import rotation_state_for
+from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.canvas_smiles_input_state import (
+    CanvasSmilesInputState,
+    last_smiles_input_for,
+)
+from chemvas.ui.canvas_text_style_state import (
+    CanvasTextStyleState,
+    text_style_state_for,
+)
+from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor
 
 
 class _Canvas:
@@ -87,7 +93,9 @@ class _DisposedSceneItem:
 
 
 class CanvasDocumentStateTest(unittest.TestCase):
-    def test_snapshot_canvas_document_state_skips_detached_disposed_and_empty_arrow_state(self) -> None:
+    def test_snapshot_canvas_document_state_skips_detached_disposed_and_empty_arrow_state(
+        self,
+    ) -> None:
         scene_obj = object()
         ring_item = _SceneItem(
             scene_obj,
@@ -112,7 +120,9 @@ class CanvasDocumentStateTest(unittest.TestCase):
             },
         )
         empty_arrow_item = _SceneItem(scene_obj, {})
-        ts_item = _SceneItem(scene_obj, {"kind": "ts_bracket", "rect": (0.0, 0.0, 1.0, 1.0)})
+        ts_item = _SceneItem(
+            scene_obj, {"kind": "ts_bracket", "rect": (0.0, 0.0, 1.0, 1.0)}
+        )
         orbital_item = _SceneItem(
             scene_obj,
             {"orbital_kind": "p", "center": (2.0, 3.0), "scale": 2.0, "rotation": 45.0},
@@ -206,10 +216,22 @@ class CanvasDocumentStateTest(unittest.TestCase):
         self.assertEqual(state["notes"], [{"text": "note", "x": 1.0, "y": 2.0}])
         self.assertEqual(
             state["marks"],
-            [{"kind": "plus", "text": "+", "atom_id": 1, "dx": 0.5, "dy": -0.5, "x": 3.0, "y": 4.0}],
+            [
+                {
+                    "kind": "plus",
+                    "text": "+",
+                    "atom_id": 1,
+                    "dx": 0.5,
+                    "dy": -0.5,
+                    "x": 3.0,
+                    "y": 4.0,
+                }
+            ],
         )
         self.assertEqual(state["arrows"], [])
-        self.assertEqual(state["ts_brackets"], [{"kind": "ts_bracket", "rect": (0.0, 0.0, 1.0, 1.0)}])
+        self.assertEqual(
+            state["ts_brackets"], [{"kind": "ts_bracket", "rect": (0.0, 0.0, 1.0, 1.0)}]
+        )
         self.assertEqual(
             state["orbitals"],
             [{"kind": "p", "center": (2.0, 3.0), "scale": 2.0, "rotation": 45.0}],
@@ -303,7 +325,9 @@ class CanvasDocumentStateTest(unittest.TestCase):
         self.assertEqual(text_style.note_padding, 8.0)
         self.assertEqual(last_smiles_input_for(canvas), "after")
 
-    def test_apply_document_settings_defaults_missing_text_note_settings_for_legacy_state(self) -> None:
+    def test_apply_document_settings_defaults_missing_text_note_settings_for_legacy_state(
+        self,
+    ) -> None:
         canvas = SimpleNamespace(
             renderer=SimpleNamespace(
                 style=SimpleNamespace(bond_length_px=18.0),
@@ -344,7 +368,9 @@ class CanvasDocumentStateTest(unittest.TestCase):
         self.assertEqual(text_style.text_alignment, Qt.AlignmentFlag.AlignLeft)
         self.assertFalse(text_style.note_box_enabled)
 
-    def test_restore_document_projection_state_restores_coords_and_projection(self) -> None:
+    def test_restore_document_projection_state_restores_coords_and_projection(
+        self,
+    ) -> None:
         canvas = SimpleNamespace()
         set_atom_coords_3d_for(canvas, {9: (9.0, 9.0, 9.0)})
         rotation = rotation_state_for(canvas)
@@ -366,7 +392,9 @@ class CanvasDocumentStateTest(unittest.TestCase):
         self.assertEqual(rotation.projection_center_3d, (5.0, 6.5, 7.0))
         self.assertEqual(rotation.projection_anchor_2d, (8.0, 9.5))
 
-    def test_restore_document_projection_state_clears_missing_legacy_projection(self) -> None:
+    def test_restore_document_projection_state_clears_missing_legacy_projection(
+        self,
+    ) -> None:
         canvas = SimpleNamespace()
         set_atom_coords_3d_for(canvas, {1: (1.0, 2.0, 3.0)})
         rotation = rotation_state_for(canvas)
@@ -380,7 +408,7 @@ class CanvasDocumentStateTest(unittest.TestCase):
         self.assertIsNone(rotation.projection_anchor_2d)
 
     def test_apply_document_settings_ignores_legacy_style_preset(self) -> None:
-        from core.renderer import Renderer
+        from chemvas.core.renderer import Renderer
 
         canvas = SimpleNamespace(
             renderer=Renderer(),
@@ -408,7 +436,9 @@ class CanvasDocumentStateTest(unittest.TestCase):
             "sheet_orientation": "portrait",
             "style_preset": "Presentation",
         }
-        apply_document_settings(canvas, {"settings": settings, "last_smiles_input": "y"})
+        apply_document_settings(
+            canvas, {"settings": settings, "last_smiles_input": "y"}
+        )
 
         self.assertEqual(canvas.renderer.style.font_size_pt, 12)
         self.assertEqual(canvas.renderer.style.bond_length_pt, 14.4)
@@ -420,10 +450,22 @@ class CanvasDocumentStateTest(unittest.TestCase):
         state = {
             "ring_fills": [{"points": [(0.0, 0.0)]}],
             "notes": [{"text": "note", "x": 1.0, "y": 2.0}],
-            "marks": [{"kind": "minus", "text": "-", "atom_id": 3, "dx": 1.0, "dy": 2.0, "x": 4.0, "y": 5.0}],
+            "marks": [
+                {
+                    "kind": "minus",
+                    "text": "-",
+                    "atom_id": 3,
+                    "dx": 1.0,
+                    "dy": 2.0,
+                    "x": 4.0,
+                    "y": 5.0,
+                }
+            ],
             "arrows": [{"kind": "arrow", "start": (0.0, 0.0), "end": (1.0, 1.0)}],
             "ts_brackets": [{"kind": "ts_bracket", "rect": (0.0, 0.0, 1.0, 1.0)}],
-            "orbitals": [{"kind": "p", "center": (3.0, 4.0), "scale": 2.0, "rotation": 45.0}],
+            "orbitals": [
+                {"kind": "p", "center": (3.0, 4.0), "scale": 2.0, "rotation": 45.0}
+            ],
         }
 
         restore_document_pre_model_items(canvas, state)
@@ -447,7 +489,10 @@ class CanvasDocumentStateTest(unittest.TestCase):
                         "y": 5.0,
                     },
                 ),
-                ("controller_arrow", {"kind": "arrow", "start": (0.0, 0.0), "end": (1.0, 1.0)}),
+                (
+                    "controller_arrow",
+                    {"kind": "arrow", "start": (0.0, 0.0), "end": (1.0, 1.0)},
+                ),
                 ("controller_ts", {"kind": "ts_bracket", "rect": (0.0, 0.0, 1.0, 1.0)}),
                 (
                     "controller_orbital",
@@ -467,7 +512,17 @@ class CanvasDocumentStateTest(unittest.TestCase):
         state = {
             "ring_fills": [{"points": [(0.0, 0.0)]}],
             "notes": [{"text": "note", "x": 1.0, "y": 2.0}],
-            "marks": [{"kind": "plus", "text": "+", "atom_id": None, "dx": None, "dy": None, "x": 4.0, "y": 5.0}],
+            "marks": [
+                {
+                    "kind": "plus",
+                    "text": "+",
+                    "atom_id": None,
+                    "dx": None,
+                    "dy": None,
+                    "x": 4.0,
+                    "y": 5.0,
+                }
+            ],
             "arrows": [{"kind": "equilibrium"}],
             "ts_brackets": [{"kind": "ts_bracket", "rect": (0.0, 0.0, 2.0, 2.0)}],
             "orbitals": [{"center": (3.0, 4.0)}],

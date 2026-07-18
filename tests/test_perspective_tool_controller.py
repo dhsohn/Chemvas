@@ -11,10 +11,10 @@ except ModuleNotFoundError:
     QPointF = None
 
 if QPointF is not None:
-    from ui.canvas_rotation_state import CanvasRotationState
-    from ui.perspective_tool_controller import PerspectiveToolController
-    from ui.tool_context import ToolContext
-    from ui.tools import PerspectiveTool
+    from chemvas.ui.canvas_rotation_state import CanvasRotationState
+    from chemvas.ui.perspective_tool_controller import PerspectiveToolController
+    from chemvas.ui.tool_context import ToolContext
+    from chemvas.ui.tools import PerspectiveTool
 
 
 class _Event:
@@ -116,7 +116,9 @@ class _PerspectiveCanvas:
         return self._select_structure_for_item(item)
 
     def begin_selection_3d_rotation(self, axis_hint=None, press_pos=None):
-        self.begin_calls.append((axis_hint, QPointF(press_pos) if press_pos is not None else None))
+        self.begin_calls.append(
+            (axis_hint, QPointF(press_pos) if press_pos is not None else None)
+        )
         return self.begin_rotation_result
 
 
@@ -124,7 +126,8 @@ def _tool_context_for(canvas, *, hit_testing_service=None, selection_controller=
     return ToolContext(
         canvas,
         hit_testing_service=hit_testing_service or canvas.services.hit_testing_service,
-        selection_controller=selection_controller or canvas.services.selection_controller,
+        selection_controller=selection_controller
+        or canvas.services.selection_controller,
         note_controller=getattr(
             canvas.services,
             "note_controller",
@@ -146,17 +149,25 @@ def _tool_context_for(canvas, *, hit_testing_service=None, selection_controller=
             ),
         ),
         set_drag_mode=getattr(canvas, "setDragMode", None),
-        rubber_band_drag_mode=getattr(getattr(canvas, "DragMode", None), "RubberBandDrag", None),
+        rubber_band_drag_mode=getattr(
+            getattr(canvas, "DragMode", None), "RubberBandDrag", None
+        ),
     )
 
 
-@unittest.skipUnless(QPointF is not None, "PyQt6 is required for perspective controller tests")
+@unittest.skipUnless(
+    QPointF is not None, "PyQt6 is required for perspective controller tests"
+)
 class PerspectiveToolControllerTest(unittest.TestCase):
-    def test_begin_selection_rotation_reselects_structure_and_uses_bond_axis_hint(self) -> None:
+    def test_begin_selection_rotation_reselects_structure_and_uses_bond_axis_hint(
+        self,
+    ) -> None:
         canvas = _PerspectiveCanvas()
         bond_item = _DataItem("bond", 12)
         canvas.preferred_item = bond_item
-        controller = PerspectiveToolController(canvas, context=_tool_context_for(canvas))
+        controller = PerspectiveToolController(
+            canvas, context=_tool_context_for(canvas)
+        )
 
         rotating = controller.begin_selection_rotation(_Event(QPointF(2.0, 3.0)))
 
@@ -165,12 +176,16 @@ class PerspectiveToolControllerTest(unittest.TestCase):
         self.assertEqual(canvas.selection_targets, [bond_item])
         self.assertEqual(canvas.begin_calls, [(12, QPointF(2.0, 3.0))])
 
-    def test_begin_selection_rotation_returns_false_when_selection_cannot_be_established(self) -> None:
+    def test_begin_selection_rotation_returns_false_when_selection_cannot_be_established(
+        self,
+    ) -> None:
         canvas = _PerspectiveCanvas()
         atom_item = _DataItem("atom", 7)
         canvas.item = atom_item
         canvas.select_result = False
-        controller = PerspectiveToolController(canvas, context=_tool_context_for(canvas))
+        controller = PerspectiveToolController(
+            canvas, context=_tool_context_for(canvas)
+        )
 
         rotating = controller.begin_selection_rotation(_Event(QPointF(4.0, 5.0)))
 
@@ -179,11 +194,15 @@ class PerspectiveToolControllerTest(unittest.TestCase):
         self.assertEqual(canvas.selection_targets, [atom_item])
         self.assertEqual(canvas.begin_calls, [])
 
-    def test_begin_selection_rotation_skips_reselection_when_press_hits_selection(self) -> None:
+    def test_begin_selection_rotation_skips_reselection_when_press_hits_selection(
+        self,
+    ) -> None:
         canvas = _PerspectiveCanvas()
         canvas.selection_hit = True
         canvas.preferred_item = _DataItem("bond", 9)
-        controller = PerspectiveToolController(canvas, context=_tool_context_for(canvas))
+        controller = PerspectiveToolController(
+            canvas, context=_tool_context_for(canvas)
+        )
 
         rotating = controller.begin_selection_rotation(_Event(QPointF(6.0, 7.0)))
 
@@ -191,7 +210,9 @@ class PerspectiveToolControllerTest(unittest.TestCase):
         self.assertEqual(canvas.selection_targets, [])
         self.assertEqual(canvas.begin_calls, [(9, QPointF(6.0, 7.0))])
 
-    def test_begin_selection_rotation_uses_context_services_when_available(self) -> None:
+    def test_begin_selection_rotation_uses_context_services_when_available(
+        self,
+    ) -> None:
         canvas = _PerspectiveCanvas()
         service_bond = _DataItem("bond", 12)
         fallback_bond = _DataItem("bond", 99)
@@ -203,28 +224,46 @@ class PerspectiveToolControllerTest(unittest.TestCase):
             item_at_event=mock.Mock(return_value=service_bond),
         )
         selection_controller = SimpleNamespace(
-            preferred_structure_item_at_scene_pos=mock.Mock(side_effect=[None, service_bond]),
+            preferred_structure_item_at_scene_pos=mock.Mock(
+                side_effect=[None, service_bond]
+            ),
             selection_hit_test=mock.Mock(return_value=False),
             select_structure_for_item=mock.Mock(return_value=True),
         )
         canvas.services.hit_testing_service = SimpleNamespace(
-            scene_pos_from_event=mock.Mock(side_effect=AssertionError("canvas service should not be used")),
-            item_at_event=mock.Mock(side_effect=AssertionError("canvas service should not be used")),
+            scene_pos_from_event=mock.Mock(
+                side_effect=AssertionError("canvas service should not be used")
+            ),
+            item_at_event=mock.Mock(
+                side_effect=AssertionError("canvas service should not be used")
+            ),
         )
         canvas.services.selection_controller = SimpleNamespace(
             preferred_structure_item_at_scene_pos=mock.Mock(
                 side_effect=AssertionError("canvas controller should not be used")
             ),
-            selection_hit_test=mock.Mock(side_effect=AssertionError("canvas controller should not be used")),
-            select_structure_for_item=mock.Mock(side_effect=AssertionError("canvas controller should not be used")),
+            selection_hit_test=mock.Mock(
+                side_effect=AssertionError("canvas controller should not be used")
+            ),
+            select_structure_for_item=mock.Mock(
+                side_effect=AssertionError("canvas controller should not be used")
+            ),
         )
-        canvas.scene_pos_from_event = mock.Mock(side_effect=AssertionError("canvas facade should not be used"))
-        canvas.item_at_event = mock.Mock(side_effect=AssertionError("canvas facade should not be used"))
+        canvas.scene_pos_from_event = mock.Mock(
+            side_effect=AssertionError("canvas facade should not be used")
+        )
+        canvas.item_at_event = mock.Mock(
+            side_effect=AssertionError("canvas facade should not be used")
+        )
         canvas.preferred_structure_item_at_scene_pos = mock.Mock(
             side_effect=AssertionError("canvas facade should not be used")
         )
-        canvas.selection_hit_test = mock.Mock(side_effect=AssertionError("canvas facade should not be used"))
-        canvas.select_structure_for_item = mock.Mock(side_effect=AssertionError("canvas facade should not be used"))
+        canvas.selection_hit_test = mock.Mock(
+            side_effect=AssertionError("canvas facade should not be used")
+        )
+        canvas.select_structure_for_item = mock.Mock(
+            side_effect=AssertionError("canvas facade should not be used")
+        )
         controller = PerspectiveToolController(
             canvas,
             context=_tool_context_for(
@@ -239,8 +278,12 @@ class PerspectiveToolControllerTest(unittest.TestCase):
         self.assertTrue(rotating)
         hit_testing_service.scene_pos_from_event.assert_called_once()
         hit_testing_service.item_at_event.assert_called_once()
-        selection_controller.selection_hit_test.assert_called_once_with(press_pos, snapshot=None)
-        selection_controller.select_structure_for_item.assert_called_once_with(service_bond)
+        selection_controller.selection_hit_test.assert_called_once_with(
+            press_pos, snapshot=None
+        )
+        selection_controller.select_structure_for_item.assert_called_once_with(
+            service_bond
+        )
         canvas.scene_pos_from_event.assert_not_called()
         canvas.item_at_event.assert_not_called()
         canvas.preferred_structure_item_at_scene_pos.assert_not_called()
@@ -250,15 +293,25 @@ class PerspectiveToolControllerTest(unittest.TestCase):
         self.assertEqual(canvas.begin_calls, [(12, press_pos)])
 
     def test_axis_hint_for_item_only_accepts_integer_bond_ids(self) -> None:
-        self.assertEqual(PerspectiveToolController.axis_hint_for_item(_DataItem("bond", 4)), 4)
-        self.assertIsNone(PerspectiveToolController.axis_hint_for_item(_DataItem("bond", "4")))
-        self.assertIsNone(PerspectiveToolController.axis_hint_for_item(_DataItem("atom", 4)))
+        self.assertEqual(
+            PerspectiveToolController.axis_hint_for_item(_DataItem("bond", 4)), 4
+        )
+        self.assertIsNone(
+            PerspectiveToolController.axis_hint_for_item(_DataItem("bond", "4"))
+        )
+        self.assertIsNone(
+            PerspectiveToolController.axis_hint_for_item(_DataItem("atom", 4))
+        )
         self.assertIsNone(PerspectiveToolController.axis_hint_for_item(None))
 
 
-@unittest.skipUnless(QPointF is not None, "PyQt6 is required for perspective tool tests")
+@unittest.skipUnless(
+    QPointF is not None, "PyQt6 is required for perspective tool tests"
+)
 class PerspectiveToolWrapperContractTest(unittest.TestCase):
-    def test_on_mouse_press_delegates_rotation_entry_and_tracks_local_state(self) -> None:
+    def test_on_mouse_press_delegates_rotation_entry_and_tracks_local_state(
+        self,
+    ) -> None:
         canvas = _PerspectiveCanvas()
         fake_controller = mock.Mock()
         fake_controller.begin_selection_rotation.side_effect = [True, False]
@@ -266,7 +319,10 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
         first_event = _Event(QPointF(8.0, 4.0))
         second_event = _Event(QPointF(3.0, 1.0))
 
-        with mock.patch("ui.perspective_tool._perspective_tool_controller_for", return_value=fake_controller):
+        with mock.patch(
+            "chemvas.ui.perspective_tool._perspective_tool_controller_for",
+            return_value=fake_controller,
+        ):
             self.assertTrue(tool.on_mouse_press(first_event))
             self.assertEqual(tool._last_pos, QPointF(8.0, 4.0))
             self.assertTrue(tool._rotating)
@@ -277,15 +333,22 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
             self.assertIsNone(tool._last_pos)
             self.assertFalse(tool._rotating)
 
-        self.assertEqual(fake_controller.begin_selection_rotation.call_args_list, [mock.call(first_event), mock.call(second_event)])
+        self.assertEqual(
+            fake_controller.begin_selection_rotation.call_args_list,
+            [mock.call(first_event), mock.call(second_event)],
+        )
 
-    def test_on_mouse_press_short_circuits_shift_toggle_without_controller(self) -> None:
+    def test_on_mouse_press_short_circuits_shift_toggle_without_controller(
+        self,
+    ) -> None:
         canvas = _PerspectiveCanvas()
         canvas.toggle_result = True
         tool = PerspectiveTool(canvas, context=_tool_context_for(canvas))
         event = _Event(QPointF(1.0, 1.0), modifiers=Qt.KeyboardModifier.ShiftModifier)
 
-        with mock.patch("ui.perspective_tool._perspective_tool_controller_for") as controller_for:
+        with mock.patch(
+            "chemvas.ui.perspective_tool._perspective_tool_controller_for"
+        ) as controller_for:
             self.assertTrue(tool.on_mouse_press(event))
 
         controller_for.assert_not_called()
@@ -373,7 +436,9 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
         self.assertIsNone(tool._last_pos)
         self.assertIsNone(tool._axis_lock)
 
-    def test_failed_move_retries_delta_and_axis_lock_before_publishing_locals(self) -> None:
+    def test_failed_move_retries_delta_and_axis_lock_before_publishing_locals(
+        self,
+    ) -> None:
         canvas = _PerspectiveCanvas()
         controller = canvas.services.selection_rotation_controller
         controller.update_selection_3d_rotation = mock.Mock(
@@ -452,7 +517,7 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
         new_event = _Event(QPointF(20.0, 12.0))
         with (
             mock.patch(
-                "ui.perspective_tool._perspective_tool_controller_for",
+                "chemvas.ui.perspective_tool._perspective_tool_controller_for",
                 return_value=next_controller,
             ),
             self.assertRaisesRegex(RuntimeError, "press retry failure"),
@@ -465,7 +530,7 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
         self.assertEqual(tool._axis_lock, "x")
 
         with mock.patch(
-            "ui.perspective_tool._perspective_tool_controller_for",
+            "chemvas.ui.perspective_tool._perspective_tool_controller_for",
             return_value=next_controller,
         ):
             self.assertTrue(tool.on_mouse_press(new_event))
@@ -484,7 +549,7 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
         # The commit click is consumed. Only a later click may start another
         # rotation session from the still-selected structure.
         with mock.patch(
-            "ui.perspective_tool._perspective_tool_controller_for",
+            "chemvas.ui.perspective_tool._perspective_tool_controller_for",
             return_value=next_controller,
         ):
             self.assertTrue(tool.on_mouse_press(new_event))

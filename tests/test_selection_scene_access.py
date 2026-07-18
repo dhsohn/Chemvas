@@ -7,6 +7,13 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
+from chemvas.ui.canvas_scene_items_state import set_selected_notes_for
+from chemvas.ui.selection_scene_access import (
+    clear_scene_selection_for,
+    scene_selected_items_for,
+    selected_scene_notes_for,
+    set_scene_items_selected_for,
+)
 from PyQt6 import sip
 from PyQt6.QtWidgets import (
     QApplication,
@@ -15,13 +22,6 @@ from PyQt6.QtWidgets import (
     QGraphicsScene,
     QGraphicsView,
     QGraphicsWidget,
-)
-from ui.canvas_scene_items_state import set_selected_notes_for
-from ui.selection_scene_access import (
-    clear_scene_selection_for,
-    scene_selected_items_for,
-    selected_scene_notes_for,
-    set_scene_items_selected_for,
 )
 
 
@@ -98,7 +98,12 @@ def test_selected_scene_notes_for_ignores_deleted_notes_and_canvas() -> None:
     set_selected_notes_for(canvas, [deleted_note])
 
     assert selected_scene_notes_for(canvas) == []
-    assert selected_scene_notes_for(SimpleNamespace(scene=mock.Mock(side_effect=RuntimeError("deleted")))) == []
+    assert (
+        selected_scene_notes_for(
+            SimpleNamespace(scene=mock.Mock(side_effect=RuntimeError("deleted")))
+        )
+        == []
+    )
 
 
 def test_clear_scene_selection_for_clears_with_optional_signal_blocking() -> None:

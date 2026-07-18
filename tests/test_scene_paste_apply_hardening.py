@@ -10,11 +10,11 @@ leave atoms added with no bonds and no undo grouping).
 
 import unittest
 
-from ui.scene_paste_apply_logic import apply_paste_payload
+from chemvas.ui.scene_paste_apply_logic import apply_paste_payload
 
 
 class _ModelLikeBondAdder:
-    """Mimics core.model.MoleculeModel.add_bond's strictness."""
+    """Mimics chemvas.domain.document.MoleculeModel.add_bond's strictness."""
 
     def __init__(self) -> None:
         self._next_atom_id = 100
@@ -85,7 +85,9 @@ class ApplyPastePayloadHardeningTest(unittest.TestCase):
         _run(
             model,
             atoms=self.atoms,
-            bonds=[{"a": 1, "b": 2, "order": 99, "style": "single", "color": "#000000"}],
+            bonds=[
+                {"a": 1, "b": 2, "order": 99, "style": "single", "color": "#000000"}
+            ],
         )
         self.assertEqual(model.added_bonds, [])
 
@@ -94,13 +96,21 @@ class ApplyPastePayloadHardeningTest(unittest.TestCase):
         _run(
             model,
             atoms=self.atoms,
-            bonds=[{"a": 1, "b": 2, "order": "x", "style": "single", "color": "#000000"}],
+            bonds=[
+                {"a": 1, "b": 2, "order": "x", "style": "single", "color": "#000000"}
+            ],
         )
         self.assertEqual(model.added_bonds, [])
 
     def test_perspective_state_is_remapped_to_new_atom_ids_and_translated(self) -> None:
         model = _ModelLikeBondAdder()
-        applied: list[tuple[dict[int, tuple[float, float, float]], tuple[float, float, float] | None, tuple[float, float] | None]] = []
+        applied: list[
+            tuple[
+                dict[int, tuple[float, float, float]],
+                tuple[float, float, float] | None,
+                tuple[float, float] | None,
+            ]
+        ] = []
 
         apply_paste_payload(
             atoms=self.atoms,
@@ -126,10 +136,14 @@ class ApplyPastePayloadHardeningTest(unittest.TestCase):
                 "projection_center_3d": [4.0, 5.0, 6.0],
                 "projection_anchor_2d": [7.0, 8.0],
             },
-            apply_perspective=lambda coords, center, anchor: applied.append((coords, center, anchor)),
+            apply_perspective=lambda coords, center, anchor: applied.append(
+                (coords, center, anchor)
+            ),
         )
 
-        self.assertEqual(applied, [({100: (11.0, 22.0, 3.0)}, (14.0, 25.0, 6.0), (17.0, 28.0))])
+        self.assertEqual(
+            applied, [({100: (11.0, 22.0, 3.0)}, (14.0, 25.0, 6.0), (17.0, 28.0))]
+        )
 
     def test_valid_bonds_are_still_applied(self) -> None:
         model = _ModelLikeBondAdder()

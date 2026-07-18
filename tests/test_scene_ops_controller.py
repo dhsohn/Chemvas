@@ -20,42 +20,42 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from core.history import (
+    from chemvas.core.history import (
         CompositeCommand,
         DeleteAtomsCommand,
         DeleteBondCommand,
     )
-    from core.model import Atom, Bond, MoleculeModel
-    from ui.atom_coords_access import atom_coords_3d_for
-    from ui.canvas_atom_graphics_state import (
+    from chemvas.domain.document import Atom, Bond, MoleculeModel
+    from chemvas.ui.atom_coords_access import atom_coords_3d_for
+    from chemvas.ui.canvas_atom_graphics_state import (
         atom_dots_for,
         atom_items_for,
         set_atom_dots_for,
         set_atom_items_for,
     )
-    from ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
-    from ui.canvas_graph_state import CanvasGraphState
-    from ui.canvas_mark_registry import CanvasMarkRegistry
-    from ui.canvas_scene_items_state import (
+    from chemvas.ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
+    from chemvas.ui.canvas_graph_state import CanvasGraphState
+    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+    from chemvas.ui.canvas_scene_items_state import (
         SCENE_ITEM_COLLECTION_ATTRS,
         scene_item_collection_for,
         set_scene_item_collection_for,
     )
-    from ui.canvas_smiles_input_state import (
+    from chemvas.ui.canvas_smiles_input_state import (
         last_smiles_input_for,
         set_last_smiles_input_for,
     )
-    from ui.graphics_items import AtomLabelItem
-    from ui.history_commands import DeleteSceneItemsCommand
-    from ui.scene_clipboard_controller import (
+    from chemvas.ui.graphics_items import AtomLabelItem
+    from chemvas.ui.history_commands import DeleteSceneItemsCommand
+    from chemvas.ui.scene_clipboard_controller import (
         CLIPBOARD_PDF_MIME,
         CLIPBOARD_SVG_MIME,
         SceneClipboardController,
     )
-    from ui.scene_clipboard_state import SceneClipboardState
-    from ui.scene_clipboard_transaction_logic import build_clipboard_copy_plan
-    from ui.scene_delete_controller import SceneDeleteController
-    from ui.scene_transform_controller import SceneTransformController
+    from chemvas.ui.scene_clipboard_state import SceneClipboardState
+    from chemvas.ui.scene_clipboard_transaction_logic import build_clipboard_copy_plan
+    from chemvas.ui.scene_delete_controller import SceneDeleteController
+    from chemvas.ui.scene_transform_controller import SceneTransformController
 
 
 def _set_selectable(item: QGraphicsItem) -> QGraphicsItem:
@@ -111,7 +111,9 @@ def _make_model_ring_item(
     color: str,
     alpha: float,
 ) -> QGraphicsPolygonItem:
-    points = [QPointF(model.atoms[atom_id].x, model.atoms[atom_id].y) for atom_id in atom_ids]
+    points = [
+        QPointF(model.atoms[atom_id].x, model.atoms[atom_id].y) for atom_id in atom_ids
+    ]
     item = _set_selectable(QGraphicsPolygonItem(QPolygonF(points)))
     fill = QColor(color)
     fill.setAlphaF(alpha)
@@ -149,7 +151,9 @@ def scene_transform_controller_for(canvas) -> SceneTransformController:
     )
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for scene ops controller tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for scene ops controller tests"
+)
 class SceneOpsControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -192,7 +196,9 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertEqual(canvas.suspend_selection_outline_calls, [True, False])
         self.assertEqual(canvas.update_selection_outline_calls, 1)
 
-    def test_delete_selected_items_builds_composite_commands_for_mixed_selection(self) -> None:
+    def test_delete_selected_items_builds_composite_commands_for_mixed_selection(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
             atoms={
@@ -227,7 +233,13 @@ class SceneOpsControllerTest(unittest.TestCase):
         )
         ts_bracket_item = _make_rect_item(
             "ts_bracket",
-            state={"kind": "ts_bracket", "left": 1.0, "top": 2.0, "right": 3.0, "bottom": 4.0},
+            state={
+                "kind": "ts_bracket",
+                "left": 1.0,
+                "top": 2.0,
+                "right": 3.0,
+                "bottom": 4.0,
+            },
         )
         orbital_item = _make_rect_item(
             "orbital",
@@ -265,12 +277,16 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertEqual(sorted(canvas.redraw_connected_bonds_calls), [1, 2])
         self.assertEqual(canvas.remove_atom_calls, [(1, True)])
 
-        delete_bond_commands = [child for child in command.commands if isinstance(child, DeleteBondCommand)]
+        delete_bond_commands = [
+            child for child in command.commands if isinstance(child, DeleteBondCommand)
+        ]
         self.assertEqual(len(delete_bond_commands), 1)
         self.assertEqual(delete_bond_commands[0].bond_id, 0)
         self.assertEqual(delete_bond_commands[0].bond_state["order"], 2)
 
-        delete_atom_commands = [child for child in command.commands if isinstance(child, DeleteAtomsCommand)]
+        delete_atom_commands = [
+            child for child in command.commands if isinstance(child, DeleteAtomsCommand)
+        ]
         self.assertEqual(len(delete_atom_commands), 1)
         atom_delete = delete_atom_commands[0]
         self.assertEqual(set(atom_delete.atom_states), {1})
@@ -282,7 +298,11 @@ class SceneOpsControllerTest(unittest.TestCase):
             ],
         )
 
-        delete_scene_item_commands = [child for child in command.commands if isinstance(child, DeleteSceneItemsCommand)]
+        delete_scene_item_commands = [
+            child
+            for child in command.commands
+            if isinstance(child, DeleteSceneItemsCommand)
+        ]
         self.assertEqual(len(delete_scene_item_commands), 1)
         scene_delete = delete_scene_item_commands[0]
         deleted_kinds = [state["kind"] for state in scene_delete.item_states]
@@ -326,7 +346,9 @@ class SceneOpsControllerTest(unittest.TestCase):
         canvas = _FakeCanvas()
         ring_item = _make_ring_item()
         controller_removed_items: list[object] = []
-        canvas.services.scene_item_controller = SimpleNamespace(remove_scene_item=controller_removed_items.append)
+        canvas.services.scene_item_controller = SimpleNamespace(
+            remove_scene_item=controller_removed_items.append
+        )
         controller = scene_delete_controller_for(canvas)
 
         command = controller.delete_ring(ring_item, record=False)
@@ -346,7 +368,9 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertEqual(canvas.removed_scene_items, [ring_item])
         self.assertEqual(canvas.pushed_commands, [command])
 
-    def test_delete_bond_removes_only_broken_ring_fill_and_restores_exact_state(self) -> None:
+    def test_delete_bond_removes_only_broken_ring_fill_and_restores_exact_state(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
             atoms={
@@ -368,8 +392,12 @@ class SceneOpsControllerTest(unittest.TestCase):
             next_atom_id=6,
         )
 
-        broken_ring = _make_model_ring_item(canvas.model, [0, 1, 2], color="#a1b2c3", alpha=0.37)
-        valid_ring = _make_model_ring_item(canvas.model, [3, 4, 5], color="#d4e5f6", alpha=0.23)
+        broken_ring = _make_model_ring_item(
+            canvas.model, [0, 1, 2], color="#a1b2c3", alpha=0.37
+        )
+        valid_ring = _make_model_ring_item(
+            canvas.model, [3, 4, 5], color="#d4e5f6", alpha=0.23
+        )
         for item in (broken_ring, valid_ring):
             canvas.ring_items.append(item)
             canvas.add_item(item)
@@ -379,7 +407,10 @@ class SceneOpsControllerTest(unittest.TestCase):
 
         self.assertIsInstance(command, CompositeCommand)
         assert isinstance(command, CompositeCommand)
-        self.assertEqual([type(child) for child in command.commands], [DeleteSceneItemsCommand, DeleteBondCommand])
+        self.assertEqual(
+            [type(child) for child in command.commands],
+            [DeleteSceneItemsCommand, DeleteBondCommand],
+        )
         ring_delete = command.commands[0]
         assert isinstance(ring_delete, DeleteSceneItemsCommand)
         self.assertEqual(ring_delete.item_states[0]["atom_ids"], [0, 1, 2])
@@ -407,7 +438,9 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertIsNone(broken_ring.scene())
         self.assertIn(valid_ring, canvas.ring_items)
 
-    def test_delete_atom_removes_and_restores_its_ring_fill_with_the_atom_transaction(self) -> None:
+    def test_delete_atom_removes_and_restores_its_ring_fill_with_the_atom_transaction(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
             atoms={
@@ -418,7 +451,9 @@ class SceneOpsControllerTest(unittest.TestCase):
             bonds=[Bond(0, 1), Bond(1, 2), Bond(2, 0)],
             next_atom_id=3,
         )
-        ring_item = _make_model_ring_item(canvas.model, [0, 1, 2], color="#6a5acd", alpha=0.41)
+        ring_item = _make_model_ring_item(
+            canvas.model, [0, 1, 2], color="#6a5acd", alpha=0.41
+        )
         canvas.ring_items.append(ring_item)
         canvas.add_item(ring_item)
 
@@ -434,7 +469,9 @@ class SceneOpsControllerTest(unittest.TestCase):
         command.undo(canvas)
 
         self.assertIn(0, canvas.model.atoms)
-        self.assertTrue(all(canvas.model.bonds[bond_id] is not None for bond_id in (0, 1, 2)))
+        self.assertTrue(
+            all(canvas.model.bonds[bond_id] is not None for bond_id in (0, 1, 2))
+        )
         self.assertIn(ring_item, canvas.ring_items)
         self.assertIs(ring_item.scene(), canvas.scene())
         self.assertEqual(ring_item.data(2), [0, 1, 2])
@@ -445,7 +482,9 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertNotIn(ring_item, canvas.ring_items)
         self.assertIsNone(ring_item.scene())
 
-    def test_broken_ring_cleanup_rolls_back_all_rings_and_bond_when_second_remove_raises(self) -> None:
+    def test_broken_ring_cleanup_rolls_back_all_rings_and_bond_when_second_remove_raises(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
             atoms={
@@ -456,8 +495,12 @@ class SceneOpsControllerTest(unittest.TestCase):
             bonds=[Bond(0, 1), Bond(1, 2), Bond(2, 0)],
             next_atom_id=3,
         )
-        first_ring = _make_model_ring_item(canvas.model, [0, 1, 2], color="#aa3300", alpha=0.21)
-        second_ring = _make_model_ring_item(canvas.model, [0, 1, 2], color="#0033aa", alpha=0.43)
+        first_ring = _make_model_ring_item(
+            canvas.model, [0, 1, 2], color="#aa3300", alpha=0.21
+        )
+        second_ring = _make_model_ring_item(
+            canvas.model, [0, 1, 2], color="#0033aa", alpha=0.43
+        )
         for item in (first_ring, second_ring):
             canvas.ring_items.append(item)
             canvas.add_item(item)
@@ -484,7 +527,9 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertEqual(first_ring.data(2), [0, 1, 2])
         self.assertEqual(second_ring.data(2), [0, 1, 2])
 
-    def test_multi_selection_deletion_auto_removes_broken_ring_and_preserves_valid_ring(self) -> None:
+    def test_multi_selection_deletion_auto_removes_broken_ring_and_preserves_valid_ring(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
             atoms={
@@ -505,8 +550,12 @@ class SceneOpsControllerTest(unittest.TestCase):
             ],
             next_atom_id=6,
         )
-        broken_ring = _make_model_ring_item(canvas.model, [0, 1, 2], color="#ff8800", alpha=0.31)
-        valid_ring = _make_model_ring_item(canvas.model, [3, 4, 5], color="#0088ff", alpha=0.27)
+        broken_ring = _make_model_ring_item(
+            canvas.model, [0, 1, 2], color="#ff8800", alpha=0.31
+        )
+        valid_ring = _make_model_ring_item(
+            canvas.model, [3, 4, 5], color="#0088ff", alpha=0.27
+        )
         for item in (broken_ring, valid_ring):
             canvas.ring_items.append(item)
             canvas.add_item(item)
@@ -607,7 +656,10 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertEqual(payload["format"], "chemvas-selection")
         self.assertEqual(payload["version"], 1)
         self.assertEqual([atom["id"] for atom in payload["atoms"]], [1, 2])
-        self.assertEqual(payload["bonds"], [{"a": 1, "b": 2, "order": 2, "style": "double", "color": "#333333"}])
+        self.assertEqual(
+            payload["bonds"],
+            [{"a": 1, "b": 2, "order": 2, "style": "double", "color": "#333333"}],
+        )
         self.assertEqual(
             payload["rings"],
             [
@@ -652,7 +704,9 @@ class SceneOpsControllerTest(unittest.TestCase):
             {"kind": "note", "text": "payload", "x": 30.0, "y": 40.0},
         )
 
-    def test_selection_payload_for_clipboard_returns_none_for_empty_selection(self) -> None:
+    def test_selection_payload_for_clipboard_returns_none_for_empty_selection(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         controller = scene_clipboard_controller_for(canvas)
 
@@ -673,7 +727,9 @@ class SceneOpsControllerTest(unittest.TestCase):
         assert plan is not None
         self.assertEqual(plan.source, QRectF(-2.5, -2.5, 30.0, 20.0))
 
-    def test_copy_selection_to_clipboard_handles_empty_and_successful_copy(self) -> None:
+    def test_copy_selection_to_clipboard_handles_empty_and_successful_copy(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         controller = scene_clipboard_controller_for(canvas)
 
@@ -722,7 +778,14 @@ class SceneOpsControllerTest(unittest.TestCase):
             "format": "chemvas-selection",
             "version": 1,
             "atoms": [
-                {"id": 10, "element": "C", "x": 5.0, "y": 10.0, "color": "#ff0000", "explicit_label": True},
+                {
+                    "id": 10,
+                    "element": "C",
+                    "x": 5.0,
+                    "y": 10.0,
+                    "color": "#ff0000",
+                    "explicit_label": True,
+                },
                 {"id": 11, "element": "O", "x": 25.0, "y": 30.0, "color": "#00ff00"},
             ],
             "bonds": [
@@ -785,7 +848,9 @@ class SceneOpsControllerTest(unittest.TestCase):
             ],
         )
 
-    def test_paste_selection_from_clipboard_rejects_missing_or_empty_payload(self) -> None:
+    def test_paste_selection_from_clipboard_rejects_missing_or_empty_payload(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         controller = scene_clipboard_controller_for(canvas)
 
@@ -793,12 +858,22 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertFalse(controller.paste_selection_from_clipboard())
 
         controller.clipboard_selection_payload = lambda: (
-            {"format": "chemvas-selection", "version": 1, "atoms": [], "bonds": [], "rings": [], "marks": [], "scene_items": []},
+            {
+                "format": "chemvas-selection",
+                "version": 1,
+                "atoms": [],
+                "bonds": [],
+                "rings": [],
+                "marks": [],
+                "scene_items": [],
+            },
             "payload-json",
         )
         self.assertFalse(controller.paste_selection_from_clipboard())
 
-    def test_paste_selection_from_clipboard_accepts_scene_item_only_payload_and_resets_source(self) -> None:
+    def test_paste_selection_from_clipboard_accepts_scene_item_only_payload_and_resets_source(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.scene_clipboard_state.paste_source_json = "old-source"
         canvas.scene_clipboard_state.paste_count = 5
@@ -817,8 +892,13 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertTrue(controller.paste_selection_from_clipboard())
         self.assertEqual(canvas.scene_clipboard_state.paste_source_json, "new-source")
         self.assertEqual(canvas.scene_clipboard_state.paste_count, 1)
-        self.assertEqual(canvas.created_scene_item_states, [{"kind": "note", "text": "solo", "x": 28.0, "y": 33.0}])
-        self.assertEqual(canvas.record_additions_calls, [(0, 0, None, canvas.created_items)])
+        self.assertEqual(
+            canvas.created_scene_item_states,
+            [{"kind": "note", "text": "solo", "x": 28.0, "y": 33.0}],
+        )
+        self.assertEqual(
+            canvas.record_additions_calls, [(0, 0, None, canvas.created_items)]
+        )
 
     def test_flip_selected_items_noop_paths(self) -> None:
         canvas = _FakeCanvas()
@@ -867,7 +947,9 @@ class _FakeCanvas:
     def __init__(self) -> None:
         self._scene = QGraphicsScene()
         self.model = MoleculeModel()
-        self.renderer = SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0, bond_line_width=1.0))
+        self.renderer = SimpleNamespace(
+            style=SimpleNamespace(bond_length_px=20.0, bond_line_width=1.0)
+        )
         set_last_smiles_input_for(self, None)
         self.mark_registry = CanvasMarkRegistry()
         for name in SCENE_ITEM_COLLECTION_ATTRS:
@@ -895,11 +977,15 @@ class _FakeCanvas:
         self.clear_note_selection_calls = 0
         self.update_selection_outline_calls = 0
         self.suspend_selection_outline_calls: list[bool] = []
-        self.record_additions_calls: list[tuple[int, int, str | None, list[QGraphicsItem]]] = []
+        self.record_additions_calls: list[
+            tuple[int, int, str | None, list[QGraphicsItem]]
+        ] = []
         self.services = SimpleNamespace(
             history_service=self.history_service,
             scene_item_controller=_FakeSceneItemController(self),
-            canvas_graph_service=SimpleNamespace(connected_components=self.connected_components),
+            canvas_graph_service=SimpleNamespace(
+                connected_components=self.connected_components
+            ),
             atom_label_service=SimpleNamespace(
                 add_or_update_atom_label=self.add_or_update_atom_label,
                 position_label=self.position_label,
@@ -916,17 +1002,27 @@ class _FakeCanvas:
                 remove_bond_by_id=self._remove_bond_by_id,
                 trim_bonds_to_length=self._trim_bonds_to_length,
             ),
-            scene_decoration_build_service=SimpleNamespace(set_mark_center=self.set_mark_center),
-            hit_testing_service=SimpleNamespace(mark_spatial_index_dirty=self.mark_spatial_index_dirty),
-            canvas_ring_fill_scene_service=SimpleNamespace(update_ring_fills_for_atoms=lambda atom_ids: None),
+            scene_decoration_build_service=SimpleNamespace(
+                set_mark_center=self.set_mark_center
+            ),
+            hit_testing_service=SimpleNamespace(
+                mark_spatial_index_dirty=self.mark_spatial_index_dirty
+            ),
+            canvas_ring_fill_scene_service=SimpleNamespace(
+                update_ring_fills_for_atoms=lambda atom_ids: None
+            ),
             handle_overlay_service=SimpleNamespace(clear_handles=self.clear_handles),
-            canvas_history_recording_service=SimpleNamespace(record_additions=self._record_additions),
+            canvas_history_recording_service=SimpleNamespace(
+                record_additions=self._record_additions
+            ),
             selection_controller=SimpleNamespace(
                 clear_note_selection=self.clear_note_selection,
                 select_note=self.select_note,
                 update_selection_outline=self.refresh_selection_outline,
             ),
-            style_controller=SimpleNamespace(suspend_selection_outline=self.suspend_selection_outline),
+            style_controller=SimpleNamespace(
+                suspend_selection_outline=self.suspend_selection_outline
+            ),
             move_controller=SimpleNamespace(
                 redraw_connected_bonds=self.redraw_connected_bonds,
                 redraw_bonds_for_atoms=self.redraw_bonds_for_atoms,
@@ -947,13 +1043,34 @@ class _FakeCanvas:
     def _set_scene_items(self, name: str, value) -> None:
         set_scene_item_collection_for(self, name, value)
 
-    selected_notes = property(lambda self: self._scene_items("selected_notes"), lambda self, value: self._set_scene_items("selected_notes", value))
-    ring_items = property(lambda self: self._scene_items("ring_items"), lambda self, value: self._set_scene_items("ring_items", value))
-    note_items = property(lambda self: self._scene_items("note_items"), lambda self, value: self._set_scene_items("note_items", value))
-    mark_items = property(lambda self: self._scene_items("mark_items"), lambda self, value: self._set_scene_items("mark_items", value))
-    arrow_items = property(lambda self: self._scene_items("arrow_items"), lambda self, value: self._set_scene_items("arrow_items", value))
-    ts_bracket_items = property(lambda self: self._scene_items("ts_bracket_items"), lambda self, value: self._set_scene_items("ts_bracket_items", value))
-    orbital_items = property(lambda self: self._scene_items("orbital_items"), lambda self, value: self._set_scene_items("orbital_items", value))
+    selected_notes = property(
+        lambda self: self._scene_items("selected_notes"),
+        lambda self, value: self._set_scene_items("selected_notes", value),
+    )
+    ring_items = property(
+        lambda self: self._scene_items("ring_items"),
+        lambda self, value: self._set_scene_items("ring_items", value),
+    )
+    note_items = property(
+        lambda self: self._scene_items("note_items"),
+        lambda self, value: self._set_scene_items("note_items", value),
+    )
+    mark_items = property(
+        lambda self: self._scene_items("mark_items"),
+        lambda self, value: self._set_scene_items("mark_items", value),
+    )
+    arrow_items = property(
+        lambda self: self._scene_items("arrow_items"),
+        lambda self, value: self._set_scene_items("arrow_items", value),
+    )
+    ts_bracket_items = property(
+        lambda self: self._scene_items("ts_bracket_items"),
+        lambda self, value: self._set_scene_items("ts_bracket_items", value),
+    )
+    orbital_items = property(
+        lambda self: self._scene_items("orbital_items"),
+        lambda self, value: self._set_scene_items("orbital_items", value),
+    )
 
     @property
     def atom_items(self):
@@ -1005,7 +1122,9 @@ class _FakeCanvas:
     def _trim_bonds_to_length(self, length: int) -> None:
         del self.model.bonds[length:]
 
-    def redraw_connected_bonds(self, atom_id: int, skip_bond_id: int | None = None) -> None:
+    def redraw_connected_bonds(
+        self, atom_id: int, skip_bond_id: int | None = None
+    ) -> None:
         self.redraw_connected_bonds_calls.append(atom_id)
 
     def redraw_bonds_for_atoms(self, atom_ids: set[int]) -> None:
@@ -1075,7 +1194,9 @@ class _FakeCanvas:
         if update_selection:
             self.refresh_selection_outline()
 
-    def move_item(self, item: QGraphicsItem, dx: float, dy: float, update_selection: bool = True) -> None:
+    def move_item(
+        self, item: QGraphicsItem, dx: float, dy: float, update_selection: bool = True
+    ) -> None:
         item.moveBy(dx, dy)
         if update_selection:
             self.refresh_selection_outline()
@@ -1120,13 +1241,23 @@ class _FakeCanvas:
     def _bounding_box_center_for_atoms(self, atom_ids: set[int]) -> QPointF | None:
         if not atom_ids:
             return None
-        xs = [self.model.atoms[atom_id].x for atom_id in atom_ids if atom_id in self.model.atoms]
-        ys = [self.model.atoms[atom_id].y for atom_id in atom_ids if atom_id in self.model.atoms]
+        xs = [
+            self.model.atoms[atom_id].x
+            for atom_id in atom_ids
+            if atom_id in self.model.atoms
+        ]
+        ys = [
+            self.model.atoms[atom_id].y
+            for atom_id in atom_ids
+            if atom_id in self.model.atoms
+        ]
         if not xs or not ys:
             return None
         return QPointF((min(xs) + max(xs)) / 2.0, (min(ys) + max(ys)) / 2.0)
 
-    def _clipboard_paste_offset(self, step: int, bond_length_px: float) -> tuple[float, float]:
+    def _clipboard_paste_offset(
+        self, step: int, bond_length_px: float
+    ) -> tuple[float, float]:
         magnitude = max(18.0, bond_length_px * 0.35) * max(1, step)
         return magnitude, magnitude
 
@@ -1206,7 +1337,9 @@ class _FakeCanvas:
         kind = translated.get("kind")
         if kind == "mark":
             atom_id = translated.get("atom_id")
-            translated["atom_id"] = atom_id_map.get(atom_id) if isinstance(atom_id, int) else None
+            translated["atom_id"] = (
+                atom_id_map.get(atom_id) if isinstance(atom_id, int) else None
+            )
             translated["x"] = float(translated["x"]) + dx
             translated["y"] = float(translated["y"]) + dy
             return translated
@@ -1220,13 +1353,19 @@ class _FakeCanvas:
         self.created_scene_item_states.append(dict(state))
         kind = state.get("kind")
         if kind == "note":
-            item = _make_note_item(str(state.get("text", "")), float(state.get("x", 0.0)), float(state.get("y", 0.0)))
+            item = _make_note_item(
+                str(state.get("text", "")),
+                float(state.get("x", 0.0)),
+                float(state.get("y", 0.0)),
+            )
         elif kind == "mark":
             item = _make_rect_item(
                 "mark",
                 data1={"atom_id": state.get("atom_id")},
                 state=state,
-                rect=QRectF(float(state.get("x", 0.0)), float(state.get("y", 0.0)), 6.0, 6.0),
+                rect=QRectF(
+                    float(state.get("x", 0.0)), float(state.get("y", 0.0)), 6.0, 6.0
+                ),
             )
         else:
             item = _make_rect_item(kind or "item", state=state)
@@ -1279,7 +1418,9 @@ class _FakeCanvas:
             float(state["bottom"]) - float(state["top"]),
         )
 
-    def set_atom_positions(self, positions: dict[int, tuple[float, float]], update_selection: bool = True) -> None:
+    def set_atom_positions(
+        self, positions: dict[int, tuple[float, float]], update_selection: bool = True
+    ) -> None:
         for atom_id, (x, y) in positions.items():
             if atom_id in self.model.atoms:
                 self.model.atoms[atom_id].x = x

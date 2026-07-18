@@ -1,5 +1,4 @@
-from chemvas.main import main
+from chemvas.bootstrap.application import main
 
 if __name__ == "__main__":
     main()
-

@@ -13,8 +13,8 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.main_window_bond_icon_renderer import MainWindowBondIconRenderer
-    from ui.main_window_icon_geometry import benzene_icon_polygon
+    from chemvas.ui.main_window_bond_icon_renderer import MainWindowBondIconRenderer
+    from chemvas.ui.main_window_icon_geometry import benzene_icon_polygon
 
 
 def _opaque_bounds(image) -> tuple[int, int, int, int] | None:
@@ -79,7 +79,10 @@ def _icon_brush(color=None) -> QBrush:
     return QBrush(QColor("#2f2f2c" if color is None else color))
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for main window bond icon renderer tests")
+@unittest.skipUnless(
+    QApplication is not None,
+    "PyQt6 is required for main window bond icon renderer tests",
+)
 class MainWindowBondIconRendererTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -127,7 +130,9 @@ class MainWindowBondIconRendererTest(unittest.TestCase):
         polygon = benzene_icon_polygon(center, 10.0)
 
         base_segments = self.renderer.benzene_icon_inner_segments(polygon, center)
-        pulled_segments = self.renderer.benzene_icon_inner_segments(polygon, center, spacing_scale=0.8)
+        pulled_segments = self.renderer.benzene_icon_inner_segments(
+            polygon, center, spacing_scale=0.8
+        )
 
         self.assertEqual(len(base_segments), 3)
         self.assertEqual(len(pulled_segments), 3)
@@ -136,7 +141,9 @@ class MainWindowBondIconRendererTest(unittest.TestCase):
             [],
         )
         self.assertEqual(
-            self.renderer.benzene_icon_inner_segments(QPolygonF([center, center]), center),
+            self.renderer.benzene_icon_inner_segments(
+                QPolygonF([center, center]), center
+            ),
             [],
         )
         self.assertNotEqual(base_segments[0][0], pulled_segments[0][0])

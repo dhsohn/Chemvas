@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from ui.canvas_tool_settings_state import (
+from chemvas.ui.canvas_tool_settings_state import (
     CanvasToolSettingsState,
     set_tool_setting_for,
     tool_settings_state_for,
@@ -8,7 +8,9 @@ from ui.canvas_tool_settings_state import (
 
 
 def test_tool_settings_state_for_uses_runtime_state() -> None:
-    runtime_state = SimpleNamespace(tool_settings_state=CanvasToolSettingsState(active_bond_style="hash"))
+    runtime_state = SimpleNamespace(
+        tool_settings_state=CanvasToolSettingsState(active_bond_style="hash")
+    )
     canvas = SimpleNamespace(runtime_state=runtime_state)
 
     assert tool_settings_state_for(canvas) is runtime_state.tool_settings_state

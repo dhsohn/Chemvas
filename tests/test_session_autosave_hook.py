@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from ui import session_autosave_hook
-from ui.session_autosave_hook import (
+from chemvas.features.session import autosave as session_autosave_hook
+from chemvas.features.session import (
     mark_quitting,
     request_snapshot,
     reset_quitting,

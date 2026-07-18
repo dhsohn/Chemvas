@@ -2,28 +2,31 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from core.model import Atom, Bond
-from PyQt6.QtCore import QPointF
-from PyQt6.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsScene
-from ui.bond_preview_access import bond_hover_endpoint_for
-from ui.canvas_hover_state import (
+from chemvas.domain.document import Atom, Bond
+from chemvas.ui.bond_preview_access import bond_hover_endpoint_for
+from chemvas.ui.canvas_hover_state import (
     HoverPreviewState,
     hover_preview_state_for,
     hover_state_for,
 )
-from ui.canvas_mark_scene_service import CanvasMarkSceneService
-from ui.canvas_rotation_state import CanvasRotationState
-from ui.canvas_tool_settings_state import CanvasToolSettingsState
-from ui.hover_interaction_access import bond_preview_signature_for
-from ui.hover_scene_service import HoverSceneService
-from ui.mark_item_access import mark_center_for_pointer_for
-from ui.selection_info_access import emit_selection_info_for, maybe_warm_rdkit_for
-from ui.selection_info_state import SelectionInfoState
-from ui.structure_geometry_access import (
+from chemvas.ui.canvas_mark_scene_service import CanvasMarkSceneService
+from chemvas.ui.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.hover_interaction_access import bond_preview_signature_for
+from chemvas.ui.hover_scene_service import HoverSceneService
+from chemvas.ui.mark_item_access import mark_center_for_pointer_for
+from chemvas.ui.selection_info_access import (
+    emit_selection_info_for,
+    maybe_warm_rdkit_for,
+)
+from chemvas.ui.selection_info_state import SelectionInfoState
+from chemvas.ui.structure_geometry_access import (
     connected_atom_unit_vectors_for,
     default_bond_angle_for_vectors,
     default_bond_endpoint_for,
 )
+from PyQt6.QtCore import QPointF
+from PyQt6.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsScene
 
 
 class _SelectedItem:
@@ -43,14 +46,18 @@ def _scene_with_selected(*items):
     return SimpleNamespace(selectedItems=lambda: list(items))
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas view tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for canvas view tests"
+)
 class CanvasViewHoverHelperTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
 
-    def test_emit_selection_info_uses_rdkit_cache_and_handles_unavailable_pending_and_empty_selections(self) -> None:
+    def test_emit_selection_info_uses_rdkit_cache_and_handles_unavailable_pending_and_empty_selections(
+        self,
+    ) -> None:
         callback = mock.Mock()
         rdkit = mock.Mock()
         rdkit.is_unavailable.return_value = False
@@ -60,7 +67,11 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
         loaded_view = SimpleNamespace(
             rdkit=rdkit,
             selection_info_state=SelectionInfoState(callback=callback),
-            scene=lambda: _scene_with_selected(_SelectedItem("atom", 1), _SelectedItem("atom", 2), _SelectedItem("bond", 3)),
+            scene=lambda: _scene_with_selected(
+                _SelectedItem("atom", 1),
+                _SelectedItem("atom", 2),
+                _SelectedItem("bond", 3),
+            ),
             model=SimpleNamespace(
                 atoms={
                     1: Atom("C", 0.0, 1.0),
@@ -71,17 +82,28 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
             rotation_state=CanvasRotationState(),
         )
 
-        with mock.patch("ui.selection_info_access.build_submodel_state", return_value=("submodel", None, None)) as build_submodel:
+        with mock.patch(
+            "chemvas.ui.selection_info_access.build_submodel_state",
+            return_value=("submodel", None, None),
+        ) as build_submodel:
             emit_selection_info_for(loaded_view)
             emit_selection_info_for(loaded_view)
 
-        self.assertEqual(callback.call_args_list, [mock.call("C2H6", "30.12"), mock.call("C2H6", "30.12")])
+        self.assertEqual(
+            callback.call_args_list,
+            [mock.call("C2H6", "30.12"), mock.call("C2H6", "30.12")],
+        )
         self.assertEqual(rdkit.compute_props.call_count, 1)
         build_submodel.assert_called_once()
-        self.assertEqual(build_submodel.call_args.args, (loaded_view.model, {1, 2}, {3}))
+        self.assertEqual(
+            build_submodel.call_args.args, (loaded_view.model, {1, 2}, {3})
+        )
         bounds_getter = build_submodel.call_args.kwargs["bounds_getter"]
         self.assertEqual(bounds_getter({1}, include_labels=True), (0.0, 1.0, 0.0, 1.0))
-        self.assertEqual(loaded_view.selection_info_state.signature, (frozenset({1, 2}), frozenset({3})))
+        self.assertEqual(
+            loaded_view.selection_info_state.signature,
+            (frozenset({1, 2}), frozenset({3})),
+        )
         self.assertEqual(loaded_view.selection_info_state.pending_signature, None)
 
         empty_callback = mock.Mock()
@@ -141,14 +163,19 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
                 callback=pending_callback,
                 cache=("cached", "1.00"),
             ),
-            scene=lambda: _scene_with_selected(_SelectedItem("atom", 7), _SelectedItem("bond", 8)),
+            scene=lambda: _scene_with_selected(
+                _SelectedItem("atom", 7), _SelectedItem("bond", 8)
+            ),
             rotation_state=CanvasRotationState(),
         )
 
         emit_selection_info_for(pending_view)
         emit_selection_info_for(pending_view)
         self.assertEqual(pending_callback.call_args_list, [mock.call("", "")])
-        self.assertEqual(pending_view.selection_info_state.pending_signature, (frozenset({7}), frozenset({8})))
+        self.assertEqual(
+            pending_view.selection_info_state.pending_signature,
+            (frozenset({7}), frozenset({8})),
+        )
         self.assertTrue(pending_view.selection_info_state.rdkit_warmup_pending)
         self.assertEqual(pending_rdkit.compute_props.call_count, 0)
 
@@ -214,7 +241,9 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
             rotation_state=CanvasRotationState(),
         )
 
-        with mock.patch("ui.selection_info_access.time.monotonic", return_value=20.0):
+        with mock.patch(
+            "chemvas.ui.selection_info_access.time.monotonic", return_value=20.0
+        ):
             maybe_warm_rdkit_for(idle_view)
 
         idle_rdkit.preload.assert_called_once_with()
@@ -237,7 +266,9 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
             ),
         )
 
-        with mock.patch("ui.selection_info_access.time.monotonic", return_value=20.0):
+        with mock.patch(
+            "chemvas.ui.selection_info_access.time.monotonic", return_value=20.0
+        ):
             maybe_warm_rdkit_for(busy_view)
 
         busy_rdkit.preload.assert_not_called()
@@ -246,11 +277,15 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
         self.assertEqual(busy_view.selection_info_state.pending_signature, ("pending",))
 
     def test_emit_selection_info_returns_immediately_without_callback(self) -> None:
-        no_callback_view = SimpleNamespace(selection_info_state=SelectionInfoState(callback=None))
+        no_callback_view = SimpleNamespace(
+            selection_info_state=SelectionInfoState(callback=None)
+        )
 
         emit_selection_info_for(no_callback_view)
 
-    def test_clear_hover_highlight_and_add_hover_indicators_manage_scene_items(self) -> None:
+    def test_clear_hover_highlight_and_add_hover_indicators_manage_scene_items(
+        self,
+    ) -> None:
         scene = QGraphicsScene()
         view = SimpleNamespace(
             scene=lambda: scene,
@@ -303,7 +338,9 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
         self.assertIsNone(hover_preview_state_for(view).style)
         self.assertEqual(len(scene.items()), 0)
 
-    def test_mark_center_and_bond_helpers_cover_pointer_and_endpoint_logic(self) -> None:
+    def test_mark_center_and_bond_helpers_cover_pointer_and_endpoint_logic(
+        self,
+    ) -> None:
         view = SimpleNamespace(
             model=SimpleNamespace(atoms={7: Atom("C", 10.0, 20.0)}, bonds=[]),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=10.0)),
@@ -314,22 +351,34 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
             ),
         )
         mark_scene_service = CanvasMarkSceneService(view)
-        mark_scene_service.mark_offset_from_click = mock.Mock(return_value=QPointF(1.5, -2.5))
+        mark_scene_service.mark_offset_from_click = mock.Mock(
+            return_value=QPointF(1.5, -2.5)
+        )
         view.services = SimpleNamespace(
             canvas_mark_scene_service=mark_scene_service,
             tools=SimpleNamespace(active=SimpleNamespace(name="bond")),
         )
 
         point = QPointF(5.0, 6.0)
-        self.assertEqual(mark_center_for_pointer_for(view, point, None, kind=None).toPoint(), point.toPoint())
-        self.assertEqual(mark_center_for_pointer_for(view, point, 999, kind=None).toPoint(), point.toPoint())
+        self.assertEqual(
+            mark_center_for_pointer_for(view, point, None, kind=None).toPoint(),
+            point.toPoint(),
+        )
+        self.assertEqual(
+            mark_center_for_pointer_for(view, point, 999, kind=None).toPoint(),
+            point.toPoint(),
+        )
 
         centered = mark_center_for_pointer_for(view, point, 7, kind="minus")
         self.assertAlmostEqual(centered.x(), 11.5)
         self.assertAlmostEqual(centered.y(), 17.5)
-        mark_scene_service.mark_offset_from_click.assert_called_once_with(7, point, kind="minus")
+        mark_scene_service.mark_offset_from_click.assert_called_once_with(
+            7, point, kind="minus"
+        )
 
-        self.assertEqual(bond_preview_signature_for(view, active_tool_name="bond"), "double:2")
+        self.assertEqual(
+            bond_preview_signature_for(view, active_tool_name="bond"), "double:2"
+        )
         view.services.tools.active = SimpleNamespace(name="select")
         self.assertIsNone(bond_preview_signature_for(view, active_tool_name="select"))
 
@@ -337,15 +386,21 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
         self.assertAlmostEqual(endpoint.x(), 7.071, places=3)
         self.assertAlmostEqual(endpoint.y(), 7.071, places=3)
 
-        zero_length = bond_hover_endpoint_for(view, QPointF(0.0, 0.0), QPointF(0.0, 0.0))
+        zero_length = bond_hover_endpoint_for(
+            view, QPointF(0.0, 0.0), QPointF(0.0, 0.0)
+        )
         self.assertAlmostEqual(zero_length.x(), 10.0)
         self.assertAlmostEqual(zero_length.y(), 0.0)
 
-        delegated = bond_hover_endpoint_for(view, QPointF(0.0, 0.0), QPointF(9.0, 9.0), start_atom_id=7)
+        delegated = bond_hover_endpoint_for(
+            view, QPointF(0.0, 0.0), QPointF(9.0, 9.0), start_atom_id=7
+        )
         self.assertAlmostEqual(delegated.x(), 10.0)
         self.assertAlmostEqual(delegated.y(), 0.0)
 
-    def test_default_bond_endpoint_handles_missing_single_and_balanced_neighbor_vectors(self) -> None:
+    def test_default_bond_endpoint_handles_missing_single_and_balanced_neighbor_vectors(
+        self,
+    ) -> None:
         single_view = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=10.0)),
             model=SimpleNamespace(
@@ -384,7 +439,9 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
         self.assertAlmostEqual(balanced.x(), 0.0, places=2)
         self.assertAlmostEqual(balanced.y(), -10.0, places=2)
 
-    def test_connected_atom_vectors_and_angle_helper_skip_invalid_neighbors(self) -> None:
+    def test_connected_atom_vectors_and_angle_helper_skip_invalid_neighbors(
+        self,
+    ) -> None:
         view = SimpleNamespace(
             model=SimpleNamespace(
                 atoms={
