@@ -16,23 +16,23 @@ except ModuleNotFoundError:
     QTest = None
 
 if QApplication is not None:
-    from core.model import MoleculeModel
-    from core.rdkit_adapter import (
+    from chemvas.core.rdkit_adapter import (
         Molecule3DAtom,
         Molecule3DBond,
         Molecule3DScene,
         MoleculeIdentifiers,
     )
-    from ui.main_window_palette import PALETTE
-    from ui.preview_3d import Preview3D
-    from ui.preview_3d_painter import (
+    from chemvas.domain.document import MoleculeModel
+    from chemvas.ui.main_window_palette import PALETTE
+    from chemvas.ui.preview_3d import Preview3D
+    from chemvas.ui.preview_3d_painter import (
         preview_caption_font,
         preview_footer_height_for_lines,
         preview_layout_for_widget,
         project_preview_paint_scene,
     )
-    from ui.preview_3d_renderer import status_badge_width
-    from ui.preview_3d_state import (
+    from chemvas.ui.preview_3d_renderer import status_badge_width
+    from chemvas.ui.preview_3d_state import (
         preview_empty_state_text,
         preview_info_items,
         preview_info_lines,
@@ -112,8 +112,12 @@ class AnnotatedIdentifierAdapter(SequencedAdapter):
         self.identifier_annotations.append(
             {atom_id: dict(values) for atom_id, values in annotations.items()}
         )
-        formal_charge = sum(values.get("formal_charge", 0) for values in annotations.values())
-        radical_electrons = sum(values.get("radical_electrons", 0) for values in annotations.values())
+        formal_charge = sum(
+            values.get("formal_charge", 0) for values in annotations.values()
+        )
+        radical_electrons = sum(
+            values.get("radical_electrons", 0) for values in annotations.values()
+        )
         return MoleculeIdentifiers(
             formula=f"charge={formal_charge};radical={radical_electrons}",
             mw=12.0 + formal_charge + radical_electrons,
@@ -207,7 +211,7 @@ class Preview3DRecoveryTest(unittest.TestCase):
         preview = self._create_preview(adapter)
 
         with mock.patch(
-            "ui.preview_3d.build_selected_3d_conversion_payload_for",
+            "chemvas.ui.preview_3d.build_selected_3d_conversion_payload_for",
             side_effect=lambda canvas: canvas.build_3d_conversion_payload(),
         ):
             preview.refresh_selected_from_canvas(canvas)
@@ -241,7 +245,7 @@ class Preview3DRecoveryTest(unittest.TestCase):
         preview = self._create_preview(adapter)
 
         with mock.patch(
-            "ui.preview_3d.build_selected_3d_conversion_payload_for",
+            "chemvas.ui.preview_3d.build_selected_3d_conversion_payload_for",
             side_effect=lambda canvas: canvas.build_3d_conversion_payload(),
         ):
             preview.refresh_selected_from_canvas(canvas)
@@ -259,7 +263,9 @@ class Preview3DRecoveryTest(unittest.TestCase):
             self.assertEqual(preview._scene, scene)
             self.assertEqual(preview._message, "")
 
-    def test_rebuild_scene_handles_disposed_missing_pending_and_empty_project_scene(self) -> None:
+    def test_rebuild_scene_handles_disposed_missing_pending_and_empty_project_scene(
+        self,
+    ) -> None:
         preview = self._create_preview(SequencedAdapter([]))
         preview._disposed = True
         preview._pending_model = self._make_model()
@@ -291,10 +297,18 @@ class Preview3DRecoveryTest(unittest.TestCase):
         preview = self._create_preview(SequencedAdapter([]))
 
         with (
-            mock.patch.object(QWidget, "mousePressEvent", new=mock.Mock(return_value=None)) as base_press,
-            mock.patch.object(QWidget, "mouseMoveEvent", new=mock.Mock(return_value=None)) as base_move,
-            mock.patch.object(QWidget, "mouseReleaseEvent", new=mock.Mock(return_value=None)) as base_release,
-            mock.patch.object(QWidget, "wheelEvent", new=mock.Mock(return_value=None)) as base_wheel,
+            mock.patch.object(
+                QWidget, "mousePressEvent", new=mock.Mock(return_value=None)
+            ) as base_press,
+            mock.patch.object(
+                QWidget, "mouseMoveEvent", new=mock.Mock(return_value=None)
+            ) as base_move,
+            mock.patch.object(
+                QWidget, "mouseReleaseEvent", new=mock.Mock(return_value=None)
+            ) as base_release,
+            mock.patch.object(
+                QWidget, "wheelEvent", new=mock.Mock(return_value=None)
+            ) as base_wheel,
             mock.patch.object(preview, "update") as update,
         ):
             press = _FakeMouseEvent(QPointF(4.0, 5.0), button=Qt.MouseButton.LeftButton)
@@ -302,13 +316,19 @@ class Preview3DRecoveryTest(unittest.TestCase):
             self.assertEqual(preview._last_pos, QPointF(4.0, 5.0))
 
             rotation_before = (preview._rotation_x, preview._rotation_y)
-            move = _FakeMouseEvent(QPointF(10.0, 8.0), buttons=Qt.MouseButton.LeftButton)
+            move = _FakeMouseEvent(
+                QPointF(10.0, 8.0), buttons=Qt.MouseButton.LeftButton
+            )
             preview.mouseMoveEvent(move)
-            self.assertNotEqual((preview._rotation_x, preview._rotation_y), rotation_before)
+            self.assertNotEqual(
+                (preview._rotation_x, preview._rotation_y), rotation_before
+            )
             self.assertEqual(preview._last_pos, QPointF(10.0, 8.0))
             update.assert_called_once_with()
 
-            release = _FakeMouseEvent(QPointF(10.0, 8.0), button=Qt.MouseButton.LeftButton)
+            release = _FakeMouseEvent(
+                QPointF(10.0, 8.0), button=Qt.MouseButton.LeftButton
+            )
             preview.mouseReleaseEvent(release)
             self.assertIsNone(preview._last_pos)
 
@@ -328,7 +348,9 @@ class Preview3DRecoveryTest(unittest.TestCase):
             base_release.assert_called_once_with(release)
             self.assertEqual(base_wheel.call_count, 3)
 
-    def test_safe_update_and_paint_event_cover_runtime_invalid_bond_and_empty_projection_paths(self) -> None:
+    def test_safe_update_and_paint_event_cover_runtime_invalid_bond_and_empty_projection_paths(
+        self,
+    ) -> None:
         preview = self._create_preview(SequencedAdapter([]))
         preview._disposed = True
         preview._safe_update()
@@ -344,16 +366,20 @@ class Preview3DRecoveryTest(unittest.TestCase):
             bonds=(Molecule3DBond(0, 99, 1),),
         )
         preview._message = "No projection"
-        with mock.patch("ui.preview_3d_painter.project_preview_paint_scene", return_value=[]):
+        with mock.patch(
+            "chemvas.ui.preview_3d_painter.project_preview_paint_scene", return_value=[]
+        ):
             preview.paintEvent(None)
 
         with mock.patch(
-            "ui.preview_3d_painter.project_preview_paint_scene",
+            "chemvas.ui.preview_3d_painter.project_preview_paint_scene",
             return_value=[(40.0, 50.0, 0.0, 8.0)],
         ):
             preview.paintEvent(None)
 
-    def test_set_structure_set_info_and_footer_helpers_cover_signature_info_and_overlay_paths(self) -> None:
+    def test_set_structure_set_info_and_footer_helpers_cover_signature_info_and_overlay_paths(
+        self,
+    ) -> None:
         preview = self._create_preview(SequencedAdapter([]))
         model = self._make_model()
 
@@ -366,12 +392,17 @@ class Preview3DRecoveryTest(unittest.TestCase):
             preview.set_info("C2H6O", "46.07")
             preview.set_info("C2H6O", "46.07")
 
-        self.assertEqual(preview._current_signature, preview_payload_signature(model, {0: {"formal_charge": 1}}))
+        self.assertEqual(
+            preview._current_signature,
+            preview_payload_signature(model, {0: {"formal_charge": 1}}),
+        )
         self.assertEqual(preview._pending_model, model)
         self.assertEqual(preview._pending_annotations, {0: {"formal_charge": 1}})
         info_lines = preview_info_lines("C2H6O", "46.07")
         self.assertEqual(info_lines, ["Formula: C2H6O", "MW: 46.07"])
-        self.assertGreater(preview_footer_height_for_lines(info_lines, preview.font()), 0.0)
+        self.assertGreater(
+            preview_footer_height_for_lines(info_lines, preview.font()), 0.0
+        )
         self.assertEqual(start.call_count, 1)
         self.assertEqual(safe_update.call_count, 2)
 
@@ -388,7 +419,9 @@ class Preview3DRecoveryTest(unittest.TestCase):
         preview._scene = self._make_scene()
         preview.paintEvent(None)
 
-    def test_new_structure_invalidates_in_flight_preview_result_immediately(self) -> None:
+    def test_new_structure_invalidates_in_flight_preview_result_immediately(
+        self,
+    ) -> None:
         preview = self._create_preview(SequencedAdapter([]))
         first_model = self._make_model()
         second_model = self._make_model()
@@ -416,12 +449,16 @@ class Preview3DRecoveryTest(unittest.TestCase):
         self.assertEqual(preview._smiles_text, "")
         self.assertEqual(preview._message, "Updating 3D preview...")
 
-    def test_inspector_layout_and_state_helpers_cover_preview_panel_sections(self) -> None:
+    def test_inspector_layout_and_state_helpers_cover_preview_panel_sections(
+        self,
+    ) -> None:
         preview = self._create_preview(SequencedAdapter([]))
         preview.resize(320, 260)
 
         self.assertEqual(preview_metadata_summary(preview._scene, preview._message), "")
-        self.assertEqual(preview_status_badge(preview._scene, preview._message)[0], "Empty")
+        self.assertEqual(
+            preview_status_badge(preview._scene, preview._message)[0], "Empty"
+        )
         self.assertEqual(
             preview_empty_state_text(preview._message),
             ("No molecule yet", "Draw or paste a structure to preview it in 3D."),
@@ -429,34 +466,64 @@ class Preview3DRecoveryTest(unittest.TestCase):
 
         preview._message = "There is no chemical structure to export."
         self.assertEqual(preview_metadata_summary(preview._scene, preview._message), "")
-        self.assertEqual(preview_status_badge(preview._scene, preview._message)[0], "Empty")
+        self.assertEqual(
+            preview_status_badge(preview._scene, preview._message)[0], "Empty"
+        )
         self.assertEqual(
             preview_empty_state_text(preview._message),
             ("No molecule yet", "Draw or paste a structure to preview it in 3D."),
         )
 
         preview._message = "Updating 3D preview..."
-        self.assertEqual(preview_metadata_summary(preview._scene, preview._message), "Preparing coordinates")
-        self.assertEqual(preview_status_badge(preview._scene, preview._message)[0], "Building")
-        self.assertEqual(preview_empty_state_text(preview._message), ("Building preview", "Preparing coordinates"))
-
-        preview._message = "Temporary 3D failure while preparing the selected structure"
-        self.assertEqual(preview_metadata_summary(preview._scene, preview._message), "Preview needs attention")
-        self.assertEqual(preview_status_badge(preview._scene, preview._message)[0], "Issue")
+        self.assertEqual(
+            preview_metadata_summary(preview._scene, preview._message),
+            "Preparing coordinates",
+        )
+        self.assertEqual(
+            preview_status_badge(preview._scene, preview._message)[0], "Building"
+        )
         self.assertEqual(
             preview_empty_state_text(preview._message),
-            ("Preview unavailable", "Temporary 3D failure while preparing the selected structure"),
+            ("Building preview", "Preparing coordinates"),
+        )
+
+        preview._message = "Temporary 3D failure while preparing the selected structure"
+        self.assertEqual(
+            preview_metadata_summary(preview._scene, preview._message),
+            "Preview needs attention",
+        )
+        self.assertEqual(
+            preview_status_badge(preview._scene, preview._message)[0], "Issue"
+        )
+        self.assertEqual(
+            preview_empty_state_text(preview._message),
+            (
+                "Preview unavailable",
+                "Temporary 3D failure while preparing the selected structure",
+            ),
         )
 
         preview._scene = self._make_scene()
         preview.set_info("C2H6O", "46.07")
-        self.assertEqual(preview_metadata_summary(preview._scene, preview._message), "2 atoms / 1 bond")
-        self.assertEqual(preview_status_badge(preview._scene, preview._message)[0], "Ready")
-        self.assertEqual(preview_info_items("C2H6O", "46.07"), [("FORMULA", "C2H6O"), ("MW", "46.07")])
+        self.assertEqual(
+            preview_metadata_summary(preview._scene, preview._message),
+            "2 atoms / 1 bond",
+        )
+        self.assertEqual(
+            preview_status_badge(preview._scene, preview._message)[0], "Ready"
+        )
+        self.assertEqual(
+            preview_info_items("C2H6O", "46.07"),
+            [("FORMULA", "C2H6O"), ("MW", "46.07")],
+        )
         info_lines = preview_info_lines("C2H6O", "46.07")
-        self.assertGreaterEqual(preview_footer_height_for_lines(info_lines, preview.font()), 68.0)
+        self.assertGreaterEqual(
+            preview_footer_height_for_lines(info_lines, preview.font()), 68.0
+        )
 
-        layout = preview_layout_for_widget(QRectF(preview.rect()), info_lines, preview.font())
+        layout = preview_layout_for_widget(
+            QRectF(preview.rect()), info_lines, preview.font()
+        )
         self.assertFalse(layout["footer"].isNull())
         self.assertLess(layout["header"].bottom(), layout["viewport"].top())
         self.assertLess(layout["viewport"].bottom(), layout["footer"].top())
@@ -486,21 +553,31 @@ class Preview3DRecoveryTest(unittest.TestCase):
         self.assertEqual(button.objectName(), "preview_export_xyz_button")
         self.assertEqual(button.text(), "Export 3D")
         self.assertTrue(button.icon().isNull())
-        self.assertEqual(button.toolButtonStyle(), Qt.ToolButtonStyle.ToolButtonTextOnly)
+        self.assertEqual(
+            button.toolButtonStyle(), Qt.ToolButtonStyle.ToolButtonTextOnly
+        )
         self.assertEqual(button.font().pixelSize(), 11)
         self.assertEqual(button.font().weight(), QFont.Weight.DemiBold)
         self.assertIn(f"background: {PALETTE['surface_input']}", button.styleSheet())
-        self.assertIn(f"border: 1px solid {PALETTE['border_strong']}", button.styleSheet())
+        self.assertIn(
+            f"border: 1px solid {PALETTE['border_strong']}", button.styleSheet()
+        )
         self.assertIn(f"border-color: {PALETTE['checked_border']}", button.styleSheet())
         self.assertIn("text-align: center", button.styleSheet())
         # The "Ready" status badge is painted flush to the header's right edge;
         # the Export button must sit to its left so it does not cover the badge.
         badge_text = preview_status_badge(preview._scene, preview._message)[0]
-        badge_width = status_badge_width(badge_text, QFontMetricsF(preview_caption_font(preview.font())))
+        badge_width = status_badge_width(
+            badge_text, QFontMetricsF(preview_caption_font(preview.font()))
+        )
         expected_right = round(layout["header"].right() - badge_width - 8.0)
         self.assertAlmostEqual(button.geometry().right(), expected_right, delta=2)
-        self.assertLess(button.geometry().right(), round(layout["header"].right() - badge_width))
-        self.assertAlmostEqual(button.geometry().top(), round(layout["header"].top() + 4.0), delta=1)
+        self.assertLess(
+            button.geometry().right(), round(layout["header"].right() - badge_width)
+        )
+        self.assertAlmostEqual(
+            button.geometry().top(), round(layout["header"].top() + 4.0), delta=1
+        )
 
         button.click()
         export_callback.assert_called_once_with()
@@ -536,8 +613,12 @@ class Preview3DRecoveryTest(unittest.TestCase):
         self.assertTrue(inchikey_button.isVisible())
         self.assertEqual(smiles_button.objectName(), "preview_copy_smiles_button")
         # Copy buttons sit to the left of the Export 3D button.
-        self.assertLessEqual(smiles_button.geometry().right(), inchikey_button.geometry().left())
-        self.assertLessEqual(inchikey_button.geometry().right(), export_button.geometry().left())
+        self.assertLessEqual(
+            smiles_button.geometry().right(), inchikey_button.geometry().left()
+        )
+        self.assertLessEqual(
+            inchikey_button.geometry().right(), export_button.geometry().left()
+        )
 
         smiles_button.click()
         self.assertEqual(QApplication.clipboard().text(), "CC=O")
@@ -558,7 +639,9 @@ class Preview3DRecoveryTest(unittest.TestCase):
         self.assertFalse(preview._copy_smiles_button.isVisible())
         self.assertFalse(preview._copy_inchikey_button.isVisible())
 
-    def test_copy_buttons_appear_when_window_shown_after_building_while_hidden(self) -> None:
+    def test_copy_buttons_appear_when_window_shown_after_building_while_hidden(
+        self,
+    ) -> None:
         # Regression: the Molecule Info preview is refreshed when the selection
         # changes, which can happen while its window is still closed. The copy
         # buttons must still appear once the window is shown — their visibility

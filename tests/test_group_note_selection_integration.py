@@ -14,18 +14,23 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.canvas_atom_graphics_state import set_atom_item_for
-    from ui.canvas_group_state import group_state_for
-    from ui.canvas_lifecycle import schedule_canvas_deletion_for
-    from ui.canvas_model_access import model_for
-    from ui.canvas_scene_items_state import append_scene_item_for, selected_notes_for
-    from ui.canvas_view import CanvasView
-    from ui.move_access import move_item_for
-    from ui.scene_group_operations import group_selection_for
-    from ui.selection_collection_access import selection_snapshot_for
+    from chemvas.ui.canvas_atom_graphics_state import set_atom_item_for
+    from chemvas.ui.canvas_group_state import group_state_for
+    from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
+    from chemvas.ui.canvas_model_access import model_for
+    from chemvas.ui.canvas_scene_items_state import (
+        append_scene_item_for,
+        selected_notes_for,
+    )
+    from chemvas.ui.canvas_view import CanvasView
+    from chemvas.ui.move_access import move_item_for
+    from chemvas.ui.scene_group_operations import group_selection_for
+    from chemvas.ui.selection_collection_access import selection_snapshot_for
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for grouped-note integration tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for grouped-note integration tests"
+)
 class GroupedNoteSelectionIntegrationTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -53,7 +58,9 @@ class GroupedNoteSelectionIntegrationTest(unittest.TestCase):
         canvas.services.tools.set_active("select")
         _, atom_item_a = self._add_atom(canvas, 0.0)
         _, atom_item_b = self._add_atom(canvas, 80.0)
-        note = canvas.services.note_controller.create_text_note(QPointF(40.0, 40.0), "label")
+        note = canvas.services.note_controller.create_text_note(
+            QPointF(40.0, 40.0), "label"
+        )
         append_scene_item_for(canvas, "note_items", note)
 
         atom_item_a.setSelected(True)

@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
-from ui.canvas_state_lookup import canvas_state_object, ensure_canvas_state
+from chemvas.ui.canvas_state_lookup import canvas_state_object, ensure_canvas_state
 
 
 def test_canvas_state_object_prefers_runtime_state_over_public_canvas_attr() -> None:
@@ -23,7 +23,9 @@ def test_canvas_state_object_uses_public_canvas_attr_without_runtime_state() -> 
 
 
 def test_canvas_state_object_uses_runtime_state_and_ignores_private_attr() -> None:
-    canvas = SimpleNamespace(_insert_state="legacy", runtime_state=SimpleNamespace(insert_state="runtime"))
+    canvas = SimpleNamespace(
+        _insert_state="legacy", runtime_state=SimpleNamespace(insert_state="runtime")
+    )
 
     assert canvas_state_object(canvas, "insert_state") == "runtime"
 
@@ -80,13 +82,20 @@ def test_ensure_canvas_state_rejects_missing_field_on_strict_container() -> None
 def test_ensure_canvas_state_direct_attr_skips_strict_check() -> None:
     canvas = SimpleNamespace(runtime_state=_StrictContainer())
 
-    state = ensure_canvas_state(canvas, "renderer", lambda: "fresh", runtime_field=False)
+    state = ensure_canvas_state(
+        canvas, "renderer", lambda: "fresh", runtime_field=False
+    )
 
     assert state == "fresh"
     assert canvas.renderer == "fresh"
 
 
 def test_ensure_canvas_state_prefers_runtime_entry_even_for_direct_attr() -> None:
-    canvas = SimpleNamespace(renderer="public", runtime_state=SimpleNamespace(renderer="runtime"))
+    canvas = SimpleNamespace(
+        renderer="public", runtime_state=SimpleNamespace(renderer="runtime")
+    )
 
-    assert ensure_canvas_state(canvas, "renderer", lambda: "fresh", runtime_field=False) == "runtime"
+    assert (
+        ensure_canvas_state(canvas, "renderer", lambda: "fresh", runtime_field=False)
+        == "runtime"
+    )

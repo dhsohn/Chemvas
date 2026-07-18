@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import ui.canvas_document_service_bundle as canvas_document_service_bundle
-from ui.canvas_document_service_bundle import (
+import chemvas.ui.canvas_document_service_bundle as canvas_document_service_bundle
+from chemvas.ui.canvas_document_service_bundle import (
     CanvasDocumentServiceBundle,
     build_canvas_document_services,
 )
@@ -19,13 +19,17 @@ def _stub_service_class(name: str):
     return StubService
 
 
-def test_build_canvas_document_services_wires_explicit_collaborators(monkeypatch) -> None:
+def test_build_canvas_document_services_wires_explicit_collaborators(
+    monkeypatch,
+) -> None:
     for class_name in (
         "CanvasDocumentSessionService",
         "CanvasHistoryRecordingService",
         "CanvasSceneResetService",
     ):
-        monkeypatch.setattr(canvas_document_service_bundle, class_name, _stub_service_class(class_name))
+        monkeypatch.setattr(
+            canvas_document_service_bundle, class_name, _stub_service_class(class_name)
+        )
 
     canvas = SimpleNamespace()
     hit_testing_service = object()

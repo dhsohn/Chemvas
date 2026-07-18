@@ -1,11 +1,11 @@
 from unittest import mock
 from unittest.mock import Mock
 
-from core.model import Atom, Bond, MoleculeModel
+from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.ui.canvas_scene_items_state import set_scene_item_collection_for
+from chemvas.ui.structure_benzene_build_service import StructureBenzeneBuildService
+from chemvas.ui.structure_build_committer import StructureBuildCommitter
 from PyQt6.QtCore import QPointF
-from ui.canvas_scene_items_state import set_scene_item_collection_for
-from ui.structure_benzene_build_service import StructureBenzeneBuildService
-from ui.structure_build_committer import StructureBuildCommitter
 
 from tests.test_structure_build_service import _FakeCanvas, _FakeRingItem
 
@@ -48,7 +48,9 @@ def test_structure_benzene_build_service_plans_attached_and_free_ring_points() -
     regular_for_atom.assert_called_once_with(6, 1)
 
 
-def test_structure_benzene_build_service_rejects_triple_bond_fuse_before_geometry_or_commit() -> None:
+def test_structure_benzene_build_service_rejects_triple_bond_fuse_before_geometry_or_commit() -> (
+    None
+):
     canvas = _FakeCanvas()
     canvas.model = MoleculeModel(
         atoms={
@@ -58,8 +60,12 @@ def test_structure_benzene_build_service_rejects_triple_bond_fuse_before_geometr
         bonds=[Bond(0, 1, 3)],
     )
     builder = _builder_for(canvas)
-    regular_for_bond = Mock(side_effect=AssertionError("triple-bond fuse should not plan geometry"))
-    run_recorded_build = Mock(side_effect=AssertionError("triple-bond fuse should not commit"))
+    regular_for_bond = Mock(
+        side_effect=AssertionError("triple-bond fuse should not plan geometry")
+    )
+    run_recorded_build = Mock(
+        side_effect=AssertionError("triple-bond fuse should not commit")
+    )
 
     assert (
         builder.benzene_ring_points(
@@ -73,7 +79,9 @@ def test_structure_benzene_build_service_rejects_triple_bond_fuse_before_geometr
     ring_item = builder.add_benzene_ring(
         QPointF(10.0, 10.0),
         attach_bond_id=0,
-        benzene_ring_points=Mock(side_effect=AssertionError("triple-bond fuse should not build geometry")),
+        benzene_ring_points=Mock(
+            side_effect=AssertionError("triple-bond fuse should not build geometry")
+        ),
         add_atom_with_merge=Mock(),
         bond_exists=Mock(),
         run_recorded_build=run_recorded_build,
@@ -84,7 +92,9 @@ def test_structure_benzene_build_service_rejects_triple_bond_fuse_before_geometr
     run_recorded_build.assert_not_called()
 
 
-def test_structure_benzene_build_service_blocks_occupied_free_ring_and_uses_free_fallback() -> None:
+def test_structure_benzene_build_service_blocks_occupied_free_ring_and_uses_free_fallback() -> (
+    None
+):
     canvas = _FakeCanvas()
     builder = _builder_for(canvas)
     set_scene_item_collection_for(canvas, "ring_items", [_FakeRingItem(True)])
@@ -100,7 +110,7 @@ def test_structure_benzene_build_service_blocks_occupied_free_ring_and_uses_free
 
     set_scene_item_collection_for(canvas, "ring_items", [_FakeRingItem(False)])
     with mock.patch(
-        "ui.structure_benzene_build_service.compute_free_benzene_ring_points",
+        "chemvas.ui.structure_benzene_build_service.compute_free_benzene_ring_points",
         return_value=[(1.0, 2.0), (3.0, 4.0)],
     ) as free_ring:
         result = builder.benzene_ring_points(
@@ -113,7 +123,9 @@ def test_structure_benzene_build_service_blocks_occupied_free_ring_and_uses_free
     free_ring.assert_called_once_with((7.0, 8.0), bond_length=20.0)
 
 
-def test_structure_benzene_build_service_adds_ring_item_and_records_scene_item() -> None:
+def test_structure_benzene_build_service_adds_ring_item_and_records_scene_item() -> (
+    None
+):
     canvas = _FakeCanvas()
     builder = _builder_for(canvas)
 
@@ -123,10 +135,14 @@ def test_structure_benzene_build_service_adds_ring_item_and_records_scene_item()
             [QPointF(float(index), float(index % 2)) for index in range(6)],
             [],
         ),
-        add_atom_with_merge=lambda point, element, merge: canvas.model.add_atom(element, point.x(), point.y()),
+        add_atom_with_merge=lambda point, element, merge: canvas.model.add_atom(
+            element, point.x(), point.y()
+        ),
         bond_exists=canvas.bond_exists,
         create_ring_fill_item=canvas._create_ring_fill_item,
-        run_recorded_build=lambda action, **kwargs: StructureBuildCommitter(canvas).record_additions(
+        run_recorded_build=lambda action, **kwargs: StructureBuildCommitter(
+            canvas
+        ).record_additions(
             StructureBuildCommitter(canvas).begin_recorded_change(
                 before_smiles_input=kwargs.get("before_smiles_input")
             ),

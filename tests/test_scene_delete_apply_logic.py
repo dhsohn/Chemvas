@@ -10,18 +10,18 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from core.history import DeleteAtomsCommand, DeleteBondCommand
-    from core.model import Atom, Bond, MoleculeModel
-    from ui.history_commands import DeleteSceneItemsCommand
-    from ui.scene_delete_logic import DeleteSelectionPlan
+    from chemvas.core.history import DeleteAtomsCommand, DeleteBondCommand
+    from chemvas.domain.document import Atom, Bond, MoleculeModel
+    from chemvas.ui.history_commands import DeleteSceneItemsCommand
+    from chemvas.ui.scene_delete_logic import DeleteSelectionPlan
 
     from tests.test_scene_ops_controller import _make_note_item, _make_rect_item
 
 
 def _load_delete_apply_helper():
     module_names = (
-        "ui.scene_delete_apply_logic",
-        "ui.scene_delete_logic",
+        "chemvas.ui.scene_delete_apply_logic",
+        "chemvas.ui.scene_delete_logic",
     )
     helper_names = (
         "build_delete_apply_commands",
@@ -41,7 +41,9 @@ def _load_delete_apply_helper():
     return None
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for scene delete apply logic tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for scene delete apply logic tests"
+)
 class SceneDeleteApplyLogicTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -71,8 +73,12 @@ class SceneDeleteApplyLogicTest(unittest.TestCase):
             "mark_states_for_atoms": plan.mark_states_for_atoms,
             "mark_states": plan.mark_states_for_atoms,
             "scene_items": plan.scene_items,
-            "atom_states": {atom_id: canvas._atom_state_dict(atom_id) for atom_id in plan.atom_ids},
-            "scene_item_states": [canvas.scene_item_state(item) for item in plan.scene_items],
+            "atom_states": {
+                atom_id: canvas._atom_state_dict(atom_id) for atom_id in plan.atom_ids
+            },
+            "scene_item_states": [
+                canvas.scene_item_state(item) for item in plan.scene_items
+            ],
             "bonds": canvas.model.bonds,
             "atoms": canvas.model.atoms,
             "next_atom_id": canvas.model.next_atom_id,
@@ -104,7 +110,9 @@ class SceneDeleteApplyLogicTest(unittest.TestCase):
                     continue
             raise
 
-    def test_delete_apply_helper_returns_empty_command_list_when_plan_has_no_work(self) -> None:
+    def test_delete_apply_helper_returns_empty_command_list_when_plan_has_no_work(
+        self,
+    ) -> None:
         canvas = _FakeDeleteCanvas()
         plan = DeleteSelectionPlan()
 
@@ -117,7 +125,9 @@ class SceneDeleteApplyLogicTest(unittest.TestCase):
         self.assertEqual(canvas.clear_handles_calls, 0)
         self.assertEqual(canvas.last_smiles_input, "C")
 
-    def test_delete_apply_helper_removes_only_valid_bonds_in_reverse_order(self) -> None:
+    def test_delete_apply_helper_removes_only_valid_bonds_in_reverse_order(
+        self,
+    ) -> None:
         canvas = _FakeDeleteCanvas()
         plan = DeleteSelectionPlan(
             bond_ids_to_remove=[3, 1, 0, 2, 9],
@@ -126,14 +136,19 @@ class SceneDeleteApplyLogicTest(unittest.TestCase):
 
         commands = self._invoke_helper(canvas, plan)
 
-        self.assertEqual([type(command) for command in commands], [DeleteBondCommand, DeleteBondCommand, DeleteBondCommand])
+        self.assertEqual(
+            [type(command) for command in commands],
+            [DeleteBondCommand, DeleteBondCommand, DeleteBondCommand],
+        )
         self.assertEqual([command.bond_id for command in commands], [3, 1, 0])
         self.assertEqual(canvas.remove_bond_calls, [3, 1, 0])
         self.assertEqual(canvas.redraw_connected_bonds_calls, [3, 1, 2, 3, 1, 2])
         self.assertEqual(canvas.remove_atom_calls, [])
         self.assertEqual(canvas.last_smiles_input, None)
 
-    def test_delete_apply_helper_builds_delete_atoms_command_with_mark_snapshot(self) -> None:
+    def test_delete_apply_helper_builds_delete_atoms_command_with_mark_snapshot(
+        self,
+    ) -> None:
         canvas = _FakeDeleteCanvas()
         plan = DeleteSelectionPlan(
             atom_ids=[1, 3],
@@ -146,7 +161,9 @@ class SceneDeleteApplyLogicTest(unittest.TestCase):
 
         commands = self._invoke_helper(canvas, plan)
 
-        delete_atoms_commands = [command for command in commands if isinstance(command, DeleteAtomsCommand)]
+        delete_atoms_commands = [
+            command for command in commands if isinstance(command, DeleteAtomsCommand)
+        ]
         self.assertEqual(len(delete_atoms_commands), 1)
         delete_atoms = delete_atoms_commands[0]
         self.assertEqual(set(delete_atoms.atom_states), {1, 3})
@@ -159,14 +176,20 @@ class SceneDeleteApplyLogicTest(unittest.TestCase):
         )
         self.assertEqual(delete_atoms.before_next_atom_id, 7)
         self.assertEqual(delete_atoms.after_next_atom_id, 7)
-        self.assertEqual(delete_atoms.atom_coords_3d, {1: (10.0, 11.0, 1.0), 3: (30.0, 31.0, 3.0)})
+        self.assertEqual(
+            delete_atoms.atom_coords_3d, {1: (10.0, 11.0, 1.0), 3: (30.0, 31.0, 3.0)}
+        )
         self.assertEqual(canvas.remove_atom_calls, [(1, True), (3, True)])
         self.assertEqual(canvas.last_smiles_input, None)
 
-    def test_delete_apply_helper_collects_scene_item_states_and_clears_handles_when_needed(self) -> None:
+    def test_delete_apply_helper_collects_scene_item_states_and_clears_handles_when_needed(
+        self,
+    ) -> None:
         canvas = _FakeDeleteCanvas()
         note_item = _make_note_item("note", 12.0, 18.0)
-        arrow_item = _make_rect_item("arrow", state={"kind": "arrow", "start": (1.0, 2.0), "end": (3.0, 4.0)})
+        arrow_item = _make_rect_item(
+            "arrow", state={"kind": "arrow", "start": (1.0, 2.0), "end": (3.0, 4.0)}
+        )
         canvas.scene_items.extend([note_item, arrow_item])
         plan = DeleteSelectionPlan(
             scene_items=[note_item, arrow_item],
@@ -175,7 +198,11 @@ class SceneDeleteApplyLogicTest(unittest.TestCase):
 
         commands = self._invoke_helper(canvas, plan)
 
-        delete_scene_commands = [command for command in commands if isinstance(command, DeleteSceneItemsCommand)]
+        delete_scene_commands = [
+            command
+            for command in commands
+            if isinstance(command, DeleteSceneItemsCommand)
+        ]
         self.assertEqual(len(delete_scene_commands), 1)
         delete_scene = delete_scene_commands[0]
         self.assertEqual(

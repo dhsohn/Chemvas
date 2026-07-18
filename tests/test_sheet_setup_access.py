@@ -6,14 +6,7 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QPointF, QRectF
-from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsView
-from ui.scene_rect_snapshot import (
-    SceneRectSnapshot,
-    scene_rect_is_automatic,
-    view_scene_rect_is_explicit,
-)
-from ui.sheet_setup_access import (
+from chemvas.ui.sheet_setup_access import (
     _SheetSetupStateSnapshot,
     scene_pos_in_sheet_for,
     set_sheet_setup_for,
@@ -22,7 +15,14 @@ from ui.sheet_setup_access import (
     sheet_setup_for,
     sheet_size_for,
 )
-from ui.sheet_setup_state import SheetSetupState, sheet_setup_state_for
+from chemvas.ui.sheet_setup_state import SheetSetupState, sheet_setup_state_for
+from chemvas.ui.transactions.scene_rect import (
+    SceneRectSnapshot,
+    scene_rect_is_automatic,
+    view_scene_rect_is_explicit,
+)
+from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsView
 
 _APP = QApplication.instance() or QApplication([])
 _APP.setQuitOnLastWindowClosed(False)
@@ -782,9 +782,7 @@ def test_sheet_success_final_compatibility_getter_cannot_poison_scene_rect() -> 
     canvas.close()
 
 
-def test_sheet_success_final_scene_getter_cannot_delete_canonical_state_root() -> (
-    None
-):
+def test_sheet_success_final_scene_getter_cannot_delete_canonical_state_root() -> None:
     class RootDeletingView(QGraphicsView):
         def __init__(self, scene: QGraphicsScene) -> None:
             super().__init__(scene)

@@ -10,7 +10,7 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from core.history import CompositeCommand
+    from chemvas.core.history import CompositeCommand
 
     from tests.test_scene_ops_controller import (
         _FakeCanvas,
@@ -21,7 +21,9 @@ if QApplication is not None:
     )
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for scene ops controller tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for scene ops controller tests"
+)
 class SceneOpsControllerDeleteFlipEdgesTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -36,7 +38,9 @@ class SceneOpsControllerDeleteFlipEdgesTest(unittest.TestCase):
         clipboard = QApplication.clipboard()
         clipboard.clear(mode=clipboard.Mode.Clipboard)
 
-    def test_delete_selected_items_ignores_invalid_bond_and_filtered_items(self) -> None:
+    def test_delete_selected_items_ignores_invalid_bond_and_filtered_items(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         invalid_bond = _make_rect_item("bond", data1=999)
         handle = _make_rect_item("handle")
@@ -72,7 +76,9 @@ class SceneOpsControllerDeleteFlipEdgesTest(unittest.TestCase):
         self.assertEqual(len(canvas.pushed_commands), 1)
         self.assertIsInstance(canvas.pushed_commands[0], CompositeCommand)
         self.assertEqual(canvas.update_selection_outline_calls, 1)
-        self.assertEqual(ring_item.data(9)["points"], [(12.0, 0.0), (0.0, 0.0), (6.0, 10.0)])
+        self.assertEqual(
+            ring_item.data(9)["points"], [(12.0, 0.0), (0.0, 0.0), (6.0, 10.0)]
+        )
         self.assertEqual(mark_item.data(9)["x"], 8.0)
         self.assertEqual(mark_item.data(9)["y"], 5.0)
 
@@ -89,9 +95,13 @@ class SceneOpsControllerDeleteFlipEdgesTest(unittest.TestCase):
 
         self.assertEqual(canvas.pushed_commands, [])
         self.assertEqual(canvas.update_selection_outline_calls, 0)
-        self.assertEqual(note_item.data(9), {"kind": "note", "text": "skip", "x": 1.0, "y": 2.0})
+        self.assertEqual(
+            note_item.data(9), {"kind": "note", "text": "skip", "x": 1.0, "y": 2.0}
+        )
 
-    def test_flip_selected_items_skips_when_flipped_state_matches_original(self) -> None:
+    def test_flip_selected_items_skips_when_flipped_state_matches_original(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         mark_item = _make_rect_item(
             "mark",
@@ -106,7 +116,9 @@ class SceneOpsControllerDeleteFlipEdgesTest(unittest.TestCase):
 
         self.assertEqual(canvas.pushed_commands, [])
         self.assertEqual(canvas.update_selection_outline_calls, 0)
-        self.assertEqual(mark_item.data(9), {"kind": "mark", "atom_id": None, "x": 2.0, "y": 2.0})
+        self.assertEqual(
+            mark_item.data(9), {"kind": "mark", "atom_id": None, "x": 2.0, "y": 2.0}
+        )
 
 
 if __name__ == "__main__":

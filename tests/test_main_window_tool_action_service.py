@@ -13,14 +13,16 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.main_window_tool_action_service import MainWindowToolActionService
+    from chemvas.ui.main_window_tool_action_service import MainWindowToolActionService
 
 
 class _HarnessWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.tool_mode_controller = SimpleNamespace(set_mark_kind=mock.Mock())
-        self.canvas = SimpleNamespace(services=SimpleNamespace(tool_mode_controller=self.tool_mode_controller))
+        self.canvas = SimpleNamespace(
+            services=SimpleNamespace(tool_mode_controller=self.tool_mode_controller)
+        )
         self._icon_factory = SimpleNamespace(
             icon_select=self._blank_icon,
             icon_bond=self._blank_icon,
@@ -51,7 +53,9 @@ class _HarnessWindow(QMainWindow):
         return QIcon()
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for main window tool action tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for main window tool action tests"
+)
 class MainWindowToolActionServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -60,7 +64,9 @@ class MainWindowToolActionServiceTest(unittest.TestCase):
 
     def setUp(self) -> None:
         self.window = _HarnessWindow()
-        self.tool_mode_controller_for_window = mock.Mock(return_value=self.window.tool_mode_controller)
+        self.tool_mode_controller_for_window = mock.Mock(
+            return_value=self.window.tool_mode_controller
+        )
         self.tool_state_service = mock.Mock()
         self.context_page_state_service = mock.Mock()
         self.icon_factory_for_window = mock.Mock(return_value=self.window._icon_factory)
@@ -84,7 +90,9 @@ class MainWindowToolActionServiceTest(unittest.TestCase):
         pixmap.fill(Qt.GlobalColor.black)
         icon = QIcon(pixmap)
 
-        with mock.patch.object(self.icon_factory_for_window.return_value, "icon_select", return_value=icon) as icon_method:
+        with mock.patch.object(
+            self.icon_factory_for_window.return_value, "icon_select", return_value=icon
+        ) as icon_method:
             _, action = self.service.build_checkable_tool_action(
                 self.window,
                 tool_group,
@@ -112,16 +120,22 @@ class MainWindowToolActionServiceTest(unittest.TestCase):
             "bond",
             reset_bond_style=False,
         )
-        self.tool_state_service.set_bond_style.assert_called_once_with(self.window, "Hash")
+        self.tool_state_service.set_bond_style.assert_called_once_with(
+            self.window, "Hash"
+        )
 
     def test_activate_ring_fill_tool_shows_ring_fill_context(self) -> None:
         self.service.activate_ring_fill_tool(self.window)
 
-        self.context_page_state_service.show_context_page.assert_called_once_with(self.window, "ring_fill")
+        self.context_page_state_service.show_context_page.assert_called_once_with(
+            self.window, "ring_fill"
+        )
         self.status_service.refresh_status_context.assert_called_once_with(self.window)
 
     def test_build_tool_actions_wires_tool_bond_and_mark_callbacks(self) -> None:
-        actions = self.service.build_tool_actions(self.window, QActionGroup(self.window))
+        actions = self.service.build_tool_actions(
+            self.window, QActionGroup(self.window)
+        )
 
         actions["select"].trigger()
         actions["color"].trigger()
@@ -133,17 +147,29 @@ class MainWindowToolActionServiceTest(unittest.TestCase):
         self.assertNotIn("mark_plus", actions)
         self.assertNotIn("mark_minus", actions)
         self.assertNotIn("mark_radical", actions)
-        self.context_page_state_service.set_tool_with_status.assert_any_call(self.window, "select")
-        self.context_page_state_service.set_tool_with_status.assert_any_call(self.window, "color")
-        self.context_page_state_service.set_tool_with_status.assert_any_call(self.window, "mark")
+        self.context_page_state_service.set_tool_with_status.assert_any_call(
+            self.window, "select"
+        )
+        self.context_page_state_service.set_tool_with_status.assert_any_call(
+            self.window, "color"
+        )
+        self.context_page_state_service.set_tool_with_status.assert_any_call(
+            self.window, "mark"
+        )
         self.context_page_state_service.set_tool_with_status.assert_any_call(
             self.window,
             "bond",
             reset_bond_style=False,
         )
-        self.context_page_state_service.show_context_page.assert_any_call(self.window, "ring_fill")
-        self.assertEqual(self.context_page_state_service.show_context_page.call_count, 1)
-        self.tool_state_service.set_bond_style.assert_called_once_with(self.window, "Hash")
+        self.context_page_state_service.show_context_page.assert_any_call(
+            self.window, "ring_fill"
+        )
+        self.assertEqual(
+            self.context_page_state_service.show_context_page.call_count, 1
+        )
+        self.tool_state_service.set_bond_style.assert_called_once_with(
+            self.window, "Hash"
+        )
 
 
 if __name__ == "__main__":

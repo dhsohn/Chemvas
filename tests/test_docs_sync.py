@@ -47,14 +47,14 @@ def _app_version() -> str:
 
 
 def _canvas_file_version() -> int:
-    src = _read(APP / "core" / "document_state.py")
+    src = _read(APP / "chemvas" / "domain" / "document" / "state.py")
     match = re.search(r"(?m)^CANVAS_FILE_VERSION\s*=\s*(\d+)", src)
-    assert match, "could not find CANVAS_FILE_VERSION in core/document_state.py"
+    assert match, "could not find CANVAS_FILE_VERSION in domain/document/state.py"
     return int(match.group(1))
 
 
 def _smiles_button_label() -> str:
-    src = _read(APP / "ui" / "main_window_panel_toolbar.py")
+    src = _read(APP / "chemvas" / "ui" / "main_window_panel_toolbar.py")
     # The SMILES insert button is tagged with objectName "smiles_render_button";
     # its displayed label is the setText(...) right after.
     anchor = src.index('"smiles_render_button"')
@@ -73,7 +73,7 @@ def _dist_name() -> str:
 def _tool_hotkeys() -> dict[str, str]:
     """Map each tool's UI label to its ChemDraw hotkey, read from the tooltip
     hints in TOOL_ACTION_SPECS (the same strings shown to the user)."""
-    src = _read(APP / "ui" / "main_window_config.py")
+    src = _read(APP / "chemvas" / "ui" / "main_window_config.py")
     hotkeys: dict[str, str] = {}
     for label, hint in re.findall(
         r'\(\s*"[^"]+",\s*"([^"]+)",\s*"[^"]+",\s*"[^"]+",\s*"([^"]*ChemDraw:[^"]*)"',

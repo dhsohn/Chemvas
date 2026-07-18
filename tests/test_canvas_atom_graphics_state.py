@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from ui.canvas_atom_graphics_state import (
+from chemvas.ui.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
     atom_dots_for,
     atom_graphics_state_for,
@@ -16,7 +16,9 @@ from ui.canvas_atom_graphics_state import (
 
 
 def test_atom_graphics_state_for_uses_runtime_state() -> None:
-    runtime_state = SimpleNamespace(atom_graphics_state=CanvasAtomGraphicsState(atom_items={1: "label"}))
+    runtime_state = SimpleNamespace(
+        atom_graphics_state=CanvasAtomGraphicsState(atom_items={1: "label"})
+    )
     canvas = SimpleNamespace(runtime_state=runtime_state)
 
     assert atom_graphics_state_for(canvas) is runtime_state.atom_graphics_state

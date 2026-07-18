@@ -13,7 +13,7 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.main_window_toolbar_buttons import (
+    from chemvas.ui.main_window_toolbar_buttons import (
         ArrowButton,
         CornerMenuButton,
         CornerMenuToolButton,
@@ -21,7 +21,9 @@ if QApplication is not None:
     )
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for toolbar button tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for toolbar button tests"
+)
 class MainWindowToolbarButtonsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -36,7 +38,9 @@ class MainWindowToolbarButtonsTest(unittest.TestCase):
         pixmap.fill(Qt.GlobalColor.black)
         return QIcon(pixmap)
 
-    def test_corner_menu_tool_button_opens_menu_only_in_bottom_right_corner(self) -> None:
+    def test_corner_menu_tool_button_opens_menu_only_in_bottom_right_corner(
+        self,
+    ) -> None:
         window = QMainWindow()
         self.addCleanup(window.close)
         action = QAction("Tool", window)
@@ -110,11 +114,21 @@ class MainWindowToolbarButtonsTest(unittest.TestCase):
         self.assertIs(save_button.defaultAction(), save_action)
         self.assertEqual(save_button.menu().actions(), [save_as_action])
         self.assertIs(file_button.defaultAction(), save_action)
-        non_separator = [action for action in file_button.menu().actions() if not action.isSeparator()]
-        self.assertEqual(non_separator, [load_action, save_action, save_as_action, export_action])
-        self.assertEqual(sum(1 for action in file_button.menu().actions() if action.isSeparator()), 1)
+        non_separator = [
+            action
+            for action in file_button.menu().actions()
+            if not action.isSeparator()
+        ]
+        self.assertEqual(
+            non_separator, [load_action, save_action, save_as_action, export_action]
+        )
+        self.assertEqual(
+            sum(1 for action in file_button.menu().actions() if action.isSeparator()), 1
+        )
 
-    def test_custom_buttons_paint_and_corner_menu_allows_no_default_action(self) -> None:
+    def test_custom_buttons_paint_and_corner_menu_allows_no_default_action(
+        self,
+    ) -> None:
         owner = QWidget()
         self.addCleanup(owner.close)
         factory = MainWindowToolbarButtonFactory()
@@ -130,7 +144,9 @@ class MainWindowToolbarButtonsTest(unittest.TestCase):
         self.assertIsInstance(corner_button, CornerMenuButton)
         self.assertIsNone(corner_button.defaultAction())
         self.assertFalse(corner_button.icon().isNull())
-        self.assertEqual([action.text() for action in corner_button.menu().actions()], ["Pick"])
+        self.assertEqual(
+            [action.text() for action in corner_button.menu().actions()], ["Pick"]
+        )
 
         for widget, size in (
             (ArrowButton("up", owner), (8, 6)),

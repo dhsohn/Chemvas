@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ui.session_snapshot_logic import (
+from chemvas.features.session import (
     DocEntry,
     SessionManifest,
     entries_to_restore,
@@ -14,7 +14,9 @@ from ui.session_snapshot_logic import (
 
 
 def _entry(*, file_path=None, dirty=False, snapshot=None, name="Doc"):
-    return DocEntry(file_path=file_path, display_name=name, dirty=dirty, snapshot=snapshot)
+    return DocEntry(
+        file_path=file_path, display_name=name, dirty=dirty, snapshot=snapshot
+    )
 
 
 def test_should_persist_skips_only_blank_untitled():
@@ -59,7 +61,11 @@ def test_plan_restore_recovers_every_crash_session_plus_newest_clean():
     crash_old = SessionManifest(pid=1, clean_exit=False)
     crash_new = SessionManifest(pid=2, clean_exit=False)
     clean = SessionManifest(pid=3, clean_exit=True)
-    candidates = [("c_old", crash_old, 100.0), ("c_new", crash_new, 300.0), ("clean", clean, 200.0)]
+    candidates = [
+        ("c_old", crash_old, 100.0),
+        ("c_new", crash_new, 300.0),
+        ("clean", clean, 200.0),
+    ]
 
     plan = plan_restore(candidates, is_alive=lambda pid: False)
 
@@ -75,10 +81,15 @@ def test_plan_restore_suppresses_clean_session_but_still_recovers_crashes():
     clean = SessionManifest(pid=2, clean_exit=True)
     candidates = [("crash", crash, 100.0), ("clean", clean, 200.0)]
 
-    plan = plan_restore(candidates, is_alive=lambda pid: False, include_clean_session=False)
+    plan = plan_restore(
+        candidates, is_alive=lambda pid: False, include_clean_session=False
+    )
 
     assert plan.restore == ["crash"]  # crash recovered even though a file was opened
-    assert set(plan.prune) == {"crash", "clean"}  # clean pruned (its files are safe on disk)
+    assert set(plan.prune) == {
+        "crash",
+        "clean",
+    }  # clean pruned (its files are safe on disk)
 
 
 def test_plan_restore_ignores_live_sessions():
@@ -94,7 +105,10 @@ def test_entries_to_restore_clean_exit_keeps_only_saved_paths():
     manifest = SessionManifest(
         pid=1,
         clean_exit=True,
-        docs=[_entry(file_path="/a/x.chemvas"), _entry(file_path=None, dirty=True, snapshot="doc-0.json")],
+        docs=[
+            _entry(file_path="/a/x.chemvas"),
+            _entry(file_path=None, dirty=True, snapshot="doc-0.json"),
+        ],
     )
     restored = entries_to_restore(manifest)
     assert [e.file_path for e in restored] == ["/a/x.chemvas"]
@@ -104,7 +118,10 @@ def test_entries_to_restore_crash_keeps_everything():
     manifest = SessionManifest(
         pid=1,
         clean_exit=False,
-        docs=[_entry(file_path="/a/x.chemvas"), _entry(file_path=None, dirty=True, snapshot="doc-0.json")],
+        docs=[
+            _entry(file_path="/a/x.chemvas"),
+            _entry(file_path=None, dirty=True, snapshot="doc-0.json"),
+        ],
     )
     assert len(entries_to_restore(manifest)) == 2
 
@@ -113,7 +130,14 @@ def test_manifest_json_round_trips():
     manifest = SessionManifest(
         pid=99,
         clean_exit=False,
-        docs=[_entry(file_path="/a/x.chemvas", dirty=True, snapshot="doc-0.json", name="x.chemvas")],
+        docs=[
+            _entry(
+                file_path="/a/x.chemvas",
+                dirty=True,
+                snapshot="doc-0.json",
+                name="x.chemvas",
+            )
+        ],
     )
     restored = manifest_from_json(manifest_to_json(manifest))
     assert restored == manifest
@@ -123,6 +147,8 @@ def test_manifest_from_json_rejects_garbage():
     assert manifest_from_json(None) is None
     assert manifest_from_json({"clean_exit": True}) is None  # no pid
     # A doc without a display_name is dropped, not fatal.
-    parsed = manifest_from_json({"pid": 1, "docs": [{"file_path": "/a"}, {"display_name": "ok"}]})
+    parsed = manifest_from_json(
+        {"pid": 1, "docs": [{"file_path": "/a"}, {"display_name": "ok"}]}
+    )
     assert parsed is not None
     assert [e.display_name for e in parsed.docs] == ["ok"]

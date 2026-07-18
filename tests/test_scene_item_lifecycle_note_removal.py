@@ -17,13 +17,13 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.canvas_scene_items_state import (
+    from chemvas.ui.canvas_scene_items_state import (
         CanvasSceneItemsState,
         add_selected_note_for,
         append_scene_item_for,
         selected_notes_for,
     )
-    from ui.scene_item_lifecycle_service import SceneItemLifecycleService
+    from chemvas.ui.scene_item_lifecycle_service import SceneItemLifecycleService
 
 
 if QApplication is not None:

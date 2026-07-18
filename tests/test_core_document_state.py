@@ -1,11 +1,14 @@
 import math
 import unittest
 
-from core.document_state import (
+from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     CHEMVAS_FILE_TYPE,
     GROUPS_CANVAS_FILE_VERSION,
     LEGACY_CANVAS_FILE_VERSION,
+    Atom,
+    Bond,
+    MoleculeModel,
     atom_to_state,
     bond_to_state,
     build_document_payload,
@@ -16,7 +19,6 @@ from core.document_state import (
     serialize_model_state_with_warnings,
     serialize_settings,
 )
-from core.model import Atom, Bond, MoleculeModel
 
 
 def _settings() -> dict:
@@ -60,7 +62,13 @@ def _canvas_state(model: dict | None = None) -> dict:
 
 
 def _atom_state() -> dict:
-    return {"element": "C", "x": 0.0, "y": 0.0, "color": "#000000", "explicit_label": False}
+    return {
+        "element": "C",
+        "x": 0.0,
+        "y": 0.0,
+        "color": "#000000",
+        "explicit_label": False,
+    }
 
 
 class DocumentStateTest(unittest.TestCase):
@@ -125,8 +133,12 @@ class DocumentStateTest(unittest.TestCase):
         state = serialize_model_state(model)
         restored = deserialize_model_state(state)
 
-        self.assertEqual(state["atom_annotations"], {0: {"formal_charge": 1, "radical_electrons": 1}})
-        self.assertEqual(restored.atom_annotations, {0: {"formal_charge": 1, "radical_electrons": 1}})
+        self.assertEqual(
+            state["atom_annotations"], {0: {"formal_charge": 1, "radical_electrons": 1}}
+        )
+        self.assertEqual(
+            restored.atom_annotations, {0: {"formal_charge": 1, "radical_electrons": 1}}
+        )
 
     def test_bold_double_positions_round_trip_through_document_payload(self) -> None:
         model = MoleculeModel(
@@ -144,7 +156,9 @@ class DocumentStateTest(unittest.TestCase):
         )
 
         state = serialize_model_state(model)
-        payload = build_document_payload(_canvas_state(state), version=CANVAS_FILE_VERSION)
+        payload = build_document_payload(
+            _canvas_state(state), version=CANVAS_FILE_VERSION
+        )
         restored = deserialize_model_state(payload["state"]["model"])
 
         self.assertEqual(
@@ -176,7 +190,10 @@ class DocumentStateTest(unittest.TestCase):
         self.assertEqual(state["atoms"][0]["element"], "C")
         self.assertEqual(state["atoms"][0]["x"], 0.0)
         self.assertEqual(state["atoms"][0]["color"], "#000000")
-        self.assertEqual(state["bonds"], [{"a": 0, "b": 1, "order": 1, "style": "single", "color": "#000000"}])
+        self.assertEqual(
+            state["bonds"],
+            [{"a": 0, "b": 1, "order": 1, "style": "single", "color": "#000000"}],
+        )
         self.assertNotIn("atom_annotations", state)
         self.assertIn("1 atom label was replaced with carbon.", warnings)
         self.assertIn("1 atom position was reset to a finite coordinate.", warnings)
@@ -193,7 +210,13 @@ class DocumentStateTest(unittest.TestCase):
         model = deserialize_model_state(
             {
                 "atoms": {
-                    "0": {"element": "C", "x": 1.0, "y": 2.0, "color": "#000000", "explicit_label": False},
+                    "0": {
+                        "element": "C",
+                        "x": 1.0,
+                        "y": 2.0,
+                        "color": "#000000",
+                        "explicit_label": False,
+                    },
                     "2": {
                         "element": "N",
                         "x": -1.0,
@@ -224,8 +247,20 @@ class DocumentStateTest(unittest.TestCase):
         model = deserialize_model_state(
             {
                 "atoms": {
-                    "3": {"element": "C", "x": 1.0, "y": 2.0, "color": "#000000", "explicit_label": False},
-                    "7": {"element": "O", "x": -1.0, "y": 0.5, "color": "#ff0000", "explicit_label": True},
+                    "3": {
+                        "element": "C",
+                        "x": 1.0,
+                        "y": 2.0,
+                        "color": "#000000",
+                        "explicit_label": False,
+                    },
+                    "7": {
+                        "element": "O",
+                        "x": -1.0,
+                        "y": 0.5,
+                        "color": "#ff0000",
+                        "explicit_label": True,
+                    },
                 },
                 "bonds": [],
                 "next_atom_id": 4,
@@ -241,9 +276,13 @@ class DocumentStateTest(unittest.TestCase):
         with self.assertRaises(KeyError):
             deserialize_model_state({"atoms": {}, "bonds": []})
         with self.assertRaises(KeyError):
-            deserialize_model_state({"atoms": {"1": {"x": 1.5}}, "bonds": [], "next_atom_id": 2})
+            deserialize_model_state(
+                {"atoms": {"1": {"x": 1.5}}, "bonds": [], "next_atom_id": 2}
+            )
         with self.assertRaises(TypeError):
-            deserialize_model_state({"atoms": {}, "bonds": ["bad-entry"], "next_atom_id": 2})
+            deserialize_model_state(
+                {"atoms": {}, "bonds": ["bad-entry"], "next_atom_id": 2}
+            )
 
     def test_settings_and_payload_helpers_round_trip(self) -> None:
         settings = serialize_settings(
@@ -282,7 +321,9 @@ class DocumentStateTest(unittest.TestCase):
         state["settings"] = settings
         build_document_payload(state, version=CANVAS_FILE_VERSION)
 
-    def test_document_payload_accepts_legacy_settings_without_text_note_keys(self) -> None:
+    def test_document_payload_accepts_legacy_settings_without_text_note_keys(
+        self,
+    ) -> None:
         settings = _settings()
         for key in (
             "text_font_family",
@@ -388,7 +429,9 @@ class DocumentStateTest(unittest.TestCase):
         ]
         for name, atom_ids, case_bonds in cases:
             with self.subTest(name=name):
-                state = _canvas_state(_model_state(atoms=atoms, bonds=case_bonds, next_atom_id=3))
+                state = _canvas_state(
+                    _model_state(atoms=atoms, bonds=case_bonds, next_atom_id=3)
+                )
                 state["ring_fills"] = [
                     {
                         "points": [(0.0, 0.0), (1.0, 0.0), (0.5, 1.0)],
@@ -424,7 +467,9 @@ class DocumentStateTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             build_document_payload(state, version=CANVAS_FILE_VERSION)
 
-    def test_document_payload_rejects_large_coordinate_ring_point_mismatch(self) -> None:
+    def test_document_payload_rejects_large_coordinate_ring_point_mismatch(
+        self,
+    ) -> None:
         atoms = {
             0: {**_atom_state(), "x": 1_000_000_000.0},
             1: {**_atom_state(), "x": 1_000_000_001.0},
@@ -438,7 +483,11 @@ class DocumentStateTest(unittest.TestCase):
         state = _canvas_state(_model_state(atoms=atoms, bonds=bonds, next_atom_id=3))
         state["ring_fills"] = [
             {
-                "points": [(1_000_000_000.5, 0.0), (1_000_000_001.0, 0.0), (1_000_000_000.5, 1.0)],
+                "points": [
+                    (1_000_000_000.5, 0.0),
+                    (1_000_000_001.0, 0.0),
+                    (1_000_000_000.5, 1.0),
+                ],
                 "atom_ids": [0, 1, 2],
                 "color": "#000000",
                 "alpha": 0.4,
@@ -565,7 +614,9 @@ class DocumentStateTest(unittest.TestCase):
         ]
         for key, value in cases:
             with self.subTest(key=key):
-                state = _canvas_state(_model_state(atoms=atoms, bonds=bonds, next_atom_id=3))
+                state = _canvas_state(
+                    _model_state(atoms=atoms, bonds=bonds, next_atom_id=3)
+                )
                 state[key] = value
                 with self.assertRaises(ValueError):
                     build_document_payload(state, version=CANVAS_FILE_VERSION)
@@ -578,11 +629,41 @@ class DocumentStateTest(unittest.TestCase):
             )
         )
         invalid_states = [
-            {"perspective": {"atom_coords_3d": {"99": [1.0, 2.0, 3.0]}, "projection_center_3d": None, "projection_anchor_2d": None}},
-            {"perspective": {"atom_coords_3d": {"0": [1.0, 2.0]}, "projection_center_3d": None, "projection_anchor_2d": None}},
-            {"perspective": {"atom_coords_3d": {"0": [1.0, 2.0, 3.0]}, "projection_center_3d": [1.0, 2.0], "projection_anchor_2d": None}},
-            {"perspective": {"atom_coords_3d": {"0": [1.0, 2.0, 3.0]}, "projection_center_3d": None, "projection_anchor_2d": [1.0, 2.0, 3.0]}},
-            {"perspective": {"atom_coords_3d": {"0": [1.0, 2.0, 3.0]}, "projection_center_3d": [1.0, math.inf, 3.0], "projection_anchor_2d": None}},
+            {
+                "perspective": {
+                    "atom_coords_3d": {"99": [1.0, 2.0, 3.0]},
+                    "projection_center_3d": None,
+                    "projection_anchor_2d": None,
+                }
+            },
+            {
+                "perspective": {
+                    "atom_coords_3d": {"0": [1.0, 2.0]},
+                    "projection_center_3d": None,
+                    "projection_anchor_2d": None,
+                }
+            },
+            {
+                "perspective": {
+                    "atom_coords_3d": {"0": [1.0, 2.0, 3.0]},
+                    "projection_center_3d": [1.0, 2.0],
+                    "projection_anchor_2d": None,
+                }
+            },
+            {
+                "perspective": {
+                    "atom_coords_3d": {"0": [1.0, 2.0, 3.0]},
+                    "projection_center_3d": None,
+                    "projection_anchor_2d": [1.0, 2.0, 3.0],
+                }
+            },
+            {
+                "perspective": {
+                    "atom_coords_3d": {"0": [1.0, 2.0, 3.0]},
+                    "projection_center_3d": [1.0, math.inf, 3.0],
+                    "projection_anchor_2d": None,
+                }
+            },
             {"perspective": {"atom_coords_3d": {"0": [1.0, 2.0, 3.0]}}},
         ]
         for invalid_state in invalid_states:
@@ -633,7 +714,14 @@ class DocumentStateTest(unittest.TestCase):
             "format": "chemvas-selection",
             "version": 1,
             "atoms": [
-                {"id": 3, "element": "C", "x": 10.0, "y": 20.0, "color": "#111111", "explicit_label": True},
+                {
+                    "id": 3,
+                    "element": "C",
+                    "x": 10.0,
+                    "y": 20.0,
+                    "color": "#111111",
+                    "explicit_label": True,
+                },
                 {
                     "id": 7,
                     "element": "O",
@@ -643,7 +731,14 @@ class DocumentStateTest(unittest.TestCase):
                     "explicit_label": False,
                     "annotation": {"formal_charge": -1},
                 },
-                {"id": 9, "element": "C", "x": 20.0, "y": 55.0, "color": "#111111", "explicit_label": False},
+                {
+                    "id": 9,
+                    "element": "C",
+                    "x": 20.0,
+                    "y": 55.0,
+                    "color": "#111111",
+                    "explicit_label": False,
+                },
             ],
             "bonds": [
                 {"a": 3, "b": 7, "order": 2, "style": "double", "color": "#333333"},
@@ -672,10 +767,34 @@ class DocumentStateTest(unittest.TestCase):
                 }
             ],
             "scene_items": [
-                {"kind": "note", "text": "selected", "html": "<p><b>selected</b></p>", "x": 5.0, "y": 6.0},
-                {"kind": "arrow", "start": (1.0, 2.0), "end": (3.0, 4.0), "control": None, "double": False},
-                {"kind": "ts_bracket", "left": 1.0, "top": 2.0, "right": 3.0, "bottom": 4.0},
-                {"kind": "orbital", "orbital_kind": "p", "center": (8.0, 9.0), "scale": 1.2, "rotation": 30.0},
+                {
+                    "kind": "note",
+                    "text": "selected",
+                    "html": "<p><b>selected</b></p>",
+                    "x": 5.0,
+                    "y": 6.0,
+                },
+                {
+                    "kind": "arrow",
+                    "start": (1.0, 2.0),
+                    "end": (3.0, 4.0),
+                    "control": None,
+                    "double": False,
+                },
+                {
+                    "kind": "ts_bracket",
+                    "left": 1.0,
+                    "top": 2.0,
+                    "right": 3.0,
+                    "bottom": 4.0,
+                },
+                {
+                    "kind": "orbital",
+                    "orbital_kind": "p",
+                    "center": (8.0, 9.0),
+                    "scale": 1.2,
+                    "rotation": 30.0,
+                },
             ],
         }
 
@@ -703,10 +822,26 @@ class DocumentStateTest(unittest.TestCase):
             "format": "chemvas-selection",
             "version": 2,
             "atoms": [
-                {"id": 3, "element": "C", "x": 10.0, "y": 20.0, "color": "#111111", "explicit_label": True},
-                {"id": 7, "element": "O", "x": 30.0, "y": 40.0, "color": "#222222", "explicit_label": False},
+                {
+                    "id": 3,
+                    "element": "C",
+                    "x": 10.0,
+                    "y": 20.0,
+                    "color": "#111111",
+                    "explicit_label": True,
+                },
+                {
+                    "id": 7,
+                    "element": "O",
+                    "x": 30.0,
+                    "y": 40.0,
+                    "color": "#222222",
+                    "explicit_label": False,
+                },
             ],
-            "bonds": [{"a": 3, "b": 7, "order": 1, "style": "single", "color": "#333333"}],
+            "bonds": [
+                {"a": 3, "b": 7, "order": 1, "style": "single", "color": "#333333"}
+            ],
             "rings": [],
             "marks": [],
             "scene_items": [],
@@ -732,11 +867,15 @@ class DocumentStateTest(unittest.TestCase):
         )
         build_document_payload(state, version=CANVAS_FILE_VERSION)
 
-    def test_build_document_payload_rejects_wedge_hash_on_non_single_bonds(self) -> None:
+    def test_build_document_payload_rejects_wedge_hash_on_non_single_bonds(
+        self,
+    ) -> None:
         state = _canvas_state(
             _model_state(
                 atoms={"0": _atom_state(), "1": _atom_state()},
-                bonds=[{"a": 0, "b": 1, "order": 2, "style": "wedge", "color": "#000000"}],
+                bonds=[
+                    {"a": 0, "b": 1, "order": 2, "style": "wedge", "color": "#000000"}
+                ],
                 next_atom_id=2,
             )
         )
@@ -751,7 +890,9 @@ class DocumentStateTest(unittest.TestCase):
                 next_atom_id=1,
             )
         )
-        state["model"]["atom_annotations"] = {"0": {"formal_charge": -1, "radical_electrons": 1}}
+        state["model"]["atom_annotations"] = {
+            "0": {"formal_charge": -1, "radical_electrons": 1}
+        }
         build_document_payload(state, version=CANVAS_FILE_VERSION)
 
         invalid_cases = [
@@ -775,10 +916,26 @@ class DocumentStateTest(unittest.TestCase):
     def test_selection_payload_rejects_wedge_hash_on_non_single_bonds(self) -> None:
         payload = {
             "atoms": [
-                {"id": 0, "element": "C", "x": 0.0, "y": 0.0, "color": "#000000", "explicit_label": False},
-                {"id": 1, "element": "C", "x": 1.0, "y": 0.0, "color": "#000000", "explicit_label": False},
+                {
+                    "id": 0,
+                    "element": "C",
+                    "x": 0.0,
+                    "y": 0.0,
+                    "color": "#000000",
+                    "explicit_label": False,
+                },
+                {
+                    "id": 1,
+                    "element": "C",
+                    "x": 1.0,
+                    "y": 0.0,
+                    "color": "#000000",
+                    "explicit_label": False,
+                },
             ],
-            "bonds": [{"a": 0, "b": 1, "order": 2, "style": "hash", "color": "#000000"}],
+            "bonds": [
+                {"a": 0, "b": 1, "order": 2, "style": "hash", "color": "#000000"}
+            ],
         }
 
         with self.assertRaises(ValueError):
@@ -813,8 +970,26 @@ class DocumentStateTest(unittest.TestCase):
             }
         ]
         state["notes"] = [{"text": "note", "x": 1.0, "y": 2.0}]
-        state["marks"] = [{"kind": "plus", "text": "+", "atom_id": 0, "dx": 1.0, "dy": 0.0, "x": 1.0, "y": 0.0}]
-        state["arrows"] = [{"kind": "arrow", "start": (0.0, 0.0), "end": (1.0, 1.0), "control": None, "double": False}]
+        state["marks"] = [
+            {
+                "kind": "plus",
+                "text": "+",
+                "atom_id": 0,
+                "dx": 1.0,
+                "dy": 0.0,
+                "x": 1.0,
+                "y": 0.0,
+            }
+        ]
+        state["arrows"] = [
+            {
+                "kind": "arrow",
+                "start": (0.0, 0.0),
+                "end": (1.0, 1.0),
+                "control": None,
+                "double": False,
+            }
+        ]
         state["ts_brackets"] = [
             {
                 "kind": "ts_bracket",
@@ -825,7 +1000,9 @@ class DocumentStateTest(unittest.TestCase):
                 "bracket_kind": "double_dagger",
             }
         ]
-        state["orbitals"] = [{"kind": "p", "center": (0.0, 0.0), "scale": 1.5, "rotation": 45.0}]
+        state["orbitals"] = [
+            {"kind": "p", "center": (0.0, 0.0), "scale": 1.5, "rotation": 45.0}
+        ]
 
         build_document_payload(state, version=CANVAS_FILE_VERSION)
 
@@ -835,7 +1012,9 @@ class DocumentStateTest(unittest.TestCase):
 
         build_document_payload(state, version=CANVAS_FILE_VERSION)
 
-    def test_build_document_payload_rejects_unsupported_mark_and_orbital_kinds(self) -> None:
+    def test_build_document_payload_rejects_unsupported_mark_and_orbital_kinds(
+        self,
+    ) -> None:
         cases = [
             (
                 "marks",
@@ -851,7 +1030,10 @@ class DocumentStateTest(unittest.TestCase):
                     }
                 ],
             ),
-            ("orbitals", [{"kind": "f", "center": (0.0, 0.0), "scale": 1.0, "rotation": 0.0}]),
+            (
+                "orbitals",
+                [{"kind": "f", "center": (0.0, 0.0), "scale": 1.0, "rotation": 0.0}],
+            ),
         ]
 
         for key, value in cases:
@@ -864,24 +1046,71 @@ class DocumentStateTest(unittest.TestCase):
     def test_build_document_payload_rejects_malformed_nested_scene_items(self) -> None:
         cases = [
             ("ring_fills", [{}]),
-            ("ring_fills", [{"points": [(0.0, 0.0)], "atom_ids": [99], "color": "#abcdef", "alpha": 0.25}]),
-            ("ring_fills", [{"points": [(0.0, 0.0)], "atom_ids": [], "color": "red", "alpha": 0.25}]),
+            (
+                "ring_fills",
+                [
+                    {
+                        "points": [(0.0, 0.0)],
+                        "atom_ids": [99],
+                        "color": "#abcdef",
+                        "alpha": 0.25,
+                    }
+                ],
+            ),
+            (
+                "ring_fills",
+                [
+                    {
+                        "points": [(0.0, 0.0)],
+                        "atom_ids": [],
+                        "color": "red",
+                        "alpha": 0.25,
+                    }
+                ],
+            ),
             ("notes", [{"text": "note", "x": 0.0, "y": math.inf}]),
             ("marks", [{}]),
-            ("marks", [{"kind": "plus", "text": "+", "atom_id": 99, "dx": 1.0, "dy": 0.0, "x": 1.0, "y": 0.0}]),
-            ("arrows", [{"kind": "unexpected", "start": (0.0, 0.0), "end": (1.0, 1.0)}]),
+            (
+                "marks",
+                [
+                    {
+                        "kind": "plus",
+                        "text": "+",
+                        "atom_id": 99,
+                        "dx": 1.0,
+                        "dy": 0.0,
+                        "x": 1.0,
+                        "y": 0.0,
+                    }
+                ],
+            ),
+            (
+                "arrows",
+                [{"kind": "unexpected", "start": (0.0, 0.0), "end": (1.0, 1.0)}],
+            ),
             ("arrows", [{"kind": "arrow", "start": (0.0, 0.0), "end": ("x", 1.0)}]),
             ("ts_brackets", [{"kind": "ts_bracket", "rect": (0.0, 0.0, 1.0)}]),
             (
                 "ts_brackets",
-                [{"kind": "ts_bracket", "left": 0.0, "top": 0.0, "right": 1.0, "bottom": 1.0, "bracket_kind": "bad"}],
+                [
+                    {
+                        "kind": "ts_bracket",
+                        "left": 0.0,
+                        "top": 0.0,
+                        "right": 1.0,
+                        "bottom": 1.0,
+                        "bracket_kind": "bad",
+                    }
+                ],
             ),
             ("orbitals", [{"center": (0.0, 0.0)}]),
         ]
 
         for key, value in cases:
             with self.subTest(key=key, value=value):
-                state = _canvas_state(_model_state(atoms={"0": _atom_state()}, next_atom_id=1))
+                state = _canvas_state(
+                    _model_state(atoms={"0": _atom_state()}, next_atom_id=1)
+                )
                 state[key] = value
                 with self.assertRaises(ValueError):
                     build_document_payload(state, version=CANVAS_FILE_VERSION)
@@ -898,39 +1127,97 @@ class DocumentStateTest(unittest.TestCase):
             extract_document_state(payload)
 
     def test_extract_document_state_rejects_invalid_model_schema(self) -> None:
-        valid_atoms = {"0": {"element": "C", "x": 0.0, "y": 0.0, "color": "#000000", "explicit_label": False}}
+        valid_atoms = {
+            "0": {
+                "element": "C",
+                "x": 0.0,
+                "y": 0.0,
+                "color": "#000000",
+                "explicit_label": False,
+            }
+        }
         invalid_models = [
-            _model_state(valid_atoms, [{"a": 0, "b": 9, "order": 1, "style": "single", "color": "#000000"}], 1),
-            _model_state(valid_atoms, [{"a": 0, "b": 0, "order": 4, "style": "single", "color": "#000000"}], 1),
-            _model_state({"0": {"element": "C", "x": float("nan"), "y": 0.0, "color": "#000000", "explicit_label": False}}, [], 1),
-            _model_state({"0": {"element": "C", "x": 0.0, "y": 0.0, "color": "red", "explicit_label": False}}, [], 1),
+            _model_state(
+                valid_atoms,
+                [{"a": 0, "b": 9, "order": 1, "style": "single", "color": "#000000"}],
+                1,
+            ),
+            _model_state(
+                valid_atoms,
+                [{"a": 0, "b": 0, "order": 4, "style": "single", "color": "#000000"}],
+                1,
+            ),
+            _model_state(
+                {
+                    "0": {
+                        "element": "C",
+                        "x": float("nan"),
+                        "y": 0.0,
+                        "color": "#000000",
+                        "explicit_label": False,
+                    }
+                },
+                [],
+                1,
+            ),
+            _model_state(
+                {
+                    "0": {
+                        "element": "C",
+                        "x": 0.0,
+                        "y": 0.0,
+                        "color": "red",
+                        "explicit_label": False,
+                    }
+                },
+                [],
+                1,
+            ),
             _model_state(valid_atoms, [], 0),
             {"atoms": valid_atoms, "bonds": []},
-            _model_state({"0": {"element": "C", "x": 0.0, "y": 0.0, "color": "#000000"}}, [], 1),
+            _model_state(
+                {"0": {"element": "C", "x": 0.0, "y": 0.0, "color": "#000000"}}, [], 1
+            ),
         ]
 
         for model in invalid_models:
             with self.subTest(model=model):
                 with self.assertRaises(ValueError):
-                    build_document_payload(_canvas_state(model), version=CANVAS_FILE_VERSION)
+                    build_document_payload(
+                        _canvas_state(model), version=CANVAS_FILE_VERSION
+                    )
 
     def test_extract_document_state_rejects_self_bond(self) -> None:
-        valid_atoms = {"0": {"element": "C", "x": 0.0, "y": 0.0, "color": "#000000", "explicit_label": False}}
+        valid_atoms = {
+            "0": {
+                "element": "C",
+                "x": 0.0,
+                "y": 0.0,
+                "color": "#000000",
+                "explicit_label": False,
+            }
+        }
         self_bond_model = _model_state(
             valid_atoms,
             [{"a": 0, "b": 0, "order": 1, "style": "single", "color": "#000000"}],
             1,
         )
         with self.assertRaises(ValueError):
-            build_document_payload(_canvas_state(self_bond_model), version=CANVAS_FILE_VERSION)
+            build_document_payload(
+                _canvas_state(self_bond_model), version=CANVAS_FILE_VERSION
+            )
 
-    def test_build_document_payload_rejects_unsupported_or_mismatched_versions(self) -> None:
+    def test_build_document_payload_rejects_unsupported_or_mismatched_versions(
+        self,
+    ) -> None:
         canvas_state = _canvas_state()
 
         with self.assertRaises(ValueError):
             build_document_payload(canvas_state, version=CANVAS_FILE_VERSION + 1)
         with self.assertRaises(ValueError):
-            build_document_payload({"active_sheet_index": 0, "sheets": []}, version=CANVAS_FILE_VERSION)
+            build_document_payload(
+                {"active_sheet_index": 0, "sheets": []}, version=CANVAS_FILE_VERSION
+            )
 
     def test_extract_document_state_rejects_version_two_workbook_payload(self) -> None:
         payload = {
@@ -938,7 +1225,9 @@ class DocumentStateTest(unittest.TestCase):
             "version": 2,
             "state": {
                 "active_sheet_index": 0,
-                "sheets": [{"name": "Canvas 1", "kind": "canvas", "content": _canvas_state()}],
+                "sheets": [
+                    {"name": "Canvas 1", "kind": "canvas", "content": _canvas_state()}
+                ],
             },
         }
 
@@ -996,13 +1285,23 @@ class DocumentStateTest(unittest.TestCase):
 
 
 class UnhashableChoiceValueTest(unittest.TestCase):
-    def test_document_validation_rejects_unhashable_bond_style_with_value_error(self) -> None:
+    def test_document_validation_rejects_unhashable_bond_style_with_value_error(
+        self,
+    ) -> None:
         # A JSON array where a style string belongs must fail as an invalid
         # file, not escape the boundary as a TypeError.
         state = _canvas_state(
             _model_state(
                 atoms={0: _atom_state(), 1: {**_atom_state(), "x": 10.0}},
-                bonds=[{"a": 0, "b": 1, "order": 1, "style": ["single"], "color": "#000000"}],
+                bonds=[
+                    {
+                        "a": 0,
+                        "b": 1,
+                        "order": 1,
+                        "style": ["single"],
+                        "color": "#000000",
+                    }
+                ],
                 next_atom_id=2,
             )
         )
@@ -1029,18 +1328,20 @@ class CompactBondFormatTest(unittest.TestCase):
 
     def test_v4_rejects_bond_tombstones(self) -> None:
         with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
-            build_document_payload(self._state_with_bond_tombstone(), CANVAS_FILE_VERSION)
+            build_document_payload(
+                self._state_with_bond_tombstone(), CANVAS_FILE_VERSION
+            )
 
     def test_pre_v4_versions_accept_bond_tombstones(self) -> None:
         for version in (LEGACY_CANVAS_FILE_VERSION, GROUPS_CANVAS_FILE_VERSION):
             with self.subTest(version=version):
-                payload = build_document_payload(self._state_with_bond_tombstone(), version)
+                payload = build_document_payload(
+                    self._state_with_bond_tombstone(), version
+                )
                 self.assertEqual(payload["version"], version)
 
     def test_deserialize_still_reads_pre_v4_tombstoned_bonds(self) -> None:
-        model = deserialize_model_state(
-            self._state_with_bond_tombstone()["model"]
-        )
+        model = deserialize_model_state(self._state_with_bond_tombstone()["model"])
 
         self.assertEqual(len(model.bonds), 2)
         self.assertIsNone(model.bonds[0])
@@ -1061,7 +1362,10 @@ class CompactBondFormatTest(unittest.TestCase):
 
         self.assertEqual(payload["version"], CANVAS_FILE_VERSION)
         self.assertEqual(len(restored.bonds), 1)
-        self.assertEqual((restored.bonds[0].a, restored.bonds[0].b, restored.bonds[0].order), (b, c, 2))
+        self.assertEqual(
+            (restored.bonds[0].a, restored.bonds[0].b, restored.bonds[0].order),
+            (b, c, 2),
+        )
 
 
 class ModelInvariantTest(unittest.TestCase):

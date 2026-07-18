@@ -45,6 +45,9 @@ jobs:
       - name: Lint
         run: python -m ruff check .
 
+      - name: Format check
+        run: python -m ruff format --check .
+
       - name: Type check
         run: python -m mypy
 
@@ -96,3 +99,42 @@ jobs:
 
       - name: Run RDKit smoke tests
         run: python -m pytest tests/test_core_rdkit_adapter.py -k real_rdkit_smoke
+
+  package-smoke:
+    name: Wheel smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Build wheel
+        run: |
+          python -m pip install --upgrade build
+          python -m build --wheel
+          python scripts/verify_wheel.py dist/*.whl
+
+      - name: Install wheel without source-tree imports
+        run: |
+          python -m venv /tmp/chemvas-wheel-smoke
+          /tmp/chemvas-wheel-smoke/bin/python -m pip install --no-deps dist/*.whl
+          cd /tmp
+          /tmp/chemvas-wheel-smoke/bin/python - <<'PY'
+          from importlib.util import find_spec
+
+          import chemvas
+          import chemvas.adapters.qt
+          import chemvas.ui
+          from chemvas.bootstrap.application import main
+          from chemvas.domain.document import MoleculeModel
+
+          assert chemvas.__version__
+          assert callable(main)
+          assert MoleculeModel is not None
+          assert find_spec("core") is None
+          assert find_spec("ui") is None
+          PY

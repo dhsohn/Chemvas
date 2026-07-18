@@ -1,8 +1,8 @@
 from types import SimpleNamespace
 from unittest import mock
 
-from ui.canvas_renderer_state import renderer_for
-from ui.renderer_style_access import (
+from chemvas.ui.canvas_renderer_state import renderer_for
+from chemvas.ui.renderer_style_access import (
     atom_color_for,
     atom_font_for,
     atom_label_offset_px_for,

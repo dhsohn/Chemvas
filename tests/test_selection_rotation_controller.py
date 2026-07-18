@@ -5,11 +5,29 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from core.history import SetAtomPositionsCommand
-from core.model import Atom, Bond, MoleculeModel
+from chemvas.core.history import SetAtomPositionsCommand
+from chemvas.domain.document import Atom, Bond, MoleculeModel
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
+from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
+from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
+from chemvas.ui.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.canvas_scene_items_state import ring_items_for
+from chemvas.ui.canvas_view import CanvasView
+from chemvas.ui.selection_collection_access import selected_ids_for
+from chemvas.ui.selection_outline_state import selection_outlines_for
+from chemvas.ui.selection_rotation_controller import SelectionRotationController
+from chemvas.ui.selection_rotation_preview_transaction import (
+    _CoreStateSnapshot,
+    run_rotation_preview_update,
+)
+from chemvas.ui.structure_mutation_access import (
+    add_atom_for,
+    add_benzene_ring_for,
+    add_bond_for,
+)
 from PyQt6 import sip
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QPolygonF
@@ -18,24 +36,6 @@ from PyQt6.QtWidgets import (
     QGraphicsPolygonItem,
     QGraphicsRectItem,
     QGraphicsScene,
-)
-from ui.atom_coords_access import CanvasAtomCoords3DState
-from ui.canvas_atom_graphics_state import visible_atom_item_for
-from ui.canvas_lifecycle import schedule_canvas_deletion_for
-from ui.canvas_rotation_state import CanvasRotationState
-from ui.canvas_scene_items_state import ring_items_for
-from ui.canvas_view import CanvasView
-from ui.selection_collection_access import selected_ids_for
-from ui.selection_outline_state import selection_outlines_for
-from ui.selection_rotation_controller import SelectionRotationController
-from ui.selection_rotation_preview_transaction import (
-    _CoreStateSnapshot,
-    run_rotation_preview_update,
-)
-from ui.structure_mutation_access import (
-    add_atom_for,
-    add_benzene_ring_for,
-    add_bond_for,
 )
 
 
@@ -1109,10 +1109,10 @@ class SelectionRotationControllerTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "ui.selection_rotation_controller.update_ring_fills_for_atoms_for"
+                "chemvas.ui.selection_rotation_controller.update_ring_fills_for_atoms_for"
             ) as update_rings,
             mock.patch(
-                "ui.selection_rotation_controller.refresh_selection_outline_for"
+                "chemvas.ui.selection_rotation_controller.refresh_selection_outline_for"
             ) as refresh_outline,
         ):
             SelectionRotationController.refresh_atom_geometry(controller, {0, 2})
@@ -3476,7 +3476,7 @@ class SelectionRotationControllerTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "ui.selection_rotation_preview_transaction._UpdateSnapshot.restore",
+                "chemvas.ui.selection_rotation_preview_transaction._UpdateSnapshot.restore",
                 side_effect=RuntimeError("scene rollback failure"),
             ),
             self.assertRaises(RuntimeError) as raised,

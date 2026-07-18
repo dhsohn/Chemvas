@@ -11,10 +11,10 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.atom_coords_access import atom_coords_3d_for
-    from ui.bond_graphics_access import project_point_3d_for
-    from ui.canvas_rotation_state import rotation_state_for
-    from ui.canvas_smiles_input_state import (
+    from chemvas.ui.atom_coords_access import atom_coords_3d_for
+    from chemvas.ui.bond_graphics_access import project_point_3d_for
+    from chemvas.ui.canvas_rotation_state import rotation_state_for
+    from chemvas.ui.canvas_smiles_input_state import (
         last_smiles_input_for,
         set_last_smiles_input_for,
     )
@@ -89,7 +89,10 @@ class _BrokenAddNoteInterrupt(KeyboardInterrupt):
         raise SystemExit("add_note failed")
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for scene ops controller paste edge tests")
+@unittest.skipUnless(
+    QApplication is not None,
+    "PyQt6 is required for scene ops controller paste edge tests",
+)
 class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -104,7 +107,9 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
         clipboard = QApplication.clipboard()
         clipboard.clear(mode=clipboard.Mode.Clipboard)
 
-    def test_paste_selection_from_clipboard_rejects_missing_and_empty_payloads(self) -> None:
+    def test_paste_selection_from_clipboard_rejects_missing_and_empty_payloads(
+        self,
+    ) -> None:
         canvas = _RecordingFakeCanvas()
         controller = scene_clipboard_controller_for(canvas)
 
@@ -125,7 +130,9 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
         )
         self.assertFalse(controller.paste_selection_from_clipboard())
 
-    def test_select_pasted_content_skips_missing_atoms_and_none_scene_items(self) -> None:
+    def test_select_pasted_content_skips_missing_atoms_and_none_scene_items(
+        self,
+    ) -> None:
         canvas = _RecordingFakeCanvas()
         note_item = _make_note_item("note", 14.0, 16.0)
         canvas.add_item(note_item)
@@ -138,7 +145,9 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
         self.assertEqual(canvas.update_selection_outline_calls, 1)
         self.assertTrue(note_item.isSelected())
 
-    def test_paste_selection_from_clipboard_keeps_paste_state_when_everything_is_dropped(self) -> None:
+    def test_paste_selection_from_clipboard_keeps_paste_state_when_everything_is_dropped(
+        self,
+    ) -> None:
         canvas = _RecordingFakeCanvas()
         canvas.scene_clipboard_state.paste_source_json = "old-source"
         canvas.scene_clipboard_state.paste_count = 7
@@ -172,7 +181,9 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
         self.assertEqual(canvas.created_scene_item_states, [])
         self.assertEqual(canvas.record_additions_calls, [])
 
-    def test_paste_selection_from_clipboard_applies_explicit_carbon_and_additive_note_selection(self) -> None:
+    def test_paste_selection_from_clipboard_applies_explicit_carbon_and_additive_note_selection(
+        self,
+    ) -> None:
         canvas = _RecordingFakeCanvas()
         canvas.translate_empty_kinds = {"skip"}
         controller = scene_clipboard_controller_for(canvas)
@@ -180,7 +191,14 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
             "format": "chemvas-selection",
             "version": 1,
             "atoms": [
-                {"id": 10, "element": "C", "x": 5.0, "y": 7.0, "color": "#123456", "explicit_label": True},
+                {
+                    "id": 10,
+                    "element": "C",
+                    "x": 5.0,
+                    "y": 7.0,
+                    "color": "#123456",
+                    "explicit_label": True,
+                },
             ],
             "bonds": [
                 {"a": 10, "b": 99, "order": 2, "style": "double", "color": "#abcdef"},
@@ -212,13 +230,20 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
                 }
             ],
         )
-        self.assertEqual(canvas.created_scene_item_states, [{"kind": "note", "text": "copied", "x": 68.0, "y": 78.0}])
+        self.assertEqual(
+            canvas.created_scene_item_states,
+            [{"kind": "note", "text": "copied", "x": 68.0, "y": 78.0}],
+        )
         self.assertEqual(canvas.select_note_calls, [(canvas.created_items[0], True)])
-        self.assertEqual(canvas.record_additions_calls, [(0, 0, None, canvas.created_items)])
+        self.assertEqual(
+            canvas.record_additions_calls, [(0, 0, None, canvas.created_items)]
+        )
         self.assertEqual(canvas.clear_note_selection_calls, 1)
         self.assertEqual(canvas.update_selection_outline_calls, 1)
 
-    def test_paste_selection_from_clipboard_rolls_back_if_history_recording_raises(self) -> None:
+    def test_paste_selection_from_clipboard_rolls_back_if_history_recording_raises(
+        self,
+    ) -> None:
         canvas = _RecordingFakeCanvas()
         canvas.scene_clipboard_state.paste_source_json = "old-source"
         canvas.scene_clipboard_state.paste_count = 3
@@ -264,7 +289,9 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
         self.assertEqual(canvas.selected_notes, [existing_note])
         self.assertNotIn(canvas.created_items[0], canvas.selected_notes)
 
-    def test_paste_selection_rolls_back_append_then_keyboard_interrupt_exactly(self) -> None:
+    def test_paste_selection_rolls_back_append_then_keyboard_interrupt_exactly(
+        self,
+    ) -> None:
         canvas = _RecordingFakeCanvas()
         canvas.scene_clipboard_state.paste_source_json = "old-source"
         canvas.scene_clipboard_state.paste_count = 4
@@ -290,7 +317,9 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
             canvas.pushed_commands.append("partial-history-entry")
             raise interruption
 
-        canvas.services.canvas_history_recording_service.record_additions = append_then_interrupt
+        canvas.services.canvas_history_recording_service.record_additions = (
+            append_then_interrupt
+        )
 
         with self.assertRaises(KeyboardInterrupt) as raised:
             controller.paste_selection_from_clipboard()
@@ -306,10 +335,12 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
         self.assertEqual(canvas.selected_notes, [existing_note])
         self.assertTrue(all(item.scene() is None for item in canvas.created_items))
 
-    def test_paste_exact_restore_is_final_after_every_manual_rollback_mutates_then_raises(self) -> None:
-        from ui import insert_commit_rollback as rollback_module
-        from ui import scene_clipboard_paste_service as paste_module
-        from ui import scene_clipboard_selection as selection_module
+    def test_paste_exact_restore_is_final_after_every_manual_rollback_mutates_then_raises(
+        self,
+    ) -> None:
+        from chemvas.ui import insert_commit_rollback as rollback_module
+        from chemvas.ui import scene_clipboard_paste_service as paste_module
+        from chemvas.ui import scene_clipboard_selection as selection_module
 
         canvas = _RecordingFakeCanvas()
         canvas.scene_clipboard_state.paste_source_json = "old-source"
@@ -337,7 +368,9 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
             canvas.pushed_commands.append("partial-history-entry")
             raise interruption
 
-        canvas.services.canvas_history_recording_service.record_additions = append_then_interrupt
+        canvas.services.canvas_history_recording_service.record_additions = (
+            append_then_interrupt
+        )
         original_clear_selection = selection_module.clear_scene_selection_for
         clear_selection_calls = 0
         rollback_events: list[str] = []
@@ -351,9 +384,7 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
                 raise SystemExit("selection restore failed after mutation")
             return result
 
-        original_restore_smiles = (
-            rollback_module.SmilesInputRestoreAuthority.restore
-        )
+        original_restore_smiles = rollback_module.SmilesInputRestoreAuthority.restore
 
         def corrupt_smiles_then_fail(authority, value) -> None:
             rollback_events.append("smiles")
@@ -408,7 +439,9 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
             controller.paste_selection_from_clipboard()
 
         self.assertIs(raised.exception, interruption)
-        self.assertEqual(rollback_events, ["smiles", "selection", "source", "count", "exact"])
+        self.assertEqual(
+            rollback_events, ["smiles", "selection", "source", "count", "exact"]
+        )
         exact_restore.assert_called_once()
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(canvas.model.bonds, [])
@@ -434,7 +467,9 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
                 {"id": 10, "element": "C", "x": 5.0, "y": 7.0},
                 {"id": 11, "element": "N", "x": 25.0, "y": 7.0},
             ],
-            "bonds": [{"a": 10, "b": 11, "order": 1, "style": "single", "color": "#000000"}],
+            "bonds": [
+                {"a": 10, "b": 11, "order": 1, "style": "single", "color": "#000000"}
+            ],
             "rings": [],
             "marks": [],
             "scene_items": [],
@@ -481,7 +516,9 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
         self.assertIsNone(canvas.scene_clipboard_state.paste_source_json)
         self.assertEqual(canvas.scene_clipboard_state.paste_count, 0)
 
-    def test_copy_selection_to_clipboard_resets_paste_source_when_copy_has_no_selection_data(self) -> None:
+    def test_copy_selection_to_clipboard_resets_paste_source_when_copy_has_no_selection_data(
+        self,
+    ) -> None:
         canvas = _RecordingFakeCanvas()
         canvas.scene_clipboard_state.paste_source_json = "stale-source"
         canvas.scene_clipboard_state.paste_count = 4

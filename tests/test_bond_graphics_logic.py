@@ -3,8 +3,8 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from core.model import Bond
-from ui.bond_graphics_logic import refresh_bond_graphics
+from chemvas.domain.document import Bond
+from chemvas.features.rendering import refresh_bond_graphics
 
 
 class _FakeSelectableItem:
@@ -19,7 +19,9 @@ class _FakeSelectableItem:
 
 
 class BondGraphicsLogicTest(unittest.TestCase):
-    def test_refresh_bond_graphics_returns_false_for_invalid_or_missing_bond(self) -> None:
+    def test_refresh_bond_graphics_returns_false_for_invalid_or_missing_bond(
+        self,
+    ) -> None:
         removed: list[object] = []
         add_calls: list[int] = []
         redraw_calls: list[tuple[int, int | None]] = []
@@ -33,7 +35,9 @@ class BondGraphicsLogicTest(unittest.TestCase):
                 remove_scene_item=removed.append,
                 add_bond_graphics=add_calls.append,
                 redraw_connected=True,
-                redraw_connected_bonds=lambda atom_id, skip_bond_id: redraw_calls.append((atom_id, skip_bond_id)),
+                redraw_connected_bonds=lambda atom_id, skip_bond_id: (
+                    redraw_calls.append((atom_id, skip_bond_id))
+                ),
             )
         )
         self.assertFalse(
@@ -44,7 +48,9 @@ class BondGraphicsLogicTest(unittest.TestCase):
                 remove_scene_item=removed.append,
                 add_bond_graphics=add_calls.append,
                 redraw_connected=True,
-                redraw_connected_bonds=lambda atom_id, skip_bond_id: redraw_calls.append((atom_id, skip_bond_id)),
+                redraw_connected_bonds=lambda atom_id, skip_bond_id: (
+                    redraw_calls.append((atom_id, skip_bond_id))
+                ),
             )
         )
 
@@ -53,7 +59,9 @@ class BondGraphicsLogicTest(unittest.TestCase):
         self.assertEqual(redraw_calls, [])
         self.assertEqual(bond_items[0], ["old"])
 
-    def test_refresh_bond_graphics_preserves_selection_and_redraws_neighbors(self) -> None:
+    def test_refresh_bond_graphics_preserves_selection_and_redraws_neighbors(
+        self,
+    ) -> None:
         removed: list[object] = []
         add_calls: list[int] = []
         redraw_calls: list[tuple[int, int | None]] = []
@@ -74,7 +82,9 @@ class BondGraphicsLogicTest(unittest.TestCase):
                 remove_scene_item=removed.append,
                 add_bond_graphics=add_bond_graphics,
                 redraw_connected=True,
-                redraw_connected_bonds=lambda atom_id, skip_bond_id: redraw_calls.append((atom_id, skip_bond_id)),
+                redraw_connected_bonds=lambda atom_id, skip_bond_id: (
+                    redraw_calls.append((atom_id, skip_bond_id))
+                ),
             )
         )
 
@@ -84,7 +94,9 @@ class BondGraphicsLogicTest(unittest.TestCase):
         self.assertTrue(replacement.isSelected())
         self.assertEqual(redraw_calls, [(1, 0), (2, 0)])
 
-    def test_refresh_bond_graphics_tolerates_non_selectable_original_items(self) -> None:
+    def test_refresh_bond_graphics_tolerates_non_selectable_original_items(
+        self,
+    ) -> None:
         removed: list[object] = []
         add_calls: list[int] = []
         original = object()
@@ -109,7 +121,9 @@ class BondGraphicsLogicTest(unittest.TestCase):
         self.assertEqual(add_calls, [0])
         self.assertEqual(bond_items[0], [replacement])
 
-    def test_refresh_bond_graphics_skips_selection_restore_for_non_selectable_replacements(self) -> None:
+    def test_refresh_bond_graphics_skips_selection_restore_for_non_selectable_replacements(
+        self,
+    ) -> None:
         removed: list[object] = []
         original = _FakeSelectableItem(selected=True)
         replacement = object()

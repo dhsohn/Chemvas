@@ -18,18 +18,23 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.main_window import MainWindow
-    from ui.main_window_context_bar_pages import (
+    from chemvas.bootstrap.main_window import build_main_window
+    from chemvas.ui.main_window_context_bar_pages import (
         MainWindowContextBarPageBuilder,
         bond_label_for_state,
     )
-    from ui.main_window_ports import active_canvas_for_window, services_for_window
-    from ui.main_window_theme import (
+    from chemvas.ui.main_window_ports import (
+        active_canvas_for_window,
+        services_for_window,
+    )
+    from chemvas.ui.main_window_theme import (
         CONTEXT_BAR_BUTTON_HEIGHT,
     )
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for context bar page tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for context bar page tests"
+)
 class MainWindowContextBarPagesTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -37,8 +42,10 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def setUp(self) -> None:
-        self.window = MainWindow()
-        self.insert_controller = active_canvas_for_window(self.window).services.insert_controller
+        self.window = build_main_window()
+        self.insert_controller = active_canvas_for_window(
+            self.window
+        ).services.insert_controller
         self.tool_mode_controller = SimpleNamespace(
             get_arrow_line_width=mock.Mock(return_value=2.0),
             get_arrow_head_scale=mock.Mock(return_value=0.4),
@@ -47,8 +54,12 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
             get_atom_symbol=mock.Mock(return_value="N"),
             set_atom_symbol=mock.Mock(),
         )
-        self.insert_controller_for_window = mock.Mock(return_value=self.insert_controller)
-        self.tool_mode_controller_for_window = mock.Mock(return_value=self.tool_mode_controller)
+        self.insert_controller_for_window = mock.Mock(
+            return_value=self.insert_controller
+        )
+        self.tool_mode_controller_for_window = mock.Mock(
+            return_value=self.tool_mode_controller
+        )
         self.tool_state_service = mock.Mock()
         self.activate_bond_style_for_window = mock.Mock()
         self.set_bond_length_value_for_window = mock.Mock()
@@ -82,7 +93,9 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         self.assertEqual(bond_label_for_state("hash", 1), "Hash")
         self.assertIsNone(bond_label_for_state("unknown", 1))
 
-    def test_builder_returns_pages_and_wires_bond_ring_template_arrow_actions(self) -> None:
+    def test_builder_returns_pages_and_wires_bond_ring_template_arrow_actions(
+        self,
+    ) -> None:
         pages = self.builder.build(self.window)
 
         self.assertEqual(
@@ -122,7 +135,9 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         self.assertFalse(pages.arrow_buttons["curved_double"].icon().isNull())
         self.assertIsNotNone(pages.bracket_group)
         self.assertIsInstance(pages.atom_input, QLineEdit)
-        self.assertIs(pages.atom_input, pages.pages["atom"].findChild(QLineEdit, "atomInput"))
+        self.assertIs(
+            pages.atom_input, pages.pages["atom"].findChild(QLineEdit, "atomInput")
+        )
         page_labels = {
             key: [
                 label.text()
@@ -161,7 +176,9 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
             for button in pages.pages["ring"].findChildren(QToolButton)
             if button.toolTip() == "Benzene"
         )
-        with mock.patch.object(self.insert_controller, "begin_ring_template_insert") as insert:
+        with mock.patch.object(
+            self.insert_controller, "begin_ring_template_insert"
+        ) as insert:
             self.assertTrue(template_button.isCheckable())
             self.assertFalse(template_button.isChecked())
             template_button.click()
@@ -174,7 +191,9 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         self.assertTrue(pages.mark_buttons["minus"].isChecked())
         pages.mark_buttons["circled_plus"].click()
         self.tool_state_service.set_mark_kind.assert_any_call(self.window, "minus")
-        self.tool_state_service.set_mark_kind.assert_any_call(self.window, "circled_plus")
+        self.tool_state_service.set_mark_kind.assert_any_call(
+            self.window, "circled_plus"
+        )
         self.assertTrue(pages.mark_buttons["circled_plus"].isChecked())
         self.assertEqual(pages.mark_buttons["circled_plus"].text(), "")
         self.assertFalse(pages.mark_buttons["circled_plus"].icon().isNull())
@@ -187,11 +206,19 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         )
         preset_button.click()
 
-        self.tool_state_service.set_arrow_type.assert_called_once_with(self.window, "Curved Double")
-        self.tool_state_service.set_arrow_preset.assert_called_once_with(self.window, "Bold")
+        self.tool_state_service.set_arrow_type.assert_called_once_with(
+            self.window, "Curved Double"
+        )
+        self.tool_state_service.set_arrow_preset.assert_called_once_with(
+            self.window, "Bold"
+        )
         self.tool_mode_controller_for_window.assert_called_once_with(self.window)
-        self.assertEqual(pages.arrow_buttons["curved_double"].width(), CONTEXT_BAR_BUTTON_HEIGHT)
-        self.assertEqual(pages.arrow_buttons["curved_double"].height(), CONTEXT_BAR_BUTTON_HEIGHT)
+        self.assertEqual(
+            pages.arrow_buttons["curved_double"].width(), CONTEXT_BAR_BUTTON_HEIGHT
+        )
+        self.assertEqual(
+            pages.arrow_buttons["curved_double"].height(), CONTEXT_BAR_BUTTON_HEIGHT
+        )
         self.assertEqual(preset_button.height(), CONTEXT_BAR_BUTTON_HEIGHT)
         self.assertEqual(preset_button.width(), CONTEXT_BAR_BUTTON_HEIGHT)
         self.assertEqual(preset_button.text(), "")
@@ -213,11 +240,21 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
 
         sliders = pages.pages["arrow"].findChildren(QSlider)
         self.assertEqual([slider.value() for slider in sliders], [2, 40])
-        self.assertEqual([slider.objectName() for slider in sliders], ["arrowCompactSlider", "arrowCompactSlider"])
-        self.assertEqual([slider.height() for slider in sliders], [CONTEXT_BAR_BUTTON_HEIGHT] * 2)
-        self.assertEqual([slider.sizeHint().height() for slider in sliders], [CONTEXT_BAR_BUTTON_HEIGHT] * 2)
+        self.assertEqual(
+            [slider.objectName() for slider in sliders],
+            ["arrowCompactSlider", "arrowCompactSlider"],
+        )
+        self.assertEqual(
+            [slider.height() for slider in sliders], [CONTEXT_BAR_BUTTON_HEIGHT] * 2
+        )
+        self.assertEqual(
+            [slider.sizeHint().height() for slider in sliders],
+            [CONTEXT_BAR_BUTTON_HEIGHT] * 2,
+        )
         arrow_labels = [
-            label for label in pages.pages["arrow"].findChildren(QLabel) if label.objectName() == "arrowCompactLabel"
+            label
+            for label in pages.pages["arrow"].findChildren(QLabel)
+            if label.objectName() == "arrowCompactLabel"
         ]
         self.assertEqual(arrow_labels, [])
         sliders[0].setValue(5)
@@ -228,7 +265,9 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         self.tool_mode_controller.set_atom_symbol.assert_called_once_with("Cl")
 
         pages.bracket_buttons["dagger"].click()
-        self.tool_state_service.set_bracket_type.assert_called_once_with(self.window, "dagger")
+        self.tool_state_service.set_bracket_type.assert_called_once_with(
+            self.window, "dagger"
+        )
         self.assertTrue(pages.bracket_buttons["dagger"].isChecked())
 
         color_button = next(
@@ -237,7 +276,9 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
             if button.toolTip() == "Color: Blue"
         )
         color_button.click()
-        self.apply_color_preset_for_window.assert_called_once_with(self.window, "#2f6ed3")
+        self.apply_color_preset_for_window.assert_called_once_with(
+            self.window, "#2f6ed3"
+        )
 
         ring_fill_button = next(
             button
@@ -245,7 +286,9 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
             if button.toolTip() == "Ring Fill: Yellow"
         )
         ring_fill_button.click()
-        self.apply_ring_fill_preset_for_window.assert_called_once_with(self.window, "#f4d06f")
+        self.apply_ring_fill_preset_for_window.assert_called_once_with(
+            self.window, "#f4d06f"
+        )
 
 
 if __name__ == "__main__":

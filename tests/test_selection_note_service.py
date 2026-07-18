@@ -12,20 +12,27 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.canvas_group_state import register_group_for
-    from ui.canvas_scene_items_state import selected_notes_for, set_selected_notes_for
-    from ui.selection_note_service import SelectionNoteService
-    from ui.selection_style_state import SelectionStyleState
+    from chemvas.ui.canvas_group_state import register_group_for
+    from chemvas.ui.canvas_scene_items_state import (
+        selected_notes_for,
+        set_selected_notes_for,
+    )
+    from chemvas.ui.selection_note_service import SelectionNoteService
+    from chemvas.ui.selection_style_state import SelectionStyleState
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for selection note service tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for selection note service tests"
+)
 class SelectionNoteServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
 
-    def test_select_note_replaces_or_extends_note_selection_and_updates_boxes(self) -> None:
+    def test_select_note_replaces_or_extends_note_selection_and_updates_boxes(
+        self,
+    ) -> None:
         scene = QGraphicsScene()
         note_a = QGraphicsTextItem("A")
         note_b = QGraphicsTextItem("B")
@@ -33,7 +40,9 @@ class SelectionNoteServiceTest(unittest.TestCase):
         scene.addItem(note_b)
         canvas = SimpleNamespace(
             note_padding=6.0,
-            selection_style_state=SelectionStyleState(color=QColor("#1f5eff"), stroke_delta=0.8),
+            selection_style_state=SelectionStyleState(
+                color=QColor("#1f5eff"), stroke_delta=0.8
+            ),
         )
         set_selected_notes_for(canvas, [note_a])
         service = SelectionNoteService(canvas)
@@ -49,13 +58,17 @@ class SelectionNoteServiceTest(unittest.TestCase):
         self.assertEqual(selected_notes_for(canvas), [note_b, note_a])
         self.assertTrue(note_a.data(21).isVisible())
 
-    def test_toggle_note_selection_adds_or_removes_note_and_updates_box_visibility(self) -> None:
+    def test_toggle_note_selection_adds_or_removes_note_and_updates_box_visibility(
+        self,
+    ) -> None:
         scene = QGraphicsScene()
         note = QGraphicsTextItem("A")
         scene.addItem(note)
         canvas = SimpleNamespace(
             note_padding=6.0,
-            selection_style_state=SelectionStyleState(color=QColor("#1f5eff"), stroke_delta=0.8),
+            selection_style_state=SelectionStyleState(
+                color=QColor("#1f5eff"), stroke_delta=0.8
+            ),
         )
         set_selected_notes_for(canvas, [])
         service = SelectionNoteService(canvas)
@@ -76,7 +89,9 @@ class SelectionNoteServiceTest(unittest.TestCase):
         scene.addItem(note_b)
         canvas = SimpleNamespace(
             note_padding=6.0,
-            selection_style_state=SelectionStyleState(color=QColor("#1f5eff"), stroke_delta=0.8),
+            selection_style_state=SelectionStyleState(
+                color=QColor("#1f5eff"), stroke_delta=0.8
+            ),
         )
         set_selected_notes_for(canvas, [note_a, note_b])
         service = SelectionNoteService(canvas)
@@ -92,7 +107,9 @@ class SelectionNoteServiceTest(unittest.TestCase):
     def _note_canvas(self):
         return SimpleNamespace(
             note_padding=6.0,
-            selection_style_state=SelectionStyleState(color=QColor("#1f5eff"), stroke_delta=0.8),
+            selection_style_state=SelectionStyleState(
+                color=QColor("#1f5eff"), stroke_delta=0.8
+            ),
         )
 
     def test_toggle_note_selection_deselects_notes_only_group_as_unit(self) -> None:
@@ -122,7 +139,9 @@ class SelectionNoteServiceTest(unittest.TestCase):
         canvas = self._note_canvas()
         outline_refresh = mock.Mock()
         canvas.services = SimpleNamespace(
-            selection_controller=SimpleNamespace(update_selection_outline=outline_refresh)
+            selection_controller=SimpleNamespace(
+                update_selection_outline=outline_refresh
+            )
         )
         set_selected_notes_for(canvas, [])
         service = SelectionNoteService(canvas)

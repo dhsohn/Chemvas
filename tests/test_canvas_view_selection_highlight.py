@@ -19,24 +19,24 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.canvas_handle_controller import CanvasHandleController
-    from ui.canvas_tool_settings_state import CanvasToolSettingsState
-    from ui.curved_arrow_path_service import CurvedArrowPathService
-    from ui.handle_mutation_access import (
+    from chemvas.ui.canvas_handle_controller import CanvasHandleController
+    from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+    from chemvas.ui.curved_arrow_path_service import CurvedArrowPathService
+    from chemvas.ui.handle_mutation_access import (
         update_curved_control_for,
         update_orbital_rotate_for,
         update_orbital_scale_for,
     )
-    from ui.handle_mutation_service import HandleMutationService
-    from ui.handle_overlay_access import (
+    from chemvas.ui.handle_mutation_service import HandleMutationService
+    from chemvas.ui.handle_overlay_access import (
         clear_handles_for,
         show_curved_handles_for,
         show_orbital_handles_for,
     )
-    from ui.handle_overlay_service import HandleOverlayService
-    from ui.handle_state import CanvasHandleState
-    from ui.selection_highlight_styler import SelectionHighlightStyler
-    from ui.selection_style_state import SelectionStyleState
+    from chemvas.ui.handle_overlay_service import HandleOverlayService
+    from chemvas.ui.handle_state import CanvasHandleState
+    from chemvas.ui.selection_highlight_styler import SelectionHighlightStyler
+    from chemvas.ui.selection_style_state import SelectionStyleState
 
 
 def _path_item(color: str = "#111111", width: float = 1.5) -> QGraphicsPathItem:
@@ -56,8 +56,12 @@ def _attach_handle_services(view: SimpleNamespace) -> SimpleNamespace:
     if services is None:
         services = SimpleNamespace()
         view.services = services
-    if hasattr(view, "refresh_selection_outline") and not hasattr(services, "selection_controller"):
-        services.selection_controller = SimpleNamespace(update_selection_outline=view.refresh_selection_outline)
+    if hasattr(view, "refresh_selection_outline") and not hasattr(
+        services, "selection_controller"
+    ):
+        services.selection_controller = SimpleNamespace(
+            update_selection_outline=view.refresh_selection_outline
+        )
     services.selection_highlight_styler = SelectionHighlightStyler(view)
     services.handle_overlay_service = HandleOverlayService(view)
     services.curved_arrow_path_service = CurvedArrowPathService(view)
@@ -85,7 +89,9 @@ def _selection_style_state(
     )
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas view tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for canvas view tests"
+)
 class CanvasViewSelectionHighlightTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -145,8 +151,12 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
         selected_item = _path_item()
         view = SimpleNamespace(
             scene=lambda: scene,
-            handle_state=CanvasHandleState(active_handles=[handle_a, handle_b], target=object()),
-            selection_style_state=_selection_style_state(selected_items=[selected_item]),
+            handle_state=CanvasHandleState(
+                active_handles=[handle_a, handle_b], target=object()
+            ),
+            selection_style_state=_selection_style_state(
+                selected_items=[selected_item]
+            ),
         )
         services = _attach_handle_services(view)
         services.selection_highlight_styler.apply_selection_style(selected_item, True)
@@ -176,12 +186,19 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
         show_orbital_handles_for(view, item)
 
         self.assertEqual(len(view.handle_state.active_handles), 2)
-        self.assertEqual({handle.data(1) for handle in view.handle_state.active_handles}, {"orbital_scale", "orbital_rotate"})
-        self.assertTrue(all(handle.data(2) is item for handle in view.handle_state.active_handles))
+        self.assertEqual(
+            {handle.data(1) for handle in view.handle_state.active_handles},
+            {"orbital_scale", "orbital_rotate"},
+        )
+        self.assertTrue(
+            all(handle.data(2) is item for handle in view.handle_state.active_handles)
+        )
         self.assertIs(view.handle_state.target, item)
         self.assertEqual(item.pen().color().name(), "#1f5eff")
 
-    def test_show_orbital_then_curved_handles_replaces_previous_handles_and_highlight(self) -> None:
+    def test_show_orbital_then_curved_handles_replaces_previous_handles_and_highlight(
+        self,
+    ) -> None:
         scene = QGraphicsScene()
         orbital = _path_item("#111111", 1.0)
         orbital.setData(1, {"center": QPointF(10.0, 20.0), "base_handle_dist": 15.0})
@@ -193,7 +210,9 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
             handle_state=CanvasHandleState(),
             selection_style_state=_selection_style_state(),
             services=SimpleNamespace(
-                scene_decoration_build_service=SimpleNamespace(add_arrow_head=mock.Mock())
+                scene_decoration_build_service=SimpleNamespace(
+                    add_arrow_head=mock.Mock()
+                )
             ),
             refresh_selection_outline=mock.Mock(),
             tool_settings_state=CanvasToolSettingsState(curved_snap_step=2),
@@ -261,21 +280,30 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
         controller = view.services.handle_controller
 
         controller.update_handle_drag(scale_handle, QPointF(10.0, 0.0))
-        mutation_service.update_orbital_scale.assert_called_once_with(target, QPointF(10.0, 0.0))
+        mutation_service.update_orbital_scale.assert_called_once_with(
+            target, QPointF(10.0, 0.0)
+        )
         overlay_service.show_orbital_handles.assert_called_once_with(target)
 
         controller.update_handle_drag(rotate_handle, QPointF(0.0, -10.0))
-        mutation_service.update_orbital_rotate.assert_called_once_with(target, QPointF(0.0, -10.0))
+        mutation_service.update_orbital_rotate.assert_called_once_with(
+            target, QPointF(0.0, -10.0)
+        )
         self.assertEqual(overlay_service.show_orbital_handles.call_count, 2)
 
         controller.update_handle_drag(curved_handle, QPointF(3.0, 4.0))
-        mutation_service.update_curved_control.assert_called_once_with(target, QPointF(3.0, 4.0))
+        mutation_service.update_curved_control.assert_called_once_with(
+            target, QPointF(3.0, 4.0)
+        )
         overlay_service.show_curved_handles.assert_called_once_with(target)
 
         controller.update_handle_drag(curved_start_handle, QPointF(-1.0, 2.0))
         controller.update_handle_drag(curved_end_handle, QPointF(12.0, -3.0))
         mutation_service.update_curved_endpoint.assert_has_calls(
-            [mock.call(target, QPointF(-1.0, 2.0), "start"), mock.call(target, QPointF(12.0, -3.0), "end")]
+            [
+                mock.call(target, QPointF(-1.0, 2.0), "start"),
+                mock.call(target, QPointF(12.0, -3.0), "end"),
+            ]
         )
         self.assertEqual(overlay_service.show_curved_handles.call_count, 3)
 
@@ -285,14 +313,18 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
     def test_orbital_and_curved_update_helpers_apply_geometry_changes(self) -> None:
         orbital = _path_item()
         orbital.setData(1, {"center": QPointF(0.0, 0.0), "base_handle_dist": 10.0})
-        orbital_view = SimpleNamespace(renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)))
+        orbital_view = SimpleNamespace(
+            renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0))
+        )
         _attach_handle_services(orbital_view)
         update_orbital_scale_for(orbital_view, orbital, QPointF(20.0, 0.0))
         self.assertAlmostEqual(orbital.scale(), 2.0)
 
         orbital_view = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
-            tool_settings_state=CanvasToolSettingsState(orbital_snap_enabled=True, orbital_snap_step=15),
+            tool_settings_state=CanvasToolSettingsState(
+                orbital_snap_enabled=True, orbital_snap_step=15
+            ),
         )
         _attach_handle_services(orbital_view)
         update_orbital_rotate_for(orbital_view, orbital, QPointF(10.0, 10.0))
@@ -310,7 +342,9 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
         )
         curved_view = SimpleNamespace(
             services=SimpleNamespace(
-                scene_decoration_build_service=SimpleNamespace(add_arrow_head=mock.Mock())
+                scene_decoration_build_service=SimpleNamespace(
+                    add_arrow_head=mock.Mock()
+                )
             ),
             refresh_selection_outline=mock.Mock(),
         )

@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import mock
 
-from ui.hover_scene_access import (
+from chemvas.ui.hover_scene_access import (
     add_hover_preview_items_to_scene_for,
     add_hover_scene_item_for,
     clear_hover_items_for,
@@ -22,7 +22,9 @@ def test_clear_hover_items_for_delegates_with_canvas_scene() -> None:
     scene = object()
     canvas = SimpleNamespace(scene=mock.Mock(return_value=scene))
 
-    with mock.patch("ui.hover_scene_access.clear_hover_items_helper", return_value=[]) as clear_helper:
+    with mock.patch(
+        "chemvas.ui.hover_scene_access.clear_hover_items_helper", return_value=[]
+    ) as clear_helper:
         assert clear_hover_items_for(canvas, ["old"]) == []
 
     canvas.scene.assert_called_once_with()
@@ -33,7 +35,10 @@ def test_add_hover_preview_items_to_scene_for_delegates_with_canvas_scene() -> N
     scene = object()
     canvas = SimpleNamespace(scene=mock.Mock(return_value=scene))
 
-    with mock.patch("ui.hover_scene_access.add_hover_preview_items_helper", return_value=["added"]) as add_helper:
+    with mock.patch(
+        "chemvas.ui.hover_scene_access.add_hover_preview_items_helper",
+        return_value=["added"],
+    ) as add_helper:
         assert add_hover_preview_items_to_scene_for(canvas, ["new"]) == ["added"]
 
     canvas.scene.assert_called_once_with()

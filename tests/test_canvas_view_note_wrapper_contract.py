@@ -19,10 +19,13 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.canvas_note_controller import CanvasNoteController
-    from ui.canvas_service_access import canvas_services_for
-    from ui.canvas_text_style_state import CanvasTextStyleState, set_text_style_for
-    from ui.note_item_access import apply_note_style_for, update_note_box_for
+    from chemvas.ui.canvas_note_controller import CanvasNoteController
+    from chemvas.ui.canvas_service_access import canvas_services_for
+    from chemvas.ui.canvas_text_style_state import (
+        CanvasTextStyleState,
+        set_text_style_for,
+    )
+    from chemvas.ui.note_item_access import apply_note_style_for, update_note_box_for
 
 
 class _FakeNoteController:
@@ -84,12 +87,14 @@ def _make_canvas_note_view(scene: QGraphicsScene) -> SimpleNamespace:
         selection_controller=SimpleNamespace(
             select_note=select_note,
             update_note_selection_box=mock.Mock(),
-        )
+        ),
     )
     return view
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas view note tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for canvas view note tests"
+)
 class CanvasViewNoteWrapperContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -102,10 +107,14 @@ class CanvasViewNoteWrapperContractTest(unittest.TestCase):
         view = _make_canvas_note_view(scene)
         view.services.note_controller = fake_controller
 
-        item = canvas_services_for(view).note_controller.create_text_note(QPointF(3.0, 4.0), "Scheme")
+        item = canvas_services_for(view).note_controller.create_text_note(
+            QPointF(3.0, 4.0), "Scheme"
+        )
 
         self.assertEqual(item, "note-item")
-        self.assertEqual(fake_controller.calls, [("create_text_note", QPointF(3.0, 4.0), "Scheme")])
+        self.assertEqual(
+            fake_controller.calls, [("create_text_note", QPointF(3.0, 4.0), "Scheme")]
+        )
 
     def test_note_actions_use_note_controller(self) -> None:
         scene = QGraphicsScene()
@@ -134,7 +143,9 @@ class CanvasViewNoteWrapperContractTest(unittest.TestCase):
             ],
         )
 
-    def test_note_controller_begin_note_edit_selects_note_and_focuses_editor(self) -> None:
+    def test_note_controller_begin_note_edit_selects_note_and_focuses_editor(
+        self,
+    ) -> None:
         scene = QGraphicsScene()
         item = QGraphicsTextItem("Mechanism")
         scene.addItem(item)
@@ -144,7 +155,9 @@ class CanvasViewNoteWrapperContractTest(unittest.TestCase):
         controller.begin_note_edit(item)
 
         self.assertIn(item, view.selected_notes)
-        self.assertEqual(item.textInteractionFlags(), Qt.TextInteractionFlag.TextEditorInteraction)
+        self.assertEqual(
+            item.textInteractionFlags(), Qt.TextInteractionFlag.TextEditorInteraction
+        )
         self.assertTrue(item.flags() & QGraphicsItem.GraphicsItemFlag.ItemIsFocusable)
         self.assertIs(scene.focusItem(), item)
         view.setFocus.assert_called_once()
@@ -164,10 +177,14 @@ class CanvasViewNoteWrapperContractTest(unittest.TestCase):
         self.assertEqual(font.weight(), QFont.Weight.DemiBold)
         self.assertTrue(font.italic())
         self.assertEqual(item.defaultTextColor().name(), "#334455")
-        self.assertEqual(item.document().defaultTextOption().alignment(), Qt.AlignmentFlag.AlignRight)
+        self.assertEqual(
+            item.document().defaultTextOption().alignment(), Qt.AlignmentFlag.AlignRight
+        )
         self.assertIsNotNone(item.data(20))
         self.assertTrue(item.data(20).isVisible())
-        view.services.selection_controller.update_note_selection_box.assert_called_once_with(item)
+        view.services.selection_controller.update_note_selection_box.assert_called_once_with(
+            item
+        )
 
     def test_note_controller_update_text_note_and_box_toggle(self) -> None:
         scene = QGraphicsScene()

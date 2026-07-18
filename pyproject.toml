@@ -25,13 +25,18 @@ rdkit = [
 ]
 
 [project.scripts]
-chemvas = "chemvas.main:main"
+chemvas = "chemvas.bootstrap.application:main"
 
 [tool.setuptools.dynamic]
 version = { attr = "chemvas.__version__" }
 
+[tool.setuptools]
+include-package-data = false
+
 [tool.setuptools.packages.find]
 where = ["app"]
+include = ["chemvas*"]
+namespaces = false
 
 [tool.setuptools.package-data]
 chemvas = ["assets/icon/*.svg", "assets/icon/*.png"]
@@ -66,7 +71,7 @@ max-complexity = 30
 [tool.mypy]
 python_version = "3.12"
 mypy_path = "app"
-files = ["app/core", "app/ui"]
+files = ["app/chemvas"]
 warn_unused_ignores = true
 check_untyped_defs = true
 
@@ -74,9 +79,31 @@ check_untyped_defs = true
 module = ["rdkit", "rdkit.*"]
 ignore_missing_imports = true
 
-# core.rdkit_adapter carries a type: ignore for rdkit-stubs' missing
+# New architectural owners are held to mypy's full strict profile. Legacy
+# ``chemvas.core`` / ``chemvas.ui`` modules remain on the project-wide gradual
+# settings until their feature slice moves behind one of these public APIs.
+[[tool.mypy.overrides]]
+module = [
+    "chemvas.domain.*",
+    "chemvas.features.*",
+    "chemvas.shell.*",
+    "chemvas.adapters.*",
+    "chemvas.bootstrap.*",
+]
+disallow_any_generics = true
+disallow_incomplete_defs = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_untyped_decorators = true
+disallow_untyped_defs = true
+extra_checks = true
+implicit_reexport = false
+strict_equality = true
+warn_return_any = true
+
+# chemvas.core.rdkit_adapter carries a type: ignore for rdkit-stubs' missing
 # RDLogger.DisableLog. Without rdkit installed (CI) the module is Any and the
 # ignore would be flagged as unused, so skip that warning for this module only.
 [[tool.mypy.overrides]]
-module = ["core.rdkit_adapter"]
+module = ["chemvas.core.rdkit_adapter"]
 warn_unused_ignores = false

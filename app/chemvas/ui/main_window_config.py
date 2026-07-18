@@ -1,0 +1,157 @@
+from __future__ import annotations
+
+from chemvas.features.annotations import BRACKET_MENU_SPECS
+
+ARROW_MENU_SPECS: list[tuple[str, str]] = [
+    ("Reaction", "reaction"),
+    ("Equilibrium", "equilibrium"),
+    ("Resonance", "resonance"),
+    ("Curved Single", "curved_single"),
+    ("Curved Double", "curved_double"),
+    ("Inhibition", "inhibit"),
+    ("Dotted", "dotted"),
+]
+
+ARROW_PRESET_SPECS: list[str] = ["Default", "Bold", "Fine"]
+
+COLOR_PALETTE_SPECS: list[tuple[str, str]] = [
+    ("Black", "#000000"),
+    ("Gray", "#4a4a4a"),
+    ("Yellow", "#f4d06f"),
+    ("Blue", "#2f6ed3"),
+    ("Red", "#d84a3a"),
+    ("Green", "#2e8b57"),
+    ("Purple", "#6a2ea6"),
+    ("Orange", "#c77c00"),
+]
+
+TEMPLATE_ENTRY_SPECS: list[tuple[str, int, str]] = [
+    ("Benzene", 6, "benzene"),
+    ("Cyclopropane", 3, "regular"),
+    ("Cyclobutane", 4, "regular"),
+    ("Cyclopentane", 5, "regular"),
+    ("Cyclohexane (Chair)", 6, "chair"),
+    ("Cyclohexane (Chair, flipped)", 6, "chair_flip"),
+    ("Cycloheptane", 7, "regular"),
+    ("Cyclooctane", 8, "regular"),
+]
+
+TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
+    ("select", "Select", "select", "icon_select", "Select / Marquee (ChemDraw: Space)"),
+    ("bond", "Bond", "bond", "icon_bond", "Bond (ChemDraw: X)"),
+    ("benzene", "Ring", "benzene", "icon_ring", "Ring / Benzene (ChemDraw: J)"),
+    ("arrow", "Arrow", "arrow", "icon_arrow", "Arrow (ChemDraw: E)"),
+    ("text", "Atom", "text", "icon_text", "Atom (ChemDraw: A)"),
+    ("note", "Text", "note", "icon_note", "Text / Annotation (ChemDraw: T)"),
+    ("mark", "Mark", "mark", "icon_mark", "Charge / Radical"),
+    (
+        "ts_bracket",
+        "Brackets",
+        "ts_bracket",
+        "icon_ts_bracket",
+        "Brackets (ChemDraw: Shift+T)",
+    ),
+    (
+        "shape",
+        "Shape",
+        "shape",
+        "icon_shape",
+        "Shapes / decoration (circle, ellipse, box)",
+    ),
+    ("orbital", "Orbital", "orbital", "icon_orbital", "Orbital"),
+    (
+        "perspective",
+        "Perspective",
+        "perspective",
+        "icon_perspective",
+        "Perspective Rotation (ChemDraw: Alt+D, Shift+drag locks X/Y)",
+    ),
+    ("color", "Color", "color", "icon_color", "Color"),
+]
+
+RING_FILL_TOOL_ACTION_SPEC: tuple[str, str, str, str] = (
+    "ring_fill",
+    "Ring Fill",
+    "icon_ring_fill",
+    "Ring Fill",
+)
+
+BOND_TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
+    ("bond_bold", "Bold Bond", "Bold", "icon_bond_bold", "Bold Bond (Bond Hotkey: B)"),
+    ("bond_wedge", "Wedge", "Wedge", "icon_bond_wedge", "Wedge Bond (Bond Hotkey: W)"),
+    ("bond_hash", "Hash", "Hash", "icon_bond_hash", "Hash Bond (Bond Hotkey: Shift+H)"),
+    ("bond_dotted", "Dotted Bond", "Dotted", "icon_bond_dotted", "Dotted Bond"),
+]
+
+MARK_TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
+    ("mark_plus", "Charge +", "plus", "icon_mark_plus", "Charge + (Atom Hotkey: +)"),
+    ("mark_minus", "Charge -", "minus", "icon_mark_minus", "Charge - (Atom Hotkey: -)"),
+    (
+        "mark_circled_plus",
+        "Circled Charge +",
+        "circled_plus",
+        "icon_mark_circled_plus",
+        "Circled charge +",
+    ),
+    (
+        "mark_circled_minus",
+        "Circled Charge -",
+        "circled_minus",
+        "icon_mark_circled_minus",
+        "Circled charge -",
+    ),
+    ("mark_radical", "Radical", "radical", "icon_mark_radical", "Radical"),
+]
+
+TOOLBAR_PRIMARY_TOOL_GROUP: tuple[str, ...] = (
+    "select",
+    "perspective",
+    "text",
+    "bond",
+    "benzene",
+    "arrow",
+    "ts_bracket",
+)
+
+# "note" is the tool labelled "Text" in the UI; "shape" sits to its right.
+TOOLBAR_TOOL_GROUPS: list[tuple[str, ...]] = [
+    TOOLBAR_PRIMARY_TOOL_GROUP,
+    ("mark", "orbital"),
+    ("note", "shape", "color", "ring_fill"),
+]
+
+TOOLBAR_TOOL_ACTION_ORDER: list[str] = [
+    *(action_key for group in TOOLBAR_TOOL_GROUPS for action_key in group),
+]
+
+TEXT_FONT_FAMILY_CHOICES: tuple[str, ...] = (
+    "Arial",
+    "Helvetica",
+    "Times New Roman",
+    "Courier New",
+    "Verdana",
+)
+
+ARROW_MENU_ITEMS = ARROW_MENU_SPECS
+ARROW_PRESET_ITEMS = ARROW_PRESET_SPECS
+ACS_COLOR_PALETTE = COLOR_PALETTE_SPECS
+
+
+__all__ = [
+    "ACS_COLOR_PALETTE",
+    "ARROW_MENU_ITEMS",
+    "ARROW_MENU_SPECS",
+    "ARROW_PRESET_ITEMS",
+    "ARROW_PRESET_SPECS",
+    "BOND_TOOL_ACTION_SPECS",
+    "BRACKET_MENU_SPECS",
+    "COLOR_PALETTE_SPECS",
+    "MARK_TOOL_ACTION_SPECS",
+    "RING_FILL_TOOL_ACTION_SPEC",
+    "TEMPLATE_ENTRY_SPECS",
+    "TEXT_FONT_FAMILY_CHOICES",
+    "TOOLBAR_PRIMARY_TOOL_GROUP",
+    "TOOLBAR_TOOL_ACTION_ORDER",
+    "TOOLBAR_TOOL_GROUPS",
+    "TOOL_ACTION_SPECS",
+]

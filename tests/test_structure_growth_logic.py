@@ -1,9 +1,8 @@
 import math
 import unittest
 
-from core.model import Atom, Bond
-from PyQt6.QtCore import QPointF
-from ui.structure_growth_logic import (
+from chemvas.domain.document import Atom, Bond
+from chemvas.features.insertion import (
     alternating_ring_bond_specs,
     crown_ether_elements,
     fused_benzene_centers,
@@ -11,6 +10,7 @@ from ui.structure_growth_logic import (
     other_atom_id_from_bond_result,
     resolve_bond_placement_context,
 )
+from PyQt6.QtCore import QPointF
 
 
 class StructureGrowthLogicTest(unittest.TestCase):
@@ -21,11 +21,20 @@ class StructureGrowthLogicTest(unittest.TestCase):
         angled = fused_benzene_centers(center, 30.0, 3, mode="angled")
         linear = fused_benzene_centers(center, 30.0, 3, mode="linear")
 
-        self.assertEqual([(point.x(), point.y()) for point in count_two], [(-5.0, 20.0), (25.0, 20.0)])
-        self.assertEqual([(point.x(), point.y()) for point in angled[:2]], [(-20.0, 20.0), (10.0, 20.0)])
+        self.assertEqual(
+            [(point.x(), point.y()) for point in count_two],
+            [(-5.0, 20.0), (25.0, 20.0)],
+        )
+        self.assertEqual(
+            [(point.x(), point.y()) for point in angled[:2]],
+            [(-20.0, 20.0), (10.0, 20.0)],
+        )
         self.assertAlmostEqual(angled[2].x(), 25.0)
         self.assertAlmostEqual(angled[2].y(), 20.0 + 30.0 * math.sqrt(3.0) / 2.0)
-        self.assertEqual([(point.x(), point.y()) for point in linear], [(-20.0, 20.0), (10.0, 20.0), (40.0, 20.0)])
+        self.assertEqual(
+            [(point.x(), point.y()) for point in linear],
+            [(-20.0, 20.0), (10.0, 20.0), (40.0, 20.0)],
+        )
 
     def test_crown_ether_elements_marks_oxygen_stride(self) -> None:
         self.assertEqual(
@@ -33,7 +42,9 @@ class StructureGrowthLogicTest(unittest.TestCase):
             ["O", "C", "C", "O", "C", "C", "O", "C", "C", "O", "C", "C"],
         )
 
-    def test_other_atom_id_from_bond_result_handles_missing_and_non_matching_anchor(self) -> None:
+    def test_other_atom_id_from_bond_result_handles_missing_and_non_matching_anchor(
+        self,
+    ) -> None:
         self.assertEqual(other_atom_id_from_bond_result(1, (1, 2)), 2)
         self.assertEqual(other_atom_id_from_bond_result(2, (1, 2)), 1)
         self.assertIsNone(other_atom_id_from_bond_result(3, (1, 2)))
@@ -53,17 +64,25 @@ class StructureGrowthLogicTest(unittest.TestCase):
         self.assertEqual((placement.midpoint.x(), placement.midpoint.y()), (5.0, 2.0))
         self.assertIsNone(resolve_bond_placement_context(1, bonds=bonds, atoms=atoms))
         self.assertIsNone(resolve_bond_placement_context(5, bonds=bonds, atoms=atoms))
-        self.assertIsNone(resolve_bond_placement_context(0, bonds=bonds, atoms={1: atoms[1]}))
+        self.assertIsNone(
+            resolve_bond_placement_context(0, bonds=bonds, atoms={1: atoms[1]})
+        )
 
     def test_mirrored_points_and_alternating_ring_specs(self) -> None:
         points = [QPointF(1.0, 2.0), QPointF(3.0, -4.0)]
 
         self.assertEqual(
-            [(point.x(), point.y()) for point in mirrored_local_points(points, mirrored=False)],
+            [
+                (point.x(), point.y())
+                for point in mirrored_local_points(points, mirrored=False)
+            ],
             [(1.0, 2.0), (3.0, -4.0)],
         )
         self.assertEqual(
-            [(point.x(), point.y()) for point in mirrored_local_points(points, mirrored=True)],
+            [
+                (point.x(), point.y())
+                for point in mirrored_local_points(points, mirrored=True)
+            ],
             [(1.0, -2.0), (3.0, 4.0)],
         )
         self.assertEqual(

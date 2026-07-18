@@ -2,48 +2,49 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from core.history import HistoryTransactionRestoreResult
-from core.model import Atom, Bond, MoleculeModel
-from PyQt6.QtCore import QCoreApplication, QEvent, QPointF
-from PyQt6.QtWidgets import QApplication
-from ui import insert_commit_rollback as insert_rollback_module
-from ui import insert_smiles_commit_service as insert_smiles_commit_service_module
-from ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
-from ui.canvas_atom_graphics_state import atom_items_for
-from ui.canvas_graph_state import graph_state_for
-from ui.canvas_lifecycle import schedule_canvas_deletion_for
-from ui.canvas_scene_items_state import (
-    append_scene_item_for,
-    remove_scene_item_from_collection_for,
-    ring_items_for,
-)
-from ui.canvas_smiles_input_state import (
-    last_smiles_input_for,
-    set_last_smiles_input_for,
-)
-from ui.canvas_view import CanvasView
-from ui.insert_commit_rollback import (
-    capture_smiles_input_restore_authority,
-    rollback_insert_mutation,
-)
-from ui.insert_commit_service import InsertCommitService
-from ui.insert_smiles_commit_service import apply_smiles_commit_plan
-from ui.insert_template_commit_service import apply_template_commit_resolution
-from ui.smiles_insert_logic import (
+from chemvas.core.history import HistoryTransactionRestoreResult
+from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.features.insertion import (
     SmilesAtomPlacement,
     SmilesBondPlacement,
     SmilesCommitPlan,
     SmilesMarkPlacement,
-)
-from ui.structure_insert_access import (
-    add_insert_ring_from_points_for,
-    rollback_insert_mutation_for,
-)
-from ui.template_insert_logic import (
     TemplateInsertPlan,
     TemplateInsertRequest,
     TemplateInsertResolution,
 )
+from chemvas.ui import insert_commit_rollback as insert_rollback_module
+from chemvas.ui import (
+    insert_smiles_commit_service as insert_smiles_commit_service_module,
+)
+from chemvas.ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
+from chemvas.ui.canvas_atom_graphics_state import atom_items_for
+from chemvas.ui.canvas_graph_state import graph_state_for
+from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
+from chemvas.ui.canvas_runtime_services import CanvasRuntimeServices
+from chemvas.ui.canvas_scene_items_state import (
+    append_scene_item_for,
+    remove_scene_item_from_collection_for,
+    ring_items_for,
+)
+from chemvas.ui.canvas_smiles_input_state import (
+    last_smiles_input_for,
+    set_last_smiles_input_for,
+)
+from chemvas.ui.canvas_view import CanvasView
+from chemvas.ui.insert_commit_rollback import (
+    capture_smiles_input_restore_authority,
+    rollback_insert_mutation,
+)
+from chemvas.ui.insert_commit_service import InsertCommitService
+from chemvas.ui.insert_smiles_commit_service import apply_smiles_commit_plan
+from chemvas.ui.insert_template_commit_service import apply_template_commit_resolution
+from chemvas.ui.structure_insert_access import (
+    add_insert_ring_from_points_for,
+    rollback_insert_mutation_for,
+)
+from PyQt6.QtCore import QCoreApplication, QEvent, QPointF
+from PyQt6.QtWidgets import QApplication
 
 
 def _points(count: int, *, start: float = 1.0) -> list[tuple[float, float]]:
@@ -93,29 +94,53 @@ class _FakeCanvas:
         self.ring_calls: list[list[tuple[float, float]]] = []
         self.benzene_calls: list[tuple[float, float, int | None]] = []
         self.bond_renderer = SimpleNamespace(add_bond_graphics=self._add_bond_graphics)
-        self.services = SimpleNamespace(
-            atom_label_service=SimpleNamespace(
-                add_or_update_atom_label=self.add_or_update_atom_label,
-                ensure_carbon_dot=self.ensure_carbon_dot,
+        self.services = CanvasRuntimeServices(
+            auxiliary=SimpleNamespace(
+                atom_label_service=SimpleNamespace(
+                    add_or_update_atom_label=self.add_or_update_atom_label,
+                    ensure_carbon_dot=self.ensure_carbon_dot,
+                )
             ),
-            canvas_atom_mutation_service=SimpleNamespace(add_atom=self.add_atom),
-            canvas_bond_mutation_service=SimpleNamespace(add_bond=self.add_bond),
-            canvas_graph_service=SimpleNamespace(bond_exists=self.bond_exists),
-            canvas_history_recording_service=SimpleNamespace(record_additions=self._record_additions),
-            canvas_mark_scene_service=SimpleNamespace(add_mark_for_atom=self.add_mark_for_atom),
-            canvas_ring_fill_scene_service=SimpleNamespace(
-                create_ring_fill_item=self.create_ring_fill_item,
+            document=SimpleNamespace(
+                canvas_history_recording_service=SimpleNamespace(
+                    record_additions=self._record_additions
+                )
             ),
-            scene_item_controller=SimpleNamespace(
-                attach_scene_item=self.attach_scene_item,
-                remove_scene_item=self.remove_scene_item,
-                restore_scene_item=self.attach_scene_item,
+            graph=SimpleNamespace(
+                canvas_graph_service=SimpleNamespace(bond_exists=self.bond_exists)
             ),
-            structure_build_service=SimpleNamespace(
-                add_atom_with_merge=self.add_atom_with_merge,
-                add_ring_from_points=self.add_ring_from_points,
-                add_benzene_ring=self.add_benzene_ring,
+            input=SimpleNamespace(),
+            interaction=SimpleNamespace(),
+            scene_view=SimpleNamespace(
+                canvas_ring_fill_scene_service=SimpleNamespace(
+                    create_ring_fill_item=self.create_ring_fill_item,
+                ),
+                scene_item_controller=SimpleNamespace(
+                    attach_scene_item=self.attach_scene_item,
+                    remove_scene_item=self.remove_scene_item,
+                    restore_scene_item=self.attach_scene_item,
+                ),
             ),
+            handles=SimpleNamespace(),
+            hover=SimpleNamespace(),
+            scene_decoration=SimpleNamespace(
+                canvas_mark_scene_service=SimpleNamespace(
+                    add_mark_for_atom=self.add_mark_for_atom
+                )
+            ),
+            scene_operations=SimpleNamespace(),
+            selection=SimpleNamespace(),
+            structure=SimpleNamespace(
+                canvas_atom_mutation_service=SimpleNamespace(add_atom=self.add_atom),
+                canvas_bond_mutation_service=SimpleNamespace(add_bond=self.add_bond),
+                structure_build_service=SimpleNamespace(
+                    add_atom_with_merge=self.add_atom_with_merge,
+                    add_ring_from_points=self.add_ring_from_points,
+                    add_benzene_ring=self.add_benzene_ring,
+                ),
+            ),
+            tooling=SimpleNamespace(),
+            history_service=None,
         )
 
     def add_atom(self, element: str, x: float, y: float) -> int:
@@ -147,7 +172,14 @@ class _FakeCanvas:
     def _record_additions(self, **kwargs) -> None:
         self.record_calls.append(kwargs)
 
-    def add_mark_for_atom(self, atom_id: int, click_pos: QPointF, *, kind: str | None = None, record: bool = True):
+    def add_mark_for_atom(
+        self,
+        atom_id: int,
+        click_pos: QPointF,
+        *,
+        kind: str | None = None,
+        record: bool = True,
+    ):
         self.mark_calls.append((atom_id, click_pos.x(), click_pos.y(), kind, record))
         item = object()
         self.created_marks.append(item)
@@ -196,7 +228,9 @@ class _FakeCanvas:
         self.benzene_calls.append((center.x(), center.y(), attach_bond_id))
         return [(center.x() + 1.0, center.y() + 1.0)] * 6, []
 
-    def add_benzene_ring(self, center, attach_atom_id=None, attach_bond_id=None, before_smiles_input=None):
+    def add_benzene_ring(
+        self, center, attach_atom_id=None, attach_bond_id=None, before_smiles_input=None
+    ):
         set_last_smiles_input_for(self, None)
         points = [(center.x() + 1.0, center.y() + 1.0)] * 6
         atom_ids = []
@@ -204,7 +238,9 @@ class _FakeCanvas:
             atom_ids.append(self.add_atom("C", point_x, point_y))
         for index in range(len(atom_ids)):
             self.add_bond(atom_ids[index], atom_ids[(index + 1) % len(atom_ids)])
-        for bond_id in range(len(self.model.bonds) - len(atom_ids), len(self.model.bonds)):
+        for bond_id in range(
+            len(self.model.bonds) - len(atom_ids), len(self.model.bonds)
+        ):
             self._add_bond_graphics(bond_id)
         self._record_additions(
             before_next_atom_id=0,
@@ -479,20 +515,33 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertIsNot(canvas.smiles_input_state, state)
         self.assertTrue(result.errors)
 
-
-    def test_structure_insert_access_routes_ring_build_to_structure_service(self) -> None:
-        structure_build_service = SimpleNamespace(add_ring_from_points=mock.Mock(return_value=[7]))
+    def test_structure_insert_access_routes_ring_build_to_structure_service(
+        self,
+    ) -> None:
+        structure_build_service = SimpleNamespace(
+            add_ring_from_points=mock.Mock(return_value=[7])
+        )
         canvas = SimpleNamespace(
-            services=SimpleNamespace(structure_build_service=structure_build_service),
+            services=SimpleNamespace(
+                structure=SimpleNamespace(
+                    structure_build_service=structure_build_service
+                )
+            ),
         )
         points = [QPointF(1.0, 2.0), QPointF(3.0, 4.0)]
 
         atom_ids = add_insert_ring_from_points_for(canvas, points)
 
         self.assertEqual(atom_ids, [7])
-        structure_build_service.add_ring_from_points.assert_called_once_with(points)
+        structure_build_service.add_ring_from_points.assert_called_once_with(
+            points,
+            elements=None,
+            merge=None,
+        )
 
-    def test_rollback_insert_mutation_direct_fallback_removes_atom_coords_3d(self) -> None:
+    def test_rollback_insert_mutation_direct_fallback_removes_atom_coords_3d(
+        self,
+    ) -> None:
         canvas = SimpleNamespace(model=MoleculeModel())
         atom_id = canvas.model.add_atom("C", 1.0, 2.0)
         set_atom_coords_3d_for(canvas, {atom_id: (1.0, 2.0, 3.0)})
@@ -502,7 +551,9 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(atom_coords_3d_for(canvas), {})
 
-    def test_rollback_insert_mutation_continues_after_one_atom_removal_fails(self) -> None:
+    def test_rollback_insert_mutation_continues_after_one_atom_removal_fails(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         for offset in range(3):
             canvas.model.add_atom("C", float(offset), 0.0)
@@ -530,7 +581,9 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(canvas.model.next_atom_id, 0)
 
-    def test_rollback_insert_mutation_raw_fallback_clears_graph_graphics_and_scene(self) -> None:
+    def test_rollback_insert_mutation_raw_fallback_clears_graph_graphics_and_scene(
+        self,
+    ) -> None:
         class _SceneItem:
             def __init__(self, scene) -> None:
                 self._scene = scene
@@ -629,7 +682,9 @@ class InsertCommitServiceTest(unittest.TestCase):
             ],
         )
 
-    def test_apply_smiles_commit_plan_rolls_back_mutate_then_keyboard_interrupt(self) -> None:
+    def test_apply_smiles_commit_plan_rolls_back_mutate_then_keyboard_interrupt(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         plan = SmilesCommitPlan(
             offset=(0.0, 0.0),
@@ -697,7 +752,9 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertEqual(canvas.model.next_atom_id, 0)
         self.assertEqual(last_smiles_input_for(canvas), "old")
 
-    def test_smiles_commit_outer_rollback_and_broken_add_note_preserve_primary_and_retry(self) -> None:
+    def test_smiles_commit_outer_rollback_and_broken_add_note_preserve_primary_and_retry(
+        self,
+    ) -> None:
         plan = SmilesCommitPlan(
             offset=(0.0, 0.0),
             atoms=[SmilesAtomPlacement(0, "N", 10.0, 20.0, "#111111", True)],
@@ -707,8 +764,12 @@ class InsertCommitServiceTest(unittest.TestCase):
             with self.subTest(error_type=error_type.__name__):
                 canvas = _FakeCanvas()
                 primary_error = error_type("SMILES insertion interrupted")
-                original_add_atom = insert_smiles_commit_service_module.add_insert_atom_for
-                original_rollback = insert_smiles_commit_service_module.rollback_insert_mutation
+                original_add_atom = (
+                    insert_smiles_commit_service_module.add_insert_atom_for
+                )
+                original_rollback = (
+                    insert_smiles_commit_service_module.rollback_insert_mutation
+                )
 
                 def add_then_interrupt(
                     target_canvas,
@@ -801,7 +862,9 @@ class InsertCommitServiceTest(unittest.TestCase):
             ],
         )
 
-    def test_apply_smiles_commit_plan_removes_created_marks_if_later_mark_creation_raises(self) -> None:
+    def test_apply_smiles_commit_plan_removes_created_marks_if_later_mark_creation_raises(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         plan = SmilesCommitPlan(
             offset=(0.0, 0.0),
@@ -815,12 +878,22 @@ class InsertCommitServiceTest(unittest.TestCase):
             ],
         )
 
-        def add_first_mark_then_fail(atom_id: int, click_pos: QPointF, *, kind: str | None = None, record: bool = True):
+        def add_first_mark_then_fail(
+            atom_id: int,
+            click_pos: QPointF,
+            *,
+            kind: str | None = None,
+            record: bool = True,
+        ):
             if not canvas.created_marks:
-                return canvas.add_mark_for_atom(atom_id, click_pos, kind=kind, record=record)
+                return canvas.add_mark_for_atom(
+                    atom_id, click_pos, kind=kind, record=record
+                )
             raise RuntimeError("mark failed")
 
-        canvas.services.canvas_mark_scene_service.add_mark_for_atom = add_first_mark_then_fail
+        canvas.services.canvas_mark_scene_service.add_mark_for_atom = (
+            add_first_mark_then_fail
+        )
 
         with self.assertRaisesRegex(RuntimeError, "mark failed"):
             apply_smiles_commit_plan(
@@ -838,7 +911,9 @@ class InsertCommitServiceTest(unittest.TestCase):
 
     def test_apply_template_commit_resolution_handles_free_and_bond_paths(self) -> None:
         free_canvas = _FakeCanvas()
-        free_request = TemplateInsertRequest(ring_size=6, cursor_pos=(5.0, 6.0), ring_style="regular")
+        free_request = TemplateInsertRequest(
+            ring_size=6, cursor_pos=(5.0, 6.0), ring_style="regular"
+        )
         free_plan = TemplateInsertPlan(
             generator="free_regular_ring",
             ring_size=6,
@@ -858,12 +933,16 @@ class InsertCommitServiceTest(unittest.TestCase):
         )
 
         self.assertTrue(applied)
-        self.assertEqual(free_canvas.add_atom_calls, [("C", x, y) for x, y in _points(6)])
+        self.assertEqual(
+            free_canvas.add_atom_calls, [("C", x, y) for x, y in _points(6)]
+        )
         self.assertEqual(
             free_canvas.add_bond_calls,
             [(0, 1, 1), (1, 2, 1), (2, 3, 1), (3, 4, 1), (4, 5, 1), (5, 0, 1)],
         )
-        self.assertEqual(free_canvas.record_calls[0]["before_smiles_input"], "before-free")
+        self.assertEqual(
+            free_canvas.record_calls[0]["before_smiles_input"], "before-free"
+        )
         self.assertIsNone(last_smiles_input_for(free_canvas))
 
         bond_canvas = _FakeCanvas()
@@ -873,7 +952,9 @@ class InsertCommitServiceTest(unittest.TestCase):
         }
         bond_canvas.model.bonds = [Bond(0, 1, 1)]
         bond_canvas.model.next_atom_id = 2
-        bond_request = TemplateInsertRequest(ring_size=6, cursor_pos=(8.0, 9.0), bond_id=0, ring_style="chair")
+        bond_request = TemplateInsertRequest(
+            ring_size=6, cursor_pos=(8.0, 9.0), bond_id=0, ring_style="chair"
+        )
         bond_plan = TemplateInsertPlan(
             generator="bond_template_shape",
             ring_size=6,
@@ -895,16 +976,24 @@ class InsertCommitServiceTest(unittest.TestCase):
         )
 
         self.assertTrue(applied)
-        self.assertEqual(bond_canvas.ring_calls[-1][:2], [(0, 0.0, 0.0), (1, 10.0, 0.0)])
-        self.assertEqual(bond_canvas.record_calls[0]["before_smiles_input"], "before-bond")
+        self.assertEqual(
+            bond_canvas.ring_calls[-1][:2], [(0, 0.0, 0.0), (1, 10.0, 0.0)]
+        )
+        self.assertEqual(
+            bond_canvas.record_calls[0]["before_smiles_input"], "before-bond"
+        )
         self.assertEqual(len(ring_items_for(bond_canvas)), 1)
         ring_item = ring_items_for(bond_canvas)[0]
         self.assertEqual(ring_item.data(2), [2, 3, 4, 5, 6, 7])
         self.assertEqual(bond_canvas.record_calls[0]["added_scene_items"], [ring_item])
 
-    def test_apply_template_commit_resolution_rejects_degenerate_point_sets(self) -> None:
+    def test_apply_template_commit_resolution_rejects_degenerate_point_sets(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
-        request = TemplateInsertRequest(ring_size=6, cursor_pos=(5.0, 6.0), ring_style="regular")
+        request = TemplateInsertRequest(
+            ring_size=6, cursor_pos=(5.0, 6.0), ring_style="regular"
+        )
         plan = TemplateInsertPlan(
             generator="free_regular_ring",
             ring_size=6,
@@ -912,7 +1001,9 @@ class InsertCommitServiceTest(unittest.TestCase):
             bond_id=None,
             radius_mode="regular_polygon",
         )
-        resolution = TemplateInsertResolution(plan=plan, points=[(1.0, 2.0), (3.0, 4.0)])
+        resolution = TemplateInsertResolution(
+            plan=plan, points=[(1.0, 2.0), (3.0, 4.0)]
+        )
 
         applied = apply_template_commit_resolution(
             canvas,
@@ -928,9 +1019,13 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertEqual(canvas.record_calls, [])
         self.assertEqual(last_smiles_input_for(canvas), "before")
 
-    def test_apply_template_commit_resolution_uses_benzene_path_and_rejects_invalid_points(self) -> None:
+    def test_apply_template_commit_resolution_uses_benzene_path_and_rejects_invalid_points(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
-        request = TemplateInsertRequest(ring_size=6, cursor_pos=(7.0, 8.0), bond_id=3, ring_style="benzene")
+        request = TemplateInsertRequest(
+            ring_size=6, cursor_pos=(7.0, 8.0), bond_id=3, ring_style="benzene"
+        )
         plan = TemplateInsertPlan(
             generator="benzene",
             ring_size=6,
@@ -952,7 +1047,9 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertIsNone(last_smiles_input_for(canvas))
 
         blocked = _FakeCanvas()
-        blocked.services.structure_build_service.add_benzene_ring = lambda *args, **kwargs: None
+        blocked.services.structure_build_service.add_benzene_ring = (
+            lambda *args, **kwargs: None
+        )
         self.assertFalse(
             apply_template_commit_resolution(
                 blocked,
@@ -963,7 +1060,9 @@ class InsertCommitServiceTest(unittest.TestCase):
             )
         )
 
-    def test_benzene_template_preserves_original_error_when_outer_rollback_fails(self) -> None:
+    def test_benzene_template_preserves_original_error_when_outer_rollback_fails(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         request = TemplateInsertRequest(
             ring_size=6,
@@ -983,7 +1082,7 @@ class InsertCommitServiceTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "ui.insert_template_commit_service.rollback_insert_mutation",
+                "chemvas.ui.insert_template_commit_service.rollback_insert_mutation",
                 side_effect=RuntimeError("outer rollback failure"),
             ),
             self.assertRaises(RuntimeError) as raised,
@@ -1001,7 +1100,9 @@ class InsertCommitServiceTest(unittest.TestCase):
             any("outer rollback failure" in note for note in original_error.__notes__)
         )
 
-    def test_benzene_template_broken_add_note_preserves_control_flow_primary(self) -> None:
+    def test_benzene_template_broken_add_note_preserves_control_flow_primary(
+        self,
+    ) -> None:
         request = TemplateInsertRequest(
             ring_size=6,
             cursor_pos=(7.0, 8.0),
@@ -1023,7 +1124,7 @@ class InsertCommitServiceTest(unittest.TestCase):
 
                 with (
                     mock.patch(
-                        "ui.insert_template_commit_service.rollback_insert_mutation",
+                        "chemvas.ui.insert_template_commit_service.rollback_insert_mutation",
                         side_effect=RuntimeError("outer rollback failure"),
                     ),
                     self.assertRaises(error_type) as raised,
@@ -1038,11 +1139,15 @@ class InsertCommitServiceTest(unittest.TestCase):
 
                 self.assertIs(raised.exception, primary_error)
 
-    def test_apply_smiles_commit_plan_prefers_atom_label_service_over_canvas_wrapper(self) -> None:
+    def test_apply_smiles_commit_plan_prefers_atom_label_service_over_canvas_wrapper(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         service_calls = []
         canvas.services.atom_label_service = SimpleNamespace(
-            add_or_update_atom_label=lambda atom_id, text, **kwargs: service_calls.append((atom_id, text, kwargs))
+            add_or_update_atom_label=lambda atom_id, text, **kwargs: (
+                service_calls.append((atom_id, text, kwargs))
+            )
         )
         plan = SmilesCommitPlan(
             offset=(0.0, 0.0),
@@ -1064,8 +1169,26 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertEqual(
             service_calls,
             [
-                (0, "C", {"clear_smiles": False, "record": False, "allow_merge": True, "show_carbon": False}),
-                (1, "Cl", {"clear_smiles": False, "record": False, "allow_merge": True, "show_carbon": False}),
+                (
+                    0,
+                    "C",
+                    {
+                        "clear_smiles": False,
+                        "record": False,
+                        "allow_merge": True,
+                        "show_carbon": False,
+                    },
+                ),
+                (
+                    1,
+                    "Cl",
+                    {
+                        "clear_smiles": False,
+                        "record": False,
+                        "allow_merge": True,
+                        "show_carbon": False,
+                    },
+                ),
             ],
         )
         self.assertEqual(canvas.labels, [])
@@ -1075,13 +1198,19 @@ class InsertCommitServiceTest(unittest.TestCase):
         service = InsertCommitService(canvas)
 
         self.assertFalse(
-            service.apply_smiles_commit_plan(None, before_smiles_input="before", after_smiles_input="after")
+            service.apply_smiles_commit_plan(
+                None, before_smiles_input="before", after_smiles_input="after"
+            )
         )
 
-    def test_service_template_wrappers_rewrite_cursor_delegate_and_handle_none_merge_seed(self) -> None:
+    def test_service_template_wrappers_rewrite_cursor_delegate_and_handle_none_merge_seed(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         service = InsertCommitService(canvas)
-        request = TemplateInsertRequest(ring_size=6, cursor_pos=(1.0, 2.0), bond_id=4, ring_style="chair")
+        request = TemplateInsertRequest(
+            ring_size=6, cursor_pos=(1.0, 2.0), bond_id=4, ring_style="chair"
+        )
         plan = TemplateInsertPlan(
             generator="free_regular_ring",
             ring_size=6,
@@ -1091,7 +1220,10 @@ class InsertCommitServiceTest(unittest.TestCase):
         )
         resolution = TemplateInsertResolution(plan=plan, points=_points(6, start=0.0))
 
-        with mock.patch("ui.insert_commit_service.apply_template_commit_resolution", return_value=True) as patched:
+        with mock.patch(
+            "chemvas.ui.insert_commit_service.apply_template_commit_resolution",
+            return_value=True,
+        ) as patched:
             applied = service.apply_template_commit(
                 QPointF(9.0, 10.0),
                 request=request,
@@ -1105,7 +1237,10 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertEqual(patched.call_args.kwargs["before_smiles_input"], "before")
         self.assertEqual(service.bond_merge_seed(None), [])
 
-        with mock.patch("ui.insert_commit_service.apply_template_commit_resolution", return_value=False) as patched:
+        with mock.patch(
+            "chemvas.ui.insert_commit_service.apply_template_commit_resolution",
+            return_value=False,
+        ) as patched:
             self.assertFalse(
                 service.apply_template_commit_resolution(
                     request,
@@ -1117,7 +1252,9 @@ class InsertCommitServiceTest(unittest.TestCase):
             )
         self.assertEqual(patched.call_args.kwargs["after_smiles_input"], "new")
 
-    def test_apply_smiles_commit_plan_rejects_duplicate_and_unknown_bond_sources(self) -> None:
+    def test_apply_smiles_commit_plan_rejects_duplicate_and_unknown_bond_sources(
+        self,
+    ) -> None:
         duplicate_canvas = _FakeCanvas()
         duplicate_plan = SmilesCommitPlan(
             offset=(0.0, 0.0),
@@ -1151,7 +1288,9 @@ class InsertCommitServiceTest(unittest.TestCase):
             )
         )
 
-    def test_apply_smiles_commit_plan_returns_false_when_id_lookup_breaks_after_atom_creation(self) -> None:
+    def test_apply_smiles_commit_plan_returns_false_when_id_lookup_breaks_after_atom_creation(
+        self,
+    ) -> None:
         # atom_source and bond_source are equal twins during validation, so the
         # plan clears the up-front bond-source check. _DetachingCanvas detaches
         # atom_source once both atoms exist, so the bond's id_map lookup misses
@@ -1166,7 +1305,9 @@ class InsertCommitServiceTest(unittest.TestCase):
                 SmilesAtomPlacement(atom_source, "C", 0.0, 0.0, "#111111", False),
                 SmilesAtomPlacement(other_source, "N", 1.0, 0.0, "#222222", True),
             ],
-            bonds=[SmilesBondPlacement(0, bond_source, other_source, 1, "solid", "#333333")],
+            bonds=[
+                SmilesBondPlacement(0, bond_source, other_source, 1, "solid", "#333333")
+            ],
         )
 
         self.assertFalse(
@@ -1183,9 +1324,13 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertEqual(last_smiles_input_for(canvas), "before")
         self.assertEqual(canvas.record_calls, [])
 
-    def test_apply_template_commit_resolution_rejects_bond_generators_without_bond_id(self) -> None:
+    def test_apply_template_commit_resolution_rejects_bond_generators_without_bond_id(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
-        request = TemplateInsertRequest(ring_size=6, cursor_pos=(3.0, 4.0), ring_style="regular")
+        request = TemplateInsertRequest(
+            ring_size=6, cursor_pos=(3.0, 4.0), ring_style="regular"
+        )
         plan = TemplateInsertPlan(
             generator="bond_regular_ring",
             ring_size=6,

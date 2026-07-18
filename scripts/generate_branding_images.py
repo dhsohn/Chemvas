@@ -102,7 +102,9 @@ def render_banner(out_path: Path) -> None:
     top = (height - block_height) / 2
     text_x = int(pad + mark_size + 56)
     wordmark_baseline = top + wordmark_metrics.ascent()
-    tagline_baseline = wordmark_baseline + wordmark_metrics.descent() + gap + tagline_metrics.ascent()
+    tagline_baseline = (
+        wordmark_baseline + wordmark_metrics.descent() + gap + tagline_metrics.ascent()
+    )
 
     painter.setFont(wordmark_font)
     painter.setPen(QColor(WHITE))
@@ -140,10 +142,17 @@ def render_social(out_path: Path) -> None:
     )
     top = (height - block_height) / 2
 
-    _mark_renderer().render(painter, QRectF((width - mark_size) / 2, top, mark_size, mark_size))
+    _mark_renderer().render(
+        painter, QRectF((width - mark_size) / 2, top, mark_size, mark_size)
+    )
 
     wordmark_baseline = top + mark_size + gap_mark + wordmark_metrics.ascent()
-    tagline_baseline = wordmark_baseline + wordmark_metrics.descent() + gap_text + tagline_metrics.ascent()
+    tagline_baseline = (
+        wordmark_baseline
+        + wordmark_metrics.descent()
+        + gap_text
+        + tagline_metrics.ascent()
+    )
 
     painter.setFont(wordmark_font)
     painter.setPen(QColor(WHITE))

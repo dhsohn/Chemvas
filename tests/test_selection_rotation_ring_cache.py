@@ -12,10 +12,10 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    import ui.canvas_ring_fill_scene_service as ring_fill_service
-    import ui.selection_rotation_preview_transaction as preview_transaction
-    from ui.canvas_lifecycle import schedule_canvas_deletion_for
-    from ui.canvas_view import CanvasView
+    import chemvas.ui.canvas_ring_fill_scene_service as ring_fill_service
+    import chemvas.ui.selection_rotation_preview_transaction as preview_transaction
+    from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
+    from chemvas.ui.canvas_view import CanvasView
 
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required")

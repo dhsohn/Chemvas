@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from core.history import SetAtomPositionsCommand
-from ui.selection_rotation_history import build_selection_rotation_command
+from chemvas.core.history import SetAtomPositionsCommand
+from chemvas.ui.selection_rotation_history import build_selection_rotation_command
 
 
-def test_build_selection_rotation_command_returns_none_without_position_or_coord_changes() -> None:
+def test_build_selection_rotation_command_returns_none_without_position_or_coord_changes() -> (
+    None
+):
     assert (
         build_selection_rotation_command(
             before_positions={1: (0.0, 0.0)},
@@ -20,7 +22,9 @@ def test_build_selection_rotation_command_returns_none_without_position_or_coord
     )
 
 
-def test_build_selection_rotation_command_captures_position_and_projection_state() -> None:
+def test_build_selection_rotation_command_captures_position_and_projection_state() -> (
+    None
+):
     command = build_selection_rotation_command(
         before_positions={1: (0.0, 0.0)},
         after_positions={1: (2.0, 3.0)},

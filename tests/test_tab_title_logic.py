@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ui.tab_title_logic import (
+from chemvas.ui.tab_title_logic import (
     APP_TITLE_SUFFIX,
     UNSAVED_MARKER,
     decorate_tab_title,

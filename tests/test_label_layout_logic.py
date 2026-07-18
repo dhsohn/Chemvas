@@ -1,6 +1,6 @@
 import unittest
 
-from ui.label_layout_logic import (
+from chemvas.features.annotations import (
     LabelRun,
     hydride_display_text,
     hydride_hydrogen_text,

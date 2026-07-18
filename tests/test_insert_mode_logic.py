@@ -1,6 +1,6 @@
 import unittest
 
-from ui.insert_mode_logic import (
+from chemvas.ui.insert_mode_logic import (
     InsertSessionState,
     begin_smiles_insert,
     begin_template_insert,
@@ -12,7 +12,9 @@ from ui.insert_mode_logic import (
 
 
 class InsertModeLogicTest(unittest.TestCase):
-    def test_begin_template_insert_normalizes_style_and_clears_smiles_state(self) -> None:
+    def test_begin_template_insert_normalizes_style_and_clears_smiles_state(
+        self,
+    ) -> None:
         state = InsertSessionState(
             smiles_active=True,
             smiles_text="CCO",
@@ -112,7 +114,9 @@ class InsertModeLogicTest(unittest.TestCase):
         self.assertEqual(request.ring_style, "boat")
 
     def test_build_template_insert_request_returns_none_when_inactive(self) -> None:
-        self.assertIsNone(build_template_insert_request(clear_insert_session(), (0.0, 0.0), None))
+        self.assertIsNone(
+            build_template_insert_request(clear_insert_session(), (0.0, 0.0), None)
+        )
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 import unittest
 
-from ui.template_preview_logic import (
+from chemvas.features.insertion import (
     build_benzene_template_preview_geometry,
     build_template_preview_geometry,
     plan_template_preview_update,
@@ -8,7 +8,9 @@ from ui.template_preview_logic import (
 
 
 class TemplatePreviewLogicTest(unittest.TestCase):
-    def test_build_template_preview_geometry_returns_segments_and_dot_rects(self) -> None:
+    def test_build_template_preview_geometry_returns_segments_and_dot_rects(
+        self,
+    ) -> None:
         geometry = build_template_preview_geometry(
             [(0.0, 0.0), (10.0, 0.0), (5.0, 8.0)],
             atom_radius=2.0,
@@ -33,11 +35,15 @@ class TemplatePreviewLogicTest(unittest.TestCase):
 
     def test_plan_template_preview_update_clears_when_points_missing(self) -> None:
         self.assertEqual(
-            plan_template_preview_update(None, atom_radius=1.0, existing_line_count=3, existing_dot_count=3).action,
+            plan_template_preview_update(
+                None, atom_radius=1.0, existing_line_count=3, existing_dot_count=3
+            ).action,
             "clear",
         )
         self.assertEqual(
-            plan_template_preview_update([], atom_radius=1.0, existing_line_count=3, existing_dot_count=3).action,
+            plan_template_preview_update(
+                [], atom_radius=1.0, existing_line_count=3, existing_dot_count=3
+            ).action,
             "clear",
         )
         self.assertEqual(
@@ -84,7 +90,10 @@ class TemplatePreviewLogicTest(unittest.TestCase):
 
         self.assertEqual(len(geometry.line_segments), 9)
         self.assertEqual(len(geometry.dot_rects), 6)
-        self.assertEqual(geometry.line_segments[:6], build_template_preview_geometry(points, 1.0).line_segments)
+        self.assertEqual(
+            geometry.line_segments[:6],
+            build_template_preview_geometry(points, 1.0).line_segments,
+        )
         self.assertEqual(plan.action, "rebuild")
         assert plan.geometry is not None
         self.assertEqual(len(plan.geometry.line_segments), 9)

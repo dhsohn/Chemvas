@@ -17,7 +17,7 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.export_render_service import (
+    from chemvas.features.export import (
         collect_export_items,
         content_bounds,
         export_scene,
@@ -26,10 +26,12 @@ if QApplication is not None:
         render_scene_to_svg,
         render_scene_to_svg_bytes,
     )
-    from ui.graphics_items import AtomDotItem, AtomLabelItem
+    from chemvas.ui.graphics_items import AtomDotItem, AtomLabelItem
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for export render tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for export render tests"
+)
 class ExportRenderServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -104,7 +106,9 @@ class ExportRenderServiceTest(unittest.TestCase):
         self.assertAlmostEqual(bounds.width(), export_rect.width())
         self.assertAlmostEqual(bounds.height(), export_rect.height())
 
-    def test_atom_dot_export_bounds_ignore_hit_padding_and_transparent_dots(self) -> None:
+    def test_atom_dot_export_bounds_ignore_hit_padding_and_transparent_dots(
+        self,
+    ) -> None:
         scene = QGraphicsScene()
         radical = AtomDotItem(-1.5, -1.5, 3.0, 3.0, hit_padding=24.0)
         radical.setBrush(QColor("#000000"))
@@ -119,8 +123,12 @@ class ExportRenderServiceTest(unittest.TestCase):
         scene.addItem(transparent_dot)
 
         radical_export_rect = item_export_bounds(radical)
-        self.assertLess(radical_export_rect.width(), radical.sceneBoundingRect().width())
-        self.assertAlmostEqual(content_bounds([radical]).width(), radical_export_rect.width())
+        self.assertLess(
+            radical_export_rect.width(), radical.sceneBoundingRect().width()
+        )
+        self.assertAlmostEqual(
+            content_bounds([radical]).width(), radical_export_rect.width()
+        )
         self.assertTrue(item_export_bounds(transparent_dot).isNull())
         self.assertIsNone(content_bounds([transparent_dot]))
 
@@ -130,8 +138,12 @@ class ExportRenderServiceTest(unittest.TestCase):
         bounds = content_bounds(items)
         assert bounds is not None
 
-        svg_data = render_scene_to_svg_bytes(scene, source=bounds, items=items, title="Copy")
-        pdf_data = render_scene_to_pdf_bytes(scene, source=bounds, items=items, title="Copy")
+        svg_data = render_scene_to_svg_bytes(
+            scene, source=bounds, items=items, title="Copy"
+        )
+        pdf_data = render_scene_to_pdf_bytes(
+            scene, source=bounds, items=items, title="Copy"
+        )
 
         self.assertIn(b"<svg", svg_data)
         self.assertIn(b"<path", svg_data)
@@ -163,10 +175,20 @@ class ExportRenderServiceTest(unittest.TestCase):
         scene = self._content_scene()
         with tempfile.TemporaryDirectory() as tmp:
             full = export_scene(
-                scene, os.path.join(tmp, "a.png"), fmt="png", margin=4.0, dpi=300, unit_scale=1.0
+                scene,
+                os.path.join(tmp, "a.png"),
+                fmt="png",
+                margin=4.0,
+                dpi=300,
+                unit_scale=1.0,
             )
             half = export_scene(
-                scene, os.path.join(tmp, "b.png"), fmt="png", margin=4.0, dpi=300, unit_scale=0.5
+                scene,
+                os.path.join(tmp, "b.png"),
+                fmt="png",
+                margin=4.0,
+                dpi=300,
+                unit_scale=0.5,
             )
         # Same source rect, but the physical/point size halves with unit_scale.
         self.assertAlmostEqual(half.source_w, full.source_w)
@@ -176,7 +198,11 @@ class ExportRenderServiceTest(unittest.TestCase):
         scene = self._content_scene()
         with tempfile.TemporaryDirectory() as tmp:
             plan = export_scene(
-                scene, os.path.join(tmp, "c.svg"), fmt="svg", margin=4.0, target_width_pt=238.11
+                scene,
+                os.path.join(tmp, "c.svg"),
+                fmt="svg",
+                margin=4.0,
+                target_width_pt=238.11,
             )
         self.assertAlmostEqual(plan.out_w_pt, 238.11, places=2)
 
@@ -202,19 +228,31 @@ class ExportRenderServiceTest(unittest.TestCase):
         scene = self._content_scene()
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "figure.png")
-            export_scene(scene, path, fmt="png", margin=4.0, dpi=150, background="white")
+            export_scene(
+                scene, path, fmt="png", margin=4.0, dpi=150, background="white"
+            )
             loaded = QImage(path)
             corner = loaded.pixelColor(0, 0)
             self.assertEqual(corner.alpha(), 255)
-            self.assertEqual((corner.red(), corner.green(), corner.blue()), (255, 255, 255))
+            self.assertEqual(
+                (corner.red(), corner.green(), corner.blue()), (255, 255, 255)
+            )
 
     def test_selection_items_shrink_bounds(self) -> None:
         scene = self._content_scene()
-        bond = next(item for item in collect_export_items(scene) if item.data(0) == "bond")
+        bond = next(
+            item for item in collect_export_items(scene) if item.data(0) == "bond"
+        )
         with tempfile.TemporaryDirectory() as tmp:
-            full = export_scene(scene, os.path.join(tmp, "full.svg"), fmt="svg", margin=4.0)
+            full = export_scene(
+                scene, os.path.join(tmp, "full.svg"), fmt="svg", margin=4.0
+            )
             only_bond = export_scene(
-                scene, os.path.join(tmp, "bond.svg"), fmt="svg", items=[bond], margin=4.0
+                scene,
+                os.path.join(tmp, "bond.svg"),
+                fmt="svg",
+                items=[bond],
+                margin=4.0,
             )
         self.assertLess(only_bond.source_w, full.source_w)
 

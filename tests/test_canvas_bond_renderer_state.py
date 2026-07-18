@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from ui.bond_renderer import BondRenderer
-from ui.canvas_bond_renderer_state import bond_renderer_for, set_bond_renderer_for
+from chemvas.ui.bond_renderer import BondRenderer
+from chemvas.ui.canvas_bond_renderer_state import (
+    bond_renderer_for,
+    set_bond_renderer_for,
+)
 
 
 def test_canvas_bond_renderer_state_returns_existing_renderer() -> None:

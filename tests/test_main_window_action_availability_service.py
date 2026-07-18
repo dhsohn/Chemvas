@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import mock
 
-from ui.main_window_action_availability_service import (
+from chemvas.ui.main_window_action_availability_service import (
     MainWindowActionAvailabilityService,
 )
 
@@ -17,7 +17,9 @@ def test_update_action_availability_sets_history_and_export_buttons() -> None:
     redo_button = _button()
     export_button = _button()
     canvas = object()
-    history = SimpleNamespace(can_undo=mock.Mock(return_value=True), can_redo=mock.Mock(return_value=False))
+    history = SimpleNamespace(
+        can_undo=mock.Mock(return_value=True), can_redo=mock.Mock(return_value=False)
+    )
     history_service_for_window = mock.Mock(return_value=history)
     has_exportable_atoms_for_window = mock.Mock(return_value=True)
     active_canvas_or_none_for_window = mock.Mock(return_value=canvas)

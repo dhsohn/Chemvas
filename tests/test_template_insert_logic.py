@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import Mock
 
-from ui.template_insert_logic import (
+from chemvas.features.insertion import (
     TemplateInsertPlan,
     TemplateInsertRequest,
     TemplatePointResolvers,
@@ -44,22 +44,41 @@ class TemplateInsertLogicTest(unittest.TestCase):
 
     def test_plan_commit_rejects_invalid_requests(self) -> None:
         self.assertIsNone(
-            plan_template_commit(TemplateInsertRequest(ring_size=2, cursor_pos=(0.0, 0.0), ring_style="regular"))
+            plan_template_commit(
+                TemplateInsertRequest(
+                    ring_size=2, cursor_pos=(0.0, 0.0), ring_style="regular"
+                )
+            )
         )
         self.assertIsNone(
-            plan_template_commit(TemplateInsertRequest(ring_size=6, cursor_pos=(0.0, 0.0), ring_style="weird")))
+            plan_template_commit(
+                TemplateInsertRequest(
+                    ring_size=6, cursor_pos=(0.0, 0.0), ring_style="weird"
+                )
+            )
+        )
         for style in ("chair", "chair_flip", "boat"):
             with self.subTest(style=style):
                 self.assertIsNone(
-                    plan_template_commit(TemplateInsertRequest(ring_size=5, cursor_pos=(0.0, 0.0), ring_style=style))
+                    plan_template_commit(
+                        TemplateInsertRequest(
+                            ring_size=5, cursor_pos=(0.0, 0.0), ring_style=style
+                        )
+                    )
                 )
                 self.assertIsNone(
-                    plan_template_preview(TemplateInsertRequest(ring_size=5, cursor_pos=(0.0, 0.0), ring_style=style))
+                    plan_template_preview(
+                        TemplateInsertRequest(
+                            ring_size=5, cursor_pos=(0.0, 0.0), ring_style=style
+                        )
+                    )
                 )
 
     def test_plan_commit_routes_hexagonal_benzene_to_special_flow(self) -> None:
         plan = plan_template_commit(
-            TemplateInsertRequest(ring_size=6, cursor_pos=(0.0, 0.0), bond_id=7, ring_style="benzene")
+            TemplateInsertRequest(
+                ring_size=6, cursor_pos=(0.0, 0.0), bond_id=7, ring_style="benzene"
+            )
         )
 
         assert plan is not None
@@ -69,10 +88,14 @@ class TemplateInsertLogicTest(unittest.TestCase):
 
     def test_plan_preview_keeps_benzene_on_generic_ring_paths(self) -> None:
         free_plan = plan_template_preview(
-            TemplateInsertRequest(ring_size=6, cursor_pos=(0.0, 0.0), ring_style="benzene")
+            TemplateInsertRequest(
+                ring_size=6, cursor_pos=(0.0, 0.0), ring_style="benzene"
+            )
         )
         bond_plan = plan_template_preview(
-            TemplateInsertRequest(ring_size=6, cursor_pos=(0.0, 0.0), bond_id=3, ring_style="benzene")
+            TemplateInsertRequest(
+                ring_size=6, cursor_pos=(0.0, 0.0), bond_id=3, ring_style="benzene"
+            )
         )
 
         assert free_plan is not None
@@ -83,7 +106,9 @@ class TemplateInsertLogicTest(unittest.TestCase):
 
     def test_plan_preview_routes_atom_ring_to_atom_regular_path(self) -> None:
         plan = plan_template_preview(
-            TemplateInsertRequest(ring_size=6, cursor_pos=(0.0, 0.0), ring_style="benzene", atom_id=4)
+            TemplateInsertRequest(
+                ring_size=6, cursor_pos=(0.0, 0.0), ring_style="benzene", atom_id=4
+            )
         )
 
         assert plan is not None
@@ -93,7 +118,9 @@ class TemplateInsertLogicTest(unittest.TestCase):
 
     def test_plan_commit_routes_template_shapes_by_bond_presence(self) -> None:
         chair_plan = plan_template_commit(
-            TemplateInsertRequest(ring_size=6, cursor_pos=(0.0, 0.0), bond_id=2, ring_style="chair")
+            TemplateInsertRequest(
+                ring_size=6, cursor_pos=(0.0, 0.0), bond_id=2, ring_style="chair"
+            )
         )
         boat_plan = plan_template_commit(
             TemplateInsertRequest(ring_size=6, cursor_pos=(0.0, 0.0), ring_style="boat")
@@ -107,7 +134,9 @@ class TemplateInsertLogicTest(unittest.TestCase):
         self.assertEqual(boat_plan.template_shape, "boat")
 
     def test_resolve_free_regular_ring_uses_regular_radius(self) -> None:
-        request = TemplateInsertRequest(ring_size=5, cursor_pos=(4.0, 5.0), ring_style="regular")
+        request = TemplateInsertRequest(
+            ring_size=5, cursor_pos=(4.0, 5.0), ring_style="regular"
+        )
         plan = plan_template_commit(request)
         ring_points = Mock(return_value=_points(5))
         resolvers = _make_resolvers(ring_points=ring_points)
@@ -121,10 +150,14 @@ class TemplateInsertLogicTest(unittest.TestCase):
         ring_points.assert_called_once_with((4.0, 5.0), 5, 12.5)
 
     def test_resolve_atom_regular_ring_delegates_to_atom_resolver(self) -> None:
-        request = TemplateInsertRequest(ring_size=6, cursor_pos=(4.0, 5.0), ring_style="regular", atom_id=3)
+        request = TemplateInsertRequest(
+            ring_size=6, cursor_pos=(4.0, 5.0), ring_style="regular", atom_id=3
+        )
         plan = plan_template_commit(request)
         regular_ring_points_for_atom = Mock(return_value=_points(6, start=40.0))
-        resolvers = _make_resolvers(regular_ring_points_for_atom=regular_ring_points_for_atom)
+        resolvers = _make_resolvers(
+            regular_ring_points_for_atom=regular_ring_points_for_atom
+        )
 
         assert plan is not None
         resolution = resolve_template_insert(request, plan, resolvers)
@@ -134,7 +167,9 @@ class TemplateInsertLogicTest(unittest.TestCase):
         regular_ring_points_for_atom.assert_called_once_with(6, 3)
 
     def test_resolve_free_non_regular_ring_uses_default_radius(self) -> None:
-        request = TemplateInsertRequest(ring_size=6, cursor_pos=(1.0, 2.0), ring_style="benzene")
+        request = TemplateInsertRequest(
+            ring_size=6, cursor_pos=(1.0, 2.0), ring_style="benzene"
+        )
         plan = plan_template_preview(request)
         resolvers = _make_resolvers()
 
@@ -145,8 +180,12 @@ class TemplateInsertLogicTest(unittest.TestCase):
         resolvers.regular_ring_radius.assert_not_called()
         resolvers.ring_points.assert_called_once_with((1.0, 2.0), 6, None)
 
-    def test_resolve_bond_template_shape_builds_local_points_before_projection(self) -> None:
-        request = TemplateInsertRequest(ring_size=6, cursor_pos=(15.0, -3.0), bond_id=4, ring_style="chair")
+    def test_resolve_bond_template_shape_builds_local_points_before_projection(
+        self,
+    ) -> None:
+        request = TemplateInsertRequest(
+            ring_size=6, cursor_pos=(15.0, -3.0), bond_id=4, ring_style="chair"
+        )
         plan = plan_template_commit(request)
         local_points = _points(6, start=-6.0)
         projected_points = _points(6, start=8.0)
@@ -166,7 +205,9 @@ class TemplateInsertLogicTest(unittest.TestCase):
         template_points_for_bond.assert_called_once_with(local_points, 4, (15.0, -3.0))
 
     def test_resolve_free_template_shape_uses_cursor_position_as_center(self) -> None:
-        request = TemplateInsertRequest(ring_size=6, cursor_pos=(-2.0, 7.0), ring_style="boat")
+        request = TemplateInsertRequest(
+            ring_size=6, cursor_pos=(-2.0, 7.0), ring_style="boat"
+        )
         plan = plan_template_commit(request)
         boat_points = Mock(return_value=_points(6, start=20.0))
         resolvers = _make_resolvers(boat_points=boat_points)
@@ -179,10 +220,14 @@ class TemplateInsertLogicTest(unittest.TestCase):
         boat_points.assert_called_once_with((-2.0, 7.0))
 
     def test_resolve_bond_regular_ring_delegates_to_bond_resolver(self) -> None:
-        request = TemplateInsertRequest(ring_size=7, cursor_pos=(3.0, 4.0), bond_id=8, ring_style="regular")
+        request = TemplateInsertRequest(
+            ring_size=7, cursor_pos=(3.0, 4.0), bond_id=8, ring_style="regular"
+        )
         plan = plan_template_commit(request)
         regular_ring_points_for_bond = Mock(return_value=_points(7, start=30.0))
-        resolvers = _make_resolvers(regular_ring_points_for_bond=regular_ring_points_for_bond)
+        resolvers = _make_resolvers(
+            regular_ring_points_for_bond=regular_ring_points_for_bond
+        )
 
         assert plan is not None
         resolution = resolve_template_insert(request, plan, resolvers)
@@ -192,7 +237,9 @@ class TemplateInsertLogicTest(unittest.TestCase):
         regular_ring_points_for_bond.assert_called_once_with(7, 8, (3.0, 4.0))
 
     def test_resolve_returns_none_when_bond_projection_fails(self) -> None:
-        request = TemplateInsertRequest(ring_size=6, cursor_pos=(0.0, 0.0), bond_id=5, ring_style="boat")
+        request = TemplateInsertRequest(
+            ring_size=6, cursor_pos=(0.0, 0.0), bond_id=5, ring_style="boat"
+        )
         plan = plan_template_commit(request)
         resolvers = _make_resolvers(template_points_for_bond=Mock(return_value=None))
 
@@ -200,7 +247,9 @@ class TemplateInsertLogicTest(unittest.TestCase):
         self.assertIsNone(resolve_template_insert(request, plan, resolvers))
 
     def test_resolve_rejects_degenerate_or_wrong_size_point_lists(self) -> None:
-        request = TemplateInsertRequest(ring_size=6, cursor_pos=(0.0, 0.0), ring_style="regular")
+        request = TemplateInsertRequest(
+            ring_size=6, cursor_pos=(0.0, 0.0), ring_style="regular"
+        )
         plan = plan_template_preview(request)
 
         assert plan is not None
@@ -210,7 +259,9 @@ class TemplateInsertLogicTest(unittest.TestCase):
                 self.assertIsNone(resolve_template_insert(request, plan, resolvers))
 
     def test_resolve_rejects_invalid_internal_bond_plans(self) -> None:
-        request = TemplateInsertRequest(ring_size=6, cursor_pos=(0.0, 0.0), ring_style="regular")
+        request = TemplateInsertRequest(
+            ring_size=6, cursor_pos=(0.0, 0.0), ring_style="regular"
+        )
         resolvers = _make_resolvers()
 
         self.assertIsNone(
@@ -253,7 +304,9 @@ class TemplateInsertLogicTest(unittest.TestCase):
         )
 
     def test_resolve_rejects_unknown_generator_and_missing_template_shape(self) -> None:
-        request = TemplateInsertRequest(ring_size=6, cursor_pos=(0.0, 0.0), ring_style="regular")
+        request = TemplateInsertRequest(
+            ring_size=6, cursor_pos=(0.0, 0.0), ring_style="regular"
+        )
         resolvers = _make_resolvers()
 
         self.assertIsNone(
@@ -281,8 +334,12 @@ class TemplateInsertLogicTest(unittest.TestCase):
                 resolvers,
             )
 
-    def test_resolve_benzene_returns_special_resolution_without_point_generation(self) -> None:
-        request = TemplateInsertRequest(ring_size=6, cursor_pos=(0.0, 0.0), bond_id=9, ring_style="benzene")
+    def test_resolve_benzene_returns_special_resolution_without_point_generation(
+        self,
+    ) -> None:
+        request = TemplateInsertRequest(
+            ring_size=6, cursor_pos=(0.0, 0.0), bond_id=9, ring_style="benzene"
+        )
         plan = plan_template_commit(request)
         resolvers = _make_resolvers()
 

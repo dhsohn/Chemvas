@@ -13,10 +13,10 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.canvas_scene_decoration_build_service import (
+    from chemvas.ui.canvas_scene_decoration_build_service import (
         CanvasSceneDecorationBuildService,
     )
-    from ui.canvas_tool_settings_state import CanvasToolSettingsState
+    from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
 
 
 class _RecordingScene:
@@ -27,14 +27,19 @@ class _RecordingScene:
         self.items.append(item)
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for scene decoration build service tests")
+@unittest.skipUnless(
+    QApplication is not None,
+    "PyQt6 is required for scene decoration build service tests",
+)
 class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
 
-    def _make_service(self, *, orbital_phase_enabled: bool = True, arrow_build_service=None):
+    def _make_service(
+        self, *, orbital_phase_enabled: bool = True, arrow_build_service=None
+    ):
         scene = _RecordingScene()
         style = SimpleNamespace(
             bond_length_px=20.0,
@@ -59,14 +64,25 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
             ),
             scene=lambda: scene,
         )
-        return CanvasSceneDecorationBuildService(canvas, arrow_build_service=arrow_build_service), scene, style
+        return (
+            CanvasSceneDecorationBuildService(
+                canvas, arrow_build_service=arrow_build_service
+            ),
+            scene,
+            style,
+        )
 
     def test_build_arrow_item_delegates_to_arrow_build_service(self) -> None:
         arrow_service = mock.Mock()
         service, _, _ = self._make_service(arrow_build_service=arrow_service)
         arrow_service.build_arrow_item.return_value = "arrow"
 
-        self.assertEqual(service.build_arrow_item(QPointF(1.0, 2.0), QPointF(8.0, 9.0), "equilibrium"), "arrow")
+        self.assertEqual(
+            service.build_arrow_item(
+                QPointF(1.0, 2.0), QPointF(8.0, 9.0), "equilibrium"
+            ),
+            "arrow",
+        )
         arrow_service.build_arrow_item.assert_called_once_with(
             QPointF(1.0, 2.0),
             QPointF(8.0, 9.0),
@@ -78,21 +94,31 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
         service, _, _ = self._make_service(arrow_build_service=arrow_service)
         arrow_service.build_curved_arrow.return_value = "curved"
 
-        result = service.build_curved_arrow(QPointF(0.0, 0.0), QPointF(10.0, 0.0), double=True)
+        result = service.build_curved_arrow(
+            QPointF(0.0, 0.0), QPointF(10.0, 0.0), double=True
+        )
 
         self.assertEqual(result, "curved")
-        arrow_service.build_curved_arrow.assert_called_once_with(QPointF(0.0, 0.0), QPointF(10.0, 0.0), True)
+        arrow_service.build_curved_arrow.assert_called_once_with(
+            QPointF(0.0, 0.0), QPointF(10.0, 0.0), True
+        )
 
-    def test_ts_bracket_rect_from_points_applies_minimum_size_and_normalization(self) -> None:
+    def test_ts_bracket_rect_from_points_applies_minimum_size_and_normalization(
+        self,
+    ) -> None:
         service, _, _ = self._make_service()
 
-        tiny_rect = service.ts_bracket_rect_from_points(QPointF(10.0, 20.0), QPointF(11.0, 21.0))
+        tiny_rect = service.ts_bracket_rect_from_points(
+            QPointF(10.0, 20.0), QPointF(11.0, 21.0)
+        )
         self.assertAlmostEqual(tiny_rect.left(), -8.0)
         self.assertAlmostEqual(tiny_rect.top(), -4.0)
         self.assertAlmostEqual(tiny_rect.width(), 36.0)
         self.assertAlmostEqual(tiny_rect.height(), 48.0)
 
-        normalized_rect = service.ts_bracket_rect_from_points(QPointF(30.0, 50.0), QPointF(10.0, 10.0))
+        normalized_rect = service.ts_bracket_rect_from_points(
+            QPointF(30.0, 50.0), QPointF(10.0, 10.0)
+        )
         self.assertAlmostEqual(normalized_rect.center().x(), 20.0)
         self.assertAlmostEqual(normalized_rect.center().y(), 30.0)
         self.assertAlmostEqual(normalized_rect.width(), 36.0)
@@ -138,11 +164,17 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
 
         self.assertEqual(len(phase_items), 3)
         self.assertEqual(len(no_phase_items), 3)
-        self.assertTrue(all(isinstance(item, QGraphicsEllipseItem) for item in phase_items[:2]))
+        self.assertTrue(
+            all(isinstance(item, QGraphicsEllipseItem) for item in phase_items[:2])
+        )
         self.assertEqual(phase_items[0].brush().color().name(), "#ff3300")
         self.assertEqual(phase_items[1].brush().color().name(), "#0033ff")
-        self.assertAlmostEqual(phase_items[0].brush().color().alphaF(), phase_style.orbital_alpha, places=2)
-        self.assertAlmostEqual(phase_items[1].brush().color().alphaF(), phase_style.orbital_alpha, places=2)
+        self.assertAlmostEqual(
+            phase_items[0].brush().color().alphaF(), phase_style.orbital_alpha, places=2
+        )
+        self.assertAlmostEqual(
+            phase_items[1].brush().color().alphaF(), phase_style.orbital_alpha, places=2
+        )
         self.assertEqual(no_phase_items[0].brush().style(), Qt.BrushStyle.NoBrush)
         self.assertEqual(no_phase_items[1].brush().style(), Qt.BrushStyle.NoBrush)
 
@@ -160,7 +192,9 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
         self.assertFalse(item.data(2)["double"])
         self.assertIsNotNone(item.data(2)["control"])
 
-    def test_preview_ts_bracket_adds_preview_item_to_scene_with_preview_brush(self) -> None:
+    def test_preview_ts_bracket_adds_preview_item_to_scene_with_preview_brush(
+        self,
+    ) -> None:
         service, scene, _ = self._make_service()
 
         item = service.preview_ts_bracket(QPointF(3.0, 4.0), QPointF(4.0, 5.0))

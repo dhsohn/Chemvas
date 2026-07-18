@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from core.model import Bond
-from ui.canvas_graph_state import CanvasGraphState
-from ui.selection_rotation_planarity import (
+from chemvas.domain.document import Bond
+from chemvas.ui.canvas_graph_state import CanvasGraphState
+from chemvas.ui.selection_rotation_planarity import (
     bond_in_cycle_for,
     flatten_planar_fragments_for,
 )

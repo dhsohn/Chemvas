@@ -18,15 +18,18 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     try:
-        from ui.canvas_insert_state import insert_state_for
-        from ui.canvas_tool_settings_state import tool_settings_state_for
-        from ui.main_window import MainWindow
-        from ui.main_window_ports import active_canvas_for_window, services_for_window
-        from ui.main_window_theme import TOOLBAR_THICKNESS
+        from chemvas.bootstrap.main_window import build_main_window
+        from chemvas.ui.canvas_insert_state import insert_state_for
+        from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
+        from chemvas.ui.main_window_ports import (
+            active_canvas_for_window,
+            services_for_window,
+        )
+        from chemvas.ui.main_window_theme import TOOLBAR_THICKNESS
     except SyntaxError:
-        MainWindow = None
+        build_main_window = None
 else:
-    MainWindow = None
+    build_main_window = None
 
 
 class _FakeItem:
@@ -40,8 +43,8 @@ class _FakeItem:
 
 
 @unittest.skipUnless(
-    QApplication is not None and MainWindow is not None,
-    "PyQt6 and an importable MainWindow are required for main window tests",
+    QApplication is not None and build_main_window is not None,
+    "PyQt6 and an importable build_main_window are required for main window tests",
 )
 class MainWindowToolbarActionsTest(unittest.TestCase):
     @classmethod
@@ -50,7 +53,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def setUp(self) -> None:
-        self.window = MainWindow()
+        self.window = build_main_window()
 
     def tearDown(self) -> None:
         document_service = services_for_window(self.window).canvas_document_service
@@ -77,7 +80,11 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
                 color = image.pixelColor(x, y)
                 if color.alpha() <= 0:
                     continue
-                luminance = 0.2126 * color.red() + 0.7152 * color.green() + 0.0722 * color.blue()
+                luminance = (
+                    0.2126 * color.red()
+                    + 0.7152 * color.green()
+                    + 0.0722 * color.blue()
+                )
                 if luminance < 125:
                     count += 1
         return count
@@ -89,7 +96,11 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
                 color = image.pixelColor(x, y)
                 if color.alpha() <= 0:
                     continue
-                luminance = 0.2126 * color.red() + 0.7152 * color.green() + 0.0722 * color.blue()
+                luminance = (
+                    0.2126 * color.red()
+                    + 0.7152 * color.green()
+                    + 0.0722 * color.blue()
+                )
                 if luminance < 125:
                     count += 1
         return count
@@ -100,17 +111,28 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
                 icon = self.window.ui_references.tool_actions[action_key].icon()
                 self.assertFalse(icon.isNull())
                 self.assertGreaterEqual(self._dark_pixel_count(icon), 60)
-                self.assertGreaterEqual(self._dark_pixel_count(icon, center_only=True), 10)
-                self.assertGreaterEqual(self._dark_pixel_count(icon, mode=QIcon.Mode.Disabled), 60)
                 self.assertGreaterEqual(
-                    self._dark_pixel_count(icon, mode=QIcon.Mode.Selected, state=QIcon.State.On),
+                    self._dark_pixel_count(icon, center_only=True), 10
+                )
+                self.assertGreaterEqual(
+                    self._dark_pixel_count(icon, mode=QIcon.Mode.Disabled), 60
+                )
+                self.assertGreaterEqual(
+                    self._dark_pixel_count(
+                        icon, mode=QIcon.Mode.Selected, state=QIcon.State.On
+                    ),
                     60,
                 )
 
     def test_top_toolbar_keeps_select_and_perspective_actions_visible(self) -> None:
-        self.assertNotIn("Tools", [toolbar.windowTitle() for toolbar in self.window.findChildren(QToolBar)])
+        self.assertNotIn(
+            "Tools",
+            [toolbar.windowTitle() for toolbar in self.window.findChildren(QToolBar)],
+        )
         panel_bar = next(
-            toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Panels"
+            toolbar
+            for toolbar in self.window.findChildren(QToolBar)
+            if toolbar.windowTitle() == "Panels"
         )
         actions = [
             action
@@ -133,48 +155,85 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         self.app.processEvents()
 
         panel_bar = next(
-            toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Panels"
+            toolbar
+            for toolbar in self.window.findChildren(QToolBar)
+            if toolbar.windowTitle() == "Panels"
         )
         options_bar = next(
-            toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Options"
+            toolbar
+            for toolbar in self.window.findChildren(QToolBar)
+            if toolbar.windowTitle() == "Options"
         )
 
-        self.assertNotIn("Tools", [toolbar.windowTitle() for toolbar in self.window.findChildren(QToolBar)])
+        self.assertNotIn(
+            "Tools",
+            [toolbar.windowTitle() for toolbar in self.window.findChildren(QToolBar)],
+        )
         self.assertEqual(panel_bar.height(), TOOLBAR_THICKNESS)
         self.assertEqual(options_bar.height(), TOOLBAR_THICKNESS)
 
-    def test_color_and_ring_fill_live_in_top_toolbar_and_palette_options_bar(self) -> None:
+    def test_color_and_ring_fill_live_in_top_toolbar_and_palette_options_bar(
+        self,
+    ) -> None:
         panel_bar = next(
-            toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Panels"
+            toolbar
+            for toolbar in self.window.findChildren(QToolBar)
+            if toolbar.windowTitle() == "Panels"
         )
 
-        self.assertNotIn("Tools", [toolbar.windowTitle() for toolbar in self.window.findChildren(QToolBar)])
+        self.assertNotIn(
+            "Tools",
+            [toolbar.windowTitle() for toolbar in self.window.findChildren(QToolBar)],
+        )
         self.assertIn("Color", [action.text() for action in panel_bar.actions()])
         self.assertIn("Ring Fill", [action.text() for action in panel_bar.actions()])
         self.assertNotIn("Template", [action.text() for action in panel_bar.actions()])
-        self.assertNotIn("Bond Length", [button.toolTip() for button in panel_bar.findChildren(QToolButton)])
-        self.assertIn("Color", [button.toolTip() for button in panel_bar.findChildren(QToolButton)])
-        self.assertIn("Ring Fill", [button.toolTip() for button in panel_bar.findChildren(QToolButton)])
+        self.assertNotIn(
+            "Bond Length",
+            [button.toolTip() for button in panel_bar.findChildren(QToolButton)],
+        )
+        self.assertIn(
+            "Color",
+            [button.toolTip() for button in panel_bar.findChildren(QToolButton)],
+        )
+        self.assertIn(
+            "Ring Fill",
+            [button.toolTip() for button in panel_bar.findChildren(QToolButton)],
+        )
 
         self.window.ui_references.tool_actions["color"].trigger()
         color_button = next(
-            widget for widget in self.window.findChildren(QToolButton) if widget.toolTip() == "Color: Blue"
+            widget
+            for widget in self.window.findChildren(QToolButton)
+            if widget.toolTip() == "Color: Blue"
         )
-        self.assertEqual(self.window.statusBar().currentMessage(), "Color: choose a swatch")
         self.assertEqual(
-            services_for_window(self.window).status_service.status_context_texts()["tool"],
+            self.window.statusBar().currentMessage(), "Color: choose a swatch"
+        )
+        self.assertEqual(
+            services_for_window(self.window).status_service.status_context_texts()[
+                "tool"
+            ],
             "Tool: Color",
         )
         self.assertIsNotNone(color_button)
 
         self.window.ui_references.tool_actions["ring_fill"].trigger()
         ring_fill_button = next(
-            widget for widget in self.window.findChildren(QToolButton) if widget.toolTip() == "Ring Fill: Yellow"
+            widget
+            for widget in self.window.findChildren(QToolButton)
+            if widget.toolTip() == "Ring Fill: Yellow"
         )
-        self.assertEqual(self.window.runtime_state.context_bar_page_override, "ring_fill")
-        self.assertEqual(self.window.statusBar().currentMessage(), "Ring Fill: choose fill color")
         self.assertEqual(
-            services_for_window(self.window).status_service.status_context_texts()["tool"],
+            self.window.runtime_state.context_bar_page_override, "ring_fill"
+        )
+        self.assertEqual(
+            self.window.statusBar().currentMessage(), "Ring Fill: choose fill color"
+        )
+        self.assertEqual(
+            services_for_window(self.window).status_service.status_context_texts()[
+                "tool"
+            ],
             "Tool: Ring Fill",
         )
         self.assertIsNotNone(ring_fill_button)
@@ -184,7 +243,9 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         self.window.show()
         self.app.processEvents()
         panel_bar = next(
-            toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Panels"
+            toolbar
+            for toolbar in self.window.findChildren(QToolBar)
+            if toolbar.windowTitle() == "Panels"
         )
         image = panel_bar.grab().toImage()
 
@@ -193,21 +254,29 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         # button while the native-size guard above still catches blank icons.
         for text, min_dark_pixels in (("Select", 24), ("Perspective", 20)):
             with self.subTest(text=text):
-                action = next(action for action in panel_bar.actions() if action.text() == text)
+                action = next(
+                    action for action in panel_bar.actions() if action.text() == text
+                )
                 widget = panel_bar.widgetForAction(action)
                 self.assertIsNotNone(widget)
                 self.assertTrue(widget.isVisible())
                 self.assertFalse(widget.icon().isNull())
                 self.assertEqual(widget.iconSize(), panel_bar.iconSize())
                 rect = widget.geometry().intersected(image.rect())
-                self.assertGreaterEqual(self._dark_pixel_count_in_rect(image, rect), min_dark_pixels)
+                self.assertGreaterEqual(
+                    self._dark_pixel_count_in_rect(image, rect), min_dark_pixels
+                )
 
-    def test_top_toolbar_renders_select_and_perspective_glyphs_when_checked(self) -> None:
+    def test_top_toolbar_renders_select_and_perspective_glyphs_when_checked(
+        self,
+    ) -> None:
         self.window.resize(900, 560)
         self.window.show()
         self.app.processEvents()
         panel_bar = next(
-            toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Panels"
+            toolbar
+            for toolbar in self.window.findChildren(QToolBar)
+            if toolbar.windowTitle() == "Panels"
         )
 
         for action_key, min_dark_pixels in (("select", 24), ("perspective", 20)):
@@ -222,14 +291,18 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
                 self.assertFalse(widget.icon().isNull())
                 self.assertEqual(widget.iconSize(), panel_bar.iconSize())
                 rect = widget.geometry().intersected(image.rect())
-                self.assertGreaterEqual(self._dark_pixel_count_in_rect(image, rect), min_dark_pixels)
+                self.assertGreaterEqual(
+                    self._dark_pixel_count_in_rect(image, rect), min_dark_pixels
+                )
 
     def test_top_toolbar_keeps_all_tool_actions_visible_in_compact_window(self) -> None:
         self.window.resize(800, 420)
         self.window.show()
         self.app.processEvents()
         panel_bar = next(
-            toolbar for toolbar in self.window.findChildren(QToolBar) if toolbar.windowTitle() == "Panels"
+            toolbar
+            for toolbar in self.window.findChildren(QToolBar)
+            if toolbar.windowTitle() == "Panels"
         )
 
         tool_action_texts = {
@@ -254,9 +327,14 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
                 self.assertIsNotNone(widget)
                 self.assertTrue(widget.isVisible())
 
-    def test_template_entries_and_template_menu_preserve_ring_size_and_style(self) -> None:
+    def test_template_entries_and_template_menu_preserve_ring_size_and_style(
+        self,
+    ) -> None:
         tool_routing_service = services_for_window(self.window).tool_routing_service
-        with mock.patch.object(active_canvas_for_window(self.window).services.insert_controller, "begin_ring_template_insert") as begin_insert:
+        with mock.patch.object(
+            active_canvas_for_window(self.window).services.insert_controller,
+            "begin_ring_template_insert",
+        ) as begin_insert:
             entries = dict(tool_routing_service.template_entries(self.window))
             entries["Benzene"]()
             entries["Cyclopropane"]()
@@ -291,8 +369,12 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
             ],
         )
 
-    def test_ring_action_shows_template_icon_buttons_and_routes_current_canvas(self) -> None:
-        insert_controller = active_canvas_for_window(self.window).services.insert_controller
+    def test_ring_action_shows_template_icon_buttons_and_routes_current_canvas(
+        self,
+    ) -> None:
+        insert_controller = active_canvas_for_window(
+            self.window
+        ).services.insert_controller
         with mock.patch.object(
             insert_controller,
             "begin_ring_template_insert",
@@ -301,17 +383,38 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
             self.window.ui_references.tool_actions["benzene"].trigger()
 
             button = next(
-                widget for widget in self.window.findChildren(QToolButton) if widget.toolTip() == "Benzene"
+                widget
+                for widget in self.window.findChildren(QToolButton)
+                if widget.toolTip() == "Benzene"
             )
             self.assertIsNone(self.window.runtime_state.context_bar_page_override)
-            self.assertTrue(self.window.ui_references.tool_actions["benzene"].isChecked())
+            self.assertTrue(
+                self.window.ui_references.tool_actions["benzene"].isChecked()
+            )
             self.assertTrue(button.isChecked())
-            self.assertTrue(insert_state_for(active_canvas_for_window(self.window)).template_active)
-            self.assertEqual(insert_state_for(active_canvas_for_window(self.window)).template_ring_size, 6)
-            self.assertEqual(insert_state_for(active_canvas_for_window(self.window)).template_ring_style, "benzene")
-            self.assertEqual(self.window.statusBar().currentMessage(), "Ring: click to place template")
+            self.assertTrue(
+                insert_state_for(active_canvas_for_window(self.window)).template_active
+            )
             self.assertEqual(
-                services_for_window(self.window).status_service.status_context_texts()["tool"],
+                insert_state_for(
+                    active_canvas_for_window(self.window)
+                ).template_ring_size,
+                6,
+            )
+            self.assertEqual(
+                insert_state_for(
+                    active_canvas_for_window(self.window)
+                ).template_ring_style,
+                "benzene",
+            )
+            self.assertEqual(
+                self.window.statusBar().currentMessage(),
+                "Ring: click to place template",
+            )
+            self.assertEqual(
+                services_for_window(self.window).status_service.status_context_texts()[
+                    "tool"
+                ],
                 "Tool: Ring",
             )
 
@@ -321,14 +424,20 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
 
         begin_insert.assert_called_once_with(6, "benzene")
 
-    def test_arrow_action_shows_context_icon_buttons_and_routes_type_and_preset(self) -> None:
+    def test_arrow_action_shows_context_icon_buttons_and_routes_type_and_preset(
+        self,
+    ) -> None:
         self.window.ui_references.tool_actions["arrow"].trigger()
 
         arrow_button = next(
-            widget for widget in self.window.findChildren(QToolButton) if widget.toolTip() == "Curved Double"
+            widget
+            for widget in self.window.findChildren(QToolButton)
+            if widget.toolTip() == "Curved Double"
         )
         preset_button = next(
-            widget for widget in self.window.findChildren(QToolButton) if widget.toolTip() == "Bold arrow preset"
+            widget
+            for widget in self.window.findChildren(QToolButton)
+            if widget.toolTip() == "Bold arrow preset"
         )
 
         arrow_button.click()
@@ -343,13 +452,18 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         self.window.ui_references.tool_actions["ts_bracket"].trigger()
 
         dagger_button = next(
-            widget for widget in self.window.findChildren(QToolButton) if widget.toolTip() == "Dagger"
+            widget
+            for widget in self.window.findChildren(QToolButton)
+            if widget.toolTip() == "Dagger"
         )
         dagger_button.click()
 
         settings = tool_settings_state_for(active_canvas_for_window(self.window))
         self.assertEqual(settings.active_bracket_type, "dagger")
-        self.assertEqual(active_canvas_for_window(self.window).services.tools.active.name, "ts_bracket")
+        self.assertEqual(
+            active_canvas_for_window(self.window).services.tools.active.name,
+            "ts_bracket",
+        )
 
     def test_tool_routing_service_surface_stays_off_main_window(self) -> None:
         self.assertFalse(hasattr(self.window, "template_entries"))
@@ -389,17 +503,23 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         icon = QIcon()
         factory.icon_select.return_value = icon
 
-        self.assertIs(self.window.ui_references.require_icon_factory().icon_select(), icon)
+        self.assertIs(
+            self.window.ui_references.require_icon_factory().icon_select(), icon
+        )
         self.assertFalse(hasattr(self.window, "icon_factory"))
         self.assertFalse(hasattr(self.window, "_icon_select"))
         factory.icon_select.assert_called_once_with()
 
-    def test_tool_action_public_methods_delegate_to_service_without_build_wrapper(self) -> None:
+    def test_tool_action_public_methods_delegate_to_service_without_build_wrapper(
+        self,
+    ) -> None:
         self.assertFalse(hasattr(self.window, "activate_bond_style_tool"))
         self.assertFalse(hasattr(self.window, "build_tool_actions"))
         self.assertFalse(hasattr(self.window, "new_tool_action"))
 
-    def test_arrow_menu_helpers_route_type_and_preset_through_existing_methods(self) -> None:
+    def test_arrow_menu_helpers_route_type_and_preset_through_existing_methods(
+        self,
+    ) -> None:
         tool_routing_service = services_for_window(self.window).tool_routing_service
         tool_routing_service.activate_arrow_type_from_menu(self.window, "Curved Double")
         tool_routing_service.activate_arrow_preset_from_menu(self.window, "Bold")
@@ -411,7 +531,9 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
 
         menu = QMenu()
         tool_routing_service.populate_arrow_menu(self.window, menu)
-        preset_menu = next(action.menu() for action in menu.actions() if action.menu() is not None)
+        preset_menu = next(
+            action.menu() for action in menu.actions() if action.menu() is not None
+        )
         menu.actions()[0].trigger()
         preset_menu.actions()[0].trigger()
 
@@ -434,7 +556,10 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
     def test_text_preset_and_palette_menu_helpers_delegate_correctly(self) -> None:
         text_style_service = services_for_window(self.window).text_style_service
         with (
-            mock.patch.object(active_canvas_for_window(self.window).services.style_controller, "apply_text_preset_acs") as acs,
+            mock.patch.object(
+                active_canvas_for_window(self.window).services.style_controller,
+                "apply_text_preset_acs",
+            ) as acs,
             mock.patch.object(
                 active_canvas_for_window(self.window).services.style_controller,
                 "apply_text_preset_paper_thin",
@@ -456,7 +581,9 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         palette_calls = []
         menu = QMenu()
         tool_routing_service = services_for_window(self.window).tool_routing_service
-        tool_routing_service.populate_palette_menu(self.window, menu, lambda value: palette_calls.append(value))
+        tool_routing_service.populate_palette_menu(
+            self.window, menu, lambda value: palette_calls.append(value)
+        )
         self.assertEqual(
             [action.text() for action in menu.actions()],
             [label for label, _ in tool_routing_service.acs_color_palette()],
@@ -464,27 +591,45 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         menu.actions()[0].trigger()
         self.assertEqual(palette_calls, ["#000000"])
 
-    def test_apply_color_and_ring_fill_presets_filter_selected_items_and_update_color_tool(self) -> None:
+    def test_apply_color_and_ring_fill_presets_filter_selected_items_and_update_color_tool(
+        self,
+    ) -> None:
         color_tool = SimpleNamespace(set_color=mock.Mock())
         active_canvas_for_window(self.window).services.tools.tools["color"] = color_tool
         selected_items = [_FakeItem("atom"), _FakeItem("ring"), _FakeItem("note")]
         scene = SimpleNamespace(selectedItems=lambda: selected_items)
 
         with (
-            mock.patch("ui.main_window_tool_routing_service.QTimer.singleShot", side_effect=lambda _delay, callback: callback()),
-            mock.patch.object(active_canvas_for_window(self.window), "scene", return_value=scene),
-            mock.patch.object(active_canvas_for_window(self.window).services.tool_mode_controller, "set_tool") as set_tool,
+            mock.patch(
+                "chemvas.ui.main_window_tool_routing_service.QTimer.singleShot",
+                side_effect=lambda _delay, callback: callback(),
+            ),
             mock.patch.object(
-                active_canvas_for_window(self.window).services.canvas_color_mutation_service,
+                active_canvas_for_window(self.window), "scene", return_value=scene
+            ),
+            mock.patch.object(
+                active_canvas_for_window(self.window).services.tool_mode_controller,
+                "set_tool",
+            ) as set_tool,
+            mock.patch.object(
+                active_canvas_for_window(
+                    self.window
+                ).services.canvas_color_mutation_service,
                 "apply_color_to_items",
             ) as apply_color,
             mock.patch.object(
-                active_canvas_for_window(self.window).services.canvas_color_mutation_service,
+                active_canvas_for_window(
+                    self.window
+                ).services.canvas_color_mutation_service,
                 "apply_ring_fill_color_to_items",
             ) as apply_fill,
         ):
-            services_for_window(self.window).tool_routing_service.apply_color_preset(self.window, "#2f6ed3")
-            services_for_window(self.window).tool_routing_service.apply_ring_fill_preset(self.window, "#f4d06f")
+            services_for_window(self.window).tool_routing_service.apply_color_preset(
+                self.window, "#2f6ed3"
+            )
+            services_for_window(
+                self.window
+            ).tool_routing_service.apply_ring_fill_preset(self.window, "#f4d06f")
 
         color_tool.set_color.assert_called_once()
         self.assertEqual(color_tool.set_color.call_args.args[0].name(), "#2f6ed3")

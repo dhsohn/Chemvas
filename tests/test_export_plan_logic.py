@@ -1,6 +1,6 @@
 import unittest
 
-from ui.export_plan_logic import build_export_plan, points_for_mm
+from chemvas.features.export import build_export_plan, points_for_mm
 
 
 class BuildExportPlanTest(unittest.TestCase):

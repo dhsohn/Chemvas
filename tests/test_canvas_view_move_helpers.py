@@ -12,14 +12,17 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from core.model import Atom, Bond
-    from ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
-    from ui.canvas_atom_graphics_state import set_atom_dots_for, set_atom_items_for
-    from ui.canvas_bond_graphics_state import set_bond_items_for
-    from ui.canvas_mark_registry import CanvasMarkRegistry
-    from ui.canvas_move_controller import CanvasMoveController
-    from ui.canvas_scene_items_state import set_scene_item_collection_for
-    from ui.move_access import move_atoms_for, move_item_for
+    from chemvas.domain.document import Atom, Bond
+    from chemvas.ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
+    from chemvas.ui.canvas_atom_graphics_state import (
+        set_atom_dots_for,
+        set_atom_items_for,
+    )
+    from chemvas.ui.canvas_bond_graphics_state import set_bond_items_for
+    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+    from chemvas.ui.canvas_move_controller import CanvasMoveController
+    from chemvas.ui.canvas_scene_items_state import set_scene_item_collection_for
+    from chemvas.ui.move_access import move_atoms_for, move_item_for
 
 
 class _FakeItem:
@@ -54,10 +57,14 @@ class _FakeRingItem:
         return None
 
     def setPolygon(self, polygon) -> None:
-        self.polygons.append([(round(point.x(), 6), round(point.y(), 6)) for point in polygon])
+        self.polygons.append(
+            [(round(point.x(), 6), round(point.y(), 6)) for point in polygon]
+        )
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas view tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for canvas view tests"
+)
 class CanvasViewMoveHelpersTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -70,14 +77,20 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
             services = SimpleNamespace()
             view.services = services
         if not hasattr(services, "hit_testing_service"):
-            services.hit_testing_service = SimpleNamespace(mark_spatial_index_dirty=mock.Mock())
+            services.hit_testing_service = SimpleNamespace(
+                mark_spatial_index_dirty=mock.Mock()
+            )
         controller = controller or CanvasMoveController(
             view,
             hit_testing_service=services.hit_testing_service,
         )
         services.move_controller = controller
-        if hasattr(view, "refresh_selection_outline") and not hasattr(services, "selection_controller"):
-            services.selection_controller = SimpleNamespace(update_selection_outline=view.refresh_selection_outline)
+        if hasattr(view, "refresh_selection_outline") and not hasattr(
+            services, "selection_controller"
+        ):
+            services.selection_controller = SimpleNamespace(
+                update_selection_outline=view.refresh_selection_outline
+            )
         return controller
 
     def test_move_item_atom_branch_and_guard_paths(self) -> None:
@@ -112,7 +125,9 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         bond_item = _FakeItem("bond", data1=0)
         mark_item = _FakeItem("mark", data1={"atom_id": 1})
         orbital_item = _FakeItem("orbital", data1={"center": QPointF(2.0, 3.0)})
-        bracket_item = _FakeItem("ts_bracket", data1={"rect": QRectF(1.0, 2.0, 3.0, 4.0)})
+        bracket_item = _FakeItem(
+            "ts_bracket", data1={"rect": QRectF(1.0, 2.0, 3.0, 4.0)}
+        )
         arrow_item = _FakeItem(
             "arrow",
             data2={
@@ -143,7 +158,9 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         move_item_for(view, bracket_item, 2.0, 2.0)
         move_item_for(view, arrow_item, 1.5, -0.5)
 
-        controller.move_atom.assert_has_calls([mock.call(1, 4.0, -2.0), mock.call(2, 4.0, -2.0)])
+        controller.move_atom.assert_has_calls(
+            [mock.call(1, 4.0, -2.0), mock.call(2, 4.0, -2.0)]
+        )
         view.bond_renderer.redraw_connected_bonds.assert_has_calls(
             [mock.call(1, skip_bond_id=None), mock.call(2, skip_bond_id=None)]
         )
@@ -158,7 +175,10 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         self.assertEqual(view.refresh_selection_outline.call_count, 5)
 
     def test_move_item_shifts_active_handles_glued_to_target(self) -> None:
-        from ui.handle_state import set_active_handles_for, set_handle_target_for
+        from chemvas.ui.handle_state import (
+            set_active_handles_for,
+            set_handle_target_for,
+        )
 
         shape = _FakeItem("shape", data1={"rect": QRectF(0.0, 0.0, 10.0, 10.0)})
         handle_a = _FakeItem("handle")
@@ -258,7 +278,9 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
             update_selection=False,
         )
 
-        self.assertEqual({call.args[0] for call in controller.move_atom.call_args_list}, {1, 2})
+        self.assertEqual(
+            {call.args[0] for call in controller.move_atom.call_args_list}, {1, 2}
+        )
         self.assertEqual(bond_graphic.moves, [(3.0, -4.0)])
         view.bond_renderer.update_bond_geometry.assert_called_once_with(5)
         controller.move_rings_for_atoms.assert_called_once_with({1, 2}, 3.0, -4.0)
@@ -292,7 +314,11 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
                 }
             ),
         )
-        set_scene_item_collection_for(view, "ring_items", [matching_ring, short_ring, non_matching_ring, invalid_ring])
+        set_scene_item_collection_for(
+            view,
+            "ring_items",
+            [matching_ring, short_ring, non_matching_ring, invalid_ring],
+        )
         controller = self._bind_move_controller(view)
 
         controller.move_rings_for_atoms({1, 2, 3}, 10.0, 20.0)
@@ -320,7 +346,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         controller.redraw_bonds_for_atoms = mock.Mock()
 
         with mock.patch(
-            "ui.canvas_move_controller.ring_items_for",
+            "chemvas.ui.canvas_move_controller.ring_items_for",
             side_effect=AssertionError("ring registry was rescanned"),
         ) as ring_items_for_port:
             for _ in range(5):
@@ -368,9 +394,19 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         self._bind_move_controller(view, controller)
 
         move_item_for(view, item, 1.0, 2.0, update_selection=False)
-        move_atoms_for(view, {1, 2}, 3.0, 4.0, bond_ids={5}, redraw_bond_ids={6}, update_selection=False)
+        move_atoms_for(
+            view,
+            {1, 2},
+            3.0,
+            4.0,
+            bond_ids={5},
+            redraw_bond_ids={6},
+            update_selection=False,
+        )
 
-        controller.move_item.assert_called_once_with(item, 1.0, 2.0, update_selection=False)
+        controller.move_item.assert_called_once_with(
+            item, 1.0, 2.0, update_selection=False
+        )
         controller.move_atoms.assert_called_once_with(
             {1, 2},
             3.0,

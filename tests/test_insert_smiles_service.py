@@ -8,8 +8,30 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from core.history import HistoryTransactionRestoreResult
-from core.model import Atom, MoleculeModel
+from chemvas.core.history import HistoryTransactionRestoreResult
+from chemvas.domain.document import Atom, MoleculeModel
+from chemvas.ui.canvas_hover_state import hover_state_for
+from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
+from chemvas.ui.canvas_rotation_preview_state import (
+    RotationPreviewItemSnapshot,
+    rotation_preview_state_for,
+)
+from chemvas.ui.canvas_rotation_state import rotation_state_for
+from chemvas.ui.canvas_scene_items_state import note_items_for, selected_notes_for
+from chemvas.ui.canvas_smiles_input_state import (
+    last_smiles_input_for,
+    set_last_smiles_input_for,
+)
+from chemvas.ui.canvas_view import CanvasView
+from chemvas.ui.input_view_access import set_scene_rect_for
+from chemvas.ui.insert_mode_logic import InsertSessionState
+from chemvas.ui.insert_smiles_service import (
+    InsertSmilesService,
+    _detach_top_level_scene_items_before_clear,
+)
+from chemvas.ui.selection_info_state import selection_info_state_for
+from chemvas.ui.selection_style_state import selection_style_state_for
+from chemvas.ui.transactions.scene_rect import SceneRectSnapshot
 from PyQt6 import sip
 from PyQt6.QtCore import QCoreApplication, QEvent, QPointF, QRectF
 from PyQt6.QtGui import QTransform
@@ -19,28 +41,6 @@ from PyQt6.QtWidgets import (
     QGraphicsRectItem,
     QGraphicsScene,
 )
-from ui.canvas_hover_state import hover_state_for
-from ui.canvas_lifecycle import schedule_canvas_deletion_for
-from ui.canvas_rotation_preview_state import (
-    RotationPreviewItemSnapshot,
-    rotation_preview_state_for,
-)
-from ui.canvas_rotation_state import rotation_state_for
-from ui.canvas_scene_items_state import note_items_for, selected_notes_for
-from ui.canvas_smiles_input_state import (
-    last_smiles_input_for,
-    set_last_smiles_input_for,
-)
-from ui.canvas_view import CanvasView
-from ui.input_view_access import set_scene_rect_for
-from ui.insert_mode_logic import InsertSessionState
-from ui.insert_smiles_service import (
-    InsertSmilesService,
-    _detach_top_level_scene_items_before_clear,
-)
-from ui.scene_rect_snapshot import SceneRectSnapshot
-from ui.selection_info_state import selection_info_state_for
-from ui.selection_style_state import selection_style_state_for
 
 from tests.test_insert_controller import _FakeCanvas
 
@@ -443,11 +443,11 @@ def test_smiles_exact_rollback_retries_and_reports_authority(
 
     with (
         mock.patch(
-            "ui.insert_smiles_service.restore_history_transaction_for_history",
+            "chemvas.ui.insert_smiles_service.restore_history_transaction_for_history",
             side_effect=lambda *_args: next(results),
         ) as restore,
         mock.patch(
-            "ui.insert_smiles_service.deserialize_model_state",
+            "chemvas.ui.insert_smiles_service.deserialize_model_state",
             return_value=MoleculeModel(),
         ),
     ):
@@ -541,7 +541,7 @@ def test_insert_smiles_service_render_preview_routes_clear_and_apply_paths() -> 
     service = _service_for(canvas, clear_smiles_preview=clear_smiles_preview)
 
     with mock.patch(
-        "ui.insert_smiles_service.plan_smiles_preview_update",
+        "chemvas.ui.insert_smiles_service.plan_smiles_preview_update",
         return_value=mock.Mock(action="clear", geometry=None),
     ):
         service.render_smiles_preview(QPointF(1.0, 2.0))
@@ -551,11 +551,11 @@ def test_insert_smiles_service_render_preview_routes_clear_and_apply_paths() -> 
     clear_smiles_preview.reset_mock()
     with (
         mock.patch(
-            "ui.insert_smiles_service.plan_smiles_preview_update",
+            "chemvas.ui.insert_smiles_service.plan_smiles_preview_update",
             return_value=mock.Mock(action="update", geometry={"lines": 1}),
         ),
         mock.patch(
-            "ui.insert_smiles_service.apply_smiles_preview_geometry_helper",
+            "chemvas.ui.insert_smiles_service.apply_smiles_preview_geometry_helper",
             return_value=(["items"], {0: ["bond"]}, {0: "atom"}),
         ) as apply_helper,
     ):
@@ -582,18 +582,18 @@ def test_load_smiles_next_atom_id_exit_precedes_exact_scene_guard() -> None:
 
     with (
         mock.patch(
-            "ui.insert_smiles_service.snapshot_canvas_document_state",
+            "chemvas.ui.insert_smiles_service.snapshot_canvas_document_state",
             return_value={},
         ),
         mock.patch.object(
             service.transaction_builder, "capture", return_value=object()
         ),
         mock.patch(
-            "ui.insert_smiles_service.next_atom_id_for",
+            "chemvas.ui.insert_smiles_service.next_atom_id_for",
             side_effect=SystemExit("next atom id capture terminated"),
         ),
         mock.patch(
-            "ui.insert_smiles_service.capture_history_transaction_for_history",
+            "chemvas.ui.insert_smiles_service.capture_history_transaction_for_history",
             side_effect=lambda *_args, **_kwargs: SceneRectSnapshot.capture(scene),
         ) as capture,
         pytest.raises(SystemExit, match="next atom id capture terminated"),
@@ -634,23 +634,23 @@ def test_load_smiles_false_history_push_rolls_back_when_not_explicitly_disabled(
 
     with (
         mock.patch(
-            "ui.insert_smiles_service.snapshot_canvas_document_state",
+            "chemvas.ui.insert_smiles_service.snapshot_canvas_document_state",
             return_value={},
         ),
         mock.patch(
-            "ui.insert_smiles_service.capture_history_transaction_for_history",
+            "chemvas.ui.insert_smiles_service.capture_history_transaction_for_history",
             return_value=exact_transaction,
         ),
         mock.patch(
-            "ui.insert_smiles_service.release_history_transaction_for_history"
+            "chemvas.ui.insert_smiles_service.release_history_transaction_for_history"
         ) as release,
         mock.patch(
-            "ui.insert_smiles_service._detach_top_level_scene_items_before_clear"
+            "chemvas.ui.insert_smiles_service._detach_top_level_scene_items_before_clear"
         ),
-        mock.patch("ui.insert_smiles_service.clear_scene_for"),
-        mock.patch("ui.insert_smiles_service.next_atom_id_for", return_value=0),
-        mock.patch("ui.insert_smiles_service.set_model_for"),
-        mock.patch("ui.insert_smiles_service.set_last_smiles_input_for"),
+        mock.patch("chemvas.ui.insert_smiles_service.clear_scene_for"),
+        mock.patch("chemvas.ui.insert_smiles_service.next_atom_id_for", return_value=0),
+        mock.patch("chemvas.ui.insert_smiles_service.set_model_for"),
+        mock.patch("chemvas.ui.insert_smiles_service.set_last_smiles_input_for"),
         mock.patch.object(
             service,
             "_restore_document_state_after_failed_load",
@@ -685,23 +685,23 @@ def test_load_smiles_false_history_push_is_allowed_when_explicitly_disabled() ->
 
     with (
         mock.patch(
-            "ui.insert_smiles_service.snapshot_canvas_document_state",
+            "chemvas.ui.insert_smiles_service.snapshot_canvas_document_state",
             return_value={},
         ),
         mock.patch(
-            "ui.insert_smiles_service.capture_history_transaction_for_history",
+            "chemvas.ui.insert_smiles_service.capture_history_transaction_for_history",
             return_value=exact_transaction,
         ),
         mock.patch(
-            "ui.insert_smiles_service.release_history_transaction_for_history"
+            "chemvas.ui.insert_smiles_service.release_history_transaction_for_history"
         ) as release,
         mock.patch(
-            "ui.insert_smiles_service._detach_top_level_scene_items_before_clear"
+            "chemvas.ui.insert_smiles_service._detach_top_level_scene_items_before_clear"
         ),
-        mock.patch("ui.insert_smiles_service.clear_scene_for"),
-        mock.patch("ui.insert_smiles_service.next_atom_id_for", return_value=0),
-        mock.patch("ui.insert_smiles_service.set_model_for"),
-        mock.patch("ui.insert_smiles_service.set_last_smiles_input_for"),
+        mock.patch("chemvas.ui.insert_smiles_service.clear_scene_for"),
+        mock.patch("chemvas.ui.insert_smiles_service.next_atom_id_for", return_value=0),
+        mock.patch("chemvas.ui.insert_smiles_service.set_model_for"),
+        mock.patch("chemvas.ui.insert_smiles_service.set_last_smiles_input_for"),
         mock.patch.object(
             service,
             "_restore_document_state_after_failed_load",
@@ -761,18 +761,18 @@ def test_load_smiles_aborts_before_destructive_clear_when_root_detach_does_not_c
 
     with (
         mock.patch(
-            "ui.insert_smiles_service.snapshot_canvas_document_state",
+            "chemvas.ui.insert_smiles_service.snapshot_canvas_document_state",
             return_value={},
         ),
         mock.patch.object(
             service.transaction_builder, "capture", return_value=object()
         ),
         mock.patch(
-            "ui.insert_smiles_service.capture_history_transaction_for_history",
+            "chemvas.ui.insert_smiles_service.capture_history_transaction_for_history",
             return_value=exact_transaction,
         ),
         mock.patch(
-            "ui.insert_smiles_service.restore_history_transaction_for_history",
+            "chemvas.ui.insert_smiles_service.restore_history_transaction_for_history",
             return_value=restore_result,
         ) as restore_exact,
         pytest.raises(RuntimeError, match="detach"),
@@ -805,18 +805,18 @@ def test_load_smiles_collects_every_root_before_first_detach() -> None:
 
     with (
         mock.patch(
-            "ui.insert_smiles_service.snapshot_canvas_document_state",
+            "chemvas.ui.insert_smiles_service.snapshot_canvas_document_state",
             return_value={},
         ),
         mock.patch.object(
             service.transaction_builder, "capture", return_value=object()
         ),
         mock.patch(
-            "ui.insert_smiles_service.capture_history_transaction_for_history",
+            "chemvas.ui.insert_smiles_service.capture_history_transaction_for_history",
             return_value=exact_transaction,
         ),
         mock.patch(
-            "ui.insert_smiles_service.restore_history_transaction_for_history",
+            "chemvas.ui.insert_smiles_service.restore_history_transaction_for_history",
             return_value=restore_result,
         ) as restore_exact,
         pytest.raises(RuntimeError, match="deleted child parent lookup"),
@@ -846,22 +846,22 @@ def test_load_smiles_detach_rollback_note_failure_preserves_primary_exception() 
 
     with (
         mock.patch(
-            "ui.insert_smiles_service.snapshot_canvas_document_state",
+            "chemvas.ui.insert_smiles_service.snapshot_canvas_document_state",
             return_value={},
         ),
         mock.patch.object(
             service.transaction_builder, "capture", return_value=object()
         ),
         mock.patch(
-            "ui.insert_smiles_service.capture_history_transaction_for_history",
+            "chemvas.ui.insert_smiles_service.capture_history_transaction_for_history",
             return_value=exact_transaction,
         ),
         mock.patch(
-            "ui.insert_smiles_service._detach_top_level_scene_items_before_clear",
+            "chemvas.ui.insert_smiles_service._detach_top_level_scene_items_before_clear",
             side_effect=primary_error,
         ),
         mock.patch(
-            "ui.insert_smiles_service.restore_history_transaction_for_history",
+            "chemvas.ui.insert_smiles_service.restore_history_transaction_for_history",
             return_value=restore_result,
         ),
         pytest.raises(_BrokenAddNoteInterrupt) as caught,
@@ -907,7 +907,7 @@ def test_load_smiles_preserves_live_qt_document_identity_across_base_exceptions_
                 fail()
 
             failure_patch = mock.patch(
-                "ui.insert_smiles_service.clear_scene_for",
+                "chemvas.ui.insert_smiles_service.clear_scene_for",
                 side_effect=clear_then_fail,
             )
         elif failure_stage == "render":
@@ -935,7 +935,7 @@ def test_load_smiles_preserves_live_qt_document_identity_across_base_exceptions_
                 side_effect=push_then_fail,
             )
         else:
-            from ui import insert_smiles_service as service_module
+            from chemvas.ui import insert_smiles_service as service_module
 
             original_release = service_module.release_history_transaction_for_history
 
@@ -951,7 +951,7 @@ def test_load_smiles_preserves_live_qt_document_identity_across_base_exceptions_
 
         with (
             mock.patch(
-                "ui.insert_smiles_service.smiles_to_2d_for",
+                "chemvas.ui.insert_smiles_service.smiles_to_2d_for",
                 return_value=replacement_model,
             ),
             failure_patch,
@@ -968,7 +968,7 @@ def test_load_smiles_preserves_live_qt_document_identity_across_base_exceptions_
             }
         )
         with mock.patch(
-            "ui.insert_smiles_service.smiles_to_2d_for",
+            "chemvas.ui.insert_smiles_service.smiles_to_2d_for",
             return_value=retry_model,
         ):
             service.load_smiles("CO")
@@ -1024,7 +1024,7 @@ def test_load_smiles_clears_detached_highlight_and_pending_selection_info() -> N
         replacement_model = MoleculeModel(atoms={0: Atom("C", 0.0, 0.0)})
 
         with mock.patch(
-            "ui.insert_smiles_service.smiles_to_2d_for",
+            "chemvas.ui.insert_smiles_service.smiles_to_2d_for",
             return_value=replacement_model,
         ):
             service.load_smiles("C")
@@ -1044,8 +1044,8 @@ def test_load_smiles_clears_detached_highlight_and_pending_selection_info() -> N
         # polling, with no stale RDKit preload or formula computation.
         assert idle_timer.isActive()
         with (
-            mock.patch("ui.selection_info_access.preload_rdkit_for") as preload,
-            mock.patch("ui.selection_info_access.compute_props_for") as compute,
+            mock.patch("chemvas.ui.selection_info_access.preload_rdkit_for") as preload,
+            mock.patch("chemvas.ui.selection_info_access.compute_props_for") as compute,
         ):
             canvas.runtime_state.rdkit_idle_warmup_bridge.warm_when_idle()
         preload.assert_not_called()
@@ -1071,7 +1071,7 @@ def test_load_smiles_success_releases_detached_original_qt_wrappers() -> None:
         )
 
         with mock.patch(
-            "ui.insert_smiles_service.smiles_to_2d_for",
+            "chemvas.ui.insert_smiles_service.smiles_to_2d_for",
             return_value=replacement_model,
         ):
             service.load_smiles("C")

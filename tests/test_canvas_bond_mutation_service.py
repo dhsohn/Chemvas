@@ -5,13 +5,13 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from core.model import Bond
-from ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
-from ui.canvas_bond_mutation_service import CanvasBondMutationService
+from chemvas.domain.document import Bond
+from chemvas.ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
+from chemvas.ui.canvas_bond_mutation_service import CanvasBondMutationService
 
 try:
-    from ui.canvas_graph_service import CanvasGraphService
-    from ui.canvas_graph_state import CanvasGraphState
+    from chemvas.ui.canvas_graph_service import CanvasGraphService
+    from chemvas.ui.canvas_graph_state import CanvasGraphState
 except ModuleNotFoundError:
     CanvasGraphService = None
     CanvasGraphState = None
@@ -82,17 +82,23 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
 
         self.assertEqual(bond_id, 0)
         self.assertEqual(model.add_bond_calls, [(1, 2, 2)])
-        self.assertEqual((model.bonds[0].a, model.bonds[0].b, model.bonds[0].order), (1, 2, 2))
+        self.assertEqual(
+            (model.bonds[0].a, model.bonds[0].b, model.bonds[0].order), (1, 2, 2)
+        )
         graph.add_bond_neighbors.assert_called_once_with(1, 2)
         graph.add_bond_index.assert_called_once_with(0, 1, 2)
         hit_testing.mark_spatial_index_dirty.assert_called_once_with()
 
-    def test_add_bond_uses_injected_hit_testing_service_for_spatial_dirty_mark(self) -> None:
+    def test_add_bond_uses_injected_hit_testing_service_for_spatial_dirty_mark(
+        self,
+    ) -> None:
         model = _FakeModel()
         graph = _graph_service()
         injected_hit_testing = _hit_testing_service()
         registry_hit_testing = SimpleNamespace(
-            mark_spatial_index_dirty=mock.Mock(side_effect=AssertionError("registry service should not be used"))
+            mark_spatial_index_dirty=mock.Mock(
+                side_effect=AssertionError("registry service should not be used")
+            )
         )
         canvas = SimpleNamespace(
             services=_services(graph=graph, hit_testing=registry_hit_testing),
@@ -126,7 +132,9 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
         graph.add_bond_index.assert_not_called()
         hit_testing.mark_spatial_index_dirty.assert_not_called()
 
-    def test_restore_bond_from_state_rewires_existing_adjacency_and_indexes(self) -> None:
+    def test_restore_bond_from_state_rewires_existing_adjacency_and_indexes(
+        self,
+    ) -> None:
         scene = _FakeScene()
         old_item = object()
         graph = _graph_service()
@@ -289,7 +297,9 @@ class CanvasBondMutationServiceStaleIndexTest(unittest.TestCase):
         CanvasGraphService is not None and CanvasGraphState is not None,
         "PyQt6 is required for canvas graph service tests",
     )
-    def test_trim_bonds_to_length_does_not_repair_trimmed_parallel_bond_indexes(self) -> None:
+    def test_trim_bonds_to_length_does_not_repair_trimmed_parallel_bond_indexes(
+        self,
+    ) -> None:
         scene = _FakeScene()
         graph_state = CanvasGraphState(
             atom_neighbors={1: {2}, 2: {1}},

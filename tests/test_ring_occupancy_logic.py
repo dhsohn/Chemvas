@@ -1,12 +1,17 @@
 import unittest
 
-from core.model import Bond
+from chemvas.domain.document import Bond
+from chemvas.features.insertion import (
+    point_inside_any_ring,
+    ring_polygon_points_for_bond,
+)
 from PyQt6.QtCore import QPointF
-from ui.ring_occupancy_logic import point_inside_any_ring, ring_polygon_points_for_bond
 
 
 class _FakePolygon:
-    def __init__(self, points: list[tuple[float, float]], *, contains: bool = False) -> None:
+    def __init__(
+        self, points: list[tuple[float, float]], *, contains: bool = False
+    ) -> None:
         self._points = [QPointF(x, y) for x, y in points]
         self._contains = contains
 
@@ -35,16 +40,24 @@ class _FakeRingItem:
 
 
 class RingOccupancyLogicTest(unittest.TestCase):
-    def test_ring_polygon_points_for_bond_validates_and_returns_matching_polygon(self) -> None:
+    def test_ring_polygon_points_for_bond_validates_and_returns_matching_polygon(
+        self,
+    ) -> None:
         bonds = [Bond(1, 2, 1), None]
         ring_items = [
             _FakeRingItem("not-a-list", _FakePolygon([(0.0, 0.0)])),
             _FakeRingItem([1, 3], _FakePolygon([(0.0, 0.0)])),
-            _FakeRingItem([1, 2, 3], _FakePolygon([(1.0, 2.0), (3.0, 4.0), (5.0, 6.0)])),
+            _FakeRingItem(
+                [1, 2, 3], _FakePolygon([(1.0, 2.0), (3.0, 4.0), (5.0, 6.0)])
+            ),
         ]
 
-        self.assertIsNone(ring_polygon_points_for_bond(-1, bonds=bonds, ring_items=ring_items))
-        self.assertIsNone(ring_polygon_points_for_bond(1, bonds=bonds, ring_items=ring_items))
+        self.assertIsNone(
+            ring_polygon_points_for_bond(-1, bonds=bonds, ring_items=ring_items)
+        )
+        self.assertIsNone(
+            ring_polygon_points_for_bond(1, bonds=bonds, ring_items=ring_items)
+        )
         self.assertEqual(
             ring_polygon_points_for_bond(0, bonds=bonds, ring_items=ring_items),
             [(1.0, 2.0), (3.0, 4.0), (5.0, 6.0)],
@@ -73,7 +86,9 @@ class RingOccupancyLogicTest(unittest.TestCase):
         self.assertFalse(
             point_inside_any_ring(
                 QPointF(3.0, 4.0),
-                ring_items=[_FakeRingItem([1, 2], _FakePolygon([(0.0, 0.0)], contains=False))],
+                ring_items=[
+                    _FakeRingItem([1, 2], _FakePolygon([(0.0, 0.0)], contains=False))
+                ],
             )
         )
 

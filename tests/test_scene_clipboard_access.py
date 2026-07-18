@@ -2,7 +2,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import ui.scene_clipboard_access as access
+import chemvas.ui.scene_clipboard_access as access
 from PyQt6.QtCore import QRectF
 
 
@@ -57,14 +57,25 @@ class SceneClipboardAccessTest(unittest.TestCase):
         self.assertEqual(access.clipboard_paste_source_json_for(canvas), "payload")
         self.assertEqual(access.clipboard_paste_count_for(canvas), 3)
 
-    def test_build_selection_clipboard_payload_for_canvas_uses_canvas_scene_membership(self) -> None:
+    def test_build_selection_clipboard_payload_for_canvas_uses_canvas_scene_membership(
+        self,
+    ) -> None:
         scene = _Scene()
         other_scene = _Scene()
         canvas = _Canvas(scene)
-        attached_ring = _Item(scene, data={0: "ring", 2: [1, 2], 9: {"kind": "ring", "id": "attached"}})
-        detached_ring = _Item(other_scene, data={0: "ring", 2: [1, 2], 9: {"kind": "ring", "id": "detached"}})
-        attached_mark = _Item(scene, data={0: "mark", 9: {"kind": "mark", "id": "attached"}})
-        detached_mark = _Item(other_scene, data={0: "mark", 9: {"kind": "mark", "id": "detached"}})
+        attached_ring = _Item(
+            scene, data={0: "ring", 2: [1, 2], 9: {"kind": "ring", "id": "attached"}}
+        )
+        detached_ring = _Item(
+            other_scene,
+            data={0: "ring", 2: [1, 2], 9: {"kind": "ring", "id": "detached"}},
+        )
+        attached_mark = _Item(
+            scene, data={0: "mark", 9: {"kind": "mark", "id": "attached"}}
+        )
+        detached_mark = _Item(
+            other_scene, data={0: "mark", 9: {"kind": "mark", "id": "detached"}}
+        )
 
         payload = access.build_selection_clipboard_payload_for_canvas(
             canvas,
@@ -74,7 +85,11 @@ class SceneClipboardAccessTest(unittest.TestCase):
             bonds=[],
             ring_items=[attached_ring, detached_ring],
             marks_by_atom={1: [attached_mark, detached_mark]},
-            atom_state_getter=lambda atom_id: {"element": "C", "x": atom_id, "y": atom_id},
+            atom_state_getter=lambda atom_id: {
+                "element": "C",
+                "x": atom_id,
+                "y": atom_id,
+            },
             bond_state_getter=lambda bond: {"bond": bond},
             scene_item_state_getter=lambda item: item.data(9),
             version=7,
@@ -86,7 +101,9 @@ class SceneClipboardAccessTest(unittest.TestCase):
         self.assertEqual(payload["rings"], [{"kind": "ring", "id": "attached"}])
         self.assertEqual(payload["marks"], [{"kind": "mark", "id": "attached"}])
 
-    def test_visible_canvas_items_to_hide_for_copy_queries_canvas_scene_source(self) -> None:
+    def test_visible_canvas_items_to_hide_for_copy_queries_canvas_scene_source(
+        self,
+    ) -> None:
         selected = _Item(visible=True)
         visible_unselected = _Item(visible=True)
         hidden_unselected = _Item(visible=False)
@@ -94,7 +111,9 @@ class SceneClipboardAccessTest(unittest.TestCase):
         canvas = _Canvas(scene)
         source = QRectF(1, 2, 3, 4)
 
-        hidden = access.visible_canvas_items_to_hide_for_copy(canvas, source, selected_items={selected})
+        hidden = access.visible_canvas_items_to_hide_for_copy(
+            canvas, source, selected_items={selected}
+        )
 
         self.assertEqual(hidden, [visible_unselected])
         self.assertEqual(scene.items_calls, [(source,)])
@@ -120,8 +139,12 @@ class SceneClipboardAccessTest(unittest.TestCase):
         items = [_Item(scene)]
 
         with (
-            patch.object(access, "render_scene_to_svg_bytes", return_value=b"svg") as svg_renderer,
-            patch.object(access, "render_scene_to_pdf_bytes", return_value=b"pdf") as pdf_renderer,
+            patch.object(
+                access, "render_scene_to_svg_bytes", return_value=b"svg"
+            ) as svg_renderer,
+            patch.object(
+                access, "render_scene_to_pdf_bytes", return_value=b"pdf"
+            ) as pdf_renderer,
         ):
             rendered = access.render_canvas_selection_vector_bytes(
                 canvas,
@@ -131,8 +154,12 @@ class SceneClipboardAccessTest(unittest.TestCase):
             )
 
         self.assertEqual(rendered, (b"svg", b"pdf"))
-        svg_renderer.assert_called_once_with(scene, source=source, items=items, title="Chemvas selection")
-        pdf_renderer.assert_called_once_with(scene, source=source, items=items, title="Chemvas selection")
+        svg_renderer.assert_called_once_with(
+            scene, source=source, items=items, title="Chemvas selection"
+        )
+        pdf_renderer.assert_called_once_with(
+            scene, source=source, items=items, title="Chemvas selection"
+        )
 
 
 if __name__ == "__main__":

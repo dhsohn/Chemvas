@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 import pytest
-from ui import (
+from chemvas.ui import (
     canvas_color_mutation_service,
     insert_commit_rollback,
     insert_smiles_commit_service,
@@ -48,9 +48,11 @@ def _note_helpers() -> tuple[tuple[str, Callable[[BaseException], None]], ...]:
         ),
         (
             "rotation_finalization",
-            lambda error: selection_rotation_controller._add_rotation_finalization_rollback_note(
-                error,
-                _SECONDARY_ERROR,
+            lambda error: (
+                selection_rotation_controller._add_rotation_finalization_rollback_note(
+                    error,
+                    _SECONDARY_ERROR,
+                )
             ),
         ),
         (
@@ -134,7 +136,9 @@ def _note_helpers() -> tuple[tuple[str, Callable[[BaseException], None]], ...]:
     "primary_type",
     (_BrokenAddNoteLookupInterrupt, _BrokenAddNoteLookupSystemExit),
 )
-@pytest.mark.parametrize(("_name", "invoke"), _note_helpers(), ids=lambda value: str(value))
+@pytest.mark.parametrize(
+    ("_name", "invoke"), _note_helpers(), ids=lambda value: str(value)
+)
 def test_note_helper_contains_broken_add_note_lookup(
     _name: str,
     invoke: Callable[[BaseException], None],

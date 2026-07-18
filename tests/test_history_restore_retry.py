@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import pytest
-from core.history import HistoryTransactionRestoreResult
-from ui.history_restore_retry import restore_history_snapshot_with_retry
+from chemvas.core.history import HistoryTransactionRestoreResult
+from chemvas.domain.transactions import restore_history_snapshot_with_retry
 
 
 @pytest.mark.parametrize(

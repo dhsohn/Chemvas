@@ -10,10 +10,12 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.main_window_about_dialog import rdkit_status, show_about_dialog
+    from chemvas.ui.main_window_about_dialog import rdkit_status, show_about_dialog
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for about dialog tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for about dialog tests"
+)
 class AboutDialogTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -45,12 +47,18 @@ class AboutDialogTest(unittest.TestCase):
             captured["title"] = dialog.windowTitle()
             captured["labels"] = [label.text() for label in dialog.findChildren(QLabel)]
             captured["close"] = next(
-                (button for button in dialog.findChildren(QPushButton) if button.text() == "Close"),
+                (
+                    button
+                    for button in dialog.findChildren(QPushButton)
+                    if button.text() == "Close"
+                ),
                 None,
             )
             return QDialog.DialogCode.Accepted
 
-        with mock.patch("ui.main_window_about_dialog.QDialog.exec", new=drive_dialog):
+        with mock.patch(
+            "chemvas.ui.main_window_about_dialog.QDialog.exec", new=drive_dialog
+        ):
             show_about_dialog(self.window)
 
         self.assertEqual(captured["title"], "About Chemvas")

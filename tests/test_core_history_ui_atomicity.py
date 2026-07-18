@@ -4,7 +4,7 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from core.history import (
+from chemvas.core.history import (
     AddAtomsCommand,
     AddBondCommand,
     CompositeCommand,
@@ -19,6 +19,16 @@ from core.history import (
     UpdateBondCommand,
     UpdateBondLengthCommand,
 )
+from chemvas.ui.bond_graphics_access import add_bond_graphics_for
+from chemvas.ui.canvas_atom_graphics_state import atom_items_for
+from chemvas.ui.canvas_bond_graphics_state import bond_items_for, bond_items_for_id
+from chemvas.ui.canvas_history_service import CanvasHistoryService
+from chemvas.ui.canvas_history_state import CanvasHistoryState
+from chemvas.ui.canvas_rotation_state import rotation_state_for
+from chemvas.ui.canvas_view import CanvasView
+from chemvas.ui.graphics_items import AtomLabelItem
+from chemvas.ui.history_commands import MoveItemsCommand, UpdateSceneItemCommand
+from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QPolygonF
 from PyQt6.QtWidgets import (
@@ -27,16 +37,6 @@ from PyQt6.QtWidgets import (
     QGraphicsScene,
     QGraphicsTextItem,
 )
-from ui.bond_graphics_access import add_bond_graphics_for
-from ui.canvas_atom_graphics_state import atom_items_for
-from ui.canvas_bond_graphics_state import bond_items_for, bond_items_for_id
-from ui.canvas_history_service import CanvasHistoryService
-from ui.canvas_history_state import CanvasHistoryState
-from ui.canvas_rotation_state import rotation_state_for
-from ui.canvas_view import CanvasView
-from ui.graphics_items import AtomLabelItem
-from ui.history_commands import MoveItemsCommand, UpdateSceneItemCommand
-from ui.structure_mutation_access import add_atom_for, add_bond_for
 
 
 class CoreHistoryUiAtomicityTest(unittest.TestCase):
@@ -115,7 +115,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                 # scene removal. The old inverse compensation created a second
                 # label and orphaned the selected original item.
                 with mock.patch(
-                    "ui.canvas_atom_mutation_service.remove_item_from_canvas_scene",
+                    "chemvas.ui.canvas_atom_mutation_service.remove_item_from_canvas_scene",
                     side_effect=RuntimeError("scene removal failed"),
                 ):
                     with self.assertRaisesRegex(RuntimeError, "scene removal failed"):
@@ -179,7 +179,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                     )
                 )
 
-                from ui import canvas_bond_mutation_service as mutation_module
+                from chemvas.ui import canvas_bond_mutation_service as mutation_module
 
                 original_pop = mutation_module.pop_bond_items_for
                 armed = True
@@ -198,7 +198,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                     return result
 
                 with mock.patch(
-                    "ui.canvas_bond_mutation_service.pop_bond_items_for",
+                    "chemvas.ui.canvas_bond_mutation_service.pop_bond_items_for",
                     side_effect=pop_then_fail,
                 ):
                     with self.assertRaisesRegex(RuntimeError, "registry pop failed"):
@@ -248,7 +248,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
         history_state.history.append(reference_command)
         history_list = history_state.history
 
-        from ui import canvas_bond_mutation_service as mutation_module
+        from chemvas.ui import canvas_bond_mutation_service as mutation_module
 
         original_add = mutation_module.add_bond_graphics_for
 
@@ -257,7 +257,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
             raise RuntimeError("bond graphics add failed")
 
         with mock.patch(
-            "ui.canvas_bond_mutation_service.add_bond_graphics_for",
+            "chemvas.ui.canvas_bond_mutation_service.add_bond_graphics_for",
             side_effect=add_then_fail,
         ):
             with self.assertRaisesRegex(RuntimeError, "bond graphics add failed"):
@@ -291,7 +291,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
             ]
         )
 
-        from ui import history_canvas_access as history_access
+        from chemvas.ui import history_canvas_access as history_access
 
         original_restore_length = history_access.restore_bond_length_for_history
 
@@ -319,8 +319,8 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
         self.assertEqual(note.data(2), original_data)
 
     def test_bond_length_style_restore_controls_retryable_history_stacks(self) -> None:
-        from core.renderer import Renderer
-        from ui import history_canvas_access as history_access
+        from chemvas.core.renderer import Renderer
+        from chemvas.ui import history_canvas_access as history_access
 
         class _ControlledRenderer(Renderer):
             def __init__(self, style) -> None:
@@ -442,8 +442,8 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
     def test_move_exact_owner_preserves_retryable_service_stacks_with_one_capture(
         self,
     ) -> None:
-        from ui import history_canvas_access as history_access
-        from ui import history_commands as history_commands_module
+        from chemvas.ui import history_canvas_access as history_access
+        from chemvas.ui import history_commands as history_commands_module
 
         for move_kind in ("atoms", "items"):
             for wrapped in (False, True):
@@ -564,7 +564,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
     def test_move_atom_preflight_failures_keep_exact_retryable_service_stacks(
         self,
     ) -> None:
-        from ui import history_canvas_access as history_access
+        from chemvas.ui import history_canvas_access as history_access
 
         for failure_source in ("atom_lookup", "position_descriptor", "coords"):
             for direction in ("undo", "redo"):
@@ -678,7 +678,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
     def test_exact_move_callback_cannot_replace_success_or_failure_stacks(
         self,
     ) -> None:
-        from ui import history_canvas_access as history_access
+        from chemvas.ui import history_canvas_access as history_access
 
         for direction in ("undo", "redo"):
             for outcome in ("success", "system_exit"):
@@ -781,7 +781,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
     def test_move_atom_transaction_capture_failure_uses_conservative_stacks(
         self,
     ) -> None:
-        from ui import history_canvas_access as history_access
+        from chemvas.ui import history_canvas_access as history_access
 
         for direction in ("undo", "redo"):
             with self.subTest(direction=direction):
@@ -829,7 +829,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
     def test_move_item_preflight_failures_keep_exact_retryable_service_stacks(
         self,
     ) -> None:
-        from ui import history_commands as history_commands_module
+        from chemvas.ui import history_commands as history_commands_module
 
         for failure_source in ("membership", "handles"):
             for direction in ("undo", "redo"):
@@ -919,7 +919,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
     def test_legacy_marker_lookup_is_bypassed_by_operation_scope_authority(
         self,
     ) -> None:
-        from ui import history_canvas_access as history_access
+        from chemvas.ui import history_canvas_access as history_access
 
         for direction in ("undo", "redo"):
             for primary_type, lookup_error_type in (
@@ -1052,7 +1052,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
             ]
         )
 
-        from ui import history_canvas_access as history_access
+        from chemvas.ui import history_canvas_access as history_access
 
         calls = 0
 
@@ -1089,7 +1089,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
         self.assertIs(canvas.renderer.style, before_style)
 
     def test_failed_history_observer_cannot_recorrupt_restored_runtime(self) -> None:
-        from ui import history_canvas_access as history_access
+        from chemvas.ui import history_canvas_access as history_access
 
         canvas = self._canvas()
         atom_id = add_atom_for(canvas, "C", 3.0, 7.0)
@@ -1144,7 +1144,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
         )
 
     def test_legacy_failure_closes_nonauthoritative_publication_stacks(self) -> None:
-        from ui import history_canvas_access as history_access
+        from chemvas.ui import history_canvas_access as history_access
 
         for direction in ("undo", "redo"):
             with self.subTest(direction=direction):
@@ -1218,7 +1218,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                 self.assertEqual(redo_stack, [])
 
     def test_failed_runtime_restore_cannot_recorrupt_history_authority(self) -> None:
-        from ui import history_canvas_access as history_access
+        from chemvas.ui import history_canvas_access as history_access
 
         canvas = self._canvas()
         atom_id = add_atom_for(canvas, "C", 3.0, 7.0)
@@ -1296,7 +1296,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
     def test_failed_runtime_verifier_cannot_poison_history_after_second_sweep(
         self,
     ) -> None:
-        from ui import history_canvas_access as history_access
+        from chemvas.ui import history_canvas_access as history_access
 
         canvas = self._canvas()
         atom_id = add_atom_for(canvas, "C", 3.0, 7.0)
@@ -1377,7 +1377,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
         )
 
     def test_failed_history_reassert_runtime_poison_uses_reverse_pass(self) -> None:
-        from ui import history_canvas_access as history_access
+        from chemvas.ui import history_canvas_access as history_access
 
         canvas = self._canvas()
         atom_id = add_atom_for(canvas, "C", 3.0, 7.0)
@@ -1538,7 +1538,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                     {atom_id: (0.0, 0.0)},
                     {atom_id: (10_000.0, 0.0)},
                 )
-                from ui import history_canvas_access as history_access
+                from chemvas.ui import history_canvas_access as history_access
 
                 original_set_positions = history_access.set_atom_positions_for_history
                 primary = error_type("atom position update interrupted")
@@ -1571,13 +1571,13 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                 scene.removeItem(future)
 
     def test_broken_add_note_cannot_replace_ui_transaction_primary(self) -> None:
-        from core.history import _add_history_rollback_note
-        from ui.canvas_delete_transaction import _add_delete_rollback_note
-        from ui.canvas_document_session_service import _add_scene_recovery_note
-        from ui.canvas_geometry_controller import _add_bond_length_rollback_note
-        from ui.canvas_history_service import _add_history_notification_note
-        from ui.history_canvas_access import _add_move_rollback_note
-        from ui.history_commands import _add_rollback_error_note
+        from chemvas.core.history import _add_history_rollback_note
+        from chemvas.ui.canvas_delete_transaction import _add_delete_rollback_note
+        from chemvas.ui.canvas_document_session_service import _add_scene_recovery_note
+        from chemvas.ui.canvas_geometry_controller import _add_bond_length_rollback_note
+        from chemvas.ui.canvas_history_service import _add_history_notification_note
+        from chemvas.ui.history_canvas_access import _add_move_rollback_note
+        from chemvas.ui.history_commands import _add_rollback_error_note
 
         class BrokenNoteCallPrimary(SystemExit):
             def add_note(self, _note: str) -> None:

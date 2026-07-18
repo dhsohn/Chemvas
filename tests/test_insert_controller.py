@@ -2,37 +2,37 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from core.history import (
+from chemvas.core.history import (
     AddAtomsCommand,
     AddBondCommand,
     CompositeCommand,
     DeleteAtomsCommand,
     DeleteBondCommand,
 )
-from core.model import Atom, Bond, MoleculeModel
-from PyQt6.QtCore import QPointF, QRectF
-from ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
-from ui.canvas_insert_state import CanvasInsertState
-from ui.canvas_mark_registry import CanvasMarkRegistry
-from ui.canvas_rotation_state import rotation_state_for
-from ui.canvas_scene_items_state import (
-    SCENE_ITEM_COLLECTION_ATTRS,
-    scene_item_collection_for,
-    set_scene_item_collection_for,
-)
-from ui.canvas_smiles_input_state import (
-    last_smiles_input_for,
-    set_last_smiles_input_for,
-)
-from ui.history_commands import AddSceneItemsCommand, DeleteSceneItemsCommand
-from ui.insert_controller import InsertController
-from ui.insert_smiles_service import MAX_SMILES_INPUT_LENGTH
-from ui.sheet_setup_state import sheet_setup_state_for
-from ui.template_insert_logic import (
+from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.features.insertion import (
     TemplateInsertRequest,
     TemplateInsertResolution,
     plan_template_commit,
 )
+from chemvas.ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
+from chemvas.ui.canvas_insert_state import CanvasInsertState
+from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas_rotation_state import rotation_state_for
+from chemvas.ui.canvas_scene_items_state import (
+    SCENE_ITEM_COLLECTION_ATTRS,
+    scene_item_collection_for,
+    set_scene_item_collection_for,
+)
+from chemvas.ui.canvas_smiles_input_state import (
+    last_smiles_input_for,
+    set_last_smiles_input_for,
+)
+from chemvas.ui.history_commands import AddSceneItemsCommand, DeleteSceneItemsCommand
+from chemvas.ui.insert_controller import InsertController
+from chemvas.ui.insert_smiles_service import MAX_SMILES_INPUT_LENGTH
+from chemvas.ui.sheet_setup_state import sheet_setup_state_for
+from PyQt6.QtCore import QPointF, QRectF
 
 
 def _point_tuples(points) -> list[tuple[float, float]]:
@@ -60,7 +60,9 @@ class _FakeViewport:
 
 
 class _FakeSceneItem:
-    def __init__(self, kind: str, atom_id=None, state: dict | None = None, scene_obj=None) -> None:
+    def __init__(
+        self, kind: str, atom_id=None, state: dict | None = None, scene_obj=None
+    ) -> None:
         self.kind = kind
         self._payload = {}
         self._state = dict(state or {"kind": kind})
@@ -115,15 +117,21 @@ class _FakeCanvas:
         self.bond_renderer = SimpleNamespace(
             add_bond_graphics=self._add_bond_graphics,
             parallel_bond_segments=Mock(
-                side_effect=lambda x1, y1, x2, y2, order: ((x1, y1, x2, y2),) * max(0, order)
+                side_effect=lambda x1, y1, x2, y2, order: (
+                    ((x1, y1, x2, y2),) * max(0, order)
+                )
             ),
         )
         self.add_benzene_ring = Mock()
         self.clear_benzene_preview = Mock()
 
         self._atom_state_dict = Mock(side_effect=lambda atom_id: {"atom_id": atom_id})
-        self._bond_state_dict = Mock(side_effect=lambda bond: {"bond": (bond.a, bond.b, bond.order)})
-        self.scene_item_state = Mock(side_effect=lambda item: {"kind": getattr(item, "kind", "item")})
+        self._bond_state_dict = Mock(
+            side_effect=lambda bond: {"bond": (bond.a, bond.b, bond.order)}
+        )
+        self.scene_item_state = Mock(
+            side_effect=lambda item: {"kind": getattr(item, "kind", "item")}
+        )
         self.bond_exists = Mock(return_value=False)
 
         self.add_bond_calls: list[tuple[int, int, int]] = []
@@ -142,7 +150,9 @@ class _FakeCanvas:
                 add_or_update_atom_label=self.add_or_update_atom_label,
                 ensure_carbon_dot=self.ensure_carbon_dot,
             ),
-            benzene_preview_service=SimpleNamespace(clear_preview=self.clear_benzene_preview),
+            benzene_preview_service=SimpleNamespace(
+                clear_preview=self.clear_benzene_preview
+            ),
             canvas_atom_mutation_service=SimpleNamespace(
                 add_atom=self.add_atom,
                 remove_atom_only=self.remove_atom_only,
@@ -159,12 +169,18 @@ class _FakeCanvas:
                 rebuild_bond_adjacency=self.rebuild_bond_adjacency,
                 bond_exists=self.bond_exists,
             ),
-            canvas_history_recording_service=SimpleNamespace(record_additions=self._record_additions),
-            canvas_mark_scene_service=SimpleNamespace(add_mark_for_atom=self.add_mark_for_atom),
+            canvas_history_recording_service=SimpleNamespace(
+                record_additions=self._record_additions
+            ),
+            canvas_mark_scene_service=SimpleNamespace(
+                add_mark_for_atom=self.add_mark_for_atom
+            ),
             canvas_ring_fill_scene_service=SimpleNamespace(
                 create_ring_fill_item=self.create_ring_fill_item,
             ),
-            canvas_scene_reset_service=SimpleNamespace(clear_scene=lambda: self.clear_scene()),
+            canvas_scene_reset_service=SimpleNamespace(
+                clear_scene=lambda: self.clear_scene()
+            ),
             hit_testing_service=SimpleNamespace(find_bond_near=Mock(return_value=None)),
             scene_item_controller=SimpleNamespace(
                 attach_scene_item=self.attach_scene_item,
@@ -277,7 +293,9 @@ class _FakeCanvas:
 
     def restore_note_from_state(self, note_state: dict):
         self.restored_note_states.append(dict(note_state))
-        item = _FakeSceneItem("note", state={"kind": "note", **note_state}, scene_obj=self._scene)
+        item = _FakeSceneItem(
+            "note", state={"kind": "note", **note_state}, scene_obj=self._scene
+        )
         scene_items = list(getattr(self, "note_items", []))
         scene_items.append(item)
         set_scene_item_collection_for(self, "note_items", scene_items)
@@ -304,17 +322,32 @@ class _FakeCanvas:
         self.model.atoms[atom_id].element = text
         self.model.atoms[atom_id].explicit_label = show_carbon
 
-    def add_mark_for_atom(self, atom_id: int, click_pos: QPointF, *, kind: str | None = None, record: bool = True):
+    def add_mark_for_atom(
+        self,
+        atom_id: int,
+        click_pos: QPointF,
+        *,
+        kind: str | None = None,
+        record: bool = True,
+    ):
         self.mark_calls.append((atom_id, click_pos.x(), click_pos.y(), kind, record))
-        item = _FakeSceneItem("mark", atom_id=atom_id, state={"kind": "mark", "mark_kind": kind, "atom_id": atom_id})
+        item = _FakeSceneItem(
+            "mark",
+            atom_id=atom_id,
+            state={"kind": "mark", "mark_kind": kind, "atom_id": atom_id},
+        )
         self.created_marks.append(item)
         return item
 
 
 def _controller_for(canvas: _FakeCanvas, **kwargs) -> InsertController:
-    hit_testing_service = kwargs.pop("hit_testing_service", canvas.services.hit_testing_service)
+    hit_testing_service = kwargs.pop(
+        "hit_testing_service", canvas.services.hit_testing_service
+    )
     graph_service = kwargs.pop("graph_service", canvas.services.canvas_graph_service)
-    structure_build_service = kwargs.pop("structure_build_service", canvas.services.structure_build_service)
+    structure_build_service = kwargs.pop(
+        "structure_build_service", canvas.services.structure_build_service
+    )
     return InsertController(
         canvas,
         hit_testing_service=hit_testing_service,
@@ -342,7 +375,9 @@ class InsertControllerTest(unittest.TestCase):
         controller.template_insert_request = Mock(return_value=request)
         controller.template_point_resolvers = Mock(return_value=resolvers)
         controller.resolve_ring_points_for_template = Mock(return_value=pairs)
-        controller.resolve_regular_ring_points_for_template_bond = Mock(return_value=pairs)
+        controller.resolve_regular_ring_points_for_template_bond = Mock(
+            return_value=pairs
+        )
         controller.resolve_chair_points_for_template = Mock(return_value=pairs)
         controller.resolve_boat_points_for_template = Mock(return_value=pairs)
         controller.resolve_template_points_for_template_bond = Mock(return_value=pairs)
@@ -351,25 +386,45 @@ class InsertControllerTest(unittest.TestCase):
         self.assertEqual(controller.smiles_preview_snapshot(), preview_snapshot)
         self.assertIs(controller.template_insert_request(QPointF(1.0, 2.0)), request)
         self.assertIs(controller.template_point_resolvers(), resolvers)
-        self.assertEqual(controller.resolve_ring_points_for_template((1.0, 2.0), 6, 12.0), pairs)
-        self.assertEqual(controller.resolve_regular_ring_points_for_template_bond(6, 3, (4.0, 5.0)), pairs)
-        self.assertEqual(controller.resolve_chair_points_for_template((0.0, 0.0)), pairs)
+        self.assertEqual(
+            controller.resolve_ring_points_for_template((1.0, 2.0), 6, 12.0), pairs
+        )
+        self.assertEqual(
+            controller.resolve_regular_ring_points_for_template_bond(6, 3, (4.0, 5.0)),
+            pairs,
+        )
+        self.assertEqual(
+            controller.resolve_chair_points_for_template((0.0, 0.0)), pairs
+        )
         self.assertEqual(controller.resolve_boat_points_for_template((0.0, 0.0)), pairs)
-        self.assertEqual(controller.resolve_template_points_for_template_bond([(0.0, 0.0)], 4, (2.0, 3.0)), pairs)
+        self.assertEqual(
+            controller.resolve_template_points_for_template_bond(
+                [(0.0, 0.0)], 4, (2.0, 3.0)
+            ),
+            pairs,
+        )
         self.assertEqual(controller.bond_merge_seed(7), [(1, 2.0, 3.0)])
 
         controller.insert_session_state.assert_called_once_with()
         controller.smiles_preview_snapshot.assert_called_once_with()
         controller.template_insert_request.assert_called_once_with(QPointF(1.0, 2.0))
         controller.template_point_resolvers.assert_called_once_with()
-        controller.resolve_ring_points_for_template.assert_called_once_with((1.0, 2.0), 6, 12.0)
-        controller.resolve_regular_ring_points_for_template_bond.assert_called_once_with(6, 3, (4.0, 5.0))
+        controller.resolve_ring_points_for_template.assert_called_once_with(
+            (1.0, 2.0), 6, 12.0
+        )
+        controller.resolve_regular_ring_points_for_template_bond.assert_called_once_with(
+            6, 3, (4.0, 5.0)
+        )
         controller.resolve_chair_points_for_template.assert_called_once_with((0.0, 0.0))
         controller.resolve_boat_points_for_template.assert_called_once_with((0.0, 0.0))
-        controller.resolve_template_points_for_template_bond.assert_called_once_with([(0.0, 0.0)], 4, (2.0, 3.0))
+        controller.resolve_template_points_for_template_bond.assert_called_once_with(
+            [(0.0, 0.0)], 4, (2.0, 3.0)
+        )
         commit_service.bond_merge_seed.assert_called_once_with(7)
 
-    def test_insert_session_state_and_apply_insert_session_state_track_and_clear_modes(self) -> None:
+    def test_insert_session_state_and_apply_insert_session_state_track_and_clear_modes(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.insert_state.template_active = True
         canvas.insert_state.template_ring_size = 6
@@ -447,7 +502,7 @@ class InsertControllerTest(unittest.TestCase):
         canvas.rdkit.last_error = "bad smiles"
         controller = _controller_for(canvas)
 
-        with patch("ui.insert_smiles_service.QMessageBox.warning") as warning:
+        with patch("chemvas.ui.insert_smiles_service.QMessageBox.warning") as warning:
             controller.load_smiles("broken")
 
         warning.assert_called_once_with(canvas, "SMILES Error", "bad smiles")
@@ -459,7 +514,7 @@ class InsertControllerTest(unittest.TestCase):
         canvas = _FakeCanvas()
         controller = _controller_for(canvas)
 
-        with patch("ui.insert_smiles_service.QMessageBox.warning") as warning:
+        with patch("chemvas.ui.insert_smiles_service.QMessageBox.warning") as warning:
             controller.load_smiles("C" * (MAX_SMILES_INPUT_LENGTH + 1))
 
         warning.assert_called_once_with(
@@ -509,7 +564,13 @@ class InsertControllerTest(unittest.TestCase):
         self.assertIsInstance(command, CompositeCommand)
         self.assertEqual(
             [type(child) for child in command.commands],
-            [DeleteBondCommand, DeleteAtomsCommand, DeleteSceneItemsCommand, AddAtomsCommand, AddBondCommand],
+            [
+                DeleteBondCommand,
+                DeleteAtomsCommand,
+                DeleteSceneItemsCommand,
+                AddAtomsCommand,
+                AddBondCommand,
+            ],
         )
         delete_bond = command.commands[0]
         delete_atoms = command.commands[1]
@@ -527,7 +588,9 @@ class InsertControllerTest(unittest.TestCase):
         self.assertIsNone(delete_atoms.after_projection_center_3d)
         self.assertEqual(delete_atoms.before_projection_anchor_2d, (-1.0, -2.0))
         self.assertIsNone(delete_atoms.after_projection_anchor_2d)
-        self.assertEqual(delete_scene_items.item_states, [{"kind": "free-mark"}, {"kind": "note"}])
+        self.assertEqual(
+            delete_scene_items.item_states, [{"kind": "free-mark"}, {"kind": "note"}]
+        )
         self.assertEqual(add_atoms.before_next_atom_id, 0)
         self.assertEqual(add_atoms.after_next_atom_id, 2)
         self.assertEqual(add_bond.previous_bond_count, 0)
@@ -550,7 +613,9 @@ class InsertControllerTest(unittest.TestCase):
         command = canvas.push_command.call_args.args[0]
         self.assertIsInstance(command, CompositeCommand)
         self.assertIsInstance(command.commands[0], AddAtomsCommand)
-        self.assertEqual(command.commands[0].atom_states[0]["annotation"], {"formal_charge": 1})
+        self.assertEqual(
+            command.commands[0].atom_states[0]["annotation"], {"formal_charge": 1}
+        )
         self.assertIsInstance(command.commands[-1], AddSceneItemsCommand)
         self.assertEqual(command.commands[-1].items, canvas.created_marks)
 
@@ -562,7 +627,9 @@ class InsertControllerTest(unittest.TestCase):
         rotation = rotation_state_for(canvas)
         rotation.projection_center_3d = (-5.0, -5.0, 0.0)
         rotation.projection_anchor_2d = (-5.0, -5.0)
-        canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(atoms={0: Atom("C", 1.0, 2.0)})
+        canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(
+            atoms={0: Atom("C", 1.0, 2.0)}
+        )
 
         def _clear_scene() -> None:
             canvas.model = MoleculeModel()
@@ -570,7 +637,9 @@ class InsertControllerTest(unittest.TestCase):
             rotation_state_for(canvas).reset_all()
 
         canvas.clear_scene = Mock(side_effect=_clear_scene)
-        canvas.services.structure_build_service.render_model = Mock(side_effect=RuntimeError("render failed"))
+        canvas.services.structure_build_service.render_model = Mock(
+            side_effect=RuntimeError("render failed")
+        )
         controller = _controller_for(canvas)
 
         with self.assertRaisesRegex(RuntimeError, "render failed"):
@@ -581,7 +650,9 @@ class InsertControllerTest(unittest.TestCase):
         self.assertEqual(canvas.model.next_atom_id, 1)
         self.assertEqual(last_smiles_input_for(canvas), "before")
         self.assertEqual(atom_coords_3d_for(canvas), {0: (-5.0, -5.0, 0.0)})
-        self.assertEqual(rotation_state_for(canvas).projection_center_3d, (-5.0, -5.0, 0.0))
+        self.assertEqual(
+            rotation_state_for(canvas).projection_center_3d, (-5.0, -5.0, 0.0)
+        )
         self.assertEqual(rotation_state_for(canvas).projection_anchor_2d, (-5.0, -5.0))
         canvas.push_command.assert_not_called()
 
@@ -590,7 +661,9 @@ class InsertControllerTest(unittest.TestCase):
         set_last_smiles_input_for(canvas, "before")
         canvas.model.add_atom("O", -5.0, -5.0)
         set_atom_coords_3d_for(canvas, {0: (-5.0, -5.0, 0.0)})
-        canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(atoms={0: Atom("C", 1.0, 2.0)})
+        canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(
+            atoms={0: Atom("C", 1.0, 2.0)}
+        )
 
         def _clear_scene() -> None:
             canvas.model = MoleculeModel()
@@ -610,7 +683,9 @@ class InsertControllerTest(unittest.TestCase):
         self.assertEqual(atom_coords_3d_for(canvas), {0: (-5.0, -5.0, 0.0)})
         canvas.push_command.assert_not_called()
 
-    def test_load_smiles_rolls_back_control_flow_error_after_history_mutation(self) -> None:
+    def test_load_smiles_rolls_back_control_flow_error_after_history_mutation(
+        self,
+    ) -> None:
         for error_type in (KeyboardInterrupt, SystemExit):
             with self.subTest(error_type=error_type.__name__):
                 canvas = _FakeCanvas()
@@ -670,11 +745,15 @@ class InsertControllerTest(unittest.TestCase):
             record: bool = True,
         ):
             if not canvas.created_marks:
-                return canvas.add_mark_for_atom(atom_id, click_pos, kind=kind, record=record)
+                return canvas.add_mark_for_atom(
+                    atom_id, click_pos, kind=kind, record=record
+                )
             raise RuntimeError("mark failed")
 
         canvas.clear_scene = Mock(side_effect=_clear_scene)
-        canvas.services.canvas_mark_scene_service.add_mark_for_atom = _add_first_mark_then_fail
+        canvas.services.canvas_mark_scene_service.add_mark_for_atom = (
+            _add_first_mark_then_fail
+        )
         controller = _controller_for(canvas)
 
         with self.assertRaisesRegex(RuntimeError, "mark failed"):
@@ -685,20 +764,26 @@ class InsertControllerTest(unittest.TestCase):
         self.assertEqual(canvas.created_marks, [])
         canvas.push_command.assert_not_called()
 
-    def test_load_smiles_rolls_back_existing_scene_items_if_render_model_raises(self) -> None:
+    def test_load_smiles_rolls_back_existing_scene_items_if_render_model_raises(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.model.add_atom("O", -5.0, -5.0)
         old_note_state = {"kind": "note", "text": "old note", "x": 12.0, "y": 14.0}
         old_note = _FakeSceneItem("note", state=old_note_state, scene_obj=canvas._scene)
         set_scene_item_collection_for(canvas, "note_items", [old_note])
-        canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(atoms={0: Atom("C", 1.0, 2.0)})
+        canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(
+            atoms={0: Atom("C", 1.0, 2.0)}
+        )
 
         def _clear_scene() -> None:
             canvas.model = MoleculeModel()
             set_scene_item_collection_for(canvas, "note_items", [])
 
         canvas.clear_scene = Mock(side_effect=_clear_scene)
-        canvas.services.structure_build_service.render_model = Mock(side_effect=RuntimeError("render failed"))
+        canvas.services.structure_build_service.render_model = Mock(
+            side_effect=RuntimeError("render failed")
+        )
         controller = _controller_for(canvas)
 
         with self.assertRaisesRegex(RuntimeError, "render failed"):
@@ -715,15 +800,21 @@ class InsertControllerTest(unittest.TestCase):
 
     def test_load_smiles_skips_push_when_history_builder_returns_none(self) -> None:
         canvas = _FakeCanvas()
-        canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(atoms={0: Atom("C", 1.0, 2.0)})
+        canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(
+            atoms={0: Atom("C", 1.0, 2.0)}
+        )
 
         def _clear_scene() -> None:
             canvas.model = MoleculeModel()
 
         canvas.clear_scene = Mock(side_effect=_clear_scene)
         controller = _controller_for(canvas)
-        controller.smiles_service.transaction_builder.capture = Mock(return_value="snapshot")
-        controller.smiles_service.transaction_builder.build_command = Mock(return_value=None)
+        controller.smiles_service.transaction_builder.capture = Mock(
+            return_value="snapshot"
+        )
+        controller.smiles_service.transaction_builder.build_command = Mock(
+            return_value=None
+        )
 
         controller.load_smiles("C")
 
@@ -748,7 +839,9 @@ class InsertControllerTest(unittest.TestCase):
         controller.cancel_smiles_insert.assert_not_called()
         controller.render_template_preview.assert_not_called()
 
-    def test_begin_ring_template_insert_cancels_smiles_without_rendering_initial_preview(self) -> None:
+    def test_begin_ring_template_insert_cancels_smiles_without_rendering_initial_preview(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.insert_state.smiles_active = True
         controller = _controller_for(canvas)
@@ -779,17 +872,19 @@ class InsertControllerTest(unittest.TestCase):
         canvas.rdkit.last_error = "bad smiles"
         controller = _controller_for(canvas)
 
-        with patch("ui.insert_smiles_service.QMessageBox.warning") as warning:
+        with patch("chemvas.ui.insert_smiles_service.QMessageBox.warning") as warning:
             controller.begin_smiles_insert("broken")
 
         warning.assert_called_once_with(canvas, "SMILES Error", "bad smiles")
         self.assertIsNone(canvas.insert_state.smiles_preview_model)
 
-    def test_begin_smiles_insert_rejects_oversized_input_before_rdkit_conversion(self) -> None:
+    def test_begin_smiles_insert_rejects_oversized_input_before_rdkit_conversion(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         controller = _controller_for(canvas)
 
-        with patch("ui.insert_smiles_service.QMessageBox.warning") as warning:
+        with patch("chemvas.ui.insert_smiles_service.QMessageBox.warning") as warning:
             controller.begin_smiles_insert("C" * (MAX_SMILES_INPUT_LENGTH + 1))
 
         warning.assert_called_once_with(
@@ -800,7 +895,9 @@ class InsertControllerTest(unittest.TestCase):
         canvas.rdkit.smiles_to_2d.assert_not_called()
         self.assertIsNone(canvas.insert_state.smiles_preview_model)
 
-    def test_begin_smiles_insert_clears_model_when_preview_center_is_missing(self) -> None:
+    def test_begin_smiles_insert_clears_model_when_preview_center_is_missing(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.rdkit.smiles_to_2d.return_value = MoleculeModel()
         controller = _controller_for(canvas)
@@ -811,13 +908,20 @@ class InsertControllerTest(unittest.TestCase):
         self.assertIsNone(canvas.insert_state.smiles_preview_model)
         controller.render_smiles_preview.assert_not_called()
 
-    def test_begin_smiles_insert_clears_model_when_state_helper_returns_none(self) -> None:
+    def test_begin_smiles_insert_clears_model_when_state_helper_returns_none(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
-        canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(atoms={0: Atom("C", 0.0, 0.0)})
+        canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(
+            atoms={0: Atom("C", 0.0, 0.0)}
+        )
         controller = _controller_for(canvas)
         controller.render_smiles_preview = Mock()
 
-        with patch("ui.insert_smiles_service.begin_smiles_insert_state", return_value=None):
+        with patch(
+            "chemvas.ui.insert_smiles_service.begin_smiles_insert_state",
+            return_value=None,
+        ):
             controller.begin_smiles_insert("CC")
 
         self.assertIsNone(canvas.insert_state.smiles_preview_model)
@@ -842,7 +946,13 @@ class InsertControllerTest(unittest.TestCase):
         canvas.clear_benzene_preview.assert_called_once_with()
         self.assertTrue(canvas.insert_state.smiles_active)
         self.assertEqual(canvas.insert_state.smiles_preview_smiles, "CO")
-        self.assertEqual((canvas.insert_state.smiles_preview_center.x(), canvas.insert_state.smiles_preview_center.y()), (5.0, 0.0))
+        self.assertEqual(
+            (
+                canvas.insert_state.smiles_preview_center.x(),
+                canvas.insert_state.smiles_preview_center.y(),
+            ),
+            (5.0, 0.0),
+        )
         preview_pos = controller.render_smiles_preview.call_args.args[0]
         self.assertEqual((preview_pos.x(), preview_pos.y()), (60.0, 40.0))
 
@@ -850,7 +960,9 @@ class InsertControllerTest(unittest.TestCase):
         canvas = _FakeCanvas()
         canvas.insert_state.smiles_active = True
         canvas.insert_state.smiles_preview_smiles = "CC"
-        canvas.insert_state.smiles_preview_model = MoleculeModel(atoms={0: Atom("C", 0.0, 0.0)})
+        canvas.insert_state.smiles_preview_model = MoleculeModel(
+            atoms={0: Atom("C", 0.0, 0.0)}
+        )
         controller = _controller_for(canvas)
         controller.clear_smiles_preview = Mock()
 
@@ -863,12 +975,16 @@ class InsertControllerTest(unittest.TestCase):
         controller.clear_smiles_preview.assert_called_once_with()
         canvas._record_additions.assert_not_called()
 
-    def test_commit_smiles_insert_cancels_when_commit_service_rejects_plan(self) -> None:
+    def test_commit_smiles_insert_cancels_when_commit_service_rejects_plan(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.insert_state.smiles_active = True
         canvas.insert_state.smiles_preview_smiles = "CO"
         canvas.insert_state.smiles_preview_center = QPointF(5.0, 0.0)
-        canvas.insert_state.smiles_preview_model = MoleculeModel(atoms={0: Atom("C", 0.0, 0.0)})
+        canvas.insert_state.smiles_preview_model = MoleculeModel(
+            atoms={0: Atom("C", 0.0, 0.0)}
+        )
         commit_service = Mock()
         commit_service.apply_smiles_commit.return_value = False
         controller = _controller_for(canvas, insert_commit_service=commit_service)
@@ -910,7 +1026,9 @@ class InsertControllerTest(unittest.TestCase):
         self.assertEqual(canvas.model.bonds[1].color, "#333333")
         self.assertEqual(canvas.ensure_carbon_dot_calls, [1])
         self.assertEqual(canvas.atom_label_calls, [(2, "O", False, False, False)])
-        self.assertEqual([call.args[0] for call in canvas._add_bond_graphics.call_args_list], [1])
+        self.assertEqual(
+            [call.args[0] for call in canvas._add_bond_graphics.call_args_list], [1]
+        )
         self.assertEqual(last_smiles_input_for(canvas), "CO")
         controller.cancel_smiles_insert.assert_called_once_with()
         canvas._record_additions.assert_called_once_with(
@@ -925,14 +1043,16 @@ class InsertControllerTest(unittest.TestCase):
         controller = _controller_for(canvas)
 
         with patch(
-            "ui.insert_smiles_service.clear_smiles_preview_helper",
+            "chemvas.ui.insert_smiles_service.clear_smiles_preview_helper",
             return_value=(["new-items"], {"bond": ["segments"]}, {1: "atom"}),
         ) as helper:
             controller.clear_smiles_preview()
 
         helper.assert_called_once_with(canvas, ["old"])
         self.assertEqual(canvas.insert_state.smiles_preview_items, ["new-items"])
-        self.assertEqual(canvas.insert_state.smiles_preview_bond_items, {"bond": ["segments"]})
+        self.assertEqual(
+            canvas.insert_state.smiles_preview_bond_items, {"bond": ["segments"]}
+        )
         self.assertEqual(canvas.insert_state.smiles_preview_atom_items, {1: "atom"})
 
     def test_render_smiles_preview_clears_on_clear_plan(self) -> None:
@@ -941,7 +1061,7 @@ class InsertControllerTest(unittest.TestCase):
         controller.clear_smiles_preview = Mock()
 
         with patch(
-            "ui.insert_smiles_service.plan_smiles_preview_update",
+            "chemvas.ui.insert_smiles_service.plan_smiles_preview_update",
             return_value=SimpleNamespace(action="clear", geometry=None),
         ):
             controller.render_smiles_preview(QPointF(10.0, 20.0))
@@ -950,29 +1070,38 @@ class InsertControllerTest(unittest.TestCase):
 
     def test_render_smiles_preview_applies_geometry(self) -> None:
         canvas = _FakeCanvas()
-        canvas.insert_state.smiles_preview_model = MoleculeModel(atoms={0: Atom("C", 0.0, 0.0)})
+        canvas.insert_state.smiles_preview_model = MoleculeModel(
+            atoms={0: Atom("C", 0.0, 0.0)}
+        )
         canvas.insert_state.smiles_preview_center = QPointF(0.0, 0.0)
         canvas.insert_state.smiles_preview_items = ["old"]
         canvas.insert_state.smiles_preview_bond_items = {0: ["bond"]}
         canvas.insert_state.smiles_preview_atom_items = {0: "atom"}
         controller = _controller_for(canvas)
 
-        with patch(
-            "ui.insert_smiles_service.plan_smiles_preview_update",
-            return_value=SimpleNamespace(action="update", geometry={"lines": 1}),
-        ) as plan_update, patch(
-            "ui.insert_smiles_service.apply_smiles_preview_geometry_helper",
-            return_value=(["items"], {0: ["new-bond"]}, {0: "new-atom"}),
-        ) as apply_helper:
+        with (
+            patch(
+                "chemvas.ui.insert_smiles_service.plan_smiles_preview_update",
+                return_value=SimpleNamespace(action="update", geometry={"lines": 1}),
+            ) as plan_update,
+            patch(
+                "chemvas.ui.insert_smiles_service.apply_smiles_preview_geometry_helper",
+                return_value=(["items"], {0: ["new-bond"]}, {0: "new-atom"}),
+            ) as apply_helper,
+        ):
             controller.render_smiles_preview(QPointF(12.0, 18.0))
 
         self.assertEqual(plan_update.call_args.args[2], (12.0, 18.0))
         apply_helper.assert_called_once()
         self.assertEqual(canvas.insert_state.smiles_preview_items, ["items"])
-        self.assertEqual(canvas.insert_state.smiles_preview_bond_items, {0: ["new-bond"]})
+        self.assertEqual(
+            canvas.insert_state.smiles_preview_bond_items, {0: ["new-bond"]}
+        )
         self.assertEqual(canvas.insert_state.smiles_preview_atom_items, {0: "new-atom"})
 
-    def test_commit_template_insert_uses_free_ring_path_for_unattached_templates(self) -> None:
+    def test_commit_template_insert_uses_free_ring_path_for_unattached_templates(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.insert_state.template_active = True
         canvas.insert_state.template_ring_size = 5
@@ -980,20 +1109,29 @@ class InsertControllerTest(unittest.TestCase):
         set_last_smiles_input_for(canvas, "before")
         controller = _controller_for(canvas)
 
-        request = TemplateInsertRequest(ring_size=5, cursor_pos=(12.0, 18.0), ring_style="regular")
+        request = TemplateInsertRequest(
+            ring_size=5, cursor_pos=(12.0, 18.0), ring_style="regular"
+        )
         plan = plan_template_commit(request)
         assert plan is not None
         resolution = TemplateInsertResolution(plan=plan, points=_points(5))
 
-        with patch.object(controller, "template_insert_request", return_value=request), patch(
-            "ui.template_geometry_resolver_service.resolve_template_insert",
-            return_value=resolution,
+        with (
+            patch.object(controller, "template_insert_request", return_value=request),
+            patch(
+                "chemvas.ui.template_geometry_resolver_service.resolve_template_insert",
+                return_value=resolution,
+            ),
         ):
             controller.commit_template_insert(QPointF(*request.cursor_pos))
 
         canvas.services.structure_build_service.add_ring_from_points.assert_called_once()
         self.assertEqual(
-            _point_tuples(canvas.services.structure_build_service.add_ring_from_points.call_args.args[0]),
+            _point_tuples(
+                canvas.services.structure_build_service.add_ring_from_points.call_args.args[
+                    0
+                ]
+            ),
             _points(5),
         )
         canvas.add_benzene_ring.assert_not_called()
@@ -1017,11 +1155,16 @@ class InsertControllerTest(unittest.TestCase):
         set_last_smiles_input_for(canvas, "before")
         controller = _controller_for(canvas)
 
-        request = TemplateInsertRequest(ring_size=6, cursor_pos=(8.0, 9.0), bond_id=4, ring_style="benzene")
+        request = TemplateInsertRequest(
+            ring_size=6, cursor_pos=(8.0, 9.0), bond_id=4, ring_style="benzene"
+        )
 
-        with patch.object(controller, "template_insert_request", return_value=request), patch(
-            "ui.insert_template_commit_service.has_insert_mutation_since_for",
-            return_value=True,
+        with (
+            patch.object(controller, "template_insert_request", return_value=request),
+            patch(
+                "chemvas.ui.insert_template_commit_service.has_insert_mutation_since_for",
+                return_value=True,
+            ),
         ):
             controller.commit_template_insert(QPointF(*request.cursor_pos))
 
@@ -1038,17 +1181,24 @@ class InsertControllerTest(unittest.TestCase):
         self.assertEqual(canvas.insert_state.template_preview_items, [])
         self.assertIsNone(last_smiles_input_for(canvas))
 
-    def test_commit_template_insert_routes_atom_benzene_plan_to_canvas_helper(self) -> None:
+    def test_commit_template_insert_routes_atom_benzene_plan_to_canvas_helper(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.insert_state.template_active = True
         canvas.insert_state.template_ring_size = 6
         canvas.insert_state.template_ring_style = "benzene"
         controller = _controller_for(canvas)
-        request = TemplateInsertRequest(ring_size=6, cursor_pos=(8.0, 9.0), ring_style="benzene", atom_id=3)
+        request = TemplateInsertRequest(
+            ring_size=6, cursor_pos=(8.0, 9.0), ring_style="benzene", atom_id=3
+        )
 
-        with patch.object(controller, "template_insert_request", return_value=request), patch(
-            "ui.insert_template_commit_service.has_insert_mutation_since_for",
-            return_value=True,
+        with (
+            patch.object(controller, "template_insert_request", return_value=request),
+            patch(
+                "chemvas.ui.insert_template_commit_service.has_insert_mutation_since_for",
+                return_value=True,
+            ),
         ):
             controller.commit_template_insert(QPointF(*request.cursor_pos))
 
@@ -1079,23 +1229,32 @@ class InsertControllerTest(unittest.TestCase):
             canvas.model.next_atom_id = max(canvas.model.next_atom_id, atom_id + 1)
             return atom_id
 
-        canvas.services.structure_build_service.add_atom_with_merge.side_effect = add_atom_with_merge
+        canvas.services.structure_build_service.add_atom_with_merge.side_effect = (
+            add_atom_with_merge
+        )
         canvas.bond_exists.side_effect = lambda a_id, b_id: {a_id, b_id} == {10, 11}
         controller = _controller_for(canvas)
 
-        request = TemplateInsertRequest(ring_size=6, cursor_pos=(20.0, 30.0), bond_id=0, ring_style="chair")
+        request = TemplateInsertRequest(
+            ring_size=6, cursor_pos=(20.0, 30.0), bond_id=0, ring_style="chair"
+        )
         plan = plan_template_commit(request)
         assert plan is not None
         resolution = TemplateInsertResolution(plan=plan, points=_points(6, start=5.0))
 
-        with patch.object(controller, "template_insert_request", return_value=request), patch(
-            "ui.template_geometry_resolver_service.resolve_template_insert",
-            return_value=resolution,
+        with (
+            patch.object(controller, "template_insert_request", return_value=request),
+            patch(
+                "chemvas.ui.template_geometry_resolver_service.resolve_template_insert",
+                return_value=resolution,
+            ),
         ):
             controller.commit_template_insert(QPointF(*request.cursor_pos))
 
         expected_merge = [(1, 1.0, 2.0), (2, 3.0, 4.0)]
-        self.assertEqual(canvas.services.structure_build_service.add_atom_with_merge.call_count, 6)
+        self.assertEqual(
+            canvas.services.structure_build_service.add_atom_with_merge.call_count, 6
+        )
         self.assertEqual(
             [
                 _point_tuples([call.args[0]])[0]
@@ -1103,7 +1262,9 @@ class InsertControllerTest(unittest.TestCase):
             ],
             _points(6, start=5.0),
         )
-        for call in canvas.services.structure_build_service.add_atom_with_merge.call_args_list:
+        for (
+            call
+        ) in canvas.services.structure_build_service.add_atom_with_merge.call_args_list:
             self.assertEqual(call.args[1], "C")
             self.assertEqual(call.args[2], expected_merge)
         self.assertEqual(
@@ -1148,7 +1309,9 @@ class InsertControllerTest(unittest.TestCase):
             canvas.model.next_atom_id = max(canvas.model.next_atom_id, atom_id + 1)
             return atom_id
 
-        canvas.services.structure_build_service.add_atom_with_merge.side_effect = add_atom_with_merge
+        canvas.services.structure_build_service.add_atom_with_merge.side_effect = (
+            add_atom_with_merge
+        )
         controller = _controller_for(canvas)
         request = TemplateInsertRequest(
             ring_size=5,
@@ -1163,22 +1326,32 @@ class InsertControllerTest(unittest.TestCase):
             points=[(1.0, 2.0), (7.0, 6.0), (5.0, 4.0), (9.0, 8.0), (11.0, 10.0)],
         )
 
-        with patch.object(controller, "template_insert_request", return_value=request), patch(
-            "ui.template_geometry_resolver_service.resolve_template_insert",
-            return_value=resolution,
+        with (
+            patch.object(controller, "template_insert_request", return_value=request),
+            patch(
+                "chemvas.ui.template_geometry_resolver_service.resolve_template_insert",
+                return_value=resolution,
+            ),
         ):
             controller.commit_template_insert(QPointF(*request.cursor_pos))
 
         expected_merge = [(1, 1.0, 2.0)]
-        self.assertEqual(canvas.services.structure_build_service.add_atom_with_merge.call_count, 5)
-        for call in canvas.services.structure_build_service.add_atom_with_merge.call_args_list:
+        self.assertEqual(
+            canvas.services.structure_build_service.add_atom_with_merge.call_count, 5
+        )
+        for (
+            call
+        ) in canvas.services.structure_build_service.add_atom_with_merge.call_args_list:
             self.assertEqual(call.args[1], "C")
             self.assertEqual(call.args[2], expected_merge)
         self.assertEqual(
             canvas.add_bond_calls,
             [(1, 10, 1), (10, 11, 1), (11, 12, 1), (12, 13, 1), (13, 1, 1)],
         )
-        self.assertEqual([call.args[0] for call in canvas._add_bond_graphics.call_args_list], [0, 1, 2, 3, 4])
+        self.assertEqual(
+            [call.args[0] for call in canvas._add_bond_graphics.call_args_list],
+            [0, 1, 2, 3, 4],
+        )
         ring_items = scene_item_collection_for(canvas, "ring_items")
         self.assertEqual(len(ring_items), 1)
         self.assertEqual(ring_items[0].data(2), [1, 10, 11, 12, 13])
@@ -1198,43 +1371,65 @@ class InsertControllerTest(unittest.TestCase):
         controller = _controller_for(canvas)
         with (
             patch(
-                "ui.template_geometry_resolver_service.ring_points_for",
+                "chemvas.ui.template_geometry_resolver_service.ring_points_for",
                 return_value=[QPointF(1.0, 2.0), QPointF(3.0, 4.0)],
             ),
             patch(
-                "ui.template_geometry_resolver_service.regular_ring_points_for_bond_for",
+                "chemvas.ui.template_geometry_resolver_service.regular_ring_points_for_bond_for",
                 return_value=([QPointF(5.0, 6.0)], "unused"),
-            )
-            as regular_ring_points_for_bond,
+            ) as regular_ring_points_for_bond,
             patch(
-                "ui.template_geometry_resolver_service.cyclohexane_chair_points_for",
+                "chemvas.ui.template_geometry_resolver_service.cyclohexane_chair_points_for",
                 return_value=[QPointF(7.0, 8.0)],
             ),
             patch(
-                "ui.template_geometry_resolver_service.cyclohexane_boat_points_for",
+                "chemvas.ui.template_geometry_resolver_service.cyclohexane_boat_points_for",
                 return_value=[QPointF(9.0, 10.0)],
             ),
             patch(
-                "ui.template_geometry_resolver_service.template_points_for_bond_for",
+                "chemvas.ui.template_geometry_resolver_service.template_points_for_bond_for",
                 return_value=([QPointF(11.0, 12.0)], "unused"),
-            )
-            as template_points_for_bond,
+            ) as template_points_for_bond,
         ):
             request = controller.template_insert_request(QPointF(20.0, 30.0))
 
-            self.assertEqual(request, TemplateInsertRequest(6, (20.0, 30.0), 5, "chair"))
-            self.assertEqual(controller.resolve_ring_points_for_template((1.0, 2.0), 6, 12.0), [(1.0, 2.0), (3.0, 4.0)])
-            self.assertEqual(controller.resolve_regular_ring_points_for_template_bond(6, 3, (4.0, 5.0)), [(5.0, 6.0)])
-            self.assertEqual(controller.resolve_chair_points_for_template((0.0, 0.0)), [(7.0, 8.0)])
-            self.assertEqual(controller.resolve_boat_points_for_template((0.0, 0.0)), [(9.0, 10.0)])
             self.assertEqual(
-                controller.resolve_template_points_for_template_bond([(0.0, 0.0)], 4, (2.0, 3.0)),
+                request, TemplateInsertRequest(6, (20.0, 30.0), 5, "chair")
+            )
+            self.assertEqual(
+                controller.resolve_ring_points_for_template((1.0, 2.0), 6, 12.0),
+                [(1.0, 2.0), (3.0, 4.0)],
+            )
+            self.assertEqual(
+                controller.resolve_regular_ring_points_for_template_bond(
+                    6, 3, (4.0, 5.0)
+                ),
+                [(5.0, 6.0)],
+            )
+            self.assertEqual(
+                controller.resolve_chair_points_for_template((0.0, 0.0)), [(7.0, 8.0)]
+            )
+            self.assertEqual(
+                controller.resolve_boat_points_for_template((0.0, 0.0)), [(9.0, 10.0)]
+            )
+            self.assertEqual(
+                controller.resolve_template_points_for_template_bond(
+                    [(0.0, 0.0)], 4, (2.0, 3.0)
+                ),
                 [(11.0, 12.0)],
             )
             regular_ring_points_for_bond.return_value = None
             template_points_for_bond.return_value = None
-            self.assertIsNone(controller.resolve_regular_ring_points_for_template_bond(6, 3, (4.0, 5.0)))
-            self.assertIsNone(controller.resolve_template_points_for_template_bond([(0.0, 0.0)], 4, (2.0, 3.0)))
+            self.assertIsNone(
+                controller.resolve_regular_ring_points_for_template_bond(
+                    6, 3, (4.0, 5.0)
+                )
+            )
+            self.assertIsNone(
+                controller.resolve_template_points_for_template_bond(
+                    [(0.0, 0.0)], 4, (2.0, 3.0)
+                )
+            )
 
     def test_template_request_uses_injected_hit_testing_service(self) -> None:
         canvas = _FakeCanvas()
@@ -1242,9 +1437,13 @@ class InsertControllerTest(unittest.TestCase):
         canvas.insert_state.template_ring_size = 6
         injected_hit_testing = SimpleNamespace(find_bond_near=Mock(return_value=7))
         canvas.services.hit_testing_service = SimpleNamespace(
-            find_bond_near=Mock(side_effect=AssertionError("registry service should not be used"))
+            find_bond_near=Mock(
+                side_effect=AssertionError("registry service should not be used")
+            )
         )
-        canvas.find_bond_near = Mock(side_effect=AssertionError("canvas facade should not be used"))
+        canvas.find_bond_near = Mock(
+            side_effect=AssertionError("canvas facade should not be used")
+        )
         controller = _controller_for(canvas, hit_testing_service=injected_hit_testing)
 
         request = controller.template_insert_request(QPointF(1.0, 2.0))
@@ -1252,7 +1451,9 @@ class InsertControllerTest(unittest.TestCase):
         self.assertIsNotNone(request)
         assert request is not None
         self.assertEqual(request.bond_id, 7)
-        injected_hit_testing.find_bond_near.assert_called_once_with(QPointF(1.0, 2.0), 7.0)
+        injected_hit_testing.find_bond_near.assert_called_once_with(
+            QPointF(1.0, 2.0), 7.0
+        )
         canvas.services.hit_testing_service.find_bond_near.assert_not_called()
         canvas.find_bond_near.assert_not_called()
 
@@ -1275,7 +1476,9 @@ class InsertControllerTest(unittest.TestCase):
             controller.commit_template_insert(QPointF(1.0, 2.0))
         self.assertFalse(canvas.insert_state.template_active)
 
-    def test_commit_template_insert_cancels_for_missing_resolution_or_points(self) -> None:
+    def test_commit_template_insert_cancels_for_missing_resolution_or_points(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.insert_state.template_active = True
         controller = _controller_for(canvas)
@@ -1284,17 +1487,23 @@ class InsertControllerTest(unittest.TestCase):
         plan = plan_template_commit(request)
         assert plan is not None
 
-        with patch.object(controller, "template_insert_request", return_value=request), patch(
-            "ui.template_geometry_resolver_service.resolve_template_insert",
-            return_value=None,
+        with (
+            patch.object(controller, "template_insert_request", return_value=request),
+            patch(
+                "chemvas.ui.template_geometry_resolver_service.resolve_template_insert",
+                return_value=None,
+            ),
         ):
             controller.commit_template_insert(QPointF(1.0, 2.0))
         self.assertFalse(canvas.insert_state.template_active)
 
         canvas.insert_state.template_active = True
-        with patch.object(controller, "template_insert_request", return_value=request), patch(
-            "ui.template_geometry_resolver_service.resolve_template_insert",
-            return_value=TemplateInsertResolution(plan=plan, points=None),
+        with (
+            patch.object(controller, "template_insert_request", return_value=request),
+            patch(
+                "chemvas.ui.template_geometry_resolver_service.resolve_template_insert",
+                return_value=TemplateInsertResolution(plan=plan, points=None),
+            ),
         ):
             controller.commit_template_insert(QPointF(1.0, 2.0))
         self.assertFalse(canvas.insert_state.template_active)
@@ -1305,7 +1514,7 @@ class InsertControllerTest(unittest.TestCase):
         controller = _controller_for(canvas)
 
         with patch(
-            "ui.insert_template_service.clear_template_preview_helper",
+            "chemvas.ui.insert_template_service.clear_template_preview_helper",
             return_value=(["new-items"], ["lines"], ["dots"]),
         ) as helper:
             controller.clear_template_preview()
@@ -1315,7 +1524,9 @@ class InsertControllerTest(unittest.TestCase):
         self.assertEqual(canvas.insert_state.template_preview_lines, ["lines"])
         self.assertEqual(canvas.insert_state.template_preview_dots, ["dots"])
 
-    def test_render_template_preview_clears_for_missing_request_and_preview_plan(self) -> None:
+    def test_render_template_preview_clears_for_missing_request_and_preview_plan(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         controller = _controller_for(canvas)
         controller.clear_template_preview = Mock()
@@ -1326,51 +1537,69 @@ class InsertControllerTest(unittest.TestCase):
 
         controller.clear_template_preview.reset_mock()
         request = TemplateInsertRequest(5, (4.0, 5.0), ring_style="regular")
-        with patch.object(controller, "template_insert_request", return_value=request), patch(
-            "ui.insert_template_service.plan_template_preview",
-            return_value=None,
+        with (
+            patch.object(controller, "template_insert_request", return_value=request),
+            patch(
+                "chemvas.ui.insert_template_service.plan_template_preview",
+                return_value=None,
+            ),
         ):
             controller.render_template_preview(QPointF(4.0, 5.0))
         controller.clear_template_preview.assert_called_once_with()
 
-    def test_render_template_preview_clears_for_missing_resolution_points_and_clear_action(self) -> None:
+    def test_render_template_preview_clears_for_missing_resolution_points_and_clear_action(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         controller = _controller_for(canvas)
         controller.clear_template_preview = Mock()
         request = TemplateInsertRequest(5, (4.0, 5.0), ring_style="regular")
         plan = SimpleNamespace(generator="free_regular_ring")
 
-        with patch.object(controller, "template_insert_request", return_value=request), patch(
-            "ui.insert_template_service.plan_template_preview",
-            return_value=plan,
-        ), patch(
-            "ui.template_geometry_resolver_service.resolve_template_insert",
-            return_value=None,
+        with (
+            patch.object(controller, "template_insert_request", return_value=request),
+            patch(
+                "chemvas.ui.insert_template_service.plan_template_preview",
+                return_value=plan,
+            ),
+            patch(
+                "chemvas.ui.template_geometry_resolver_service.resolve_template_insert",
+                return_value=None,
+            ),
         ):
             controller.render_template_preview(QPointF(4.0, 5.0))
         controller.clear_template_preview.assert_called_once_with()
 
         controller.clear_template_preview.reset_mock()
-        with patch.object(controller, "template_insert_request", return_value=request), patch(
-            "ui.insert_template_service.plan_template_preview",
-            return_value=plan,
-        ), patch(
-            "ui.template_geometry_resolver_service.resolve_template_insert",
-            return_value=TemplateInsertResolution(plan=plan, points=None),
+        with (
+            patch.object(controller, "template_insert_request", return_value=request),
+            patch(
+                "chemvas.ui.insert_template_service.plan_template_preview",
+                return_value=plan,
+            ),
+            patch(
+                "chemvas.ui.template_geometry_resolver_service.resolve_template_insert",
+                return_value=TemplateInsertResolution(plan=plan, points=None),
+            ),
         ):
             controller.render_template_preview(QPointF(4.0, 5.0))
         controller.clear_template_preview.assert_called_once_with()
 
         controller.clear_template_preview.reset_mock()
-        with patch.object(controller, "template_insert_request", return_value=request), patch(
-            "ui.insert_template_service.plan_template_preview",
-            return_value=plan,
-        ), patch(
-            "ui.template_geometry_resolver_service.resolve_template_insert",
-            return_value=TemplateInsertResolution(plan=plan, points=[(1.0, 2.0)]),
-        ), patch(
-            "ui.insert_template_service.plan_template_preview_update",
-            return_value=SimpleNamespace(action="clear", geometry=None),
+        with (
+            patch.object(controller, "template_insert_request", return_value=request),
+            patch(
+                "chemvas.ui.insert_template_service.plan_template_preview",
+                return_value=plan,
+            ),
+            patch(
+                "chemvas.ui.template_geometry_resolver_service.resolve_template_insert",
+                return_value=TemplateInsertResolution(plan=plan, points=[(1.0, 2.0)]),
+            ),
+            patch(
+                "chemvas.ui.insert_template_service.plan_template_preview_update",
+                return_value=SimpleNamespace(action="clear", geometry=None),
+            ),
         ):
             controller.render_template_preview(QPointF(4.0, 5.0))
         controller.clear_template_preview.assert_called_once_with()
@@ -1380,21 +1609,29 @@ class InsertControllerTest(unittest.TestCase):
         controller = _controller_for(canvas)
         request = TemplateInsertRequest(5, (4.0, 5.0), ring_style="regular")
         plan = SimpleNamespace(generator="free_regular_ring")
-        resolution = TemplateInsertResolution(plan=plan, points=[(1.0, 2.0), (3.0, 4.0)])
+        resolution = TemplateInsertResolution(
+            plan=plan, points=[(1.0, 2.0), (3.0, 4.0)]
+        )
 
-        with patch.object(controller, "template_insert_request", return_value=request), patch(
-            "ui.insert_template_service.plan_template_preview",
-            return_value=plan,
-        ), patch(
-            "ui.template_geometry_resolver_service.resolve_template_insert",
-            return_value=resolution,
-        ), patch(
-            "ui.insert_template_service.plan_template_preview_update",
-            return_value=SimpleNamespace(action="update", geometry={"segments": 2}),
-        ) as preview_update, patch(
-            "ui.insert_template_service.apply_template_preview_geometry_helper",
-            return_value=(["items"], ["lines"], ["dots"]),
-        ) as apply_helper:
+        with (
+            patch.object(controller, "template_insert_request", return_value=request),
+            patch(
+                "chemvas.ui.insert_template_service.plan_template_preview",
+                return_value=plan,
+            ),
+            patch(
+                "chemvas.ui.template_geometry_resolver_service.resolve_template_insert",
+                return_value=resolution,
+            ),
+            patch(
+                "chemvas.ui.insert_template_service.plan_template_preview_update",
+                return_value=SimpleNamespace(action="update", geometry={"segments": 2}),
+            ) as preview_update,
+            patch(
+                "chemvas.ui.insert_template_service.apply_template_preview_geometry_helper",
+                return_value=(["items"], ["lines"], ["dots"]),
+            ) as apply_helper,
+        ):
             controller.render_template_preview(QPointF(4.0, 5.0))
 
         self.assertEqual(preview_update.call_args.args[0], [(1.0, 2.0), (3.0, 4.0)])

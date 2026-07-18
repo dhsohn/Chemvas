@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import QRectF
-from ui.preview_3d_layout import (
+from chemvas.ui.preview_3d_layout import (
     preview_footer_height,
     preview_footer_item_rects,
     preview_layout_rects,
 )
+from PyQt6.QtCore import QRectF
 
 
 def test_preview_footer_height_uses_row_minimum_and_gap() -> None:
@@ -24,7 +24,9 @@ def test_preview_layout_rects_builds_ordered_sections_with_footer() -> None:
     assert layout["footer"].height() == 74.0
 
 
-def test_preview_layout_rects_uses_full_rect_for_tiny_widget_and_fallback_molecule_padding() -> None:
+def test_preview_layout_rects_uses_full_rect_for_tiny_widget_and_fallback_molecule_padding() -> (
+    None
+):
     layout = preview_layout_rects(QRectF(0.0, 0.0, 12.0, 12.0), footer_height=0.0)
 
     assert layout["panel"] == QRectF(0.0, 0.0, 12.0, 12.0)

@@ -12,11 +12,11 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from core.model import Atom, Bond
-    from ui.canvas_bond_graphics_state import set_bond_items_for
-    from ui.canvas_hit_testing_service import CanvasHitTestingService
-    from ui.canvas_hover_state import set_hover_bond_id_for
-    from ui.spatial_index_state import CanvasSpatialIndexState
+    from chemvas.domain.document import Atom, Bond
+    from chemvas.ui.canvas_bond_graphics_state import set_bond_items_for
+    from chemvas.ui.canvas_hit_testing_service import CanvasHitTestingService
+    from chemvas.ui.canvas_hover_state import set_hover_bond_id_for
+    from chemvas.ui.spatial_index_state import CanvasSpatialIndexState
 
 
 class _FakeScene:
@@ -60,7 +60,9 @@ def _service_double(**overrides):
     return SimpleNamespace(**defaults)
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas hit testing service tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for canvas hit testing service tests"
+)
 class CanvasHitTestingServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -69,9 +71,13 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
 
     def test_scene_pos_from_event_uses_qt6_position(self) -> None:
         scene_pos_mapper = mock.Mock(return_value=QPointF(1.0, 2.0))
-        service = CanvasHitTestingService(SimpleNamespace(), scene_pos_mapper=scene_pos_mapper)
+        service = CanvasHitTestingService(
+            SimpleNamespace(), scene_pos_mapper=scene_pos_mapper
+        )
 
-        self.assertEqual(service.scene_pos_from_event(_PositionEvent()), QPointF(1.0, 2.0))
+        self.assertEqual(
+            service.scene_pos_from_event(_PositionEvent()), QPointF(1.0, 2.0)
+        )
         scene_pos_mapper.assert_called_once()
 
     def test_item_lookup_prefers_atom_and_falls_back_to_nearby_bond(self) -> None:
@@ -101,7 +107,9 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
         fallback_service = CanvasHitTestingService(fallback_canvas)
         fallback_service.find_bond_near = mock.Mock(return_value=4)
 
-        self.assertIs(fallback_service.item_at_scene_pos(QPointF(2.0, 2.0)), nearby_bond_graphic)
+        self.assertIs(
+            fallback_service.item_at_scene_pos(QPointF(2.0, 2.0)), nearby_bond_graphic
+        )
 
         empty_fallback_canvas = SimpleNamespace(
             scene=lambda: _FakeScene([_FakeItem("note_box"), _FakeItem("other")]),
@@ -110,18 +118,24 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
         empty_fallback_service = CanvasHitTestingService(empty_fallback_canvas)
         empty_fallback_service.find_bond_near = mock.Mock(return_value=4)
 
-        self.assertEqual(empty_fallback_service.item_at_scene_pos(QPointF(2.0, 2.0)).data(0), "other")
+        self.assertEqual(
+            empty_fallback_service.item_at_scene_pos(QPointF(2.0, 2.0)).data(0), "other"
+        )
 
-    def test_item_lookup_uses_scene_access_helper_without_canvas_scene_facade(self) -> None:
+    def test_item_lookup_uses_scene_access_helper_without_canvas_scene_facade(
+        self,
+    ) -> None:
         atom_item = _FakeItem("atom")
         canvas = SimpleNamespace()
         set_bond_items_for(canvas, {})
-        canvas.scene = mock.Mock(side_effect=AssertionError("scene facade should not be used by service"))
+        canvas.scene = mock.Mock(
+            side_effect=AssertionError("scene facade should not be used by service")
+        )
         service = CanvasHitTestingService(canvas)
         service.find_bond_near = mock.Mock(return_value=None)
 
         with mock.patch(
-            "ui.canvas_hit_testing_service.scene_items_at_pos_for_canvas",
+            "chemvas.ui.canvas_hit_testing_service.scene_items_at_pos_for_canvas",
             return_value=[_FakeItem("selection_outline"), atom_item],
         ) as scene_items:
             self.assertIs(service.item_at_scene_pos(QPointF(2.0, 2.0)), atom_item)
@@ -179,7 +193,9 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
 
         self.assertEqual(service.find_atom_near(30.0, 0.0, 5.0), 2)
 
-    def test_spatial_index_and_nearest_helpers_cover_missing_sparse_and_zero_cell_paths(self) -> None:
+    def test_spatial_index_and_nearest_helpers_cover_missing_sparse_and_zero_cell_paths(
+        self,
+    ) -> None:
         sparse_canvas = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
             model=SimpleNamespace(
@@ -194,7 +210,9 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
 
         sparse_lookup_canvas = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
-            model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[None, Bond(1, 99, 1)]),
+            model=SimpleNamespace(
+                atoms={1: Atom("C", 0.0, 0.0)}, bonds=[None, Bond(1, 99, 1)]
+            ),
             spatial_index_state=CanvasSpatialIndexState(
                 dirty=False,
                 cell_size=20.0,
@@ -206,13 +224,17 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
         self.assertEqual(sparse_lookup_service.find_atom_near(0.0, 0.0, 5.0), 1)
         self.assertIsNone(sparse_lookup_service.find_bond_near(QPointF(0.0, 0.0), 5.0))
 
-    def test_nearest_hit_helpers_and_bond_id_from_event_use_service_methods(self) -> None:
+    def test_nearest_hit_helpers_and_bond_id_from_event_use_service_methods(
+        self,
+    ) -> None:
         canvas = SimpleNamespace(
             model=SimpleNamespace(
                 atoms={1: Atom("C", 3.0, 4.0), 2: Atom("O", 10.0, 0.0)},
                 bonds=[Bond(1, 2, 1), None],
             ),
-            renderer=SimpleNamespace(style=SimpleNamespace(bond_line_width=1.0, bond_length_px=20.0)),
+            renderer=SimpleNamespace(
+                style=SimpleNamespace(bond_line_width=1.0, bond_length_px=20.0)
+            ),
         )
         set_hover_bond_id_for(canvas, 7)
         service = CanvasHitTestingService(canvas)
@@ -229,6 +251,7 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
         service.find_bond_near.return_value = 2
         self.assertEqual(service.bond_id_from_event(object()), 2)
         service.find_bond_near.assert_called_with(QPointF(3.0, 4.0), 10.56)
+
 
 if __name__ == "__main__":
     unittest.main()

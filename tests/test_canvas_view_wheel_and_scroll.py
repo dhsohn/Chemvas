@@ -13,9 +13,9 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.canvas_view import CanvasView
-    from ui.input_view_state import input_view_state_for
-    from ui.selection_info_state import selection_info_state_for
+    from chemvas.ui.canvas_view import CanvasView
+    from chemvas.ui.input_view_state import input_view_state_for
+    from chemvas.ui.selection_info_state import selection_info_state_for
 
 
 class _FakeWheelEvent:
@@ -27,7 +27,9 @@ class _FakeWheelEvent:
     ) -> None:
         self._pixel_delta = pixel_delta
         self._angle_delta = angle_delta
-        self._modifiers = modifiers if modifiers is not None else Qt.KeyboardModifier.NoModifier
+        self._modifiers = (
+            modifiers if modifiers is not None else Qt.KeyboardModifier.NoModifier
+        )
         self.accept = mock.Mock()
 
     def pixelDelta(self) -> QPoint:
@@ -43,7 +45,9 @@ class _FakeWheelEvent:
         return QPointF(10.0, 10.0)
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas view tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for canvas view tests"
+)
 class CanvasViewWheelAndScrollTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -62,13 +66,17 @@ class CanvasViewWheelAndScrollTest(unittest.TestCase):
         return view, hbar, vbar
 
     def test_wheel_event_uses_pixel_delta_and_accepts(self) -> None:
-        with mock.patch.object(QGraphicsView, "wheelEvent", new=mock.Mock(return_value=None)) as base_wheel:
+        with mock.patch.object(
+            QGraphicsView, "wheelEvent", new=mock.Mock(return_value=None)
+        ) as base_wheel:
             view, hbar, vbar = self._new_view()
             event = _FakeWheelEvent(QPoint(15, -7), QPoint(99, 99))
 
             CanvasView.wheelEvent(view, event)
 
-            self.assertGreater(selection_info_state_for(view).last_interaction_time, 0.0)
+            self.assertGreater(
+                selection_info_state_for(view).last_interaction_time, 0.0
+            )
             self.assertTrue(input_view_state_for(view).base_transform.isIdentity())
             self.assertTrue(view.transform().isIdentity())
             hbar.setValue.assert_called_once_with(105)
@@ -76,14 +84,20 @@ class CanvasViewWheelAndScrollTest(unittest.TestCase):
             event.accept.assert_called_once_with()
             self.assertEqual(base_wheel.call_count, 0)
 
-    def test_wheel_event_falls_back_to_angle_delta_when_pixel_delta_is_null(self) -> None:
-        with mock.patch.object(QGraphicsView, "wheelEvent", new=mock.Mock(return_value=None)) as base_wheel:
+    def test_wheel_event_falls_back_to_angle_delta_when_pixel_delta_is_null(
+        self,
+    ) -> None:
+        with mock.patch.object(
+            QGraphicsView, "wheelEvent", new=mock.Mock(return_value=None)
+        ) as base_wheel:
             view, hbar, vbar = self._new_view()
             event = _FakeWheelEvent(QPoint(0, 0), QPoint(8, -6))
 
             CanvasView.wheelEvent(view, event)
 
-            self.assertGreater(selection_info_state_for(view).last_interaction_time, 0.0)
+            self.assertGreater(
+                selection_info_state_for(view).last_interaction_time, 0.0
+            )
             self.assertTrue(input_view_state_for(view).base_transform.isIdentity())
             self.assertTrue(view.transform().isIdentity())
             hbar.setValue.assert_called_once_with(116)
@@ -92,13 +106,17 @@ class CanvasViewWheelAndScrollTest(unittest.TestCase):
             self.assertEqual(base_wheel.call_count, 0)
 
     def test_wheel_event_delegates_to_super_when_deltas_are_zero(self) -> None:
-        with mock.patch.object(QGraphicsView, "wheelEvent", new=mock.Mock(return_value=None)) as base_wheel:
+        with mock.patch.object(
+            QGraphicsView, "wheelEvent", new=mock.Mock(return_value=None)
+        ) as base_wheel:
             view, hbar, vbar = self._new_view()
             event = _FakeWheelEvent(QPoint(0, 0), QPoint(0, 0))
 
             CanvasView.wheelEvent(view, event)
 
-            self.assertGreater(selection_info_state_for(view).last_interaction_time, 0.0)
+            self.assertGreater(
+                selection_info_state_for(view).last_interaction_time, 0.0
+            )
             self.assertTrue(input_view_state_for(view).base_transform.isIdentity())
             self.assertTrue(view.transform().isIdentity())
             hbar.setValue.assert_not_called()
@@ -107,12 +125,16 @@ class CanvasViewWheelAndScrollTest(unittest.TestCase):
             base_wheel.assert_called_once_with(event)
 
     def test_ctrl_wheel_zooms_in_and_out_without_scrolling(self) -> None:
-        with mock.patch.object(QGraphicsView, "wheelEvent", new=mock.Mock(return_value=None)) as base_wheel:
+        with mock.patch.object(
+            QGraphicsView, "wheelEvent", new=mock.Mock(return_value=None)
+        ) as base_wheel:
             view, hbar, vbar = self._new_view()
             input_view_state_for(view).zoom = 1.0
 
             zoom_in = _FakeWheelEvent(
-                QPoint(0, 0), QPoint(0, 120), modifiers=Qt.KeyboardModifier.ControlModifier
+                QPoint(0, 0),
+                QPoint(0, 120),
+                modifiers=Qt.KeyboardModifier.ControlModifier,
             )
             CanvasView.wheelEvent(view, zoom_in)
             self.assertGreater(input_view_state_for(view).zoom, 1.0)
@@ -120,7 +142,9 @@ class CanvasViewWheelAndScrollTest(unittest.TestCase):
 
             zoomed = input_view_state_for(view).zoom
             zoom_out = _FakeWheelEvent(
-                QPoint(0, 0), QPoint(0, -120), modifiers=Qt.KeyboardModifier.ControlModifier
+                QPoint(0, 0),
+                QPoint(0, -120),
+                modifiers=Qt.KeyboardModifier.ControlModifier,
             )
             CanvasView.wheelEvent(view, zoom_out)
             self.assertLess(input_view_state_for(view).zoom, zoomed)

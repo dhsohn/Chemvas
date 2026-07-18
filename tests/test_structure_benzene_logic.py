@@ -1,9 +1,9 @@
 import unittest
 from unittest import mock
 
-from core.model import Atom, Bond
+from chemvas.domain.document import Atom, Bond
+from chemvas.ui.structure_benzene_logic import plan_benzene_ring_points
 from PyQt6.QtCore import QPointF
-from ui.structure_benzene_logic import plan_benzene_ring_points
 
 
 class _FakePolygon:
@@ -30,8 +30,12 @@ class StructureBenzeneLogicTest(unittest.TestCase):
             1: Atom("C", 0.0, 0.0),
             2: Atom("C", 10.0, 0.0),
         }
-        regular_ring_points_for_bond = mock.Mock(return_value=([QPointF(1.0, 2.0)], [(1, 0.0, 0.0)]))
-        regular_ring_points_for_atom = mock.Mock(return_value=([QPointF(3.0, 4.0)], [(1, 0.0, 0.0)]))
+        regular_ring_points_for_bond = mock.Mock(
+            return_value=([QPointF(1.0, 2.0)], [(1, 0.0, 0.0)])
+        )
+        regular_ring_points_for_atom = mock.Mock(
+            return_value=([QPointF(3.0, 4.0)], [(1, 0.0, 0.0)])
+        )
         compute_free_points = mock.Mock(return_value=[(7.0, 8.0)])
 
         bond_result = plan_benzene_ring_points(
@@ -78,7 +82,9 @@ class StructureBenzeneLogicTest(unittest.TestCase):
         regular_ring_points_for_atom.assert_called_once_with(6, 1)
         compute_free_points.assert_called_once_with((5.0, 6.0), bond_length=20.0)
 
-    def test_plan_benzene_ring_points_treats_failed_bond_geometry_as_terminal(self) -> None:
+    def test_plan_benzene_ring_points_treats_failed_bond_geometry_as_terminal(
+        self,
+    ) -> None:
         result = plan_benzene_ring_points(
             QPointF(5.0, 6.0),
             attach_atom_id=1,
@@ -88,13 +94,17 @@ class StructureBenzeneLogicTest(unittest.TestCase):
             ring_items=[],
             bond_length=20.0,
             regular_ring_points_for_bond=mock.Mock(return_value=None),
-            regular_ring_points_for_atom=mock.Mock(return_value=([QPointF(3.0, 4.0)], [(1, 0.0, 0.0)])),
+            regular_ring_points_for_atom=mock.Mock(
+                return_value=([QPointF(3.0, 4.0)], [(1, 0.0, 0.0)])
+            ),
             compute_free_points=mock.Mock(return_value=[(7.0, 8.0)]),
         )
 
         self.assertIsNone(result)
 
-    def test_plan_benzene_ring_points_skips_invalid_bond_to_atom_fallback_paths(self) -> None:
+    def test_plan_benzene_ring_points_skips_invalid_bond_to_atom_fallback_paths(
+        self,
+    ) -> None:
         center = QPointF(5.0, 6.0)
         atom_result = ([QPointF(3.0, 4.0)], [(1, 0.0, 0.0)])
         regular_ring_points_for_atom = mock.Mock(return_value=atom_result)
@@ -128,7 +138,9 @@ class StructureBenzeneLogicTest(unittest.TestCase):
         self.assertEqual(missing_endpoint_result, atom_result)
         self.assertEqual(regular_ring_points_for_atom.call_count, 2)
 
-    def test_plan_benzene_ring_points_treats_failed_atom_geometry_as_terminal(self) -> None:
+    def test_plan_benzene_ring_points_treats_failed_atom_geometry_as_terminal(
+        self,
+    ) -> None:
         compute_free_points = mock.Mock(return_value=[(7.0, 8.0)])
 
         result = plan_benzene_ring_points(
@@ -147,7 +159,9 @@ class StructureBenzeneLogicTest(unittest.TestCase):
         self.assertIsNone(result)
         compute_free_points.assert_not_called()
 
-    def test_plan_benzene_ring_points_blocks_free_center_inside_existing_ring(self) -> None:
+    def test_plan_benzene_ring_points_blocks_free_center_inside_existing_ring(
+        self,
+    ) -> None:
         result = plan_benzene_ring_points(
             QPointF(5.0, 6.0),
             attach_atom_id=None,

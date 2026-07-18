@@ -1,6 +1,6 @@
 import unittest
 
-from ui.sheet_setup_logic import (
+from chemvas.ui.sheet_setup_logic import (
     normalize_sheet_orientation,
     normalize_sheet_setup,
     normalize_sheet_size,

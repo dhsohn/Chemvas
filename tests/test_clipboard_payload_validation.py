@@ -1,6 +1,6 @@
 import unittest
 
-from core.document_state import (
+from chemvas.domain.document import (
     CLIPBOARD_SELECTION_PERSPECTIVE_VERSION,
     validate_clipboard_selection_payload,
 )
@@ -11,9 +11,30 @@ def _valid_payload() -> dict:
         "format": "chemvas-selection",
         "version": 1,
         "atoms": [
-            {"id": 0, "element": "C", "x": 1.0, "y": 2.0, "color": "#000000", "explicit_label": False},
-            {"id": 1, "element": "O", "x": 3.0, "y": 4.0, "color": "#ff0000", "explicit_label": True},
-            {"id": 2, "element": "C", "x": 2.0, "y": 5.0, "color": "#000000", "explicit_label": False},
+            {
+                "id": 0,
+                "element": "C",
+                "x": 1.0,
+                "y": 2.0,
+                "color": "#000000",
+                "explicit_label": False,
+            },
+            {
+                "id": 1,
+                "element": "O",
+                "x": 3.0,
+                "y": 4.0,
+                "color": "#ff0000",
+                "explicit_label": True,
+            },
+            {
+                "id": 2,
+                "element": "C",
+                "x": 2.0,
+                "y": 5.0,
+                "color": "#000000",
+                "explicit_label": False,
+            },
         ],
         "bonds": [
             {"a": 0, "b": 1, "order": 2, "style": "double", "color": "#000000"},
@@ -43,9 +64,21 @@ def _valid_payload() -> dict:
         ],
         "scene_items": [
             {"kind": "note", "text": "hi", "x": 0.0, "y": 0.0},
-            {"kind": "arrow", "start": [0, 0], "end": [1, 1], "control": None, "double": False},
+            {
+                "kind": "arrow",
+                "start": [0, 0],
+                "end": [1, 1],
+                "control": None,
+                "double": False,
+            },
             {"kind": "ts_bracket", "left": 0, "top": 0, "right": 1, "bottom": 1},
-            {"kind": "orbital", "orbital_kind": "p", "center": [0, 0], "scale": 1.0, "rotation": 0.0},
+            {
+                "kind": "orbital",
+                "orbital_kind": "p",
+                "center": [0, 0],
+                "scale": 1.0,
+                "rotation": 0.0,
+            },
         ],
     }
 
@@ -143,28 +176,51 @@ class ClipboardPayloadValidationTest(unittest.TestCase):
             ("future version", add_future_perspective),
             (
                 "string atom id",
-                lambda p: mutate_perspective(p, lambda state: state["atom_coords_3d"][0].__setitem__("atom_id", "0")),
+                lambda p: mutate_perspective(
+                    p,
+                    lambda state: state["atom_coords_3d"][0].__setitem__(
+                        "atom_id", "0"
+                    ),
+                ),
             ),
             (
                 "missing atom",
-                lambda p: mutate_perspective(p, lambda state: state["atom_coords_3d"][0].__setitem__("atom_id", 99)),
+                lambda p: mutate_perspective(
+                    p,
+                    lambda state: state["atom_coords_3d"][0].__setitem__("atom_id", 99),
+                ),
             ),
             (
                 "duplicate atom",
                 lambda p: mutate_perspective(
                     p,
-                    lambda state: state["atom_coords_3d"].append({"atom_id": 0, "coords": [4.0, 5.0, 6.0]}),
+                    lambda state: state["atom_coords_3d"].append(
+                        {"atom_id": 0, "coords": [4.0, 5.0, 6.0]}
+                    ),
                 ),
             ),
             (
                 "bad coords",
-                lambda p: mutate_perspective(p, lambda state: state["atom_coords_3d"][0].__setitem__("coords", [1.0, 2.0])),
+                lambda p: mutate_perspective(
+                    p,
+                    lambda state: state["atom_coords_3d"][0].__setitem__(
+                        "coords", [1.0, 2.0]
+                    ),
+                ),
             ),
             (
                 "bad center",
-                lambda p: mutate_perspective(p, lambda state: state.__setitem__("projection_center_3d", [1.0, 2.0])),
+                lambda p: mutate_perspective(
+                    p,
+                    lambda state: state.__setitem__("projection_center_3d", [1.0, 2.0]),
+                ),
             ),
-            ("extra key", lambda p: mutate_perspective(p, lambda state: state.__setitem__("extra", True))),
+            (
+                "extra key",
+                lambda p: mutate_perspective(
+                    p, lambda state: state.__setitem__("extra", True)
+                ),
+            ),
         ]
         for name, mutate in cases:
             with self.subTest(name=name):
@@ -199,14 +255,20 @@ class ClipboardPayloadValidationTest(unittest.TestCase):
 
     def test_rejects_duplicate_bond_pairs(self) -> None:
         self._assert_rejected(
-            lambda p: p["bonds"].append({"a": 1, "b": 0, "order": 1, "style": "single", "color": "#000000"})
+            lambda p: p["bonds"].append(
+                {"a": 1, "b": 0, "order": 1, "style": "single", "color": "#000000"}
+            )
         )
 
     def test_rejects_ring_atom_outside_selection(self) -> None:
-        self._assert_rejected(lambda p: p["rings"][0].__setitem__("atom_ids", [0, 1, 42]))
+        self._assert_rejected(
+            lambda p: p["rings"][0].__setitem__("atom_ids", [0, 1, 42])
+        )
 
     def test_rejects_degenerate_ring_points(self) -> None:
-        self._assert_rejected(lambda p: p["rings"][0].__setitem__("points", [[0.0, 0.0], [1.0, 0.0]]))
+        self._assert_rejected(
+            lambda p: p["rings"][0].__setitem__("points", [[0.0, 0.0], [1.0, 0.0]])
+        )
 
     def test_rejects_degenerate_ring_atom_cycle(self) -> None:
         cases = [
@@ -215,7 +277,10 @@ class ClipboardPayloadValidationTest(unittest.TestCase):
             ("short", lambda p: p["rings"][0].__setitem__("atom_ids", [0, 1])),
             ("duplicate", lambda p: p["rings"][0].__setitem__("atom_ids", [0, 1, 0])),
             ("missing closing bond", lambda p: p["bonds"].pop()),
-            ("point count mismatch", lambda p: p["rings"][0]["points"].append([0.0, 0.5])),
+            (
+                "point count mismatch",
+                lambda p: p["rings"][0]["points"].append([0.0, 0.5]),
+            ),
             (
                 "large coordinate mismatch",
                 lambda p: (
@@ -260,7 +325,9 @@ class ClipboardPayloadValidationTest(unittest.TestCase):
         self._assert_rejected(lambda p: p["marks"][0].__setitem__("atom_id", 42))
 
     def test_rejects_unattached_mark_with_atom_offsets(self) -> None:
-        self._assert_rejected(lambda p: p["marks"][0].update({"atom_id": None, "dx": 1.0, "dy": 1.0}))
+        self._assert_rejected(
+            lambda p: p["marks"][0].update({"atom_id": None, "dx": 1.0, "dy": 1.0})
+        )
 
     def test_rejects_mark_with_partial_offset(self) -> None:
         self._assert_rejected(lambda p: p["marks"][0].__setitem__("dy", None))
@@ -272,8 +339,12 @@ class ClipboardPayloadValidationTest(unittest.TestCase):
         self._assert_rejected(lambda p: p["scene_items"][1].__setitem__("end", None))
 
     def test_rejects_arrow_extra_key_and_non_bool_double(self) -> None:
-        self._assert_rejected(lambda p: p["scene_items"][1].__setitem__("injected", True))
-        self._assert_rejected(lambda p: p["scene_items"][1].__setitem__("double", "yes"))
+        self._assert_rejected(
+            lambda p: p["scene_items"][1].__setitem__("injected", True)
+        )
+        self._assert_rejected(
+            lambda p: p["scene_items"][1].__setitem__("double", "yes")
+        )
 
     def test_accepts_valid_shape_scene_item(self) -> None:
         payload = _valid_payload()
@@ -303,15 +374,27 @@ class ClipboardPayloadValidationTest(unittest.TestCase):
             "shape_kind": "rect",
             "stroke_style": "solid",
         }
-        self._assert_rejected(lambda p: p["scene_items"].append({**shape, "fill": "red"}))
-        self._assert_rejected(lambda p: p["scene_items"].append({**shape, "fill": "#123456", "fill_alpha": 1.1}))
-        self._assert_rejected(lambda p: p["scene_items"].append({**shape, "injected": True}))
+        self._assert_rejected(
+            lambda p: p["scene_items"].append({**shape, "fill": "red"})
+        )
+        self._assert_rejected(
+            lambda p: p["scene_items"].append(
+                {**shape, "fill": "#123456", "fill_alpha": 1.1}
+            )
+        )
+        self._assert_rejected(
+            lambda p: p["scene_items"].append({**shape, "injected": True})
+        )
 
     def test_rejects_invalid_orbital_kind(self) -> None:
-        self._assert_rejected(lambda p: p["scene_items"][3].__setitem__("orbital_kind", "f"))
+        self._assert_rejected(
+            lambda p: p["scene_items"][3].__setitem__("orbital_kind", "f")
+        )
 
     def test_rejects_orbital_extra_key(self) -> None:
-        self._assert_rejected(lambda p: p["scene_items"][3].__setitem__("injected", True))
+        self._assert_rejected(
+            lambda p: p["scene_items"][3].__setitem__("injected", True)
+        )
 
     def test_rejects_non_list_sections(self) -> None:
         self._assert_rejected(lambda p: p.__setitem__("atoms", {}))
@@ -322,7 +405,9 @@ class ClipboardPayloadValidationTest(unittest.TestCase):
         # JSON arrays/objects where a string is expected must be rejected via
         # the normal False path, not crash the membership test with TypeError.
         self._assert_rejected(lambda p: p["bonds"][0].__setitem__("style", ["single"]))
-        self._assert_rejected(lambda p: p["scene_items"][0].__setitem__("kind", ["note"]))
+        self._assert_rejected(
+            lambda p: p["scene_items"][0].__setitem__("kind", ["note"])
+        )
         self._assert_rejected(lambda p: p["marks"][0].__setitem__("mark_kind", {}))
 
 

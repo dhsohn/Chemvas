@@ -13,7 +13,7 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.main_window_icon_pixmap_factory import MainWindowIconPixmapFactory
+    from chemvas.ui.main_window_icon_pixmap_factory import MainWindowIconPixmapFactory
 
 
 def _opaque_pixel_count(image) -> int:
@@ -25,7 +25,10 @@ def _opaque_pixel_count(image) -> int:
     )
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for main window icon pixmap factory tests")
+@unittest.skipUnless(
+    QApplication is not None,
+    "PyQt6 is required for main window icon pixmap factory tests",
+)
 class MainWindowIconPixmapFactoryTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -33,7 +36,9 @@ class MainWindowIconPixmapFactoryTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def test_make_icon_uses_default_size_and_hidpi_backing_store(self) -> None:
-        factory = MainWindowIconPixmapFactory(default_size=30, device_pixel_ratio=lambda: 2.0)
+        factory = MainWindowIconPixmapFactory(
+            default_size=30, device_pixel_ratio=lambda: 2.0
+        )
 
         def draw(painter: QPainter) -> None:
             painter.setPen(Qt.GlobalColor.black)
@@ -42,19 +47,27 @@ class MainWindowIconPixmapFactoryTest(unittest.TestCase):
         icon = factory.make_icon(draw)
         pixmap = icon.pixmap(30, 30)
 
-        self.assertIn((60, 60), [(size.width(), size.height()) for size in icon.availableSizes()])
+        self.assertIn(
+            (60, 60), [(size.width(), size.height()) for size in icon.availableSizes()]
+        )
         self.assertFalse(pixmap.isNull())
         self.assertGreater(_opaque_pixel_count(pixmap.toImage()), 0)
 
     def test_make_icon_accepts_size_override(self) -> None:
-        factory = MainWindowIconPixmapFactory(default_size=30, device_pixel_ratio=lambda: 1.0)
+        factory = MainWindowIconPixmapFactory(
+            default_size=30, device_pixel_ratio=lambda: 1.0
+        )
 
         icon = factory.make_icon(lambda painter: painter.drawPoint(5, 5), size=18)
 
-        self.assertIn((18, 18), [(size.width(), size.height()) for size in icon.availableSizes()])
+        self.assertIn(
+            (18, 18), [(size.width(), size.height()) for size in icon.availableSizes()]
+        )
 
     def test_make_sized_icon_renders_a_crisp_pixmap_per_size(self) -> None:
-        factory = MainWindowIconPixmapFactory(default_size=30, device_pixel_ratio=lambda: 1.0)
+        factory = MainWindowIconPixmapFactory(
+            default_size=30, device_pixel_ratio=lambda: 1.0
+        )
         seen_sizes: list[int] = []
 
         def draw(painter: QPainter, size: int) -> None:
@@ -70,7 +83,9 @@ class MainWindowIconPixmapFactoryTest(unittest.TestCase):
         self.assertEqual(sorted(seen_sizes), [16, 18, 30])
 
     def test_make_icon_registers_visible_checked_and_active_states(self) -> None:
-        factory = MainWindowIconPixmapFactory(default_size=30, device_pixel_ratio=lambda: 1.0)
+        factory = MainWindowIconPixmapFactory(
+            default_size=30, device_pixel_ratio=lambda: 1.0
+        )
 
         def draw(painter: QPainter) -> None:
             painter.setPen(Qt.GlobalColor.black)
