@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 
-from ui.selection_rotation_geometry import (
+from chemvas.features.selection import (
     axis_rotated_coords,
     center_for_coords_3d,
     dominant_axis_angle_from_drag,
@@ -31,7 +31,10 @@ def test_normalize_and_center_for_coords_3d_cover_empty_and_valid_inputs() -> No
 
 
 def test_fragment_plane_normal_handles_valid_degenerate_and_collinear_points() -> None:
-    assert fragment_plane_normal_for({1, 2}, {1: (0.0, 0.0, 0.0), 2: (1.0, 0.0, 0.0)}) is None
+    assert (
+        fragment_plane_normal_for({1, 2}, {1: (0.0, 0.0, 0.0), 2: (1.0, 0.0, 0.0)})
+        is None
+    )
     assert fragment_plane_normal_for(
         {1, 2, 3},
         {
@@ -50,10 +53,14 @@ def test_fragment_plane_normal_handles_valid_degenerate_and_collinear_points() -
         },
     )
     assert normal is not None
-    assert math.isclose(math.sqrt(sum(component * component for component in normal)), 1.0)
+    assert math.isclose(
+        math.sqrt(sum(component * component for component in normal)), 1.0
+    )
 
 
-def test_flatten_coords_to_plane_projects_known_atoms_and_preserves_missing_atoms() -> None:
+def test_flatten_coords_to_plane_projects_known_atoms_and_preserves_missing_atoms() -> (
+    None
+):
     flattened = flatten_coords_to_plane(
         {
             1: (0.0, 0.0, 2.0),
@@ -73,7 +80,10 @@ def test_flatten_coords_to_plane_projects_known_atoms_and_preserves_missing_atom
 
 def test_rotate_point_around_axis_handles_zero_axis_and_right_angle_rotation() -> None:
     point = (2.0, 3.0, 4.0)
-    assert rotate_point_around_axis(point, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), math.pi) == point
+    assert (
+        rotate_point_around_axis(point, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), math.pi)
+        == point
+    )
 
     rotated = rotate_point_around_axis(
         (1.0, 0.0, 0.0),
@@ -118,8 +128,17 @@ def test_rigid_rotated_coords_rotates_known_atoms_and_skips_missing_coords() -> 
     assert math.isclose(rotated[2][2], 2.0 * sin_x)
 
 
-def test_axis_rotated_coords_uses_injected_rotation_callback_and_skips_missing_coords() -> None:
-    calls: list[tuple[tuple[float, float, float], tuple[float, float, float], tuple[float, float, float], float]] = []
+def test_axis_rotated_coords_uses_injected_rotation_callback_and_skips_missing_coords() -> (
+    None
+):
+    calls: list[
+        tuple[
+            tuple[float, float, float],
+            tuple[float, float, float],
+            tuple[float, float, float],
+            float,
+        ]
+    ] = []
 
     def rotate(point, axis_start, axis_end, angle):
         calls.append((point, axis_start, axis_end, angle))

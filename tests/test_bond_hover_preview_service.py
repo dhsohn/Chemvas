@@ -2,36 +2,42 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from core.model import Atom, Bond
+from chemvas.domain.document import Atom, Bond
+from chemvas.ui.bond_hover_preview_service import BondHoverPreviewService
+from chemvas.ui.canvas_hover_state import HoverPreviewState
+from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
 from PyQt6.QtCore import QPointF
-from ui.bond_hover_preview_service import BondHoverPreviewService
-from ui.canvas_hover_state import HoverPreviewState
-from ui.canvas_tool_settings_state import CanvasToolSettingsState
 
 
 class _PreviewMocks:
     def __init__(self, *, endpoint: QPointF | None = None) -> None:
         self.add_hover_preview_items = mock.Mock()
         self.build_bond_preview_items = mock.Mock(return_value=["preview"])
-        self.bond_hover_endpoint = mock.Mock(return_value=endpoint or QPointF(17.0, 18.0))
+        self.bond_hover_endpoint = mock.Mock(
+            return_value=endpoint or QPointF(17.0, 18.0)
+        )
 
 
 class BondHoverPreviewServiceTest(unittest.TestCase):
     def setUp(self) -> None:
         build_patcher = mock.patch(
-            "ui.bond_hover_preview_service.build_bond_preview_items_for",
-            side_effect=lambda canvas, start, end, *atom_ids: canvas.preview_mocks.build_bond_preview_items(
-                start,
-                end,
-                *atom_ids,
+            "chemvas.ui.bond_hover_preview_service.build_bond_preview_items_for",
+            side_effect=lambda canvas, start, end, *atom_ids: (
+                canvas.preview_mocks.build_bond_preview_items(
+                    start,
+                    end,
+                    *atom_ids,
+                )
             ),
         )
         endpoint_patcher = mock.patch(
-            "ui.bond_hover_preview_service.bond_hover_endpoint_for",
-            side_effect=lambda canvas, start, pos, atom_id: canvas.preview_mocks.bond_hover_endpoint(
-                start,
-                pos,
-                atom_id,
+            "chemvas.ui.bond_hover_preview_service.bond_hover_endpoint_for",
+            side_effect=lambda canvas, start, pos, atom_id: (
+                canvas.preview_mocks.bond_hover_endpoint(
+                    start,
+                    pos,
+                    atom_id,
+                )
             ),
         )
         build_patcher.start()
@@ -52,11 +58,15 @@ class BondHoverPreviewServiceTest(unittest.TestCase):
             model=SimpleNamespace(atoms=atoms or {}),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
             hover_preview_state=HoverPreviewState(),
-            tool_settings_state=CanvasToolSettingsState(active_bond_style=active_bond_style),
+            tool_settings_state=CanvasToolSettingsState(
+                active_bond_style=active_bond_style
+            ),
             preview_mocks=preview_mocks,
             services=SimpleNamespace(
                 tools=SimpleNamespace(active=SimpleNamespace(name=active_tool)),
-                hover_scene_service=SimpleNamespace(add_hover_preview_items=preview_mocks.add_hover_preview_items),
+                hover_scene_service=SimpleNamespace(
+                    add_hover_preview_items=preview_mocks.add_hover_preview_items
+                ),
             ),
         )
 
@@ -86,7 +96,9 @@ class BondHoverPreviewServiceTest(unittest.TestCase):
 
         self.assertEqual(preview_mocks.add_hover_preview_items.call_count, 3)
 
-    def test_add_bond_style_hover_preview_applies_for_supported_styles_only(self) -> None:
+    def test_add_bond_style_hover_preview_applies_for_supported_styles_only(
+        self,
+    ) -> None:
         preview_mocks = _PreviewMocks()
         canvas = self._make_canvas(
             atoms={1: Atom("C", 10.0, 20.0), 2: Atom("C", 30.0, 20.0)},
@@ -121,14 +133,20 @@ class BondHoverPreviewServiceTest(unittest.TestCase):
             skip_mocks.build_bond_preview_items.assert_not_called()
             skip_mocks.add_hover_preview_items.assert_not_called()
 
-    def test_add_bond_tool_hover_preview_uses_hover_endpoint_and_skips_invalid_inputs(self) -> None:
+    def test_add_bond_tool_hover_preview_uses_hover_endpoint_and_skips_invalid_inputs(
+        self,
+    ) -> None:
         preview_mocks = _PreviewMocks()
-        canvas = self._make_canvas(atoms={1: Atom("C", 10.0, 20.0)}, preview_mocks=preview_mocks)
+        canvas = self._make_canvas(
+            atoms={1: Atom("C", 10.0, 20.0)}, preview_mocks=preview_mocks
+        )
         service = self._service_for(canvas)
 
         service.add_bond_tool_hover_preview(1, QPointF(40.0, 41.0))
 
-        preview_mocks.bond_hover_endpoint.assert_called_once_with(QPointF(10.0, 20.0), QPointF(40.0, 41.0), 1)
+        preview_mocks.bond_hover_endpoint.assert_called_once_with(
+            QPointF(10.0, 20.0), QPointF(40.0, 41.0), 1
+        )
         preview_mocks.build_bond_preview_items.assert_called_once_with(
             QPointF(10.0, 20.0),
             QPointF(17.0, 18.0),
@@ -138,8 +156,12 @@ class BondHoverPreviewServiceTest(unittest.TestCase):
         preview_mocks.add_hover_preview_items.assert_called_once_with(["preview"])
 
         missing_atom_mocks = _PreviewMocks()
-        missing_atom_canvas = self._make_canvas(atoms={}, preview_mocks=missing_atom_mocks)
-        self._service_for(missing_atom_canvas).add_bond_tool_hover_preview(1, QPointF(1.0, 2.0))
+        missing_atom_canvas = self._make_canvas(
+            atoms={}, preview_mocks=missing_atom_mocks
+        )
+        self._service_for(missing_atom_canvas).add_bond_tool_hover_preview(
+            1, QPointF(1.0, 2.0)
+        )
         missing_atom_mocks.build_bond_preview_items.assert_not_called()
 
         nonbond_mocks = _PreviewMocks()
@@ -148,7 +170,9 @@ class BondHoverPreviewServiceTest(unittest.TestCase):
             active_tool="select",
             preview_mocks=nonbond_mocks,
         )
-        self._service_for(nonbond_canvas).add_bond_tool_hover_preview(1, QPointF(1.0, 2.0))
+        self._service_for(nonbond_canvas).add_bond_tool_hover_preview(
+            1, QPointF(1.0, 2.0)
+        )
         nonbond_mocks.build_bond_preview_items.assert_not_called()
 
     def test_add_free_bond_hover_preview_uses_default_horizontal_segment(self) -> None:
@@ -157,7 +181,9 @@ class BondHoverPreviewServiceTest(unittest.TestCase):
 
         self._service_for(canvas).add_free_bond_hover_preview(QPointF(5.0, 6.0))
 
-        preview_mocks.build_bond_preview_items.assert_called_once_with(QPointF(5.0, 6.0), QPointF(25.0, 6.0))
+        preview_mocks.build_bond_preview_items.assert_called_once_with(
+            QPointF(5.0, 6.0), QPointF(25.0, 6.0)
+        )
         preview_mocks.add_hover_preview_items.assert_called_once_with(["preview"])
 
 

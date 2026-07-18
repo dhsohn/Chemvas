@@ -13,22 +13,28 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from core.document_state import _validate_note_states
-    from PyQt6.QtGui import QTextCursor
-    from ui.canvas_note_controller import CanvasNoteController, _EditingNoteSnapshot
-    from ui.canvas_scene_items_state import (
+    from chemvas.domain.document.state import _validate_note_states
+    from chemvas.ui.canvas_note_controller import (
+        CanvasNoteController,
+        _EditingNoteSnapshot,
+    )
+    from chemvas.ui.canvas_scene_items_state import (
         CanvasSceneItemsState,
         selected_notes_for,
         set_selected_notes_for,
     )
-    from ui.canvas_text_style_state import CanvasTextStyleState, set_text_style_for
-    from ui.history_commands import UpdateSceneItemCommand
-    from ui.note_item import NoteItem
-    from ui.note_item_access import committed_note_text_for
-    from ui.scene_item_restore import create_note_item_from_state
-    from ui.scene_item_state_serialization import note_state_dict
-    from ui.selection_service_bundle import build_selection_services
-    from ui.selection_style_state import SelectionStyleState
+    from chemvas.ui.canvas_text_style_state import (
+        CanvasTextStyleState,
+        set_text_style_for,
+    )
+    from chemvas.ui.history_commands import UpdateSceneItemCommand
+    from chemvas.ui.note_item import NoteItem
+    from chemvas.ui.note_item_access import committed_note_text_for
+    from chemvas.ui.scene_item_restore import create_note_item_from_state
+    from chemvas.ui.scene_item_state_serialization import note_state_dict
+    from chemvas.ui.selection_service_bundle import build_selection_services
+    from chemvas.ui.selection_style_state import SelectionStyleState
+    from PyQt6.QtGui import QTextCursor
 
 
 def _history_service(push=None):
@@ -46,7 +52,9 @@ def _attach_history_service(canvas):
 
 
 def _note_controller(canvas, **kwargs) -> CanvasNoteController:
-    history_service = getattr(getattr(canvas, "services", None), "history_service", None)
+    history_service = getattr(
+        getattr(canvas, "services", None), "history_service", None
+    )
     return CanvasNoteController(canvas, history_service=history_service, **kwargs)
 
 
@@ -55,10 +63,14 @@ def _selection_controller_for(canvas):
         expand_connected_atoms=mock.Mock(return_value=set()),
         connected_components=lambda atom_ids: [set(atom_ids)] if atom_ids else [],
     )
-    return build_selection_services(canvas, graph_service=graph_service).selection_controller
+    return build_selection_services(
+        canvas, graph_service=graph_service
+    ).selection_controller
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for note controller tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for note controller tests"
+)
 class CanvasNoteControllerUnitTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -80,7 +92,11 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
         canvas = SimpleNamespace(
             selected_notes=selected_notes,
-            services=SimpleNamespace(selection_controller=SimpleNamespace(select_note=mock.Mock(side_effect=_select_note))),
+            services=SimpleNamespace(
+                selection_controller=SimpleNamespace(
+                    select_note=mock.Mock(side_effect=_select_note)
+                )
+            ),
             scene=lambda: scene,
             setFocus=mock.Mock(),
         )
@@ -89,11 +105,15 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
         controller.begin_note_edit(item)
 
-        canvas.services.selection_controller.select_note.assert_called_once_with(item, additive=False)
+        canvas.services.selection_controller.select_note.assert_called_once_with(
+            item, additive=False
+        )
         self.assertEqual(selected_notes, [item])
         canvas.setFocus.assert_called_once_with(Qt.FocusReason.MouseFocusReason)
         self.assertIs(scene.focusItem(), item)
-        self.assertTrue(item.textInteractionFlags() & Qt.TextInteractionFlag.TextEditorInteraction)
+        self.assertTrue(
+            item.textInteractionFlags() & Qt.TextInteractionFlag.TextEditorInteraction
+        )
         self.assertTrue(bool(item.flags() & item.GraphicsItemFlag.ItemIsFocusable))
         self.assertTrue(item.textCursor().hasSelection())
 
@@ -184,7 +204,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         self.assertIs(created.scene(), scene)
         self.assertEqual(scene._chemvas_scene_rect_tracker.depth, 0)
 
-    def test_create_text_note_removes_attached_item_if_style_application_raises(self) -> None:
+    def test_create_text_note_removes_attached_item_if_style_application_raises(
+        self,
+    ) -> None:
         scene = QGraphicsScene()
         pos = QPointF(3.0, 4.0)
         removed = []
@@ -210,7 +232,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         )
         _attach_history_service(canvas)
         controller = _note_controller(canvas)
-        controller.apply_note_style = mock.Mock(side_effect=RuntimeError("style failed"))
+        controller.apply_note_style = mock.Mock(
+            side_effect=RuntimeError("style failed")
+        )
 
         with self.assertRaisesRegex(RuntimeError, "style failed"):
             controller.create_text_note(pos, "Mechanism")
@@ -347,11 +371,13 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "ui.history_commands._scene_items_snapshot",
-                side_effect=AssertionError("bulk note creation scanned the whole scene"),
+                "chemvas.ui.history_commands._scene_items_snapshot",
+                side_effect=AssertionError(
+                    "bulk note creation scanned the whole scene"
+                ),
             ) as scene_scan,
             mock.patch(
-                "ui.canvas_note_controller._scene_runtime_snapshot",
+                "chemvas.ui.canvas_note_controller._scene_runtime_snapshot",
                 side_effect=AssertionError("note creation captured full runtime"),
             ) as runtime_scan,
         ):
@@ -365,7 +391,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         runtime_scan.assert_not_called()
         self.assertEqual(len(note_items), 100)
 
-    def test_far_note_system_exit_restores_auto_scene_rect_and_future_growth(self) -> None:
+    def test_far_note_system_exit_restores_auto_scene_rect_and_future_growth(
+        self,
+    ) -> None:
         scene = QGraphicsScene()
         scene.addRect(0.0, 0.0, 10.0, 10.0)
         original_rect = scene.sceneRect()
@@ -418,7 +446,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         controller = CanvasNoteController(canvas)
 
         with mock.patch(
-            "ui.canvas_note_controller.committed_note_text_for",
+            "chemvas.ui.canvas_note_controller.committed_note_text_for",
             side_effect=SystemExit("note metadata capture terminated"),
         ):
             with self.assertRaisesRegex(
@@ -435,7 +463,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
     def _editing_note_controller(self, text: str):
         scene = QGraphicsScene()
-        canvas = SimpleNamespace(scene=lambda: scene, text_style_state=CanvasTextStyleState())
+        canvas = SimpleNamespace(
+            scene=lambda: scene, text_style_state=CanvasTextStyleState()
+        )
         note = NoteItem(canvas)
         note.setData(0, "note")
         note.setPlainText(text)
@@ -482,7 +512,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         self.assertIn("Courier New", html)
         cursor = note.textCursor()
         cursor.select(QTextCursor.SelectionType.Document)
-        self.assertEqual(cursor.blockFormat().alignment(), Qt.AlignmentFlag.AlignHCenter)
+        self.assertEqual(
+            cursor.blockFormat().alignment(), Qt.AlignmentFlag.AlignHCenter
+        )
 
     def test_set_alignment_on_selected_note_records_history(self) -> None:
         scene = QGraphicsScene()
@@ -507,7 +539,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         self.assertEqual(push_command.call_count, 1)
         self.assertIsInstance(push_command.call_args.args[0], UpdateSceneItemCommand)
 
-    def test_selected_note_batch_serializes_every_item_before_first_mutation(self) -> None:
+    def test_selected_note_batch_serializes_every_item_before_first_mutation(
+        self,
+    ) -> None:
         scene = QGraphicsScene()
         canvas = SimpleNamespace(scene=lambda: scene)
         first = NoteItem(canvas)
@@ -531,10 +565,12 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             return real_state(item)
 
         with mock.patch(
-            "ui.canvas_note_controller.note_state_dict_for",
+            "chemvas.ui.canvas_note_controller.note_state_dict_for",
             side_effect=fail_second_snapshot,
         ):
-            with self.assertRaisesRegex(KeyboardInterrupt, "second snapshot interrupted"):
+            with self.assertRaisesRegex(
+                KeyboardInterrupt, "second snapshot interrupted"
+            ):
                 controller._apply_to_target_notes(mutate)
 
         mutate.assert_not_called()
@@ -542,7 +578,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         self.assertEqual(second.toPlainText(), "second")
         history.push.assert_not_called()
 
-    def test_selected_note_batch_metadata_capture_failure_precedes_all_mutations(self) -> None:
+    def test_selected_note_batch_metadata_capture_failure_precedes_all_mutations(
+        self,
+    ) -> None:
         scene = QGraphicsScene()
         canvas = SimpleNamespace(scene=lambda: scene)
         first = NoteItem(canvas)
@@ -565,7 +603,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             return ""
 
         with mock.patch(
-            "ui.canvas_note_controller.committed_note_html_for",
+            "chemvas.ui.canvas_note_controller.committed_note_html_for",
             side_effect=fail_second_metadata,
         ):
             with self.assertRaisesRegex(SystemExit, "metadata capture terminated"):
@@ -602,10 +640,12 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             item.setHtml(state["html"])
 
         with mock.patch(
-            "ui.history_commands._apply_scene_item_state",
+            "chemvas.ui.history_commands._apply_scene_item_state",
             side_effect=apply_state,
         ):
-            with self.assertRaisesRegex(KeyboardInterrupt, "first mutation interrupted"):
+            with self.assertRaisesRegex(
+                KeyboardInterrupt, "first mutation interrupted"
+            ):
                 controller._apply_to_target_notes(mutate_then_interrupt)
 
         self.assertEqual(first.toPlainText(), "first")
@@ -667,10 +707,12 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "ui.history_commands._apply_scene_item_state",
+                "chemvas.ui.history_commands._apply_scene_item_state",
                 side_effect=apply_state,
             ),
-            mock.patch("ui.history_commands.refresh_selection_outline_for_canvas"),
+            mock.patch(
+                "chemvas.ui.history_commands.refresh_selection_outline_for_canvas"
+            ),
         ):
             with self.assertRaises(BrokenSystemExit) as caught:
                 controller._apply_to_target_notes(mutate_then_exit)
@@ -680,9 +722,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         self.assertEqual(second.toPlainText(), "second")
 
         interaction_setter.fail = False
-        controller._apply_to_target_notes(
-            lambda item: item.setPlainText("retry")
-        )
+        controller._apply_to_target_notes(lambda item: item.setPlainText("retry"))
         self.assertEqual(first.toPlainText(), "retry")
         self.assertEqual(second.toPlainText(), "retry")
 
@@ -734,10 +774,12 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "ui.history_commands._apply_scene_item_state",
+                "chemvas.ui.history_commands._apply_scene_item_state",
                 side_effect=apply_state,
             ),
-            mock.patch("ui.history_commands.refresh_selection_outline_for_canvas"),
+            mock.patch(
+                "chemvas.ui.history_commands.refresh_selection_outline_for_canvas"
+            ),
         ):
             with self.assertRaisesRegex(SystemExit, "batch history terminated"):
                 controller.set_text_alignment("right")
@@ -760,15 +802,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             def setSceneRect(self, *args) -> None:
                 rect = args[0] if len(args) == 1 else None
                 super().setSceneRect(*args)
-                if (
-                    rect is not None
-                    and rect.isNull()
-                    and self.fail_null_restores
-                ):
+                if rect is not None and rect.isNull() and self.fail_null_restores:
                     self.fail_null_restores -= 1
-                    raise SystemExit(
-                        "note scene rect restore failed after mutation"
-                    )
+                    raise SystemExit("note scene rect restore failed after mutation")
 
         scene = FailOnceAutomaticRestoreScene()
         scene.addRect(0.0, 0.0, 10.0, 10.0)
@@ -818,11 +854,11 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "ui.history_commands._apply_scene_item_state",
+                "chemvas.ui.history_commands._apply_scene_item_state",
                 side_effect=apply_state,
             ),
             mock.patch(
-                "ui.history_commands.refresh_selection_outline_for_canvas"
+                "chemvas.ui.history_commands.refresh_selection_outline_for_canvas"
             ),
         ):
             with self.assertRaises(KeyboardInterrupt) as raised:
@@ -851,9 +887,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             history_state.redo_stack.clear()
 
         history.push = append_successfully
-        controller._apply_to_target_notes(
-            lambda item: item.setPos(30_000.0, 0.0)
-        )
+        controller._apply_to_target_notes(lambda item: item.setPos(30_000.0, 0.0))
         self.assertGreater(scene.sceneRect().right(), 30_000.0)
         self.assertTrue(scene._chemvas_scene_rect_automatic)
         self.assertEqual(scene._chemvas_scene_rect_tracker.depth, 0)
@@ -949,10 +983,14 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "ui.history_commands._scene_items_snapshot",
-                side_effect=AssertionError("editing format scanned unrelated scene items"),
+                "chemvas.ui.history_commands._scene_items_snapshot",
+                side_effect=AssertionError(
+                    "editing format scanned unrelated scene items"
+                ),
             ) as scene_scan,
-            mock.patch.object(document, "blockSignals", side_effect=block_once_then_exit),
+            mock.patch.object(
+                document, "blockSignals", side_effect=block_once_then_exit
+            ),
         ):
             with self.assertRaisesRegex(KeyboardInterrupt, "box refresh interrupted"):
                 controller.set_text_alignment("right")
@@ -1170,7 +1208,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         mutate = mock.Mock()
 
         with mock.patch(
-            "ui.canvas_note_controller.update_note_selection_box_for"
+            "chemvas.ui.canvas_note_controller.update_note_selection_box_for"
         ) as update_selection_box:
             with self.assertRaises(AttributeError):
                 controller._apply_to_target_notes(mutate)
@@ -1198,7 +1236,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
     def test_format_methods_noop_when_no_note_is_focused(self) -> None:
         scene = QGraphicsScene()
-        canvas = SimpleNamespace(scene=lambda: scene, text_style_state=CanvasTextStyleState())
+        canvas = SimpleNamespace(
+            scene=lambda: scene, text_style_state=CanvasTextStyleState()
+        )
         controller = CanvasNoteController(canvas)
         # No focused note -> should not raise.
         controller.toggle_text_bold()
@@ -1221,7 +1261,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         self.assertEqual(restored.toPlainText(), "2")
         self.assertIn("vertical-align:super", restored.toHtml())
 
-    def test_apply_text_style_to_selected_and_update_text_note_refresh_note_box(self) -> None:
+    def test_apply_text_style_to_selected_and_update_text_note_refresh_note_box(
+        self,
+    ) -> None:
         scene = QGraphicsScene()
         item = QGraphicsTextItem("Mechanism")
         scene.addItem(item)
@@ -1301,7 +1343,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         scene = QGraphicsScene()
         canvas = SimpleNamespace(
             scene=lambda: scene,
-            text_style_state=CanvasTextStyleState(note_padding=6.0, note_border_enabled=True),
+            text_style_state=CanvasTextStyleState(
+                note_padding=6.0, note_border_enabled=True
+            ),
         )
         _attach_history_service(canvas)
         note = NoteItem(canvas)
@@ -1327,9 +1371,13 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
     def test_focus_out_ends_editing_and_clears_text_selection(self) -> None:
         scene = QGraphicsScene()
-        canvas = SimpleNamespace(scene=lambda: scene, text_style_state=CanvasTextStyleState())
+        canvas = SimpleNamespace(
+            scene=lambda: scene, text_style_state=CanvasTextStyleState()
+        )
         _attach_history_service(canvas)
-        canvas.services.selection_controller = SimpleNamespace(update_note_selection_box=mock.Mock())
+        canvas.services.selection_controller = SimpleNamespace(
+            update_note_selection_box=mock.Mock()
+        )
         set_selected_notes_for(canvas, [])
         note = NoteItem(canvas)
         note.setData(0, "note")
@@ -1346,7 +1394,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
         # The double-click highlight is dropped and the editor stops accepting input.
         self.assertFalse(note.textCursor().hasSelection())
-        self.assertEqual(note.textInteractionFlags(), Qt.TextInteractionFlag.NoTextInteraction)
+        self.assertEqual(
+            note.textInteractionFlags(), Qt.TextInteractionFlag.NoTextInteraction
+        )
 
     def test_selection_controller_note_box_helper_round_trips_visibility(self) -> None:
         scene = QGraphicsScene()
@@ -1390,8 +1440,12 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         canvas._note_state_dict = _note_state_dict
         canvas.push_command = canvas.commands.append
         canvas.services = SimpleNamespace(
-            scene_item_controller=SimpleNamespace(remove_scene_item=canvas.removed_items.append),
-            selection_controller=SimpleNamespace(update_note_selection_box=canvas.updated_boxes.append),
+            scene_item_controller=SimpleNamespace(
+                remove_scene_item=canvas.removed_items.append
+            ),
+            selection_controller=SimpleNamespace(
+                update_note_selection_box=canvas.updated_boxes.append
+            ),
         )
         _attach_history_service(canvas)
         controller = _note_controller(canvas)
@@ -1413,7 +1467,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         self.assertEqual(canvas.removed_items[-1], item)
         self.assertEqual(committed_note_text_for(item), "")
 
-    def test_handle_note_focus_out_rolls_back_new_note_when_add_history_push_fails(self) -> None:
+    def test_handle_note_focus_out_rolls_back_new_note_when_add_history_push_fails(
+        self,
+    ) -> None:
         canvas = SimpleNamespace(
             removed_items=[],
             updated_boxes=[],
@@ -1431,8 +1487,12 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
         canvas.push_command = fail_push
         canvas.services = SimpleNamespace(
-            scene_item_controller=SimpleNamespace(remove_scene_item=canvas.removed_items.append),
-            selection_controller=SimpleNamespace(update_note_selection_box=canvas.updated_boxes.append),
+            scene_item_controller=SimpleNamespace(
+                remove_scene_item=canvas.removed_items.append
+            ),
+            selection_controller=SimpleNamespace(
+                update_note_selection_box=canvas.updated_boxes.append
+            ),
         )
         _attach_history_service(canvas)
         controller = _note_controller(canvas)
@@ -1445,7 +1505,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         self.assertEqual(canvas.removed_items, [item])
         self.assertEqual(committed_note_text_for(item), "")
 
-    def test_handle_note_focus_out_restores_deleted_note_when_delete_history_push_fails(self) -> None:
+    def test_handle_note_focus_out_restores_deleted_note_when_delete_history_push_fails(
+        self,
+    ) -> None:
         canvas = SimpleNamespace(
             commands=[],
             removed_items=[],
@@ -1469,7 +1531,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
                 remove_scene_item=canvas.removed_items.append,
                 restore_scene_item=canvas.restored_items.append,
             ),
-            selection_controller=SimpleNamespace(update_note_selection_box=canvas.updated_boxes.append),
+            selection_controller=SimpleNamespace(
+                update_note_selection_box=canvas.updated_boxes.append
+            ),
         )
         history = _attach_history_service(canvas)
         controller = _note_controller(canvas)
@@ -1684,7 +1748,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         remove.assert_not_called()
         history.push.assert_not_called()
 
-    def test_delete_history_snapshot_system_exit_restores_removed_note_and_selection(self) -> None:
+    def test_delete_history_snapshot_system_exit_restores_removed_note_and_selection(
+        self,
+    ) -> None:
         scene = QGraphicsScene()
         note_items = []
         selected_notes = []
@@ -1735,7 +1801,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "ui.canvas_note_controller.HistoryStackSnapshot.capture",
+            "chemvas.ui.canvas_note_controller.HistoryAuthoritySnapshot.capture",
             side_effect=SystemExit("history snapshot terminated"),
         ):
             with self.assertRaisesRegex(SystemExit, "history snapshot terminated"):
@@ -1747,7 +1813,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         self.assertEqual(committed_note_text_for(item), "Mechanism")
         history.push.assert_not_called()
 
-    def test_handle_note_focus_out_routes_deselection_through_note_service(self) -> None:
+    def test_handle_note_focus_out_routes_deselection_through_note_service(
+        self,
+    ) -> None:
         canvas = SimpleNamespace(
             commands=[],
             removed_items=[],
@@ -1758,7 +1826,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         canvas.push_command = canvas.commands.append
         toggle_note_selection = mock.Mock()
         canvas.services = SimpleNamespace(
-            scene_item_controller=SimpleNamespace(remove_scene_item=canvas.removed_items.append),
+            scene_item_controller=SimpleNamespace(
+                remove_scene_item=canvas.removed_items.append
+            ),
             selection_controller=SimpleNamespace(
                 update_note_selection_box=canvas.updated_boxes.append,
                 toggle_note_selection=toggle_note_selection,
@@ -1779,7 +1849,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         toggle_note_selection.assert_called_once_with(item)
         self.assertIn(item, selected_notes_for(canvas))
 
-    def test_handle_note_focus_out_routes_emptied_note_deletion_through_note_service(self) -> None:
+    def test_handle_note_focus_out_routes_emptied_note_deletion_through_note_service(
+        self,
+    ) -> None:
         canvas = SimpleNamespace(
             commands=[],
             removed_items=[],
@@ -1791,7 +1863,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         toggle_note_selection = mock.Mock()
         update_selection_outline = mock.Mock()
         canvas.services = SimpleNamespace(
-            scene_item_controller=SimpleNamespace(remove_scene_item=canvas.removed_items.append),
+            scene_item_controller=SimpleNamespace(
+                remove_scene_item=canvas.removed_items.append
+            ),
             selection_controller=SimpleNamespace(
                 update_note_selection_box=canvas.updated_boxes.append,
                 toggle_note_selection=toggle_note_selection,
@@ -1816,7 +1890,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         # refreshed again after the note leaves the scene.
         update_selection_outline.assert_called_once_with()
 
-    def test_handle_note_focus_out_removes_empty_untracked_note_and_selection_box(self) -> None:
+    def test_handle_note_focus_out_removes_empty_untracked_note_and_selection_box(
+        self,
+    ) -> None:
         canvas = SimpleNamespace(
             commands=[],
             removed_items=[],
@@ -1826,8 +1902,12 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         set_selected_notes_for(canvas, [])
         canvas.push_command = canvas.commands.append
         canvas.services = SimpleNamespace(
-            scene_item_controller=SimpleNamespace(remove_scene_item=canvas.removed_items.append),
-            selection_controller=SimpleNamespace(update_note_selection_box=canvas.updated_boxes.append),
+            scene_item_controller=SimpleNamespace(
+                remove_scene_item=canvas.removed_items.append
+            ),
+            selection_controller=SimpleNamespace(
+                update_note_selection_box=canvas.updated_boxes.append
+            ),
         )
         _attach_history_service(canvas)
         controller = _note_controller(canvas)
@@ -1840,7 +1920,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         self.assertEqual(canvas.updated_boxes, [item])
         self.assertEqual(canvas.removed_items, [item])
 
-    def test_handle_note_focus_out_prefers_scene_item_controller_for_removal(self) -> None:
+    def test_handle_note_focus_out_prefers_scene_item_controller_for_removal(
+        self,
+    ) -> None:
         controller_remove = mock.Mock()
         canvas = SimpleNamespace(
             commands=[],
@@ -1848,12 +1930,16 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             updated_boxes=[],
             _note_state_dict=lambda item: {},
             services=SimpleNamespace(
-                scene_item_controller=SimpleNamespace(remove_scene_item=controller_remove),
+                scene_item_controller=SimpleNamespace(
+                    remove_scene_item=controller_remove
+                ),
             ),
         )
         set_selected_notes_for(canvas, [])
         canvas.push_command = canvas.commands.append
-        canvas.services.selection_controller = SimpleNamespace(update_note_selection_box=canvas.updated_boxes.append)
+        canvas.services.selection_controller = SimpleNamespace(
+            update_note_selection_box=canvas.updated_boxes.append
+        )
         _attach_history_service(canvas)
         controller = _note_controller(canvas)
         item = NoteItem(canvas)
@@ -1890,7 +1976,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         controller.update_note_box(item)
         self.assertEqual(box.pen().style(), Qt.PenStyle.NoPen)
 
-    def test_apply_note_style_prefers_line_height_type_enum_when_available(self) -> None:
+    def test_apply_note_style_prefers_line_height_type_enum_when_available(
+        self,
+    ) -> None:
         class FakeOption:
             def __init__(self) -> None:
                 self.alignment = None
@@ -1958,15 +2046,22 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         controller = _note_controller(canvas)
         controller.update_note_box = mock.Mock()
 
-        with mock.patch("ui.canvas_note_controller.QTextBlockFormat", FakeBlockFormat), mock.patch(
-            "ui.canvas_note_controller.QTextCursor",
-            FakeCursor,
+        with (
+            mock.patch(
+                "chemvas.ui.canvas_note_controller.QTextBlockFormat", FakeBlockFormat
+            ),
+            mock.patch(
+                "chemvas.ui.canvas_note_controller.QTextCursor",
+                FakeCursor,
+            ),
         ):
             controller.apply_note_style(item)
 
         self.assertEqual(document.option.alignment, Qt.AlignmentFlag.AlignHCenter)
         self.assertIs(document.saved_option, document.option)
-        self.assertEqual(FakeCursor.last_instance.selection, FakeCursor.SelectionType.Document)
+        self.assertEqual(
+            FakeCursor.last_instance.selection, FakeCursor.SelectionType.Document
+        )
         self.assertEqual(
             FakeCursor.last_instance.block_format.height,
             (125, FakeBlockFormat.LineHeightType.ProportionalHeight),

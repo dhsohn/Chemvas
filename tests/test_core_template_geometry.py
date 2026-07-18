@@ -1,7 +1,7 @@
 import math
 import unittest
 
-from core.template_geometry import (
+from chemvas.core.template_geometry import (
     cyclohexane_boat_points,
     cyclohexane_chair_points,
     place_template_on_bond,
@@ -32,7 +32,9 @@ class TemplateGeometryTest(unittest.TestCase):
 
     def test_regular_ring_radius_matches_polygon_geometry(self) -> None:
         self.assertAlmostEqual(regular_ring_radius(6, 14.0), 14.0)
-        self.assertAlmostEqual(regular_ring_radius(5, 12.0), 12.0 / (2.0 * math.sin(math.pi / 5)))
+        self.assertAlmostEqual(
+            regular_ring_radius(5, 12.0), 12.0 / (2.0 * math.sin(math.pi / 5))
+        )
 
     def test_regular_ring_radius_falls_back_for_invalid_sizes(self) -> None:
         self.assertEqual(regular_ring_radius(0, 9.5), 9.5)
@@ -82,7 +84,9 @@ class TemplateGeometryTest(unittest.TestCase):
         )
 
     def test_scale_points_to_bond_length_handles_degenerate_input(self) -> None:
-        self.assertEqual(scale_points_to_bond_length([(1.0, 1.0)], (0.0, 0.0), 5.0), [(1.0, 1.0)])
+        self.assertEqual(
+            scale_points_to_bond_length([(1.0, 1.0)], (0.0, 0.0), 5.0), [(1.0, 1.0)]
+        )
         self.assertEqual(
             scale_points_to_bond_length([(1.0, 1.0), (1.0, 1.0)], (0.0, 0.0), 5.0),
             [(1.0, 1.0), (1.0, 1.0)],
@@ -107,7 +111,11 @@ class TemplateGeometryTest(unittest.TestCase):
             ],
         )
         for index in range(len(points)):
-            self.assertAlmostEqual(_distance(points[index], points[(index + 1) % len(points)]), 10.0, places=6)
+            self.assertAlmostEqual(
+                _distance(points[index], points[(index + 1) % len(points)]),
+                10.0,
+                places=6,
+            )
 
     def test_cyclohexane_chair_bounds_are_centered_on_requested_center(self) -> None:
         points = cyclohexane_chair_points((25.0, -4.0), 12.0)
@@ -144,7 +152,9 @@ class TemplateGeometryTest(unittest.TestCase):
         self.assertAlmostEqual(points[1][1], points[2][1], places=6)
         self.assertAlmostEqual(points[4][1], points[5][1], places=6)
 
-    def test_regular_ring_points_for_atom_uses_attach_point_as_first_vertex(self) -> None:
+    def test_regular_ring_points_for_atom_uses_attach_point_as_first_vertex(
+        self,
+    ) -> None:
         points = regular_ring_points_for_atom(6, (0.0, 0.0), [], 10.0)
 
         assert points is not None
@@ -158,9 +168,13 @@ class TemplateGeometryTest(unittest.TestCase):
         assert points is not None
         self.assertLess(sum(x for x, _ in points) / len(points), 0.0)
 
-    def test_regular_ring_points_for_atom_handles_invalid_and_balanced_neighbors(self) -> None:
+    def test_regular_ring_points_for_atom_handles_invalid_and_balanced_neighbors(
+        self,
+    ) -> None:
         self.assertIsNone(regular_ring_points_for_atom(2, (0.0, 0.0), [], 10.0))
-        points = regular_ring_points_for_atom(6, (0.0, 0.0), [(10.0, 0.0), (-10.0, 0.0), (0.0, 0.0)], 10.0)
+        points = regular_ring_points_for_atom(
+            6, (0.0, 0.0), [(10.0, 0.0), (-10.0, 0.0), (0.0, 0.0)], 10.0
+        )
 
         assert points is not None
         self.assertGreater(sum(y for _, y in points) / len(points), 0.0)
@@ -189,10 +203,16 @@ class TemplateGeometryTest(unittest.TestCase):
 
     def test_place_template_on_bond_rejects_degenerate_inputs(self) -> None:
         self.assertIsNone(place_template_on_bond([(0.0, 0.0)], (0.0, 0.0), (1.0, 0.0)))
-        self.assertIsNone(place_template_on_bond([(0.0, 0.0), (0.0, 0.0)], (0.0, 0.0), (1.0, 0.0)))
-        self.assertIsNone(place_template_on_bond([(0.0, 0.0), (1.0, 0.0)], (0.0, 0.0), (0.0, 0.0)))
+        self.assertIsNone(
+            place_template_on_bond([(0.0, 0.0), (0.0, 0.0)], (0.0, 0.0), (1.0, 0.0))
+        )
+        self.assertIsNone(
+            place_template_on_bond([(0.0, 0.0), (1.0, 0.0)], (0.0, 0.0), (0.0, 0.0))
+        )
 
-    def test_place_template_on_bond_uses_occupied_polygon_and_can_reject_both_sides(self) -> None:
+    def test_place_template_on_bond_uses_occupied_polygon_and_can_reject_both_sides(
+        self,
+    ) -> None:
         triangle = [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]
 
         mirrored = place_template_on_bond(
@@ -212,7 +232,9 @@ class TemplateGeometryTest(unittest.TestCase):
         )
         self.assertIsNone(rejected)
 
-    def test_place_template_on_bond_keeps_default_side_for_lower_occupied_polygon_and_short_polygon(self) -> None:
+    def test_place_template_on_bond_keeps_default_side_for_lower_occupied_polygon_and_short_polygon(
+        self,
+    ) -> None:
         triangle = [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]
 
         points = place_template_on_bond(
@@ -234,7 +256,9 @@ class TemplateGeometryTest(unittest.TestCase):
         assert short_polygon is not None
         self.assertGreater(short_polygon[2][1], 3.0)
 
-    def test_place_template_on_bond_keeps_default_side_when_center_hint_is_farther_from_mirror(self) -> None:
+    def test_place_template_on_bond_keeps_default_side_when_center_hint_is_farther_from_mirror(
+        self,
+    ) -> None:
         points = place_template_on_bond(
             [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)],
             (2.0, 3.0),
@@ -253,7 +277,9 @@ class TemplateGeometryTest(unittest.TestCase):
         self.assertAlmostEqual(_distance(points[0], points[1]), 10.0, places=6)
         self.assertAlmostEqual(_distance(points[1], points[2]), 10.0, places=6)
 
-    def test_regular_ring_points_for_bond_uses_center_hint_for_side_selection(self) -> None:
+    def test_regular_ring_points_for_bond_uses_center_hint_for_side_selection(
+        self,
+    ) -> None:
         points = regular_ring_points_for_bond(
             6,
             (0.0, 0.0),
@@ -264,7 +290,9 @@ class TemplateGeometryTest(unittest.TestCase):
         assert points is not None
         self.assertLess(sum(y for _, y in points) / len(points), 0.0)
 
-    def test_regular_ring_points_for_bond_rejects_invalid_input_and_uses_occupied_polygon(self) -> None:
+    def test_regular_ring_points_for_bond_rejects_invalid_input_and_uses_occupied_polygon(
+        self,
+    ) -> None:
         self.assertIsNone(regular_ring_points_for_bond(2, (0.0, 0.0), (10.0, 0.0)))
         self.assertIsNone(regular_ring_points_for_bond(6, (0.0, 0.0), (0.0, 0.0)))
 
@@ -282,11 +310,18 @@ class TemplateGeometryTest(unittest.TestCase):
                 6,
                 (0.0, 0.0),
                 (10.0, 0.0),
-                occupied_polygon=[(-1.0, -20.0), (11.0, -20.0), (11.0, 20.0), (-1.0, 20.0)],
+                occupied_polygon=[
+                    (-1.0, -20.0),
+                    (11.0, -20.0),
+                    (11.0, 20.0),
+                    (-1.0, 20.0),
+                ],
             )
         )
 
-    def test_regular_ring_points_for_bond_handles_lower_and_non_intersecting_occupied_polygons(self) -> None:
+    def test_regular_ring_points_for_bond_handles_lower_and_non_intersecting_occupied_polygons(
+        self,
+    ) -> None:
         lower_blocked = regular_ring_points_for_bond(
             6,
             (0.0, 0.0),

@@ -2,17 +2,19 @@ from __future__ import annotations
 
 import math
 
-from PyQt6.QtCore import QPointF
-from PyQt6.QtWidgets import QGraphicsLineItem
-from ui.bond_preview_geometry import (
+from chemvas.ui.bond_preview_geometry import (
     apply_plain_double_preview_variant,
     expanded_bold_segment,
     plain_double_preview_segments,
     trim_segment,
 )
+from PyQt6.QtCore import QPointF
+from PyQt6.QtWidgets import QGraphicsLineItem
 
 
-def test_bond_preview_geometry_uses_atom_to_atom_bold_segment_and_trims_segments() -> None:
+def test_bond_preview_geometry_uses_atom_to_atom_bold_segment_and_trims_segments() -> (
+    None
+):
     expanded = expanded_bold_segment(QPointF(0.0, 0.0), QPointF(10.0, 0.0), 20.0)
 
     assert math.isclose(expanded[0], 0.0)

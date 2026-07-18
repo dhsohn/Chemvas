@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import mock
 
-import ui.canvas_lifecycle as lifecycle
+import chemvas.ui.canvas_lifecycle as lifecycle
 
 
 class _FailingSignalBlocker:
@@ -19,10 +19,16 @@ class _FailingSignalBlocker:
             raise RuntimeError("signal block failed")
 
 
-def test_schedule_canvas_deletion_survives_each_best_effort_cleanup_failure(monkeypatch) -> None:
+def test_schedule_canvas_deletion_survives_each_best_effort_cleanup_failure(
+    monkeypatch,
+) -> None:
     for failure_stage in ("scene", "initial_block", "clear", "final_block"):
         blocker = _FailingSignalBlocker(
-            1 if failure_stage == "initial_block" else 2 if failure_stage == "final_block" else None
+            1
+            if failure_stage == "initial_block"
+            else 2
+            if failure_stage == "final_block"
+            else None
         )
         scene = SimpleNamespace(blockSignals=blocker)
         delete_later = mock.Mock()
@@ -34,7 +40,9 @@ def test_schedule_canvas_deletion_survives_each_best_effort_cleanup_failure(monk
 
         canvas = SimpleNamespace(scene=scene_for_canvas, deleteLater=delete_later)
         clear_scene = mock.Mock(
-            side_effect=RuntimeError("scene clear failed") if failure_stage == "clear" else None,
+            side_effect=RuntimeError("scene clear failed")
+            if failure_stage == "clear"
+            else None,
         )
         monkeypatch.setattr(lifecycle, "clear_scene_for", clear_scene)
 

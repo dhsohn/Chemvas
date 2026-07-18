@@ -1,6 +1,6 @@
 import unittest
 
-from ui.main_window_toolbar_logic import (
+from chemvas.ui.main_window_toolbar_logic import (
     arrow_preset_from_label,
     arrow_type_from_label,
     bond_style_from_label,
@@ -28,7 +28,13 @@ class MainWindowToolbarLogicTest(unittest.TestCase):
 
         self.assertEqual(
             calls,
-            [(6, "benzene"), (3, "regular"), (7, "regular"), (8, "regular"), (6, "chair")],
+            [
+                (6, "benzene"),
+                (3, "regular"),
+                (7, "regular"),
+                (8, "regular"),
+                (6, "chair"),
+            ],
         )
 
     def test_mapping_helpers_use_expected_defaults(self) -> None:
@@ -45,7 +51,9 @@ class MainWindowToolbarLogicTest(unittest.TestCase):
         self.assertEqual(tool_display_name("benzene"), "Ring")
         self.assertEqual(tool_display_name("mystery"), "Mystery")
 
-    def test_tool_action_key_for_canvas_state_handles_bond_mark_and_regular_tools(self) -> None:
+    def test_tool_action_key_for_canvas_state_handles_bond_mark_and_regular_tools(
+        self,
+    ) -> None:
         self.assertEqual(
             tool_action_key_for_canvas_state(
                 "bond",

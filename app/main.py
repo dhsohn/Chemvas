@@ -1,4 +1,4 @@
-from chemvas import main as _chemvas_main
+from chemvas.bootstrap import application as _chemvas_main
 
 IGNORED_STDERR_SUBSTRINGS = _chemvas_main.IGNORED_STDERR_SUBSTRINGS
 _filtered_stderr = _chemvas_main._filtered_stderr

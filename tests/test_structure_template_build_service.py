@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from unittest import mock
 
+from chemvas.ui.structure_fragment_build_service import StructureFragmentBuildActions
+from chemvas.ui.structure_template_build_service import StructureTemplateBuildService
 from PyQt6.QtCore import QPointF
-from ui.structure_fragment_build_service import StructureFragmentBuildActions
-from ui.structure_template_build_service import StructureTemplateBuildService
 
 
 class _FakeFragmentBuilder:
@@ -42,7 +42,9 @@ def _actions(*, run_recorded_build=None) -> StructureFragmentBuildActions:
 def test_template_build_service_passes_actions_to_fragment_builder() -> None:
     fragment_builder = _FakeFragmentBuilder()
     actions = _actions()
-    service = StructureTemplateBuildService(fragment_builder, actions_factory=lambda: actions)
+    service = StructureTemplateBuildService(
+        fragment_builder, actions_factory=lambda: actions
+    )
 
     service.add_regular_ring_template(6)
     service.add_hetero_ring_template(5, ["O", "C", "C", "C", "C"])
@@ -50,7 +52,11 @@ def test_template_build_service_passes_actions_to_fragment_builder() -> None:
 
     assert fragment_builder.calls == [
         ("add_regular_ring_template", (6, actions), {}),
-        ("add_hetero_ring_template", (5, ["O", "C", "C", "C", "C"], actions), {"bond_orders": None}),
+        (
+            "add_hetero_ring_template",
+            (5, ["O", "C", "C", "C", "C"], actions),
+            {"bond_orders": None},
+        ),
         ("add_phenyl", (actions,), {}),
     ]
 
@@ -59,7 +65,9 @@ def test_fused_heterocycle_templates_run_inside_recorded_build() -> None:
     fragment_builder = _FakeFragmentBuilder()
     run_recorded_build = mock.Mock(side_effect=lambda action: action())
     actions = _actions(run_recorded_build=run_recorded_build)
-    service = StructureTemplateBuildService(fragment_builder, actions_factory=lambda: actions)
+    service = StructureTemplateBuildService(
+        fragment_builder, actions_factory=lambda: actions
+    )
 
     service.add_indole()
 
@@ -84,7 +92,9 @@ def test_direct_fused_heterocycle_template_can_use_explicit_actions() -> None:
     explicit_actions = _actions()
     service = StructureTemplateBuildService(
         fragment_builder,
-        actions_factory=mock.Mock(side_effect=AssertionError("explicit actions should be used")),
+        actions_factory=mock.Mock(
+            side_effect=AssertionError("explicit actions should be used")
+        ),
     )
 
     service.add_fused_heterocycle_template(

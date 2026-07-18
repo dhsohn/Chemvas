@@ -3,11 +3,8 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from core.document_state import (
-    _validate_shape_states,
-    build_document_payload,
-    extract_document_state,
-)
+from chemvas.domain.document import build_document_payload, extract_document_state
+from chemvas.domain.document.state import _validate_shape_states
 
 try:
     from PyQt6.QtCore import QPointF, QRectF, Qt
@@ -19,13 +16,7 @@ except ModuleNotFoundError:
     QRectF = None
 
 if QApplication is not None:
-    from ui.handle_interaction_logic import (
-        resized_shape_rect,
-        shape_resize_handle_positions,
-    )
-    from ui.scene_item_restore import create_shape_item_from_state
-    from ui.scene_item_state import shape_state_dict
-    from ui.shape_geometry import (
+    from chemvas.features.annotations import (
         SHAPE_KINDS,
         STROKE_STYLES,
         normalized_shape_kind,
@@ -33,6 +24,12 @@ if QApplication is not None:
         pen_style_for_stroke,
         shape_path,
     )
+    from chemvas.features.selection import (
+        resized_shape_rect,
+        shape_resize_handle_positions,
+    )
+    from chemvas.ui.scene_item_restore import create_shape_item_from_state
+    from chemvas.ui.scene_item_state import shape_state_dict
 
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 required")
@@ -73,11 +70,17 @@ class ShapeSerializationTest(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def _shape_item(self, fill=None):
-        item = QGraphicsPathItem(shape_path(QRectF(10.0, 20.0, 60.0, 40.0), "rounded_rect"))
+        item = QGraphicsPathItem(
+            shape_path(QRectF(10.0, 20.0, 60.0, 40.0), "rounded_rect")
+        )
         item.setData(0, "shape")
         item.setData(
             1,
-            {"rect": QRectF(10.0, 20.0, 60.0, 40.0), "shape_kind": "rounded_rect", "stroke_style": "dashed"},
+            {
+                "rect": QRectF(10.0, 20.0, 60.0, 40.0),
+                "shape_kind": "rounded_rect",
+                "stroke_style": "dashed",
+            },
         )
         if fill is not None:
             item.setBrush(fill)
@@ -90,7 +93,10 @@ class ShapeSerializationTest(unittest.TestCase):
         self.assertEqual(state["kind"], "shape")
         self.assertEqual(state["shape_kind"], "rounded_rect")
         self.assertEqual(state["stroke_style"], "dashed")
-        self.assertEqual((state["left"], state["top"], state["right"], state["bottom"]), (10.0, 20.0, 70.0, 60.0))
+        self.assertEqual(
+            (state["left"], state["top"], state["right"], state["bottom"]),
+            (10.0, 20.0, 70.0, 60.0),
+        )
         self.assertNotIn("fill", state)
 
     def test_fill_is_serialized_only_when_visible(self) -> None:
@@ -102,7 +108,9 @@ class ShapeSerializationTest(unittest.TestCase):
         state = shape_state_dict(self._shape_item(QColor(33, 150, 243, 64)))
         built = create_shape_item_from_state(
             state,
-            build_shape_item=lambda rect, kind, stroke, fill: self._rebuild(rect, kind, stroke, fill),
+            build_shape_item=lambda rect, kind, stroke, fill: self._rebuild(
+                rect, kind, stroke, fill
+            ),
         )
         self.assertIsNotNone(built)
         self.assertEqual(built.data(1)["shape_kind"], "rounded_rect")
@@ -111,7 +119,9 @@ class ShapeSerializationTest(unittest.TestCase):
     def _rebuild(self, rect, kind, stroke, fill):
         item = QGraphicsPathItem(shape_path(rect, kind))
         item.setData(0, "shape")
-        item.setData(1, {"rect": QRectF(rect), "shape_kind": kind, "stroke_style": stroke})
+        item.setData(
+            1, {"rect": QRectF(rect), "shape_kind": kind, "stroke_style": stroke}
+        )
         item.setBrush(fill if fill is not None else QColor(0, 0, 0, 0))
         return item
 
@@ -126,21 +136,30 @@ class ShapeResizeTest(unittest.TestCase):
         self.assertEqual(positions["shape_n"], QPointF(50.0, 0.0))
 
     def test_corner_drag_moves_only_that_corner(self) -> None:
-        rect = resized_shape_rect(QRectF(0.0, 0.0, 60.0, 40.0), "shape_se", QPointF(100.0, 90.0))
+        rect = resized_shape_rect(
+            QRectF(0.0, 0.0, 60.0, 40.0), "shape_se", QPointF(100.0, 90.0)
+        )
         self.assertEqual(rect, QRectF(0.0, 0.0, 100.0, 90.0))
 
     def test_edge_drag_moves_only_that_edge(self) -> None:
-        rect = resized_shape_rect(QRectF(0.0, 0.0, 60.0, 40.0), "shape_n", QPointF(999.0, -20.0))
+        rect = resized_shape_rect(
+            QRectF(0.0, 0.0, 60.0, 40.0), "shape_n", QPointF(999.0, -20.0)
+        )
         self.assertEqual(rect, QRectF(0.0, -20.0, 60.0, 60.0))
 
     def test_min_size_clamp_prevents_inversion(self) -> None:
-        rect = resized_shape_rect(QRectF(0.0, 0.0, 60.0, 40.0), "shape_nw", QPointF(500.0, 500.0), min_size=8.0)
+        rect = resized_shape_rect(
+            QRectF(0.0, 0.0, 60.0, 40.0),
+            "shape_nw",
+            QPointF(500.0, 500.0),
+            min_size=8.0,
+        )
         self.assertGreaterEqual(rect.width(), 8.0)
         self.assertGreaterEqual(rect.height(), 8.0)
 
     def test_shape_is_a_selectable_object(self) -> None:
         # Shapes must be selectable for resize handles and border editing to work.
-        from ui.selection_structure_targets import STRUCTURE_OVERLAY_KINDS
+        from chemvas.ui.selection_structure_targets import STRUCTURE_OVERLAY_KINDS
 
         self.assertIn("shape", STRUCTURE_OVERLAY_KINDS)
 

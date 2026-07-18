@@ -13,9 +13,9 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.canvas_tool_settings_state import CanvasToolSettingsState
-    from ui.curved_arrow_path_service import CurvedArrowPathService
-    from ui.handle_mutation_service import HandleMutationService
+    from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+    from chemvas.ui.curved_arrow_path_service import CurvedArrowPathService
+    from chemvas.ui.handle_mutation_service import HandleMutationService
 
 
 class _FakeGraphicsItem:
@@ -58,7 +58,9 @@ class _FakeGraphicsItem:
         return QPointF(self._pos)
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for handle mutation service tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for handle mutation service tests"
+)
 class HandleMutationServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -68,13 +70,17 @@ class HandleMutationServiceTest(unittest.TestCase):
     def _make_canvas(self, *, bond_length_px: float = 40.0):
         build_service = SimpleNamespace(add_arrow_head=mock.Mock())
         canvas = SimpleNamespace(
-            renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=bond_length_px)),
+            renderer=SimpleNamespace(
+                style=SimpleNamespace(bond_length_px=bond_length_px)
+            ),
             tool_settings_state=CanvasToolSettingsState(),
             refresh_selection_outline=mock.Mock(),
         )
         canvas.services = SimpleNamespace(
             scene_decoration_build_service=build_service,
-            selection_controller=SimpleNamespace(update_selection_outline=canvas.refresh_selection_outline),
+            selection_controller=SimpleNamespace(
+                update_selection_outline=canvas.refresh_selection_outline
+            ),
         )
         canvas.services.curved_arrow_path_service = CurvedArrowPathService(canvas)
         return canvas
@@ -89,7 +95,9 @@ class HandleMutationServiceTest(unittest.TestCase):
         canvas = self._make_canvas(bond_length_px=40.0)
         service = self._service(canvas)
 
-        centered_item = _FakeGraphicsItem(data={1: {"center": QPointF(10.0, 5.0), "base_handle_dist": 10.0}})
+        centered_item = _FakeGraphicsItem(
+            data={1: {"center": QPointF(10.0, 5.0), "base_handle_dist": 10.0}}
+        )
         service.update_orbital_scale(centered_item, QPointF(15.0, 5.0))
         service.update_orbital_rotate(centered_item, QPointF(10.0, 15.0))
         self.assertAlmostEqual(centered_item._scale, 0.5)
@@ -97,7 +105,9 @@ class HandleMutationServiceTest(unittest.TestCase):
 
         canvas.tool_settings_state.orbital_snap_enabled = True
         canvas.tool_settings_state.orbital_snap_step = 15
-        fallback_item = _FakeGraphicsItem(rect=QRectF(0.0, 0.0, 20.0, 10.0), data={1: {}})
+        fallback_item = _FakeGraphicsItem(
+            rect=QRectF(0.0, 0.0, 20.0, 10.0), data={1: {}}
+        )
         service.update_orbital_scale(fallback_item, QPointF(42.0, 5.0))
         service.update_orbital_rotate(fallback_item, QPointF(42.0, 5.0))
         self.assertAlmostEqual(fallback_item._scale, 1.0)
@@ -107,7 +117,13 @@ class HandleMutationServiceTest(unittest.TestCase):
         canvas = self._make_canvas()
         service = self._service(canvas)
         curved_item = _FakeGraphicsItem(
-            data={2: {"start": QPointF(0.0, 0.0), "end": QPointF(10.0, 0.0), "double": True}}
+            data={
+                2: {
+                    "start": QPointF(0.0, 0.0),
+                    "end": QPointF(10.0, 0.0),
+                    "double": True,
+                }
+            }
         )
         curved_item.setPos(14.0, -6.0)
 
@@ -128,11 +144,20 @@ class HandleMutationServiceTest(unittest.TestCase):
         add_arrow_head.assert_not_called()
         canvas.refresh_selection_outline.assert_not_called()
 
-    def test_update_curved_endpoint_updates_path_and_preserves_existing_control(self) -> None:
+    def test_update_curved_endpoint_updates_path_and_preserves_existing_control(
+        self,
+    ) -> None:
         canvas = self._make_canvas()
         service = self._service(canvas)
         curved_item = _FakeGraphicsItem(
-            data={2: {"start": QPointF(0.0, 0.0), "end": QPointF(10.0, 0.0), "control": QPointF(5.0, 8.0), "double": False}}
+            data={
+                2: {
+                    "start": QPointF(0.0, 0.0),
+                    "end": QPointF(10.0, 0.0),
+                    "control": QPointF(5.0, 8.0),
+                    "double": False,
+                }
+            }
         )
         curved_item.setPos(22.0, 9.0)
 
@@ -148,7 +173,15 @@ class HandleMutationServiceTest(unittest.TestCase):
         add_arrow_head = canvas.services.scene_decoration_build_service.add_arrow_head
         add_arrow_head.reset_mock()
         canvas.refresh_selection_outline.reset_mock()
-        fallback_item = _FakeGraphicsItem(data={2: {"start": QPointF(0.0, 0.0), "end": QPointF(10.0, 0.0), "double": True}})
+        fallback_item = _FakeGraphicsItem(
+            data={
+                2: {
+                    "start": QPointF(0.0, 0.0),
+                    "end": QPointF(10.0, 0.0),
+                    "double": True,
+                }
+            }
+        )
         service.update_curved_endpoint(fallback_item, QPointF(12.0, -1.0), "end")
         self.assertEqual(fallback_item.data(2)["end"], QPointF(12.0, -1.0))
         self.assertEqual(fallback_item.data(2)["control"], QPointF(6.3, 3.1))

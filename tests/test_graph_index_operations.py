@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from ui.graph_index_operations import (
+from chemvas.ui.graph_index_operations import (
     add_bond_to_atom_index,
     add_neighbor_edge,
     bond_id_between_indexed_atoms,
@@ -214,33 +214,24 @@ def test_build_bond_adjacency_index_and_bond_set_classification() -> None:
         9: {3},
         10: {3},
     }
-    assert (
-        bond_sets_for_atom_ids(
-            {1, 2},
-            atom_bond_ids,
-            bonds,
-            bond_for_id=lambda bond_id: bonds[bond_id],
-        )
-        == ({0}, {2})
-    )
-    assert (
-        bond_sets_for_atom_ids(
-            {9},
-            {},
-            bonds,
-            bond_for_id=lambda bond_id: bonds[bond_id],
-        )
-        == (set(), {3})
-    )
-    assert (
-        bond_sets_for_atom_ids(
-            set(),
-            atom_bond_ids,
-            bonds,
-            bond_for_id=lambda bond_id: bonds[bond_id],
-        )
-        == (set(), set())
-    )
+    assert bond_sets_for_atom_ids(
+        {1, 2},
+        atom_bond_ids,
+        bonds,
+        bond_for_id=lambda bond_id: bonds[bond_id],
+    ) == ({0}, {2})
+    assert bond_sets_for_atom_ids(
+        {9},
+        {},
+        bonds,
+        bond_for_id=lambda bond_id: bonds[bond_id],
+    ) == (set(), {3})
+    assert bond_sets_for_atom_ids(
+        set(),
+        atom_bond_ids,
+        bonds,
+        bond_for_id=lambda bond_id: bonds[bond_id],
+    ) == (set(), set())
 
 
 def test_bond_sets_scans_for_atoms_missing_an_index_entry() -> None:
@@ -250,27 +241,21 @@ def test_bond_sets_scans_for_atoms_missing_an_index_entry() -> None:
     bonds = [_bond(1, 5), _bond(2, 3)]
     atom_bond_ids = {1: {0}, 3: {1}, 5: {0}}
 
-    assert (
-        bond_sets_for_atom_ids(
-            {1, 2},
-            atom_bond_ids,
-            bonds,
-            bond_for_id=lambda bond_id: bonds[bond_id],
-        )
-        == (set(), {0, 1})
-    )
+    assert bond_sets_for_atom_ids(
+        {1, 2},
+        atom_bond_ids,
+        bonds,
+        bond_for_id=lambda bond_id: bonds[bond_id],
+    ) == (set(), {0, 1})
 
 
 def test_bond_sets_scans_for_atoms_with_empty_index_entries() -> None:
     bonds = [_bond(1, 5), _bond(2, 3)]
     atom_bond_ids = {1: {0}, 2: set(), 3: {1}, 5: {0}}
 
-    assert (
-        bond_sets_for_atom_ids(
-            {1, 2},
-            atom_bond_ids,
-            bonds,
-            bond_for_id=lambda bond_id: bonds[bond_id],
-        )
-        == (set(), {0, 1})
-    )
+    assert bond_sets_for_atom_ids(
+        {1, 2},
+        atom_bond_ids,
+        bonds,
+        bond_for_id=lambda bond_id: bonds[bond_id],
+    ) == (set(), {0, 1})

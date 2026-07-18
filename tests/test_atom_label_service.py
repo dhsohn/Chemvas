@@ -14,30 +14,30 @@ except ModuleNotFoundError:
     QGraphicsScene = object
 
 if QApplication is not None:
-    from core.history import (
+    from chemvas.core.history import (
         CompositeCommand,
         DeleteAtomsCommand,
         DeleteBondCommand,
         UpdateBondCommand,
     )
-    from core.model import Atom, Bond, MoleculeModel
-    from ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
-    from ui.atom_label_service import AtomLabelService
-    from ui.canvas_atom_graphics_state import (
+    from chemvas.domain.document import Atom, Bond, MoleculeModel
+    from chemvas.ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
+    from chemvas.ui.atom_label_service import AtomLabelService
+    from chemvas.ui.canvas_atom_graphics_state import (
         atom_dots_for,
         atom_items_for,
         set_atom_dots_for,
         set_atom_items_for,
     )
-    from ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
-    from ui.canvas_history_service import CanvasHistoryService
-    from ui.canvas_history_state import CanvasHistoryState
-    from ui.canvas_smiles_input_state import (
+    from chemvas.ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
+    from chemvas.ui.canvas_history_service import CanvasHistoryService
+    from chemvas.ui.canvas_history_state import CanvasHistoryState
+    from chemvas.ui.canvas_smiles_input_state import (
         last_smiles_input_for,
         set_last_smiles_input_for,
     )
-    from ui.graphics_items import AtomLabelItem
-    from ui.history_commands import ChangeAtomLabelCommand
+    from chemvas.ui.graphics_items import AtomLabelItem
+    from chemvas.ui.history_commands import ChangeAtomLabelCommand
 
 
 class _FakeScene(QGraphicsScene):
@@ -98,8 +98,12 @@ class _FakeCanvas:
         self.hover_refresh = Mock()
         self.services = SimpleNamespace(
             history_service=self.history_service,
-            canvas_graph_service=SimpleNamespace(rebuild_bond_adjacency=self.rebuild_bond_adjacency),
-            move_controller=SimpleNamespace(redraw_connected_bonds=self.redraw_connected_bonds),
+            canvas_graph_service=SimpleNamespace(
+                rebuild_bond_adjacency=self.rebuild_bond_adjacency
+            ),
+            move_controller=SimpleNamespace(
+                redraw_connected_bonds=self.redraw_connected_bonds
+            ),
         )
 
     def scene(self) -> _FakeScene:
@@ -144,7 +148,9 @@ class _FakeCanvas:
     def rebuild_bond_adjacency(self) -> None:
         self.rebuild_bond_adjacency_calls += 1
 
-    def redraw_connected_bonds(self, atom_id: int, skip_bond_id: int | None = None) -> None:
+    def redraw_connected_bonds(
+        self, atom_id: int, skip_bond_id: int | None = None
+    ) -> None:
         self.redraw_calls.append(atom_id)
 
     def _uses_compact_label_hit_shape(self, text: str) -> bool:
@@ -172,7 +178,9 @@ def _atom_label_service(canvas: _FakeCanvas) -> AtomLabelService:
     )
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for atom label service tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for atom label service tests"
+)
 class AtomLabelServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -220,7 +228,7 @@ class AtomLabelServiceTest(unittest.TestCase):
         service.add_or_update_atom_label = Mock()
 
         with patch(
-            "ui.atom_label_service.QInputDialog.getText",
+            "chemvas.ui.atom_label_service.QInputDialog.getText",
             side_effect=[(" N ", True), ("   ", True), ("ignored", False)],
         ):
             service.prompt_atom_label(2)
@@ -235,7 +243,9 @@ class AtomLabelServiceTest(unittest.TestCase):
             ]
         )
 
-    def test_merge_overlapping_atoms_deletes_self_loops_and_weaker_duplicates(self) -> None:
+    def test_merge_overlapping_atoms_deletes_self_loops_and_weaker_duplicates(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
             atoms={
@@ -271,7 +281,15 @@ class AtomLabelServiceTest(unittest.TestCase):
         self.assertEqual(merge_ids, [2])
         self.assertEqual(
             merge_info["atom_states"],
-            {2: {"element": "O", "x": 0.4, "y": 0.3, "color": "#000000", "explicit_label": False}},
+            {
+                2: {
+                    "element": "O",
+                    "x": 0.4,
+                    "y": 0.3,
+                    "color": "#000000",
+                    "explicit_label": False,
+                }
+            },
         )
         self.assertEqual(merge_info["atom_coords_3d"], {2: (0.4, 0.3, 4.0)})
         self.assertEqual(set(merge_info["bond_before_states"]), {0, 1, 2})
@@ -286,7 +304,9 @@ class AtomLabelServiceTest(unittest.TestCase):
             [merged_label, merged_dot, deleted_self_loop_item, deleted_duplicate_item],
         )
 
-    def test_merge_overlapping_atoms_cleans_3d_coords_and_history_round_trip_matches(self) -> None:
+    def test_merge_overlapping_atoms_cleans_3d_coords_and_history_round_trip_matches(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
             atoms={
@@ -334,14 +354,18 @@ class AtomLabelServiceTest(unittest.TestCase):
             remove_atom_for_history=remove_atom,
             set_last_smiles_input_for_history=lambda _canvas, _value: None,
         )
-        with patch("core.history._history_canvas_port", return_value=history_port):
+        with patch(
+            "chemvas.core.history._history_canvas_port", return_value=history_port
+        ):
             command.undo(canvas)
             self.assertEqual(atom_coords_3d_for(canvas)[2], (0.2, 0.2, 4.0))
             command.redo(canvas)
 
         self.assertEqual(atom_coords_3d_for(canvas), after_merge_coords)
 
-    def test_merge_overlapping_atoms_keeps_special_style_on_same_order_duplicate(self) -> None:
+    def test_merge_overlapping_atoms_keeps_special_style_on_same_order_duplicate(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
             atoms={
@@ -376,7 +400,9 @@ class AtomLabelServiceTest(unittest.TestCase):
         self.assertIn(removed_standard_bond_item, canvas.scene_obj.removed_items)
         self.assertNotIn(kept_special_bond_item, canvas.scene_obj.removed_items)
 
-    def test_merge_overlapping_atoms_skips_none_bonds_and_discards_later_weaker_duplicate(self) -> None:
+    def test_merge_overlapping_atoms_skips_none_bonds_and_discards_later_weaker_duplicate(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
             atoms={
@@ -425,7 +451,9 @@ class AtomLabelServiceTest(unittest.TestCase):
         self.assertIs(service.atom_item_for_id(1), dot_item)
         self.assertIsNone(service.atom_item_for_id(99))
 
-    def test_carbon_dot_helpers_position_label_and_restore_item_interaction(self) -> None:
+    def test_carbon_dot_helpers_position_label_and_restore_item_interaction(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(atoms={1: Atom("C", 4.0, 6.0)})
         service = _atom_label_service(canvas)
@@ -440,17 +468,23 @@ class AtomLabelServiceTest(unittest.TestCase):
         label_item.setPlainText("NH")
         service.position_label(label_item, 10.0, 12.0)
         self.assertAlmostEqual(
-            label_item.pos().x() + label_item.boundingRect().center().x() - canvas.renderer.style.atom_label_offset_px,
+            label_item.pos().x()
+            + label_item.boundingRect().center().x()
+            - canvas.renderer.style.atom_label_offset_px,
             10.0,
         )
         self.assertAlmostEqual(
-            label_item.pos().y() + label_item.boundingRect().center().y() + canvas.renderer.style.atom_label_offset_px,
+            label_item.pos().y()
+            + label_item.boundingRect().center().y()
+            + canvas.renderer.style.atom_label_offset_px,
             12.0,
         )
 
         replacement_item = _FakeGraphicsItem()
         canvas.atom_items[1] = replacement_item
-        service.restore_atom_item_interaction(1, _FakeGraphicsItem(selected=True), was_selected=True, refresh_hover=True)
+        service.restore_atom_item_interaction(
+            1, _FakeGraphicsItem(selected=True), was_selected=True, refresh_hover=True
+        )
         self.assertTrue(replacement_item.isSelected())
         canvas.hover_refresh.assert_called_once_with()
 
@@ -513,7 +547,11 @@ class AtomLabelServiceTest(unittest.TestCase):
         # instead of falling back to a centred full-clearance label.
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
-            atoms={1: Atom("C", -20.0, 0.0), 2: Atom("N", 0.0, 0.0), 3: Atom("C", 20.0, 0.0)},
+            atoms={
+                1: Atom("C", -20.0, 0.0),
+                2: Atom("N", 0.0, 0.0),
+                3: Atom("C", 20.0, 0.0),
+            },
             bonds=[Bond(1, 2, 1, style="single"), Bond(2, 3, 1, style="single")],
         )
         service = _atom_label_service(canvas)
@@ -583,7 +621,9 @@ class AtomLabelServiceTest(unittest.TestCase):
         self.assertIsNotNone(anchor)
         self.assertLess(anchor.center().y(), item.sceneBoundingRect().center().y())
 
-    def test_record_label_change_builds_composite_single_and_noop_commands(self) -> None:
+    def test_record_label_change_builds_composite_single_and_noop_commands(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
             atoms={5: Atom("N", 1.0, 2.0, explicit_label=True)},
@@ -604,8 +644,20 @@ class AtomLabelServiceTest(unittest.TestCase):
             merge_ids=[7],
             merge_info={
                 "bond_before_states": {
-                    0: {"a": 5, "b": 6, "order": 1, "style": "single", "color": "#000000"},
-                    1: {"a": 7, "b": 8, "order": 1, "style": "single", "color": "#abcdef"},
+                    0: {
+                        "a": 5,
+                        "b": 6,
+                        "order": 1,
+                        "style": "single",
+                        "color": "#000000",
+                    },
+                    1: {
+                        "a": 7,
+                        "b": 8,
+                        "order": 1,
+                        "style": "single",
+                        "color": "#abcdef",
+                    },
                 },
                 "deleted_bond_ids": [1],
                 "atom_states": {7: {"element": "C"}},
@@ -618,7 +670,12 @@ class AtomLabelServiceTest(unittest.TestCase):
         self.assertIsInstance(composite, CompositeCommand)
         self.assertEqual(
             [type(command) for command in composite.commands],
-            [ChangeAtomLabelCommand, UpdateBondCommand, DeleteBondCommand, DeleteAtomsCommand],
+            [
+                ChangeAtomLabelCommand,
+                UpdateBondCommand,
+                DeleteBondCommand,
+                DeleteAtomsCommand,
+            ],
         )
         self.assertFalse(composite.commands[-1].remove_marks)
         self.assertEqual(composite.commands[-1].atom_coords_3d, {7: (1.0, 2.0, 3.0)})
@@ -803,7 +860,7 @@ class AtomLabelServiceTest(unittest.TestCase):
     def test_lightweight_label_history_release_failure_restores_exactly(
         self,
     ) -> None:
-        import ui.atom_label_history_recorder as recorder_module
+        import chemvas.ui.atom_label_history_recorder as recorder_module
 
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
@@ -846,7 +903,7 @@ class AtomLabelServiceTest(unittest.TestCase):
     def test_disabled_lightweight_label_history_release_failure_rolls_back(
         self,
     ) -> None:
-        import ui.atom_label_history_recorder as recorder_module
+        import chemvas.ui.atom_label_history_recorder as recorder_module
 
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
@@ -909,15 +966,11 @@ class AtomLabelServiceTest(unittest.TestCase):
         for push_result in (None, True):
             with self.subTest(push_result=push_result):
                 canvas = _FakeCanvas()
-                canvas.model = MoleculeModel(
-                    atoms={1: Atom("C", 1.0, 2.0)}
-                )
+                canvas.model = MoleculeModel(atoms={1: Atom("C", 1.0, 2.0)})
                 service = _atom_label_service(canvas)
                 canvas.services.atom_label_service = service
                 service.ensure_carbon_dot(1)
-                canvas.services.history_service.push = Mock(
-                    return_value=push_result
-                )
+                canvas.services.history_service.push = Mock(return_value=push_result)
 
                 with self.assertRaisesRegex(
                     RuntimeError,
@@ -940,9 +993,7 @@ class AtomLabelServiceTest(unittest.TestCase):
             with self.subTest(push_result=push_result):
                 canvas = _FakeCanvas()
                 del canvas.pushed_commands
-                canvas.model = MoleculeModel(
-                    atoms={1: Atom("C", 1.0, 2.0)}
-                )
+                canvas.model = MoleculeModel(atoms={1: Atom("C", 1.0, 2.0)})
                 push = Mock(return_value=push_result)
                 canvas.services.history_service.push = push
                 service = _atom_label_service(canvas)
@@ -970,9 +1021,7 @@ class AtomLabelServiceTest(unittest.TestCase):
             with self.subTest(append_command=append_command):
                 canvas = _FakeCanvas()
                 del canvas.pushed_commands
-                canvas.model = MoleculeModel(
-                    atoms={1: Atom("C", 1.0, 2.0)}
-                )
+                canvas.model = MoleculeModel(atoms={1: Atom("C", 1.0, 2.0)})
 
                 class History:
                     def __init__(self, should_append: bool) -> None:
@@ -1053,9 +1102,7 @@ class AtomLabelServiceTest(unittest.TestCase):
         for initial_alias in ("absent", "none"):
             with self.subTest(initial_alias=initial_alias):
                 canvas = _FakeCanvas()
-                canvas.model = MoleculeModel(
-                    atoms={1: Atom("C", 1.0, 2.0)}
-                )
+                canvas.model = MoleculeModel(atoms={1: Atom("C", 1.0, 2.0)})
 
                 class History:
                     __slots__ = ("commands",)
@@ -1153,7 +1200,7 @@ class AtomLabelServiceTest(unittest.TestCase):
         self.assertEqual(canvas.pushed_commands, [])
 
     def test_label_history_runtime_scene_capture_cannot_poison_history(self) -> None:
-        import ui.canvas_history_recording_service as recording_module
+        import chemvas.ui.canvas_history_recording_service as recording_module
 
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(atoms={1: Atom("C", 1.0, 2.0)})
@@ -1212,8 +1259,20 @@ class AtomLabelServiceTest(unittest.TestCase):
             merge_ids=[7],
             merge_info={
                 "bond_before_states": {
-                    0: {"a": 7, "b": 8, "order": 1, "style": "single", "color": "#abcdef"},
-                    1: {"a": 5, "b": 6, "order": 2, "style": "double", "color": "#112233"},
+                    0: {
+                        "a": 7,
+                        "b": 8,
+                        "order": 1,
+                        "style": "single",
+                        "color": "#abcdef",
+                    },
+                    1: {
+                        "a": 5,
+                        "b": 6,
+                        "order": 2,
+                        "style": "double",
+                        "color": "#112233",
+                    },
                 },
                 "deleted_bond_ids": [],
             },
@@ -1221,9 +1280,13 @@ class AtomLabelServiceTest(unittest.TestCase):
 
         self.assertEqual(canvas.pushed_commands, [])
 
-    def test_add_or_update_atom_label_removes_label_to_carbon_dot_and_records_change(self) -> None:
+    def test_add_or_update_atom_label_removes_label_to_carbon_dot_and_records_change(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
-        canvas.model = MoleculeModel(atoms={1: Atom("C", 1.0, 2.0, explicit_label=True)})
+        canvas.model = MoleculeModel(
+            atoms={1: Atom("C", 1.0, 2.0, explicit_label=True)}
+        )
         set_last_smiles_input_for(canvas, "keep-me")
         existing_label = _FakeGraphicsItem(selected=True)
         canvas.atom_items[1] = existing_label
@@ -1243,14 +1306,18 @@ class AtomLabelServiceTest(unittest.TestCase):
         self.assertEqual(command.atom_id, 1)
         self.assertFalse(command.after_explicit_label)
 
-    def test_add_or_update_atom_label_creates_explicit_carbon_label_and_removes_dot(self) -> None:
+    def test_add_or_update_atom_label_creates_explicit_carbon_label_and_removes_dot(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(atoms={1: Atom("C", 1.0, 2.0)})
         existing_dot = _FakeGraphicsItem()
         canvas.atom_dots[1] = existing_dot
         service = _atom_label_service(canvas)
 
-        service.add_or_update_atom_label(1, "C", show_carbon=True, allow_merge=False, record=False)
+        service.add_or_update_atom_label(
+            1, "C", show_carbon=True, allow_merge=False, record=False
+        )
 
         self.assertEqual(canvas.model.atoms[1].element, "C")
         self.assertTrue(canvas.model.atoms[1].explicit_label)
@@ -1283,7 +1350,9 @@ class AtomLabelServiceTest(unittest.TestCase):
         canvas.atom_items[1] = existing_item
         service = _atom_label_service(canvas)
 
-        service.add_or_update_atom_label(1, "NH", clear_smiles=False, allow_merge=False, record=False)
+        service.add_or_update_atom_label(
+            1, "NH", clear_smiles=False, allow_merge=False, record=False
+        )
 
         self.assertIs(canvas.atom_items[1], existing_item)
         self.assertEqual(existing_item.toPlainText(), "NH")
@@ -1292,7 +1361,9 @@ class AtomLabelServiceTest(unittest.TestCase):
         self.assertEqual(last_smiles_input_for(canvas), "preserve")
         self.assertEqual(canvas.scene_obj.removed_items, [])
 
-    def test_add_or_update_atom_label_adds_carbon_dot_without_existing_label(self) -> None:
+    def test_add_or_update_atom_label_adds_carbon_dot_without_existing_label(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(atoms={1: Atom("C", 1.0, 2.0)})
         service = _atom_label_service(canvas)
@@ -1304,9 +1375,13 @@ class AtomLabelServiceTest(unittest.TestCase):
         self.assertEqual(canvas.redraw_calls, [1])
         self.assertEqual(canvas.scene_obj.removed_items, [])
 
-    def test_add_or_update_atom_label_removes_non_carbon_label_without_dot_when_record_disabled(self) -> None:
+    def test_add_or_update_atom_label_removes_non_carbon_label_without_dot_when_record_disabled(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
-        canvas.model = MoleculeModel(atoms={1: Atom("N", 1.0, 2.0, explicit_label=True)})
+        canvas.model = MoleculeModel(
+            atoms={1: Atom("N", 1.0, 2.0, explicit_label=True)}
+        )
         existing_label = _FakeGraphicsItem()
         canvas.atom_items[1] = existing_label
         service = _atom_label_service(canvas)
@@ -1323,7 +1398,10 @@ class AtomLabelServiceTest(unittest.TestCase):
         canvas.model = MoleculeModel(atoms={1: Atom("C", 1.0, 2.0)})
         set_last_smiles_input_for(canvas, "C=C")
         service = _atom_label_service(canvas)
-        merge_info = {"bond_before_states": {3: {"a": 1, "b": 2}}, "deleted_bond_ids": [3]}
+        merge_info = {
+            "bond_before_states": {3: {"a": 1, "b": 2}},
+            "deleted_bond_ids": [3],
+        }
         service.merge_overlapping_atoms = Mock(return_value=([7], merge_info))
 
         service.add_or_update_atom_label(1, "N")

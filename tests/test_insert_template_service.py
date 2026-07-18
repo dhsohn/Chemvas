@@ -3,16 +3,16 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import mock
 
-from core.model import Atom, Bond
-from PyQt6.QtCore import QPointF
-from ui.insert_mode_logic import InsertSessionState
-from ui.insert_template_service import InsertTemplateService
-from ui.template_insert_logic import (
+from chemvas.domain.document import Atom, Bond
+from chemvas.features.insertion import (
     TemplateInsertRequest,
     TemplateInsertResolution,
     plan_template_commit,
     plan_template_preview,
 )
+from chemvas.ui.insert_mode_logic import InsertSessionState
+from chemvas.ui.insert_template_service import InsertTemplateService
+from PyQt6.QtCore import QPointF
 
 from tests.test_insert_controller import _FakeCanvas
 
@@ -43,14 +43,18 @@ def _apply_state(canvas: _FakeCanvas, state: InsertSessionState) -> None:
     canvas.insert_state.template_ring_style = state.template_ring_style
     canvas.insert_state.smiles_active = state.smiles_active
     canvas.insert_state.smiles_preview_smiles = state.smiles_text
-    canvas.insert_state.smiles_preview_center = None if state.smiles_center is None else QPointF(*state.smiles_center)
+    canvas.insert_state.smiles_preview_center = (
+        None if state.smiles_center is None else QPointF(*state.smiles_center)
+    )
 
 
 def _service_for(canvas: _FakeCanvas, **overrides) -> InsertTemplateService:
     return InsertTemplateService(
         canvas,
         insert_state=canvas.insert_state,
-        hit_testing_service=overrides.pop("hit_testing_service", canvas.services.hit_testing_service),
+        hit_testing_service=overrides.pop(
+            "hit_testing_service", canvas.services.hit_testing_service
+        ),
         insert_commit_service=overrides.pop("insert_commit_service", mock.Mock()),
         session_state=lambda: _session_state(canvas),
         apply_session_state=lambda state: _apply_state(canvas, state),
@@ -59,7 +63,9 @@ def _service_for(canvas: _FakeCanvas, **overrides) -> InsertTemplateService:
     )
 
 
-def test_insert_template_service_begin_template_activates_state_without_initial_preview() -> None:
+def test_insert_template_service_begin_template_activates_state_without_initial_preview() -> (
+    None
+):
     canvas = _FakeCanvas()
     canvas.insert_state.smiles_active = True
     cancel_smiles = mock.Mock()
@@ -106,7 +112,9 @@ def test_insert_template_service_template_request_uses_direct_atom_hit() -> None
     hit_testing.find_bond_near.assert_not_called()
 
 
-def test_insert_template_service_template_request_prefers_endpoint_atom_over_bond() -> None:
+def test_insert_template_service_template_request_prefers_endpoint_atom_over_bond() -> (
+    None
+):
     canvas = _FakeCanvas()
     canvas.model.atoms = {1: Atom("N", 0.0, 0.0), 2: Atom("C", 10.0, 0.0)}
     canvas.model.bonds = [Bond(1, 2)]
@@ -126,7 +134,9 @@ def test_insert_template_service_template_request_prefers_endpoint_atom_over_bon
     hit_testing.find_bond_near.assert_called_once_with(QPointF(0.0, 0.0), 7.0)
 
 
-def test_insert_template_service_commit_resolves_plan_and_keeps_session_active() -> None:
+def test_insert_template_service_commit_resolves_plan_and_keeps_session_active() -> (
+    None
+):
     canvas = _FakeCanvas()
     canvas.insert_state.template_active = True
     canvas.insert_state.template_ring_size = 5
@@ -140,7 +150,7 @@ def test_insert_template_service_commit_resolves_plan_and_keeps_session_active()
     resolution = TemplateInsertResolution(plan=plan, points=[(1.0, 2.0), (3.0, 4.0)])
 
     with mock.patch(
-        "ui.template_geometry_resolver_service.resolve_template_insert",
+        "chemvas.ui.template_geometry_resolver_service.resolve_template_insert",
         return_value=resolution,
     ) as resolve:
         service.commit_template_request(QPointF(4.0, 5.0), request)
@@ -165,7 +175,9 @@ def test_insert_template_service_render_preview_routes_clear_and_apply_paths() -
     plan = plan_template_preview(request)
     assert plan is not None
 
-    with mock.patch("ui.insert_template_service.plan_template_preview", return_value=None):
+    with mock.patch(
+        "chemvas.ui.insert_template_service.plan_template_preview", return_value=None
+    ):
         service.render_template_request_preview(
             QPointF(4.0, 5.0),
             request,
@@ -177,17 +189,20 @@ def test_insert_template_service_render_preview_routes_clear_and_apply_paths() -
     clear_preview.reset_mock()
     resolution = TemplateInsertResolution(plan=plan, points=[(1.0, 2.0), (3.0, 4.0)])
     with (
-        mock.patch("ui.insert_template_service.plan_template_preview", return_value=plan),
         mock.patch(
-            "ui.template_geometry_resolver_service.resolve_template_insert",
+            "chemvas.ui.insert_template_service.plan_template_preview",
+            return_value=plan,
+        ),
+        mock.patch(
+            "chemvas.ui.template_geometry_resolver_service.resolve_template_insert",
             return_value=resolution,
         ),
         mock.patch(
-            "ui.insert_template_service.plan_template_preview_update",
+            "chemvas.ui.insert_template_service.plan_template_preview_update",
             return_value=SimpleNamespace(action="update", geometry={"segments": 2}),
         ) as plan_update,
         mock.patch(
-            "ui.insert_template_service.apply_template_preview_geometry_helper",
+            "chemvas.ui.insert_template_service.apply_template_preview_geometry_helper",
             return_value=(["items"], ["lines"], ["dots"]),
         ) as apply_helper,
     ):
@@ -206,7 +221,9 @@ def test_insert_template_service_render_preview_routes_clear_and_apply_paths() -
     assert canvas.insert_state.template_preview_dots == ["dots"]
 
 
-def test_insert_template_service_render_benzene_preview_requests_aromatic_geometry() -> None:
+def test_insert_template_service_render_benzene_preview_requests_aromatic_geometry() -> (
+    None
+):
     canvas = _FakeCanvas()
     service = _service_for(canvas)
     request = TemplateInsertRequest(6, (4.0, 5.0), ring_style="benzene")
@@ -218,17 +235,20 @@ def test_insert_template_service_render_benzene_preview_requests_aromatic_geomet
     )
 
     with (
-        mock.patch("ui.insert_template_service.plan_template_preview", return_value=plan),
         mock.patch(
-            "ui.template_geometry_resolver_service.resolve_template_insert",
+            "chemvas.ui.insert_template_service.plan_template_preview",
+            return_value=plan,
+        ),
+        mock.patch(
+            "chemvas.ui.template_geometry_resolver_service.resolve_template_insert",
             return_value=resolution,
         ),
         mock.patch(
-            "ui.insert_template_service.plan_template_preview_update",
+            "chemvas.ui.insert_template_service.plan_template_preview_update",
             return_value=SimpleNamespace(action="update", geometry={"segments": 9}),
         ) as plan_update,
         mock.patch(
-            "ui.insert_template_service.apply_template_preview_geometry_helper",
+            "chemvas.ui.insert_template_service.apply_template_preview_geometry_helper",
             return_value=(["items"], ["lines"], ["dots"]),
         ),
     ):

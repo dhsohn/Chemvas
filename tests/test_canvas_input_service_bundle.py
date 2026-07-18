@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import ui.canvas_input_service_bundle as canvas_input_service_bundle
-from ui.canvas_input_service_bundle import (
+import chemvas.ui.canvas_input_service_bundle as canvas_input_service_bundle
+from chemvas.ui.canvas_input_service_bundle import (
     CanvasInputServiceBundle,
     build_canvas_input_services,
 )
@@ -26,7 +26,9 @@ def test_build_canvas_input_services_wires_explicit_collaborators(monkeypatch) -
         "CanvasPointerController",
         "CanvasToolModeController",
     ):
-        monkeypatch.setattr(canvas_input_service_bundle, class_name, _stub_service_class(class_name))
+        monkeypatch.setattr(
+            canvas_input_service_bundle, class_name, _stub_service_class(class_name)
+        )
 
     canvas = SimpleNamespace()
     hit_testing_service = object()

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import QPointF
-from ui.preview_3d_interaction import (
+from chemvas.ui.preview_3d_interaction import (
     preview_drag_rotation,
     preview_zoom_for_wheel_delta,
 )
+from PyQt6.QtCore import QPointF
 
 
 def test_preview_drag_rotation_applies_pointer_delta_with_default_sensitivity() -> None:

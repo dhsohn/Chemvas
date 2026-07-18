@@ -3,11 +3,14 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import mock
 
-from ui.main_window_bootstrap import bootstrap_main_window, build_main_window_runtime
-from ui.main_window_ports import preview_for_window, services_for_window
-from ui.main_window_state import MainWindowState
-from ui.main_window_tab_references import MainWindowTabReferences
-from ui.main_window_ui_references import MainWindowUiReferences
+from chemvas.bootstrap.main_window_runtime import (
+    bootstrap_main_window,
+    build_main_window_runtime,
+)
+from chemvas.ui.main_window_ports import preview_for_window, services_for_window
+from chemvas.ui.main_window_state import MainWindowState
+from chemvas.ui.main_window_tab_references import MainWindowTabReferences
+from chemvas.ui.main_window_ui_references import MainWindowUiReferences
 
 
 class _FakeWindow:
@@ -26,7 +29,9 @@ class _FakeWindow:
 
     @property
     def tab_references(self):
-        return SimpleNamespace(active_canvas_or_none=mock.Mock(return_value=self.canvas))
+        return SimpleNamespace(
+            active_canvas_or_none=mock.Mock(return_value=self.canvas)
+        )
 
     @property
     def runtime_state(self):
@@ -97,8 +102,12 @@ def test_bootstrap_main_window_initializes_runtime_references_and_services() -> 
     tab_callbacks["on_canvas_tab_moved"](2, 1)
     tab_callbacks["on_canvas_tab_changed"](3)
     tab_callbacks["on_canvas_tab_close_requested"](4)
-    services.canvas_tab_ui_service.on_canvas_tab_moved.assert_called_once_with(window, 2, 1)
-    services.active_canvas_ui_service.on_canvas_tab_changed.assert_called_once_with(window, 3)
+    services.canvas_tab_ui_service.on_canvas_tab_moved.assert_called_once_with(
+        window, 2, 1
+    )
+    services.active_canvas_ui_service.on_canvas_tab_changed.assert_called_once_with(
+        window, 3
+    )
     services.canvas_tab_ui_service.close_canvas_tab.assert_called_once_with(window, 4)
     window.on_canvas_tab_moved.assert_not_called()
     window.on_canvas_tab_changed.assert_not_called()
@@ -137,7 +146,9 @@ def test_bootstrap_main_window_initializes_runtime_references_and_services() -> 
     assert window.ui_references.tool_actions == toolbar_assembly.tool_actions
     services.ui_assembly_service.init_toolbars.assert_called_once_with(window)
     services.ui_assembly_service.init_menu_bar.assert_called_once_with(window)
-    services.action_availability_service.update_action_availability.assert_called_once_with(window)
+    services.action_availability_service.update_action_availability.assert_called_once_with(
+        window
+    )
     services.context_bar_service.init_context_bar.assert_called_once_with(window)
     services.panel_service.init_panels.assert_called_once_with(window)
     services.ui_assembly_service.apply_theme.assert_called_once_with(window)

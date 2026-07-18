@@ -12,10 +12,12 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.curved_arrow_path_service import CurvedArrowPathService
+    from chemvas.ui.curved_arrow_path_service import CurvedArrowPathService
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for curved arrow path service tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for curved arrow path service tests"
+)
 class CurvedArrowPathServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -26,7 +28,9 @@ class CurvedArrowPathServiceTest(unittest.TestCase):
         path_item = QGraphicsPathItem()
         path_item.setPos(18.0, -7.0)
         build_service = SimpleNamespace(add_arrow_head=mock.Mock())
-        canvas = SimpleNamespace(services=SimpleNamespace(scene_decoration_build_service=build_service))
+        canvas = SimpleNamespace(
+            services=SimpleNamespace(scene_decoration_build_service=build_service)
+        )
 
         CurvedArrowPathService(canvas).set_curved_arrow_path(
             path_item,

@@ -1,7 +1,10 @@
 import unittest
 
-from ui.hover_highlight_logic import HoverUpdatePlan, plan_structure_hover_update
-from ui.selection_hit_logic import StructureHit
+from chemvas.features.selection import StructureHit
+from chemvas.ui.hover_highlight_logic import (
+    HoverUpdatePlan,
+    plan_structure_hover_update,
+)
 
 
 class HoverHighlightLogicTest(unittest.TestCase):
@@ -141,7 +144,9 @@ class HoverHighlightLogicTest(unittest.TestCase):
                 atom_preview_signature="wedge:1",
                 atom_preview_key="wedge:1:13.0:14.0",
             ),
-            HoverUpdatePlan(action="atom_hit", hover_atom_id=1, preview_key="wedge:1:13.0:14.0"),
+            HoverUpdatePlan(
+                action="atom_hit", hover_atom_id=1, preview_key="wedge:1:13.0:14.0"
+            ),
         )
         self.assertEqual(
             plan_structure_hover_update(

@@ -13,19 +13,22 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from core.model import Atom, Bond
-    from ui.canvas_atom_graphics_state import set_atom_dots_for, set_atom_items_for
-    from ui.canvas_bond_graphics_state import set_bond_items_for
-    from ui.canvas_graph_service import CanvasGraphService
-    from ui.canvas_graph_state import CanvasGraphState
-    from ui.canvas_mark_registry import CanvasMarkRegistry
-    from ui.canvas_ring_fill_scene_access import update_ring_fills_for_atoms_for
-    from ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
-    from ui.canvas_scene_items_state import set_scene_item_collection_for
-    from ui.input_view_access import rotate_view_for
-    from ui.input_view_state import InputViewState
-    from ui.selection_rotation_access import rotate_selection_for
-    from ui.selection_style_access import restore_selection_from_ids_for
+    from chemvas.domain.document import Atom, Bond
+    from chemvas.ui.canvas_atom_graphics_state import (
+        set_atom_dots_for,
+        set_atom_items_for,
+    )
+    from chemvas.ui.canvas_bond_graphics_state import set_bond_items_for
+    from chemvas.ui.canvas_graph_service import CanvasGraphService
+    from chemvas.ui.canvas_graph_state import CanvasGraphState
+    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+    from chemvas.ui.canvas_ring_fill_scene_access import update_ring_fills_for_atoms_for
+    from chemvas.ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
+    from chemvas.ui.canvas_scene_items_state import set_scene_item_collection_for
+    from chemvas.ui.input_view_access import rotate_view_for
+    from chemvas.ui.input_view_state import InputViewState
+    from chemvas.ui.selection_rotation_access import rotate_selection_for
+    from chemvas.ui.selection_style_access import restore_selection_from_ids_for
 
 
 class _FakeSelectableItem:
@@ -92,7 +95,9 @@ class _FakePositionedItem:
         self.positions.append(QPointF(float(x), float(y)))
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas view tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for canvas view tests"
+)
 class CanvasViewTransformHelperTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -149,10 +154,14 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
                 move_controller=move_controller,
                 selection_controller=selection_controller,
                 scene_decoration_build_service=SimpleNamespace(
-                    set_mark_center=lambda _mark, center: mark_centers.append(QPointF(center))
+                    set_mark_center=lambda _mark, center: mark_centers.append(
+                        QPointF(center)
+                    )
                 ),
             ),
-            mark_registry=CanvasMarkRegistry({1: [mark_with_offset, mark_without_offset]}),
+            mark_registry=CanvasMarkRegistry(
+                {1: [mark_with_offset, mark_without_offset]}
+            ),
         )
         set_atom_items_for(view, {1: label_1, 2: label_2})
         set_atom_dots_for(view, {1: dot_1})
@@ -184,7 +193,10 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
         # degrees becomes (3, 2), applied at the rotated atom (1, 1).
         self.assertEqual(mark_centers, [QPointF(4.0, 3.0), QPointF(1.0, 1.0)])
         self.assertEqual(
-            {call.args[0] for call in move_controller.redraw_connected_bonds.call_args_list},
+            {
+                call.args[0]
+                for call in move_controller.redraw_connected_bonds.call_args_list
+            },
             {1, 2},
         )
         selection_controller.update_selection_outline.assert_called_once_with()
@@ -193,7 +205,9 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
         empty_atom_label_service = SimpleNamespace(position_label=mock.Mock())
         empty_move_controller = SimpleNamespace(redraw_connected_bonds=mock.Mock())
         empty_ring_fill_service = SimpleNamespace(rotate_ring_fills=mock.Mock())
-        empty_selection_controller = SimpleNamespace(update_selection_outline=mock.Mock())
+        empty_selection_controller = SimpleNamespace(
+            update_selection_outline=mock.Mock()
+        )
         empty_view = SimpleNamespace(
             model=SimpleNamespace(atoms={}, bonds=[]),
             scene=lambda: _FakeScene(),
@@ -215,7 +229,9 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
         no_center_atom_label_service = SimpleNamespace(position_label=mock.Mock())
         no_center_move_controller = SimpleNamespace(redraw_connected_bonds=mock.Mock())
         no_center_ring_fill_service = SimpleNamespace(rotate_ring_fills=mock.Mock())
-        no_center_selection_controller = SimpleNamespace(update_selection_outline=mock.Mock())
+        no_center_selection_controller = SimpleNamespace(
+            update_selection_outline=mock.Mock()
+        )
         no_center_view = SimpleNamespace(
             model=SimpleNamespace(atoms={1: Atom("C", 2.0, 3.0)}, bonds=[]),
             scene=lambda: _FakeScene([_FakeSelectableItem("atom", 99)]),
@@ -236,7 +252,9 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
         no_center_ring_fill_service.rotate_ring_fills.assert_not_called()
         no_center_selection_controller.update_selection_outline.assert_not_called()
 
-    def test_bond_sets_for_atoms_classifies_internal_boundary_and_falls_back_to_model_scan(self) -> None:
+    def test_bond_sets_for_atoms_classifies_internal_boundary_and_falls_back_to_model_scan(
+        self,
+    ) -> None:
         classified_view = SimpleNamespace(
             model=SimpleNamespace(
                 bonds=[
@@ -255,7 +273,9 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
             ),
         )
         classified_graph_service = CanvasGraphService(classified_view)
-        classified_view.services = SimpleNamespace(canvas_graph_service=classified_graph_service)
+        classified_view.services = SimpleNamespace(
+            canvas_graph_service=classified_graph_service
+        )
 
         internal, boundary = classified_graph_service.bond_sets_for_atoms({1, 2, 3})
         self.assertEqual(internal, {0, 1})
@@ -272,14 +292,20 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
             graph_state=CanvasGraphState(),
         )
         fallback_graph_service = CanvasGraphService(fallback_view)
-        fallback_view.services = SimpleNamespace(canvas_graph_service=fallback_graph_service)
+        fallback_view.services = SimpleNamespace(
+            canvas_graph_service=fallback_graph_service
+        )
 
         internal, boundary = fallback_graph_service.bond_sets_for_atoms({5, 6})
         self.assertEqual(internal, {0})
         self.assertEqual(boundary, {1})
-        self.assertEqual(fallback_graph_service.bond_sets_for_atoms(set()), (set(), set()))
+        self.assertEqual(
+            fallback_graph_service.bond_sets_for_atoms(set()), (set(), set())
+        )
 
-    def test_restore_selection_from_ids_selects_atoms_bonds_and_refreshes_outline(self) -> None:
+    def test_restore_selection_from_ids_selects_atoms_bonds_and_refreshes_outline(
+        self,
+    ) -> None:
         atom_item = _FakeSelectableItem("atom", 1)
         atom_dot = _FakeSelectableItem("atom", 2)
         bond_item_a = _FakeSelectableItem("bond", 7)
@@ -352,8 +378,12 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
                 }
             ),
         )
-        set_scene_item_collection_for(view, "ring_items", [matching_ring, non_matching_ring, invalid_ring])
-        view.services = SimpleNamespace(canvas_ring_fill_scene_service=CanvasRingFillSceneService(view))
+        set_scene_item_collection_for(
+            view, "ring_items", [matching_ring, non_matching_ring, invalid_ring]
+        )
+        view.services = SimpleNamespace(
+            canvas_ring_fill_scene_service=CanvasRingFillSceneService(view)
+        )
 
         update_ring_fills_for_atoms_for(view, {1, 2, 3})
 

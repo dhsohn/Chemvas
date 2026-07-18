@@ -1,16 +1,18 @@
 from types import SimpleNamespace
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor
-from ui.canvas_text_style_state import (
+from chemvas.ui.canvas_text_style_state import (
     CanvasTextStyleState,
     set_text_style_for,
     text_style_state_for,
 )
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor
 
 
 def test_text_style_state_for_uses_runtime_state() -> None:
-    runtime_state = SimpleNamespace(text_style_state=CanvasTextStyleState(text_font_size=18))
+    runtime_state = SimpleNamespace(
+        text_style_state=CanvasTextStyleState(text_font_size=18)
+    )
     canvas = SimpleNamespace(runtime_state=runtime_state)
 
     assert text_style_state_for(canvas) is runtime_state.text_style_state

@@ -19,8 +19,8 @@ except ModuleNotFoundError:
     QGraphicsTextItem = None
 
 if QApplication is not None:
-    from ui.graphics_items import NoSelectLineItem
-    from ui.hover_scene_renderer import (
+    from chemvas.ui.graphics_items import NoSelectLineItem
+    from chemvas.ui.hover_scene_renderer import (
         add_hover_preview_items,
         build_atom_hover_indicator,
         build_bond_hover_indicator,
@@ -33,7 +33,9 @@ class _BrokenHoverItem:
         raise RuntimeError("wrapped C/C++ object has been deleted")
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for hover scene renderer tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for hover scene renderer tests"
+)
 class HoverSceneRendererTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -69,7 +71,9 @@ class HoverSceneRendererTest(unittest.TestCase):
 
     def test_build_hover_indicators_match_atom_and_bond_geometry(self) -> None:
         atom_indicator = build_atom_hover_indicator(QPointF(12.0, -4.0), 3.5)
-        bond_indicator = build_bond_hover_indicator(QPointF(-2.0, 6.0), QPointF(10.0, 14.0), 2.0)
+        bond_indicator = build_bond_hover_indicator(
+            QPointF(-2.0, 6.0), QPointF(10.0, 14.0), 2.0
+        )
 
         self.assertEqual(atom_indicator.rect().x(), 8.5)
         self.assertEqual(atom_indicator.rect().y(), -7.5)
@@ -116,7 +120,9 @@ class HoverSceneRendererTest(unittest.TestCase):
         self.assertAlmostEqual(dot.zValue(), 7.25)
         self.assertAlmostEqual(text.zValue(), 7.25)
 
-    def test_add_hover_preview_items_uses_default_color_and_keeps_no_brush_items(self) -> None:
+    def test_add_hover_preview_items_uses_default_color_and_keeps_no_brush_items(
+        self,
+    ) -> None:
         dot = QGraphicsEllipseItem(1.0, 2.0, 4.0, 4.0)
 
         added = add_hover_preview_items(self.scene, [dot])

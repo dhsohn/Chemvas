@@ -11,11 +11,11 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.selection_highlight_styler import (
+    from chemvas.ui.selection_highlight_styler import (
         SelectionHighlightStyler,
         selection_highlight_styler_for,
     )
-    from ui.selection_style_state import SelectionStyleState
+    from chemvas.ui.selection_style_state import SelectionStyleState
 
 
 def _path_item(color: str = "#111111", width: float = 1.5) -> QGraphicsPathItem:
@@ -30,7 +30,9 @@ def _path_item(color: str = "#111111", width: float = 1.5) -> QGraphicsPathItem:
     return item
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for selection highlight styler tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for selection highlight styler tests"
+)
 class SelectionHighlightStylerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -108,7 +110,9 @@ class SelectionHighlightStylerTest(unittest.TestCase):
         self.assertEqual(item.pen().color().name(), "#555555")
         self.assertAlmostEqual(item.pen().widthF(), 1.1)
 
-    def test_selection_highlight_styler_for_reuses_matching_or_duck_typed_service(self) -> None:
+    def test_selection_highlight_styler_for_reuses_matching_or_duck_typed_service(
+        self,
+    ) -> None:
         canvas = self._make_canvas()
         matching = SelectionHighlightStyler(canvas)
         canvas.services.selection_highlight_styler = matching

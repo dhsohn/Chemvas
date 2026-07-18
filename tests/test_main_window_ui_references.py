@@ -14,10 +14,12 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.main_window_ui_references import MainWindowUiReferences
+    from chemvas.ui.main_window_ui_references import MainWindowUiReferences
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required for main window UI reference tests")
+@pytest.mark.skipif(
+    QApplication is None, reason="PyQt6 is required for main window UI reference tests"
+)
 def test_main_window_ui_references_require_initialized_icon_factory() -> None:
     refs = MainWindowUiReferences()
 
@@ -30,7 +32,9 @@ def test_main_window_ui_references_require_initialized_icon_factory() -> None:
     assert refs.require_icon_factory() is icon_factory
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required for main window UI reference tests")
+@pytest.mark.skipif(
+    QApplication is None, reason="PyQt6 is required for main window UI reference tests"
+)
 def test_main_window_ui_references_apply_toolbar_assembly() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)

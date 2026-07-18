@@ -3,17 +3,17 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import mock
 
-from ui.canvas_scene_items_state import set_selected_notes_for
-from ui.selection_collection_access import (
+from chemvas.ui.canvas_scene_items_state import set_selected_notes_for
+from chemvas.ui.selection_collection_access import (
     selection_status_count_for,
     selection_status_item_identity,
 )
-from ui.selection_scene_access import (
+from chemvas.ui.selection_scene_access import (
     clear_scene_selection_for,
     scene_selected_items_for,
     set_scene_items_selected_for,
 )
-from ui.selection_service_access import (
+from chemvas.ui.selection_service_access import (
     select_single_structure_item_for,
     selection_targets_for_item_for,
 )
@@ -76,7 +76,9 @@ def test_selection_status_item_identity_uses_stable_structure_ids() -> None:
     assert selection_status_item_identity(custom) == ("item", id(custom))
 
 
-def test_selection_status_count_dedupes_structures_and_includes_selected_notes() -> None:
+def test_selection_status_count_dedupes_structures_and_includes_selected_notes() -> (
+    None
+):
     atom = _Item("atom", 1)
     duplicate_atom = _Item("atom", 1)
     bond = _Item("bond", 2)
@@ -142,7 +144,9 @@ def test_select_single_structure_item_for_uses_selection_controller_targets() ->
     item = object()
     target = _Item("atom", 1)
     scene = _Scene([])
-    selection_controller = SimpleNamespace(selection_targets_for_item=mock.Mock(return_value=[target, None]))
+    selection_controller = SimpleNamespace(
+        selection_targets_for_item=mock.Mock(return_value=[target, None])
+    )
     canvas = SimpleNamespace(
         services=SimpleNamespace(selection_controller=selection_controller),
         scene=mock.Mock(return_value=scene),
@@ -151,6 +155,8 @@ def test_select_single_structure_item_for_uses_selection_controller_targets() ->
     assert selection_targets_for_item_for(canvas, item) == [target]
     assert select_single_structure_item_for(canvas, item)
 
-    selection_controller.selection_targets_for_item.assert_has_calls([mock.call(item), mock.call(item)])
+    selection_controller.selection_targets_for_item.assert_has_calls(
+        [mock.call(item), mock.call(item)]
+    )
     assert scene.clear_selection_calls == 1
     assert target.selected_calls == [True]

@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from ui.main_window_action_availability_service import (
+from chemvas.bootstrap.main_window_services import build_main_window_services
+from chemvas.ui.main_window_action_availability_service import (
     MainWindowActionAvailabilityService,
 )
-from ui.main_window_context_page_state_service import (
+from chemvas.ui.main_window_context_page_state_service import (
     MainWindowContextPageStateService,
 )
-from ui.main_window_ports import (
+from chemvas.ui.main_window_ports import (
     active_tool_name_for_window,
     color_mutation_service_for_window,
     color_tool_for_window,
@@ -20,7 +21,6 @@ from ui.main_window_ports import (
     style_controller_for_window,
     tool_mode_controller_for_window,
 )
-from ui.main_window_services import build_main_window_services
 
 
 def _window_with_active_canvas(canvas):
@@ -65,9 +65,18 @@ def test_active_canvas_service_ports_share_active_canvas_services_lookup() -> No
     assert style_controller_for_window(window) is services.style_controller
     assert tool_mode_controller_for_window(window) is services.tool_mode_controller
     assert insert_controller_for_window(window) is services.insert_controller
-    assert color_mutation_service_for_window(window) is services.canvas_color_mutation_service
-    assert scene_transform_controller_for_window(window) is services.scene_transform_controller
-    assert document_session_service_for_window(window) is services.canvas_document_session_service
+    assert (
+        color_mutation_service_for_window(window)
+        is services.canvas_color_mutation_service
+    )
+    assert (
+        scene_transform_controller_for_window(window)
+        is services.scene_transform_controller
+    )
+    assert (
+        document_session_service_for_window(window)
+        is services.canvas_document_session_service
+    )
     assert geometry_controller_for_window(window) is services.geometry_controller
     assert color_tool_for_window(window) is services.tools.tools["color"]
 
@@ -84,10 +93,14 @@ def test_has_exportable_atoms_for_window_handles_missing_and_populated_canvas() 
 def test_build_main_window_services_includes_action_availability_service() -> None:
     services = build_main_window_services()
 
-    assert isinstance(services.action_availability_service, MainWindowActionAvailabilityService)
+    assert isinstance(
+        services.action_availability_service, MainWindowActionAvailabilityService
+    )
 
 
 def test_build_main_window_services_includes_context_page_state_service() -> None:
     services = build_main_window_services()
 
-    assert isinstance(services.context_page_state_service, MainWindowContextPageStateService)
+    assert isinstance(
+        services.context_page_state_service, MainWindowContextPageStateService
+    )

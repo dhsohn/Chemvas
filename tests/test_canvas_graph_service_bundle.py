@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import ui.canvas_graph_service_bundle as canvas_graph_service_bundle
-from ui.canvas_graph_service_bundle import (
+import chemvas.ui.canvas_graph_service_bundle as canvas_graph_service_bundle
+from chemvas.ui.canvas_graph_service_bundle import (
     CanvasGraphServiceBundle,
     build_canvas_graph_services,
 )

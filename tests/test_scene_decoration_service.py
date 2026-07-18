@@ -12,13 +12,13 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.canvas_mark_registry import CanvasMarkRegistry
-    from ui.canvas_scene_items_state import CanvasSceneItemsState
-    from ui.canvas_tool_settings_state import CanvasToolSettingsState
-    from ui.history_commands import AddSceneItemsCommand
-    from ui.history_stack_snapshot import HistoryStackSnapshot
-    from ui.scene_decoration_service import SceneDecorationService
-    from ui.scene_item_lifecycle_service import SceneItemLifecycleService
+    from chemvas.domain.transactions import HistoryStackSnapshot
+    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+    from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
+    from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+    from chemvas.ui.history_commands import AddSceneItemsCommand
+    from chemvas.ui.scene_decoration_service import SceneDecorationService
+    from chemvas.ui.scene_item_lifecycle_service import SceneItemLifecycleService
 
 
 class _FakeScene:
@@ -65,7 +65,9 @@ def _scene_decoration_service(canvas) -> SceneDecorationService:
     )
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for scene decoration tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for scene decoration tests"
+)
 class SceneDecorationServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -76,7 +78,9 @@ class SceneDecorationServiceTest(unittest.TestCase):
         scene = _FakeScene()
         pushed = []
         text_mark = QGraphicsTextItem("-")
-        set_mark_center = mock.Mock(side_effect=lambda item, center: item.setPos(center))
+        set_mark_center = mock.Mock(
+            side_effect=lambda item, center: item.setPos(center)
+        )
         build_service = SimpleNamespace(
             build_mark_item=mock.Mock(side_effect=[text_mark, None]),
             set_mark_center=set_mark_center,
@@ -157,9 +161,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
             def history(self):
                 self.history_calls += 1
                 if self.source == "history" and self.history_calls == 1:
-                    raise AttributeError(
-                        "live history descriptor failed internally"
-                    )
+                    raise AttributeError("live history descriptor failed internally")
                 return self._history
 
             @history.setter
@@ -545,7 +547,9 @@ class SceneDecorationServiceTest(unittest.TestCase):
             history_service=history,
             scene_decoration_build_service=SimpleNamespace(
                 build_mark_item=mock.Mock(return_value=new_mark),
-                set_mark_center=mock.Mock(side_effect=lambda item, pos: item.setPos(pos)),
+                set_mark_center=mock.Mock(
+                    side_effect=lambda item, pos: item.setPos(pos)
+                ),
             ),
             scene_item_controller=_FakeSceneItemController(canvas),
         )
@@ -665,11 +669,11 @@ class SceneDecorationServiceTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "ui.history_commands._scene_items_snapshot",
+                "chemvas.ui.history_commands._scene_items_snapshot",
                 side_effect=AssertionError("bulk mark add scanned the whole scene"),
             ) as scene_scan,
             mock.patch(
-                "ui.scene_decoration_service.HistoryStackSnapshot.capture",
+                "chemvas.ui.scene_decoration_service.HistoryAuthoritySnapshot.capture",
                 side_effect=AssertionError("unrecorded mark copied history"),
             ) as history_scan,
         ):
@@ -720,7 +724,9 @@ class SceneDecorationServiceTest(unittest.TestCase):
         service = _scene_decoration_service(canvas)
 
         arrow = service.add_arrow(QPointF(1.0, 2.0), QPointF(6.0, 7.0), "curved_double")
-        ts_bracket = service.add_ts_bracket(QRectF(QPointF(0.0, 0.0), QPointF(4.0, 8.0)))
+        ts_bracket = service.add_ts_bracket(
+            QRectF(QPointF(0.0, 0.0), QPointF(4.0, 8.0))
+        )
 
         self.assertIs(arrow, arrow_item)
         self.assertEqual(arrow.data(0), "curved_double")
@@ -731,9 +737,14 @@ class SceneDecorationServiceTest(unittest.TestCase):
         self.assertEqual(canvas.arrow_items, [arrow_item])
         self.assertEqual(canvas.ts_bracket_items, [ts_item])
         self.assertEqual(scene.items, [arrow_item, ts_item])
-        self.assertEqual(canvas.attach_scene_item.call_args_list, [mock.call(arrow_item), mock.call(ts_item)])
+        self.assertEqual(
+            canvas.attach_scene_item.call_args_list,
+            [mock.call(arrow_item), mock.call(ts_item)],
+        )
         self.assertEqual(len(pushed), 2)
-        self.assertTrue(all(isinstance(command, AddSceneItemsCommand) for command in pushed))
+        self.assertTrue(
+            all(isinstance(command, AddSceneItemsCommand) for command in pushed)
+        )
 
     def test_add_orbital_builds_before_attach_and_skips_empty_builds(self) -> None:
         pushed = []

@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from ui.canvas_hover_state import (
+from chemvas.ui.canvas_hover_state import (
     CanvasHoverState,
     append_hover_item_for,
     hover_preview_state_for,
@@ -19,7 +19,9 @@ def test_hover_state_for_uses_runtime_state() -> None:
     assert hover_preview_state_for(canvas).style == "wedge"
 
 
-def test_hover_state_for_starts_from_default_state_without_canvas_attr_fallback() -> None:
+def test_hover_state_for_starts_from_default_state_without_canvas_attr_fallback() -> (
+    None
+):
     canvas = SimpleNamespace(hover_items=["existing"], hover_atom_id=2, hover_bond_id=3)
 
     state = hover_state_for(canvas)

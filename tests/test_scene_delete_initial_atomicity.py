@@ -14,46 +14,46 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from core.history import (
+    from chemvas.core.history import (
         CompositeCommand,
         HistoryTransactionRestoreResult,
         SetSmilesInputCommand,
     )
-    from core.model import Atom, Bond, MoleculeModel
-    from ui.atom_coords_access import atom_coords_3d_for
-    from ui.bond_graphics_access import add_bond_graphics_for
-    from ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
-    from ui.canvas_bond_graphics_state import bond_items_for_id
-    from ui.canvas_callback_state import callback_state_for
-    from ui.canvas_delete_transaction import (
+    from chemvas.domain.document import Atom, Bond, MoleculeModel
+    from chemvas.ui.atom_coords_access import atom_coords_3d_for
+    from chemvas.ui.bond_graphics_access import add_bond_graphics_for
+    from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
+    from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
+    from chemvas.ui.canvas_callback_state import callback_state_for
+    from chemvas.ui.canvas_delete_transaction import (
         CanvasDeleteTransactionSnapshot,
         canvas_delete_transaction,
     )
-    from ui.canvas_group_state import (
+    from chemvas.ui.canvas_group_state import (
         group_state_for,
         register_group_for,
         remove_group_for,
     )
-    from ui.canvas_mark_registry import mark_registry_for
-    from ui.canvas_scene_items_state import note_items_for, ring_items_for
-    from ui.canvas_smiles_input_state import (
+    from chemvas.ui.canvas_mark_registry import mark_registry_for
+    from chemvas.ui.canvas_scene_items_state import note_items_for, ring_items_for
+    from chemvas.ui.canvas_smiles_input_state import (
         last_smiles_input_for,
         set_last_smiles_input_for,
     )
-    from ui.canvas_view import CanvasView
-    from ui.edit_tools import DeleteTool
-    from ui.history_commands import UngroupSceneItemsCommand
-    from ui.scene_delete_controller import (
+    from chemvas.ui.canvas_view import CanvasView
+    from chemvas.ui.edit_tools import DeleteTool
+    from chemvas.ui.history_commands import UngroupSceneItemsCommand
+    from chemvas.ui.scene_delete_controller import (
         SceneDeleteController,
         SceneDeleteTransactionSession,
     )
-    from ui.scene_item_state import (
+    from chemvas.ui.scene_item_state import (
         atom_state_dict_for,
         bond_state_dict,
         mark_state_dict_for,
     )
-    from ui.selection_info_state import selection_info_state_for
-    from ui.structure_mutation_access import add_benzene_ring_for
+    from chemvas.ui.selection_info_state import selection_info_state_for
+    from chemvas.ui.structure_mutation_access import add_benzene_ring_for
 
     from tests.test_scene_ops_controller import (
         _FakeCanvas,
@@ -1165,7 +1165,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                         raise RuntimeError("persistent group removal failure")
 
                     patcher = mock.patch(
-                        "ui.scene_delete_controller.remove_group_for",
+                        "chemvas.ui.scene_delete_controller.remove_group_for",
                         side_effect=mutate_group_then_fail,
                     )
                 else:
@@ -2355,11 +2355,11 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "ui.scene_delete_controller.model_bond_pairs",
+                "chemvas.ui.scene_delete_controller.model_bond_pairs",
                 side_effect=AssertionError("gesture delete rescanned the full model"),
             ),
             mock.patch(
-                "ui.scene_delete_controller.ring_items_for",
+                "chemvas.ui.scene_delete_controller.ring_items_for",
                 side_effect=AssertionError("gesture delete rescanned every ring"),
             ),
         ):
@@ -2385,7 +2385,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 return_value=shape_item,
             ),
             mock.patch(
-                "ui.scene_delete_controller.group_ids_for_members_for",
+                "chemvas.ui.scene_delete_controller.group_ids_for_members_for",
                 side_effect=AssertionError("gesture delete rescanned every group"),
             ),
         ):
@@ -2423,15 +2423,15 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "ui.scene_delete_controller.model_bond_pairs",
+                "chemvas.ui.scene_delete_controller.model_bond_pairs",
                 side_effect=AssertionError("gesture delete rescanned the full model"),
             ),
             mock.patch(
-                "ui.scene_delete_controller.ring_items_for",
+                "chemvas.ui.scene_delete_controller.ring_items_for",
                 side_effect=AssertionError("gesture delete rescanned every ring"),
             ),
             mock.patch(
-                "ui.scene_delete_controller.group_ids_for_members_for",
+                "chemvas.ui.scene_delete_controller.group_ids_for_members_for",
                 side_effect=AssertionError("gesture delete rescanned every group"),
             ),
         ):
@@ -2459,15 +2459,15 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "ui.scene_delete_controller.model_bond_pairs",
+                "chemvas.ui.scene_delete_controller.model_bond_pairs",
                 side_effect=AssertionError("gesture delete rescanned the full model"),
             ),
             mock.patch(
-                "ui.scene_delete_controller.ring_items_for",
+                "chemvas.ui.scene_delete_controller.ring_items_for",
                 side_effect=AssertionError("gesture delete rescanned every ring"),
             ),
             mock.patch(
-                "ui.scene_delete_controller.group_ids_for_members_for",
+                "chemvas.ui.scene_delete_controller.group_ids_for_members_for",
                 side_effect=AssertionError("gesture delete rescanned every group"),
             ),
         ):

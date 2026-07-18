@@ -11,7 +11,7 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.canvas_view import CanvasView
+    from chemvas.ui.canvas_view import CanvasView
 
 
 class _FakeKeyEvent:
@@ -33,7 +33,9 @@ class _FakeKeyEvent:
         return ""
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas view tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for canvas view tests"
+)
 class CanvasViewKeyPressRoutingTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

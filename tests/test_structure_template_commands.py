@@ -4,9 +4,9 @@ from types import SimpleNamespace
 from unittest import mock
 
 import pytest
-from core.rdkit_adapter import RDKitAdapter
-from ui.structure_fragment_build_service import FRAGMENT_BUILD_FAILED
-from ui.structure_template_commands import (
+from chemvas.core.rdkit_adapter import RDKitAdapter
+from chemvas.ui.structure_fragment_build_service import FRAGMENT_BUILD_FAILED
+from chemvas.ui.structure_template_commands import (
     SERVICE_TEMPLATE_METHODS,
     apply_structure_template_command,
     known_structure_template_keys,
@@ -54,7 +54,9 @@ def test_structure_template_commands_dispatch_recorded_catalog_templates() -> No
         ["C", "C", "C", "C", "C", "N"],
         [2, 1, 2, 1, 2, 1],
     )
-    service.template_builder.add_fused_benzenes.assert_called_once_with(3, mode="angled")
+    service.template_builder.add_fused_benzenes.assert_called_once_with(
+        3, mode="angled"
+    )
     service.template_builder.add_crown_ether.assert_called_once_with(18, 6)
 
 
@@ -70,7 +72,9 @@ def test_structure_template_commands_dispatch_imidazole_pyrrolic_bond_orders() -
     )
 
 
-def test_structure_template_commands_dispatch_service_methods_and_unknown_keys() -> None:
+def test_structure_template_commands_dispatch_service_methods_and_unknown_keys() -> (
+    None
+):
     service = _template_service()
 
     apply_structure_template_command(service, "cyclohexane_chair")
@@ -83,21 +87,29 @@ def test_structure_template_commands_dispatch_service_methods_and_unknown_keys()
         apply_structure_template_command(service, "not-a-template")
 
 
-def test_structure_template_commands_preserve_recorded_action_result_conventions() -> None:
+def test_structure_template_commands_preserve_recorded_action_result_conventions() -> (
+    None
+):
     service = _template_service()
     recorded_results = []
-    service.run_recorded_build.side_effect = lambda action: recorded_results.append(action())
+    service.run_recorded_build.side_effect = lambda action: recorded_results.append(
+        action()
+    )
     scene_item = object()
 
     service.template_builder.add_regular_ring_template.return_value = [scene_item]
     apply_structure_template_command(service, "cyclopropane")
-    service.template_builder.add_regular_ring_template.return_value = FRAGMENT_BUILD_FAILED
+    service.template_builder.add_regular_ring_template.return_value = (
+        FRAGMENT_BUILD_FAILED
+    )
     apply_structure_template_command(service, "cyclopropane")
 
     assert recorded_results == [[scene_item], None]
 
 
-def test_structure_template_commands_record_real_catalog_builds_without_rollback() -> None:
+def test_structure_template_commands_record_real_catalog_builds_without_rollback() -> (
+    None
+):
     cases = (
         ("cyclopropane", 3, 3, 0),
         ("pyridine", 6, 6, 3),
@@ -129,7 +141,9 @@ def test_structure_template_service_methods_self_record_history_once() -> None:
         assert len(canvas.record_calls) == 1, key
 
 
-@pytest.mark.skipif(_RealChem is None, reason="RDKit is required for aromatic template identity tests")
+@pytest.mark.skipif(
+    _RealChem is None, reason="RDKit is required for aromatic template identity tests"
+)
 def test_structure_template_commands_build_imidazole_identity() -> None:
     canvas = _FakeCanvas()
     service = _service_for(canvas)
@@ -141,7 +155,9 @@ def test_structure_template_commands_build_imidazole_identity() -> None:
     assert _RealChem.MolToSmiles(mol, canonical=True) == "c1c[nH]cn1"
 
 
-@pytest.mark.skipif(_RealChem is None, reason="RDKit is required for aromatic template MOL export tests")
+@pytest.mark.skipif(
+    _RealChem is None, reason="RDKit is required for aromatic template MOL export tests"
+)
 def test_structure_template_commands_mol_export_preserves_pyrrolic_n_identity() -> None:
     cases = (
         ("pyrrole", "c1cc[nH]c1"),

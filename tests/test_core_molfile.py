@@ -1,8 +1,8 @@
 import math
 import unittest
 
-from core.model import MoleculeModel
-from core.molfile import MolfileError, MolfileLimitError, write_molfile
+from chemvas.core.molfile import MolfileError, MolfileLimitError, write_molfile
+from chemvas.domain.document import MoleculeModel
 
 try:
     from rdkit import Chem as _RealChem
@@ -33,7 +33,11 @@ def _far_offset_ethanol() -> MoleculeModel:
 def _benzene() -> MoleculeModel:
     model = MoleculeModel()
     ids = [
-        model.add_atom("C", 40 * math.cos(math.radians(60 * i)), 40 * math.sin(math.radians(60 * i)))
+        model.add_atom(
+            "C",
+            40 * math.cos(math.radians(60 * i)),
+            40 * math.sin(math.radians(60 * i)),
+        )
         for i in range(6)
     ]
     for i in range(6):
@@ -103,7 +107,9 @@ class MolfileWriterTest(unittest.TestCase):
             write_molfile(model)
         self.assertIn("Me", str(ctx.exception))
 
-    @unittest.skipUnless(_RealChem is not None, "RDKit is required for round-trip tests")
+    @unittest.skipUnless(
+        _RealChem is not None, "RDKit is required for round-trip tests"
+    )
     def test_benzene_round_trips_through_rdkit(self) -> None:
         mol = _RealChem.MolFromMolBlock(write_molfile(_benzene()))
         self.assertIsNotNone(mol)
@@ -111,13 +117,17 @@ class MolfileWriterTest(unittest.TestCase):
         self.assertEqual(mol.GetNumBonds(), 6)
         self.assertEqual(_RealChem.MolToSmiles(mol), "c1ccccc1")
 
-    @unittest.skipUnless(_RealChem is not None, "RDKit is required for round-trip tests")
+    @unittest.skipUnless(
+        _RealChem is not None, "RDKit is required for round-trip tests"
+    )
     def test_ethanol_round_trips_through_rdkit(self) -> None:
         mol = _RealChem.MolFromMolBlock(write_molfile(_ethanol()))
         self.assertIsNotNone(mol)
         self.assertEqual(_RealChem.MolToSmiles(mol), "CCO")
 
-    @unittest.skipUnless(_RealChem is not None, "RDKit is required for round-trip tests")
+    @unittest.skipUnless(
+        _RealChem is not None, "RDKit is required for round-trip tests"
+    )
     def test_formal_charge_survives_round_trip(self) -> None:
         model = MoleculeModel()
         model.add_atom("N", 0.0, 0.0)

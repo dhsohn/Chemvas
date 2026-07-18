@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from ui.note_html_sanitizer import MAX_NOTE_HTML_CHARS, sanitize_note_html
+from chemvas.features.annotations import MAX_NOTE_HTML_CHARS, sanitize_note_html
 
 
-def test_sanitize_note_html_preserves_safe_qt_text_styles_and_drops_css_resources() -> None:
+def test_sanitize_note_html_preserves_safe_qt_text_styles_and_drops_css_resources() -> (
+    None
+):
     html = (
         '<p style="font-size:12pt; vertical-align:super; background-image:url(file:///tmp/x); '
         'color:#123456; -qt-block-indent:0; margin-top:0px">x</p>'
@@ -37,19 +39,21 @@ def test_sanitize_note_html_drops_unsafe_style_values_and_oversized_html() -> No
 
 def test_sanitize_note_html_keeps_safe_body_subset() -> None:
     html = (
-        '<p><b>B</b><strong>S</strong><i>I</i><em>E</em><u>U</u><sub>2</sub><sup>+</sup><br>'
+        "<p><b>B</b><strong>S</strong><i>I</i><em>E</em><u>U</u><sub>2</sub><sup>+</sup><br>"
         '<span style="color:#123456; background-color:rgb(10, 20, 30)">S</span></p>'
     )
 
     sanitized = sanitize_note_html(html)
 
     assert sanitized == (
-        '<p><b>B</b><strong>S</strong><i>I</i><em>E</em><u>U</u><sub>2</sub><sup>+</sup><br>'
+        "<p><b>B</b><strong>S</strong><i>I</i><em>E</em><u>U</u><sub>2</sub><sup>+</sup><br>"
         '<span style="color:#123456; background-color:rgb(10, 20, 30)">S</span></p>'
     )
 
 
-def test_sanitize_note_html_preserves_legacy_note_formatting_without_document_wrappers() -> None:
+def test_sanitize_note_html_preserves_legacy_note_formatting_without_document_wrappers() -> (
+    None
+):
     html = (
         "<html><head>"
         '<meta name="qrichtext" content="1"><title>drop me</title>'
@@ -60,8 +64,8 @@ def test_sanitize_note_html_preserves_legacy_note_formatting_without_document_wr
         '<blockquote style="margin-left:40px; color:rgb(12, 34, 56)">'
         '<p align="RIGHT" class="unused" data-note="x">'
         'Safe <font color="red" face="Courier New" size="4">font</font> '
-        '<span style="font-family:\'Courier New\'; font-size:12pt; font-weight:700; '
-        'font-style:italic; line-height:125%; text-decoration:underline; color:#abcdef; background-color:lightblue; '
+        "<span style=\"font-family:'Courier New'; font-size:12pt; font-weight:700; "
+        "font-style:italic; line-height:125%; text-decoration:underline; color:#abcdef; background-color:lightblue; "
         'vertical-align:super; white-space:pre-wrap">span</span>'
         '</p><ul type="disc"><li value="2">one</li></ul><ol type="A" start="2"><li type="i">two</li></ol>'
         "</blockquote></div></body></html>"

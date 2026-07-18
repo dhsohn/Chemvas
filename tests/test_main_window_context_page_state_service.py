@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 from unittest import mock
 
-from ui.main_window_context_page_state_service import (
+from chemvas.ui.main_window_context_page_state_service import (
     MainWindowContextPageStateService,
 )
 
@@ -92,7 +92,9 @@ def test_show_context_page_sets_override_checks_action_and_refreshes() -> None:
 
     service.show_context_page(window, "ring_fill")
 
-    set_context_bar_page_override_for_window.assert_called_once_with(window, "ring_fill")
+    set_context_bar_page_override_for_window.assert_called_once_with(
+        window, "ring_fill"
+    )
     tool_action_for_window.assert_called_once_with(window, "ring_fill")
     action.setChecked.assert_called_once_with(True)
     context_bar_service.refresh_window.assert_called_once_with(window)
@@ -113,5 +115,7 @@ def test_show_context_page_allows_missing_action() -> None:
 
     service.show_context_page(window, "ring_fill")
 
-    set_context_bar_page_override_for_window.assert_called_once_with(window, "ring_fill")
+    set_context_bar_page_override_for_window.assert_called_once_with(
+        window, "ring_fill"
+    )
     context_bar_service.refresh_window.assert_called_once_with(window)

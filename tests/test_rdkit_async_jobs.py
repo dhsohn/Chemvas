@@ -16,23 +16,27 @@ except ModuleNotFoundError:
     QObject = None
 
 if QObject is not None:
-    from core.model import MoleculeModel
-    from core.rdkit_types import MoleculeIdentifiers, RDKitResult
-    from ui import rdkit_async_jobs
-    from ui.preview_3d_worker import Preview3DWorker
-    from ui.rdkit_async_jobs import XYZExportWorker, export_xyz_in_thread
-    from ui.rdkit_export_job_state import (
+    from chemvas.domain.document import MoleculeModel
+    from chemvas.features.insertion import MoleculeIdentifiers, RDKitResult
+    from chemvas.ui import rdkit_async_jobs
+    from chemvas.ui.preview_3d_worker import Preview3DWorker
+    from chemvas.ui.rdkit_async_jobs import XYZExportWorker, export_xyz_in_thread
+    from chemvas.ui.rdkit_export_job_state import (
         normalized_export_target_path,
         rdkit_export_jobs_for,
         reset_rdkit_export_job_state_for_tests,
     )
 
 
-@unittest.skipUnless(QObject is not None, "PyQt6 is required for async RDKit export tests")
+@unittest.skipUnless(
+    QObject is not None, "PyQt6 is required for async RDKit export tests"
+)
 class XYZExportWorkerTest(unittest.TestCase):
     def test_run_writes_xyz_and_emits_success_and_finished(self) -> None:
         rdkit = SimpleNamespace(
-            model_to_xyz_block=mock.Mock(return_value="1\nChemvas XYZ export\nC 0.0 0.0 0.0\n"),
+            model_to_xyz_block=mock.Mock(
+                return_value="1\nChemvas XYZ export\nC 0.0 0.0 0.0\n"
+            ),
             last_error=None,
         )
         signals = {"succeeded": [], "failed": [], "finished": 0}
@@ -42,13 +46,20 @@ class XYZExportWorkerTest(unittest.TestCase):
             worker = XYZExportWorker(rdkit, "model", {"annotations": True}, str(path))
             worker.succeeded.connect(signals["succeeded"].append)
             worker.failed.connect(signals["failed"].append)
-            worker.finished.connect(lambda: signals.__setitem__("finished", signals["finished"] + 1))
+            worker.finished.connect(
+                lambda: signals.__setitem__("finished", signals["finished"] + 1)
+            )
 
             worker.run()
 
-            self.assertEqual(path.read_text(encoding="utf-8"), "1\nChemvas XYZ export\nC 0.0 0.0 0.0\n")
+            self.assertEqual(
+                path.read_text(encoding="utf-8"),
+                "1\nChemvas XYZ export\nC 0.0 0.0 0.0\n",
+            )
 
-        rdkit.model_to_xyz_block.assert_called_once_with("model", atom_annotations={"annotations": True})
+        rdkit.model_to_xyz_block.assert_called_once_with(
+            "model", atom_annotations={"annotations": True}
+        )
         self.assertEqual(signals["succeeded"], [str(path)])
         self.assertEqual(signals["failed"], [])
         self.assertEqual(signals["finished"], 1)
@@ -63,7 +74,9 @@ class XYZExportWorkerTest(unittest.TestCase):
         worker = XYZExportWorker(rdkit, "model", {}, "/tmp/not-written.xyz")
         worker.succeeded.connect(signals["succeeded"].append)
         worker.failed.connect(signals["failed"].append)
-        worker.finished.connect(lambda: signals.__setitem__("finished", signals["finished"] + 1))
+        worker.finished.connect(
+            lambda: signals.__setitem__("finished", signals["finished"] + 1)
+        )
 
         worker.run()
 
@@ -73,7 +86,9 @@ class XYZExportWorkerTest(unittest.TestCase):
 
     def test_run_prefers_result_error_over_stale_adapter_error(self) -> None:
         rdkit = SimpleNamespace(
-            model_to_xyz_block_result=mock.Mock(return_value=RDKitResult(None, "local error")),
+            model_to_xyz_block_result=mock.Mock(
+                return_value=RDKitResult(None, "local error")
+            ),
             last_error="stale error",
         )
         signals = {"succeeded": [], "failed": [], "finished": 0}
@@ -81,11 +96,15 @@ class XYZExportWorkerTest(unittest.TestCase):
         worker = XYZExportWorker(rdkit, "model", {}, "/tmp/not-written.xyz")
         worker.succeeded.connect(signals["succeeded"].append)
         worker.failed.connect(signals["failed"].append)
-        worker.finished.connect(lambda: signals.__setitem__("finished", signals["finished"] + 1))
+        worker.finished.connect(
+            lambda: signals.__setitem__("finished", signals["finished"] + 1)
+        )
 
         worker.run()
 
-        rdkit.model_to_xyz_block_result.assert_called_once_with("model", atom_annotations={})
+        rdkit.model_to_xyz_block_result.assert_called_once_with(
+            "model", atom_annotations={}
+        )
         self.assertEqual(signals["succeeded"], [])
         self.assertEqual(signals["failed"], ["local error"])
         self.assertEqual(signals["finished"], 1)
@@ -93,15 +112,23 @@ class XYZExportWorkerTest(unittest.TestCase):
     def test_run_emits_fallback_error_messages(self) -> None:
         cases = (
             (
-                SimpleNamespace(model_to_xyz_block=mock.Mock(return_value=None), last_error=None),
+                SimpleNamespace(
+                    model_to_xyz_block=mock.Mock(return_value=None), last_error=None
+                ),
                 "Failed to export 3D XYZ.",
             ),
             (
-                SimpleNamespace(model_to_xyz_block=mock.Mock(side_effect=RuntimeError()), last_error=None),
+                SimpleNamespace(
+                    model_to_xyz_block=mock.Mock(side_effect=RuntimeError()),
+                    last_error=None,
+                ),
                 "Failed to export 3D XYZ.",
             ),
             (
-                SimpleNamespace(model_to_xyz_block=mock.Mock(side_effect=RuntimeError("boom")), last_error=None),
+                SimpleNamespace(
+                    model_to_xyz_block=mock.Mock(side_effect=RuntimeError("boom")),
+                    last_error=None,
+                ),
                 "boom",
             ),
         )
@@ -157,7 +184,15 @@ class _FakeThread:
 class _FakeWorker:
     instances = []
 
-    def __init__(self, rdkit_adapter, model, atom_annotations, path: str, *, rdkit_adapter_factory=None) -> None:
+    def __init__(
+        self,
+        rdkit_adapter,
+        model,
+        atom_annotations,
+        path: str,
+        *,
+        rdkit_adapter_factory=None,
+    ) -> None:
         self.rdkit_adapter = rdkit_adapter
         self.rdkit_adapter_factory = rdkit_adapter_factory
         self.model = model
@@ -181,7 +216,9 @@ class _FakeWorker:
         self.run_called = True
 
 
-@unittest.skipUnless(QObject is not None, "PyQt6 is required for async RDKit export tests")
+@unittest.skipUnless(
+    QObject is not None, "PyQt6 is required for async RDKit export tests"
+)
 class ExportXYZInThreadTest(unittest.TestCase):
     def setUp(self) -> None:
         reset_rdkit_export_job_state_for_tests()
@@ -247,7 +284,9 @@ class ExportXYZInThreadTest(unittest.TestCase):
             self.assertTrue(thread.delete_later_called)
             self.assertEqual(rdkit_export_jobs_for(owner), [])
 
-    def test_overlapping_same_path_publishes_only_latest_generation_when_completion_reverses(self) -> None:
+    def test_overlapping_same_path_publishes_only_latest_generation_when_completion_reverses(
+        self,
+    ) -> None:
         owner = QObject()
         succeeded = []
         failed = []
@@ -288,7 +327,9 @@ class ExportXYZInThreadTest(unittest.TestCase):
             self.assertFalse(Path(newer_worker.path).exists())
             self.assertEqual(rdkit_export_jobs_for(owner), [])
 
-    def test_owner_destruction_suppresses_callbacks_but_keeps_latest_file_publication(self) -> None:
+    def test_owner_destruction_suppresses_callbacks_but_keeps_latest_file_publication(
+        self,
+    ) -> None:
         owner = QObject()
         succeeded = []
         failed = []
@@ -335,17 +376,19 @@ class ExportXYZInThreadTest(unittest.TestCase):
                 normalized_export_target_path(aliased),
             )
 
-    def test_owner_delete_keeps_running_qthread_until_event_loop_cleans_registry(self) -> None:
+    def test_owner_delete_keeps_running_qthread_until_event_loop_cleans_registry(
+        self,
+    ) -> None:
         app_root = Path(__file__).resolve().parents[1] / "app"
-        script = r'''
+        script = r"""
 import sys
 import time
 from pathlib import Path
 
 from PyQt6.QtCore import QCoreApplication, QObject, QTimer
 
-from ui.rdkit_async_jobs import export_xyz_in_thread
-from ui.rdkit_export_job_state import active_rdkit_export_jobs
+from chemvas.ui.rdkit_async_jobs import export_xyz_in_thread
+from chemvas.ui.rdkit_export_job_state import active_rdkit_export_jobs
 
 
 class SlowAdapter:
@@ -386,7 +429,7 @@ assert successes == []
 assert errors == []
 assert active_rdkit_export_jobs() == ()
 assert list(target.parent.glob(f".{target.name}.*.stage")) == []
-'''
+"""
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "shutdown.xyz"
             env = os.environ.copy()
@@ -405,14 +448,20 @@ assert list(target.parent.glob(f".{target.name}.*.stage")) == []
         self.assertEqual(completed.returncode, 0, completed.stderr)
 
 
-@unittest.skipUnless(QObject is not None, "PyQt6 is required for async RDKit preview tests")
+@unittest.skipUnless(
+    QObject is not None, "PyQt6 is required for async RDKit preview tests"
+)
 class Preview3DWorkerTest(unittest.TestCase):
     def test_run_prefers_result_error_over_stale_adapter_error(self) -> None:
         rdkit = SimpleNamespace(
             compute_identifiers=mock.Mock(
-                return_value=MoleculeIdentifiers(formula="C", mw=12.01, smiles="C", inchikey="KEY")
+                return_value=MoleculeIdentifiers(
+                    formula="C", mw=12.01, smiles="C", inchikey="KEY"
+                )
             ),
-            model_to_3d_scene_result=mock.Mock(return_value=RDKitResult(None, "local preview error")),
+            model_to_3d_scene_result=mock.Mock(
+                return_value=RDKitResult(None, "local preview error")
+            ),
             last_error="stale preview error",
         )
         model = MoleculeModel()
@@ -429,8 +478,12 @@ class Preview3DWorkerTest(unittest.TestCase):
         self.assertIsNot(identifier_model, model)
         self.assertEqual(identifier_model.atom_annotations, atom_annotations)
         self.assertEqual(model.atom_annotations, {})
-        rdkit.model_to_3d_scene_result.assert_called_once_with(model, atom_annotations=atom_annotations)
-        self.assertEqual(emitted, [(7, "C", 12.01, "C", "KEY", None, "local preview error")])
+        rdkit.model_to_3d_scene_result.assert_called_once_with(
+            model, atom_annotations=atom_annotations
+        )
+        self.assertEqual(
+            emitted, [(7, "C", 12.01, "C", "KEY", None, "local preview error")]
+        )
 
 
 if __name__ == "__main__":

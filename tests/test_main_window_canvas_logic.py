@@ -2,12 +2,15 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from ui.canvas_callback_state import callback_state_for
-from ui.canvas_history_service import CanvasHistoryService
-from ui.canvas_history_state import history_state_for
-from ui.canvas_text_style_state import set_text_style_for, text_style_state_for
-from ui.canvas_tool_settings_state import set_tool_setting_for, tool_settings_state_for
-from ui.main_window_canvas_logic import (
+from chemvas.ui.canvas_callback_state import callback_state_for
+from chemvas.ui.canvas_history_service import CanvasHistoryService
+from chemvas.ui.canvas_history_state import history_state_for
+from chemvas.ui.canvas_text_style_state import set_text_style_for, text_style_state_for
+from chemvas.ui.canvas_tool_settings_state import (
+    set_tool_setting_for,
+    tool_settings_state_for,
+)
+from chemvas.ui.main_window_canvas_logic import (
     active_canvas_index,
     active_canvas_tab_index,
     bind_active_canvas_callbacks,
@@ -15,14 +18,16 @@ from ui.main_window_canvas_logic import (
     copy_canvas_template_settings,
     resolve_active_canvas,
 )
-from ui.selection_info_state import selection_info_state_for
+from chemvas.ui.selection_info_state import selection_info_state_for
 
 
 class MainWindowCanvasLogicTest(unittest.TestCase):
     @staticmethod
     def _canvas_with_history() -> SimpleNamespace:
         canvas = SimpleNamespace()
-        canvas.runtime_state = SimpleNamespace(history_service=CanvasHistoryService(canvas, history_state_for(canvas)))
+        canvas.runtime_state = SimpleNamespace(
+            history_service=CanvasHistoryService(canvas, history_state_for(canvas))
+        )
         return canvas
 
     def test_resolve_active_canvas_prefers_current_then_last_then_first(self) -> None:
@@ -102,11 +107,17 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
             history_change_callback=history_change_callback,
         )
 
-        self.assertIs(selection_info_state_for(active_canvas).callback, selection_info_callback)
+        self.assertIs(
+            selection_info_state_for(active_canvas).callback, selection_info_callback
+        )
         self.assertIsNone(callback_state_for(active_canvas).error)
-        self.assertIs(callback_state_for(active_canvas).tool_change, tool_change_callback)
+        self.assertIs(
+            callback_state_for(active_canvas).tool_change, tool_change_callback
+        )
         self.assertIs(callback_state_for(active_canvas).zoom, zoom_callback)
-        self.assertIs(history_state_for(active_canvas).change_callback, history_change_callback)
+        self.assertIs(
+            history_state_for(active_canvas).change_callback, history_change_callback
+        )
         self.assertIsNone(selection_info_state_for(inactive_canvas).callback)
         self.assertIsNone(callback_state_for(inactive_canvas).error)
         self.assertIsNone(callback_state_for(inactive_canvas).tool_change)
@@ -115,7 +126,9 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
 
     def test_canvas_name_counter_tracks_default_canvas_names(self) -> None:
         self.assertEqual(canvas_name_counter([]), 0)
-        self.assertEqual(canvas_name_counter(["Canvas draft", "Canvas 2", "Canvas 9"]), 9)
+        self.assertEqual(
+            canvas_name_counter(["Canvas draft", "Canvas 2", "Canvas 9"]), 9
+        )
         self.assertEqual(canvas_name_counter(["Reactant", "Canvas 2", "Canvas 9"]), 9)
         self.assertEqual(canvas_name_counter(["Result 1"], prefix="Result"), 1)
 

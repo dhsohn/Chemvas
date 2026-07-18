@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ui.bond_dotted_geometry import dotted_bond_path_from_trimmed_segment
+from chemvas.features.rendering import dotted_bond_path_from_trimmed_segment
 
 
 def test_dotted_bond_path_handles_zero_length_and_trim_scaling() -> None:

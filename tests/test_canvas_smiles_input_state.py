@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from ui.canvas_smiles_input_state import (
+from chemvas.ui.canvas_smiles_input_state import (
     CanvasSmilesInputState,
     clear_last_smiles_input_for,
     last_smiles_input_for,
@@ -10,7 +10,9 @@ from ui.canvas_smiles_input_state import (
 
 
 def test_smiles_input_state_for_uses_runtime_state() -> None:
-    runtime_state = SimpleNamespace(smiles_input_state=CanvasSmilesInputState(last_smiles_input="CCO"))
+    runtime_state = SimpleNamespace(
+        smiles_input_state=CanvasSmilesInputState(last_smiles_input="CCO")
+    )
     canvas = SimpleNamespace(runtime_state=runtime_state)
 
     assert smiles_input_state_for(canvas) is runtime_state.smiles_input_state

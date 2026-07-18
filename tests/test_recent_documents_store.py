@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from ui.recent_documents_store import (
+from chemvas.ui.recent_documents_store import (
     clear_recent,
     load_recent,
     record_recent,
@@ -69,4 +69,8 @@ def test_most_recent_first_ordering(tmp_path):
         record_recent(str(target), path=recent)
 
     loaded = load_recent(path=recent)
-    assert [p.rsplit("/", 1)[-1] for p in loaded] == ["c.chemvas", "b.chemvas", "a.chemvas"]
+    assert [p.rsplit("/", 1)[-1] for p in loaded] == [
+        "c.chemvas",
+        "b.chemvas",
+        "a.chemvas",
+    ]

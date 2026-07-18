@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 from unittest import mock
 
-from ui.input_view_access import (
+from chemvas.ui.input_view_access import (
     device_pixel_ratio_for,
     focus_canvas_for,
     focused_scene_item_for,
@@ -115,7 +115,9 @@ def test_focus_canvas_for_calls_canvas_focus() -> None:
 
 def test_scene_rect_and_viewport_helpers_delegate_to_canvas_view() -> None:
     viewport = SimpleNamespace(update=mock.Mock())
-    canvas = SimpleNamespace(setSceneRect=mock.Mock(), viewport=mock.Mock(return_value=viewport))
+    canvas = SimpleNamespace(
+        setSceneRect=mock.Mock(), viewport=mock.Mock(return_value=viewport)
+    )
     rect = object()
 
     set_scene_rect_for(canvas, rect)

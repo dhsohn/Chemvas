@@ -4,11 +4,11 @@ import json
 import os
 import time
 
-from core.document_io import write_document
-from core.document_state import CANVAS_FILE_VERSION, serialize_settings
-from ui import session_snapshot_store
-from ui.session_snapshot_logic import DocDescriptor
-from ui.session_snapshot_store import SessionSnapshotStore
+from chemvas.core.document_io import write_document
+from chemvas.domain.document import CANVAS_FILE_VERSION, serialize_settings
+from chemvas.features.session import DocDescriptor
+from chemvas.ui import session_snapshot_store
+from chemvas.ui.session_snapshot_store import SessionSnapshotStore
 
 
 def _valid_state(marker: str | None = None) -> dict:
@@ -47,7 +47,16 @@ def test_crash_restore_round_trips_unsaved_work(tmp_path, monkeypatch):
     root = tmp_path / "sessions"
     prev = _store(root, "prev", pid=111)
     prev.begin()
-    prev.save_documents([DocDescriptor(state=_valid_state("scratch"), file_path=None, display_name="Canvas 1", dirty=True)])
+    prev.save_documents(
+        [
+            DocDescriptor(
+                state=_valid_state("scratch"),
+                file_path=None,
+                display_name="Canvas 1",
+                dirty=True,
+            )
+        ]
+    )
 
     _dead_pids(monkeypatch)  # the previous instance is gone → a crash
     result = _store(root, "cur").consume_previous_sessions()
@@ -72,7 +81,16 @@ def test_clean_exit_reopens_saved_files_from_disk(tmp_path, monkeypatch):
 
     prev = _store(root, "prev", pid=222)
     prev.begin()
-    prev.save_documents([DocDescriptor(state=_valid_state("on-disk"), file_path=str(saved), display_name="molecule.chemvas", dirty=False)])
+    prev.save_documents(
+        [
+            DocDescriptor(
+                state=_valid_state("on-disk"),
+                file_path=str(saved),
+                display_name="molecule.chemvas",
+                dirty=False,
+            )
+        ]
+    )
     prev.mark_clean_exit()
 
     _dead_pids(monkeypatch)
@@ -90,7 +108,16 @@ def test_clean_exit_drops_unsaved_untitled_docs(tmp_path, monkeypatch):
     root = tmp_path / "sessions"
     prev = _store(root, "prev", pid=333)
     prev.begin()
-    prev.save_documents([DocDescriptor(state=_valid_state(), file_path=None, display_name="Canvas 1", dirty=True)])
+    prev.save_documents(
+        [
+            DocDescriptor(
+                state=_valid_state(),
+                file_path=None,
+                display_name="Canvas 1",
+                dirty=True,
+            )
+        ]
+    )
     prev.mark_clean_exit()
 
     _dead_pids(monkeypatch)
@@ -99,7 +126,9 @@ def test_clean_exit_drops_unsaved_untitled_docs(tmp_path, monkeypatch):
     assert result.docs == []
 
 
-def test_crash_is_recovered_even_when_clean_session_is_suppressed(tmp_path, monkeypatch):
+def test_crash_is_recovered_even_when_clean_session_is_suppressed(
+    tmp_path, monkeypatch
+):
     # The startup-file case (include_clean_session=False): the clean workspace is
     # not reopened, but a crashed session's unsaved work must still be recovered
     # rather than silently pruned.
@@ -109,12 +138,30 @@ def test_crash_is_recovered_even_when_clean_session_is_suppressed(tmp_path, monk
 
     clean = _store(root, "clean-session", pid=10)
     clean.begin()
-    clean.save_documents([DocDescriptor(state=_valid_state("disk"), file_path=str(saved), display_name="kept.chemvas", dirty=False)])
+    clean.save_documents(
+        [
+            DocDescriptor(
+                state=_valid_state("disk"),
+                file_path=str(saved),
+                display_name="kept.chemvas",
+                dirty=False,
+            )
+        ]
+    )
     clean.mark_clean_exit()
 
     crash = _store(root, "crash-session", pid=11)
     crash.begin()
-    crash.save_documents([DocDescriptor(state=_valid_state("unsaved"), file_path=None, display_name="Canvas 1", dirty=True)])
+    crash.save_documents(
+        [
+            DocDescriptor(
+                state=_valid_state("unsaved"),
+                file_path=None,
+                display_name="Canvas 1",
+                dirty=True,
+            )
+        ]
+    )
 
     _dead_pids(monkeypatch)
     result = _store(root, "cur").consume_previous_sessions(include_clean_session=False)
@@ -136,12 +183,26 @@ def test_unreadable_snapshot_does_not_inflate_recovered_count(tmp_path, monkeypa
     prev.begin()
     prev.save_documents(
         [
-            DocDescriptor(state=_valid_state("good"), file_path=None, display_name="Good", dirty=True),
-            DocDescriptor(state=_valid_state("lost"), file_path=None, display_name="Lost", dirty=True),
+            DocDescriptor(
+                state=_valid_state("good"),
+                file_path=None,
+                display_name="Good",
+                dirty=True,
+            ),
+            DocDescriptor(
+                state=_valid_state("lost"),
+                file_path=None,
+                display_name="Lost",
+                dirty=True,
+            ),
         ]
     )
     manifest = json.loads((root / "prev" / "session.json").read_text())
-    lost_snapshot = next(entry["snapshot"] for entry in manifest["docs"] if entry["display_name"] == "Lost")
+    lost_snapshot = next(
+        entry["snapshot"]
+        for entry in manifest["docs"]
+        if entry["display_name"] == "Lost"
+    )
     (root / "prev" / lost_snapshot).unlink()  # simulate a truncated/missing payload
 
     _dead_pids(monkeypatch)
@@ -169,14 +230,22 @@ def test_consume_tolerates_a_sibling_vanishing_mid_scan(tmp_path, monkeypatch):
     root = tmp_path / "sessions"
     prev = _store(root, "prev", pid=77)
     prev.begin()
-    prev.save_documents([DocDescriptor(state=_valid_state("x"), file_path=None, display_name="X", dirty=True)])
+    prev.save_documents(
+        [
+            DocDescriptor(
+                state=_valid_state("x"), file_path=None, display_name="X", dirty=True
+            )
+        ]
+    )
 
     cur = _store(root, "cur")
     original_read = cur._read_manifest
 
     def read_then_vanish(session_dir):
         manifest = original_read(session_dir)
-        shutil.rmtree(session_dir, ignore_errors=True)  # concurrent prune after the read
+        shutil.rmtree(
+            session_dir, ignore_errors=True
+        )  # concurrent prune after the read
         return manifest
 
     monkeypatch.setattr(cur, "_read_manifest", read_then_vanish)
@@ -191,9 +260,20 @@ def test_live_instance_session_is_left_untouched(tmp_path, monkeypatch):
     root = tmp_path / "sessions"
     prev = _store(root, "prev", pid=444)
     prev.begin()
-    prev.save_documents([DocDescriptor(state=_valid_state("live"), file_path=None, display_name="Canvas 1", dirty=True)])
+    prev.save_documents(
+        [
+            DocDescriptor(
+                state=_valid_state("live"),
+                file_path=None,
+                display_name="Canvas 1",
+                dirty=True,
+            )
+        ]
+    )
 
-    monkeypatch.setattr(session_snapshot_store, "_pid_alive", lambda pid: True)  # still running
+    monkeypatch.setattr(
+        session_snapshot_store, "_pid_alive", lambda pid: True
+    )  # still running
     result = _store(root, "cur").consume_previous_sessions()
 
     assert result.docs == []
@@ -207,7 +287,16 @@ def test_clean_saved_doc_is_recorded_without_a_snapshot(tmp_path):
     store = _store(root, "cur")
     store.begin()
 
-    store.save_documents([DocDescriptor(state=_valid_state(), file_path=str(saved), display_name="x.chemvas", dirty=False)])
+    store.save_documents(
+        [
+            DocDescriptor(
+                state=_valid_state(),
+                file_path=str(saved),
+                display_name="x.chemvas",
+                dirty=False,
+            )
+        ]
+    )
 
     assert list((root / "cur").glob("doc-*.json")) == []
     manifest = json.loads((root / "cur" / "session.json").read_text())
@@ -220,7 +309,16 @@ def test_pristine_untitled_canvas_is_not_persisted(tmp_path):
     store = _store(root, "cur")
     store.begin()
 
-    store.save_documents([DocDescriptor(state=_valid_state(), file_path=None, display_name="Canvas 1", dirty=False)])
+    store.save_documents(
+        [
+            DocDescriptor(
+                state=_valid_state(),
+                file_path=None,
+                display_name="Canvas 1",
+                dirty=False,
+            )
+        ]
+    )
 
     manifest = json.loads((root / "cur" / "session.json").read_text())
     assert manifest["docs"] == []
@@ -237,16 +335,31 @@ def test_snapshot_names_are_generation_unique_and_pruned_after_commit(tmp_path):
 
     store.save_documents(
         [
-            DocDescriptor(state=_valid_state("A"), file_path=None, display_name="A", dirty=True),
-            DocDescriptor(state=_valid_state("B"), file_path=None, display_name="B", dirty=True),
+            DocDescriptor(
+                state=_valid_state("A"), file_path=None, display_name="A", dirty=True
+            ),
+            DocDescriptor(
+                state=_valid_state("B"), file_path=None, display_name="B", dirty=True
+            ),
         ]
     )
-    assert sorted(p.name for p in session.glob("doc-*.json")) == ["doc-1-0.json", "doc-1-1.json"]
+    assert sorted(p.name for p in session.glob("doc-*.json")) == [
+        "doc-1-0.json",
+        "doc-1-1.json",
+    ]
 
     # Close the first doc: only B persists now, under a fresh generation name.
-    store.save_documents([DocDescriptor(state=_valid_state("B"), file_path=None, display_name="B", dirty=True)])
+    store.save_documents(
+        [
+            DocDescriptor(
+                state=_valid_state("B"), file_path=None, display_name="B", dirty=True
+            )
+        ]
+    )
 
-    assert sorted(p.name for p in session.glob("doc-*.json")) == ["doc-2-0.json"]  # gen 1 pruned
+    assert sorted(p.name for p in session.glob("doc-*.json")) == [
+        "doc-2-0.json"
+    ]  # gen 1 pruned
     manifest = json.loads((session / "session.json").read_text())
     assert [entry["snapshot"] for entry in manifest["docs"]] == ["doc-2-0.json"]
 
@@ -255,14 +368,34 @@ def test_unchanged_tick_is_a_no_op(tmp_path, monkeypatch):
     root = tmp_path / "sessions"
     store = _store(root, "cur")
     store.begin()
-    docs = [DocDescriptor(state=_valid_state("same"), file_path=None, display_name="Canvas 1", dirty=True)]
+    docs = [
+        DocDescriptor(
+            state=_valid_state("same"),
+            file_path=None,
+            display_name="Canvas 1",
+            dirty=True,
+        )
+    ]
     store.save_documents(docs)
 
     writes: list[str] = []
     original = store._write_manifest
-    monkeypatch.setattr(store, "_write_manifest", lambda manifest: (writes.append("w"), original(manifest))[1])
+    monkeypatch.setattr(
+        store,
+        "_write_manifest",
+        lambda manifest: (writes.append("w"), original(manifest))[1],
+    )
 
-    store.save_documents([DocDescriptor(state=_valid_state("same"), file_path=None, display_name="Canvas 1", dirty=True)])
+    store.save_documents(
+        [
+            DocDescriptor(
+                state=_valid_state("same"),
+                file_path=None,
+                display_name="Canvas 1",
+                dirty=True,
+            )
+        ]
+    )
 
     assert writes == []  # identical open set → nothing rewritten
 
@@ -296,7 +429,9 @@ def test_pid_liveness_uses_a_safe_probe_on_windows_never_os_kill(monkeypatch):
         return True
 
     def _forbidden_kill(*_args, **_kwargs):
-        raise AssertionError("os.kill must never be used on Windows (it terminates the target)")
+        raise AssertionError(
+            "os.kill must never be used on Windows (it terminates the target)"
+        )
 
     monkeypatch.setattr("sys.platform", "win32")
     monkeypatch.setattr(session_snapshot_store, "_pid_alive_windows", _fake_windows)

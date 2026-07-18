@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from ui.active_tool_reference import ActiveToolReference
+from chemvas.features.selection import ActiveToolReference
 
 
 def test_active_tool_reference_resolves_late_bound_tool_controller() -> None:

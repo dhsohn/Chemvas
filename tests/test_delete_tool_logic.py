@@ -3,16 +3,16 @@ import unittest
 from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-from core.history import (  # noqa: E402
+from chemvas.core.history import (  # noqa: E402
     CompositeCommand,
     HistoryCommand,
     SetSmilesInputCommand,
 )
-from ui.delete_tool_logic import (  # noqa: E402
+from chemvas.ui.delete_tool_logic import (  # noqa: E402
     build_delete_tool_history_command,
     erase_delete_tool_item,
 )
-from ui.history_commands import DeleteSceneItemsCommand  # noqa: E402
+from chemvas.ui.history_commands import DeleteSceneItemsCommand  # noqa: E402
 
 
 class _Command(HistoryCommand):
@@ -64,7 +64,9 @@ class _Canvas:
                 delete_bond=self.delete_bond,
                 delete_ring=self.delete_ring,
             ),
-            scene_item_controller=SimpleNamespace(remove_scene_item=self.remove_scene_item),
+            scene_item_controller=SimpleNamespace(
+                remove_scene_item=self.remove_scene_item
+            ),
         )
 
     def delete_atom(self, atom_id: int, record: bool = True):
@@ -94,7 +96,9 @@ class _SceneItemController:
 
 
 class DeleteToolLogicTest(unittest.TestCase):
-    def test_erase_delete_tool_item_dispatches_atom_bond_ring_and_scene_items(self) -> None:
+    def test_erase_delete_tool_item_dispatches_atom_bond_ring_and_scene_items(
+        self,
+    ) -> None:
         canvas = _Canvas()
 
         changed, command = erase_delete_tool_item(canvas, _Item("atom", 3))
@@ -155,12 +159,18 @@ class DeleteToolLogicTest(unittest.TestCase):
     def test_erase_delete_tool_item_rejects_non_integer_atom_and_bond_ids(self) -> None:
         canvas = _Canvas()
 
-        self.assertEqual(erase_delete_tool_item(canvas, _Item("atom", "bad")), (False, None))
-        self.assertEqual(erase_delete_tool_item(canvas, _Item("bond", None)), (False, None))
+        self.assertEqual(
+            erase_delete_tool_item(canvas, _Item("atom", "bad")), (False, None)
+        )
+        self.assertEqual(
+            erase_delete_tool_item(canvas, _Item("bond", None)), (False, None)
+        )
         self.assertEqual(canvas.deleted_atoms, [])
         self.assertEqual(canvas.deleted_bonds, [])
 
-    def test_erase_delete_tool_item_prefers_scene_item_controller_when_available(self) -> None:
+    def test_erase_delete_tool_item_prefers_scene_item_controller_when_available(
+        self,
+    ) -> None:
         canvas = _Canvas()
         canvas.services.scene_item_controller = _SceneItemController(canvas)
         note_item = _Item("note", 9, state={"kind": "note", "id": 9})
@@ -172,7 +182,9 @@ class DeleteToolLogicTest(unittest.TestCase):
         self.assertEqual(canvas.services.scene_item_controller.calls, [note_item])
         self.assertEqual(canvas.removed_items, [("controller", note_item)])
 
-    def test_build_delete_tool_history_command_wraps_single_command_and_multiple(self) -> None:
+    def test_build_delete_tool_history_command_wraps_single_command_and_multiple(
+        self,
+    ) -> None:
         single = _Command("single")
         single_command = build_delete_tool_history_command(
             [single],
@@ -202,7 +214,9 @@ class DeleteToolLogicTest(unittest.TestCase):
         self.assertIs(command.commands[1], first)
         self.assertIs(command.commands[2], second)
 
-    def test_build_delete_tool_history_command_returns_none_for_empty_input(self) -> None:
+    def test_build_delete_tool_history_command_returns_none_for_empty_input(
+        self,
+    ) -> None:
         self.assertIsNone(
             build_delete_tool_history_command(
                 [],

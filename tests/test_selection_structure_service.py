@@ -1,12 +1,12 @@
 from types import SimpleNamespace
 from unittest import mock
 
-from core.model import Atom, Bond
-from ui.canvas_atom_graphics_state import set_atom_dots_for, set_atom_items_for
-from ui.canvas_bond_graphics_state import set_bond_items_for
-from ui.canvas_scene_items_state import set_scene_item_collection_for
-from ui.selection_hit_logic import StructureHit
-from ui.selection_structure_service import SelectionStructureService
+from chemvas.domain.document import Atom, Bond
+from chemvas.features.selection import StructureHit
+from chemvas.ui.canvas_atom_graphics_state import set_atom_dots_for, set_atom_items_for
+from chemvas.ui.canvas_bond_graphics_state import set_bond_items_for
+from chemvas.ui.canvas_scene_items_state import set_scene_item_collection_for
+from chemvas.ui.selection_structure_service import SelectionStructureService
 
 
 class _FakeItem:
@@ -41,9 +41,14 @@ def _make_canvas(**overrides):
         model=overrides.pop("model", SimpleNamespace(atoms={}, bonds=[])),
         services=SimpleNamespace(
             canvas_graph_service=SimpleNamespace(
-                expand_connected_atoms=overrides.pop("expand_connected_atoms", mock.Mock(side_effect=lambda ids: set(ids)))
+                expand_connected_atoms=overrides.pop(
+                    "expand_connected_atoms",
+                    mock.Mock(side_effect=lambda ids: set(ids)),
+                )
             ),
-            selection_controller=overrides.pop("selection_controller", SimpleNamespace()),
+            selection_controller=overrides.pop(
+                "selection_controller", SimpleNamespace()
+            ),
         ),
         scene=lambda: scene,
     )
@@ -76,12 +81,32 @@ def test_structure_hit_and_item_resolution_cover_atoms_bonds_and_rings() -> None
     )
 
     assert service.structure_hit_from_item(None) == (None, None, None)
-    assert service.structure_hit_from_item(atom_item)[0] == StructureHit(kind="atom", id=1)
-    assert service.structure_hit_from_item(_FakeItem("atom", data1="bad")) == (None, None, None)
-    assert service.structure_hit_from_item(bond_item) == (StructureHit(kind="bond", id=0), (1, 2), None)
-    assert service.structure_hit_from_item(_FakeItem("bond", data1=1)) == (None, None, None)
-    assert service.structure_hit_from_item(ring_item) == (StructureHit(kind="ring"), None, [1, 2])
-    assert service.structure_hit_from_item(_FakeItem("note"))[0] == StructureHit(kind="other")
+    assert service.structure_hit_from_item(atom_item)[0] == StructureHit(
+        kind="atom", id=1
+    )
+    assert service.structure_hit_from_item(_FakeItem("atom", data1="bad")) == (
+        None,
+        None,
+        None,
+    )
+    assert service.structure_hit_from_item(bond_item) == (
+        StructureHit(kind="bond", id=0),
+        (1, 2),
+        None,
+    )
+    assert service.structure_hit_from_item(_FakeItem("bond", data1=1)) == (
+        None,
+        None,
+        None,
+    )
+    assert service.structure_hit_from_item(ring_item) == (
+        StructureHit(kind="ring"),
+        None,
+        [1, 2],
+    )
+    assert service.structure_hit_from_item(_FakeItem("note"))[0] == StructureHit(
+        kind="other"
+    )
     assert service.structure_item_for_hit(StructureHit(kind="atom", id=1)) is atom_item
     assert service.structure_item_for_hit(StructureHit(kind="atom", id=2)) is atom_dot
     assert service.structure_item_for_hit(StructureHit(kind="bond", id=0)) is bond_item
@@ -92,7 +117,9 @@ def test_selection_targets_for_item_resolves_graphics_items_only() -> None:
     atom_item = _FakeItem("atom", data1=1)
     bond_item = _FakeItem("bond", data1=0)
     overlay_item = _FakeItem("orbital")
-    service = _structure_service(_make_canvas(atom_items={1: atom_item}, bond_items={0: [bond_item, None]}))
+    service = _structure_service(
+        _make_canvas(atom_items={1: atom_item}, bond_items={0: [bond_item, None]})
+    )
 
     assert service.selection_targets_for_item(_FakeItem("atom", data1=1)) == [atom_item]
     assert service.selection_targets_for_item(_FakeItem("bond", data1=0)) == [bond_item]
@@ -108,13 +135,19 @@ def test_select_structure_for_item_selects_connected_atoms_bonds_and_rings() -> 
     bond_graphic = _FakeItem("bond")
     ring_item = _FakeItem("ring", data2=[1, 2])
     unrelated_ring_item = _FakeItem("ring", data2=[1, 3])
-    scene = _FakeScene([atom_item, atom_item_2, bond_graphic, ring_item, unrelated_ring_item])
+    scene = _FakeScene(
+        [atom_item, atom_item_2, bond_graphic, ring_item, unrelated_ring_item]
+    )
     selection_controller = SimpleNamespace(clear_note_selection=mock.Mock())
     service = _structure_service(
         _make_canvas(
             scene=scene,
             model=SimpleNamespace(
-                atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 1.0, 0.0), 3: Atom("N", 2.0, 0.0)},
+                atoms={
+                    1: Atom("C", 0.0, 0.0),
+                    2: Atom("O", 1.0, 0.0),
+                    3: Atom("N", 2.0, 0.0),
+                },
                 bonds=[Bond(1, 2, 1), Bond(1, 3, 1)],
             ),
             atom_items={1: atom_item, 2: atom_item_2},
@@ -142,7 +175,9 @@ def test_select_structure_for_item_selects_overlay_without_outline_refresh() -> 
     note_item = _FakeItem("note")
     scene = _FakeScene([note_item])
     selection_controller = SimpleNamespace(clear_note_selection=mock.Mock())
-    service = _structure_service(_make_canvas(scene=scene, selection_controller=selection_controller))
+    service = _structure_service(
+        _make_canvas(scene=scene, selection_controller=selection_controller)
+    )
 
     result = service.select_structure_for_item(note_item)
 

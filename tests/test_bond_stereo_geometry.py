@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ui.bond_stereo_geometry import (
+from chemvas.features.rendering import (
     hash_segments_from_segment,
     trimmed_line_segment,
     wedge_polygon_from_segment,

@@ -5,22 +5,22 @@ from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from core.model import Atom, Bond, MoleculeModel
-from PyQt6.QtCore import QPointF, QRectF
-from PyQt6.QtWidgets import QApplication, QGraphicsScene
-from ui.canvas_atom_graphics_state import (
+from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.ui.canvas_atom_graphics_state import (
     atom_dots_for,
     atom_items_for,
     set_atom_dots_for,
     set_atom_items_for,
 )
-from ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
-from ui.canvas_smiles_input_state import (
+from chemvas.ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
+from chemvas.ui.canvas_smiles_input_state import (
     last_smiles_input_for,
     set_last_smiles_input_for,
 )
-from ui.scene_rect_snapshot import SceneRectSnapshot
-from ui.structure_insert_service import StructureInsertService
+from chemvas.ui.structure_insert_service import StructureInsertService
+from chemvas.ui.transactions.scene_rect import SceneRectSnapshot
+from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtWidgets import QApplication, QGraphicsScene
 
 
 def _point_tuple(point: QPointF) -> tuple[float, float]:
@@ -80,7 +80,9 @@ class _FakeScene:
 
     def clearSelection(self) -> None:
         self.clear_selection_calls += 1
-        for item in list(self.canvas.atom_items.values()) + list(self.canvas.atom_dots.values()):
+        for item in list(self.canvas.atom_items.values()) + list(
+            self.canvas.atom_dots.values()
+        ):
             item.setSelected(False)
         for items in self.canvas.bond_items.values():
             for item in items:
@@ -105,7 +107,9 @@ class _FakeCanvas:
         self.atom_label_calls: list[tuple[int, str, bool, bool]] = []
         self.add_text_note_calls: list[tuple[QPointF, str]] = []
         self.services = SimpleNamespace(
-            canvas_history_recording_service=SimpleNamespace(record_additions=self._record_additions),
+            canvas_history_recording_service=SimpleNamespace(
+                record_additions=self._record_additions
+            ),
             atom_label_service=SimpleNamespace(
                 add_or_update_atom_label=self.add_or_update_atom_label,
                 ensure_carbon_dot=self.ensure_carbon_dot,
@@ -222,7 +226,9 @@ def _structure_insert_service(canvas: _FakeCanvas) -> StructureInsertService:
 
 
 class _EphemeralBondList(list):
-    def __init__(self, items=(), *, none_after_first_read: set[int] | None = None) -> None:
+    def __init__(
+        self, items=(), *, none_after_first_read: set[int] | None = None
+    ) -> None:
         super().__init__(items)
         self._none_after_first_read = set(none_after_first_read or ())
         self._reads: dict[int, int] = {}
@@ -242,7 +248,9 @@ class StructureInsertServiceTest(unittest.TestCase):
         canvas = _FakeCanvas()
         service = _structure_insert_service(canvas)
 
-        inserted_atom_ids, inserted_bond_ids = service.insert_structure_model(MoleculeModel())
+        inserted_atom_ids, inserted_bond_ids = service.insert_structure_model(
+            MoleculeModel()
+        )
 
         self.assertEqual(inserted_atom_ids, set())
         self.assertEqual(inserted_bond_ids, set())
@@ -252,7 +260,9 @@ class StructureInsertServiceTest(unittest.TestCase):
         self.assertEqual(canvas.selected_atom_ids(), set())
         self.assertEqual(canvas.selected_bond_ids(), set())
 
-    def test_insert_structure_model_recenters_atoms_and_adds_bond_graphics(self) -> None:
+    def test_insert_structure_model_recenters_atoms_and_adds_bond_graphics(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         existing_atom_id = canvas.model.add_atom("N", -20.0, -10.0)
         canvas.model.atoms[existing_atom_id].explicit_label = True
@@ -273,8 +283,12 @@ class StructureInsertServiceTest(unittest.TestCase):
 
         self.assertEqual(inserted_atom_ids, {1, 2})
         self.assertEqual(inserted_bond_ids, {1})
-        self.assertEqual((canvas.model.atoms[1].x, canvas.model.atoms[1].y), (38.0, 30.0))
-        self.assertEqual((canvas.model.atoms[2].x, canvas.model.atoms[2].y), (42.0, 30.0))
+        self.assertEqual(
+            (canvas.model.atoms[1].x, canvas.model.atoms[1].y), (38.0, 30.0)
+        )
+        self.assertEqual(
+            (canvas.model.atoms[2].x, canvas.model.atoms[2].y), (42.0, 30.0)
+        )
         self.assertEqual(canvas.model.atoms[1].color, "#112233")
         self.assertFalse(canvas.model.atoms[1].explicit_label)
         self.assertEqual(canvas.model.atoms[2].color, "#445566")
@@ -295,7 +309,9 @@ class StructureInsertServiceTest(unittest.TestCase):
         self.assertEqual(canvas.selected_atom_ids(), {1, 2})
         self.assertEqual(canvas.selected_bond_ids(), {1})
 
-    def test_insert_structure_model_uses_carbon_dot_for_implicit_carbon_and_labels_explicit_atoms(self) -> None:
+    def test_insert_structure_model_uses_carbon_dot_for_implicit_carbon_and_labels_explicit_atoms(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         service = _structure_insert_service(canvas)
         model = MoleculeModel(
@@ -325,7 +341,9 @@ class StructureInsertServiceTest(unittest.TestCase):
         self.assertTrue(canvas.model.atoms[1].explicit_label)
         self.assertFalse(canvas.model.atoms[2].explicit_label)
 
-    def test_insert_structure_model_remaps_atom_annotations_to_inserted_atoms(self) -> None:
+    def test_insert_structure_model_remaps_atom_annotations_to_inserted_atoms(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         existing_atom_id = canvas.model.add_atom("H", -10.0, -10.0)
         canvas.model.atom_annotations[existing_atom_id] = {"formal_charge": -1}
@@ -362,7 +380,9 @@ class StructureInsertServiceTest(unittest.TestCase):
             },
         )
 
-    def test_insert_structure_model_adds_title_note_and_restores_selection_history(self) -> None:
+    def test_insert_structure_model_adds_title_note_and_restores_selection_history(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         set_last_smiles_input_for(canvas, "CCO")
         canvas.model.add_atom("H", 100.0, 100.0)
@@ -394,15 +414,21 @@ class StructureInsertServiceTest(unittest.TestCase):
                 "before_next_atom_id": 1,
                 "before_bond_count": 0,
                 "before_smiles_input": "CCO",
-                "added_scene_items": [{"kind": "note", "text": "Inserted fragment", "pos": (55.0, 12.0)}],
+                "added_scene_items": [
+                    {"kind": "note", "text": "Inserted fragment", "pos": (55.0, 12.0)}
+                ],
             },
         )
         self.assertEqual(canvas.selected_atom_ids(), {1, 2})
         self.assertEqual(canvas.selected_bond_ids(), {0})
 
-    def test_insert_structure_model_rolls_back_if_bond_graphics_raise_before_history_record(self) -> None:
+    def test_insert_structure_model_rolls_back_if_bond_graphics_raise_before_history_record(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
-        canvas.bond_renderer.add_bond_graphics = Mock(side_effect=RuntimeError("graphics failed"))
+        canvas.bond_renderer.add_bond_graphics = Mock(
+            side_effect=RuntimeError("graphics failed")
+        )
         service = _structure_insert_service(canvas)
         model = MoleculeModel(
             atoms={
@@ -424,7 +450,9 @@ class StructureInsertServiceTest(unittest.TestCase):
         self.assertEqual(canvas.selected_atom_ids(), set())
         self.assertEqual(canvas.selected_bond_ids(), set())
 
-    def test_insert_structure_model_rolls_back_mutate_then_keyboard_interrupt(self) -> None:
+    def test_insert_structure_model_rolls_back_mutate_then_keyboard_interrupt(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         interruption = KeyboardInterrupt("structure graphics interrupted")
         canvas.bond_renderer.add_bond_graphics = Mock(side_effect=interruption)
@@ -448,8 +476,10 @@ class StructureInsertServiceTest(unittest.TestCase):
         self.assertEqual(canvas.bond_items, {})
         self.assertEqual(last_smiles_input_for(canvas), "before")
 
-    def test_structure_insert_outer_rollback_and_broken_add_note_preserve_primary_and_retry(self) -> None:
-        from ui import structure_insert_service as service_module
+    def test_structure_insert_outer_rollback_and_broken_add_note_preserve_primary_and_retry(
+        self,
+    ) -> None:
+        from chemvas.ui import structure_insert_service as service_module
 
         model = MoleculeModel(
             atoms={
@@ -528,10 +558,8 @@ class StructureInsertServiceTest(unittest.TestCase):
                 side_effect=SystemExit("structure bounds capture terminated"),
             ),
             patch(
-                "ui.structure_insert_service.capture_history_transaction_for_history",
-                side_effect=lambda *_args, **_kwargs: SceneRectSnapshot.capture(
-                    scene
-                ),
+                "chemvas.ui.structure_insert_service.capture_history_transaction_for_history",
+                side_effect=lambda *_args, **_kwargs: SceneRectSnapshot.capture(scene),
             ) as capture,
         ):
             with self.assertRaisesRegex(
@@ -547,11 +575,15 @@ class StructureInsertServiceTest(unittest.TestCase):
         self.assertGreater(scene.sceneRect().right(), 10_000.0)
         scene.removeItem(far)
 
-    def test_insert_structure_model_prefers_atom_label_service_over_canvas_wrapper(self) -> None:
+    def test_insert_structure_model_prefers_atom_label_service_over_canvas_wrapper(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         service_calls = []
         canvas.services.atom_label_service = SimpleNamespace(
-            add_or_update_atom_label=lambda atom_id, text, **kwargs: service_calls.append((atom_id, text, kwargs))
+            add_or_update_atom_label=lambda atom_id, text, **kwargs: (
+                service_calls.append((atom_id, text, kwargs))
+            )
         )
         model = MoleculeModel(
             atoms={
@@ -560,7 +592,9 @@ class StructureInsertServiceTest(unittest.TestCase):
             }
         )
 
-        inserted_atom_ids, inserted_bond_ids = _structure_insert_service(canvas).insert_structure_model(
+        inserted_atom_ids, inserted_bond_ids = _structure_insert_service(
+            canvas
+        ).insert_structure_model(
             model,
             center=QPointF(5.0, 0.0),
         )
@@ -570,8 +604,26 @@ class StructureInsertServiceTest(unittest.TestCase):
         self.assertEqual(
             service_calls,
             [
-                (0, "C", {"clear_smiles": False, "record": False, "allow_merge": True, "show_carbon": False}),
-                (1, "N", {"clear_smiles": False, "record": False, "allow_merge": True, "show_carbon": False}),
+                (
+                    0,
+                    "C",
+                    {
+                        "clear_smiles": False,
+                        "record": False,
+                        "allow_merge": True,
+                        "show_carbon": False,
+                    },
+                ),
+                (
+                    1,
+                    "N",
+                    {
+                        "clear_smiles": False,
+                        "record": False,
+                        "allow_merge": True,
+                        "show_carbon": False,
+                    },
+                ),
             ],
         )
         self.assertEqual(canvas.atom_label_calls, [])
@@ -590,7 +642,9 @@ class StructureInsertServiceTest(unittest.TestCase):
             ],
         )
 
-        inserted_atom_ids, inserted_bond_ids = _structure_insert_service(canvas).insert_structure_model(
+        inserted_atom_ids, inserted_bond_ids = _structure_insert_service(
+            canvas
+        ).insert_structure_model(
             model,
             center=QPointF(4.0, 0.0),
         )
@@ -600,9 +654,13 @@ class StructureInsertServiceTest(unittest.TestCase):
         self.assertEqual(len(canvas.model.bonds), 1)
         self.assertEqual(canvas.add_bond_graphics_calls, [0])
 
-    def test_insert_structure_model_skips_graphics_for_sparse_new_bond_slots(self) -> None:
+    def test_insert_structure_model_skips_graphics_for_sparse_new_bond_slots(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
-        canvas.model.bonds = _EphemeralBondList(canvas.model.bonds, none_after_first_read={0})
+        canvas.model.bonds = _EphemeralBondList(
+            canvas.model.bonds, none_after_first_read={0}
+        )
         model = MoleculeModel(
             atoms={
                 4: Atom("C", 0.0, 0.0, explicit_label=False),
@@ -611,7 +669,9 @@ class StructureInsertServiceTest(unittest.TestCase):
             bonds=[Bond(4, 8, order=1, style="single", color="#333333")],
         )
 
-        inserted_atom_ids, inserted_bond_ids = _structure_insert_service(canvas).insert_structure_model(
+        inserted_atom_ids, inserted_bond_ids = _structure_insert_service(
+            canvas
+        ).insert_structure_model(
             model,
             center=QPointF(5.0, 0.0),
         )

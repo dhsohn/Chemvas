@@ -2,17 +2,17 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from core.model import Atom, Bond
-from PyQt6.QtCore import QPointF, QRectF
-from ui.canvas_hover_state import (
+from chemvas.domain.document import Atom, Bond
+from chemvas.ui.canvas_hover_state import (
     HoverPreviewState,
     hover_preview_state_for,
     hover_state_for,
     set_hover_atom_id_for,
     set_hover_bond_id_for,
 )
-from ui.canvas_tool_settings_state import CanvasToolSettingsState
-from ui.hover_interaction_service import HoverInteractionService
+from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.hover_interaction_service import HoverInteractionService
+from PyQt6.QtCore import QPointF, QRectF
 
 
 class HoverInteractionServiceTest(unittest.TestCase):
@@ -41,7 +41,11 @@ class HoverInteractionServiceTest(unittest.TestCase):
                 active_bond_order=active_bond_order,
             ),
             services=SimpleNamespace(
-                tools=SimpleNamespace(active=None if active_tool is None else SimpleNamespace(name=active_tool)),
+                tools=SimpleNamespace(
+                    active=None
+                    if active_tool is None
+                    else SimpleNamespace(name=active_tool)
+                ),
                 hover_scene_service=hover_scene_service,
                 mark_hover_preview_service=mark_hover_preview_service,
                 bond_hover_preview_service=bond_hover_preview_service,
@@ -49,7 +53,9 @@ class HoverInteractionServiceTest(unittest.TestCase):
         )
 
     def _set_preferred_hit(self, canvas, hit):
-        selection_controller = SimpleNamespace(preferred_structure_hit_at_scene_pos=mock.Mock(return_value=hit))
+        selection_controller = SimpleNamespace(
+            preferred_structure_hit_at_scene_pos=mock.Mock(return_value=hit)
+        )
         canvas.services.selection_controller = selection_controller
         canvas.preferred_structure_hit_at_scene_pos = mock.Mock(
             side_effect=AssertionError("canvas facade should not be used")
@@ -71,19 +77,25 @@ class HoverInteractionServiceTest(unittest.TestCase):
 
         self._hover_service(canvas).update_hover_highlight(QPointF(1.0, 2.0))
 
-        canvas.services.mark_hover_preview_service.add_mark_hover_preview.assert_called_once_with(QPointF(1.0, 2.0))
+        canvas.services.mark_hover_preview_service.add_mark_hover_preview.assert_called_once_with(
+            QPointF(1.0, 2.0)
+        )
         canvas.services.hover_scene_service.clear_hover_highlight.assert_not_called()
 
     def test_update_hover_highlight_clears_without_preview_outside_sheet(self) -> None:
         canvas = self._make_canvas(active_tool="mark")
-        canvas.sheet_setup_state = SimpleNamespace(rect=QRectF(-10.0, -10.0, 20.0, 20.0))
+        canvas.sheet_setup_state = SimpleNamespace(
+            rect=QRectF(-10.0, -10.0, 20.0, 20.0)
+        )
 
         self._hover_service(canvas).update_hover_highlight(QPointF(999.0, 999.0))
 
         canvas.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
         canvas.services.mark_hover_preview_service.add_mark_hover_preview.assert_not_called()
 
-    def test_update_hover_highlight_handles_no_atom_clear_and_preview_paths(self) -> None:
+    def test_update_hover_highlight_handles_no_atom_clear_and_preview_paths(
+        self,
+    ) -> None:
         clear_canvas = self._make_canvas(atoms={}, bonds=[], active_tool="select")
 
         self._hover_service(clear_canvas).update_hover_highlight(QPointF(2.0, 3.0))
@@ -99,7 +111,9 @@ class HoverInteractionServiceTest(unittest.TestCase):
         preview_canvas.services.bond_hover_preview_service.add_free_bond_hover_preview.assert_called_once_with(
             QPointF(8.0, 9.0)
         )
-        self.assertEqual(hover_preview_state_for(preview_canvas).style, "wedge:1:8.0:9.0")
+        self.assertEqual(
+            hover_preview_state_for(preview_canvas).style, "wedge:1:8.0:9.0"
+        )
 
         populated_preview_canvas = self._make_canvas(
             atoms={1: Atom("C", 0.0, 0.0)},
@@ -109,40 +123,57 @@ class HoverInteractionServiceTest(unittest.TestCase):
         )
         self._set_preferred_hit(populated_preview_canvas, None)
 
-        self._hover_service(populated_preview_canvas).update_hover_highlight(QPointF(12.0, 13.0))
+        self._hover_service(populated_preview_canvas).update_hover_highlight(
+            QPointF(12.0, 13.0)
+        )
 
         populated_preview_canvas.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
         populated_preview_canvas.services.bond_hover_preview_service.add_free_bond_hover_preview.assert_called_once_with(
             QPointF(12.0, 13.0)
         )
-        self.assertEqual(hover_preview_state_for(populated_preview_canvas).style, "single:1:12.0:13.0")
+        self.assertEqual(
+            hover_preview_state_for(populated_preview_canvas).style,
+            "single:1:12.0:13.0",
+        )
 
     def test_update_hover_highlight_handles_atom_bond_and_invalid_hits(self) -> None:
         atoms = {1: Atom("C", 10.0, 20.0), 2: Atom("C", 30.0, 20.0)}
         bonds = [Bond(1, 2)]
 
-        atom_canvas = self._make_canvas(atoms=atoms, bonds=[], active_tool="bond", active_bond_style="wedge")
+        atom_canvas = self._make_canvas(
+            atoms=atoms, bonds=[], active_tool="bond", active_bond_style="wedge"
+        )
         self._set_preferred_hit(atom_canvas, SimpleNamespace(kind="atom", id=1))
 
         self._hover_service(atom_canvas).update_hover_highlight(QPointF(11.0, 12.0))
 
         atom_canvas.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
-        atom_canvas.services.hover_scene_service.add_atom_hover_indicator.assert_called_once_with(1)
+        atom_canvas.services.hover_scene_service.add_atom_hover_indicator.assert_called_once_with(
+            1
+        )
         atom_canvas.services.bond_hover_preview_service.add_bond_tool_hover_preview.assert_called_once_with(
             1,
             QPointF(11.0, 12.0),
         )
         self.assertEqual(hover_state_for(atom_canvas).atom_id, 1)
-        self.assertEqual(hover_preview_state_for(atom_canvas).style, "wedge:1:30.0:20.0")
+        self.assertEqual(
+            hover_preview_state_for(atom_canvas).style, "wedge:1:30.0:20.0"
+        )
 
-        bond_canvas = self._make_canvas(atoms=atoms, bonds=bonds, active_tool="bond", active_bond_style="hash")
+        bond_canvas = self._make_canvas(
+            atoms=atoms, bonds=bonds, active_tool="bond", active_bond_style="hash"
+        )
         self._set_preferred_hit(bond_canvas, SimpleNamespace(kind="bond", id=0))
 
         self._hover_service(bond_canvas).update_hover_highlight(QPointF(4.0, 5.0))
 
         bond_canvas.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
-        bond_canvas.services.hover_scene_service.add_bond_hover_indicator.assert_called_once_with(0)
-        bond_canvas.services.bond_hover_preview_service.add_bond_style_hover_preview.assert_called_once_with(bonds[0])
+        bond_canvas.services.hover_scene_service.add_bond_hover_indicator.assert_called_once_with(
+            0
+        )
+        bond_canvas.services.bond_hover_preview_service.add_bond_style_hover_preview.assert_called_once_with(
+            bonds[0]
+        )
         self.assertEqual(hover_state_for(bond_canvas).bond_id, 0)
 
         invalid_canvas = self._make_canvas(atoms=atoms, bonds=bonds, active_tool="bond")
@@ -156,14 +187,22 @@ class HoverInteractionServiceTest(unittest.TestCase):
         invalid_canvas.services.bond_hover_preview_service.add_free_bond_hover_preview.assert_called_once_with(
             QPointF(9.0, 9.0)
         )
-        self.assertEqual(hover_preview_state_for(invalid_canvas).style, "wedge:1:9.0:9.0")
+        self.assertEqual(
+            hover_preview_state_for(invalid_canvas).style, "wedge:1:9.0:9.0"
+        )
 
-    def test_update_hover_highlight_uses_selection_controller_when_available(self) -> None:
+    def test_update_hover_highlight_uses_selection_controller_when_available(
+        self,
+    ) -> None:
         atoms = {1: Atom("C", 10.0, 20.0)}
         selection_controller = SimpleNamespace(
-            preferred_structure_hit_at_scene_pos=mock.Mock(return_value=SimpleNamespace(kind="atom", id=1))
+            preferred_structure_hit_at_scene_pos=mock.Mock(
+                return_value=SimpleNamespace(kind="atom", id=1)
+            )
         )
-        canvas = self._make_canvas(atoms=atoms, active_tool="bond", active_bond_style="wedge")
+        canvas = self._make_canvas(
+            atoms=atoms, active_tool="bond", active_bond_style="wedge"
+        )
         canvas.services.selection_controller = selection_controller
         canvas.preferred_structure_hit_at_scene_pos = mock.Mock(
             side_effect=AssertionError("canvas facade should not be used")
@@ -171,16 +210,24 @@ class HoverInteractionServiceTest(unittest.TestCase):
 
         self._hover_service(canvas).update_hover_highlight(QPointF(11.0, 12.0))
 
-        selection_controller.preferred_structure_hit_at_scene_pos.assert_called_once_with(QPointF(11.0, 12.0))
+        selection_controller.preferred_structure_hit_at_scene_pos.assert_called_once_with(
+            QPointF(11.0, 12.0)
+        )
         canvas.preferred_structure_hit_at_scene_pos.assert_not_called()
-        canvas.services.hover_scene_service.add_atom_hover_indicator.assert_called_once_with(1)
+        canvas.services.hover_scene_service.add_atom_hover_indicator.assert_called_once_with(
+            1
+        )
 
     def test_update_hover_highlight_uses_services_selection_controller(self) -> None:
         atoms = {1: Atom("C", 10.0, 20.0)}
         selection_controller = SimpleNamespace(
-            preferred_structure_hit_at_scene_pos=mock.Mock(return_value=SimpleNamespace(kind="atom", id=1))
+            preferred_structure_hit_at_scene_pos=mock.Mock(
+                return_value=SimpleNamespace(kind="atom", id=1)
+            )
         )
-        canvas = self._make_canvas(atoms=atoms, active_tool="select", active_bond_style="wedge")
+        canvas = self._make_canvas(
+            atoms=atoms, active_tool="select", active_bond_style="wedge"
+        )
         canvas.services.selection_controller = selection_controller
         canvas.preferred_structure_hit_at_scene_pos = mock.Mock(
             side_effect=AssertionError("canvas facade should not be used")
@@ -188,12 +235,18 @@ class HoverInteractionServiceTest(unittest.TestCase):
 
         self._hover_service(canvas).update_hover_highlight(QPointF(11.0, 12.0))
 
-        selection_controller.preferred_structure_hit_at_scene_pos.assert_called_once_with(QPointF(11.0, 12.0))
+        selection_controller.preferred_structure_hit_at_scene_pos.assert_called_once_with(
+            QPointF(11.0, 12.0)
+        )
         canvas.preferred_structure_hit_at_scene_pos.assert_not_called()
-        canvas.services.hover_scene_service.add_atom_hover_indicator.assert_called_once_with(1)
+        canvas.services.hover_scene_service.add_atom_hover_indicator.assert_called_once_with(
+            1
+        )
 
     def test_update_hover_highlight_skips_noop_paths(self) -> None:
-        atom_canvas = self._make_canvas(atoms={1: Atom("C", 10.0, 20.0)}, active_tool="bond")
+        atom_canvas = self._make_canvas(
+            atoms={1: Atom("C", 10.0, 20.0)}, active_tool="bond"
+        )
         self._set_preferred_hit(atom_canvas, SimpleNamespace(kind="atom", id=1))
         set_hover_atom_id_for(atom_canvas, 1)
         hover_preview_state_for(atom_canvas).style = "wedge:1:30.0:20.0"
@@ -204,7 +257,12 @@ class HoverInteractionServiceTest(unittest.TestCase):
         atom_canvas.services.hover_scene_service.add_atom_hover_indicator.assert_not_called()
         atom_canvas.services.bond_hover_preview_service.add_bond_tool_hover_preview.assert_not_called()
 
-        bond_canvas = self._make_canvas(atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 1.0, 1.0)}, bonds=[Bond(1, 2)], active_tool="bond", active_bond_style="hash")
+        bond_canvas = self._make_canvas(
+            atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 1.0, 1.0)},
+            bonds=[Bond(1, 2)],
+            active_tool="bond",
+            active_bond_style="hash",
+        )
         self._set_preferred_hit(bond_canvas, SimpleNamespace(kind="bond", id=0))
         set_hover_bond_id_for(bond_canvas, 0)
         hover_preview_state_for(bond_canvas).style = "hash"
@@ -230,16 +288,24 @@ class HoverInteractionServiceTest(unittest.TestCase):
         canvas = self._make_canvas(atoms={1: Atom("C", 0.0, 0.0)}, active_tool="bond")
         service = self._hover_service(canvas)
 
-        service._apply_plan(SimpleNamespace(action="atom_hit", hover_atom_id=None, preview_key="wedge"), QPointF())
+        service._apply_plan(
+            SimpleNamespace(action="atom_hit", hover_atom_id=None, preview_key="wedge"),
+            QPointF(),
+        )
         canvas.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
         canvas.services.hover_scene_service.add_atom_hover_indicator.assert_not_called()
 
         canvas.services.hover_scene_service.clear_hover_highlight.reset_mock()
-        service._apply_plan(SimpleNamespace(action="bond_hit", hover_bond_id=None, preview_key="hash"), QPointF())
+        service._apply_plan(
+            SimpleNamespace(action="bond_hit", hover_bond_id=None, preview_key="hash"),
+            QPointF(),
+        )
         canvas.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
         canvas.services.hover_scene_service.add_bond_hover_indicator.assert_not_called()
 
-    def test_apply_plan_skips_missing_bond_objects_and_bond_lookup_handles_exceptions(self) -> None:
+    def test_apply_plan_skips_missing_bond_objects_and_bond_lookup_handles_exceptions(
+        self,
+    ) -> None:
         none_bond_canvas = self._make_canvas(
             atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 1.0, 0.0)},
             bonds=[None],
@@ -247,7 +313,10 @@ class HoverInteractionServiceTest(unittest.TestCase):
         )
         service = self._hover_service(none_bond_canvas)
 
-        service._apply_plan(SimpleNamespace(action="bond_hit", hover_bond_id=0, preview_key="hash"), QPointF())
+        service._apply_plan(
+            SimpleNamespace(action="bond_hit", hover_bond_id=0, preview_key="hash"),
+            QPointF(),
+        )
 
         none_bond_canvas.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
         self.assertEqual(hover_state_for(none_bond_canvas).bond_id, 0)

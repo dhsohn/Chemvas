@@ -1,13 +1,13 @@
 import unittest
 
-from core.history import AddAtomsCommand
-from core.model import Atom, Bond, MoleculeModel
-from core.text_tool_logic import (
+from chemvas.core.history import AddAtomsCommand
+from chemvas.core.text_tool_logic import (
     build_created_atom_command,
     normalize_text_symbol,
     plan_text_input,
     resolve_text_tool_target,
 )
+from chemvas.domain.document import Atom, Bond, MoleculeModel
 
 
 class TextToolLogicTest(unittest.TestCase):
@@ -25,7 +25,9 @@ class TextToolLogicTest(unittest.TestCase):
         self.assertTrue(prompted.needs_prompt)
         self.assertEqual(prompted.initial, "N")
 
-    def test_resolve_text_tool_target_prefers_valid_hover_atom_and_snaps_position(self) -> None:
+    def test_resolve_text_tool_target_prefers_valid_hover_atom_and_snaps_position(
+        self,
+    ) -> None:
         model = MoleculeModel(atoms={1: Atom("C", 1.0, 2.0), 2: Atom("O", 8.0, 9.0)})
 
         target = resolve_text_tool_target(
@@ -53,7 +55,9 @@ class TextToolLogicTest(unittest.TestCase):
         self.assertEqual(target.atom_id, 1)
         self.assertEqual(target.pos, (1.0, 2.0))
 
-    def test_resolve_text_tool_target_ignores_invalid_ids_and_falls_back_to_nearby_bond(self) -> None:
+    def test_resolve_text_tool_target_ignores_invalid_ids_and_falls_back_to_nearby_bond(
+        self,
+    ) -> None:
         model = MoleculeModel(
             atoms={
                 1: Atom("C", 0.0, 0.0),
@@ -91,7 +95,9 @@ class TextToolLogicTest(unittest.TestCase):
         self.assertEqual(target.atom_id, 1)
         self.assertEqual(target.pos, (9.0, 0.0))
 
-    def test_resolve_text_tool_target_uses_atom_near_without_snapping_position(self) -> None:
+    def test_resolve_text_tool_target_uses_atom_near_without_snapping_position(
+        self,
+    ) -> None:
         model = MoleculeModel(atoms={1: Atom("C", 1.0, 2.0)})
 
         target = resolve_text_tool_target(
@@ -114,7 +120,9 @@ class TextToolLogicTest(unittest.TestCase):
         )
 
         self.assertIsInstance(command, AddAtomsCommand)
-        self.assertEqual(command.atom_states, {3: {"element": "Cl", "x": 5.0, "y": 6.0}})
+        self.assertEqual(
+            command.atom_states, {3: {"element": "Cl", "x": 5.0, "y": 6.0}}
+        )
         self.assertEqual(command.before_next_atom_id, 3)
         self.assertEqual(command.after_next_atom_id, 4)
         self.assertEqual(command.before_smiles_input, "before")

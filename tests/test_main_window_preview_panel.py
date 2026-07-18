@@ -9,7 +9,7 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.main_window_preview_window import build_preview_window
+    from chemvas.ui.main_window_preview_window import build_preview_window
 
 
 class _HarnessWindow(QMainWindow):
@@ -18,7 +18,9 @@ class _HarnessWindow(QMainWindow):
         self.preview_widget = QWidget()
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for preview panel tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for preview panel tests"
+)
 class MainWindowPreviewPanelTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -40,7 +42,9 @@ class MainWindowPreviewPanelTest(unittest.TestCase):
         self.assertIs(window.preview_widget.parent(), assembly.preview_window)
         self.assertEqual(assembly.preview_window.windowTitle(), "Molecule Info")
         self.assertGreaterEqual(assembly.preview_window.minimumWidth(), 420)
-        self.assertIsNone(assembly.preview_window.findChild(QWidget, "preview_export_xyz_button"))
+        self.assertIsNone(
+            assembly.preview_window.findChild(QWidget, "preview_export_xyz_button")
+        )
         assembly.preview_window.show()
         self.app.processEvents()
         self.assertTrue(assembly.preview_window.isVisible())

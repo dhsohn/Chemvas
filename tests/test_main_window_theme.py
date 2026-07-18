@@ -2,19 +2,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ui import main_window_stylesheet as main_window_stylesheet_module
-from ui import main_window_theme
-from ui.main_window_canvas_tab_styles import main_window_canvas_tab_stylesheet
-from ui.main_window_chrome_styles import main_window_chrome_stylesheet
-from ui.main_window_form_styles import main_window_form_stylesheet
-from ui.main_window_palette import PALETTE
-from ui.main_window_scrollbar_styles import main_window_scrollbar_stylesheet
-from ui.main_window_status_styles import main_window_status_stylesheet
-from ui.main_window_stylesheet import (
+from chemvas.ui import main_window_stylesheet as main_window_stylesheet_module
+from chemvas.ui import main_window_theme
+from chemvas.ui.main_window_canvas_tab_styles import main_window_canvas_tab_stylesheet
+from chemvas.ui.main_window_chrome_styles import main_window_chrome_stylesheet
+from chemvas.ui.main_window_form_styles import main_window_form_stylesheet
+from chemvas.ui.main_window_palette import PALETTE
+from chemvas.ui.main_window_scrollbar_styles import main_window_scrollbar_stylesheet
+from chemvas.ui.main_window_status_styles import main_window_status_stylesheet
+from chemvas.ui.main_window_stylesheet import (
     MAIN_WINDOW_STYLESHEET,
     build_main_window_stylesheet,
 )
-from ui.main_window_toolbar_styles import (
+from chemvas.ui.main_window_toolbar_styles import (
     CONTEXT_BAR_BUTTON_HEIGHT,
     CONTEXT_BAR_CONTENT_HEIGHT,
     CONTEXT_BAR_ICON_SIZE,

@@ -22,11 +22,11 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.main_window_config import TOOLBAR_TOOL_ACTION_ORDER
-    from ui.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
-    from ui.main_window_theme import MAIN_WINDOW_STYLESHEET
-    from ui.main_window_toolbar_buttons import ArrowButton, CornerMenuButton
-    from ui.main_window_ui_assembly_service import (
+    from chemvas.ui.main_window_config import TOOLBAR_TOOL_ACTION_ORDER
+    from chemvas.ui.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
+    from chemvas.ui.main_window_theme import MAIN_WINDOW_STYLESHEET
+    from chemvas.ui.main_window_toolbar_buttons import ArrowButton, CornerMenuButton
+    from chemvas.ui.main_window_ui_assembly_service import (
         MainWindowUIAssemblyService,
     )
 
@@ -39,7 +39,9 @@ class _HarnessCanvas:
         self.flip_vertical = mock.Mock()
         self.begin_smiles_insert = mock.Mock()
         self.insert_controller = SimpleNamespace(begin_smiles_insert=mock.Mock())
-        self.scene_transform_controller = SimpleNamespace(flip_selected_items=mock.Mock())
+        self.scene_transform_controller = SimpleNamespace(
+            flip_selected_items=mock.Mock()
+        )
         self.tool_mode_controller = SimpleNamespace(
             get_atom_symbol=mock.Mock(return_value="N"),
             set_atom_symbol=mock.Mock(),
@@ -88,7 +90,9 @@ class _HarnessWindow(QMainWindow):
             icon_ring_fill=self._blank_icon,
             icon_orbital=self._blank_icon,
         )
-        self.ui_references = SimpleNamespace(require_icon_factory=lambda: self._icon_factory)
+        self.ui_references = SimpleNamespace(
+            require_icon_factory=lambda: self._icon_factory
+        )
 
     def _blank_icon(self) -> QIcon:
         return QIcon()
@@ -104,7 +108,9 @@ class _HarnessWindow(QMainWindow):
         action.triggered.connect(lambda checked=False: callback("#000000"))
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for main window UI assembly tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for main window UI assembly tests"
+)
 class MainWindowUIAssemblyServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -113,7 +119,9 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
 
     def setUp(self) -> None:
         self.scene_transform_controller_for_window = mock.Mock(
-            side_effect=lambda window: window.canvas.services.scene_transform_controller,
+            side_effect=lambda window: (
+                window.canvas.services.scene_transform_controller
+            ),
         )
         self.insert_controller_for_window = mock.Mock(
             side_effect=lambda window: window.canvas.services.insert_controller,
@@ -121,7 +129,9 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.history_service_for_window = mock.Mock(
             side_effect=lambda window: window.canvas.services.history_service,
         )
-        self.build_tool_actions_for_window = mock.Mock(side_effect=self._build_tool_actions_for_window)
+        self.build_tool_actions_for_window = mock.Mock(
+            side_effect=self._build_tool_actions_for_window
+        )
         self.panel_toolbar_callbacks = MainWindowPanelToolbarCallbacks(
             save_canvas=mock.Mock(),
             save_canvas_as=mock.Mock(),
@@ -188,7 +198,9 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         button.click()
         callback.assert_called_once_with(False)
 
-    def test_create_corner_menu_button_prefers_default_action_and_builds_menu(self) -> None:
+    def test_create_corner_menu_button_prefers_default_action_and_builds_menu(
+        self,
+    ) -> None:
         owner = QMainWindow()
         self.addCleanup(owner.close)
         save_action = QAction("Save", owner)
@@ -206,8 +218,12 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.assertEqual(button.toolTip(), "Save")
         self.assertEqual(button.statusTip(), "Save")
         self.assertEqual(button.styleSheet(), "padding: 0;")
-        self.assertEqual(button.popupMode(), QToolButton.ToolButtonPopupMode.MenuButtonPopup)
-        self.assertEqual([action.text() for action in button.menu().actions()], ["Save As..."])
+        self.assertEqual(
+            button.popupMode(), QToolButton.ToolButtonPopupMode.MenuButtonPopup
+        )
+        self.assertEqual(
+            [action.text() for action in button.menu().actions()], ["Save As..."]
+        )
 
     def test_button_factories_cover_icon_only_and_paint_paths(self) -> None:
         owner = QWidget()
@@ -233,7 +249,9 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         )
         self.assertIsNone(corner_button.defaultAction())
         self.assertFalse(corner_button.icon().isNull())
-        self.assertEqual([action.text() for action in corner_button.menu().actions()], ["Pick"])
+        self.assertEqual(
+            [action.text() for action in corner_button.menu().actions()], ["Pick"]
+        )
 
         up_button = ArrowButton("up", owner)
         down_button = ArrowButton("down", owner)
@@ -241,7 +259,11 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.assertTrue(up_button.autoRaise())
         self.assertEqual(up_button.focusPolicy(), Qt.FocusPolicy.NoFocus)
 
-        for widget, size in ((up_button, (8, 6)), (down_button, (20, 20)), (menu_indicator, (18, 18))):
+        for widget, size in (
+            (up_button, (8, 6)),
+            (down_button, (20, 20)),
+            (menu_indicator, (18, 18)),
+        ):
             widget.resize(*size)
             widget.show()
             self.app.processEvents()
@@ -259,7 +281,9 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.assertIs(button.defaultAction(), save_action)
         self.assertEqual(button.toolTip(), "Save")
         self.assertEqual(button.statusTip(), "Save")
-        self.assertEqual(button.popupMode(), QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        self.assertEqual(
+            button.popupMode(), QToolButton.ToolButtonPopupMode.MenuButtonPopup
+        )
         self.assertEqual(button.menu().actions(), [save_as_action])
 
     def test_create_file_project_menu_button_uses_file_project_actions(self) -> None:
@@ -276,13 +300,21 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
 
         self.assertIs(button.defaultAction(), save_action)
         self.assertEqual(button.toolTip(), "File")
-        self.assertEqual(button.statusTip(), "Save, load, export, or save as the current file")
-        self.assertEqual(button.popupMode(), QToolButton.ToolButtonPopupMode.MenuButtonPopup)
-        non_separator = [action for action in button.menu().actions() if not action.isSeparator()]
+        self.assertEqual(
+            button.statusTip(), "Save, load, export, or save as the current file"
+        )
+        self.assertEqual(
+            button.popupMode(), QToolButton.ToolButtonPopupMode.MenuButtonPopup
+        )
+        non_separator = [
+            action for action in button.menu().actions() if not action.isSeparator()
+        ]
         self.assertEqual(
             non_separator, [load_action, save_action, save_as_action, export_action]
         )
-        self.assertEqual(sum(1 for action in button.menu().actions() if action.isSeparator()), 1)
+        self.assertEqual(
+            sum(1 for action in button.menu().actions() if action.isSeparator()), 1
+        )
 
     def test_init_toolbars_builds_bars_and_wires_inputs(self) -> None:
         window = _HarnessWindow()
@@ -298,7 +330,10 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         ]
         # The "note" tool is embedded as a font-dropdown menu button (a widget),
         # so it is not added as a plain action on the toolbar.
-        self.assertEqual(tool_action_texts, [key for key in TOOLBAR_TOOL_ACTION_ORDER if key != "note"])
+        self.assertEqual(
+            tool_action_texts,
+            [key for key in TOOLBAR_TOOL_ACTION_ORDER if key != "note"],
+        )
         note_button = assembly.panel_bar.findChild(QToolButton, "toolButton_note")
         self.assertIsNotNone(note_button)
         self.assertIsNotNone(note_button.menu())
@@ -309,7 +344,9 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.assertTrue(assembly.tool_actions["bond"].isChecked())
         self.assertIs(assembly.save_button.defaultAction(), assembly.save_action)
         menu_actions = [
-            action for action in assembly.save_button.menu().actions() if not action.isSeparator()
+            action
+            for action in assembly.save_button.menu().actions()
+            if not action.isSeparator()
         ]
         # File menu order: Load, Open Recent (submenu), Save, Save As, exports.
         self.assertIs(menu_actions[0], assembly.load_action)
@@ -321,15 +358,27 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.assertEqual(assembly.save_button.toolTip(), "File")
         self.assertEqual(assembly.load_action.statusTip(), "Open a drawing")
         self.assertEqual(assembly.save_action.statusTip(), "Save the current drawing")
-        self.assertEqual(assembly.save_as_action.statusTip(), "Save the current drawing to a new file")
-        self.assertNotIn("Tools", [toolbar.windowTitle() for toolbar in window.findChildren(QToolBar)])
+        self.assertEqual(
+            assembly.save_as_action.statusTip(),
+            "Save the current drawing to a new file",
+        )
+        self.assertNotIn(
+            "Tools",
+            [toolbar.windowTitle() for toolbar in window.findChildren(QToolBar)],
+        )
         self.assertIn(
             "Open",
-            [button.toolTip() for button in assembly.panel_bar.findChildren(QToolButton)],
+            [
+                button.toolTip()
+                for button in assembly.panel_bar.findChildren(QToolButton)
+            ],
         )
         self.assertNotIn(
             "Bond Length",
-            [button.toolTip() for button in assembly.panel_bar.findChildren(QToolButton)],
+            [
+                button.toolTip()
+                for button in assembly.panel_bar.findChildren(QToolButton)
+            ],
         )
 
         # The SMILES quick-insert bar now lives on the top toolbar. It has no
@@ -344,22 +393,40 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
 
         self.assertIsNone(assembly.panel_bar.findChild(QLineEdit, "atomInput"))
         self.assertEqual(
-            [line_edit.objectName() for line_edit in assembly.panel_bar.findChildren(QLineEdit)],
+            [
+                line_edit.objectName()
+                for line_edit in assembly.panel_bar.findChildren(QLineEdit)
+            ],
             ["contextSmilesInput"],
         )
-        self.assertIsNotNone(assembly.panel_bar.findChild(QToolButton, "smiles_render_button"))
+        self.assertIsNotNone(
+            assembly.panel_bar.findChild(QToolButton, "smiles_render_button")
+        )
         self.assertIsNone(assembly.export_xyz_button)
-        self.assertIsNone(assembly.panel_bar.findChild(QToolButton, "export_xyz_button"))
+        self.assertIsNone(
+            assembly.panel_bar.findChild(QToolButton, "export_xyz_button")
+        )
         self.assertIs(
             assembly.preview_panel_button,
             assembly.panel_bar.findChild(QToolButton, "preview_panel_button"),
         )
         self.assertFalse(assembly.preview_panel_button.isCheckable())
         self.assertEqual(assembly.preview_panel_button.toolTip(), "Molecule Info")
-        self.assertIsNone(assembly.panel_bar.findChild(QToolButton, "setup_sheet_button"))
-        self.assertIs(assembly.new_canvas_button, assembly.panel_bar.findChild(QToolButton, "new_canvas_button"))
-        self.assertIs(assembly.undo_button, assembly.panel_bar.findChild(QToolButton, "undo_button"))
-        self.assertIs(assembly.redo_button, assembly.panel_bar.findChild(QToolButton, "redo_button"))
+        self.assertIsNone(
+            assembly.panel_bar.findChild(QToolButton, "setup_sheet_button")
+        )
+        self.assertIs(
+            assembly.new_canvas_button,
+            assembly.panel_bar.findChild(QToolButton, "new_canvas_button"),
+        )
+        self.assertIs(
+            assembly.undo_button,
+            assembly.panel_bar.findChild(QToolButton, "undo_button"),
+        )
+        self.assertIs(
+            assembly.redo_button,
+            assembly.panel_bar.findChild(QToolButton, "redo_button"),
+        )
 
         window.canvas.insert_controller.begin_smiles_insert.assert_not_called()
         self.insert_controller_for_window.assert_not_called()
@@ -368,7 +435,9 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         assembly.save_as_action.trigger()
         assembly.load_action.trigger()
         export_figure_action = next(
-            action for action in assembly.save_button.menu().actions() if action.text() == "Export Figure..."
+            action
+            for action in assembly.save_button.menu().actions()
+            if action.text() == "Export Figure..."
         )
         export_figure_action.trigger()
         self.panel_toolbar_callbacks.save_canvas.assert_called_once_with(window)
@@ -395,14 +464,21 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         window.canvas.scene_transform_controller.flip_selected_items.assert_has_calls(
             [mock.call(horizontal=True), mock.call(horizontal=False)]
         )
-        self.scene_transform_controller_for_window.assert_has_calls([mock.call(window), mock.call(window)])
-        self.assertEqual(self.history_service_for_window.call_args_list, [mock.call(window), mock.call(window)])
+        self.scene_transform_controller_for_window.assert_has_calls(
+            [mock.call(window), mock.call(window)]
+        )
+        self.assertEqual(
+            self.history_service_for_window.call_args_list,
+            [mock.call(window), mock.call(window)],
+        )
 
     def test_init_menu_bar_builds_help_menu_with_about_actions(self) -> None:
         window = QMainWindow()
         self.addCleanup(window.close)
 
-        with mock.patch("ui.main_window_menu_bar.show_about_dialog") as show_about:
+        with mock.patch(
+            "chemvas.ui.main_window_menu_bar.show_about_dialog"
+        ) as show_about:
             menu_bar = self.service.init_menu_bar(window)
 
             help_menu = next(
@@ -410,15 +486,21 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
                 for action in menu_bar.actions()
                 if (menu := action.menu()) is not None and menu.title() == "Help"
             )
-            actions = [action for action in help_menu.actions() if not action.isSeparator()]
+            actions = [
+                action for action in help_menu.actions() if not action.isSeparator()
+            ]
             self.assertEqual(
                 [action.text() for action in actions],
                 ["About Chemvas", "About Qt", "Chemvas on GitHub"],
             )
 
-            about_action = next(action for action in actions if action.text() == "About Chemvas")
+            about_action = next(
+                action for action in actions if action.text() == "About Chemvas"
+            )
             self.assertEqual(about_action.menuRole(), QAction.MenuRole.AboutRole)
-            about_qt_action = next(action for action in actions if action.text() == "About Qt")
+            about_qt_action = next(
+                action for action in actions if action.text() == "About Qt"
+            )
             self.assertEqual(about_qt_action.menuRole(), QAction.MenuRole.AboutQtRole)
 
             show_about.assert_not_called()

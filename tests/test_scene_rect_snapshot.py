@@ -6,24 +6,20 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QRectF
-from PyQt6.QtWidgets import (
-    QApplication,
-    QGraphicsRectItem,
-    QGraphicsScene,
-    QGraphicsTextItem,
-    QGraphicsView,
-)
-from ui.history_commands import (
+from chemvas.ui.history_commands import (
     _capture_scene_rect_snapshot,
     _release_scene_rect_snapshot,
 )
-from ui.input_view_access import CanvasSceneRectStateSnapshot, set_scene_rect_for
-from ui.scene_item_attach_snapshot import (
+from chemvas.ui.input_view_access import (
+    CanvasSceneRectStateSnapshot,
+    set_scene_rect_for,
+)
+from chemvas.ui.scene_signal_blocking import _add_signal_recovery_note
+from chemvas.ui.transactions.scene_item_attach import (
     SceneItemAttachPorts,
     SceneItemAttachSnapshot,
 )
-from ui.scene_rect_snapshot import (
+from chemvas.ui.transactions.scene_rect import (
     SceneRectSnapshot,
     SceneRectStateSnapshot,
     ViewSceneRectStateSnapshot,
@@ -34,7 +30,14 @@ from ui.scene_rect_snapshot import (
     set_inherited_view_scene_rect,
     view_scene_rect_is_explicit,
 )
-from ui.scene_signal_blocking import _add_signal_recovery_note
+from PyQt6.QtCore import QRectF
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsRectItem,
+    QGraphicsScene,
+    QGraphicsTextItem,
+    QGraphicsView,
+)
 
 
 class _Signal:

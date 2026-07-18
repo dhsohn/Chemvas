@@ -11,10 +11,12 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.graphics_items import AtomDotItem, AtomLabelItem, NoSelectRectItem
+    from chemvas.ui.graphics_items import AtomDotItem, AtomLabelItem, NoSelectRectItem
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for graphics item tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for graphics item tests"
+)
 class GraphicsItemsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -49,7 +51,9 @@ class GraphicsItemsTest(unittest.TestCase):
         self.assertRectAlmostEqual(item.boundingRect(), rect)
         self.assertRectAlmostEqual(item.shape().boundingRect(), rect)
 
-    def test_atom_label_item_without_hit_padding_or_radius_uses_text_bounds(self) -> None:
+    def test_atom_label_item_without_hit_padding_or_radius_uses_text_bounds(
+        self,
+    ) -> None:
         item = AtomLabelItem("N", hit_padding=0.0, hit_radius=None)
         base_rect = super(AtomLabelItem, item).boundingRect()
 

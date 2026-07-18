@@ -23,19 +23,19 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.canvas_mark_registry import CanvasMarkRegistry
-    from ui.canvas_scene_items_state import (
+    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+    from chemvas.ui.canvas_scene_items_state import (
         SCENE_ITEM_COLLECTION_ATTRS,
         scene_item_collection_for,
         set_scene_item_collection_for,
     )
-    from ui.handle_state import CanvasHandleState
-    from ui.scene_item_attach_snapshot import (
+    from chemvas.ui.handle_state import CanvasHandleState
+    from chemvas.ui.scene_item_controller import SceneItemController
+    from chemvas.ui.transactions.scene_item_attach import (
         SceneItemAttachPorts,
         SceneItemAttachSnapshot,
     )
-    from ui.scene_item_controller import SceneItemController
-    from ui.scene_rect_snapshot import scene_rect_is_automatic
+    from chemvas.ui.transactions.scene_rect import scene_rect_is_automatic
 
 
 class _FakeCanvas:
@@ -268,7 +268,7 @@ class SceneItemControllerTest(unittest.TestCase):
         note.setData(0, "note")
 
         with patch(
-            "ui.scene_item_lifecycle_service._scene_runtime_snapshot",
+            "chemvas.ui.scene_item_lifecycle_service._scene_runtime_snapshot",
             side_effect=AssertionError("non-ring attach scanned the scene"),
         ):
             self.controller.attach_scene_item(note)
@@ -281,7 +281,7 @@ class SceneItemControllerTest(unittest.TestCase):
         collection = scene_item_collection_for(self.canvas, "shape_items")
 
         with patch(
-            "ui.scene_item_attach_snapshot._scene_runtime_snapshot",
+            "chemvas.ui.transactions.scene_item_attach._scene_runtime_snapshot",
             side_effect=AssertionError("builtin attach captured full scene runtime"),
         ):
             for _index in range(200):
@@ -362,7 +362,7 @@ class SceneItemControllerTest(unittest.TestCase):
         ring.setData(0, "ring")
 
         with patch(
-            "ui.scene_item_lifecycle_service._scene_runtime_snapshot",
+            "chemvas.ui.scene_item_lifecycle_service._scene_runtime_snapshot",
             side_effect=SystemExit("ring runtime capture terminated"),
         ):
             with self.assertRaisesRegex(
@@ -387,7 +387,7 @@ class SceneItemControllerTest(unittest.TestCase):
         mark.setData(1, {"atom_id": 7})
 
         with patch(
-            "ui.scene_item_lifecycle_service._add_item_with_attach_ports",
+            "chemvas.ui.scene_item_lifecycle_service._add_item_with_attach_ports",
             side_effect=RuntimeError("boom"),
         ):
             with self.assertRaisesRegex(RuntimeError, "boom"):
@@ -424,7 +424,7 @@ class SceneItemControllerTest(unittest.TestCase):
         lifecycle = self.controller.lifecycle_service
         with (
             patch(
-                "ui.scene_item_lifecycle_service._add_item_with_attach_ports",
+                "chemvas.ui.scene_item_lifecycle_service._add_item_with_attach_ports",
                 side_effect=add_then_interrupt,
             ),
             patch.object(
@@ -685,7 +685,7 @@ class SceneItemControllerTest(unittest.TestCase):
 
                 with (
                     patch(
-                        "ui.scene_item_lifecycle_service._add_item_with_attach_ports",
+                        "chemvas.ui.scene_item_lifecycle_service._add_item_with_attach_ports",
                         side_effect=damage_operation(
                             mode,
                             state,
@@ -745,7 +745,7 @@ class SceneItemControllerTest(unittest.TestCase):
             raise SystemExit("terminate attach")
 
         with patch(
-            "ui.scene_item_lifecycle_service._add_item_with_attach_ports",
+            "chemvas.ui.scene_item_lifecycle_service._add_item_with_attach_ports",
             side_effect=add_then_exit,
         ):
             with self.assertRaisesRegex(SystemExit, "terminate attach"):
@@ -788,7 +788,7 @@ class SceneItemControllerTest(unittest.TestCase):
 
         with (
             patch(
-                "ui.scene_item_lifecycle_service._add_item_with_attach_ports",
+                "chemvas.ui.scene_item_lifecycle_service._add_item_with_attach_ports",
                 side_effect=add_after_corrupting_topology,
             ),
             self.assertRaises(KeyboardInterrupt) as caught,
@@ -966,7 +966,7 @@ class SceneItemControllerTest(unittest.TestCase):
                 try:
                     with (
                         patch(
-                            "ui.scene_item_attach_snapshot.SceneRectSnapshot.release",
+                            "chemvas.ui.transactions.scene_item_attach.SceneRectSnapshot.release",
                             side_effect=RuntimeError("attach rect release failed"),
                         ),
                         self.assertRaisesRegex(
@@ -1035,7 +1035,7 @@ class SceneItemControllerTest(unittest.TestCase):
             raise primary_error
 
         with patch(
-            "ui.scene_item_lifecycle_service._add_item_with_attach_ports",
+            "chemvas.ui.scene_item_lifecycle_service._add_item_with_attach_ports",
             side_effect=add_focus_then_interrupt,
         ):
             with self.assertRaises(BrokenKeyboardInterrupt) as caught:
@@ -1283,7 +1283,7 @@ class SceneItemControllerTest(unittest.TestCase):
 
         with (
             patch(
-                "ui.scene_item_lifecycle_service._add_item_with_attach_ports",
+                "chemvas.ui.scene_item_lifecycle_service._add_item_with_attach_ports",
                 side_effect=add_then_interrupt,
             ),
             self.assertRaises(SystemExit) as caught,
@@ -1460,7 +1460,7 @@ class SceneItemControllerTest(unittest.TestCase):
 
         with (
             patch(
-                "ui.scene_item_lifecycle_service._add_item_with_attach_ports",
+                "chemvas.ui.scene_item_lifecycle_service._add_item_with_attach_ports",
                 side_effect=add_then_fail,
             ),
             self.assertRaisesRegex(
@@ -1503,7 +1503,7 @@ class SceneItemControllerTest(unittest.TestCase):
 
         with (
             patch(
-                "ui.scene_item_lifecycle_service._add_item_with_attach_ports",
+                "chemvas.ui.scene_item_lifecycle_service._add_item_with_attach_ports",
                 side_effect=add_then_fail,
             ),
             self.assertRaises(RuntimeError) as caught,

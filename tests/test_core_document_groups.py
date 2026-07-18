@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from core.document_state import (
+from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     PERSPECTIVE_CANVAS_FILE_VERSION,
     build_document_payload,
@@ -13,8 +13,20 @@ from core.document_state import (
 def _model_state() -> dict:
     return {
         "atoms": {
-            "0": {"element": "C", "x": 0.0, "y": 0.0, "color": "#000000", "explicit_label": False},
-            "1": {"element": "O", "x": 10.0, "y": 0.0, "color": "#000000", "explicit_label": True},
+            "0": {
+                "element": "C",
+                "x": 0.0,
+                "y": 0.0,
+                "color": "#000000",
+                "explicit_label": False,
+            },
+            "1": {
+                "element": "O",
+                "x": 10.0,
+                "y": 0.0,
+                "color": "#000000",
+                "explicit_label": True,
+            },
         },
         "bonds": [],
         "next_atom_id": 2,
@@ -73,7 +85,9 @@ def _canvas_state(groups: list | None = None) -> dict:
 class DocumentGroupsValidationTest(unittest.TestCase):
     def test_valid_groups_round_trip_through_payload(self) -> None:
         state = _canvas_state(
-            groups=[{"atoms": [0, 1], "items": [["marks", 0], ["arrows", 0], ["notes", 0]]}],
+            groups=[
+                {"atoms": [0, 1], "items": [["marks", 0], ["arrows", 0], ["notes", 0]]}
+            ],
         )
 
         payload = build_document_payload(state, CANVAS_FILE_VERSION)

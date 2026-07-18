@@ -3,10 +3,10 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from chemvas.features.session import RestoredDoc
+from chemvas.ui.session_recovery_service import SessionRecoveryService
+from chemvas.ui.session_snapshot_store import RestoreResult
 from PyQt6.QtWidgets import QApplication
-from ui.session_recovery_service import SessionRecoveryService
-from ui.session_snapshot_logic import RestoredDoc
-from ui.session_snapshot_store import RestoreResult
 
 
 @pytest.fixture(scope="module")
@@ -42,7 +42,9 @@ class _FakeDocService:
         return object() if self.reusable else None
 
     def open_state(self, window, *, state, file_path, display_name=None):
-        canvas = SimpleNamespace(window=window, state=state, file_path=file_path, display_name=display_name)
+        canvas = SimpleNamespace(
+            window=window, state=state, file_path=file_path, display_name=display_name
+        )
         self.opened.append(canvas)
         return canvas
 
@@ -63,7 +65,9 @@ class _FakeStore:
         self.include_clean_session: bool | None = None
         self.events: list[str] = []
 
-    def consume_previous_sessions(self, *, include_clean_session: bool = True) -> RestoreResult:
+    def consume_previous_sessions(
+        self, *, include_clean_session: bool = True
+    ) -> RestoreResult:
         self.include_clean_session = include_clean_session
         return self._result
 
@@ -109,8 +113,15 @@ def test_restore_previous_rebuilds_windows_and_marks_recovered_dirty():
     second = _FakeWindow("second")
     result = RestoreResult(
         docs=[
-            RestoredDoc(state={"m": 1}, file_path=None, display_name="Canvas 1", dirty=True),
-            RestoredDoc(state={"m": 2}, file_path="/a/x.chemvas", display_name="x.chemvas", dirty=False),
+            RestoredDoc(
+                state={"m": 1}, file_path=None, display_name="Canvas 1", dirty=True
+            ),
+            RestoredDoc(
+                state={"m": 2},
+                file_path="/a/x.chemvas",
+                display_name="x.chemvas",
+                dirty=False,
+            ),
         ],
         recovered_unsaved=1,
     )
@@ -135,8 +146,12 @@ def test_restore_gives_each_doc_its_own_window_when_first_is_occupied():
     spawned = [_FakeWindow("w1"), _FakeWindow("w2")]
     result = RestoreResult(
         docs=[
-            RestoredDoc(state={"m": 1}, file_path="/a.chemvas", display_name="a", dirty=False),
-            RestoredDoc(state={"m": 2}, file_path="/b.chemvas", display_name="b", dirty=False),
+            RestoredDoc(
+                state={"m": 1}, file_path="/a.chemvas", display_name="a", dirty=False
+            ),
+            RestoredDoc(
+                state={"m": 2}, file_path="/b.chemvas", display_name="b", dirty=False
+            ),
         ]
     )
     service, doc_service = _service(_FakeStore(result), extra_windows=list(spawned))
@@ -167,7 +182,9 @@ def test_restore_previous_is_silent_when_nothing_to_recover():
 
 def test_snapshot_now_persists_the_current_documents():
     sentinel = [object()]
-    service, _ = _service(_FakeStore(RestoreResult()), current_documents=lambda: sentinel)
+    service, _ = _service(
+        _FakeStore(RestoreResult()), current_documents=lambda: sentinel
+    )
 
     service.snapshot_now()
 
@@ -231,7 +248,9 @@ def test_consumed_sessions_are_pruned_only_after_resnapshot(qapp):
     service.start(fake_app)
 
     assert store.pruned == [["old-1", "old-2"]]
-    assert store.events.index("save") < store.events.index("prune")  # snapshot, then prune
+    assert store.events.index("save") < store.events.index(
+        "prune"
+    )  # snapshot, then prune
     service._timer.stop()
 
 
@@ -245,7 +264,7 @@ def test_about_to_quit_marks_the_session_clean():
 
 
 def test_about_to_quit_sets_the_quitting_flag():
-    from ui import session_autosave_hook
+    from chemvas.features.session import autosave as session_autosave_hook
 
     session_autosave_hook.reset_quitting()
     store = _FakeStore(RestoreResult())

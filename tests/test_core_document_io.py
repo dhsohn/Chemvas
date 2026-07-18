@@ -7,7 +7,7 @@ from decimal import Decimal
 from pathlib import Path
 from unittest import mock
 
-from core.document_io import (
+from chemvas.core.document_io import (
     ChemvasDocument,
     atomic_write_text,
     atomic_write_via_temp,
@@ -16,7 +16,7 @@ from core.document_io import (
     read_document,
     write_document,
 )
-from core.document_state import (
+from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     CHEMVAS_FILE_TYPE,
     LEGACY_CANVAS_FILE_VERSION,
@@ -113,7 +113,15 @@ class DocumentIOTest(unittest.TestCase):
     def test_create_and_write_document_normalize_decimal_numbers(self) -> None:
         state = _canvas_state(
             _model_state(
-                {"0": {"element": "C", "x": Decimal("1.25"), "y": 0.0, "color": "#000000", "explicit_label": False}},
+                {
+                    "0": {
+                        "element": "C",
+                        "x": Decimal("1.25"),
+                        "y": 0.0,
+                        "color": "#000000",
+                        "explicit_label": False,
+                    }
+                },
                 [],
                 1,
             )
@@ -129,7 +137,9 @@ class DocumentIOTest(unittest.TestCase):
 
         self.assertEqual(loaded["state"]["model"]["atoms"]["0"]["x"], 1.25)
 
-    def test_create_and_write_document_normalize_decimal_numbers_inside_tuples(self) -> None:
+    def test_create_and_write_document_normalize_decimal_numbers_inside_tuples(
+        self,
+    ) -> None:
         state = _canvas_state()
         state["arrows"] = [
             {
@@ -155,14 +165,25 @@ class DocumentIOTest(unittest.TestCase):
             None,
             {},
             {"type": CHEMVAS_FILE_TYPE, "version": CANVAS_FILE_VERSION, "state": {}},
-            {"type": "unexpected", "version": CANVAS_FILE_VERSION, "state": _canvas_state()},
-            {"type": CHEMVAS_FILE_TYPE, "version": CANVAS_FILE_VERSION + 1, "state": _canvas_state()},
+            {
+                "type": "unexpected",
+                "version": CANVAS_FILE_VERSION,
+                "state": _canvas_state(),
+            },
+            {
+                "type": CHEMVAS_FILE_TYPE,
+                "version": CANVAS_FILE_VERSION + 1,
+                "state": _canvas_state(),
+            },
             {
                 "type": CHEMVAS_FILE_TYPE,
                 "version": CANVAS_FILE_VERSION,
                 "state": {"active_sheet_index": 0, "sheets": []},
             },
-            {"model": {"atoms": {}, "bonds": [], "next_atom_id": 0}, "version": CANVAS_FILE_VERSION},
+            {
+                "model": {"atoms": {}, "bonds": [], "next_atom_id": 0},
+                "version": CANVAS_FILE_VERSION,
+            },
         )
         for payload in cases:
             with self.subTest(payload=payload):
@@ -178,7 +199,9 @@ class DocumentIOTest(unittest.TestCase):
         }
 
         self.assertIs(parse_document(payload).state, state)
-        self.assertIs(create_document(state, version=LEGACY_CANVAS_FILE_VERSION).state, state)
+        self.assertIs(
+            create_document(state, version=LEGACY_CANVAS_FILE_VERSION).state, state
+        )
 
     def test_workbook_shaped_payloads_are_invalid(self) -> None:
         workbook_payload = {
@@ -186,7 +209,9 @@ class DocumentIOTest(unittest.TestCase):
             "version": 2,
             "state": {
                 "active_sheet_index": 0,
-                "sheets": [{"name": "Canvas 1", "kind": "canvas", "content": _canvas_state()}],
+                "sheets": [
+                    {"name": "Canvas 1", "kind": "canvas", "content": _canvas_state()}
+                ],
             },
         }
 
@@ -197,18 +222,30 @@ class DocumentIOTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             create_document(_canvas_state(), version=9)
         with self.assertRaises(ValueError):
-            create_document({"active_sheet_index": 0, "sheets": []}, version=CANVAS_FILE_VERSION)
+            create_document(
+                {"active_sheet_index": 0, "sheets": []}, version=CANVAS_FILE_VERSION
+            )
 
     def test_create_document_reports_save_side_error_message(self) -> None:
         # The save path never produced this state from a file, so the failure
         # message must not claim the *file* is invalid.
         with self.assertRaisesRegex(ValueError, "Failed to save"):
-            create_document({"active_sheet_index": 0, "sheets": []}, version=CANVAS_FILE_VERSION)
+            create_document(
+                {"active_sheet_index": 0, "sheets": []}, version=CANVAS_FILE_VERSION
+            )
 
     def test_write_and_read_document_round_trip_wrapped_payload(self) -> None:
         state = _canvas_state(
             _model_state(
-                {"0": {"element": "C", "x": 0.0, "y": 0.0, "color": "#000000", "explicit_label": False}},
+                {
+                    "0": {
+                        "element": "C",
+                        "x": 0.0,
+                        "y": 0.0,
+                        "color": "#000000",
+                        "explicit_label": False,
+                    }
+                },
                 [],
                 1,
             )
@@ -237,10 +274,25 @@ class DocumentIOTest(unittest.TestCase):
         state = _canvas_state(
             _model_state(
                 {
-                    "0": {"element": "C", "x": 0.0, "y": 0.0, "color": "#000000", "explicit_label": False},
-                    "1": {"element": "C", "x": 10.0, "y": 0.0, "color": "#000000", "explicit_label": False},
+                    "0": {
+                        "element": "C",
+                        "x": 0.0,
+                        "y": 0.0,
+                        "color": "#000000",
+                        "explicit_label": False,
+                    },
+                    "1": {
+                        "element": "C",
+                        "x": 10.0,
+                        "y": 0.0,
+                        "color": "#000000",
+                        "explicit_label": False,
+                    },
                 },
-                [None, {"a": 0, "b": 1, "order": 1, "style": "single", "color": "#000000"}],
+                [
+                    None,
+                    {"a": 0, "b": 1, "order": 1, "style": "single", "color": "#000000"},
+                ],
                 2,
             )
         )
@@ -258,10 +310,25 @@ class DocumentIOTest(unittest.TestCase):
         state = _canvas_state(
             _model_state(
                 {
-                    "0": {"element": "C", "x": 0.0, "y": 0.0, "color": "#000000", "explicit_label": False},
-                    "1": {"element": "C", "x": 10.0, "y": 0.0, "color": "#000000", "explicit_label": False},
+                    "0": {
+                        "element": "C",
+                        "x": 0.0,
+                        "y": 0.0,
+                        "color": "#000000",
+                        "explicit_label": False,
+                    },
+                    "1": {
+                        "element": "C",
+                        "x": 10.0,
+                        "y": 0.0,
+                        "color": "#000000",
+                        "explicit_label": False,
+                    },
                 },
-                [None, {"a": 0, "b": 1, "order": 1, "style": "single", "color": "#000000"}],
+                [
+                    None,
+                    {"a": 0, "b": 1, "order": 1, "style": "single", "color": "#000000"},
+                ],
                 2,
             )
         )
@@ -272,7 +339,9 @@ class DocumentIOTest(unittest.TestCase):
                 write_document(path, state, version=CANVAS_FILE_VERSION)
             self.assertFalse(path.exists())
 
-    def test_read_document_rejects_deep_json_without_leaking_recursion_error(self) -> None:
+    def test_read_document_rejects_deep_json_without_leaking_recursion_error(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "sample.chemvas"
             path.write_text("[" * 20_000 + "0" + "]" * 20_000, encoding="utf-8")
@@ -280,7 +349,9 @@ class DocumentIOTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
                 read_document(path)
 
-    def test_read_document_rejects_invalid_utf8_without_leaking_decode_error(self) -> None:
+    def test_read_document_rejects_invalid_utf8_without_leaking_decode_error(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "sample.chemvas"
             path.write_bytes(b"\xff\xfe\x00")
@@ -288,7 +359,9 @@ class DocumentIOTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
                 read_document(path)
 
-    def test_read_document_rejects_overlong_json_integer_without_leaking_int_guard_error(self) -> None:
+    def test_read_document_rejects_overlong_json_integer_without_leaking_int_guard_error(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "sample.chemvas"
             payload = {
@@ -310,7 +383,10 @@ class DocumentIOTest(unittest.TestCase):
                     )
                 ),
             }
-            path.write_text(json.dumps(payload).replace('"__HUGE_INT__"', "9" * 5000), encoding="utf-8")
+            path.write_text(
+                json.dumps(payload).replace('"__HUGE_INT__"', "9" * 5000),
+                encoding="utf-8",
+            )
 
             with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
                 read_document(path)
@@ -345,7 +421,9 @@ class DocumentIOTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
                 read_document(path)
 
-    def test_parse_document_rejects_huge_numeric_coordinate_without_leaking_overflow_error(self) -> None:
+    def test_parse_document_rejects_huge_numeric_coordinate_without_leaking_overflow_error(
+        self,
+    ) -> None:
         payload = {
             "type": CHEMVAS_FILE_TYPE,
             "version": CANVAS_FILE_VERSION,
@@ -369,7 +447,9 @@ class DocumentIOTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
             parse_document(payload)
 
-    def test_parse_document_rejects_overlong_decimal_id_without_leaking_int_guard_error(self) -> None:
+    def test_parse_document_rejects_overlong_decimal_id_without_leaking_int_guard_error(
+        self,
+    ) -> None:
         payload = {
             "type": CHEMVAS_FILE_TYPE,
             "version": CANVAS_FILE_VERSION,
@@ -400,7 +480,9 @@ class DocumentIOTest(unittest.TestCase):
             path = Path(temp_dir) / "sample.chemvas"
             path.write_text("ORIGINAL", encoding="utf-8")
 
-            with mock.patch("core.document_io.os.fsync", side_effect=OSError("disk full")):
+            with mock.patch(
+                "chemvas.core.document_io.os.fsync", side_effect=OSError("disk full")
+            ):
                 with self.assertRaises(OSError):
                     write_document(path, state, version=CANVAS_FILE_VERSION)
 
@@ -423,7 +505,9 @@ class DocumentIOTest(unittest.TestCase):
             path = Path(temp_dir) / "export.xyz"
             path.write_text("ORIGINAL", encoding="utf-8")
 
-            with mock.patch("core.document_io.os.fsync", side_effect=OSError("disk full")):
+            with mock.patch(
+                "chemvas.core.document_io.os.fsync", side_effect=OSError("disk full")
+            ):
                 with self.assertRaises(OSError):
                     atomic_write_text(path, "NEW")
 
@@ -459,7 +543,9 @@ class DocumentIOTest(unittest.TestCase):
             def assert_write_capable(fd: int) -> None:
                 self.assertEqual(os.write(fd, b""), 0)
 
-            with mock.patch("core.document_io.os.fsync", side_effect=assert_write_capable) as fsync:
+            with mock.patch(
+                "chemvas.core.document_io.os.fsync", side_effect=assert_write_capable
+            ) as fsync:
                 atomic_write_text(path, "NEW")
 
             fsync.assert_called_once()

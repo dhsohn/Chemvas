@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import pytest
-from core.history import HistoryCommand
-from ui.history_command_snapshot import HistoryCommandSnapshot
+from chemvas.core.history import HistoryCommand
+from chemvas.ui.transactions.history_command import HistoryCommandSnapshot
 
 
 class _HostileList(list):

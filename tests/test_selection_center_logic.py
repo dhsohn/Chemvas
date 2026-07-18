@@ -1,8 +1,11 @@
 import unittest
 
-from core.model import Atom
+from chemvas.domain.document import Atom
+from chemvas.features.selection import (
+    bounding_box_center_for_atoms,
+    center_for_atoms,
+)
 from PyQt6.QtCore import QPointF
-from ui.selection_center_logic import bounding_box_center_for_atoms, center_for_atoms
 
 
 class SelectionCenterLogicTest(unittest.TestCase):

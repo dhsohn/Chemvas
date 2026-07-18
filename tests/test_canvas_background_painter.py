@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import mock
 
-import ui.canvas_background_painter as background_painter
+import chemvas.ui.canvas_background_painter as background_painter
 from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QColor
 
@@ -13,7 +13,9 @@ def test_draw_canvas_background_paints_workspace_shadow_and_sheet(monkeypatch) -
     painter = mock.Mock()
     viewport_rect = QRectF(-100.0, -80.0, 200.0, 160.0)
     sheet_rect = QRectF(-20.0, -10.0, 40.0, 20.0)
-    monkeypatch.setattr(background_painter, "sheet_rect_for", mock.Mock(return_value=sheet_rect))
+    monkeypatch.setattr(
+        background_painter, "sheet_rect_for", mock.Mock(return_value=sheet_rect)
+    )
 
     background_painter.draw_canvas_background_for(canvas, painter, viewport_rect)
 

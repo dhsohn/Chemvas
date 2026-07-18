@@ -1,12 +1,12 @@
 import math
 import unittest
 
-from core.bond_tool_logic import (
+from chemvas.core.bond_tool_logic import (
     resolve_bond_endpoint_target,
     resolve_bond_press_target,
     resolve_bond_snap_target,
 )
-from core.model import Atom, Bond, MoleculeModel
+from chemvas.domain.document import Atom, Bond, MoleculeModel
 
 
 class BondToolLogicTest(unittest.TestCase):
@@ -20,7 +20,9 @@ class BondToolLogicTest(unittest.TestCase):
         self.assertAlmostEqual(actual[0], expected[0], places=places)
         self.assertAlmostEqual(actual[1], expected[1], places=places)
 
-    def test_resolve_bond_press_target_prefers_item_then_nearby_then_hover_and_returns_none_for_atom(self) -> None:
+    def test_resolve_bond_press_target_prefers_item_then_nearby_then_hover_and_returns_none_for_atom(
+        self,
+    ) -> None:
         self.assertEqual(
             resolve_bond_press_target(
                 atom_id=None,
@@ -61,7 +63,9 @@ class BondToolLogicTest(unittest.TestCase):
             )
         )
 
-    def test_resolve_bond_snap_target_returns_original_pos_when_no_atom_and_no_bond(self) -> None:
+    def test_resolve_bond_snap_target_returns_original_pos_when_no_atom_and_no_bond(
+        self,
+    ) -> None:
         model = MoleculeModel()
 
         target = resolve_bond_snap_target(
@@ -76,7 +80,9 @@ class BondToolLogicTest(unittest.TestCase):
         self.assertEqual(target.pos, (4.0, 5.0))
         self.assertEqual(target.start_atom_id, 7)
 
-    def test_resolve_bond_snap_target_snaps_to_atom_and_updates_start_atom_id_when_not_ignoring_start(self) -> None:
+    def test_resolve_bond_snap_target_snaps_to_atom_and_updates_start_atom_id_when_not_ignoring_start(
+        self,
+    ) -> None:
         model = MoleculeModel(atoms={1: Atom("C", 10.0, 20.0)})
 
         target = resolve_bond_snap_target(
@@ -91,7 +97,9 @@ class BondToolLogicTest(unittest.TestCase):
         self.assertEqual(target.pos, (10.0, 20.0))
         self.assertEqual(target.start_atom_id, 1)
 
-    def test_resolve_bond_snap_target_returns_original_pos_when_atom_matches_start_and_ignore_start_is_true(self) -> None:
+    def test_resolve_bond_snap_target_returns_original_pos_when_atom_matches_start_and_ignore_start_is_true(
+        self,
+    ) -> None:
         model = MoleculeModel(atoms={1: Atom("C", 10.0, 20.0)})
 
         target = resolve_bond_snap_target(
@@ -106,7 +114,9 @@ class BondToolLogicTest(unittest.TestCase):
         self.assertEqual(target.pos, (1.0, 2.0))
         self.assertEqual(target.start_atom_id, 1)
 
-    def test_resolve_bond_snap_target_returns_original_pos_for_missing_atom_id(self) -> None:
+    def test_resolve_bond_snap_target_returns_original_pos_for_missing_atom_id(
+        self,
+    ) -> None:
         model = MoleculeModel(atoms={})
 
         target = resolve_bond_snap_target(
@@ -142,7 +152,9 @@ class BondToolLogicTest(unittest.TestCase):
         self.assertEqual(target.pos, (10.0, 0.0))
         self.assertEqual(target.start_atom_id, 3)
 
-    def test_resolve_bond_snap_target_returns_original_pos_for_invalid_or_missing_bond(self) -> None:
+    def test_resolve_bond_snap_target_returns_original_pos_for_invalid_or_missing_bond(
+        self,
+    ) -> None:
         pos = (8.0, 1.0)
         start_atom_id = 4
 
@@ -191,7 +203,9 @@ class BondToolLogicTest(unittest.TestCase):
         self.assertEqual(missing_endpoint_target.pos, pos)
         self.assertEqual(missing_endpoint_target.start_atom_id, start_atom_id)
 
-    def test_resolve_bond_endpoint_target_snaps_to_valid_atom_different_from_start_atom(self) -> None:
+    def test_resolve_bond_endpoint_target_snaps_to_valid_atom_different_from_start_atom(
+        self,
+    ) -> None:
         model = MoleculeModel(atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 8.0, -3.0)})
 
         target = resolve_bond_endpoint_target(
@@ -206,7 +220,9 @@ class BondToolLogicTest(unittest.TestCase):
 
         self.assertEqual(target, (8.0, -3.0))
 
-    def test_resolve_bond_endpoint_target_ignores_start_atom_hit_and_falls_back_to_angle_snap(self) -> None:
+    def test_resolve_bond_endpoint_target_ignores_start_atom_hit_and_falls_back_to_angle_snap(
+        self,
+    ) -> None:
         model = MoleculeModel(atoms={1: Atom("C", 0.0, 0.0)})
 
         target = resolve_bond_endpoint_target(
@@ -221,7 +237,9 @@ class BondToolLogicTest(unittest.TestCase):
 
         self.assertPointAlmostEqual(target, (0.0, 10.0))
 
-    def test_resolve_bond_endpoint_target_falls_back_to_angle_snap_for_missing_atom(self) -> None:
+    def test_resolve_bond_endpoint_target_falls_back_to_angle_snap_for_missing_atom(
+        self,
+    ) -> None:
         model = MoleculeModel(atoms={1: Atom("C", 0.0, 0.0)})
 
         target = resolve_bond_endpoint_target(
@@ -236,7 +254,9 @@ class BondToolLogicTest(unittest.TestCase):
 
         self.assertPointAlmostEqual(target, (10.0, 0.0))
 
-    def test_resolve_bond_endpoint_target_returns_original_end_for_zero_length_drag(self) -> None:
+    def test_resolve_bond_endpoint_target_returns_original_end_for_zero_length_drag(
+        self,
+    ) -> None:
         model = MoleculeModel()
         end = (1.25, -2.5)
 
@@ -267,7 +287,9 @@ class BondToolLogicTest(unittest.TestCase):
 
         self.assertPointAlmostEqual(target, (math.sqrt(50.0), math.sqrt(50.0)))
 
-    def test_resolve_bond_endpoint_target_falls_back_to_thirty_degree_snaps_for_falsy_steps(self) -> None:
+    def test_resolve_bond_endpoint_target_falls_back_to_thirty_degree_snaps_for_falsy_steps(
+        self,
+    ) -> None:
         model = MoleculeModel()
         expected = (5.0, 5.0 * math.sqrt(3.0))
 

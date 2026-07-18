@@ -5,10 +5,10 @@ from types import SimpleNamespace
 from unittest import mock
 
 import pytest
-from ui import selection_rotation_session as rotation_session
-from ui.atom_coords_access import CanvasAtomCoords3DState
-from ui.canvas_rotation_state import CanvasRotationState
-from ui.selection_rotation_session import (
+from chemvas.ui import selection_rotation_session as rotation_session
+from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
+from chemvas.ui.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.selection_rotation_session import (
     begin_rigid_rotation_session,
     begin_selection_rotation_session,
     explicit_rotation_atom_ids_from_items,
@@ -137,9 +137,7 @@ def _rotation_prestate() -> tuple[CanvasRotationState, CanvasAtomCoords3DState]:
         coord_atom_ids={700},
         selection_ids=(selection_atom_ids, selection_bond_ids),
     )
-    coords_state = CanvasAtomCoords3DState(
-        atom_coords_3d={700: (28.0, 29.0, 30.0)}
-    )
+    coords_state = CanvasAtomCoords3DState(atom_coords_3d={700: (28.0, 29.0, 30.0)})
     return state, coords_state
 
 
@@ -189,7 +187,9 @@ def _assert_exact_rotation_prestate(
     assert coords_state.atom_coords_3d is mapping
 
 
-def test_explicit_rotation_atom_ids_from_items_promotes_valid_mark_targets_only() -> None:
+def test_explicit_rotation_atom_ids_from_items_promotes_valid_mark_targets_only() -> (
+    None
+):
     assert explicit_rotation_atom_ids_from_items(
         {1},
         [
@@ -201,7 +201,9 @@ def test_explicit_rotation_atom_ids_from_items_promotes_valid_mark_targets_only(
     ) == {1, 3}
 
 
-def test_begin_rigid_rotation_session_populates_rotation_state_and_canvas_coords() -> None:
+def test_begin_rigid_rotation_session_populates_rotation_state_and_canvas_coords() -> (
+    None
+):
     ports = _RigidPorts()
     state = CanvasRotationState(
         projection_center_3d=(100.0, 200.0, 300.0),
@@ -233,7 +235,9 @@ def test_begin_rigid_rotation_session_populates_rotation_state_and_canvas_coords
     assert ports.average_calls == [({1, 2}, dict(state.base_coords))]
 
 
-def test_begin_selection_rotation_restores_exact_state_after_every_failure_stage() -> None:
+def test_begin_selection_rotation_restores_exact_state_after_every_failure_stage() -> (
+    None
+):
     failure_cases = (
         ("selected_ids", SystemExit),
         ("selected_scene_items", KeyboardInterrupt),
@@ -369,9 +373,7 @@ def test_begin_rotation_restores_replaced_3d_state_root_before_retry() -> None:
     state, coords_state = _rotation_prestate()
     ports.canvas.atom_coords_3d_state = coords_state
     coords_mapping = coords_state.atom_coords_3d
-    replacement = CanvasAtomCoords3DState(
-        atom_coords_3d={1: (99.0, 99.0, 99.0)}
-    )
+    replacement = CanvasAtomCoords3DState(atom_coords_3d={1: (99.0, 99.0, 99.0)})
     primary = KeyboardInterrupt("flatten replaced 3D state root")
 
     def replace_root_then_fail(_atom_ids, _coords):

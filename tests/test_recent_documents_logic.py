@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ui.recent_documents_logic import (
+from chemvas.ui.recent_documents_logic import (
     MAX_RECENT,
     add_recent,
     from_json,
@@ -44,7 +44,9 @@ def test_prune_missing_keeps_only_existing_and_dedupes():
 
 
 def test_menu_entries_use_basename_as_label():
-    assert recent_menu_entries(["/lab/aspirin.chemvas"]) == [("aspirin.chemvas", "/lab/aspirin.chemvas")]
+    assert recent_menu_entries(["/lab/aspirin.chemvas"]) == [
+        ("aspirin.chemvas", "/lab/aspirin.chemvas")
+    ]
 
 
 def test_json_round_trips():

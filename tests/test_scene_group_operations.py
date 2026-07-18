@@ -17,18 +17,21 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.canvas_atom_graphics_state import set_atom_item_for
-    from ui.canvas_bond_graphics_state import bond_items_for
-    from ui.canvas_group_state import group_state_for, register_group_for
-    from ui.canvas_mark_registry import mark_registry_for
-    from ui.canvas_model_access import model_for
-    from ui.canvas_scene_items_state import (
+    from chemvas.ui.canvas_atom_graphics_state import set_atom_item_for
+    from chemvas.ui.canvas_bond_graphics_state import bond_items_for
+    from chemvas.ui.canvas_group_state import group_state_for, register_group_for
+    from chemvas.ui.canvas_mark_registry import mark_registry_for
+    from chemvas.ui.canvas_model_access import model_for
+    from chemvas.ui.canvas_scene_items_state import (
         add_selected_note_for,
         append_scene_item_for,
         selected_notes_for,
     )
-    from ui.history_commands import GroupSceneItemsCommand, UngroupSceneItemsCommand
-    from ui.scene_group_operations import (
+    from chemvas.ui.history_commands import (
+        GroupSceneItemsCommand,
+        UngroupSceneItemsCommand,
+    )
+    from chemvas.ui.scene_group_operations import (
         expand_note_selection_to_groups_for,
         expand_selection_to_groups_for,
         group_selection_for,
@@ -36,7 +39,7 @@ if QApplication is not None:
         selected_group_rects_for,
         ungroup_selection_for,
     )
-    from ui.selection_note_service import SelectionNoteService
+    from chemvas.ui.selection_note_service import SelectionNoteService
 
 
 class _History:

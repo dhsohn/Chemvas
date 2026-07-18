@@ -3,17 +3,21 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import mock
 
-from PyQt6.QtCore import QPointF
-from ui.canvas_view_ports import (
+from chemvas.ui.canvas_view_ports import (
     input_controller_for_view,
     pointer_controller_for_view,
     scene_pos_from_event_for_view,
 )
+from PyQt6.QtCore import QPointF
 
 
 def test_input_controller_for_view_returns_attached_input_controller() -> None:
     input_controller = object()
-    canvas = SimpleNamespace(services=SimpleNamespace(input_controller=input_controller))
+    canvas = SimpleNamespace(
+        services=SimpleNamespace(
+            input=SimpleNamespace(input_controller=input_controller)
+        )
+    )
 
     assert input_controller_for_view(canvas) is input_controller
 
@@ -24,7 +28,11 @@ def test_input_controller_for_view_returns_none_when_services_are_missing() -> N
 
 def test_pointer_controller_for_view_returns_attached_pointer_controller() -> None:
     pointer_controller = object()
-    canvas = SimpleNamespace(services=SimpleNamespace(pointer_controller=pointer_controller))
+    canvas = SimpleNamespace(
+        services=SimpleNamespace(
+            input=SimpleNamespace(pointer_controller=pointer_controller)
+        )
+    )
 
     assert pointer_controller_for_view(canvas) is pointer_controller
 

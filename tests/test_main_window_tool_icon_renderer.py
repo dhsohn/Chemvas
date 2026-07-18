@@ -13,7 +13,7 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.main_window_tool_icon_renderer import MainWindowToolIconRenderer
+    from chemvas.ui.main_window_tool_icon_renderer import MainWindowToolIconRenderer
 
 
 def _opaque_bounds(image) -> tuple[int, int, int, int] | None:
@@ -43,7 +43,10 @@ def _icon_brush(color=None) -> QBrush:
     return QBrush(QColor("#2f2f2c" if color is None else color))
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for main window tool icon renderer tests")
+@unittest.skipUnless(
+    QApplication is not None,
+    "PyQt6 is required for main window tool icon renderer tests",
+)
 class MainWindowToolIconRendererTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -100,7 +103,11 @@ class MainWindowToolIconRendererTest(unittest.TestCase):
         for kind in ("s", "p", "sp", "sp2", "sp3", "d", "dz2"):
             with self.subTest(kind=kind):
                 self.assertIsNotNone(
-                    self._render(lambda painter, kind=kind: self.renderer.draw_orbital_preview(painter, kind))
+                    self._render(
+                        lambda painter, kind=kind: self.renderer.draw_orbital_preview(
+                            painter, kind
+                        )
+                    )
                 )
 
     def test_bracket_preview_matrix_renders_palette_variants(self) -> None:
@@ -116,7 +123,11 @@ class MainWindowToolIconRendererTest(unittest.TestCase):
         ):
             with self.subTest(kind=kind):
                 self.assertIsNotNone(
-                    self._render(lambda painter, kind=kind: self.renderer.draw_bracket_preview(painter, kind))
+                    self._render(
+                        lambda painter, kind=kind: self.renderer.draw_bracket_preview(
+                            painter, kind
+                        )
+                    )
                 )
 
 

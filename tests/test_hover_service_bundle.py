@@ -3,8 +3,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import mock
 
-import ui.hover_service_bundle as hover_service_bundle
-from ui.hover_service_bundle import HoverServiceBundle, build_hover_services
+import chemvas.ui.hover_service_bundle as hover_service_bundle
+from chemvas.ui.hover_service_bundle import HoverServiceBundle, build_hover_services
 
 
 def _stub_service_class(name: str):
@@ -30,7 +30,9 @@ def test_build_hover_services_wires_explicit_collaborators(monkeypatch) -> None:
         "HoverSceneService",
         "MarkHoverPreviewService",
     ):
-        monkeypatch.setattr(hover_service_bundle, class_name, _stub_service_class(class_name))
+        monkeypatch.setattr(
+            hover_service_bundle, class_name, _stub_service_class(class_name)
+        )
 
     canvas = SimpleNamespace()
     selection_controller = object()
@@ -89,7 +91,9 @@ def test_hover_refresh_uses_injected_hover_ports(monkeypatch) -> None:
     )
 
 
-def test_hover_refresh_uses_canvas_insert_controller_when_available(monkeypatch) -> None:
+def test_hover_refresh_uses_canvas_insert_controller_when_available(
+    monkeypatch,
+) -> None:
     refresh_hover_from_cursor_for = mock.Mock()
     monkeypatch.setattr(
         hover_service_bundle,
@@ -108,7 +112,9 @@ def test_hover_refresh_uses_canvas_insert_controller_when_available(monkeypatch)
         render_template_preview=mock.Mock(),
         render_smiles_preview=mock.Mock(),
     )
-    canvas.services = SimpleNamespace(insert_controller=insert_controller)
+    canvas.services = SimpleNamespace(
+        structure=SimpleNamespace(insert_controller=insert_controller)
+    )
 
     services.hover_refresh(render_insert_preview=True)
 

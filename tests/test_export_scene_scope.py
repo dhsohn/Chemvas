@@ -16,7 +16,7 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.export_scene_scope import (
+    from chemvas.features.export import (
         collect_export_items,
         content_bounds,
         export_item_closure,

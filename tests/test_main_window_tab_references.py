@@ -13,12 +13,14 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.canvas_view import CanvasView
-    from ui.main_window_tab_references import MainWindowTabReferences
-    from ui.main_window_tab_setup import build_canvas_tab_assembly
+    from chemvas.ui.canvas_view import CanvasView
+    from chemvas.ui.main_window_tab_references import MainWindowTabReferences
+    from chemvas.ui.main_window_tab_setup import build_canvas_tab_assembly
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required for main window tab reference tests")
+@pytest.mark.skipif(
+    QApplication is None, reason="PyQt6 is required for main window tab reference tests"
+)
 def test_main_window_tab_references_resolve_active_canvas_tabs_and_names() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)

@@ -17,10 +17,13 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.canvas_atom_graphics_state import set_atom_dot_for, set_atom_item_for
-    from ui.canvas_bond_graphics_state import bond_items_for
-    from ui.canvas_scene_items_state import append_scene_item_for
-    from ui.select_all_access import select_all_scene_items_for
+    from chemvas.ui.canvas_atom_graphics_state import (
+        set_atom_dot_for,
+        set_atom_item_for,
+    )
+    from chemvas.ui.canvas_bond_graphics_state import bond_items_for
+    from chemvas.ui.canvas_scene_items_state import append_scene_item_for
+    from chemvas.ui.select_all_access import select_all_scene_items_for
 
 
 if QApplication is not None:
@@ -32,7 +35,9 @@ if QApplication is not None:
                 select_note=mock.Mock(),
                 update_selection_outline=mock.Mock(),
             )
-            self.services = SimpleNamespace(selection_controller=self.selection_controller)
+            self.services = SimpleNamespace(
+                selection_controller=self.selection_controller
+            )
 
         def add_scene_item(self, kind: str):
             item = QGraphicsRectItem(0.0, 0.0, 5.0, 5.0)
@@ -70,7 +75,9 @@ class SelectAllAccessTest(unittest.TestCase):
         self.assertTrue(bond_item.isSelected())
         self.assertTrue(arrow_item.isSelected())
         self.assertTrue(shape_item.isSelected())
-        canvas.selection_controller.select_note.assert_called_once_with(note_item, additive=True)
+        canvas.selection_controller.select_note.assert_called_once_with(
+            note_item, additive=True
+        )
         canvas.selection_controller.update_selection_outline.assert_called_once_with()
 
     def test_select_all_selects_implicit_carbon_dots(self) -> None:

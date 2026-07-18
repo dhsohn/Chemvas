@@ -14,20 +14,20 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from core.history import (
+    from chemvas.core.history import (
         CompositeCommand,
         HistoryTransactionRestoreResult,
         SetAtomPositionsCommand,
         SetRingPolygonsCommand,
         UpdateBondLengthCommand,
     )
-    from core.model import Atom, Bond
-    from ui.atom_coords_access import (
+    from chemvas.domain.document import Atom, Bond
+    from chemvas.ui.atom_coords_access import (
         atom_coords_3d_for,
         current_atom_coords_3d_for,
         set_atom_coords_3d_for,
     )
-    from ui.bond_graphics_access import (
+    from chemvas.ui.bond_graphics_access import (
         add_bond_graphics_for,
         apply_color_to_bond_item_for,
         bond_offset_unit_3d_for,
@@ -48,29 +48,29 @@ if QApplication is not None:
         strip_polygon_for,
         wedge_polygon_for,
     )
-    from ui.bond_renderer import bond_renderer_for
-    from ui.canvas_atom_graphics_state import (
+    from chemvas.ui.bond_renderer import bond_renderer_for
+    from chemvas.ui.canvas_atom_graphics_state import (
         atom_dots_for,
         atom_items_for,
         set_atom_dots_for,
         set_atom_items_for,
     )
-    from ui.canvas_bond_graphics_state import bond_items_for_id
-    from ui.canvas_geometry_controller import CanvasGeometryController
-    from ui.canvas_graph_service import CanvasGraphService
-    from ui.canvas_graph_state import CanvasGraphState
-    from ui.canvas_mark_registry import CanvasMarkRegistry
-    from ui.canvas_move_controller import CanvasMoveController
-    from ui.canvas_rotation_state import CanvasRotationState
-    from ui.canvas_scene_items_state import (
+    from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
+    from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
+    from chemvas.ui.canvas_graph_service import CanvasGraphService
+    from chemvas.ui.canvas_graph_state import CanvasGraphState
+    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+    from chemvas.ui.canvas_move_controller import CanvasMoveController
+    from chemvas.ui.canvas_rotation_state import CanvasRotationState
+    from chemvas.ui.canvas_scene_items_state import (
         ring_items_for,
         set_scene_item_collection_for,
     )
-    from ui.canvas_view import CanvasView
-    from ui.graphics_items import AtomLabelItem
-    from ui.history_commands import UpdateSceneItemCommand
-    from ui.renderer_style_access import bond_length_px_for
-    from ui.selection_rotation_access import (
+    from chemvas.ui.canvas_view import CanvasView
+    from chemvas.ui.graphics_items import AtomLabelItem
+    from chemvas.ui.history_commands import UpdateSceneItemCommand
+    from chemvas.ui.renderer_style_access import bond_length_px_for
+    from chemvas.ui.selection_rotation_access import (
         apply_projected_atom_positions_for,
         atom_in_planar_system_for,
         average_bond_length_for_atoms_for,
@@ -86,7 +86,7 @@ if QApplication is not None:
         rotation_scale_for_coords_for,
         unproject_scene_point_3d_for,
     )
-    from ui.structure_mutation_access import add_atom_for, add_bond_for
+    from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 
 
 class _FakeRingItem:
@@ -166,7 +166,9 @@ class _FakeBrushOnlyItem:
         self.brush_updates.append(color)
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas view tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for canvas view tests"
+)
 class CanvasViewProjectionMathTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -187,7 +189,9 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         add_bond_graphics_for(canvas, bond_id)
         return canvas, label_atom_id, dot_atom_id, bond_id
 
-    def test_bond_length_history_preserves_graphics_selection_and_prior_item_command(self) -> None:
+    def test_bond_length_history_preserves_graphics_selection_and_prior_item_command(
+        self,
+    ) -> None:
         canvas, label_atom_id, dot_atom_id, bond_id = self._real_bond_length_canvas()
         label_item = atom_items_for(canvas)[label_atom_id]
         dot_item = atom_dots_for(canvas)[dot_atom_id]
@@ -220,7 +224,9 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertGreater(label_item.font().pointSizeF(), original_font_size)
         self.assertGreater(dot_item.boundingRect().width(), original_dot_hit_width)
         self.assertGreater(bond_item.pen().widthF(), original_pen_width)
-        self.assertTrue(all(item.isSelected() for item in (label_item, dot_item, bond_item)))
+        self.assertTrue(
+            all(item.isSelected() for item in (label_item, dot_item, bond_item))
+        )
 
         canvas.services.history_service.undo()
 
@@ -236,10 +242,12 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertEqual(label_item.font().pointSizeF(), original_font_size)
         self.assertEqual(dot_item.boundingRect().width(), original_dot_hit_width)
         self.assertEqual(bond_item.pen().widthF(), original_pen_width)
-        self.assertTrue(all(item.isSelected() for item in (label_item, dot_item, bond_item)))
+        self.assertTrue(
+            all(item.isSelected() for item in (label_item, dot_item, bond_item))
+        )
 
         with mock.patch(
-            "ui.history_commands._apply_scene_item_state",
+            "chemvas.ui.history_commands._apply_scene_item_state",
             side_effect=lambda _canvas, item, state: item.setOpacity(state["opacity"]),
         ):
             canvas.services.history_service.undo()
@@ -286,7 +294,9 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                 self.assertEqual(bond_item.pen(), original_pen)
                 self.assertFalse(canvas.services.history_service.can_undo())
 
-    def test_bond_length_command_fail_once_restores_metrics_identity_and_selection(self) -> None:
+    def test_bond_length_command_fail_once_restores_metrics_identity_and_selection(
+        self,
+    ) -> None:
         canvas, label_atom_id, dot_atom_id, bond_id = self._real_bond_length_canvas()
         canvas.services.geometry_controller.set_bond_length(30.0)
         canvas.services.history_service.clear()
@@ -314,7 +324,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
 
         command = UpdateBondLengthCommand(before_length=20.0, after_length=30.0)
         with mock.patch(
-            "ui.bond_length_graphics_refresh.update_bond_geometry_for",
+            "chemvas.ui.bond_length_graphics_refresh.update_bond_geometry_for",
             side_effect=fail_once_after_update,
         ):
             with self.assertRaisesRegex(RuntimeError, "in-place refresh failure"):
@@ -338,9 +348,13 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             ),
             original_metrics,
         )
-        self.assertTrue(all(item.isSelected() for item in (label_item, dot_item, bond_item)))
+        self.assertTrue(
+            all(item.isSelected() for item in (label_item, dot_item, bond_item))
+        )
 
-    def test_set_bond_length_fail_once_rolls_back_model_metrics_and_history(self) -> None:
+    def test_set_bond_length_fail_once_rolls_back_model_metrics_and_history(
+        self,
+    ) -> None:
         canvas, label_atom_id, dot_atom_id, bond_id = self._real_bond_length_canvas()
         label_item = atom_items_for(canvas)[label_atom_id]
         dot_item = atom_dots_for(canvas)[dot_atom_id]
@@ -368,7 +382,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                 raise RuntimeError("injected initial refresh failure")
 
         with mock.patch(
-            "ui.bond_length_graphics_refresh.update_bond_geometry_for",
+            "chemvas.ui.bond_length_graphics_refresh.update_bond_geometry_for",
             side_effect=fail_once_after_update,
         ):
             with self.assertRaisesRegex(RuntimeError, "initial refresh failure"):
@@ -396,10 +410,14 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             ),
             original_metrics,
         )
-        self.assertTrue(all(item.isSelected() for item in (label_item, dot_item, bond_item)))
+        self.assertTrue(
+            all(item.isSelected() for item in (label_item, dot_item, bond_item))
+        )
         self.assertFalse(canvas.services.history_service.can_undo())
 
-    def test_set_bond_length_live_pen_port_failure_rolls_back_all_primitives(self) -> None:
+    def test_set_bond_length_live_pen_port_failure_rolls_back_all_primitives(
+        self,
+    ) -> None:
         for failure_port in ("pen", "setPen"):
             with self.subTest(failure_port=failure_port):
                 canvas, _label_atom_id, _dot_atom_id, bond_id = (
@@ -476,7 +494,9 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                 self.assertGreaterEqual(failing_item.setter_port_reads, 1)
                 self.assertFalse(canvas.services.history_service.can_undo())
 
-    def test_set_bond_length_persistent_pre_update_failure_restores_raw_bond_geometry(self) -> None:
+    def test_set_bond_length_persistent_pre_update_failure_restores_raw_bond_geometry(
+        self,
+    ) -> None:
         canvas, label_atom_id, dot_atom_id, bond_id = self._real_bond_length_canvas()
         label_item = atom_items_for(canvas)[label_atom_id]
         dot_item = atom_dots_for(canvas)[dot_atom_id]
@@ -496,7 +516,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "ui.bond_length_graphics_refresh.update_bond_geometry_for",
+            "chemvas.ui.bond_length_graphics_refresh.update_bond_geometry_for",
             side_effect=RuntimeError("persistent geometry callback failure"),
         ):
             with self.assertRaisesRegex(RuntimeError, "persistent geometry"):
@@ -521,7 +541,9 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertIs(atom_items_for(canvas)[label_atom_id], label_item)
         self.assertIs(atom_dots_for(canvas)[dot_atom_id], dot_item)
         self.assertIs(bond_items_for_id(canvas, bond_id)[0], bond_item)
-        self.assertTrue(all(item.isSelected() for item in (label_item, dot_item, bond_item)))
+        self.assertTrue(
+            all(item.isSelected() for item in (label_item, dot_item, bond_item))
+        )
         self.assertFalse(canvas.services.history_service.can_undo())
 
     def test_set_bond_length_keeps_rollback_control_flow_failure_as_note(self) -> None:
@@ -531,7 +553,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         rollback_error = SystemExit("rollback refresh terminated")
 
         with mock.patch(
-            "ui.canvas_geometry_controller.refresh_bond_length_graphics_for",
+            "chemvas.ui.canvas_geometry_controller.refresh_bond_length_graphics_for",
             side_effect=[original_error, rollback_error],
         ):
             with self.assertRaises(RuntimeError) as caught:
@@ -550,7 +572,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
     def test_bond_length_exact_restore_retries_fail_once_and_persistent_results(
         self,
     ) -> None:
-        from ui import canvas_geometry_controller as geometry_module
+        from chemvas.ui import canvas_geometry_controller as geometry_module
 
         for behavior in ("fail_once", "persistent"):
             with self.subTest(behavior=behavior):
@@ -592,9 +614,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                     return HistoryTransactionRestoreResult(
                         authoritative=False,
                         fallback_to_inverse=False,
-                        errors=(
-                            RuntimeError("persistent bond exact restore failure"),
-                        ),
+                        errors=(RuntimeError("persistent bond exact restore failure"),),
                     )
 
                 with (
@@ -637,7 +657,9 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                         )
                     )
 
-    def test_set_bond_length_persistent_label_setter_failure_restores_raw_atom_graphics(self) -> None:
+    def test_set_bond_length_persistent_label_setter_failure_restores_raw_atom_graphics(
+        self,
+    ) -> None:
         canvas, label_atom_id, _dot_atom_id, _bond_id = self._real_bond_length_canvas()
         label_item = atom_items_for(canvas)[label_atom_id]
         label_item.setSelected(True)
@@ -675,7 +697,9 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertTrue(label_item.isSelected())
         self.assertFalse(canvas.services.history_service.can_undo())
 
-    def test_update_bond_length_history_persistent_label_failure_restores_exact_state(self) -> None:
+    def test_update_bond_length_history_persistent_label_failure_restores_exact_state(
+        self,
+    ) -> None:
         canvas, label_atom_id, _dot_atom_id, _bond_id = self._real_bond_length_canvas()
         canvas.services.geometry_controller.set_bond_length(30.0)
         label_item = atom_items_for(canvas)[label_atom_id]
@@ -712,7 +736,9 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertEqual(label_item.pos(), original_position)
         self.assertTrue(label_item.isSelected())
 
-    def test_real_bond_length_composite_failure_restores_atoms_ring_and_history_stacks(self) -> None:
+    def test_real_bond_length_composite_failure_restores_atoms_ring_and_history_stacks(
+        self,
+    ) -> None:
         class _PersistentFailRingItem(QGraphicsPolygonItem):
             fail_set_polygon = False
 
@@ -747,8 +773,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         )
 
         before_positions = {
-            atom_id: (atom.x, atom.y)
-            for atom_id, atom in canvas.model.atoms.items()
+            atom_id: (atom.x, atom.y) for atom_id, atom in canvas.model.atoms.items()
         }
         before_coords = dict(atom_coords_3d_for(canvas))
         before_polygon = [(point.x(), point.y()) for point in ring_item.polygon()]
@@ -771,8 +796,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         coords_mapping = atom_coords_3d_for(canvas)
         after_style = canvas.renderer.style
         after_positions = {
-            atom_id: (atom.x, atom.y)
-            for atom_id, atom in canvas.model.atoms.items()
+            atom_id: (atom.x, atom.y) for atom_id, atom in canvas.model.atoms.items()
         }
         after_coords = dict(coords_mapping)
         after_polygon = [(point.x(), point.y()) for point in ring_item.polygon()]
@@ -845,7 +869,9 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             before_polygon,
         )
 
-    def test_set_bond_length_append_then_raise_restores_history_identity_and_style(self) -> None:
+    def test_set_bond_length_append_then_raise_restores_history_identity_and_style(
+        self,
+    ) -> None:
         canvas, label_atom_id, dot_atom_id, bond_id = self._real_bond_length_canvas()
         label_item = atom_items_for(canvas)[label_atom_id]
         dot_item = atom_dots_for(canvas)[dot_atom_id]
@@ -898,7 +924,9 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             ),
             original_ids,
         )
-        self.assertTrue(all(item.isSelected() for item in (label_item, dot_item, bond_item)))
+        self.assertTrue(
+            all(item.isSelected() for item in (label_item, dot_item, bond_item))
+        )
         self.assertIs(state.history, history_list)
         self.assertIs(state.redo_stack, redo_list)
         self.assertEqual(state.history, [prior_command])
@@ -914,7 +942,10 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         pushed = []
         structure_build_service = SimpleNamespace(render_model=mock.Mock())
         view = SimpleNamespace(
-            renderer=SimpleNamespace(style=style, set_bond_length=mock.Mock(side_effect=_set_renderer_bond_length)),
+            renderer=SimpleNamespace(
+                style=style,
+                set_bond_length=mock.Mock(side_effect=_set_renderer_bond_length),
+            ),
             model=SimpleNamespace(
                 atoms={
                     1: Atom("C", 0.0, 0.0),
@@ -932,7 +963,9 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             services=SimpleNamespace(
                 history_service=SimpleNamespace(push=pushed.append),
                 structure_build_service=structure_build_service,
-                hit_testing_service=SimpleNamespace(mark_spatial_index_dirty=mock.Mock()),
+                hit_testing_service=SimpleNamespace(
+                    mark_spatial_index_dirty=mock.Mock()
+                ),
             ),
         )
         set_scene_item_collection_for(view, "ring_items", [ring_item])
@@ -947,7 +980,9 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertEqual(style.bond_length_px, 30.0)
         self.assertAlmostEqual(view.model.atoms[1].x, -5.0)
         self.assertAlmostEqual(view.model.atoms[2].x, 25.0)
-        self.assertEqual(atom_coords_3d_for(view), {1: (-4.625, 0.0, 6.0), 2: (24.625, 0.0, 6.0)})
+        self.assertEqual(
+            atom_coords_3d_for(view), {1: (-4.625, 0.0, 6.0), 2: (24.625, 0.0, 6.0)}
+        )
         self.assertEqual(current_atom_coords_3d_for(view, 1), (-4.625, 0.0, 6.0))
         self.assertEqual(view.rotation_state.projection_center_3d, (10.0, 0.0, 0.0))
         self.assertEqual(view.rotation_state.projection_anchor_2d, (10.0, 0.0))
@@ -957,24 +992,46 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertEqual(len(pushed), 1)
         command = pushed[0]
         self.assertIsInstance(command, CompositeCommand)
-        self.assertEqual([type(entry) for entry in command.commands], [UpdateBondLengthCommand, SetAtomPositionsCommand, SetRingPolygonsCommand])
+        self.assertEqual(
+            [type(entry) for entry in command.commands],
+            [UpdateBondLengthCommand, SetAtomPositionsCommand, SetRingPolygonsCommand],
+        )
         atom_positions_command = command.commands[1]
-        self.assertEqual(atom_positions_command.before_coords_3d, {1: (0.25, 0.0, 4.0), 2: (19.75, 0.0, 4.0)})
-        self.assertEqual(atom_positions_command.after_coords_3d, {1: (-4.625, 0.0, 6.0), 2: (24.625, 0.0, 6.0)})
+        self.assertEqual(
+            atom_positions_command.before_coords_3d,
+            {1: (0.25, 0.0, 4.0), 2: (19.75, 0.0, 4.0)},
+        )
+        self.assertEqual(
+            atom_positions_command.after_coords_3d,
+            {1: (-4.625, 0.0, 6.0), 2: (24.625, 0.0, 6.0)},
+        )
         self.assertTrue(atom_positions_command.restore_projection_state)
-        self.assertEqual(atom_positions_command.before_projection_center_3d, (10.0, 0.0, 0.0))
-        self.assertEqual(atom_positions_command.after_projection_center_3d, (10.0, 0.0, 0.0))
+        self.assertEqual(
+            atom_positions_command.before_projection_center_3d, (10.0, 0.0, 0.0)
+        )
+        self.assertEqual(
+            atom_positions_command.after_projection_center_3d, (10.0, 0.0, 0.0)
+        )
 
     def test_set_bond_length_short_circuits_for_empty_model_or_same_scale(self) -> None:
         empty_style = SimpleNamespace(bond_length_px=20.0)
         empty_view = SimpleNamespace(
-            renderer=SimpleNamespace(style=empty_style, set_bond_length=mock.Mock(side_effect=lambda value: setattr(empty_style, "bond_length_px", value))),
+            renderer=SimpleNamespace(
+                style=empty_style,
+                set_bond_length=mock.Mock(
+                    side_effect=lambda value: setattr(
+                        empty_style, "bond_length_px", value
+                    )
+                ),
+            ),
             model=SimpleNamespace(atoms={}),
             push_command=mock.Mock(),
             services=SimpleNamespace(),
         )
         set_scene_item_collection_for(empty_view, "ring_items", [])
-        empty_view.services.history_service = SimpleNamespace(push=empty_view.push_command)
+        empty_view.services.history_service = SimpleNamespace(
+            push=empty_view.push_command
+        )
 
         CanvasGeometryController(empty_view).set_bond_length(30.0)
 
@@ -982,13 +1039,22 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
 
         same_style = SimpleNamespace(bond_length_px=24.0)
         same_view = SimpleNamespace(
-            renderer=SimpleNamespace(style=same_style, set_bond_length=mock.Mock(side_effect=lambda value: setattr(same_style, "bond_length_px", value))),
+            renderer=SimpleNamespace(
+                style=same_style,
+                set_bond_length=mock.Mock(
+                    side_effect=lambda value: setattr(
+                        same_style, "bond_length_px", value
+                    )
+                ),
+            ),
             model=SimpleNamespace(atoms={1: Atom("C", 1.0, 2.0)}),
             push_command=mock.Mock(),
             services=SimpleNamespace(),
         )
         set_scene_item_collection_for(same_view, "ring_items", [])
-        same_view.services.history_service = SimpleNamespace(push=same_view.push_command)
+        same_view.services.history_service = SimpleNamespace(
+            push=same_view.push_command
+        )
 
         CanvasGeometryController(same_view).set_bond_length(24.0)
 
@@ -999,7 +1065,9 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertEqual(normalize_3d(0.0, 3.0, 4.0), (0.0, 0.6, 0.8))
 
         no_projection_view = SimpleNamespace(rotation_state=CanvasRotationState())
-        self.assertEqual(project_point_3d_for(no_projection_view, (2.0, 3.0, 4.0)), (2.0, 3.0))
+        self.assertEqual(
+            project_point_3d_for(no_projection_view, (2.0, 3.0, 4.0)), (2.0, 3.0)
+        )
         self.assertEqual(
             unproject_scene_point_3d_for(no_projection_view, QPointF(2.0, 3.0), 4.0),
             (2.0, 3.0, 4.0),
@@ -1014,7 +1082,9 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         )
 
         scene_xy = project_point_3d_for(projected_view, (14.0, 26.0, 40.0))
-        restored = unproject_scene_point_3d_for(projected_view, QPointF(*scene_xy), 40.0)
+        restored = unproject_scene_point_3d_for(
+            projected_view, QPointF(*scene_xy), 40.0
+        )
         self.assertAlmostEqual(restored[0], 14.0, places=6)
         self.assertAlmostEqual(restored[1], 26.0, places=6)
         self.assertAlmostEqual(restored[2], 40.0, places=6)
@@ -1036,20 +1106,28 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
 
         coords = current_atom_coords_3d_for(projected_view, 1)
         self.assertEqual(coords, (12.0, 13.0, 30.0))
-        self.assertEqual(current_atom_coords_3d_for(projected_view, 2), (40.0, 50.0, 0.0))
+        self.assertEqual(
+            current_atom_coords_3d_for(projected_view, 2), (40.0, 50.0, 0.0)
+        )
         self.assertIsNone(current_atom_coords_3d_for(projected_view, 99))
 
         set_atom_coords_3d_for(projected_view, {})
-        self.assertEqual(current_atom_coords_3d_for(projected_view, 1), projected_atom + (0.0,))
+        self.assertEqual(
+            current_atom_coords_3d_for(projected_view, 1), projected_atom + (0.0,)
+        )
 
-    def test_projection_and_center_helpers_cover_anchor_and_empty_fallbacks(self) -> None:
+    def test_projection_and_center_helpers_cover_anchor_and_empty_fallbacks(
+        self,
+    ) -> None:
         projected_view = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
             rotation_state=CanvasRotationState(projection_center_3d=(10.0, 20.0, 30.0)),
         )
 
         projected = project_point_3d_for(projected_view, (12.0, 24.0, 30.0))
-        restored = unproject_scene_point_3d_for(projected_view, QPointF(*projected), 30.0)
+        restored = unproject_scene_point_3d_for(
+            projected_view, QPointF(*projected), 30.0
+        )
         self.assertAlmostEqual(projected[0], 12.0)
         self.assertAlmostEqual(projected[1], 24.0)
         self.assertAlmostEqual(restored[0], 12.0)
@@ -1076,7 +1154,9 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertAlmostEqual(explicit_restored[0], 12.0)
         self.assertAlmostEqual(explicit_restored[1], 24.0)
 
-    def test_planar_fragment_helpers_detect_and_flatten_connected_planar_atoms(self) -> None:
+    def test_planar_fragment_helpers_detect_and_flatten_connected_planar_atoms(
+        self,
+    ) -> None:
         view = SimpleNamespace(
             model=SimpleNamespace(
                 bonds=[
@@ -1097,16 +1177,26 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                 }
             ),
             services=SimpleNamespace(
-                canvas_graph_service=SimpleNamespace(bond_in_cycle=lambda bond_id: bond_id in {2, 3})
+                canvas_graph_service=SimpleNamespace(
+                    bond_in_cycle=lambda bond_id: bond_id in {2, 3}
+                )
             ),
         )
         bond_in_cycle = view.services.canvas_graph_service.bond_in_cycle
         self.assertTrue(atom_in_planar_system_for(view, 2, bond_in_cycle=bond_in_cycle))
-        self.assertTrue(bond_is_planar_fragment_edge_for(view, 1, bond_in_cycle=bond_in_cycle))
-        self.assertTrue(bond_is_planar_fragment_edge_for(view, 3, bond_in_cycle=bond_in_cycle))
-        self.assertFalse(bond_is_planar_fragment_edge_for(view, 99, bond_in_cycle=bond_in_cycle))
+        self.assertTrue(
+            bond_is_planar_fragment_edge_for(view, 1, bond_in_cycle=bond_in_cycle)
+        )
+        self.assertTrue(
+            bond_is_planar_fragment_edge_for(view, 3, bond_in_cycle=bond_in_cycle)
+        )
+        self.assertFalse(
+            bond_is_planar_fragment_edge_for(view, 99, bond_in_cycle=bond_in_cycle)
+        )
         self.assertEqual(
-            planar_fragment_components_for(view, {1, 2, 3, 4, 5}, bond_in_cycle=bond_in_cycle),
+            planar_fragment_components_for(
+                view, {1, 2, 3, 4, 5}, bond_in_cycle=bond_in_cycle
+            ),
             [{1, 2, 3, 4, 5}],
         )
 
@@ -1119,19 +1209,33 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         }
         normal = fragment_plane_normal_for({1, 2, 3}, coords)
         self.assertIsNotNone(normal)
-        flattened = flatten_planar_fragments_for(view, {1, 2, 3, 4, 5}, coords, bond_in_cycle=bond_in_cycle)
+        flattened = flatten_planar_fragments_for(
+            view, {1, 2, 3, 4, 5}, coords, bond_in_cycle=bond_in_cycle
+        )
         self.assertNotEqual(flattened[5], coords[5])
 
-    def test_planar_fragment_helpers_cover_invalid_none_collinear_and_skip_paths(self) -> None:
+    def test_planar_fragment_helpers_cover_invalid_none_collinear_and_skip_paths(
+        self,
+    ) -> None:
         view = SimpleNamespace(
             model=SimpleNamespace(bonds=[None, Bond(1, 2, 1), Bond(2, 3, 1)]),
             graph_state=CanvasGraphState(atom_bond_ids={1: {0, 9}, 2: {0, 1}, 3: {2}}),
-            services=SimpleNamespace(canvas_graph_service=SimpleNamespace(bond_in_cycle=lambda bond_id: False)),
+            services=SimpleNamespace(
+                canvas_graph_service=SimpleNamespace(
+                    bond_in_cycle=lambda bond_id: False
+                )
+            ),
         )
         bond_in_cycle = view.services.canvas_graph_service.bond_in_cycle
-        self.assertFalse(atom_in_planar_system_for(view, 1, bond_in_cycle=bond_in_cycle))
-        self.assertFalse(bond_is_planar_fragment_edge_for(view, 0, bond_in_cycle=bond_in_cycle))
-        self.assertFalse(bond_is_planar_fragment_edge_for(view, 9, bond_in_cycle=bond_in_cycle))
+        self.assertFalse(
+            atom_in_planar_system_for(view, 1, bond_in_cycle=bond_in_cycle)
+        )
+        self.assertFalse(
+            bond_is_planar_fragment_edge_for(view, 0, bond_in_cycle=bond_in_cycle)
+        )
+        self.assertFalse(
+            bond_is_planar_fragment_edge_for(view, 9, bond_in_cycle=bond_in_cycle)
+        )
         self.assertIsNone(
             fragment_plane_normal_for(
                 {1, 2},
@@ -1160,30 +1264,64 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         skip_view = SimpleNamespace()
         coords = {1: (0.0, 0.0, 0.0), 2: (1.0, 0.0, 1.0), 3: (2.0, 0.0, 0.0)}
         with (
-            mock.patch("ui.selection_rotation_planarity.planar_fragment_components_for", return_value=[{1, 2, 3}]),
-            mock.patch("ui.selection_rotation_planarity.fragment_plane_normal_for", return_value=None),
-            mock.patch("ui.selection_rotation_planarity.center_for_coords_3d", return_value=(1.0, 1.0, 1.0)),
+            mock.patch(
+                "chemvas.ui.selection_rotation_planarity.planar_fragment_components_for",
+                return_value=[{1, 2, 3}],
+            ),
+            mock.patch(
+                "chemvas.ui.selection_rotation_planarity.fragment_plane_normal_for",
+                return_value=None,
+            ),
+            mock.patch(
+                "chemvas.ui.selection_rotation_planarity.center_for_coords_3d",
+                return_value=(1.0, 1.0, 1.0),
+            ),
         ):
-            self.assertEqual(flatten_planar_fragments_for(skip_view, {1, 2, 3}, coords), coords)
+            self.assertEqual(
+                flatten_planar_fragments_for(skip_view, {1, 2, 3}, coords), coords
+            )
 
         centroid_skip_view = SimpleNamespace()
         with (
-            mock.patch("ui.selection_rotation_planarity.planar_fragment_components_for", return_value=[{1, 2, 3}]),
-            mock.patch("ui.selection_rotation_planarity.fragment_plane_normal_for", return_value=(0.0, 0.0, 1.0)),
-            mock.patch("ui.selection_rotation_planarity.center_for_coords_3d", return_value=None),
+            mock.patch(
+                "chemvas.ui.selection_rotation_planarity.planar_fragment_components_for",
+                return_value=[{1, 2, 3}],
+            ),
+            mock.patch(
+                "chemvas.ui.selection_rotation_planarity.fragment_plane_normal_for",
+                return_value=(0.0, 0.0, 1.0),
+            ),
+            mock.patch(
+                "chemvas.ui.selection_rotation_planarity.center_for_coords_3d",
+                return_value=None,
+            ),
         ):
-            self.assertEqual(flatten_planar_fragments_for(centroid_skip_view, {1, 2, 3}, coords), coords)
+            self.assertEqual(
+                flatten_planar_fragments_for(centroid_skip_view, {1, 2, 3}, coords),
+                coords,
+            )
 
         small_component_view = SimpleNamespace(
             model=SimpleNamespace(bonds=[Bond(1, 2, 2)]),
         )
-        self.assertEqual(planar_fragment_components_for(small_component_view, {1, 2}), [])
+        self.assertEqual(
+            planar_fragment_components_for(small_component_view, {1, 2}), []
+        )
 
         missing_point_view = SimpleNamespace()
         with (
-            mock.patch("ui.selection_rotation_planarity.planar_fragment_components_for", return_value=[{1, 2, 3}]),
-            mock.patch("ui.selection_rotation_planarity.fragment_plane_normal_for", return_value=(0.0, 0.0, 1.0)),
-            mock.patch("ui.selection_rotation_planarity.center_for_coords_3d", return_value=(0.0, 0.0, 0.0)),
+            mock.patch(
+                "chemvas.ui.selection_rotation_planarity.planar_fragment_components_for",
+                return_value=[{1, 2, 3}],
+            ),
+            mock.patch(
+                "chemvas.ui.selection_rotation_planarity.fragment_plane_normal_for",
+                return_value=(0.0, 0.0, 1.0),
+            ),
+            mock.patch(
+                "chemvas.ui.selection_rotation_planarity.center_for_coords_3d",
+                return_value=(0.0, 0.0, 0.0),
+            ),
         ):
             flattened_missing = flatten_planar_fragments_for(
                 missing_point_view,
@@ -1204,8 +1342,12 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         atom_label_service = SimpleNamespace(position_label=mock.Mock())
         scene_decoration_build_service = SimpleNamespace(set_mark_center=mock.Mock())
         view = SimpleNamespace(
-            model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 4.0, 5.0)}),
-            mark_registry=CanvasMarkRegistry({1: [mark_with_offset, mark_without_offset]}),
+            model=SimpleNamespace(
+                atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 4.0, 5.0)}
+            ),
+            mark_registry=CanvasMarkRegistry(
+                {1: [mark_with_offset, mark_without_offset]}
+            ),
             services=SimpleNamespace(
                 atom_label_service=atom_label_service,
                 scene_decoration_build_service=scene_decoration_build_service,
@@ -1216,7 +1358,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         set_atom_dots_for(view, {1: dot})
 
         with mock.patch(
-            "ui.selection_rotation_access.project_point_3d_for",
+            "chemvas.ui.selection_rotation_access.project_point_3d_for",
             side_effect=lambda canvas, point: (point[0] + 10.0, point[1] - 5.0),
         ):
             apply_projected_atom_positions_for(
@@ -1241,13 +1383,17 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertEqual((first_mark_pos.x(), first_mark_pos.y()), (13.0, -6.0))
         self.assertEqual((second_mark_pos.x(), second_mark_pos.y()), (11.0, -3.0))
 
-    def test_apply_projected_positions_average_lengths_and_rotation_scale_cover_noop_cases(self) -> None:
+    def test_apply_projected_positions_average_lengths_and_rotation_scale_cover_noop_cases(
+        self,
+    ) -> None:
         view = SimpleNamespace(
             model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0)}),
             mark_registry=CanvasMarkRegistry(),
             services=SimpleNamespace(
                 atom_label_service=SimpleNamespace(position_label=mock.Mock()),
-                scene_decoration_build_service=SimpleNamespace(set_mark_center=mock.Mock()),
+                scene_decoration_build_service=SimpleNamespace(
+                    set_mark_center=mock.Mock()
+                ),
             ),
         )
         set_atom_coords_3d_for(view, {})
@@ -1255,7 +1401,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         set_atom_dots_for(view, {})
 
         with mock.patch(
-            "ui.selection_rotation_access.project_point_3d_for",
+            "chemvas.ui.selection_rotation_access.project_point_3d_for",
             side_effect=lambda canvas, point: (point[0], point[1]),
         ):
             apply_projected_atom_positions_for(
@@ -1289,13 +1435,25 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             )
         )
         self.assertEqual(rotation_scale_for_coords_for(sparse_view, {1, 2}, {}), 2.0)
-        with mock.patch("ui.selection_rotation_access.average_bond_length_for_atoms_for", return_value=float("nan")):
-            self.assertEqual(rotation_scale_for_coords_for(sparse_view, {1, 2}, {}), 1.0)
-        with mock.patch("ui.selection_rotation_access.average_bond_length_for_atoms_for", return_value=0.0):
-            self.assertEqual(rotation_scale_for_coords_for(sparse_view, {1, 2}, {}), 1.0)
+        with mock.patch(
+            "chemvas.ui.selection_rotation_access.average_bond_length_for_atoms_for",
+            return_value=float("nan"),
+        ):
+            self.assertEqual(
+                rotation_scale_for_coords_for(sparse_view, {1, 2}, {}), 1.0
+            )
+        with mock.patch(
+            "chemvas.ui.selection_rotation_access.average_bond_length_for_atoms_for",
+            return_value=0.0,
+        ):
+            self.assertEqual(
+                rotation_scale_for_coords_for(sparse_view, {1, 2}, {}), 1.0
+            )
 
         tail_view = SimpleNamespace(
-            graph_state=CanvasGraphState(atom_bond_ids={1: {0, 1, 2}, 2: {0, 2}, 3: {1}}),
+            graph_state=CanvasGraphState(
+                atom_bond_ids={1: {0, 1, 2}, 2: {0, 2}, 3: {1}}
+            ),
             model=SimpleNamespace(
                 bonds=[
                     None,
@@ -1340,16 +1498,26 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
 
     def test_bond_lookup_average_scale_and_axis_rotation_helpers(self) -> None:
         indexed_view = SimpleNamespace(
-            graph_state=CanvasGraphState(atom_bond_ids={1: {0, 99}, 2: {0, 1}, 3: {1, 2}}),
-            model=SimpleNamespace(bonds=[Bond(1, 2, 1), Bond(2, 3, 1), Bond(3, 4, 1), None]),
+            graph_state=CanvasGraphState(
+                atom_bond_ids={1: {0, 99}, 2: {0, 1}, 3: {1, 2}}
+            ),
+            model=SimpleNamespace(
+                bonds=[Bond(1, 2, 1), Bond(2, 3, 1), Bond(3, 4, 1), None]
+            ),
             rotation_state=CanvasRotationState(
                 base_bond_length=10.0,
-                base_coords={1: (0.0, 0.0, 0.0), 2: (8.0, 0.0, 0.0), 3: (18.0, 0.0, 0.0)},
+                base_coords={
+                    1: (0.0, 0.0, 0.0),
+                    2: (8.0, 0.0, 0.0),
+                    3: (18.0, 0.0, 0.0),
+                },
             ),
             _redraw_bond=mock.Mock(),
         )
 
-        self.assertEqual(bond_ids_for_atom_ids_for(indexed_view, {1, 2, 99}), {0, 1, 99})
+        self.assertEqual(
+            bond_ids_for_atom_ids_for(indexed_view, {1, 2, 99}), {0, 1, 99}
+        )
         self.assertEqual(bond_ids_within_atom_ids_for(indexed_view, {1, 2, 3}), {0, 1})
         self.assertAlmostEqual(
             average_bond_length_for_atoms_for(
@@ -1381,7 +1549,13 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             redraw_view,
             hit_testing_service=SimpleNamespace(mark_spatial_index_dirty=mock.Mock()),
         ).redraw_bonds_for_atoms({1, 2})
-        self.assertEqual({call.args[0] for call in redraw_view.bond_renderer.redraw_bond.call_args_list}, {0, 1})
+        self.assertEqual(
+            {
+                call.args[0]
+                for call in redraw_view.bond_renderer.redraw_bond.call_args_list
+            },
+            {0, 1},
+        )
 
         fallback_view = SimpleNamespace(
             graph_state=CanvasGraphState(),
@@ -1417,11 +1591,17 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
     def test_bond_match_lookup_order_sum_and_normal_helpers(self) -> None:
         bonds = [Bond(1, 2, 2), Bond(2, 1, 3), None, Bond(1, 3, 0)]
         cached_view = SimpleNamespace(
-            model=SimpleNamespace(bonds=bonds, atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 10.0, 0.0)}),
-            graph_state=CanvasGraphState(atom_bond_ids={1: {0, 1, 3}, 2: {0, 1}, 3: {3}}),
+            model=SimpleNamespace(
+                bonds=bonds, atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 10.0, 0.0)}
+            ),
+            graph_state=CanvasGraphState(
+                atom_bond_ids={1: {0, 1, 3}, 2: {0, 1}, 3: {3}}
+            ),
         )
         fallback_view = SimpleNamespace(
-            model=SimpleNamespace(bonds=bonds, atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 10.0, 0.0)}),
+            model=SimpleNamespace(
+                bonds=bonds, atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 10.0, 0.0)}
+            ),
             graph_state=CanvasGraphState(),
         )
 
@@ -1433,12 +1613,16 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertTrue(CanvasGraphService.bond_matches_atoms(bonds[0], 1, 2))
         self.assertTrue(CanvasGraphService.bond_matches_atoms(bonds[0], 2, 1))
         self.assertEqual(CanvasGraphService.first_matching_bond_id(bonds, 1, 2), 0)
-        self.assertEqual(CanvasGraphService.first_matching_bond_id(bonds, 1, 2, skip_bond_id=0), 1)
+        self.assertEqual(
+            CanvasGraphService.first_matching_bond_id(bonds, 1, 2, skip_bond_id=0), 1
+        )
         self.assertIsNone(cached_service.bond_id_between(1, 1))
         self.assertEqual(cached_service.bond_id_between(1, 2), 0)
         self.assertEqual(cached_service.bond_id_between(1, 2, skip_bond_id=0), 1)
         self.assertEqual(fallback_service.bond_id_between(1, 2, skip_bond_id=0), 1)
-        self.assertIsNone(CanvasGraphService.first_matching_bond_id([Bond(3, 4, 1), None], 1, 2))
+        self.assertIsNone(
+            CanvasGraphService.first_matching_bond_id([Bond(3, 4, 1), None], 1, 2)
+        )
         self.assertIsNone(
             CanvasGraphService(
                 SimpleNamespace(
@@ -1454,8 +1638,12 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         nx, ny, length = line_normal_components(0.0, 0.0, 10.0, 0.0)
         self.assertEqual((nx, ny, length), (0.0, 1.0, 10.0))
         self.assertEqual(line_normal_components(0.0, 0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
-        self.assertEqual(orient_normal_toward_target(0.0, 1.0, 5.0, 0.0, 5.0, -3.0), (0.0, -1.0))
-        self.assertEqual(line_normal_for(SimpleNamespace(), 0.0, 0.0, 10.0, 0.0), (0.0, 1.0))
+        self.assertEqual(
+            orient_normal_toward_target(0.0, 1.0, 5.0, 0.0, 5.0, -3.0), (0.0, -1.0)
+        )
+        self.assertEqual(
+            line_normal_for(SimpleNamespace(), 0.0, 0.0, 10.0, 0.0), (0.0, 1.0)
+        )
         self.assertEqual(
             line_normal_for(SimpleNamespace(), 0.0, 0.0, 10.0, 0.0, QPointF(5.0, -2.0)),
             (0.0, -1.0),
@@ -1475,7 +1663,10 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             None,
         )
         self.assertEqual(bond_offset_unit_3d_for(cached_view, 1, 2), (0.0, 1.0))
-        self.assertEqual(bond_offset_unit_3d_for(cached_view, 1, 2, target=(5.0, -2.0, 0.0)), (0.0, -1.0))
+        self.assertEqual(
+            bond_offset_unit_3d_for(cached_view, 1, 2, target=(5.0, -2.0, 0.0)),
+            (0.0, -1.0),
+        )
 
     def test_bond_graphics_access_and_color_fallbacks_delegate_cleanly(self) -> None:
         wedge_polygon = object()
@@ -1509,11 +1700,21 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         view = SimpleNamespace(bond_renderer=renderer)
         center = QPointF(5.0, 6.0)
 
-        self.assertEqual(parallel_bond_segments_for(view, 1.0, 2.0, 3.0, 4.0, 2, 7, 8), hash_segments)
+        self.assertEqual(
+            parallel_bond_segments_for(view, 1.0, 2.0, 3.0, 4.0, 2, 7, 8), hash_segments
+        )
         self.assertIs(wedge_polygon_for(view, 1.0, 2.0, 3.0, 4.0, 7, 8), wedge_polygon)
-        self.assertEqual(hash_segments_for(view, 1.0, 2.0, 3.0, 4.0, 3, 7, 8), hash_segments)
-        self.assertIs(strip_polygon_for(view, 1.0, 2.0, 3.0, 4.0, 0.0, 1.0, 2.0, 3.0), strip_polygon)
-        self.assertEqual(ring_double_segments_for(view, "a", "b", center, 7, 8, (0.0, 0.0, 1.0)), ring_segments)
+        self.assertEqual(
+            hash_segments_for(view, 1.0, 2.0, 3.0, 4.0, 3, 7, 8), hash_segments
+        )
+        self.assertIs(
+            strip_polygon_for(view, 1.0, 2.0, 3.0, 4.0, 0.0, 1.0, 2.0, 3.0),
+            strip_polygon,
+        )
+        self.assertEqual(
+            ring_double_segments_for(view, "a", "b", center, 7, 8, (0.0, 0.0, 1.0)),
+            ring_segments,
+        )
         bond_renderer_for(view).update_bond_geometry(4)
         add_bond_graphics_for(view, 5)
         self.assertIs(
@@ -1529,18 +1730,29 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             ),
             ring_bond,
         )
-        self.assertIs(one_sided_bond_strip_for(view, 1.0, 2.0, 3.0, 4.0, 0.0, 1.0, 2.0, 3.0), one_sided_strip)
-        self.assertEqual(draw_parallel_bonds_for(view, 1.0, 2.0, 3.0, 4.0, 2, 7, 8), parallel_bonds)
+        self.assertIs(
+            one_sided_bond_strip_for(view, 1.0, 2.0, 3.0, 4.0, 0.0, 1.0, 2.0, 3.0),
+            one_sided_strip,
+        )
+        self.assertEqual(
+            draw_parallel_bonds_for(view, 1.0, 2.0, 3.0, 4.0, 2, 7, 8), parallel_bonds
+        )
         self.assertIs(draw_wedge_bond_for(view, 1.0, 2.0, 3.0, 4.0, 7, 8), wedge_bond)
         self.assertIs(draw_hash_bond_for(view, 1.0, 2.0, 3.0, 4.0, 7, 8), hash_bond)
         self.assertIs(draw_dotted_bond_for(view, 1.0, 2.0, 3.0, 4.0, 7, 8), dotted_bond)
         self.assertIs(dotted_bond_path_for(view, 1.0, 2.0, 3.0, 4.0, 7, 8), dotted_path)
 
-        renderer.parallel_bond_segments.assert_called_once_with(1.0, 2.0, 3.0, 4.0, 2, 7, 8)
+        renderer.parallel_bond_segments.assert_called_once_with(
+            1.0, 2.0, 3.0, 4.0, 2, 7, 8
+        )
         renderer.wedge_polygon.assert_called_once_with(1.0, 2.0, 3.0, 4.0, 7, 8)
         renderer.hash_segments.assert_called_once_with(1.0, 2.0, 3.0, 4.0, 3, 7, 8)
-        renderer.strip_polygon.assert_called_once_with(1.0, 2.0, 3.0, 4.0, 0.0, 1.0, 2.0, 3.0)
-        renderer.ring_double_segments.assert_called_once_with("a", "b", center, 7, 8, (0.0, 0.0, 1.0))
+        renderer.strip_polygon.assert_called_once_with(
+            1.0, 2.0, 3.0, 4.0, 0.0, 1.0, 2.0, 3.0
+        )
+        renderer.ring_double_segments.assert_called_once_with(
+            "a", "b", center, 7, 8, (0.0, 0.0, 1.0)
+        )
         renderer.update_bond_geometry.assert_called_once_with(4)
         renderer.add_bond_graphics.assert_called_once_with(5)
         renderer.draw_ring_double_bond.assert_called_once_with(
@@ -1552,8 +1764,12 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             outer_style="bold",
             center_3d=(1.0, 2.0, 3.0),
         )
-        renderer.one_sided_bond_strip.assert_called_once_with(1.0, 2.0, 3.0, 4.0, 0.0, 1.0, 2.0, 3.0)
-        renderer.draw_parallel_bonds.assert_called_once_with(1.0, 2.0, 3.0, 4.0, 2, 7, 8)
+        renderer.one_sided_bond_strip.assert_called_once_with(
+            1.0, 2.0, 3.0, 4.0, 0.0, 1.0, 2.0, 3.0
+        )
+        renderer.draw_parallel_bonds.assert_called_once_with(
+            1.0, 2.0, 3.0, 4.0, 2, 7, 8
+        )
         renderer.draw_wedge_bond.assert_called_once_with(1.0, 2.0, 3.0, 4.0, 7, 8)
         renderer.draw_hash_bond.assert_called_once_with(1.0, 2.0, 3.0, 4.0, 7, 8)
         renderer.draw_dotted_bond.assert_called_once_with(1.0, 2.0, 3.0, 4.0, 7, 8)

@@ -1,28 +1,49 @@
 # Architecture
 
-## Responsibility Boundaries
-- CanvasView (`app/ui/canvas_view.py`): input handling, tool dispatch, selection state, and coordinating model/render/history updates. It should not own low-level drawing primitives.
-- MoleculeModel (`app/core/model.py`): pure atom/bond data and IDs. No Qt dependencies.
-- RDKitAdapter (`app/core/rdkit_adapter.py`): optional chemistry backend for SMILES import, property calculation, 3D coordinate generation, alias expansion, and preview scene building. UI code should treat it as a best-effort service, not a required startup dependency.
-- Renderer (`app/core/renderer.py`): style, pens/brushes, font settings.
-- HistoryCommand (`app/core/history.py`): delta-based undo/redo. Multi-entity operations are grouped with `CompositeCommand`, which applies its child delta commands in order on redo and in reverse on undo.
-- BondRenderer (`app/ui/bond_renderer.py`): bond QGraphicsItem creation/updates and geometry helpers, driven by CanvasView context.
-- Graphics items (`app/ui/graphics_items.py`): non-selectable QGraphicsItem wrappers.
-- Label layout (`app/ui/label_layout_logic.py`): pure, Qt-free parsing of a raw atom-label string into typographic runs (subscripts) plus their placement. It is the single source of truth for label typography: `AtomLabelItem` consumes it for on-screen painting, and vector export consumes the same placement when outlining glyphs, so screen and export never diverge. It operates on display text only and never mutates the stored `element` string.
-- Figure export (`app/ui/export_plan_logic.py` + `app/ui/export_dialog_logic.py` + `app/ui/export_render_service.py`): the two pure modules compute the padded source rect / physical output size (in points) and own the dialog's format/size/path rules; the Qt service (`export_scene`) collects visible content items (transient overlays excluded the same way as clipboard copy), computes bounds from item-specific export ink/content rects when available (so label hit targets and transparent implicit-carbon dots do not affect physical sizing), hides everything else, switches atom labels into outline mode, and renders the scene region into one of four sinks — `QSvgGenerator` (SVG at 72 dpi so 1 unit = 1 pt), `QPdfWriter` (PDF, page sized to content in points), or a `QImage` (PNG/TIFF with DPI metadata). `unit_scale` (points per scene unit) or `target_width_pt` give a deterministic physical size independent of zoom: bond-length mode uses the style's `bond_length_pt`, column modes fit 84/174 mm. `scope` picks whole-canvas vs selection; `background` picks transparent vs white. Outlined labels mean no format carries font-dependent `<text>`, so screen/SVG/PDF/raster all show identical glyphs.
+## Current Implementation Map (Non-Normative)
 
-## UI Layer Discipline (ports / access / state / services)
-The `app/ui` package is deliberately split into many small modules with fixed roles. The goal is that `CanvasView` and `MainWindow` stay thin Qt shells (no god object), every service is constructible headlessly (the full test suite runs in ~20s against `SimpleNamespace` canvases), and all dependencies are explicit.
+This section describes the code as it exists during migration. The target
+package boundaries and dependency direction are defined by
+[ADR 0001](adr/0001-feature-oriented-modularization.md); new features should
+follow the ADR instead of copying the flat `core` / `ui` layout below.
+- CanvasView (`app/chemvas/ui/canvas_view.py`): input handling, tool dispatch, selection state, and coordinating model/render/history updates. It should not own low-level drawing primitives.
+- MoleculeModel (`app/chemvas/domain/document/model.py`): pure atom/bond data and IDs. No Qt dependencies.
+- RDKitAdapter (`app/chemvas/core/rdkit_adapter.py`): optional chemistry backend for SMILES import, property calculation, 3D coordinate generation, alias expansion, and preview scene building. UI code should treat it as a best-effort service, not a required startup dependency.
+- Renderer (`app/chemvas/core/renderer.py`): style, pens/brushes, font settings.
+- HistoryCommand (`app/chemvas/core/history.py`): delta-based undo/redo. Multi-entity operations are grouped with `CompositeCommand`, which applies its child delta commands in order on redo and in reverse on undo.
+- BondRenderer (`app/chemvas/ui/bond_renderer.py`): bond QGraphicsItem creation/updates and geometry helpers, driven by CanvasView context.
+- Graphics items (`app/chemvas/ui/graphics_items.py`): non-selectable QGraphicsItem wrappers.
+- Label layout (`app/chemvas/features/annotations`): pure, Qt-free parsing of a raw atom-label string into typographic runs (subscripts) plus their placement. It is the single source of truth for both on-screen and outlined export typography.
+- Figure export (`app/chemvas/features/export`): the feature package owns its public API, Qt-free dialog/plan rules, scene scoping, and SVG/PDF/raster renderers. External callers import only `chemvas.features.export`; renderer modules are private implementation details. The pure plan computes the padded source rect / physical output size in points. The Qt service collects visible content items, excludes transient overlays, uses item-specific export bounds when available, outlines labels, and renders to SVG, PDF, PNG, or TIFF. `unit_scale` or `target_width_pt` gives deterministic physical sizing independent of zoom; `scope` and `background` choose the exported content and backdrop.
+- Domain document (`app/chemvas/domain/document`): owns the Qt-free molecule model plus versioned document/clipboard serialization and validation policies. The former `chemvas.core.model` and `document_state` paths have been removed.
+- Migrated feature policies (`app/chemvas/features/{export,session,annotations,rendering,insertion,selection}`): each package exposes one public API for its cohesive planning/geometry/state contracts. The former flat compatibility modules have been removed and `test_package_dependencies.py` prevents their return.
+- Main-window composition: `chemvas.shell.main_window` owns the thin Qt shell; `chemvas.bootstrap` owns runtime/service assembly, window registration, document opening, and application startup. Qt file-open events enter through `chemvas.adapters.qt`.
 
-- **State modules** (`*_state.py`): one dataclass per concern plus a `<name>_state_for(canvas)` accessor. All state accessors go through `ensure_canvas_state(canvas, name, factory)` (`ui/canvas_state_lookup.py`), which uses a single name for lookup and attach. On real canvases every state lives as a field of the eagerly-built `CanvasRuntimeState` container (`ui/canvas_runtime_state.py`); the container is strict — an accessor asking for a field the container does not have fails loudly instead of silently attaching a shadow copy. A handful of states (`model`, `renderer`, `bond_renderer`, `rdkit`) are deliberately stored as direct canvas attributes and use `runtime_field=False`. Adding a new state means: dataclass + accessor + a `CanvasRuntimeState` field; `test_state_accessor_names_match_runtime_state_container` enforces the sync.
+## Transitional Legacy UI Discipline (ports / access / state / services)
+The `app/chemvas/ui` package is deliberately split into many small modules with fixed roles. The goal is that `CanvasView` and `MainWindow` stay thin Qt shells (no god object), every service is constructible headlessly (the full test suite runs in ~20s against `SimpleNamespace` canvases), and all dependencies are explicit.
+
+These rules remain migration constraints for code that still lives in the flat
+legacy package. They are not a template that every new feature must reproduce:
+new feature packages create role modules only when the boundary is useful.
+
+- **State modules** (`*_state.py`): one dataclass per concern plus a `<name>_state_for(canvas)` accessor. All state accessors go through `ensure_canvas_state(canvas, name, factory)` (`chemvas.ui.canvas_state_lookup.py`), which uses a single name for lookup and attach. On real canvases every state lives as a field of the eagerly-built `CanvasRuntimeState` container (`chemvas.ui.canvas_runtime_state.py`); the container is strict — an accessor asking for a field the container does not have fails loudly instead of silently attaching a shadow copy. A handful of states (`model`, `renderer`, `bond_renderer`, `rdkit`) are deliberately stored as direct canvas attributes and use `runtime_field=False`. Adding a new state means: dataclass + accessor + a `CanvasRuntimeState` field; `test_state_accessor_names_match_runtime_state_container` enforces the sync.
 - **Access modules** (`*_access.py`): free functions (`foo_for(canvas)`) wrapping one operation. They must not reach into `canvas.services` directly; service lookup is delegated to the matching ports module.
-- **Ports modules** (`*_ports.py`): the only modules that resolve the service container (`canvas_services_for` / `window` private storage). Everything else receives collaborators via injection or calls a port.
-- **Services and controllers**: constructed once per canvas in `ui/canvas_service_composer.py` with explicit keyword injection — no service locator inside services, no `=None` collaborator defaults that hide a missing wire.
-- **core is Qt-free and ui-free**: `app/core` must not import `ui` at module level (a lazily resolved protocol implementation is the one sanctioned exception, see `core/history.py`).
+- **Ports modules** (`*_ports.py`): the only modules that resolve the service container (`canvas_services_for` / `window` private storage). Everything else receives collaborators via injection or calls a port. Production ports read the grouped `CanvasRuntimeServices` API (for example, `services.auxiliary.atom_label_service`); the old flat service names are a temporary compatibility surface for lightweight fixtures and are forbidden in production consumers by the architecture ratchet.
+- **Services and controllers**: constructed once per canvas in `chemvas.ui.canvas_service_composer.py` with explicit keyword injection — no service locator inside services, no `=None` collaborator defaults that hide a missing wire. The composer stores the existing feature bundles in `CanvasRuntimeServices`, preserving one stable bundle identity per canvas instead of flattening dozens of collaborators into one namespace.
+- **core is UI-free, with one recorded Qt migration debt**: `app/chemvas/core` must not import `ui` at module level (a lazily resolved protocol implementation is the one sanctioned exception, see `chemvas.core.history.py`). `chemvas.core.renderer.py` is the only existing direct Qt dependency; it is frozen as transitional debt and will move to the Qt adapter during the namespace migration. New core-to-Qt dependencies are forbidden.
 
-These rules are enforced by `tests/test_architecture_boundaries.py`. That file contains *rules* (forbidden access patterns, removed surfaces that must stay removed, dependency contracts) — not assertions that a specific implementation phrasing exists. When adding a rule, express it as a pattern ban or a dependency contract that new code automatically falls under.
+These rules are enforced by `tests/test_architecture_boundaries.py`. New rules
+must be dependency contracts or general pattern bans. Some legacy checks still
+pin removed names or implementation locations; each feature migration replaces
+those checks with package/public-API contracts before retiring them.
 
-Known trade-offs of this discipline (accepted deliberately): a real indirection tax (~20% of ui LOC is wiring) and weak static typing at the canvas seam (`canvas: Any`). When an invariant spans several of these small modules (e.g. the derived graph index), the consistency contract must be written down in one owner module — see `ui/graph_index_operations.py` and `CanvasGraphService.bond_id_between_with_repair` for the pattern.
+Known trade-offs of this discipline (accepted deliberately): a real indirection tax (~20% of ui LOC is wiring) and weak static typing at the canvas seam (`canvas: Any`). When an invariant spans several of these small modules (e.g. the derived graph index), the consistency contract must be written down in one owner module — see `chemvas.ui.graph_index_operations.py` and `CanvasGraphService.bond_id_between_with_repair` for the pattern.
+
+## Transaction and Recovery Ownership
+
+- `chemvas.domain.transactions` owns framework-free restore outcomes, hostile-descriptor-safe bound attribute ports, retry/error preservation, and the exact history stack authority snapshot.
+- `chemvas.ui.transactions` owns Qt-aware command payload, object graph, scene-item attach, and scene-rect savepoints. The former flat snapshot modules are deleted, and an architecture ratchet prevents their return.
+- Transaction behavior is intentionally not collapsed into one generic context manager. Reversible mutations restore an absolute snapshot, document replacement restores the previous document or fails closed, long drags use savepoint-style authority, and scene reset converges to empty after Qt item destruction. Shared primitives are reused only where those semantics agree.
 
 ## Data/Render Flow
 Tools -> CanvasView -> MoleculeModel mutation -> Renderer/BondRenderer -> QGraphicsScene updates -> HistoryCommand push.
@@ -44,9 +65,7 @@ When an operation touches multiple entity types at once (ex: atom creation plus 
 - Each open canvas tab is an independent document with its own file path and clean/dirty digest. `.chemvas` loading accepts only the canonical single-canvas payload.
 - `.chemvas` documents are versioned (current: v4; v1–v3 stay loadable). v4 stores bonds as a compact array: deleted-slot tombstones (`null` entries in pre-v4 files) are runtime bookkeeping and never reach the document. Bond identity is runtime-scoped — no document section references bonds by position or id (atoms carry explicit ids because marks, ring fills, groups, and perspective state reference them).
 
-## Planned Next Slices
-- Extract preview rendering (bond/SMILES/template) into dedicated renderer modules.
-- Batch scene updates around multi-item operations (selection, mass move, template insert).
-- Publication export has landed (`export_scene`): SVG/PDF/PNG/TIFF, outlined labels, format/scope/DPI/background dialog, and physical-unit sizing (bond-length + 84/174 mm column fit).
-- Clipboard copy places a PNG on the clipboard and best-effort SVG/PDF flavors for vector-aware targets such as Illustrator / macOS Office. If vector rendering fails, copy falls back to raster rather than failing the whole operation.
-- Fold formal charge into label superscripts (`place_runs` already supports the `super` role); resolve the inline charge-vs-subscript ambiguity using the existing charge mark/property rather than parsing inline text.
+## Refactoring Sequence
+
+The active modularization sequence, completion criteria, and dependency rules
+are maintained in [ADR 0001](adr/0001-feature-oriented-modularization.md).

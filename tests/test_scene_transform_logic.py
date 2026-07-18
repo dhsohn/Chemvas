@@ -11,7 +11,7 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.scene_transform_logic import (
+    from chemvas.ui.scene_transform_logic import (
         bounds_from_points,
         build_flip_atom_position_maps,
         center_for_flip_group,
@@ -47,14 +47,18 @@ class _FakeSceneItem:
         return QRectF(self._rect)
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for scene transform logic tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for scene transform logic tests"
+)
 class SceneTransformLogicTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
 
-    def test_group_items_for_flip_transform_partitions_component_and_standalone_items(self) -> None:
+    def test_group_items_for_flip_transform_partitions_component_and_standalone_items(
+        self,
+    ) -> None:
         atom_item = _make_rect_item("atom", data1=1)
         bond_item = _make_rect_item("bond", data1=0)
         linked_mark = _make_rect_item(
@@ -95,9 +99,13 @@ class SceneTransformLogicTest(unittest.TestCase):
 
         self.assertEqual(groups.component_items[0], [linked_mark, component_ring])
         self.assertEqual(groups.component_items[1], [second_component_mark])
-        self.assertEqual(groups.standalone_items, [free_mark, standalone_ring, arrow_item])
+        self.assertEqual(
+            groups.standalone_items, [free_mark, standalone_ring, arrow_item]
+        )
 
-    def test_group_items_for_flip_transform_sends_unbound_mark_to_standalone(self) -> None:
+    def test_group_items_for_flip_transform_sends_unbound_mark_to_standalone(
+        self,
+    ) -> None:
         loose_mark = _make_rect_item(
             "mark",
             data1={"atom_id": "bad"},
@@ -113,7 +121,9 @@ class SceneTransformLogicTest(unittest.TestCase):
         self.assertEqual(groups.component_items, [[]])
         self.assertEqual(groups.standalone_items, [loose_mark])
 
-    def test_build_flip_atom_position_maps_skips_missing_atoms_and_flips_remaining_atoms(self) -> None:
+    def test_build_flip_atom_position_maps_skips_missing_atoms_and_flips_remaining_atoms(
+        self,
+    ) -> None:
         atoms = {
             1: SimpleNamespace(x=2.0, y=1.0),
             3: SimpleNamespace(x=8.0, y=5.0),
@@ -123,23 +133,36 @@ class SceneTransformLogicTest(unittest.TestCase):
             [1, 2, 3],
             atoms=atoms,
             center=QPointF(5.0, 2.0),
-            flip_point=lambda point, center: QPointF(center.x() - (point.x() - center.x()), point.y()),
+            flip_point=lambda point, center: QPointF(
+                center.x() - (point.x() - center.x()), point.y()
+            ),
         )
 
         self.assertEqual(maps.before_positions, {1: (2.0, 1.0), 3: (8.0, 5.0)})
         self.assertEqual(maps.after_positions, {1: (8.0, 1.0), 3: (2.0, 5.0)})
-        self.assertEqual(maps.transformed_atom_positions, {1: (8.0, 1.0), 3: (2.0, 5.0)})
+        self.assertEqual(
+            maps.transformed_atom_positions, {1: (8.0, 1.0), 3: (2.0, 5.0)}
+        )
 
     def test_point_flip_and_bounds_from_points_are_canvas_independent(self) -> None:
-        self.assertEqual(flip_point(QPointF(8.0, 4.0), QPointF(2.0, 1.0), True), QPointF(-4.0, 4.0))
-        self.assertEqual(flip_point(QPointF(8.0, 4.0), QPointF(2.0, 1.0), False), QPointF(8.0, -2.0))
+        self.assertEqual(
+            flip_point(QPointF(8.0, 4.0), QPointF(2.0, 1.0), True), QPointF(-4.0, 4.0)
+        )
+        self.assertEqual(
+            flip_point(QPointF(8.0, 4.0), QPointF(2.0, 1.0), False), QPointF(8.0, -2.0)
+        )
         self.assertIsNone(bounds_from_points([]))
 
         bounds = bounds_from_points([QPointF(-2.0, 3.0), QPointF(4.0, -1.0)])
 
-        self.assertEqual((bounds.left(), bounds.top(), bounds.right(), bounds.bottom()), (-2.0, -1.0, 4.0, 3.0))
+        self.assertEqual(
+            (bounds.left(), bounds.top(), bounds.right(), bounds.bottom()),
+            (-2.0, -1.0, 4.0, 3.0),
+        )
 
-    def test_flip_bounds_and_center_helpers_cover_ring_arrow_note_and_bogus_paths(self) -> None:
+    def test_flip_bounds_and_center_helpers_cover_ring_arrow_note_and_bogus_paths(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.model.atoms = {
             1: SimpleNamespace(x=0.0, y=0.0),
@@ -149,7 +172,12 @@ class SceneTransformLogicTest(unittest.TestCase):
         note_item = _make_note_item("note", 3.0, 4.0)
         arrow_item = _make_rect_item(
             "arrow",
-            state={"kind": "arrow", "start": (1.0, 2.0), "end": (5.0, 6.0), "control": (3.0, 8.0)},
+            state={
+                "kind": "arrow",
+                "start": (1.0, 2.0),
+                "end": (5.0, 6.0),
+                "control": (3.0, 8.0),
+            },
         )
         bogus_item = _make_rect_item("mystery")
 
@@ -173,7 +201,15 @@ class SceneTransformLogicTest(unittest.TestCase):
         )
 
         self.assertIsNotNone(note_bounds)
-        self.assertEqual((arrow_bounds.left(), arrow_bounds.top(), arrow_bounds.right(), arrow_bounds.bottom()), (1.0, 2.0, 5.0, 8.0))
+        self.assertEqual(
+            (
+                arrow_bounds.left(),
+                arrow_bounds.top(),
+                arrow_bounds.right(),
+                arrow_bounds.bottom(),
+            ),
+            (1.0, 2.0, 5.0, 8.0),
+        )
         self.assertIsNone(
             flip_bounds_for_item(
                 bogus_item,
@@ -199,21 +235,25 @@ class SceneTransformLogicTest(unittest.TestCase):
                 {1, 2},
                 [],
                 bounding_box_center_for_atoms=canvas._bounding_box_center_for_atoms,
-                flip_center_for_selection_getter=lambda atom_ids, items: flip_center_for_selection(
-                    atom_ids,
-                    items,
-                    atoms=canvas.model.atoms,
-                    flip_bounds_getter=lambda item: flip_bounds_for_item(
-                        item,
-                        scene_item_state_getter=canvas.scene_item_state,
-                        bounds_from_points=canvas._bounds_from_points,
-                    ),
+                flip_center_for_selection_getter=lambda atom_ids, items: (
+                    flip_center_for_selection(
+                        atom_ids,
+                        items,
+                        atoms=canvas.model.atoms,
+                        flip_bounds_getter=lambda item: flip_bounds_for_item(
+                            item,
+                            scene_item_state_getter=canvas.scene_item_state,
+                            bounds_from_points=canvas._bounds_from_points,
+                        ),
+                    )
                 ),
             ),
             QPointF(10.0, 5.0),
         )
 
-    def test_flip_scene_item_state_recomputes_mark_offset_and_flips_other_scene_items(self) -> None:
+    def test_flip_scene_item_state_recomputes_mark_offset_and_flips_other_scene_items(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.model.atoms[7] = SimpleNamespace(x=10.0, y=2.0)
         mark_item = _make_rect_item("mark")
@@ -224,7 +264,13 @@ class SceneTransformLogicTest(unittest.TestCase):
         )
         bracket_item = _make_rect_item(
             "ts_bracket",
-            state={"kind": "ts_bracket", "left": 1.0, "top": 2.0, "right": 3.0, "bottom": 6.0},
+            state={
+                "kind": "ts_bracket",
+                "left": 1.0,
+                "top": 2.0,
+                "right": 3.0,
+                "bottom": 6.0,
+            },
         )
         shape_item = _make_rect_item(
             "shape",
@@ -240,7 +286,12 @@ class SceneTransformLogicTest(unittest.TestCase):
         )
         arrow_item = _make_rect_item(
             "arrow",
-            state={"kind": "arrow", "start": (1.0, 2.0), "end": (5.0, 6.0), "control": (3.0, 8.0)},
+            state={
+                "kind": "arrow",
+                "start": (1.0, 2.0),
+                "end": (5.0, 6.0),
+                "control": (3.0, 8.0),
+            },
         )
 
         mark_state = flip_scene_item_state(
@@ -275,7 +326,13 @@ class SceneTransformLogicTest(unittest.TestCase):
         )
         bracket_state = flip_scene_item_state(
             bracket_item,
-            {"kind": "ts_bracket", "left": 1.0, "top": 2.0, "right": 3.0, "bottom": 6.0},
+            {
+                "kind": "ts_bracket",
+                "left": 1.0,
+                "top": 2.0,
+                "right": 3.0,
+                "bottom": 6.0,
+            },
             center=QPointF(5.0, 5.0),
             horizontal=False,
             transformed_atom_positions={},
@@ -303,7 +360,12 @@ class SceneTransformLogicTest(unittest.TestCase):
         )
         arrow_state = flip_scene_item_state(
             arrow_item,
-            {"kind": "arrow", "start": (1.0, 2.0), "end": (5.0, 6.0), "control": (3.0, 8.0)},
+            {
+                "kind": "arrow",
+                "start": (1.0, 2.0),
+                "end": (5.0, 6.0),
+                "control": (3.0, 8.0),
+            },
             center=QPointF(4.0, 0.0),
             horizontal=True,
             transformed_atom_positions={},
@@ -329,7 +391,9 @@ class SceneTransformLogicTest(unittest.TestCase):
         self.assertEqual(arrow_state["end"], (3.0, 6.0))
         self.assertEqual(arrow_state["control"], (5.0, 8.0))
 
-    def test_flip_bounds_and_center_helpers_cover_stateful_fallback_and_skip_atom_bond_items(self) -> None:
+    def test_flip_bounds_and_center_helpers_cover_stateful_fallback_and_skip_atom_bond_items(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.model.atoms = {
             1: SimpleNamespace(x=0.0, y=0.0),
@@ -361,7 +425,9 @@ class SceneTransformLogicTest(unittest.TestCase):
         self.assertEqual(weird_bounds, QRectF(10.0, 20.0, 30.0, 40.0))
         self.assertEqual(selection_center, QPointF(20.0, 30.0))
 
-    def test_flip_scene_item_state_handles_empty_unknown_and_fallback_paths(self) -> None:
+    def test_flip_scene_item_state_handles_empty_unknown_and_fallback_paths(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.model.atoms[7] = SimpleNamespace(x=10.0, y=2.0)
         invalid_note_item = _FakeSceneItem("note", QRectF(0.0, 0.0, -1.0, -1.0))
@@ -457,7 +523,9 @@ class SceneTransformLogicTest(unittest.TestCase):
         self.assertEqual(orbital_state["rotation"], -15.0)
         self.assertEqual(bracket_state, {"kind": "ts_bracket", "left": 1.0, "top": 2.0})
 
-    def test_group_items_for_flip_transform_deduplicates_duplicate_standalone_items(self) -> None:
+    def test_group_items_for_flip_transform_deduplicates_duplicate_standalone_items(
+        self,
+    ) -> None:
         arrow_item = _make_rect_item("arrow", state={"kind": "arrow"})
 
         groups = group_items_for_flip_transform(

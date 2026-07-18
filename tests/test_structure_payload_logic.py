@@ -1,7 +1,7 @@
 import unittest
 
-from core.model import Bond, MoleculeModel
-from ui.structure_payload_logic import (
+from chemvas.domain.document import Bond, MoleculeModel
+from chemvas.features.insertion import (
     build_3d_conversion_payload,
     build_atom_annotations,
     build_structure_payload,
@@ -84,7 +84,9 @@ class StructurePayloadLogicTest(unittest.TestCase):
     def test_build_structure_payload_rejects_empty_scope(self) -> None:
         model = self._example_model()
 
-        with self.assertRaisesRegex(ValueError, "There is no chemical structure to export."):
+        with self.assertRaisesRegex(
+            ValueError, "There is no chemical structure to export."
+        ):
             build_structure_payload(
                 model,
                 set(),
@@ -113,7 +115,9 @@ class StructurePayloadLogicTest(unittest.TestCase):
         self.assertEqual(atom_annotations[0], {"formal_charge": -1})
         self.assertEqual(atom_annotations[2], {"radical_electrons": 1})
 
-    def test_model_with_atom_annotations_overlays_payload_without_mutating_source(self) -> None:
+    def test_model_with_atom_annotations_overlays_payload_without_mutating_source(
+        self,
+    ) -> None:
         model = self._example_model()
         model.atom_annotations = {1: {"formal_charge": 1}}
 
@@ -141,12 +145,16 @@ class StructurePayloadLogicTest(unittest.TestCase):
 
         self.assertEqual(cleared_model.atom_annotations, {})
 
-    def test_model_with_atom_annotations_preserves_model_when_payload_is_missing(self) -> None:
+    def test_model_with_atom_annotations_preserves_model_when_payload_is_missing(
+        self,
+    ) -> None:
         model = self._example_model()
 
         self.assertIs(model_with_atom_annotations(model, None), model)
 
-    def test_expand_build_and_annotation_helpers_skip_invalid_or_missing_entries(self) -> None:
+    def test_expand_build_and_annotation_helpers_skip_invalid_or_missing_entries(
+        self,
+    ) -> None:
         model = MoleculeModel()
         model.add_atom("C", 0.0, 0.0)
         model.bonds = [None, Bond(0, 9, 1, "wedge", "#334455")]
@@ -177,11 +185,15 @@ class StructurePayloadLogicTest(unittest.TestCase):
         )
         self.assertEqual(annotations, {0: {"radical_electrons": 2}})
 
-    def test_build_structure_payload_rejects_nonempty_selection_without_exportable_atoms(self) -> None:
+    def test_build_structure_payload_rejects_nonempty_selection_without_exportable_atoms(
+        self,
+    ) -> None:
         model = MoleculeModel()
         model.bonds = [Bond(7, 8, 1)]
 
-        with self.assertRaisesRegex(ValueError, "There is no chemical structure to export."):
+        with self.assertRaisesRegex(
+            ValueError, "There is no chemical structure to export."
+        ):
             build_structure_payload(
                 model,
                 set(),

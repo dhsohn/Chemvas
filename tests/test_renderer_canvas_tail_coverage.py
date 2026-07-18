@@ -22,25 +22,25 @@ except ModuleNotFoundError:
     Qt = None
 
 if QApplication is not None:
-    from core.history import CompositeCommand, SetRingPolygonsCommand
-    from core.model import Atom, Bond
-    from ui.bond_preview_renderer import (
+    from chemvas.core.history import CompositeCommand, SetRingPolygonsCommand
+    from chemvas.domain.document import Atom, Bond
+    from chemvas.ui.bond_preview_renderer import (
         BondPreviewBuildResolvers,
         BondPreviewConfig,
         build_bond_preview_items,
     )
-    from ui.bond_renderer import BondRenderer
-    from ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
-    from ui.canvas_geometry_controller import CanvasGeometryController
-    from ui.canvas_graph_service import CanvasGraphService
-    from ui.canvas_graph_state import CanvasGraphState
-    from ui.scene_clipboard_transaction_logic import translated_scene_item_state
-    from ui.selection_collection_access import append_selected_item_ids
-    from ui.selection_rotation_access import (
+    from chemvas.ui.bond_renderer import BondRenderer
+    from chemvas.ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
+    from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
+    from chemvas.ui.canvas_graph_service import CanvasGraphService
+    from chemvas.ui.canvas_graph_state import CanvasGraphState
+    from chemvas.ui.scene_clipboard_transaction_logic import translated_scene_item_state
+    from chemvas.ui.selection_collection_access import append_selected_item_ids
+    from chemvas.ui.selection_rotation_access import (
         average_bond_length_for_atoms_for,
         rotate_selection_for,
     )
-    from ui.selection_style_access import restore_selection_from_ids_for
+    from chemvas.ui.selection_style_access import restore_selection_from_ids_for
 
 
 class _FakeStyle:
@@ -156,7 +156,9 @@ class _ChangingBonds:
         return Bond(1, 2, 1)
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for renderer/canvas tail tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for renderer/canvas tail tests"
+)
 class RendererCanvasTailCoverageTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -208,11 +210,15 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
     def test_renderer_helper_tails_cover_optional_neighbor_and_id_paths(self) -> None:
         self.canvas.graph_state.atom_bond_ids = {0: {0, 1}}
         self.canvas.model.bonds = [Bond(0, 1, 1), Bond(0, 2, 1)]
-        self.assertGreater(self.renderer.line_geometry._junction_trim_for_atom(0, None), 0.0)
+        self.assertGreater(
+            self.renderer.line_geometry._junction_trim_for_atom(0, None), 0.0
+        )
 
         self.canvas.graph_state.atom_bond_ids = {}
         self.assertEqual(
-            self.renderer.line_geometry._plain_double_normal(0.0, 0.0, 10.0, 0.0, None, 1),
+            self.renderer.line_geometry._plain_double_normal(
+                0.0, 0.0, 10.0, 0.0, None, 1
+            ),
             (0.0, 1.0),
         )
 
@@ -220,7 +226,9 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
         self.assertEqual(len(items), 2)
         self.assertLess(items[0].line().y1(), items[1].line().y1())
 
-    def test_ring_double_segments_uses_offset_unit_without_flipping_when_center_aligned(self) -> None:
+    def test_ring_double_segments_uses_offset_unit_without_flipping_when_center_aligned(
+        self,
+    ) -> None:
         outer, inner, normal = self.renderer.ring_double_segments(
             self.canvas.model.atoms[0],
             self.canvas.model.atoms[1],
@@ -261,7 +269,9 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
             self.renderer.update_bond_geometry(0)
         # The first scene-item slot is always the bold segment, even when the
         # ring-outward ordinary-double geometry selects its second segment.
-        self.assertEqual((ring_outer_line.line().x1(), ring_outer_line.line().x2()), (1.0, 9.0))
+        self.assertEqual(
+            (ring_outer_line.line().x1(), ring_outer_line.line().x2()), (1.0, 9.0)
+        )
 
         first_line = QGraphicsLineItem(0.0, 0.0, 0.0, 0.0)
         second_line = QGraphicsLineItem(0.0, 0.0, 0.0, 0.0)
@@ -317,13 +327,17 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
         ):
             self.renderer.update_bond_geometry(0)
         self.assertEqual(len(skipped_polygon.polygon()), 0)
-        self.assertEqual((updated_line.line().y1(), updated_line.line().y2()), (2.0, 2.0))
+        self.assertEqual(
+            (updated_line.line().y1(), updated_line.line().y2()), (2.0, 2.0)
+        )
 
     def test_set_bond_length_without_ring_items_pushes_non_ring_composite(self) -> None:
         pushed = []
         view = SimpleNamespace(
             renderer=_FakeRenderer(),
-            model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 10.0, 0.0)}),
+            model=SimpleNamespace(
+                atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 10.0, 0.0)}
+            ),
             ring_items=[],
             bond_items={},
             atom_items={},
@@ -331,7 +345,9 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
             scene=lambda: SimpleNamespace(removeItem=mock.Mock()),
             services=SimpleNamespace(
                 history_service=SimpleNamespace(push=pushed.append),
-                hit_testing_service=SimpleNamespace(mark_spatial_index_dirty=mock.Mock()),
+                hit_testing_service=SimpleNamespace(
+                    mark_spatial_index_dirty=mock.Mock()
+                ),
                 structure_build_service=SimpleNamespace(render_model=mock.Mock()),
             ),
         )
@@ -346,9 +362,16 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
         self.assertEqual(len(pushed), 1)
         self.assertIsInstance(pushed[0], CompositeCommand)
         self.assertEqual(len(pushed[0].commands), 2)
-        self.assertFalse(any(isinstance(command, SetRingPolygonsCommand) for command in pushed[0].commands))
+        self.assertFalse(
+            any(
+                isinstance(command, SetRingPolygonsCommand)
+                for command in pushed[0].commands
+            )
+        )
 
-    def test_selection_translation_and_rotation_helpers_cover_missing_item_branches(self) -> None:
+    def test_selection_translation_and_rotation_helpers_cover_missing_item_branches(
+        self,
+    ) -> None:
         atom_ids: set[int] = set()
         bond_ids: set[int] = set()
         append_selected_item_ids(
@@ -388,8 +411,12 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
             services=SimpleNamespace(
                 atom_label_service=atom_label_service,
                 move_controller=SimpleNamespace(redraw_connected_bonds=mock.Mock()),
-                canvas_ring_fill_scene_service=SimpleNamespace(rotate_ring_fills=mock.Mock()),
-                selection_controller=SimpleNamespace(update_selection_outline=mock.Mock()),
+                canvas_ring_fill_scene_service=SimpleNamespace(
+                    rotate_ring_fills=mock.Mock()
+                ),
+                selection_controller=SimpleNamespace(
+                    update_selection_outline=mock.Mock()
+                ),
             ),
         )
         rotate_selection_for(rotating_view, 90.0)
@@ -410,18 +437,24 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
         scene.clearSelection.assert_called_once_with()
         selection_controller.update_selection_outline.assert_called_once_with()
 
-    def test_average_bond_length_and_order_sum_cover_defensive_tail_branches(self) -> None:
+    def test_average_bond_length_and_order_sum_cover_defensive_tail_branches(
+        self,
+    ) -> None:
         average_view = SimpleNamespace(
             model=SimpleNamespace(bonds=_ChangingBonds()),
             graph_state=CanvasGraphState(atom_bond_ids={1: {0, 1, 2}, 2: {0, 1, 2}}),
         )
         coords = {1: (0.0, 0.0, 0.0), 2: (10.0, 0.0, 0.0)}
-        self.assertEqual(average_bond_length_for_atoms_for(average_view, {1, 2}, coords), 10.0)
+        self.assertEqual(
+            average_bond_length_for_atoms_for(average_view, {1, 2}, coords), 10.0
+        )
 
         order_view = SimpleNamespace(
             model=SimpleNamespace(bonds=[Bond(1, 2, 2), Bond(3, 4, 3), None]),
         )
-        order_view.services = SimpleNamespace(canvas_graph_service=CanvasGraphService(order_view))
+        order_view.services = SimpleNamespace(
+            canvas_graph_service=CanvasGraphService(order_view)
+        )
         self.assertEqual(CanvasGraphService(order_view).atom_bond_order_sum(1), 2)
         self.assertEqual(CanvasGraphService(order_view).atom_bond_order_sum(99), 0)
 

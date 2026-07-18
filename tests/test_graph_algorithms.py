@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from ui.graph_algorithms import (
+from chemvas.ui.graph_algorithms import (
     adjacency_for_bonds,
     connected_components_for_nodes,
     edge_has_reachable_alternative_path,
@@ -15,7 +15,14 @@ def _bond(a: int, b: int) -> SimpleNamespace:
 
 
 def test_find_rings_returns_ordered_single_ring_for_simple_cycle() -> None:
-    bonds = [_bond(0, 1), _bond(1, 2), _bond(2, 3), _bond(3, 4), _bond(4, 5), _bond(5, 0)]
+    bonds = [
+        _bond(0, 1),
+        _bond(1, 2),
+        _bond(2, 3),
+        _bond(3, 4),
+        _bond(4, 5),
+        _bond(5, 0),
+    ]
 
     rings = find_rings(bonds)
 
@@ -30,8 +37,17 @@ def test_find_rings_returns_ordered_single_ring_for_simple_cycle() -> None:
 
 def test_find_rings_finds_both_fused_rings_and_ignores_substituents() -> None:
     naphthalene = [
-        _bond(0, 1), _bond(1, 2), _bond(2, 3), _bond(3, 4), _bond(4, 5), _bond(5, 0),
-        _bond(5, 6), _bond(6, 7), _bond(7, 8), _bond(8, 9), _bond(9, 0),
+        _bond(0, 1),
+        _bond(1, 2),
+        _bond(2, 3),
+        _bond(3, 4),
+        _bond(4, 5),
+        _bond(5, 0),
+        _bond(5, 6),
+        _bond(6, 7),
+        _bond(7, 8),
+        _bond(8, 9),
+        _bond(9, 0),
         _bond(2, 10),  # exocyclic substituent
     ]
 
@@ -40,7 +56,9 @@ def test_find_rings_finds_both_fused_rings_and_ignores_substituents() -> None:
     assert sorted(sorted(r) for r in rings) == [[0, 1, 2, 3, 4, 5], [0, 5, 6, 7, 8, 9]]
 
 
-def test_find_rings_completes_cycle_basis_when_shortest_candidates_are_dependent() -> None:
+def test_find_rings_completes_cycle_basis_when_shortest_candidates_are_dependent() -> (
+    None
+):
     # The four atoms 1-4 form K4 and atom 0 adds one more triangle on edge
     # 3-4.  One-shortest-path-per-edge can choose dependent candidates here,
     # but the graph's cycle rank is E - V + C = 8 - 5 + 1 = 4.
@@ -105,11 +123,20 @@ def test_reachability_helpers_can_skip_one_direct_edge() -> None:
         4: {2, 3},
     }
 
-    assert reachable_component_without_edge(1, adjacency, blocked_edge=(1, 2)) == {1, 2, 3, 4}
-    assert reachable_component_without_edge(1, {1: {2}, 2: {1}}, blocked_edge=(1, 2)) == {1}
+    assert reachable_component_without_edge(1, adjacency, blocked_edge=(1, 2)) == {
+        1,
+        2,
+        3,
+        4,
+    }
+    assert reachable_component_without_edge(
+        1, {1: {2}, 2: {1}}, blocked_edge=(1, 2)
+    ) == {1}
     assert edge_has_reachable_alternative_path(1, 2, adjacency, skip_direct_edge=True)
     assert edge_has_reachable_alternative_path(1, 2, adjacency, skip_direct_edge=False)
-    assert not edge_has_reachable_alternative_path(1, 2, {1: {2}, 2: {1}}, skip_direct_edge=True)
+    assert not edge_has_reachable_alternative_path(
+        1, 2, {1: {2}, 2: {1}}, skip_direct_edge=True
+    )
 
 
 def test_adjacency_for_bonds_and_reachable_from_ignore_empty_bond_slots() -> None:

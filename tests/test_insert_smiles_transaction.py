@@ -1,15 +1,15 @@
 import unittest
 
-from core.history import AddAtomsCommand, AddBondCommand, CompositeCommand
-from core.model import Atom, Bond, MoleculeModel
-from ui.canvas_mark_registry import CanvasMarkRegistry
-from ui.canvas_scene_items_state import (
+from chemvas.core.history import AddAtomsCommand, AddBondCommand, CompositeCommand
+from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas_scene_items_state import (
     SCENE_ITEM_COLLECTION_ATTRS,
     set_scene_item_collection_for,
 )
-from ui.canvas_smiles_input_state import set_last_smiles_input_for
-from ui.history_commands import DeleteSceneItemsCommand
-from ui.insert_smiles_transaction import SmilesLoadTransactionBuilder
+from chemvas.ui.canvas_smiles_input_state import set_last_smiles_input_for
+from chemvas.ui.history_commands import DeleteSceneItemsCommand
+from chemvas.ui.insert_smiles_transaction import SmilesLoadTransactionBuilder
 
 
 class _FakeItem:
@@ -79,7 +79,9 @@ class SmilesLoadTransactionBuilderTest(unittest.TestCase):
         shape = _FakeItem("shape")
         orbital = _FakeItem("orbital")
         canvas.mark_registry.by_atom = {1: [bound_mark]}
-        set_scene_item_collection_for(canvas, "mark_items", [bound_mark, stale_mark, free_mark])
+        set_scene_item_collection_for(
+            canvas, "mark_items", [bound_mark, stale_mark, free_mark]
+        )
         set_scene_item_collection_for(canvas, "ring_items", [ring])
         set_scene_item_collection_for(canvas, "note_items", [note])
         set_scene_item_collection_for(canvas, "arrow_items", [arrow])
@@ -95,7 +97,16 @@ class SmilesLoadTransactionBuilderTest(unittest.TestCase):
         self.assertEqual(snapshot.mark_states_for_atoms, [{"kind": "bound-mark"}])
         self.assertEqual(
             [item.kind for item in snapshot.scene_items],
-            ["ring", "stale-mark", "free-mark", "note", "arrow", "ts", "shape", "orbital"],
+            [
+                "ring",
+                "stale-mark",
+                "free-mark",
+                "note",
+                "arrow",
+                "ts",
+                "shape",
+                "orbital",
+            ],
         )
         self.assertEqual(
             snapshot.scene_item_states,
@@ -124,7 +135,9 @@ class SmilesLoadTransactionBuilderTest(unittest.TestCase):
 
         self.assertIsNone(command)
 
-    def test_build_command_returns_single_add_atoms_command_for_new_atoms_only(self) -> None:
+    def test_build_command_returns_single_add_atoms_command_for_new_atoms_only(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         builder = SmilesLoadTransactionBuilder(canvas)
         snapshot = builder.capture()
@@ -178,7 +191,11 @@ class SmilesLoadTransactionBuilderTest(unittest.TestCase):
                 "AddBondCommand",
             ],
         )
-        delete_scene_items = [child for child in command.commands if isinstance(child, DeleteSceneItemsCommand)]
+        delete_scene_items = [
+            child
+            for child in command.commands
+            if isinstance(child, DeleteSceneItemsCommand)
+        ]
         self.assertEqual(len(delete_scene_items), 1)
         self.assertEqual(delete_scene_items[0].item_states, [{"kind": "ring"}])
         self.assertEqual(delete_scene_items[0].items, [])
@@ -203,7 +220,9 @@ class SmilesLoadTransactionBuilderTest(unittest.TestCase):
 
         self.assertIsInstance(command, CompositeCommand)
         assert command is not None
-        add_bond_commands = [child for child in command.commands if isinstance(child, AddBondCommand)]
+        add_bond_commands = [
+            child for child in command.commands if isinstance(child, AddBondCommand)
+        ]
         self.assertEqual(len(add_bond_commands), 1)
         self.assertEqual(add_bond_commands[0].bond_id, 1)
         self.assertEqual(add_bond_commands[0].bond_state["order"], 2)

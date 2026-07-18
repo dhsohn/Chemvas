@@ -21,19 +21,19 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from core.model import Atom, Bond, MoleculeModel
-    from ui.atom_coords_access import set_atom_coords_3d_for
-    from ui.canvas_mark_registry import CanvasMarkRegistry
-    from ui.canvas_rotation_state import rotation_state_for
-    from ui.canvas_scene_items_state import set_scene_item_collection_for
-    from ui.scene_clipboard_controller import SceneClipboardController
-    from ui.scene_clipboard_logic import (
+    from chemvas.domain.document import Atom, Bond, MoleculeModel
+    from chemvas.ui.atom_coords_access import set_atom_coords_3d_for
+    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+    from chemvas.ui.canvas_rotation_state import rotation_state_for
+    from chemvas.ui.canvas_scene_items_state import set_scene_item_collection_for
+    from chemvas.ui.scene_clipboard_controller import SceneClipboardController
+    from chemvas.ui.scene_clipboard_logic import (
         MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES,
         build_selection_clipboard_payload,
         clipboard_payload_candidates,
         decode_clipboard_selection_payload,
     )
-    from ui.scene_clipboard_state import SceneClipboardState
+    from chemvas.ui.scene_clipboard_state import SceneClipboardState
 
 
 def _set_selectable(item: QGraphicsItem) -> QGraphicsItem:
@@ -55,7 +55,11 @@ def _make_rect_item(
     if state is not None:
         item.setData(9, dict(state))
         if kind == "mark":
-            mark_data = {key: state.get(key) for key in ("atom_id", "dx", "dy", "text") if key in state}
+            mark_data = {
+                key: state.get(key)
+                for key in ("atom_id", "dx", "dy", "text")
+                if key in state
+            }
             if "mark_kind" in state:
                 mark_data["kind"] = state.get("mark_kind")
             item.setData(1, mark_data)
@@ -70,7 +74,11 @@ def _make_text_item(kind: str, text: str, state: dict) -> QGraphicsTextItem:
     if kind == "note" and "text" in state:
         item.setPlainText(str(state["text"]))
     if kind == "mark":
-        mark_data = {key: state.get(key) for key in ("atom_id", "dx", "dy", "text") if key in state}
+        mark_data = {
+            key: state.get(key)
+            for key in ("atom_id", "dx", "dy", "text")
+            if key in state
+        }
         if "mark_kind" in state:
             mark_data["kind"] = state.get("mark_kind")
         item.setData(1, mark_data)
@@ -80,15 +88,28 @@ def _make_text_item(kind: str, text: str, state: dict) -> QGraphicsTextItem:
 
 
 def _without_html(states: list[dict]) -> list[dict]:
-    return [{key: value for key, value in state.items() if key != "html"} for state in states]
+    return [
+        {key: value for key, value in state.items() if key != "html"}
+        for state in states
+    ]
 
 
-def _make_ring_item(atom_ids: list[int], *, state: dict | None = None) -> QGraphicsPolygonItem:
+def _make_ring_item(
+    atom_ids: list[int], *, state: dict | None = None
+) -> QGraphicsPolygonItem:
     polygon = QPolygonF([QPointF(0.0, 0.0), QPointF(12.0, 0.0), QPointF(6.0, 10.0)])
     item = _set_selectable(QGraphicsPolygonItem(polygon))
     item.setData(0, "ring")
     item.setData(2, list(atom_ids))
-    item.setData(9, state or {"kind": "ring", "atom_ids": list(atom_ids), "points": [(0.0, 0.0), (12.0, 0.0), (6.0, 10.0)]})
+    item.setData(
+        9,
+        state
+        or {
+            "kind": "ring",
+            "atom_ids": list(atom_ids),
+            "points": [(0.0, 0.0), (12.0, 0.0), (6.0, 10.0)],
+        },
+    )
     return item
 
 
@@ -143,7 +164,9 @@ class _BrokenSceneItem:
         return self._scene_value
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for scene clipboard logic tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for scene clipboard logic tests"
+)
 class SceneClipboardLogicTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -158,7 +181,9 @@ class SceneClipboardLogicTest(unittest.TestCase):
         clipboard = QApplication.clipboard()
         clipboard.clear(mode=clipboard.Mode.Clipboard)
 
-    def test_build_selection_clipboard_payload_skips_invalid_bonds_atoms_rings_and_marks(self) -> None:
+    def test_build_selection_clipboard_payload_skips_invalid_bonds_atoms_rings_and_marks(
+        self,
+    ) -> None:
         scene = object()
         valid_mark = _BrokenSceneItem(
             "mark",
@@ -178,25 +203,57 @@ class SceneClipboardLogicTest(unittest.TestCase):
         )
         empty_linked_mark = _BrokenSceneItem("mark", state={}, scene_value=scene)
         empty_mark = _BrokenSceneItem("mark", state={}, scene_value=scene)
-        scene_note = _BrokenSceneItem("note", state={"kind": "note", "text": "keep", "x": 4.0, "y": 5.0})
+        scene_note = _BrokenSceneItem(
+            "note", state={"kind": "note", "text": "keep", "x": 4.0, "y": 5.0}
+        )
         empty_scene_item = _BrokenSceneItem("arrow", state={})
-        wrong_scene_ring = _BrokenSceneItem("ring", state={"kind": "ring"}, scene_value=object())
+        wrong_scene_ring = _BrokenSceneItem(
+            "ring", state={"kind": "ring"}, scene_value=object()
+        )
         broken_ring = _BrokenSceneItem("ring", state={"kind": "ring"}, raise_scene=True)
-        invalid_ids_ring = _BrokenSceneItem("ring", state={"kind": "ring"}, data2=[1, "bad"], scene_value=scene)
-        empty_state_ring = _BrokenSceneItem("ring", state={}, data2=[1, 2], scene_value=scene)
+        invalid_ids_ring = _BrokenSceneItem(
+            "ring", state={"kind": "ring"}, data2=[1, "bad"], scene_value=scene
+        )
+        empty_state_ring = _BrokenSceneItem(
+            "ring", state={}, data2=[1, 2], scene_value=scene
+        )
 
         payload = build_selection_clipboard_payload(
-            selected_items=[duplicate_selected_mark, empty_mark, scene_note, empty_scene_item],
+            selected_items=[
+                duplicate_selected_mark,
+                empty_mark,
+                scene_note,
+                empty_scene_item,
+            ],
             explicit_atom_ids={1, 3},
             selected_bond_ids={0, 1, 99},
             bonds=[Bond(1, 2, 1, style="single", color="#111111"), None],
-            ring_items=[wrong_scene_ring, broken_ring, invalid_ids_ring, empty_state_ring],
-            marks_by_atom={2: [valid_mark, valid_mark, off_scene_mark, runtime_mark, empty_linked_mark]},
+            ring_items=[
+                wrong_scene_ring,
+                broken_ring,
+                invalid_ids_ring,
+                empty_state_ring,
+            ],
+            marks_by_atom={
+                2: [
+                    valid_mark,
+                    valid_mark,
+                    off_scene_mark,
+                    runtime_mark,
+                    empty_linked_mark,
+                ]
+            },
             scene=scene,
             atom_state_getter=lambda atom_id: (
                 {}
                 if atom_id == 3
-                else {"element": "C", "x": float(atom_id), "y": 0.0, "color": "#000000", "explicit_label": False}
+                else {
+                    "element": "C",
+                    "x": float(atom_id),
+                    "y": 0.0,
+                    "color": "#000000",
+                    "explicit_label": False,
+                }
             ),
             bond_state_getter=lambda bond: {
                 "a": bond.a,
@@ -215,10 +272,26 @@ class SceneClipboardLogicTest(unittest.TestCase):
                 "format": "chemvas-selection",
                 "version": 7,
                 "atoms": [
-                    {"id": 1, "element": "C", "x": 1.0, "y": 0.0, "color": "#000000", "explicit_label": False},
-                    {"id": 2, "element": "C", "x": 2.0, "y": 0.0, "color": "#000000", "explicit_label": False},
+                    {
+                        "id": 1,
+                        "element": "C",
+                        "x": 1.0,
+                        "y": 0.0,
+                        "color": "#000000",
+                        "explicit_label": False,
+                    },
+                    {
+                        "id": 2,
+                        "element": "C",
+                        "x": 2.0,
+                        "y": 0.0,
+                        "color": "#000000",
+                        "explicit_label": False,
+                    },
                 ],
-                "bonds": [{"a": 1, "b": 2, "order": 1, "style": "single", "color": "#111111"}],
+                "bonds": [
+                    {"a": 1, "b": 2, "order": 1, "style": "single", "color": "#111111"}
+                ],
                 "rings": [],
                 "marks": [{"kind": "mark", "atom_id": 2, "x": 1.0, "y": 2.0}],
                 "scene_items": [{"kind": "note", "text": "keep", "x": 4.0, "y": 5.0}],
@@ -239,7 +312,9 @@ class SceneClipboardLogicTest(unittest.TestCase):
 
         self.assertEqual(candidates, [])
 
-    def test_decode_clipboard_selection_payload_skips_invalid_candidates_until_valid_dict(self) -> None:
+    def test_decode_clipboard_selection_payload_skips_invalid_candidates_until_valid_dict(
+        self,
+    ) -> None:
         valid_payload = _valid_note_clipboard_payload()
         valid_payload_json = json.dumps(valid_payload, separators=(",", ":"))
         payload, payload_json = decode_clipboard_selection_payload(
@@ -256,11 +331,22 @@ class SceneClipboardLogicTest(unittest.TestCase):
         self.assertEqual(payload, valid_payload)
         self.assertEqual(payload_json, valid_payload_json)
 
-    def test_decode_clipboard_selection_payload_rejects_string_numeric_atom_id(self) -> None:
+    def test_decode_clipboard_selection_payload_rejects_string_numeric_atom_id(
+        self,
+    ) -> None:
         invalid_payload = {
             "format": "chemvas-selection",
             "version": 1,
-            "atoms": [{"id": "0", "element": "C", "x": 1.0, "y": 2.0, "color": "#000000", "explicit_label": False}],
+            "atoms": [
+                {
+                    "id": "0",
+                    "element": "C",
+                    "x": 1.0,
+                    "y": 2.0,
+                    "color": "#000000",
+                    "explicit_label": False,
+                }
+            ],
             "bonds": [],
             "rings": [],
             "marks": [],
@@ -277,7 +363,9 @@ class SceneClipboardLogicTest(unittest.TestCase):
         self.assertEqual(payload, valid_payload)
         self.assertEqual(payload_json, valid_payload_json)
 
-    def test_decode_clipboard_selection_payload_rejects_unsafe_decimal_float_token(self) -> None:
+    def test_decode_clipboard_selection_payload_rejects_unsafe_decimal_float_token(
+        self,
+    ) -> None:
         invalid_payload = {
             "format": "chemvas-selection",
             "version": 1,
@@ -296,55 +384,81 @@ class SceneClipboardLogicTest(unittest.TestCase):
             "marks": [],
             "scene_items": [],
         }
-        invalid_payload_json = json.dumps(invalid_payload, separators=(",", ":")).replace(
+        invalid_payload_json = json.dumps(
+            invalid_payload, separators=(",", ":")
+        ).replace(
             '"__UNSAFE_FLOAT__"',
             "9007199254740990.5",
         )
         valid_payload = _valid_note_clipboard_payload()
         valid_payload_json = json.dumps(valid_payload, separators=(",", ":"))
 
-        payload, payload_json = decode_clipboard_selection_payload([invalid_payload_json, valid_payload_json], version=1)
+        payload, payload_json = decode_clipboard_selection_payload(
+            [invalid_payload_json, valid_payload_json], version=1
+        )
 
         self.assertEqual(payload, valid_payload)
         self.assertEqual(payload_json, valid_payload_json)
 
-    def test_clipboard_payload_candidates_rejects_oversized_custom_payload_before_decode(self) -> None:
+    def test_clipboard_payload_candidates_rejects_oversized_custom_payload_before_decode(
+        self,
+    ) -> None:
         mime_data = QMimeData()
         mime_type = "application/x-chemvas-selection+json"
-        mime_data.setData(mime_type, b"{" + (b" " * MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES) + b"}")
+        mime_data.setData(
+            mime_type, b"{" + (b" " * MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES) + b"}"
+        )
 
-        self.assertEqual(clipboard_payload_candidates(mime_data, mime_type=mime_type), [])
+        self.assertEqual(
+            clipboard_payload_candidates(mime_data, mime_type=mime_type), []
+        )
 
-    def test_decode_clipboard_selection_payload_rejects_deep_json_that_raises_recursion_error(self) -> None:
+    def test_decode_clipboard_selection_payload_rejects_deep_json_that_raises_recursion_error(
+        self,
+    ) -> None:
         deep_json = "[" * 20_000 + "0" + "]" * 20_000
         valid_payload = _valid_note_clipboard_payload()
         valid_payload_json = json.dumps(valid_payload, separators=(",", ":"))
 
-        payload, payload_json = decode_clipboard_selection_payload([deep_json, valid_payload_json], version=1)
+        payload, payload_json = decode_clipboard_selection_payload(
+            [deep_json, valid_payload_json], version=1
+        )
 
         self.assertEqual(payload, valid_payload)
         self.assertEqual(payload_json, valid_payload_json)
 
-    def test_decode_clipboard_selection_payload_skips_overlong_integer_guard_error(self) -> None:
-        overlong_version_json = '{"format":"chemvas-selection","version":' + ("9" * 5000) + "}"
+    def test_decode_clipboard_selection_payload_skips_overlong_integer_guard_error(
+        self,
+    ) -> None:
+        overlong_version_json = (
+            '{"format":"chemvas-selection","version":' + ("9" * 5000) + "}"
+        )
         valid_payload = _valid_note_clipboard_payload()
         valid_payload_json = json.dumps(valid_payload, separators=(",", ":"))
 
-        payload, payload_json = decode_clipboard_selection_payload([overlong_version_json, valid_payload_json], version=1)
+        payload, payload_json = decode_clipboard_selection_payload(
+            [overlong_version_json, valid_payload_json], version=1
+        )
 
         self.assertEqual(payload, valid_payload)
         self.assertEqual(payload_json, valid_payload_json)
 
-    def test_decode_clipboard_selection_payload_accepts_legacy_v1_payload_for_v2_reader(self) -> None:
+    def test_decode_clipboard_selection_payload_accepts_legacy_v1_payload_for_v2_reader(
+        self,
+    ) -> None:
         valid_payload = _valid_note_clipboard_payload()
         valid_payload_json = json.dumps(valid_payload, separators=(",", ":"))
 
-        payload, payload_json = decode_clipboard_selection_payload([valid_payload_json], version=2)
+        payload, payload_json = decode_clipboard_selection_payload(
+            [valid_payload_json], version=2
+        )
 
         self.assertEqual(payload, valid_payload)
         self.assertEqual(payload_json, valid_payload_json)
 
-    def test_selection_payload_extends_atom_and_bond_selection_and_keeps_related_scene_items(self) -> None:
+    def test_selection_payload_extends_atom_and_bond_selection_and_keeps_related_scene_items(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
             atoms={
@@ -360,11 +474,19 @@ class SceneClipboardLogicTest(unittest.TestCase):
 
         atom_item = _make_rect_item("atom", data1=1)
         bond_item = _make_rect_item("bond", data1=0)
-        linked_mark = _make_text_item("mark", "linked", {"kind": "mark", "atom_id": 2, "x": 3.0, "y": 4.0})
-        free_mark = _make_rect_item("mark", state={"kind": "mark", "atom_id": None, "x": 50.0, "y": 60.0})
+        linked_mark = _make_text_item(
+            "mark", "linked", {"kind": "mark", "atom_id": 2, "x": 3.0, "y": 4.0}
+        )
+        free_mark = _make_rect_item(
+            "mark", state={"kind": "mark", "atom_id": None, "x": 50.0, "y": 60.0}
+        )
         ring_item = _make_ring_item([1, 2])
-        note_item = _make_text_item("note", "note", {"kind": "note", "text": "note", "x": 80.0, "y": 90.0})
-        arrow_item = _make_rect_item("arrow", state={"kind": "arrow", "start": (5.0, 6.0), "end": (7.0, 8.0)})
+        note_item = _make_text_item(
+            "note", "note", {"kind": "note", "text": "note", "x": 80.0, "y": 90.0}
+        )
+        arrow_item = _make_rect_item(
+            "arrow", state={"kind": "arrow", "start": (5.0, 6.0), "end": (7.0, 8.0)}
+        )
 
         canvas.mark_registry.by_atom[2] = [linked_mark]
         set_scene_item_collection_for(canvas, "ring_items", [ring_item])
@@ -383,11 +505,28 @@ class SceneClipboardLogicTest(unittest.TestCase):
         self.assertEqual(
             payload["atoms"],
             [
-                {"id": 1, "element": "C", "x": 0.0, "y": 0.0, "color": "#111111", "explicit_label": True},
-                {"id": 2, "element": "O", "x": 20.0, "y": 0.0, "color": "#222222", "explicit_label": False},
+                {
+                    "id": 1,
+                    "element": "C",
+                    "x": 0.0,
+                    "y": 0.0,
+                    "color": "#111111",
+                    "explicit_label": True,
+                },
+                {
+                    "id": 2,
+                    "element": "O",
+                    "x": 20.0,
+                    "y": 0.0,
+                    "color": "#222222",
+                    "explicit_label": False,
+                },
             ],
         )
-        self.assertEqual(payload["bonds"], [{"a": 1, "b": 2, "order": 1, "style": "single", "color": "#444444"}])
+        self.assertEqual(
+            payload["bonds"],
+            [{"a": 1, "b": 2, "order": 1, "style": "single", "color": "#444444"}],
+        )
         self.assertEqual(
             payload["rings"],
             [
@@ -433,7 +572,9 @@ class SceneClipboardLogicTest(unittest.TestCase):
             ],
         )
 
-    def test_selection_payload_v2_includes_only_fresh_selected_perspective_coords(self) -> None:
+    def test_selection_payload_v2_includes_only_fresh_selected_perspective_coords(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.CLIPBOARD_SELECTION_VERSION = 2
         canvas.renderer = SimpleNamespace(style=SimpleNamespace(bond_length_px=30.0))
@@ -454,7 +595,9 @@ class SceneClipboardLogicTest(unittest.TestCase):
         canvas.add_item(atom_item, selected=True)
         canvas.add_item(bond_item, selected=True)
 
-        payload = scene_clipboard_controller_for(canvas).selection_payload_for_clipboard()
+        payload = scene_clipboard_controller_for(
+            canvas
+        ).selection_payload_for_clipboard()
 
         self.assertIsNotNone(payload)
         assert payload is not None
@@ -468,7 +611,9 @@ class SceneClipboardLogicTest(unittest.TestCase):
             },
         )
 
-    def test_selection_payload_filters_invalid_entries_and_retains_only_valid_scene_state(self) -> None:
+    def test_selection_payload_filters_invalid_entries_and_retains_only_valid_scene_state(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
             atoms={1: Atom("C", 0.0, 0.0)},
@@ -478,12 +623,23 @@ class SceneClipboardLogicTest(unittest.TestCase):
         invalid_atom = _make_rect_item("atom", data1="bad")
         invalid_bond = _make_rect_item("bond", data1=9)
         invalid_mark = _make_text_item("unknown", "mark", {})
-        invalid_ring = _make_ring_item([1], state={"kind": "ring", "atom_ids": [], "points": []})
+        invalid_ring = _make_ring_item(
+            [1], state={"kind": "ring", "atom_ids": [], "points": []}
+        )
         invalid_ring.setData(2, [])
         empty_scene_item = _make_rect_item("arrow", state={})
-        valid_note = _make_text_item("note", "keep", {"kind": "note", "text": "keep", "x": 10.0, "y": 11.0})
+        valid_note = _make_text_item(
+            "note", "keep", {"kind": "note", "text": "keep", "x": 10.0, "y": 11.0}
+        )
 
-        for item in (invalid_atom, invalid_bond, invalid_mark, invalid_ring, empty_scene_item, valid_note):
+        for item in (
+            invalid_atom,
+            invalid_bond,
+            invalid_mark,
+            invalid_ring,
+            empty_scene_item,
+            valid_note,
+        ):
             canvas.add_item(item, selected=True)
         set_scene_item_collection_for(canvas, "ring_items", [invalid_ring])
 
@@ -497,10 +653,13 @@ class SceneClipboardLogicTest(unittest.TestCase):
         self.assertEqual(payload["rings"], [])
         self.assertEqual(payload["marks"], [])
         self.assertEqual(
-            _without_html(payload["scene_items"]), [{"kind": "note", "text": "keep", "x": 10.0, "y": 11.0}]
+            _without_html(payload["scene_items"]),
+            [{"kind": "note", "text": "keep", "x": 10.0, "y": 11.0}],
         )
 
-    def test_selected_atom_bound_mark_without_atom_serializes_as_pastable_standalone_mark(self) -> None:
+    def test_selected_atom_bound_mark_without_atom_serializes_as_pastable_standalone_mark(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[])
         mark = _make_text_item(
@@ -541,11 +700,15 @@ class SceneClipboardLogicTest(unittest.TestCase):
             ],
         )
         payload_json = json.dumps(payload, separators=(",", ":"))
-        decoded_payload, decoded_json = decode_clipboard_selection_payload([payload_json], version=1)
+        decoded_payload, decoded_json = decode_clipboard_selection_payload(
+            [payload_json], version=1
+        )
         self.assertEqual(decoded_payload, payload)
         self.assertEqual(decoded_json, payload_json)
 
-    def test_selection_payload_returns_none_when_every_selected_entry_is_invalid_or_empty(self) -> None:
+    def test_selection_payload_returns_none_when_every_selected_entry_is_invalid_or_empty(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
             atoms={1: Atom("C", 0.0, 0.0)},
@@ -555,11 +718,19 @@ class SceneClipboardLogicTest(unittest.TestCase):
         invalid_atom = _make_rect_item("atom", data1="bad")
         invalid_bond = _make_rect_item("bond", data1=99)
         invalid_mark = _make_text_item("unknown", "mark", {})
-        invalid_ring = _make_ring_item([1], state={"kind": "ring", "atom_ids": [], "points": []})
+        invalid_ring = _make_ring_item(
+            [1], state={"kind": "ring", "atom_ids": [], "points": []}
+        )
         invalid_ring.setData(2, [])
         invalid_scene_item = _make_rect_item("arrow", state={})
 
-        for item in (invalid_atom, invalid_bond, invalid_mark, invalid_ring, invalid_scene_item):
+        for item in (
+            invalid_atom,
+            invalid_bond,
+            invalid_mark,
+            invalid_ring,
+            invalid_scene_item,
+        ):
             canvas.add_item(item, selected=True)
         set_scene_item_collection_for(canvas, "ring_items", [invalid_ring])
 
@@ -567,7 +738,9 @@ class SceneClipboardLogicTest(unittest.TestCase):
 
         self.assertIsNone(controller.selection_payload_for_clipboard())
 
-    def test_clipboard_selection_payload_uses_custom_mime_and_rejects_wrong_format_or_version(self) -> None:
+    def test_clipboard_selection_payload_uses_custom_mime_and_rejects_wrong_format_or_version(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         controller = scene_clipboard_controller_for(canvas)
         clipboard = QApplication.clipboard()
@@ -584,10 +757,14 @@ class SceneClipboardLogicTest(unittest.TestCase):
         clipboard.setMimeData(canvas.new_image_mime_data(image))
         self.assertEqual(controller.clipboard_selection_payload(), (None, None))
 
-        clipboard.setMimeData(canvas.new_mime_data(b'{"format":"not-chemvas-selection","version":1}'))
+        clipboard.setMimeData(
+            canvas.new_mime_data(b'{"format":"not-chemvas-selection","version":1}')
+        )
         self.assertEqual(controller.clipboard_selection_payload(), (None, None))
 
-        invalid_version_mime = canvas.new_mime_data(b'{"format":"chemvas-selection","version":999}')
+        invalid_version_mime = canvas.new_mime_data(
+            b'{"format":"chemvas-selection","version":999}'
+        )
         invalid_version_mime.setImageData(QImage(4, 4, QImage.Format.Format_ARGB32))
         clipboard.setMimeData(invalid_version_mime)
         self.assertEqual(controller.clipboard_selection_payload(), (None, None))

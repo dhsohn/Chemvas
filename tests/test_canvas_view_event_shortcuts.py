@@ -12,10 +12,13 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.canvas_hover_state import set_hover_atom_id_for, set_hover_bond_id_for
-    from ui.canvas_view import CanvasView
-    from ui.input_view_access import should_override_chemdraw_shortcut_for
-    from ui.input_view_state import input_view_state_for
+    from chemvas.ui.canvas_hover_state import (
+        set_hover_atom_id_for,
+        set_hover_bond_id_for,
+    )
+    from chemvas.ui.canvas_view import CanvasView
+    from chemvas.ui.input_view_access import should_override_chemdraw_shortcut_for
+    from chemvas.ui.input_view_state import input_view_state_for
 
 
 class _FakeEvent:
@@ -51,7 +54,9 @@ class _FakeEvent:
         return self._gesture_type
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas view tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for canvas view tests"
+)
 class CanvasViewEventShortcutTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -72,11 +77,17 @@ class CanvasViewEventShortcutTest(unittest.TestCase):
             Qt.NativeGestureType.RotateNativeGesture,
             Qt.NativeGestureType.SmartZoomNativeGesture,
         )
-        with mock.patch.object(QGraphicsView, "event", new=mock.Mock(return_value=False)) as base_event:
+        with mock.patch.object(
+            QGraphicsView, "event", new=mock.Mock(return_value=False)
+        ) as base_event:
+
             class _FakeNativeGestureEvent(_FakeEvent):
                 pass
 
-            with mock.patch("ui.canvas_view_event_router.QNativeGestureEvent", _FakeNativeGestureEvent):
+            with mock.patch(
+                "chemvas.ui.canvas_view_event_router.QNativeGestureEvent",
+                _FakeNativeGestureEvent,
+            ):
                 for gesture_type in gestures:
                     view = self._new_view()
                     base_event.reset_mock()
@@ -86,16 +97,24 @@ class CanvasViewEventShortcutTest(unittest.TestCase):
                     )
                     self.assertTrue(CanvasView.event(view, event))
                     event.accept.assert_called_once_with()
-                    self.assertTrue(input_view_state_for(view).base_transform.isIdentity())
+                    self.assertTrue(
+                        input_view_state_for(view).base_transform.isIdentity()
+                    )
                     self.assertTrue(view.transform().isIdentity())
                     self.assertEqual(base_event.call_count, 0)
 
     def test_event_falls_back_to_super_for_non_matching_native_gesture(self) -> None:
-        with mock.patch.object(QGraphicsView, "event", new=mock.Mock(return_value=False)) as base_event:
+        with mock.patch.object(
+            QGraphicsView, "event", new=mock.Mock(return_value=False)
+        ) as base_event:
+
             class _FakeNativeGestureEvent(_FakeEvent):
                 pass
 
-            with mock.patch("ui.canvas_view_event_router.QNativeGestureEvent", _FakeNativeGestureEvent):
+            with mock.patch(
+                "chemvas.ui.canvas_view_event_router.QNativeGestureEvent",
+                _FakeNativeGestureEvent,
+            ):
                 view = self._new_view()
                 base_event.reset_mock()
                 event = _FakeNativeGestureEvent(
@@ -108,7 +127,9 @@ class CanvasViewEventShortcutTest(unittest.TestCase):
                 self.assertFalse(view.transform().isIdentity())
                 self.assertEqual(base_event.call_count, 1)
 
-    def test_should_override_chemdraw_shortcut_uses_hover_state_and_modifiers(self) -> None:
+    def test_should_override_chemdraw_shortcut_uses_hover_state_and_modifiers(
+        self,
+    ) -> None:
         atom_view = self._new_view()
         set_hover_atom_id_for(atom_view, 7)
         atom_event = _FakeEvent(
@@ -123,7 +144,9 @@ class CanvasViewEventShortcutTest(unittest.TestCase):
             key=Qt.Key.Key_unknown,
             text="9",
         )
-        self.assertTrue(should_override_chemdraw_shortcut_for(atom_view, dimethyl_event))
+        self.assertTrue(
+            should_override_chemdraw_shortcut_for(atom_view, dimethyl_event)
+        )
 
         bond_view = self._new_view()
         set_hover_bond_id_for(bond_view, 11)
@@ -140,7 +163,9 @@ class CanvasViewEventShortcutTest(unittest.TestCase):
                 key=Qt.Key.Key_unknown,
                 text=text,
             )
-            self.assertTrue(should_override_chemdraw_shortcut_for(bond_view, bond_style_event))
+            self.assertTrue(
+                should_override_chemdraw_shortcut_for(bond_view, bond_style_event)
+            )
 
         reject_view = self._new_view()
         set_hover_atom_id_for(reject_view, 3)
@@ -149,7 +174,9 @@ class CanvasViewEventShortcutTest(unittest.TestCase):
             key=Qt.Key.Key_Return,
             text="c",
         )
-        self.assertFalse(should_override_chemdraw_shortcut_for(reject_view, reject_event))
+        self.assertFalse(
+            should_override_chemdraw_shortcut_for(reject_view, reject_event)
+        )
 
 
 if __name__ == "__main__":

@@ -4,25 +4,28 @@ from types import SimpleNamespace
 from unittest import mock
 from unittest.mock import Mock
 
-from core.history import CompositeCommand, HistoryTransactionRestoreResult
-from core.model import Atom, Bond, MoleculeModel
-from core.rdkit_adapter import RDKitAdapter
-from PyQt6.QtCore import QPointF
-from ui.canvas_history_recording_service import CanvasHistoryRecordingService
-from ui.canvas_scene_items_state import ring_items_for, set_scene_item_collection_for
-from ui.canvas_smiles_input_state import (
-    last_smiles_input_for,
-    set_last_smiles_input_for,
-)
-from ui.history_commands import AddSceneItemsCommand
-from ui.insert_template_commit_service import apply_template_commit_resolution
-from ui.structure_build_service import StructureBuildService
-from ui.structure_template_commands import apply_structure_template_command
-from ui.template_insert_logic import (
+from chemvas.core.history import CompositeCommand, HistoryTransactionRestoreResult
+from chemvas.core.rdkit_adapter import RDKitAdapter
+from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.features.insertion import (
     TemplateInsertPlan,
     TemplateInsertRequest,
     TemplateInsertResolution,
 )
+from chemvas.ui.canvas_history_recording_service import CanvasHistoryRecordingService
+from chemvas.ui.canvas_scene_items_state import (
+    ring_items_for,
+    set_scene_item_collection_for,
+)
+from chemvas.ui.canvas_smiles_input_state import (
+    last_smiles_input_for,
+    set_last_smiles_input_for,
+)
+from chemvas.ui.history_commands import AddSceneItemsCommand
+from chemvas.ui.insert_template_commit_service import apply_template_commit_resolution
+from chemvas.ui.structure_build_service import StructureBuildService
+from chemvas.ui.structure_template_commands import apply_structure_template_command
+from PyQt6.QtCore import QPointF
 
 try:
     from rdkit import Chem as _RealChem
@@ -583,7 +586,7 @@ class StructureBuildServiceTest(unittest.TestCase):
     def test_begin_recorded_change_restores_actual_smiles_after_clear_base_exception_and_retries(
         self,
     ) -> None:
-        from ui import structure_build_committer as committer_module
+        from chemvas.ui import structure_build_committer as committer_module
 
         for error_type in (KeyboardInterrupt, SystemExit):
             with self.subTest(error_type=error_type.__name__):
@@ -621,7 +624,7 @@ class StructureBuildServiceTest(unittest.TestCase):
     def test_begin_recorded_change_unwinds_exact_capture_poison_before_retry(
         self,
     ) -> None:
-        from ui import structure_build_committer as committer_module
+        from chemvas.ui import structure_build_committer as committer_module
 
         canvas = _FakeCanvas()
         service = _service_for(canvas)
@@ -708,7 +711,7 @@ class StructureBuildServiceTest(unittest.TestCase):
     def test_recorded_build_exact_restore_error_and_broken_add_note_preserve_primary(
         self,
     ) -> None:
-        from ui import structure_build_committer as committer_module
+        from chemvas.ui import structure_build_committer as committer_module
 
         canvas = _FakeCanvas()
         service = _service_for(canvas)
@@ -750,7 +753,7 @@ class StructureBuildServiceTest(unittest.TestCase):
     def test_recorded_build_exact_restore_retries_fail_once_and_persistent_results(
         self,
     ) -> None:
-        from ui import structure_build_committer as committer_module
+        from chemvas.ui import structure_build_committer as committer_module
 
         for behavior in ("fail_once", "persistent"):
             with self.subTest(behavior=behavior):
@@ -2154,7 +2157,7 @@ class StructureBuildServiceTest(unittest.TestCase):
 
         set_scene_item_collection_for(canvas, "ring_items", [_FakeRingItem(False)])
         with mock.patch(
-            "ui.structure_benzene_build_service.compute_free_benzene_ring_points",
+            "chemvas.ui.structure_benzene_build_service.compute_free_benzene_ring_points",
             return_value=[(1.0, 2.0), (3.0, 4.0)],
         ) as free_ring:
             result = service.benzene_ring_points(QPointF(7.0, 8.0))

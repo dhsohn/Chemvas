@@ -12,8 +12,10 @@ if QApplication is not None:
     from tests.test_scene_ops_controller_paste_edges import _RecordingFakeCanvas
 
     try:
-        from ui.scene_paste_apply_logic import apply_paste_payload
-    except ImportError as exc:  # pragma: no cover - contract test for upcoming helper API
+        from chemvas.ui.scene_paste_apply_logic import apply_paste_payload
+    except (
+        ImportError
+    ) as exc:  # pragma: no cover - contract test for upcoming helper API
         apply_paste_payload = None
         IMPORT_ERROR = str(exc)
     else:  # pragma: no cover - trivial import branch
@@ -41,7 +43,9 @@ class _RecordingPasteCanvas(_RecordingFakeCanvas):
         self.add_bond_calls.append((atom_a, atom_b, order))
         return super().add_bond(atom_a, atom_b, order)
 
-    def set_atom_annotation(self, atom_id: int, annotation: dict[str, int] | None) -> None:
+    def set_atom_annotation(
+        self, atom_id: int, annotation: dict[str, int] | None
+    ) -> None:
         self.atom_annotation_calls.append((atom_id, annotation))
 
     def _translated_scene_item_state(
@@ -58,7 +62,9 @@ class _RecordingPasteCanvas(_RecordingFakeCanvas):
             return None
         if isinstance(state, dict) and kind in self.translate_empty_kinds:
             return {}
-        return super()._translated_scene_item_state(state, dx=dx, dy=dy, atom_id_map=atom_id_map)
+        return super()._translated_scene_item_state(
+            state, dx=dx, dy=dy, atom_id_map=atom_id_map
+        )
 
 
 @unittest.skipIf(
@@ -71,7 +77,9 @@ class ScenePasteApplyLogicTest(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
 
-    def test_apply_paste_selection_routes_valid_atoms_bonds_and_translated_scene_items(self) -> None:
+    def test_apply_paste_selection_routes_valid_atoms_bonds_and_translated_scene_items(
+        self,
+    ) -> None:
         canvas = _RecordingPasteCanvas()
         canvas.translate_none_kinds = {"skip-none"}
         canvas.translate_empty_kinds = {"skip-empty"}
@@ -81,7 +89,14 @@ class ScenePasteApplyLogicTest(unittest.TestCase):
             "atoms": [
                 "bad",
                 {"id": "bad", "element": "C", "x": 1.0, "y": 2.0},
-                {"id": 10, "element": "C", "x": 5.0, "y": 7.0, "color": "#123456", "explicit_label": True},
+                {
+                    "id": 10,
+                    "element": "C",
+                    "x": 5.0,
+                    "y": 7.0,
+                    "color": "#123456",
+                    "explicit_label": True,
+                },
                 {
                     "id": 11,
                     "element": "O",
@@ -91,7 +106,14 @@ class ScenePasteApplyLogicTest(unittest.TestCase):
                     "explicit_label": True,
                     "annotation": {"formal_charge": -1, "radical_electrons": 1},
                 },
-                {"id": 12, "element": "C", "x": 21.0, "y": 22.0, "color": "#fedcba", "explicit_label": False},
+                {
+                    "id": 12,
+                    "element": "C",
+                    "x": 21.0,
+                    "y": 22.0,
+                    "color": "#fedcba",
+                    "explicit_label": False,
+                },
             ],
             "bonds": [
                 "bad-bond",
@@ -100,8 +122,16 @@ class ScenePasteApplyLogicTest(unittest.TestCase):
                 {"a": 10, "b": 99, "order": 1, "style": "single", "color": "#000000"},
             ],
             "rings": [
-                {"kind": "ring", "atom_ids": [10, 11], "points": [(0.0, 0.0), (12.0, 0.0), (6.0, 10.0)]},
-                {"kind": "skip-none", "atom_ids": [10, 11], "points": [(1.0, 1.0), (2.0, 1.0), (1.5, 2.0)]},
+                {
+                    "kind": "ring",
+                    "atom_ids": [10, 11],
+                    "points": [(0.0, 0.0), (12.0, 0.0), (6.0, 10.0)],
+                },
+                {
+                    "kind": "skip-none",
+                    "atom_ids": [10, 11],
+                    "points": [(1.0, 1.0), (2.0, 1.0), (1.5, 2.0)],
+                },
             ],
             "marks": [
                 {"kind": "mark", "atom_id": 10, "x": 1.0, "y": 2.0},
@@ -149,7 +179,10 @@ class ScenePasteApplyLogicTest(unittest.TestCase):
                 (2, "#fedcba"),
             ],
         )
-        self.assertEqual(canvas.atom_annotation_calls, [(1, {"formal_charge": -1, "radical_electrons": 1})])
+        self.assertEqual(
+            canvas.atom_annotation_calls,
+            [(1, {"formal_charge": -1, "radical_electrons": 1})],
+        )
         self.assertEqual(
             canvas.atom_label_calls,
             [
@@ -185,7 +218,11 @@ class ScenePasteApplyLogicTest(unittest.TestCase):
         self.assertEqual(
             canvas.created_scene_item_states,
             [
-                {"kind": "ring", "atom_ids": [10, 11], "points": [(0.0, 0.0), (12.0, 0.0), (6.0, 10.0)]},
+                {
+                    "kind": "ring",
+                    "atom_ids": [10, 11],
+                    "points": [(0.0, 0.0), (12.0, 0.0), (6.0, 10.0)],
+                },
                 {"kind": "mark", "atom_id": 0, "x": 19.0, "y": 24.0},
                 {"kind": "note", "text": "keep", "x": 48.0, "y": 62.0},
             ],
@@ -219,7 +256,11 @@ class ScenePasteApplyLogicTest(unittest.TestCase):
                 {"a": 99, "b": 100, "order": 1, "style": "single", "color": "#000000"},
             ],
             "rings": [
-                {"kind": "skip-none", "atom_ids": [99, 100], "points": [(0.0, 0.0), (1.0, 0.0), (0.5, 1.0)]},
+                {
+                    "kind": "skip-none",
+                    "atom_ids": [99, 100],
+                    "points": [(0.0, 0.0), (1.0, 0.0), (0.5, 1.0)],
+                },
             ],
             "marks": [
                 {"kind": "skip-empty", "atom_id": 99, "x": 1.0, "y": 2.0},

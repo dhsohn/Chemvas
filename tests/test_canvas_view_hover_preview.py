@@ -23,26 +23,28 @@ except ModuleNotFoundError:
     QGraphicsTextItem = None
 
 if QApplication is not None:
-    from core.model import Atom, Bond
-    from ui.bond_hover_preview_service import BondHoverPreviewService
-    from ui.canvas_hover_state import (
+    from chemvas.domain.document import Atom, Bond
+    from chemvas.ui.bond_hover_preview_service import BondHoverPreviewService
+    from chemvas.ui.canvas_hover_state import (
         HoverPreviewState,
         hover_preview_state_for,
         hover_state_for,
         set_hover_items_for,
     )
-    from ui.canvas_scene_decoration_build_service import (
+    from chemvas.ui.canvas_scene_decoration_build_service import (
         CanvasSceneDecorationBuildService,
     )
-    from ui.canvas_tool_settings_state import CanvasToolSettingsState
-    from ui.hover_highlight_access import add_hover_preview_items_for
-    from ui.hover_interaction_access import update_hover_highlight_for
-    from ui.hover_interaction_service import HoverInteractionService
-    from ui.hover_scene_service import HoverSceneService
-    from ui.mark_hover_preview_service import MarkHoverPreviewService
+    from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+    from chemvas.ui.hover_highlight_access import add_hover_preview_items_for
+    from chemvas.ui.hover_interaction_access import update_hover_highlight_for
+    from chemvas.ui.hover_interaction_service import HoverInteractionService
+    from chemvas.ui.hover_scene_service import HoverSceneService
+    from chemvas.ui.mark_hover_preview_service import MarkHoverPreviewService
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas view tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for canvas view tests"
+)
 class CanvasViewHoverPreviewTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -84,10 +86,14 @@ class CanvasViewHoverPreviewTest(unittest.TestCase):
             ),
         )
         view.services = SimpleNamespace()
-        view.services.tools = SimpleNamespace(active=None if active_tool is None else SimpleNamespace(name=active_tool))
+        view.services.tools = SimpleNamespace(
+            active=None if active_tool is None else SimpleNamespace(name=active_tool)
+        )
         view.active_tool_provider = lambda: getattr(view.services.tools, "active", None)
         view.active_tool_name_provider = lambda: (
-            str(name) if (name := getattr(view.active_tool_provider(), "name", None)) else None
+            str(name)
+            if (name := getattr(view.active_tool_provider(), "name", None))
+            else None
         )
         view.services.hover_scene_service = HoverSceneService(view)
         view.services.hover_interaction_service = HoverInteractionService(
@@ -98,7 +104,9 @@ class CanvasViewHoverPreviewTest(unittest.TestCase):
         return view
 
     def _bind_mark_helpers(self, view: SimpleNamespace) -> None:
-        view.services.scene_decoration_build_service = CanvasSceneDecorationBuildService(view)
+        view.services.scene_decoration_build_service = (
+            CanvasSceneDecorationBuildService(view)
+        )
         view.services.mark_hover_preview_service = MarkHoverPreviewService(
             view,
             hit_testing_service=view.services.hit_testing_service,
@@ -113,16 +121,20 @@ class CanvasViewHoverPreviewTest(unittest.TestCase):
         view.bond_preview_build_items = mock.Mock(return_value=["preview"])
         view.bond_hover_endpoint = mock.Mock(return_value=QPointF(17.0, 18.0))
         build_patcher = mock.patch(
-            "ui.bond_hover_preview_service.build_bond_preview_items_for",
-            side_effect=lambda canvas, start, end, *atom_ids: canvas.bond_preview_build_items(
-                start,
-                end,
-                *atom_ids,
+            "chemvas.ui.bond_hover_preview_service.build_bond_preview_items_for",
+            side_effect=lambda canvas, start, end, *atom_ids: (
+                canvas.bond_preview_build_items(
+                    start,
+                    end,
+                    *atom_ids,
+                )
             ),
         )
         endpoint_patcher = mock.patch(
-            "ui.bond_hover_preview_service.bond_hover_endpoint_for",
-            side_effect=lambda canvas, start, pos, atom_id: canvas.bond_hover_endpoint(start, pos, atom_id),
+            "chemvas.ui.bond_hover_preview_service.bond_hover_endpoint_for",
+            side_effect=lambda canvas, start, pos, atom_id: canvas.bond_hover_endpoint(
+                start, pos, atom_id
+            ),
         )
         build_patcher.start()
         endpoint_patcher.start()
@@ -136,18 +148,26 @@ class CanvasViewHoverPreviewTest(unittest.TestCase):
 
     def test_add_mark_hover_preview_adds_and_skips_duplicate_previews(self) -> None:
         scene = QGraphicsScene()
-        view = self._make_view(scene=scene, atoms={1: Atom("C", 10.0, 20.0)}, active_tool=None)
-        view.services.hit_testing_service = SimpleNamespace(find_atom_near=mock.Mock(return_value=1))
+        view = self._make_view(
+            scene=scene, atoms={1: Atom("C", 10.0, 20.0)}, active_tool=None
+        )
+        view.services.hit_testing_service = SimpleNamespace(
+            find_atom_near=mock.Mock(return_value=1)
+        )
         self._bind_mark_helpers(view)
         view.services.canvas_mark_scene_service = SimpleNamespace(
             mark_center_for_pointer=mock.Mock(return_value=QPointF(12.0, 18.0))
         )
 
-        view.services.mark_hover_preview_service.add_mark_hover_preview(QPointF(4.0, 5.0))
+        view.services.mark_hover_preview_service.add_mark_hover_preview(
+            QPointF(4.0, 5.0)
+        )
 
         self.assertEqual(hover_state_for(view).atom_id, 1)
         self.assertEqual(hover_state_for(view).bond_id, None)
-        self.assertEqual(hover_preview_state_for(view).style, "mark:plus:atom:1:12.0:18.0")
+        self.assertEqual(
+            hover_preview_state_for(view).style, "mark:plus:atom:1:12.0:18.0"
+        )
         self.assertEqual(len(hover_state_for(view).items), 2)
         self.assertEqual(len(scene.items()), 2)
 
@@ -157,7 +177,9 @@ class CanvasViewHoverPreviewTest(unittest.TestCase):
         view.services.hover_scene_service.add_atom_hover_indicator = mock.Mock()
         view.services.hover_scene_service.add_hover_preview_items = mock.Mock()
 
-        view.services.mark_hover_preview_service.add_mark_hover_preview(QPointF(4.0, 5.0))
+        view.services.mark_hover_preview_service.add_mark_hover_preview(
+            QPointF(4.0, 5.0)
+        )
 
         view.services.hover_scene_service.clear_hover_highlight.assert_not_called()
         view.services.hover_scene_service.add_atom_hover_indicator.assert_not_called()
@@ -166,7 +188,9 @@ class CanvasViewHoverPreviewTest(unittest.TestCase):
         self.assertEqual(len(scene.items()), 2)
 
         free_view = self._make_view(active_tool=None)
-        free_view.services.hit_testing_service = SimpleNamespace(find_atom_near=mock.Mock(return_value=None))
+        free_view.services.hit_testing_service = SimpleNamespace(
+            find_atom_near=mock.Mock(return_value=None)
+        )
         self._bind_mark_helpers(free_view)
         free_view.services.canvas_mark_scene_service = SimpleNamespace(
             mark_center_for_pointer=mock.Mock(return_value=QPointF(3.5, 7.5))
@@ -174,17 +198,25 @@ class CanvasViewHoverPreviewTest(unittest.TestCase):
         hover_preview_state_for(free_view).style = "mark:plus:free:3.5:7.5"
         free_view.services.hover_scene_service.clear_hover_highlight = mock.Mock()
 
-        free_view.services.mark_hover_preview_service.add_mark_hover_preview(QPointF(3.5, 7.5))
+        free_view.services.mark_hover_preview_service.add_mark_hover_preview(
+            QPointF(3.5, 7.5)
+        )
 
         free_view.services.hover_scene_service.clear_hover_highlight.assert_not_called()
         self.assertEqual(hover_state_for(free_view).items, [])
 
-    def test_update_hover_highlight_handles_mark_empty_atom_and_bond_paths(self) -> None:
+    def test_update_hover_highlight_handles_mark_empty_atom_and_bond_paths(
+        self,
+    ) -> None:
         mark_view = self._make_view(active_tool="mark")
-        mark_view.services.mark_hover_preview_service = SimpleNamespace(add_mark_hover_preview=mock.Mock())
+        mark_view.services.mark_hover_preview_service = SimpleNamespace(
+            add_mark_hover_preview=mock.Mock()
+        )
 
         update_hover_highlight_for(mark_view, QPointF(1.0, 2.0))
-        mark_view.services.mark_hover_preview_service.add_mark_hover_preview.assert_called_once_with(QPointF(1.0, 2.0))
+        mark_view.services.mark_hover_preview_service.add_mark_hover_preview.assert_called_once_with(
+            QPointF(1.0, 2.0)
+        )
 
         no_atoms_clear = self._make_view(atoms={}, bonds=[], active_tool="select")
         no_atoms_clear.services.hover_scene_service.clear_hover_highlight = mock.Mock()
@@ -202,17 +234,27 @@ class CanvasViewHoverPreviewTest(unittest.TestCase):
             QPointF(8.0, 9.0),
             QPointF(28.0, 9.0),
         )
-        no_atoms_preview.services.hover_scene_service.add_hover_preview_items.assert_called_once_with(["preview"])
-        self.assertEqual(hover_preview_state_for(no_atoms_preview).style, "wedge:1:8.0:9.0")
+        no_atoms_preview.services.hover_scene_service.add_hover_preview_items.assert_called_once_with(
+            ["preview"]
+        )
+        self.assertEqual(
+            hover_preview_state_for(no_atoms_preview).style, "wedge:1:8.0:9.0"
+        )
 
-    def test_update_hover_highlight_handles_atom_hits_bond_hits_and_invalid_hits(self) -> None:
+    def test_update_hover_highlight_handles_atom_hits_bond_hits_and_invalid_hits(
+        self,
+    ) -> None:
         atoms = {1: Atom("C", 10.0, 20.0), 2: Atom("C", 30.0, 20.0)}
         bonds = [Bond(1, 2)]
 
-        atom_view = self._make_view(atoms=atoms, bonds=bonds, active_tool="bond", active_bond_style="wedge")
+        atom_view = self._make_view(
+            atoms=atoms, bonds=bonds, active_tool="bond", active_bond_style="wedge"
+        )
         self._bind_bond_hover_preview_service(atom_view)
         atom_view.services.selection_controller = SimpleNamespace(
-            preferred_structure_hit_at_scene_pos=mock.Mock(return_value=SimpleNamespace(kind="atom", id=1))
+            preferred_structure_hit_at_scene_pos=mock.Mock(
+                return_value=SimpleNamespace(kind="atom", id=1)
+            )
         )
         atom_view.services.hover_interaction_service = HoverInteractionService(
             atom_view,
@@ -227,21 +269,29 @@ class CanvasViewHoverPreviewTest(unittest.TestCase):
         update_hover_highlight_for(atom_view, QPointF(11.0, 12.0))
 
         atom_view.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
-        atom_view.services.hover_scene_service.add_atom_hover_indicator.assert_called_once_with(1)
+        atom_view.services.hover_scene_service.add_atom_hover_indicator.assert_called_once_with(
+            1
+        )
         atom_view.bond_preview_build_items.assert_called_once_with(
             QPointF(10.0, 20.0),
             QPointF(13.0, 14.0),
             1,
             None,
         )
-        atom_view.services.hover_scene_service.add_hover_preview_items.assert_called_once_with(["atom-preview"])
+        atom_view.services.hover_scene_service.add_hover_preview_items.assert_called_once_with(
+            ["atom-preview"]
+        )
         self.assertEqual(hover_state_for(atom_view).atom_id, 1)
         self.assertEqual(hover_preview_state_for(atom_view).style, "wedge:1:0.0:2.7")
 
-        bond_view = self._make_view(atoms=atoms, bonds=bonds, active_tool="bond", active_bond_style="hash")
+        bond_view = self._make_view(
+            atoms=atoms, bonds=bonds, active_tool="bond", active_bond_style="hash"
+        )
         self._bind_bond_hover_preview_service(bond_view)
         bond_view.services.selection_controller = SimpleNamespace(
-            preferred_structure_hit_at_scene_pos=mock.Mock(return_value=SimpleNamespace(kind="bond", id=0))
+            preferred_structure_hit_at_scene_pos=mock.Mock(
+                return_value=SimpleNamespace(kind="bond", id=0)
+            )
         )
         bond_view.services.hover_interaction_service = HoverInteractionService(
             bond_view,
@@ -259,13 +309,17 @@ class CanvasViewHoverPreviewTest(unittest.TestCase):
             1,
             2,
         )
-        bond_view.services.hover_scene_service.add_hover_preview_items.assert_called_once_with(["bond-preview"])
+        bond_view.services.hover_scene_service.add_hover_preview_items.assert_called_once_with(
+            ["bond-preview"]
+        )
         self.assertEqual(hover_state_for(bond_view).bond_id, 0)
         self.assertEqual(hover_preview_state_for(bond_view).style, "hash")
 
         invalid_view = self._make_view(atoms=atoms, bonds=bonds, active_tool="bond")
         invalid_view.services.selection_controller = SimpleNamespace(
-            preferred_structure_hit_at_scene_pos=mock.Mock(return_value=SimpleNamespace(kind="other", id="x"))
+            preferred_structure_hit_at_scene_pos=mock.Mock(
+                return_value=SimpleNamespace(kind="other", id="x")
+            )
         )
         invalid_view.services.hover_interaction_service = HoverInteractionService(
             invalid_view,
@@ -280,15 +334,21 @@ class CanvasViewHoverPreviewTest(unittest.TestCase):
         self.assertIsNone(hover_state_for(invalid_view).atom_id)
         self.assertIsNone(hover_state_for(invalid_view).bond_id)
 
-    def test_add_bond_style_hover_preview_and_add_bond_tool_hover_preview_cover_success_and_skip_paths(self) -> None:
+    def test_add_bond_style_hover_preview_and_add_bond_tool_hover_preview_cover_success_and_skip_paths(
+        self,
+    ) -> None:
         atoms = {1: Atom("C", 10.0, 20.0), 2: Atom("C", 30.0, 20.0)}
         bond = Bond(1, 2)
 
-        style_view = self._make_view(atoms=atoms, bonds=[bond], active_tool="bond", active_bond_style="wedge")
+        style_view = self._make_view(
+            atoms=atoms, bonds=[bond], active_tool="bond", active_bond_style="wedge"
+        )
         self._bind_bond_hover_preview_service(style_view)
         style_view.bond_preview_build_items.return_value = ["style-preview"]
 
-        style_view.services.bond_hover_preview_service.add_bond_style_hover_preview(bond)
+        style_view.services.bond_hover_preview_service.add_bond_style_hover_preview(
+            bond
+        )
 
         style_view.bond_preview_build_items.assert_called_once_with(
             QPointF(10.0, 20.0),
@@ -296,7 +356,9 @@ class CanvasViewHoverPreviewTest(unittest.TestCase):
             1,
             2,
         )
-        style_view.services.hover_scene_service.add_hover_preview_items.assert_called_once_with(["style-preview"])
+        style_view.services.hover_scene_service.add_hover_preview_items.assert_called_once_with(
+            ["style-preview"]
+        )
         self.assertEqual(hover_preview_state_for(style_view).style, "wedge")
 
         for tool_name, style_name, atom_map, expected_calls in [
@@ -304,19 +366,35 @@ class CanvasViewHoverPreviewTest(unittest.TestCase):
             ("bond", "single", atoms, 0),
             ("bond", "wedge", {1: Atom("C", 10.0, 20.0)}, 0),
         ]:
-            with self.subTest(tool_name=tool_name, style_name=style_name, atom_count=len(atom_map)):
-                skip_view = self._make_view(atoms=atom_map, bonds=[bond], active_tool=tool_name, active_bond_style=style_name)
+            with self.subTest(
+                tool_name=tool_name, style_name=style_name, atom_count=len(atom_map)
+            ):
+                skip_view = self._make_view(
+                    atoms=atom_map,
+                    bonds=[bond],
+                    active_tool=tool_name,
+                    active_bond_style=style_name,
+                )
                 self._bind_bond_hover_preview_service(skip_view)
-                skip_view.services.bond_hover_preview_service.add_bond_style_hover_preview(bond)
-                self.assertEqual(skip_view.bond_preview_build_items.call_count, expected_calls)
-                self.assertEqual(skip_view.services.hover_scene_service.add_hover_preview_items.call_count, expected_calls)
+                skip_view.services.bond_hover_preview_service.add_bond_style_hover_preview(
+                    bond
+                )
+                self.assertEqual(
+                    skip_view.bond_preview_build_items.call_count, expected_calls
+                )
+                self.assertEqual(
+                    skip_view.services.hover_scene_service.add_hover_preview_items.call_count,
+                    expected_calls,
+                )
 
         tool_view = self._make_view(atoms=atoms, bonds=[bond], active_tool="bond")
         self._bind_bond_hover_preview_service(tool_view)
         tool_view.bond_hover_endpoint.return_value = QPointF(17.0, 18.0)
         tool_view.bond_preview_build_items.return_value = ["tool-preview"]
 
-        tool_view.services.bond_hover_preview_service.add_bond_tool_hover_preview(1, QPointF(40.0, 41.0))
+        tool_view.services.bond_hover_preview_service.add_bond_tool_hover_preview(
+            1, QPointF(40.0, 41.0)
+        )
 
         tool_view.bond_hover_endpoint.assert_called_once_with(
             QPointF(10.0, 20.0),
@@ -329,21 +407,31 @@ class CanvasViewHoverPreviewTest(unittest.TestCase):
             1,
             None,
         )
-        tool_view.services.hover_scene_service.add_hover_preview_items.assert_called_once_with(["tool-preview"])
+        tool_view.services.hover_scene_service.add_hover_preview_items.assert_called_once_with(
+            ["tool-preview"]
+        )
 
-        missing_atom_view = self._make_view(atoms=atoms, bonds=[bond], active_tool="bond")
+        missing_atom_view = self._make_view(
+            atoms=atoms, bonds=[bond], active_tool="bond"
+        )
         self._bind_bond_hover_preview_service(missing_atom_view)
-        missing_atom_view.services.bond_hover_preview_service.add_bond_tool_hover_preview(999, QPointF(1.0, 2.0))
+        missing_atom_view.services.bond_hover_preview_service.add_bond_tool_hover_preview(
+            999, QPointF(1.0, 2.0)
+        )
         missing_atom_view.bond_preview_build_items.assert_not_called()
         missing_atom_view.services.hover_scene_service.add_hover_preview_items.assert_not_called()
 
         nonbond_view = self._make_view(atoms=atoms, bonds=[bond], active_tool="select")
         self._bind_bond_hover_preview_service(nonbond_view)
-        nonbond_view.services.bond_hover_preview_service.add_bond_tool_hover_preview(1, QPointF(1.0, 2.0))
+        nonbond_view.services.bond_hover_preview_service.add_bond_tool_hover_preview(
+            1, QPointF(1.0, 2.0)
+        )
         nonbond_view.bond_preview_build_items.assert_not_called()
         nonbond_view.services.hover_scene_service.add_hover_preview_items.assert_not_called()
 
-    def test_add_hover_preview_items_appends_scene_items_and_ignores_empty_input(self) -> None:
+    def test_add_hover_preview_items_appends_scene_items_and_ignores_empty_input(
+        self,
+    ) -> None:
         scene = QGraphicsScene()
         view = self._make_view(scene=scene, active_tool=None)
         existing = object()

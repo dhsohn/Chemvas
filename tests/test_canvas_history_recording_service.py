@@ -6,7 +6,7 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from core.history import (
+from chemvas.core.history import (
     AddAtomsCommand,
     AddBondCommand,
     CompositeCommand,
@@ -14,21 +14,21 @@ from core.history import (
     HistoryTransactionRestoreResult,
     UpdateBondCommand,
 )
-from core.model import Atom, Bond
-from ui.atom_coords_access import set_atom_coords_3d_for
-from ui.canvas_history_recording_service import (
+from chemvas.domain.document import Atom, Bond
+from chemvas.domain.transactions import HistoryStackSnapshot
+from chemvas.ui.atom_coords_access import set_atom_coords_3d_for
+from chemvas.ui.canvas_history_recording_service import (
     CallbackFreeHistoryBaseline,
     CanvasHistoryRecordingService,
 )
-from ui.canvas_history_service import CanvasHistoryService
-from ui.canvas_history_state import CanvasHistoryState
-from ui.canvas_smiles_input_state import CanvasSmilesInputState
-from ui.history_commands import AddSceneItemsCommand
-from ui.history_push_failure_recovery import (
+from chemvas.ui.canvas_history_service import CanvasHistoryService
+from chemvas.ui.canvas_history_state import CanvasHistoryState
+from chemvas.ui.canvas_smiles_input_state import CanvasSmilesInputState
+from chemvas.ui.history_commands import AddSceneItemsCommand
+from chemvas.ui.history_push_failure_recovery import (
     RecordingHistoryPolicySnapshot,
     _verify_history_and_policy_authority,
 )
-from ui.history_stack_snapshot import HistoryStackSnapshot
 
 
 class _SceneItem:
@@ -390,7 +390,7 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         runtime_capture = mock.Mock()
         with (
             mock.patch(
-                "ui.canvas_history_recording_service.capture_history_transaction_for_history",
+                "chemvas.ui.canvas_history_recording_service.capture_history_transaction_for_history",
                 runtime_capture,
             ),
             self.assertRaisesRegex(
@@ -460,7 +460,7 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "ui.canvas_history_recording_service.capture_history_transaction_for_history",
+                "chemvas.ui.canvas_history_recording_service.capture_history_transaction_for_history",
                 side_effect=lambda *_args, **_kwargs: RuntimeSnapshot(),
             ),
             self.assertRaisesRegex(
@@ -508,7 +508,7 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         )
         with (
             mock.patch(
-                "ui.canvas_history_recording_service.capture_history_transaction_for_history",
+                "chemvas.ui.canvas_history_recording_service.capture_history_transaction_for_history",
                 side_effect=lambda *_args, **_kwargs: RuntimeSnapshot(),
             ),
             self.assertRaisesRegex(RuntimeError, "explicitly disabled policy"),
@@ -573,11 +573,11 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         service = CanvasHistoryRecordingService(canvas, history_service=history)
         with (
             mock.patch(
-                "ui.canvas_history_recording_service.capture_history_transaction_for_history",
+                "chemvas.ui.canvas_history_recording_service.capture_history_transaction_for_history",
                 side_effect=capture_poisoned_runtime,
             ),
             mock.patch(
-                "ui.history_push_failure_recovery.capture_history_transaction_for_history",
+                "chemvas.ui.history_push_failure_recovery.capture_history_transaction_for_history",
                 side_effect=lambda *_args, **_kwargs: RuntimeSnapshot(),
             ),
             self.assertRaisesRegex(RuntimeError, "history stack contents"),
@@ -645,11 +645,11 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         service = CanvasHistoryRecordingService(canvas, history_service=History())
         with (
             mock.patch(
-                "ui.canvas_history_recording_service.capture_history_transaction_for_history",
+                "chemvas.ui.canvas_history_recording_service.capture_history_transaction_for_history",
                 side_effect=lambda *_args, **_kwargs: RuntimeSnapshot(poison=True),
             ),
             mock.patch(
-                "ui.history_push_failure_recovery.capture_history_transaction_for_history",
+                "chemvas.ui.history_push_failure_recovery.capture_history_transaction_for_history",
                 side_effect=lambda *_args, **_kwargs: RuntimeSnapshot(poison=False),
             ),
             self.assertRaisesRegex(RuntimeError, "history stack contents"),
@@ -741,11 +741,11 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
 
                 with (
                     mock.patch(
-                        "ui.canvas_history_recording_service.capture_history_transaction_for_history",
+                        "chemvas.ui.canvas_history_recording_service.capture_history_transaction_for_history",
                         side_effect=lambda *_args, **_kwargs: RuntimeSnapshot(),
                     ),
                     mock.patch(
-                        "ui.history_push_failure_recovery.capture_history_transaction_for_history",
+                        "chemvas.ui.history_push_failure_recovery.capture_history_transaction_for_history",
                         side_effect=lambda *_args, **_kwargs: RuntimeSnapshot(),
                     ),
                     self.assertRaises(
@@ -818,7 +818,7 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "ui.canvas_history_recording_service.capture_history_transaction_for_history",
+                "chemvas.ui.canvas_history_recording_service.capture_history_transaction_for_history",
                 side_effect=lambda *_args, **_kwargs: RuntimeSnapshot(),
             ),
             self.assertRaisesRegex(RuntimeError, "raw history stack contents"),
@@ -960,11 +960,11 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         service = CanvasHistoryRecordingService(canvas, history_service=History())
         with (
             mock.patch(
-                "ui.history_push_failure_recovery.capture_history_transaction_for_history",
+                "chemvas.ui.history_push_failure_recovery.capture_history_transaction_for_history",
                 side_effect=lambda *_args, **_kwargs: RuntimeSnapshot(),
             ),
             mock.patch(
-                "ui.history_push_failure_recovery.restore_history_transaction_for_history",
+                "chemvas.ui.history_push_failure_recovery.restore_history_transaction_for_history",
                 side_effect=restore_runtime,
             ),
             self.assertRaises(KeyboardInterrupt) as caught,
@@ -1062,19 +1062,19 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         service = CanvasHistoryRecordingService(canvas, history_service=History())
         with (
             mock.patch(
-                "ui.canvas_history_recording_service.capture_history_transaction_for_history",
+                "chemvas.ui.canvas_history_recording_service.capture_history_transaction_for_history",
                 side_effect=capture_runtime,
             ),
             mock.patch(
-                "ui.canvas_history_recording_service.release_history_transaction_for_history",
+                "chemvas.ui.canvas_history_recording_service.release_history_transaction_for_history",
                 return_value=None,
             ),
             mock.patch(
-                "ui.history_push_failure_recovery.capture_history_transaction_for_history",
+                "chemvas.ui.history_push_failure_recovery.capture_history_transaction_for_history",
                 side_effect=capture_runtime,
             ),
             mock.patch(
-                "ui.history_push_failure_recovery.restore_history_transaction_for_history",
+                "chemvas.ui.history_push_failure_recovery.restore_history_transaction_for_history",
                 side_effect=restore_runtime,
             ),
             self.assertRaises(KeyboardInterrupt) as caught,
@@ -1166,11 +1166,11 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         service = CanvasHistoryRecordingService(canvas, history_service=History())
         with (
             mock.patch(
-                "ui.history_push_failure_recovery.capture_history_transaction_for_history",
+                "chemvas.ui.history_push_failure_recovery.capture_history_transaction_for_history",
                 side_effect=lambda *_args, **_kwargs: RuntimeSnapshot(),
             ),
             mock.patch(
-                "ui.history_push_failure_recovery.restore_history_transaction_for_history",
+                "chemvas.ui.history_push_failure_recovery.restore_history_transaction_for_history",
                 side_effect=restore_runtime,
             ),
             self.assertRaises(KeyboardInterrupt) as caught,

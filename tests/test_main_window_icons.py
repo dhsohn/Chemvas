@@ -22,14 +22,14 @@ except ModuleNotFoundError:
     QPolygonF = None
 
 if QApplication is not None:
-    from ui.main_window import MainWindow
-    from ui.main_window_icon_factory import MainWindowIconFactory
-    from ui.main_window_icon_geometry import (
+    from chemvas.bootstrap.main_window import build_main_window
+    from chemvas.ui.main_window_icon_factory import MainWindowIconFactory
+    from chemvas.ui.main_window_icon_geometry import (
         benzene_icon_polygon,
         chair_icon_points,
         template_preview_ring_sides,
     )
-    from ui.main_window_ports import active_canvas_for_window
+    from chemvas.ui.main_window_ports import active_canvas_for_window
 
 
 def _opaque_bounds(image) -> tuple[int, int, int, int] | None:
@@ -60,7 +60,9 @@ def _render_chair_bounds(rect) -> tuple[int, int, int, int] | None:
     return _opaque_bounds(pixmap.toImage())
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for main window icon tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for main window icon tests"
+)
 class MainWindowIconGeometryTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -68,7 +70,7 @@ class MainWindowIconGeometryTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def setUp(self) -> None:
-        self.window = MainWindow()
+        self.window = build_main_window()
         self.factory = MainWindowIconFactory(self.window)
 
     def tearDown(self) -> None:
@@ -79,7 +81,9 @@ class MainWindowIconGeometryTest(unittest.TestCase):
         center = QPointF(15.0, 15.0)
         outer = benzene_icon_polygon(center, 10.0)
         base_segments = self.factory.benzene_icon_inner_segments(outer, center)
-        inner_segments = self.factory.benzene_icon_inner_segments(outer, center, spacing_scale=0.92)
+        inner_segments = self.factory.benzene_icon_inner_segments(
+            outer, center, spacing_scale=0.92
+        )
 
         self.assertEqual(len(base_segments), 3)
         self.assertEqual(len(inner_segments), 3)
@@ -93,13 +97,18 @@ class MainWindowIconGeometryTest(unittest.TestCase):
         outer_mid_x = (outer[0].x() + outer[1].x()) / 2.0
         base_inner_mid_x = (base_start.x() + base_end.x()) / 2.0
         inner_mid_x = (start.x() + end.x()) / 2.0
-        icon_bond_length = math.hypot(outer[1].x() - outer[0].x(), outer[1].y() - outer[0].y())
+        icon_bond_length = math.hypot(
+            outer[1].x() - outer[0].x(), outer[1].y() - outer[0].y()
+        )
         expected_base_spacing = icon_bond_length * (
-            active_canvas_for_window(self.window).renderer.style.bond_spacing_px * 1.1
+            active_canvas_for_window(self.window).renderer.style.bond_spacing_px
+            * 1.1
             / active_canvas_for_window(self.window).renderer.style.bond_length_px
         )
 
-        self.assertAlmostEqual(outer_mid_x - base_inner_mid_x, expected_base_spacing, places=2)
+        self.assertAlmostEqual(
+            outer_mid_x - base_inner_mid_x, expected_base_spacing, places=2
+        )
         self.assertGreater(outer_mid_x - inner_mid_x, outer_mid_x - base_inner_mid_x)
         self.assertGreater(inner_mid_x, center.x())
 
@@ -114,9 +123,13 @@ class MainWindowIconGeometryTest(unittest.TestCase):
 
     def test_chair_template_icons_use_larger_geometry(self) -> None:
         old_bounds = _render_chair_bounds(QRectF(4.0, 7.0, 22.0, 16.0))
-        toolbar_bounds = _opaque_bounds(self.factory.icon_templates().pixmap(26, 26).toImage())
+        toolbar_bounds = _opaque_bounds(
+            self.factory.icon_templates().pixmap(26, 26).toImage()
+        )
         preview_bounds = _opaque_bounds(
-            self.factory.icon_template_preview("Cyclohexane (Chair)").pixmap(26, 26).toImage()
+            self.factory.icon_template_preview("Cyclohexane (Chair)")
+            .pixmap(26, 26)
+            .toImage()
         )
 
         self.assertIsNotNone(old_bounds)
@@ -162,7 +175,9 @@ class MainWindowIconGeometryTest(unittest.TestCase):
             def hash_spacing_px(self) -> float:
                 return 4.0
 
-            def ring_double_inner_segment(self, start: QPointF, end: QPointF, center: QPointF):
+            def ring_double_inner_segment(
+                self, start: QPointF, end: QPointF, center: QPointF
+            ):
                 return (start.x() + 1.0, start.y(), end.x() + 1.0, end.y())
 
         factory = MainWindowIconFactory(object(), canvas_style=_FakeStyle())
@@ -179,9 +194,13 @@ class MainWindowIconGeometryTest(unittest.TestCase):
     def test_benzene_inner_segments_handle_short_and_zero_length_polygons(self) -> None:
         center = QPointF(15.0, 15.0)
 
-        self.assertEqual(self.factory.benzene_icon_inner_segments(QPolygonF([center]), center), [])
         self.assertEqual(
-            self.factory.benzene_icon_inner_segments(QPolygonF([center, center]), center),
+            self.factory.benzene_icon_inner_segments(QPolygonF([center]), center), []
+        )
+        self.assertEqual(
+            self.factory.benzene_icon_inner_segments(
+                QPolygonF([center, center]), center
+            ),
             [],
         )
 
@@ -221,8 +240,18 @@ class MainWindowIconGeometryTest(unittest.TestCase):
         self.assertAlmostEqual(active_pen.widthF(), self.factory.STROKE_ACTIVE)
 
     def test_arrow_preview_matrix_renders_special_cases(self) -> None:
-        for kind in ("reaction", "dotted", "curved_single", "curved_double", "equilibrium", "resonance", "inhibit"):
-            bounds = _opaque_bounds(self.factory.icon_arrow_preview(kind).pixmap(30, 30).toImage())
+        for kind in (
+            "reaction",
+            "dotted",
+            "curved_single",
+            "curved_double",
+            "equilibrium",
+            "resonance",
+            "inhibit",
+        ):
+            bounds = _opaque_bounds(
+                self.factory.icon_arrow_preview(kind).pixmap(30, 30).toImage()
+            )
             self.assertIsNotNone(bounds, kind)
         for icon in (
             self.factory.icon_arrow_preset("Default"),
@@ -235,10 +264,14 @@ class MainWindowIconGeometryTest(unittest.TestCase):
 
     def test_orbital_preview_matrix_renders_distinct_families(self) -> None:
         for kind in ("s", "p", "sp", "sp2", "sp3", "d", "dz2"):
-            bounds = _opaque_bounds(self.factory.icon_orbital_preview(kind).pixmap(30, 30).toImage())
+            bounds = _opaque_bounds(
+                self.factory.icon_orbital_preview(kind).pixmap(30, 30).toImage()
+            )
             self.assertIsNotNone(bounds, kind)
 
-    def test_template_preview_matrix_covers_ring_fragment_and_text_variants(self) -> None:
+    def test_template_preview_matrix_covers_ring_fragment_and_text_variants(
+        self,
+    ) -> None:
         labels = (
             "Benzene",
             "Naphthalene",
@@ -252,7 +285,9 @@ class MainWindowIconGeometryTest(unittest.TestCase):
             "Unknown Template",
         )
         for label in labels:
-            bounds = _opaque_bounds(self.factory.icon_template_preview(label).pixmap(30, 30).toImage())
+            bounds = _opaque_bounds(
+                self.factory.icon_template_preview(label).pixmap(30, 30).toImage()
+            )
             self.assertIsNotNone(bounds, label)
 
         self.assertEqual(template_preview_ring_sides("Cycloheptane"), 7)
@@ -261,8 +296,17 @@ class MainWindowIconGeometryTest(unittest.TestCase):
     def test_template_icons_render_independently_of_chair_geometry(self) -> None:
         # The templates button and the chair preview now use static SVG design
         # icons, so a degenerate chair polygon no longer blanks them out.
-        with mock.patch("ui.main_window_template_icon_renderer.chair_icon_points", return_value=QPolygonF()):
-            self.assertIsNotNone(_opaque_bounds(self.factory.icon_templates().pixmap(30, 30).toImage()))
+        with mock.patch(
+            "chemvas.ui.main_window_template_icon_renderer.chair_icon_points",
+            return_value=QPolygonF(),
+        ):
             self.assertIsNotNone(
-                _opaque_bounds(self.factory.icon_template_preview("Cyclohexane (Chair)").pixmap(30, 30).toImage())
+                _opaque_bounds(self.factory.icon_templates().pixmap(30, 30).toImage())
+            )
+            self.assertIsNotNone(
+                _opaque_bounds(
+                    self.factory.icon_template_preview("Cyclohexane (Chair)")
+                    .pixmap(30, 30)
+                    .toImage()
+                )
             )

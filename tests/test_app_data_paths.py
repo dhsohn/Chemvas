@@ -3,10 +3,12 @@ from __future__ import annotations
 import os
 
 import pytest
-from ui import app_data_paths
+from chemvas.ui import app_data_paths
 
 
-def test_falls_back_to_the_next_candidate_when_one_cannot_be_created(tmp_path, monkeypatch):
+def test_falls_back_to_the_next_candidate_when_one_cannot_be_created(
+    tmp_path, monkeypatch
+):
     # A path *under a regular file* cannot be mkdir'd (NotADirectoryError).
     (tmp_path / "blocker").write_text("x")
     unusable = tmp_path / "blocker" / "nope"

@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from ui.history_stack_snapshot import HistoryStackSnapshot
+from chemvas.domain.transactions import HistoryStackSnapshot
 
 
 @pytest.mark.parametrize(

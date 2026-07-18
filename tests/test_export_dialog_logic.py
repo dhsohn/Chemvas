@@ -1,6 +1,6 @@
 import unittest
 
-from ui.export_dialog_logic import (
+from chemvas.features.export import (
     default_export_path,
     file_filter_for_format,
     is_dpi_relevant,
@@ -32,14 +32,18 @@ class ExportDialogLogicTest(unittest.TestCase):
         self.assertEqual(normalize_export_path("/tmp/figure", "pdf"), "/tmp/figure.pdf")
 
     def test_normalize_keeps_explicit_suffix(self):
-        self.assertEqual(normalize_export_path("/tmp/figure.tiff", "png"), "/tmp/figure.tiff")
+        self.assertEqual(
+            normalize_export_path("/tmp/figure.tiff", "png"), "/tmp/figure.tiff"
+        )
 
     def test_normalize_blank_is_none(self):
         self.assertIsNone(normalize_export_path("", "svg"))
         self.assertIsNone(normalize_export_path(None, "svg"))
 
     def test_default_export_path_swaps_suffix(self):
-        self.assertEqual(default_export_path("/work/mol.chemvas", "pdf"), "/work/mol.pdf")
+        self.assertEqual(
+            default_export_path("/work/mol.chemvas", "pdf"), "/work/mol.pdf"
+        )
         self.assertEqual(default_export_path("", "pdf"), "")
 
 

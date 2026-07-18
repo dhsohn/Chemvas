@@ -13,15 +13,20 @@ except ModuleNotFoundError:
     QTest = None
 
 if QApplication is not None:
-    from ui.canvas_bond_graphics_state import bond_items_for_id
-    from ui.canvas_document_metadata_state import document_file_path_for
-    from ui.canvas_window_access import snapshot_canvas_state_for
-    from ui.main_window import MainWindow
-    from ui.main_window_ports import active_canvas_for_window, services_for_window
-    from ui.structure_mutation_access import add_bond_between_points_for
+    from chemvas.bootstrap.main_window import build_main_window
+    from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
+    from chemvas.ui.canvas_document_metadata_state import document_file_path_for
+    from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
+    from chemvas.ui.main_window_ports import (
+        active_canvas_for_window,
+        services_for_window,
+    )
+    from chemvas.ui.structure_mutation_access import add_bond_between_points_for
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas document service tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for canvas document service tests"
+)
 class MainWindowCanvasDocumentServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -29,7 +34,7 @@ class MainWindowCanvasDocumentServiceTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def setUp(self) -> None:
-        self.window = MainWindow()
+        self.window = build_main_window()
         self.window.show()
         self.app.processEvents()
         QTest.qWait(20)
@@ -50,7 +55,9 @@ class MainWindowCanvasDocumentServiceTest(unittest.TestCase):
         self.assertIsNone(document_file_path_for(canvas))
         self.assertFalse(self.service.is_dirty(canvas))
 
-    def test_new_canvas_creates_independent_clean_canvas_with_template_settings(self) -> None:
+    def test_new_canvas_creates_independent_clean_canvas_with_template_settings(
+        self,
+    ) -> None:
         first = active_canvas_for_window(self.window)
         first.renderer.set_bond_length(42.0)
 
@@ -72,11 +79,15 @@ class MainWindowCanvasDocumentServiceTest(unittest.TestCase):
             "/tmp/first.chemvas",
         )
 
-        opened = self.service.open_state(self.window, state=state, file_path="/tmp/opened.chemvas")
+        opened = self.service.open_state(
+            self.window, state=state, file_path="/tmp/opened.chemvas"
+        )
 
         self.assertIsNot(opened, first)
         self.assertEqual(self.window.tab_references.canvas_count(), 2)
-        self.assertEqual(self.window.tab_references.canvas_tabs.tabText(1), "opened.chemvas")
+        self.assertEqual(
+            self.window.tab_references.canvas_tabs.tabText(1), "opened.chemvas"
+        )
         self.assertEqual(document_file_path_for(opened), "/tmp/opened.chemvas")
 
     def test_dirty_state_uses_snapshot_digest(self) -> None:
@@ -89,7 +100,9 @@ class MainWindowCanvasDocumentServiceTest(unittest.TestCase):
         self.service.mark_clean(canvas)
         self.assertFalse(self.service.is_dirty(canvas))
 
-    def test_remove_canvas_clears_selected_graphics_before_deferred_delete(self) -> None:
+    def test_remove_canvas_clears_selected_graphics_before_deferred_delete(
+        self,
+    ) -> None:
         canvas = active_canvas_for_window(self.window)
         add_bond_between_points_for(
             canvas,

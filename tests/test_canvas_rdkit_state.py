@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from core.rdkit_adapter import RDKitAdapter
-from ui.canvas_rdkit_state import rdkit_adapter_for, set_rdkit_adapter_for
+from chemvas.core.rdkit_adapter import RDKitAdapter
+from chemvas.ui.canvas_rdkit_state import rdkit_adapter_for, set_rdkit_adapter_for
 
 
 def test_canvas_rdkit_state_returns_existing_adapter() -> None:

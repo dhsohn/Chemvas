@@ -18,13 +18,17 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.scene_clipboard_selection import select_pasted_content_for_canvas
+    from chemvas.ui.scene_clipboard_selection import select_pasted_content_for_canvas
 
     class _FakeCanvas:
         def __init__(self, atom_item) -> None:
             self._scene = QGraphicsScene()
-            self.selection_controller = SimpleNamespace(update_selection_outline=mock.Mock())
-            self.atom_label_service = SimpleNamespace(atom_item_for_id=mock.Mock(return_value=atom_item))
+            self.selection_controller = SimpleNamespace(
+                update_selection_outline=mock.Mock()
+            )
+            self.atom_label_service = SimpleNamespace(
+                atom_item_for_id=mock.Mock(return_value=atom_item)
+            )
             self.services = SimpleNamespace(
                 atom_label_service=self.atom_label_service,
                 selection_controller=self.selection_controller,
@@ -34,14 +38,18 @@ if QApplication is not None:
             return self._scene
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for scene clipboard selection tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for scene clipboard selection tests"
+)
 class SceneClipboardSelectionTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
 
-    def test_select_pasted_content_selects_atoms_scene_items_notes_and_refreshes_outline(self) -> None:
+    def test_select_pasted_content_selects_atoms_scene_items_notes_and_refreshes_outline(
+        self,
+    ) -> None:
         atom_item = QGraphicsRectItem(QRectF(0.0, 0.0, 4.0, 4.0))
         stale_item = QGraphicsRectItem(QRectF(10.0, 0.0, 4.0, 4.0))
         pasted_item = QGraphicsRectItem(QRectF(20.0, 0.0, 4.0, 4.0))

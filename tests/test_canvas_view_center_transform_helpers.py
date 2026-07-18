@@ -19,21 +19,24 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from core.model import Atom
-    from ui.canvas_atom_graphics_state import set_atom_dots_for, set_atom_items_for
-    from ui.canvas_callback_state import CanvasCallbackState
-    from ui.canvas_insert_state import CanvasInsertState
-    from ui.canvas_tool_mode_controller import CanvasToolModeController
-    from ui.canvas_tool_settings_state import CanvasToolSettingsState
-    from ui.history_canvas_access import set_ring_polygons_for_history
-    from ui.input_view_access import update_view_transform_for
-    from ui.input_view_state import InputViewState
-    from ui.selection_center_logic import (
+    from chemvas.domain.document import Atom
+    from chemvas.features.selection import (
         bounding_box_center_for_atoms,
         center_for_atoms,
     )
-    from ui.selection_geometry_access import bounds_for_atoms_for
-    from ui.structure_geometry_access import (
+    from chemvas.ui.canvas_atom_graphics_state import (
+        set_atom_dots_for,
+        set_atom_items_for,
+    )
+    from chemvas.ui.canvas_callback_state import CanvasCallbackState
+    from chemvas.ui.canvas_insert_state import CanvasInsertState
+    from chemvas.ui.canvas_tool_mode_controller import CanvasToolModeController
+    from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+    from chemvas.ui.history_canvas_access import set_ring_polygons_for_history
+    from chemvas.ui.input_view_access import update_view_transform_for
+    from chemvas.ui.input_view_state import InputViewState
+    from chemvas.ui.selection_geometry_access import bounds_for_atoms_for
+    from chemvas.ui.structure_geometry_access import (
         _compute_bond_template_geometry_for,
         cyclohexane_boat_points_for,
         cyclohexane_chair_points_for,
@@ -47,7 +50,9 @@ if QApplication is not None:
     )
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for canvas view tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for canvas view tests"
+)
 class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -66,16 +71,22 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         )
 
         centroid = center_for_atoms({1, 2, 3, 99}, atoms=view.model.atoms)
-        bbox_center = bounding_box_center_for_atoms({1, 2, 3, 99}, atoms=view.model.atoms)
+        bbox_center = bounding_box_center_for_atoms(
+            {1, 2, 3, 99}, atoms=view.model.atoms
+        )
 
         self.assertEqual(centroid, QPointF(3.0, 17.0 / 3.0))
         self.assertEqual(bbox_center, QPointF(3.0, 6.0))
         self.assertIsNone(center_for_atoms({99}, atoms=view.model.atoms))
         self.assertIsNone(bounding_box_center_for_atoms({99}, atoms=view.model.atoms))
 
-    def test_update_view_transform_applies_shear_and_scale_over_base_transform(self) -> None:
+    def test_update_view_transform_applies_shear_and_scale_over_base_transform(
+        self,
+    ) -> None:
         plain_view = SimpleNamespace(
-            input_view_state=InputViewState(base_transform=QTransform().translate(2.0, 3.0)),
+            input_view_state=InputViewState(
+                base_transform=QTransform().translate(2.0, 3.0)
+            ),
             setTransform=mock.Mock(),
         )
 
@@ -104,7 +115,9 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         self.assertAlmostEqual(skewed_transform.m21(), 0.375)
         self.assertAlmostEqual(skewed_transform.m22(), 1.5)
 
-    def test_bounds_for_atoms_includes_labels_and_dots_or_falls_back_to_model_bounds(self) -> None:
+    def test_bounds_for_atoms_includes_labels_and_dots_or_falls_back_to_model_bounds(
+        self,
+    ) -> None:
         label = QGraphicsTextItem("O")
         label.setPos(6.0, 8.0)
         dot = QGraphicsEllipseItem(-1.0, -1.0, 2.0, 2.0)
@@ -134,10 +147,15 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         self.assertGreater(bounds_with_labels[2], 14.0)
         self.assertGreater(bounds_with_labels[3], 18.0)
 
-        self.assertEqual(bounds_for_atoms_for(view, {99}, include_labels=True), (-5.0, -6.0, 7.0, 8.0))
+        self.assertEqual(
+            bounds_for_atoms_for(view, {99}, include_labels=True),
+            (-5.0, -6.0, 7.0, 8.0),
+        )
         view.model.bounds.assert_called_once_with()
 
-    def test_set_ring_polygons_and_tool_variant_setters_update_canvas_state(self) -> None:
+    def test_set_ring_polygons_and_tool_variant_setters_update_canvas_state(
+        self,
+    ) -> None:
         ring = QGraphicsPolygonItem()
         view = SimpleNamespace(
             insert_state=CanvasInsertState(template_active=True),
@@ -152,7 +170,9 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
             ),
         )
         view.services = SimpleNamespace(
-            selection_controller=SimpleNamespace(update_selection_outline=view.refresh_selection_outline),
+            selection_controller=SimpleNamespace(
+                update_selection_outline=view.refresh_selection_outline
+            ),
             hover_scene_service=SimpleNamespace(clear_hover_highlight=mock.Mock()),
             tools=SimpleNamespace(set_active=mock.Mock()),
         )
@@ -164,7 +184,10 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         )
         polygon = ring.polygon()
         self.assertEqual(polygon.count(), 2)
-        self.assertEqual((polygon[0].x(), polygon[0].y(), polygon[1].x(), polygon[1].y()), (1.0, 2.0, 3.0, 4.0))
+        self.assertEqual(
+            (polygon[0].x(), polygon[0].y(), polygon[1].x(), polygon[1].y()),
+            (1.0, 2.0, 3.0, 4.0),
+        )
 
         tool_mode_controller = CanvasToolModeController(
             view,
@@ -178,7 +201,9 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         tool_mode_controller.set_curved_snap_step(0.01)
 
         settings = view.tool_settings_state
-        self.assertEqual((settings.active_bond_style, settings.active_bond_order), ("double", 2))
+        self.assertEqual(
+            (settings.active_bond_style, settings.active_bond_order), ("double", 2)
+        )
         self.assertEqual(settings.active_arrow_type, "curved")
         self.assertEqual(settings.active_orbital_type, "sp2")
         self.assertTrue(tool_mode_controller.get_curved_snap())
@@ -189,7 +214,9 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         )
         self.assertEqual(view.refresh_selection_outline.call_count, 3)
         self.assertEqual(view.callback_state.tool_change.call_count, 3)
-        self.assertEqual(view.services.hover_scene_service.clear_hover_highlight.call_count, 3)
+        self.assertEqual(
+            view.services.hover_scene_service.clear_hover_highlight.call_count, 3
+        )
 
     def test_point_pair_helpers_cover_add_geometry_paths(self) -> None:
         view = SimpleNamespace(
@@ -197,7 +224,9 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         )
 
         pointfs = qpoints_from_pairs([(1.0, 2.0), (3.5, 4.5)])
-        self.assertEqual([(point.x(), point.y()) for point in pointfs], [(1.0, 2.0), (3.5, 4.5)])
+        self.assertEqual(
+            [(point.x(), point.y()) for point in pointfs], [(1.0, 2.0), (3.5, 4.5)]
+        )
 
         chair_points = cyclohexane_chair_points_for(view, QPointF(0.0, 0.0))
         boat_points = cyclohexane_boat_points_for(view, QPointF(0.0, 0.0))
@@ -211,9 +240,14 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         self.assertTrue(all(isinstance(point, QPointF) for point in chair_points))
         self.assertTrue(all(isinstance(point, QPointF) for point in boat_points))
         self.assertEqual(len(ring_points), 6)
-        self.assertEqual([(point.x(), point.y()) for point in scaled_points], [(-5.0, 0.0), (15.0, 0.0)])
+        self.assertEqual(
+            [(point.x(), point.y()) for point in scaled_points],
+            [(-5.0, 0.0), (15.0, 0.0)],
+        )
 
-    def test_template_geometry_helpers_cover_none_result_and_pair_conversions(self) -> None:
+    def test_template_geometry_helpers_cover_none_result_and_pair_conversions(
+        self,
+    ) -> None:
         view = SimpleNamespace(
             model=SimpleNamespace(
                 atoms={
@@ -225,7 +259,10 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=14.0)),
         )
 
-        self.assertEqual(point_pairs([QPointF(1.0, 2.0), QPointF(3.0, 4.0)]), [(1.0, 2.0), (3.0, 4.0)])
+        self.assertEqual(
+            point_pairs([QPointF(1.0, 2.0), QPointF(3.0, 4.0)]),
+            [(1.0, 2.0), (3.0, 4.0)],
+        )
         self.assertEqual(point_pair(QPointF(5.0, 6.0)), (5.0, 6.0))
         self.assertIsNone(point_pair(None))
         self.assertEqual(
@@ -243,7 +280,7 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         geometry_fn = mock.Mock(side_effect=[None, ([(11.0, 12.0)], [(2, 3.0, 4.0)])])
 
         with mock.patch(
-            "ui.structure_geometry_access.ring_polygon_points_for_bond",
+            "chemvas.ui.structure_geometry_access.ring_polygon_points_for_bond",
             return_value=[(1.0, 1.0)],
         ):
             self.assertIsNone(
@@ -263,7 +300,9 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
                 center_hint=None,
             )
 
-        self.assertEqual([(point.x(), point.y()) for point in result[0]], [(11.0, 12.0)])
+        self.assertEqual(
+            [(point.x(), point.y()) for point in result[0]], [(11.0, 12.0)]
+        )
         self.assertEqual(result[1], [(2, 3.0, 4.0)])
         self.assertEqual(
             geometry_fn.call_args_list,

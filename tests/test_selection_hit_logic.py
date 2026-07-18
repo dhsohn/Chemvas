@@ -1,6 +1,6 @@
 import unittest
 
-from ui.selection_hit_logic import (
+from chemvas.features.selection import (
     AtomHitCandidate,
     BondHitCandidate,
     SelectionHitRequest,
@@ -123,7 +123,9 @@ class SelectionHitLogicTest(unittest.TestCase):
             nearest_ring_atom_id([(10, 8.0), (11, 2.5), (12, 4.0)], max_distance=5.0),
             11,
         )
-        self.assertIsNone(nearest_ring_atom_id([(10, 8.0), (11, 6.0)], max_distance=5.0))
+        self.assertIsNone(
+            nearest_ring_atom_id([(10, 8.0), (11, 6.0)], max_distance=5.0)
+        )
 
     def test_structure_hit_is_selected_for_atom_bond_ring_and_other(self) -> None:
         selected_atom_ids = {1, 2}
@@ -169,7 +171,9 @@ class SelectionHitLogicTest(unittest.TestCase):
             )
         )
 
-    def test_structure_hit_is_selected_handles_none_and_direct_selected_bond(self) -> None:
+    def test_structure_hit_is_selected_handles_none_and_direct_selected_bond(
+        self,
+    ) -> None:
         self.assertFalse(
             structure_hit_is_selected(
                 None,

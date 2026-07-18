@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from ui.canvas_format_access import (
+from chemvas.ui.canvas_format_access import (
     clipboard_selection_mime_for,
     clipboard_selection_version_for,
     file_format_version_for,

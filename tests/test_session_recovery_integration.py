@@ -12,20 +12,25 @@ except ModuleNotFoundError:
     QPointF = None
 
 if QApplication is not None:
-    from ui import session_snapshot_store as session_store_module
-    from ui.app_data_paths import sessions_dir
-    from ui.canvas_window_access import snapshot_canvas_state_for
-    from ui.main_window_app import forget_window, open_new_window
-    from ui.main_window_ports import active_canvas_for_window, services_for_window
-    from ui.session_recovery_service import (
+    from chemvas.bootstrap.window_registry import forget_window, open_new_window
+    from chemvas.ui import session_snapshot_store as session_store_module
+    from chemvas.ui.app_data_paths import sessions_dir
+    from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
+    from chemvas.ui.main_window_ports import (
+        active_canvas_for_window,
+        services_for_window,
+    )
+    from chemvas.ui.session_recovery_service import (
         SessionRecoveryService,
         collect_open_documents,
     )
-    from ui.session_snapshot_store import SessionSnapshotStore
-    from ui.structure_mutation_access import add_bond_between_points_for
+    from chemvas.ui.session_snapshot_store import SessionSnapshotStore
+    from chemvas.ui.structure_mutation_access import add_bond_between_points_for
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for session recovery integration tests")
+@unittest.skipUnless(
+    QApplication is not None, "PyQt6 is required for session recovery integration tests"
+)
 class SessionRecoveryIntegrationTest(unittest.TestCase):
     """End-to-end: a real window is drawn on, autosaved, 'crashes', and its
     unsaved drawing is rebuilt into a fresh window on the next launch.
@@ -50,7 +55,9 @@ class SessionRecoveryIntegrationTest(unittest.TestCase):
         add_bond_between_points_for(canvas, QPointF(-20.0, 0.0), QPointF(20.0, 0.0))
         self.assertTrue(self._document_service(prev_window).is_dirty(canvas))
 
-        prev_store = SessionSnapshotStore(sessions_dir(), session_id="prev-session", pid=os.getpid())
+        prev_store = SessionSnapshotStore(
+            sessions_dir(), session_id="prev-session", pid=os.getpid()
+        )
         prev_store.begin()
         prev_store.save_documents(collect_open_documents())
         # No mark_clean_exit() → the manifest stays "unclean", i.e. a crash.
@@ -69,9 +76,13 @@ class SessionRecoveryIntegrationTest(unittest.TestCase):
         self.app.processEvents()
         restored_canvas = None
         try:
-            with mock.patch.object(session_store_module, "_pid_alive", return_value=False):
+            with mock.patch.object(
+                session_store_module, "_pid_alive", return_value=False
+            ):
                 recovery = SessionRecoveryService(
-                    SessionSnapshotStore(sessions_dir(), session_id="cur-session", pid=os.getpid())
+                    SessionSnapshotStore(
+                        sessions_dir(), session_id="cur-session", pid=os.getpid()
+                    )
                 )
                 recovered = recovery.restore_previous(new_window)
 
@@ -81,7 +92,9 @@ class SessionRecoveryIntegrationTest(unittest.TestCase):
             # The drawn bond (and its two atoms) survived the crash round-trip...
             self.assertTrue(restored_state["model"]["atoms"])
             # ...and the restored document is flagged unsaved for the user.
-            self.assertTrue(self._document_service(new_window).is_dirty(restored_canvas))
+            self.assertTrue(
+                self._document_service(new_window).is_dirty(restored_canvas)
+            )
             # Deferred prune: the source dir survives restore_previous and is only
             # deleted by start() after the recovered work is re-snapshotted.
             self.assertTrue((sessions_dir() / "prev-session").exists())

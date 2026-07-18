@@ -14,12 +14,12 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     try:
-        from ui.canvas_callback_state import callback_state_for
-        from ui.canvas_view import CanvasView
-        from ui.main_window_active_canvas_ui_service import (
+        from chemvas.ui.canvas_callback_state import callback_state_for
+        from chemvas.ui.canvas_view import CanvasView
+        from chemvas.ui.main_window_active_canvas_ui_service import (
             MainWindowActiveCanvasUIService,
         )
-        from ui.selection_info_state import selection_info_state_for
+        from chemvas.ui.selection_info_state import selection_info_state_for
     except (ModuleNotFoundError, SyntaxError):
         CanvasView = None
         MainWindowActiveCanvasUIService = None
@@ -88,7 +88,9 @@ class _FakePreview3D:
 
 
 @unittest.skipUnless(
-    QApplication is not None and CanvasView is not None and MainWindowActiveCanvasUIService is not None,
+    QApplication is not None
+    and CanvasView is not None
+    and MainWindowActiveCanvasUIService is not None,
     "PyQt6 and an importable active canvas UI service are required for tests",
 )
 class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
@@ -102,8 +104,12 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.tool_mode_controller_for_window = mock.Mock(
             side_effect=lambda window: window.canvas.services.tool_mode_controller,
         )
-        self.active_canvas_for_window = mock.Mock(side_effect=lambda window: window.canvas)
-        self.all_canvases_for_window = mock.Mock(return_value=[self.window.canvas_a, self.window.canvas_b])
+        self.active_canvas_for_window = mock.Mock(
+            side_effect=lambda window: window.canvas
+        )
+        self.all_canvases_for_window = mock.Mock(
+            return_value=[self.window.canvas_a, self.window.canvas_b]
+        )
         self.current_zoom_percent_for_window = mock.Mock(return_value=100)
         self.status_service = mock.Mock()
         self.status_service.has_zoom_label.return_value = True
@@ -113,11 +119,19 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.tab_refs_for_window = mock.Mock(
             side_effect=lambda window: SimpleNamespace(canvas_tabs=window.canvas_tabs)
         )
-        self.preview_for_window = mock.Mock(side_effect=lambda window: window.preview_3d)
-        self.atom_input_for_window = mock.Mock(side_effect=lambda window: window.atom_input)
-        self.tab_reactions_suspended_for_window = mock.Mock(side_effect=lambda window: window.tab_reactions_suspended)
+        self.preview_for_window = mock.Mock(
+            side_effect=lambda window: window.preview_3d
+        )
+        self.atom_input_for_window = mock.Mock(
+            side_effect=lambda window: window.atom_input
+        )
+        self.tab_reactions_suspended_for_window = mock.Mock(
+            side_effect=lambda window: window.tab_reactions_suspended
+        )
         self.set_last_canvas_tab_index_for_window = mock.Mock(
-            side_effect=lambda window, index: setattr(window, "last_canvas_tab_index", index)
+            side_effect=lambda window, index: setattr(
+                window, "last_canvas_tab_index", index
+            )
         )
         self.refresh_document_chrome_for_window = mock.Mock()
         self.service = MainWindowActiveCanvasUIService(
@@ -143,10 +157,20 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
 
     def _assert_canvas_callbacks(self, canvas, *, active: bool) -> None:
         if active:
-            self.assertIsNot(selection_info_state_for(canvas).callback, self.window.handle_selection_info)
-            self.assertIsNot(callback_state_for(canvas).tool_change, self.window.sync_tool_actions_from_canvas)
-            self.assertIs(callback_state_for(canvas).zoom, self.status_service.update_zoom_label)
-            self.assertIsNot(callback_state_for(canvas).error, self.window.show_error_message)
+            self.assertIsNot(
+                selection_info_state_for(canvas).callback,
+                self.window.handle_selection_info,
+            )
+            self.assertIsNot(
+                callback_state_for(canvas).tool_change,
+                self.window.sync_tool_actions_from_canvas,
+            )
+            self.assertIs(
+                callback_state_for(canvas).zoom, self.status_service.update_zoom_label
+            )
+            self.assertIsNot(
+                callback_state_for(canvas).error, self.window.show_error_message
+            )
             self.assertIsNot(
                 canvas.runtime_state.history_service.state.change_callback,
                 self.window.update_action_availability,
@@ -169,7 +193,9 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self._assert_canvas_callbacks(self.window.canvas_a, active=False)
         self._assert_canvas_callbacks(self.window.canvas_b, active=True)
 
-    def test_bound_active_canvas_callbacks_route_through_injected_services(self) -> None:
+    def test_bound_active_canvas_callbacks_route_through_injected_services(
+        self,
+    ) -> None:
         self.window.canvas_tabs.setCurrentWidget(self.window.canvas_b)
         self.service.bind_active_canvas(self.window)
         self.status_service.reset_mock()
@@ -183,9 +209,15 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.window.canvas_b.runtime_state.history_service.state.change_callback()
         callback_state_for(self.window.canvas_b).error("Invalid molecule")
 
-        self.window.preview_3d.refresh_selected_from_canvas.assert_called_once_with(self.window.canvas_b)
-        self.status_service.update_selection_status_label.assert_called_once_with(self.window)
-        self.context_page_state_service.sync_tool_actions_from_canvas.assert_called_once_with(self.window)
+        self.window.preview_3d.refresh_selected_from_canvas.assert_called_once_with(
+            self.window.canvas_b
+        )
+        self.status_service.update_selection_status_label.assert_called_once_with(
+            self.window
+        )
+        self.context_page_state_service.sync_tool_actions_from_canvas.assert_called_once_with(
+            self.window
+        )
         self.status_service.update_zoom_label.assert_called_once_with(175)
         self.action_availability_service.update_action_availability.assert_has_calls(
             [mock.call(self.window), mock.call(self.window)],
@@ -208,14 +240,22 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
 
         self.service.handle_selection_info(self.window)
 
-        self.window.preview_3d.refresh_selected_from_canvas.assert_called_once_with(self.window.canvas_b)
-        self.status_service.update_selection_status_label.assert_called_once_with(self.window)
-        self.action_availability_service.update_action_availability.assert_called_once_with(self.window)
+        self.window.preview_3d.refresh_selected_from_canvas.assert_called_once_with(
+            self.window.canvas_b
+        )
+        self.status_service.update_selection_status_label.assert_called_once_with(
+            self.window
+        )
+        self.action_availability_service.update_action_availability.assert_called_once_with(
+            self.window
+        )
 
     def test_handle_selection_info_ignores_deleted_window_canvas(self) -> None:
         class _DeletedWindow:
             def __init__(self) -> None:
-                self.preview_3d = SimpleNamespace(refresh_selected_from_canvas=mock.Mock())
+                self.preview_3d = SimpleNamespace(
+                    refresh_selected_from_canvas=mock.Mock()
+                )
 
             @property
             def canvas(self):
@@ -230,12 +270,18 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.action_availability_service.update_action_availability.assert_not_called()
 
     def test_handle_selection_info_ignores_deleted_qt_callback_state(self) -> None:
-        self.status_service.update_selection_status_label.side_effect = RuntimeError("deleted")
+        self.status_service.update_selection_status_label.side_effect = RuntimeError(
+            "deleted"
+        )
 
         self.service.handle_selection_info(self.window)
 
-        self.window.preview_3d.refresh_selected_from_canvas.assert_called_once_with(self.window.canvas_a)
-        self.status_service.update_selection_status_label.assert_called_once_with(self.window)
+        self.window.preview_3d.refresh_selected_from_canvas.assert_called_once_with(
+            self.window.canvas_a
+        )
+        self.status_service.update_selection_status_label.assert_called_once_with(
+            self.window
+        )
         self.action_availability_service.update_action_availability.assert_not_called()
 
     def test_current_zoom_percent_rounds_scale_and_clamps_minimum(self) -> None:
@@ -246,14 +292,25 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         for _scale, expected in cases:
             with self.subTest(expected=expected):
                 self.current_zoom_percent_for_window.return_value = expected
-                self.assertEqual(self.service.current_zoom_percent(self.window), expected)
-        self.assertEqual(self.current_zoom_percent_for_window.call_args_list, [mock.call(self.window), mock.call(self.window)])
+                self.assertEqual(
+                    self.service.current_zoom_percent(self.window), expected
+                )
+        self.assertEqual(
+            self.current_zoom_percent_for_window.call_args_list,
+            [mock.call(self.window), mock.call(self.window)],
+        )
 
-    def test_refresh_active_canvas_ui_rebinds_updates_inputs_and_refreshes_preview(self) -> None:
+    def test_refresh_active_canvas_ui_rebinds_updates_inputs_and_refreshes_preview(
+        self,
+    ) -> None:
         self.window.canvas_tabs.setCurrentWidget(self.window.canvas_b)
         self.current_zoom_percent_for_window.return_value = 275
 
-        with mock.patch.object(self.window.canvas_b.services.tool_mode_controller, "get_atom_symbol", return_value="N"):
+        with mock.patch.object(
+            self.window.canvas_b.services.tool_mode_controller,
+            "get_atom_symbol",
+            return_value="N",
+        ):
             self.service.refresh_active_canvas_ui(self.window)
 
         # selection-derived UI (preview / selection status / action availability)
@@ -262,21 +319,33 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
 
         self.assertEqual(
             self.window._atom_input.method_calls,
-            [mock.call.blockSignals(True), mock.call.setText("N"), mock.call.blockSignals(False)],
+            [
+                mock.call.blockSignals(True),
+                mock.call.setText("N"),
+                mock.call.blockSignals(False),
+            ],
         )
         self.status_service.update_zoom_label.assert_called_once_with(275)
         self.window.update_zoom_label.assert_not_called()
-        self.context_page_state_service.sync_tool_actions_from_canvas.assert_called_once_with(self.window)
+        self.context_page_state_service.sync_tool_actions_from_canvas.assert_called_once_with(
+            self.window
+        )
         self.window.sync_tool_actions_from_canvas.assert_not_called()
-        self.action_availability_service.update_action_availability.assert_called_once_with(self.window)
+        self.action_availability_service.update_action_availability.assert_called_once_with(
+            self.window
+        )
         self.window.update_action_availability.assert_not_called()
-        self.window.preview_3d.refresh_selected_from_canvas.assert_called_once_with(self.window.canvas_b)
+        self.window.preview_3d.refresh_selected_from_canvas.assert_called_once_with(
+            self.window.canvas_b
+        )
         self.assertIs(self.window.preview_3d.rdkit_adapter, self.window.canvas_b.rdkit)
         self.tool_mode_controller_for_window.assert_called_once_with(self.window)
         self._assert_canvas_callbacks(self.window.canvas_a, active=False)
         self._assert_canvas_callbacks(self.window.canvas_b, active=True)
 
-    def test_on_canvas_tab_changed_ignores_suspended_invalid_and_non_canvas_targets(self) -> None:
+    def test_on_canvas_tab_changed_ignores_suspended_invalid_and_non_canvas_targets(
+        self,
+    ) -> None:
         other_widget = QWidget()
         other_index = self.window.canvas_tabs.insertTab(2, other_widget, "Other")
 
@@ -291,13 +360,19 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.assertEqual(self.status_service.refresh_status_context.call_count, 3)
         self.assertEqual(self.context_bar_service.refresh_window.call_count, 3)
 
-    def test_on_canvas_tab_changed_tracks_last_canvas_tab_index_and_refreshes_ui(self) -> None:
-        with mock.patch.object(self.service, "refresh_active_canvas_ui") as refresh_active_canvas_ui:
+    def test_on_canvas_tab_changed_tracks_last_canvas_tab_index_and_refreshes_ui(
+        self,
+    ) -> None:
+        with mock.patch.object(
+            self.service, "refresh_active_canvas_ui"
+        ) as refresh_active_canvas_ui:
             self.service.on_canvas_tab_changed(self.window, 1)
 
         self.assertEqual(self.window.last_canvas_tab_index, 1)
         refresh_active_canvas_ui.assert_called_once_with(self.window)
-        self.status_service.refresh_status_context.assert_called_once_with(self.window, update_zoom=False)
+        self.status_service.refresh_status_context.assert_called_once_with(
+            self.window, update_zoom=False
+        )
         self.context_bar_service.refresh_window.assert_called_once_with(self.window)
 
 

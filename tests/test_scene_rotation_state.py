@@ -10,9 +10,9 @@ except ModuleNotFoundError:
     QPointF = None
 
 if QPointF is not None:
-    from core.model import Atom
-    from ui.scene_item_state import ts_bracket_rect_from_state
-    from ui.scene_rotation_state import rotate_scene_item_state, rotated_point
+    from chemvas.domain.document import Atom
+    from chemvas.ui.scene_item_state import ts_bracket_rect_from_state
+    from chemvas.ui.scene_rotation_state import rotate_scene_item_state, rotated_point
 
 
 def _rotate_state(item, before_state, *, transformed=None, atoms=None):
@@ -32,15 +32,21 @@ def _item(kind: str, *, bounding_rect: QRectF | None = None):
     return SimpleNamespace(data=lambda _key: kind, sceneBoundingRect=lambda: rect)
 
 
-@unittest.skipUnless(QPointF is not None, "PyQt6 is required for scene rotation state tests")
+@unittest.skipUnless(
+    QPointF is not None, "PyQt6 is required for scene rotation state tests"
+)
 class SceneRotationStateTest(unittest.TestCase):
     def test_rotated_point_rotates_clockwise_in_scene_coordinates(self) -> None:
-        rotated = rotated_point(QPointF(10.0, 0.0), QPointF(0.0, 0.0), 3.141592653589793 / 2.0)
+        rotated = rotated_point(
+            QPointF(10.0, 0.0), QPointF(0.0, 0.0), 3.141592653589793 / 2.0
+        )
         self.assertAlmostEqual(rotated.x(), 0.0)
         self.assertAlmostEqual(rotated.y(), 10.0)
 
     def test_rotate_state_handles_ring_points_and_arrow_endpoints(self) -> None:
-        ring_state = _rotate_state(_item("ring"), {"kind": "ring", "points": [(10.0, 0.0), (0.0, 10.0)]})
+        ring_state = _rotate_state(
+            _item("ring"), {"kind": "ring", "points": [(10.0, 0.0), (0.0, 10.0)]}
+        )
         self.assertAlmostEqual(ring_state["points"][0][0], 0.0)
         self.assertAlmostEqual(ring_state["points"][0][1], 10.0)
         self.assertAlmostEqual(ring_state["points"][1][0], -10.0)
@@ -101,7 +107,13 @@ class SceneRotationStateTest(unittest.TestCase):
 
         bracket_state = _rotate_state(
             _item("ts_bracket"),
-            {"kind": "ts_bracket", "left": 10.0, "top": 10.0, "right": 20.0, "bottom": 20.0},
+            {
+                "kind": "ts_bracket",
+                "left": 10.0,
+                "top": 10.0,
+                "right": 20.0,
+                "bottom": 20.0,
+            },
         )
         self.assertAlmostEqual(bracket_state["left"], -20.0)
         self.assertAlmostEqual(bracket_state["top"], 10.0)

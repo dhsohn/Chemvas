@@ -13,7 +13,9 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from ui.main_window_utility_icon_renderer import MainWindowUtilityIconRenderer
+    from chemvas.ui.main_window_utility_icon_renderer import (
+        MainWindowUtilityIconRenderer,
+    )
 
 
 def _opaque_bounds(image) -> tuple[int, int, int, int] | None:
@@ -43,7 +45,10 @@ def _icon_brush(color=None) -> QBrush:
     return QBrush(QColor("#2f2f2c" if color is None else color))
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for main window utility icon renderer tests")
+@unittest.skipUnless(
+    QApplication is not None,
+    "PyQt6 is required for main window utility icon renderer tests",
+)
 class MainWindowUtilityIconRendererTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

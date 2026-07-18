@@ -3,14 +3,16 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import mock
 
-import ui.canvas_view_event_router as router
+import chemvas.ui.canvas_view_event_router as router
 
 
 def test_route_key_press_event_uses_input_controller_or_base(monkeypatch) -> None:
     event = object()
     input_controller = SimpleNamespace(key_press_event=mock.Mock())
     base = mock.Mock()
-    monkeypatch.setattr(router, "input_controller_for_view", mock.Mock(return_value=input_controller))
+    monkeypatch.setattr(
+        router, "input_controller_for_view", mock.Mock(return_value=input_controller)
+    )
 
     router.route_key_press_event("view", event, base_key_press_event=base)
 
@@ -32,17 +34,31 @@ def test_route_pointer_mouse_events_use_pointer_controller_or_base(monkeypatch) 
         mouse_release_event=mock.Mock(),
     )
     base = mock.Mock()
-    monkeypatch.setattr(router, "pointer_controller_for_view", mock.Mock(return_value=pointer_controller))
+    monkeypatch.setattr(
+        router,
+        "pointer_controller_for_view",
+        mock.Mock(return_value=pointer_controller),
+    )
 
     router.route_mouse_press_event("view", event, base_mouse_press_event=base)
-    router.route_mouse_double_click_event("view", event, base_mouse_double_click_event=base)
+    router.route_mouse_double_click_event(
+        "view", event, base_mouse_double_click_event=base
+    )
     router.route_mouse_move_event("view", event, base_mouse_move_event=base)
     router.route_mouse_release_event("view", event, base_mouse_release_event=base)
 
-    pointer_controller.mouse_press_event.assert_called_once_with(event, base_mouse_press_event=base)
-    pointer_controller.mouse_double_click_event.assert_called_once_with(event, base_mouse_double_click_event=base)
-    pointer_controller.mouse_move_event.assert_called_once_with(event, base_mouse_move_event=base)
-    pointer_controller.mouse_release_event.assert_called_once_with(event, base_mouse_release_event=base)
+    pointer_controller.mouse_press_event.assert_called_once_with(
+        event, base_mouse_press_event=base
+    )
+    pointer_controller.mouse_double_click_event.assert_called_once_with(
+        event, base_mouse_double_click_event=base
+    )
+    pointer_controller.mouse_move_event.assert_called_once_with(
+        event, base_mouse_move_event=base
+    )
+    pointer_controller.mouse_release_event.assert_called_once_with(
+        event, base_mouse_release_event=base
+    )
     base.assert_not_called()
 
     router.pointer_controller_for_view.return_value = None
@@ -51,7 +67,9 @@ def test_route_pointer_mouse_events_use_pointer_controller_or_base(monkeypatch) 
     base.assert_called_once_with(event)
 
 
-def test_route_viewport_wheel_event_and_scroll_use_pointer_controller_or_base(monkeypatch) -> None:
+def test_route_viewport_wheel_event_and_scroll_use_pointer_controller_or_base(
+    monkeypatch,
+) -> None:
     event = object()
     pointer_controller = SimpleNamespace(
         viewport_event=mock.Mock(return_value=True),
@@ -61,9 +79,16 @@ def test_route_viewport_wheel_event_and_scroll_use_pointer_controller_or_base(mo
     base_viewport = mock.Mock(return_value=False)
     base_wheel = mock.Mock()
     base_scroll = mock.Mock()
-    monkeypatch.setattr(router, "pointer_controller_for_view", mock.Mock(return_value=pointer_controller))
+    monkeypatch.setattr(
+        router,
+        "pointer_controller_for_view",
+        mock.Mock(return_value=pointer_controller),
+    )
 
-    assert router.route_viewport_event("view", event, base_viewport_event=base_viewport) is True
+    assert (
+        router.route_viewport_event("view", event, base_viewport_event=base_viewport)
+        is True
+    )
     router.route_wheel_event("view", event, base_wheel_event=base_wheel)
     router.route_scroll_contents_by("view", 3, -2, base_scroll_contents_by=base_scroll)
 
@@ -72,14 +97,21 @@ def test_route_viewport_wheel_event_and_scroll_use_pointer_controller_or_base(mo
         single_shot=router.QTimer.singleShot,
         base_viewport_event=base_viewport,
     )
-    pointer_controller.wheel_event.assert_called_once_with(event, base_wheel_event=base_wheel)
-    pointer_controller.scroll_contents_by.assert_called_once_with(3, -2, base_scroll_contents_by=base_scroll)
+    pointer_controller.wheel_event.assert_called_once_with(
+        event, base_wheel_event=base_wheel
+    )
+    pointer_controller.scroll_contents_by.assert_called_once_with(
+        3, -2, base_scroll_contents_by=base_scroll
+    )
     base_viewport.assert_not_called()
     base_wheel.assert_not_called()
     base_scroll.assert_not_called()
 
     router.pointer_controller_for_view.return_value = None
-    assert router.route_viewport_event("view", event, base_viewport_event=base_viewport) is False
+    assert (
+        router.route_viewport_event("view", event, base_viewport_event=base_viewport)
+        is False
+    )
     router.route_wheel_event("view", event, base_wheel_event=base_wheel)
     router.route_scroll_contents_by("view", 3, -2, base_scroll_contents_by=base_scroll)
 
@@ -92,7 +124,9 @@ def test_route_event_uses_input_controller_or_base(monkeypatch) -> None:
     event = object()
     input_controller = SimpleNamespace(event=mock.Mock(return_value=True))
     base = mock.Mock(return_value=False)
-    monkeypatch.setattr(router, "input_controller_for_view", mock.Mock(return_value=input_controller))
+    monkeypatch.setattr(
+        router, "input_controller_for_view", mock.Mock(return_value=input_controller)
+    )
 
     assert router.route_event("view", event, base_event=base) is True
 
@@ -125,4 +159,7 @@ def test_route_scene_selection_callbacks_use_stable_callback_state(monkeypatch) 
     router.route_scene_selection_outline_changed(view)
 
     assert calls == ["expand", "outline"]
-    assert router.callback_state_for.call_args_list == [mock.call(view), mock.call(view)]
+    assert router.callback_state_for.call_args_list == [
+        mock.call(view),
+        mock.call(view),
+    ]

@@ -3,7 +3,9 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from core.perspective_drag_logic import resolve_perspective_drag_update  # noqa: E402
+from chemvas.core.perspective_drag_logic import (
+    resolve_perspective_drag_update,  # noqa: E402
+)
 
 
 class PerspectiveDragLogicTest(unittest.TestCase):
@@ -21,7 +23,9 @@ class PerspectiveDragLogicTest(unittest.TestCase):
         self.assertEqual(update.axis_lock, "x")
         self.assertTrue(update.should_update)
 
-    def test_resolve_perspective_drag_update_locks_y_axis_for_taller_delta(self) -> None:
+    def test_resolve_perspective_drag_update_locks_y_axis_for_taller_delta(
+        self,
+    ) -> None:
         update = resolve_perspective_drag_update(
             delta_x=2.0,
             delta_y=6.0,
@@ -35,7 +39,9 @@ class PerspectiveDragLogicTest(unittest.TestCase):
         self.assertEqual(update.axis_lock, "y")
         self.assertTrue(update.should_update)
 
-    def test_resolve_perspective_drag_update_skips_zero_delta_when_lock_is_unset(self) -> None:
+    def test_resolve_perspective_drag_update_skips_zero_delta_when_lock_is_unset(
+        self,
+    ) -> None:
         update = resolve_perspective_drag_update(
             delta_x=0.0,
             delta_y=0.0,

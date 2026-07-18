@@ -9,17 +9,21 @@ except ModuleNotFoundError:
     QPointF = None
 
 if QPointF is not None:
-    from ui.main_window_icon_canvas_style import MainWindowIconCanvasStyle
+    from chemvas.ui.main_window_icon_canvas_style import MainWindowIconCanvasStyle
 
 
 def _window_for_canvas(canvas):
     return SimpleNamespace(
         runtime_state=SimpleNamespace(last_canvas_tab_index=0),
-        tab_references=SimpleNamespace(active_canvas_or_none=mock.Mock(return_value=canvas)),
+        tab_references=SimpleNamespace(
+            active_canvas_or_none=mock.Mock(return_value=canvas)
+        ),
     )
 
 
-@unittest.skipUnless(QPointF is not None, "PyQt6 is required for main window icon canvas style tests")
+@unittest.skipUnless(
+    QPointF is not None, "PyQt6 is required for main window icon canvas style tests"
+)
 class MainWindowIconCanvasStyleTest(unittest.TestCase):
     def test_delegates_renderer_style_and_bond_renderer_access(self) -> None:
         bond_pen = QPen()
@@ -80,11 +84,17 @@ class MainWindowIconCanvasStyleTest(unittest.TestCase):
         )
         canvas = SimpleNamespace(
             renderer=renderer,
-            bond_renderer=SimpleNamespace(ring_double_segments=mock.Mock(return_value=None)),
+            bond_renderer=SimpleNamespace(
+                ring_double_segments=mock.Mock(return_value=None)
+            ),
         )
         style = MainWindowIconCanvasStyle(_window_for_canvas(canvas))
 
-        self.assertIsNone(style.ring_double_inner_segment(QPointF(0.0, 0.0), QPointF(1.0, 1.0), QPointF(0.5, 0.5)))
+        self.assertIsNone(
+            style.ring_double_inner_segment(
+                QPointF(0.0, 0.0), QPointF(1.0, 1.0), QPointF(0.5, 0.5)
+            )
+        )
 
 
 if __name__ == "__main__":

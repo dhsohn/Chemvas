@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from ui.canvas_bond_graphics_state import (
+from chemvas.ui.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
     bond_graphics_state_for,
     bond_items_for,
@@ -13,7 +13,9 @@ from ui.canvas_bond_graphics_state import (
 
 
 def test_bond_graphics_state_for_uses_runtime_state() -> None:
-    runtime_state = SimpleNamespace(bond_graphics_state=CanvasBondGraphicsState(bond_items={1: ["bond"]}))
+    runtime_state = SimpleNamespace(
+        bond_graphics_state=CanvasBondGraphicsState(bond_items={1: ["bond"]})
+    )
     canvas = SimpleNamespace(runtime_state=runtime_state)
 
     assert bond_graphics_state_for(canvas) is runtime_state.bond_graphics_state

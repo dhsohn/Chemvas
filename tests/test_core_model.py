@@ -1,6 +1,6 @@
 import unittest
 
-from core.model import Atom, MoleculeModel
+from chemvas.domain.document import Atom, MoleculeModel
 
 
 class MoleculeModelTest(unittest.TestCase):

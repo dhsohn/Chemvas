@@ -3,8 +3,8 @@ from copy import deepcopy
 from types import SimpleNamespace
 from unittest import mock
 
-import core.history as history_core
-from core.history import (
+import chemvas.core.history as history_core
+from chemvas.core.history import (
     AddAtomsCommand,
     AddBondCommand,
     CompositeCommand,
@@ -22,16 +22,16 @@ from core.history import (
     consume_authoritative_history_failure_restore,
     restore_history_transaction_for_command,
 )
-from core.model import Atom
-from ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
-from ui.canvas_history_service import CanvasHistoryService
-from ui.canvas_history_state import CanvasHistoryState
-from ui.canvas_rotation_state import CanvasRotationState
-from ui.canvas_smiles_input_state import (
+from chemvas.domain.document import Atom
+from chemvas.ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
+from chemvas.ui.canvas_history_service import CanvasHistoryService
+from chemvas.ui.canvas_history_state import CanvasHistoryState
+from chemvas.ui.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.canvas_smiles_input_state import (
     last_smiles_input_for,
     set_last_smiles_input_for,
 )
-from ui.history_commands import (
+from chemvas.ui.history_commands import (
     AddSceneItemsCommand,
     ChangeAtomLabelCommand,
     DeleteSceneItemsCommand,
@@ -481,7 +481,7 @@ class HistoryCommandTest(unittest.TestCase):
             with self.subTest(result=type(malformed).__name__):
                 primary = ValueError("original command failure")
                 with mock.patch(
-                    "core.history._history_canvas_port",
+                    "chemvas.core.history._history_canvas_port",
                     return_value=Port(malformed),
                 ):
                     result = restore_history_transaction_for_command(
@@ -614,7 +614,7 @@ class HistoryCommandTest(unittest.TestCase):
             ]
         )
 
-        with mock.patch("core.history._history_canvas_port", return_value=port):
+        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
             with self.assertRaisesRegex(RuntimeError, "later child failed"):
                 command.redo(canvas)
 
@@ -664,7 +664,7 @@ class HistoryCommandTest(unittest.TestCase):
             ]
         )
 
-        with mock.patch("core.history._history_canvas_port", return_value=port):
+        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
             with self.assertRaisesRegex(RuntimeError, "restore hook disappeared"):
                 command.redo(canvas)
 
@@ -716,7 +716,7 @@ class HistoryCommandTest(unittest.TestCase):
             ]
         )
 
-        with mock.patch("core.history._history_canvas_port", return_value=port):
+        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
             with self.assertRaises(KeyboardInterrupt) as caught:
                 command.redo(canvas)
 
@@ -783,7 +783,7 @@ class HistoryCommandTest(unittest.TestCase):
             ]
         )
 
-        with mock.patch("core.history._history_canvas_port", return_value=port):
+        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
             with self.assertRaisesRegex(ValueError, "later child failed") as caught:
                 command.redo(canvas)
 
@@ -841,7 +841,7 @@ class HistoryCommandTest(unittest.TestCase):
             ]
         )
 
-        with mock.patch("core.history._history_canvas_port", return_value=port):
+        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
             with self.assertRaisesRegex(ValueError, "later child failed") as caught:
                 command.redo(canvas)
 
@@ -907,7 +907,7 @@ class HistoryCommandTest(unittest.TestCase):
             ]
         )
 
-        with mock.patch("core.history._history_canvas_port", return_value=port):
+        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
             with self.assertRaisesRegex(ValueError, "later child failed") as caught:
                 command.redo(canvas)
 
@@ -972,7 +972,7 @@ class HistoryCommandTest(unittest.TestCase):
             ]
         )
 
-        with mock.patch("core.history._history_canvas_port", return_value=port):
+        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
             with self.assertRaisesRegex(ValueError, "later child failed") as caught:
                 command.redo(canvas)
 
@@ -989,7 +989,7 @@ class HistoryCommandTest(unittest.TestCase):
     def test_history_canvas_restore_marks_persistent_renderer_setter_as_partial(
         self,
     ) -> None:
-        from ui.history_canvas_access import (
+        from chemvas.ui.history_canvas_access import (
             _capture_renderer_style_access,
             _HistoryCanvasTransactionSnapshot,
             restore_history_transaction_for_history,
@@ -1042,7 +1042,7 @@ class HistoryCommandTest(unittest.TestCase):
         )
 
     def test_history_canvas_restore_reverses_cross_authority_writers(self) -> None:
-        from ui.history_canvas_access import (
+        from chemvas.ui.history_canvas_access import (
             _capture_renderer_style_access,
             _HistoryCanvasTransactionSnapshot,
             restore_history_transaction_for_history,
@@ -1107,7 +1107,7 @@ class HistoryCommandTest(unittest.TestCase):
         )
 
     def test_history_canvas_rechecks_canvas_after_style_getter(self) -> None:
-        from ui.history_canvas_access import (
+        from chemvas.ui.history_canvas_access import (
             _capture_renderer_style_access,
             _HistoryCanvasTransactionSnapshot,
             restore_history_transaction_for_history,
@@ -1190,7 +1190,7 @@ class HistoryCommandTest(unittest.TestCase):
     def test_history_canvas_renderer_style_restore_retries_and_verifies_identity(
         self,
     ) -> None:
-        from ui.history_canvas_access import (
+        from chemvas.ui.history_canvas_access import (
             _capture_renderer_style_access,
             _HistoryCanvasTransactionSnapshot,
             restore_history_transaction_for_history,
@@ -1265,7 +1265,7 @@ class HistoryCommandTest(unittest.TestCase):
     def test_history_canvas_restore_keeps_history_notification_failure_secondary(
         self,
     ) -> None:
-        from ui.history_canvas_access import (
+        from chemvas.ui.history_canvas_access import (
             capture_history_transaction_for_history,
             restore_history_transaction_for_history,
         )
@@ -1351,7 +1351,7 @@ class HistoryCommandTest(unittest.TestCase):
         length_canvas = SimpleNamespace(bond_length=20.0)
         length_command = UpdateBondLengthCommand(20.0, 30.0)
 
-        with mock.patch("core.history._history_canvas_port", return_value=port):
+        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
             with self.assertRaisesRegex(KeyboardInterrupt, "position interrupted"):
                 position_command.redo(position_canvas)
             with self.assertRaisesRegex(KeyboardInterrupt, "ring interrupted"):
@@ -1389,7 +1389,7 @@ class HistoryCommandTest(unittest.TestCase):
         )
         original_error: KeyboardInterrupt | None = None
 
-        with mock.patch("core.history._history_canvas_port", return_value=port):
+        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
             with self.assertRaises(KeyboardInterrupt) as caught:
                 command.redo(canvas)
             original_error = caught.exception
@@ -1421,7 +1421,7 @@ class HistoryCommandTest(unittest.TestCase):
             after_smiles_input="after",
         )
 
-        with mock.patch("core.history._history_canvas_port", return_value=port):
+        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
             before = _atomic_canvas_snapshot(canvas)
             port.fail_once_after("restore_atom", 2)
             with self.assertRaisesRegex(RuntimeError, "restore_atom failed"):
@@ -1471,7 +1471,7 @@ class HistoryCommandTest(unittest.TestCase):
             after_projection_anchor_2d=None,
         )
 
-        with mock.patch("core.history._history_canvas_port", return_value=port):
+        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
             before = _atomic_canvas_snapshot(canvas)
             port.fail_once_after("remove_atom", 2)
             with self.assertRaisesRegex(RuntimeError, "remove_atom failed"):
@@ -1507,7 +1507,7 @@ class HistoryCommandTest(unittest.TestCase):
             after_projection_anchor_2d=(40.0, 50.0),
         )
 
-        with mock.patch("core.history._history_canvas_port", return_value=port):
+        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
             before = _atomic_canvas_snapshot(canvas)
             port.fail_once_after("set_positions")
             with self.assertRaisesRegex(RuntimeError, "set_positions failed"):
@@ -1526,7 +1526,7 @@ class HistoryCommandTest(unittest.TestCase):
         port = _StatefulHistoryPort()
         command = SetRingPolygonsCommand([first, second], before, after)
 
-        with mock.patch("core.history._history_canvas_port", return_value=port):
+        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
             port.fail_once_after("set_ring_polygon", "second")
             with self.assertRaisesRegex(RuntimeError, "set_ring_polygon failed"):
                 command.redo(canvas)
@@ -1623,7 +1623,7 @@ class HistoryCommandTest(unittest.TestCase):
                         )
 
                     with mock.patch(
-                        "core.history._history_canvas_port",
+                        "chemvas.core.history._history_canvas_port",
                         return_value=port,
                     ):
                         with self.assertRaises(primary_type) as caught:
@@ -1663,7 +1663,9 @@ class HistoryCommandTest(unittest.TestCase):
                 raise RuntimeError("position compensation failed")
 
         command = SetAtomPositionsCommand({1: (1.0, 2.0)}, {1: (3.0, 4.0)})
-        with mock.patch("core.history._history_canvas_port", return_value=Port()):
+        with mock.patch(
+            "chemvas.core.history._history_canvas_port", return_value=Port()
+        ):
             with self.assertRaises(BrokenNotePrimary) as caught:
                 command.redo(_AtomicHistoryCanvas())
 
@@ -1691,7 +1693,7 @@ class HistoryCommandTest(unittest.TestCase):
             ]
         )
 
-        with mock.patch("core.history._history_canvas_port", return_value=port):
+        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
             port.fail_next = True
             with self.assertRaisesRegex(RuntimeError, "graphics rebuild failed"):
                 command.undo(canvas)
@@ -1736,7 +1738,7 @@ class HistoryCommandTest(unittest.TestCase):
             ]
         )
 
-        with mock.patch("core.history._history_canvas_port", return_value=port):
+        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
             command.redo(canvas)
             command.undo(canvas)
 
@@ -1774,7 +1776,7 @@ class HistoryCommandTest(unittest.TestCase):
 
         command = MoveAtomsCommand({1, 2}, 5.0, 7.0)
         with mock.patch(
-            "ui.history_canvas_access.move_atoms_for",
+            "chemvas.ui.history_canvas_access.move_atoms_for",
             side_effect=partially_move_first_atom,
         ):
             with self.assertRaisesRegex(RuntimeError, "partial move failed"):
@@ -1817,7 +1819,7 @@ class HistoryCommandTest(unittest.TestCase):
 
         command = MoveAtomsCommand({1, 2}, 5.0, 7.0)
         with mock.patch(
-            "ui.history_canvas_access.move_atoms_for",
+            "chemvas.ui.history_canvas_access.move_atoms_for",
             side_effect=interrupt_after_first_atom,
         ):
             with self.assertRaisesRegex(KeyboardInterrupt, "partial move interrupted"):
@@ -1854,7 +1856,9 @@ class HistoryCommandTest(unittest.TestCase):
             with self.subTest(command=name):
                 canvas = _AtomicHistoryCanvas(bonds=bonds, smiles_input="before")
                 port = _StatefulHistoryPort()
-                with mock.patch("core.history._history_canvas_port", return_value=port):
+                with mock.patch(
+                    "chemvas.core.history._history_canvas_port", return_value=port
+                ):
                     before = _atomic_canvas_snapshot(canvas)
                     port.fail_once_after("set_smiles", "after")
                     with self.assertRaisesRegex(RuntimeError, "set_smiles failed"):
@@ -1911,7 +1915,7 @@ class HistoryCommandTest(unittest.TestCase):
         service = CanvasHistoryService(canvas, state)
         before = _atomic_canvas_snapshot(canvas)
 
-        with mock.patch("core.history._history_canvas_port", return_value=port):
+        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
             port.fail_once_after("remove_atom", 2)
             with self.assertRaisesRegex(RuntimeError, "remove_atom failed"):
                 service.undo()
@@ -2069,7 +2073,9 @@ class HistoryCommandTest(unittest.TestCase):
 
         primary = SelectiveMarkerError("command failed")
         with (
-            mock.patch("core.history._history_canvas_port", return_value=ExactPort()),
+            mock.patch(
+                "chemvas.core.history._history_canvas_port", return_value=ExactPort()
+            ),
             history_core.history_operation_scope() as operation_token,
         ):
             history_core._mark_nonexact_history_compensation_failed(primary)
@@ -2554,7 +2560,7 @@ class HistoryCommandTest(unittest.TestCase):
                     expected_redo = list(redo_stack)
 
                     with mock.patch(
-                        "ui.canvas_history_service."
+                        "chemvas.ui.canvas_history_service."
                         "consume_authoritative_history_failure_restore",
                         return_value=True,
                     ):
@@ -2858,7 +2864,7 @@ class HistoryCommandTest(unittest.TestCase):
         state = CanvasHistoryState(history=[composite], redo_stack=[stale_redo])
         service = CanvasHistoryService(canvas, state)
 
-        with mock.patch("core.history._history_canvas_port", return_value=port):
+        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
             port.fail_once_after("remove_atom", 2)
             with self.assertRaisesRegex(RuntimeError, "remove_atom failed") as caught:
                 service.undo()
@@ -2905,7 +2911,7 @@ class HistoryCommandTest(unittest.TestCase):
         state = CanvasHistoryState(history=[command], redo_stack=[stale_redo])
         service = CanvasHistoryService(canvas, state)
 
-        with mock.patch("core.history._history_canvas_port", return_value=port):
+        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
             with self.assertRaisesRegex(RuntimeError, "shared remove failure"):
                 service.undo()
             self.assertEqual(state.history, [command])
@@ -3001,7 +3007,7 @@ class HistoryCommandTest(unittest.TestCase):
         ]
         composite = CompositeCommand(commands)
 
-        with mock.patch("core.history._history_canvas_port", return_value=port):
+        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
             composite.redo(canvas)
             self.assertEqual(port.capture_calls, 1)
             composite.undo(canvas)
@@ -3047,7 +3053,9 @@ class HistoryCommandTest(unittest.TestCase):
                 canvas = SimpleNamespace(length=20.0)
                 port = _ReleasePort(fail_release=fail_release)
                 command = UpdateBondLengthCommand(20.0, 30.0)
-                with mock.patch("core.history._history_canvas_port", return_value=port):
+                with mock.patch(
+                    "chemvas.core.history._history_canvas_port", return_value=port
+                ):
                     if fail_release:
                         with self.assertRaisesRegex(
                             SystemExit, "transaction release failed"
@@ -3094,7 +3102,9 @@ class HistoryCommandTest(unittest.TestCase):
                 canvas = SimpleNamespace(length=20.0)
                 port = _OpaquePort(fail_release=fail_release)
                 command = UpdateBondLengthCommand(20.0, 30.0)
-                with mock.patch("core.history._history_canvas_port", return_value=port):
+                with mock.patch(
+                    "chemvas.core.history._history_canvas_port", return_value=port
+                ):
                     if fail_release:
                         with self.assertRaisesRegex(
                             SystemExit,
@@ -3150,7 +3160,7 @@ class HistoryCommandTest(unittest.TestCase):
         )
         before = _atomic_canvas_snapshot(canvas)
 
-        with mock.patch("core.history._history_canvas_port", return_value=port):
+        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
             port.fail_once_after("restore_bond", 10)
             with self.assertRaisesRegex(RuntimeError, "restore_bond failed"):
                 composite.redo(canvas)
@@ -3200,7 +3210,7 @@ class HistoryCommandTest(unittest.TestCase):
             ]
         )
 
-        with mock.patch("core.history._history_canvas_port", return_value=port):
+        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
             port.fail_once_after("restore_bond", 0)
             with self.assertRaisesRegex(RuntimeError, "restore_bond failed"):
                 command.redo(canvas)
@@ -3251,7 +3261,7 @@ class HistoryCommandTest(unittest.TestCase):
         )
         service = CanvasHistoryService(canvas, state)
 
-        with mock.patch("core.history._history_canvas_port", return_value=port):
+        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
             port.fail_once_after("restore_bond", 0)
             with self.assertRaisesRegex(RuntimeError, "restore_bond failed") as caught:
                 service.redo()
@@ -3301,7 +3311,7 @@ class HistoryCommandTest(unittest.TestCase):
         state = CanvasHistoryState(history=[stale_history], redo_stack=[composite])
         service = CanvasHistoryService(canvas, state)
 
-        with mock.patch("core.history._history_canvas_port", return_value=port):
+        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
             with self.assertRaisesRegex(RuntimeError, "unknown child failed"):
                 service.redo()
 

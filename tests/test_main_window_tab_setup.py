@@ -14,7 +14,7 @@ except ModuleNotFoundError:
     QTabWidget = None
 
 if QApplication is not None:
-    from ui.main_window_tab_setup import build_canvas_tab_assembly
+    from chemvas.ui.main_window_tab_setup import build_canvas_tab_assembly
 
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for tab setup tests")
@@ -40,7 +40,9 @@ class MainWindowTabSetupTest(unittest.TestCase):
         self.assertEqual(assembly.canvas_tabs.objectName(), "canvasTabs")
         self.assertIs(assembly.canvas_tabs.parent(), window)
         self.assertFalse(hasattr(assembly, "sheet_add_tab"))
-        self.assertEqual(assembly.canvas_tabs.tabPosition(), QTabWidget.TabPosition.South)
+        self.assertEqual(
+            assembly.canvas_tabs.tabPosition(), QTabWidget.TabPosition.South
+        )
         self.assertFalse(assembly.canvas_tabs.documentMode())
         self.assertTrue(assembly.canvas_tabs.isMovable())
         self.assertTrue(assembly.canvas_tabs.tabsClosable())

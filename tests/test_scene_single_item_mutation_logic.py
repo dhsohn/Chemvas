@@ -4,10 +4,10 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from core.history import CompositeCommand, DeleteAtomsCommand, DeleteBondCommand
-from core.model import Atom, Bond, MoleculeModel
-from ui.history_commands import DeleteSceneItemsCommand
-from ui.scene_single_item_mutation_logic import (
+from chemvas.core.history import CompositeCommand, DeleteAtomsCommand, DeleteBondCommand
+from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.ui.history_commands import DeleteSceneItemsCommand
+from chemvas.ui.scene_single_item_mutation_logic import (
     apply_bond_style_with_history,
     cycle_bond_style_with_history,
     delete_atom_with_history,
@@ -18,7 +18,9 @@ from ui.scene_single_item_mutation_logic import (
 
 
 class SceneSingleItemMutationLogicTest(unittest.TestCase):
-    def test_delete_atom_with_history_builds_composite_command_in_reverse_bond_order(self) -> None:
+    def test_delete_atom_with_history_builds_composite_command_in_reverse_bond_order(
+        self,
+    ) -> None:
         model = MoleculeModel(
             atoms={
                 1: Atom("C", 0.0, 0.0),
@@ -56,7 +58,9 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
                 return self.values[index]
 
             def __iter__(self):
-                raise AssertionError("indexed delete must not scan the full bond sequence")
+                raise AssertionError(
+                    "indexed delete must not scan the full bond sequence"
+                )
 
         command = delete_atom_with_history(
             1,
@@ -66,7 +70,11 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
             current_smiles_input_getter=lambda: smiles_state["value"],
             clear_smiles_input=clear_smiles_input,
             mark_state_getter=lambda mark: dict(mark),
-            bond_state_getter=lambda bond: {"a": bond.a, "b": bond.b, "order": bond.order},
+            bond_state_getter=lambda bond: {
+                "a": bond.a,
+                "b": bond.b,
+                "order": bond.order,
+            },
             remove_bond_by_id=remove_bond_by_id,
             redraw_connected_bonds=redraw_calls.append,
             atom_state_getter=lambda atom_id: {
@@ -81,14 +89,20 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
         )
 
         self.assertIsInstance(command, CompositeCommand)
-        self.assertEqual([type(child) for child in command.commands], [DeleteBondCommand, DeleteBondCommand, DeleteAtomsCommand])
+        self.assertEqual(
+            [type(child) for child in command.commands],
+            [DeleteBondCommand, DeleteBondCommand, DeleteAtomsCommand],
+        )
         self.assertEqual([child.bond_id for child in command.commands[:2]], [1, 0])
         self.assertEqual(removed_bonds, [1, 0])
         self.assertEqual(redraw_calls, [3, 1, 1, 2])
         self.assertEqual(removed_atoms, [(1, True)])
         atom_delete = command.commands[-1]
         assert isinstance(atom_delete, DeleteAtomsCommand)
-        self.assertEqual(atom_delete.mark_states, [{"kind": "mark", "atom_id": 1, "x": 2.0, "y": 3.0}])
+        self.assertEqual(
+            atom_delete.mark_states,
+            [{"kind": "mark", "atom_id": 1, "x": 2.0, "y": 3.0}],
+        )
         self.assertEqual(atom_delete.before_next_atom_id, 4)
         self.assertEqual(atom_delete.after_next_atom_id, 4)
         self.assertEqual(atom_delete.atom_coords_3d, {1: (0.0, 0.0, 2.0)})
@@ -114,7 +128,11 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
                 before_smiles_input="C=C",
                 current_smiles_input_getter=lambda: smiles_state["value"],
                 clear_smiles_input=clear_smiles_input,
-                bond_state_getter=lambda bond: {"a": bond.a, "b": bond.b, "order": bond.order},
+                bond_state_getter=lambda bond: {
+                    "a": bond.a,
+                    "b": bond.b,
+                    "order": bond.order,
+                },
                 remove_bond_by_id=remove_bond_by_id,
                 redraw_connected_bonds=redraw_calls.append,
             )
@@ -126,7 +144,11 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
                 before_smiles_input="C=C",
                 current_smiles_input_getter=lambda: smiles_state["value"],
                 clear_smiles_input=clear_smiles_input,
-                bond_state_getter=lambda bond: {"a": bond.a, "b": bond.b, "order": bond.order},
+                bond_state_getter=lambda bond: {
+                    "a": bond.a,
+                    "b": bond.b,
+                    "order": bond.order,
+                },
                 remove_bond_by_id=remove_bond_by_id,
                 redraw_connected_bonds=redraw_calls.append,
             )
@@ -138,7 +160,11 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
             before_smiles_input="C=C",
             current_smiles_input_getter=lambda: smiles_state["value"],
             clear_smiles_input=clear_smiles_input,
-            bond_state_getter=lambda bond: {"a": bond.a, "b": bond.b, "order": bond.order},
+            bond_state_getter=lambda bond: {
+                "a": bond.a,
+                "b": bond.b,
+                "order": bond.order,
+            },
             remove_bond_by_id=remove_bond_by_id,
             redraw_connected_bonds=redraw_calls.append,
         )
@@ -162,11 +188,15 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
         )
 
         self.assertIsInstance(command, DeleteSceneItemsCommand)
-        self.assertEqual(command.item_states, [{"kind": "ring", "points": [(0.0, 0.0)]}])
+        self.assertEqual(
+            command.item_states, [{"kind": "ring", "points": [(0.0, 0.0)]}]
+        )
         self.assertEqual(command.items, [ring])
         self.assertEqual(removed_items, [ring])
 
-    def test_flip_bond_direction_with_history_swaps_atoms_and_records_update(self) -> None:
+    def test_flip_bond_direction_with_history_swaps_atoms_and_records_update(
+        self,
+    ) -> None:
         bonds = [Bond(1, 2, 1, style="wedge"), Bond(3, 4, 1, style="single"), None]
         rebuild_calls: list[tuple[int, bool]] = []
         record_calls: list[tuple[int, dict, dict, object, object]] = []
@@ -177,8 +207,14 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
                 bonds=bonds,
                 before_smiles_input="C=C",
                 current_smiles_input_getter=lambda: "C=C",
-                bond_state_getter=lambda bond: {"a": bond.a, "b": bond.b, "style": bond.style},
-                rebuild_bond_graphics=lambda bond_id, redraw_connected: rebuild_calls.append((bond_id, redraw_connected)),
+                bond_state_getter=lambda bond: {
+                    "a": bond.a,
+                    "b": bond.b,
+                    "style": bond.style,
+                },
+                rebuild_bond_graphics=lambda bond_id, redraw_connected: (
+                    rebuild_calls.append((bond_id, redraw_connected))
+                ),
                 record_bond_update=lambda *args: record_calls.append(args),
             )
         )
@@ -188,8 +224,14 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
                 bonds=bonds,
                 before_smiles_input="C=C",
                 current_smiles_input_getter=lambda: "C=C",
-                bond_state_getter=lambda bond: {"a": bond.a, "b": bond.b, "style": bond.style},
-                rebuild_bond_graphics=lambda bond_id, redraw_connected: rebuild_calls.append((bond_id, redraw_connected)),
+                bond_state_getter=lambda bond: {
+                    "a": bond.a,
+                    "b": bond.b,
+                    "style": bond.style,
+                },
+                rebuild_bond_graphics=lambda bond_id, redraw_connected: (
+                    rebuild_calls.append((bond_id, redraw_connected))
+                ),
                 record_bond_update=lambda *args: record_calls.append(args),
             )
         )
@@ -200,8 +242,14 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
                 bonds=bonds,
                 before_smiles_input="C=C",
                 current_smiles_input_getter=lambda: "C=C",
-                bond_state_getter=lambda bond: {"a": bond.a, "b": bond.b, "style": bond.style},
-                rebuild_bond_graphics=lambda bond_id, redraw_connected: rebuild_calls.append((bond_id, redraw_connected)),
+                bond_state_getter=lambda bond: {
+                    "a": bond.a,
+                    "b": bond.b,
+                    "style": bond.style,
+                },
+                rebuild_bond_graphics=lambda bond_id, redraw_connected: (
+                    rebuild_calls.append((bond_id, redraw_connected))
+                ),
                 record_bond_update=lambda *args: record_calls.append(args),
             )
         )
@@ -210,10 +258,20 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
         self.assertEqual(rebuild_calls, [(0, True)])
         self.assertEqual(
             record_calls,
-            [(0, {"a": 1, "b": 2, "style": "wedge"}, {"a": 2, "b": 1, "style": "wedge"}, "C=C", "C=C")],
+            [
+                (
+                    0,
+                    {"a": 1, "b": 2, "style": "wedge"},
+                    {"a": 2, "b": 1, "style": "wedge"},
+                    "C=C",
+                    "C=C",
+                )
+            ],
         )
 
-    def test_apply_and_cycle_bond_style_with_history_use_expected_rebuild_policy(self) -> None:
+    def test_apply_and_cycle_bond_style_with_history_use_expected_rebuild_policy(
+        self,
+    ) -> None:
         bonds = [Bond(1, 2, 1, style="single"), Bond(3, 4, 1, style="single"), None]
         rebuild_calls: list[tuple[int, bool]] = []
         record_calls: list[tuple[int, dict, dict, object, object]] = []
@@ -226,8 +284,13 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
                 order=2,
                 before_smiles_input="CN",
                 current_smiles_input_getter=lambda: "CN",
-                bond_state_getter=lambda bond: {"style": bond.style, "order": bond.order},
-                rebuild_bond_graphics=lambda bond_id, redraw_connected: rebuild_calls.append((bond_id, redraw_connected)),
+                bond_state_getter=lambda bond: {
+                    "style": bond.style,
+                    "order": bond.order,
+                },
+                rebuild_bond_graphics=lambda bond_id, redraw_connected: (
+                    rebuild_calls.append((bond_id, redraw_connected))
+                ),
                 record_bond_update=lambda *args: record_calls.append(args),
             )
         )
@@ -239,22 +302,35 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
                 order=2,
                 before_smiles_input="CN",
                 current_smiles_input_getter=lambda: "CN",
-                bond_state_getter=lambda bond: {"style": bond.style, "order": bond.order},
-                rebuild_bond_graphics=lambda bond_id, redraw_connected: rebuild_calls.append((bond_id, redraw_connected)),
+                bond_state_getter=lambda bond: {
+                    "style": bond.style,
+                    "order": bond.order,
+                },
+                rebuild_bond_graphics=lambda bond_id, redraw_connected: (
+                    rebuild_calls.append((bond_id, redraw_connected))
+                ),
                 record_bond_update=lambda *args: record_calls.append(args),
             )
         )
         self.assertEqual((bonds[0].style, bonds[0].order), ("double", 2))
 
-        with mock.patch("ui.scene_single_item_mutation_logic.cycle_plain_bond_style", return_value=("aromatic", 3)) as cycle_style:
+        with mock.patch(
+            "chemvas.ui.scene_single_item_mutation_logic.cycle_plain_bond_style",
+            return_value=("aromatic", 3),
+        ) as cycle_style:
             self.assertFalse(
                 cycle_bond_style_with_history(
                     2,
                     bonds=bonds,
                     before_smiles_input="CN",
                     current_smiles_input_getter=lambda: "CN",
-                    bond_state_getter=lambda bond: {"style": bond.style, "order": bond.order},
-                    rebuild_bond_graphics=lambda bond_id, redraw_connected: rebuild_calls.append((bond_id, redraw_connected)),
+                    bond_state_getter=lambda bond: {
+                        "style": bond.style,
+                        "order": bond.order,
+                    },
+                    rebuild_bond_graphics=lambda bond_id, redraw_connected: (
+                        rebuild_calls.append((bond_id, redraw_connected))
+                    ),
                     record_bond_update=lambda *args: record_calls.append(args),
                 )
             )
@@ -264,8 +340,13 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
                     bonds=bonds,
                     before_smiles_input="CN",
                     current_smiles_input_getter=lambda: "CN",
-                    bond_state_getter=lambda bond: {"style": bond.style, "order": bond.order},
-                    rebuild_bond_graphics=lambda bond_id, redraw_connected: rebuild_calls.append((bond_id, redraw_connected)),
+                    bond_state_getter=lambda bond: {
+                        "style": bond.style,
+                        "order": bond.order,
+                    },
+                    rebuild_bond_graphics=lambda bond_id, redraw_connected: (
+                        rebuild_calls.append((bond_id, redraw_connected))
+                    ),
                     record_bond_update=lambda *args: record_calls.append(args),
                 )
             )
@@ -276,8 +357,20 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
         self.assertEqual(
             record_calls,
             [
-                (0, {"style": "single", "order": 1}, {"style": "double", "order": 2}, "CN", "CN"),
-                (1, {"style": "single", "order": 1}, {"style": "aromatic", "order": 3}, "CN", "CN"),
+                (
+                    0,
+                    {"style": "single", "order": 1},
+                    {"style": "double", "order": 2},
+                    "CN",
+                    "CN",
+                ),
+                (
+                    1,
+                    {"style": "single", "order": 1},
+                    {"style": "aromatic", "order": 3},
+                    "CN",
+                    "CN",
+                ),
             ],
         )
 

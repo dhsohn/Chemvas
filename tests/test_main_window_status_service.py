@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import mock
 
-from ui.main_window_status_service import MainWindowStatusService
+from chemvas.ui.main_window_status_service import MainWindowStatusService
 
 
 def _service(
@@ -18,12 +18,17 @@ def _service(
 ):
     return MainWindowStatusService(
         active_tool_name_for_window=active_tool_name_for_window or mock.Mock(),
-        current_zoom_percent_for_window=current_zoom_percent_for_window or mock.Mock(return_value=100),
-        active_canvas_or_none_for_window=active_canvas_or_none_for_window or mock.Mock(return_value=object()),
+        current_zoom_percent_for_window=current_zoom_percent_for_window
+        or mock.Mock(return_value=100),
+        active_canvas_or_none_for_window=active_canvas_or_none_for_window
+        or mock.Mock(return_value=object()),
         canvas_count_for_window=canvas_count_for_window or mock.Mock(return_value=1),
-        active_canvas_name_for_window=active_canvas_name_for_window or mock.Mock(return_value="Canvas 1"),
-        active_canvas_index_for_window=active_canvas_index_for_window or mock.Mock(return_value=0),
-        context_bar_page_override_for_window=context_bar_page_override_for_window or mock.Mock(return_value=None),
+        active_canvas_name_for_window=active_canvas_name_for_window
+        or mock.Mock(return_value="Canvas 1"),
+        active_canvas_index_for_window=active_canvas_index_for_window
+        or mock.Mock(return_value=0),
+        context_bar_page_override_for_window=context_bar_page_override_for_window
+        or mock.Mock(return_value=None),
     )
 
 
@@ -44,7 +49,9 @@ def test_active_tool_status_text_uses_injected_active_tool_port() -> None:
     active_tool_name_for_window.assert_called_once_with(window)
 
 
-def test_active_tool_status_text_ignores_unknown_override_and_handles_missing_canvas() -> None:
+def test_active_tool_status_text_ignores_unknown_override_and_handles_missing_canvas() -> (
+    None
+):
     active_tool_name_for_window = mock.Mock(return_value="bond")
     context_bar_page_override_for_window = mock.Mock(side_effect=["template", None])
     active_canvas_or_none_for_window = mock.Mock(side_effect=[object(), None])
@@ -86,10 +93,14 @@ def test_active_tool_hint_text_describes_visible_status_message() -> None:
         context_bar_page_override_for_window=mock.Mock(return_value=None),
     )
 
-    assert service.active_tool_hint_text(SimpleNamespace()) == "Bond: click-drag to draw"
+    assert (
+        service.active_tool_hint_text(SimpleNamespace()) == "Bond: click-drag to draw"
+    )
 
 
-def test_active_tool_hint_text_respects_ring_fill_override_without_canvas_lookup() -> None:
+def test_active_tool_hint_text_respects_ring_fill_override_without_canvas_lookup() -> (
+    None
+):
     active_tool_name_for_window = mock.Mock(return_value="select")
     active_canvas_or_none_for_window = mock.Mock(return_value=object())
     service = _service(
@@ -98,7 +109,10 @@ def test_active_tool_hint_text_respects_ring_fill_override_without_canvas_lookup
         context_bar_page_override_for_window=mock.Mock(return_value="ring_fill"),
     )
 
-    assert service.active_tool_hint_text(SimpleNamespace()) == "Ring Fill: choose fill color"
+    assert (
+        service.active_tool_hint_text(SimpleNamespace())
+        == "Ring Fill: choose fill color"
+    )
     active_canvas_or_none_for_window.assert_not_called()
     active_tool_name_for_window.assert_not_called()
 
@@ -122,7 +136,9 @@ def test_show_error_message_uses_timer_default_inside_status_service() -> None:
     bar = mock.Mock()
     window = SimpleNamespace(statusBar=mock.Mock(return_value=bar))
 
-    with mock.patch("ui.main_window_status_service.QTimer.singleShot") as single_shot:
+    with mock.patch(
+        "chemvas.ui.main_window_status_service.QTimer.singleShot"
+    ) as single_shot:
         service.show_error_message(window, "Invalid molecule", timeout=500)
 
     bar.setProperty.assert_called_once_with("statusState", "error")

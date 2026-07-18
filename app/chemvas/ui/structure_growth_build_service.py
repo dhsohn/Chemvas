@@ -1,0 +1,222 @@
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass
+
+from PyQt6.QtCore import QPointF
+
+from chemvas.features.insertion import (
+    BondPlacementContext,
+    mirrored_local_points,
+    other_atom_id_from_bond_result,
+)
+
+RingPoints = tuple[list[QPointF], list[tuple[int, float, float]]]
+
+
+@dataclass(frozen=True, slots=True)
+class StructureGrowthBuildActions:
+    atom_point: Callable[[int], QPointF]
+    sprout_bond_endpoint: Callable[..., QPointF | None]
+    add_bond_between_points: Callable[
+        [QPointF, QPointF, str, int], tuple[int, int] | None
+    ]
+    add_benzene_ring: Callable[..., object | None]
+    has_atom: Callable[[int], bool]
+    default_bond_endpoint: Callable[[QPointF, int | None], QPointF]
+    add_atom_label: Callable[..., None]
+    regular_ring_points_for_atom: Callable[[int, int], RingPoints | None]
+    regular_ring_points_for_bond: Callable[[int, int, QPointF], RingPoints | None]
+    cyclohexane_chair_points: Callable[[QPointF], list[QPointF]]
+    template_points_for_bond: Callable[[list[QPointF], int, QPointF], RingPoints | None]
+    add_ring_from_points: Callable[..., list[int]]
+    bond_placement_context: Callable[[int], BondPlacementContext | None]
+    run_recorded_additions_action: Callable[[Callable[[], bool]], bool]
+    add_atom: Callable[[str, float, float], int] | None = None
+    add_bond: Callable[..., int] | None = None
+    add_bond_graphics: Callable[[int], None] | None = None
+
+
+class StructureGrowthBuildService:
+    def __init__(self, actions: StructureGrowthBuildActions) -> None:
+        self.actions = actions
+
+    def sprout_bond_from_atom(
+        self,
+        atom_id: int,
+        *,
+        style: str,
+        order: int,
+        cyclic: bool = False,
+    ) -> tuple[int, int] | None:
+        start = self.actions.atom_point(atom_id)
+        end = self.actions.sprout_bond_endpoint(atom_id, cyclic=cyclic)
+        if end is None:
+            return None
+        return self.actions.add_bond_between_points(start, end, style, order)
+
+    def sprout_benzene_from_atom(self, atom_id: int) -> object | None:
+        return self.actions.add_benzene_ring(
+            self.actions.atom_point(atom_id), attach_atom_id=atom_id
+        )
+
+    def sprout_acetyl_from_atom(self, atom_id: int) -> None:
+        start = self.actions.atom_point(atom_id)
+        carbon_end = self.actions.sprout_bond_endpoint(atom_id, cyclic=False)
+        if carbon_end is None:
+            return
+        if (
+            self.actions.add_atom is None
+            or self.actions.add_bond is None
+            or self.actions.add_bond_graphics is None
+        ):
+            self._sprout_acetyl_with_bond_builder(atom_id, start, carbon_end)
+            return
+
+        def _build() -> bool:
+            assert self.actions.add_atom is not None
+            assert self.actions.add_bond is not None
+            assert self.actions.add_bond_graphics is not None
+            carbon_id = self.actions.add_atom("C", carbon_end.x(), carbon_end.y())
+            anchor_bond_id = self.actions.add_bond(
+                atom_id, carbon_id, 1, style="single"
+            )
+            self.actions.add_bond_graphics(anchor_bond_id)
+            carbon_point = self.actions.atom_point(carbon_id)
+
+            oxygen_end = self.actions.default_bond_endpoint(carbon_point, carbon_id)
+            if oxygen_end is None:
+                return False
+            oxygen_id = self.actions.add_atom("O", oxygen_end.x(), oxygen_end.y())
+            oxygen_bond_id = self.actions.add_bond(
+                carbon_id, oxygen_id, 2, style="double"
+            )
+            self.actions.add_bond_graphics(oxygen_bond_id)
+            self.actions.add_atom_label(oxygen_id, "O", record=False, show_carbon=True)
+
+            methyl_end = self.actions.default_bond_endpoint(carbon_point, carbon_id)
+            if methyl_end is None:
+                return False
+            methyl_id = self.actions.add_atom("C", methyl_end.x(), methyl_end.y())
+            methyl_bond_id = self.actions.add_bond(
+                carbon_id, methyl_id, 1, style="single"
+            )
+            self.actions.add_bond_graphics(methyl_bond_id)
+            return True
+
+        self.actions.run_recorded_additions_action(_build)
+
+    def _sprout_acetyl_with_bond_builder(
+        self, atom_id: int, start: QPointF, carbon_end: QPointF
+    ) -> None:
+        result = self.actions.add_bond_between_points(start, carbon_end, "single", 1)
+        carbon_id = other_atom_id_from_bond_result(atom_id, result)
+        if carbon_id is None or not self.actions.has_atom(carbon_id):
+            return
+        carbon_point = self.actions.atom_point(carbon_id)
+        oxygen_end = self.actions.default_bond_endpoint(carbon_point, carbon_id)
+        result = self.actions.add_bond_between_points(
+            carbon_point, oxygen_end, "double", 2
+        )
+        oxygen_id = other_atom_id_from_bond_result(carbon_id, result)
+        if oxygen_id is not None and self.actions.has_atom(oxygen_id):
+            self.actions.add_atom_label(oxygen_id, "O", show_carbon=True)
+        methyl_end = self.actions.default_bond_endpoint(carbon_point, carbon_id)
+        self.actions.add_bond_between_points(carbon_point, methyl_end, "single", 1)
+
+    def sprout_dimethyl_from_atom(self, atom_id: int) -> None:
+        start = self.actions.atom_point(atom_id)
+        first_end = self.actions.sprout_bond_endpoint(atom_id, cyclic=False)
+        if first_end is None:
+            return
+        if (
+            self.actions.add_atom is None
+            or self.actions.add_bond is None
+            or self.actions.add_bond_graphics is None
+        ):
+            self._sprout_dimethyl_with_bond_builder(atom_id, start, first_end)
+            return
+
+        def _build() -> bool:
+            assert self.actions.add_atom is not None
+            assert self.actions.add_bond is not None
+            assert self.actions.add_bond_graphics is not None
+            first_id = self.actions.add_atom("C", first_end.x(), first_end.y())
+            first_bond_id = self.actions.add_bond(atom_id, first_id, 1, style="single")
+            self.actions.add_bond_graphics(first_bond_id)
+            second_end = self.actions.sprout_bond_endpoint(atom_id, cyclic=False)
+            if second_end is None:
+                return True
+            second_id = self.actions.add_atom("C", second_end.x(), second_end.y())
+            second_bond_id = self.actions.add_bond(
+                atom_id, second_id, 1, style="single"
+            )
+            self.actions.add_bond_graphics(second_bond_id)
+            return True
+
+        self.actions.run_recorded_additions_action(_build)
+
+    def _sprout_dimethyl_with_bond_builder(
+        self, atom_id: int, start: QPointF, first_end: QPointF
+    ) -> None:
+        self.actions.add_bond_between_points(start, first_end, "single", 1)
+        second_end = self.actions.sprout_bond_endpoint(atom_id, cyclic=False)
+        if second_end is None:
+            return
+        self.actions.add_bond_between_points(start, second_end, "single", 1)
+
+    def sprout_regular_ring_from_atom(self, atom_id: int, n: int) -> None:
+        def _build() -> bool:
+            result = self.actions.regular_ring_points_for_atom(n, atom_id)
+            if result is None:
+                return False
+            points, merge = result
+            self.actions.add_ring_from_points(points, merge=merge)
+            return True
+
+        self.actions.run_recorded_additions_action(_build)
+
+    def fuse_regular_ring_to_bond(self, bond_id: int, n: int) -> None:
+        def _build() -> bool:
+            placement = self.actions.bond_placement_context(bond_id)
+            if placement is None:
+                return False
+            result = self.actions.regular_ring_points_for_bond(
+                n, bond_id, placement.midpoint
+            )
+            if result is None:
+                return False
+            points, merge = result
+            self.actions.add_ring_from_points(points, merge=merge)
+            return True
+
+        self.actions.run_recorded_additions_action(_build)
+
+    def fuse_chair_to_bond(self, bond_id: int, mirrored: bool = False) -> None:
+        def _build() -> bool:
+            local_center = QPointF(0.0, 0.0)
+            points_local = mirrored_local_points(
+                self.actions.cyclohexane_chair_points(local_center), mirrored
+            )
+            placement = self.actions.bond_placement_context(bond_id)
+            if placement is None:
+                return False
+            result = self.actions.template_points_for_bond(
+                points_local, bond_id, placement.midpoint
+            )
+            if result is None:
+                return False
+            points, merge = result
+            self.actions.add_ring_from_points(points, merge=merge)
+            return True
+
+        self.actions.run_recorded_additions_action(_build)
+
+    def fuse_benzene_to_bond(self, bond_id: int) -> object | None:
+        placement = self.actions.bond_placement_context(bond_id)
+        if placement is None:
+            return None
+        return self.actions.add_benzene_ring(placement.midpoint, attach_bond_id=bond_id)
+
+
+__all__ = ["StructureGrowthBuildActions", "StructureGrowthBuildService"]

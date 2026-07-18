@@ -1,6 +1,6 @@
 from unittest import mock
 
-from ui.main_window_canvas_tab_ui_service import MainWindowCanvasTabUIService
+from chemvas.ui.main_window_canvas_tab_ui_service import MainWindowCanvasTabUIService
 
 
 def test_canvas_tab_ui_service_delegates_close_requests() -> None:

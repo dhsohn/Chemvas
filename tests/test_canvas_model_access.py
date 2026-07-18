@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
-from core.model import Atom, Bond, MoleculeModel
-from ui.canvas_model_access import (
+from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.ui.canvas_model_access import (
     add_atom_to_model_for,
     add_bond_to_model_for,
     atom_for_id,
@@ -27,7 +27,9 @@ from ui.canvas_model_access import (
 
 
 def test_model_collection_accessors_return_underlying_model_collections() -> None:
-    model = SimpleNamespace(atoms={1: Atom("C", 1.0, 2.0)}, bonds=[Bond(1, 2)], next_atom_id=2)
+    model = SimpleNamespace(
+        atoms={1: Atom("C", 1.0, 2.0)}, bonds=[Bond(1, 2)], next_atom_id=2
+    )
     canvas = SimpleNamespace(model=model)
 
     assert model_for(canvas) is model
@@ -64,7 +66,11 @@ def test_has_atoms_for_is_false_for_empty_model() -> None:
 def test_model_mutation_helpers_trim_remove_and_restore_next_atom_id() -> None:
     canvas = SimpleNamespace(
         model=SimpleNamespace(
-            atoms={0: Atom("C", 0.0, 0.0), 2: Atom("N", 2.0, 0.0), 3: Atom("O", 3.0, 0.0)},
+            atoms={
+                0: Atom("C", 0.0, 0.0),
+                2: Atom("N", 2.0, 0.0),
+                3: Atom("O", 3.0, 0.0),
+            },
             bonds=[Bond(0, 2), Bond(2, 3), Bond(3, 0)],
             next_atom_id=4,
         )
@@ -111,7 +117,9 @@ def test_atom_mutation_helpers_add_set_and_advance_next_atom_id() -> None:
 
 def test_set_model_for_replaces_canvas_model() -> None:
     old_model = SimpleNamespace(atoms={}, bonds=[], next_atom_id=0)
-    new_model = SimpleNamespace(atoms={1: Atom("C", 1.0, 1.0)}, bonds=[], next_atom_id=2)
+    new_model = SimpleNamespace(
+        atoms={1: Atom("C", 1.0, 1.0)}, bonds=[], next_atom_id=2
+    )
     canvas = SimpleNamespace(model=old_model)
 
     set_model_for(canvas, new_model)
