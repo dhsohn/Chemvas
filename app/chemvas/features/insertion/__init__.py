@@ -1,16 +1,14 @@
 """Structure, template, and SMILES insertion planning."""
 
+from importlib import import_module
+from typing import TYPE_CHECKING, Any
+
 from .chemistry_types import (
     Molecule3DAtom,
     Molecule3DBond,
     Molecule3DScene,
     MoleculeIdentifiers,
     RDKitResult,
-)
-from .ring_occupancy import (
-    point_inside_any_ring,
-    ring_polygon_points_for_atoms,
-    ring_polygon_points_for_bond,
 )
 from .smiles import (
     SmilesAtomPlacement,
@@ -30,15 +28,6 @@ from .smiles import (
     plan_smiles_preview_update,
     smiles_preview_center,
     snapshot_smiles_preview_geometry,
-)
-from .structure_growth import (
-    BondPlacementContext,
-    alternating_ring_bond_specs,
-    crown_ether_elements,
-    fused_benzene_centers,
-    mirrored_local_points,
-    other_atom_id_from_bond_result,
-    resolve_bond_placement_context,
 )
 from .structure_payload import (
     build_3d_conversion_payload,
@@ -66,6 +55,48 @@ from .template_preview import (
     build_template_preview_geometry,
     plan_template_preview_update,
 )
+
+if TYPE_CHECKING:
+    from .ring_occupancy import (
+        point_inside_any_ring,
+        ring_polygon_points_for_atoms,
+        ring_polygon_points_for_bond,
+    )
+    from .structure_growth import (
+        BondPlacementContext,
+        alternating_ring_bond_specs,
+        crown_ether_elements,
+        fused_benzene_centers,
+        mirrored_local_points,
+        other_atom_id_from_bond_result,
+        resolve_bond_placement_context,
+    )
+
+
+_LAZY_EXPORTS: dict[str, str] = {
+    "BondPlacementContext": ".structure_growth",
+    "alternating_ring_bond_specs": ".structure_growth",
+    "crown_ether_elements": ".structure_growth",
+    "fused_benzene_centers": ".structure_growth",
+    "mirrored_local_points": ".structure_growth",
+    "other_atom_id_from_bond_result": ".structure_growth",
+    "point_inside_any_ring": ".ring_occupancy",
+    "resolve_bond_placement_context": ".structure_growth",
+    "ring_polygon_points_for_atoms": ".ring_occupancy",
+    "ring_polygon_points_for_bond": ".ring_occupancy",
+}
+
+
+def __getattr__(name: str) -> Any:
+    """Load Qt-dependent insertion helpers only when callers request them."""
+    try:
+        module_name = _LAZY_EXPORTS[name]
+    except KeyError:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}") from None
+    value = getattr(import_module(module_name, __name__), name)
+    globals()[name] = value
+    return value
+
 
 __all__ = [
     "BondPlacementContext",

@@ -124,17 +124,27 @@ jobs:
           /tmp/chemvas-wheel-smoke/bin/python -m pip install --no-deps dist/*.whl
           cd /tmp
           /tmp/chemvas-wheel-smoke/bin/python - <<'PY'
+          from importlib.metadata import distribution
           from importlib.util import find_spec
 
           import chemvas
-          import chemvas.adapters.qt
           import chemvas.ui
           from chemvas.bootstrap.application import main
           from chemvas.domain.document import MoleculeModel
 
+          installed = distribution("chemvas")
+          installed_files = {str(path) for path in installed.files or ()}
+          console_scripts = {
+              entry_point.name: entry_point.value
+              for entry_point in installed.entry_points
+              if entry_point.group == "console_scripts"
+          }
+
           assert chemvas.__version__
           assert callable(main)
           assert MoleculeModel is not None
+          assert "chemvas/adapters/qt/file_open_events.py" in installed_files
+          assert console_scripts["chemvas"] == "chemvas.bootstrap.application:main"
           assert find_spec("core") is None
           assert find_spec("ui") is None
           PY

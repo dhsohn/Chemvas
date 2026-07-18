@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import ast
+import os
+import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 CHEMVAS_ROOT = Path(__file__).resolve().parents[1] / "app" / "chemvas"
+APP_ROOT = CHEMVAS_ROOT.parent
 TARGET_LAYERS = frozenset(("domain", "features", "adapters", "shell", "bootstrap"))
 REMOVED_COMPATIBILITY_MODULES = frozenset(
     {
@@ -203,6 +207,33 @@ def test_domain_has_no_framework_or_adapter_dependencies() -> None:
     ]
 
     assert violations == []
+
+
+def test_rdkit_adapter_import_does_not_load_qt() -> None:
+    env = os.environ.copy()
+    pythonpath = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = os.pathsep.join(
+        path for path in (str(APP_ROOT), pythonpath) if path
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; "
+                "from chemvas.core.rdkit_adapter import RDKitAdapter; "
+                "assert RDKitAdapter is not None; "
+                "assert not any(name == 'PyQt6' or name.startswith('PyQt6.') "
+                "for name in sys.modules)"
+            ),
+        ],
+        check=False,
+        capture_output=True,
+        env=env,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_production_code_does_not_import_removed_compatibility_modules() -> None:
