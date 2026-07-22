@@ -12,13 +12,11 @@ except ModuleNotFoundError:
 
 if QPointF is not None:
     from chemvas.domain.document import Atom, Bond
+    from chemvas.features.hover import HoverState
     from chemvas.ui.canvas_chemdraw_shortcut_service import (
         CanvasChemdrawShortcutService,
     )
-    from chemvas.ui.canvas_hover_state import (
-        set_hover_atom_id_for,
-        set_hover_bond_id_for,
-    )
+    from chemvas.ui.canvas_hover_state import hover_state_for
     from chemvas.ui.input_view_access import shortcut_modifiers_for
 
 
@@ -203,8 +201,10 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
     def test_handle_shortcut_routes_between_object_atom_bond_and_generic_paths(
         self,
     ) -> None:
-        canvas = SimpleNamespace()
-        set_hover_atom_id_for(canvas, 4)
+        canvas = SimpleNamespace(
+            runtime_state=SimpleNamespace(hover_preview_state=HoverState())
+        )
+        hover_state_for(canvas).atom_id = 4
         service = _shortcut_service(canvas)
         service.handle_object_shortcut = mock.Mock(return_value=False)
         service.handle_atom_hotkey = mock.Mock(return_value=True)
@@ -215,12 +215,12 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         self.assertTrue(service.handle_shortcut(event))
         service.handle_atom_hotkey.assert_called_once_with(event, 4)
 
-        set_hover_atom_id_for(canvas, None)
-        set_hover_bond_id_for(canvas, 7)
+        hover_state_for(canvas).atom_id = None
+        hover_state_for(canvas).bond_id = 7
         self.assertTrue(service.handle_shortcut(event))
         service.handle_bond_hotkey.assert_called_once_with(event, 7)
 
-        set_hover_bond_id_for(canvas, None)
+        hover_state_for(canvas).bond_id = None
         self.assertTrue(service.handle_shortcut(event))
         service.handle_generic_hotkey.assert_called_once_with(event)
 
@@ -232,8 +232,10 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
     ) -> None:
         # Pressing a tool shortcut (Space, J, ...) while hovering an atom or a
         # bond must still reach the generic hotkeys instead of being swallowed.
-        canvas = SimpleNamespace()
-        set_hover_atom_id_for(canvas, 4)
+        canvas = SimpleNamespace(
+            runtime_state=SimpleNamespace(hover_preview_state=HoverState())
+        )
+        hover_state_for(canvas).atom_id = 4
         service = _shortcut_service(canvas)
         service.handle_object_shortcut = mock.Mock(return_value=False)
         service.handle_atom_hotkey = mock.Mock(return_value=False)
@@ -245,8 +247,8 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         service.handle_atom_hotkey.assert_called_once_with(event, 4)
         service.handle_generic_hotkey.assert_called_once_with(event)
 
-        set_hover_atom_id_for(canvas, None)
-        set_hover_bond_id_for(canvas, 7)
+        hover_state_for(canvas).atom_id = None
+        hover_state_for(canvas).bond_id = 7
         service.handle_generic_hotkey.reset_mock()
         self.assertTrue(service.handle_shortcut(event))
         service.handle_bond_hotkey.assert_called_once_with(event, 7)

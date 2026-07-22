@@ -20,7 +20,6 @@ def _canvas_with_service(service_name: str, service):
     [
         (ports.atom_label_service_for_access, "atom_label_service"),
         (ports.benzene_preview_service_for_access, "benzene_preview_service"),
-        (ports.bond_hover_preview_service_for_access, "bond_hover_preview_service"),
         (
             ports.canvas_window_document_session_service,
             "canvas_document_session_service",
@@ -36,10 +35,7 @@ def _canvas_with_service(service_name: str, service):
             ports.history_recording_service_for_access,
             "canvas_history_recording_service",
         ),
-        (ports.hover_interaction_service_for_access, "hover_interaction_service"),
-        (ports.hover_scene_service_for_access, "hover_scene_service"),
         (ports.insert_controller_for_access, "insert_controller"),
-        (ports.mark_hover_preview_service_for_access, "mark_hover_preview_service"),
         (ports.mark_scene_service_for_access, "canvas_mark_scene_service"),
         (ports.move_controller_for_access, "move_controller"),
         (ports.note_controller_for_access, "note_controller"),

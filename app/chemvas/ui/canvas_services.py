@@ -16,7 +16,7 @@ from chemvas.ui.canvas_service_composer import (
     compose_canvas_services,
 )
 from chemvas.ui.handle_service_bundle import build_handle_services
-from chemvas.ui.hover_service_bundle import build_hover_services
+from chemvas.ui.hover import build_hover_controller
 from chemvas.ui.scene_decoration_service_bundle import build_scene_decoration_services
 from chemvas.ui.scene_operation_service_bundle import build_scene_operation_services
 from chemvas.ui.selection_service_bundle import build_selection_services
@@ -39,7 +39,7 @@ def build_canvas_services(
         build_canvas_interaction_services=build_canvas_interaction_services,
         build_canvas_scene_view_services=build_canvas_scene_view_services,
         build_handle_services=build_handle_services,
-        build_hover_services=build_hover_services,
+        build_hover_controller=build_hover_controller,
         build_scene_decoration_services=build_scene_decoration_services,
         build_scene_operation_services=build_scene_operation_services,
         build_selection_services=build_selection_services,
