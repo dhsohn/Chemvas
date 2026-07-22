@@ -12,10 +12,7 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from chemvas.ui.canvas_hover_state import (
-        set_hover_atom_id_for,
-        set_hover_bond_id_for,
-    )
+    from chemvas.ui.canvas_hover_state import hover_state_for
     from chemvas.ui.canvas_view import CanvasView
     from chemvas.ui.input_view_access import should_override_chemdraw_shortcut_for
     from chemvas.ui.input_view_state import input_view_state_for
@@ -131,7 +128,7 @@ class CanvasViewEventShortcutTest(unittest.TestCase):
         self,
     ) -> None:
         atom_view = self._new_view()
-        set_hover_atom_id_for(atom_view, 7)
+        hover_state_for(atom_view).atom_id = 7
         atom_event = _FakeEvent(
             modifiers=Qt.KeyboardModifier.NoModifier,
             key=Qt.Key.Key_Return,
@@ -149,7 +146,7 @@ class CanvasViewEventShortcutTest(unittest.TestCase):
         )
 
         bond_view = self._new_view()
-        set_hover_bond_id_for(bond_view, 11)
+        hover_state_for(bond_view).bond_id = 11
         bond_event = _FakeEvent(
             modifiers=Qt.KeyboardModifier.NoModifier,
             key=Qt.Key.Key_unknown,
@@ -168,7 +165,7 @@ class CanvasViewEventShortcutTest(unittest.TestCase):
             )
 
         reject_view = self._new_view()
-        set_hover_atom_id_for(reject_view, 3)
+        hover_state_for(reject_view).atom_id = 3
         reject_event = _FakeEvent(
             modifiers=Qt.KeyboardModifier.ControlModifier,
             key=Qt.Key.Key_Return,

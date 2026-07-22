@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from chemvas.features.selection import ActiveToolReference
 from chemvas.ui.canvas_runtime_services import (
@@ -11,7 +11,6 @@ from chemvas.ui.canvas_runtime_services import (
     DocumentServices,
     GraphServices,
     HandleServices,
-    HoverServices,
     InputServices,
     InteractionServices,
     SceneDecorationServices,
@@ -21,6 +20,9 @@ from chemvas.ui.canvas_runtime_services import (
     StructureServices,
     ToolingServices,
 )
+
+if TYPE_CHECKING:
+    from chemvas.ui.hover import HoverController
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,7 +34,7 @@ class CanvasServiceBuilders:
     build_canvas_interaction_services: Callable[..., InteractionServices]
     build_canvas_scene_view_services: Callable[..., SceneViewServices]
     build_handle_services: Callable[..., HandleServices]
-    build_hover_services: Callable[..., HoverServices]
+    build_hover_controller: Callable[..., HoverController]
     build_scene_decoration_services: Callable[..., SceneDecorationServices]
     build_scene_operation_services: Callable[..., SceneOperationServices]
     build_selection_services: Callable[..., SelectionServices]
@@ -60,13 +62,6 @@ def compose_canvas_services(
         active_tool_name_provider=active_tool_reference.active_tool_name,
     )
     handle_services = builders.build_handle_services(canvas)
-    hover_services = builders.build_hover_services(
-        canvas,
-        selection_controller=selection_services.selection_controller,
-        hit_testing_service=selection_services.hit_testing_service,
-        active_tool_provider=active_tool_reference.active_tool,
-        active_tool_name_provider=active_tool_reference.active_tool_name,
-    )
     interaction_services = builders.build_canvas_interaction_services(
         canvas,
         selection_controller=selection_services.selection_controller,
@@ -111,17 +106,27 @@ def compose_canvas_services(
         canvas,
         history_service=history_service,
     )
+    hover_controller = builders.build_hover_controller(
+        canvas,
+        selection_controller=selection_services.selection_controller,
+        hit_testing_service=selection_services.hit_testing_service,
+        insert_controller=structure_services.insert_controller,
+        scene_decoration_build_service=(
+            scene_decoration_services.scene_decoration_build_service
+        ),
+        mark_scene_service=scene_decoration_services.canvas_mark_scene_service,
+        active_tool_name_provider=active_tool_reference.active_tool_name,
+    )
     input_services = builders.build_canvas_input_services(
         canvas,
         hit_testing_service=selection_services.hit_testing_service,
         insert_controller=structure_services.insert_controller,
-        hover_interaction_service=hover_services.hover_interaction_service,
+        hover_controller=hover_controller,
         tool_controller=tool_services.tools,
         scene_delete_controller=scene_operation_services.scene_delete_controller,
         scene_clipboard_controller=scene_operation_services.scene_clipboard_controller,
         scene_transform_controller=scene_operation_services.scene_transform_controller,
         mark_scene_service=scene_decoration_services.canvas_mark_scene_service,
-        hover_refresh=hover_services.hover_refresh,
         history_service=history_service,
     )
     document_services = builders.build_canvas_document_services(
@@ -143,7 +148,7 @@ def compose_canvas_services(
         move_controller=interaction_services.move_controller,
         graph_service=canvas_graph_service,
         history_service=history_service,
-        hover_refresh=hover_services.hover_refresh,
+        hover_refresh=hover_controller.refresh,
         structure_build_service=structure_services.structure_build_service,
         note_controller=interaction_services.note_controller,
     )
@@ -156,7 +161,7 @@ def compose_canvas_services(
         interaction=interaction_services,
         scene_view=scene_view_services,
         handles=handle_services,
-        hover=hover_services,
+        hover=hover_controller,
         scene_decoration=scene_decoration_services,
         scene_operations=scene_operation_services,
         selection=selection_services,

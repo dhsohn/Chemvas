@@ -21,6 +21,7 @@ if QApplication is not None:
         UpdateBondCommand,
     )
     from chemvas.domain.document import Atom, Bond, MoleculeModel
+    from chemvas.features.hover import HoverState
     from chemvas.ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
     from chemvas.ui.atom_label_service import AtomLabelService
     from chemvas.ui.canvas_atom_graphics_state import (
@@ -84,7 +85,7 @@ class _FakeCanvas:
         set_atom_dots_for(self, {})
         set_bond_items_for(self, {})
         set_last_smiles_input_for(self, None)
-        self.hover_atom_id = None
+        self.runtime_state = SimpleNamespace(hover_preview_state=HoverState())
         self.history_state = CanvasHistoryState()
 
         self.scene_obj = _FakeScene()

@@ -12,6 +12,7 @@ except ModuleNotFoundError:
 
 from chemvas.core.rdkit_adapter import RDKitAdapter
 from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.features.hover import HoverState
 
 if QApplication is not None:
     from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
@@ -441,8 +442,7 @@ class _SelectCanvas:
 class _TextCanvas:
     def __init__(self) -> None:
         self.renderer = SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0))
-        self.hover_atom_id = None
-        self.hover_bond_id = None
+        self.runtime_state = SimpleNamespace(hover_preview_state=HoverState())
         self.item = _Item("atom", "not-an-int")
         self.nearby_bond_calls = []
         self.nearby_atom_calls = []

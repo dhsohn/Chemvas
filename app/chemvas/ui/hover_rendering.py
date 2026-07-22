@@ -16,14 +16,13 @@ from PyQt6.QtWidgets import (
 def clear_hover_items(
     scene: QGraphicsScene,
     items: Sequence[QGraphicsItem],
-) -> list[QGraphicsItem]:
+) -> None:
     for item in items:
         try:
             if item.scene() is scene:
                 scene.removeItem(item)
         except RuntimeError:
             pass
-    return []
 
 
 def build_atom_hover_indicator(

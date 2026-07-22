@@ -33,15 +33,12 @@ def test_build_canvas_input_services_wires_explicit_collaborators(monkeypatch) -
     canvas = SimpleNamespace()
     hit_testing_service = object()
     insert_controller = object()
-    hover_interaction_service = object()
+    hover_controller = SimpleNamespace(refresh=object())
     tool_controller = SimpleNamespace(set_active=object())
     scene_delete_controller = object()
     scene_clipboard_controller = object()
     scene_transform_controller = object()
     mark_scene_service = object()
-
-    def hover_refresh() -> None:
-        return None
 
     history_service = object()
 
@@ -49,29 +46,27 @@ def test_build_canvas_input_services_wires_explicit_collaborators(monkeypatch) -
         canvas,
         hit_testing_service=hit_testing_service,
         insert_controller=insert_controller,
-        hover_interaction_service=hover_interaction_service,
+        hover_controller=hover_controller,
         tool_controller=tool_controller,
         scene_delete_controller=scene_delete_controller,
         scene_clipboard_controller=scene_clipboard_controller,
         scene_transform_controller=scene_transform_controller,
         mark_scene_service=mark_scene_service,
-        hover_refresh=hover_refresh,
         history_service=history_service,
     )
 
     assert isinstance(services, CanvasInputServiceBundle)
     assert services.tool_mode_controller.kwargs == {
         "insert_controller": insert_controller,
-        "hover_refresh": hover_refresh,
+        "hover_refresh": hover_controller.refresh,
         "set_active_tool": tool_controller.set_active,
     }
     assert services.pointer_controller.kwargs == {
         "hit_testing_service": hit_testing_service,
         "insert_controller": insert_controller,
-        "hover_interaction_service": hover_interaction_service,
+        "hover_controller": hover_controller,
         "tool_controller": tool_controller,
         "scene_transform_controller": scene_transform_controller,
-        "hover_refresh": hover_refresh,
     }
     assert services.chemdraw_shortcut_service.kwargs == {
         "scene_transform_controller": scene_transform_controller,
@@ -82,7 +77,7 @@ def test_build_canvas_input_services_wires_explicit_collaborators(monkeypatch) -
         "scene_delete_controller": scene_delete_controller,
         "scene_clipboard_controller": scene_clipboard_controller,
         "history_service": history_service,
-        "hover_refresh": hover_refresh,
+        "hover_controller": hover_controller,
         "chemdraw_shortcut_service": services.chemdraw_shortcut_service,
         "tool_mode_controller": services.tool_mode_controller,
     }

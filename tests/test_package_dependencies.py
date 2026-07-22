@@ -18,22 +18,33 @@ REMOVED_COMPATIBILITY_MODULES = frozenset(
         "chemvas.file_open",
         "chemvas.main",
         "chemvas.ui.active_tool_reference",
+        "chemvas.ui.bond_hover_preview_service",
         "chemvas.ui.bond_dotted_geometry",
         "chemvas.ui.bond_geometry_primitives",
         "chemvas.ui.bond_graphics_logic",
         "chemvas.ui.bond_stereo_geometry",
         "chemvas.ui.bond_style_logic",
         "chemvas.ui.bracket_types",
+        "chemvas.ui.canvas_hover_refresh",
         "chemvas.ui.handle_interaction_logic",
         "chemvas.ui.history_command_snapshot",
         "chemvas.ui.history_recovery_note",
         "chemvas.ui.history_restore_retry",
         "chemvas.ui.history_stack_snapshot",
+        "chemvas.ui.hover_highlight_access",
+        "chemvas.ui.hover_highlight_logic",
+        "chemvas.ui.hover_interaction_access",
+        "chemvas.ui.hover_interaction_service",
+        "chemvas.ui.hover_scene_access",
+        "chemvas.ui.hover_scene_renderer",
+        "chemvas.ui.hover_scene_service",
+        "chemvas.ui.hover_service_bundle",
         "chemvas.ui.label_layout_logic",
         "chemvas.ui.main_window",
         "chemvas.ui.main_window_app",
         "chemvas.ui.main_window_bootstrap",
         "chemvas.ui.main_window_services",
+        "chemvas.ui.mark_hover_preview_service",
         "chemvas.ui.note_html_sanitizer",
         "chemvas.ui.ring_occupancy_logic",
         "chemvas.ui.scene_item_attach_snapshot",
@@ -209,6 +220,44 @@ def test_domain_has_no_framework_or_adapter_dependencies() -> None:
     assert violations == []
 
 
+def test_hover_feature_policy_is_qt_and_adapter_free() -> None:
+    hover_package = "chemvas.features.hover"
+    violations = [
+        _formatted(edge)
+        for edge in _import_edges()
+        if (edge.source == hover_package or edge.source.startswith(f"{hover_package}."))
+        and edge.dependency.startswith(("PyQt6", "rdkit", "chemvas.adapters"))
+    ]
+
+    assert violations == []
+
+
+def test_hover_feature_import_does_not_load_qt() -> None:
+    env = os.environ.copy()
+    pythonpath = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = os.pathsep.join(
+        import_path for import_path in (str(APP_ROOT), pythonpath) if import_path
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; "
+                "import chemvas.features.hover; "
+                "assert not any(name == 'PyQt6' or name.startswith('PyQt6.') "
+                "for name in sys.modules)"
+            ),
+        ],
+        check=False,
+        capture_output=True,
+        env=env,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
 def test_rdkit_adapter_import_does_not_load_qt() -> None:
     env = os.environ.copy()
     pythonpath = env.get("PYTHONPATH")
@@ -323,6 +372,20 @@ def test_export_callers_use_feature_public_api() -> None:
             or edge.source.startswith(f"{export_package}.")
         )
         and edge.dependency.startswith(f"{export_package}.")
+    ]
+
+    assert violations == []
+
+
+def test_hover_callers_use_feature_public_api() -> None:
+    hover_package = "chemvas.features.hover"
+    violations = [
+        _formatted(edge)
+        for edge in _import_edges()
+        if not (
+            edge.source == hover_package or edge.source.startswith(f"{hover_package}.")
+        )
+        and edge.dependency.startswith(f"{hover_package}.")
     ]
 
     assert violations == []

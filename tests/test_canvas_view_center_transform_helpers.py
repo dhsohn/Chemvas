@@ -173,7 +173,7 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
             selection_controller=SimpleNamespace(
                 update_selection_outline=view.refresh_selection_outline
             ),
-            hover_scene_service=SimpleNamespace(clear_hover_highlight=mock.Mock()),
+            hover=SimpleNamespace(refresh=mock.Mock()),
             tools=SimpleNamespace(set_active=mock.Mock()),
         )
 
@@ -191,7 +191,7 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
 
         tool_mode_controller = CanvasToolModeController(
             view,
-            hover_refresh=view.services.hover_scene_service.clear_hover_highlight,
+            hover_refresh=view.services.hover.refresh,
             set_active_tool=view.services.tools.set_active,
         )
         tool_mode_controller.set_bond_style("double", 2)
@@ -214,9 +214,7 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         )
         self.assertEqual(view.refresh_selection_outline.call_count, 3)
         self.assertEqual(view.callback_state.tool_change.call_count, 3)
-        self.assertEqual(
-            view.services.hover_scene_service.clear_hover_highlight.call_count, 3
-        )
+        self.assertEqual(view.services.hover.refresh.call_count, 3)
 
     def test_point_pair_helpers_cover_add_geometry_paths(self) -> None:
         view = SimpleNamespace(

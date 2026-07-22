@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtWidgets import QMenu
 
@@ -15,7 +13,6 @@ from chemvas.features.rendering import (
 )
 from chemvas.ui.canvas_insert_state import insert_state_for
 from chemvas.ui.canvas_model_access import bond_for_id
-from chemvas.ui.hover_highlight_access import clear_hover_highlight_for
 from chemvas.ui.input_view_access import (
     global_pos_from_event_for,
     reset_view_transform_for,
@@ -44,19 +41,17 @@ class CanvasPointerController:
         *,
         hit_testing_service,
         insert_controller,
-        hover_interaction_service,
+        hover_controller,
         tool_controller,
         scene_transform_controller,
-        hover_refresh: Callable[..., None] | None = None,
     ) -> None:
         self.canvas = canvas
         self.insert_state = insert_state_for(canvas)
         self.hit_testing_service = hit_testing_service
         self.insert_controller = insert_controller
-        self.hover_interaction_service = hover_interaction_service
+        self.hover = hover_controller
         self.tool_controller = tool_controller
         self.scene_transform = scene_transform_controller
-        self._hover_refresh = hover_refresh or (lambda: None)
 
     @staticmethod
     def _accept_event(event) -> None:
@@ -98,7 +93,7 @@ class CanvasPointerController:
             event.button() == Qt.MouseButton.RightButton
             and self._show_double_bond_context_menu(event)
         ):
-            clear_hover_highlight_for(self.canvas)
+            self.hover.clear_hover_highlight()
             return
         if (
             self.insert_state.template_active
@@ -107,11 +102,11 @@ class CanvasPointerController:
             scene_pos = self.hit_testing_service.scene_pos_from_event(event)
             if self._outside_sheet(scene_pos):
                 self._clear_insert_preview("template")
-                clear_hover_highlight_for(self.canvas)
+                self.hover.clear_hover_highlight()
                 self._accept_event(event)
                 return
             self.insert_controller.commit_template_insert(scene_pos)
-            clear_hover_highlight_for(self.canvas)
+            self.hover.clear_hover_highlight()
             return
         if (
             self.insert_state.smiles_active
@@ -120,11 +115,11 @@ class CanvasPointerController:
             scene_pos = self.hit_testing_service.scene_pos_from_event(event)
             if self._outside_sheet(scene_pos):
                 self._clear_insert_preview("smiles")
-                clear_hover_highlight_for(self.canvas)
+                self.hover.clear_hover_highlight()
                 self._accept_event(event)
                 return
             self.insert_controller.commit_smiles_insert(scene_pos)
-            clear_hover_highlight_for(self.canvas)
+            self.hover.clear_hover_highlight()
             return
         active_tool = getattr(self.tool_controller, "active", None)
         if (
@@ -134,7 +129,7 @@ class CanvasPointerController:
         ):
             scene_pos = self.hit_testing_service.scene_pos_from_event(event)
             if self._outside_sheet(scene_pos):
-                clear_hover_highlight_for(self.canvas)
+                self.hover.clear_hover_highlight()
                 self._accept_event(event)
                 return
         if active_tool and (allow_select_tool or active_tool.name != "select"):
@@ -143,18 +138,18 @@ class CanvasPointerController:
                 # Perspective captures an exact scene snapshot on press.
                 # Remove transient hover items before that boundary so their
                 # normal cleanup is not treated as an external scene mutation.
-                clear_hover_highlight_for(self.canvas)
+                self.hover.clear_hover_highlight()
             handled = active_tool.on_mouse_press(event)
             if not clear_before_press:
                 # Other tools still consume hover atom/bond IDs while handling
                 # their press, so preserve the established clear-after contract.
-                clear_hover_highlight_for(self.canvas)
+                self.hover.clear_hover_highlight()
             if handled:
                 return
             base_event(event)
             return
         base_event(event)
-        clear_hover_highlight_for(self.canvas)
+        self.hover.clear_hover_highlight()
 
     def _show_double_bond_context_menu(self, event, *, menu_factory=QMenu) -> bool:
         bond_id = self._context_bond_id(event)
@@ -217,11 +212,11 @@ class CanvasPointerController:
         if self._outside_sheet(scene_pos):
             if self.insert_state.template_active:
                 self._clear_insert_preview("template")
-                clear_hover_highlight_for(self.canvas)
+                self.hover.clear_hover_highlight()
                 return
             if self.insert_state.smiles_active:
                 self._clear_insert_preview("smiles")
-                clear_hover_highlight_for(self.canvas)
+                self.hover.clear_hover_highlight()
                 return
             active_tool = getattr(self.tool_controller, "active", None)
             if (
@@ -230,7 +225,7 @@ class CanvasPointerController:
                 and self._tool_draws_on_sheet(active_tool)
             ):
                 self._reset_tool_preview(active_tool)
-            clear_hover_highlight_for(self.canvas)
+            self.hover.clear_hover_highlight()
             return
         if self.insert_state.template_active:
             self.insert_controller.render_template_preview(scene_pos)
@@ -239,9 +234,9 @@ class CanvasPointerController:
             self.insert_controller.render_smiles_preview(scene_pos)
             return
         if event.buttons() == Qt.MouseButton.NoButton:
-            self.hover_interaction_service.update_hover_highlight(scene_pos)
+            self.hover.update_hover_highlight(scene_pos)
         else:
-            clear_hover_highlight_for(self.canvas)
+            self.hover.clear_hover_highlight()
         active_tool = getattr(self.tool_controller, "active", None)
         if active_tool and active_tool.on_mouse_move(event):
             return
@@ -254,21 +249,21 @@ class CanvasPointerController:
             scene_pos = self.hit_testing_service.scene_pos_from_event(event)
             if self._outside_sheet(scene_pos):
                 self._reset_tool_preview(active_tool)
-                clear_hover_highlight_for(self.canvas)
-                self._hover_refresh()
+                self.hover.clear_hover_highlight()
+                self.hover.refresh()
                 self._accept_event(event)
                 return
         if active_tool and active_tool.on_mouse_release(event):
-            self._hover_refresh()
+            self.hover.refresh()
             return
         base_mouse_release_event(event)
-        self._hover_refresh()
+        self.hover.refresh()
 
     def viewport_event(self, event, *, single_shot, base_viewport_event) -> bool:
         if event.type() in {QEvent.Type.Leave, QEvent.Type.Hide}:
-            clear_hover_highlight_for(self.canvas)
+            self.hover.clear_hover_highlight()
         elif event.type() == QEvent.Type.Enter:
-            single_shot(0, self._hover_refresh)
+            single_shot(0, self.hover.refresh)
         elif event.type() == QEvent.Type.MouseMove:
             scene_pos = self.hit_testing_service.scene_pos_from_event(event)
             if self._outside_sheet(scene_pos):
@@ -283,7 +278,7 @@ class CanvasPointerController:
                     active_tool = getattr(self.tool_controller, "active", None)
                     if active_tool and self._tool_draws_on_sheet(active_tool):
                         self._reset_tool_preview(active_tool)
-                clear_hover_highlight_for(self.canvas)
+                self.hover.clear_hover_highlight()
             elif self.insert_state.template_active:
                 self.insert_controller.render_template_preview(scene_pos)
             elif self.insert_state.smiles_active:
@@ -292,9 +287,9 @@ class CanvasPointerController:
                 getattr(event, "buttons", lambda: Qt.MouseButton.NoButton)()
                 == Qt.MouseButton.NoButton
             ):
-                self.hover_interaction_service.update_hover_highlight(scene_pos)
+                self.hover.update_hover_highlight(scene_pos)
             else:
-                clear_hover_highlight_for(self.canvas)
+                self.hover.clear_hover_highlight()
         return base_viewport_event(event)
 
     def wheel_event(self, event, *, base_wheel_event) -> None:
@@ -328,4 +323,4 @@ class CanvasPointerController:
     def scroll_contents_by(self, dx: int, dy: int, *, base_scroll_contents_by) -> None:
         base_scroll_contents_by(dx, dy)
         reset_view_transform_for(self.canvas)
-        clear_hover_highlight_for(self.canvas)
+        self.hover.clear_hover_highlight()

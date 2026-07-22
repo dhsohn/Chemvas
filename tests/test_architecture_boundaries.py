@@ -1314,8 +1314,6 @@ def test_simple_canvas_access_helpers_delegate_service_lookup_to_ports() -> None
         APP_ROOT / "chemvas" / "ui" / "benzene_preview_access.py",
         APP_ROOT / "chemvas" / "ui" / "canvas_model_access.py",
         APP_ROOT / "chemvas" / "ui" / "canvas_scene_reset_access.py",
-        APP_ROOT / "chemvas" / "ui" / "hover_highlight_access.py",
-        APP_ROOT / "chemvas" / "ui" / "hover_interaction_access.py",
         APP_ROOT / "chemvas" / "ui" / "insert_session_access.py",
         APP_ROOT / "chemvas" / "ui" / "note_item.py",
         APP_ROOT / "chemvas" / "ui" / "note_item_access.py",
@@ -1552,7 +1550,6 @@ def test_service_fallbacks_use_canvas_service_accessor_instead_of_services_looku
         APP_ROOT / "chemvas" / "ui" / "canvas_bond_mutation_service.py",
         APP_ROOT / "chemvas" / "ui" / "canvas_color_mutation_service.py",
         APP_ROOT / "chemvas" / "ui" / "insert_controller.py",
-        APP_ROOT / "chemvas" / "ui" / "hover_interaction_service.py",
         APP_ROOT / "chemvas" / "ui" / "scene_item_controller.py",
         APP_ROOT / "chemvas" / "ui" / "selection_service_bundle.py",
         APP_ROOT / "chemvas" / "ui" / "selection_hit_test_service.py",
@@ -1590,7 +1587,6 @@ def test_explicit_service_collaborators_do_not_lookup_canvas_services() -> None:
     paths = [
         APP_ROOT / "chemvas" / "ui" / "canvas_style_controller.py",
         APP_ROOT / "chemvas" / "ui" / "structure_insert_service.py",
-        APP_ROOT / "chemvas" / "ui" / "hover_interaction_service.py",
         APP_ROOT / "chemvas" / "ui" / "canvas_tool_mode_controller.py",
     ]
     pattern = re.compile(
@@ -1602,7 +1598,7 @@ def test_explicit_service_collaborators_do_not_lookup_canvas_services() -> None:
     assert _matching_lines(pattern, paths) == []
 
 
-def test_tool_mode_controller_uses_injected_hover_refresh_port() -> None:
+def test_tool_mode_controller_does_not_lookup_legacy_hover_refresh_helpers() -> None:
     controller = APP_ROOT / "chemvas" / "ui" / "canvas_tool_mode_controller.py"
     pattern = re.compile(
         r"\bcanvas_hover_refresh\b"
@@ -1625,7 +1621,7 @@ def test_tool_activation_uses_injected_ports() -> None:
     assert _matching_lines(pattern, paths) == []
 
 
-def test_hover_refresh_consumers_use_injected_port() -> None:
+def test_hover_refresh_consumers_do_not_lookup_legacy_refresh_helpers() -> None:
     paths = [
         APP_ROOT / "chemvas" / "ui" / "canvas_input_controller.py",
         APP_ROOT / "chemvas" / "ui" / "canvas_pointer_controller.py",
@@ -1641,12 +1637,14 @@ def test_hover_refresh_consumers_use_injected_port() -> None:
     assert _matching_lines(pattern, paths) == []
 
 
-def test_canvas_hover_refresh_uses_injected_ports() -> None:
-    module = APP_ROOT / "chemvas" / "ui" / "canvas_hover_refresh.py"
+def test_hover_controller_uses_injected_collaborators_without_service_lookup() -> None:
+    module = APP_ROOT / "chemvas" / "ui" / "hover.py"
     pattern = re.compile(
-        r"\bcanvas_service_for\b"
-        r"|\bclear_hover_highlight_for\b"
-        r"|\bhover_interaction_service\b"
+        r"\b(?:canvas_services_for|canvas_service_for|optional_canvas_service_for)\b"
+        r"|getattr\([^,\n]+,\s*\"services\""
+        r"|\b(?:selection_controller|hit_testing_service|insert_controller|"
+        r"scene_decoration_build_service|mark_scene_service|"
+        r"active_tool_name_provider)\s*=\s*None"
     )
 
     assert _matching_lines(pattern, [module]) == []
@@ -1907,14 +1905,41 @@ def test_canvas_services_delegates_handle_service_assembly_to_bundle() -> None:
     assert _matching_lines(direct_instantiation, _service_assembly_paths()) == []
 
 
-def test_canvas_services_delegates_hover_service_assembly_to_bundle() -> None:
-    source = _canvas_service_composer_source()
-    direct_instantiation = re.compile(
-        r"\b(?:BondHoverPreviewService|HoverInteractionService|HoverSceneService|MarkHoverPreviewService)\("
+def test_canvas_runtime_services_exposes_direct_hover_controller_boundary() -> None:
+    runtime_services = APP_ROOT / "chemvas" / "ui" / "canvas_runtime_services.py"
+    tree = ast.parse(runtime_services.read_text())
+    hover_annotation: str | None = None
+    for node in tree.body:
+        if not isinstance(node, ast.ClassDef) or node.name != "CanvasRuntimeServices":
+            continue
+        for child in node.body:
+            if (
+                isinstance(child, ast.AnnAssign)
+                and isinstance(child.target, ast.Name)
+                and child.target.id == "hover"
+            ):
+                hover_annotation = ast.unparse(child.annotation)
+                break
+
+    assert hover_annotation == "HoverController"
+
+
+def test_hover_service_graph_does_not_reintroduce_legacy_role_stack() -> None:
+    paths = [
+        *_service_assembly_paths(),
+        APP_ROOT / "chemvas" / "ui" / "canvas_runtime_services.py",
+        APP_ROOT / "chemvas" / "ui" / "canvas_input_service_bundle.py",
+        APP_ROOT / "chemvas" / "ui" / "hover.py",
+    ]
+    pattern = re.compile(
+        r"\b(?:HoverServices|HoverServiceBundle|BondHoverPreviewService|"
+        r"HoverInteractionService|HoverSceneService|MarkHoverPreviewService)\b"
+        r"|\b(?:bond_hover_preview_service|canvas_hover_refresh|"
+        r"hover_interaction_service|hover_scene_service|hover_service_bundle|"
+        r"mark_hover_preview_service)\b"
     )
 
-    assert "refresh_hover_from_cursor_for" not in source
-    assert _matching_lines(direct_instantiation, _service_assembly_paths()) == []
+    assert _matching_lines(pattern, paths) == []
 
 
 def test_canvas_services_delegates_scene_decoration_service_assembly_to_bundle() -> (
@@ -2217,34 +2242,6 @@ def test_canvas_note_controller_does_not_use_context_facade() -> None:
     assert _matching_lines(pattern, [controller]) == []
 
 
-def test_bond_hover_preview_service_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "bond_hover_preview_context.py"
-    service = APP_ROOT / "chemvas" / "ui" / "bond_hover_preview_service.py"
-    pattern = re.compile(
-        r"\bBondHoverPreviewContext\b"
-        r"|\bbond_hover_preview_context_for\b"
-        r"|self\.context\b"
-        r"|\bcanvas_service_for\b"
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [service]) == []
-
-
-def test_mark_hover_preview_service_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "mark_hover_preview_context.py"
-    service = APP_ROOT / "chemvas" / "ui" / "mark_hover_preview_service.py"
-    pattern = re.compile(
-        r"\bMarkHoverPreviewContext\b"
-        r"|\bmark_hover_preview_context_for\b"
-        r"|self\.context\b"
-        r"|\bcanvas_service_for\b"
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [service]) == []
-
-
 def test_canvas_color_mutation_service_does_not_use_context_facade() -> None:
     removed_context = APP_ROOT / "chemvas" / "ui" / "canvas_color_mutation_context.py"
     service = APP_ROOT / "chemvas" / "ui" / "canvas_color_mutation_service.py"
@@ -2279,20 +2276,6 @@ def test_scene_decoration_service_does_not_use_context_facade() -> None:
     service = APP_ROOT / "chemvas" / "ui" / "scene_decoration_service.py"
     pattern = re.compile(
         r"\bSceneDecorationContext\b|\bscene_decoration_context_for\b|self\.context\b"
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [service]) == []
-
-
-def test_hover_interaction_service_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "hover_interaction_context.py"
-    service = APP_ROOT / "chemvas" / "ui" / "hover_interaction_service.py"
-    pattern = re.compile(
-        r"\bHoverInteractionContext\b"
-        r"|\bhover_interaction_context_for\b"
-        r"|self\.context\b"
-        r"|\bselection_controller_for\b"
     )
 
     assert not removed_context.exists()
@@ -2920,17 +2903,6 @@ def test_canvas_handle_controller_does_not_use_context_facade() -> None:
     assert _matching_lines(pattern, [controller]) == []
 
 
-def test_hover_scene_service_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "hover_scene_context.py"
-    service = APP_ROOT / "chemvas" / "ui" / "hover_scene_service.py"
-    pattern = re.compile(
-        r"\bHoverSceneContext\b|\bhover_scene_context_for\b|self\.context\b"
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [service]) == []
-
-
 def test_rotation_preview_controller_does_not_use_context_facade() -> None:
     removed_context = APP_ROOT / "chemvas" / "ui" / "canvas_rotation_preview_context.py"
     controller = APP_ROOT / "chemvas" / "ui" / "canvas_rotation_preview_controller.py"
@@ -3292,13 +3264,24 @@ def test_production_code_uses_atom_graphics_accessors_instead_of_canvas_alias_fa
     assert _matching_lines(pattern, _app_python_files()) == []
 
 
-def test_hover_state_accessor_does_not_read_canvas_hover_aliases() -> None:
+def test_hover_state_accessor_stays_a_thin_runtime_state_leaf() -> None:
     hover_state = APP_ROOT / "chemvas" / "ui" / "canvas_hover_state.py"
+    tree = ast.parse(hover_state.read_text())
+    classes = [node.name for node in tree.body if isinstance(node, ast.ClassDef)]
+    functions = [
+        node.name
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
     pattern = re.compile(
-        r"\bcanvas_state_mirror\b|\bsync_canvas_attr_map\b"
-        r"|\bgetattr\(\s*canvas\s*,\s*\"(?:hover_items|hover_atom_id|hover_bond_id)\""
+        r"\b(?:ensure_canvas_state|canvas_state_mirror|sync_canvas_attr_map)\b"
+        r"|\b(?:getattr|setattr)\(\s*canvas\b"
+        r"|\b(?:CanvasHoverState|HoverPreviewState|HOVER_STATE_ATTR_MAP)\b"
+        r"|\b(?:append|extend|set)_hover_(?:item|items|atom_id|bond_id)_for\b"
     )
 
+    assert classes == []
+    assert functions == ["hover_state_for"]
     assert _matching_lines(pattern, [hover_state]) == []
 
 
@@ -3576,18 +3559,6 @@ def test_perspective_tool_controller_does_not_reintroduce_context_delegate_wrapp
         break
 
     assert private_methods.isdisjoint(forbidden_methods)
-
-
-def test_mark_hover_preview_uses_injected_hit_testing_service() -> None:
-    service = APP_ROOT / "chemvas" / "ui" / "mark_hover_preview_service.py"
-    pattern = re.compile(
-        r"\bcanvas_hit_testing_service_for\b"
-        r"|\bhover_scene_service_for\b"
-        r"|\bcanvas_service_for\b"
-        r"|\bdef _find_atom_near\b"
-    )
-
-    assert _matching_lines(pattern, [service]) == []
 
 
 def test_tools_module_is_reexport_only() -> None:

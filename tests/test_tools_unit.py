@@ -30,6 +30,7 @@ if QApplication is not None:
         MoveAtomsCommand,
     )
     from chemvas.domain.document import Atom, Bond
+    from chemvas.features.hover import HoverState
     from chemvas.ui.canvas_atom_graphics_state import (
         atom_dots_for,
         atom_items_for,
@@ -37,7 +38,7 @@ if QApplication is not None:
         set_atom_items_for,
     )
     from chemvas.ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
-    from chemvas.ui.canvas_hover_state import set_hover_bond_id_for
+    from chemvas.ui.canvas_hover_state import hover_state_for
     from chemvas.ui.canvas_scene_items_state import (
         selected_notes_for,
         set_scene_item_collection_for,
@@ -415,11 +416,11 @@ class _FakeBondCanvas:
         self.active_bond_order = 1
         self.snap_angle_step = 30
         self.renderer = SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0))
+        self.runtime_state = SimpleNamespace(hover_preview_state=HoverState())
         self.preview_build_items = ["new-preview"]
         self.atom_near = None
         self.item = None
         self.preferred_item = None
-        self.hover_bond_id = None
         self.model = SimpleNamespace(
             atoms={
                 1: Atom("C", 10.0, 0.0),
@@ -3144,12 +3145,12 @@ class ToolsUnitTest(unittest.TestCase):
 
         canvas.model.bonds[0] = Bond(1, 2, 2, style="bold_in")
         canvas.item = None
-        set_hover_bond_id_for(canvas, 0)
+        hover_state_for(canvas).bond_id = 0
         set_tool_setting_for(canvas, "active_bond_style", "bold")
         self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
         self.assertEqual(canvas.bond_style_calls[-1], (0, "bold_in", 2))
 
-        set_hover_bond_id_for(canvas, None)
+        hover_state_for(canvas).bond_id = None
         canvas.atom_near = 1
         with mock.patch.object(tool, "_set_preview_items") as preview:
             self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(2.0, 2.0))))

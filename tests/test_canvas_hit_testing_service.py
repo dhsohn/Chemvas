@@ -13,9 +13,10 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from chemvas.domain.document import Atom, Bond
+    from chemvas.features.hover import HoverState
     from chemvas.ui.canvas_bond_graphics_state import set_bond_items_for
     from chemvas.ui.canvas_hit_testing_service import CanvasHitTestingService
-    from chemvas.ui.canvas_hover_state import set_hover_bond_id_for
+    from chemvas.ui.canvas_hover_state import hover_state_for
     from chemvas.ui.spatial_index_state import CanvasSpatialIndexState
 
 
@@ -235,8 +236,9 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
             renderer=SimpleNamespace(
                 style=SimpleNamespace(bond_line_width=1.0, bond_length_px=20.0)
             ),
+            runtime_state=SimpleNamespace(hover_preview_state=HoverState()),
         )
-        set_hover_bond_id_for(canvas, 7)
+        hover_state_for(canvas).bond_id = 7
         service = CanvasHitTestingService(canvas)
         service.find_atom_near = mock.Mock(return_value=1)
         service.find_bond_near = mock.Mock(return_value=0)
@@ -247,7 +249,7 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
         self.assertEqual(service.nearest_bond_hit(QPointF(5.0, 2.0)), (0, 2.5))
         self.assertEqual(service.bond_id_from_event(object()), 7)
 
-        set_hover_bond_id_for(canvas, None)
+        hover_state_for(canvas).bond_id = None
         service.find_bond_near.return_value = 2
         self.assertEqual(service.bond_id_from_event(object()), 2)
         service.find_bond_near.assert_called_with(QPointF(3.0, 4.0), 10.56)

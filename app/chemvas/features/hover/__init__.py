@@ -1,11 +1,24 @@
+"""Pure hover planning policy."""
+
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Literal
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Literal
 
-from chemvas.features.selection import StructureHit
+if TYPE_CHECKING:
+    from chemvas.features.selection import StructureHit
 
 HoverAction = Literal["clear", "free_bond_preview", "atom_hit", "bond_hit", "noop"]
+
+
+@dataclass(slots=True)
+class HoverState:
+    """Transient hover state without a dependency on the Qt adapter."""
+
+    style: str | None = None
+    items: list[object] = field(default_factory=list)
+    atom_id: int | None = None
+    bond_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -76,6 +89,8 @@ def plan_structure_hover_update(
 
 
 __all__ = [
+    "HoverAction",
+    "HoverState",
     "HoverUpdatePlan",
     "plan_structure_hover_update",
 ]

@@ -49,7 +49,6 @@ if QApplication is not None:
     from chemvas.ui.canvas_bond_graphics_state import bond_items_for, bond_items_for_id
     from chemvas.ui.canvas_bond_renderer_state import update_bond_geometry_for
     from chemvas.ui.canvas_geometry_access import mark_target_distance_for_atom_for
-    from chemvas.ui.canvas_hover_refresh import refresh_hover_from_cursor_for
     from chemvas.ui.canvas_hover_state import hover_state_for
     from chemvas.ui.canvas_insert_state import insert_state_for
     from chemvas.ui.canvas_mark_registry import mark_registry_for
@@ -67,7 +66,6 @@ if QApplication is not None:
         restore_canvas_state_for,
         snapshot_canvas_state_for,
     )
-    from chemvas.ui.hover_interaction_access import update_hover_highlight_for
     from chemvas.ui.main_window_ports import (
         active_canvas_for_window,
         services_for_window,
@@ -98,11 +96,7 @@ if QApplication is not None:
     )
 
     def refresh_hover_from_cursor_for_canvas(canvas) -> None:
-        refresh_hover_from_cursor_for(
-            canvas,
-            update_hover_highlight=canvas.services.hover_interaction_service.update_hover_highlight,
-            clear_hover_highlight=canvas.services.hover_scene_service.clear_hover_highlight,
-        )
+        canvas.services.hover.refresh()
 
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for GUI smoke tests")
@@ -140,7 +134,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
                 self.window
             ).services.insert_controller.render_smiles_preview(point)
         else:
-            update_hover_highlight_for(active_canvas_for_window(self.window), point)
+            active_canvas_for_window(self.window).services.hover.update_hover_highlight(
+                point
+            )
         self.app.processEvents()
         QTest.qWait(10)
 
@@ -641,7 +637,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         ).tool_mode_controller.set_mark_kind("plus")
         hover_pos = QPointF(24.0, 31.0)
 
-        update_hover_highlight_for(active_canvas_for_window(self.window), hover_pos)
+        active_canvas_for_window(self.window).services.hover.update_hover_highlight(
+            hover_pos
+        )
 
         preview = next(
             item
@@ -659,7 +657,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         ).tool_mode_controller.set_mark_kind("minus")
         hover_pos = QPointF(5.0, -2.0)
 
-        update_hover_highlight_for(active_canvas_for_window(self.window), hover_pos)
+        active_canvas_for_window(self.window).services.hover.update_hover_highlight(
+            hover_pos
+        )
 
         preview = next(
             item
@@ -723,9 +723,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             active_canvas_for_window(self.window).viewport().mapToGlobal(viewport_pos)
         )
 
-        with patch(
-            "chemvas.ui.canvas_hover_refresh.QCursor.pos", return_value=global_pos
-        ):
+        with patch("chemvas.ui.hover.QCursor.pos", return_value=global_pos):
             refresh_hover_from_cursor_for_canvas(active_canvas_for_window(self.window))
             self.assertEqual(
                 hover_state_for(active_canvas_for_window(self.window)).atom_id, atom_id
@@ -762,9 +760,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             active_canvas_for_window(self.window).viewport().mapToGlobal(viewport_pos)
         )
 
-        with patch(
-            "chemvas.ui.canvas_hover_refresh.QCursor.pos", return_value=global_pos
-        ):
+        with patch("chemvas.ui.hover.QCursor.pos", return_value=global_pos):
             refresh_hover_from_cursor_for_canvas(active_canvas_for_window(self.window))
             self.assertEqual(
                 hover_state_for(active_canvas_for_window(self.window)).atom_id, atom_id
@@ -795,9 +791,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         canvas_services_for(canvas).tool_mode_controller.set_tool("select")
         self.app.processEvents()
 
-        with patch(
-            "chemvas.ui.canvas_hover_refresh.QCursor.pos", return_value=global_pos
-        ):
+        with patch("chemvas.ui.hover.QCursor.pos", return_value=global_pos):
             self._press_key(Qt.Key.Key_X)
 
         self.assertEqual(canvas.services.tools.active.name, "bond")
@@ -811,9 +805,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertTrue(hover_state_for(canvas).items)
         self.assertTrue((hover_state_for(canvas).style or "").startswith("single:1"))
 
-        with patch(
-            "chemvas.ui.canvas_hover_refresh.QCursor.pos", return_value=global_pos
-        ):
+        with patch("chemvas.ui.hover.QCursor.pos", return_value=global_pos):
             self._press_key(Qt.Key.Key_J)
 
         self.assertEqual(canvas.services.tools.active.name, "benzene")
@@ -1128,9 +1120,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         viewport_pos = canvas.mapFromScene(QPointF(0.0, 0.0))
         global_pos = canvas.viewport().mapToGlobal(viewport_pos)
 
-        with patch(
-            "chemvas.ui.canvas_hover_refresh.QCursor.pos", return_value=global_pos
-        ):
+        with patch("chemvas.ui.hover.QCursor.pos", return_value=global_pos):
             refresh_hover_from_cursor_for_canvas(canvas)
             self.assertEqual(hover_state_for(canvas).atom_id, atom_id)
 
@@ -1654,8 +1644,8 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             active_canvas_for_window(self.window), 0, "P", record=False
         )
 
-        update_hover_highlight_for(
-            active_canvas_for_window(self.window), QPointF(4.0, 0.0)
+        active_canvas_for_window(self.window).services.hover.update_hover_highlight(
+            QPointF(4.0, 0.0)
         )
 
         self.assertEqual(
@@ -1694,8 +1684,8 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         target_atom_id = ring_atom_ids[0]
         atom = active_canvas_for_window(self.window).model.atoms[target_atom_id]
 
-        update_hover_highlight_for(
-            active_canvas_for_window(self.window), QPointF(atom.x + 1.0, atom.y + 1.0)
+        active_canvas_for_window(self.window).services.hover.update_hover_highlight(
+            QPointF(atom.x + 1.0, atom.y + 1.0)
         )
 
         self.assertEqual(
@@ -2937,7 +2927,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         canvas.services.structure_build_service.render_model()
         self._select_atom_ids(left_id, right_id)
         canvas_services_for(canvas).tool_mode_controller.set_tool("perspective")
-        canvas.services.hover_scene_service.add_atom_hover_indicator(left_id)
+        canvas.services.hover.add_atom_hover_indicator(left_id)
         self.assertTrue(hover_state_for(canvas).items)
 
         self._drag_scene_point(QPointF(-40.0, 0.0), QPointF(40.0, 30.0))

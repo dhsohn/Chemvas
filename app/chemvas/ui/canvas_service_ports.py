@@ -13,10 +13,6 @@ def benzene_preview_service_for_access(canvas) -> Any:
     return canvas_services_for(canvas).auxiliary.benzene_preview_service
 
 
-def bond_hover_preview_service_for_access(canvas) -> Any:
-    return canvas_services_for(canvas).hover.bond_hover_preview_service
-
-
 def canvas_window_document_session_service(canvas) -> Any:
     return canvas_services_for(canvas).document.canvas_document_session_service
 
@@ -53,20 +49,8 @@ def history_recording_service_for_access(canvas) -> Any:
     return canvas_services_for(canvas).document.canvas_history_recording_service
 
 
-def hover_interaction_service_for_access(canvas) -> Any:
-    return canvas_services_for(canvas).hover.hover_interaction_service
-
-
-def hover_scene_service_for_access(canvas) -> Any:
-    return canvas_services_for(canvas).hover.hover_scene_service
-
-
 def insert_controller_for_access(canvas) -> Any:
     return canvas_services_for(canvas).structure.insert_controller
-
-
-def mark_hover_preview_service_for_access(canvas) -> Any:
-    return canvas_services_for(canvas).hover.mark_hover_preview_service
 
 
 def mark_scene_service_for_access(canvas) -> Any:
@@ -132,7 +116,6 @@ def structure_mutation_build_service(canvas) -> Any:
 __all__ = [
     "atom_label_service_for_access",
     "benzene_preview_service_for_access",
-    "bond_hover_preview_service_for_access",
     "canvas_window_document_session_service",
     "curved_arrow_path_service_for_access",
     "geometry_controller_for_access",
@@ -142,10 +125,7 @@ __all__ = [
     "history_bond_mutation_service_for",
     "history_hit_testing_service_for",
     "history_recording_service_for_access",
-    "hover_interaction_service_for_access",
-    "hover_scene_service_for_access",
     "insert_controller_for_access",
-    "mark_hover_preview_service_for_access",
     "mark_scene_service_for_access",
     "move_controller_for_access",
     "note_controller_for_access",

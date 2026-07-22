@@ -50,8 +50,6 @@ if QApplication is not None:
     from chemvas.ui.canvas_document_session_service import CanvasDocumentSessionService
     from chemvas.ui.canvas_history_service import CanvasHistoryService
     from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_for
-    from chemvas.ui.canvas_hover_refresh import refresh_hover_from_cursor_for
-    from chemvas.ui.canvas_insert_state import CanvasInsertState
     from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
     from chemvas.ui.canvas_note_controller import CanvasNoteController
     from chemvas.ui.canvas_ring_fill_scene_access import (
@@ -104,18 +102,6 @@ if QApplication is not None:
     from chemvas.ui.history_recording_access import (
         record_additions_for,
         record_bond_update_for,
-    )
-    from chemvas.ui.hover_highlight_access import (
-        add_hover_preview_items_for,
-        clear_hover_highlight_for,
-    )
-    from chemvas.ui.hover_interaction_access import (
-        add_atom_hover_indicator_for,
-        add_bond_hover_indicator_for,
-        add_bond_style_hover_preview_for,
-        add_bond_tool_hover_preview_for,
-        add_mark_hover_preview_for,
-        update_hover_highlight_for,
     )
     from chemvas.ui.move_access import shift_selection_outlines_for
     from chemvas.ui.note_item_access import update_note_box_for
@@ -433,7 +419,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                     cancel_template_insert=mock.Mock(),
                     cancel_smiles_insert=mock.Mock(),
                 ),
-                hover_scene_service=SimpleNamespace(clear_hover_highlight=mock.Mock()),
+                hover=SimpleNamespace(refresh=mock.Mock()),
             ),
             refresh_selection_outline=mock.Mock(),
             callback_state=CanvasCallbackState(tool_change=mock.Mock()),
@@ -445,7 +431,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         tool_view.services.tool_mode_controller = CanvasToolModeController(
             tool_view,
             insert_controller=tool_view.services.insert_controller,
-            hover_refresh=tool_view.services.hover_scene_service.clear_hover_highlight,
+            hover_refresh=tool_view.services.hover.refresh,
             set_active_tool=tool_view.services.tools.set_active,
         )
         canvas_services_for(tool_view).tool_mode_controller.set_tool("bond")
@@ -466,9 +452,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         self.assertEqual(tool_settings_state_for(tool_view).mark_kind, "circled_plus")
         self.assertEqual(tool_view.refresh_selection_outline.call_count, 3)
         self.assertEqual(tool_view.callback_state.tool_change.call_count, 3)
-        self.assertEqual(
-            tool_view.services.hover_scene_service.clear_hover_highlight.call_count, 3
-        )
+        self.assertEqual(tool_view.services.hover.refresh.call_count, 3)
 
     def test_document_session_wrappers_delegate_to_service(self) -> None:
         document_session_service = mock.Mock()
@@ -634,108 +618,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         atom_label_service.prompt_atom_label.assert_called_once_with(2)
 
-    def test_refresh_hover_from_cursor_and_export_xyz_cover_guard_and_error_paths(
-        self,
-    ) -> None:
-        refresh_hover_from_cursor_for(SimpleNamespace())
-
-        template_view = SimpleNamespace(
-            insert_state=CanvasInsertState(template_active=True),
-            services=SimpleNamespace(
-                tools=object(),
-                hover_scene_service=SimpleNamespace(clear_hover_highlight=mock.Mock()),
-            ),
-        )
-        refresh_hover_from_cursor_for(
-            template_view,
-            clear_hover_highlight=template_view.services.hover_scene_service.clear_hover_highlight,
-        )
-        template_view.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
-
-        template_render_viewport = SimpleNamespace(
-            mapFromGlobal=mock.Mock(return_value=QPointF(2.0, 3.0)),
-            rect=lambda: SimpleNamespace(contains=lambda _pos: True),
-        )
-        template_render_view = SimpleNamespace(
-            insert_state=CanvasInsertState(template_active=True),
-            viewport=lambda: template_render_viewport,
-            mapToScene=mock.Mock(return_value=QPointF(12.0, 13.0)),
-            services=SimpleNamespace(
-                hover_scene_service=SimpleNamespace(clear_hover_highlight=mock.Mock()),
-                insert_controller=SimpleNamespace(render_template_preview=mock.Mock()),
-            ),
-        )
-        with mock.patch(
-            "chemvas.ui.canvas_hover_refresh.QCursor.pos",
-            return_value=QPointF(1.0, 2.0),
-        ):
-            refresh_hover_from_cursor_for(
-                template_render_view,
-                clear_hover_highlight=template_render_view.services.hover_scene_service.clear_hover_highlight,
-                render_template_preview=template_render_view.services.insert_controller.render_template_preview,
-            )
-        template_render_view.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
-        template_render_view.services.insert_controller.render_template_preview.assert_called_once_with(
-            QPointF(12.0, 13.0)
-        )
-
-        viewport = SimpleNamespace(
-            mapFromGlobal=mock.Mock(return_value=QPointF(4.0, 5.0)),
-            rect=lambda: SimpleNamespace(contains=lambda _pos: True),
-        )
-        inside_view = SimpleNamespace(
-            insert_state=CanvasInsertState(),
-            viewport=lambda: viewport,
-            mapToScene=mock.Mock(return_value=QPointF(7.0, 8.0)),
-            services=SimpleNamespace(
-                tools=object(),
-                hover_interaction_service=SimpleNamespace(
-                    update_hover_highlight=mock.Mock()
-                ),
-                hover_scene_service=SimpleNamespace(clear_hover_highlight=mock.Mock()),
-            ),
-        )
-        with mock.patch(
-            "chemvas.ui.canvas_hover_refresh.QCursor.pos",
-            return_value=QPointF(1.0, 2.0),
-        ):
-            refresh_hover_from_cursor_for(
-                inside_view,
-                update_hover_highlight=inside_view.services.hover_interaction_service.update_hover_highlight,
-                clear_hover_highlight=inside_view.services.hover_scene_service.clear_hover_highlight,
-            )
-        inside_view.services.hover_interaction_service.update_hover_highlight.assert_called_once_with(
-            QPointF(7.0, 8.0)
-        )
-        inside_view.services.hover_scene_service.clear_hover_highlight.assert_not_called()
-
-        outside_view = SimpleNamespace(
-            insert_state=CanvasInsertState(),
-            viewport=lambda: SimpleNamespace(
-                mapFromGlobal=mock.Mock(return_value=QPointF(9.0, 10.0)),
-                rect=lambda: SimpleNamespace(contains=lambda _pos: False),
-            ),
-            mapToScene=mock.Mock(),
-            services=SimpleNamespace(
-                tools=object(),
-                hover_interaction_service=SimpleNamespace(
-                    update_hover_highlight=mock.Mock()
-                ),
-                hover_scene_service=SimpleNamespace(clear_hover_highlight=mock.Mock()),
-            ),
-        )
-        with mock.patch(
-            "chemvas.ui.canvas_hover_refresh.QCursor.pos",
-            return_value=QPointF(3.0, 4.0),
-        ):
-            refresh_hover_from_cursor_for(
-                outside_view,
-                update_hover_highlight=outside_view.services.hover_interaction_service.update_hover_highlight,
-                clear_hover_highlight=outside_view.services.hover_scene_service.clear_hover_highlight,
-            )
-        outside_view.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
-        outside_view.services.hover_interaction_service.update_hover_highlight.assert_not_called()
-
+    def test_export_xyz_reports_rdkit_failures(self) -> None:
         error_model = MoleculeModel()
         error_model.add_atom("C", 0.0, 0.0)
         error_view = SimpleNamespace(
@@ -776,7 +659,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                     cancel_template_insert=mock.Mock(),
                     cancel_smiles_insert=mock.Mock(),
                 ),
-                hover_scene_service=SimpleNamespace(clear_hover_highlight=mock.Mock()),
+                hover=SimpleNamespace(refresh=mock.Mock()),
             ),
             refresh_selection_outline=mock.Mock(),
             callback_state=CanvasCallbackState(tool_change=callback),
@@ -784,16 +667,14 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         view.services.tool_mode_controller = CanvasToolModeController(
             view,
             insert_controller=view.services.insert_controller,
-            hover_refresh=view.services.hover_scene_service.clear_hover_highlight,
+            hover_refresh=view.services.hover.refresh,
             set_active_tool=view.services.tools.set_active,
         )
 
         canvas_services_for(view).tool_mode_controller.set_tool("bond")
 
         callback.assert_called_once_with()
-        view.services.hover_scene_service.clear_hover_highlight.assert_called_once_with(
-            render_insert_preview=True
-        )
+        view.services.hover.refresh.assert_called_once_with(render_insert_preview=True)
 
     def test_structure_build_wrappers_delegate(self) -> None:
         structure_build_service = mock.Mock()
@@ -897,108 +778,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             QPointF(2.0, 3.0),
             attach_atom_id=1,
             attach_bond_id=2,
-        )
-
-    def test_bond_hover_preview_wrappers_delegate(self) -> None:
-        bond_hover_preview_service = mock.Mock()
-        bond = object()
-        view = SimpleNamespace(
-            services=SimpleNamespace(
-                bond_hover_preview_service=bond_hover_preview_service
-            )
-        )
-
-        add_bond_style_hover_preview_for(view, bond)
-        add_bond_tool_hover_preview_for(view, 3, QPointF(4.0, 5.0))
-
-        bond_hover_preview_service.add_bond_style_hover_preview.assert_called_once_with(
-            bond
-        )
-        bond_hover_preview_service.add_bond_tool_hover_preview.assert_called_once_with(
-            3, QPointF(4.0, 5.0)
-        )
-
-    def test_mark_hover_preview_wrapper_delegates(self) -> None:
-        mark_hover_preview_service = mock.Mock()
-        view = SimpleNamespace(
-            services=SimpleNamespace(
-                mark_hover_preview_service=mark_hover_preview_service
-            )
-        )
-
-        add_mark_hover_preview_for(view, QPointF(6.0, 7.0))
-
-        mark_hover_preview_service.add_mark_hover_preview.assert_called_once_with(
-            QPointF(6.0, 7.0)
-        )
-
-    def test_hover_scene_wrappers_delegate(self) -> None:
-        hover_scene_service = mock.Mock()
-        view = SimpleNamespace(
-            services=SimpleNamespace(hover_scene_service=hover_scene_service)
-        )
-
-        clear_hover_highlight_for(view)
-        add_atom_hover_indicator_for(view, 3)
-        add_bond_hover_indicator_for(view, 4)
-        add_hover_preview_items_for(view, ["preview"])
-
-        hover_scene_service.clear_hover_highlight.assert_called_once_with()
-        hover_scene_service.add_atom_hover_indicator.assert_called_once_with(3)
-        hover_scene_service.add_bond_hover_indicator.assert_called_once_with(4)
-        hover_scene_service.add_hover_preview_items.assert_called_once_with(["preview"])
-
-    def test_hover_interaction_wrapper_delegates(self) -> None:
-        hover_interaction_service = mock.Mock()
-        view = SimpleNamespace(
-            services=SimpleNamespace(
-                hover_interaction_service=hover_interaction_service
-            )
-        )
-
-        update_hover_highlight_for(view, QPointF(8.0, 9.0))
-
-        hover_interaction_service.update_hover_highlight.assert_called_once_with(
-            QPointF(8.0, 9.0)
-        )
-
-    def test_hover_interaction_wrappers_prefer_services_over_legacy_fallbacks(
-        self,
-    ) -> None:
-        hover_scene_service = mock.Mock()
-        mark_hover_preview_service = mock.Mock()
-        bond_hover_preview_service = mock.Mock()
-        hover_interaction_service = mock.Mock()
-        view = SimpleNamespace(
-            services=SimpleNamespace(
-                hover_scene_service=hover_scene_service,
-                mark_hover_preview_service=mark_hover_preview_service,
-                bond_hover_preview_service=bond_hover_preview_service,
-                hover_interaction_service=hover_interaction_service,
-            ),
-        )
-        bond = object()
-
-        add_atom_hover_indicator_for(view, 3)
-        add_bond_hover_indicator_for(view, 4)
-        add_mark_hover_preview_for(view, QPointF(5.0, 6.0))
-        add_bond_tool_hover_preview_for(view, 7, QPointF(8.0, 9.0))
-        add_bond_style_hover_preview_for(view, bond)
-        update_hover_highlight_for(view, QPointF(10.0, 11.0))
-
-        hover_scene_service.add_atom_hover_indicator.assert_called_once_with(3)
-        hover_scene_service.add_bond_hover_indicator.assert_called_once_with(4)
-        mark_hover_preview_service.add_mark_hover_preview.assert_called_once_with(
-            QPointF(5.0, 6.0)
-        )
-        bond_hover_preview_service.add_bond_tool_hover_preview.assert_called_once_with(
-            7, QPointF(8.0, 9.0)
-        )
-        bond_hover_preview_service.add_bond_style_hover_preview.assert_called_once_with(
-            bond
-        )
-        hover_interaction_service.update_hover_highlight.assert_called_once_with(
-            QPointF(10.0, 11.0)
         )
 
     def test_selection_controller_public_api_delegates(self) -> None:

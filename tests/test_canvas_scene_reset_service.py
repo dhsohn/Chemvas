@@ -9,17 +9,13 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from chemvas.domain.document import MoleculeModel
 from chemvas.domain.transactions import HistoryStackSnapshot
+from chemvas.features.hover import HoverState
 from chemvas.ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
 from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for
 from chemvas.ui.canvas_graph_state import CanvasGraphState, graph_state_for
 from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_for
-from chemvas.ui.canvas_hover_state import (
-    hover_state_for,
-    set_hover_atom_id_for,
-    set_hover_bond_id_for,
-    set_hover_items_for,
-)
+from chemvas.ui.canvas_hover_state import hover_state_for
 from chemvas.ui.canvas_insert_state import CanvasInsertState, insert_state_for
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
 from chemvas.ui.canvas_rotation_preview_state import (
@@ -71,6 +67,17 @@ class _FakeScene:
 
     def clear(self) -> None:
         self.clear_calls += 1
+
+
+def _attach_minimal_runtime_state(canvas) -> None:
+    canvas.runtime_state = SimpleNamespace(
+        graph_state=graph_state_for(canvas),
+        rotation_state=rotation_state_for(canvas),
+        rotation_preview_state=rotation_preview_state_for(canvas),
+        insert_state=insert_state_for(canvas),
+        mark_registry=mark_registry_for(canvas),
+        hover_preview_state=HoverState(),
+    )
 
 
 class CanvasSceneResetServiceTest(unittest.TestCase):
@@ -1519,6 +1526,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             selection_style_state=SelectionStyleState(),
             selection_info_state=SelectionInfoState(),
         )
+        _attach_minimal_runtime_state(canvas)
         service = CanvasSceneResetService(
             canvas,
             hit_testing_service=SimpleNamespace(
@@ -1579,6 +1587,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             selection_style_state=SelectionStyleState(),
             selection_info_state=selection_info,
         )
+        _attach_minimal_runtime_state(canvas)
         service = CanvasSceneResetService(
             canvas,
             hit_testing_service=SimpleNamespace(
@@ -2052,6 +2061,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
                         return lambda: target
 
                 canvas = Canvas()
+                _attach_minimal_runtime_state(canvas)
                 original_model = canvas.model
                 service = CanvasSceneResetService(
                     canvas,
@@ -2148,6 +2158,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
                     scene,
                     fail_scene_once=failure_root == "scene",
                 )
+                _attach_minimal_runtime_state(canvas)
                 hit_testing = SimpleNamespace(
                     mark_spatial_index_dirty=mock.Mock(),
                 )
@@ -2312,10 +2323,13 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
                 rdkit_warmup_pending=True,
             ),
         )
+        _attach_minimal_runtime_state(canvas)
         set_atom_coords_3d_for(canvas, {1: (1.0, 2.0, 3.0)})
-        set_hover_items_for(canvas, [object()])
-        set_hover_atom_id_for(canvas, 3)
-        set_hover_bond_id_for(canvas, 4)
+        hover_state = hover_state_for(canvas)
+        hover_state.items = [object()]
+        hover_state.atom_id = 3
+        hover_state.bond_id = 4
+        hover_state.style = "single:1:10.0:20.0"
         set_selection_outlines_for(canvas, [object()])
         set_active_handles_for(canvas, [object()])
         set_handle_target_for(canvas, object())
@@ -2329,6 +2343,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         self.assertEqual(hover_state_for(canvas).items, [])
         self.assertIsNone(hover_state_for(canvas).atom_id)
         self.assertIsNone(hover_state_for(canvas).bond_id)
+        self.assertIsNone(hover_state_for(canvas).style)
         self.assertIsInstance(canvas.model, MoleculeModel)
         canvas.services.hit_testing_service.mark_spatial_index_dirty.assert_called_once_with()
         self.assertEqual(atom_coords_3d_for(canvas), {})

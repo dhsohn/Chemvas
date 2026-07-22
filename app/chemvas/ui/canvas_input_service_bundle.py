@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -11,6 +10,7 @@ from chemvas.ui.canvas_tool_mode_controller import CanvasToolModeController
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView
+    from chemvas.ui.hover import HoverController
 
 
 @dataclass(slots=True)
@@ -26,29 +26,27 @@ def build_canvas_input_services(
     *,
     hit_testing_service: Any,
     insert_controller: Any,
-    hover_interaction_service: Any,
+    hover_controller: HoverController,
     tool_controller: Any,
     scene_delete_controller: Any,
     scene_clipboard_controller: Any,
     scene_transform_controller: Any,
     mark_scene_service: Any,
-    hover_refresh: Callable[..., None],
     history_service: Any,
 ) -> CanvasInputServiceBundle:
     tool_mode_controller = CanvasToolModeController(
         canvas,
         insert_controller=insert_controller,
-        hover_refresh=hover_refresh,
+        hover_refresh=hover_controller.refresh,
         set_active_tool=tool_controller.set_active,
     )
     pointer_controller = CanvasPointerController(
         canvas,
         hit_testing_service=hit_testing_service,
         insert_controller=insert_controller,
-        hover_interaction_service=hover_interaction_service,
+        hover_controller=hover_controller,
         tool_controller=tool_controller,
         scene_transform_controller=scene_transform_controller,
-        hover_refresh=hover_refresh,
     )
     chemdraw_shortcut_service = CanvasChemdrawShortcutService(
         canvas,
@@ -61,7 +59,7 @@ def build_canvas_input_services(
         scene_delete_controller=scene_delete_controller,
         scene_clipboard_controller=scene_clipboard_controller,
         history_service=history_service,
-        hover_refresh=hover_refresh,
+        hover_controller=hover_controller,
         chemdraw_shortcut_service=chemdraw_shortcut_service,
         tool_mode_controller=tool_mode_controller,
     )

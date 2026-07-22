@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtGui import QKeySequence, QNativeGestureEvent
 from PyQt6.QtWidgets import QGraphicsTextItem, QGraphicsView
@@ -9,7 +7,6 @@ from PyQt6.QtWidgets import QGraphicsTextItem, QGraphicsView
 from chemvas.ui.atom_label_access import atom_has_visible_label_for, atom_label_service
 from chemvas.ui.canvas_hover_state import hover_state_for
 from chemvas.ui.canvas_insert_state import insert_state_for
-from chemvas.ui.hover_highlight_access import clear_hover_highlight_for
 from chemvas.ui.input_view_access import (
     fit_canvas_to_view_for,
     focused_scene_item_for,
@@ -36,7 +33,7 @@ class CanvasInputController:
         scene_delete_controller,
         scene_clipboard_controller,
         history_service=None,
-        hover_refresh: Callable[[], None] | None = None,
+        hover_controller,
         chemdraw_shortcut_service=None,
         tool_mode_controller,
     ) -> None:
@@ -45,7 +42,7 @@ class CanvasInputController:
         self._history = history_service
         self.scene_delete = scene_delete_controller
         self.scene_clipboard = scene_clipboard_controller
-        self._hover_refresh = hover_refresh or (lambda: None)
+        self.hover = hover_controller
         self.chemdraw_shortcut_service = chemdraw_shortcut_service
         self.tool_mode_controller = tool_mode_controller
 
@@ -78,7 +75,7 @@ class CanvasInputController:
         ):
             QGraphicsView.keyPressEvent(self.canvas, event)
             return
-        self._hover_refresh()
+        self.hover.refresh()
         if event.key() == Qt.Key.Key_Escape:
             if self.insert_state.template_active:
                 cancel_template_insert_for(self.canvas)
@@ -183,14 +180,14 @@ class CanvasInputController:
                         atom_id, "C", show_carbon=False
                     )
                 else:
-                    clear_hover_highlight_for(self.canvas)
+                    self.hover.clear_hover_highlight()
                     self.scene_delete.delete_atom(atom_id, record=True)
                 event.accept()
                 return
             hover_bond_id = hover_state_for(self.canvas).bond_id
             if hover_bond_id is not None:
                 bond_id = hover_bond_id
-                clear_hover_highlight_for(self.canvas)
+                self.hover.clear_hover_highlight()
                 self.scene_delete.delete_bond(bond_id, record=True)
             event.accept()
             return
@@ -208,7 +205,7 @@ class CanvasInputController:
         return False
 
     def should_override_chemdraw_shortcut(self, event) -> bool:
-        self._hover_refresh()
+        self.hover.refresh()
         return should_override_chemdraw_shortcut_for(self.canvas, event)
 
     def event(self, event, *, native_gesture_event_type=QNativeGestureEvent) -> bool:
