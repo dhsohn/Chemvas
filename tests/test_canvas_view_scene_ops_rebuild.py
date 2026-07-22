@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -48,7 +50,7 @@ class CanvasViewSceneOpsRebuildTest(unittest.TestCase):
         scene = _FakeScene()
         view = SimpleNamespace(
             scene=lambda: scene,
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 structure_build_service=SimpleNamespace(render_model=mock.Mock())
             ),
         )
@@ -70,7 +72,7 @@ class CanvasViewSceneOpsRebuildTest(unittest.TestCase):
         self.assertEqual(bond_items_for(view), {})
         self.assertEqual(atom_items_for(view), {})
         self.assertEqual(atom_dots_for(view), {})
-        view.services.structure_build_service.render_model.assert_called_once_with()
+        view.services.structure.structure_build_service.render_model.assert_called_once_with()
 
     def test_scene_item_clear_helpers_remove_items_and_return_empty_maps(self) -> None:
         scene = _FakeScene()

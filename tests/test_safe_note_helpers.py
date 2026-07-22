@@ -15,7 +15,6 @@ from chemvas.ui import (
     structure_bond_build_service,
     structure_build_committer,
     structure_build_service,
-    structure_insert_service,
 )
 
 
@@ -112,13 +111,6 @@ def _note_helpers() -> tuple[tuple[str, Callable[[BaseException], None]], ...]:
                 error,
                 _SECONDARY_ERROR,
                 phase="test",
-            ),
-        ),
-        (
-            "structure_insert",
-            lambda error: structure_insert_service._add_structure_insert_rollback_note(
-                error,
-                "test",
             ),
         ),
         (

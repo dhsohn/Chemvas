@@ -8,6 +8,8 @@ from chemvas.ui.canvas_bond_graphics_state import set_bond_items_for
 from chemvas.ui.canvas_scene_items_state import set_scene_item_collection_for
 from chemvas.ui.selection_structure_service import SelectionStructureService
 
+from tests.runtime_services import canvas_runtime_services
+
 
 class _FakeItem:
     def __init__(self, kind=None, *, data1=None, data2=None, selected=False) -> None:
@@ -39,7 +41,7 @@ def _make_canvas(**overrides):
     scene = overrides.pop("scene", _FakeScene())
     canvas = SimpleNamespace(
         model=overrides.pop("model", SimpleNamespace(atoms={}, bonds=[])),
-        services=SimpleNamespace(
+        services=canvas_runtime_services(
             canvas_graph_service=SimpleNamespace(
                 expand_connected_atoms=overrides.pop(
                     "expand_connected_atoms",
@@ -62,7 +64,7 @@ def _make_canvas(**overrides):
 def _structure_service(canvas) -> SelectionStructureService:
     return SelectionStructureService(
         canvas,
-        graph_service=canvas.services.canvas_graph_service,
+        graph_service=canvas.services.graph.canvas_graph_service,
     )
 
 

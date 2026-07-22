@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -21,7 +23,9 @@ class _HarnessWindow(QMainWindow):
         super().__init__()
         self.tool_mode_controller = SimpleNamespace(set_mark_kind=mock.Mock())
         self.canvas = SimpleNamespace(
-            services=SimpleNamespace(tool_mode_controller=self.tool_mode_controller)
+            services=canvas_runtime_services(
+                tool_mode_controller=self.tool_mode_controller
+            )
         )
         self._icon_factory = SimpleNamespace(
             icon_select=self._blank_icon,

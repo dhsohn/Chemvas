@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -34,9 +36,9 @@ if QApplication is not None:
     from chemvas.ui.main_window_toolbar_buttons import ArrowButton
     from chemvas.ui.main_window_ui_assembly_service import MainWindowUIAssemblyService
     from chemvas.ui.note_item_access import set_committed_note_text_for
+    from chemvas.ui.scene_flip_state import flip_scene_item_state
     from chemvas.ui.scene_item_restore import create_orbital_item_from_state
     from chemvas.ui.scene_paste_apply_logic import apply_paste_payload
-    from chemvas.ui.scene_transform_logic import flip_scene_item_state
 
 
 def _history_service(push=None):
@@ -271,7 +273,7 @@ class UIServiceTailCoverageTest(unittest.TestCase):
         fill_pushes = []
         fill_canvas = SimpleNamespace(
             _ring_state_dict=mock.Mock(),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 history_service=_history_service(fill_pushes.append)
             ),
         )
@@ -288,7 +290,7 @@ class UIServiceTailCoverageTest(unittest.TestCase):
             model=SimpleNamespace(atoms={7: SimpleNamespace(color="#112233")}),
             atom_items={7: atom_item},
             atom_dots={7: atom_item},
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 history_service=_history_service(),
                 atom_label_service=SimpleNamespace(
                     implicit_carbon_dot_brush=mock.Mock()
@@ -312,7 +314,7 @@ class UIServiceTailCoverageTest(unittest.TestCase):
             scene=mock.Mock(return_value=QGraphicsScene()),
             setFocus=mock.Mock(),
             push_command=mock.Mock(),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 history_service=_history_service(),
                 selection_controller=SimpleNamespace(select_note=mock.Mock()),
             ),
@@ -328,7 +330,7 @@ class UIServiceTailCoverageTest(unittest.TestCase):
 
         controller.begin_note_edit(item)
         # Re-editing a now-deselected note selects it again.
-        canvas.services.selection_controller.select_note.assert_called_once_with(
+        canvas.services.selection.selection_controller.select_note.assert_called_once_with(
             item, additive=False
         )
         canvas.setFocus.assert_called_once_with(Qt.FocusReason.MouseFocusReason)
@@ -390,7 +392,7 @@ class UIServiceTailCoverageTest(unittest.TestCase):
                 text_alignment=Qt.AlignmentFlag.AlignLeft,
                 text_line_spacing=1.4,
             ),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 history_service=_history_service(),
                 selection_controller=SimpleNamespace(
                     update_note_selection_box=mock.Mock()
@@ -413,7 +415,7 @@ class UIServiceTailCoverageTest(unittest.TestCase):
 
         self.assertEqual(_FakeCursor.last_instance.block_format.height, (140, 42))
         controller.update_note_box.assert_called_once_with(item)
-        canvas.services.selection_controller.update_note_selection_box.assert_called_once_with(
+        canvas.services.selection.selection_controller.update_note_selection_box.assert_called_once_with(
             item
         )
 
@@ -462,7 +464,7 @@ class UIServiceTailCoverageTest(unittest.TestCase):
                 text_alignment=Qt.AlignmentFlag.AlignLeft,
                 text_line_spacing=1.4,
             ),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 history_service=_history_service(),
                 selection_controller=SimpleNamespace(
                     update_note_selection_box=mock.Mock()

@@ -1,9 +1,4 @@
-"""Typed, feature-grouped runtime services for a canvas.
-
-The grouped feature runtimes are the canonical API. Flat service attributes
-remain as a temporary compatibility surface for legacy tests and are redirected
-into the same grouped objects, so there is still exactly one instance per role.
-"""
+"""Typed, feature-grouped runtime services for a canvas."""
 
 from __future__ import annotations
 
@@ -12,11 +7,6 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
     from chemvas.ui.hover import HoverController
-
-
-class AuxiliaryServices(Protocol):
-    atom_label_service: Any
-    structure_insert_service: Any
 
 
 class DocumentServices(Protocol):
@@ -47,7 +37,6 @@ class SceneViewServices(Protocol):
     selection_highlight_styler: Any
     geometry_controller: Any
     canvas_ring_fill_scene_service: Any
-    rotation_preview_controller: Any
 
 
 class HandleServices(Protocol):
@@ -87,89 +76,8 @@ class ToolingServices(Protocol):
     tools: Any
 
 
-_LEGACY_SERVICE_PATHS: dict[str, tuple[str, str]] = {
-    "selection_controller": ("selection", "selection_controller"),
-    "scene_item_controller": ("scene_view", "scene_item_controller"),
-    "scene_clipboard_controller": (
-        "scene_operations",
-        "scene_clipboard_controller",
-    ),
-    "scene_delete_controller": ("scene_operations", "scene_delete_controller"),
-    "scene_transform_controller": (
-        "scene_operations",
-        "scene_transform_controller",
-    ),
-    "insert_controller": ("structure", "insert_controller"),
-    "input_controller": ("input", "input_controller"),
-    "handle_controller": ("handles", "handle_controller"),
-    "handle_overlay_service": ("handles", "handle_overlay_service"),
-    "handle_mutation_service": ("handles", "handle_mutation_service"),
-    "curved_arrow_path_service": ("handles", "curved_arrow_path_service"),
-    "selection_highlight_styler": (
-        "scene_view",
-        "selection_highlight_styler",
-    ),
-    "move_controller": ("interaction", "move_controller"),
-    "note_controller": ("interaction", "note_controller"),
-    "pointer_controller": ("input", "pointer_controller"),
-    "geometry_controller": ("scene_view", "geometry_controller"),
-    "canvas_atom_mutation_service": (
-        "structure",
-        "canvas_atom_mutation_service",
-    ),
-    "canvas_bond_mutation_service": (
-        "structure",
-        "canvas_bond_mutation_service",
-    ),
-    "chemdraw_shortcut_service": ("input", "chemdraw_shortcut_service"),
-    "hit_testing_service": ("selection", "hit_testing_service"),
-    "canvas_color_mutation_service": (
-        "scene_operations",
-        "canvas_color_mutation_service",
-    ),
-    "canvas_document_session_service": (
-        "document",
-        "canvas_document_session_service",
-    ),
-    "canvas_graph_service": ("graph", "canvas_graph_service"),
-    "canvas_history_recording_service": (
-        "document",
-        "canvas_history_recording_service",
-    ),
-    "canvas_mark_scene_service": (
-        "scene_decoration",
-        "canvas_mark_scene_service",
-    ),
-    "canvas_ring_fill_scene_service": (
-        "scene_view",
-        "canvas_ring_fill_scene_service",
-    ),
-    "canvas_scene_reset_service": ("document", "canvas_scene_reset_service"),
-    "rotation_preview_controller": ("scene_view", "rotation_preview_controller"),
-    "atom_label_service": ("auxiliary", "atom_label_service"),
-    "structure_build_service": ("structure", "structure_build_service"),
-    "scene_decoration_build_service": (
-        "scene_decoration",
-        "scene_decoration_build_service",
-    ),
-    "scene_decoration_service": (
-        "scene_decoration",
-        "scene_decoration_service",
-    ),
-    "structure_insert_service": ("auxiliary", "structure_insert_service"),
-    "selection_rotation_controller": (
-        "interaction",
-        "selection_rotation_controller",
-    ),
-    "style_controller": ("scene_operations", "style_controller"),
-    "tool_mode_controller": ("input", "tool_mode_controller"),
-    "tools": ("tooling", "tools"),
-}
-
-
 @dataclass(slots=True)
 class CanvasRuntimeServices:
-    auxiliary: AuxiliaryServices
     document: DocumentServices
     graph: GraphServices
     input: InputServices
@@ -182,28 +90,8 @@ class CanvasRuntimeServices:
     selection: SelectionServices
     structure: StructureServices
     tooling: ToolingServices
+    atom_label_service: Any
     history_service: Any
 
-    def __getattr__(self, name: str) -> Any:
-        path = _LEGACY_SERVICE_PATHS.get(name)
-        if path is None:
-            raise AttributeError(name)
-        bundle_name, member_name = path
-        bundle = object.__getattribute__(self, bundle_name)
-        return getattr(bundle, member_name)
 
-    def __setattr__(self, name: str, value: Any) -> None:
-        path = _LEGACY_SERVICE_PATHS.get(name)
-        if path is None:
-            object.__setattr__(self, name, value)
-            return
-        bundle_name, member_name = path
-        bundle = object.__getattribute__(self, bundle_name)
-        setattr(bundle, member_name, value)
-
-
-# Transitional import name; new production code uses CanvasRuntimeServices.
-CanvasServices = CanvasRuntimeServices
-
-
-__all__ = ["CanvasRuntimeServices", "CanvasServices"]
+__all__ = ["CanvasRuntimeServices"]

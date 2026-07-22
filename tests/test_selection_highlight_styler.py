@@ -2,6 +2,8 @@ import os
 import unittest
 from types import SimpleNamespace
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -41,7 +43,7 @@ class SelectionHighlightStylerTest(unittest.TestCase):
 
     def _make_canvas(self):
         return SimpleNamespace(
-            services=SimpleNamespace(),
+            services=canvas_runtime_services(),
             selection_style_state=SelectionStyleState(
                 color=QColor("#1f5eff"),
                 stroke_delta=0.6,
@@ -115,7 +117,7 @@ class SelectionHighlightStylerTest(unittest.TestCase):
     ) -> None:
         canvas = self._make_canvas()
         matching = SelectionHighlightStyler(canvas)
-        canvas.services.selection_highlight_styler = matching
+        canvas.services.scene_view.selection_highlight_styler = matching
 
         self.assertIs(selection_highlight_styler_for(canvas), matching)
 
@@ -125,11 +127,11 @@ class SelectionHighlightStylerTest(unittest.TestCase):
             clear_selection_highlight=lambda: None,
             apply_selection_style=lambda item, selected: None,
         )
-        canvas.services.selection_highlight_styler = duck
+        canvas.services.scene_view.selection_highlight_styler = duck
         self.assertIs(selection_highlight_styler_for(canvas), duck)
 
         placeholder = object()
-        canvas.services.selection_highlight_styler = placeholder
+        canvas.services.scene_view.selection_highlight_styler = placeholder
         self.assertIs(selection_highlight_styler_for(canvas), placeholder)
 
 

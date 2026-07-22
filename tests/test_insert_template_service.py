@@ -53,7 +53,7 @@ def _service_for(canvas: _FakeCanvas, **overrides) -> InsertTemplateService:
         canvas,
         insert_state=canvas.insert_state,
         hit_testing_service=overrides.pop(
-            "hit_testing_service", canvas.services.hit_testing_service
+            "hit_testing_service", canvas.services.selection.hit_testing_service
         ),
         insert_commit_service=overrides.pop("insert_commit_service", mock.Mock()),
         session_state=lambda: _session_state(canvas),

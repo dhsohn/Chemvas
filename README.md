@@ -153,9 +153,11 @@ Chemvas supports a major subset of ChemDraw-compatible shortcuts.
 
 CI runs `ruff`, `mypy`, and the test suite headlessly (`QT_QPA_PLATFORM=offscreen`).
 See [CONTRIBUTING.md](CONTRIBUTING.md) for dev setup, how to run the tests, and the
-**architecture conventions** — the codebase is split into many small
-`*_ports` / `*_access` / `*_state` / `*_service` modules **on purpose**, and that
-boundary is enforced by a test. Read CONTRIBUTING before restructuring anything.
+**architecture conventions**. Transitional UI code keeps its established
+`*_ports` / `*_access` / `*_state` / `*_service` boundaries where they still
+separate real responsibilities; new features do not copy that layout by default.
+The active boundaries are enforced by tests, so read CONTRIBUTING before
+restructuring anything.
 
 The high-level design is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

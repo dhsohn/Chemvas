@@ -3,16 +3,13 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from chemvas.ui import canvas_runtime_services
 from chemvas.ui import canvas_service_ports as ports
+
+from tests.runtime_services import canvas_runtime_services
 
 
 def _canvas_with_service(service_name: str, service):
-    group_name, member_name = canvas_runtime_services._LEGACY_SERVICE_PATHS[
-        service_name
-    ]
-    group = SimpleNamespace(**{member_name: service})
-    return SimpleNamespace(services=SimpleNamespace(**{group_name: group}))
+    return SimpleNamespace(services=canvas_runtime_services(**{service_name: service}))
 
 
 @pytest.mark.parametrize(

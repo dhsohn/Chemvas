@@ -26,6 +26,8 @@ from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 
+from tests.runtime_services import canvas_runtime_services
+
 
 class _Canvas:
     def __init__(self) -> None:
@@ -446,7 +448,9 @@ class CanvasDocumentStateTest(unittest.TestCase):
 
     def test_restore_document_items_prefer_scene_item_controller(self) -> None:
         canvas = _Canvas()
-        canvas.services = SimpleNamespace(scene_item_controller=_Controller(canvas))
+        canvas.services = canvas_runtime_services(
+            scene_item_controller=_Controller(canvas)
+        )
         state = {
             "ring_fills": [{"points": [(0.0, 0.0)]}],
             "notes": [{"text": "note", "x": 1.0, "y": 2.0}],

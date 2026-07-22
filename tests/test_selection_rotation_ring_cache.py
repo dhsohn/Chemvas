@@ -29,7 +29,7 @@ class SelectionRotationRingCacheTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = CanvasView()
-        controller = canvas.services.selection_rotation_controller
+        controller = canvas.services.interaction.selection_rotation_controller
         atom_id = canvas.model.add_atom("C", 0.0, 0.0)
         controller.rotation.atom_ids = {atom_id}
         polygon = QPolygonF([QPointF(0.0, 0.0), QPointF(2.0, 0.0), QPointF(1.0, 2.0)])

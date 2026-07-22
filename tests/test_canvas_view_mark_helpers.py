@@ -4,6 +4,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -68,7 +70,7 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
         view = SimpleNamespace(
             renderer=self._renderer(),
         )
-        view.services = SimpleNamespace(
+        view.services = canvas_runtime_services(
             scene_decoration_build_service=CanvasSceneDecorationBuildService(view)
         )
         selection_radius = mark_selection_radius_for(view)
@@ -114,12 +116,14 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
             tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
         )
         mark_target_distance = mock.Mock(return_value=20.0)
-        view.services = SimpleNamespace(
+        view.services = canvas_runtime_services(
             geometry_controller=SimpleNamespace(
                 mark_target_distance_for_atom=mark_target_distance
             )
         )
-        view.services.canvas_mark_scene_service = CanvasMarkSceneService(view)
+        view.services.scene_decoration.canvas_mark_scene_service = (
+            CanvasMarkSceneService(view)
+        )
 
         offset = mark_offset_from_click_for(view, 7, QPointF(10.0, 20.0), kind="minus")
 
@@ -142,12 +146,14 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
             tool_settings_state=CanvasToolSettingsState(mark_kind="radical"),
         )
         mark_target_distance = mock.Mock(return_value=0.0)
-        view.services = SimpleNamespace(
+        view.services = canvas_runtime_services(
             geometry_controller=SimpleNamespace(
                 mark_target_distance_for_atom=mark_target_distance
             )
         )
-        view.services.canvas_mark_scene_service = CanvasMarkSceneService(view)
+        view.services.scene_decoration.canvas_mark_scene_service = (
+            CanvasMarkSceneService(view)
+        )
 
         offset = mark_offset_from_click_for(view, 7, QPointF(13.0, 24.0))
 
@@ -158,7 +164,7 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
     def test_add_mark_delegates_to_scene_decoration_service(self) -> None:
         service = mock.Mock(return_value="mark-item")
         view = SimpleNamespace(
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 scene_decoration_service=SimpleNamespace(add_mark=service)
             )
         )
@@ -188,7 +194,9 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
         mark_item = object()
         center = QPointF(6.0, 7.0)
         view = SimpleNamespace(
-            services=SimpleNamespace(scene_decoration_build_service=build_service)
+            services=canvas_runtime_services(
+                scene_decoration_build_service=build_service
+            )
         )
 
         build_service.build_mark_item.return_value = mark_item
@@ -210,7 +218,7 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
         center = QPointF(4.0, 5.0)
         offset = QPointF(1.5, -2.5)
         view = SimpleNamespace(
-            services=SimpleNamespace(canvas_mark_scene_service=scene_service)
+            services=canvas_runtime_services(canvas_mark_scene_service=scene_service)
         )
 
         scene_service.add_mark_for_atom.return_value = mark_item

@@ -105,31 +105,37 @@ def _active_canvas_services_for_window(window):
 
 
 def style_controller_for_window(window):
-    return _active_canvas_services_for_window(window).style_controller
+    return _active_canvas_services_for_window(window).scene_operations.style_controller
 
 
 def tool_mode_controller_for_window(window):
-    return _active_canvas_services_for_window(window).tool_mode_controller
+    return _active_canvas_services_for_window(window).input.tool_mode_controller
 
 
 def insert_controller_for_window(window):
-    return _active_canvas_services_for_window(window).insert_controller
+    return _active_canvas_services_for_window(window).structure.insert_controller
 
 
 def color_mutation_service_for_window(window):
-    return _active_canvas_services_for_window(window).canvas_color_mutation_service
+    return _active_canvas_services_for_window(
+        window
+    ).scene_operations.canvas_color_mutation_service
 
 
 def scene_transform_controller_for_window(window):
-    return _active_canvas_services_for_window(window).scene_transform_controller
+    return _active_canvas_services_for_window(
+        window
+    ).scene_operations.scene_transform_controller
 
 
 def document_session_service_for_window(window):
-    return _active_canvas_services_for_window(window).canvas_document_session_service
+    return _active_canvas_services_for_window(
+        window
+    ).document.canvas_document_session_service
 
 
 def geometry_controller_for_window(window):
-    return _active_canvas_services_for_window(window).geometry_controller
+    return _active_canvas_services_for_window(window).scene_view.geometry_controller
 
 
 def history_service_for_window(window):
@@ -273,9 +279,9 @@ def tool_settings_for_window(window):
 
 
 def color_tool_for_window(window):
-    return getattr(_active_canvas_services_for_window(window).tools, "tools", {}).get(
-        "color"
-    )
+    return getattr(
+        _active_canvas_services_for_window(window).tooling.tools, "tools", {}
+    ).get("color")
 
 
 def selected_scene_items_for_window(window, *, excluded_kinds):

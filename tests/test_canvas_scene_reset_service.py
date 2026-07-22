@@ -6,6 +6,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from chemvas.domain.document import MoleculeModel
 from chemvas.domain.transactions import HistoryStackSnapshot
@@ -18,10 +20,6 @@ from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_fo
 from chemvas.ui.canvas_hover_state import hover_state_for
 from chemvas.ui.canvas_insert_state import CanvasInsertState, insert_state_for
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
-from chemvas.ui.canvas_rotation_preview_state import (
-    CanvasRotationPreviewState,
-    rotation_preview_state_for,
-)
 from chemvas.ui.canvas_rotation_state import CanvasRotationState, rotation_state_for
 from chemvas.ui.canvas_scene_items_state import (
     arrow_items_for,
@@ -73,7 +71,6 @@ def _attach_minimal_runtime_state(canvas) -> None:
     canvas.runtime_state = SimpleNamespace(
         graph_state=graph_state_for(canvas),
         rotation_state=rotation_state_for(canvas),
-        rotation_preview_state=rotation_preview_state_for(canvas),
         insert_state=insert_state_for(canvas),
         mark_registry=mark_registry_for(canvas),
         hover_preview_state=HoverState(),
@@ -118,7 +115,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         selection_info_state_for(canvas).callback = callback
 
         with self.assertRaises(RuntimeError) as raised:
-            canvas.services.canvas_scene_reset_service.clear_scene()
+            canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertIs(raised.exception, primary)
         self.assertTrue(sip.isdeleted(target))
@@ -161,7 +158,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             RuntimeError,
             "signal block failed before clear",
         ):
-            canvas.services.canvas_scene_reset_service.clear_scene()
+            canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertIs(canvas.model, original_model)
         self.assertEqual(scene.items(), [item])
@@ -196,7 +193,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         original_model = canvas.model
 
         with self.assertRaises(RuntimeError) as raised:
-            canvas.services.canvas_scene_reset_service.clear_scene()
+            canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertIs(raised.exception, primary)
         self.assertIs(canvas.model, original_model)
@@ -244,7 +241,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         )
 
         with self.assertRaises(AttributeError):
-            canvas.services.canvas_scene_reset_service.clear_scene()
+            canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertTrue(sip.isdeleted(target))
         self.assertEqual(QGraphicsScene.items(scene), [])
@@ -298,7 +295,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         canvas.services.history_service = history_service
 
         with self.assertRaises(RuntimeError) as raised:
-            canvas.services.canvas_scene_reset_service.clear_scene()
+            canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertIs(raised.exception, primary)
         self.assertTrue(sip.isdeleted(item))
@@ -347,7 +344,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             RuntimeError,
             "history preflight changed callback-free authority",
         ):
-            canvas.services.canvas_scene_reset_service.clear_scene()
+            canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertEqual(state.history, [original_entry])
         self.assertNotIn(injected_entry, state.history)
@@ -434,7 +431,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             RuntimeError,
             "history preflight changed callback-free authority",
         ):
-            canvas.services.canvas_scene_reset_service.clear_scene()
+            canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertEqual(state._history, [])
         self.assertNotIn(injected_entry, state._history)
@@ -463,7 +460,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             RuntimeError,
             "ambiguous callback-free scene-reset history stack backings",
         ):
-            canvas.services.canvas_scene_reset_service.clear_scene()
+            canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertEqual(set(canvas.model.atoms), {0})
         self.assertEqual(public_state.history, [])
@@ -502,7 +499,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             RuntimeError,
             "history preflight changed callback-free authority",
         ):
-            canvas.services.canvas_scene_reset_service.clear_scene()
+            canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertTrue(state.enabled)
         self.assertEqual(state.limit, 17)
@@ -541,7 +538,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         )
 
         with self.assertRaises(RuntimeError) as raised:
-            canvas.services.canvas_scene_reset_service.clear_scene()
+            canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertIs(raised.exception, primary)
         self.assertEqual(QGraphicsScene.items(scene), [])
@@ -585,7 +582,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         )
 
         with self.assertRaises(RuntimeError) as raised:
-            canvas.services.canvas_scene_reset_service.clear_scene()
+            canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertIs(raised.exception, primary)
         self.assertEqual(scene.clear_calls, 1)
@@ -625,7 +622,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             RuntimeError,
             "scene reset left graphics items behind",
         ):
-            canvas.services.canvas_scene_reset_service.clear_scene()
+            canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertEqual(QGraphicsScene.items(scene), [])
         self.assertEqual(canvas.model.atoms, {})
@@ -654,7 +651,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         scene = CachedSelectionScene()
         canvas = CanvasView()
         canvas.setScene(scene)
-        atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
+        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
             "N",
             0.0,
             0.0,
@@ -662,7 +659,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         item = atom_items_for(canvas)[atom_id]
         scene.cached_item = item
 
-        canvas.services.canvas_scene_reset_service.clear_scene()
+        canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertEqual(scene.clear_selection_calls, 0)
         self.assertTrue(sip.isdeleted(item))
@@ -693,7 +690,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         scene = PartialFailureScene()
         canvas = CanvasView()
         canvas.setScene(scene)
-        canvas.services.canvas_atom_mutation_service.add_atom("C", 0.0, 0.0)
+        canvas.services.structure.canvas_atom_mutation_service.add_atom("C", 0.0, 0.0)
         target = scene.addRect(30.0, 0.0, 10.0, 10.0)
         scene.target = target
         history = canvas.services.history_service.state.history
@@ -705,7 +702,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         )
 
         with self.assertRaises(RuntimeError) as raised:
-            canvas.services.canvas_scene_reset_service.clear_scene()
+            canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertIs(raised.exception, primary)
         self.assertTrue(sip.isdeleted(target))
@@ -736,7 +733,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         canvas = CanvasView()
         deleting_scene = SelectiveDeletingScene()
         canvas.setScene(deleting_scene)
-        canvas.services.canvas_atom_mutation_service.add_atom(
+        canvas.services.structure.canvas_atom_mutation_service.add_atom(
             "C",
             10.0,
             20.0,
@@ -751,7 +748,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         deleting_scene.target = retained_item
         selection_callback = mock.Mock()
         selection_info_state_for(canvas).callback = selection_callback
-        service = canvas.services.canvas_scene_reset_service
+        service = canvas.services.document.canvas_scene_reset_service
 
         service.hit_testing_service.mark_spatial_index_dirty = mock.Mock(
             side_effect=RuntimeError("reset failed after replacing the model")
@@ -816,7 +813,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         selection_info = PoisoningSelectionInfo()
         canvas.runtime_state.selection_info_state = selection_info
 
-        canvas.services.canvas_scene_reset_service.clear_scene()
+        canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertIs(selection_info.callback, callback)
         self.assertEqual(history, [history_entry])
@@ -857,7 +854,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         selection_info = PolicyPoisoningSelectionInfo()
         canvas.runtime_state.selection_info_state = selection_info
 
-        canvas.services.canvas_scene_reset_service.clear_scene()
+        canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertIs(selection_info.callback, callback)
         self.assertIs(history.state.enabled, before_enabled)
@@ -907,7 +904,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         )
 
         with self.assertRaises(RuntimeError) as raised:
-            canvas.services.canvas_scene_reset_service.clear_scene()
+            canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertIs(raised.exception, primary)
         self.assertIs(selection_info.callback, callback)
@@ -961,7 +958,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         original_model = canvas.model
 
         with self.assertRaises(RuntimeError) as raised:
-            canvas.services.canvas_scene_reset_service.clear_scene()
+            canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertIs(raised.exception, primary)
         self.assertIs(canvas.model, original_model)
@@ -995,7 +992,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             ),
             self.assertRaisesRegex(RuntimeError, "document state was re-mutated"),
         ):
-            canvas.services.canvas_scene_reset_service.clear_scene()
+            canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         canvas.close()
         app.processEvents()
@@ -1007,7 +1004,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         app.setQuitOnLastWindowClosed(False)
         self.app = app
         canvas = CanvasView()
-        atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
+        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
             "N",
             0.0,
             0.0,
@@ -1020,8 +1017,8 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
 
         def corrupt_after_empty_status(formula: str, mass: str) -> None:
             published.append((formula, mass))
-            canvas.services.canvas_scene_reset_service.clear_scene()
-            canvas.services.canvas_atom_mutation_service.add_atom(
+            canvas.services.document.canvas_scene_reset_service.clear_scene()
+            canvas.services.structure.canvas_atom_mutation_service.add_atom(
                 "C",
                 100.0,
                 100.0,
@@ -1030,7 +1027,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
 
         selection_info_state_for(canvas).callback = corrupt_after_empty_status
 
-        canvas.services.canvas_scene_reset_service.clear_scene()
+        canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertEqual(published, [("", "")])
         self.assertEqual(canvas.model.atoms, {})
@@ -1058,7 +1055,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             history = canvas.services.history_service.state.history
             history.append(AddSceneItemsCommand(items=[item], item_states=[{}]))
             selection_info_state_for(canvas).callback = None
-            canvas.services.canvas_scene_reset_service.clear_scene()
+            canvas.services.document.canvas_scene_reset_service.clear_scene()
             assert history == []
             canvas.services.history_service.undo()
             canvas.close()
@@ -1095,7 +1092,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         original.replacement = replacement
         selection_info_state_for(canvas).callback = None
 
-        canvas.services.canvas_scene_reset_service.clear_scene()
+        canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertIs(canvas.scene(), original)
         self.assertEqual(QGraphicsScene.items(replacement), [])
@@ -1109,7 +1106,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         app = QApplication.instance() or QApplication([])
         canvas = CanvasView()
         original_scene = QGraphicsView.scene(canvas)
-        canvas.services.canvas_atom_mutation_service.add_atom("C", 0.0, 0.0)
+        canvas.services.structure.canvas_atom_mutation_service.add_atom("C", 0.0, 0.0)
 
         def detach_scene(_formula: str, _mass: str) -> None:
             QGraphicsView.setScene(canvas, None)
@@ -1117,7 +1114,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         selection_info = selection_info_state_for(canvas)
         selection_info.callback = detach_scene
 
-        canvas.services.canvas_scene_reset_service.clear_scene()
+        canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertIs(QGraphicsView.scene(canvas), original_scene)
         self.assertEqual(canvas.model.atoms, {})
@@ -1154,7 +1151,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         history.append(AddSceneItemsCommand(items=[item], item_states=[{}]))
 
         with self.assertRaises(RuntimeError) as raised:
-            canvas.services.canvas_scene_reset_service.clear_scene()
+            canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertIs(raised.exception, primary)
         self.assertEqual(history, [])
@@ -1179,7 +1176,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             canvas.services.history_service = replacement_history
 
         original_info.callback = replace_roots
-        canvas.services.canvas_scene_reset_service.clear_scene()
+        canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertIs(selection_info_state_for(canvas), original_info)
         self.assertIs(canvas.services.history_service, original_history)
@@ -1191,7 +1188,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
     def test_publication_runtime_history_alias_replacements_are_closed(self) -> None:
         app = QApplication.instance() or QApplication([])
         canvas = CanvasView()
-        canvas.services.canvas_atom_mutation_service.add_atom("C", 0.0, 0.0)
+        canvas.services.structure.canvas_atom_mutation_service.add_atom("C", 0.0, 0.0)
         original_info = selection_info_state_for(canvas)
         original_history_service = canvas.runtime_state.history_service
         original_history_state = canvas.runtime_state.history_state
@@ -1206,7 +1203,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             canvas.runtime_state.history_state = replacement_history_state
 
         original_info.callback = replace_runtime_aliases
-        canvas.services.canvas_scene_reset_service.clear_scene()
+        canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertIs(
             canvas.runtime_state.history_service,
@@ -1223,7 +1220,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
     def test_publication_graph_root_replacement_is_closed(self) -> None:
         app = QApplication.instance() or QApplication([])
         canvas = CanvasView()
-        canvas.services.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
+        canvas.services.structure.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
         original_graph = graph_state_for(canvas)
         replacement_graph = CanvasGraphState(
             atom_neighbors={99: {100}},
@@ -1237,7 +1234,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         selection_info = selection_info_state_for(canvas)
         selection_info.callback = replace_graph_root
 
-        canvas.services.canvas_scene_reset_service.clear_scene()
+        canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertIs(graph_state_for(canvas), original_graph)
         self.assertEqual(original_graph.atom_neighbors, {})
@@ -1253,19 +1250,17 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
     def test_publication_cannot_poison_cached_reset_state_aliases(self) -> None:
         app = QApplication.instance() or QApplication([])
         canvas = CanvasView()
-        service = canvas.services.canvas_scene_reset_service
+        service = canvas.services.document.canvas_scene_reset_service
         original_graph = graph_state_for(canvas)
         original_aliases = {
             "graph": original_graph,
             "rotation": rotation_state_for(canvas),
-            "rotation_preview": rotation_preview_state_for(canvas),
             "insert_state": insert_state_for(canvas),
             "marks": mark_registry_for(canvas),
         }
         replacements = {
             "graph": CanvasGraphState(atom_neighbors={99: {100}}, graph_version=7),
             "rotation": CanvasRotationState(total_angle=2.5),
-            "rotation_preview": CanvasRotationPreviewState(center=object()),
             "insert_state": CanvasInsertState(smiles_active=True),
             "marks": CanvasMarkRegistry({99: [object()]}),
         }
@@ -1282,7 +1277,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             self.assertIs(getattr(service, name), original)
 
         selection_info.callback = None
-        canvas.services.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
+        canvas.services.structure.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
         self.assertEqual(original_graph.atom_neighbors, {0: set()})
 
         service.clear_scene()
@@ -1313,10 +1308,10 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         canvas = CanvasView()
         canvas.setScene(scene)
         scene.canvas = canvas
-        canvas.services.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
+        canvas.services.structure.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
 
         with self.assertRaises(RuntimeError) as raised:
-            canvas.services.canvas_scene_reset_service.clear_scene()
+            canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertIs(raised.exception, primary)
         self.assertEqual(len(canvas.model.atoms), 1)
@@ -1358,7 +1353,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         selection_style.suspend_outline = True
 
         with self.assertRaises(RuntimeError) as raised:
-            canvas.services.canvas_scene_reset_service.clear_scene()
+            canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertIs(raised.exception, primary)
         self.assertIs(selection_style.selected_items, selected_items)
@@ -1462,7 +1457,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
                     model=model,
                     history_state=history_state,
                     history_service=history_service,
-                    services=SimpleNamespace(history_service=history_service),
+                    services=canvas_runtime_services(history_service=history_service),
                     selection_style_state=SelectionStyleState(),
                     selection_info_state=SelectionInfoState(),
                 )
@@ -1522,7 +1517,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             model=model,
             history_state=history_state,
             history_service=history_service,
-            services=SimpleNamespace(history_service=history_service),
+            services=canvas_runtime_services(history_service=history_service),
             selection_style_state=SelectionStyleState(),
             selection_info_state=SelectionInfoState(),
         )
@@ -1583,7 +1578,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             model=model,
             history_state=history_state,
             history_service=history_service,
-            services=SimpleNamespace(history_service=history_service),
+            services=canvas_runtime_services(history_service=history_service),
             selection_style_state=SelectionStyleState(),
             selection_info_state=selection_info,
         )
@@ -1688,7 +1683,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
                     model=model,
                     history_state=history_state,
                     history_service=history_service,
-                    services=SimpleNamespace(history_service=history_service),
+                    services=canvas_runtime_services(history_service=history_service),
                     selection_style_state=SelectionStyleState(),
                     selection_info_state=SelectionInfoState(),
                 )
@@ -1774,7 +1769,9 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
                 canvas.model = model
                 canvas.history_state = history_state
                 canvas.history_service = history_service
-                canvas.services = SimpleNamespace(history_service=history_service)
+                canvas.services = canvas_runtime_services(
+                    history_service=history_service
+                )
                 canvas.selection_style_state = SelectionStyleState()
                 canvas.selection_info_state = SelectionInfoState()
                 original.canvas = canvas
@@ -1861,7 +1858,9 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
                 canvas.model = model
                 canvas.history_state = history_state
                 canvas.history_service = history_service
-                canvas.services = SimpleNamespace(history_service=history_service)
+                canvas.services = canvas_runtime_services(
+                    history_service=history_service
+                )
                 canvas.selection_style_state = SelectionStyleState()
                 canvas.selection_info_state = SelectionInfoState()
                 original.canvas = canvas
@@ -1913,7 +1912,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         canvas.model = model
         canvas.history_state = history_state
         canvas.history_service = history_service
-        canvas.services = SimpleNamespace(history_service=history_service)
+        canvas.services = canvas_runtime_services(history_service=history_service)
         canvas.selection_style_state = SelectionStyleState()
         canvas.selection_info_state = SelectionInfoState()
         service = CanvasSceneResetService(
@@ -1984,7 +1983,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             model=model,
             history_state=history_state,
             history_service=history_service,
-            services=SimpleNamespace(history_service=history_service),
+            services=canvas_runtime_services(history_service=history_service),
             selection_style_state=SelectionStyleState(),
             selection_info_state=SelectionInfoState(),
         )
@@ -2041,7 +2040,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
                             state=self.history_state,
                             notify_change=lambda: None,
                         )
-                        self.services = SimpleNamespace(
+                        self.services = canvas_runtime_services(
                             history_service=self.history_service,
                         )
                         self.selection_style_state = SelectionStyleState()
@@ -2140,7 +2139,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
                         self.scene_port_reads = 0
                         self.fail_scene_once = fail_scene_once
                         self.model = object()
-                        self.services = SimpleNamespace()
+                        self.services = canvas_runtime_services()
 
                     @property
                     def scene(self):
@@ -2263,7 +2262,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         canvas = SimpleNamespace(
             scene=lambda: scene,
             model=SimpleNamespace(dummy=True),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 hit_testing_service=SimpleNamespace(
                     mark_spatial_index_dirty=mock.Mock()
                 ),
@@ -2332,7 +2331,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
 
         CanvasSceneResetService(
             canvas,
-            hit_testing_service=canvas.services.hit_testing_service,
+            hit_testing_service=canvas.services.selection.hit_testing_service,
         ).clear_scene()
 
         self.assertEqual(scene.clear_calls, 2)
@@ -2341,7 +2340,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         self.assertIsNone(hover_state_for(canvas).bond_id)
         self.assertIsNone(hover_state_for(canvas).style)
         self.assertIsInstance(canvas.model, MoleculeModel)
-        canvas.services.hit_testing_service.mark_spatial_index_dirty.assert_called_once_with()
+        canvas.services.selection.hit_testing_service.mark_spatial_index_dirty.assert_called_once_with()
         self.assertEqual(atom_coords_3d_for(canvas), {})
         self.assertIsNone(canvas.rotation_state.projection_center_3d)
         self.assertIsNone(canvas.rotation_state.projection_anchor_2d)
@@ -2383,6 +2382,6 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         self.assertIsNone(handle_target_for(canvas))
         self.assertEqual(canvas.mark_registry.by_atom, {})
         self.assertIsNone(canvas.insert_state.smiles_preview_model)
-        canvas.services.insert_controller.clear_template_preview.assert_called_once_with()
-        canvas.services.insert_controller.clear_smiles_preview.assert_called_once_with()
+        canvas.services.structure.insert_controller.clear_template_preview.assert_called_once_with()
+        canvas.services.structure.insert_controller.clear_smiles_preview.assert_called_once_with()
         apply_insert_session_state.assert_called_once_with(clear_insert_session())

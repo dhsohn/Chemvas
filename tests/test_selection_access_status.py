@@ -18,6 +18,8 @@ from chemvas.ui.selection_service_access import (
     selection_targets_for_item_for,
 )
 
+from tests.runtime_services import canvas_runtime_services
+
 
 class _Item:
     def __init__(self, kind: str, item_id=None, *, ring_ids=None, scene=None) -> None:
@@ -148,7 +150,7 @@ def test_select_single_structure_item_for_uses_selection_controller_targets() ->
         selection_targets_for_item=mock.Mock(return_value=[target, None])
     )
     canvas = SimpleNamespace(
-        services=SimpleNamespace(selection_controller=selection_controller),
+        services=canvas_runtime_services(selection_controller=selection_controller),
         scene=mock.Mock(return_value=scene),
     )
 

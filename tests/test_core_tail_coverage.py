@@ -2,6 +2,8 @@ import os
 import unittest
 from types import SimpleNamespace
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -83,11 +85,7 @@ def _tool_context_for(canvas):
         selected_scene_items=selected_items,
         select_single_structure_item=getattr(canvas, "select_structure_for_item", None),
         atom_symbol_provider=getattr(tool_mode_controller, "get_atom_symbol", None),
-        history_service=getattr(
-            services,
-            "history_service",
-            fallback_history,
-        ),
+        history_service=getattr(services, "history_service", None) or fallback_history,
         set_drag_mode=getattr(canvas, "setDragMode", None),
         rubber_band_drag_mode=getattr(
             getattr(canvas, "DragMode", None), "RubberBandDrag", None
@@ -354,7 +352,7 @@ class _SelectCanvas:
         self.curved_handles = []
         self.pushed_commands = []
         self.updated_outline = 0
-        self.services = SimpleNamespace(
+        self.services = canvas_runtime_services(
             hit_testing_service=SimpleNamespace(
                 scene_pos_from_event=self.scene_pos_from_event,
                 item_at_event=self.item_at_event,
@@ -449,7 +447,7 @@ class _TextCanvas:
         self.label_calls = []
         self.tool_settings_state = CanvasToolSettingsState(atom_symbol="N")
         self.model = MoleculeModel(atoms={1: Atom("C", 5.0, 6.0)}, bonds=[])
-        self.services = SimpleNamespace(
+        self.services = canvas_runtime_services(
             atom_label_service=SimpleNamespace(
                 add_or_update_atom_label=self.add_or_update_atom_label
             ),

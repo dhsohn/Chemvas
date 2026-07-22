@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -67,7 +69,7 @@ class _PerspectiveCanvas:
         self.clear_handles_calls = 0
         self.toggle_result = False
         self.rotation_state = CanvasRotationState(mode="rigid")
-        self.services = SimpleNamespace(
+        self.services = canvas_runtime_services(
             hit_testing_service=SimpleNamespace(
                 scene_pos_from_event=lambda event: event.position(),
                 item_at_event=lambda event: self.item,
@@ -125,9 +127,10 @@ class _PerspectiveCanvas:
 def _tool_context_for(canvas, *, hit_testing_service=None, selection_controller=None):
     return ToolContext(
         canvas,
-        hit_testing_service=hit_testing_service or canvas.services.hit_testing_service,
+        hit_testing_service=hit_testing_service
+        or canvas.services.selection.hit_testing_service,
         selection_controller=selection_controller
-        or canvas.services.selection_controller,
+        or canvas.services.selection.selection_controller,
         note_controller=getattr(
             canvas.services,
             "note_controller",
@@ -138,7 +141,7 @@ def _tool_context_for(canvas, *, hit_testing_service=None, selection_controller=
             "handle_controller",
             SimpleNamespace(update_handle_drag=mock.Mock()),
         ),
-        selection_rotation_controller=canvas.services.selection_rotation_controller,
+        selection_rotation_controller=canvas.services.interaction.selection_rotation_controller,
         scene_transform_controller=getattr(
             canvas.services,
             "scene_transform_controller",
@@ -230,7 +233,7 @@ class PerspectiveToolControllerTest(unittest.TestCase):
             selection_hit_test=mock.Mock(return_value=False),
             select_structure_for_item=mock.Mock(return_value=True),
         )
-        canvas.services.hit_testing_service = SimpleNamespace(
+        canvas.services.selection.hit_testing_service = SimpleNamespace(
             scene_pos_from_event=mock.Mock(
                 side_effect=AssertionError("canvas service should not be used")
             ),
@@ -238,7 +241,7 @@ class PerspectiveToolControllerTest(unittest.TestCase):
                 side_effect=AssertionError("canvas service should not be used")
             ),
         )
-        canvas.services.selection_controller = SimpleNamespace(
+        canvas.services.selection.selection_controller = SimpleNamespace(
             preferred_structure_item_at_scene_pos=mock.Mock(
                 side_effect=AssertionError("canvas controller should not be used")
             ),
@@ -356,7 +359,7 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
     def test_deactivate_commits_active_rotation_before_tool_switch(self) -> None:
         canvas = _PerspectiveCanvas()
         canvas.selection_hit = True
-        controller = canvas.services.selection_rotation_controller
+        controller = canvas.services.interaction.selection_rotation_controller
         session = {"active": False}
         coordinates = [0.0, 0.0]
         history = []
@@ -411,7 +414,7 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
 
     def test_failed_deactivate_keeps_rotation_session_for_release_retry(self) -> None:
         canvas = _PerspectiveCanvas()
-        controller = canvas.services.selection_rotation_controller
+        controller = canvas.services.interaction.selection_rotation_controller
         controller.end_selection_3d_rotation = mock.Mock(
             side_effect=[RuntimeError("injected commit failure"), None]
         )
@@ -440,7 +443,7 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = _PerspectiveCanvas()
-        controller = canvas.services.selection_rotation_controller
+        controller = canvas.services.interaction.selection_rotation_controller
         controller.update_selection_3d_rotation = mock.Mock(
             side_effect=[KeyboardInterrupt("injected preview failure"), None]
         )
@@ -473,7 +476,7 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
 
     def test_move_without_left_button_does_not_continue_stranded_rotation(self) -> None:
         canvas = _PerspectiveCanvas()
-        controller = canvas.services.selection_rotation_controller
+        controller = canvas.services.interaction.selection_rotation_controller
         tool = PerspectiveTool(canvas, context=_tool_context_for(canvas))
         old_position = QPointF(8.0, 4.0)
         tool._rotating = True
@@ -495,7 +498,7 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
 
     def test_new_press_retries_failed_release_without_restarting_rotation(self) -> None:
         canvas = _PerspectiveCanvas()
-        controller = canvas.services.selection_rotation_controller
+        controller = canvas.services.interaction.selection_rotation_controller
         controller.end_selection_3d_rotation = mock.Mock(
             side_effect=[
                 RuntimeError("release commit failure"),

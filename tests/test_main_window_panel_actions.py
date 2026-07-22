@@ -262,7 +262,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
             "chemvas.ui.main_window_document_action_service.QFileDialog.getSaveFileName",
             return_value=("/tmp/output", ""),
         ) as dialog:
-            doc_service = canvas.services.canvas_document_session_service
+            doc_service = canvas.services.document.canvas_document_session_service
             doc_service.export_xyz_async = mock.Mock(
                 side_effect=lambda path, *, on_success, on_error, selected_only=False: (
                     on_success(path)
@@ -294,7 +294,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
                 return_value=("/tmp/output", ""),
             ),
             mock.patch.object(
-                canvas.services.canvas_document_session_service,
+                canvas.services.document.canvas_document_session_service,
                 "export_xyz_async",
                 side_effect=lambda path, *, on_success, on_error, selected_only=False: (
                     on_error("no exporter")
@@ -355,11 +355,11 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         )
         scene_transform = active_canvas_for_window(
             self.window
-        ).services.scene_transform_controller
+        ).services.scene_operations.scene_transform_controller
         scene_transform.flip_selected_items = mock.Mock()
         insert_controller = active_canvas_for_window(
             self.window
-        ).services.insert_controller
+        ).services.structure.insert_controller
         insert_controller.begin_smiles_insert = mock.Mock()
         self.assertFalse(undo_button.isEnabled())
         self.assertFalse(redo_button.isEnabled())

@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -106,7 +108,7 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         )
         canvas = SimpleNamespace(
             _shortcut_modifiers=shortcut_modifiers_for,
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 scene_transform_controller=scene_transform_controller,
                 tool_mode_controller=tool_mode_controller,
             ),
@@ -259,7 +261,7 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         canvas = SimpleNamespace(
             model=SimpleNamespace(atoms={1: Atom("C", 1.0, 2.0)}, bonds=[]),
             _shortcut_modifiers=shortcut_modifiers_for,
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 canvas_mark_scene_service=SimpleNamespace(
                     add_mark_for_atom=lambda atom_id, pos, kind: calls.append(
                         ("mark", atom_id, pos.x(), pos.y(), kind)
@@ -390,7 +392,7 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
                 ],
             ),
             _shortcut_modifiers=shortcut_modifiers_for,
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 scene_transform_controller=scene_transform_controller,
                 structure_build_service=SimpleNamespace(
                     fuse_benzene_to_bond=lambda bond_id: calls.append(

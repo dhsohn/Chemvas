@@ -22,6 +22,8 @@ from chemvas.ui.main_window_ports import (
     tool_mode_controller_for_window,
 )
 
+from tests.runtime_services import canvas_runtime_services
+
 
 def _window_with_active_canvas(canvas):
     return SimpleNamespace(
@@ -40,7 +42,7 @@ def test_active_tool_name_for_window_handles_missing_active_canvas() -> None:
 
 def test_active_tool_name_for_window_reads_active_canvas_services() -> None:
     canvas = SimpleNamespace(
-        services=SimpleNamespace(
+        services=canvas_runtime_services(
             tools=SimpleNamespace(active=SimpleNamespace(name="perspective")),
         ),
     )
@@ -50,7 +52,7 @@ def test_active_tool_name_for_window_reads_active_canvas_services() -> None:
 
 
 def test_active_canvas_service_ports_share_active_canvas_services_lookup() -> None:
-    services = SimpleNamespace(
+    services = canvas_runtime_services(
         style_controller=object(),
         tool_mode_controller=object(),
         insert_controller=object(),

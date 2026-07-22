@@ -270,8 +270,8 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
             },
         }
         controller.clipboard_selection_payload = lambda: (payload, "fresh-source")
-        canvas.services.canvas_history_recording_service.record_additions = Mock(
-            side_effect=RuntimeError("history failed")
+        canvas.services.document.canvas_history_recording_service.record_additions = (
+            Mock(side_effect=RuntimeError("history failed"))
         )
 
         with self.assertRaisesRegex(RuntimeError, "history failed"):
@@ -317,7 +317,7 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
             canvas.pushed_commands.append("partial-history-entry")
             raise interruption
 
-        canvas.services.canvas_history_recording_service.record_additions = (
+        canvas.services.document.canvas_history_recording_service.record_additions = (
             append_then_interrupt
         )
 
@@ -368,7 +368,7 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
             canvas.pushed_commands.append("partial-history-entry")
             raise interruption
 
-        canvas.services.canvas_history_recording_service.record_additions = (
+        canvas.services.document.canvas_history_recording_service.record_additions = (
             append_then_interrupt
         )
         original_clear_selection = selection_module.clear_scene_selection_for

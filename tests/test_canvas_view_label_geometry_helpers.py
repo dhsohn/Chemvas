@@ -4,6 +4,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -67,7 +69,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
         )
         services = getattr(view, "services", None)
         if services is None:
-            services = SimpleNamespace()
+            services = canvas_runtime_services()
             view.services = services
         services.geometry_controller = controller
         return controller
@@ -281,7 +283,9 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
 
     def test_geometry_access_helpers_delegate_to_controller(self) -> None:
         controller = mock.Mock()
-        view = SimpleNamespace(services=SimpleNamespace(geometry_controller=controller))
+        view = SimpleNamespace(
+            services=canvas_runtime_services(geometry_controller=controller)
+        )
         bond = Bond(1, 2, 1)
 
         ring_center_for_bond_for(view, bond)

@@ -64,7 +64,7 @@ class CanvasViewEventShortcutTest(unittest.TestCase):
         view = CanvasView()
         input_view_state_for(view).base_transform = QTransform().translate(3.0, 4.0)
         view.setTransform(QTransform().scale(2.0, 2.0))
-        view.services.tools.active = None
+        view.services.tooling.tools.active = None
         return view
 
     def test_event_accepts_supported_native_gestures_and_resets_transform(self) -> None:

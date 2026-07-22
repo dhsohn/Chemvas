@@ -5,6 +5,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -101,7 +103,7 @@ class _FakeCanvas:
         self._ring_center = None
         self._ring_center_3d = None
         self._scene = QGraphicsScene()
-        self.services = SimpleNamespace(
+        self.services = canvas_runtime_services(
             geometry_controller=SimpleNamespace(
                 trim_line_for_labels=self.trim_line_for_labels,
                 label_rect_for_atom=self.label_rect_for_atom,
@@ -343,7 +345,7 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
             atom_items={},
             atom_dots={},
             scene=lambda: SimpleNamespace(removeItem=mock.Mock()),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 history_service=SimpleNamespace(push=pushed.append),
                 hit_testing_service=SimpleNamespace(
                     mark_spatial_index_dirty=mock.Mock()
@@ -354,7 +356,7 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
 
         CanvasGeometryController(
             view,
-            hit_testing_service=view.services.hit_testing_service,
+            hit_testing_service=view.services.selection.hit_testing_service,
             history_service=view.services.history_service,
         ).set_bond_length(30.0)
 
@@ -408,7 +410,7 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
                 bonds=[],
             ),
             atom_items={},
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 atom_label_service=atom_label_service,
                 move_controller=SimpleNamespace(redraw_connected_bonds=mock.Mock()),
                 canvas_ring_fill_scene_service=SimpleNamespace(
@@ -431,7 +433,7 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
             atom_items={},
             atom_dots={},
             bond_items={},
-            services=SimpleNamespace(selection_controller=selection_controller),
+            services=canvas_runtime_services(selection_controller=selection_controller),
         )
         restore_selection_from_ids_for(restore_view, {99}, {42})
         scene.clearSelection.assert_called_once_with()
@@ -452,7 +454,7 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
         order_view = SimpleNamespace(
             model=SimpleNamespace(bonds=[Bond(1, 2, 2), Bond(3, 4, 3), None]),
         )
-        order_view.services = SimpleNamespace(
+        order_view.services = canvas_runtime_services(
             canvas_graph_service=CanvasGraphService(order_view)
         )
         self.assertEqual(CanvasGraphService(order_view).atom_bond_order_sum(1), 2)

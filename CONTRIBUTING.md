@@ -78,7 +78,7 @@ Using the atom-label feature as a worked example:
 
 | Suffix | Role | Example |
 | --- | --- | --- |
-| `*_ports` | The single canonical way to resolve a service/collaborator from a canvas or window. | [`canvas_service_ports.py`](app/chemvas/ui/canvas_service_ports.py): `atom_label_service_for_access(canvas)` → `canvas_services_for(canvas).auxiliary.atom_label_service` |
+| `*_ports` | The single canonical way to resolve a service/collaborator from a canvas or window. | [`canvas_service_ports.py`](app/chemvas/ui/canvas_service_ports.py): `atom_label_service_for_access(canvas)` → `canvas_services_for(canvas).atom_label_service` |
 | `*_access` | Caller-facing free functions. Other modules call these instead of touching attributes. | [`atom_label_access.py`](app/chemvas/ui/atom_label_access.py): `add_or_update_atom_label(canvas, atom_id, text)` |
 | `*_service` | The actual implementation/logic. Receives its collaborators as **injected ports**. | `atom_label_service.py` |
 | `*_state` | Owns runtime state in a dedicated object instead of as private attrs on the window/canvas. | `main_window_state.py` (`MainWindowState`) |
@@ -118,6 +118,14 @@ Using the atom-label feature as a worked example:
 When migrating legacy code, preserve its existing access rules until the whole
 feature owns a public API and the corresponding legacy architecture checks can
 be retired.
+
+Production service lookup accepts only `CanvasRuntimeServices`; it does not adapt
+flat or duck-typed service bags. Focused legacy UI tests use the test-only builder
+in `tests/runtime_services.py` when they need a partial runtime. Legacy state
+accessors may still attach state to a plain headless collaborator, but a real
+`CanvasView` always uses the strict `CanvasRuntimeState` and fails on an unknown
+field. Remove that plain-object state seam when the last legacy state accessor has
+moved to a canonical feature runtime.
 
 ### Core vs UI
 

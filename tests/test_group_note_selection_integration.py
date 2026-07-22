@@ -55,28 +55,30 @@ class GroupedNoteSelectionIntegrationTest(unittest.TestCase):
     def test_grouped_note_follows_shift_click_and_drag(self) -> None:
         canvas = CanvasView()
         self.addCleanup(self._dispose_canvas, canvas)
-        canvas.services.tools.set_active("select")
+        canvas.services.tooling.tools.set_active("select")
         _, atom_item_a = self._add_atom(canvas, 0.0)
         _, atom_item_b = self._add_atom(canvas, 80.0)
-        note = canvas.services.note_controller.create_text_note(
+        note = canvas.services.interaction.note_controller.create_text_note(
             QPointF(40.0, 40.0), "label"
         )
         append_scene_item_for(canvas, "note_items", note)
 
         atom_item_a.setSelected(True)
         atom_item_b.setSelected(True)
-        canvas.services.selection_controller.select_note(note, additive=True)
+        canvas.services.selection.selection_controller.select_note(note, additive=True)
         self.assertTrue(group_selection_for(canvas))
         self.assertEqual(len(group_state_for(canvas).groups), 1)
 
-        canvas.services.selection_controller.clear_note_selection()
+        canvas.services.selection.selection_controller.clear_note_selection()
         canvas.scene().clearSelection()
         self.assertNotIn(note, selected_notes_for(canvas))
 
         # Shift-click routes through toggle_item_selection, whose
         # set_scene_items_selected_for blocks the selectionChanged expansion hook,
         # so the grouped note must be toggled explicitly through the note service.
-        canvas.services.selection_controller.toggle_item_selection(atom_item_a)
+        canvas.services.selection.selection_controller.toggle_item_selection(
+            atom_item_a
+        )
         self.assertTrue(atom_item_a.isSelected())
         self.assertTrue(atom_item_b.isSelected())
         self.assertIn(note, selected_notes_for(canvas))
@@ -91,7 +93,9 @@ class GroupedNoteSelectionIntegrationTest(unittest.TestCase):
         self.assertEqual(note.pos().y() - before.y(), 10.0)
 
         # Toggling the same member again drops the whole group, note included.
-        canvas.services.selection_controller.toggle_item_selection(atom_item_a)
+        canvas.services.selection.selection_controller.toggle_item_selection(
+            atom_item_a
+        )
         self.assertFalse(atom_item_a.isSelected())
         self.assertFalse(atom_item_b.isSelected())
         self.assertNotIn(note, selected_notes_for(canvas))
