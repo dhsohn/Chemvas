@@ -14,7 +14,6 @@ from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene, QGraphicsView
 from chemvas.domain.document import MoleculeModel
 from chemvas.domain.transactions import HistoryAuthoritySnapshot
 from chemvas.ui.atom_coords_access import clear_atom_coords_3d_for
-from chemvas.ui.benzene_preview_access import clear_benzene_preview_for
 from chemvas.ui.canvas_atom_graphics_state import clear_atom_graphics_for
 from chemvas.ui.canvas_bond_graphics_state import clear_bond_graphics_for
 from chemvas.ui.canvas_document_state import snapshot_canvas_document_state
@@ -1905,7 +1904,6 @@ class CanvasSceneResetService:
         self.marks.clear()
         if not silent_reassert:
             clear_template_preview_for(self.canvas)
-            clear_benzene_preview_for(self.canvas)
             clear_smiles_preview_for(self.canvas)
             apply_insert_session_state_for(self.canvas, clear_insert_session())
         self._clear_insert_runtime_directly()
@@ -1926,7 +1924,6 @@ class CanvasSceneResetService:
         state.template_preview_items.clear()
         state.template_preview_lines.clear()
         state.template_preview_dots.clear()
-        state.benzene_preview_items.clear()
 
     @staticmethod
     def _raw_history_matches(

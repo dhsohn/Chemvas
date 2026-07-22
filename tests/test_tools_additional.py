@@ -650,18 +650,10 @@ class _ControllerCanvas:
 
     def __init__(self) -> None:
         self.drag_mode = None
-        self.clear_benzene_preview_calls = 0
-        self.services = SimpleNamespace(
-            benzene_preview_service=SimpleNamespace(
-                clear_preview=self.clear_benzene_preview
-            )
-        )
+        self.services = SimpleNamespace()
 
     def setDragMode(self, mode) -> None:
         self.drag_mode = mode
-
-    def clear_benzene_preview(self) -> None:
-        self.clear_benzene_preview_calls += 1
 
     def scene(self):
         return object()
@@ -691,15 +683,11 @@ class _ToolControllerPreviewCanvas:
         self.scene_obj = _PreviewScene()
         self.active_arrow_type = "reaction"
         self.clear_handles_calls = 0
-        self.clear_benzene_preview_calls = 0
         self.preview_arrow_calls = []
         self.add_arrow_calls = []
         self.services = SimpleNamespace(
             hit_testing_service=SimpleNamespace(
                 scene_pos_from_event=self.scene_pos_from_event
-            ),
-            benzene_preview_service=SimpleNamespace(
-                clear_preview=self.clear_benzene_preview
             ),
             scene_decoration_service=SimpleNamespace(add_arrow=self.add_arrow),
             scene_decoration_build_service=SimpleNamespace(
@@ -725,9 +713,6 @@ class _ToolControllerPreviewCanvas:
 
     def clear_handles(self) -> None:
         self.clear_handles_calls += 1
-
-    def clear_benzene_preview(self) -> None:
-        self.clear_benzene_preview_calls += 1
 
 
 @unittest.skipUnless(
@@ -938,7 +923,6 @@ class ToolsAdditionalTest(unittest.TestCase):
             DragMode=SimpleNamespace(NoDrag="none"),
             drag_mode=None,
             runtime_state=SimpleNamespace(hover_preview_state=HoverState()),
-            preview_calls=[],
             add_calls=[],
             setDragMode=lambda mode: setattr(benzene_canvas, "drag_mode", mode),
             scene_pos_from_event=lambda event: event.position(),
@@ -970,16 +954,6 @@ class ToolsAdditionalTest(unittest.TestCase):
                         )
                     )
                 ),
-                benzene_preview_service=SimpleNamespace(
-                    clear_preview=lambda: benzene_canvas.add_calls.append(
-                        ("clear", None, None)
-                    ),
-                    render_preview=lambda pos, attach_atom_id=None, attach_bond_id=None: (
-                        benzene_canvas.preview_calls.append(
-                            (QPointF(pos), attach_atom_id, attach_bond_id)
-                        )
-                    ),
-                ),
             ),
         )
         hover_state_for(benzene_canvas).bond_id = 4
@@ -989,19 +963,17 @@ class ToolsAdditionalTest(unittest.TestCase):
         )
         benzene_tool.activate()
         self.assertEqual(benzene_canvas.drag_mode, benzene_canvas.DragMode.NoDrag)
-        self.assertEqual(benzene_canvas.add_calls, [("clear", None, None)])
         self.assertFalse(
             benzene_tool.on_mouse_press(_Event(button=Qt.MouseButton.RightButton))
         )
         self.assertFalse(benzene_tool.on_mouse_press(_Event(QPointF(2.0, 3.0))))
-        self.assertEqual(benzene_canvas.add_calls, [("clear", None, None)])
+        self.assertEqual(benzene_canvas.add_calls, [])
         hover_state_for(benzene_canvas).bond_id = None
         self.assertFalse(
             benzene_tool.on_mouse_move(
                 _Event(QPointF(5.0, 6.0), buttons=Qt.MouseButton.NoButton)
             )
         )
-        self.assertEqual(benzene_canvas.preview_calls, [])
         self.assertFalse(
             benzene_tool.on_mouse_move(
                 _Event(QPointF(5.0, 6.0), buttons=Qt.MouseButton.LeftButton)
@@ -1138,8 +1110,6 @@ class ToolsAdditionalTest(unittest.TestCase):
         self,
     ) -> None:
         benzene_calls = []
-        preview_calls = []
-        clear_calls = []
         benzene_canvas = SimpleNamespace(
             DragMode=SimpleNamespace(NoDrag="none"),
             drag_mode=None,
@@ -1160,14 +1130,6 @@ class ToolsAdditionalTest(unittest.TestCase):
                         )
                     )
                 ),
-                benzene_preview_service=SimpleNamespace(
-                    clear_preview=lambda: clear_calls.append(True),
-                    render_preview=lambda pos, attach_atom_id=None, attach_bond_id=None: (
-                        preview_calls.append(
-                            (QPointF(pos), attach_atom_id, attach_bond_id)
-                        )
-                    ),
-                ),
             ),
         )
         hover_state_for(benzene_canvas).atom_id = 5
@@ -1175,7 +1137,6 @@ class ToolsAdditionalTest(unittest.TestCase):
             benzene_canvas, context=_tool_context_for(benzene_canvas)
         )
         benzene_tool.activate()
-        self.assertEqual(clear_calls, [True])
         self.assertFalse(
             benzene_tool.on_mouse_press(_Event(button=Qt.MouseButton.RightButton))
         )
@@ -1194,7 +1155,6 @@ class ToolsAdditionalTest(unittest.TestCase):
             )
         )
         self.assertEqual(benzene_calls, [])
-        self.assertEqual(preview_calls, [])
 
         misc_canvas = _MiscCanvas()
         color_tool = ColorTool(misc_canvas, context=_tool_context_for(misc_canvas))
@@ -1491,7 +1451,6 @@ class ToolsAdditionalTest(unittest.TestCase):
         )
         controller.set_active("benzene")
         controller.set_active("missing")
-        self.assertEqual(controller_canvas.clear_benzene_preview_calls, 2)
         self.assertEqual(
             controller_canvas.drag_mode, controller_canvas.DragMode.RubberBandDrag
         )

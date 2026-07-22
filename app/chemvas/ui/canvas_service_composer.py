@@ -149,7 +149,6 @@ def compose_canvas_services(
         graph_service=canvas_graph_service,
         history_service=history_service,
         hover_refresh=hover_controller.refresh,
-        structure_build_service=structure_services.structure_build_service,
         note_controller=interaction_services.note_controller,
     )
 
