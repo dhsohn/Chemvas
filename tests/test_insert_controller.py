@@ -123,7 +123,6 @@ class _FakeCanvas:
             ),
         )
         self.add_benzene_ring = Mock()
-        self.clear_benzene_preview = Mock()
 
         self._atom_state_dict = Mock(side_effect=lambda atom_id: {"atom_id": atom_id})
         self._bond_state_dict = Mock(
@@ -149,9 +148,6 @@ class _FakeCanvas:
             atom_label_service=SimpleNamespace(
                 add_or_update_atom_label=self.add_or_update_atom_label,
                 ensure_carbon_dot=self.ensure_carbon_dot,
-            ),
-            benzene_preview_service=SimpleNamespace(
-                clear_preview=self.clear_benzene_preview
             ),
             canvas_atom_mutation_service=SimpleNamespace(
                 add_atom=self.add_atom,
@@ -835,7 +831,6 @@ class InsertControllerTest(unittest.TestCase):
         controller.begin_ring_template_insert(2)
 
         self.assertFalse(canvas.insert_state.template_active)
-        canvas.clear_benzene_preview.assert_not_called()
         controller.cancel_smiles_insert.assert_not_called()
         controller.render_template_preview.assert_not_called()
 
@@ -851,7 +846,6 @@ class InsertControllerTest(unittest.TestCase):
         controller.begin_ring_template_insert(6, "benzene")
 
         controller.cancel_smiles_insert.assert_called_once_with()
-        canvas.clear_benzene_preview.assert_called_once_with()
         self.assertTrue(canvas.insert_state.template_active)
         self.assertEqual(canvas.insert_state.template_ring_size, 6)
         self.assertEqual(canvas.insert_state.template_ring_style, "benzene")
@@ -943,7 +937,6 @@ class InsertControllerTest(unittest.TestCase):
         controller.begin_smiles_insert(" CO ")
 
         controller.cancel_template_insert.assert_called_once_with()
-        canvas.clear_benzene_preview.assert_called_once_with()
         self.assertTrue(canvas.insert_state.smiles_active)
         self.assertEqual(canvas.insert_state.smiles_preview_smiles, "CO")
         self.assertEqual(

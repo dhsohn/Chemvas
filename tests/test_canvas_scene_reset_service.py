@@ -2258,7 +2258,6 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
     def test_clear_scene_resets_canvas_state_and_clears_previews(self) -> None:
         scene = _FakeScene()
         apply_insert_session_state = mock.Mock()
-        clear_benzene_preview = mock.Mock()
         selection_callback = mock.Mock()
         selected_highlight = object()
         canvas = SimpleNamespace(
@@ -2267,9 +2266,6 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             services=SimpleNamespace(
                 hit_testing_service=SimpleNamespace(
                     mark_spatial_index_dirty=mock.Mock()
-                ),
-                benzene_preview_service=SimpleNamespace(
-                    clear_preview=clear_benzene_preview
                 ),
                 insert_controller=SimpleNamespace(
                     clear_template_preview=mock.Mock(),
@@ -2388,6 +2384,5 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         self.assertEqual(canvas.mark_registry.by_atom, {})
         self.assertIsNone(canvas.insert_state.smiles_preview_model)
         canvas.services.insert_controller.clear_template_preview.assert_called_once_with()
-        clear_benzene_preview.assert_called_once_with()
         canvas.services.insert_controller.clear_smiles_preview.assert_called_once_with()
         apply_insert_session_state.assert_called_once_with(clear_insert_session())

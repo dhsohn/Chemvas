@@ -119,7 +119,6 @@ def _live_canvas_load_snapshot(
     smiles_atom_item = add_preview_item(110.0)
     template_line_item = add_preview_item(120.0)
     template_dot_item = add_preview_item(130.0)
-    benzene_item = add_preview_item(140.0)
     insert_state.smiles_active = True
     insert_state.smiles_preview_model = MoleculeModel(atoms={7: Atom("O", 1.0, 2.0)})
     insert_state.smiles_preview_items = [smiles_bond_item, smiles_atom_item]
@@ -133,7 +132,6 @@ def _live_canvas_load_snapshot(
     insert_state.template_preview_items = [template_line_item, template_dot_item]
     insert_state.template_preview_lines = [template_line_item]
     insert_state.template_preview_dots = [template_dot_item]
-    insert_state.benzene_preview_items = [benzene_item]
 
     hover_state = hover_state_for(canvas)
     hover_item = add_preview_item(150.0)
@@ -213,7 +211,6 @@ def _live_canvas_load_snapshot(
                 "template_preview_items",
                 "template_preview_lines",
                 "template_preview_dots",
-                "benzene_preview_items",
             )
         },
         "insert_values": {
@@ -495,7 +492,6 @@ def test_insert_smiles_service_begin_smiles_insert_uses_callbacks_and_preview_st
     service.begin_smiles_insert(" CO ")
 
     cancel_template.assert_called_once_with()
-    canvas.clear_benzene_preview.assert_called_once_with()
     assert canvas.insert_state.smiles_active
     assert canvas.insert_state.smiles_preview_smiles == "CO"
     assert (

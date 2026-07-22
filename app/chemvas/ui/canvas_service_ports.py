@@ -9,10 +9,6 @@ def atom_label_service_for_access(canvas) -> Any:
     return canvas_services_for(canvas).auxiliary.atom_label_service
 
 
-def benzene_preview_service_for_access(canvas) -> Any:
-    return canvas_services_for(canvas).auxiliary.benzene_preview_service
-
-
 def canvas_window_document_session_service(canvas) -> Any:
     return canvas_services_for(canvas).document.canvas_document_session_service
 
@@ -115,7 +111,6 @@ def structure_mutation_build_service(canvas) -> Any:
 
 __all__ = [
     "atom_label_service_for_access",
-    "benzene_preview_service_for_access",
     "canvas_window_document_session_service",
     "curved_arrow_path_service_for_access",
     "geometry_controller_for_access",

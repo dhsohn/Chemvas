@@ -18,7 +18,6 @@ from chemvas.features.selection import (
     StructureHit,
     choose_preferred_structure_hit,
 )
-from chemvas.ui.benzene_preview_access import clear_benzene_preview_for
 from chemvas.ui.canvas_insert_state import CanvasInsertState
 from chemvas.ui.canvas_model_access import atom_for_id, bond_for_id
 from chemvas.ui.insert_commit_service import InsertCommitService
@@ -83,7 +82,6 @@ class InsertTemplateService:
             return
         if self.insert_state.smiles_active:
             self._cancel_smiles_insert()
-        clear_benzene_preview_for(self.canvas)
         self._apply_session_state(next_state)
 
     def cancel_template_insert(self) -> None:

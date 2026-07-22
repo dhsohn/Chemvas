@@ -95,7 +95,6 @@ def test_build_canvas_services_uses_selection_service_bundle(monkeypatch) -> Non
 
     auxiliary_bundle = SimpleNamespace(
         atom_label_service=object(),
-        benzene_preview_service=object(),
         structure_insert_service=object(),
     )
 
@@ -106,7 +105,6 @@ def test_build_canvas_services_uses_selection_service_bundle(monkeypatch) -> Non
         graph_service,
         history_service,
         hover_refresh,
-        structure_build_service,
         note_controller,
     ):
         build_canvas_auxiliary_services_calls.append(
@@ -116,7 +114,6 @@ def test_build_canvas_services_uses_selection_service_bundle(monkeypatch) -> Non
                 graph_service,
                 history_service,
                 hover_refresh,
-                structure_build_service,
                 note_controller,
             )
         )
@@ -463,7 +460,6 @@ def test_build_canvas_services_uses_selection_service_bundle(monkeypatch) -> Non
             services.canvas_graph_service,
             history_service,
             hover_controller.refresh,
-            services.structure_build_service,
             services.note_controller,
         )
     ]
@@ -644,7 +640,6 @@ def test_build_canvas_services_uses_selection_service_bundle(monkeypatch) -> Non
         is interaction_bundle.selection_rotation_controller
     )
     assert services.atom_label_service is auxiliary_bundle.atom_label_service
-    assert services.benzene_preview_service is auxiliary_bundle.benzene_preview_service
     assert (
         services.structure_insert_service is auxiliary_bundle.structure_insert_service
     )
