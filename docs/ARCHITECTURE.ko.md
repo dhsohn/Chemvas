@@ -15,8 +15,9 @@
 - Graphics items (`app/chemvas/ui/graphics_items.py`): 선택 불가능한 QGraphicsItem 래퍼(wrapper).
 - Label layout (`app/chemvas/features/annotations`): 원자 레이블을 조판 런과 배치로 파싱하는 순수(Qt-free) 공개 API이며 화면과 아웃라인 내보내기 타이포그래피의 단일 소유자다.
 - Figure export (`app/chemvas/features/export`): feature 패키지가 공개 API, Qt-free 대화상자/계획 규칙, 씬 범위 처리, SVG/PDF/raster 렌더러를 소유한다. 외부 호출자는 `chemvas.features.export`만 import하고 렌더러 모듈은 비공개 구현 세부사항으로 남는다. 순수 plan은 패딩이 적용된 소스 사각형과 물리 출력 크기를 포인트 단위로 계산한다. Qt 서비스는 보이는 콘텐츠를 수집하고, 일시적 오버레이를 제외하며, 가능한 경우 항목별 export bounds를 사용하고, 레이블을 아웃라인 처리한 뒤 SVG/PDF/PNG/TIFF로 렌더링한다. `unit_scale` 또는 `target_width_pt`로 줌과 무관한 크기를 결정하고 `scope`와 `background`로 내용과 배경을 선택한다.
+- Hover (`app/chemvas/features/hover`, `app/chemvas/ui/hover.py`): feature 공개 API가 Qt-free transient state와 갱신 정책을 소유한다. 캔버스당 하나의 `HoverController`가 Qt 조율을 맡고, `hover_rendering.py`가 graphics item helper를 소유한다. `canvas_hover_state.py`는 eager import graph를 비순환으로 유지하기 위한 단일 함수 runtime-state leaf로 남는다. `CanvasRuntimeServices.hover`는 controller를 직접 노출하며, 기존 hover access/ports/bundle과 4개 service 스택은 삭제되었다.
 - Domain document (`app/chemvas/domain/document`): Qt-free 분자 모델과 버전이 있는 문서/클립보드 직렬화·검증 정책을 소유한다. 기존 `chemvas.core.model`과 `document_state` 경로는 삭제되었다.
-- 이전된 feature 정책 (`app/chemvas/features/{export,session,annotations,rendering,insertion,selection}`): 각 패키지는 응집된 planning/geometry/state 계약을 하나의 공개 API로 제공한다. 기존 평면 호환 모듈은 삭제되었고 `test_package_dependencies.py`가 재도입을 막는다.
+- 이전된 feature 정책 (`app/chemvas/features/{export,session,annotations,rendering,insertion,selection,hover}`): 각 패키지는 응집된 planning/geometry/state 계약을 하나의 공개 API로 제공한다. 기존 평면 호환 모듈은 삭제되었고 `test_package_dependencies.py`가 재도입을 막는다.
 - 메인 창 조립: `chemvas.shell.main_window`가 얇은 Qt 셸을 소유하고, `chemvas.bootstrap`이 runtime/service 조립·창 등록·문서 열기·앱 시작을 소유한다. Qt 파일 열기 이벤트는 `chemvas.adapters.qt`를 통해 들어온다.
 
 ## 전환기 레거시 UI 규율 (ports / access / state / services)
@@ -26,10 +27,10 @@
 유지한다. 모든 신규 기능이 복제할 템플릿은 아니며, 신규 feature 패키지는
 실제 경계가 필요할 때만 역할별 모듈을 만든다.
 
-- **State 모듈** (`*_state.py`): 관심사당 dataclass 하나와 `<name>_state_for(canvas)` 접근자. 모든 상태 접근자는 `ensure_canvas_state(canvas, name, factory)`(`chemvas.ui.canvas_state_lookup.py`)를 거치며, 조회와 부착에 하나의 이름만 사용한다. 실제 캔버스에서는 모든 상태가 eager 생성되는 `CanvasRuntimeState` 컨테이너(`chemvas.ui.canvas_runtime_state.py`)의 필드로 존재한다. 컨테이너는 strict하다 — 컨테이너에 없는 필드를 요청하는 접근자는 그림자 사본을 조용히 부착하는 대신 즉시 실패한다. 일부 상태(`model`, `renderer`, `bond_renderer`, `rdkit`)는 의도적으로 캔버스 직접 속성으로 저장되며 `runtime_field=False`를 사용한다. 새 상태 추가 시: dataclass + 접근자 + `CanvasRuntimeState` 필드가 세트이며, `test_state_accessor_names_match_runtime_state_container`가 동기화를 강제한다.
+- **State 모듈** (`*_state.py`): 아직 이전되지 않은 관심사는 dataclass 하나와 `<name>_state_for(canvas)` 접근자를 사용한다. 이 접근자들은 `ensure_canvas_state(canvas, name, factory)`(`chemvas.ui.canvas_state_lookup.py`)를 거쳐 조회와 부착에 하나의 이름만 사용한다. 실제 캔버스의 상태는 eager 생성되는 strict `CanvasRuntimeState` 컨테이너(`chemvas.ui.canvas_runtime_state.py`)에 있으며, 알 수 없는 필드는 그림자 사본을 만들지 않고 즉시 실패한다. 일부 상태(`model`, `renderer`, `bond_renderer`, `rdkit`)는 의도적으로 캔버스 직접 속성에 저장되고 `runtime_field=False`를 사용한다. 이전된 hover 상태는 `chemvas.features.hover`가 소유하며, 얇은 UI leaf는 필수 runtime field를 직접 읽을 뿐 부착하거나 fallback하지 않는다. `test_state_accessor_names_match_runtime_state_container`는 남은 `ensure_canvas_state` 이름을 검증한다.
 - **Access 모듈** (`*_access.py`): 연산 하나를 감싸는 자유 함수(`foo_for(canvas)`). `canvas.services`에 직접 접근할 수 없고, 서비스 조회는 대응하는 ports 모듈에 위임한다.
 - **Ports 모듈** (`*_ports.py`): 서비스 컨테이너(`canvas_services_for` / window 비공개 저장소)를 해석할 수 있는 유일한 모듈. 그 외 모든 코드는 협력자를 주입받거나 port를 호출한다. 생산 코드의 port는 묶음형 `CanvasRuntimeServices` API(예: `services.auxiliary.atom_label_service`)만 사용한다. 기존 평면 서비스 이름은 경량 테스트 fixture를 위한 임시 호환 표면이며, 생산 소비자에서의 사용은 아키텍처 ratchet이 금지한다.
-- **서비스와 컨트롤러**: `chemvas.ui.canvas_service_composer.py`에서 캔버스당 한 번, 명시적 키워드 주입으로 조립된다 — 서비스 내부의 서비스 로케이터 금지, 누락된 배선을 숨기는 `=None` 협력자 기본값 금지. composer는 기존 기능 bundle들을 `CanvasRuntimeServices`에 그대로 보관하여 수십 개 협력자를 평면화하지 않고 캔버스마다 안정적인 bundle identity 하나를 유지한다.
+- **서비스와 컨트롤러**: `chemvas.ui.canvas_service_composer.py`에서 캔버스당 한 번, 명시적 키워드 주입으로 조립된다 — 서비스 내부의 서비스 로케이터 금지, 누락된 배선을 숨기는 `=None` 협력자 기본값 금지. composer는 응집된 레거시 그룹은 `CanvasRuntimeServices`의 bundle로 보관하고, hover처럼 runtime이 하나인 feature는 단일 멤버 bundle을 만들지 않고 직접 보관한다.
 - **core는 UI와 분리되며, Qt 마이그레이션 부채는 하나만 허용한다**: `app/chemvas/core`는 모듈 수준에서 `ui`를 import하지 않는다(`chemvas.core.history.py`의 지연 해석 프로토콜 구현만 예외). `chemvas.core.renderer.py`는 현재 유일한 직접 Qt 의존성으로, 네임스페이스 이전 중 Qt 어댑터로 이동할 전환 부채다. 새로운 core-to-Qt 의존성은 금지한다.
 
 이 규칙들은 `tests/test_architecture_boundaries.py`가 강제한다. 신규 규칙은

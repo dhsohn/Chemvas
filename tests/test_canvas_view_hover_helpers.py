@@ -4,16 +4,9 @@ from unittest import mock
 
 from chemvas.domain.document import Atom, Bond
 from chemvas.ui.bond_preview_access import bond_hover_endpoint_for
-from chemvas.ui.canvas_hover_state import (
-    HoverPreviewState,
-    hover_preview_state_for,
-    hover_state_for,
-)
 from chemvas.ui.canvas_mark_scene_service import CanvasMarkSceneService
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.hover_interaction_access import bond_preview_signature_for
-from chemvas.ui.hover_scene_service import HoverSceneService
 from chemvas.ui.mark_item_access import mark_center_for_pointer_for
 from chemvas.ui.selection_info_access import (
     emit_selection_info_for,
@@ -26,7 +19,7 @@ from chemvas.ui.structure_geometry_access import (
     default_bond_endpoint_for,
 )
 from PyQt6.QtCore import QPointF
-from PyQt6.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsScene
+from PyQt6.QtWidgets import QApplication
 
 
 class _SelectedItem:
@@ -283,61 +276,6 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
 
         emit_selection_info_for(no_callback_view)
 
-    def test_clear_hover_highlight_and_add_hover_indicators_manage_scene_items(
-        self,
-    ) -> None:
-        scene = QGraphicsScene()
-        view = SimpleNamespace(
-            scene=lambda: scene,
-            model=SimpleNamespace(
-                atoms={
-                    1: Atom("C", 10.0, 10.0),
-                    2: Atom("C", 30.0, 10.0),
-                    3: Atom("C", 12.0, 34.0),
-                },
-                bonds=[Bond(1, 2, 1), None],
-            ),
-            renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
-            hover_preview_state=HoverPreviewState("preview"),
-        )
-        hover_scene_service = HoverSceneService(view)
-        view.services = SimpleNamespace(hover_scene_service=hover_scene_service)
-
-        hover_scene_service.add_atom_hover_indicator(3)
-        self.assertEqual(len(hover_state_for(view).items), 1)
-        indicator = hover_state_for(view).items[0]
-        self.assertIsInstance(indicator, QGraphicsEllipseItem)
-        self.assertEqual(len(scene.items()), 1)
-        rect = indicator.rect()
-        self.assertAlmostEqual(rect.x(), 7.0)
-        self.assertAlmostEqual(rect.y(), 29.0)
-        self.assertAlmostEqual(rect.width(), 10.0)
-        self.assertAlmostEqual(rect.height(), 10.0)
-
-        hover_scene_service.add_bond_hover_indicator(0)
-        self.assertEqual(len(hover_state_for(view).items), 2)
-        self.assertEqual(len(scene.items()), 2)
-        bond_indicator = hover_state_for(view).items[1]
-        self.assertIsInstance(bond_indicator, QGraphicsEllipseItem)
-        bond_rect = bond_indicator.rect()
-        self.assertAlmostEqual(bond_rect.width(), 8.8)
-        self.assertAlmostEqual(bond_rect.height(), 8.8)
-
-        hover_scene_service.add_atom_hover_indicator(999)
-        hover_scene_service.add_bond_hover_indicator(1)
-        hover_scene_service.add_bond_hover_indicator(99)
-        view.model.bonds[0] = Bond(1, 9, 1)
-        hover_scene_service.add_bond_hover_indicator(0)
-        self.assertEqual(len(hover_state_for(view).items), 2)
-        self.assertEqual(len(scene.items()), 2)
-
-        hover_scene_service.clear_hover_highlight()
-        self.assertEqual(hover_state_for(view).items, [])
-        self.assertIsNone(hover_state_for(view).atom_id)
-        self.assertIsNone(hover_state_for(view).bond_id)
-        self.assertIsNone(hover_preview_state_for(view).style)
-        self.assertEqual(len(scene.items()), 0)
-
     def test_mark_center_and_bond_helpers_cover_pointer_and_endpoint_logic(
         self,
     ) -> None:
@@ -375,12 +313,6 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
         mark_scene_service.mark_offset_from_click.assert_called_once_with(
             7, point, kind="minus"
         )
-
-        self.assertEqual(
-            bond_preview_signature_for(view, active_tool_name="bond"), "double:2"
-        )
-        view.services.tools.active = SimpleNamespace(name="select")
-        self.assertIsNone(bond_preview_signature_for(view, active_tool_name="select"))
 
         endpoint = bond_hover_endpoint_for(view, QPointF(0.0, 0.0), QPointF(1.0, 1.0))
         self.assertAlmostEqual(endpoint.x(), 7.071, places=3)

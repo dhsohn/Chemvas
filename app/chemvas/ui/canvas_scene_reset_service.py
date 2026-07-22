@@ -20,11 +20,7 @@ from chemvas.ui.canvas_bond_graphics_state import clear_bond_graphics_for
 from chemvas.ui.canvas_document_state import snapshot_canvas_document_state
 from chemvas.ui.canvas_graph_state import graph_state_for
 from chemvas.ui.canvas_group_state import clear_groups_for
-from chemvas.ui.canvas_hover_state import (
-    set_hover_atom_id_for,
-    set_hover_bond_id_for,
-    set_hover_items_for,
-)
+from chemvas.ui.canvas_hover_state import hover_state_for
 from chemvas.ui.canvas_insert_state import insert_state_for
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import set_model_for
@@ -76,7 +72,7 @@ _RESET_OWNED_RUNTIME_FIELDS: dict[str, tuple[str, ...] | None] = {
         "rdkit_warmup_pending",
     ),
     "selection_outline_state": None,
-    "hover_preview_state": ("items", "atom_id", "bond_id"),
+    "hover_preview_state": ("items", "atom_id", "bond_id", "style"),
     "scene_items_state": None,
 }
 
@@ -1883,9 +1879,11 @@ class CanvasSceneResetService:
         # Scene signals were blocked and dropped during destruction; discard
         # the stale wrapper graph immediately after the destructive boundary.
         self.rotation_preview.reset()
-        set_hover_items_for(self.canvas, [])
-        set_hover_atom_id_for(self.canvas, None)
-        set_hover_bond_id_for(self.canvas, None)
+        hover_state = hover_state_for(self.canvas)
+        hover_state.items.clear()
+        hover_state.atom_id = None
+        hover_state.bond_id = None
+        hover_state.style = None
         target_model = empty_model if empty_model is not None else MoleculeModel()
         if empty_model is not None:
             target_model.atoms.clear()

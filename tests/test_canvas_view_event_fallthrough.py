@@ -115,8 +115,13 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
 
     def _new_view(self, *, tool_active=None):
         view = CanvasView()
-        hover_scene_service = SimpleNamespace(clear_hover_highlight=mock.Mock())
-        view.services.hover_scene_service = hover_scene_service
+        hover_controller = SimpleNamespace(
+            clear_hover_highlight=mock.Mock(),
+            update_hover_highlight=mock.Mock(),
+            refresh=mock.Mock(),
+        )
+        view.services.hover = hover_controller
+        view.services.input_controller.hover = hover_controller
         insert_controller = SimpleNamespace(
             render_template_preview=mock.Mock(),
             render_smiles_preview=mock.Mock(),
@@ -124,10 +129,6 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
             commit_smiles_insert=mock.Mock(),
         )
         view.services.insert_controller = insert_controller
-        hover_interaction_service = SimpleNamespace(update_hover_highlight=mock.Mock())
-        view.services.hover_interaction_service = hover_interaction_service
-        hover_refresh = mock.Mock()
-        view.hover_refresh = hover_refresh
         hit_testing_service = SimpleNamespace(
             scene_pos_from_event=mock.Mock(return_value=QPointF(4.0, 5.0)),
             item_at_event=mock.Mock(return_value=None),
@@ -142,10 +143,9 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
             view,
             hit_testing_service=hit_testing_service,
             insert_controller=insert_controller,
-            hover_interaction_service=hover_interaction_service,
+            hover_controller=hover_controller,
             tool_controller=tool_controller,
             scene_transform_controller=scene_transform_controller,
-            hover_refresh=hover_refresh,
         )
         return view
 
@@ -165,7 +165,7 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
 
             template_view.services.insert_controller.commit_template_insert.assert_not_called()
             base_press.assert_called_once()
-            template_view.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
+            template_view.services.hover.clear_hover_highlight.assert_called_once_with()
 
             tool = SimpleNamespace(on_mouse_press=mock.Mock(return_value=False))
             tool_view = self._new_view(tool_active=tool)
@@ -177,7 +177,7 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
 
             tool.on_mouse_press.assert_called_once()
             base_press.assert_called_once()
-            tool_view.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
+            tool_view.services.hover.clear_hover_highlight.assert_called_once_with()
 
     def test_mouse_press_clears_hover_before_perspective_captures_scene(self) -> None:
         tool = SimpleNamespace(
@@ -188,7 +188,7 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
         event = _FakeEvent(button=Qt.MouseButton.LeftButton)
         calls = mock.Mock()
         calls.attach_mock(
-            view.services.hover_scene_service.clear_hover_highlight,
+            view.services.hover.clear_hover_highlight,
             "clear_hover",
         )
         calls.attach_mock(tool.on_mouse_press, "begin_rotation")
@@ -212,7 +212,7 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
         calls = mock.Mock()
         calls.attach_mock(tool.on_mouse_press, "handle_target")
         calls.attach_mock(
-            view.services.hover_scene_service.clear_hover_highlight,
+            view.services.hover.clear_hover_highlight,
             "clear_hover",
         )
 
@@ -247,7 +247,7 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
             view,
             hit_testing_service=view.services.hit_testing_service,
             insert_controller=view.services.insert_controller,
-            hover_interaction_service=view.services.hover_interaction_service,
+            hover_controller=view.services.hover,
             tool_controller=view.services.tools,
             scene_transform_controller=scene_transform_controller,
         )
@@ -303,7 +303,7 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
                     view,
                     hit_testing_service=view.services.hit_testing_service,
                     insert_controller=view.services.insert_controller,
-                    hover_interaction_service=view.services.hover_interaction_service,
+                    hover_controller=view.services.hover,
                     tool_controller=view.services.tools,
                     scene_transform_controller=scene_transform_controller,
                 )
@@ -354,7 +354,7 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
 
             tool.on_mouse_press.assert_called_once()
             base_double.assert_not_called()
-            tool_view.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
+            tool_view.services.hover.clear_hover_highlight.assert_called_once_with()
 
             select_tool = SimpleNamespace(
                 name="select", on_mouse_press=mock.Mock(return_value=True)
@@ -368,7 +368,7 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
 
             select_tool.on_mouse_press.assert_not_called()
             base_double.assert_called_once()
-            select_view.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
+            select_view.services.hover.clear_hover_highlight.assert_called_once_with()
 
     def test_mouse_move_event_fallthrough_calls_super_for_hover_and_drag_paths(
         self,
@@ -383,10 +383,10 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
                 hover_view, _FakeEvent(buttons=Qt.MouseButton.NoButton)
             )
 
-            hover_view.services.hover_interaction_service.update_hover_highlight.assert_called_once_with(
+            hover_view.services.hover.update_hover_highlight.assert_called_once_with(
                 QPointF(4.0, 5.0)
             )
-            hover_view.services.hover_scene_service.clear_hover_highlight.assert_not_called()
+            hover_view.services.hover.clear_hover_highlight.assert_not_called()
             base_move.assert_called_once()
 
             drag_tool = SimpleNamespace(on_mouse_move=mock.Mock(return_value=False))
@@ -397,8 +397,8 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
                 drag_view, _FakeEvent(buttons=Qt.MouseButton.LeftButton)
             )
 
-            drag_view.services.hover_scene_service.clear_hover_highlight.assert_called_once_with()
-            drag_view.services.hover_interaction_service.update_hover_highlight.assert_not_called()
+            drag_view.services.hover.clear_hover_highlight.assert_called_once_with()
+            drag_view.services.hover.update_hover_highlight.assert_not_called()
             base_move.assert_called_once()
 
     def test_mouse_release_event_tool_false_path_calls_super_and_refresh(self) -> None:
@@ -416,8 +416,8 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
 
         tool.on_mouse_release.assert_called_once()
         base_release.assert_called_once()
-        view.hover_refresh.assert_called_once_with()
-        view.services.hover_scene_service.clear_hover_highlight.assert_not_called()
+        view.services.hover.refresh.assert_called_once_with()
+        view.services.hover.clear_hover_highlight.assert_not_called()
 
     def test_viewport_event_generic_passthrough_and_event_false_paths_use_super(
         self,
@@ -431,25 +431,19 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
                 CanvasView.viewportEvent(view, _FakeEvent(QEvent.Type.FocusIn))
             )
             base_viewport.assert_called_once()
-            view.services.hover_scene_service.clear_hover_highlight.assert_not_called()
-            view.services.hover_interaction_service.update_hover_highlight.assert_not_called()
+            view.services.hover.clear_hover_highlight.assert_not_called()
+            view.services.hover.update_hover_highlight.assert_not_called()
 
         with mock.patch.object(
             QGraphicsView, "event", new=mock.Mock(return_value=False)
         ) as base_event:
             view = self._new_view()
             base_event.reset_mock()
-            with mock.patch(
-                "chemvas.ui.hover_service_bundle.refresh_hover_from_cursor_for"
-            ) as refresh_hover:
-                self.assertFalse(
-                    CanvasView.event(view, _FakeEvent(QEvent.Type.ShortcutOverride))
-                )
+            self.assertFalse(
+                CanvasView.event(view, _FakeEvent(QEvent.Type.ShortcutOverride))
+            )
             base_event.assert_called_once()
-            refresh_hover.assert_called_once()
-            self.assertIs(refresh_hover.call_args.args[0], view)
-            self.assertIn("update_hover_highlight", refresh_hover.call_args.kwargs)
-            self.assertIn("clear_hover_highlight", refresh_hover.call_args.kwargs)
+            view.services.hover.refresh.assert_called_once_with()
 
 
 if __name__ == "__main__":

@@ -1,15 +1,17 @@
 """Typed, feature-grouped runtime services for a canvas.
 
-The feature bundles are the canonical API. Flat service attributes remain as a
-temporary compatibility surface for legacy tests and are redirected into the
-same bundle objects, so there is still exactly one service instance per role.
+The grouped feature runtimes are the canonical API. Flat service attributes
+remain as a temporary compatibility surface for legacy tests and are redirected
+into the same grouped objects, so there is still exactly one instance per role.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+    from chemvas.ui.hover import HoverController
 
 
 class AuxiliaryServices(Protocol):
@@ -54,16 +56,6 @@ class HandleServices(Protocol):
     handle_overlay_service: Any
     handle_mutation_service: Any
     curved_arrow_path_service: Any
-
-
-class HoverServices(Protocol):
-    hover_interaction_service: Any
-    hover_scene_service: Any
-    mark_hover_preview_service: Any
-    bond_hover_preview_service: Any
-
-    @property
-    def hover_refresh(self) -> Callable[..., None]: ...
 
 
 class SceneDecorationServices(Protocol):
@@ -156,10 +148,6 @@ _LEGACY_SERVICE_PATHS: dict[str, tuple[str, str]] = {
     "canvas_scene_reset_service": ("document", "canvas_scene_reset_service"),
     "rotation_preview_controller": ("scene_view", "rotation_preview_controller"),
     "atom_label_service": ("auxiliary", "atom_label_service"),
-    "hover_interaction_service": ("hover", "hover_interaction_service"),
-    "hover_scene_service": ("hover", "hover_scene_service"),
-    "mark_hover_preview_service": ("hover", "mark_hover_preview_service"),
-    "bond_hover_preview_service": ("hover", "bond_hover_preview_service"),
     "structure_build_service": ("structure", "structure_build_service"),
     "benzene_preview_service": ("auxiliary", "benzene_preview_service"),
     "scene_decoration_build_service": (
@@ -190,7 +178,7 @@ class CanvasRuntimeServices:
     interaction: InteractionServices
     scene_view: SceneViewServices
     handles: HandleServices
-    hover: HoverServices
+    hover: HoverController
     scene_decoration: SceneDecorationServices
     scene_operations: SceneOperationServices
     selection: SelectionServices

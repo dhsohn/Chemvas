@@ -65,6 +65,17 @@ Every slice moves its tests with its implementation, preserves an acyclic eager
 import graph, and is followed by lint, type, focused tests, the architecture
 suite, and milestone-level full-suite/package verification.
 
+### Recorded migration slices
+
+- Hover is the first runtime-consolidation slice. `chemvas.features.hover` owns
+  the Qt-free transient state and planning policy; one `chemvas.ui.hover`
+  controller owns orchestration and `chemvas.ui.hover_rendering` owns Qt item
+  helpers. `CanvasRuntimeServices.hover` references that controller directly.
+- The former hover access, ports, refresh, bundle, interaction, scene, bond
+  preview, and mark preview roles were removed rather than retained as
+  compatibility paths. A thin `chemvas.ui.canvas_hover_state` accessor remains
+  as an import-cycle leaf and reads only the strict runtime-state field.
+
 ## Consequences
 
 - Large all-at-once moves are rejected in favor of behavior-preserving slices.

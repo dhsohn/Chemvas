@@ -20,7 +20,7 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from chemvas.ui.graphics_items import NoSelectLineItem
-    from chemvas.ui.hover_scene_renderer import (
+    from chemvas.ui.hover_rendering import (
         add_hover_preview_items,
         build_atom_hover_indicator,
         build_bond_hover_indicator,
@@ -45,15 +45,14 @@ class HoverSceneRendererTest(unittest.TestCase):
     def setUp(self) -> None:
         self.scene = QGraphicsScene()
 
-    def test_clear_hover_items_removes_scene_items_and_returns_empty_pool(self) -> None:
+    def test_clear_hover_items_removes_scene_items(self) -> None:
         line = NoSelectLineItem(0.0, 0.0, 10.0, 0.0)
         dot = QGraphicsEllipseItem(-1.0, -1.0, 2.0, 2.0)
         self.scene.addItem(line)
         self.scene.addItem(dot)
 
-        cleared = clear_hover_items(self.scene, [line, dot])
+        clear_hover_items(self.scene, [line, dot])
 
-        self.assertEqual(cleared, [])
         self.assertEqual(len(self.scene.items()), 0)
         self.assertIsNone(line.scene())
         self.assertIsNone(dot.scene())
@@ -63,9 +62,8 @@ class HoverSceneRendererTest(unittest.TestCase):
         line = NoSelectLineItem(0.0, 0.0, 10.0, 0.0)
         other_scene.addItem(line)
 
-        cleared = clear_hover_items(self.scene, [line, _BrokenHoverItem()])
+        clear_hover_items(self.scene, [line, _BrokenHoverItem()])
 
-        self.assertEqual(cleared, [])
         self.assertIs(line.scene(), other_scene)
         self.assertEqual(len(self.scene.items()), 0)
 

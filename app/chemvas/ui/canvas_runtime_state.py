@@ -6,6 +6,7 @@ from weakref import ref
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSlot
 
+from chemvas.features.hover import HoverState
 from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
 from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas_bond_graphics_state import CanvasBondGraphicsState
@@ -15,7 +16,6 @@ from chemvas.ui.canvas_graph_state import CanvasGraphState
 from chemvas.ui.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas_history_state import CanvasHistoryState
-from chemvas.ui.canvas_hover_state import HoverPreviewState
 from chemvas.ui.canvas_insert_state import CanvasInsertState
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_rotation_preview_state import CanvasRotationPreviewState
@@ -87,7 +87,7 @@ class CanvasRuntimeState:
     selection_outline_state: SelectionOutlineState
     text_style_state: CanvasTextStyleState
     tool_settings_state: CanvasToolSettingsState
-    hover_preview_state: HoverPreviewState
+    hover_preview_state: HoverState
     callback_state: CanvasCallbackState
     scene_clipboard_state: SceneClipboardState
     scene_items_state: CanvasSceneItemsState
@@ -127,7 +127,7 @@ class CanvasRuntimeState:
             selection_outline_state=SelectionOutlineState(),
             text_style_state=CanvasTextStyleState(),
             tool_settings_state=CanvasToolSettingsState(),
-            hover_preview_state=HoverPreviewState(),
+            hover_preview_state=HoverState(),
             callback_state=CanvasCallbackState(),
             scene_clipboard_state=SceneClipboardState(),
             scene_items_state=CanvasSceneItemsState(),

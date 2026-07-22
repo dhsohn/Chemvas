@@ -71,7 +71,7 @@ def test_build_canvas_services_uses_selection_service_bundle(monkeypatch) -> Non
     build_selection_services_calls = []
     build_canvas_auxiliary_services_calls = []
     build_handle_services_calls = []
-    build_hover_services_calls = []
+    build_hover_controller_calls = []
     build_canvas_interaction_services_calls = []
     build_canvas_input_services_calls = []
     build_canvas_document_services_calls = []
@@ -166,32 +166,30 @@ def test_build_canvas_services_uses_selection_service_bundle(monkeypatch) -> Non
         build_handle_services_calls.append(canvas)
         return handle_bundle
 
-    hover_bundle = SimpleNamespace(
-        hover_interaction_service=object(),
-        hover_scene_service=object(),
-        mark_hover_preview_service=object(),
-        bond_hover_preview_service=object(),
-        hover_refresh=lambda: None,
-    )
+    hover_controller = SimpleNamespace(refresh=lambda: None)
 
-    def fake_build_hover_services(
+    def fake_build_hover_controller(
         canvas,
         *,
         selection_controller,
         hit_testing_service,
-        active_tool_provider,
+        insert_controller,
+        scene_decoration_build_service,
+        mark_scene_service,
         active_tool_name_provider,
     ):
-        build_hover_services_calls.append(
+        build_hover_controller_calls.append(
             (
                 canvas,
                 selection_controller,
                 hit_testing_service,
-                active_tool_provider,
+                insert_controller,
+                scene_decoration_build_service,
+                mark_scene_service,
                 active_tool_name_provider,
             )
         )
-        return hover_bundle
+        return hover_controller
 
     interaction_bundle = SimpleNamespace(
         note_controller=object(),
@@ -273,13 +271,12 @@ def test_build_canvas_services_uses_selection_service_bundle(monkeypatch) -> Non
         *,
         hit_testing_service,
         insert_controller,
-        hover_interaction_service,
+        hover_controller,
         tool_controller,
         scene_delete_controller,
         scene_clipboard_controller,
         scene_transform_controller,
         mark_scene_service,
-        hover_refresh,
         history_service,
     ):
         build_canvas_input_services_calls.append(
@@ -287,13 +284,12 @@ def test_build_canvas_services_uses_selection_service_bundle(monkeypatch) -> Non
                 canvas,
                 hit_testing_service,
                 insert_controller,
-                hover_interaction_service,
+                hover_controller,
                 tool_controller,
                 scene_delete_controller,
                 scene_clipboard_controller,
                 scene_transform_controller,
                 mark_scene_service,
-                hover_refresh,
                 history_service,
             )
         )
@@ -394,7 +390,7 @@ def test_build_canvas_services_uses_selection_service_bundle(monkeypatch) -> Non
         canvas_services, "build_handle_services", fake_build_handle_services
     )
     monkeypatch.setattr(
-        canvas_services, "build_hover_services", fake_build_hover_services
+        canvas_services, "build_hover_controller", fake_build_hover_controller
     )
     monkeypatch.setattr(
         canvas_services,
@@ -466,19 +462,26 @@ def test_build_canvas_services_uses_selection_service_bundle(monkeypatch) -> Non
             services.move_controller,
             services.canvas_graph_service,
             history_service,
-            hover_bundle.hover_refresh,
+            hover_controller.refresh,
             services.structure_build_service,
             services.note_controller,
         )
     ]
     assert build_handle_services_calls == [canvas]
-    assert build_hover_services_calls[0][0] is canvas
-    assert build_hover_services_calls[0][1] is selection_controller
-    assert build_hover_services_calls[0][2] is hit_testing_service
-    assert callable(build_hover_services_calls[0][3])
-    assert callable(build_hover_services_calls[0][4])
-    assert build_hover_services_calls[0][3]() is active_tool
-    assert build_hover_services_calls[0][4]() == "perspective"
+    assert build_hover_controller_calls[0][0] is canvas
+    assert build_hover_controller_calls[0][1] is selection_controller
+    assert build_hover_controller_calls[0][2] is hit_testing_service
+    assert build_hover_controller_calls[0][3] is structure_bundle.insert_controller
+    assert (
+        build_hover_controller_calls[0][4]
+        is scene_decoration_bundle.scene_decoration_build_service
+    )
+    assert (
+        build_hover_controller_calls[0][5]
+        is scene_decoration_bundle.canvas_mark_scene_service
+    )
+    assert callable(build_hover_controller_calls[0][6])
+    assert build_hover_controller_calls[0][6]() == "perspective"
     assert build_canvas_interaction_services_calls == [
         (
             canvas,
@@ -516,13 +519,12 @@ def test_build_canvas_services_uses_selection_service_bundle(monkeypatch) -> Non
             canvas,
             hit_testing_service,
             services.insert_controller,
-            services.hover_interaction_service,
+            hover_controller,
             tool_controller,
             services.scene_delete_controller,
             services.scene_clipboard_controller,
             services.scene_transform_controller,
             services.canvas_mark_scene_service,
-            hover_bundle.hover_refresh,
             history_service,
         )
     ]
@@ -566,14 +568,6 @@ def test_build_canvas_services_uses_selection_service_bundle(monkeypatch) -> Non
     assert services.handle_overlay_service is handle_bundle.handle_overlay_service
     assert services.handle_mutation_service is handle_bundle.handle_mutation_service
     assert services.curved_arrow_path_service is handle_bundle.curved_arrow_path_service
-    assert services.hover_interaction_service is hover_bundle.hover_interaction_service
-    assert services.hover_scene_service is hover_bundle.hover_scene_service
-    assert (
-        services.mark_hover_preview_service is hover_bundle.mark_hover_preview_service
-    )
-    assert (
-        services.bond_hover_preview_service is hover_bundle.bond_hover_preview_service
-    )
     assert (
         services.canvas_mark_scene_service
         is scene_decoration_bundle.canvas_mark_scene_service
@@ -664,7 +658,7 @@ def test_build_canvas_services_uses_selection_service_bundle(monkeypatch) -> Non
     assert services.interaction is interaction_bundle
     assert services.scene_view is scene_view_bundle
     assert services.handles is handle_bundle
-    assert services.hover is hover_bundle
+    assert services.hover is hover_controller
     assert services.scene_decoration is scene_decoration_bundle
     assert services.scene_operations is scene_operation_bundle
     assert services.selection is selection_bundle
