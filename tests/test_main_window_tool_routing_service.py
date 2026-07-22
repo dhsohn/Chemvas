@@ -43,17 +43,17 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
         self.insert_controller_for_window = mock.Mock(
             return_value=active_canvas_for_window(
                 self.window
-            ).services.insert_controller,
+            ).services.structure.insert_controller,
         )
         self.tool_mode_controller_for_window = mock.Mock(
             return_value=active_canvas_for_window(
                 self.window
-            ).services.tool_mode_controller,
+            ).services.input.tool_mode_controller,
         )
         self.color_mutation_service_for_window = mock.Mock(
             return_value=active_canvas_for_window(
                 self.window
-            ).services.canvas_color_mutation_service,
+            ).services.scene_operations.canvas_color_mutation_service,
         )
         self.color_tool_for_window = mock.Mock(return_value=None)
         self.selected_scene_items_for_window = mock.Mock(return_value=[])
@@ -84,7 +84,7 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
         self,
     ) -> None:
         with mock.patch.object(
-            active_canvas_for_window(self.window).services.insert_controller,
+            active_canvas_for_window(self.window).services.structure.insert_controller,
             "begin_ring_template_insert",
         ) as begin_insert:
             entries = dict(self.service.template_entries(self.window))
@@ -193,19 +193,21 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
                 side_effect=lambda _delay, callback: callback(),
             ),
             mock.patch.object(
-                active_canvas_for_window(self.window).services.tool_mode_controller,
+                active_canvas_for_window(
+                    self.window
+                ).services.input.tool_mode_controller,
                 "set_tool",
             ) as set_tool,
             mock.patch.object(
                 active_canvas_for_window(
                     self.window
-                ).services.canvas_color_mutation_service,
+                ).services.scene_operations.canvas_color_mutation_service,
                 "apply_color_to_items",
             ) as apply_color,
             mock.patch.object(
                 active_canvas_for_window(
                     self.window
-                ).services.canvas_color_mutation_service,
+                ).services.scene_operations.canvas_color_mutation_service,
                 "apply_ring_fill_color_to_items",
             ) as apply_fill,
         ):

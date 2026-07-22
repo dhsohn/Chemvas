@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -54,7 +56,7 @@ def _path_item(color: str = "#111111", width: float = 1.5) -> QGraphicsPathItem:
 def _attach_handle_services(view: SimpleNamespace) -> SimpleNamespace:
     services = getattr(view, "services", None)
     if services is None:
-        services = SimpleNamespace()
+        services = canvas_runtime_services()
         view.services = services
     if hasattr(view, "refresh_selection_outline") and not hasattr(
         services, "selection_controller"
@@ -209,7 +211,7 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
             handle_state=CanvasHandleState(),
             selection_style_state=_selection_style_state(),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 scene_decoration_build_service=SimpleNamespace(
                     add_arrow_head=mock.Mock()
                 )
@@ -247,12 +249,12 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
             show_curved_handles=mock.Mock(),
         )
         view = SimpleNamespace(
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 handle_mutation_service=mutation_service,
                 handle_overlay_service=overlay_service,
             ),
         )
-        view.services.handle_controller = CanvasHandleController(
+        view.services.handles.handle_controller = CanvasHandleController(
             view,
             handle_overlay_service=overlay_service,
             handle_mutation_service=mutation_service,
@@ -277,7 +279,7 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
         orphan_handle.setData(1, "orbital_scale")
         orphan_handle.setData(2, None)
 
-        controller = view.services.handle_controller
+        controller = view.services.handles.handle_controller
 
         controller.update_handle_drag(scale_handle, QPointF(10.0, 0.0))
         mutation_service.update_orbital_scale.assert_called_once_with(
@@ -341,7 +343,7 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
             },
         )
         curved_view = SimpleNamespace(
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 scene_decoration_build_service=SimpleNamespace(
                     add_arrow_head=mock.Mock()
                 )

@@ -232,7 +232,6 @@ _DELETE_MUTATED_RUNTIME_FIELDS = (
     "group_state",
     "scene_clipboard_state",
     "insert_state",
-    "rotation_preview_state",
     "rotation_state",
     "smiles_input_state",
     "history_state",

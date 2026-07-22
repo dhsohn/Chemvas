@@ -46,6 +46,8 @@ from chemvas.ui.structure_insert_access import (
 from PyQt6.QtCore import QCoreApplication, QEvent, QPointF
 from PyQt6.QtWidgets import QApplication
 
+from tests.runtime_services import canvas_runtime_services
+
 
 def _points(count: int, *, start: float = 1.0) -> list[tuple[float, float]]:
     return [(start + 2.0 * index, start + 2.0 * index + 1.0) for index in range(count)]
@@ -95,11 +97,9 @@ class _FakeCanvas:
         self.benzene_calls: list[tuple[float, float, int | None]] = []
         self.bond_renderer = SimpleNamespace(add_bond_graphics=self._add_bond_graphics)
         self.services = CanvasRuntimeServices(
-            auxiliary=SimpleNamespace(
-                atom_label_service=SimpleNamespace(
-                    add_or_update_atom_label=self.add_or_update_atom_label,
-                    ensure_carbon_dot=self.ensure_carbon_dot,
-                )
+            atom_label_service=SimpleNamespace(
+                add_or_update_atom_label=self.add_or_update_atom_label,
+                ensure_carbon_dot=self.ensure_carbon_dot,
             ),
             document=SimpleNamespace(
                 canvas_history_recording_service=SimpleNamespace(
@@ -522,7 +522,7 @@ class InsertCommitServiceTest(unittest.TestCase):
             add_ring_from_points=mock.Mock(return_value=[7])
         )
         canvas = SimpleNamespace(
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 structure=SimpleNamespace(
                     structure_build_service=structure_build_service
                 )
@@ -567,7 +567,9 @@ class InsertCommitServiceTest(unittest.TestCase):
                 raise removal_error
             canvas.model.atoms.pop(atom_id, None)
 
-        canvas.services.canvas_atom_mutation_service.remove_atom_only = remove_atom
+        canvas.services.structure.canvas_atom_mutation_service.remove_atom_only = (
+            remove_atom
+        )
 
         with self.assertRaises(RuntimeError) as raised:
             rollback_insert_mutation_for(
@@ -622,8 +624,8 @@ class InsertCommitServiceTest(unittest.TestCase):
             atom_items_for(canvas).pop(removed_atom_id, None)
             raise removal_error
 
-        canvas.services.canvas_atom_mutation_service.remove_atom_only = mock.Mock(
-            side_effect=pop_graphics_then_raise
+        canvas.services.structure.canvas_atom_mutation_service.remove_atom_only = (
+            mock.Mock(side_effect=pop_graphics_then_raise)
         )
 
         with self.assertRaises(KeyboardInterrupt) as raised:
@@ -734,7 +736,7 @@ class InsertCommitServiceTest(unittest.TestCase):
             set_last_smiles_input_for(canvas, "poisoned-after-push")
             raise primary
 
-        canvas.services.canvas_history_recording_service.record_additions = (
+        canvas.services.document.canvas_history_recording_service.record_additions = (
             mutate_input_then_fail
         )
 
@@ -891,7 +893,7 @@ class InsertCommitServiceTest(unittest.TestCase):
                 )
             raise RuntimeError("mark failed")
 
-        canvas.services.canvas_mark_scene_service.add_mark_for_atom = (
+        canvas.services.scene_decoration.canvas_mark_scene_service.add_mark_for_atom = (
             add_first_mark_then_fail
         )
 
@@ -1047,7 +1049,7 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertIsNone(last_smiles_input_for(canvas))
 
         blocked = _FakeCanvas()
-        blocked.services.structure_build_service.add_benzene_ring = (
+        blocked.services.structure.structure_build_service.add_benzene_ring = (
             lambda *args, **kwargs: None
         )
         self.assertFalse(
@@ -1076,7 +1078,7 @@ class InsertCommitServiceTest(unittest.TestCase):
             bond_id=None,
         )
         original_error = RuntimeError("original benzene failure")
-        canvas.services.structure_build_service.add_benzene_ring = mock.Mock(
+        canvas.services.structure.structure_build_service.add_benzene_ring = mock.Mock(
             side_effect=original_error
         )
 
@@ -1118,8 +1120,8 @@ class InsertCommitServiceTest(unittest.TestCase):
             with self.subTest(error_type=error_type.__name__):
                 canvas = _FakeCanvas()
                 primary_error = error_type("benzene interrupted")
-                canvas.services.structure_build_service.add_benzene_ring = mock.Mock(
-                    side_effect=primary_error
+                canvas.services.structure.structure_build_service.add_benzene_ring = (
+                    mock.Mock(side_effect=primary_error)
                 )
 
                 with (

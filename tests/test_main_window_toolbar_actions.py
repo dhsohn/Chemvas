@@ -332,7 +332,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
     ) -> None:
         tool_routing_service = services_for_window(self.window).tool_routing_service
         with mock.patch.object(
-            active_canvas_for_window(self.window).services.insert_controller,
+            active_canvas_for_window(self.window).services.structure.insert_controller,
             "begin_ring_template_insert",
         ) as begin_insert:
             entries = dict(tool_routing_service.template_entries(self.window))
@@ -374,7 +374,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
     ) -> None:
         insert_controller = active_canvas_for_window(
             self.window
-        ).services.insert_controller
+        ).services.structure.insert_controller
         with mock.patch.object(
             insert_controller,
             "begin_ring_template_insert",
@@ -461,7 +461,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         settings = tool_settings_state_for(active_canvas_for_window(self.window))
         self.assertEqual(settings.active_bracket_type, "dagger")
         self.assertEqual(
-            active_canvas_for_window(self.window).services.tools.active.name,
+            active_canvas_for_window(self.window).services.tooling.tools.active.name,
             "ts_bracket",
         )
 
@@ -557,15 +557,21 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         text_style_service = services_for_window(self.window).text_style_service
         with (
             mock.patch.object(
-                active_canvas_for_window(self.window).services.style_controller,
+                active_canvas_for_window(
+                    self.window
+                ).services.scene_operations.style_controller,
                 "apply_text_preset_acs",
             ) as acs,
             mock.patch.object(
-                active_canvas_for_window(self.window).services.style_controller,
+                active_canvas_for_window(
+                    self.window
+                ).services.scene_operations.style_controller,
                 "apply_text_preset_paper_thin",
             ) as paper_thin,
             mock.patch.object(
-                active_canvas_for_window(self.window).services.style_controller,
+                active_canvas_for_window(
+                    self.window
+                ).services.scene_operations.style_controller,
                 "apply_text_preset_paper_bold",
             ) as paper_bold,
         ):
@@ -595,7 +601,9 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         self,
     ) -> None:
         color_tool = SimpleNamespace(set_color=mock.Mock())
-        active_canvas_for_window(self.window).services.tools.tools["color"] = color_tool
+        active_canvas_for_window(self.window).services.tooling.tools.tools["color"] = (
+            color_tool
+        )
         selected_items = [_FakeItem("atom"), _FakeItem("ring"), _FakeItem("note")]
         scene = SimpleNamespace(selectedItems=lambda: selected_items)
 
@@ -608,19 +616,21 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
                 active_canvas_for_window(self.window), "scene", return_value=scene
             ),
             mock.patch.object(
-                active_canvas_for_window(self.window).services.tool_mode_controller,
+                active_canvas_for_window(
+                    self.window
+                ).services.input.tool_mode_controller,
                 "set_tool",
             ) as set_tool,
             mock.patch.object(
                 active_canvas_for_window(
                     self.window
-                ).services.canvas_color_mutation_service,
+                ).services.scene_operations.canvas_color_mutation_service,
                 "apply_color_to_items",
             ) as apply_color,
             mock.patch.object(
                 active_canvas_for_window(
                     self.window
-                ).services.canvas_color_mutation_service,
+                ).services.scene_operations.canvas_color_mutation_service,
                 "apply_ring_fill_color_to_items",
             ) as apply_fill,
         ):

@@ -1,5 +1,4 @@
 import unittest
-from types import SimpleNamespace
 
 from chemvas.ui.scene_item_access import (
     add_item_to_canvas_scene,
@@ -31,6 +30,8 @@ from chemvas.ui.scene_item_access import (
 from PyQt6 import sip
 from PyQt6.QtCore import QObject, QRectF
 from PyQt6.QtWidgets import QGraphicsRectItem
+
+from tests.runtime_services import canvas_runtime_services
 
 
 class _Canvas:
@@ -173,7 +174,9 @@ class _SceneItem:
 class SceneItemAccessTest(unittest.TestCase):
     def test_helpers_prefer_scene_item_controller_when_available(self) -> None:
         canvas = _Canvas()
-        canvas.services = SimpleNamespace(scene_item_controller=_Controller(canvas))
+        canvas.services = canvas_runtime_services(
+            scene_item_controller=_Controller(canvas)
+        )
         item = object()
 
         self.assertEqual(
@@ -235,7 +238,7 @@ class SceneItemAccessTest(unittest.TestCase):
     def test_attach_scene_item_requires_controller_attach_method(self) -> None:
         canvas = _Canvas()
         item = object()
-        canvas.services = SimpleNamespace(scene_item_controller=object())
+        canvas.services = canvas_runtime_services(scene_item_controller=object())
 
         with self.assertRaises(AttributeError):
             attach_scene_item(canvas, item)

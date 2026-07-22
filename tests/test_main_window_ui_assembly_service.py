@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -50,7 +52,7 @@ class _HarnessCanvas:
             undo=mock.Mock(),
             redo=mock.Mock(),
         )
-        self.services = SimpleNamespace(
+        self.services = canvas_runtime_services(
             insert_controller=self.insert_controller,
             scene_transform_controller=self.scene_transform_controller,
             tool_mode_controller=self.tool_mode_controller,
@@ -120,11 +122,13 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
     def setUp(self) -> None:
         self.scene_transform_controller_for_window = mock.Mock(
             side_effect=lambda window: (
-                window.canvas.services.scene_transform_controller
+                window.canvas.services.scene_operations.scene_transform_controller
             ),
         )
         self.insert_controller_for_window = mock.Mock(
-            side_effect=lambda window: window.canvas.services.insert_controller,
+            side_effect=lambda window: (
+                window.canvas.services.structure.insert_controller
+            ),
         )
         self.history_service_for_window = mock.Mock(
             side_effect=lambda window: window.canvas.services.history_service,

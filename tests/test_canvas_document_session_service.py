@@ -6,6 +6,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from chemvas.core.svg_roundtrip import extract_chemvas_document_from_svg
@@ -21,13 +23,6 @@ from chemvas.ui.canvas_document_session_service import (
 )
 from chemvas.ui.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_for
-from chemvas.ui.canvas_rotation_preview_controller import (
-    CanvasRotationPreviewController,
-)
-from chemvas.ui.canvas_rotation_preview_state import (
-    RotationPreviewItemSnapshot,
-    rotation_preview_state_for,
-)
 from chemvas.ui.canvas_runtime_state import attach_canvas_runtime_state
 from chemvas.ui.canvas_scene_reset_service import CanvasSceneResetService
 from chemvas.ui.canvas_view import CanvasView
@@ -82,7 +77,7 @@ def _document_services(
     render_model,
     mark_spatial_index_dirty,
 ):
-    return SimpleNamespace(
+    return canvas_runtime_services(
         canvas_scene_reset_service=SimpleNamespace(clear_scene=clear_scene),
         canvas_graph_service=SimpleNamespace(
             rebuild_bond_adjacency=rebuild_bond_adjacency
@@ -101,7 +96,7 @@ def _attach_history_service(canvas):
     service = CanvasHistoryService(canvas, history_state_for(canvas))
     services = getattr(canvas, "services", None)
     if services is None:
-        services = SimpleNamespace()
+        services = canvas_runtime_services()
         canvas.services = services
     services.history_service = service
     runtime_state = getattr(canvas, "runtime_state", None)
@@ -113,23 +108,26 @@ def _attach_history_service(canvas):
 def _session_service(canvas):
     services = getattr(canvas, "services", None)
     if services is None:
-        services = SimpleNamespace()
+        services = canvas_runtime_services()
         canvas.services = services
-    hit_testing_service = getattr(services, "hit_testing_service", None)
-    if hit_testing_service is None:
+    try:
+        hit_testing_service = services.selection.hit_testing_service
+    except AttributeError:
         hit_testing_service = SimpleNamespace(mark_spatial_index_dirty=mock.Mock())
-        services.hit_testing_service = hit_testing_service
-    graph_service = getattr(services, "canvas_graph_service", None)
-    if graph_service is None:
+        services.selection.hit_testing_service = hit_testing_service
+    try:
+        graph_service = services.graph.canvas_graph_service
+    except AttributeError:
         graph_service = SimpleNamespace(rebuild_bond_adjacency=mock.Mock())
-        services.canvas_graph_service = graph_service
-    structure_build_service = getattr(services, "structure_build_service", None)
-    if structure_build_service is None:
+        services.graph.canvas_graph_service = graph_service
+    try:
+        structure_build_service = services.structure.structure_build_service
+    except AttributeError:
         structure_build_service = SimpleNamespace(
             render_model=mock.Mock(),
             ensure_ring_fills_for_model=mock.Mock(),
         )
-        services.structure_build_service = structure_build_service
+        services.structure.structure_build_service = structure_build_service
     return CanvasDocumentSessionService(
         canvas,
         hit_testing_service=hit_testing_service,
@@ -280,7 +278,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 "dirty",
             ],
         )
-        canvas.services.structure_build_service.ensure_ring_fills_for_model.assert_not_called()
+        canvas.services.structure.structure_build_service.ensure_ring_fills_for_model.assert_not_called()
 
     def test_apply_state_reenables_history_when_restore_fails(self) -> None:
         canvas = SimpleNamespace(
@@ -873,7 +871,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertEqual(history_state_for(canvas).history, [])
         self.assertEqual(history_state_for(canvas).redo_stack, [command])
 
-    def test_apply_state_rollback_restores_view_rect_and_rotation_preview(self) -> None:
+    def test_apply_state_rollback_restores_view_rect(self) -> None:
         app = QApplication.instance() or QApplication([])
         self.assertIsNotNone(app)
         scene = QGraphicsScene()
@@ -883,18 +881,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         set_explicit_scene_rect(scene, scene_rect)
         canvas = _qt_canvas_with_scene_reset(scene)
         set_explicit_view_scene_rect(canvas, view_rect)
-        preview_item = QGraphicsRectItem(0.0, 0.0, 20.0, 20.0)
-        scene.addItem(preview_item)
-        preview_group = scene.createItemGroup([preview_item])
-        preview_snapshot = RotationPreviewItemSnapshot(
-            item=preview_item,
-            state={"x": 0.0, "y": 0.0},
-        )
-        preview_state = rotation_preview_state_for(canvas)
-        preview_state.group = preview_group
-        preview_state.position_snapshots = [preview_snapshot]
-        preview_state.center = QPointF(10.0, 10.0)
-        original_snapshots = preview_state.position_snapshots
         service = _session_service(canvas)
         old_state = {"model": {"name": "old"}}
 
@@ -933,12 +919,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         self.assertEqual(canvas.sceneRect(), view_rect)
         self.assertEqual(scene.sceneRect(), scene_rect)
-        self.assertIs(preview_state.group, preview_group)
-        self.assertIs(preview_state.position_snapshots, original_snapshots)
-        self.assertEqual(preview_state.position_snapshots, [preview_snapshot])
-        self.assertEqual(preview_state.center, QPointF(10.0, 10.0))
-        self.assertIs(preview_group.scene(), scene)
-        self.assertIs(preview_item.scene(), scene)
 
     def test_apply_state_rollback_restores_clamped_viewport_pan_and_transform(
         self,
@@ -1252,7 +1232,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
     ) -> None:
         canvas = CanvasView()
         scene = canvas.scene()
-        service = canvas.services.canvas_document_session_service
+        service = canvas.services.document.canvas_document_session_service
         original_scene_rect = QRectF(scene.sceneRect())
         original_view_rect = QRectF(canvas.sceneRect())
         target_rect = QRectF(-100.0, -100.0, 200.0, 200.0)
@@ -1283,7 +1263,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertFalse(scene.signalsBlocked())
         self.assertFalse(hasattr(scene, "_chemvas_scene_rect_tracker"))
 
-        note_controller = canvas.services.note_controller
+        note_controller = canvas.services.interaction.note_controller
         with mock.patch.object(
             note_controller,
             "apply_note_style",
@@ -1382,7 +1362,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         ):
             with self.subTest(behavior=behavior):
                 canvas = CanvasView()
-                service = canvas.services.canvas_document_session_service
+                service = canvas.services.document.canvas_document_session_service
                 history_state = service.history.state
                 original_set_enabled = service.history.set_enabled
                 restore_attempts = 0
@@ -1448,7 +1428,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = CanvasView()
-        service = canvas.services.canvas_document_session_service
+        service = canvas.services.document.canvas_document_session_service
         original_model = canvas.model
         original_items = tuple(canvas.scene().items())
         apply_contents = mock.Mock()
@@ -2222,7 +2202,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
     ) -> None:
         canvas = CanvasView()
         self.addCleanup(canvas.close)
-        service = canvas.services.canvas_document_session_service
+        service = canvas.services.document.canvas_document_session_service
         original_scene = canvas.scene()
         replacement_scene = QGraphicsScene(canvas)
         target = service.snapshot_state()
@@ -2262,7 +2242,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
     def test_document_apply_rejects_reentrant_history_owner_swap(self) -> None:
         canvas = CanvasView()
         self.addCleanup(canvas.close)
-        service = canvas.services.canvas_document_session_service
+        service = canvas.services.document.canvas_document_session_service
         original_history = service.history
         original_command = object()
         original_history.state.history[:] = [original_command]
@@ -2302,7 +2282,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             with self.subTest(alias_name=alias_name):
                 canvas = CanvasView()
                 self.addCleanup(canvas.close)
-                service = canvas.services.canvas_document_session_service
+                service = canvas.services.document.canvas_document_session_service
                 original_history = service.history
                 original_command = object()
                 original_history.state.history[:] = [original_command]
@@ -2427,7 +2407,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
     ) -> None:
         canvas = CanvasView()
         self.addCleanup(canvas.close)
-        service = canvas.services.canvas_document_session_service
+        service = canvas.services.document.canvas_document_session_service
         atom_id = canvas.model.add_atom("C", 1.0, 2.0)
         original_atoms = canvas.model.atoms
         primary = SystemExit("document serialization failed after mutation")
@@ -2937,7 +2917,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             with self.subTest(failure_mode=failure_mode):
                 canvas = CanvasView()
                 scene = canvas.scene()
-                service = canvas.services.canvas_document_session_service
+                service = canvas.services.document.canvas_document_session_service
                 history_state = service.history.state
                 old_history = history_state.history
                 old_redo = history_state.redo_stack
@@ -3247,78 +3227,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertFalse(scene.blocked)
         self.assertIs(item.current_scene, scene)
 
-    def test_apply_state_success_clears_rotation_preview_and_allows_new_preview(
-        self,
-    ) -> None:
-        app = QApplication.instance() or QApplication([])
-        self.assertIsNotNone(app)
-        scene = QGraphicsScene()
-        canvas = _qt_canvas_with_scene_reset(scene)
-        old_item = QGraphicsRectItem(0.0, 0.0, 20.0, 20.0)
-        scene.addItem(old_item)
-        old_group = scene.createItemGroup([old_item])
-        preview_state = rotation_preview_state_for(canvas)
-        preview_state.group = old_group
-        preview_state.position_snapshots = [
-            RotationPreviewItemSnapshot(item=old_item, state={"x": 0.0, "y": 0.0})
-        ]
-        preview_state.center = QPointF(10.0, 10.0)
-        service = _session_service(canvas)
-
-        with (
-            mock.patch(
-                "chemvas.ui.canvas_document_session_service.snapshot_canvas_document_state",
-                return_value={"model": {"name": "old"}},
-            ),
-            mock.patch(
-                "chemvas.ui.canvas_document_session_service.apply_document_settings"
-            ),
-            mock.patch(
-                "chemvas.ui.canvas_document_session_service.deserialize_model_state",
-                return_value=MoleculeModel(),
-            ),
-            mock.patch(
-                "chemvas.ui.canvas_document_session_service.restore_document_pre_model_items"
-            ),
-            mock.patch(
-                "chemvas.ui.canvas_document_session_service.restore_document_projection_state"
-            ),
-            mock.patch(
-                "chemvas.ui.canvas_document_session_service.restore_document_post_model_items"
-            ),
-            mock.patch(
-                "chemvas.ui.canvas_document_session_service.restore_document_groups"
-            ),
-        ):
-            service.apply_state({"model": {"name": "target"}})
-
-        self.assertIsNone(preview_state.group)
-        self.assertEqual(preview_state.position_snapshots, [])
-        self.assertIsNone(preview_state.center)
-        self.assertIsNone(old_group.scene())
-
-        new_item = QGraphicsRectItem(30.0, 0.0, 20.0, 20.0)
-        scene.addItem(new_item)
-        scene_transform = SimpleNamespace(
-            rotation_selection_preview=mock.Mock(
-                return_value=SimpleNamespace(
-                    items=[new_item],
-                    position_items=[],
-                    center=QPointF(40.0, 10.0),
-                )
-            ),
-            rotation_position_preview_snapshots=mock.Mock(),
-        )
-        controller = CanvasRotationPreviewController(
-            canvas,
-            scene_transform_controller=scene_transform,
-        )
-
-        self.assertTrue(controller.begin_selection_rotation())
-        self.assertIsNotNone(preview_state.group)
-        preview_state.reset()
-        scene.clear()
-
     def test_rolled_back_selected_document_can_be_cleared_without_stale_item_callbacks(
         self,
     ) -> None:
@@ -3326,7 +3234,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertIsNotNone(app)
         canvas = CanvasView()
         self.addCleanup(canvas.close)
-        self.addCleanup(canvas.services.canvas_scene_reset_service.clear_scene)
+        self.addCleanup(canvas.services.document.canvas_scene_reset_service.clear_scene)
         label_atom_id = add_atom_for(canvas, "N", 0.0, 0.0)
         dot_atom_id = add_atom_for(canvas, "C", 20.0, 0.0)
         bond_id = add_bond_for(canvas, label_atom_id, dot_atom_id)
@@ -3354,7 +3262,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         selection_info.cache = ("NH", "15.01")
         selection_info.rdkit_warmup_pending = True
 
-        service = canvas.services.canvas_document_session_service
+        service = canvas.services.document.canvas_document_session_service
         target_state = deepcopy(service.snapshot_state())
         target_state["settings"]["bond_length_px"] = 31.0
         with mock.patch(
@@ -3381,7 +3289,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertEqual(selection_info.cache, ("NH", "15.01"))
         self.assertTrue(selection_info.rdkit_warmup_pending)
 
-        canvas.services.canvas_scene_reset_service.clear_scene()
+        canvas.services.document.canvas_scene_reset_service.clear_scene()
 
         self.assertEqual(canvas.scene().items(), [])
         self.assertEqual(canvas.model.atoms, {})
@@ -3398,9 +3306,9 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
     ) -> None:
         canvas = CanvasView()
         self.addCleanup(canvas.close)
-        self.addCleanup(canvas.services.canvas_scene_reset_service.clear_scene)
+        self.addCleanup(canvas.services.document.canvas_scene_reset_service.clear_scene)
         scene = canvas.scene()
-        atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
+        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
             "C",
             0.0,
             0.0,
@@ -3433,18 +3341,18 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         primary = RuntimeError("target document failed after clear")
 
         def clear_then_fail(_state: dict) -> None:
-            canvas.services.canvas_scene_reset_service.clear_scene()
+            canvas.services.document.canvas_scene_reset_service.clear_scene()
             raise primary
 
         with mock.patch.object(
-            canvas.services.canvas_document_session_service,
+            canvas.services.document.canvas_document_session_service,
             "_apply_state_contents",
             side_effect=clear_then_fail,
         ):
             with self.assertRaises(RuntimeError) as caught:
-                canvas.services.canvas_document_session_service.apply_state(
+                canvas.services.document.canvas_document_session_service.apply_state(
                     deepcopy(
-                        canvas.services.canvas_document_session_service.snapshot_state()
+                        canvas.services.document.canvas_document_session_service.snapshot_state()
                     )
                 )
 
@@ -3467,7 +3375,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
     ) -> None:
         canvas = CanvasView()
         self.addCleanup(canvas.close)
-        self.addCleanup(canvas.services.canvas_scene_reset_service.clear_scene)
+        self.addCleanup(canvas.services.document.canvas_scene_reset_service.clear_scene)
         scene = canvas.scene()
         old_item = QGraphicsRectItem(0.0, 0.0, 20.0, 20.0)
         old_item.setFlag(
@@ -3477,7 +3385,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         scene.addItem(old_item)
         old_item.setSelected(True)
 
-        service = canvas.services.canvas_document_session_service
+        service = canvas.services.document.canvas_document_session_service
         target_state = deepcopy(service.snapshot_state())
         target_state["settings"]["bond_length_px"] = 31.0
         selection_style = selection_style_state_for(canvas)

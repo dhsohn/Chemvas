@@ -46,7 +46,7 @@ class CanvasViewKeyPressRoutingTest(unittest.TestCase):
         event = _FakeKeyEvent(Qt.Key.Key_A)
         input_controller = mock.Mock()
         view = CanvasView()
-        view.services.input_controller = input_controller
+        view.services.input.input_controller = input_controller
 
         CanvasView.keyPressEvent(view, event)
 

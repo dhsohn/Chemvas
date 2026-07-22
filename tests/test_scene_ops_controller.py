@@ -3,6 +3,8 @@ import re
 import unittest
 from types import SimpleNamespace
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -126,18 +128,18 @@ def _make_model_ring_item(
 def scene_clipboard_controller_for(canvas) -> SceneClipboardController:
     return SceneClipboardController(
         canvas,
-        selection_controller=canvas.services.selection_controller,
-        bond_mutation_service=canvas.services.canvas_bond_mutation_service,
+        selection_controller=canvas.services.selection.selection_controller,
+        bond_mutation_service=canvas.services.structure.canvas_bond_mutation_service,
     )
 
 
 def scene_delete_controller_for(canvas) -> SceneDeleteController:
     return SceneDeleteController(
         canvas,
-        move_controller=canvas.services.move_controller,
-        atom_mutation_service=canvas.services.canvas_atom_mutation_service,
-        bond_mutation_service=canvas.services.canvas_bond_mutation_service,
-        style_controller=canvas.services.style_controller,
+        move_controller=canvas.services.interaction.move_controller,
+        atom_mutation_service=canvas.services.structure.canvas_atom_mutation_service,
+        bond_mutation_service=canvas.services.structure.canvas_bond_mutation_service,
+        style_controller=canvas.services.scene_operations.style_controller,
         history_service=canvas.history_service,
     )
 
@@ -145,8 +147,8 @@ def scene_delete_controller_for(canvas) -> SceneDeleteController:
 def scene_transform_controller_for(canvas) -> SceneTransformController:
     return SceneTransformController(
         canvas,
-        move_controller=canvas.services.move_controller,
-        graph_service=canvas.services.canvas_graph_service,
+        move_controller=canvas.services.interaction.move_controller,
+        graph_service=canvas.services.graph.canvas_graph_service,
         history_service=canvas.history_service,
     )
 
@@ -346,7 +348,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         canvas = _FakeCanvas()
         ring_item = _make_ring_item()
         controller_removed_items: list[object] = []
-        canvas.services.scene_item_controller = SimpleNamespace(
+        canvas.services.scene_view.scene_item_controller = SimpleNamespace(
             remove_scene_item=controller_removed_items.append
         )
         controller = scene_delete_controller_for(canvas)
@@ -980,7 +982,7 @@ class _FakeCanvas:
         self.record_additions_calls: list[
             tuple[int, int, str | None, list[QGraphicsItem]]
         ] = []
-        self.services = SimpleNamespace(
+        self.services = canvas_runtime_services(
             history_service=self.history_service,
             scene_item_controller=_FakeSceneItemController(self),
             canvas_graph_service=SimpleNamespace(

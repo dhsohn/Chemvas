@@ -82,7 +82,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             refresh=mock.Mock(),
         )
         view.services.hover = hover_controller
-        view.services.input_controller.hover = hover_controller
+        view.services.input.input_controller.hover = hover_controller
         insert_controller = SimpleNamespace(
             render_template_preview=mock.Mock(),
             render_smiles_preview=mock.Mock(),
@@ -91,7 +91,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             clear_template_preview=mock.Mock(),
             clear_smiles_preview=mock.Mock(),
         )
-        view.services.insert_controller = insert_controller
+        view.services.structure.insert_controller = insert_controller
         input_view_state_for(view).base_transform = QTransform().translate(3.0, 4.0)
         view.setTransform(QTransform().scale(2.0, 2.0))
         hit_testing_service = SimpleNamespace(
@@ -99,12 +99,14 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             item_at_event=mock.Mock(return_value=None),
             bond_id_from_event=mock.Mock(return_value=None),
         )
-        view.services.hit_testing_service = hit_testing_service
+        view.services.selection.hit_testing_service = hit_testing_service
         tool_controller = SimpleNamespace(active=tool_active)
-        view.services.tools = tool_controller
+        view.services.tooling.tools = tool_controller
         scene_transform_controller = SimpleNamespace(apply_bond_style=mock.Mock())
-        view.services.scene_transform_controller = scene_transform_controller
-        view.services.pointer_controller = CanvasPointerController(
+        view.services.scene_operations.scene_transform_controller = (
+            scene_transform_controller
+        )
+        view.services.input.pointer_controller = CanvasPointerController(
             view,
             hit_testing_service=hit_testing_service,
             insert_controller=insert_controller,
@@ -127,7 +129,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         insert_state_for(template_view).template_active = True
         CanvasView.mousePressEvent(template_view, press_event)
         self.assertEqual(
-            template_view.services.insert_controller.commit_template_insert.call_count,
+            template_view.services.structure.insert_controller.commit_template_insert.call_count,
             1,
         )
         self.assertEqual(
@@ -135,7 +137,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             1,
         )
         self.assertEqual(
-            template_view.services.tools.active.on_mouse_press.call_count, 0
+            template_view.services.tooling.tools.active.on_mouse_press.call_count, 0
         )
 
         smiles_view = self._new_view(
@@ -148,10 +150,13 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         insert_state_for(smiles_view).smiles_active = True
         CanvasView.mousePressEvent(smiles_view, press_event)
         self.assertEqual(
-            smiles_view.services.insert_controller.commit_smiles_insert.call_count, 1
+            smiles_view.services.structure.insert_controller.commit_smiles_insert.call_count,
+            1,
         )
         self.assertEqual(smiles_view.services.hover.clear_hover_highlight.call_count, 1)
-        self.assertEqual(smiles_view.services.tools.active.on_mouse_press.call_count, 0)
+        self.assertEqual(
+            smiles_view.services.tooling.tools.active.on_mouse_press.call_count, 0
+        )
 
         tool = SimpleNamespace(
             on_mouse_press=mock.Mock(return_value=True),
@@ -161,10 +166,12 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         tool.on_mouse_press.assert_called_once_with(press_event)
         self.assertEqual(tool_view.services.hover.clear_hover_highlight.call_count, 1)
         self.assertEqual(
-            tool_view.services.insert_controller.commit_template_insert.call_count, 0
+            tool_view.services.structure.insert_controller.commit_template_insert.call_count,
+            0,
         )
         self.assertEqual(
-            tool_view.services.insert_controller.commit_smiles_insert.call_count, 0
+            tool_view.services.structure.insert_controller.commit_smiles_insert.call_count,
+            0,
         )
 
     def test_mouse_press_event_blocks_insert_and_drawing_tools_outside_sheet(
@@ -180,15 +187,13 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             ),
         )
         template_view = self._new_view(tool_active=template_tool)
-        template_view.services.hit_testing_service.scene_pos_from_event.return_value = (
-            outside_pos
-        )
+        template_view.services.selection.hit_testing_service.scene_pos_from_event.return_value = outside_pos
         insert_state_for(template_view).template_active = True
 
         CanvasView.mousePressEvent(template_view, press_event)
 
-        template_view.services.insert_controller.commit_template_insert.assert_not_called()
-        template_view.services.insert_controller.clear_template_preview.assert_called_once_with()
+        template_view.services.structure.insert_controller.commit_template_insert.assert_not_called()
+        template_view.services.structure.insert_controller.clear_template_preview.assert_called_once_with()
         template_tool.on_mouse_press.assert_not_called()
         template_view.services.hover.clear_hover_highlight.assert_called_once_with()
         press_event.accept.assert_called_once_with()
@@ -201,9 +206,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             ),
         )
         tool_view = self._new_view(tool_active=drawing_tool)
-        tool_view.services.hit_testing_service.scene_pos_from_event.return_value = (
-            outside_pos
-        )
+        tool_view.services.selection.hit_testing_service.scene_pos_from_event.return_value = outside_pos
 
         CanvasView.mousePressEvent(tool_view, tool_event)
 
@@ -217,19 +220,19 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         template_view = self._new_view()
         insert_state_for(template_view).template_active = True
         CanvasView.mouseMoveEvent(template_view, move_event)
-        template_view.services.insert_controller.render_template_preview.assert_called_once_with(
+        template_view.services.structure.insert_controller.render_template_preview.assert_called_once_with(
             QPointF(4.0, 5.0)
         )
-        template_view.services.insert_controller.render_smiles_preview.assert_not_called()
+        template_view.services.structure.insert_controller.render_smiles_preview.assert_not_called()
         template_view.services.hover.update_hover_highlight.assert_not_called()
 
         smiles_view = self._new_view()
         insert_state_for(smiles_view).smiles_active = True
         CanvasView.mouseMoveEvent(smiles_view, move_event)
-        smiles_view.services.insert_controller.render_smiles_preview.assert_called_once_with(
+        smiles_view.services.structure.insert_controller.render_smiles_preview.assert_called_once_with(
             QPointF(4.0, 5.0)
         )
-        smiles_view.services.insert_controller.render_template_preview.assert_not_called()
+        smiles_view.services.structure.insert_controller.render_template_preview.assert_not_called()
         smiles_view.services.hover.update_hover_highlight.assert_not_called()
 
         hover_view = self._new_view()
@@ -261,20 +264,16 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         move_event = _FakeEvent(buttons=Qt.MouseButton.NoButton)
 
         template_view = self._new_view()
-        template_view.services.hit_testing_service.scene_pos_from_event.return_value = (
-            outside_pos
-        )
+        template_view.services.selection.hit_testing_service.scene_pos_from_event.return_value = outside_pos
         insert_state_for(template_view).template_active = True
         CanvasView.mouseMoveEvent(template_view, move_event)
 
-        template_view.services.insert_controller.render_template_preview.assert_not_called()
-        template_view.services.insert_controller.clear_template_preview.assert_called_once_with()
+        template_view.services.structure.insert_controller.render_template_preview.assert_not_called()
+        template_view.services.structure.insert_controller.clear_template_preview.assert_called_once_with()
         template_view.services.hover.clear_hover_highlight.assert_called_once_with()
 
         hover_view = self._new_view()
-        hover_view.services.hit_testing_service.scene_pos_from_event.return_value = (
-            outside_pos
-        )
+        hover_view.services.selection.hit_testing_service.scene_pos_from_event.return_value = outside_pos
         CanvasView.mouseMoveEvent(hover_view, move_event)
 
         hover_view.services.hover.update_hover_highlight.assert_not_called()
@@ -517,7 +516,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             ),
         )
         view = self._new_view(tool_active=tool)
-        view.services.hit_testing_service.scene_pos_from_event.return_value = QPointF(
+        view.services.selection.hit_testing_service.scene_pos_from_event.return_value = QPointF(
             999.0, 999.0
         )
         release_event = _FakeEvent(
@@ -584,7 +583,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
                 QEvent.Type.MouseMove, buttons=Qt.MouseButton.NoButton
             )
             self.assertFalse(CanvasView.viewportEvent(template_view, template_event))
-            template_view.services.insert_controller.render_template_preview.assert_called_once_with(
+            template_view.services.structure.insert_controller.render_template_preview.assert_called_once_with(
                 QPointF(4.0, 5.0)
             )
             self.assertEqual(base_event.call_count, 1)
@@ -596,7 +595,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
                 QEvent.Type.MouseMove, buttons=Qt.MouseButton.NoButton
             )
             self.assertFalse(CanvasView.viewportEvent(smiles_view, smiles_event))
-            smiles_view.services.insert_controller.render_smiles_preview.assert_called_once_with(
+            smiles_view.services.structure.insert_controller.render_smiles_preview.assert_called_once_with(
                 QPointF(4.0, 5.0)
             )
             self.assertEqual(base_event.call_count, 1)

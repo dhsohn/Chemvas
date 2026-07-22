@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -26,7 +28,7 @@ def _component_lookup(components: dict[tuple[int, int], set[int]]):
 
 def _bind_graph_service(view) -> CanvasGraphService:
     service = CanvasGraphService(view)
-    view.services = SimpleNamespace(canvas_graph_service=service)
+    view.services = canvas_runtime_services(canvas_graph_service=service)
     return service
 
 

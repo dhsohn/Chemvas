@@ -188,7 +188,6 @@ _DOCUMENT_MUTATED_RUNTIME_FIELDS = (
     "bond_graphics_state",
     "mark_registry",
     "spatial_index_state",
-    "rotation_preview_state",
     "rotation_state",
     "handle_state",
     "selection_style_state",

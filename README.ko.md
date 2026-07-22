@@ -105,8 +105,8 @@ python -m pip install -e .
 - PyQt6가 설치된 환경에서 headless 테스트 실행: `QT_QPA_PLATFORM=offscreen python -m pytest`
 - GitHub Actions CI도 동일하게 headless 환경(`QT_QPA_PLATFORM=offscreen`)에서 lint, 타입 체크, 테스트를 실행합니다.
 - 개발 환경 설정, 테스트 실행 방법, 그리고 **아키텍처 규약**은 [CONTRIBUTING.md](CONTRIBUTING.md)를 참고하세요.
-  코드베이스가 수많은 작은 `*_ports` / `*_access` / `*_state` / `*_service` 모듈로 나뉜 것은 **의도된 설계**이며,
-  그 경계는 테스트로 강제됩니다. 구조를 바꾸기 전에 반드시 CONTRIBUTING을 읽어주세요.
+  전환기 UI 코드는 실제 책임을 분리하는 기존 `*_ports` / `*_access` / `*_state` / `*_service` 경계를 유지하지만,
+  신규 기능이 이 배치를 기본으로 복제하지는 않습니다. 활성 경계는 테스트로 강제되므로 구조를 바꾸기 전에 반드시 CONTRIBUTING을 읽어주세요.
 - 전체 설계 개요는 [docs/ARCHITECTURE.ko.md](docs/ARCHITECTURE.ko.md)에 있습니다.
 
 ## 로드맵 / 아직 미지원

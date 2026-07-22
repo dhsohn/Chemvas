@@ -78,6 +78,17 @@ suite, and milestone-level full-suite/package verification.
 - Benzene preview now uses the canonical insertion template policy and shared
   scene renderer. Its separate access, scene-access, service, renderer, and
   transient state were removed instead of being retained as compatibility paths.
+- Canvas service lookup now accepts only the canonical `CanvasRuntimeServices`.
+  Flat aliases and the production fixture adapter were removed; focused legacy UI
+  tests build partial canonical runtimes in `tests/runtime_services.py`.
+- The unused `StructureInsertService` and auxiliary bundle, the unused rotation
+  preview controller/state, and the remaining selection/transform/service-name
+  compatibility facades were removed with their internal-wiring tests.
+- Direct feature-to-Qt dependencies are frozen by the shrinking
+  `FEATURE_QT_MIGRATION_ALLOWLIST` in `tests/test_package_dependencies.py`. A
+  migration slice removes its entry when its concrete Qt implementation moves to
+  `chemvas.adapters`; no new entries are allowed, and an empty set ends the
+  exception.
 
 ## Consequences
 

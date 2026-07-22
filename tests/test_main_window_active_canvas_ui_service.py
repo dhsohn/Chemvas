@@ -102,7 +102,9 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
     def setUp(self) -> None:
         self.window = _FakeWindow()
         self.tool_mode_controller_for_window = mock.Mock(
-            side_effect=lambda window: window.canvas.services.tool_mode_controller,
+            side_effect=lambda window: (
+                window.canvas.services.input.tool_mode_controller
+            ),
         )
         self.active_canvas_for_window = mock.Mock(
             side_effect=lambda window: window.canvas
@@ -307,7 +309,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.current_zoom_percent_for_window.return_value = 275
 
         with mock.patch.object(
-            self.window.canvas_b.services.tool_mode_controller,
+            self.window.canvas_b.services.input.tool_mode_controller,
             "get_atom_symbol",
             return_value="N",
         ):

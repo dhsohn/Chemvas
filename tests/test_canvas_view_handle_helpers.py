@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -123,26 +125,26 @@ def _make_proxy(
         ),
         tool_settings_state=CanvasToolSettingsState(curved_snap_step=2),
         refresh_selection_outline=mock.Mock(),
-        services=SimpleNamespace(
+        services=canvas_runtime_services(
             scene_decoration_build_service=SimpleNamespace(add_arrow_head=mock.Mock()),
             selection_controller=SimpleNamespace(update_selection_outline=mock.Mock()),
         ),
     )
-    view.services.selection_controller.update_selection_outline = (
+    view.services.selection.selection_controller.update_selection_outline = (
         view.refresh_selection_outline
     )
     view.clear_handles = lambda: clear_handles_for(view)
-    view.services.selection_highlight_styler = SelectionHighlightStyler(view)
-    view.services.handle_overlay_service = HandleOverlayService(view)
-    view.services.curved_arrow_path_service = CurvedArrowPathService(view)
-    view.services.handle_mutation_service = HandleMutationService(
+    view.services.scene_view.selection_highlight_styler = SelectionHighlightStyler(view)
+    view.services.handles.handle_overlay_service = HandleOverlayService(view)
+    view.services.handles.curved_arrow_path_service = CurvedArrowPathService(view)
+    view.services.handles.handle_mutation_service = HandleMutationService(
         view,
-        curved_arrow_path_service=view.services.curved_arrow_path_service,
+        curved_arrow_path_service=view.services.handles.curved_arrow_path_service,
     )
-    view.services.handle_controller = CanvasHandleController(
+    view.services.handles.handle_controller = CanvasHandleController(
         view,
-        handle_overlay_service=view.services.handle_overlay_service,
-        handle_mutation_service=view.services.handle_mutation_service,
+        handle_overlay_service=view.services.handles.handle_overlay_service,
+        handle_mutation_service=view.services.handles.handle_mutation_service,
     )
     return view
 
@@ -167,7 +169,9 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         child.setPen(original_pen)
         group.addToGroup(child)
 
-        view.services.selection_highlight_styler.set_selection_highlight([group])
+        view.services.scene_view.selection_highlight_styler.set_selection_highlight(
+            [group]
+        )
 
         selected_pen = child.pen()
         stored_pen = child.data(6)
@@ -183,7 +187,7 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         )
         self.assertEqual(view.selection_style_state.selected_items, [group])
 
-        view.services.selection_highlight_styler.clear_selection_highlight()
+        view.services.scene_view.selection_highlight_styler.clear_selection_highlight()
 
         restored_pen = child.pen()
         self.assertEqual(restored_pen.color().name(), original_pen.color().name())
@@ -193,7 +197,7 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
     def test_clear_handles_removes_active_handles_and_clears_target(self) -> None:
         scene = _RecordingScene()
         view = _make_proxy(scene)
-        view.services.selection_highlight_styler.clear_selection_highlight = mock.Mock()
+        view.services.scene_view.selection_highlight_styler.clear_selection_highlight = mock.Mock()
 
         handle_one = QGraphicsEllipseItem(0.0, 0.0, 10.0, 10.0)
         handle_two = QGraphicsEllipseItem(10.0, 0.0, 10.0, 10.0)
@@ -208,7 +212,7 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         self.assertEqual(scene.removed_items, [handle_one, handle_two])
         self.assertEqual(view.handle_state.active_handles, [])
         self.assertIsNone(view.handle_state.target)
-        view.services.selection_highlight_styler.clear_selection_highlight.assert_called_once()
+        view.services.scene_view.selection_highlight_styler.clear_selection_highlight.assert_called_once()
 
     def test_show_orbital_handles_creates_handles_from_center_and_bounds(self) -> None:
         scene = _RecordingScene()
@@ -296,9 +300,9 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         view = _make_proxy(scene)
         mutation_service = mock.Mock()
         overlay_service = mock.Mock()
-        view.services.handle_mutation_service = mutation_service
-        view.services.handle_overlay_service = overlay_service
-        view.services.handle_controller = CanvasHandleController(
+        view.services.handles.handle_mutation_service = mutation_service
+        view.services.handles.handle_overlay_service = overlay_service
+        view.services.handles.handle_controller = CanvasHandleController(
             view,
             handle_overlay_service=overlay_service,
             handle_mutation_service=mutation_service,
@@ -322,7 +326,7 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         )
         unknown_handle = SimpleNamespace(data=lambda key: None)
 
-        controller = view.services.handle_controller
+        controller = view.services.handles.handle_controller
         controller.update_handle_drag(scale_handle, QPointF(1.0, 2.0))
         controller.update_handle_drag(rotate_handle, QPointF(3.0, 4.0))
         controller.update_handle_drag(curved_handle, QPointF(5.0, 6.0))
@@ -376,7 +380,8 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         self.assertEqual(curved_item.data(2)["control"], QPointF(5.0, 8.0))
         self.assertEqual(curved_item.pos(), QPointF())
         self.assertEqual(
-            view.services.scene_decoration_build_service.add_arrow_head.call_count, 2
+            view.services.scene_decoration.scene_decoration_build_service.add_arrow_head.call_count,
+            2,
         )
         self.assertEqual(view.refresh_selection_outline.call_count, 1)
 
@@ -425,7 +430,8 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         self.assertIn("control", curved_item.data(2))
         self.assertEqual(curved_item.pos(), QPointF())
         self.assertEqual(
-            view.services.scene_decoration_build_service.add_arrow_head.call_count, 2
+            view.services.scene_decoration.scene_decoration_build_service.add_arrow_head.call_count,
+            2,
         )
         self.assertEqual(view.refresh_selection_outline.call_count, 1)
 

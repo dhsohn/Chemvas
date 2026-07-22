@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -224,7 +226,9 @@ class SelectionOutlineServiceTest(unittest.TestCase):
         self.assertEqual(service.selection_center_for_atoms({1, 2}), QPointF(5.0, 6.0))
         self.assertTrue(service.selection_center_marker_enabled())
 
-        canvas.services.tools = SimpleNamespace(active=SimpleNamespace(name="select"))
+        canvas.services.tooling.tools = SimpleNamespace(
+            active=SimpleNamespace(name="select")
+        )
         self.assertFalse(service.selection_center_marker_enabled())
 
     def test_selection_path_helpers_cover_bond_and_object_paths(self) -> None:
@@ -240,7 +244,7 @@ class SelectionOutlineServiceTest(unittest.TestCase):
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 10.0, 0.0)},
                 bonds=[Bond(1, 2, 2), None],
             ),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 scene_decoration_build_service=SimpleNamespace(
                     mark_center=lambda item: QPointF(4.0, 5.0)
                 ),
@@ -320,7 +324,7 @@ class SelectionOutlineServiceTest(unittest.TestCase):
             model=SimpleNamespace(
                 atoms={1: Atom("C", 0.0, 0.0)}, bonds=[Bond(1, 1, 1)]
             ),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 geometry_controller=SimpleNamespace(
                     ring_center_for_bond=lambda bond: None,
                     trim_line_for_labels=lambda *_args: (0.0, 1.0),

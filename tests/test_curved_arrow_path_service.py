@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -29,7 +31,9 @@ class CurvedArrowPathServiceTest(unittest.TestCase):
         path_item.setPos(18.0, -7.0)
         build_service = SimpleNamespace(add_arrow_head=mock.Mock())
         canvas = SimpleNamespace(
-            services=SimpleNamespace(scene_decoration_build_service=build_service)
+            services=canvas_runtime_services(
+                scene_decoration_build_service=build_service
+            )
         )
 
         CurvedArrowPathService(canvas).set_curved_arrow_path(

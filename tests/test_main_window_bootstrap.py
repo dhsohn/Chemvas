@@ -12,6 +12,8 @@ from chemvas.ui.main_window_state import MainWindowState
 from chemvas.ui.main_window_tab_references import MainWindowTabReferences
 from chemvas.ui.main_window_ui_references import MainWindowUiReferences
 
+from tests.runtime_services import canvas_runtime_services
+
 
 class _FakeWindow:
     def __init__(self) -> None:
@@ -52,7 +54,7 @@ def test_bootstrap_main_window_initializes_runtime_references_and_services() -> 
         undo_button=object(),
         redo_button=object(),
     )
-    services = SimpleNamespace(
+    services = canvas_runtime_services(
         ui_assembly_service=SimpleNamespace(
             init_toolbars=mock.Mock(return_value=toolbar_assembly),
             init_menu_bar=mock.Mock(),

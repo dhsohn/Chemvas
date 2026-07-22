@@ -8,6 +8,8 @@ from chemvas.ui.session_recovery_service import SessionRecoveryService
 from chemvas.ui.session_snapshot_store import RestoreResult
 from PyQt6.QtWidgets import QApplication
 
+from tests.runtime_services import canvas_runtime_services
+
 
 @pytest.fixture(scope="module")
 def qapp():
@@ -97,7 +99,7 @@ class _FakeSignal:
 
 def _service(store, *, extra_windows=None, current_documents=lambda: []):
     doc_service = _FakeDocService()
-    services = SimpleNamespace(canvas_document_service=doc_service)
+    services = canvas_runtime_services(canvas_document_service=doc_service)
     spawned = list(extra_windows or [])
     service = SessionRecoveryService(
         store,

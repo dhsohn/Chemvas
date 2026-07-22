@@ -23,7 +23,6 @@ from chemvas.ui.canvas_hover_state import hover_state_for
 from chemvas.ui.canvas_insert_state import insert_state_for
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import set_model_for
-from chemvas.ui.canvas_rotation_preview_state import rotation_preview_state_for
 from chemvas.ui.canvas_rotation_state import rotation_state_for
 from chemvas.ui.canvas_scene_items_state import clear_scene_item_collections_for
 from chemvas.ui.handle_state import set_active_handles_for, set_handle_target_for
@@ -60,7 +59,6 @@ _RESET_OWNED_RUNTIME_FIELDS: dict[str, tuple[str, ...] | None] = {
     "bond_graphics_state": None,
     "mark_registry": ("by_atom",),
     "spatial_index_state": ("dirty",),
-    "rotation_preview_state": None,
     "rotation_state": None,
     "handle_state": None,
     "selection_style_state": ("selected_items", "suspend_outline"),
@@ -701,7 +699,6 @@ class _GraphicsSceneClearPorts:
 _SERVICE_RUNTIME_ALIASES: tuple[tuple[str, str], ...] = (
     ("graph", "graph_state"),
     ("rotation", "rotation_state"),
-    ("rotation_preview", "rotation_preview_state"),
     ("insert_state", "insert_state"),
     ("marks", "mark_registry"),
 )
@@ -1043,7 +1040,6 @@ class CanvasSceneResetService:
         self.hit_testing_service = hit_testing_service
         self.graph = graph_state_for(canvas)
         self.rotation = rotation_state_for(canvas)
-        self.rotation_preview = rotation_preview_state_for(canvas)
         self.insert_state = insert_state_for(canvas)
         self.marks = mark_registry_for(canvas)
         self._empty_status_publication_active = False
@@ -1874,10 +1870,6 @@ class CanvasSceneResetService:
         clear_selection_outlines_for(self.canvas)
         set_active_handles_for(self.canvas, [])
         set_handle_target_for(self.canvas, None)
-        # A preview group owns references to graphics from the current model.
-        # Scene signals were blocked and dropped during destruction; discard
-        # the stale wrapper graph immediately after the destructive boundary.
-        self.rotation_preview.reset()
         hover_state = hover_state_for(self.canvas)
         hover_state.items.clear()
         hover_state.atom_id = None

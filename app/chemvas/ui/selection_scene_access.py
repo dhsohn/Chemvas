@@ -1259,7 +1259,11 @@ class _SelectionInfoRecoverySnapshot:
     @classmethod
     def capture(cls, canvas: object) -> _SelectionInfoRecoverySnapshot:
         services = _optional_live_attribute(canvas, "services")
-        controller = _optional_live_attribute(services, "selection_controller")
+        selection_services = _optional_live_attribute(services, "selection")
+        controller = _optional_live_attribute(
+            selection_services,
+            "selection_controller",
+        )
         runtime_state = _optional_live_attribute(canvas, "runtime_state")
         update_outline_value = _optional_live_attribute(
             controller,

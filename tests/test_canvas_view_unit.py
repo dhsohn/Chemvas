@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -53,7 +55,7 @@ if QApplication is not None:
         translated_point_value,
         translated_scene_item_state,
     )
-    from chemvas.ui.scene_transform_logic import bounds_from_points, flip_point
+    from chemvas.ui.scene_flip_geometry import bounds_from_points, flip_point
     from chemvas.ui.selection_collection_access import (
         selected_bond_atom_ids_for,
         selected_structure_ids_for,
@@ -91,7 +93,7 @@ class _FakeNoteCanvas:
         set_selected_notes_for(self, [])
         self.updated_boxes = []
         self.history_service = SimpleNamespace(push=self.push_command)
-        self.services = SimpleNamespace(
+        self.services = canvas_runtime_services(
             history_service=self.history_service,
             scene_item_controller=SimpleNamespace(
                 remove_scene_item=self.removed_items.append
@@ -100,7 +102,7 @@ class _FakeNoteCanvas:
                 update_note_selection_box=self.record_note_selection_box_updated
             ),
         )
-        self.services.note_controller = CanvasNoteController(
+        self.services.interaction.note_controller = CanvasNoteController(
             self,
             history_service=self.services.history_service,
         )
@@ -270,7 +272,7 @@ class CanvasViewUnitTest(unittest.TestCase):
 
         prime_insert_modes()
 
-        canvas_services_for(canvas).tool_mode_controller.set_tool("benzene")
+        canvas_services_for(canvas).input.tool_mode_controller.set_tool("benzene")
 
         self.assertTrue(insert_state_for(canvas).template_active)
         self.assertEqual(insert_state_for(canvas).template_ring_size, 6)
@@ -278,49 +280,53 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertFalse(insert_state_for(canvas).smiles_active)
         self.assertIsNone(insert_state_for(canvas).smiles_preview_smiles)
         self.assertIsNone(insert_state_for(canvas).smiles_preview_center)
-        self.assertEqual(canvas.services.tools.active.name, "benzene")
+        self.assertEqual(canvas.services.tooling.tools.active.name, "benzene")
 
         insert_state_for(canvas).template_active = True
         insert_state_for(canvas).template_ring_size = 6
         insert_state_for(canvas).template_ring_style = "benzene"
 
-        canvas_services_for(canvas).tool_mode_controller.set_mark_kind("minus")
+        canvas_services_for(canvas).input.tool_mode_controller.set_mark_kind("minus")
 
         self.assertFalse(insert_state_for(canvas).template_active)
         self.assertIsNone(insert_state_for(canvas).template_ring_size)
         self.assertIsNone(insert_state_for(canvas).template_ring_style)
         self.assertEqual(tool_settings_state_for(canvas).mark_kind, "minus")
-        self.assertEqual(canvas.services.tools.active.name, "mark")
+        self.assertEqual(canvas.services.tooling.tools.active.name, "mark")
 
         prime_insert_modes()
 
-        canvas_services_for(canvas).tool_mode_controller.set_bond_style("double", 2)
+        canvas_services_for(canvas).input.tool_mode_controller.set_bond_style(
+            "double", 2
+        )
 
         self.assertFalse(insert_state_for(canvas).template_active)
         self.assertFalse(insert_state_for(canvas).smiles_active)
         self.assertEqual(tool_settings_state_for(canvas).active_bond_style, "double")
         self.assertEqual(tool_settings_state_for(canvas).active_bond_order, 2)
-        self.assertEqual(canvas.services.tools.active.name, "bond")
+        self.assertEqual(canvas.services.tooling.tools.active.name, "bond")
 
         prime_insert_modes()
 
-        canvas_services_for(canvas).tool_mode_controller.set_arrow_type("curved_double")
+        canvas_services_for(canvas).input.tool_mode_controller.set_arrow_type(
+            "curved_double"
+        )
 
         self.assertFalse(insert_state_for(canvas).template_active)
         self.assertFalse(insert_state_for(canvas).smiles_active)
         self.assertEqual(
             tool_settings_state_for(canvas).active_arrow_type, "curved_double"
         )
-        self.assertEqual(canvas.services.tools.active.name, "arrow")
+        self.assertEqual(canvas.services.tooling.tools.active.name, "arrow")
 
         prime_insert_modes()
 
-        canvas_services_for(canvas).tool_mode_controller.set_orbital_type("p")
+        canvas_services_for(canvas).input.tool_mode_controller.set_orbital_type("p")
 
         self.assertFalse(insert_state_for(canvas).template_active)
         self.assertFalse(insert_state_for(canvas).smiles_active)
         self.assertEqual(tool_settings_state_for(canvas).active_orbital_type, "p")
-        self.assertEqual(canvas.services.tools.active.name, "orbital")
+        self.assertEqual(canvas.services.tooling.tools.active.name, "orbital")
 
     def test_note_item_focus_out_adds_updates_and_deletes_commands(self) -> None:
         canvas = _FakeNoteCanvas()
@@ -427,7 +433,7 @@ class CanvasViewUnitTest(unittest.TestCase):
             (None, None, ()),
         ]
         view = SimpleNamespace(
-            services=SimpleNamespace(selection_controller=selection_controller)
+            services=canvas_runtime_services(selection_controller=selection_controller)
         )
 
         self.assertTrue(structure_item_is_selected_for(view, selected_item, {1}, set()))

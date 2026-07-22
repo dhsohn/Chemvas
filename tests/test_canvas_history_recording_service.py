@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from chemvas.core.history import (
@@ -113,7 +115,7 @@ def _make_canvas(
     )
     return SimpleNamespace(
         push_command=push_command,
-        services=SimpleNamespace(history_service=history_service),
+        services=canvas_runtime_services(history_service=history_service),
         _atom_state_dict=mock.Mock(
             side_effect=lambda atom_id: {"atom_id": atom_id, "kind": "atom"}
         ),
@@ -197,7 +199,7 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
                 return None
 
         history = History()
-        services = SimpleNamespace(history_service=history)
+        services = canvas_runtime_services(history_service=history)
 
         class Canvas:
             def __init__(self) -> None:
@@ -290,7 +292,7 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
                     history_state=state,
                     history_service=history,
                 )
-                canvas.services = SimpleNamespace(history_service=history)
+                canvas.services = canvas_runtime_services(history_service=history)
 
                 with self.assertRaisesRegex(RuntimeError, "history .* alias"):
                     CanvasHistoryRecordingService(canvas, history).push_history(

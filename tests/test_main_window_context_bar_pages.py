@@ -45,7 +45,7 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         self.window = build_main_window()
         self.insert_controller = active_canvas_for_window(
             self.window
-        ).services.insert_controller
+        ).services.structure.insert_controller
         self.tool_mode_controller = SimpleNamespace(
             get_arrow_line_width=mock.Mock(return_value=2.0),
             get_arrow_head_scale=mock.Mock(return_value=0.4),

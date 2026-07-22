@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -45,7 +47,7 @@ def _attach_history_service(canvas):
     service = _history_service(getattr(canvas, "push_command", None))
     services = getattr(canvas, "services", None)
     if services is None:
-        services = SimpleNamespace()
+        services = canvas_runtime_services()
         canvas.services = services
     services.history_service = service
     return service
@@ -92,7 +94,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
         canvas = SimpleNamespace(
             selected_notes=selected_notes,
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 selection_controller=SimpleNamespace(
                     select_note=mock.Mock(side_effect=_select_note)
                 )
@@ -105,7 +107,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
         controller.begin_note_edit(item)
 
-        canvas.services.selection_controller.select_note.assert_called_once_with(
+        canvas.services.selection.selection_controller.select_note.assert_called_once_with(
             item, additive=False
         )
         self.assertEqual(selected_notes, [item])
@@ -129,7 +131,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         attach_mock = mock.Mock(side_effect=_attach)
         canvas = SimpleNamespace(
             note_items=[],
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 scene_item_controller=SimpleNamespace(attach_scene_item=attach_mock),
             ),
             _make_selectable=mock.Mock(),
@@ -177,7 +179,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
         canvas = FailOnceSceneCanvas()
         canvas.scene_items_state = CanvasSceneItemsState(note_items=note_items)
-        canvas.services = SimpleNamespace(
+        canvas.services = canvas_runtime_services(
             history_service=_history_service(),
             scene_item_controller=SimpleNamespace(attach_scene_item=attach),
         )
@@ -223,7 +225,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
         canvas = SimpleNamespace(
             note_items=[],
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 scene_item_controller=SimpleNamespace(
                     attach_scene_item=mock.Mock(side_effect=_attach),
                     remove_scene_item=mock.Mock(side_effect=_remove),
@@ -303,7 +305,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         canvas = SimpleNamespace(
             scene=lambda: scene,
             scene_items_state=CanvasSceneItemsState(note_items=note_items),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 scene_item_controller=SimpleNamespace(
                     attach_scene_item=attach,
                     remove_scene_item=remove,
@@ -358,7 +360,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         canvas = SimpleNamespace(
             scene=lambda: scene,
             scene_items_state=scene_items_state,
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 scene_item_controller=SimpleNamespace(
                     attach_scene_item=attach,
                     remove_scene_item=remove,
@@ -413,7 +415,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             if item.scene() is scene:
                 scene.removeItem(item)
 
-        canvas.services = SimpleNamespace(
+        canvas.services = canvas_runtime_services(
             scene_item_controller=SimpleNamespace(
                 attach_scene_item=attach,
                 remove_scene_item=remove,
@@ -522,7 +524,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         canvas = SimpleNamespace(
             scene=lambda: scene,
             text_style_state=CanvasTextStyleState(),
-            services=SimpleNamespace(history_service=_history_service(push_command)),
+            services=canvas_runtime_services(
+                history_service=_history_service(push_command)
+            ),
         )
         note = NoteItem(canvas)
         note.setData(0, "note")
@@ -763,7 +767,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             push=append_mutate_then_exit,
             notify_change=mock.Mock(),
         )
-        canvas.services = SimpleNamespace(history_service=history)
+        canvas.services = canvas_runtime_services(history_service=history)
         controller = _note_controller(canvas)
 
         def apply_state(_canvas, item, state) -> None:
@@ -841,7 +845,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             push=append_then_interrupt,
             notify_change=mock.Mock(),
         )
-        canvas.services = SimpleNamespace(history_service=history)
+        canvas.services = canvas_runtime_services(history_service=history)
         controller = CanvasNoteController(canvas, history_service=history)
 
         def apply_state(_canvas, item, state) -> None:
@@ -1290,7 +1294,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
                 color=QColor("#1f5eff"),
                 stroke_delta=0.8,
             ),
-            services=SimpleNamespace(selection_controller=selection_controller),
+            services=canvas_runtime_services(selection_controller=selection_controller),
         )
         set_selected_notes_for(canvas, [item])
         _attach_history_service(canvas)
@@ -1375,7 +1379,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             scene=lambda: scene, text_style_state=CanvasTextStyleState()
         )
         _attach_history_service(canvas)
-        canvas.services.selection_controller = SimpleNamespace(
+        canvas.services.selection.selection_controller = SimpleNamespace(
             update_note_selection_box=mock.Mock()
         )
         set_selected_notes_for(canvas, [])
@@ -1439,7 +1443,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
         canvas._note_state_dict = _note_state_dict
         canvas.push_command = canvas.commands.append
-        canvas.services = SimpleNamespace(
+        canvas.services = canvas_runtime_services(
             scene_item_controller=SimpleNamespace(
                 remove_scene_item=canvas.removed_items.append
             ),
@@ -1486,7 +1490,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             raise RuntimeError("history")
 
         canvas.push_command = fail_push
-        canvas.services = SimpleNamespace(
+        canvas.services = canvas_runtime_services(
             scene_item_controller=SimpleNamespace(
                 remove_scene_item=canvas.removed_items.append
             ),
@@ -1526,7 +1530,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
         canvas._note_state_dict = _note_state_dict
         canvas.push_command = canvas.commands.append
-        canvas.services = SimpleNamespace(
+        canvas.services = canvas_runtime_services(
             scene_item_controller=SimpleNamespace(
                 remove_scene_item=canvas.removed_items.append,
                 restore_scene_item=canvas.restored_items.append,
@@ -1594,7 +1598,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             push=append_then_exit,
             notify_change=mock.Mock(),
         )
-        canvas.services = SimpleNamespace(
+        canvas.services = canvas_runtime_services(
             history_service=history,
             scene_item_controller=SimpleNamespace(
                 remove_scene_item=remove,
@@ -1669,7 +1673,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             push=append_then_interrupt,
             notify_change=mock.Mock(),
         )
-        canvas.services = SimpleNamespace(
+        canvas.services = canvas_runtime_services(
             history_service=history,
             scene_item_controller=SimpleNamespace(
                 remove_scene_item=remove,
@@ -1728,7 +1732,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             push=mock.Mock(),
         )
         remove = mock.Mock()
-        canvas.services = SimpleNamespace(
+        canvas.services = canvas_runtime_services(
             history_service=history,
             scene_item_controller=SimpleNamespace(remove_scene_item=remove),
             selection_controller=SimpleNamespace(
@@ -1787,7 +1791,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             state=SimpleNamespace(history=[], redo_stack=[]),
             push=mock.Mock(),
         )
-        canvas.services = SimpleNamespace(
+        canvas.services = canvas_runtime_services(
             history_service=history,
             scene_item_controller=SimpleNamespace(
                 remove_scene_item=remove,
@@ -1825,7 +1829,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         set_selected_notes_for(canvas, [])
         canvas.push_command = canvas.commands.append
         toggle_note_selection = mock.Mock()
-        canvas.services = SimpleNamespace(
+        canvas.services = canvas_runtime_services(
             scene_item_controller=SimpleNamespace(
                 remove_scene_item=canvas.removed_items.append
             ),
@@ -1862,7 +1866,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         canvas.push_command = canvas.commands.append
         toggle_note_selection = mock.Mock()
         update_selection_outline = mock.Mock()
-        canvas.services = SimpleNamespace(
+        canvas.services = canvas_runtime_services(
             scene_item_controller=SimpleNamespace(
                 remove_scene_item=canvas.removed_items.append
             ),
@@ -1901,7 +1905,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         )
         set_selected_notes_for(canvas, [])
         canvas.push_command = canvas.commands.append
-        canvas.services = SimpleNamespace(
+        canvas.services = canvas_runtime_services(
             scene_item_controller=SimpleNamespace(
                 remove_scene_item=canvas.removed_items.append
             ),
@@ -1929,7 +1933,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             removed_items=[],
             updated_boxes=[],
             _note_state_dict=lambda item: {},
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 scene_item_controller=SimpleNamespace(
                     remove_scene_item=controller_remove
                 ),
@@ -1937,7 +1941,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         )
         set_selected_notes_for(canvas, [])
         canvas.push_command = canvas.commands.append
-        canvas.services.selection_controller = SimpleNamespace(
+        canvas.services.selection.selection_controller = SimpleNamespace(
             update_note_selection_box=canvas.updated_boxes.append
         )
         _attach_history_service(canvas)
@@ -2040,7 +2044,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
                 text_alignment=Qt.AlignmentFlag.AlignHCenter,
                 text_line_spacing=1.25,
             ),
-            services=SimpleNamespace(selection_controller=selection_controller),
+            services=canvas_runtime_services(selection_controller=selection_controller),
         )
         _attach_history_service(canvas)
         controller = _note_controller(canvas)

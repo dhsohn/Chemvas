@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -66,7 +68,7 @@ class _FakeCanvas:
         self.curved_arrow_path_calls = []
         self.built_ts_bracket_rects = []
         self.built_orbital_calls = []
-        self.services = SimpleNamespace(
+        self.services = canvas_runtime_services(
             canvas_graph_service=SimpleNamespace(bond_id_between=self.bond_id_between),
             note_controller=SimpleNamespace(
                 apply_note_style=self.record_note_style_applied
@@ -238,7 +240,7 @@ class SceneItemControllerTest(unittest.TestCase):
         self.canvas = _FakeCanvas()
         self.controller = SceneItemController(
             self.canvas,
-            graph_service=self.canvas.services.canvas_graph_service,
+            graph_service=self.canvas.services.graph.canvas_graph_service,
         )
 
     def test_attach_scene_item_updates_registries_without_duplicates(self) -> None:
@@ -630,7 +632,7 @@ class SceneItemControllerTest(unittest.TestCase):
                 canvas = _FakeCanvas()
                 controller = SceneItemController(
                     canvas,
-                    graph_service=canvas.services.canvas_graph_service,
+                    graph_service=canvas.services.graph.canvas_graph_service,
                 )
                 scene = canvas.scene()
                 existing = QGraphicsPathItem()

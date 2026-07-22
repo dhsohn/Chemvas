@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -138,7 +140,7 @@ class SelectionNoteServiceTest(unittest.TestCase):
         scene.addItem(note)
         canvas = self._note_canvas()
         outline_refresh = mock.Mock()
-        canvas.services = SimpleNamespace(
+        canvas.services = canvas_runtime_services(
             selection_controller=SimpleNamespace(
                 update_selection_outline=outline_refresh
             )

@@ -89,7 +89,7 @@ class SceneItemRestoreTest(unittest.TestCase):
     ) -> None:
         style_controller = canvas_services_for(
             active_canvas_for_window(self.window)
-        ).style_controller
+        ).scene_operations.style_controller
         style_controller.set_text_size(19)
         style_controller.set_text_weight(63)
         style_controller.set_text_italic(True)
@@ -162,7 +162,7 @@ class SceneItemRestoreTest(unittest.TestCase):
     ) -> None:
         canvas_services_for(
             active_canvas_for_window(self.window)
-        ).geometry_controller.set_bond_length(30.0)
+        ).scene_view.geometry_controller.set_bond_length(30.0)
         state = {
             "kind": "orbital",
             "orbital_kind": "sp2",

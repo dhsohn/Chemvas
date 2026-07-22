@@ -39,6 +39,8 @@ from chemvas.ui.history_commands import (
     UpdateSceneItemCommand,
 )
 
+from tests.runtime_services import canvas_runtime_services
+
 
 class _RecorderCommand:
     def __init__(self, name: str, log: list[str]) -> None:
@@ -102,7 +104,7 @@ class _FakeCanvas:
             projection_center_3d="before-center",
             projection_anchor_2d="before-anchor",
         )
-        self.services = SimpleNamespace(
+        self.services = canvas_runtime_services(
             atom_label_service=SimpleNamespace(
                 add_or_update_atom_label=self.add_or_update_atom_label
             ),
@@ -3590,7 +3592,9 @@ class HistoryCommandTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = _FakeCanvas()
-        canvas.services.scene_item_controller = _FakeSceneItemController(canvas)
+        canvas.services.scene_view.scene_item_controller = _FakeSceneItemController(
+            canvas
+        )
         add_command = AddSceneItemsCommand(item_states=[{"kind": "note"}])
         delete_command = DeleteSceneItemsCommand(item_states=[{"kind": "arrow"}])
         update_command = UpdateSceneItemCommand("item", {"x": 1}, {"x": 2})

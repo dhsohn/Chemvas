@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
 
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QPainterPath, QPainterPathStroker, QPen
@@ -13,7 +12,7 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
-PenWidthGetter = Callable[[Any], float]
+PenWidthGetter = Callable[[QPen], float]
 LineStrokePathBuilder = Callable[[QPointF, QPointF, float], QPainterPath]
 
 ARROW_OBJECT_KINDS = {

@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -105,7 +107,7 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
             smiles_input_state=CanvasSmilesInputState(last_smiles_input="C"),
             mark_registry=CanvasMarkRegistry({1: [mark_item]}),
             _bond_state_dict=mock.Mock(),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 canvas_atom_mutation_service=atom_mutation_service,
                 canvas_bond_mutation_service=SimpleNamespace(
                     remove_bond_by_id=remove_bond_by_id
@@ -171,7 +173,7 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
             _bond_state_dict=mock.Mock(
                 side_effect=lambda bond: {"a": bond.a, "b": bond.b, "order": bond.order}
             ),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 canvas_atom_mutation_service=atom_mutation_service,
                 canvas_bond_mutation_service=SimpleNamespace(
                     remove_bond_by_id=remove_bond_by_id
@@ -210,7 +212,7 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
             model=SimpleNamespace(bonds=bonds),
             smiles_input_state=CanvasSmilesInputState(last_smiles_input="CC"),
             _bond_state_dict=mock.Mock(return_value={"bond": 0}),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 canvas_bond_mutation_service=SimpleNamespace(
                     remove_bond_by_id=remove_bond_by_id
                 ),
@@ -239,7 +241,9 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         ring_item = _StateItem({"kind": "ring"})
         scene_item_controller = SimpleNamespace(remove_scene_item=mock.Mock())
         view = SimpleNamespace(
-            services=SimpleNamespace(scene_item_controller=scene_item_controller),
+            services=canvas_runtime_services(
+                scene_item_controller=scene_item_controller
+            ),
             push_command=mock.Mock(),
         )
         view.services.history_service = SimpleNamespace(push=view.push_command)
@@ -270,7 +274,7 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
             _bond_state_dict=mock.Mock(
                 side_effect=lambda bond: {"a": bond.a, "b": bond.b, "style": bond.style}
             ),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 history_service=SimpleNamespace(push=mock.Mock()),
                 move_controller=move_controller,
                 canvas_history_recording_service=SimpleNamespace(
@@ -328,7 +332,7 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
                     "order": bond.order,
                 }
             ),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 history_service=SimpleNamespace(push=mock.Mock()),
                 move_controller=move_controller,
                 canvas_history_recording_service=SimpleNamespace(
@@ -376,18 +380,26 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         delete_controller = mock.Mock()
         transform_controller = mock.Mock()
         view = SimpleNamespace(
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 scene_delete_controller=delete_controller,
                 scene_transform_controller=transform_controller,
             )
         )
 
-        view.services.scene_delete_controller.delete_atom(1, record=False)
-        view.services.scene_delete_controller.delete_bond(2, record=True)
-        view.services.scene_delete_controller.delete_ring("ring", record=False)
-        view.services.scene_transform_controller.flip_bond_direction(3)
-        view.services.scene_transform_controller.apply_bond_style(4, "double", 2)
-        view.services.scene_transform_controller.cycle_bond_style(5)
+        view.services.scene_operations.scene_delete_controller.delete_atom(
+            1, record=False
+        )
+        view.services.scene_operations.scene_delete_controller.delete_bond(
+            2, record=True
+        )
+        view.services.scene_operations.scene_delete_controller.delete_ring(
+            "ring", record=False
+        )
+        view.services.scene_operations.scene_transform_controller.flip_bond_direction(3)
+        view.services.scene_operations.scene_transform_controller.apply_bond_style(
+            4, "double", 2
+        )
+        view.services.scene_operations.scene_transform_controller.cycle_bond_style(5)
 
         delete_controller.delete_atom.assert_called_once_with(1, record=False)
         delete_controller.delete_bond.assert_called_once_with(2, record=True)

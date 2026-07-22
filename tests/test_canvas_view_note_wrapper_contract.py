@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -82,7 +84,7 @@ def _make_canvas_note_view(scene: QGraphicsScene) -> SimpleNamespace:
             view.selected_notes.append(target)
 
     view.select_note = select_note
-    view.services = SimpleNamespace(
+    view.services = canvas_runtime_services(
         history_service=SimpleNamespace(push=mock.Mock()),
         selection_controller=SimpleNamespace(
             select_note=select_note,
@@ -105,9 +107,9 @@ class CanvasViewNoteWrapperContractTest(unittest.TestCase):
         scene = QGraphicsScene()
         fake_controller = _FakeNoteController()
         view = _make_canvas_note_view(scene)
-        view.services.note_controller = fake_controller
+        view.services.interaction.note_controller = fake_controller
 
-        item = canvas_services_for(view).note_controller.create_text_note(
+        item = canvas_services_for(view).interaction.note_controller.create_text_note(
             QPointF(3.0, 4.0), "Scheme"
         )
 
@@ -123,9 +125,9 @@ class CanvasViewNoteWrapperContractTest(unittest.TestCase):
         fake_controller = _FakeNoteController()
         view = _make_canvas_note_view(scene)
 
-        view.services.note_controller = fake_controller
+        view.services.interaction.note_controller = fake_controller
 
-        controller = canvas_services_for(view).note_controller
+        controller = canvas_services_for(view).interaction.note_controller
         controller.update_text_note(item, "Updated")
         controller.begin_note_edit(item)
         controller.apply_text_style_to_selected()
@@ -182,7 +184,7 @@ class CanvasViewNoteWrapperContractTest(unittest.TestCase):
         )
         self.assertIsNotNone(item.data(20))
         self.assertTrue(item.data(20).isVisible())
-        view.services.selection_controller.update_note_selection_box.assert_called_once_with(
+        view.services.selection.selection_controller.update_note_selection_box.assert_called_once_with(
             item
         )
 

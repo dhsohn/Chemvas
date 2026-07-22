@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -100,7 +102,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
             mark_registry=CanvasMarkRegistry(),
             attach_scene_item=mock.Mock(side_effect=_attach),
         )
-        canvas.services = SimpleNamespace(
+        canvas.services = canvas_runtime_services(
             history_service=SimpleNamespace(push=pushed.append),
             scene_decoration_build_service=build_service,
             scene_item_controller=_FakeSceneItemController(canvas),
@@ -266,7 +268,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
             mark_registry=mark_registry,
             attach_scene_item=mock.Mock(side_effect=attach),
         )
-        canvas.services = SimpleNamespace(
+        canvas.services = canvas_runtime_services(
             history_service=history,
             scene_decoration_build_service=build_service,
             scene_item_controller=_FakeSceneItemController(canvas),
@@ -328,7 +330,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
             attach_scene_item=mock.Mock(side_effect=_attach),
             remove_scene_item=mock.Mock(side_effect=_remove),
         )
-        canvas.services = SimpleNamespace(
+        canvas.services = canvas_runtime_services(
             history_service=SimpleNamespace(push=mock.Mock()),
             scene_decoration_build_service=build_service,
             scene_item_controller=_FakeSceneItemController(canvas),
@@ -387,7 +389,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
             mark_registry=mark_registry,
             tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
         )
-        canvas.services = SimpleNamespace(
+        canvas.services = canvas_runtime_services(
             history_service=history,
             scene_decoration_build_service=build_service,
         )
@@ -395,7 +397,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
             canvas,
             graph_service=SimpleNamespace(),
         )
-        canvas.services.scene_item_controller = lifecycle
+        canvas.services.scene_view.scene_item_controller = lifecycle
 
         result = _scene_decoration_service(canvas).add_mark(
             QPointF(4.0, 5.0),
@@ -459,7 +461,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
             mark_registry=mark_registry,
             tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
         )
-        canvas.services = SimpleNamespace(
+        canvas.services = canvas_runtime_services(
             history_service=history,
             scene_decoration_build_service=build_service,
         )
@@ -467,7 +469,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
             canvas,
             graph_service=SimpleNamespace(),
         )
-        canvas.services.scene_item_controller = lifecycle
+        canvas.services.scene_view.scene_item_controller = lifecycle
 
         with self.assertRaisesRegex(
             RuntimeError,
@@ -543,7 +545,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
             attach_scene_item=attach,
             remove_scene_item=remove,
         )
-        canvas.services = SimpleNamespace(
+        canvas.services = canvas_runtime_services(
             history_service=history,
             scene_decoration_build_service=SimpleNamespace(
                 build_mark_item=mock.Mock(return_value=new_mark),
@@ -608,7 +610,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
             attach_scene_item=mock.Mock(side_effect=attach_then_exit),
             remove_scene_item=mock.Mock(side_effect=remove),
         )
-        canvas.services = SimpleNamespace(
+        canvas.services = canvas_runtime_services(
             history_service=SimpleNamespace(
                 state=SimpleNamespace(history=[], redo_stack=[]),
                 push=mock.Mock(),
@@ -655,7 +657,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
             tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
             attach_scene_item=attach,
         )
-        canvas.services = SimpleNamespace(
+        canvas.services = canvas_runtime_services(
             history_service=SimpleNamespace(
                 state=SimpleNamespace(history=[], redo_stack=[]),
                 push=mock.Mock(),
@@ -716,7 +718,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
             ts_bracket_items=[],
             attach_scene_item=mock.Mock(side_effect=_attach),
         )
-        canvas.services = SimpleNamespace(
+        canvas.services = canvas_runtime_services(
             history_service=SimpleNamespace(push=pushed.append),
             scene_decoration_build_service=build_service,
             scene_item_controller=_FakeSceneItemController(canvas),
@@ -764,7 +766,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
             attach_scene_item=mock.Mock(side_effect=attach),
         )
-        canvas.services = SimpleNamespace(
+        canvas.services = canvas_runtime_services(
             history_service=SimpleNamespace(push=pushed.append),
             scene_decoration_build_service=SimpleNamespace(
                 build_orbital_items=build_orbital_items,

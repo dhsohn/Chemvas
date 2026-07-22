@@ -12,10 +12,6 @@ from chemvas.core.history import HistoryTransactionRestoreResult
 from chemvas.domain.document import Atom, MoleculeModel
 from chemvas.ui.canvas_hover_state import hover_state_for
 from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.canvas_rotation_preview_state import (
-    RotationPreviewItemSnapshot,
-    rotation_preview_state_for,
-)
 from chemvas.ui.canvas_rotation_state import rotation_state_for
 from chemvas.ui.canvas_scene_items_state import note_items_for, selected_notes_for
 from chemvas.ui.canvas_smiles_input_state import (
@@ -37,7 +33,6 @@ from PyQt6.QtCore import QCoreApplication, QEvent, QPointF, QRectF
 from PyQt6.QtGui import QTransform
 from PyQt6.QtWidgets import (
     QApplication,
-    QGraphicsItemGroup,
     QGraphicsRectItem,
     QGraphicsScene,
 )
@@ -73,8 +68,8 @@ def _service_for(canvas: _FakeCanvas, **overrides) -> InsertSmilesService:
         canvas,
         insert_state=canvas.insert_state,
         insert_commit_service=overrides.pop("insert_commit_service", mock.Mock()),
-        graph_service=canvas.services.canvas_graph_service,
-        structure_build_service=canvas.services.structure_build_service,
+        graph_service=canvas.services.graph.canvas_graph_service,
+        structure_build_service=canvas.services.structure.structure_build_service,
         history_service=canvas.services.history_service,
         session_state=lambda: _session_state(canvas),
         apply_session_state=lambda state: _apply_state(canvas, state),
@@ -100,12 +95,12 @@ def _live_canvas_load_snapshot(
     atom_id = original_model.add_atom("N", 12.0, 34.0)
     original_atom = original_model.atoms[atom_id]
     set_last_smiles_input_for(canvas, "old-smiles")
-    note = canvas.services.note_controller.create_text_note(
+    note = canvas.services.interaction.note_controller.create_text_note(
         QPointF(18.0, 27.0),
         "original note",
     )
     note.setSelected(True)
-    canvas.services.selection_controller.select_note(note)
+    canvas.services.selection.selection_controller.select_note(note)
 
     scene = canvas.scene()
 
@@ -139,17 +134,6 @@ def _live_canvas_load_snapshot(
     hover_state.items = [hover_item]
     hover_state.atom_id = atom_id
     hover_state.bond_id = 9
-
-    rotation_preview = rotation_preview_state_for(canvas)
-    rotation_child = QGraphicsRectItem(QRectF(160.0, 0.0, 5.0, 5.0))
-    rotation_group = QGraphicsItemGroup()
-    rotation_group.addToGroup(rotation_child)
-    scene.addItem(rotation_group)
-    rotation_preview.group = rotation_group
-    rotation_preview.position_snapshots = [
-        RotationPreviewItemSnapshot(rotation_child, {"x": 160.0})
-    ]
-    rotation_preview.center = QPointF(162.5, 2.5)
 
     rotation = rotation_state_for(canvas)
     rotation.base_coords = {atom_id: (12.0, 34.0, 5.0)}
@@ -228,15 +212,6 @@ def _live_canvas_load_snapshot(
         "hover_state": hover_state,
         "hover_items": (hover_state.items, list(hover_state.items)),
         "hover_values": (hover_state.style, hover_state.atom_id, hover_state.bond_id),
-        "rotation_preview": rotation_preview,
-        "rotation_preview_positions": (
-            rotation_preview.position_snapshots,
-            list(rotation_preview.position_snapshots),
-        ),
-        "rotation_preview_values": (
-            rotation_preview.group,
-            rotation_preview.center,
-        ),
         "rotation_state": rotation,
         "rotation_containers": {
             name: (getattr(rotation, name), getattr(rotation, name).copy())
@@ -322,15 +297,6 @@ def _assert_live_canvas_load_snapshot(
     assert (hover_state.style, hover_state.atom_id, hover_state.bond_id) == state[
         "hover_values"
     ]
-
-    rotation_preview = rotation_preview_state_for(canvas)
-    assert rotation_preview is state["rotation_preview"]
-    original_positions, original_position_contents = state["rotation_preview_positions"]
-    assert rotation_preview.position_snapshots is original_positions
-    assert rotation_preview.position_snapshots == original_position_contents
-    original_group, original_center = state["rotation_preview_values"]
-    assert rotation_preview.group is original_group
-    assert rotation_preview.center is original_center
 
     rotation = rotation_state_for(canvas)
     assert rotation is state["rotation_state"]
@@ -886,7 +852,7 @@ def test_load_smiles_preserves_live_qt_document_identity_across_base_exceptions_
     app.setQuitOnLastWindowClosed(False)
     canvas = CanvasView()
     try:
-        service = canvas.services.insert_controller.smiles_service
+        service = canvas.services.structure.insert_controller.smiles_service
         state = _live_canvas_load_snapshot(canvas, service)
         replacement_model = MoleculeModel(
             atoms={0: Atom("C", 0.0, 0.0)},
@@ -896,7 +862,9 @@ def test_load_smiles_preserves_live_qt_document_identity_across_base_exceptions_
             raise failure_type(f"{failure_stage} interrupted")
 
         if failure_stage == "clear":
-            original_clear = canvas.services.canvas_scene_reset_service.clear_scene
+            original_clear = (
+                canvas.services.document.canvas_scene_reset_service.clear_scene
+            )
 
             def clear_then_fail(_canvas) -> None:
                 original_clear()
@@ -981,8 +949,6 @@ def test_load_smiles_preserves_live_qt_document_identity_across_base_exceptions_
         assert not service.insert_state.template_active
         assert service.insert_state.template_preview_items == []
         assert hover_state_for(canvas).items == []
-        assert rotation_preview_state_for(canvas).group is None
-        assert rotation_preview_state_for(canvas).position_snapshots == []
         assert rotation_state_for(canvas).projection_center_3d is None
         assert rotation_state_for(canvas).projection_anchor_2d is None
         assert service.history.state.history is state["history"]
@@ -999,7 +965,7 @@ def test_load_smiles_clears_detached_highlight_and_pending_selection_info() -> N
     app.setQuitOnLastWindowClosed(False)
     canvas = CanvasView()
     try:
-        service = canvas.services.insert_controller.smiles_service
+        service = canvas.services.structure.insert_controller.smiles_service
         old_highlight = QGraphicsRectItem(QRectF(0.0, 0.0, 10.0, 10.0))
         canvas.scene().addItem(old_highlight)
 
@@ -1056,8 +1022,8 @@ def test_load_smiles_success_releases_detached_original_qt_wrappers() -> None:
     app.setQuitOnLastWindowClosed(False)
     canvas = CanvasView()
     try:
-        service = canvas.services.insert_controller.smiles_service
-        note = canvas.services.note_controller.create_text_note(
+        service = canvas.services.structure.insert_controller.smiles_service
+        note = canvas.services.interaction.note_controller.create_text_note(
             QPointF(1.0, 2.0),
             "temporary original",
         )

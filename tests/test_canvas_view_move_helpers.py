@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -74,7 +76,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
     def _bind_move_controller(self, view, controller=None):
         services = getattr(view, "services", None)
         if services is None:
-            services = SimpleNamespace()
+            services = canvas_runtime_services()
             view.services = services
         if not hasattr(services, "hit_testing_service"):
             services.hit_testing_service = SimpleNamespace(
@@ -119,7 +121,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         self.assertEqual(atom_item.moves, [(2.0, 3.0)])
         view.bond_renderer.redraw_bond.assert_called_once_with(0)
         view.refresh_selection_outline.assert_not_called()
-        view.services.hit_testing_service.mark_spatial_index_dirty.assert_called_once_with()
+        view.services.selection.hit_testing_service.mark_spatial_index_dirty.assert_called_once_with()
 
     def test_move_item_updates_bond_mark_and_scene_item_payloads(self) -> None:
         bond_item = _FakeItem("bond", data1=0)
@@ -142,7 +144,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
                 bonds=[Bond(1, 2, 1), None],
             ),
             bond_renderer=SimpleNamespace(redraw_connected_bonds=mock.Mock()),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 scene_decoration_build_service=SimpleNamespace(
                     mark_center=mock.Mock(return_value=QPointF(15.0, 18.0))
                 )
@@ -221,7 +223,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
                 bonds=[Bond(1, 2, 1), None],
             ),
             bond_renderer=SimpleNamespace(redraw_connected_bonds=mock.Mock()),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 scene_decoration_build_service=SimpleNamespace(
                     mark_center=mock.Mock(return_value=QPointF(15.0, 18.0))
                 )
@@ -370,7 +372,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         view = SimpleNamespace(
             model=SimpleNamespace(atoms={1: Atom("C", 1.0, 2.0)}),
             mark_registry=CanvasMarkRegistry({1: [mark]}),
-            services=SimpleNamespace(hit_testing_service=hit_testing_service),
+            services=canvas_runtime_services(hit_testing_service=hit_testing_service),
         )
         set_atom_items_for(view, {1: label})
         set_atom_dots_for(view, {1: dot})

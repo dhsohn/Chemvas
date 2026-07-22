@@ -22,15 +22,15 @@ follow the ADR instead of copying the flat `core` / `ui` layout below.
 - Main-window composition: `chemvas.shell.main_window` owns the thin Qt shell; `chemvas.bootstrap` owns runtime/service assembly, window registration, document opening, and application startup. Qt file-open events enter through `chemvas.adapters.qt`.
 
 ## Transitional Legacy UI Discipline (ports / access / state / services)
-The `app/chemvas/ui` package is deliberately split into many small modules with fixed roles. The goal is that `CanvasView` and `MainWindow` stay thin Qt shells (no god object), every service is constructible headlessly (the full test suite runs in ~20s against `SimpleNamespace` canvases), and all dependencies are explicit.
+The `app/chemvas/ui` package retains small role modules where they separate real legacy responsibilities. The goal is that `CanvasView` and `MainWindow` stay thin Qt shells (no god object), every service is constructible headlessly, and all dependencies are explicit.
 
 These rules remain migration constraints for code that still lives in the flat
 legacy package. They are not a template that every new feature must reproduce:
 new feature packages create role modules only when the boundary is useful.
 
-- **State modules** (`*_state.py`): unmigrated concerns use one dataclass plus a `<name>_state_for(canvas)` accessor. Those accessors go through `ensure_canvas_state(canvas, name, factory)` (`chemvas.ui.canvas_state_lookup.py`), which uses a single name for lookup and attach. On real canvases state lives in the eagerly-built, strict `CanvasRuntimeState` container (`chemvas.ui.canvas_runtime_state.py`); an unknown field fails loudly instead of creating a shadow copy. A handful of states (`model`, `renderer`, `bond_renderer`, `rdkit`) are deliberately stored as direct canvas attributes with `runtime_field=False`. Migrated hover state is owned by `chemvas.features.hover`; its thin UI leaf reads the required runtime field directly and never attaches or falls back. `test_state_accessor_names_match_runtime_state_container` enforces the remaining `ensure_canvas_state` names.
+- **State modules** (`*_state.py`): unmigrated concerns use one dataclass plus a `<name>_state_for(canvas)` accessor. Those accessors go through `ensure_canvas_state(canvas, name, factory)` (`chemvas.ui.canvas_state_lookup.py`), which uses a single name for lookup and attach. On real canvases state lives in the eagerly-built, strict `CanvasRuntimeState` container (`chemvas.ui.canvas_runtime_state.py`); an unknown field fails loudly instead of creating a shadow copy. Plain-object attachment is limited to headless legacy collaborators and is removed when the final legacy state accessor moves to a canonical feature runtime. A handful of states (`model`, `renderer`, `bond_renderer`, `rdkit`) are deliberately stored as direct canvas attributes with `runtime_field=False`. Migrated hover state is owned by `chemvas.features.hover`; its thin UI leaf reads the required runtime field directly and never attaches or falls back. `test_state_accessor_names_match_runtime_state_container` enforces the remaining `ensure_canvas_state` names.
 - **Access modules** (`*_access.py`): free functions (`foo_for(canvas)`) wrapping one operation. They must not reach into `canvas.services` directly; service lookup is delegated to the matching ports module.
-- **Ports modules** (`*_ports.py`): the only modules that resolve the service container (`canvas_services_for` / `window` private storage). Everything else receives collaborators via injection or calls a port. Production ports read the grouped `CanvasRuntimeServices` API (for example, `services.auxiliary.atom_label_service`); the old flat service names are a temporary compatibility surface for lightweight fixtures and are forbidden in production consumers by the architecture ratchet.
+- **Ports modules** (`*_ports.py`): the only modules that resolve the service container (`canvas_services_for` / `window` private storage). Everything else receives collaborators via injection or calls a port. Production ports read only the grouped `CanvasRuntimeServices` API (with single runtimes such as `atom_label_service` stored directly). Flat service aliases and duck-typed production adapters are removed; focused tests build partial canonical runtimes with `tests/runtime_services.py`.
 - **Services and controllers**: constructed once per canvas in `chemvas.ui.canvas_service_composer.py` with explicit keyword injection — no service locator inside services, no `=None` collaborator defaults that hide a missing wire. The composer stores cohesive legacy groups as bundles in `CanvasRuntimeServices`; a feature with one runtime, such as hover, is stored directly instead of receiving a one-member bundle.
 - **core is UI-free, with one recorded Qt migration debt**: `app/chemvas/core` must not import `ui` at module level (a lazily resolved protocol implementation is the one sanctioned exception, see `chemvas.core.history.py`). `chemvas.core.renderer.py` is the only existing direct Qt dependency; it is frozen as transitional debt and will move to the Qt adapter during the namespace migration. New core-to-Qt dependencies are forbidden.
 
@@ -40,6 +40,16 @@ pin removed names or implementation locations; each feature migration replaces
 those checks with package/public-API contracts before retiring them.
 
 Known trade-offs of this discipline (accepted deliberately): a real indirection tax (~20% of ui LOC is wiring) and weak static typing at the canvas seam (`canvas: Any`). When an invariant spans several of these small modules (e.g. the derived graph index), the consistency contract must be written down in one owner module — see `chemvas.ui.graph_index_operations.py` and `CanvasGraphService.bond_id_between_with_repair` for the pattern.
+
+## Feature Qt Migration Inventory
+
+The target boundary keeps concrete Qt integration in `chemvas.adapters`, but the
+ongoing namespace migration still has direct Qt imports in a fixed set of feature
+implementation modules. `FEATURE_QT_MIGRATION_ALLOWLIST` in
+`tests/test_package_dependencies.py` is the executable inventory: new modules may
+not join it, and each adapter migration removes its module from the set. When the
+set becomes empty, replace the inventory check with an unconditional ban on Qt
+imports from `chemvas.features`.
 
 ## Transaction and Recovery Ownership
 

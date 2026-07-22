@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from chemvas.ui.canvas_auxiliary_service_bundle import build_canvas_auxiliary_services
+from chemvas.ui.atom_label_service import AtomLabelService
 from chemvas.ui.canvas_document_service_bundle import build_canvas_document_services
 from chemvas.ui.canvas_graph_service_bundle import build_canvas_graph_services
 from chemvas.ui.canvas_input_service_bundle import build_canvas_input_services
@@ -32,7 +32,7 @@ def build_canvas_services(
     history_service,
 ) -> CanvasRuntimeServices:
     builders = CanvasServiceBuilders(
-        build_canvas_auxiliary_services=build_canvas_auxiliary_services,
+        build_atom_label_service=AtomLabelService,
         build_canvas_document_services=build_canvas_document_services,
         build_canvas_graph_services=build_canvas_graph_services,
         build_canvas_input_services=build_canvas_input_services,
@@ -59,12 +59,8 @@ def attach_canvas_services(canvas: Any, services: CanvasRuntimeServices) -> None
     canvas.services = services
 
 
-CanvasServices = CanvasRuntimeServices
-
-
 __all__ = [
     "CanvasRuntimeServices",
-    "CanvasServices",
     "attach_canvas_services",
     "build_canvas_services",
 ]

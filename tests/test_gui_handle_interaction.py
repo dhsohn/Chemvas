@@ -58,7 +58,7 @@ class GuiHandleInteractionTest(unittest.TestCase):
     ) -> None:
         canvas_services_for(
             active_canvas_for_window(self.window)
-        ).geometry_controller.set_bond_length(20.0)
+        ).scene_view.geometry_controller.set_bond_length(20.0)
         set_tool_setting_for(
             active_canvas_for_window(self.window), "active_orbital_type", "p"
         )
@@ -79,7 +79,7 @@ class GuiHandleInteractionTest(unittest.TestCase):
 
         active_canvas_for_window(
             self.window
-        ).services.handle_controller.update_handle_drag(
+        ).services.handles.handle_controller.update_handle_drag(
             scale_handle, QPointF(40.0, 0.0)
         )
 
@@ -97,7 +97,7 @@ class GuiHandleInteractionTest(unittest.TestCase):
     def test_show_curved_handles_and_drag_endpoint_updates_arrow_geometry(self) -> None:
         canvas_services_for(
             active_canvas_for_window(self.window)
-        ).geometry_controller.set_bond_length(20.0)
+        ).scene_view.geometry_controller.set_bond_length(20.0)
         curved = add_arrow_for(
             active_canvas_for_window(self.window),
             QPointF(0.0, 0.0),
@@ -119,7 +119,7 @@ class GuiHandleInteractionTest(unittest.TestCase):
 
         active_canvas_for_window(
             self.window
-        ).services.handle_controller.update_handle_drag(
+        ).services.handles.handle_controller.update_handle_drag(
             start_handle, QPointF(30.0, -10.0)
         )
 

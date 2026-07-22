@@ -34,6 +34,8 @@ from chemvas.ui.insert_smiles_service import MAX_SMILES_INPUT_LENGTH
 from chemvas.ui.sheet_setup_state import sheet_setup_state_for
 from PyQt6.QtCore import QPointF, QRectF
 
+from tests.runtime_services import canvas_runtime_services
+
 
 def _point_tuples(points) -> list[tuple[float, float]]:
     return [(point.x(), point.y()) for point in points]
@@ -143,7 +145,7 @@ class _FakeCanvas:
         self.restored_scene_items: list[_FakeSceneItem] = []
         self.restored_marks: list[dict] = []
         self.restored_note_states: list[dict] = []
-        self.services = SimpleNamespace(
+        self.services = canvas_runtime_services(
             history_service=self.history_service,
             atom_label_service=SimpleNamespace(
                 add_or_update_atom_label=self.add_or_update_atom_label,
@@ -338,11 +340,13 @@ class _FakeCanvas:
 
 def _controller_for(canvas: _FakeCanvas, **kwargs) -> InsertController:
     hit_testing_service = kwargs.pop(
-        "hit_testing_service", canvas.services.hit_testing_service
+        "hit_testing_service", canvas.services.selection.hit_testing_service
     )
-    graph_service = kwargs.pop("graph_service", canvas.services.canvas_graph_service)
+    graph_service = kwargs.pop(
+        "graph_service", canvas.services.graph.canvas_graph_service
+    )
     structure_build_service = kwargs.pop(
-        "structure_build_service", canvas.services.structure_build_service
+        "structure_build_service", canvas.services.structure.structure_build_service
     )
     return InsertController(
         canvas,
@@ -554,7 +558,7 @@ class InsertControllerTest(unittest.TestCase):
 
         canvas.clear_scene.assert_called_once_with()
         canvas.rebuild_bond_adjacency.assert_called_once_with()
-        canvas.services.structure_build_service.render_model.assert_called_once_with()
+        canvas.services.structure.structure_build_service.render_model.assert_called_once_with()
         self.assertEqual(last_smiles_input_for(canvas), "C")
         command = canvas.push_command.call_args.args[0]
         self.assertIsInstance(command, CompositeCommand)
@@ -633,7 +637,7 @@ class InsertControllerTest(unittest.TestCase):
             rotation_state_for(canvas).reset_all()
 
         canvas.clear_scene = Mock(side_effect=_clear_scene)
-        canvas.services.structure_build_service.render_model = Mock(
+        canvas.services.structure.structure_build_service.render_model = Mock(
             side_effect=RuntimeError("render failed")
         )
         controller = _controller_for(canvas)
@@ -747,7 +751,7 @@ class InsertControllerTest(unittest.TestCase):
             raise RuntimeError("mark failed")
 
         canvas.clear_scene = Mock(side_effect=_clear_scene)
-        canvas.services.canvas_mark_scene_service.add_mark_for_atom = (
+        canvas.services.scene_decoration.canvas_mark_scene_service.add_mark_for_atom = (
             _add_first_mark_then_fail
         )
         controller = _controller_for(canvas)
@@ -777,7 +781,7 @@ class InsertControllerTest(unittest.TestCase):
             set_scene_item_collection_for(canvas, "note_items", [])
 
         canvas.clear_scene = Mock(side_effect=_clear_scene)
-        canvas.services.structure_build_service.render_model = Mock(
+        canvas.services.structure.structure_build_service.render_model = Mock(
             side_effect=RuntimeError("render failed")
         )
         controller = _controller_for(canvas)
@@ -1118,17 +1122,17 @@ class InsertControllerTest(unittest.TestCase):
         ):
             controller.commit_template_insert(QPointF(*request.cursor_pos))
 
-        canvas.services.structure_build_service.add_ring_from_points.assert_called_once()
+        canvas.services.structure.structure_build_service.add_ring_from_points.assert_called_once()
         self.assertEqual(
             _point_tuples(
-                canvas.services.structure_build_service.add_ring_from_points.call_args.args[
+                canvas.services.structure.structure_build_service.add_ring_from_points.call_args.args[
                     0
                 ]
             ),
             _points(5),
         )
         canvas.add_benzene_ring.assert_not_called()
-        canvas.services.structure_build_service.add_atom_with_merge.assert_not_called()
+        canvas.services.structure.structure_build_service.add_atom_with_merge.assert_not_called()
         self.assertTrue(canvas.insert_state.template_active)
         self.assertEqual(canvas.insert_state.template_ring_size, 5)
         self.assertEqual(canvas.insert_state.template_ring_style, "regular")
@@ -1166,7 +1170,7 @@ class InsertControllerTest(unittest.TestCase):
         self.assertEqual((args.args[0].x(), args.args[0].y()), (8.0, 9.0))
         self.assertEqual(args.kwargs["attach_bond_id"], 4)
         self.assertEqual(args.kwargs["before_smiles_input"], "before")
-        canvas.services.structure_build_service.add_ring_from_points.assert_not_called()
+        canvas.services.structure.structure_build_service.add_ring_from_points.assert_not_called()
         canvas._record_additions.assert_not_called()
         self.assertTrue(canvas.insert_state.template_active)
         self.assertEqual(canvas.insert_state.template_ring_size, 6)
@@ -1222,9 +1226,7 @@ class InsertControllerTest(unittest.TestCase):
             canvas.model.next_atom_id = max(canvas.model.next_atom_id, atom_id + 1)
             return atom_id
 
-        canvas.services.structure_build_service.add_atom_with_merge.side_effect = (
-            add_atom_with_merge
-        )
+        canvas.services.structure.structure_build_service.add_atom_with_merge.side_effect = add_atom_with_merge
         canvas.bond_exists.side_effect = lambda a_id, b_id: {a_id, b_id} == {10, 11}
         controller = _controller_for(canvas)
 
@@ -1246,18 +1248,17 @@ class InsertControllerTest(unittest.TestCase):
 
         expected_merge = [(1, 1.0, 2.0), (2, 3.0, 4.0)]
         self.assertEqual(
-            canvas.services.structure_build_service.add_atom_with_merge.call_count, 6
+            canvas.services.structure.structure_build_service.add_atom_with_merge.call_count,
+            6,
         )
         self.assertEqual(
             [
                 _point_tuples([call.args[0]])[0]
-                for call in canvas.services.structure_build_service.add_atom_with_merge.call_args_list
+                for call in canvas.services.structure.structure_build_service.add_atom_with_merge.call_args_list
             ],
             _points(6, start=5.0),
         )
-        for (
-            call
-        ) in canvas.services.structure_build_service.add_atom_with_merge.call_args_list:
+        for call in canvas.services.structure.structure_build_service.add_atom_with_merge.call_args_list:
             self.assertEqual(call.args[1], "C")
             self.assertEqual(call.args[2], expected_merge)
         self.assertEqual(
@@ -1268,7 +1269,7 @@ class InsertControllerTest(unittest.TestCase):
             [call.args[0] for call in canvas._add_bond_graphics.call_args_list],
             [1, 2, 3, 4, 5],
         )
-        canvas.services.structure_build_service.add_ring_from_points.assert_not_called()
+        canvas.services.structure.structure_build_service.add_ring_from_points.assert_not_called()
         ring_items = scene_item_collection_for(canvas, "ring_items")
         self.assertEqual(len(ring_items), 1)
         self.assertEqual(ring_items[0].data(2), [10, 11, 12, 13, 14, 15])
@@ -1302,9 +1303,7 @@ class InsertControllerTest(unittest.TestCase):
             canvas.model.next_atom_id = max(canvas.model.next_atom_id, atom_id + 1)
             return atom_id
 
-        canvas.services.structure_build_service.add_atom_with_merge.side_effect = (
-            add_atom_with_merge
-        )
+        canvas.services.structure.structure_build_service.add_atom_with_merge.side_effect = add_atom_with_merge
         controller = _controller_for(canvas)
         request = TemplateInsertRequest(
             ring_size=5,
@@ -1330,11 +1329,10 @@ class InsertControllerTest(unittest.TestCase):
 
         expected_merge = [(1, 1.0, 2.0)]
         self.assertEqual(
-            canvas.services.structure_build_service.add_atom_with_merge.call_count, 5
+            canvas.services.structure.structure_build_service.add_atom_with_merge.call_count,
+            5,
         )
-        for (
-            call
-        ) in canvas.services.structure_build_service.add_atom_with_merge.call_args_list:
+        for call in canvas.services.structure.structure_build_service.add_atom_with_merge.call_args_list:
             self.assertEqual(call.args[1], "C")
             self.assertEqual(call.args[2], expected_merge)
         self.assertEqual(
@@ -1360,7 +1358,7 @@ class InsertControllerTest(unittest.TestCase):
         canvas.insert_state.template_active = True
         canvas.insert_state.template_ring_size = 6
         canvas.insert_state.template_ring_style = "chair"
-        canvas.services.hit_testing_service.find_bond_near.return_value = 5
+        canvas.services.selection.hit_testing_service.find_bond_near.return_value = 5
         controller = _controller_for(canvas)
         with (
             patch(
@@ -1429,7 +1427,7 @@ class InsertControllerTest(unittest.TestCase):
         canvas.insert_state.template_active = True
         canvas.insert_state.template_ring_size = 6
         injected_hit_testing = SimpleNamespace(find_bond_near=Mock(return_value=7))
-        canvas.services.hit_testing_service = SimpleNamespace(
+        canvas.services.selection.hit_testing_service = SimpleNamespace(
             find_bond_near=Mock(
                 side_effect=AssertionError("registry service should not be used")
             )
@@ -1447,7 +1445,7 @@ class InsertControllerTest(unittest.TestCase):
         injected_hit_testing.find_bond_near.assert_called_once_with(
             QPointF(1.0, 2.0), 7.0
         )
-        canvas.services.hit_testing_service.find_bond_near.assert_not_called()
+        canvas.services.selection.hit_testing_service.find_bond_near.assert_not_called()
         canvas.find_bond_near.assert_not_called()
 
     def test_commit_template_insert_cancels_for_missing_request_or_plan(self) -> None:

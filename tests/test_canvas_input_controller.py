@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -113,7 +115,7 @@ class _Canvas(QGraphicsView):
             handle_shortcut=mock.Mock(return_value=False)
         )
         self.tool_mode_controller = SimpleNamespace(set_tool=mock.Mock())
-        self.services = SimpleNamespace(
+        self.services = canvas_runtime_services(
             history_service=self.history_service,
             insert_controller=insert_controller,
             scene_clipboard_controller=scene_clipboard_controller,
@@ -168,8 +170,8 @@ class _Canvas(QGraphicsView):
 def _input_controller(canvas: _Canvas) -> CanvasInputController:
     return CanvasInputController(
         canvas,
-        scene_delete_controller=canvas.services.scene_delete_controller,
-        scene_clipboard_controller=canvas.services.scene_clipboard_controller,
+        scene_delete_controller=canvas.services.scene_operations.scene_delete_controller,
+        scene_clipboard_controller=canvas.services.scene_operations.scene_clipboard_controller,
         history_service=canvas.services.history_service,
         hover_controller=canvas.hover_controller,
         chemdraw_shortcut_service=canvas.chemdraw_shortcut_service,
@@ -207,7 +209,7 @@ class CanvasInputControllerTest(unittest.TestCase):
         canvas.insert_state.template_active = True
         template_event = _FakeEvent(key=Qt.Key.Key_Escape)
         controller.key_press_event(template_event)
-        canvas.services.insert_controller.cancel_template_insert.assert_called_once_with()
+        canvas.services.structure.insert_controller.cancel_template_insert.assert_called_once_with()
         template_event.accept.assert_called_once_with()
 
         canvas = _Canvas()
@@ -215,7 +217,7 @@ class CanvasInputControllerTest(unittest.TestCase):
         canvas.insert_state.smiles_active = True
         smiles_event = _FakeEvent(key=Qt.Key.Key_Escape)
         controller.key_press_event(smiles_event)
-        canvas.services.insert_controller.cancel_smiles_insert.assert_called_once_with()
+        canvas.services.structure.insert_controller.cancel_smiles_insert.assert_called_once_with()
         smiles_event.accept.assert_called_once_with()
 
         canvas = _Canvas()
@@ -232,8 +234,8 @@ class CanvasInputControllerTest(unittest.TestCase):
         paste_event = _FakeEvent(
             key=Qt.Key.Key_V, matches={QKeySequence.StandardKey.Paste}
         )
-        canvas.services.scene_clipboard_controller.copy_selection_to_clipboard.return_value = True
-        canvas.services.scene_clipboard_controller.paste_selection_from_clipboard.return_value = True
+        canvas.services.scene_operations.scene_clipboard_controller.copy_selection_to_clipboard.return_value = True
+        canvas.services.scene_operations.scene_clipboard_controller.paste_selection_from_clipboard.return_value = True
 
         controller.key_press_event(undo_event)
         controller.key_press_event(redo_event)
@@ -242,8 +244,8 @@ class CanvasInputControllerTest(unittest.TestCase):
 
         canvas.history_service.undo.assert_called_once_with()
         canvas.history_service.redo.assert_called_once_with()
-        canvas.services.scene_clipboard_controller.copy_selection_to_clipboard.assert_called_once_with()
-        canvas.services.scene_clipboard_controller.paste_selection_from_clipboard.assert_called_once_with()
+        canvas.services.scene_operations.scene_clipboard_controller.copy_selection_to_clipboard.assert_called_once_with()
+        canvas.services.scene_operations.scene_clipboard_controller.paste_selection_from_clipboard.assert_called_once_with()
         canvas.undo.assert_not_called()
         canvas.redo.assert_not_called()
         canvas.copy_selection_to_clipboard.assert_not_called()
@@ -325,10 +327,10 @@ class CanvasInputControllerTest(unittest.TestCase):
         zoom_out.assert_called_once_with(canvas)
 
         cut_event = _FakeEvent(key=Qt.Key.Key_X, matches={QKeySequence.StandardKey.Cut})
-        canvas.services.scene_clipboard_controller.copy_selection_to_clipboard.return_value = True
+        canvas.services.scene_operations.scene_clipboard_controller.copy_selection_to_clipboard.return_value = True
         controller.key_press_event(cut_event)
-        canvas.services.scene_clipboard_controller.copy_selection_to_clipboard.assert_called_once_with()
-        canvas.services.scene_delete_controller.delete_selected_items.assert_called_once_with()
+        canvas.services.scene_operations.scene_clipboard_controller.copy_selection_to_clipboard.assert_called_once_with()
+        canvas.services.scene_operations.scene_delete_controller.delete_selected_items.assert_called_once_with()
         cut_event.accept.assert_called_once_with()
 
         canvas = _Canvas()
@@ -340,7 +342,7 @@ class CanvasInputControllerTest(unittest.TestCase):
             QGraphicsView, "keyPressEvent", new=mock.Mock(return_value=None)
         ):
             controller.key_press_event(empty_cut_event)
-        canvas.services.scene_delete_controller.delete_selected_items.assert_not_called()
+        canvas.services.scene_operations.scene_delete_controller.delete_selected_items.assert_not_called()
         empty_cut_event.accept.assert_not_called()
 
     def test_key_press_event_escape_copy_and_paste_false_paths_fall_through(
@@ -375,7 +377,7 @@ class CanvasInputControllerTest(unittest.TestCase):
         canvas.add_selected_item()
         selected_delete_event = _FakeEvent(key=Qt.Key.Key_Delete)
         controller.key_press_event(selected_delete_event)
-        canvas.services.scene_delete_controller.delete_selected_items.assert_called_once_with()
+        canvas.services.scene_operations.scene_delete_controller.delete_selected_items.assert_called_once_with()
         canvas.delete_selected_items.assert_not_called()
         selected_delete_event.accept.assert_called_once_with()
 
@@ -387,7 +389,7 @@ class CanvasInputControllerTest(unittest.TestCase):
         set_selected_notes_for(canvas, [note])
         note_delete_event = _FakeEvent(key=Qt.Key.Key_Delete)
         controller.key_press_event(note_delete_event)
-        canvas.services.scene_delete_controller.delete_selected_items.assert_called_once_with()
+        canvas.services.scene_operations.scene_delete_controller.delete_selected_items.assert_called_once_with()
         note_delete_event.accept.assert_called_once_with()
 
         canvas = _Canvas()
@@ -396,7 +398,7 @@ class CanvasInputControllerTest(unittest.TestCase):
         atom_delete_event = _FakeEvent(key=Qt.Key.Key_Delete)
         controller.key_press_event(atom_delete_event)
         canvas.hover_controller.clear_hover_highlight.assert_called_once_with()
-        canvas.services.scene_delete_controller.delete_atom.assert_called_once_with(
+        canvas.services.scene_operations.scene_delete_controller.delete_atom.assert_called_once_with(
             7, record=True
         )
         canvas.delete_atom.assert_not_called()
@@ -411,7 +413,7 @@ class CanvasInputControllerTest(unittest.TestCase):
             8, "C", show_carbon=False
         )
         canvas.clear_atom_label.assert_not_called()
-        canvas.services.scene_delete_controller.delete_atom.assert_not_called()
+        canvas.services.scene_operations.scene_delete_controller.delete_atom.assert_not_called()
         label_clear_event.accept.assert_called_once_with()
 
         canvas = _Canvas()
@@ -425,7 +427,7 @@ class CanvasInputControllerTest(unittest.TestCase):
         bond_delete_event = _FakeEvent(key=Qt.Key.Key_Delete)
         controller.key_press_event(bond_delete_event)
         canvas.hover_controller.clear_hover_highlight.assert_called_once_with()
-        canvas.services.scene_delete_controller.delete_bond.assert_called_once_with(
+        canvas.services.scene_operations.scene_delete_controller.delete_bond.assert_called_once_with(
             1, record=True
         )
         canvas.delete_bond.assert_not_called()
@@ -436,7 +438,7 @@ class CanvasInputControllerTest(unittest.TestCase):
         noop_delete_event = _FakeEvent(key=Qt.Key.Key_Delete)
         controller.key_press_event(noop_delete_event)
         noop_delete_event.accept.assert_called_once_with()
-        canvas.services.scene_delete_controller.delete_ring.assert_not_called()
+        canvas.services.scene_operations.scene_delete_controller.delete_ring.assert_not_called()
 
         canvas = _Canvas()
         canvas.chemdraw_shortcut_service.handle_shortcut.return_value = True

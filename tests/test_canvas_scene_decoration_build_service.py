@@ -183,7 +183,7 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
 
         # "none" becomes the active drawing default (not just a mutation of the
         # current selection), so background panels can be drawn borderless.
-        self.canvas.services.tool_mode_controller.set_shape_stroke("none")
+        self.canvas.services.input.tool_mode_controller.set_shape_stroke("none")
         self.assertEqual(
             tool_settings_state_for(self.canvas).active_shape_stroke, "none"
         )

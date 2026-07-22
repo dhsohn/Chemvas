@@ -17,6 +17,57 @@ from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parents[1] / "app"
 
+LEGACY_CANVAS_SERVICE_NAMES = frozenset(
+    {
+        "selection_controller",
+        "scene_item_controller",
+        "scene_clipboard_controller",
+        "scene_delete_controller",
+        "scene_transform_controller",
+        "insert_controller",
+        "input_controller",
+        "handle_controller",
+        "handle_overlay_service",
+        "handle_mutation_service",
+        "curved_arrow_path_service",
+        "selection_highlight_styler",
+        "move_controller",
+        "note_controller",
+        "pointer_controller",
+        "geometry_controller",
+        "canvas_atom_mutation_service",
+        "canvas_bond_mutation_service",
+        "chemdraw_shortcut_service",
+        "hit_testing_service",
+        "canvas_color_mutation_service",
+        "canvas_document_session_service",
+        "canvas_graph_service",
+        "canvas_history_recording_service",
+        "canvas_mark_scene_service",
+        "canvas_ring_fill_scene_service",
+        "canvas_scene_reset_service",
+        "structure_build_service",
+        "scene_decoration_build_service",
+        "scene_decoration_service",
+        "selection_rotation_controller",
+        "style_controller",
+        "tool_mode_controller",
+        "tools",
+    }
+)
+
+REMOVED_RUNTIME_COMPATIBILITY_FILES = frozenset(
+    {
+        "canvas_auxiliary_service_bundle.py",
+        "canvas_rotation_preview_controller.py",
+        "canvas_rotation_preview_state.py",
+        "canvas_service_types.py",
+        "scene_transform_logic.py",
+        "selection_access.py",
+        "structure_insert_service.py",
+    }
+)
+
 CANVAS_STATE_PROPERTIES = (
     "hover_items",
     "hover_atom_id",
@@ -1232,7 +1283,6 @@ def test_selection_flow_does_not_use_selection_context_facade() -> None:
     removed_context = APP_ROOT / "chemvas" / "ui" / "selection_context.py"
     paths = [
         APP_ROOT / "chemvas" / "ui" / "selection_controller.py",
-        APP_ROOT / "chemvas" / "ui" / "selection_access.py",
         APP_ROOT / "chemvas" / "ui" / "selection_service_access.py",
         APP_ROOT / "chemvas" / "ui" / "move_access.py",
         APP_ROOT / "chemvas" / "ui" / "selection_style_access.py",
@@ -1249,11 +1299,9 @@ def test_selection_flow_does_not_use_selection_context_facade() -> None:
     assert _matching_lines(pattern, paths) == []
 
 
-def test_selection_collection_helpers_live_outside_selection_access_facade() -> None:
-    access = APP_ROOT / "chemvas" / "ui" / "selection_access.py"
+def test_selection_collection_helpers_live_in_canonical_modules() -> None:
     collection = APP_ROOT / "chemvas" / "ui" / "selection_collection_access.py"
     service_access = APP_ROOT / "chemvas" / "ui" / "selection_service_access.py"
-    access_source = access.read_text()
     collection_source = collection.read_text()
     service_source = service_access.read_text()
     moved_defs = (
@@ -1272,10 +1320,8 @@ def test_selection_collection_helpers_live_outside_selection_access_facade() -> 
     )
 
     for helper in moved_defs:
-        assert f"def {helper}" not in access_source
         assert f"def {helper}" in collection_source
     for helper in service_defs:
-        assert f"def {helper}" not in access_source
         assert f"def {helper}" in service_source
 
 
@@ -1286,9 +1332,8 @@ def test_production_code_uses_selection_specific_access_modules_instead_of_compa
     import_pattern = re.compile(
         r"\bfrom ui\.selection_access import\b|\bimport ui\.selection_access\b"
     )
-    app_paths = [path for path in _app_python_files() if path != compat_facade]
-
-    assert _matching_lines(import_pattern, app_paths) == []
+    assert not compat_facade.exists()
+    assert _matching_lines(import_pattern, _app_python_files()) == []
 
 
 def test_access_helpers_use_canvas_service_accessor_instead_of_services_lookup() -> (
@@ -1297,7 +1342,6 @@ def test_access_helpers_use_canvas_service_accessor_instead_of_services_lookup()
     paths = [
         APP_ROOT / "chemvas" / "ui" / "input_view_access.py",
         APP_ROOT / "chemvas" / "ui" / "move_access.py",
-        APP_ROOT / "chemvas" / "ui" / "selection_access.py",
         APP_ROOT / "chemvas" / "ui" / "selection_service_access.py",
         APP_ROOT / "chemvas" / "ui" / "history_canvas_access.py",
     ]
@@ -1556,7 +1600,6 @@ def test_service_fallbacks_use_canvas_service_accessor_instead_of_services_looku
         APP_ROOT / "chemvas" / "ui" / "selection_structure_service.py",
         APP_ROOT / "chemvas" / "ui" / "structure_bond_build_service.py",
         APP_ROOT / "chemvas" / "ui" / "structure_build_service.py",
-        APP_ROOT / "chemvas" / "ui" / "structure_insert_service.py",
     ]
     pattern = re.compile(
         r"\b(?:self\.)?canvas\.services\."
@@ -1585,7 +1628,6 @@ def test_move_controller_collaborators_do_not_lookup_canvas_services() -> None:
 def test_explicit_service_collaborators_do_not_lookup_canvas_services() -> None:
     paths = [
         APP_ROOT / "chemvas" / "ui" / "canvas_style_controller.py",
-        APP_ROOT / "chemvas" / "ui" / "structure_insert_service.py",
         APP_ROOT / "chemvas" / "ui" / "canvas_tool_mode_controller.py",
     ]
     pattern = re.compile(
@@ -1962,7 +2004,6 @@ def test_canvas_services_delegates_scene_operation_service_assembly_to_bundle() 
 
 def test_scene_ops_controller_stays_out_of_production_service_graph() -> None:
     paths = [
-        APP_ROOT / "chemvas" / "ui" / "canvas_service_types.py",
         APP_ROOT / "chemvas" / "ui" / "canvas_service_composer.py",
         APP_ROOT / "chemvas" / "ui" / "scene_operation_service_bundle.py",
     ]
@@ -1981,7 +2022,7 @@ def test_canvas_services_delegates_document_service_assembly_to_bundle() -> None
 
 def test_canvas_services_delegates_scene_view_service_assembly_to_bundle() -> None:
     direct_instantiation = re.compile(
-        r"\b(?:CanvasGeometryController|CanvasRingFillSceneService|CanvasRotationPreviewController|"
+        r"\b(?:CanvasGeometryController|CanvasRingFillSceneService|"
         r"SceneItemController|SelectionHighlightStyler)\("
     )
 
@@ -1996,12 +2037,15 @@ def test_canvas_services_delegates_interaction_service_assembly_to_bundle() -> N
     assert _matching_lines(direct_instantiation, _service_assembly_paths()) == []
 
 
-def test_canvas_services_delegates_auxiliary_service_assembly_to_bundle() -> None:
-    direct_instantiation = re.compile(
-        r"\b(?:AtomLabelService|StructureInsertService)\("
-    )
+def test_atom_label_service_is_a_direct_runtime_without_auxiliary_bundle() -> None:
+    runtime_services = APP_ROOT / "chemvas" / "ui" / "canvas_runtime_services.py"
+    source = runtime_services.read_text()
 
-    assert _matching_lines(direct_instantiation, _service_assembly_paths()) == []
+    assert "atom_label_service:" in source
+    assert "AuxiliaryServices" not in source
+    assert not (
+        APP_ROOT / "chemvas" / "ui" / "canvas_auxiliary_service_bundle.py"
+    ).exists()
 
 
 def test_template_preview_does_not_reintroduce_separate_benzene_runtime() -> None:
@@ -2080,22 +2124,8 @@ def test_canvas_services_delegates_selection_service_assembly_to_bundle() -> Non
     assert "SelectionController(canvas)" not in source
 
 
-def _legacy_canvas_service_names() -> frozenset[str]:
-    runtime_services = APP_ROOT / "chemvas" / "ui" / "canvas_runtime_services.py"
-    tree = ast.parse(runtime_services.read_text())
-    for node in tree.body:
-        if not isinstance(node, ast.AnnAssign):
-            continue
-        if not isinstance(node.target, ast.Name):
-            continue
-        if node.target.id != "_LEGACY_SERVICE_PATHS" or node.value is None:
-            continue
-        return frozenset(ast.literal_eval(node.value))
-    raise AssertionError("legacy canvas service map not found")
-
-
 def test_production_canvas_service_consumers_use_grouped_runtime_api() -> None:
-    legacy_names = _legacy_canvas_service_names()
+    legacy_names = LEGACY_CANVAS_SERVICE_NAMES
     runtime_services = APP_ROOT / "chemvas" / "ui" / "canvas_runtime_services.py"
     violations: list[str] = []
 
@@ -2118,6 +2148,7 @@ def test_production_canvas_service_consumers_use_grouped_runtime_api() -> None:
                     and owner.func.id
                     in {
                         "active_canvas_services_for",
+                        "_active_canvas_services_for_window",
                         "build_canvas_services",
                         "canvas_services_for",
                     }
@@ -2126,7 +2157,10 @@ def test_production_canvas_service_consumers_use_grouped_runtime_api() -> None:
                     violations.append(f"{path}:{node.lineno}: {node.attr}")
             if not isinstance(node, ast.Call) or len(node.args) < 2:
                 continue
-            if not isinstance(node.func, ast.Name) or node.func.id != "getattr":
+            if not isinstance(node.func, ast.Name) or node.func.id not in {
+                "getattr",
+                "_optional_live_attribute",
+            }:
                 continue
             owner, attribute_name = node.args[:2]
             if not (
@@ -2136,7 +2170,9 @@ def test_production_canvas_service_consumers_use_grouped_runtime_api() -> None:
                 and attribute_name.value in legacy_names
             ):
                 continue
-            violations.append(f"{path}:{node.lineno}: getattr({attribute_name.value})")
+            violations.append(
+                f"{path}:{node.lineno}: {node.func.id}({attribute_name.value})"
+            )
 
     assert violations == []
 
@@ -2566,7 +2602,6 @@ def test_structure_insert_flow_does_not_use_context_facade() -> None:
         APP_ROOT / "chemvas" / "ui" / "structure_insert_access.py",
         APP_ROOT / "chemvas" / "ui" / "structure_build_committer.py",
         APP_ROOT / "chemvas" / "ui" / "insert_commit_service.py",
-        APP_ROOT / "chemvas" / "ui" / "structure_insert_service.py",
     ]
     pattern = re.compile(
         r"\bStructureInsertContext\b"
@@ -2874,17 +2909,14 @@ def test_transform_details_live_in_scene_transform_controller() -> None:
     assert not controller.exists()
 
 
-def test_scene_transform_logic_is_compat_reexport_only() -> None:
+def test_scene_transform_logic_compat_reexport_stays_removed() -> None:
     compat = APP_ROOT / "chemvas" / "ui" / "scene_transform_logic.py"
-    app_paths = [path for path in _app_python_files() if path != compat]
     import_pattern = re.compile(
         r"\bfrom ui\.scene_transform_logic import\b|\bimport ui\.scene_transform_logic\b"
     )
-    source = compat.read_text()
 
-    assert "def flip_scene_item_state" not in source
-    assert "class TransformSelectionGroups" not in source
-    assert _matching_lines(import_pattern, app_paths) == []
+    assert not compat.exists()
+    assert _matching_lines(import_pattern, _app_python_files()) == []
 
 
 def test_canvas_handle_controller_does_not_use_context_facade() -> None:
@@ -2898,15 +2930,14 @@ def test_canvas_handle_controller_does_not_use_context_facade() -> None:
     assert _matching_lines(pattern, [controller]) == []
 
 
-def test_rotation_preview_controller_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "canvas_rotation_preview_context.py"
-    controller = APP_ROOT / "chemvas" / "ui" / "canvas_rotation_preview_controller.py"
-    pattern = re.compile(
-        r"\bCanvasRotationPreviewContext\b|\bcanvas_rotation_preview_context_for\b|self\.context\b"
-    )
+def test_dead_runtime_and_compatibility_files_stay_removed() -> None:
+    ui_root = APP_ROOT / "chemvas" / "ui"
 
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [controller]) == []
+    assert [
+        name
+        for name in sorted(REMOVED_RUNTIME_COMPATIBILITY_FILES)
+        if (ui_root / name).exists()
+    ] == []
 
 
 def test_handle_overlay_service_does_not_use_context_facade() -> None:
@@ -3585,15 +3616,6 @@ def test_graph_algorithms_are_canvas_free() -> None:
     pattern = re.compile(r"\bcanvas\b|\bfrom ui\.|\bimport ui\.")
 
     assert _matching_lines(pattern, graph_modules) == []
-
-
-def test_rotation_preview_context_does_not_mirror_legacy_private_group_state() -> None:
-    rotation_preview_context = (
-        APP_ROOT / "chemvas" / "ui" / "canvas_rotation_preview_state.py"
-    )
-    pattern = re.compile(r"\b_rotation_group\b|\b_rotation_preview_context\b")
-
-    assert _matching_lines(pattern, [rotation_preview_context]) == []
 
 
 def test_production_window_helpers_do_not_reach_into_window_private_members() -> None:

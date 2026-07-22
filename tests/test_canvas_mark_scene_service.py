@@ -4,6 +4,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -29,7 +31,9 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
     def test_missing_atom_paths(self) -> None:
         scene_decoration_service = SimpleNamespace(add_mark=mock.Mock())
         canvas = SimpleNamespace(
-            services=SimpleNamespace(scene_decoration_service=scene_decoration_service),
+            services=canvas_runtime_services(
+                scene_decoration_service=scene_decoration_service
+            ),
             model=SimpleNamespace(atoms={}),
             tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
         )
@@ -46,7 +50,9 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
             add_mark=mock.Mock(return_value="mark-item")
         )
         canvas = SimpleNamespace(
-            services=SimpleNamespace(scene_decoration_service=scene_decoration_service),
+            services=canvas_runtime_services(
+                scene_decoration_service=scene_decoration_service
+            ),
             model=SimpleNamespace(atoms={7: Atom("C", 10.0, 20.0)}),
             tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
         )
@@ -78,7 +84,7 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
             tool_settings_state=CanvasToolSettingsState(mark_kind="radical"),
         )
         mark_target_distance = mock.Mock(return_value=20.0)
-        canvas.services = SimpleNamespace(
+        canvas.services = canvas_runtime_services(
             geometry_controller=SimpleNamespace(
                 mark_target_distance_for_atom=mark_target_distance
             )

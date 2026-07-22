@@ -12,9 +12,9 @@ def _builder_for(canvas: _FakeCanvas) -> StructureBondBuildService:
     return StructureBondBuildService(
         canvas,
         StructureBuildCommitter(canvas),
-        hit_testing_service=canvas.services.hit_testing_service,
-        move_controller=canvas.services.move_controller,
-        graph_service=canvas.services.canvas_graph_service,
+        hit_testing_service=canvas.services.selection.hit_testing_service,
+        move_controller=canvas.services.interaction.move_controller,
+        graph_service=canvas.services.graph.canvas_graph_service,
     )
 
 
@@ -48,7 +48,7 @@ def test_structure_bond_build_service_updates_existing_bond_without_recording_ad
     builder.add_bond_between_points(QPointF(0.0, 0.0), QPointF(10.0, 0.0), "single", 1)
     canvas.record_calls.clear()
     canvas.hit_testing_find_atom_near = Mock(side_effect=[0, 1])
-    canvas.services.hit_testing_service.find_atom_near = (
+    canvas.services.selection.hit_testing_service.find_atom_near = (
         canvas.hit_testing_find_atom_near
     )
     builder = _builder_for(canvas)
@@ -74,7 +74,7 @@ def test_structure_bond_build_service_uses_hit_testing_service_for_snap_lookup()
     registry_hit_testing_service.find_atom_near = Mock(
         side_effect=AssertionError("registry service should not be used")
     )
-    canvas.services.hit_testing_service = registry_hit_testing_service
+    canvas.services.selection.hit_testing_service = registry_hit_testing_service
     canvas.find_atom_near = Mock(
         side_effect=AssertionError("canvas facade should not be used")
     )
@@ -82,8 +82,8 @@ def test_structure_bond_build_service_uses_hit_testing_service_for_snap_lookup()
         canvas,
         StructureBuildCommitter(canvas),
         hit_testing_service=hit_testing_service,
-        move_controller=canvas.services.move_controller,
-        graph_service=canvas.services.canvas_graph_service,
+        move_controller=canvas.services.interaction.move_controller,
+        graph_service=canvas.services.graph.canvas_graph_service,
     )
 
     result = builder.add_bond_between_points(

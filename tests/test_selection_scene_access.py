@@ -4,6 +4,8 @@ import os
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
@@ -1735,7 +1737,7 @@ def test_actual_qt_multi_selection_bypasses_failing_override_without_refresh(
     refresh = mock.Mock()
     canvas = SimpleNamespace(
         scene=lambda: scene,
-        services=SimpleNamespace(
+        services=canvas_runtime_services(
             selection_controller=SimpleNamespace(
                 update_selection_outline=refresh,
             )
@@ -1921,7 +1923,7 @@ def test_unblocked_partial_selection_restores_frontier_and_refreshes_once() -> N
         scene=lambda: scene,
         selection_info_state=selection_info,
         scene_items_state=scene_items_state,
-        services=SimpleNamespace(
+        services=canvas_runtime_services(
             selection_controller=SimpleNamespace(
                 update_selection_outline=refresh,
                 update_note_selection_box=update_note_selection_box,
@@ -2080,7 +2082,7 @@ def test_selection_restore_writes_captured_false_after_true_callback() -> None:
     scene = LiveScene([previous, target, failing])
     canvas = SimpleNamespace(
         scene=lambda: scene,
-        services=SimpleNamespace(selection_controller=None),
+        services=canvas_runtime_services(selection_controller=None),
     )
 
     with pytest.raises(RuntimeError) as caught:
@@ -2133,7 +2135,7 @@ def test_fail_before_selection_still_restores_derived_logical_state() -> None:
         scene=lambda: scene,
         selection_info_state=selection_info,
         scene_items_state=scene_items_state,
-        services=SimpleNamespace(selection_controller=None),
+        services=canvas_runtime_services(selection_controller=None),
     )
 
     with pytest.raises(RuntimeError) as raised:
@@ -2234,7 +2236,7 @@ def test_actual_qt_override_bypass_needs_no_status_recovery_publication() -> Non
         scene=lambda: scene,
         selection_info_state=selection_info,
         scene_items_state=scene_items_state,
-        services=SimpleNamespace(
+        services=canvas_runtime_services(
             selection_controller=SimpleNamespace(
                 update_selection_outline=None,
                 update_note_selection_box=None,

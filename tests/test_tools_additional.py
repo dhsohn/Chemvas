@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -202,7 +204,7 @@ class _TextCanvas:
         self.label_calls = []
         self.pushed_commands = []
         self.history_service = SimpleNamespace(push=self.push_command)
-        self.services = SimpleNamespace(
+        self.services = canvas_runtime_services(
             history_service=self.history_service,
             canvas_atom_mutation_service=SimpleNamespace(add_atom=self.add_atom),
             atom_label_service=SimpleNamespace(
@@ -272,7 +274,7 @@ class _MiscCanvas:
         self.flipped = []
         self.cycled = []
         self.bond_id = None
-        self.services = SimpleNamespace(
+        self.services = canvas_runtime_services(
             canvas_color_mutation_service=SimpleNamespace(
                 apply_color_to_item=self.apply_color_to_item,
                 apply_color_to_items=self.apply_color_to_items,
@@ -329,7 +331,7 @@ class _DeleteCanvas:
         self.removed_items = []
         self.pushed_commands = []
         self.history_service = SimpleNamespace(push=self.push_command)
-        self.services = SimpleNamespace(
+        self.services = canvas_runtime_services(
             history_service=self.history_service,
             scene_delete_controller=SimpleNamespace(
                 begin_delete_tool_session=self.begin_delete_tool_session,
@@ -435,7 +437,7 @@ class _MoveCanvas:
             notify_change=lambda: None,
         )
         self.selection_outline_updates = 0
-        self.services = SimpleNamespace(
+        self.services = canvas_runtime_services(
             history_service=self.history_service,
             hit_testing_service=SimpleNamespace(
                 item_at_event=self.item_at_event,
@@ -483,7 +485,7 @@ class _OrbitalMarkNoteCanvas:
         self.edited_notes = []
         self.clear_note_selection_calls = 0
         self.added_notes = []
-        self.services = SimpleNamespace(
+        self.services = canvas_runtime_services(
             hit_testing_service=SimpleNamespace(
                 scene_pos_from_event=self.scene_pos_from_event,
                 item_at_event=self.item_at_event,
@@ -587,7 +589,7 @@ class _PerspectiveCanvas:
         self.begin_calls = []
         self.update_calls = []
         self.end_calls = 0
-        self.services = SimpleNamespace(
+        self.services = canvas_runtime_services(
             hit_testing_service=SimpleNamespace(
                 scene_pos_from_event=lambda event: event.position(),
                 item_at_event=lambda event: self.item,
@@ -650,7 +652,7 @@ class _ControllerCanvas:
 
     def __init__(self) -> None:
         self.drag_mode = None
-        self.services = SimpleNamespace()
+        self.services = canvas_runtime_services()
 
     def setDragMode(self, mode) -> None:
         self.drag_mode = mode
@@ -685,7 +687,7 @@ class _ToolControllerPreviewCanvas:
         self.clear_handles_calls = 0
         self.preview_arrow_calls = []
         self.add_arrow_calls = []
-        self.services = SimpleNamespace(
+        self.services = canvas_runtime_services(
             hit_testing_service=SimpleNamespace(
                 scene_pos_from_event=self.scene_pos_from_event
             ),
@@ -937,7 +939,7 @@ class ToolsAdditionalTest(unittest.TestCase):
                     )
                 )
             ),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 hit_testing_service=SimpleNamespace(
                     scene_pos_from_event=lambda event: event.position()
                 ),
@@ -1119,7 +1121,7 @@ class ToolsAdditionalTest(unittest.TestCase):
             add_benzene_ring=lambda pos, attach_atom_id=None, attach_bond_id=None: (
                 benzene_calls.append((QPointF(pos), attach_atom_id, attach_bond_id))
             ),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 hit_testing_service=SimpleNamespace(
                     scene_pos_from_event=lambda event: event.position()
                 ),
@@ -1459,7 +1461,7 @@ class ToolsAdditionalTest(unittest.TestCase):
         canvas = _ToolControllerPreviewCanvas()
         controller = ToolController(
             canvas,
-            hit_testing_service=canvas.services.hit_testing_service,
+            hit_testing_service=canvas.services.selection.hit_testing_service,
             selection_controller=SimpleNamespace(),
             note_controller=SimpleNamespace(
                 create_text_note=mock.Mock(), begin_note_edit=mock.Mock()

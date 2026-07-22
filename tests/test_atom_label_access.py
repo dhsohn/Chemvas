@@ -3,6 +3,8 @@ from types import SimpleNamespace
 
 from chemvas.ui.atom_label_access import add_or_update_atom_label, clear_atom_label_for
 
+from tests.runtime_services import canvas_runtime_services
+
 
 class _FakeCanvas:
     def __init__(self) -> None:
@@ -27,7 +29,7 @@ class AtomLabelAccessTest(unittest.TestCase):
     def test_add_or_update_atom_label_prefers_service_when_available(self) -> None:
         service_calls = []
         canvas = _FakeCanvas()
-        canvas.services = SimpleNamespace(
+        canvas.services = canvas_runtime_services(
             atom_label_service=SimpleNamespace(
                 add_or_update_atom_label=lambda atom_id, text, **kwargs: (
                     service_calls.append((atom_id, text, kwargs))
@@ -72,7 +74,7 @@ class AtomLabelAccessTest(unittest.TestCase):
         service_calls = []
         canvas = SimpleNamespace(
             model=SimpleNamespace(atoms={1: object()}),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 atom_label_service=SimpleNamespace(
                     add_or_update_atom_label=lambda atom_id, text, **kwargs: (
                         service_calls.append((atom_id, text, kwargs))

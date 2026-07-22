@@ -21,6 +21,8 @@ from chemvas.ui.structure_geometry_access import (
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
+from tests.runtime_services import canvas_runtime_services
+
 
 class _SelectedItem:
     def __init__(self, kind: str, item_id: int) -> None:
@@ -292,7 +294,7 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
         mark_scene_service.mark_offset_from_click = mock.Mock(
             return_value=QPointF(1.5, -2.5)
         )
-        view.services = SimpleNamespace(
+        view.services = canvas_runtime_services(
             canvas_mark_scene_service=mark_scene_service,
             tools=SimpleNamespace(active=SimpleNamespace(name="bond")),
         )

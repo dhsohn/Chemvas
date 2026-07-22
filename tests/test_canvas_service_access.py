@@ -8,6 +8,8 @@ from chemvas.ui.canvas_service_access import (
     optional_canvas_service_method,
 )
 
+from tests.runtime_services import canvas_runtime_services
+
 
 def _attach_private_shaped_attr(canvas, attr: str, value) -> None:
     setattr(canvas, attr, value)
@@ -15,7 +17,7 @@ def _attach_private_shaped_attr(canvas, attr: str, value) -> None:
 
 def test_canvas_services_for_returns_attached_services_bundle() -> None:
     scene_item_controller = object()
-    services = SimpleNamespace(scene_item_controller=scene_item_controller)
+    services = canvas_runtime_services(scene_item_controller=scene_item_controller)
     canvas = SimpleNamespace(services=services)
 
     resolved = canvas_services_for(canvas)
@@ -27,7 +29,7 @@ def test_canvas_services_for_returns_attached_services_bundle() -> None:
 
 def test_canvas_services_for_does_not_promote_private_shaped_attr() -> None:
     legacy = object()
-    canvas = SimpleNamespace(services=SimpleNamespace())
+    canvas = SimpleNamespace(services=canvas_runtime_services())
     _attach_private_shaped_attr(canvas, "_scene_item_controller", legacy)
 
     resolved = canvas_services_for(canvas)
@@ -39,7 +41,7 @@ def test_canvas_services_for_does_not_promote_private_shaped_attr() -> None:
 def test_optional_canvas_service_method_returns_callable_method() -> None:
     calls = []
     service = SimpleNamespace(record=lambda value: calls.append(value))
-    canvas = SimpleNamespace(services=SimpleNamespace(history=service))
+    canvas = SimpleNamespace(services=canvas_runtime_services(history=service))
 
     method = optional_canvas_service_method(
         canvas, lambda target: target.services.history, "record"
@@ -63,7 +65,7 @@ def test_optional_canvas_service_method_returns_none_without_service_or_method()
     )
     assert (
         optional_canvas_service_method(
-            SimpleNamespace(services=SimpleNamespace()),
+            SimpleNamespace(services=canvas_runtime_services()),
             lambda target: target.services,
             "record",
         )

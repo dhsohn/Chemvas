@@ -18,7 +18,6 @@ from chemvas.ui.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas_history_state import CanvasHistoryState
 from chemvas.ui.canvas_insert_state import CanvasInsertState
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-from chemvas.ui.canvas_rotation_preview_state import CanvasRotationPreviewState
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas_smiles_input_state import CanvasSmilesInputState
@@ -80,7 +79,6 @@ class CanvasRuntimeState:
     mark_registry: CanvasMarkRegistry
     spatial_index_state: CanvasSpatialIndexState
     input_view_state: InputViewState
-    rotation_preview_state: CanvasRotationPreviewState
     rotation_state: CanvasRotationState
     handle_state: CanvasHandleState
     selection_style_state: SelectionStyleState
@@ -120,7 +118,6 @@ class CanvasRuntimeState:
             mark_registry=CanvasMarkRegistry(),
             spatial_index_state=CanvasSpatialIndexState(),
             input_view_state=InputViewState(),
-            rotation_preview_state=CanvasRotationPreviewState(),
             rotation_state=CanvasRotationState(),
             handle_state=CanvasHandleState(),
             selection_style_state=SelectionStyleState(),

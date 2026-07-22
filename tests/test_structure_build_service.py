@@ -27,6 +27,8 @@ from chemvas.ui.structure_build_service import StructureBuildService
 from chemvas.ui.structure_template_commands import apply_structure_template_command
 from PyQt6.QtCore import QPointF
 
+from tests.runtime_services import canvas_runtime_services
+
 try:
     from rdkit import Chem as _RealChem
 except ModuleNotFoundError:
@@ -121,7 +123,7 @@ class _FakeCanvas:
         )
         self.hit_testing_find_atom_near = Mock(return_value=None)
         self.bond_renderer = SimpleNamespace(add_bond_graphics=self._add_bond_graphics)
-        self.services = SimpleNamespace(
+        self.services = canvas_runtime_services(
             hit_testing_service=SimpleNamespace(
                 find_atom_near=self.hit_testing_find_atom_near
             ),
@@ -152,19 +154,19 @@ class _FakeCanvas:
                 create_ring_fill_item=self._create_ring_fill_item
             ),
         )
-        self.services.canvas_atom_mutation_service.remove_atom_only = (
+        self.services.structure.canvas_atom_mutation_service.remove_atom_only = (
             self.remove_atom_only
         )
-        self.services.canvas_atom_mutation_service.restore_atom_from_state = (
+        self.services.structure.canvas_atom_mutation_service.restore_atom_from_state = (
             self.restore_atom_from_state
         )
-        self.services.canvas_bond_mutation_service.remove_bond_by_id = (
+        self.services.structure.canvas_bond_mutation_service.remove_bond_by_id = (
             self.remove_bond_by_id
         )
-        self.services.canvas_bond_mutation_service.restore_bond_from_state = (
+        self.services.structure.canvas_bond_mutation_service.restore_bond_from_state = (
             self.restore_bond_from_state
         )
-        self.services.canvas_bond_mutation_service.trim_bonds_to_length = (
+        self.services.structure.canvas_bond_mutation_service.trim_bonds_to_length = (
             self.trim_bonds_to_length
         )
 
@@ -306,9 +308,9 @@ class _FakeCanvas:
 def _service_for(canvas: _FakeCanvas) -> StructureBuildService:
     return StructureBuildService(
         canvas,
-        hit_testing_service=canvas.services.hit_testing_service,
-        move_controller=canvas.services.move_controller,
-        graph_service=canvas.services.canvas_graph_service,
+        hit_testing_service=canvas.services.selection.hit_testing_service,
+        move_controller=canvas.services.interaction.move_controller,
+        graph_service=canvas.services.graph.canvas_graph_service,
     )
 
 
@@ -388,8 +390,8 @@ class StructureBuildServiceTest(unittest.TestCase):
             [QPointF(0.0, 0.0), QPointF(1.0, 0.0), QPointF(0.0, 1.0)],
             [0],
         )
-        canvas.services.canvas_history_recording_service.record_additions = Mock(
-            side_effect=RuntimeError("history")
+        canvas.services.document.canvas_history_recording_service.record_additions = (
+            Mock(side_effect=RuntimeError("history"))
         )
 
         def action() -> list:
@@ -412,8 +414,8 @@ class StructureBuildServiceTest(unittest.TestCase):
         service = _service_for(canvas)
         history_error = RuntimeError("original history failure")
         trim_error = RuntimeError("bond trim rollback failure")
-        canvas.services.canvas_history_recording_service.record_additions = Mock(
-            side_effect=history_error
+        canvas.services.document.canvas_history_recording_service.record_additions = (
+            Mock(side_effect=history_error)
         )
         original_trim = canvas.trim_bonds_to_length
 
@@ -421,7 +423,7 @@ class StructureBuildServiceTest(unittest.TestCase):
             original_trim(length)
             raise trim_error
 
-        canvas.services.canvas_bond_mutation_service.trim_bonds_to_length = (
+        canvas.services.structure.canvas_bond_mutation_service.trim_bonds_to_length = (
             trim_then_raise
         )
 
@@ -499,13 +501,11 @@ class StructureBuildServiceTest(unittest.TestCase):
         service = _service_for(canvas)
         history_error = RuntimeError("original history failure")
         cleanup_error = RuntimeError("ring cleanup failure")
-        canvas.services.canvas_history_recording_service.record_additions = Mock(
-            side_effect=history_error
+        canvas.services.document.canvas_history_recording_service.record_additions = (
+            Mock(side_effect=history_error)
         )
         refresh_ring_geometry = Mock()
-        canvas.services.scene_item_controller.refresh_bond_geometry_for_ring_item = (
-            refresh_ring_geometry
-        )
+        canvas.services.scene_view.scene_item_controller.refresh_bond_geometry_for_ring_item = refresh_ring_geometry
         canvas.scene = lambda: SimpleNamespace(
             removeItem=lambda item: (
                 canvas.scene_items.remove(item) if item in canvas.scene_items else None
@@ -518,7 +518,9 @@ class StructureBuildServiceTest(unittest.TestCase):
                 original_remove(item)
             raise cleanup_error
 
-        canvas.services.scene_item_controller.remove_scene_item = failing_remove
+        canvas.services.scene_view.scene_item_controller.remove_scene_item = (
+            failing_remove
+        )
         ring = _FakeRingItem(
             False,
             [QPointF(0.0, 0.0), QPointF(1.0, 0.0), QPointF(0.0, 1.0)],
@@ -568,12 +570,10 @@ class StructureBuildServiceTest(unittest.TestCase):
                 canvas.scene_items.remove(item) if item in canvas.scene_items else None
             )
         )
-        canvas.services.scene_item_controller.remove_scene_item = Mock(
+        canvas.services.scene_view.scene_item_controller.remove_scene_item = Mock(
             side_effect=RuntimeError("cleanup failure")
         )
-        canvas.services.scene_item_controller.refresh_bond_geometry_for_ring_item = (
-            Mock()
-        )
+        canvas.services.scene_view.scene_item_controller.refresh_bond_geometry_for_ring_item = Mock()
 
         with self.assertRaisesRegex(RuntimeError, "cleanup failure"):
             service.committer.abort_recorded_change(snapshot)
@@ -870,8 +870,8 @@ class StructureBuildServiceTest(unittest.TestCase):
     ) -> None:
         canvas = _FakeCanvas()
         service = _service_for(canvas)
-        canvas.services.canvas_history_recording_service.record_additions = Mock(
-            side_effect=RuntimeError("history")
+        canvas.services.document.canvas_history_recording_service.record_additions = (
+            Mock(side_effect=RuntimeError("history"))
         )
 
         def action() -> bool:
@@ -1265,7 +1265,7 @@ class StructureBuildServiceTest(unittest.TestCase):
     def test_catalog_template_history_undo_redo_includes_ring_items(self) -> None:
         canvas = _FakeCanvas()
         pushed_commands = []
-        canvas.services.canvas_history_recording_service = (
+        canvas.services.document.canvas_history_recording_service = (
             CanvasHistoryRecordingService(
                 canvas,
                 history_service=SimpleNamespace(push=pushed_commands.append),
@@ -1305,14 +1305,14 @@ class StructureBuildServiceTest(unittest.TestCase):
     def test_free_template_insert_history_undo_redo_includes_ring_items(self) -> None:
         canvas = _FakeCanvas()
         pushed_commands = []
-        canvas.services.canvas_history_recording_service = (
+        canvas.services.document.canvas_history_recording_service = (
             CanvasHistoryRecordingService(
                 canvas,
                 history_service=SimpleNamespace(push=pushed_commands.append),
             )
         )
         service = _service_for(canvas)
-        canvas.services.structure_build_service = service
+        canvas.services.structure.structure_build_service = service
         request = TemplateInsertRequest(
             ring_size=5, cursor_pos=(0.0, 0.0), ring_style="regular"
         )
@@ -1419,14 +1419,14 @@ class StructureBuildServiceTest(unittest.TestCase):
                 base_atom_count = len(canvas.model.atoms)
                 base_bond_count = len(canvas.model.bonds)
                 pushed_commands = []
-                canvas.services.canvas_history_recording_service = (
+                canvas.services.document.canvas_history_recording_service = (
                     CanvasHistoryRecordingService(
                         canvas,
                         history_service=SimpleNamespace(push=pushed_commands.append),
                     )
                 )
                 service = _service_for(canvas)
-                canvas.services.structure_build_service = service
+                canvas.services.structure.structure_build_service = service
                 request = TemplateInsertRequest(
                     ring_size=len(points),
                     cursor_pos=(0.0, 0.0),
@@ -1684,7 +1684,7 @@ class StructureBuildServiceTest(unittest.TestCase):
 
         canvas.record_calls.clear()
         canvas.hit_testing_find_atom_near = Mock(side_effect=[0, 1])
-        canvas.services.hit_testing_service.find_atom_near = (
+        canvas.services.selection.hit_testing_service.find_atom_near = (
             canvas.hit_testing_find_atom_near
         )
         updated = service.add_bond_between_points(
@@ -1704,7 +1704,7 @@ class StructureBuildServiceTest(unittest.TestCase):
         hit_testing_service = SimpleNamespace(
             find_atom_near=Mock(side_effect=[None, None])
         )
-        canvas.services.hit_testing_service = hit_testing_service
+        canvas.services.selection.hit_testing_service = hit_testing_service
         canvas.find_atom_near = Mock(
             side_effect=AssertionError("canvas facade should not be used")
         )
@@ -1738,7 +1738,7 @@ class StructureBuildServiceTest(unittest.TestCase):
                 side_effect=AssertionError("direct alias should not be used")
             )
         )
-        canvas.services.hit_testing_service = registry_hit_testing_service
+        canvas.services.selection.hit_testing_service = registry_hit_testing_service
         canvas.hit_testing = direct_alias_hit_testing_service
         canvas.find_atom_near = Mock(
             side_effect=AssertionError("canvas facade should not be used")
@@ -1746,8 +1746,8 @@ class StructureBuildServiceTest(unittest.TestCase):
         service = StructureBuildService(
             canvas,
             hit_testing_service=hit_testing_service,
-            move_controller=canvas.services.move_controller,
-            graph_service=canvas.services.canvas_graph_service,
+            move_controller=canvas.services.interaction.move_controller,
+            graph_service=canvas.services.graph.canvas_graph_service,
         )
 
         result = service.add_bond_between_points(
@@ -1806,10 +1806,10 @@ class StructureBuildServiceTest(unittest.TestCase):
         )
         canvas.model.next_atom_id = 2
         canvas.hit_testing_find_atom_near = Mock(side_effect=[0, 1])
-        canvas.services.hit_testing_service.find_atom_near = (
+        canvas.services.selection.hit_testing_service.find_atom_near = (
             canvas.hit_testing_find_atom_near
         )
-        canvas.services.move_controller.redraw_bond = Mock(
+        canvas.services.interaction.move_controller.redraw_bond = Mock(
             side_effect=RuntimeError("redraw failed")
         )
         service = _service_for(canvas)
@@ -1833,12 +1833,12 @@ class StructureBuildServiceTest(unittest.TestCase):
         )
         canvas.model.next_atom_id = 2
         canvas.hit_testing_find_atom_near = Mock(side_effect=[0, 1])
-        canvas.services.hit_testing_service.find_atom_near = (
+        canvas.services.selection.hit_testing_service.find_atom_near = (
             canvas.hit_testing_find_atom_near
         )
         original_error = KeyboardInterrupt("initial redraw interrupted")
         rollback_error = SystemExit("rollback redraw terminated")
-        canvas.services.move_controller.redraw_bond = Mock(
+        canvas.services.interaction.move_controller.redraw_bond = Mock(
             side_effect=[original_error, rollback_error]
         )
         service = _service_for(canvas)
@@ -1877,12 +1877,12 @@ class StructureBuildServiceTest(unittest.TestCase):
                 )
                 canvas.model.next_atom_id = 2
                 canvas.hit_testing_find_atom_near = Mock(side_effect=[0, 1])
-                canvas.services.hit_testing_service.find_atom_near = (
+                canvas.services.selection.hit_testing_service.find_atom_near = (
                     canvas.hit_testing_find_atom_near
                 )
                 primary_error = error_type("history record interrupted")
-                canvas.services.canvas_history_recording_service.record_bond_update = (
-                    Mock(side_effect=primary_error)
+                canvas.services.document.canvas_history_recording_service.record_bond_update = Mock(
+                    side_effect=primary_error
                 )
                 redraw_calls = 0
 
@@ -1892,7 +1892,7 @@ class StructureBuildServiceTest(unittest.TestCase):
                     if redraw_calls == 2:
                         raise RuntimeError("compensation redraw failed")
 
-                canvas.services.move_controller.redraw_bond = redraw_bond
+                canvas.services.interaction.move_controller.redraw_bond = redraw_bond
                 service = _service_for(canvas)
 
                 with self.assertRaises(error_type) as raised:
@@ -1913,13 +1913,13 @@ class StructureBuildServiceTest(unittest.TestCase):
                 self.assertEqual(last_smiles_input_for(canvas), "before")
 
                 canvas.hit_testing_find_atom_near = Mock(side_effect=[0, 1])
-                canvas.services.hit_testing_service.find_atom_near = (
+                canvas.services.selection.hit_testing_service.find_atom_near = (
                     canvas.hit_testing_find_atom_near
                 )
-                canvas.services.canvas_history_recording_service.record_bond_update = (
-                    canvas._record_bond_update
+                canvas.services.document.canvas_history_recording_service.record_bond_update = canvas._record_bond_update
+                canvas.services.interaction.move_controller.redraw_bond = (
+                    canvas.redraw_bond
                 )
-                canvas.services.move_controller.redraw_bond = canvas.redraw_bond
                 self.assertEqual(
                     service.add_bond_between_points(
                         QPointF(0.0, 0.0),
@@ -1966,7 +1966,7 @@ class StructureBuildServiceTest(unittest.TestCase):
         )
         canvas.model.next_atom_id = 2
         canvas.hit_testing_find_atom_near = Mock(side_effect=[0, 1])
-        canvas.services.hit_testing_service.find_atom_near = (
+        canvas.services.selection.hit_testing_service.find_atom_near = (
             canvas.hit_testing_find_atom_near
         )
         redrawn_states: list[tuple[int, str]] = []
@@ -1976,8 +1976,10 @@ class StructureBuildServiceTest(unittest.TestCase):
             assert bond is not None
             redrawn_states.append((bond.order, bond.style))
 
-        canvas.services.move_controller.redraw_bond = Mock(side_effect=redraw_bond)
-        canvas.services.move_controller.redraw_connected_bonds = Mock(
+        canvas.services.interaction.move_controller.redraw_bond = Mock(
+            side_effect=redraw_bond
+        )
+        canvas.services.interaction.move_controller.redraw_connected_bonds = Mock(
             side_effect=RuntimeError("connected failed")
         )
         service = _service_for(canvas)
@@ -2013,7 +2015,7 @@ class StructureBuildServiceTest(unittest.TestCase):
         )
         canvas.model.next_atom_id = 4
         canvas.hit_testing_find_atom_near = Mock(side_effect=[0, 1])
-        canvas.services.hit_testing_service.find_atom_near = (
+        canvas.services.selection.hit_testing_service.find_atom_near = (
             canvas.hit_testing_find_atom_near
         )
         redrawn_bond_states: list[tuple[int, str]] = []
@@ -2040,8 +2042,10 @@ class StructureBuildServiceTest(unittest.TestCase):
                 failed_once = True
                 raise RuntimeError("connected failed")
 
-        canvas.services.move_controller.redraw_bond = Mock(side_effect=redraw_bond)
-        canvas.services.move_controller.redraw_connected_bonds = Mock(
+        canvas.services.interaction.move_controller.redraw_bond = Mock(
+            side_effect=redraw_bond
+        )
+        canvas.services.interaction.move_controller.redraw_connected_bonds = Mock(
             side_effect=redraw_connected_bonds
         )
         service = _service_for(canvas)
@@ -2424,7 +2428,7 @@ class StructureBuildServiceTest(unittest.TestCase):
         )
 
         canvas.hit_testing_find_atom_near = Mock(side_effect=[0, 0])
-        canvas.services.hit_testing_service.find_atom_near = (
+        canvas.services.selection.hit_testing_service.find_atom_near = (
             canvas.hit_testing_find_atom_near
         )
         self.assertIsNone(
@@ -2434,11 +2438,13 @@ class StructureBuildServiceTest(unittest.TestCase):
         )
 
         canvas.hit_testing_find_atom_near = Mock(side_effect=[0, 1])
-        canvas.services.hit_testing_service.find_atom_near = (
+        canvas.services.selection.hit_testing_service.find_atom_near = (
             canvas.hit_testing_find_atom_near
         )
         canvas.model.bonds = [None]
-        canvas.services.canvas_graph_service.bond_id_between = Mock(return_value=0)
+        canvas.services.graph.canvas_graph_service.bond_id_between = Mock(
+            return_value=0
+        )
         self.assertIsNone(
             service.add_bond_between_points(
                 QPointF(0.0, 0.0), QPointF(10.0, 0.0), "single", 1
@@ -2449,7 +2455,7 @@ class StructureBuildServiceTest(unittest.TestCase):
 
         failed_canvas = _FakeCanvas()
         failed_service = _service_for(failed_canvas)
-        failed_canvas.services.canvas_bond_mutation_service.add_bond = Mock(
+        failed_canvas.services.structure.canvas_bond_mutation_service.add_bond = Mock(
             return_value=0
         )
         self.assertIsNone(

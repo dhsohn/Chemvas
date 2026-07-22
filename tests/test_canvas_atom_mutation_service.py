@@ -17,6 +17,8 @@ from chemvas.ui.canvas_atom_mutation_service import CanvasAtomMutationService
 from chemvas.ui.canvas_graph_state import CanvasGraphState
 from PyQt6.QtGui import QColor
 
+from tests.runtime_services import canvas_runtime_services
+
 
 class _FakeModel:
     def __init__(self, atoms=None, bonds=None, next_atom_id: int = 0) -> None:
@@ -58,7 +60,7 @@ def _services(
     mark_scene=None,
     atom_mutation=None,
 ):
-    return SimpleNamespace(
+    return canvas_runtime_services(
         canvas_graph_service=graph,
         atom_label_service=atom_label,
         hit_testing_service=hit_testing,
@@ -75,8 +77,8 @@ def _set_atom_graphics(canvas, items=None, dots=None) -> None:
 def _service_for(canvas) -> CanvasAtomMutationService:
     return CanvasAtomMutationService(
         canvas,
-        hit_testing_service=canvas.services.hit_testing_service,
-        graph_service=canvas.services.canvas_graph_service,
+        hit_testing_service=canvas.services.selection.hit_testing_service,
+        graph_service=canvas.services.graph.canvas_graph_service,
     )
 
 

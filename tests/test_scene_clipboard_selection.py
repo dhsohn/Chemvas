@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -29,7 +31,7 @@ if QApplication is not None:
             self.atom_label_service = SimpleNamespace(
                 atom_item_for_id=mock.Mock(return_value=atom_item)
             )
-            self.services = SimpleNamespace(
+            self.services = canvas_runtime_services(
                 atom_label_service=self.atom_label_service,
                 selection_controller=self.selection_controller,
             )

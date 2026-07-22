@@ -10,11 +10,13 @@ from chemvas.ui.canvas_view_ports import (
 )
 from PyQt6.QtCore import QPointF
 
+from tests.runtime_services import canvas_runtime_services
+
 
 def test_input_controller_for_view_returns_attached_input_controller() -> None:
     input_controller = object()
     canvas = SimpleNamespace(
-        services=SimpleNamespace(
+        services=canvas_runtime_services(
             input=SimpleNamespace(input_controller=input_controller)
         )
     )
@@ -29,7 +31,7 @@ def test_input_controller_for_view_returns_none_when_services_are_missing() -> N
 def test_pointer_controller_for_view_returns_attached_pointer_controller() -> None:
     pointer_controller = object()
     canvas = SimpleNamespace(
-        services=SimpleNamespace(
+        services=canvas_runtime_services(
             input=SimpleNamespace(pointer_controller=pointer_controller)
         )
     )

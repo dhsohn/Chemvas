@@ -6,6 +6,8 @@ from unittest import mock
 import chemvas.ui.canvas_view_setup as setup
 from chemvas.ui.canvas_callback_state import CanvasCallbackState
 
+from tests.runtime_services import canvas_runtime_services
+
 
 def test_initialize_canvas_view_configures_view_runtime_and_services(
     monkeypatch,
@@ -20,7 +22,7 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(
         tool_settings_state=SimpleNamespace(arrow_line_width=0.0),
     )
     callback_state = CanvasCallbackState()
-    services = SimpleNamespace(
+    services = canvas_runtime_services(
         selection=SimpleNamespace(
             selection_controller=SimpleNamespace(update_selection_outline=mock.Mock())
         ),

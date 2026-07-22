@@ -4,6 +4,8 @@ import os
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from chemvas.shell.main_window import MainWindow
@@ -29,7 +31,7 @@ def _window(*, confirm: bool, events: list[str]) -> MainWindow:
         state=object(),
         ui_refs=SimpleNamespace(preview_window=_PreviewWindow()),
         tab_refs=object(),
-        services=SimpleNamespace(document_action_service=_DocumentActions()),
+        services=canvas_runtime_services(document_action_service=_DocumentActions()),
         preview_3d=_Preview3D(),
     )
     return MainWindow(

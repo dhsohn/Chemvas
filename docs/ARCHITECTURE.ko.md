@@ -22,15 +22,15 @@
 - 메인 창 조립: `chemvas.shell.main_window`가 얇은 Qt 셸을 소유하고, `chemvas.bootstrap`이 runtime/service 조립·창 등록·문서 열기·앱 시작을 소유한다. Qt 파일 열기 이벤트는 `chemvas.adapters.qt`를 통해 들어온다.
 
 ## 전환기 레거시 UI 규율 (ports / access / state / services)
-`app/chemvas/ui` 패키지는 역할이 고정된 다수의 작은 모듈로 의도적으로 분리되어 있다. 목표는 `CanvasView`와 `MainWindow`를 얇은 Qt 셸로 유지하고(갓 오브젝트 금지), 모든 서비스를 헤드리스로 생성 가능하게 하며(전체 테스트 스위트가 `SimpleNamespace` 캔버스로 약 20초에 실행), 모든 의존성을 명시적으로 만드는 것이다.
+`app/chemvas/ui` 패키지는 실제 레거시 책임을 분리하는 경우에만 작은 역할 모듈을 유지한다. 목표는 `CanvasView`와 `MainWindow`를 얇은 Qt 셸로 유지하고(갓 오브젝트 금지), 모든 서비스를 헤드리스로 생성 가능하게 하며, 모든 의존성을 명시적으로 만드는 것이다.
 
 이 규칙들은 평면 레거시 패키지에 남아 있는 코드의 마이그레이션 제약으로
 유지한다. 모든 신규 기능이 복제할 템플릿은 아니며, 신규 feature 패키지는
 실제 경계가 필요할 때만 역할별 모듈을 만든다.
 
-- **State 모듈** (`*_state.py`): 아직 이전되지 않은 관심사는 dataclass 하나와 `<name>_state_for(canvas)` 접근자를 사용한다. 이 접근자들은 `ensure_canvas_state(canvas, name, factory)`(`chemvas.ui.canvas_state_lookup.py`)를 거쳐 조회와 부착에 하나의 이름만 사용한다. 실제 캔버스의 상태는 eager 생성되는 strict `CanvasRuntimeState` 컨테이너(`chemvas.ui.canvas_runtime_state.py`)에 있으며, 알 수 없는 필드는 그림자 사본을 만들지 않고 즉시 실패한다. 일부 상태(`model`, `renderer`, `bond_renderer`, `rdkit`)는 의도적으로 캔버스 직접 속성에 저장되고 `runtime_field=False`를 사용한다. 이전된 hover 상태는 `chemvas.features.hover`가 소유하며, 얇은 UI leaf는 필수 runtime field를 직접 읽을 뿐 부착하거나 fallback하지 않는다. `test_state_accessor_names_match_runtime_state_container`는 남은 `ensure_canvas_state` 이름을 검증한다.
+- **State 모듈** (`*_state.py`): 아직 이전되지 않은 관심사는 dataclass 하나와 `<name>_state_for(canvas)` 접근자를 사용한다. 이 접근자들은 `ensure_canvas_state(canvas, name, factory)`(`chemvas.ui.canvas_state_lookup.py`)를 거쳐 조회와 부착에 하나의 이름만 사용한다. 실제 캔버스의 상태는 eager 생성되는 strict `CanvasRuntimeState` 컨테이너(`chemvas.ui.canvas_runtime_state.py`)에 있으며, 알 수 없는 필드는 그림자 사본을 만들지 않고 즉시 실패한다. plain-object 부착은 헤드리스 레거시 협력자에만 허용하며 마지막 레거시 state accessor가 canonical feature runtime으로 이동하면 제거한다. 일부 상태(`model`, `renderer`, `bond_renderer`, `rdkit`)는 의도적으로 캔버스 직접 속성에 저장되고 `runtime_field=False`를 사용한다. 이전된 hover 상태는 `chemvas.features.hover`가 소유하며, 얇은 UI leaf는 필수 runtime field를 직접 읽을 뿐 부착하거나 fallback하지 않는다. `test_state_accessor_names_match_runtime_state_container`는 남은 `ensure_canvas_state` 이름을 검증한다.
 - **Access 모듈** (`*_access.py`): 연산 하나를 감싸는 자유 함수(`foo_for(canvas)`). `canvas.services`에 직접 접근할 수 없고, 서비스 조회는 대응하는 ports 모듈에 위임한다.
-- **Ports 모듈** (`*_ports.py`): 서비스 컨테이너(`canvas_services_for` / window 비공개 저장소)를 해석할 수 있는 유일한 모듈. 그 외 모든 코드는 협력자를 주입받거나 port를 호출한다. 생산 코드의 port는 묶음형 `CanvasRuntimeServices` API(예: `services.auxiliary.atom_label_service`)만 사용한다. 기존 평면 서비스 이름은 경량 테스트 fixture를 위한 임시 호환 표면이며, 생산 소비자에서의 사용은 아키텍처 ratchet이 금지한다.
+- **Ports 모듈** (`*_ports.py`): 서비스 컨테이너(`canvas_services_for` / window 비공개 저장소)를 해석할 수 있는 유일한 모듈. 그 외 모든 코드는 협력자를 주입받거나 port를 호출한다. 생산 코드의 port는 묶음형 `CanvasRuntimeServices` API만 사용하며 `atom_label_service` 같은 단일 runtime은 직접 보관한다. 평면 서비스 별칭과 duck-typed 생산 adapter는 삭제되었고, 집중 테스트는 `tests/runtime_services.py`로 부분 canonical runtime을 만든다.
 - **서비스와 컨트롤러**: `chemvas.ui.canvas_service_composer.py`에서 캔버스당 한 번, 명시적 키워드 주입으로 조립된다 — 서비스 내부의 서비스 로케이터 금지, 누락된 배선을 숨기는 `=None` 협력자 기본값 금지. composer는 응집된 레거시 그룹은 `CanvasRuntimeServices`의 bundle로 보관하고, hover처럼 runtime이 하나인 feature는 단일 멤버 bundle을 만들지 않고 직접 보관한다.
 - **core는 UI와 분리되며, Qt 마이그레이션 부채는 하나만 허용한다**: `app/chemvas/core`는 모듈 수준에서 `ui`를 import하지 않는다(`chemvas.core.history.py`의 지연 해석 프로토콜 구현만 예외). `chemvas.core.renderer.py`는 현재 유일한 직접 Qt 의존성으로, 네임스페이스 이전 중 Qt 어댑터로 이동할 전환 부채다. 새로운 core-to-Qt 의존성은 금지한다.
 
@@ -40,6 +40,14 @@
 계약으로 교체한 뒤 퇴역시킨다.
 
 이 규율의 알려진 트레이드오프(의도적으로 수용): 실재하는 간접 비용(ui LOC의 약 20%가 배선)과 캔버스 seam의 약한 정적 타이핑(`canvas: Any`). 하나의 불변식이 여러 작은 모듈에 걸칠 때는 일관성 계약을 소유 모듈 한 곳에 문서화해야 한다 — 파생 그래프 인덱스의 예로 `chemvas.ui.graph_index_operations.py`와 `CanvasGraphService.bond_id_between_with_repair` 패턴을 참고.
+
+## Feature Qt 마이그레이션 목록
+
+목표 경계는 구체 Qt 통합을 `chemvas.adapters`에 둔다. 다만 진행 중인 namespace
+마이그레이션에는 아직 고정된 일부 feature 구현 모듈의 직접 Qt import가 남아 있다.
+`tests/test_package_dependencies.py`의 `FEATURE_QT_MIGRATION_ALLOWLIST`가 실행 가능한
+목록이다. 새 모듈은 추가할 수 없고, 각 adapter 이전에서 해당 항목을 제거한다. 목록이
+비면 예외 검사를 `chemvas.features`의 Qt import 전면 금지로 교체한다.
 
 ## 트랜잭션과 복구 소유권
 

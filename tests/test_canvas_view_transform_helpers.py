@@ -4,6 +4,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -148,7 +150,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
                     _FakeSelectableItem("bond", 99),
                 ]
             ),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 atom_label_service=atom_label_service,
                 canvas_ring_fill_scene_service=ring_fill_service,
                 move_controller=move_controller,
@@ -211,7 +213,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
         empty_view = SimpleNamespace(
             model=SimpleNamespace(atoms={}, bonds=[]),
             scene=lambda: _FakeScene(),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 atom_label_service=empty_atom_label_service,
                 canvas_ring_fill_scene_service=empty_ring_fill_service,
                 move_controller=empty_move_controller,
@@ -235,7 +237,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
         no_center_view = SimpleNamespace(
             model=SimpleNamespace(atoms={1: Atom("C", 2.0, 3.0)}, bonds=[]),
             scene=lambda: _FakeScene([_FakeSelectableItem("atom", 99)]),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 atom_label_service=no_center_atom_label_service,
                 canvas_ring_fill_scene_service=no_center_ring_fill_service,
                 move_controller=no_center_move_controller,
@@ -273,7 +275,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
             ),
         )
         classified_graph_service = CanvasGraphService(classified_view)
-        classified_view.services = SimpleNamespace(
+        classified_view.services = canvas_runtime_services(
             canvas_graph_service=classified_graph_service
         )
 
@@ -292,7 +294,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
             graph_state=CanvasGraphState(),
         )
         fallback_graph_service = CanvasGraphService(fallback_view)
-        fallback_view.services = SimpleNamespace(
+        fallback_view.services = canvas_runtime_services(
             canvas_graph_service=fallback_graph_service
         )
 
@@ -314,7 +316,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
         selection_controller = SimpleNamespace(update_selection_outline=mock.Mock())
         view = SimpleNamespace(
             scene=lambda: scene,
-            services=SimpleNamespace(selection_controller=selection_controller),
+            services=canvas_runtime_services(selection_controller=selection_controller),
         )
         set_atom_items_for(view, {1: atom_item})
         set_atom_dots_for(view, {2: atom_dot})
@@ -333,7 +335,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
         atom_item = _FakeSelectableItem("atom", 1)
         selection_controller = SimpleNamespace(update_selection_outline=mock.Mock())
         view = SimpleNamespace(
-            services=SimpleNamespace(selection_controller=selection_controller),
+            services=canvas_runtime_services(selection_controller=selection_controller),
         )
         set_atom_items_for(view, {1: atom_item})
         set_atom_dots_for(view, {})
@@ -356,7 +358,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
             )
         )
         graph_service = CanvasGraphService(view)
-        view.services = SimpleNamespace(canvas_graph_service=graph_service)
+        view.services = canvas_runtime_services(canvas_graph_service=graph_service)
 
         self.assertEqual(graph_service.expand_connected_atoms({1}), {1, 2, 3})
         self.assertEqual(graph_service.expand_connected_atoms({4}), {4, 5})
@@ -381,7 +383,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
         set_scene_item_collection_for(
             view, "ring_items", [matching_ring, non_matching_ring, invalid_ring]
         )
-        view.services = SimpleNamespace(
+        view.services = canvas_runtime_services(
             canvas_ring_fill_scene_service=CanvasRingFillSceneService(view)
         )
 

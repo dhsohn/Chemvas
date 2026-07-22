@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -97,7 +99,7 @@ class _FakeCanvas:
             is_enabled=lambda: bool(self.history_state.enabled),
         )
         self.hover_refresh = Mock()
-        self.services = SimpleNamespace(
+        self.services = canvas_runtime_services(
             history_service=self.history_service,
             canvas_graph_service=SimpleNamespace(
                 rebuild_bond_adjacency=self.rebuild_bond_adjacency
@@ -172,8 +174,8 @@ class _FakeCanvas:
 def _atom_label_service(canvas: _FakeCanvas) -> AtomLabelService:
     return AtomLabelService(
         canvas,
-        move_controller=canvas.services.move_controller,
-        graph_service=canvas.services.canvas_graph_service,
+        move_controller=canvas.services.interaction.move_controller,
+        graph_service=canvas.services.graph.canvas_graph_service,
         history_service=canvas.services.history_service,
         hover_refresh=canvas.hover_refresh,
     )

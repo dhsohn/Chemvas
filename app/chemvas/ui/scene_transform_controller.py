@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from functools import wraps
 from typing import TYPE_CHECKING, Any
 
+from PyQt6.QtWidgets import QGraphicsItem
+
 from chemvas.core.history import (
     CompositeCommand,
     HistoryCommand,
@@ -25,7 +27,6 @@ from chemvas.ui.canvas_model_access import (
     atoms_for,
     bonds_for,
 )
-from chemvas.ui.canvas_rotation_preview_state import RotationPreviewItemSnapshot
 from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
 from chemvas.ui.history_canvas_access import set_atom_positions_for_history
 from chemvas.ui.history_commands import MoveItemsCommand, UpdateSceneItemCommand
@@ -76,6 +77,12 @@ from chemvas.ui.selection_service_access import refresh_selection_outline_for
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView
+
+
+@dataclass(frozen=True, slots=True)
+class RotationPreviewItemSnapshot:
+    item: QGraphicsItem
+    state: dict
 
 
 @dataclass(frozen=True, slots=True)
