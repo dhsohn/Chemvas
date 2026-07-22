@@ -259,9 +259,11 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         for fail_after_mutation in (False, True):
             with self.subTest(fail_after_mutation=fail_after_mutation):
                 canvas = self._new_canvas()
-                mutation_service = canvas.services.canvas_atom_mutation_service
+                mutation_service = (
+                    canvas.services.structure.canvas_atom_mutation_service
+                )
                 atom_id = mutation_service.add_atom("N", 10.0, 20.0)
-                mark = canvas.services.canvas_mark_scene_service.add_mark_for_atom(
+                mark = canvas.services.scene_decoration.canvas_mark_scene_service.add_mark_for_atom(
                     atom_id,
                     QPointF(22.0, 20.0),
                     kind="plus",
@@ -314,7 +316,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 mutation_service.remove_atom_only = fail_persistently
 
                 with self.assertRaisesRegex(RuntimeError, "atom-(before|after)"):
-                    canvas.services.scene_delete_controller.delete_atom(
+                    canvas.services.scene_operations.scene_delete_controller.delete_atom(
                         atom_id, record=True
                     )
 
@@ -347,8 +349,8 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         for failure_stage in ("before_remove", "after_remove", "redraw"):
             with self.subTest(failure_stage=failure_stage):
                 canvas = self._new_canvas()
-                atom_service = canvas.services.canvas_atom_mutation_service
-                bond_service = canvas.services.canvas_bond_mutation_service
+                atom_service = canvas.services.structure.canvas_atom_mutation_service
+                bond_service = canvas.services.structure.canvas_bond_mutation_service
                 atom_a = atom_service.add_atom("N", 0.0, 0.0)
                 atom_b = atom_service.add_atom("O", 40.0, 0.0)
                 bond_id = bond_service.add_bond(atom_a, atom_b, 2)
@@ -361,7 +363,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 graphics_mapping = canvas.runtime_state.bond_graphics_state.bond_items
                 scene_order_before = list(canvas.scene().items())
                 original_remove = bond_service.remove_bond_by_id
-                original_redraw = canvas.services.move_controller.redraw_connected_bonds
+                original_redraw = (
+                    canvas.services.interaction.move_controller.redraw_connected_bonds
+                )
                 remove_calls = 0
                 redraw_calls = 0
 
@@ -393,12 +397,12 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                         raise RuntimeError("bond-redraw")
 
                 bond_service.remove_bond_by_id = fail_remove_once
-                canvas.services.move_controller.redraw_connected_bonds = (
+                canvas.services.interaction.move_controller.redraw_connected_bonds = (
                     fail_redraw_once
                 )
 
                 with self.assertRaisesRegex(RuntimeError, "bond-(before|after|redraw)"):
-                    canvas.services.scene_delete_controller.delete_bond(
+                    canvas.services.scene_operations.scene_delete_controller.delete_bond(
                         bond_id, record=True
                     )
 
@@ -533,7 +537,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         canvas.bond_renderer.update_bond_geometry = mutate_then_fail_persistently
 
         with self.assertRaisesRegex(RuntimeError, "persistent geometry refresh"):
-            canvas.services.scene_delete_controller.delete_bond(0, record=False)
+            canvas.services.scene_operations.scene_delete_controller.delete_bond(
+                0, record=False
+            )
 
         self.assertGreaterEqual(len(refresh_calls), len(canvas.model.bonds))
         self.assertIs(
@@ -591,7 +597,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
 
                 history = canvas.services.history_service
                 history.clear()
-                canvas.services.scene_delete_controller.delete_ring(ring, record=True)
+                canvas.services.scene_operations.scene_delete_controller.delete_ring(
+                    ring, record=True
+                )
                 if history_operation == "redo":
                     history.undo()
 
@@ -676,7 +684,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
     ) -> None:
         canvas = self._new_canvas()
         ring = _make_ring_item()
-        scene_item_controller = canvas.services.scene_item_controller
+        scene_item_controller = canvas.services.scene_view.scene_item_controller
         scene_item_controller.attach_scene_item(ring)
         original_remove = scene_item_controller.remove_scene_item
         call_count = 0
@@ -690,7 +698,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         scene_item_controller.remove_scene_item = fail_persistently
 
         with self.assertRaisesRegex(RuntimeError, "ring-after"):
-            canvas.services.scene_delete_controller.delete_ring(ring, record=True)
+            canvas.services.scene_operations.scene_delete_controller.delete_ring(
+                ring, record=True
+            )
 
         self.assertEqual(call_count, 1)
         self.assertIs(ring.scene(), canvas.scene())
@@ -728,7 +738,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
             if call_count == 1:
                 raise RuntimeError("bond-before-ring-cleanup")
 
-        canvas.services.canvas_bond_mutation_service.remove_bond_by_id = fail_once
+        canvas.services.structure.canvas_bond_mutation_service.remove_bond_by_id = (
+            fail_once
+        )
 
         with self.assertRaisesRegex(RuntimeError, "bond-before-ring-cleanup"):
             scene_delete_controller_for(canvas).delete_bond(0, record=True)
@@ -768,7 +780,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
             if redraw_count == 3:
                 raise RuntimeError("multi-bond-redraw")
 
-        canvas.services.move_controller.redraw_connected_bonds = fail_on_third_redraw
+        canvas.services.interaction.move_controller.redraw_connected_bonds = (
+            fail_on_third_redraw
+        )
 
         with self.assertRaisesRegex(RuntimeError, "multi-bond-redraw"):
             scene_delete_controller_for(canvas).delete_selected_items()
@@ -813,7 +827,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 failed = True
                 raise RuntimeError("multi-atom-second")
 
-        canvas.services.canvas_atom_mutation_service.remove_atom_only = (
+        canvas.services.structure.canvas_atom_mutation_service.remove_atom_only = (
             fail_on_second_atom
         )
 
@@ -844,7 +858,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         ]
         for note in notes:
             canvas.add_item(note, selected=True)
-        scene_item_controller = canvas.services.scene_item_controller
+        scene_item_controller = canvas.services.scene_view.scene_item_controller
         original_remove = scene_item_controller.remove_scene_item
         initially_attempted: list[object] = []
         failed = False
@@ -874,8 +888,8 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = self._new_canvas()
-        atom_service = canvas.services.canvas_atom_mutation_service
-        bond_service = canvas.services.canvas_bond_mutation_service
+        atom_service = canvas.services.structure.canvas_atom_mutation_service
+        bond_service = canvas.services.structure.canvas_bond_mutation_service
         atom_a = atom_service.add_atom("C", 0.0, 0.0)
         atom_b = atom_service.add_atom("C", 40.0, 0.0)
         bond_id = bond_service.add_bond(atom_a, atom_b)
@@ -886,7 +900,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         scene_before = list(canvas.scene().items())
         graphics_before = list(bond_items_for_id(canvas, bond_id))
         cleanup_calls: list[tuple[str, bool | None]] = []
-        original_suspend = canvas.services.style_controller.suspend_selection_outline
+        original_suspend = (
+            canvas.services.scene_operations.style_controller.suspend_selection_outline
+        )
 
         def fail_body(_bond_id: int) -> None:
             raise ValueError("original delete failure")
@@ -902,11 +918,15 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
             raise LookupError("refresh cleanup failure")
 
         bond_service.remove_bond_by_id = fail_body
-        canvas.services.style_controller.suspend_selection_outline = fail_resume
-        canvas.services.selection_controller.update_selection_outline = fail_refresh
+        canvas.services.scene_operations.style_controller.suspend_selection_outline = (
+            fail_resume
+        )
+        canvas.services.selection.selection_controller.update_selection_outline = (
+            fail_refresh
+        )
 
         with self.assertRaisesRegex(ValueError, "original delete failure") as caught:
-            canvas.services.scene_delete_controller.delete_selected_items()
+            canvas.services.scene_operations.scene_delete_controller.delete_selected_items()
 
         notes = getattr(caught.exception, "__notes__", [])
         self.assertTrue(any("resume cleanup failure" in note for note in notes))
@@ -926,8 +946,8 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = self._new_canvas()
-        atom_service = canvas.services.canvas_atom_mutation_service
-        bond_service = canvas.services.canvas_bond_mutation_service
+        atom_service = canvas.services.structure.canvas_atom_mutation_service
+        bond_service = canvas.services.structure.canvas_bond_mutation_service
         atom_a = atom_service.add_atom("C", 0.0, 0.0)
         atom_b = atom_service.add_atom("C", 40.0, 0.0)
         bond_id = bond_service.add_bond(atom_a, atom_b)
@@ -945,7 +965,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
             lambda: history_observations.append(history.can_undo())
         )
         cleanup_calls: list[tuple[str, bool | None]] = []
-        original_suspend = canvas.services.style_controller.suspend_selection_outline
+        original_suspend = (
+            canvas.services.scene_operations.style_controller.suspend_selection_outline
+        )
 
         def fail_resume(suspend: bool) -> None:
             cleanup_calls.append(("suspend", suspend))
@@ -957,11 +979,15 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
             cleanup_calls.append(("refresh", None))
             raise LookupError("second cleanup failure")
 
-        canvas.services.style_controller.suspend_selection_outline = fail_resume
-        canvas.services.selection_controller.update_selection_outline = fail_refresh
+        canvas.services.scene_operations.style_controller.suspend_selection_outline = (
+            fail_resume
+        )
+        canvas.services.selection.selection_controller.update_selection_outline = (
+            fail_refresh
+        )
 
         with self.assertRaisesRegex(RuntimeError, "first cleanup failure") as caught:
-            canvas.services.scene_delete_controller.delete_selected_items()
+            canvas.services.scene_operations.scene_delete_controller.delete_selected_items()
 
         notes = getattr(caught.exception, "__notes__", [])
         self.assertTrue(any("second cleanup failure" in note for note in notes))
@@ -986,7 +1012,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = self._new_canvas()
-        item_controller = canvas.services.scene_item_controller
+        item_controller = canvas.services.scene_view.scene_item_controller
         items = [_make_rect_item("shape") for _ in range(2)]
         items[1].setPos(30.0, 0.0)
         for item in items:
@@ -1001,7 +1027,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         member_list = group_object.items
         item_refs = [weakref.ref(item) for item in items]
 
-        self.assertTrue(canvas.services.scene_delete_controller.delete_selected_items())
+        self.assertTrue(
+            canvas.services.scene_operations.scene_delete_controller.delete_selected_items()
+        )
 
         command = canvas.services.history_service.state.history[-1]
         self.assertIsInstance(command, CompositeCommand)
@@ -1039,7 +1067,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = self._new_canvas()
-        atom_id = canvas.services.canvas_atom_mutation_service.add_atom("N", 10.0, 20.0)
+        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
+            "N", 10.0, 20.0
+        )
         group_state = group_state_for(canvas)
         groups_object = group_state.groups
         group_id = register_group_for(canvas, {atom_id}, [])
@@ -1047,7 +1077,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         atom_ids_object = group_object.atom_ids
         items_object = group_object.items
 
-        command = canvas.services.scene_delete_controller.delete_atom(
+        command = canvas.services.scene_operations.scene_delete_controller.delete_atom(
             atom_id, record=True
         )
 
@@ -1075,14 +1105,18 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
     ) -> None:
         direct_canvas = self._new_canvas()
         direct_ring = _make_ring_item()
-        direct_canvas.services.scene_item_controller.attach_scene_item(direct_ring)
+        direct_canvas.services.scene_view.scene_item_controller.attach_scene_item(
+            direct_ring
+        )
         direct_group_state = group_state_for(direct_canvas)
         direct_group_id = register_group_for(direct_canvas, set(), [direct_ring])
         direct_group = direct_group_state.groups[direct_group_id]
 
-        direct_command = direct_canvas.services.scene_delete_controller.delete_ring(
-            direct_ring,
-            record=True,
+        direct_command = (
+            direct_canvas.services.scene_operations.scene_delete_controller.delete_ring(
+                direct_ring,
+                record=True,
+            )
         )
 
         self.assertIsInstance(direct_command, CompositeCommand)
@@ -1105,9 +1139,11 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         broken_group_id = register_group_for(broken_canvas, set(), [broken_ring])
         broken_group = broken_group_state.groups[broken_group_id]
 
-        broken_command = broken_canvas.services.scene_delete_controller.delete_bond(
-            0,
-            record=True,
+        broken_command = (
+            broken_canvas.services.scene_operations.scene_delete_controller.delete_bond(
+                0,
+                record=True,
+            )
         )
 
         self.assertIsInstance(broken_command, CompositeCommand)
@@ -1130,7 +1166,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         for failure_stage in ("group_remove", "cleanup_refresh"):
             with self.subTest(failure_stage=failure_stage):
                 canvas = self._new_canvas()
-                item_controller = canvas.services.scene_item_controller
+                item_controller = canvas.services.scene_view.scene_item_controller
                 items = [_make_rect_item("shape") for _ in range(2)]
                 items[1].setPos(30.0, 0.0)
                 for item in items:
@@ -1187,7 +1223,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                         raise RuntimeError("persistent group refresh failure")
 
                     patcher = mock.patch.object(
-                        canvas.services.selection_controller,
+                        canvas.services.selection.selection_controller,
                         "update_selection_outline",
                         side_effect=mutate_every_group_layer_then_fail,
                     )
@@ -1197,7 +1233,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                         RuntimeError,
                         f"persistent group {'removal' if failure_stage == 'group_remove' else 'refresh'} failure",
                     ):
-                        canvas.services.scene_delete_controller.delete_selected_items()
+                        canvas.services.scene_operations.scene_delete_controller.delete_selected_items()
 
                 self.assertIs(group_state.groups, groups_object)
                 self.assertEqual(list(group_state.groups), [group_id])
@@ -1218,8 +1254,8 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = self._new_canvas()
-        controller = canvas.services.scene_delete_controller
-        item_controller = canvas.services.scene_item_controller
+        controller = canvas.services.scene_operations.scene_delete_controller
+        item_controller = canvas.services.scene_view.scene_item_controller
         notes = [
             _make_note_item("zero", 10.0, 10.0),
             _make_note_item("one", 20.0, 20.0),
@@ -1331,7 +1367,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
     def test_history_mutate_then_raise_restores_stack_and_deleted_item(self) -> None:
         canvas = self._new_canvas()
         ring = _make_ring_item()
-        canvas.services.scene_item_controller.attach_scene_item(ring)
+        canvas.services.scene_view.scene_item_controller.attach_scene_item(ring)
         history = canvas.services.history_service
         history_item = SetSmilesInputCommand("old", "current")
         redo_item = SetSmilesInputCommand("current", "future")
@@ -1349,7 +1385,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         history.push = mutate_then_fail
 
         with self.assertRaisesRegex(RuntimeError, "history-after"):
-            canvas.services.scene_delete_controller.delete_ring(ring, record=True)
+            canvas.services.scene_operations.scene_delete_controller.delete_ring(
+                ring, record=True
+            )
 
         self.assertIs(history.state.history, history_object)
         self.assertIs(history.state.redo_stack, redo_object)
@@ -1383,10 +1421,12 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         for failure_stage in ("before_append", "after_append"):
             with self.subTest(failure_stage=failure_stage):
                 canvas = self._new_canvas()
-                atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
-                    "N",
-                    10.0,
-                    20.0,
+                atom_id = (
+                    canvas.services.structure.canvas_atom_mutation_service.add_atom(
+                        "N",
+                        10.0,
+                        20.0,
+                    )
                 )
                 atom = canvas.model.atoms[atom_id]
                 atom_registry = atom_items_for(canvas)
@@ -1404,9 +1444,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 atoms_object = canvas.model.atoms
                 scene_before = list(canvas.scene().items())
 
-                tool = DeleteTool(canvas, context=canvas.services.tools.context)
+                tool = DeleteTool(canvas, context=canvas.services.tooling.tools.context)
                 with mock.patch.object(
-                    canvas.services.hit_testing_service,
+                    canvas.services.selection.hit_testing_service,
                     "item_at_event",
                     return_value=atom_item,
                 ):
@@ -1450,18 +1490,20 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = self._new_canvas()
-        atom_id = canvas.services.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
+        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
+            "N", 0.0, 0.0
+        )
         atom_item = atom_items_for(canvas)[atom_id]
         shape_item = _make_rect_item("shape")
-        canvas.services.scene_item_controller.attach_scene_item(shape_item)
+        canvas.services.scene_view.scene_item_controller.attach_scene_item(shape_item)
         atom_item.setSelected(True)
         shape_item.setSelected(True)
         scene_before = list(canvas.scene().items())
         history_before = list(canvas.services.history_service.state.history)
 
-        tool = DeleteTool(canvas, context=canvas.services.tools.context)
+        tool = DeleteTool(canvas, context=canvas.services.tooling.tools.context)
         with mock.patch.object(
-            canvas.services.hit_testing_service,
+            canvas.services.selection.hit_testing_service,
             "item_at_event",
             side_effect=[atom_item, shape_item],
         ):
@@ -1490,7 +1532,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
     ) -> None:
         canvas = self._new_canvas()
         atom_ids = [
-            canvas.services.canvas_atom_mutation_service.add_atom(
+            canvas.services.structure.canvas_atom_mutation_service.add_atom(
                 "N",
                 float(index * 20),
                 0.0,
@@ -1511,7 +1553,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
             original_outline_callback()
 
         callbacks.scene_selection_outline = counted_outline_callback
-        session = canvas.services.scene_delete_controller.begin_delete_tool_session()
+        session = canvas.services.scene_operations.scene_delete_controller.begin_delete_tool_session()
         commands = [session.delete_atom(atom_id) for atom_id in atom_ids]
 
         self.assertEqual(outline_calls, 0)
@@ -1528,7 +1570,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = self._new_canvas()
-        atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
+        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
             "C",
             0.0,
             0.0,
@@ -1546,7 +1588,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
             original_outline_callback()
 
         callbacks.scene_selection_outline = counted_outline_callback
-        session = canvas.services.scene_delete_controller.begin_delete_tool_session()
+        session = canvas.services.scene_operations.scene_delete_controller.begin_delete_tool_session()
 
         session.commit()
 
@@ -1558,14 +1600,14 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = self._new_canvas()
-        canvas.services.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
+        canvas.services.structure.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
         original_callbacks = callback_state_for(canvas)
         group_callback = original_callbacks.scene_selection_group
         outline_callback = original_callbacks.scene_selection_outline
         ports = _FailingCallbackPorts(group_callback, outline_callback)
         ports.group_getter_failures = 1
         canvas.runtime_state.callback_state = ports
-        controller = canvas.services.scene_delete_controller
+        controller = canvas.services.scene_operations.scene_delete_controller
         scene = canvas.scene()
 
         with (
@@ -1599,7 +1641,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = self._new_canvas()
-        canvas.services.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
+        canvas.services.structure.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
         original_callbacks = callback_state_for(canvas)
         group_callback = original_callbacks.scene_selection_group
         outline_callback = original_callbacks.scene_selection_outline
@@ -1607,7 +1649,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         ports.setter_error = SystemExit("group callback suspension terminated")
         ports.group_setter_failures = 1
         canvas.runtime_state.callback_state = ports
-        controller = canvas.services.scene_delete_controller
+        controller = canvas.services.scene_operations.scene_delete_controller
         scene = canvas.scene()
         scene_before = list(scene.items())
 
@@ -1630,7 +1672,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
 
     def test_delete_session_observer_no_op_setters_fail_closed(self) -> None:
         canvas = self._new_canvas()
-        canvas.services.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
+        canvas.services.structure.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
         original_callbacks = callback_state_for(canvas)
         group_callback = original_callbacks.scene_selection_group
         outline_callback = original_callbacks.scene_selection_outline
@@ -1664,7 +1706,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
 
         ports = NoOpCallbackPorts()
         canvas.runtime_state.callback_state = ports
-        controller = canvas.services.scene_delete_controller
+        controller = canvas.services.scene_operations.scene_delete_controller
 
         with self.assertRaisesRegex(RuntimeError, "no-op"):
             controller.begin_delete_tool_session()
@@ -1694,7 +1736,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = self._new_canvas()
-        atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
+        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
             "N",
             0.0,
             0.0,
@@ -1704,7 +1746,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         outline_callback = original_callbacks.scene_selection_outline
         ports = _FailingCallbackPorts(group_callback, outline_callback)
         canvas.runtime_state.callback_state = ports
-        session = canvas.services.scene_delete_controller.begin_delete_tool_session()
+        session = canvas.services.scene_operations.scene_delete_controller.begin_delete_tool_session()
         self.assertIsNotNone(session.delete_atom(atom_id))
         ports.setter_error = KeyboardInterrupt(
             "group callback rollback suspension interrupted"
@@ -1737,13 +1779,13 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = self._new_canvas()
-        canvas.services.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
+        canvas.services.structure.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
         original_callbacks = callback_state_for(canvas)
         group_callback = original_callbacks.scene_selection_group
         outline_callback = original_callbacks.scene_selection_outline
         ports = _FailingCallbackPorts(group_callback, outline_callback)
         canvas.runtime_state.callback_state = ports
-        session = canvas.services.scene_delete_controller.begin_delete_tool_session()
+        session = canvas.services.scene_operations.scene_delete_controller.begin_delete_tool_session()
         primary_error = KeyboardInterrupt("group callback commit restore interrupted")
         ports.setter_error = primary_error
         ports.group_restore_setter_failures = 1
@@ -1764,7 +1806,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = self._new_canvas()
-        atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
+        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
             "N",
             0.0,
             0.0,
@@ -1774,7 +1816,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         outline_callback = original_callbacks.scene_selection_outline
         ports = _FailingCallbackPorts(group_callback, outline_callback)
         canvas.runtime_state.callback_state = ports
-        session = canvas.services.scene_delete_controller.begin_delete_tool_session()
+        session = canvas.services.scene_operations.scene_delete_controller.begin_delete_tool_session()
         self.assertIsNotNone(session.delete_atom(atom_id))
         restore_error = SystemExit("group callback restore stayed unavailable")
         ports.setter_error = restore_error
@@ -1798,7 +1840,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = self._new_canvas()
-        atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
+        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
             "N",
             0.0,
             0.0,
@@ -1809,9 +1851,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         outline_callback = original_callbacks.scene_selection_outline
         ports = _FailingCallbackPorts(group_callback, outline_callback)
         canvas.runtime_state.callback_state = ports
-        tool = DeleteTool(canvas, context=canvas.services.tools.context)
+        tool = DeleteTool(canvas, context=canvas.services.tooling.tools.context)
         with mock.patch.object(
-            canvas.services.hit_testing_service,
+            canvas.services.selection.hit_testing_service,
             "item_at_event",
             return_value=atom_item,
         ):
@@ -1840,7 +1882,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = self._new_canvas()
-        atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
+        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
             "N",
             0.0,
             0.0,
@@ -1851,7 +1893,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         selection_info.callback = lambda formula, mass: published.append(
             (formula, mass)
         )
-        session = canvas.services.scene_delete_controller.begin_delete_tool_session()
+        session = canvas.services.scene_operations.scene_delete_controller.begin_delete_tool_session()
         self.assertIsNotNone(session.delete_atom(atom_id))
         transient_error = RuntimeError("absolute delete restore incomplete once")
         original_restore = CanvasDeleteTransactionSnapshot.restore_with_result
@@ -1890,7 +1932,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = self._new_canvas()
-        atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
+        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
             "C",
             0.0,
             0.0,
@@ -1915,7 +1957,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
 
         selection_info.callback = corrupt_after_publication
 
-        session = canvas.services.scene_delete_controller.begin_delete_tool_session()
+        session = canvas.services.scene_operations.scene_delete_controller.begin_delete_tool_session()
         self.assertIsNotNone(session.delete_atom(atom_id))
         self.assertEqual(published_values, [])
 
@@ -1942,10 +1984,12 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         for element in ("N", "O", "F", "Cl"):
             with self.subTest(element=element):
                 canvas = self._new_canvas()
-                atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
-                    element,
-                    0.0,
-                    0.0,
+                atom_id = (
+                    canvas.services.structure.canvas_atom_mutation_service.add_atom(
+                        element,
+                        0.0,
+                        0.0,
+                    )
                 )
                 atom_item = atom_items_for(canvas)[atom_id]
                 atom_item.setSelected(True)
@@ -1959,9 +2003,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                     published_values,
                 )
 
-                session = (
-                    canvas.services.scene_delete_controller.begin_delete_tool_session()
-                )
+                session = canvas.services.scene_operations.scene_delete_controller.begin_delete_tool_session()
                 self.assertIsNotNone(session.delete_atom(atom_id))
 
                 self.assertEqual(session.rollback(), [])
@@ -1978,7 +2020,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = self._new_canvas()
-        atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
+        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
             "C",
             0.0,
             0.0,
@@ -2009,9 +2051,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
             raise rollback_observer_error
 
         selection_info.callback = mutate_then_maybe_fail
-        tool = DeleteTool(canvas, context=canvas.services.tools.context)
+        tool = DeleteTool(canvas, context=canvas.services.tooling.tools.context)
         with mock.patch.object(
-            canvas.services.hit_testing_service,
+            canvas.services.selection.hit_testing_service,
             "item_at_event",
             return_value=atom_item,
         ):
@@ -2049,7 +2091,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = self._new_canvas()
-        atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
+        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
             "N",
             0.0,
             0.0,
@@ -2081,7 +2123,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 return original_rollback.__get__(instance, owner)
 
         rollback_descriptor = FailOnSecondRollbackLookup()
-        controller = canvas.services.scene_delete_controller
+        controller = canvas.services.scene_operations.scene_delete_controller
         original_begin = controller.begin_delete_tool_session
 
         def capture_session() -> SceneDeleteTransactionSession:
@@ -2089,7 +2131,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
             captured_sessions.append(session)
             return session
 
-        tool = DeleteTool(canvas, context=canvas.services.tools.context)
+        tool = DeleteTool(canvas, context=canvas.services.tooling.tools.context)
         with (
             mock.patch.object(
                 controller,
@@ -2102,7 +2144,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 rollback_descriptor,
             ),
             mock.patch.object(
-                canvas.services.hit_testing_service,
+                canvas.services.selection.hit_testing_service,
                 "item_at_event",
                 return_value=atom_item,
             ),
@@ -2142,18 +2184,20 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
 
     def test_delete_tool_success_commits_one_restorable_history_step(self) -> None:
         canvas = self._new_canvas()
-        atom_id = canvas.services.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
+        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
+            "N", 0.0, 0.0
+        )
         atom_item = atom_items_for(canvas)[atom_id]
         shape_item = _make_rect_item("shape")
-        canvas.services.scene_item_controller.attach_scene_item(shape_item)
-        context = canvas.services.tools.context
+        canvas.services.scene_view.scene_item_controller.attach_scene_item(shape_item)
+        context = canvas.services.tooling.tools.context
         actual_history = canvas.services.history_service
         unrelated_history = mock.Mock()
         context.history_service = unrelated_history
         self.addCleanup(setattr, context, "history_service", actual_history)
         tool = DeleteTool(canvas, context=context)
         with mock.patch.object(
-            canvas.services.hit_testing_service,
+            canvas.services.selection.hit_testing_service,
             "item_at_event",
             side_effect=[atom_item, shape_item],
         ):
@@ -2183,14 +2227,20 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = self._new_canvas()
-        atom_a = canvas.services.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
-        atom_b = canvas.services.canvas_atom_mutation_service.add_atom("O", 20.0, 0.0)
-        bond_id = canvas.services.canvas_bond_mutation_service.add_bond(atom_a, atom_b)
+        atom_a = canvas.services.structure.canvas_atom_mutation_service.add_atom(
+            "N", 0.0, 0.0
+        )
+        atom_b = canvas.services.structure.canvas_atom_mutation_service.add_atom(
+            "O", 20.0, 0.0
+        )
+        bond_id = canvas.services.structure.canvas_bond_mutation_service.add_bond(
+            atom_a, atom_b
+        )
         add_bond_graphics_for(canvas, bond_id)
         graph = canvas.runtime_state.graph_state
         graph.atom_bond_ids[atom_a] = {999}
 
-        session = canvas.services.scene_delete_controller.begin_delete_tool_session()
+        session = canvas.services.scene_operations.scene_delete_controller.begin_delete_tool_session()
 
         self.assertEqual(session.atom_bond_ids[atom_a], {bond_id})
         self.assertIsNotNone(session.delete_atom(atom_a))
@@ -2207,7 +2257,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         ring = add_benzene_ring_for(canvas, QPointF(0.0, 0.0))
         self.assertIsNotNone(ring)
         assert ring is not None
-        atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
+        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
             "N",
             200.0,
             0.0,
@@ -2232,11 +2282,11 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 raise read_error
             return original_data(role)
 
-        tool = DeleteTool(canvas, context=canvas.services.tools.context)
+        tool = DeleteTool(canvas, context=canvas.services.tooling.tools.context)
         with (
             mock.patch.object(ring, "data", side_effect=fail_once),
             mock.patch.object(
-                canvas.services.hit_testing_service,
+                canvas.services.selection.hit_testing_service,
                 "item_at_event",
                 return_value=atom_item,
             ),
@@ -2311,7 +2361,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
             side_effect=fail_second_dependency_read,
         ):
             with self.assertRaises(RuntimeError) as raised:
-                canvas.services.scene_delete_controller.delete_bond(
+                canvas.services.scene_operations.scene_delete_controller.delete_bond(
                     bond_id,
                     record=True,
                 )
@@ -2322,9 +2372,11 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
             self.assertEqual(ring_items_for(canvas), [ring])
             self.assertEqual(history.state.history, [])
 
-            command = canvas.services.scene_delete_controller.delete_bond(
-                bond_id,
-                record=True,
+            command = (
+                canvas.services.scene_operations.scene_delete_controller.delete_bond(
+                    bond_id,
+                    record=True,
+                )
             )
             self.assertIsNotNone(command)
             self.assertIsNone(canvas.model.bonds[bond_id])
@@ -2346,12 +2398,14 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         canvas = self._new_canvas()
         add_benzene_ring_for(canvas, QPointF(0.0, 0.0))
         ring = ring_items_for(canvas)[0]
-        isolated_atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
-            "N",
-            200.0,
-            0.0,
+        isolated_atom_id = (
+            canvas.services.structure.canvas_atom_mutation_service.add_atom(
+                "N",
+                200.0,
+                0.0,
+            )
         )
-        session = canvas.services.scene_delete_controller.begin_delete_tool_session()
+        session = canvas.services.scene_operations.scene_delete_controller.begin_delete_tool_session()
 
         with (
             mock.patch(
@@ -2373,14 +2427,14 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
     ) -> None:
         canvas = self._new_canvas()
         shape_item = _make_rect_item("shape")
-        canvas.services.scene_item_controller.attach_scene_item(shape_item)
+        canvas.services.scene_view.scene_item_controller.attach_scene_item(shape_item)
         group_id = register_group_for(canvas, set(), [shape_item])
         group = group_state_for(canvas).groups[group_id]
 
-        tool = DeleteTool(canvas, context=canvas.services.tools.context)
+        tool = DeleteTool(canvas, context=canvas.services.tooling.tools.context)
         with (
             mock.patch.object(
-                canvas.services.hit_testing_service,
+                canvas.services.selection.hit_testing_service,
                 "item_at_event",
                 return_value=shape_item,
             ),
@@ -2419,7 +2473,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         first_atom_ids = first_ring.data(2)
         self.assertIsInstance(first_atom_ids, list)
         atom_id = first_atom_ids[0]
-        session = canvas.services.scene_delete_controller.begin_delete_tool_session()
+        session = canvas.services.scene_operations.scene_delete_controller.begin_delete_tool_session()
 
         with (
             mock.patch(
@@ -2450,12 +2504,14 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self.assertIsNotNone(ring)
         assert ring is not None
         ring.setData(2, [999, 1000, 1001])
-        isolated_atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
-            "N",
-            200.0,
-            0.0,
+        isolated_atom_id = (
+            canvas.services.structure.canvas_atom_mutation_service.add_atom(
+                "N",
+                200.0,
+                0.0,
+            )
         )
-        session = canvas.services.scene_delete_controller.begin_delete_tool_session()
+        session = canvas.services.scene_operations.scene_delete_controller.begin_delete_tool_session()
 
         with (
             mock.patch(

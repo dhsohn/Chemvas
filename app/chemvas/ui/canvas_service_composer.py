@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Any
 
 from chemvas.features.selection import ActiveToolReference
 from chemvas.ui.canvas_runtime_services import (
-    AuxiliaryServices,
     CanvasRuntimeServices,
     DocumentServices,
     GraphServices,
@@ -27,7 +26,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class CanvasServiceBuilders:
-    build_canvas_auxiliary_services: Callable[..., AuxiliaryServices]
+    build_atom_label_service: Callable[..., Any]
     build_canvas_document_services: Callable[..., DocumentServices]
     build_canvas_graph_services: Callable[..., GraphServices]
     build_canvas_input_services: Callable[..., InputServices]
@@ -141,19 +140,16 @@ def compose_canvas_services(
         graph_service=canvas_graph_service,
         hit_testing_service=selection_services.hit_testing_service,
         history_service=history_service,
-        scene_transform_controller=scene_operation_services.scene_transform_controller,
     )
-    auxiliary_services = builders.build_canvas_auxiliary_services(
+    atom_label_service = builders.build_atom_label_service(
         canvas,
         move_controller=interaction_services.move_controller,
         graph_service=canvas_graph_service,
         history_service=history_service,
         hover_refresh=hover_controller.refresh,
-        note_controller=interaction_services.note_controller,
     )
 
     return CanvasRuntimeServices(
-        auxiliary=auxiliary_services,
         document=document_services,
         graph=graph_services,
         input=input_services,
@@ -166,6 +162,7 @@ def compose_canvas_services(
         selection=selection_services,
         structure=structure_services,
         tooling=tool_services,
+        atom_label_service=atom_label_service,
         history_service=history_service,
     )
 

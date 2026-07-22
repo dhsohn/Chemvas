@@ -4,6 +4,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -783,7 +785,7 @@ class _FakeCanvas:
         self.scene_clipboard_state.paste_source_json = None
         self.scene_clipboard_state.paste_count = 0
         self.history_service = SimpleNamespace(push=mock.Mock())
-        self.services = SimpleNamespace(history_service=self.history_service)
+        self.services = canvas_runtime_services(history_service=self.history_service)
 
     def scene(self) -> QGraphicsScene:
         return self._scene

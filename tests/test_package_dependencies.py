@@ -30,6 +30,10 @@ REMOVED_COMPATIBILITY_MODULES = frozenset(
         "chemvas.ui.bond_style_logic",
         "chemvas.ui.bracket_types",
         "chemvas.ui.canvas_hover_refresh",
+        "chemvas.ui.canvas_auxiliary_service_bundle",
+        "chemvas.ui.canvas_rotation_preview_controller",
+        "chemvas.ui.canvas_rotation_preview_state",
+        "chemvas.ui.canvas_service_types",
         "chemvas.ui.handle_interaction_logic",
         "chemvas.ui.history_command_snapshot",
         "chemvas.ui.history_recovery_note",
@@ -53,6 +57,8 @@ REMOVED_COMPATIBILITY_MODULES = frozenset(
         "chemvas.ui.ring_occupancy_logic",
         "chemvas.ui.scene_item_attach_snapshot",
         "chemvas.ui.scene_rect_snapshot",
+        "chemvas.ui.scene_transform_logic",
+        "chemvas.ui.selection_access",
         "chemvas.ui.selection_center_logic",
         "chemvas.ui.selection_hit_logic",
         "chemvas.ui.selection_outline_paths",
@@ -64,6 +70,7 @@ REMOVED_COMPATIBILITY_MODULES = frozenset(
         "chemvas.ui.shape_geometry",
         "chemvas.ui.smiles_insert_logic",
         "chemvas.ui.structure_growth_logic",
+        "chemvas.ui.structure_insert_service",
         "chemvas.ui.structure_payload_logic",
         "chemvas.ui.template_insert_logic",
         "chemvas.ui.template_preview_logic",
@@ -76,6 +83,27 @@ BOOTSTRAP_LEGACY_COMPOSITION_MODULES = frozenset(
         "chemvas.bootstrap.main_window",
         "chemvas.bootstrap.main_window_runtime",
         "chemvas.bootstrap.main_window_services",
+    }
+)
+
+FEATURE_QT_MIGRATION_ALLOWLIST = frozenset(
+    {
+        "chemvas.features.annotations.shape_geometry",
+        "chemvas.features.export.painting",
+        "chemvas.features.export.raster",
+        "chemvas.features.export.scope",
+        "chemvas.features.export.service",
+        "chemvas.features.export.vector",
+        "chemvas.features.insertion.ring_occupancy",
+        "chemvas.features.insertion.structure_growth",
+        "chemvas.features.rendering.bond_dotted",
+        "chemvas.features.rendering.bond_geometry",
+        "chemvas.features.rendering.bond_stereo",
+        "chemvas.features.selection.center",
+        "chemvas.features.selection.handles",
+        "chemvas.features.selection.outline",
+        "chemvas.features.selection.rotation",
+        "chemvas.features.session.autosave",
     }
 )
 
@@ -222,6 +250,25 @@ def test_domain_has_no_framework_or_adapter_dependencies() -> None:
     ]
 
     assert violations == []
+
+
+def test_feature_qt_dependencies_match_shrinking_migration_inventory() -> None:
+    direct_qt_modules = {
+        edge.source
+        for edge in _import_edges()
+        if _layer(edge.source) == "features" and edge.dependency.startswith("PyQt6")
+    }
+
+    assert direct_qt_modules == FEATURE_QT_MIGRATION_ALLOWLIST
+
+
+def test_migrated_selection_runtime_types_do_not_reintroduce_public_any() -> None:
+    paths = [
+        CHEMVAS_ROOT / "features" / "selection" / "active_tool.py",
+        CHEMVAS_ROOT / "features" / "selection" / "outline.py",
+    ]
+
+    assert all("from typing import Any" not in path.read_text() for path in paths)
 
 
 def test_hover_feature_policy_is_qt_and_adapter_free() -> None:

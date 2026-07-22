@@ -6,7 +6,7 @@ from chemvas.ui.canvas_service_access import canvas_services_for
 
 
 def atom_label_service_for_access(canvas) -> Any:
-    return canvas_services_for(canvas).auxiliary.atom_label_service
+    return canvas_services_for(canvas).atom_label_service
 
 
 def canvas_window_document_session_service(canvas) -> Any:

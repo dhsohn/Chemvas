@@ -12,11 +12,11 @@ except ModuleNotFoundError:
 if QApplication is not None:
     from chemvas.core.history import SetAtomPositionsCommand
     from chemvas.ui.history_commands import UpdateSceneItemCommand
+    from chemvas.ui.scene_flip_grouping import FlipAtomPositionMaps
     from chemvas.ui.scene_transform_apply_logic import (
         apply_component_flip_transform,
         apply_standalone_flip_transform,
     )
-    from chemvas.ui.scene_transform_logic import FlipAtomPositionMaps
 
     from tests.test_scene_ops_controller import _make_rect_item
 

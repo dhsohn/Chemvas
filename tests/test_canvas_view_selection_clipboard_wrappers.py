@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -368,11 +370,15 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
     def test_flip_actions_use_scene_transform_controller(self) -> None:
         controller = SimpleNamespace(flip_selected_items=mock.Mock())
         view = SimpleNamespace(
-            services=SimpleNamespace(scene_transform_controller=controller)
+            services=canvas_runtime_services(scene_transform_controller=controller)
         )
 
-        view.services.scene_transform_controller.flip_selected_items(horizontal=True)
-        view.services.scene_transform_controller.flip_selected_items(horizontal=False)
+        view.services.scene_operations.scene_transform_controller.flip_selected_items(
+            horizontal=True
+        )
+        view.services.scene_operations.scene_transform_controller.flip_selected_items(
+            horizontal=False
+        )
 
         controller.flip_selected_items.assert_has_calls(
             [mock.call(horizontal=True), mock.call(horizontal=False)]
@@ -388,19 +394,21 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
             delete_selected_items=mock.Mock(return_value=True),
         )
         view = SimpleNamespace(
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 scene_clipboard_controller=clipboard_controller,
                 scene_delete_controller=delete_controller,
             )
         )
 
         self.assertTrue(
-            view.services.scene_clipboard_controller.copy_selection_to_clipboard()
+            view.services.scene_operations.scene_clipboard_controller.copy_selection_to_clipboard()
         )
         self.assertFalse(
-            view.services.scene_clipboard_controller.paste_selection_from_clipboard()
+            view.services.scene_operations.scene_clipboard_controller.paste_selection_from_clipboard()
         )
-        self.assertTrue(view.services.scene_delete_controller.delete_selected_items())
+        self.assertTrue(
+            view.services.scene_operations.scene_delete_controller.delete_selected_items()
+        )
 
         clipboard_controller.copy_selection_to_clipboard.assert_called_once_with()
         clipboard_controller.paste_selection_from_clipboard.assert_called_once_with()

@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -76,19 +78,21 @@ class HandleMutationServiceTest(unittest.TestCase):
             tool_settings_state=CanvasToolSettingsState(),
             refresh_selection_outline=mock.Mock(),
         )
-        canvas.services = SimpleNamespace(
+        canvas.services = canvas_runtime_services(
             scene_decoration_build_service=build_service,
             selection_controller=SimpleNamespace(
                 update_selection_outline=canvas.refresh_selection_outline
             ),
         )
-        canvas.services.curved_arrow_path_service = CurvedArrowPathService(canvas)
+        canvas.services.handles.curved_arrow_path_service = CurvedArrowPathService(
+            canvas
+        )
         return canvas
 
     def _service(self, canvas) -> HandleMutationService:
         return HandleMutationService(
             canvas,
-            curved_arrow_path_service=canvas.services.curved_arrow_path_service,
+            curved_arrow_path_service=canvas.services.handles.curved_arrow_path_service,
         )
 
     def test_update_orbital_scale_and_rotate_use_center_or_bounds(self) -> None:
@@ -132,7 +136,7 @@ class HandleMutationServiceTest(unittest.TestCase):
         self.assertFalse(curved_item.path().isEmpty())
         self.assertEqual(curved_item.data(2)["control"], QPointF(5.0, 8.0))
         self.assertEqual(curved_item.pos(), QPointF())
-        add_arrow_head = canvas.services.scene_decoration_build_service.add_arrow_head
+        add_arrow_head = canvas.services.scene_decoration.scene_decoration_build_service.add_arrow_head
         self.assertEqual(add_arrow_head.call_count, 2)
         canvas.refresh_selection_outline.assert_called_once_with()
 
@@ -170,7 +174,7 @@ class HandleMutationServiceTest(unittest.TestCase):
         self.assertEqual(curved_item.pos(), QPointF())
         canvas.refresh_selection_outline.assert_called_once_with()
 
-        add_arrow_head = canvas.services.scene_decoration_build_service.add_arrow_head
+        add_arrow_head = canvas.services.scene_decoration.scene_decoration_build_service.add_arrow_head
         add_arrow_head.reset_mock()
         canvas.refresh_selection_outline.reset_mock()
         fallback_item = _FakeGraphicsItem(

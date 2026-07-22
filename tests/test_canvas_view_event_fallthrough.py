@@ -121,25 +121,27 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
             refresh=mock.Mock(),
         )
         view.services.hover = hover_controller
-        view.services.input_controller.hover = hover_controller
+        view.services.input.input_controller.hover = hover_controller
         insert_controller = SimpleNamespace(
             render_template_preview=mock.Mock(),
             render_smiles_preview=mock.Mock(),
             commit_template_insert=mock.Mock(),
             commit_smiles_insert=mock.Mock(),
         )
-        view.services.insert_controller = insert_controller
+        view.services.structure.insert_controller = insert_controller
         hit_testing_service = SimpleNamespace(
             scene_pos_from_event=mock.Mock(return_value=QPointF(4.0, 5.0)),
             item_at_event=mock.Mock(return_value=None),
             bond_id_from_event=mock.Mock(return_value=None),
         )
-        view.services.hit_testing_service = hit_testing_service
+        view.services.selection.hit_testing_service = hit_testing_service
         tool_controller = SimpleNamespace(active=tool_active)
-        view.services.tools = tool_controller
+        view.services.tooling.tools = tool_controller
         scene_transform_controller = SimpleNamespace(apply_bond_style=mock.Mock())
-        view.services.scene_transform_controller = scene_transform_controller
-        view.services.pointer_controller = CanvasPointerController(
+        view.services.scene_operations.scene_transform_controller = (
+            scene_transform_controller
+        )
+        view.services.input.pointer_controller = CanvasPointerController(
             view,
             hit_testing_service=hit_testing_service,
             insert_controller=insert_controller,
@@ -163,7 +165,7 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
                 template_view, _FakeEvent(button=Qt.MouseButton.RightButton)
             )
 
-            template_view.services.insert_controller.commit_template_insert.assert_not_called()
+            template_view.services.structure.insert_controller.commit_template_insert.assert_not_called()
             base_press.assert_called_once()
             template_view.services.hover.clear_hover_highlight.assert_called_once_with()
 
@@ -234,21 +236,23 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
             2: Atom("C", 20.0, 0.0),
         }
         view.model.bonds = [Bond(1, 2, 2, style="double_center")]
-        view.services.hit_testing_service.item_at_event.return_value = None
-        view.services.hit_testing_service.bond_id_from_event.return_value = 0
+        view.services.selection.hit_testing_service.item_at_event.return_value = None
+        view.services.selection.hit_testing_service.bond_id_from_event.return_value = 0
         view.apply_bond_style = mock.Mock(
             side_effect=AssertionError("canvas bond style wrapper should not run")
         )
         scene_transform_controller = SimpleNamespace(apply_bond_style=mock.Mock())
-        view.services.scene_transform_controller = scene_transform_controller
+        view.services.scene_operations.scene_transform_controller = (
+            scene_transform_controller
+        )
         _FakeMenu.instances = []
 
         controller = CanvasPointerController(
             view,
-            hit_testing_service=view.services.hit_testing_service,
-            insert_controller=view.services.insert_controller,
+            hit_testing_service=view.services.selection.hit_testing_service,
+            insert_controller=view.services.structure.insert_controller,
             hover_controller=view.services.hover,
-            tool_controller=view.services.tools,
+            tool_controller=view.services.tooling.tools,
             scene_transform_controller=scene_transform_controller,
         )
         handled = controller._show_double_bond_context_menu(
@@ -294,17 +298,17 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
                     2: Atom("C", 20.0, 0.0),
                 }
                 view.model.bonds = [Bond(1, 2, 2, style=current_style)]
-                view.services.hit_testing_service.item_at_event.return_value = None
-                view.services.hit_testing_service.bond_id_from_event.return_value = 0
+                view.services.selection.hit_testing_service.item_at_event.return_value = None
+                view.services.selection.hit_testing_service.bond_id_from_event.return_value = 0
                 scene_transform_controller = SimpleNamespace(
                     apply_bond_style=mock.Mock()
                 )
                 controller = CanvasPointerController(
                     view,
-                    hit_testing_service=view.services.hit_testing_service,
-                    insert_controller=view.services.insert_controller,
+                    hit_testing_service=view.services.selection.hit_testing_service,
+                    insert_controller=view.services.structure.insert_controller,
                     hover_controller=view.services.hover,
-                    tool_controller=view.services.tools,
+                    tool_controller=view.services.tooling.tools,
                     scene_transform_controller=scene_transform_controller,
                 )
                 _FakeMenu.instances = []

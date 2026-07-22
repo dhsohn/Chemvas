@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -65,7 +67,7 @@ if QApplication is not None:
                 toggle_note_selection=mock.Mock(),
                 update_selection_outline=mock.Mock(),
             )
-            self.services = SimpleNamespace(
+            self.services = canvas_runtime_services(
                 selection_controller=self.selection_controller
             )
 

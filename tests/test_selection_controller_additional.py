@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -203,7 +205,7 @@ def _make_canvas(**overrides):
     graph_expand_connected_atoms = defaults.pop("graph_expand_connected_atoms")
     graph_connected_components = defaults.pop("graph_connected_components")
     tool_controller = defaults.pop("tools", SimpleNamespace(active=None))
-    services = defaults.pop("services", SimpleNamespace())
+    services = defaults.pop("services", canvas_runtime_services())
     canvas = _FakeCanvas(**defaults)
     set_atom_items_for(canvas, atom_items)
     set_atom_dots_for(canvas, atom_dots)
@@ -233,7 +235,7 @@ def _make_canvas(**overrides):
 def _make_selection_controller(canvas, *, hit_testing_service=None):
     services = getattr(canvas, "services", None)
     if services is None:
-        services = SimpleNamespace()
+        services = canvas_runtime_services()
         canvas.services = services
     graph_service = getattr(services, "canvas_graph_service", None)
     if graph_service is None:
@@ -435,7 +437,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         canvas = SimpleNamespace(
             atom_items={},
             atom_dots={},
-            services=SimpleNamespace(hit_testing_service=service),
+            services=canvas_runtime_services(hit_testing_service=service),
             item_at_scene_pos=mock.Mock(
                 side_effect=AssertionError("canvas facade should not be used")
             ),
@@ -866,7 +868,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         set_selected_notes_for(canvas, [note_a])
         controller = _make_selection_controller(canvas)
         canvas.clear_note_selection = controller.clear_note_selection
-        canvas.services = SimpleNamespace(selection_controller=controller)
+        canvas.services = canvas_runtime_services(selection_controller=controller)
 
         controller.select_note(note_b, additive=False)
         self.assertEqual(selected_notes_for(canvas), [note_b])
@@ -1093,7 +1095,9 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         )
         self.assertTrue(controller.selection_center_marker_enabled())
 
-        canvas.services.tools = SimpleNamespace(active=SimpleNamespace(name="select"))
+        canvas.services.tooling.tools = SimpleNamespace(
+            active=SimpleNamespace(name="select")
+        )
         self.assertFalse(controller.selection_center_marker_enabled())
 
         empty_controller = _make_selection_controller(
@@ -1116,7 +1120,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 10.0, 0.0)},
                 bonds=[Bond(1, 2, 2), None],
             ),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 scene_decoration_build_service=SimpleNamespace(
                     mark_center=lambda item: QPointF(4.0, 5.0)
                 ),
@@ -1169,8 +1173,8 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         canvas.bond_items[0] = [line_item_a, line_item_b]
         self.assertFalse(controller.selection_path_for_bond(0).isEmpty())
 
-        canvas.services.geometry_controller.ring_center_for_bond = lambda bond: QPointF(
-            5.0, 0.0
+        canvas.services.scene_view.geometry_controller.ring_center_for_bond = (
+            lambda bond: QPointF(5.0, 0.0)
         )
         canvas.bond_items[0] = [object()]
         self.assertTrue(controller.selection_path_for_bond(0).isEmpty())
@@ -1182,7 +1186,9 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
             QGraphicsLineItem(0.0, 0.0, 10.0, 0.0),
             QGraphicsLineItem(0.0, 2.0, 10.0, 2.0),
         ]
-        canvas.services.geometry_controller.ring_center_for_bond = lambda bond: None
+        canvas.services.scene_view.geometry_controller.ring_center_for_bond = (
+            lambda bond: None
+        )
         self.assertFalse(controller.selection_path_for_bond(0).isEmpty())
 
         canvas.model = SimpleNamespace(

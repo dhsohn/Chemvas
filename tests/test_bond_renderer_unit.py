@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -104,7 +106,7 @@ class _FakeCanvas:
         self.graph_state = CanvasGraphState()
         self._scene = QGraphicsScene()
         self.selectable_items: list = []
-        self.services = SimpleNamespace(
+        self.services = canvas_runtime_services(
             geometry_controller=SimpleNamespace(
                 trim_line_for_labels=self.trim_line_for_labels,
                 label_rect_for_atom=self.label_rect_for_atom,

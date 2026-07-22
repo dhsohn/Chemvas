@@ -4,6 +4,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -179,7 +181,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         canvas = CanvasView()
 
         def close_canvas(target=canvas) -> None:
-            target.services.canvas_scene_reset_service.clear_scene()
+            target.services.document.canvas_scene_reset_service.clear_scene()
             target.close()
 
         self.addCleanup(close_canvas)
@@ -211,7 +213,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         bond_item.setOpacity(0.4)
         canvas.services.history_service.push(prior_command)
 
-        canvas.services.geometry_controller.set_bond_length(30.0)
+        canvas.services.scene_view.geometry_controller.set_bond_length(30.0)
 
         self.assertEqual(
             (
@@ -285,7 +287,9 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                     lambda _item, _value: None,
                 ):
                     with self.assertRaisesRegex(RuntimeError, expected_error):
-                        canvas.services.geometry_controller.set_bond_length(40.0)
+                        canvas.services.scene_view.geometry_controller.set_bond_length(
+                            40.0
+                        )
 
                 self.assertIs(canvas.renderer.style, original_style)
                 self.assertEqual(bond_length_px_for(canvas), 20.0)
@@ -298,7 +302,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self,
     ) -> None:
         canvas, label_atom_id, dot_atom_id, bond_id = self._real_bond_length_canvas()
-        canvas.services.geometry_controller.set_bond_length(30.0)
+        canvas.services.scene_view.geometry_controller.set_bond_length(30.0)
         canvas.services.history_service.clear()
         label_item = atom_items_for(canvas)[label_atom_id]
         dot_item = atom_dots_for(canvas)[dot_atom_id]
@@ -386,7 +390,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             side_effect=fail_once_after_update,
         ):
             with self.assertRaisesRegex(RuntimeError, "initial refresh failure"):
-                canvas.services.geometry_controller.set_bond_length(30.0)
+                canvas.services.scene_view.geometry_controller.set_bond_length(30.0)
 
         self.assertEqual(bond_length_px_for(canvas), 20.0)
         self.assertEqual(
@@ -478,7 +482,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                     AttributeError,
                     rf"live {failure_port} descriptor failed",
                 ):
-                    canvas.services.geometry_controller.set_bond_length(30.0)
+                    canvas.services.scene_view.geometry_controller.set_bond_length(30.0)
 
                 self.assertEqual(bond_length_px_for(canvas), 20.0)
                 self.assertEqual(
@@ -520,7 +524,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             side_effect=RuntimeError("persistent geometry callback failure"),
         ):
             with self.assertRaisesRegex(RuntimeError, "persistent geometry"):
-                canvas.services.geometry_controller.set_bond_length(30.0)
+                canvas.services.scene_view.geometry_controller.set_bond_length(30.0)
 
         self.assertIs(canvas.renderer.style, original_style)
         self.assertEqual(bond_length_px_for(canvas), 20.0)
@@ -557,7 +561,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             side_effect=[original_error, rollback_error],
         ):
             with self.assertRaises(RuntimeError) as caught:
-                canvas.services.geometry_controller.set_bond_length(30.0)
+                canvas.services.scene_view.geometry_controller.set_bond_length(30.0)
 
         self.assertIs(caught.exception, original_error)
         self.assertIs(canvas.renderer.style, original_style)
@@ -630,7 +634,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                     ),
                     self.assertRaises(KeyboardInterrupt) as raised,
                 ):
-                    canvas.services.geometry_controller.set_bond_length(30.0)
+                    canvas.services.scene_view.geometry_controller.set_bond_length(30.0)
 
                 self.assertIs(raised.exception, primary)
                 self.assertEqual(calls, 2)
@@ -684,7 +688,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             new=mutate_once_then_fail_persistently,
         ):
             with self.assertRaisesRegex(RuntimeError, "persistent atom font"):
-                canvas.services.geometry_controller.set_bond_length(30.0)
+                canvas.services.scene_view.geometry_controller.set_bond_length(30.0)
 
         self.assertGreaterEqual(calls, 2)
         self.assertIs(canvas.renderer.style, original_style)
@@ -701,7 +705,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self,
     ) -> None:
         canvas, label_atom_id, _dot_atom_id, _bond_id = self._real_bond_length_canvas()
-        canvas.services.geometry_controller.set_bond_length(30.0)
+        canvas.services.scene_view.geometry_controller.set_bond_length(30.0)
         label_item = atom_items_for(canvas)[label_atom_id]
         label_item.setSelected(True)
         original_style = canvas.renderer.style
@@ -777,7 +781,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         }
         before_coords = dict(atom_coords_3d_for(canvas))
         before_polygon = [(point.x(), point.y()) for point in ring_item.polygon()]
-        canvas.services.geometry_controller.set_bond_length(30.0)
+        canvas.services.scene_view.geometry_controller.set_bond_length(30.0)
 
         history_service = canvas.services.history_service
         state = history_service.state
@@ -908,7 +912,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
 
         with mock.patch.object(history, "push", side_effect=append_then_raise):
             with self.assertRaisesRegex(RuntimeError, "failed after append"):
-                canvas.services.geometry_controller.set_bond_length(30.0)
+                canvas.services.scene_view.geometry_controller.set_bond_length(30.0)
 
         self.assertIs(canvas.renderer.style, renderer_style)
         self.assertEqual(bond_length_px_for(canvas), 20.0)
@@ -960,7 +964,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             atom_items={},
             atom_dots={},
             scene=lambda: SimpleNamespace(removeItem=mock.Mock()),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 history_service=SimpleNamespace(push=pushed.append),
                 structure_build_service=structure_build_service,
                 hit_testing_service=SimpleNamespace(
@@ -973,7 +977,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
 
         CanvasGeometryController(
             view,
-            hit_testing_service=view.services.hit_testing_service,
+            hit_testing_service=view.services.selection.hit_testing_service,
             history_service=view.services.history_service,
         ).set_bond_length(30.0)
 
@@ -1026,7 +1030,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             ),
             model=SimpleNamespace(atoms={}),
             push_command=mock.Mock(),
-            services=SimpleNamespace(),
+            services=canvas_runtime_services(),
         )
         set_scene_item_collection_for(empty_view, "ring_items", [])
         empty_view.services.history_service = SimpleNamespace(
@@ -1049,7 +1053,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             ),
             model=SimpleNamespace(atoms={1: Atom("C", 1.0, 2.0)}),
             push_command=mock.Mock(),
-            services=SimpleNamespace(),
+            services=canvas_runtime_services(),
         )
         set_scene_item_collection_for(same_view, "ring_items", [])
         same_view.services.history_service = SimpleNamespace(
@@ -1176,13 +1180,13 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                     5: {3},
                 }
             ),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 canvas_graph_service=SimpleNamespace(
                     bond_in_cycle=lambda bond_id: bond_id in {2, 3}
                 )
             ),
         )
-        bond_in_cycle = view.services.canvas_graph_service.bond_in_cycle
+        bond_in_cycle = view.services.graph.canvas_graph_service.bond_in_cycle
         self.assertTrue(atom_in_planar_system_for(view, 2, bond_in_cycle=bond_in_cycle))
         self.assertTrue(
             bond_is_planar_fragment_edge_for(view, 1, bond_in_cycle=bond_in_cycle)
@@ -1220,13 +1224,13 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         view = SimpleNamespace(
             model=SimpleNamespace(bonds=[None, Bond(1, 2, 1), Bond(2, 3, 1)]),
             graph_state=CanvasGraphState(atom_bond_ids={1: {0, 9}, 2: {0, 1}, 3: {2}}),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 canvas_graph_service=SimpleNamespace(
                     bond_in_cycle=lambda bond_id: False
                 )
             ),
         )
-        bond_in_cycle = view.services.canvas_graph_service.bond_in_cycle
+        bond_in_cycle = view.services.graph.canvas_graph_service.bond_in_cycle
         self.assertFalse(
             atom_in_planar_system_for(view, 1, bond_in_cycle=bond_in_cycle)
         )
@@ -1348,7 +1352,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             mark_registry=CanvasMarkRegistry(
                 {1: [mark_with_offset, mark_without_offset]}
             ),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 atom_label_service=atom_label_service,
                 scene_decoration_build_service=scene_decoration_build_service,
             ),
@@ -1389,7 +1393,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         view = SimpleNamespace(
             model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0)}),
             mark_registry=CanvasMarkRegistry(),
-            services=SimpleNamespace(
+            services=canvas_runtime_services(
                 atom_label_service=SimpleNamespace(position_label=mock.Mock()),
                 scene_decoration_build_service=SimpleNamespace(
                     set_mark_center=mock.Mock()
@@ -1607,7 +1611,9 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
 
         cached_service = CanvasGraphService(cached_view)
         fallback_service = CanvasGraphService(fallback_view)
-        cached_view.services = SimpleNamespace(canvas_graph_service=cached_service)
+        cached_view.services = canvas_runtime_services(
+            canvas_graph_service=cached_service
+        )
 
         self.assertFalse(CanvasGraphService.bond_matches_atoms(None, 1, 2))
         self.assertTrue(CanvasGraphService.bond_matches_atoms(bonds[0], 1, 2))

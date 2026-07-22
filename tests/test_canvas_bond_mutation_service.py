@@ -9,6 +9,8 @@ from chemvas.domain.document import Bond
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
 from chemvas.ui.canvas_bond_mutation_service import CanvasBondMutationService
 
+from tests.runtime_services import canvas_runtime_services
+
 try:
     from chemvas.ui.canvas_graph_service import CanvasGraphService
     from chemvas.ui.canvas_graph_state import CanvasGraphState
@@ -53,7 +55,7 @@ def _hit_testing_service():
 
 
 def _services(*, graph=None, hit_testing=None, bond_mutation=None):
-    return SimpleNamespace(
+    return canvas_runtime_services(
         canvas_graph_service=graph,
         hit_testing_service=hit_testing,
         canvas_bond_mutation_service=bond_mutation,
@@ -63,8 +65,8 @@ def _services(*, graph=None, hit_testing=None, bond_mutation=None):
 def _service_for(canvas) -> CanvasBondMutationService:
     return CanvasBondMutationService(
         canvas,
-        hit_testing_service=canvas.services.hit_testing_service,
-        graph_service=canvas.services.canvas_graph_service,
+        hit_testing_service=canvas.services.selection.hit_testing_service,
+        graph_service=canvas.services.graph.canvas_graph_service,
     )
 
 

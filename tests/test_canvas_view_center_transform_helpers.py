@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -169,7 +171,7 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
                 curved_snap_step=0.25,
             ),
         )
-        view.services = SimpleNamespace(
+        view.services = canvas_runtime_services(
             selection_controller=SimpleNamespace(
                 update_selection_outline=view.refresh_selection_outline
             ),
@@ -192,7 +194,7 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         tool_mode_controller = CanvasToolModeController(
             view,
             hover_refresh=view.services.hover.refresh,
-            set_active_tool=view.services.tools.set_active,
+            set_active_tool=view.services.tooling.tools.set_active,
         )
         tool_mode_controller.set_bond_style("double", 2)
         tool_mode_controller.set_arrow_type("curved")
@@ -209,7 +211,7 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         self.assertTrue(tool_mode_controller.get_curved_snap())
         self.assertEqual(tool_mode_controller.get_curved_snap_step(), 0.05)
         self.assertEqual(
-            view.services.tools.set_active.call_args_list,
+            view.services.tooling.tools.set_active.call_args_list,
             [mock.call("bond"), mock.call("arrow"), mock.call("orbital")],
         )
         self.assertEqual(view.refresh_selection_outline.call_count, 3)

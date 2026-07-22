@@ -49,7 +49,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
         canvas = CanvasView()
 
         def close_canvas(target=canvas) -> None:
-            target.services.canvas_scene_reset_service.clear_scene()
+            target.services.document.canvas_scene_reset_service.clear_scene()
             target.close()
 
         self.addCleanup(close_canvas)

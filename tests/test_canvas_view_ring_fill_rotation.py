@@ -4,6 +4,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -46,7 +48,7 @@ def _polygon_points(polygon) -> list[tuple[float, float]]:
 
 
 def _attach_ring_fill_service(view) -> None:
-    view.services = SimpleNamespace(
+    view.services = canvas_runtime_services(
         canvas_ring_fill_scene_service=CanvasRingFillSceneService(view)
     )
 

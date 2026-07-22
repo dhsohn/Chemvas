@@ -47,7 +47,7 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         self.tool_mode_controller_for_window = mock.Mock(
             return_value=active_canvas_for_window(
                 self.window
-            ).services.tool_mode_controller,
+            ).services.input.tool_mode_controller,
         )
         self.active_tool_name_for_window = mock.Mock(
             side_effect=lambda window: self._active_tool_name_for_canvas(
@@ -80,7 +80,7 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         )
 
     def _active_tool_name_for_canvas(self, canvas) -> str | None:
-        active_tool = getattr(canvas.services.tools, "active", None)
+        active_tool = getattr(canvas.services.tooling.tools, "active", None)
         name = getattr(active_tool, "name", None)
         return str(name) if name else None
 
@@ -100,11 +100,15 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
     ) -> None:
         with (
             mock.patch.object(
-                active_canvas_for_window(self.window).services.tool_mode_controller,
+                active_canvas_for_window(
+                    self.window
+                ).services.input.tool_mode_controller,
                 "set_tool",
             ) as set_tool,
             mock.patch.object(
-                active_canvas_for_window(self.window).services.tool_mode_controller,
+                active_canvas_for_window(
+                    self.window
+                ).services.input.tool_mode_controller,
                 "set_mark_kind",
             ) as set_mark_kind,
             mock.patch.object(self.service, "set_bond_style") as set_bond_style,
@@ -137,9 +141,9 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
 
     def test_sync_tool_actions_from_canvas_follows_active_tool_variants(self) -> None:
         self._reset_tool_checks()
-        active_canvas_for_window(self.window).services.tools.active = SimpleNamespace(
-            name="bond"
-        )
+        active_canvas_for_window(
+            self.window
+        ).services.tooling.tools.active = SimpleNamespace(name="bond")
         set_tool_setting_for(
             active_canvas_for_window(self.window), "active_bond_style", "hash"
         )
@@ -147,9 +151,9 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         self.assertTrue(self.window.ui_references.tool_actions["bond"].isChecked())
 
         self._reset_tool_checks()
-        active_canvas_for_window(self.window).services.tools.active = SimpleNamespace(
-            name="mark"
-        )
+        active_canvas_for_window(
+            self.window
+        ).services.tooling.tools.active = SimpleNamespace(name="mark")
         set_tool_setting_for(
             active_canvas_for_window(self.window), "mark_kind", "minus"
         )
@@ -157,9 +161,9 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         self.assertTrue(self.window.ui_references.tool_actions["mark"].isChecked())
 
         self._reset_tool_checks()
-        active_canvas_for_window(self.window).services.tools.active = SimpleNamespace(
-            name="perspective"
-        )
+        active_canvas_for_window(
+            self.window
+        ).services.tooling.tools.active = SimpleNamespace(name="perspective")
         self.service.sync_tool_actions_from_canvas(self.window)
         self.assertTrue(
             self.window.ui_references.tool_actions["perspective"].isChecked()
@@ -171,7 +175,7 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
 
     def test_set_bond_style_routes_toolbar_labels_to_canvas(self) -> None:
         with mock.patch.object(
-            active_canvas_for_window(self.window).services.tool_mode_controller,
+            active_canvas_for_window(self.window).services.input.tool_mode_controller,
             "set_bond_style",
         ) as set_bond_style:
             self.service.set_bond_style(self.window, "Double")
@@ -184,11 +188,11 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         self.assertEqual(self.tool_mode_controller_for_window.call_count, 2)
 
     def test_set_mark_kind_routes_option_bar_choice_to_canvas(self) -> None:
-        active_canvas_for_window(self.window).services.tools.active = SimpleNamespace(
-            name="mark"
-        )
+        active_canvas_for_window(
+            self.window
+        ).services.tooling.tools.active = SimpleNamespace(name="mark")
         with mock.patch.object(
-            active_canvas_for_window(self.window).services.tool_mode_controller,
+            active_canvas_for_window(self.window).services.input.tool_mode_controller,
             "set_mark_kind",
         ) as set_mark_kind:
             self.service.set_mark_kind(self.window, "radical")
@@ -201,11 +205,11 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         self.tool_mode_controller_for_window.assert_called_once_with(self.window)
 
     def test_set_bracket_type_routes_option_bar_choice_to_canvas(self) -> None:
-        active_canvas_for_window(self.window).services.tools.active = SimpleNamespace(
-            name="ts_bracket"
-        )
+        active_canvas_for_window(
+            self.window
+        ).services.tooling.tools.active = SimpleNamespace(name="ts_bracket")
         with mock.patch.object(
-            active_canvas_for_window(self.window).services.tool_mode_controller,
+            active_canvas_for_window(self.window).services.input.tool_mode_controller,
             "set_bracket_type",
         ) as set_bracket_type:
             self.service.set_bracket_type(self.window, "double_dagger")
@@ -220,15 +224,21 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
     def test_set_arrow_and_orbital_variants_route_mapped_values(self) -> None:
         with (
             mock.patch.object(
-                active_canvas_for_window(self.window).services.tool_mode_controller,
+                active_canvas_for_window(
+                    self.window
+                ).services.input.tool_mode_controller,
                 "set_arrow_type",
             ) as set_arrow_type,
             mock.patch.object(
-                active_canvas_for_window(self.window).services.tool_mode_controller,
+                active_canvas_for_window(
+                    self.window
+                ).services.input.tool_mode_controller,
                 "set_orbital_type",
             ) as set_orbital_type,
             mock.patch.object(
-                active_canvas_for_window(self.window).services.tool_mode_controller,
+                active_canvas_for_window(
+                    self.window
+                ).services.input.tool_mode_controller,
                 "set_orbital_phase_enabled",
             ) as set_orbital_phase_enabled,
         ):
@@ -256,11 +266,15 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
     def test_set_arrow_preset_routes_width_and_head_scale(self) -> None:
         with (
             mock.patch.object(
-                active_canvas_for_window(self.window).services.tool_mode_controller,
+                active_canvas_for_window(
+                    self.window
+                ).services.input.tool_mode_controller,
                 "set_arrow_line_width",
             ) as set_arrow_line_width,
             mock.patch.object(
-                active_canvas_for_window(self.window).services.tool_mode_controller,
+                active_canvas_for_window(
+                    self.window
+                ).services.input.tool_mode_controller,
                 "set_arrow_head_scale",
             ) as set_arrow_head_scale,
         ):

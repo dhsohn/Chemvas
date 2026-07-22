@@ -8,6 +8,8 @@ from unittest import mock
 from chemvas.core.history import SetAtomPositionsCommand
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 
+from tests.runtime_services import canvas_runtime_services
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
@@ -374,7 +376,7 @@ class _FakeCanvas:
         )
         self.restore_selection_calls: list[tuple[set[int], set[int]]] = []
         self.selection_info_emits = 0
-        self.services = SimpleNamespace(
+        self.services = canvas_runtime_services(
             history_service=self.history_service,
             move_controller=SimpleNamespace(
                 redraw_bonds_for_atoms=self.record_redraw_bonds_for_atoms
@@ -607,8 +609,8 @@ class _FakeSelectionRotationPorts:
 def _controller_for(canvas: _FakeCanvas) -> SelectionRotationController:
     controller = SelectionRotationController(
         canvas,
-        move_controller=canvas.services.move_controller,
-        graph_service=canvas.services.canvas_graph_service,
+        move_controller=canvas.services.interaction.move_controller,
+        graph_service=canvas.services.graph.canvas_graph_service,
         history_service=canvas.services.history_service,
     )
     ports = _FakeSelectionRotationPorts(canvas)
@@ -981,7 +983,7 @@ class SelectionRotationControllerTest(unittest.TestCase):
             self.assertIsNotNone(selected_item)
             selected_item.setSelected(True)
             self.app.processEvents()
-            controller = canvas.services.selection_rotation_controller
+            controller = canvas.services.interaction.selection_rotation_controller
 
             counting_bonds.reset_counts()
             self.assertTrue(controller.begin_selection_3d_rotation())
@@ -1735,7 +1737,9 @@ class SelectionRotationControllerTest(unittest.TestCase):
                     state_owner = canvas
                 else:
                     canvas = _FailOnceSceneCanvasView()
-                    controller = canvas.services.selection_rotation_controller
+                    controller = (
+                        canvas.services.interaction.selection_rotation_controller
+                    )
                     state_owner = canvas.runtime_state
 
                 scene = canvas.scene()
@@ -1832,7 +1836,9 @@ class SelectionRotationControllerTest(unittest.TestCase):
                         )
                     else:
                         canvas = CanvasView()
-                        controller = canvas.services.selection_rotation_controller
+                        controller = (
+                            canvas.services.interaction.selection_rotation_controller
+                        )
                         scene = canvas.scene()
                         outline_state = canvas.runtime_state.selection_outline_state
                         item = _fail_once_method_property_item(
@@ -2064,7 +2070,7 @@ class SelectionRotationControllerTest(unittest.TestCase):
 
         canvas = CanvasView()
         scene = canvas.scene()
-        controller = canvas.services.selection_rotation_controller
+        controller = canvas.services.interaction.selection_rotation_controller
         first = _BrokenFirstItem(0.0, 0.0, 10.0, 10.0)
         later = QGraphicsRectItem(20.0, 0.0, 10.0, 10.0)
         highest = QGraphicsRectItem(40.0, 0.0, 10.0, 10.0)
@@ -2294,7 +2300,7 @@ class SelectionRotationControllerTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = CanvasView()
-        controller = canvas.services.selection_rotation_controller
+        controller = canvas.services.interaction.selection_rotation_controller
         try:
             atom_ids = [
                 add_atom_for(canvas, "C", 0.0, 0.0),
@@ -2370,7 +2376,7 @@ class SelectionRotationControllerTest(unittest.TestCase):
 
     def test_actual_end_accepts_ring_selection_republication(self) -> None:
         canvas = CanvasView()
-        controller = canvas.services.selection_rotation_controller
+        controller = canvas.services.interaction.selection_rotation_controller
         try:
             add_benzene_ring_for(canvas, QPointF(0.0, 0.0))
             ring_item = ring_items_for(canvas)[0]
