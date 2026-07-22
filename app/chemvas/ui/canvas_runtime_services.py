@@ -16,7 +16,6 @@ if TYPE_CHECKING:
 
 class AuxiliaryServices(Protocol):
     atom_label_service: Any
-    benzene_preview_service: Any
     structure_insert_service: Any
 
 
@@ -149,7 +148,6 @@ _LEGACY_SERVICE_PATHS: dict[str, tuple[str, str]] = {
     "rotation_preview_controller": ("scene_view", "rotation_preview_controller"),
     "atom_label_service": ("auxiliary", "atom_label_service"),
     "structure_build_service": ("structure", "structure_build_service"),
-    "benzene_preview_service": ("auxiliary", "benzene_preview_service"),
     "scene_decoration_build_service": (
         "scene_decoration",
         "scene_decoration_build_service",

@@ -75,6 +75,9 @@ suite, and milestone-level full-suite/package verification.
   preview, and mark preview roles were removed rather than retained as
   compatibility paths. A thin `chemvas.ui.canvas_hover_state` accessor remains
   as an import-cycle leaf and reads only the strict runtime-state field.
+- Benzene preview now uses the canonical insertion template policy and shared
+  scene renderer. Its separate access, scene-access, service, renderer, and
+  transient state were removed instead of being retained as compatibility paths.
 
 ## Consequences
 

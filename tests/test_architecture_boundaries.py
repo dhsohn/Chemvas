@@ -1311,7 +1311,6 @@ def test_access_helpers_use_canvas_service_accessor_instead_of_services_lookup()
 
 def test_simple_canvas_access_helpers_delegate_service_lookup_to_ports() -> None:
     access_paths = [
-        APP_ROOT / "chemvas" / "ui" / "benzene_preview_access.py",
         APP_ROOT / "chemvas" / "ui" / "canvas_model_access.py",
         APP_ROOT / "chemvas" / "ui" / "canvas_scene_reset_access.py",
         APP_ROOT / "chemvas" / "ui" / "insert_session_access.py",
@@ -1999,10 +1998,20 @@ def test_canvas_services_delegates_interaction_service_assembly_to_bundle() -> N
 
 def test_canvas_services_delegates_auxiliary_service_assembly_to_bundle() -> None:
     direct_instantiation = re.compile(
-        r"\b(?:AtomLabelService|BenzenePreviewService|StructureInsertService)\("
+        r"\b(?:AtomLabelService|StructureInsertService)\("
     )
 
     assert _matching_lines(direct_instantiation, _service_assembly_paths()) == []
+
+
+def test_template_preview_does_not_reintroduce_separate_benzene_runtime() -> None:
+    pattern = re.compile(
+        r"\bbenzene_preview_items\b"
+        r"|\bbenzene_preview_service(?:_for(?:_access)?)?\b"
+        r"|\bBenzenePreviewService\b"
+    )
+
+    assert _matching_lines(pattern, _app_python_files()) == []
 
 
 def test_canvas_services_delegates_structure_service_assembly_to_bundle() -> None:
@@ -2251,20 +2260,6 @@ def test_canvas_color_mutation_service_does_not_use_context_facade() -> None:
         r"|self\.context\b"
         r"|\bresolve_canvas_graph_service\b"
         r"|canvas_service_for\([^,\n]+,\s*\"canvas_graph_service\""
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [service]) == []
-
-
-def test_benzene_preview_service_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "benzene_preview_context.py"
-    service = APP_ROOT / "chemvas" / "ui" / "benzene_preview_service.py"
-    pattern = re.compile(
-        r"\bBenzenePreviewContext\b"
-        r"|\bbenzene_preview_context_for\b"
-        r"|self\.context\b"
-        r"|\bcanvas_service_for\b"
     )
 
     assert not removed_context.exists()

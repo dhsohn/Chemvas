@@ -31,10 +31,6 @@ if QApplication is not None:
         clear_atom_label_for,
         prompt_atom_label_for,
     )
-    from chemvas.ui.benzene_preview_access import (
-        clear_benzene_preview_for,
-        render_benzene_preview_for,
-    )
     from chemvas.ui.canvas_atom_graphics_state import (
         atom_dots_for,
         atom_items_for,
@@ -742,42 +738,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             attach_atom_id=1,
             attach_bond_id=2,
             before_smiles_input="before",
-        )
-
-    def test_benzene_preview_access_helpers_delegate_to_service(self) -> None:
-        benzene_preview_service = mock.Mock()
-        view = SimpleNamespace(
-            services=SimpleNamespace(benzene_preview_service=benzene_preview_service)
-        )
-
-        clear_benzene_preview_for(view)
-        render_benzene_preview_for(
-            view, QPointF(2.0, 3.0), attach_atom_id=1, attach_bond_id=2
-        )
-
-        benzene_preview_service.clear_preview.assert_called_once_with()
-        benzene_preview_service.render_preview.assert_called_once_with(
-            QPointF(2.0, 3.0),
-            attach_atom_id=1,
-            attach_bond_id=2,
-        )
-
-    def test_benzene_preview_access_uses_service_only(self) -> None:
-        benzene_preview_service = mock.Mock()
-        view = SimpleNamespace(
-            services=SimpleNamespace(benzene_preview_service=benzene_preview_service)
-        )
-
-        clear_benzene_preview_for(view)
-        render_benzene_preview_for(
-            view, QPointF(2.0, 3.0), attach_atom_id=1, attach_bond_id=2
-        )
-
-        benzene_preview_service.clear_preview.assert_called_once_with()
-        benzene_preview_service.render_preview.assert_called_once_with(
-            QPointF(2.0, 3.0),
-            attach_atom_id=1,
-            attach_bond_id=2,
         )
 
     def test_selection_controller_public_api_delegates(self) -> None:

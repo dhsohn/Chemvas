@@ -24,7 +24,6 @@ def test_build_canvas_auxiliary_services_wires_explicit_collaborators(
 ) -> None:
     for class_name in (
         "AtomLabelService",
-        "BenzenePreviewService",
         "StructureInsertService",
     ):
         monkeypatch.setattr(
@@ -36,7 +35,6 @@ def test_build_canvas_auxiliary_services_wires_explicit_collaborators(
     graph_service = object()
     history_service = object()
     hover_refresh = object()
-    structure_build_service = object()
     note_controller = object()
 
     services = build_canvas_auxiliary_services(
@@ -45,7 +43,6 @@ def test_build_canvas_auxiliary_services_wires_explicit_collaborators(
         graph_service=graph_service,
         history_service=history_service,
         hover_refresh=hover_refresh,
-        structure_build_service=structure_build_service,
         note_controller=note_controller,
     )
 
@@ -55,9 +52,6 @@ def test_build_canvas_auxiliary_services_wires_explicit_collaborators(
         "graph_service": graph_service,
         "history_service": history_service,
         "hover_refresh": hover_refresh,
-    }
-    assert services.benzene_preview_service.kwargs == {
-        "structure_build_service": structure_build_service
     }
     assert services.structure_insert_service.kwargs == {
         "note_controller": note_controller

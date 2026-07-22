@@ -19,7 +19,6 @@ from chemvas.features.insertion import (
     plan_smiles_preview_update,
     smiles_preview_center,
 )
-from chemvas.ui.benzene_preview_access import clear_benzene_preview_for
 from chemvas.ui.bond_graphics_access import parallel_bond_segments_for
 from chemvas.ui.canvas_atom_graphics_state import clear_atom_graphics_for
 from chemvas.ui.canvas_bond_graphics_state import clear_bond_graphics_for
@@ -414,7 +413,6 @@ class InsertSmilesService:
     def begin_smiles_insert(self, smiles: str) -> None:
         if self.insert_state.template_active:
             self._cancel_template_insert()
-        clear_benzene_preview_for(self.canvas)
         smiles = smiles.strip()
         if not smiles:
             return

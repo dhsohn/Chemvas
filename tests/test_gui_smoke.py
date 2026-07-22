@@ -825,12 +825,6 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertEqual(
             active_canvas_for_window(self.window).services.tools.active.name, "benzene"
         )
-        self.assertEqual(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).benzene_preview_items,
-            [],
-        )
         self.assertTrue(
             insert_state_for(active_canvas_for_window(self.window)).template_active
         )
@@ -860,25 +854,8 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertEqual(
             active_canvas_for_window(self.window).services.tools.active.name, "select"
         )
-        self.assertEqual(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).benzene_preview_items,
-            [],
-        )
         self.assertFalse(
             insert_state_for(active_canvas_for_window(self.window)).template_active
-        )
-
-        active_canvas_for_window(self.window).services.tools.active.deactivate()
-        self.app.processEvents()
-        QTest.qWait(10)
-
-        self.assertEqual(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).benzene_preview_items,
-            [],
         )
 
     def test_bond_tool_drag_preview_clears_on_tool_change_and_deactivate(self) -> None:

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from chemvas.core.tool_overlay_logic import activate_tool_no_drag
-from chemvas.ui.benzene_preview_access import clear_benzene_preview_for
 from chemvas.ui.tool_base import Tool
 
 
@@ -11,10 +10,6 @@ class BenzeneTool(Tool):
 
     def activate(self) -> None:
         activate_tool_no_drag(self.canvas)
-        clear_benzene_preview_for(self.canvas)
-
-    def deactivate(self) -> None:
-        clear_benzene_preview_for(self.canvas)
 
 
 __all__ = ["BenzeneTool"]

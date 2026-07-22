@@ -22,7 +22,6 @@ class CanvasInsertState:
     template_preview_items: list[Any] = field(default_factory=list)
     template_preview_lines: list[Any] = field(default_factory=list)
     template_preview_dots: list[Any] = field(default_factory=list)
-    benzene_preview_items: list[Any] = field(default_factory=list)
 
 
 def insert_state_for(canvas: Any) -> CanvasInsertState:

@@ -19,7 +19,6 @@ def _canvas_with_service(service_name: str, service):
     ("selector", "service_name"),
     [
         (ports.atom_label_service_for_access, "atom_label_service"),
-        (ports.benzene_preview_service_for_access, "benzene_preview_service"),
         (
             ports.canvas_window_document_session_service,
             "canvas_document_session_service",

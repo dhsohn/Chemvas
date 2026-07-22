@@ -75,7 +75,6 @@ def test_insert_template_service_begin_template_activates_state_without_initial_
     service.begin_ring_template_insert(6, "benzene")
 
     cancel_smiles.assert_called_once_with()
-    canvas.clear_benzene_preview.assert_called_once_with()
     assert canvas.insert_state.template_active
     assert canvas.insert_state.template_ring_size == 6
     assert canvas.insert_state.template_ring_style == "benzene"
