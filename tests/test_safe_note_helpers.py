@@ -39,10 +39,11 @@ def _note_helpers() -> tuple[tuple[str, Callable[[BaseException], None]], ...]:
     return (
         (
             "rotation_preview",
-            lambda error: selection_rotation_preview_transaction._add_rollback_note(
-                error,
-                _SECONDARY_ERROR,
-                phase="test",
+            lambda error: (
+                selection_rotation_preview_transaction._add_rotation_rollback_note(
+                    error,
+                    _SECONDARY_ERROR,
+                )
             ),
         ),
         (
