@@ -80,3 +80,5 @@ Tools -> CanvasView -> MoleculeModel 변경(mutation) -> Renderer/BondRenderer -
 
 현재 모듈화 순서, 완료 조건, 의존성 규칙은
 [ADR 0001](adr/0001-feature-oriented-modularization.md)에서 관리한다.
+transaction/history rollback의 소유권·위협 모델·fail-closed 복구 의미론은
+[ADR 0002](adr/0002-single-rollback-kernel.md)에서 결정한다.

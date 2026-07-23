@@ -82,3 +82,6 @@ When an operation touches multiple entity types at once (ex: atom creation plus 
 
 The active modularization sequence, completion criteria, and dependency rules
 are maintained in [ADR 0001](adr/0001-feature-oriented-modularization.md).
+The transaction/history rollback ownership, threat model, and fail-closed
+recovery semantics are decided in
+[ADR 0002](adr/0002-single-rollback-kernel.md).
