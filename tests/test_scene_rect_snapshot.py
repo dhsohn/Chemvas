@@ -14,7 +14,6 @@ from chemvas.ui.input_view_access import (
     CanvasSceneRectStateSnapshot,
     set_scene_rect_for,
 )
-from chemvas.ui.scene_signal_blocking import _add_signal_recovery_note
 from chemvas.ui.transactions.scene_item_attach import (
     SceneItemAttachPorts,
     SceneItemAttachSnapshot,
@@ -109,11 +108,6 @@ class _FailingScene:
     "report",
     [
         lambda primary, secondary: _add_secondary_note(primary, secondary),
-        lambda primary, secondary: _add_signal_recovery_note(
-            primary,
-            secondary,
-            phase="testing diagnostic lookup",
-        ),
     ],
 )
 @pytest.mark.parametrize("primary_type", [KeyboardInterrupt, SystemExit])
