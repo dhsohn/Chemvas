@@ -324,6 +324,7 @@ class SelectTool(SelectionDragMixin, Tool):
             scene_pos = self.context.scene_pos_from_event(event)
             token = self._require_drag_token()
             try:
+                self._prepare_drag_mutation(token)
                 self.context.update_handle_drag(self._active_handle, scene_pos)
                 self._ensure_drag_owner(
                     token,

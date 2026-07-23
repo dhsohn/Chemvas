@@ -14,14 +14,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from PyQt6 import sip
-
 from chemvas.ui.atom_coords_access import (
     atom_coords_3d_for,
     set_atom_coords_3d_for_id,
 )
 from chemvas.ui.canvas_model_access import atom_for_id
-from chemvas.ui.canvas_scene_items_state import ring_items_for
+from chemvas.ui.canvas_scene_items_state import ring_items_for_atoms
 from chemvas.ui.selection_rotation_access import sync_atom_scene_items_for
 from chemvas.ui.transactions.scene_rect import SceneRectSnapshot
 
@@ -43,23 +41,8 @@ def _add_rotation_rollback_note(
         return
 
 
-def _ring_item_is_deleted(item: object) -> bool:
-    try:
-        return sip.isdeleted(item)  # type: ignore[arg-type]
-    except TypeError:
-        return False
-
-
 def _affected_ring_items(canvas, atom_ids: set[int]) -> list[object]:
-    rings = ring_items_for(canvas)
-    affected: list[object] = []
-    for ring in rings:
-        if _ring_item_is_deleted(ring):
-            continue
-        ring_atom_ids = ring.data(2)
-        if isinstance(ring_atom_ids, list) and not atom_ids.isdisjoint(ring_atom_ids):
-            affected.append(ring)
-    return affected
+    return ring_items_for_atoms(canvas, atom_ids)
 
 
 @dataclass(slots=True)
