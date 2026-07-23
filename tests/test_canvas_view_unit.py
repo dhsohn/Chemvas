@@ -280,7 +280,7 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertFalse(insert_state_for(canvas).smiles_active)
         self.assertIsNone(insert_state_for(canvas).smiles_preview_smiles)
         self.assertIsNone(insert_state_for(canvas).smiles_preview_center)
-        self.assertEqual(canvas.services.tooling.tools.active.name, "benzene")
+        self.assertEqual(canvas.services.tool_controller.active.name, "benzene")
 
         insert_state_for(canvas).template_active = True
         insert_state_for(canvas).template_ring_size = 6
@@ -292,7 +292,7 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertIsNone(insert_state_for(canvas).template_ring_size)
         self.assertIsNone(insert_state_for(canvas).template_ring_style)
         self.assertEqual(tool_settings_state_for(canvas).mark_kind, "minus")
-        self.assertEqual(canvas.services.tooling.tools.active.name, "mark")
+        self.assertEqual(canvas.services.tool_controller.active.name, "mark")
 
         prime_insert_modes()
 
@@ -304,7 +304,7 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertFalse(insert_state_for(canvas).smiles_active)
         self.assertEqual(tool_settings_state_for(canvas).active_bond_style, "double")
         self.assertEqual(tool_settings_state_for(canvas).active_bond_order, 2)
-        self.assertEqual(canvas.services.tooling.tools.active.name, "bond")
+        self.assertEqual(canvas.services.tool_controller.active.name, "bond")
 
         prime_insert_modes()
 
@@ -317,7 +317,7 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertEqual(
             tool_settings_state_for(canvas).active_arrow_type, "curved_double"
         )
-        self.assertEqual(canvas.services.tooling.tools.active.name, "arrow")
+        self.assertEqual(canvas.services.tool_controller.active.name, "arrow")
 
         prime_insert_modes()
 
@@ -326,7 +326,7 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertFalse(insert_state_for(canvas).template_active)
         self.assertFalse(insert_state_for(canvas).smiles_active)
         self.assertEqual(tool_settings_state_for(canvas).active_orbital_type, "p")
-        self.assertEqual(canvas.services.tooling.tools.active.name, "orbital")
+        self.assertEqual(canvas.services.tool_controller.active.name, "orbital")
 
     def test_note_item_focus_out_adds_updates_and_deletes_commands(self) -> None:
         canvas = _FakeNoteCanvas()

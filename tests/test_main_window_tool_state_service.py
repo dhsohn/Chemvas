@@ -80,7 +80,7 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         )
 
     def _active_tool_name_for_canvas(self, canvas) -> str | None:
-        active_tool = getattr(canvas.services.tooling.tools, "active", None)
+        active_tool = getattr(canvas.services.tool_controller, "active", None)
         name = getattr(active_tool, "name", None)
         return str(name) if name else None
 
@@ -143,7 +143,7 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         self._reset_tool_checks()
         active_canvas_for_window(
             self.window
-        ).services.tooling.tools.active = SimpleNamespace(name="bond")
+        ).services.tool_controller.active = SimpleNamespace(name="bond")
         set_tool_setting_for(
             active_canvas_for_window(self.window), "active_bond_style", "hash"
         )
@@ -153,7 +153,7 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         self._reset_tool_checks()
         active_canvas_for_window(
             self.window
-        ).services.tooling.tools.active = SimpleNamespace(name="mark")
+        ).services.tool_controller.active = SimpleNamespace(name="mark")
         set_tool_setting_for(
             active_canvas_for_window(self.window), "mark_kind", "minus"
         )
@@ -163,7 +163,7 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         self._reset_tool_checks()
         active_canvas_for_window(
             self.window
-        ).services.tooling.tools.active = SimpleNamespace(name="perspective")
+        ).services.tool_controller.active = SimpleNamespace(name="perspective")
         self.service.sync_tool_actions_from_canvas(self.window)
         self.assertTrue(
             self.window.ui_references.tool_actions["perspective"].isChecked()
@@ -190,7 +190,7 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
     def test_set_mark_kind_routes_option_bar_choice_to_canvas(self) -> None:
         active_canvas_for_window(
             self.window
-        ).services.tooling.tools.active = SimpleNamespace(name="mark")
+        ).services.tool_controller.active = SimpleNamespace(name="mark")
         with mock.patch.object(
             active_canvas_for_window(self.window).services.input.tool_mode_controller,
             "set_mark_kind",
@@ -207,7 +207,7 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
     def test_set_bracket_type_routes_option_bar_choice_to_canvas(self) -> None:
         active_canvas_for_window(
             self.window
-        ).services.tooling.tools.active = SimpleNamespace(name="ts_bracket")
+        ).services.tool_controller.active = SimpleNamespace(name="ts_bracket")
         with mock.patch.object(
             active_canvas_for_window(self.window).services.input.tool_mode_controller,
             "set_bracket_type",

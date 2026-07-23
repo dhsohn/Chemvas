@@ -1020,9 +1020,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         original_atom_ids = set(active_canvas_for_window(self.window).model.atoms)
         bond_id = active_canvas_for_window(
             self.window
-        ).services.graph.canvas_graph_service.bond_id_between(
-            ring_atom_ids[0], ring_atom_ids[1]
-        )
+        ).services.graph_service.bond_id_between(ring_atom_ids[0], ring_atom_ids[1])
         self.assertIsNotNone(bond_id)
         atom_a = active_canvas_for_window(self.window).model.atoms[ring_atom_ids[0]]
         atom_b = active_canvas_for_window(self.window).model.atoms[ring_atom_ids[1]]

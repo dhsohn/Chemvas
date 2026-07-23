@@ -19,6 +19,7 @@ from chemvas.core.document_io import (
     write_document,
 )
 from chemvas.core.molfile import MolfileError, MolfileLimitError, write_molfile
+from chemvas.core.rdkit_adapter import RDKitAdapter
 from chemvas.core.svg_roundtrip import (
     CHEMVAS_SVG_SCOPE_SELECTION,
     CHEMVAS_SVG_SCOPE_SHEET,
@@ -50,7 +51,6 @@ from chemvas.ui.canvas_scene_reset_access import clear_scene_for
 from chemvas.ui.rdkit_adapter_access import (
     model_to_mol_block_for,
     model_to_xyz_block_for,
-    new_rdkit_adapter,
     preload_rdkit_for,
     rdkit_adapter_for,
     rdkit_is_loaded_for,
@@ -2822,7 +2822,7 @@ class CanvasDocumentSessionService:
             path=path,
             on_success=on_success,
             on_error=on_error,
-            rdkit_adapter_factory=new_rdkit_adapter,
+            rdkit_adapter_factory=RDKitAdapter,
         )
 
     def export_figure(

@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
-
-from chemvas.ui.canvas_state_lookup import ensure_canvas_state
+from typing import cast
 
 
 @dataclass(slots=True)
@@ -16,8 +14,8 @@ class CanvasCallbackState:
     scene_selection_outline: Callable[[], None] | None = None
 
 
-def callback_state_for(canvas: Any) -> CanvasCallbackState:
-    return ensure_canvas_state(canvas, "callback_state", CanvasCallbackState)
+def callback_state_for(canvas) -> CanvasCallbackState:
+    return cast(CanvasCallbackState, canvas.runtime_state.callback_state)
 
 
 __all__ = ["CanvasCallbackState", "callback_state_for"]

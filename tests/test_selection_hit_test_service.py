@@ -23,7 +23,7 @@ if QApplication is not None:
 def _make_service(canvas, *, hit_testing_service=None, structure_service=None):
     if hit_testing_service is None:
         hit_testing_service = canvas.services.selection.hit_testing_service
-    graph_service = canvas.services.graph.canvas_graph_service
+    graph_service = canvas.services.graph_service
     if structure_service is None:
         structure_service = SelectionStructureService(
             canvas, graph_service=graph_service

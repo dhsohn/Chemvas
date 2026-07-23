@@ -142,7 +142,7 @@ class _FakeCanvas:
                 remove_scene_item=self.remove_scene_item,
                 restore_scene_item=self.restore_scene_item,
             ),
-            canvas_graph_service=SimpleNamespace(
+            graph_service=SimpleNamespace(
                 bond_id_between=self.bond_id_between,
                 bond_exists=self.bond_exists,
             ),
@@ -310,7 +310,7 @@ def _service_for(canvas: _FakeCanvas) -> StructureBuildService:
         canvas,
         hit_testing_service=canvas.services.selection.hit_testing_service,
         move_controller=canvas.services.interaction.move_controller,
-        graph_service=canvas.services.graph.canvas_graph_service,
+        graph_service=canvas.services.graph_service,
     )
 
 
@@ -1747,7 +1747,7 @@ class StructureBuildServiceTest(unittest.TestCase):
             canvas,
             hit_testing_service=hit_testing_service,
             move_controller=canvas.services.interaction.move_controller,
-            graph_service=canvas.services.graph.canvas_graph_service,
+            graph_service=canvas.services.graph_service,
         )
 
         result = service.add_bond_between_points(
@@ -2442,9 +2442,7 @@ class StructureBuildServiceTest(unittest.TestCase):
             canvas.hit_testing_find_atom_near
         )
         canvas.model.bonds = [None]
-        canvas.services.graph.canvas_graph_service.bond_id_between = Mock(
-            return_value=0
-        )
+        canvas.services.graph_service.bond_id_between = Mock(return_value=0)
         self.assertIsNone(
             service.add_bond_between_points(
                 QPointF(0.0, 0.0), QPointF(10.0, 0.0), "single", 1

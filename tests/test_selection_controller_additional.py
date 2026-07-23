@@ -201,10 +201,10 @@ def _make_canvas(**overrides):
         callback=selection_info_callback
     )
     hit_testing_service = defaults.pop("hit_testing_service", None)
-    graph_service = defaults.pop("canvas_graph_service", None)
+    graph_service = defaults.pop("graph_service", None)
     graph_expand_connected_atoms = defaults.pop("graph_expand_connected_atoms")
     graph_connected_components = defaults.pop("graph_connected_components")
-    tool_controller = defaults.pop("tools", SimpleNamespace(active=None))
+    tool_controller = defaults.pop("tool_controller", SimpleNamespace(active=None))
     services = defaults.pop("services", canvas_runtime_services())
     canvas = _FakeCanvas(**defaults)
     set_atom_items_for(canvas, atom_items)
@@ -224,9 +224,9 @@ def _make_canvas(**overrides):
             nearest_atom_hit=mock.Mock(return_value=None),
             nearest_bond_hit=mock.Mock(return_value=None),
         )
-    services.canvas_graph_service = graph_service
+    services.graph_service = graph_service
     services.hit_testing_service = hit_testing_service
-    services.tools = tool_controller
+    services.tool_controller = tool_controller
     canvas.services = services
     canvas.selection_info_callback = selection_info_callback
     return canvas
@@ -237,18 +237,20 @@ def _make_selection_controller(canvas, *, hit_testing_service=None):
     if services is None:
         services = canvas_runtime_services()
         canvas.services = services
-    graph_service = getattr(services, "canvas_graph_service", None)
+    graph_service = getattr(services, "graph_service", None)
     if graph_service is None:
         graph_service = SimpleNamespace(
             expand_connected_atoms=lambda atom_ids: set(atom_ids),
             connected_components=lambda atom_ids: [set(atom_ids)] if atom_ids else [],
         )
-        services.canvas_graph_service = graph_service
+        services.graph_service = graph_service
     if hit_testing_service is None:
         hit_testing_service = getattr(services, "hit_testing_service", None)
 
     def active_tool_name() -> str | None:
-        active_tool = getattr(getattr(services, "tools", None), "active", None)
+        active_tool = getattr(
+            getattr(services, "tool_controller", None), "active", None
+        )
         name = getattr(active_tool, "name", None)
         return str(name) if name else None
 
@@ -1078,7 +1080,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         outline = _FakeItem("selection_outline")
         canvas = _make_canvas(
             selection_outlines=[outline],
-            tools=SimpleNamespace(active=SimpleNamespace(name="perspective")),
+            tool_controller=SimpleNamespace(active=SimpleNamespace(name="perspective")),
             model=SimpleNamespace(
                 atoms={1: Atom("C", 2.0, 3.0), 2: Atom("C", 8.0, 9.0)},
                 bonds=[],
@@ -1095,7 +1097,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         )
         self.assertTrue(controller.selection_center_marker_enabled())
 
-        canvas.services.tooling.tools = SimpleNamespace(
+        canvas.services.tool_controller = SimpleNamespace(
             active=SimpleNamespace(name="select")
         )
         self.assertFalse(controller.selection_center_marker_enabled())
@@ -1128,7 +1130,9 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
                     ring_center_for_bond=lambda bond: None,
                     trim_line_for_labels=lambda *_args: (0.0, 1.0),
                 ),
-                tools=SimpleNamespace(active=SimpleNamespace(name="perspective")),
+                tool_controller=SimpleNamespace(
+                    active=SimpleNamespace(name="perspective")
+                ),
             ),
         )
         set_bond_items_for(canvas, {})

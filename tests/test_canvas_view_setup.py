@@ -4,9 +4,23 @@ from types import SimpleNamespace
 from unittest import mock
 
 import chemvas.ui.canvas_view_setup as setup
-from chemvas.ui.canvas_callback_state import CanvasCallbackState
+import pytest
+from chemvas.ui.canvas_callback_state import CanvasCallbackState, callback_state_for
 
 from tests.runtime_services import canvas_runtime_services
+
+
+def test_callback_state_for_requires_runtime_state() -> None:
+    runtime_state = CanvasCallbackState()
+    shadow_state = CanvasCallbackState()
+    canvas = SimpleNamespace(
+        runtime_state=SimpleNamespace(callback_state=runtime_state),
+        callback_state=shadow_state,
+    )
+
+    assert callback_state_for(canvas) is runtime_state
+    with pytest.raises(AttributeError):
+        callback_state_for(SimpleNamespace(callback_state=shadow_state))
 
 
 def test_initialize_canvas_view_configures_view_runtime_and_services(
@@ -26,7 +40,7 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(
         selection=SimpleNamespace(
             selection_controller=SimpleNamespace(update_selection_outline=mock.Mock())
         ),
-        tooling=SimpleNamespace(tools=SimpleNamespace(set_active=mock.Mock())),
+        tool_controller=SimpleNamespace(set_active=mock.Mock()),
     )
     calls = []
 
@@ -36,18 +50,30 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(
         lambda canvas, size, orientation: calls.append("sheet"),
     )
     monkeypatch.setattr(setup, "model_for", lambda canvas: calls.append("model"))
-    monkeypatch.setattr(setup, "renderer_for", lambda canvas: calls.append("renderer"))
     monkeypatch.setattr(
-        setup, "rdkit_adapter_for", lambda canvas: calls.append("rdkit")
+        setup,
+        "Renderer",
+        mock.Mock(side_effect=lambda: calls.append("renderer") or "renderer"),
     )
     monkeypatch.setattr(
-        setup, "attach_canvas_runtime_state", lambda canvas: runtime_state
+        setup,
+        "RDKitAdapter",
+        mock.Mock(side_effect=lambda: calls.append("rdkit") or "rdkit"),
+    )
+    monkeypatch.setattr(
+        setup,
+        "attach_canvas_runtime_state",
+        lambda canvas: calls.append("runtime") or runtime_state,
     )
     monkeypatch.setattr(
         setup, "apply_sheet_scene_rect_for", lambda canvas: calls.append("scene-rect")
     )
     monkeypatch.setattr(
-        setup, "bond_renderer_for", lambda canvas: calls.append("bond-renderer")
+        setup,
+        "BondRenderer",
+        mock.Mock(
+            side_effect=lambda canvas: calls.append("bond-renderer") or "bond-renderer"
+        ),
     )
     monkeypatch.setattr(setup, "bond_line_width_for", lambda canvas: 2.5)
     monkeypatch.setattr(
@@ -68,9 +94,16 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(
         "model",
         "renderer",
         "rdkit",
+        "runtime",
         "scene-rect",
         "bond-renderer",
     ]
+    assert canvas.renderer == "renderer"
+    assert canvas.rdkit == "rdkit"
+    assert canvas.bond_renderer == "bond-renderer"
+    setup.Renderer.assert_called_once_with()
+    setup.RDKitAdapter.assert_called_once_with()
+    setup.BondRenderer.assert_called_once_with(canvas)
     assert runtime_state.tool_settings_state.arrow_line_width == 2.5
     setup.build_canvas_services.assert_called_once_with(
         canvas,
@@ -91,4 +124,4 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(
         callback_state.scene_selection_outline
         is services.selection.selection_controller.update_selection_outline
     )
-    services.tooling.tools.set_active.assert_called_once_with("bond")
+    services.tool_controller.set_active.assert_called_once_with("bond")

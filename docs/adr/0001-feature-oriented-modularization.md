@@ -84,6 +84,24 @@ suite, and milestone-level full-suite/package verification.
 - The unused `StructureInsertService` and auxiliary bundle, the unused rotation
   preview controller/state, and the remaining selection/transform/service-name
   compatibility facades were removed with their internal-wiring tests.
+- The one-member graph and tool bundles were removed. `CanvasRuntimeServices`
+  stores `graph_service` and `tool_controller` directly, while their collaborators
+  continue to receive the same instances through explicit constructor injection.
+- Bond preview now keeps one Qt-free segment policy, one Qt item renderer, and a
+  thin adapter for the two legacy canvas callers. Resolver dataclasses, fourteen
+  per-call lambdas, silent preview-only renderer fallbacks, and separate geometry
+  and scene-item role modules were removed.
+- Renderer, optional-RDKit, and bond-renderer objects are direct canvas
+  collaborators created once by canvas setup and read through their canonical
+  access modules. Their lazy state wrappers and test-only setter seams were
+  removed; missing collaborators now fail instead of creating shadow instances.
+- Input-view keeps its concrete transform/zoom state in `InputViewState`, but its
+  canonical access module now reads the strict runtime field directly. The former
+  state-module accessor and plain-canvas lazy shadow-state seam were removed.
+- Canvas callbacks remain one concrete runtime state, but their accessor now reads
+  only the required `CanvasRuntimeState.callback_state` field. Plain-canvas lazy
+  attachment was removed so tool, error, zoom, and selection observers cannot
+  diverge onto a shadow state.
 - Direct feature-to-Qt dependencies are frozen by the shrinking
   `FEATURE_QT_MIGRATION_ALLOWLIST` in `tests/test_package_dependencies.py`. A
   migration slice removes its entry when its concrete Qt implementation moves to

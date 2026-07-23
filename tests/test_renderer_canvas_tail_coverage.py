@@ -26,11 +26,6 @@ except ModuleNotFoundError:
 if QApplication is not None:
     from chemvas.core.history import CompositeCommand, SetRingPolygonsCommand
     from chemvas.domain.document import Atom, Bond
-    from chemvas.ui.bond_preview_renderer import (
-        BondPreviewBuildResolvers,
-        BondPreviewConfig,
-        build_bond_preview_items,
-    )
     from chemvas.ui.bond_renderer import BondRenderer
     from chemvas.ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
     from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
@@ -174,40 +169,6 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
     def _set_bond(self, bond: Bond) -> None:
         self.canvas.model.bonds = [bond]
         set_bond_items_for(self.canvas, {})
-
-    def test_preview_bold_single_keeps_normal_for_non_outward_style(self) -> None:
-        strip = QGraphicsPolygonItem()
-        line_normal = mock.Mock(return_value=(0.25, 0.75))
-        one_sided = mock.Mock(return_value=strip)
-        resolvers = BondPreviewBuildResolvers(
-            draw_wedge_bond=mock.Mock(),
-            draw_hash_bond=mock.Mock(),
-            draw_dotted_bond=mock.Mock(),
-            draw_parallel_bonds=mock.Mock(),
-            line_normal=line_normal,
-            one_sided_bond_strip=one_sided,
-            bond_pen=mock.Mock(),
-            dotted_bond_pen=mock.Mock(),
-        )
-
-        items = build_bond_preview_items(
-            QPointF(0.0, 0.0),
-            QPointF(10.0, 0.0),
-            config=BondPreviewConfig(
-                style="bold",
-                order=1,
-                bond_length_px=20.0,
-                bond_line_width=1.2,
-                bold_bond_width=2.4,
-                hash_spacing_px=4.0,
-            ),
-            a_id=None,
-            b_id=None,
-            resolvers=resolvers,
-        )
-
-        self.assertEqual(items, [strip])
-        self.assertEqual(one_sided.call_args.args[4:6], (0.25, 0.75))
 
     def test_renderer_helper_tails_cover_optional_neighbor_and_id_paths(self) -> None:
         self.canvas.graph_state.atom_bond_ids = {0: {0, 1}}
@@ -455,7 +416,7 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
             model=SimpleNamespace(bonds=[Bond(1, 2, 2), Bond(3, 4, 3), None]),
         )
         order_view.services = canvas_runtime_services(
-            canvas_graph_service=CanvasGraphService(order_view)
+            graph_service=CanvasGraphService(order_view)
         )
         self.assertEqual(CanvasGraphService(order_view).atom_bond_order_sum(1), 2)
         self.assertEqual(CanvasGraphService(order_view).atom_bond_order_sum(99), 0)

@@ -148,7 +148,7 @@ def scene_transform_controller_for(canvas) -> SceneTransformController:
     return SceneTransformController(
         canvas,
         move_controller=canvas.services.interaction.move_controller,
-        graph_service=canvas.services.graph.canvas_graph_service,
+        graph_service=canvas.services.graph_service,
         history_service=canvas.history_service,
     )
 
@@ -985,7 +985,7 @@ class _FakeCanvas:
         self.services = canvas_runtime_services(
             history_service=self.history_service,
             scene_item_controller=_FakeSceneItemController(self),
-            canvas_graph_service=SimpleNamespace(
+            graph_service=SimpleNamespace(
                 connected_components=self.connected_components
             ),
             atom_label_service=SimpleNamespace(

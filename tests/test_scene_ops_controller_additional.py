@@ -61,9 +61,7 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
             calls.append(set(atom_ids))
             return [{1, 2}]
 
-        canvas.services.graph.canvas_graph_service.connected_components = (
-            connected_components
-        )
+        canvas.services.graph_service.connected_components = connected_components
         canvas.graph_state.graph_version = 4
 
         first = controller.selected_atom_components_for_transform({1, 2})

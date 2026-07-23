@@ -27,7 +27,6 @@ from chemvas.ui.bond_label_geometry_access import (
     trim_line_for_labels_for,
 )
 from chemvas.ui.bond_line_geometry_service import BondLineGeometryService
-from chemvas.ui.bond_renderer_access import bond_renderer_for
 from chemvas.ui.bond_ring_double_geometry_service import BondRingDoubleGeometryService
 from chemvas.ui.canvas_bond_graphics_state import (
     bond_items_for,
@@ -308,4 +307,4 @@ class BondRenderer:
         self.graphics_builder.add_bond_graphics(bond_id)
 
 
-__all__ = ["BondRenderer", "bond_renderer_for"]
+__all__ = ["BondRenderer"]
