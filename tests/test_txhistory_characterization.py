@@ -243,6 +243,98 @@ def test_failed_rotation_frame_reverts_to_previous_frame_and_propagates(canvas) 
     assert drawn != after_first_frame
 
 
+def test_failed_rotation_begin_leaves_document_unchanged(canvas) -> None:
+    _record_molecule(canvas)
+    controller = _primed_rotation_controller(canvas)
+    drawn = _document_state(canvas)
+    history_length = len(_history(canvas).state.history)
+
+    assert select_all_scene_items_for(canvas)
+
+    def failing_flatten(self, atom_ids_arg, coords):
+        raise RuntimeError("simulated flatten failure")
+
+    with mock.patch.object(
+        type(controller),
+        "flatten_planar_fragments",
+        failing_flatten,
+    ):
+        with pytest.raises(RuntimeError, match="simulated flatten failure"):
+            controller.begin_selection_3d_rotation()
+
+    assert _document_state(canvas) == drawn
+    assert len(_history(canvas).state.history) == history_length
+
+    # The controller must be able to start a fresh gesture afterwards.
+    assert select_all_scene_items_for(canvas)
+    assert controller.begin_selection_3d_rotation() is True
+    controller.end_selection_3d_rotation()
+
+
+def test_failed_rotation_end_push_restores_pre_gesture_document(canvas) -> None:
+    """A failed finalization fails closed (ADR 0002).
+
+    No command is recorded, the history stacks stay untouched, the document
+    reverts to the gesture start, and a fresh gesture can begin afterwards.
+    """
+
+    _record_molecule(canvas)
+    controller = _primed_rotation_controller(canvas)
+    drawn = _document_state(canvas)
+    history_before = list(_history(canvas).state.history)
+
+    with mock.patch.object(
+        CanvasHistoryService,
+        "push",
+        side_effect=RuntimeError("simulated rotation push failure"),
+    ):
+        assert controller.begin_selection_3d_rotation() is True
+        controller.update_selection_3d_rotation(25.0, 15.0)
+        with pytest.raises(RuntimeError, match="simulated rotation push failure"):
+            controller.end_selection_3d_rotation()
+
+    assert _document_state(canvas) == drawn
+    assert list(_history(canvas).state.history) == history_before
+
+    assert select_all_scene_items_for(canvas)
+    assert controller.begin_selection_3d_rotation() is True
+    controller.end_selection_3d_rotation()
+
+
+def test_failed_rotation_finalization_after_push_keeps_command_and_document(
+    canvas,
+) -> None:
+    """After a successful push, a later finalization failure must not revert.
+
+    The stack top describes the rotated document, so the document stays
+    rotated, the command stays recorded, and undo still restores the
+    pre-gesture document exactly.
+    """
+
+    _record_molecule(canvas)
+    controller = _primed_rotation_controller(canvas)
+    drawn = _document_state(canvas)
+    history_length = len(_history(canvas).state.history)
+
+    assert controller.begin_selection_3d_rotation() is True
+    controller.update_selection_3d_rotation(25.0, 15.0)
+
+    with mock.patch.object(
+        type(controller),
+        "restore_selection_from_ids",
+        side_effect=RuntimeError("simulated selection restore failure"),
+    ):
+        with pytest.raises(RuntimeError, match="selection restore failure"):
+            controller.end_selection_3d_rotation()
+
+    rotated = _document_state(canvas)
+    assert rotated != drawn
+    assert len(_history(canvas).state.history) == history_length + 1
+
+    _history(canvas).undo()
+    assert _document_state(canvas) == drawn
+
+
 def test_failed_document_open_leaves_no_half_applied_document(canvas, app) -> None:
     _record_molecule(canvas)
     source_state = _document_state(canvas)

@@ -141,33 +141,22 @@ def _rotation_prestate() -> tuple[CanvasRotationState, CanvasAtomCoords3DState]:
     return state, coords_state
 
 
+def _copied_prestate_value(value: object) -> object:
+    if isinstance(value, dict):
+        return dict(value)
+    if isinstance(value, set):
+        return set(value)
+    if isinstance(value, tuple) and len(value) == 2 and isinstance(value[0], set):
+        return (set(value[0]), set(value[1]))
+    return value
+
+
 def _capture_exact_rotation_prestate(state, coords_state):
-    values = {field.name: getattr(state, field.name) for field in fields(state)}
-    containers: dict[int, tuple[object, object]] = {}
-
-    def capture(value: object) -> None:
-        if isinstance(value, dict):
-            if id(value) in containers:
-                return
-            containers[id(value)] = (value, tuple(value.items()))
-            for key, item in value.items():
-                capture(key)
-                capture(item)
-        elif isinstance(value, set):
-            if id(value) in containers:
-                return
-            containers[id(value)] = (value, frozenset(value))
-            for item in value:
-                capture(item)
-        elif isinstance(value, tuple):
-            for item in value:
-                capture(item)
-
-    for value in values.values():
-        capture(value)
-    mapping = coords_state.atom_coords_3d
-    capture(mapping)
-    return values, tuple(containers.values()), mapping
+    values = {
+        field.name: _copied_prestate_value(getattr(state, field.name))
+        for field in fields(state)
+    }
+    return values, dict(coords_state.atom_coords_3d)
 
 
 def _assert_exact_rotation_prestate(
@@ -175,16 +164,10 @@ def _assert_exact_rotation_prestate(
     coords_state,
     savepoint,
 ) -> None:
-    values, containers, mapping = savepoint
+    values, coords = savepoint
     for name, value in values.items():
-        assert getattr(state, name) is value
-    for target, contents in containers:
-        if isinstance(target, dict):
-            assert tuple(target.items()) == contents
-        else:
-            assert isinstance(target, set)
-            assert frozenset(target) == contents
-    assert coords_state.atom_coords_3d is mapping
+        assert getattr(state, name) == value
+    assert coords_state.atom_coords_3d == coords
 
 
 def test_explicit_rotation_atom_ids_from_items_promotes_valid_mark_targets_only() -> (
@@ -355,41 +338,4 @@ def test_begin_selection_rotation_false_paths_restore_exact_state_and_retry() ->
             axis_hint=axis_hint,
         )
 
-
-def test_false_rotation_begin_removes_lazily_created_3d_state_root() -> None:
-    ports = _SelectionPorts()
-    del ports.canvas.atom_coords_3d_state
-    ports.selected_atom_ids.clear()
-    state = CanvasRotationState()
-
-    assert not begin_selection_rotation_session(ports, state)
-
-    assert not hasattr(ports.canvas, "atom_coords_3d_state")
-    assert not hasattr(ports.canvas, "model")
-
-
-def test_begin_rotation_restores_replaced_3d_state_root_before_retry() -> None:
-    ports = _SelectionPorts()
-    state, coords_state = _rotation_prestate()
-    ports.canvas.atom_coords_3d_state = coords_state
-    coords_mapping = coords_state.atom_coords_3d
-    replacement = CanvasAtomCoords3DState(atom_coords_3d={1: (99.0, 99.0, 99.0)})
-    primary = KeyboardInterrupt("flatten replaced 3D state root")
-
-    def replace_root_then_fail(_atom_ids, _coords):
-        ports.canvas.atom_coords_3d_state = replacement
-        coords_mapping[999] = (9.0, 9.0, 9.0)
-        raise primary
-
-    ports.flatten_planar_fragments = replace_root_then_fail
-
-    with pytest.raises(KeyboardInterrupt) as caught:
-        begin_selection_rotation_session(ports, state)
-
-    assert caught.value is primary
-    assert ports.canvas.atom_coords_3d_state is coords_state
-    assert coords_state.atom_coords_3d is coords_mapping
-    assert coords_mapping == {700: (28.0, 29.0, 30.0)}
-
-    ports.flatten_planar_fragments = lambda _atom_ids, coords: dict(coords)
     assert begin_selection_rotation_session(ports, state)

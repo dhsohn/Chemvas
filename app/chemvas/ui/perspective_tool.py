@@ -30,10 +30,9 @@ class PerspectiveTool(Tool):
             self._last_pos = None
             self._axis_lock = None
             return
-        # Keep the local drag session intact until the controller confirms the
-        # commit. If history/selection finalization raises, deactivate propagates
-        # the error and a delayed release (or explicit retry) can finish the same
-        # session instead of silently stranding it.
+        # A failed finalization fails closed in the controller (ADR 0002): the
+        # session is cleared and the error propagates. Resetting the local drag
+        # flags afterwards lets the next press start a fresh gesture.
         self.context.end_selection_3d_rotation()
         self._last_pos = None
         self._rotating = False
@@ -43,11 +42,10 @@ class PerspectiveTool(Tool):
         if event.button() != Qt.MouseButton.LeftButton:
             return False
         if self._rotating:
-            # A release/finalization callback may have failed while the visual
-            # rotation remained active. This click is the user's explicit
-            # commit/retry action, so consume it after finalizing the existing
-            # session instead of immediately starting another rotation from
-            # the same press event. A later click may begin a new session.
+            # A failed release left the local drag flags set while the
+            # controller session is already closed. Consume this click to
+            # reset them (end is a no-op without an active session); a later
+            # click begins a fresh gesture.
             self._commit_active_rotation()
             return True
         if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
@@ -69,9 +67,8 @@ class PerspectiveTool(Tool):
             return self._rotating
         buttons = getattr(event, "buttons", None)
         if callable(buttons) and not buttons() & Qt.MouseButton.LeftButton:
-            # Rotation is a left-button drag. If Qt delivered a move after a
-            # failed/delayed release callback, keep the session available for
-            # an explicit commit retry but never rotate from plain hovering.
+            # Rotation is a left-button drag; never rotate from plain hovering
+            # after a delayed release event.
             return False
         current = event.position()
         delta = current - self._last_pos

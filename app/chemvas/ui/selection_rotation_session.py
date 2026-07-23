@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
-from types import SimpleNamespace
+from dataclasses import dataclass, fields
 from typing import Any
 
 from PyQt6.QtCore import QPointF
@@ -12,18 +11,38 @@ from chemvas.features.selection import (
     selected_rotation_atom_ids,
 )
 from chemvas.ui.atom_coords_access import (
+    atom_coords_3d_for,
+    set_atom_coords_3d_for,
     set_atom_coords_3d_for_id,
 )
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
-from chemvas.ui.selection_rotation_preview_transaction import _CoreStateSnapshot
 
 Coords2D = tuple[float, float]
 Coords3D = tuple[float, float, float]
 
 
+def _copied_state_value(value: object) -> object:
+    if isinstance(value, dict):
+        return dict(value)
+    if isinstance(value, set):
+        return set(value)
+    if isinstance(value, tuple) and len(value) == 2 and isinstance(value[0], set):
+        return (set(value[0]), set(value[1]))
+    return value
+
+
 @dataclass(slots=True)
 class _SelectionRotationBeginSnapshot:
-    exact_core: _CoreStateSnapshot
+    """Begin-phase savepoint: rotation-state fields and 3D coordinates.
+
+    Beginning a rotation writes flattened 3D coordinates into the document
+    and republishes the rotation-state fields; a failed begin restores both.
+    """
+
+    canvas: object
+    state: CanvasRotationState
+    state_fields: dict[str, object]
+    coords_3d: dict[int, Coords3D]
 
     @classmethod
     def capture(
@@ -31,21 +50,20 @@ class _SelectionRotationBeginSnapshot:
         canvas,
         state: CanvasRotationState,
     ) -> _SelectionRotationBeginSnapshot:
-        adapter = SimpleNamespace(canvas=canvas, rotation=state)
         return cls(
-            exact_core=_CoreStateSnapshot.capture(adapter),
+            canvas=canvas,
+            state=state,
+            state_fields={
+                state_field.name: _copied_state_value(getattr(state, state_field.name))
+                for state_field in fields(state)
+            },
+            coords_3d=dict(atom_coords_3d_for(canvas)),
         )
 
-    def restore(self) -> tuple[BaseException, ...]:
-        accumulated_errors: list[BaseException] = []
-        for _attempt in range(2):
-            operation_errors = self.exact_core.restore_once()
-            verification_errors = self.exact_core.verify()
-            if not verification_errors:
-                return tuple((*accumulated_errors, *operation_errors))
-            accumulated_errors.extend(operation_errors)
-            accumulated_errors.extend(verification_errors)
-        return tuple(accumulated_errors)
+    def restore(self) -> None:
+        for name, value in self.state_fields.items():
+            setattr(self.state, name, _copied_state_value(value))
+        set_atom_coords_3d_for(self.canvas, dict(self.coords_3d))
 
 
 def _add_rotation_begin_rollback_note(
@@ -212,9 +230,7 @@ def begin_selection_rotation_session(
     *,
     axis_hint: int | None = None,
     press_pos: QPointF | None = None,
-    on_session_started: (
-        Callable[[_SelectionRotationBeginSnapshot], None] | None
-    ) = None,
+    on_session_started: Callable[[], None] | None = None,
 ) -> bool:
     snapshot = _SelectionRotationBeginSnapshot.capture(ports.canvas, state)
     try:
@@ -267,25 +283,19 @@ def begin_selection_rotation_session(
                     start_projection_anchor_2d=start_projection_anchor_2d,
                 )
         if rotating and on_session_started is not None:
-            # The callback may capture additional session-wide authorities.
-            # It remains inside the begin savepoint so a failed capture cannot
-            # strand a partially published rotation.
-            on_session_started(snapshot)
+            # The callback publishes the gesture guard. It runs inside the
+            # begin savepoint so a failed publication cannot strand a
+            # partially published rotation.
+            on_session_started()
     except BaseException as original_error:
-        for rollback_error in snapshot.restore():
-            _add_rotation_begin_rollback_note(
-                original_error,
-                rollback_error,
-            )
+        try:
+            snapshot.restore()
+        except BaseException as rollback_error:
+            _add_rotation_begin_rollback_note(original_error, rollback_error)
         raise
     if rotating:
         return True
-    rollback_errors = snapshot.restore()
-    if rollback_errors:
-        raise BaseExceptionGroup(
-            "selection-rotation begin rollback failed",
-            list(rollback_errors),
-        )
+    snapshot.restore()
     return False
 
 
