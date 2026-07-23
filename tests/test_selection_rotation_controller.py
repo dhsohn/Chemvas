@@ -381,7 +381,7 @@ class _FakeCanvas:
             move_controller=SimpleNamespace(
                 redraw_bonds_for_atoms=self.record_redraw_bonds_for_atoms
             ),
-            canvas_graph_service=SimpleNamespace(
+            graph_service=SimpleNamespace(
                 axis_from_rotation_hint=self.axis_from_rotation_hint
             ),
         )
@@ -610,7 +610,7 @@ def _controller_for(canvas: _FakeCanvas) -> SelectionRotationController:
     controller = SelectionRotationController(
         canvas,
         move_controller=canvas.services.interaction.move_controller,
-        graph_service=canvas.services.graph.canvas_graph_service,
+        graph_service=canvas.services.graph_service,
         history_service=canvas.services.history_service,
     )
     ports = _FakeSelectionRotationPorts(canvas)

@@ -9,9 +9,9 @@ from chemvas.ui.atom_label_access import (
     atom_label_service,
     uses_compact_label_hit_shape_for,
 )
+from chemvas.ui.bond_renderer_access import update_bond_geometry_for
 from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for, bond_items_for_id
-from chemvas.ui.canvas_bond_renderer_state import update_bond_geometry_for
 from chemvas.ui.canvas_model_access import atoms_for, bonds_for
 from chemvas.ui.graphics_items import AtomDotItem, AtomLabelItem
 from chemvas.ui.pick_radius_access import atom_pick_radius_for

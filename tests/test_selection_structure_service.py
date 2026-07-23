@@ -42,7 +42,7 @@ def _make_canvas(**overrides):
     canvas = SimpleNamespace(
         model=overrides.pop("model", SimpleNamespace(atoms={}, bonds=[])),
         services=canvas_runtime_services(
-            canvas_graph_service=SimpleNamespace(
+            graph_service=SimpleNamespace(
                 expand_connected_atoms=overrides.pop(
                     "expand_connected_atoms",
                     mock.Mock(side_effect=lambda ids: set(ids)),
@@ -64,7 +64,7 @@ def _make_canvas(**overrides):
 def _structure_service(canvas) -> SelectionStructureService:
     return SelectionStructureService(
         canvas,
-        graph_service=canvas.services.graph.canvas_graph_service,
+        graph_service=canvas.services.graph_service,
     )
 
 

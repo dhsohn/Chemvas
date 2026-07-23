@@ -41,9 +41,7 @@ if QApplication is not None:
 
 
 def _outline_service(canvas):
-    graph_service = getattr(
-        getattr(canvas, "services", None), "canvas_graph_service", None
-    )
+    graph_service = getattr(getattr(canvas, "services", None), "graph_service", None)
     if graph_service is None:
         graph_service = SimpleNamespace(
             graph=SimpleNamespace(atom_bond_ids={}),
@@ -53,7 +51,9 @@ def _outline_service(canvas):
         graph_service.graph = SimpleNamespace(atom_bond_ids={})
 
     def active_tool_name() -> str | None:
-        active_tool = getattr(getattr(canvas.services, "tools", None), "active", None)
+        active_tool = getattr(
+            getattr(canvas.services, "tool_controller", None), "active", None
+        )
         name = getattr(active_tool, "name", None)
         return str(name) if name else None
 
@@ -124,7 +124,7 @@ class SelectionOutlineServiceTest(unittest.TestCase):
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 2.0, 0.0)},
                 bonds=[Bond(1, 2, 1)],
             ),
-            canvas_graph_service=SimpleNamespace(
+            graph_service=SimpleNamespace(
                 graph=SimpleNamespace(atom_bond_ids={1: {0}, 2: {0}}),
                 connected_components=graph_connected_components,
             ),
@@ -185,7 +185,7 @@ class SelectionOutlineServiceTest(unittest.TestCase):
                 },
                 bonds=bonds,
             ),
-            canvas_graph_service=SimpleNamespace(
+            graph_service=SimpleNamespace(
                 graph=SimpleNamespace(
                     atom_bond_ids={
                         1: {-1, 0, 2, 3, 99},
@@ -212,7 +212,7 @@ class SelectionOutlineServiceTest(unittest.TestCase):
         outline = _FakeItem("selection_outline")
         canvas = _make_canvas(
             selection_outlines=[outline],
-            tools=SimpleNamespace(active=SimpleNamespace(name="perspective")),
+            tool_controller=SimpleNamespace(active=SimpleNamespace(name="perspective")),
             model=SimpleNamespace(
                 atoms={1: Atom("C", 2.0, 3.0), 2: Atom("C", 8.0, 9.0)},
                 bonds=[],
@@ -226,7 +226,7 @@ class SelectionOutlineServiceTest(unittest.TestCase):
         self.assertEqual(service.selection_center_for_atoms({1, 2}), QPointF(5.0, 6.0))
         self.assertTrue(service.selection_center_marker_enabled())
 
-        canvas.services.tooling.tools = SimpleNamespace(
+        canvas.services.tool_controller = SimpleNamespace(
             active=SimpleNamespace(name="select")
         )
         self.assertFalse(service.selection_center_marker_enabled())
@@ -252,7 +252,9 @@ class SelectionOutlineServiceTest(unittest.TestCase):
                     ring_center_for_bond=lambda bond: None,
                     trim_line_for_labels=lambda *_args: (0.0, 1.0),
                 ),
-                tools=SimpleNamespace(active=SimpleNamespace(name="perspective")),
+                tool_controller=SimpleNamespace(
+                    active=SimpleNamespace(name="perspective")
+                ),
             ),
         )
         set_bond_items_for(canvas, {})
@@ -329,7 +331,9 @@ class SelectionOutlineServiceTest(unittest.TestCase):
                     ring_center_for_bond=lambda bond: None,
                     trim_line_for_labels=lambda *_args: (0.0, 1.0),
                 ),
-                tools=SimpleNamespace(active=SimpleNamespace(name="perspective")),
+                tool_controller=SimpleNamespace(
+                    active=SimpleNamespace(name="perspective")
+                ),
             ),
         )
         set_bond_items_for(canvas, {0: [QGraphicsLineItem(0.0, 0.0, 10.0, 0.0)]})

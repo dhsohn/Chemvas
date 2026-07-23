@@ -14,8 +14,10 @@ except ModuleNotFoundError:
 if QApplication is not None:
     from chemvas.ui.canvas_hover_state import hover_state_for
     from chemvas.ui.canvas_view import CanvasView
-    from chemvas.ui.input_view_access import should_override_chemdraw_shortcut_for
-    from chemvas.ui.input_view_state import input_view_state_for
+    from chemvas.ui.input_view_access import (
+        input_view_state_for,
+        should_override_chemdraw_shortcut_for,
+    )
 
 
 class _FakeEvent:
@@ -64,7 +66,7 @@ class CanvasViewEventShortcutTest(unittest.TestCase):
         view = CanvasView()
         input_view_state_for(view).base_transform = QTransform().translate(3.0, 4.0)
         view.setTransform(QTransform().scale(2.0, 2.0))
-        view.services.tooling.tools.active = None
+        view.services.tool_controller.active = None
         return view
 
     def test_event_accepts_supported_native_gestures_and_resets_transform(self) -> None:

@@ -15,6 +15,7 @@ from .bond_geometry import (
     trim_segment,
 )
 from .bond_graphics import refresh_bond_graphics
+from .bond_preview import plain_double_preview_segments
 from .bond_stereo import (
     hash_segments_from_segment,
     trimmed_line_segment,
@@ -92,6 +93,7 @@ __all__ = [
     "normalized_bold_double_style",
     "normalized_plain_double_style",
     "offset_segment",
+    "plain_double_preview_segments",
     "refresh_bond_graphics",
     "scale_segment",
     "strip_polygon",

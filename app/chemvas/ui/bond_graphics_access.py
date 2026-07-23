@@ -35,27 +35,6 @@ def parallel_bond_segments_for(canvas, *args):
     return []
 
 
-def wedge_polygon_for(canvas, *args):
-    method = _renderer_method(canvas, "wedge_polygon")
-    if method is not None:
-        return method(*args)
-    return None
-
-
-def hash_segments_for(canvas, *args):
-    method = _renderer_method(canvas, "hash_segments")
-    if method is not None:
-        return method(*args)
-    return []
-
-
-def strip_polygon_for(canvas, *args):
-    method = _renderer_method(canvas, "strip_polygon")
-    if method is not None:
-        return method(*args)
-    return None
-
-
 def ring_double_segments_for(canvas, *args):
     method = _renderer_method(canvas, "ring_double_segments")
     if method is not None:
@@ -67,48 +46,6 @@ def draw_ring_double_bond_for(canvas, *args, **kwargs):
     method = _renderer_method(canvas, "draw_ring_double_bond")
     if method is not None:
         return method(*args, **kwargs)
-    return None
-
-
-def one_sided_bond_strip_for(canvas, *args):
-    method = _renderer_method(canvas, "one_sided_bond_strip")
-    if method is not None:
-        return method(*args)
-    return None
-
-
-def draw_parallel_bonds_for(canvas, *args):
-    method = _renderer_method(canvas, "draw_parallel_bonds")
-    if method is not None:
-        return method(*args)
-    return []
-
-
-def draw_wedge_bond_for(canvas, *args):
-    method = _renderer_method(canvas, "draw_wedge_bond")
-    if method is not None:
-        return method(*args)
-    return []
-
-
-def draw_hash_bond_for(canvas, *args):
-    method = _renderer_method(canvas, "draw_hash_bond")
-    if method is not None:
-        return method(*args)
-    return []
-
-
-def draw_dotted_bond_for(canvas, *args):
-    method = _renderer_method(canvas, "draw_dotted_bond")
-    if method is not None:
-        return method(*args)
-    return []
-
-
-def dotted_bond_path_for(canvas, *args):
-    method = _renderer_method(canvas, "dotted_bond_path")
-    if method is not None:
-        return method(*args)
     return None
 
 
@@ -224,22 +161,13 @@ __all__ = [
     "add_bond_graphics_for",
     "apply_color_to_bond_item_for",
     "bond_offset_unit_3d_for",
-    "dotted_bond_path_for",
-    "draw_dotted_bond_for",
-    "draw_hash_bond_for",
-    "draw_parallel_bonds_for",
     "draw_ring_double_bond_for",
-    "draw_wedge_bond_for",
-    "hash_segments_for",
     "line_normal_components",
     "line_normal_for",
-    "one_sided_bond_strip_for",
     "orient_normal_toward_target",
     "parallel_bond_segments_for",
     "project_point_3d_for",
     "ring_center_3d_for_bond_for",
     "ring_center_for_bond_for",
     "ring_double_segments_for",
-    "strip_polygon_for",
-    "wedge_polygon_for",
 ]

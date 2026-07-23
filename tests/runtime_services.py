@@ -49,7 +49,6 @@ SERVICE_PATHS: dict[str, tuple[str, str]] = {
         "document",
         "canvas_document_session_service",
     ),
-    "canvas_graph_service": ("graph", "canvas_graph_service"),
     "canvas_history_recording_service": (
         "document",
         "canvas_history_recording_service",
@@ -78,12 +77,10 @@ SERVICE_PATHS: dict[str, tuple[str, str]] = {
     ),
     "style_controller": ("scene_operations", "style_controller"),
     "tool_mode_controller": ("input", "tool_mode_controller"),
-    "tools": ("tooling", "tools"),
 }
 
 _GROUP_NAMES = (
     "document",
-    "graph",
     "input",
     "interaction",
     "scene_view",
@@ -92,7 +89,6 @@ _GROUP_NAMES = (
     "scene_operations",
     "selection",
     "structure",
-    "tooling",
 )
 
 
@@ -105,13 +101,17 @@ class CanvasRuntimeServicesDouble(CanvasRuntimeServices):
             for group_name in _GROUP_NAMES
         }
         atom_label_service = services.pop("atom_label_service", None)
+        graph_service = services.pop("graph_service", None)
         hover = services.pop("hover", SimpleNamespace())
         history_service = services.pop("history_service", None)
+        tool_controller = services.pop("tool_controller", None)
         super().__init__(
             **groups,
             hover=hover,
             atom_label_service=atom_label_service,
+            graph_service=graph_service,
             history_service=history_service,
+            tool_controller=tool_controller,
         )
         for name, value in services.items():
             setattr(self, name, value)

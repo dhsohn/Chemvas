@@ -56,7 +56,7 @@ def _hit_testing_service():
 
 def _services(*, graph=None, hit_testing=None, bond_mutation=None):
     return canvas_runtime_services(
-        canvas_graph_service=graph,
+        graph_service=graph,
         hit_testing_service=hit_testing,
         canvas_bond_mutation_service=bond_mutation,
     )
@@ -66,7 +66,7 @@ def _service_for(canvas) -> CanvasBondMutationService:
     return CanvasBondMutationService(
         canvas,
         hit_testing_service=canvas.services.selection.hit_testing_service,
-        graph_service=canvas.services.graph.canvas_graph_service,
+        graph_service=canvas.services.graph_service,
     )
 
 

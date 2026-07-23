@@ -15,10 +15,6 @@ class DocumentServices(Protocol):
     canvas_scene_reset_service: Any
 
 
-class GraphServices(Protocol):
-    canvas_graph_service: Any
-
-
 class InputServices(Protocol):
     input_controller: Any
     pointer_controller: Any
@@ -72,14 +68,10 @@ class StructureServices(Protocol):
     insert_controller: Any
 
 
-class ToolingServices(Protocol):
-    tools: Any
-
-
 @dataclass(slots=True)
 class CanvasRuntimeServices:
     document: DocumentServices
-    graph: GraphServices
+    graph_service: Any
     input: InputServices
     interaction: InteractionServices
     scene_view: SceneViewServices
@@ -89,7 +81,7 @@ class CanvasRuntimeServices:
     scene_operations: SceneOperationServices
     selection: SelectionServices
     structure: StructureServices
-    tooling: ToolingServices
+    tool_controller: Any
     atom_label_service: Any
     history_service: Any
 

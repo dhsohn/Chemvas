@@ -14,7 +14,7 @@ def _builder_for(canvas: _FakeCanvas) -> StructureBondBuildService:
         StructureBuildCommitter(canvas),
         hit_testing_service=canvas.services.selection.hit_testing_service,
         move_controller=canvas.services.interaction.move_controller,
-        graph_service=canvas.services.graph.canvas_graph_service,
+        graph_service=canvas.services.graph_service,
     )
 
 
@@ -83,7 +83,7 @@ def test_structure_bond_build_service_uses_hit_testing_service_for_snap_lookup()
         StructureBuildCommitter(canvas),
         hit_testing_service=hit_testing_service,
         move_controller=canvas.services.interaction.move_controller,
-        graph_service=canvas.services.graph.canvas_graph_service,
+        graph_service=canvas.services.graph_service,
     )
 
     result = builder.add_bond_between_points(

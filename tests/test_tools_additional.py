@@ -50,7 +50,7 @@ if QApplication is not None:
 
 def _tool_context_for(canvas):
     services = getattr(canvas, "services", None)
-    graph_service = getattr(services, "canvas_graph_service", None)
+    graph_service = getattr(services, "graph_service", None)
     color_mutation_service = getattr(services, "canvas_color_mutation_service", None)
     tool_mode_controller = getattr(services, "tool_mode_controller", None)
     return ToolContext(

@@ -174,13 +174,13 @@ def _selection_controller_for(view):
     if services is None:
         services = canvas_runtime_services()
         view.services = services
-    graph_service = getattr(services, "canvas_graph_service", None)
+    graph_service = getattr(services, "graph_service", None)
     if graph_service is None:
         graph_service = SimpleNamespace(
             expand_connected_atoms=mock.Mock(return_value=set()),
             connected_components=lambda atom_ids: [set(atom_ids)] if atom_ids else [],
         )
-        services.canvas_graph_service = graph_service
+        services.graph_service = graph_service
     return build_selection_services(
         view, graph_service=graph_service
     ).selection_controller
@@ -412,7 +412,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         tool_view = SimpleNamespace(
             insert_state=SimpleNamespace(template_active=True, smiles_active=True),
             services=canvas_runtime_services(
-                tools=SimpleNamespace(set_active=mock.Mock()),
+                tool_controller=SimpleNamespace(set_active=mock.Mock()),
                 insert_controller=SimpleNamespace(
                     cancel_template_insert=mock.Mock(),
                     cancel_smiles_insert=mock.Mock(),
@@ -420,7 +420,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 hover=SimpleNamespace(refresh=mock.Mock()),
             ),
             refresh_selection_outline=mock.Mock(),
-            callback_state=CanvasCallbackState(tool_change=mock.Mock()),
+            runtime_state=SimpleNamespace(
+                callback_state=CanvasCallbackState(tool_change=mock.Mock())
+            ),
             tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
         )
         tool_view.services.selection.selection_controller = SimpleNamespace(
@@ -430,7 +432,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             tool_view,
             insert_controller=tool_view.services.structure.insert_controller,
             hover_refresh=tool_view.services.hover.refresh,
-            set_active_tool=tool_view.services.tooling.tools.set_active,
+            set_active_tool=tool_view.services.tool_controller.set_active,
         )
         canvas_services_for(tool_view).input.tool_mode_controller.set_tool("bond")
         canvas_services_for(tool_view).input.tool_mode_controller.set_mark_kind("minus")
@@ -441,8 +443,8 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             "unsupported"
         )
 
-        tool_view.services.tooling.tools.set_active.assert_any_call("bond")
-        tool_view.services.tooling.tools.set_active.assert_any_call("mark")
+        tool_view.services.tool_controller.set_active.assert_any_call("bond")
+        tool_view.services.tool_controller.set_active.assert_any_call("mark")
         self.assertEqual(
             tool_view.services.structure.insert_controller.cancel_template_insert.call_count,
             3,
@@ -453,7 +455,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         self.assertEqual(tool_settings_state_for(tool_view).mark_kind, "circled_plus")
         self.assertEqual(tool_view.refresh_selection_outline.call_count, 3)
-        self.assertEqual(tool_view.callback_state.tool_change.call_count, 3)
+        self.assertEqual(
+            tool_view.runtime_state.callback_state.tool_change.call_count, 3
+        )
         self.assertEqual(tool_view.services.hover.refresh.call_count, 3)
 
     def test_document_session_wrappers_delegate_to_service(self) -> None:
@@ -647,7 +651,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         view = SimpleNamespace(
             insert_state=SimpleNamespace(template_active=True, smiles_active=False),
             services=canvas_runtime_services(
-                tools=SimpleNamespace(set_active=mock.Mock()),
+                tool_controller=SimpleNamespace(set_active=mock.Mock()),
                 insert_controller=SimpleNamespace(
                     cancel_template_insert=mock.Mock(),
                     cancel_smiles_insert=mock.Mock(),
@@ -655,13 +659,15 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 hover=SimpleNamespace(refresh=mock.Mock()),
             ),
             refresh_selection_outline=mock.Mock(),
-            callback_state=CanvasCallbackState(tool_change=callback),
+            runtime_state=SimpleNamespace(
+                callback_state=CanvasCallbackState(tool_change=callback)
+            ),
         )
         view.services.input.tool_mode_controller = CanvasToolModeController(
             view,
             insert_controller=view.services.structure.insert_controller,
             hover_refresh=view.services.hover.refresh,
-            set_active_tool=view.services.tooling.tools.set_active,
+            set_active_tool=view.services.tool_controller.set_active,
         )
 
         canvas_services_for(view).input.tool_mode_controller.set_tool("bond")
@@ -1571,7 +1577,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             refresh_selection_outline=mock.Mock(),
             services=canvas_runtime_services(
                 note_controller=note_controller,
-                tools=SimpleNamespace(set_active=mock.Mock()),
+                tool_controller=SimpleNamespace(set_active=mock.Mock()),
             ),
         )
         style_view.services.selection.selection_controller = SimpleNamespace(
@@ -1583,7 +1589,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         tool_mode_controller = CanvasToolModeController(
             style_view,
-            set_active_tool=style_view.services.tooling.tools.set_active,
+            set_active_tool=style_view.services.tool_controller.set_active,
         )
         text_style = text_style_state_for(style_view)
 
@@ -1667,7 +1673,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         self.assertEqual(text_style.note_padding, 2.0)
         tool_mode_controller.set_snap_angle_step(22)
         self.assertEqual(tool_settings_state_for(style_view).snap_angle_step, 22)
-        style_view.services.tooling.tools.set_active.assert_called_with("bond")
+        style_view.services.tool_controller.set_active.assert_called_with("bond")
         style_view.refresh_selection_outline.assert_called_once_with()
         self.assertGreaterEqual(
             note_controller.apply_text_style_to_selected.call_count, 14
@@ -2050,7 +2056,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 bonds=[Bond(1, 2, 1)],
             ),
             services=canvas_runtime_services(
-                canvas_graph_service=SimpleNamespace(
+                graph_service=SimpleNamespace(
                     expand_connected_atoms=expand_connected_atoms
                 )
             ),
@@ -2086,7 +2092,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 2.0, 0.0)}, bonds=[]
             ),
             services=canvas_runtime_services(
-                canvas_graph_service=SimpleNamespace(
+                graph_service=SimpleNamespace(
                     expand_connected_atoms=mock.Mock(return_value={1, 2})
                 )
             ),
@@ -2109,7 +2115,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             scene=lambda: note_scene,
             model=SimpleNamespace(atoms={}, bonds=[]),
             services=canvas_runtime_services(
-                canvas_graph_service=SimpleNamespace(expand_connected_atoms=mock.Mock())
+                graph_service=SimpleNamespace(expand_connected_atoms=mock.Mock())
             ),
             refresh_selection_outline=mock.Mock(),
         )
@@ -2130,7 +2136,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             scene=lambda: _FakeScene([invalid_atom]),
             model=SimpleNamespace(atoms={}, bonds=[]),
             services=canvas_runtime_services(
-                canvas_graph_service=SimpleNamespace(
+                graph_service=SimpleNamespace(
                     expand_connected_atoms=mock.Mock(return_value=set())
                 )
             ),

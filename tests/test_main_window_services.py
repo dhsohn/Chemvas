@@ -43,7 +43,7 @@ def test_active_tool_name_for_window_handles_missing_active_canvas() -> None:
 def test_active_tool_name_for_window_reads_active_canvas_services() -> None:
     canvas = SimpleNamespace(
         services=canvas_runtime_services(
-            tools=SimpleNamespace(active=SimpleNamespace(name="perspective")),
+            tool_controller=SimpleNamespace(active=SimpleNamespace(name="perspective")),
         ),
     )
     window = _window_with_active_canvas(canvas)
@@ -60,7 +60,7 @@ def test_active_canvas_service_ports_share_active_canvas_services_lookup() -> No
         scene_transform_controller=object(),
         canvas_document_session_service=object(),
         geometry_controller=object(),
-        tools=SimpleNamespace(tools={"color": object()}),
+        tool_controller=SimpleNamespace(tools={"color": object()}),
     )
     window = _window_with_active_canvas(SimpleNamespace(services=services))
 
@@ -80,7 +80,7 @@ def test_active_canvas_service_ports_share_active_canvas_services_lookup() -> No
         is services.canvas_document_session_service
     )
     assert geometry_controller_for_window(window) is services.geometry_controller
-    assert color_tool_for_window(window) is services.tools.tools["color"]
+    assert color_tool_for_window(window) is services.tool_controller.tools["color"]
 
 
 def test_has_exportable_atoms_for_window_handles_missing_and_populated_canvas() -> None:

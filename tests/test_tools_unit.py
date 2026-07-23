@@ -69,7 +69,7 @@ if QApplication is not None:
 
 def _tool_context_for(canvas):
     services = getattr(canvas, "services", None)
-    graph_service = getattr(services, "canvas_graph_service", None)
+    graph_service = getattr(services, "graph_service", None)
     color_mutation_service = getattr(services, "canvas_color_mutation_service", None)
     tool_mode_controller = getattr(services, "tool_mode_controller", None)
 
@@ -258,9 +258,7 @@ class _FakeSelectCanvas:
         self.updated_outline = 0
         self.services = canvas_runtime_services(
             history_service=self.history_service,
-            canvas_graph_service=SimpleNamespace(
-                bond_sets_for_atoms=self.bond_sets_for_atoms
-            ),
+            graph_service=SimpleNamespace(bond_sets_for_atoms=self.bond_sets_for_atoms),
             hit_testing_service=SimpleNamespace(
                 scene_pos_from_event=self.scene_pos_from_event,
                 item_at_event=self.item_at_event,
@@ -1107,7 +1105,7 @@ class ToolsUnitTest(unittest.TestCase):
                             1.0,
                         )
                     )
-                tool = MoveTool(canvas, context=canvas.services.tooling.tools.context)
+                tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
                 try:
                     with (
                         mock.patch.object(
@@ -1153,7 +1151,7 @@ class ToolsUnitTest(unittest.TestCase):
         canvas, shapes = self._canvas_with_shapes(count=200)
         shape = shapes[0]
         shape.setSelected(True)
-        tool = MoveTool(canvas, context=canvas.services.tooling.tools.context)
+        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
         history = canvas.services.history_service
         before_state = scene_item_state_for(canvas, shape)
         original_capture = (
@@ -1210,7 +1208,7 @@ class ToolsUnitTest(unittest.TestCase):
                 canvas, shapes = self._canvas_with_shapes(count=2)
                 shape, unrelated_shape = shapes
                 shape.setSelected(True)
-                tool = MoveTool(canvas, context=canvas.services.tooling.tools.context)
+                tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
                 history = canvas.services.history_service
                 original_state = history.state
                 baseline = MoveItemsCommand(items=[], dx=0.0, dy=0.0)
@@ -1305,7 +1303,7 @@ class ToolsUnitTest(unittest.TestCase):
         canvas, shapes = self._canvas_with_shapes(count=1)
         shape = shapes[0]
         unrelated = canvas.scene().addRect(QRectF(40.0, 20.0, 5.0, 7.0))
-        tool = MoveTool(canvas, context=canvas.services.tooling.tools.context)
+        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
         original_services = canvas.services
         before_unrelated_pos = QPointF(unrelated.pos())
         getter_calls: list[str] = []
@@ -1352,7 +1350,7 @@ class ToolsUnitTest(unittest.TestCase):
         item.setData(0, "note")
         item.setData(2, {})
         canvas.scene().addItem(item)
-        tool = MoveTool(canvas, context=canvas.services.tooling.tools.context)
+        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
         try:
             with self.assertRaisesRegex(
                 RuntimeError,
@@ -1431,7 +1429,7 @@ class ToolsUnitTest(unittest.TestCase):
                 item.setData(0, "note")
                 item.setData(2, {})
                 canvas.scene().addItem(item)
-                tool = MoveTool(canvas, context=canvas.services.tooling.tools.context)
+                tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
                 try:
                     with self.assertRaisesRegex(
                         RuntimeError,
@@ -1453,7 +1451,7 @@ class ToolsUnitTest(unittest.TestCase):
         label.setData(2, {})
         label.setPlainText("CH3")
         canvas.scene().addItem(label)
-        tool = MoveTool(canvas, context=canvas.services.tooling.tools.context)
+        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
         try:
             self.assertTrue(tool._begin_selection_drag(set(), [label], QPointF()))
             snapshot = tool._require_drag_token().canvas_snapshot
@@ -1475,7 +1473,7 @@ class ToolsUnitTest(unittest.TestCase):
         canvas, shapes = self._canvas_with_shapes(count=1)
         shape = shapes[0]
         shape.setSelected(True)
-        tool = MoveTool(canvas, context=canvas.services.tooling.tools.context)
+        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
         history = canvas.services.history_service
         redo_entry = MoveItemsCommand(items=[], dx=1.0, dy=1.0)
         history.state.redo_stack[:] = [redo_entry]
@@ -1520,7 +1518,7 @@ class ToolsUnitTest(unittest.TestCase):
         canvas, shapes = self._canvas_with_shapes(count=1)
         shape = shapes[0]
         shape.setSelected(True)
-        tool = MoveTool(canvas, context=canvas.services.tooling.tools.context)
+        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
         history = canvas.services.history_service
         redo_entry = MoveItemsCommand(items=[], dx=1.0, dy=1.0)
         history.state.redo_stack[:] = [redo_entry]
@@ -1554,7 +1552,7 @@ class ToolsUnitTest(unittest.TestCase):
         canvas, shapes = self._canvas_with_shapes(count=1)
         shape = shapes[0]
         shape.setSelected(True)
-        tool = MoveTool(canvas, context=canvas.services.tooling.tools.context)
+        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
         history = canvas.services.history_service
         redo_entry = MoveItemsCommand(items=[], dx=3.0, dy=-2.0)
         history.state.redo_stack[:] = [redo_entry]
@@ -1596,7 +1594,7 @@ class ToolsUnitTest(unittest.TestCase):
         item = _CustomItem(-2.0, -2.0, 4.0, 4.0)
         item.setData(0, "note")
         canvas.scene().addItem(item)
-        tool = MoveTool(canvas, context=canvas.services.tooling.tools.context)
+        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
         original_capture = (
             selection_drag_tool_module.capture_history_transaction_for_history
         )
@@ -1633,7 +1631,7 @@ class ToolsUnitTest(unittest.TestCase):
                 shape.setSelected(True)
                 tool = MoveTool(
                     canvas,
-                    context=canvas.services.tooling.tools.context,
+                    context=canvas.services.tool_controller.context,
                 )
                 history = canvas.services.history_service
                 baseline = MoveItemsCommand(items=[], dx=0.0, dy=0.0)
@@ -1711,7 +1709,7 @@ class ToolsUnitTest(unittest.TestCase):
         scene = canvas.scene()
         unrelated = scene.addRect(QRectF(80.0, 40.0, 8.0, 6.0))
         unrelated.setPos(QPointF(3.0, -2.0))
-        tool = MoveTool(canvas, context=canvas.services.tooling.tools.context)
+        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
         before_shape = scene_item_state_for(canvas, shape)
         before_unrelated_pos = QPointF(unrelated.pos())
         before_scene_items = list(scene.items())
@@ -1784,7 +1782,7 @@ class ToolsUnitTest(unittest.TestCase):
         unrelated.setPos(QPointF(-4.0, 6.0))
         before_shape = scene_item_state_for(canvas, shape)
         before_unrelated_pos = QPointF(unrelated.pos())
-        tool = MoveTool(canvas, context=canvas.services.tooling.tools.context)
+        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
         primary = KeyboardInterrupt("nested shape port poisoned unrelated state")
         order: list[str] = []
         original_capture = (
@@ -1838,7 +1836,7 @@ class ToolsUnitTest(unittest.TestCase):
         canvas, shapes = self._canvas_with_shapes(count=2)
         selected, replacement = shapes
         selected.setSelected(True)
-        tool = MoveTool(canvas, context=canvas.services.tooling.tools.context)
+        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
         selected_before = scene_item_state_for(canvas, selected)
         replacement_before = scene_item_state_for(canvas, replacement)
         try:
@@ -1896,7 +1894,7 @@ class ToolsUnitTest(unittest.TestCase):
             "ring_items",
             [matching_ring, *unrelated_rings],
         )
-        tool = MoveTool(canvas, context=canvas.services.tooling.tools.context)
+        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
         selected_atom = canvas.model.atoms[atom_ids[0]]
         before_atom_pos = (selected_atom.x, selected_atom.y)
         before_polygon = QPolygonF(matching_ring.polygon())
@@ -1960,7 +1958,7 @@ class ToolsUnitTest(unittest.TestCase):
                 first, second = shapes
                 first.setSelected(True)
                 second.setSelected(True)
-                tool = MoveTool(canvas, context=canvas.services.tooling.tools.context)
+                tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
                 history = canvas.services.history_service
                 history_list = history.state.history
                 redo_list = history.state.redo_stack
@@ -2031,7 +2029,7 @@ class ToolsUnitTest(unittest.TestCase):
                 canvas, shapes = self._canvas_with_shapes(count=1)
                 shape = shapes[0]
                 shape.setSelected(True)
-                tool = MoveTool(canvas, context=canvas.services.tooling.tools.context)
+                tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
                 before_state = scene_item_state_for(canvas, shape)
                 try:
                     self.assertTrue(
@@ -2081,7 +2079,7 @@ class ToolsUnitTest(unittest.TestCase):
         canvas, shapes = self._canvas_with_shapes(count=1)
         shape = shapes[0]
         shape.setSelected(True)
-        tool = MoveTool(canvas, context=canvas.services.tooling.tools.context)
+        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
         history = canvas.services.history_service
         baseline = MoveItemsCommand(items=[], dx=0.0, dy=0.0)
         redo_entry = MoveItemsCommand(items=[], dx=1.0, dy=1.0)
@@ -2143,7 +2141,7 @@ class ToolsUnitTest(unittest.TestCase):
                 canvas, shapes = self._canvas_with_shapes(count=1)
                 shape = shapes[0]
                 shape.setSelected(True)
-                tool = MoveTool(canvas, context=canvas.services.tooling.tools.context)
+                tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
                 history = canvas.services.history_service
                 original_push = history.push
                 baseline = MoveItemsCommand(items=[], dx=0.0, dy=0.0)
@@ -2237,7 +2235,7 @@ class ToolsUnitTest(unittest.TestCase):
         canvas, shapes = self._canvas_with_shapes(count=1)
         shape = shapes[0]
         shape.setSelected(True)
-        tool = MoveTool(canvas, context=canvas.services.tooling.tools.context)
+        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
         history = canvas.services.history_service
         original_push = history.push
         baseline = MoveItemsCommand(items=[], dx=0.0, dy=0.0)
@@ -2283,7 +2281,7 @@ class ToolsUnitTest(unittest.TestCase):
         canvas, shapes = self._canvas_with_shapes(count=1)
         shape = shapes[0]
         shape.setSelected(True)
-        tool = MoveTool(canvas, context=canvas.services.tooling.tools.context)
+        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
         history = canvas.services.history_service
         baseline = MoveItemsCommand(items=[], dx=0.0, dy=0.0)
         redo_entry = MoveItemsCommand(items=[], dx=1.0, dy=1.0)
@@ -2346,7 +2344,7 @@ class ToolsUnitTest(unittest.TestCase):
         child.setZValue(3.0)
         peer.setZValue(2.0)
         expected_order = list(canvas.scene().items())
-        tool = MoveTool(canvas, context=canvas.services.tooling.tools.context)
+        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
 
         def corrupt_topology_then_fail(*_args, **_kwargs) -> None:
             child.setParentItem(peer)
@@ -2390,7 +2388,7 @@ class ToolsUnitTest(unittest.TestCase):
         shape = shapes[0]
         shape.setSelected(True)
         selection_style_state_for(canvas).suspend_outline = True
-        tool = MoveTool(canvas, context=canvas.services.tooling.tools.context)
+        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
         try:
             self.assertTrue(
                 tool._begin_selection_drag(
@@ -2414,7 +2412,7 @@ class ToolsUnitTest(unittest.TestCase):
         canvas, shapes = self._canvas_with_shapes(count=1)
         shape = shapes[0]
         shape.setSelected(True)
-        tool = MoveTool(canvas, context=canvas.services.tooling.tools.context)
+        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
         history = canvas.services.history_service
         before_state = scene_item_state_for(canvas, shape)
         baseline = MoveItemsCommand(items=[], dx=0.0, dy=0.0)
@@ -2515,7 +2513,7 @@ class ToolsUnitTest(unittest.TestCase):
         canvas, shapes = self._canvas_with_shapes(count=1)
         shape = shapes[0]
         shape.setSelected(False)
-        tool = MoveTool(canvas, context=canvas.services.tooling.tools.context)
+        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
         history = canvas.services.history_service
         original_push = history.push
         before_state = scene_item_state_for(canvas, shape)
@@ -2591,7 +2589,7 @@ class ToolsUnitTest(unittest.TestCase):
         handle.setData(0, "handle")
         handle.setData(2, shape)
         canvas.scene().addItem(handle)
-        tool = SelectTool(canvas, context=canvas.services.tooling.tools.context)
+        tool = SelectTool(canvas, context=canvas.services.tool_controller.context)
         history = canvas.services.history_service
         original_push = history.push
         before_state = scene_item_state_for(canvas, shape)
@@ -2756,7 +2754,7 @@ class ToolsUnitTest(unittest.TestCase):
         canvas, shapes = self._canvas_with_shapes(count=1)
         shape = shapes[0]
         shape.setSelected(True)
-        tool = MoveTool(canvas, context=canvas.services.tooling.tools.context)
+        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
         history_service = canvas.services.history_service
         original_push = history_service.push
         replacement: dict[str, object] = {}

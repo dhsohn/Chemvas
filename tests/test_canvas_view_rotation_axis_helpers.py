@@ -28,7 +28,7 @@ def _component_lookup(components: dict[tuple[int, int], set[int]]):
 
 def _bind_graph_service(view) -> CanvasGraphService:
     service = CanvasGraphService(view)
-    view.services = canvas_runtime_services(canvas_graph_service=service)
+    view.services = canvas_runtime_services(graph_service=service)
     return service
 
 

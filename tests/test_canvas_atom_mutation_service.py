@@ -61,7 +61,7 @@ def _services(
     atom_mutation=None,
 ):
     return canvas_runtime_services(
-        canvas_graph_service=graph,
+        graph_service=graph,
         atom_label_service=atom_label,
         hit_testing_service=hit_testing,
         canvas_mark_scene_service=mark_scene,
@@ -78,7 +78,7 @@ def _service_for(canvas) -> CanvasAtomMutationService:
     return CanvasAtomMutationService(
         canvas,
         hit_testing_service=canvas.services.selection.hit_testing_service,
-        graph_service=canvas.services.graph.canvas_graph_service,
+        graph_service=canvas.services.graph_service,
     )
 
 

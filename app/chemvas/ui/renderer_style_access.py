@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from chemvas.ui.canvas_renderer_state import renderer_for
+
+def renderer_for(canvas: Any):
+    return canvas.renderer
 
 
 def renderer_style_for(canvas: Any):

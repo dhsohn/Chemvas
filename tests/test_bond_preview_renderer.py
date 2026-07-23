@@ -1,5 +1,6 @@
 import os
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -26,16 +27,7 @@ except ModuleNotFoundError:
     QGraphicsTextItem = None
 
 if QApplication is not None:
-    from chemvas.ui.bond_preview_geometry import (
-        apply_plain_double_preview_variant,
-        expanded_bold_segment,
-        plain_double_preview_segments,
-        trim_segment,
-    )
     from chemvas.ui.bond_preview_renderer import (
-        BondPreviewBuildResolvers,
-        BondPreviewConfig,
-        BondPreviewUpdateResolvers,
         add_bond_preview_items,
         build_bond_preview_items,
         clear_bond_preview_items,
@@ -57,10 +49,12 @@ class BondPreviewRendererTest(unittest.TestCase):
         items = build_bond_preview_items(
             QPointF(0.0, 0.0),
             QPointF(12.0, 4.0),
-            config=_config(style="single", order=1),
+            style="single",
+            order=1,
+            canvas_renderer=_renderer(),
             a_id=None,
             b_id=None,
-            resolvers=_build_resolvers(),
+            bond_renderer=_bond_renderer(),
         )
 
         self.assertEqual(len(items), 1)
@@ -71,10 +65,12 @@ class BondPreviewRendererTest(unittest.TestCase):
         items = build_bond_preview_items(
             QPointF(0.0, 0.0),
             QPointF(12.0, 0.0),
-            config=_config(style="dotted", order=1),
+            style="dotted",
+            order=1,
+            canvas_renderer=_renderer(),
             a_id=None,
             b_id=None,
-            resolvers=_build_resolvers(),
+            bond_renderer=_bond_renderer(),
         )
 
         self.assertEqual(len(items), 1)
@@ -89,10 +85,12 @@ class BondPreviewRendererTest(unittest.TestCase):
             [item],
             QPointF(2.0, 3.0),
             QPointF(16.0, 7.0),
-            config=_config(style="single", order=1),
+            style="single",
+            order=1,
+            canvas_renderer=_renderer(),
             a_id=None,
             b_id=None,
-            resolvers=_update_resolvers(),
+            bond_renderer=_bond_renderer(),
         )
 
         self.assertTrue(updated)
@@ -107,10 +105,12 @@ class BondPreviewRendererTest(unittest.TestCase):
         items = build_bond_preview_items(
             QPointF(0.0, 0.0),
             QPointF(14.0, 0.0),
-            config=_config(style="bold_out", order=2),
+            style="bold_out",
+            order=2,
+            canvas_renderer=_renderer(),
             a_id=1,
             b_id=2,
-            resolvers=_build_resolvers(),
+            bond_renderer=_bond_renderer(),
         )
 
         self.assertEqual(len(items), 2)
@@ -127,10 +127,12 @@ class BondPreviewRendererTest(unittest.TestCase):
             items,
             QPointF(0.0, 0.0),
             QPointF(10.0, 0.0),
-            config=_config(style="hash", order=1),
+            style="hash",
+            order=1,
+            canvas_renderer=_renderer(),
             a_id=None,
             b_id=None,
-            resolvers=_update_resolvers(),
+            bond_renderer=_bond_renderer(),
         )
 
         self.assertFalse(updated)
@@ -152,9 +154,8 @@ class BondPreviewRendererTest(unittest.TestCase):
         self.assertEqual(cleared, [])
         self.assertTrue(all(item.scene() is None for item in added))
 
-    def test_add_bond_preview_items_applies_color_to_text_pen_and_brush(self) -> None:
+    def test_add_bond_preview_items_applies_color_to_pen_and_brush(self) -> None:
         scene = QGraphicsScene()
-        text = QGraphicsTextItem("TS")
         line = NoSelectLineItem(0.0, 0.0, 5.0, 0.0)
         line.setPen(QPen(QColor("#000000")))
         polygon = QGraphicsPolygonItem(
@@ -165,11 +166,10 @@ class BondPreviewRendererTest(unittest.TestCase):
 
         color = QColor("#4A6C8E")
         added = add_bond_preview_items(
-            scene, [text, line, polygon], color=color, opacity=0.25, z_value=7.0
+            scene, [line, polygon], color=color, opacity=0.25, z_value=7.0
         )
 
-        self.assertEqual(len(added), 3)
-        self.assertEqual(text.defaultTextColor().name(), color.name())
+        self.assertEqual(len(added), 2)
         self.assertEqual(line.pen().color().name(), color.name())
         self.assertEqual(polygon.pen().color().name(), color.name())
         self.assertEqual(polygon.brush().color().name(), color.name())
@@ -194,53 +194,53 @@ class BondPreviewRendererTest(unittest.TestCase):
         self.assertEqual(clear_bond_preview_items(scene, [detached]), [])
         self.assertIs(detached.scene(), other_scene)
 
-    def test_build_wedge_preview_delegates_to_resolver(self) -> None:
+    def test_build_wedge_preview_delegates_to_bond_renderer(self) -> None:
         expected = [QGraphicsPolygonItem()]
         wedge = mock.Mock(return_value=expected)
-        resolvers = BondPreviewBuildResolvers(
+        bond_renderer = _bond_renderer(
             draw_wedge_bond=wedge,
             draw_hash_bond=mock.Mock(),
             draw_dotted_bond=mock.Mock(),
             draw_parallel_bonds=mock.Mock(),
             line_normal=mock.Mock(),
             one_sided_bond_strip=mock.Mock(),
-            bond_pen=mock.Mock(),
-            dotted_bond_pen=mock.Mock(),
         )
 
         items = build_bond_preview_items(
             QPointF(1.0, 2.0),
             QPointF(7.0, 8.0),
-            config=_config(style="wedge", order=1),
+            style="wedge",
+            order=1,
+            canvas_renderer=_renderer(),
             a_id=3,
             b_id=4,
-            resolvers=resolvers,
+            bond_renderer=bond_renderer,
         )
 
         self.assertIs(items, expected)
         wedge.assert_called_once_with(1.0, 2.0, 7.0, 8.0, 3, 4)
 
-    def test_build_hash_preview_delegates_to_resolver(self) -> None:
+    def test_build_hash_preview_delegates_to_bond_renderer(self) -> None:
         expected = [QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)]
         hashed = mock.Mock(return_value=expected)
-        resolvers = BondPreviewBuildResolvers(
+        bond_renderer = _bond_renderer(
             draw_wedge_bond=mock.Mock(),
             draw_hash_bond=hashed,
             draw_dotted_bond=mock.Mock(),
             draw_parallel_bonds=mock.Mock(),
             line_normal=mock.Mock(),
             one_sided_bond_strip=mock.Mock(),
-            bond_pen=mock.Mock(),
-            dotted_bond_pen=mock.Mock(),
         )
 
         items = build_bond_preview_items(
             QPointF(-2.0, 1.0),
             QPointF(5.0, 6.0),
-            config=_config(style="hash", order=1),
+            style="hash",
+            order=1,
+            canvas_renderer=_renderer(),
             a_id=9,
             b_id=10,
-            resolvers=resolvers,
+            bond_renderer=bond_renderer,
         )
 
         self.assertIs(items, expected)
@@ -252,15 +252,13 @@ class BondPreviewRendererTest(unittest.TestCase):
         strip = QGraphicsPolygonItem()
         line_normal = mock.Mock(return_value=(0.25, 0.75))
         one_sided = mock.Mock(return_value=strip)
-        resolvers = BondPreviewBuildResolvers(
+        bond_renderer = _bond_renderer(
             draw_wedge_bond=mock.Mock(),
             draw_hash_bond=mock.Mock(),
             draw_dotted_bond=mock.Mock(),
             draw_parallel_bonds=mock.Mock(),
             line_normal=line_normal,
             one_sided_bond_strip=one_sided,
-            bond_pen=mock.Mock(),
-            dotted_bond_pen=mock.Mock(),
         )
         start = QPointF(0.0, 0.0)
         end = QPointF(10.0, 0.0)
@@ -268,39 +266,63 @@ class BondPreviewRendererTest(unittest.TestCase):
         items = build_bond_preview_items(
             start,
             end,
-            config=_config(style="bold_out", order=1),
+            style="bold_out",
+            order=1,
+            canvas_renderer=_renderer(),
             a_id=None,
             b_id=None,
-            resolvers=resolvers,
+            bond_renderer=bond_renderer,
         )
 
-        bx1, by1, bx2, by2 = expanded_bold_segment(start, end, 20.0)
+        bx1, by1, bx2, by2 = start.x(), start.y(), end.x(), end.y()
         self.assertEqual(items, [strip])
         line_normal.assert_called_once_with(bx1, by1, bx2, by2, None)
         one_sided.assert_called_once_with(bx1, by1, bx2, by2, -0.25, -0.75, 1.2, 2.4)
+
+    def test_build_bold_single_preview_keeps_inward_normal(self) -> None:
+        strip = QGraphicsPolygonItem()
+        line_normal = mock.Mock(return_value=(0.25, 0.75))
+        one_sided = mock.Mock(return_value=strip)
+
+        items = build_bond_preview_items(
+            QPointF(0.0, 0.0),
+            QPointF(10.0, 0.0),
+            style="bold",
+            order=1,
+            canvas_renderer=_renderer(),
+            a_id=None,
+            b_id=None,
+            bond_renderer=_bond_renderer(
+                line_normal=line_normal,
+                one_sided_bond_strip=one_sided,
+            ),
+        )
+
+        self.assertEqual(items, [strip])
+        self.assertEqual(one_sided.call_args.args[4:6], (0.25, 0.75))
 
     def test_build_bold_parallel_preview_keeps_non_line_first_item(self) -> None:
         first = QGraphicsPolygonItem()
         second = QGraphicsLineItem(0.0, 0.0, 10.0, 1.0)
         draw_parallel = mock.Mock(return_value=[first, second])
-        resolvers = BondPreviewBuildResolvers(
+        bond_renderer = _bond_renderer(
             draw_wedge_bond=mock.Mock(),
             draw_hash_bond=mock.Mock(),
             draw_dotted_bond=mock.Mock(),
             draw_parallel_bonds=draw_parallel,
             line_normal=mock.Mock(),
             one_sided_bond_strip=mock.Mock(),
-            bond_pen=mock.Mock(),
-            dotted_bond_pen=mock.Mock(),
         )
 
         items = build_bond_preview_items(
             QPointF(0.0, 0.0),
             QPointF(14.0, 0.0),
-            config=_config(style="bold", order=2),
+            style="bold",
+            order=2,
+            canvas_renderer=_renderer(),
             a_id=1,
             b_id=2,
-            resolvers=resolvers,
+            bond_renderer=bond_renderer,
         )
 
         self.assertEqual(items, [first, second])
@@ -310,7 +332,7 @@ class BondPreviewRendererTest(unittest.TestCase):
         strip = QGraphicsPolygonItem()
         line_normal = mock.Mock(return_value=(0.25, 0.75))
         one_sided = mock.Mock(return_value=strip)
-        resolvers = BondPreviewBuildResolvers(
+        bond_renderer = _bond_renderer(
             draw_wedge_bond=mock.Mock(),
             draw_hash_bond=mock.Mock(),
             draw_dotted_bond=mock.Mock(),
@@ -320,46 +342,46 @@ class BondPreviewRendererTest(unittest.TestCase):
             ],
             line_normal=line_normal,
             one_sided_bond_strip=one_sided,
-            bond_pen=mock.Mock(),
-            dotted_bond_pen=mock.Mock(),
         )
 
         items = build_bond_preview_items(
             QPointF(0.0, 0.0),
             QPointF(14.0, 0.0),
-            config=_config(style="bold", order=2),
+            style="bold",
+            order=2,
+            canvas_renderer=_renderer(),
             a_id=1,
             b_id=2,
-            resolvers=resolvers,
+            bond_renderer=bond_renderer,
         )
 
         self.assertIsInstance(items[0], QGraphicsPolygonItem)
         one_sided.assert_called_once_with(0.0, 0.5, 10.0, 0.5, -0.25, -0.75, 1.2, 2.4)
 
-    def test_build_parallel_nonbold_preview_uses_parallel_resolver(self) -> None:
+    def test_build_parallel_nonbold_preview_uses_parallel_bond_renderer(self) -> None:
         expected = [
             QGraphicsLineItem(0.0, 0.0, 8.0, 0.0),
             QGraphicsLineItem(0.0, 1.0, 8.0, 1.0),
         ]
         draw_parallel = mock.Mock(return_value=expected)
-        resolvers = BondPreviewBuildResolvers(
+        bond_renderer = _bond_renderer(
             draw_wedge_bond=mock.Mock(),
             draw_hash_bond=mock.Mock(),
             draw_dotted_bond=mock.Mock(),
             draw_parallel_bonds=draw_parallel,
             line_normal=mock.Mock(),
             one_sided_bond_strip=mock.Mock(),
-            bond_pen=mock.Mock(),
-            dotted_bond_pen=mock.Mock(),
         )
 
         items = build_bond_preview_items(
             QPointF(-1.0, 0.0),
             QPointF(9.0, 0.0),
-            config=_config(style="single", order=2),
+            style="single",
+            order=2,
+            canvas_renderer=_renderer(),
             a_id=5,
             b_id=6,
-            resolvers=resolvers,
+            bond_renderer=bond_renderer,
         )
 
         self.assertIs(items, expected)
@@ -372,32 +394,34 @@ class BondPreviewRendererTest(unittest.TestCase):
                 QGraphicsLineItem(0.0, 2.0, 10.0, 2.0),
             ]
 
-        resolvers = BondPreviewBuildResolvers(
+        bond_renderer = _bond_renderer(
             draw_wedge_bond=mock.Mock(),
             draw_hash_bond=mock.Mock(),
             draw_dotted_bond=mock.Mock(),
             draw_parallel_bonds=mock.Mock(side_effect=_parallel_items),
             line_normal=mock.Mock(),
             one_sided_bond_strip=mock.Mock(),
-            bond_pen=mock.Mock(),
-            dotted_bond_pen=mock.Mock(),
         )
 
         default_items = build_bond_preview_items(
             QPointF(0.0, 0.0),
             QPointF(10.0, 0.0),
-            config=_config(style="double", order=2),
+            style="double",
+            order=2,
+            canvas_renderer=_renderer(),
             a_id=None,
             b_id=None,
-            resolvers=resolvers,
+            bond_renderer=bond_renderer,
         )
         outer_items = build_bond_preview_items(
             QPointF(0.0, 0.0),
             QPointF(10.0, 0.0),
-            config=_config(style="double_outer", order=2),
+            style="double_outer",
+            order=2,
+            canvas_renderer=_renderer(),
             a_id=None,
             b_id=None,
-            resolvers=resolvers,
+            bond_renderer=bond_renderer,
         )
 
         self.assertEqual(
@@ -418,10 +442,12 @@ class BondPreviewRendererTest(unittest.TestCase):
             [],
             QPointF(0.0, 0.0),
             QPointF(10.0, 0.0),
-            config=_config(style="single", order=1),
+            style="single",
+            order=1,
+            canvas_renderer=_renderer(),
             a_id=None,
             b_id=None,
-            resolvers=_update_resolvers(),
+            bond_renderer=_bond_renderer(),
         )
 
         self.assertFalse(updated)
@@ -435,10 +461,12 @@ class BondPreviewRendererTest(unittest.TestCase):
             [item],
             QPointF(0.0, 0.0),
             QPointF(8.0, 2.0),
-            config=_config(style="wedge", order=1),
+            style="wedge",
+            order=1,
+            canvas_renderer=_renderer(),
             a_id=1,
             b_id=2,
-            resolvers=_update_resolvers(),
+            bond_renderer=_bond_renderer(),
         )
 
         points = [(point.x(), point.y()) for point in item.polygon()]
@@ -450,10 +478,12 @@ class BondPreviewRendererTest(unittest.TestCase):
             [QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)],
             QPointF(0.0, 0.0),
             QPointF(8.0, 2.0),
-            config=_config(style="wedge", order=1),
+            style="wedge",
+            order=1,
+            canvas_renderer=_renderer(),
             a_id=None,
             b_id=None,
-            resolvers=_update_resolvers(),
+            bond_renderer=_bond_renderer(),
         )
 
         self.assertFalse(updated)
@@ -469,10 +499,12 @@ class BondPreviewRendererTest(unittest.TestCase):
             items,
             QPointF(0.0, 0.0),
             QPointF(10.0, 0.0),
-            config=_config(style="hash", order=1),
+            style="hash",
+            order=1,
+            canvas_renderer=_renderer(),
             a_id=None,
             b_id=None,
-            resolvers=_update_resolvers(),
+            bond_renderer=_bond_renderer(),
         )
 
         self.assertTrue(updated)
@@ -497,10 +529,12 @@ class BondPreviewRendererTest(unittest.TestCase):
             items,
             QPointF(0.0, 0.0),
             QPointF(10.0, 0.0),
-            config=_config(style="hash", order=1),
+            style="hash",
+            order=1,
+            canvas_renderer=_renderer(),
             a_id=None,
             b_id=None,
-            resolvers=_update_resolvers(),
+            bond_renderer=_bond_renderer(),
         )
 
         self.assertFalse(updated)
@@ -517,10 +551,12 @@ class BondPreviewRendererTest(unittest.TestCase):
             items,
             QPointF(0.0, 0.0),
             QPointF(10.0, 0.0),
-            config=_config(style="bold_out", order=2),
+            style="bold_out",
+            order=2,
+            canvas_renderer=_renderer(),
             a_id=1,
             b_id=2,
-            resolvers=_update_resolvers(),
+            bond_renderer=_bond_renderer(),
         )
 
         points = [(point.x(), point.y()) for point in items[0].polygon()]
@@ -546,10 +582,12 @@ class BondPreviewRendererTest(unittest.TestCase):
             items,
             QPointF(0.0, 0.0),
             QPointF(10.0, 0.0),
-            config=_config(style="bold", order=2),
+            style="bold",
+            order=2,
+            canvas_renderer=_renderer(),
             a_id=1,
             b_id=2,
-            resolvers=_update_resolvers(),
+            bond_renderer=_bond_renderer(),
         )
 
         self.assertTrue(updated)
@@ -570,10 +608,12 @@ class BondPreviewRendererTest(unittest.TestCase):
             [QGraphicsTextItem("bad"), QGraphicsLineItem(0.0, 1.0, 1.0, 1.0)],
             QPointF(0.0, 0.0),
             QPointF(10.0, 0.0),
-            config=_config(style="bold", order=2),
+            style="bold",
+            order=2,
+            canvas_renderer=_renderer(),
             a_id=1,
             b_id=2,
-            resolvers=_update_resolvers(),
+            bond_renderer=_bond_renderer(),
         )
 
         self.assertFalse(updated)
@@ -581,7 +621,7 @@ class BondPreviewRendererTest(unittest.TestCase):
     def test_update_bold_parallel_preview_returns_false_when_segments_are_missing(
         self,
     ) -> None:
-        resolvers = BondPreviewUpdateResolvers(
+        bond_renderer = _bond_renderer(
             wedge_polygon=lambda *args: QPolygonF(),
             hash_segments=lambda *args: (),
             dotted_bond_path=lambda *args: QPainterPath(),
@@ -594,10 +634,12 @@ class BondPreviewRendererTest(unittest.TestCase):
             [QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)],
             QPointF(0.0, 0.0),
             QPointF(10.0, 0.0),
-            config=_config(style="bold", order=2),
+            style="bold",
+            order=2,
+            canvas_renderer=_renderer(),
             a_id=None,
             b_id=None,
-            resolvers=resolvers,
+            bond_renderer=bond_renderer,
         )
 
         self.assertFalse(updated)
@@ -609,15 +651,15 @@ class BondPreviewRendererTest(unittest.TestCase):
             [item],
             QPointF(0.0, 0.0),
             QPointF(10.0, 0.0),
-            config=_config(style="bold", order=1),
+            style="bold",
+            order=1,
+            canvas_renderer=_renderer(),
             a_id=None,
             b_id=None,
-            resolvers=_update_resolvers(),
+            bond_renderer=_bond_renderer(),
         )
 
-        bx1, by1, bx2, by2 = expanded_bold_segment(
-            QPointF(0.0, 0.0), QPointF(10.0, 0.0), 20.0
-        )
+        bx1, by1, bx2, by2 = 0.0, 0.0, 10.0, 0.0
         self.assertTrue(updated)
         self.assertEqual(
             (item.line().x1(), item.line().y1(), item.line().x2(), item.line().y2()),
@@ -629,10 +671,12 @@ class BondPreviewRendererTest(unittest.TestCase):
             [QGraphicsTextItem("bad")],
             QPointF(0.0, 0.0),
             QPointF(10.0, 0.0),
-            config=_config(style="bold", order=1),
+            style="bold",
+            order=1,
+            canvas_renderer=_renderer(),
             a_id=None,
             b_id=None,
-            resolvers=_update_resolvers(),
+            bond_renderer=_bond_renderer(),
         )
 
         self.assertFalse(updated)
@@ -642,13 +686,33 @@ class BondPreviewRendererTest(unittest.TestCase):
             [QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)],
             QPointF(0.0, 0.0),
             QPointF(10.0, 0.0),
-            config=_config(style="dotted", order=1),
+            style="dotted",
+            order=1,
+            canvas_renderer=_renderer(),
             a_id=None,
             b_id=None,
-            resolvers=_update_resolvers(),
+            bond_renderer=_bond_renderer(),
         )
 
         self.assertFalse(updated)
+
+    def test_update_dotted_preview_updates_existing_path_item(self) -> None:
+        item = QGraphicsPathItem()
+
+        updated = update_bond_preview_items(
+            [item],
+            QPointF(0.0, 0.0),
+            QPointF(10.0, 0.0),
+            style="dotted",
+            order=1,
+            canvas_renderer=_renderer(),
+            a_id=1,
+            b_id=2,
+            bond_renderer=_bond_renderer(),
+        )
+
+        self.assertTrue(updated)
+        self.assertFalse(item.path().isEmpty())
 
     def test_update_bold_parallel_preview_returns_false_for_bad_later_item(
         self,
@@ -657,10 +721,12 @@ class BondPreviewRendererTest(unittest.TestCase):
             [QGraphicsPolygonItem(), QGraphicsPolygonItem()],
             QPointF(0.0, 0.0),
             QPointF(10.0, 0.0),
-            config=_config(style="bold", order=2),
+            style="bold",
+            order=2,
+            canvas_renderer=_renderer(),
             a_id=1,
             b_id=2,
-            resolvers=_update_resolvers(),
+            bond_renderer=_bond_renderer(),
         )
 
         self.assertFalse(updated)
@@ -672,10 +738,12 @@ class BondPreviewRendererTest(unittest.TestCase):
             [item],
             QPointF(0.0, 0.0),
             QPointF(10.0, 0.0),
-            config=_config(style="bold_out", order=1),
+            style="bold_out",
+            order=1,
+            canvas_renderer=_renderer(),
             a_id=None,
             b_id=None,
-            resolvers=_update_resolvers(),
+            bond_renderer=_bond_renderer(),
         )
 
         self.assertTrue(updated)
@@ -691,10 +759,12 @@ class BondPreviewRendererTest(unittest.TestCase):
             items,
             QPointF(0.0, 0.0),
             QPointF(10.0, 0.0),
-            config=_config(style="single", order=2),
+            style="single",
+            order=2,
+            canvas_renderer=_renderer(),
             a_id=1,
             b_id=2,
-            resolvers=_update_resolvers(),
+            bond_renderer=_bond_renderer(),
         )
 
         self.assertTrue(updated)
@@ -713,7 +783,7 @@ class BondPreviewRendererTest(unittest.TestCase):
             QGraphicsLineItem(0.0, 0.0, 1.0, 0.0),
             QGraphicsLineItem(0.0, 0.0, 1.0, 0.0),
         ]
-        resolvers = BondPreviewUpdateResolvers(
+        bond_renderer = _bond_renderer(
             wedge_polygon=lambda *args: QPolygonF([QPointF()]),
             hash_segments=lambda *args: ((0.0, 0.0, 1.0, 0.0),),
             dotted_bond_path=lambda *args: QPainterPath(),
@@ -729,10 +799,12 @@ class BondPreviewRendererTest(unittest.TestCase):
             items,
             QPointF(0.0, 0.0),
             QPointF(10.0, 0.0),
-            config=_config(style="double", order=2),
+            style="double",
+            order=2,
+            canvas_renderer=_renderer(),
             a_id=None,
             b_id=None,
-            resolvers=resolvers,
+            bond_renderer=bond_renderer,
         )
 
         self.assertTrue(updated)
@@ -746,10 +818,12 @@ class BondPreviewRendererTest(unittest.TestCase):
             [QGraphicsLineItem(0.0, 0.0, 1.0, 0.0), QGraphicsPolygonItem()],
             QPointF(0.0, 0.0),
             QPointF(10.0, 0.0),
-            config=_config(style="single", order=2),
+            style="single",
+            order=2,
+            canvas_renderer=_renderer(),
             a_id=None,
             b_id=None,
-            resolvers=_update_resolvers(),
+            bond_renderer=_bond_renderer(),
         )
 
         self.assertFalse(updated)
@@ -762,10 +836,12 @@ class BondPreviewRendererTest(unittest.TestCase):
                 [QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)],
                 QPointF(0.0, 0.0),
                 QPointF(10.0, 0.0),
-                config=_config(style="double", order=2),
+                style="double",
+                order=2,
+                canvas_renderer=_renderer(),
                 a_id=None,
                 b_id=None,
-                resolvers=_update_resolvers(),
+                bond_renderer=_bond_renderer(),
             )
         )
         self.assertFalse(
@@ -773,10 +849,12 @@ class BondPreviewRendererTest(unittest.TestCase):
                 [QGraphicsLineItem(0.0, 0.0, 1.0, 0.0), QGraphicsPolygonItem()],
                 QPointF(0.0, 0.0),
                 QPointF(10.0, 0.0),
-                config=_config(style="double", order=2),
+                style="double",
+                order=2,
+                canvas_renderer=_renderer(),
                 a_id=None,
                 b_id=None,
-                resolvers=_update_resolvers(),
+                bond_renderer=_bond_renderer(),
             )
         )
         self.assertFalse(
@@ -784,63 +862,43 @@ class BondPreviewRendererTest(unittest.TestCase):
                 [QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)],
                 QPointF(0.0, 0.0),
                 QPointF(10.0, 0.0),
-                config=_config(style="single", order=2),
+                style="single",
+                order=2,
+                canvas_renderer=_renderer(),
                 a_id=None,
                 b_id=None,
-                resolvers=_update_resolvers(),
+                bond_renderer=_bond_renderer(),
             )
         )
-
-    def test_plain_double_helper_tails_cover_trim_len_and_passthrough_paths(
-        self,
-    ) -> None:
-        segment = (0.0, 0.0, 10.0, 0.0)
-        self.assertEqual(trim_segment(segment, 0.0), segment)
-        self.assertEqual(
-            plain_double_preview_segments((segment,), "double"), (segment,)
-        )
-
-        centered = plain_double_preview_segments(
-            ((0.0, -2.0, 10.0, -2.0), (0.0, 2.0, 10.0, 2.0)),
-            "double_centered",
-        )
-        self.assertEqual((centered[0][1], centered[1][1]), (-2.2, 2.2))
-
-        first = QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)
-        items = [first]
-        self.assertIs(apply_plain_double_preview_variant(items, "double"), items)
 
     def test_update_single_preview_returns_false_for_wrong_item_shape(self) -> None:
         updated = update_bond_preview_items(
             [QGraphicsPolygonItem()],
             QPointF(2.0, 3.0),
             QPointF(16.0, 7.0),
-            config=_config(style="single", order=1),
+            style="single",
+            order=1,
+            canvas_renderer=_renderer(),
             a_id=None,
             b_id=None,
-            resolvers=_update_resolvers(),
+            bond_renderer=_bond_renderer(),
         )
 
         self.assertFalse(updated)
 
 
-def _config(*, style: str, order: int) -> BondPreviewConfig:
-    return BondPreviewConfig(
-        style=style,
-        order=order,
-        bond_length_px=20.0,
-        bond_line_width=1.2,
-        bold_bond_width=2.4,
-        hash_spacing_px=4.0,
+def _renderer():
+    return SimpleNamespace(
+        style=SimpleNamespace(
+            bond_line_width=1.2,
+            bold_bond_width=2.4,
+            hash_spacing_px=4.0,
+        ),
+        bond_pen=lambda: QPen(QColor("#224466")),
     )
 
 
-def _build_resolvers() -> BondPreviewBuildResolvers:
-    def dotted_bond_pen() -> QPen:
-        pen = QPen(QColor("#224466"))
-        pen.setStyle(Qt.PenStyle.DotLine)
-        return pen
-
+def _bond_renderer(**overrides):
     def draw_dotted_bond(*_args):
         path = QPainterPath()
         path.addEllipse(QPointF(1.0, 0.0), 0.5, 0.5)
@@ -850,23 +908,29 @@ def _build_resolvers() -> BondPreviewBuildResolvers:
         item.setBrush(QColor("#224466"))
         return [item]
 
-    return BondPreviewBuildResolvers(
-        draw_wedge_bond=lambda *args: [
+    def dotted_bond_path(*_args):
+        path = QPainterPath()
+        path.addEllipse(QPointF(1.0, 0.0), 0.5, 0.5)
+        path.addEllipse(QPointF(2.0, 0.0), 0.5, 0.5)
+        return path
+
+    methods = dict(
+        draw_wedge_bond=lambda *_args: [
             QGraphicsPolygonItem(
                 QPolygonF([QPointF(0.0, 0.0), QPointF(6.0, 0.0), QPointF(3.0, 3.0)])
             )
         ],
-        draw_hash_bond=lambda *args: [
+        draw_hash_bond=lambda *_args: [
             QGraphicsLineItem(0.0, 0.0, 4.0, 0.0),
             QGraphicsLineItem(0.0, 1.0, 4.0, 1.0),
         ],
         draw_dotted_bond=draw_dotted_bond,
-        draw_parallel_bonds=lambda *args: [
+        draw_parallel_bonds=lambda *_args: [
             QGraphicsLineItem(0.0, 0.0, 10.0, 0.0),
             QGraphicsLineItem(0.0, 1.0, 10.0, 1.0),
         ],
-        line_normal=lambda *args: (0.0, 1.0),
-        one_sided_bond_strip=lambda *args: QGraphicsPolygonItem(
+        line_normal=lambda *_args: (0.0, 1.0),
+        one_sided_bond_strip=lambda *_args: QGraphicsPolygonItem(
             QPolygonF(
                 [
                     QPointF(0.0, 0.0),
@@ -876,34 +940,20 @@ def _build_resolvers() -> BondPreviewBuildResolvers:
                 ]
             )
         ),
-        bond_pen=lambda: QPen(QColor("#224466")),
-        dotted_bond_pen=dotted_bond_pen,
-    )
-
-
-def _update_resolvers() -> BondPreviewUpdateResolvers:
-    def dotted_bond_path(*_args):
-        path = QPainterPath()
-        path.addEllipse(QPointF(1.0, 0.0), 0.5, 0.5)
-        path.addEllipse(QPointF(2.0, 0.0), 0.5, 0.5)
-        return path
-
-    return BondPreviewUpdateResolvers(
-        wedge_polygon=lambda *args: QPolygonF(
+        wedge_polygon=lambda *_args: QPolygonF(
             [QPointF(0.0, 0.0), QPointF(8.0, 0.0), QPointF(4.0, 4.0)]
         ),
-        hash_segments=lambda *args: (
+        hash_segments=lambda *_args: (
             (0.0, 0.0, 4.0, 0.0),
             (0.0, 1.0, 4.0, 1.0),
             (0.0, 2.0, 4.0, 2.0),
         ),
         dotted_bond_path=dotted_bond_path,
-        parallel_bond_segments=lambda *args: (
+        parallel_bond_segments=lambda *_args: (
             (0.0, 0.0, 10.0, 0.0),
             (0.0, 1.0, 10.0, 1.0),
         ),
-        line_normal=lambda *args: (0.0, 1.0),
-        strip_polygon=lambda *args: QPolygonF(
+        strip_polygon=lambda *_args: QPolygonF(
             [
                 QPointF(0.0, 0.0),
                 QPointF(10.0, 0.0),
@@ -912,6 +962,8 @@ def _update_resolvers() -> BondPreviewUpdateResolvers:
             ]
         ),
     )
+    methods.update(overrides)
+    return SimpleNamespace(**methods)
 
 
 if __name__ == "__main__":

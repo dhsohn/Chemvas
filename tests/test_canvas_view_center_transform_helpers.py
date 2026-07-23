@@ -86,8 +86,10 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         self,
     ) -> None:
         plain_view = SimpleNamespace(
-            input_view_state=InputViewState(
-                base_transform=QTransform().translate(2.0, 3.0)
+            runtime_state=SimpleNamespace(
+                input_view_state=InputViewState(
+                    base_transform=QTransform().translate(2.0, 3.0)
+                )
             ),
             setTransform=mock.Mock(),
         )
@@ -101,10 +103,12 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         self.assertAlmostEqual(plain_transform.m22(), 1.0)
 
         skewed_view = SimpleNamespace(
-            input_view_state=InputViewState(
-                base_transform=QTransform().translate(2.0, 3.0),
-                perspective_shear=0.25,
-                perspective_scale_y=1.5,
+            runtime_state=SimpleNamespace(
+                input_view_state=InputViewState(
+                    base_transform=QTransform().translate(2.0, 3.0),
+                    perspective_shear=0.25,
+                    perspective_scale_y=1.5,
+                )
             ),
             setTransform=mock.Mock(),
         )
@@ -116,6 +120,17 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         self.assertAlmostEqual(skewed_transform.dy(), 3.0)
         self.assertAlmostEqual(skewed_transform.m21(), 0.375)
         self.assertAlmostEqual(skewed_transform.m22(), 1.5)
+
+    def test_update_view_transform_rejects_plain_canvas_shadow_state(self) -> None:
+        view = SimpleNamespace(
+            input_view_state=InputViewState(),
+            setTransform=mock.Mock(),
+        )
+
+        with self.assertRaises(AttributeError):
+            update_view_transform_for(view)
+
+        view.setTransform.assert_not_called()
 
     def test_bounds_for_atoms_includes_labels_and_dots_or_falls_back_to_model_bounds(
         self,
@@ -162,7 +177,9 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         view = SimpleNamespace(
             insert_state=CanvasInsertState(template_active=True),
             refresh_selection_outline=mock.Mock(),
-            callback_state=CanvasCallbackState(tool_change=mock.Mock()),
+            runtime_state=SimpleNamespace(
+                callback_state=CanvasCallbackState(tool_change=mock.Mock())
+            ),
             tool_settings_state=CanvasToolSettingsState(
                 active_bond_style="single",
                 active_bond_order=1,
@@ -176,7 +193,7 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
                 update_selection_outline=view.refresh_selection_outline
             ),
             hover=SimpleNamespace(refresh=mock.Mock()),
-            tools=SimpleNamespace(set_active=mock.Mock()),
+            tool_controller=SimpleNamespace(set_active=mock.Mock()),
         )
 
         set_ring_polygons_for_history(
@@ -194,7 +211,7 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         tool_mode_controller = CanvasToolModeController(
             view,
             hover_refresh=view.services.hover.refresh,
-            set_active_tool=view.services.tooling.tools.set_active,
+            set_active_tool=view.services.tool_controller.set_active,
         )
         tool_mode_controller.set_bond_style("double", 2)
         tool_mode_controller.set_arrow_type("curved")
@@ -211,11 +228,11 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         self.assertTrue(tool_mode_controller.get_curved_snap())
         self.assertEqual(tool_mode_controller.get_curved_snap_step(), 0.05)
         self.assertEqual(
-            view.services.tooling.tools.set_active.call_args_list,
+            view.services.tool_controller.set_active.call_args_list,
             [mock.call("bond"), mock.call("arrow"), mock.call("orbital")],
         )
         self.assertEqual(view.refresh_selection_outline.call_count, 3)
-        self.assertEqual(view.callback_state.tool_change.call_count, 3)
+        self.assertEqual(view.runtime_state.callback_state.tool_change.call_count, 3)
         self.assertEqual(view.services.hover.refresh.call_count, 3)
 
     def test_point_pair_helpers_cover_add_geometry_paths(self) -> None:

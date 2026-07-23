@@ -106,9 +106,7 @@ class _FakeCanvas:
                     record_additions=self._record_additions
                 )
             ),
-            graph=SimpleNamespace(
-                canvas_graph_service=SimpleNamespace(bond_exists=self.bond_exists)
-            ),
+            graph_service=SimpleNamespace(bond_exists=self.bond_exists),
             input=SimpleNamespace(),
             interaction=SimpleNamespace(),
             scene_view=SimpleNamespace(
@@ -139,7 +137,7 @@ class _FakeCanvas:
                     add_benzene_ring=self.add_benzene_ring,
                 ),
             ),
-            tooling=SimpleNamespace(),
+            tool_controller=SimpleNamespace(),
             history_service=None,
         )
 

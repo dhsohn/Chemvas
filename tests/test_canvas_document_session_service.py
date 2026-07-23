@@ -10,6 +10,7 @@ from tests.runtime_services import canvas_runtime_services
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from chemvas.core.renderer import Renderer
 from chemvas.core.svg_roundtrip import extract_chemvas_document_from_svg
 from chemvas.domain.document import MoleculeModel, serialize_settings
 from chemvas.ui.bond_graphics_access import add_bond_graphics_for
@@ -79,9 +80,7 @@ def _document_services(
 ):
     return canvas_runtime_services(
         canvas_scene_reset_service=SimpleNamespace(clear_scene=clear_scene),
-        canvas_graph_service=SimpleNamespace(
-            rebuild_bond_adjacency=rebuild_bond_adjacency
-        ),
+        graph_service=SimpleNamespace(rebuild_bond_adjacency=rebuild_bond_adjacency),
         structure_build_service=SimpleNamespace(
             render_model=render_model,
             ensure_ring_fills_for_model=mock.Mock(),
@@ -116,10 +115,10 @@ def _session_service(canvas):
         hit_testing_service = SimpleNamespace(mark_spatial_index_dirty=mock.Mock())
         services.selection.hit_testing_service = hit_testing_service
     try:
-        graph_service = services.graph.canvas_graph_service
+        graph_service = services.graph_service
     except AttributeError:
         graph_service = SimpleNamespace(rebuild_bond_adjacency=mock.Mock())
-        services.graph.canvas_graph_service = graph_service
+        services.graph_service = graph_service
     try:
         structure_build_service = services.structure.structure_build_service
     except AttributeError:
@@ -169,6 +168,7 @@ def _qt_canvas_with_scene_reset(scene: QGraphicsScene) -> QGraphicsView:
     canvas = QGraphicsView(scene)
     attach_canvas_runtime_state(canvas)
     canvas.model = MoleculeModel()
+    canvas.renderer = Renderer()
     hit_testing_service = SimpleNamespace(mark_spatial_index_dirty=mock.Mock())
     reset_service = CanvasSceneResetService(
         canvas,

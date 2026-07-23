@@ -1444,7 +1444,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 atoms_object = canvas.model.atoms
                 scene_before = list(canvas.scene().items())
 
-                tool = DeleteTool(canvas, context=canvas.services.tooling.tools.context)
+                tool = DeleteTool(
+                    canvas, context=canvas.services.tool_controller.context
+                )
                 with mock.patch.object(
                     canvas.services.selection.hit_testing_service,
                     "item_at_event",
@@ -1501,7 +1503,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         scene_before = list(canvas.scene().items())
         history_before = list(canvas.services.history_service.state.history)
 
-        tool = DeleteTool(canvas, context=canvas.services.tooling.tools.context)
+        tool = DeleteTool(canvas, context=canvas.services.tool_controller.context)
         with mock.patch.object(
             canvas.services.selection.hit_testing_service,
             "item_at_event",
@@ -1851,7 +1853,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         outline_callback = original_callbacks.scene_selection_outline
         ports = _FailingCallbackPorts(group_callback, outline_callback)
         canvas.runtime_state.callback_state = ports
-        tool = DeleteTool(canvas, context=canvas.services.tooling.tools.context)
+        tool = DeleteTool(canvas, context=canvas.services.tool_controller.context)
         with mock.patch.object(
             canvas.services.selection.hit_testing_service,
             "item_at_event",
@@ -2051,7 +2053,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
             raise rollback_observer_error
 
         selection_info.callback = mutate_then_maybe_fail
-        tool = DeleteTool(canvas, context=canvas.services.tooling.tools.context)
+        tool = DeleteTool(canvas, context=canvas.services.tool_controller.context)
         with mock.patch.object(
             canvas.services.selection.hit_testing_service,
             "item_at_event",
@@ -2131,7 +2133,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
             captured_sessions.append(session)
             return session
 
-        tool = DeleteTool(canvas, context=canvas.services.tooling.tools.context)
+        tool = DeleteTool(canvas, context=canvas.services.tool_controller.context)
         with (
             mock.patch.object(
                 controller,
@@ -2190,7 +2192,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         atom_item = atom_items_for(canvas)[atom_id]
         shape_item = _make_rect_item("shape")
         canvas.services.scene_view.scene_item_controller.attach_scene_item(shape_item)
-        context = canvas.services.tooling.tools.context
+        context = canvas.services.tool_controller.context
         actual_history = canvas.services.history_service
         unrelated_history = mock.Mock()
         context.history_service = unrelated_history
@@ -2282,7 +2284,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 raise read_error
             return original_data(role)
 
-        tool = DeleteTool(canvas, context=canvas.services.tooling.tools.context)
+        tool = DeleteTool(canvas, context=canvas.services.tool_controller.context)
         with (
             mock.patch.object(ring, "data", side_effect=fail_once),
             mock.patch.object(
@@ -2431,7 +2433,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         group_id = register_group_for(canvas, set(), [shape_item])
         group = group_state_for(canvas).groups[group_id]
 
-        tool = DeleteTool(canvas, context=canvas.services.tooling.tools.context)
+        tool = DeleteTool(canvas, context=canvas.services.tool_controller.context)
         with (
             mock.patch.object(
                 canvas.services.selection.hit_testing_service,

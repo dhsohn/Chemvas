@@ -296,7 +296,7 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
         )
         view.services = canvas_runtime_services(
             canvas_mark_scene_service=mark_scene_service,
-            tools=SimpleNamespace(active=SimpleNamespace(name="bond")),
+            tool_controller=SimpleNamespace(active=SimpleNamespace(name="bond")),
         )
 
         point = QPointF(5.0, 6.0)

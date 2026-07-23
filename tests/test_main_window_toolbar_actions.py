@@ -461,7 +461,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         settings = tool_settings_state_for(active_canvas_for_window(self.window))
         self.assertEqual(settings.active_bracket_type, "dagger")
         self.assertEqual(
-            active_canvas_for_window(self.window).services.tooling.tools.active.name,
+            active_canvas_for_window(self.window).services.tool_controller.active.name,
             "ts_bracket",
         )
 
@@ -601,9 +601,9 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         self,
     ) -> None:
         color_tool = SimpleNamespace(set_color=mock.Mock())
-        active_canvas_for_window(self.window).services.tooling.tools.tools["color"] = (
-            color_tool
-        )
+        active_canvas_for_window(self.window).services.tool_controller.tools[
+            "color"
+        ] = color_tool
         selected_items = [_FakeItem("atom"), _FakeItem("ring"), _FakeItem("note")]
         scene = SimpleNamespace(selectedItems=lambda: selected_items)
 

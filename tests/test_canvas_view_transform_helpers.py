@@ -108,21 +108,25 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
 
     def test_rotate_view_updates_base_transform_and_skips_zero_angle(self) -> None:
         view = SimpleNamespace(
-            input_view_state=InputViewState(),
+            runtime_state=SimpleNamespace(input_view_state=InputViewState()),
             setTransform=mock.Mock(),
         )
 
         rotate_view_for(view, 45.0)
 
-        self.assertFalse(view.input_view_state.base_transform.isIdentity())
+        self.assertFalse(
+            view.runtime_state.input_view_state.base_transform.isIdentity()
+        )
         view.setTransform.assert_called_once()
 
         idle_view = SimpleNamespace(
-            input_view_state=InputViewState(),
+            runtime_state=SimpleNamespace(input_view_state=InputViewState()),
             setTransform=mock.Mock(),
         )
         rotate_view_for(idle_view, 0.0)
-        self.assertTrue(idle_view.input_view_state.base_transform.isIdentity())
+        self.assertTrue(
+            idle_view.runtime_state.input_view_state.base_transform.isIdentity()
+        )
         idle_view.setTransform.assert_not_called()
 
     def test_rotate_selection_rotates_atoms_and_updates_dependent_items(self) -> None:
@@ -276,7 +280,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
         )
         classified_graph_service = CanvasGraphService(classified_view)
         classified_view.services = canvas_runtime_services(
-            canvas_graph_service=classified_graph_service
+            graph_service=classified_graph_service
         )
 
         internal, boundary = classified_graph_service.bond_sets_for_atoms({1, 2, 3})
@@ -295,7 +299,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
         )
         fallback_graph_service = CanvasGraphService(fallback_view)
         fallback_view.services = canvas_runtime_services(
-            canvas_graph_service=fallback_graph_service
+            graph_service=fallback_graph_service
         )
 
         internal, boundary = fallback_graph_service.bond_sets_for_atoms({5, 6})
@@ -358,7 +362,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
             )
         )
         graph_service = CanvasGraphService(view)
-        view.services = canvas_runtime_services(canvas_graph_service=graph_service)
+        view.services = canvas_runtime_services(graph_service=graph_service)
 
         self.assertEqual(graph_service.expand_connected_atoms({1}), {1, 2, 3})
         self.assertEqual(graph_service.expand_connected_atoms({4}), {4, 5})

@@ -68,7 +68,7 @@ def _service_for(canvas: _FakeCanvas, **overrides) -> InsertSmilesService:
         canvas,
         insert_state=canvas.insert_state,
         insert_commit_service=overrides.pop("insert_commit_service", mock.Mock()),
-        graph_service=canvas.services.graph.canvas_graph_service,
+        graph_service=canvas.services.graph_service,
         structure_build_service=canvas.services.structure.structure_build_service,
         history_service=canvas.services.history_service,
         session_state=lambda: _session_state(canvas),

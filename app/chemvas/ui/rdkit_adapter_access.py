@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from chemvas.ui.canvas_rdkit_state import new_rdkit_adapter, rdkit_adapter_for
+
+def rdkit_adapter_for(canvas: Any):
+    return canvas.rdkit
 
 
 def rdkit_last_error_for(canvas: Any) -> str | None:
@@ -50,7 +52,6 @@ __all__ = [
     "compute_props_for",
     "model_to_mol_block_for",
     "model_to_xyz_block_for",
-    "new_rdkit_adapter",
     "preload_rdkit_for",
     "rdkit_adapter_for",
     "rdkit_is_loaded_for",

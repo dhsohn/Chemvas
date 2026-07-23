@@ -33,24 +33,15 @@ if QApplication is not None:
         add_bond_graphics_for,
         apply_color_to_bond_item_for,
         bond_offset_unit_3d_for,
-        dotted_bond_path_for,
-        draw_dotted_bond_for,
-        draw_hash_bond_for,
-        draw_parallel_bonds_for,
         draw_ring_double_bond_for,
-        draw_wedge_bond_for,
-        hash_segments_for,
         line_normal_components,
         line_normal_for,
-        one_sided_bond_strip_for,
         orient_normal_toward_target,
         parallel_bond_segments_for,
         project_point_3d_for,
         ring_double_segments_for,
-        strip_polygon_for,
-        wedge_polygon_for,
     )
-    from chemvas.ui.bond_renderer import bond_renderer_for
+    from chemvas.ui.bond_renderer_access import bond_renderer_for
     from chemvas.ui.canvas_atom_graphics_state import (
         atom_dots_for,
         atom_items_for,
@@ -1181,12 +1172,12 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                 }
             ),
             services=canvas_runtime_services(
-                canvas_graph_service=SimpleNamespace(
+                graph_service=SimpleNamespace(
                     bond_in_cycle=lambda bond_id: bond_id in {2, 3}
                 )
             ),
         )
-        bond_in_cycle = view.services.graph.canvas_graph_service.bond_in_cycle
+        bond_in_cycle = view.services.graph_service.bond_in_cycle
         self.assertTrue(atom_in_planar_system_for(view, 2, bond_in_cycle=bond_in_cycle))
         self.assertTrue(
             bond_is_planar_fragment_edge_for(view, 1, bond_in_cycle=bond_in_cycle)
@@ -1225,12 +1216,10 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             model=SimpleNamespace(bonds=[None, Bond(1, 2, 1), Bond(2, 3, 1)]),
             graph_state=CanvasGraphState(atom_bond_ids={1: {0, 9}, 2: {0, 1}, 3: {2}}),
             services=canvas_runtime_services(
-                canvas_graph_service=SimpleNamespace(
-                    bond_in_cycle=lambda bond_id: False
-                )
+                graph_service=SimpleNamespace(bond_in_cycle=lambda bond_id: False)
             ),
         )
-        bond_in_cycle = view.services.graph.canvas_graph_service.bond_in_cycle
+        bond_in_cycle = view.services.graph_service.bond_in_cycle
         self.assertFalse(
             atom_in_planar_system_for(view, 1, bond_in_cycle=bond_in_cycle)
         )
@@ -1611,9 +1600,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
 
         cached_service = CanvasGraphService(cached_view)
         fallback_service = CanvasGraphService(fallback_view)
-        cached_view.services = canvas_runtime_services(
-            canvas_graph_service=cached_service
-        )
+        cached_view.services = canvas_runtime_services(graph_service=cached_service)
 
         self.assertFalse(CanvasGraphService.bond_matches_atoms(None, 1, 2))
         self.assertTrue(CanvasGraphService.bond_matches_atoms(bonds[0], 1, 2))
@@ -1675,47 +1662,22 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         )
 
     def test_bond_graphics_access_and_color_fallbacks_delegate_cleanly(self) -> None:
-        wedge_polygon = object()
         hash_segments = [(0.0, 0.0, 1.0, 1.0)]
-        strip_polygon = object()
         ring_segments = ((1.0, 2.0, 3.0, 4.0), (5.0, 6.0, 7.0, 8.0), (0.0, 1.0))
         ring_bond = object()
-        one_sided_strip = object()
-        parallel_bonds = [object(), object()]
-        wedge_bond = object()
-        hash_bond = object()
-        dotted_bond = object()
-        dotted_path = object()
         renderer = SimpleNamespace(
             parallel_bond_segments=mock.Mock(return_value=hash_segments),
-            wedge_polygon=mock.Mock(return_value=wedge_polygon),
-            hash_segments=mock.Mock(return_value=hash_segments),
-            strip_polygon=mock.Mock(return_value=strip_polygon),
             ring_double_segments=mock.Mock(return_value=ring_segments),
             update_bond_geometry=mock.Mock(),
             add_bond_graphics=mock.Mock(),
             redraw_connected_bonds=mock.Mock(),
             draw_ring_double_bond=mock.Mock(return_value=ring_bond),
-            one_sided_bond_strip=mock.Mock(return_value=one_sided_strip),
-            draw_parallel_bonds=mock.Mock(return_value=parallel_bonds),
-            draw_wedge_bond=mock.Mock(return_value=wedge_bond),
-            draw_hash_bond=mock.Mock(return_value=hash_bond),
-            draw_dotted_bond=mock.Mock(return_value=dotted_bond),
-            dotted_bond_path=mock.Mock(return_value=dotted_path),
         )
         view = SimpleNamespace(bond_renderer=renderer)
         center = QPointF(5.0, 6.0)
 
         self.assertEqual(
             parallel_bond_segments_for(view, 1.0, 2.0, 3.0, 4.0, 2, 7, 8), hash_segments
-        )
-        self.assertIs(wedge_polygon_for(view, 1.0, 2.0, 3.0, 4.0, 7, 8), wedge_polygon)
-        self.assertEqual(
-            hash_segments_for(view, 1.0, 2.0, 3.0, 4.0, 3, 7, 8), hash_segments
-        )
-        self.assertIs(
-            strip_polygon_for(view, 1.0, 2.0, 3.0, 4.0, 0.0, 1.0, 2.0, 3.0),
-            strip_polygon,
         )
         self.assertEqual(
             ring_double_segments_for(view, "a", "b", center, 7, 8, (0.0, 0.0, 1.0)),
@@ -1736,25 +1698,8 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             ),
             ring_bond,
         )
-        self.assertIs(
-            one_sided_bond_strip_for(view, 1.0, 2.0, 3.0, 4.0, 0.0, 1.0, 2.0, 3.0),
-            one_sided_strip,
-        )
-        self.assertEqual(
-            draw_parallel_bonds_for(view, 1.0, 2.0, 3.0, 4.0, 2, 7, 8), parallel_bonds
-        )
-        self.assertIs(draw_wedge_bond_for(view, 1.0, 2.0, 3.0, 4.0, 7, 8), wedge_bond)
-        self.assertIs(draw_hash_bond_for(view, 1.0, 2.0, 3.0, 4.0, 7, 8), hash_bond)
-        self.assertIs(draw_dotted_bond_for(view, 1.0, 2.0, 3.0, 4.0, 7, 8), dotted_bond)
-        self.assertIs(dotted_bond_path_for(view, 1.0, 2.0, 3.0, 4.0, 7, 8), dotted_path)
-
         renderer.parallel_bond_segments.assert_called_once_with(
             1.0, 2.0, 3.0, 4.0, 2, 7, 8
-        )
-        renderer.wedge_polygon.assert_called_once_with(1.0, 2.0, 3.0, 4.0, 7, 8)
-        renderer.hash_segments.assert_called_once_with(1.0, 2.0, 3.0, 4.0, 3, 7, 8)
-        renderer.strip_polygon.assert_called_once_with(
-            1.0, 2.0, 3.0, 4.0, 0.0, 1.0, 2.0, 3.0
         )
         renderer.ring_double_segments.assert_called_once_with(
             "a", "b", center, 7, 8, (0.0, 0.0, 1.0)
@@ -1770,17 +1715,6 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             outer_style="bold",
             center_3d=(1.0, 2.0, 3.0),
         )
-        renderer.one_sided_bond_strip.assert_called_once_with(
-            1.0, 2.0, 3.0, 4.0, 0.0, 1.0, 2.0, 3.0
-        )
-        renderer.draw_parallel_bonds.assert_called_once_with(
-            1.0, 2.0, 3.0, 4.0, 2, 7, 8
-        )
-        renderer.draw_wedge_bond.assert_called_once_with(1.0, 2.0, 3.0, 4.0, 7, 8)
-        renderer.draw_hash_bond.assert_called_once_with(1.0, 2.0, 3.0, 4.0, 7, 8)
-        renderer.draw_dotted_bond.assert_called_once_with(1.0, 2.0, 3.0, 4.0, 7, 8)
-        renderer.dotted_bond_path.assert_called_once_with(1.0, 2.0, 3.0, 4.0, 7, 8)
-
         CanvasMoveController(
             view,
             hit_testing_service=SimpleNamespace(mark_spatial_index_dirty=mock.Mock()),

@@ -19,7 +19,7 @@ if QApplication is not None:
     from chemvas.ui.canvas_pointer_controller import CanvasPointerController
     from chemvas.ui.canvas_view import CanvasView
     from chemvas.ui.canvas_window_access import set_error_callback_for
-    from chemvas.ui.input_view_state import input_view_state_for
+    from chemvas.ui.input_view_access import input_view_state_for
 
 
 class _FakeEvent:
@@ -101,7 +101,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         )
         view.services.selection.hit_testing_service = hit_testing_service
         tool_controller = SimpleNamespace(active=tool_active)
-        view.services.tooling.tools = tool_controller
+        view.services.tool_controller = tool_controller
         scene_transform_controller = SimpleNamespace(apply_bond_style=mock.Mock())
         view.services.scene_operations.scene_transform_controller = (
             scene_transform_controller
@@ -137,7 +137,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             1,
         )
         self.assertEqual(
-            template_view.services.tooling.tools.active.on_mouse_press.call_count, 0
+            template_view.services.tool_controller.active.on_mouse_press.call_count, 0
         )
 
         smiles_view = self._new_view(
@@ -155,7 +155,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         )
         self.assertEqual(smiles_view.services.hover.clear_hover_highlight.call_count, 1)
         self.assertEqual(
-            smiles_view.services.tooling.tools.active.on_mouse_press.call_count, 0
+            smiles_view.services.tool_controller.active.on_mouse_press.call_count, 0
         )
 
         tool = SimpleNamespace(
