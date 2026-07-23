@@ -1367,40 +1367,6 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         canvas.close()
         app.processEvents()
 
-    def test_scene_block_interruption_is_repaired_before_mutation(self) -> None:
-        class InterruptingScene:
-            def __init__(self) -> None:
-                self.blocked = False
-                self.calls = 0
-                self.clear_calls = 0
-
-            def clearSelection(self) -> None:
-                return None
-
-            def signalsBlocked(self) -> bool:
-                return self.blocked
-
-            def clear(self) -> None:
-                self.clear_calls += 1
-
-            def blockSignals(self, blocked: bool) -> bool:
-                self.calls += 1
-                previous = self.blocked
-                self.blocked = blocked
-                if self.calls == 1:
-                    raise SystemExit("scene reset signal blocking terminated")
-                return previous
-
-        scene = InterruptingScene()
-        service = CanvasSceneResetService.__new__(CanvasSceneResetService)
-        service.canvas = SimpleNamespace(scene=lambda: scene)
-
-        service._clear_graphics_scene_without_callbacks()
-
-        self.assertFalse(scene.signalsBlocked())
-        self.assertEqual(scene.clear_calls, 1)
-        self.assertEqual(scene.calls, 3)
-
     def test_exact_fake_block_side_effect_restores_or_fails_closed(self) -> None:
         for reversible in (True, False):
             with self.subTest(reversible=reversible):

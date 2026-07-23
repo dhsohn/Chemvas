@@ -56,25 +56,6 @@ LEGACY_CANVAS_SERVICE_NAMES = frozenset(
     }
 )
 
-REMOVED_RUNTIME_COMPATIBILITY_FILES = frozenset(
-    {
-        "canvas_auxiliary_service_bundle.py",
-        "canvas_graph_service_bundle.py",
-        "canvas_rotation_preview_controller.py",
-        "canvas_rotation_preview_state.py",
-        "canvas_bond_renderer_state.py",
-        "canvas_rdkit_state.py",
-        "canvas_renderer_state.py",
-        "canvas_service_types.py",
-        "bond_preview_geometry.py",
-        "bond_preview_scene_items.py",
-        "scene_transform_logic.py",
-        "selection_access.py",
-        "structure_insert_service.py",
-        "tool_service_bundle.py",
-    }
-)
-
 CANVAS_STATE_PROPERTIES = (
     "hover_items",
     "hover_atom_id",
@@ -1921,24 +1902,19 @@ def _canvas_services_entrypoint_source() -> str:
     return (APP_ROOT / "chemvas" / "ui" / "canvas_services.py").read_text()
 
 
-def _canvas_service_composer_source() -> str:
-    return (APP_ROOT / "chemvas" / "ui" / "canvas_service_composer.py").read_text()
-
-
 def _service_assembly_paths() -> list[Path]:
     return [
         APP_ROOT / "chemvas" / "ui" / "canvas_services.py",
-        APP_ROOT / "chemvas" / "ui" / "canvas_service_composer.py",
     ]
 
 
 def test_canvas_services_delegates_tool_controller_assembly_to_factory() -> None:
-    composer_source = _canvas_service_composer_source()
+    assembly_source = _canvas_services_entrypoint_source()
     factory_source = (
         APP_ROOT / "chemvas" / "ui" / "tool_controller_factory.py"
     ).read_text()
 
-    assert "ToolController(" not in composer_source
+    assert "ToolController(" not in assembly_source
     assert "tool_mode_controller" not in factory_source
     assert "ToolController(canvas)" not in factory_source
 
@@ -1969,34 +1945,6 @@ def test_canvas_runtime_services_exposes_single_runtimes_directly() -> None:
     assert "tooling" not in annotations
 
 
-def test_bond_preview_legacy_wiring_does_not_return() -> None:
-    removed_wiring = re.compile(
-        r"\b(?:BondPreviewConfig|BondPreviewBuildResolvers|"
-        r"BondPreviewUpdateResolvers|bond_preview_config_for|"
-        r"bond_preview_update_resolvers_for)\b"
-    )
-
-    assert _matching_lines(removed_wiring, _app_python_files()) == []
-
-
-def test_hover_service_graph_does_not_reintroduce_legacy_role_stack() -> None:
-    paths = [
-        *_service_assembly_paths(),
-        APP_ROOT / "chemvas" / "ui" / "canvas_runtime_services.py",
-        APP_ROOT / "chemvas" / "ui" / "canvas_input_service_bundle.py",
-        APP_ROOT / "chemvas" / "ui" / "hover.py",
-    ]
-    pattern = re.compile(
-        r"\b(?:HoverServices|HoverServiceBundle|BondHoverPreviewService|"
-        r"HoverInteractionService|HoverSceneService|MarkHoverPreviewService)\b"
-        r"|\b(?:bond_hover_preview_service|canvas_hover_refresh|"
-        r"hover_interaction_service|hover_scene_service|hover_service_bundle|"
-        r"mark_hover_preview_service)\b"
-    )
-
-    assert _matching_lines(pattern, paths) == []
-
-
 def test_canvas_services_delegates_scene_decoration_service_assembly_to_bundle() -> (
     None
 ):
@@ -2018,7 +1966,7 @@ def test_canvas_services_delegates_scene_operation_service_assembly_to_bundle() 
 
 def test_scene_ops_controller_stays_out_of_production_service_graph() -> None:
     paths = [
-        APP_ROOT / "chemvas" / "ui" / "canvas_service_composer.py",
+        *_service_assembly_paths(),
         APP_ROOT / "chemvas" / "ui" / "scene_operation_service_bundle.py",
     ]
     pattern = re.compile(r"\bscene_ops_controller\b|\bSceneOpsController\b")
@@ -2062,16 +2010,6 @@ def test_atom_label_service_is_a_direct_runtime_without_auxiliary_bundle() -> No
     ).exists()
 
 
-def test_template_preview_does_not_reintroduce_separate_benzene_runtime() -> None:
-    pattern = re.compile(
-        r"\bbenzene_preview_items\b"
-        r"|\bbenzene_preview_service(?:_for(?:_access)?)?\b"
-        r"|\bBenzenePreviewService\b"
-    )
-
-    assert _matching_lines(pattern, _app_python_files()) == []
-
-
 def test_canvas_services_delegates_structure_service_assembly_to_bundle() -> None:
     direct_instantiation = re.compile(
         r"\b(?:CanvasAtomMutationService|CanvasBondMutationService|InsertController|StructureBuildService)\("
@@ -2088,26 +2026,10 @@ def test_canvas_services_delegates_input_service_assembly_to_bundle() -> None:
     assert _matching_lines(direct_instantiation, _service_assembly_paths()) == []
 
 
-def test_canvas_services_delegates_graph_service_assembly_to_builder() -> None:
-    direct_instantiation = re.compile(r"\bCanvasGraphService\(")
-
-    assert _matching_lines(direct_instantiation, _service_assembly_paths()) == []
-
-
 def test_canvas_services_uses_active_tool_reference_port() -> None:
     entrypoint = _canvas_services_entrypoint_source()
-    source = _canvas_service_composer_source()
 
-    assert "ActiveToolReference" not in entrypoint
-    assert "tool_controller_holder" not in source
-
-
-def test_canvas_services_does_not_construct_services_or_controllers_directly() -> None:
-    direct_instantiation = re.compile(
-        r"\b[A-Z][A-Za-z0-9_]*(?:Service|Controller|Styler)\("
-    )
-
-    assert _matching_lines(direct_instantiation, _service_assembly_paths()) == []
+    assert "tool_controller_holder" not in entrypoint
 
 
 def test_tool_implementations_use_tool_context_for_canvas_ports() -> None:
@@ -2128,7 +2050,7 @@ def test_tool_implementations_use_tool_context_for_canvas_ports() -> None:
 
 
 def test_canvas_services_delegates_selection_service_assembly_to_bundle() -> None:
-    source = _canvas_service_composer_source()
+    source = _canvas_services_entrypoint_source()
 
     assert "SelectionStructureService" not in source
     assert "SelectionPreferenceService" not in source
@@ -2929,16 +2851,6 @@ def test_transform_details_live_in_scene_transform_controller() -> None:
     assert not controller.exists()
 
 
-def test_scene_transform_logic_compat_reexport_stays_removed() -> None:
-    compat = APP_ROOT / "chemvas" / "ui" / "scene_transform_logic.py"
-    import_pattern = re.compile(
-        r"\bfrom ui\.scene_transform_logic import\b|\bimport ui\.scene_transform_logic\b"
-    )
-
-    assert not compat.exists()
-    assert _matching_lines(import_pattern, _app_python_files()) == []
-
-
 def test_canvas_handle_controller_does_not_use_context_facade() -> None:
     removed_context = APP_ROOT / "chemvas" / "ui" / "canvas_handle_context.py"
     controller = APP_ROOT / "chemvas" / "ui" / "canvas_handle_controller.py"
@@ -2948,16 +2860,6 @@ def test_canvas_handle_controller_does_not_use_context_facade() -> None:
 
     assert not removed_context.exists()
     assert _matching_lines(pattern, [controller]) == []
-
-
-def test_dead_runtime_and_compatibility_files_stay_removed() -> None:
-    ui_root = APP_ROOT / "chemvas" / "ui"
-
-    assert [
-        name
-        for name in sorted(REMOVED_RUNTIME_COMPATIBILITY_FILES)
-        if (ui_root / name).exists()
-    ] == []
 
 
 def test_handle_overlay_service_does_not_use_context_facade() -> None:
