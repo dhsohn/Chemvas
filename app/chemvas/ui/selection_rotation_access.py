@@ -179,6 +179,14 @@ def apply_projected_atom_positions_for(
         _sync_atom_scene_items_for(canvas, atom_id, label_service)
 
 
+def sync_atom_scene_items_for(canvas, atom_ids: set[int]) -> None:
+    """Reposition label/dot/mark items to their atoms' current coordinates."""
+
+    label_service = atom_label_service(canvas)
+    for atom_id in atom_ids:
+        _sync_atom_scene_items_for(canvas, atom_id, label_service)
+
+
 def _sync_atom_scene_items_for(canvas, atom_id: int, label_service) -> None:
     atom = atom_for_id(canvas, atom_id)
     if atom is None:
