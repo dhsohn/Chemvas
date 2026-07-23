@@ -26,7 +26,7 @@ def _make_service(canvas, *, hit_testing_service=None, structure_service=None):
     if structure_service is None:
         structure_service = SelectionStructureService(
             canvas,
-            graph_service=canvas.services.graph.canvas_graph_service,
+            graph_service=canvas.services.graph_service,
         )
     return SelectionPreferenceService(
         canvas,

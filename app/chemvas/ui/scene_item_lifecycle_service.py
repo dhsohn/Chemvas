@@ -4,7 +4,7 @@ from functools import partial
 
 from PyQt6.QtCore import Qt
 
-from chemvas.ui.canvas_bond_renderer_state import update_bond_geometry_for
+from chemvas.ui.bond_renderer_access import update_bond_geometry_for
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_scene_items_state import (
     append_scene_item_for,

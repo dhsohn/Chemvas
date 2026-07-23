@@ -28,7 +28,8 @@ if QApplication is not None:
     from chemvas.ui.canvas_input_controller import CanvasInputController
     from chemvas.ui.canvas_insert_state import CanvasInsertState
     from chemvas.ui.canvas_scene_items_state import set_selected_notes_for
-    from chemvas.ui.input_view_state import input_view_state_for
+    from chemvas.ui.input_view_access import input_view_state_for
+    from chemvas.ui.input_view_state import InputViewState
 
 
 class _Scene(QGraphicsScene):
@@ -87,7 +88,10 @@ class _Canvas(QGraphicsView):
         self.insert_state = CanvasInsertState()
         self.insert_state.template_active = False
         self.insert_state.smiles_active = False
-        self.runtime_state = SimpleNamespace(hover_preview_state=HoverState())
+        self.runtime_state = SimpleNamespace(
+            hover_preview_state=HoverState(),
+            input_view_state=InputViewState(),
+        )
         insert_controller = SimpleNamespace(
             cancel_template_insert=mock.Mock(),
             cancel_smiles_insert=mock.Mock(),

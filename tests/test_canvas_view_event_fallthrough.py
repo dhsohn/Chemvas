@@ -136,7 +136,7 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
         )
         view.services.selection.hit_testing_service = hit_testing_service
         tool_controller = SimpleNamespace(active=tool_active)
-        view.services.tooling.tools = tool_controller
+        view.services.tool_controller = tool_controller
         scene_transform_controller = SimpleNamespace(apply_bond_style=mock.Mock())
         view.services.scene_operations.scene_transform_controller = (
             scene_transform_controller
@@ -252,7 +252,7 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
             hit_testing_service=view.services.selection.hit_testing_service,
             insert_controller=view.services.structure.insert_controller,
             hover_controller=view.services.hover,
-            tool_controller=view.services.tooling.tools,
+            tool_controller=view.services.tool_controller,
             scene_transform_controller=scene_transform_controller,
         )
         handled = controller._show_double_bond_context_menu(
@@ -308,7 +308,7 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
                     hit_testing_service=view.services.selection.hit_testing_service,
                     insert_controller=view.services.structure.insert_controller,
                     hover_controller=view.services.hover,
-                    tool_controller=view.services.tooling.tools,
+                    tool_controller=view.services.tool_controller,
                     scene_transform_controller=scene_transform_controller,
                 )
                 _FakeMenu.instances = []

@@ -3,6 +3,7 @@ from __future__ import annotations
 import inspect
 import time
 from dataclasses import dataclass, field
+from typing import cast
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QTransform
@@ -10,7 +11,7 @@ from PyQt6.QtWidgets import QGraphicsView
 
 from chemvas.ui.canvas_callback_state import callback_state_for
 from chemvas.ui.canvas_hover_state import hover_state_for
-from chemvas.ui.input_view_state import input_view_state_for
+from chemvas.ui.input_view_state import InputViewState
 from chemvas.ui.selection_info_state import selection_info_state_for
 from chemvas.ui.transactions.scene_rect import (
     SceneRectStateSnapshot,
@@ -25,6 +26,10 @@ ZOOM_MIN = 0.2
 ZOOM_MAX = 5.0
 ZOOM_STEP = 1.25
 _MISSING_CAPTURE_ATTRIBUTE = object()
+
+
+def input_view_state_for(canvas) -> InputViewState:
+    return cast(InputViewState, canvas.runtime_state.input_view_state)
 
 
 def _capture_optional_attribute(target: object, name: str) -> object:
@@ -434,6 +439,7 @@ __all__ = [
     "focus_canvas_for",
     "focused_scene_item_for",
     "global_pos_from_event_for",
+    "input_view_state_for",
     "reset_view_transform_for",
     "reset_zoom_for",
     "rotate_view_for",

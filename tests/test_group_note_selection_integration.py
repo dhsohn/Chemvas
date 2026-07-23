@@ -55,7 +55,7 @@ class GroupedNoteSelectionIntegrationTest(unittest.TestCase):
     def test_grouped_note_follows_shift_click_and_drag(self) -> None:
         canvas = CanvasView()
         self.addCleanup(self._dispose_canvas, canvas)
-        canvas.services.tooling.tools.set_active("select")
+        canvas.services.tool_controller.set_active("select")
         _, atom_item_a = self._add_atom(canvas, 0.0)
         _, atom_item_b = self._add_atom(canvas, 80.0)
         note = canvas.services.interaction.note_controller.create_text_note(

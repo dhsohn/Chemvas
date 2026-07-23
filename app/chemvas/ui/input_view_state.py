@@ -1,11 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
 
 from PyQt6.QtGui import QTransform
-
-from chemvas.ui.canvas_state_lookup import ensure_canvas_state
 
 
 @dataclass(slots=True)
@@ -19,8 +16,4 @@ class InputViewState:
     zoom: float = 1.0
 
 
-def input_view_state_for(canvas: Any) -> InputViewState:
-    return ensure_canvas_state(canvas, "input_view_state", InputViewState)
-
-
-__all__ = ["InputViewState", "input_view_state_for"]
+__all__ = ["InputViewState"]

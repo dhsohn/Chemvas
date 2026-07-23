@@ -10,10 +10,12 @@ from chemvas.ui.atom_coords_access import (
     atom_coords_3d_for_id,
     set_atom_coords_3d_for_id,
 )
-from chemvas.ui.bond_renderer import bond_renderer_for
+from chemvas.ui.bond_renderer_access import (
+    bond_renderer_for,
+    update_bond_geometry_for,
+)
 from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
-from chemvas.ui.canvas_bond_renderer_state import update_bond_geometry_for
 from chemvas.ui.canvas_graph_state import graph_state_for
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import atom_for_id, bond_for_id, bonds_for

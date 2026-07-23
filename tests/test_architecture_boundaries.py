@@ -59,12 +59,19 @@ LEGACY_CANVAS_SERVICE_NAMES = frozenset(
 REMOVED_RUNTIME_COMPATIBILITY_FILES = frozenset(
     {
         "canvas_auxiliary_service_bundle.py",
+        "canvas_graph_service_bundle.py",
         "canvas_rotation_preview_controller.py",
         "canvas_rotation_preview_state.py",
+        "canvas_bond_renderer_state.py",
+        "canvas_rdkit_state.py",
+        "canvas_renderer_state.py",
         "canvas_service_types.py",
+        "bond_preview_geometry.py",
+        "bond_preview_scene_items.py",
         "scene_transform_logic.py",
         "selection_access.py",
         "structure_insert_service.py",
+        "tool_service_bundle.py",
     }
 )
 
@@ -1910,13 +1917,6 @@ def test_tool_controller_assembles_tool_context_with_explicit_ports() -> None:
     assert "ToolContext(canvas)" not in source
 
 
-def test_tool_service_bundle_injects_tool_context_ports() -> None:
-    source = (APP_ROOT / "chemvas" / "ui" / "tool_service_bundle.py").read_text()
-
-    assert "tool_mode_controller" not in source
-    assert "ToolController(canvas)" not in source
-
-
 def _canvas_services_entrypoint_source() -> str:
     return (APP_ROOT / "chemvas" / "ui" / "canvas_services.py").read_text()
 
@@ -1932,10 +1932,15 @@ def _service_assembly_paths() -> list[Path]:
     ]
 
 
-def test_canvas_services_delegates_tool_service_assembly_to_bundle() -> None:
-    source = _canvas_service_composer_source()
+def test_canvas_services_delegates_tool_controller_assembly_to_factory() -> None:
+    composer_source = _canvas_service_composer_source()
+    factory_source = (
+        APP_ROOT / "chemvas" / "ui" / "tool_controller_factory.py"
+    ).read_text()
 
-    assert "ToolController(" not in source
+    assert "ToolController(" not in composer_source
+    assert "tool_mode_controller" not in factory_source
+    assert "ToolController(canvas)" not in factory_source
 
 
 def test_canvas_services_delegates_handle_service_assembly_to_bundle() -> None:
@@ -1946,23 +1951,32 @@ def test_canvas_services_delegates_handle_service_assembly_to_bundle() -> None:
     assert _matching_lines(direct_instantiation, _service_assembly_paths()) == []
 
 
-def test_canvas_runtime_services_exposes_direct_hover_controller_boundary() -> None:
+def test_canvas_runtime_services_exposes_single_runtimes_directly() -> None:
     runtime_services = APP_ROOT / "chemvas" / "ui" / "canvas_runtime_services.py"
     tree = ast.parse(runtime_services.read_text())
-    hover_annotation: str | None = None
+    annotations: dict[str, str] = {}
     for node in tree.body:
         if not isinstance(node, ast.ClassDef) or node.name != "CanvasRuntimeServices":
             continue
         for child in node.body:
-            if (
-                isinstance(child, ast.AnnAssign)
-                and isinstance(child.target, ast.Name)
-                and child.target.id == "hover"
-            ):
-                hover_annotation = ast.unparse(child.annotation)
-                break
+            if isinstance(child, ast.AnnAssign) and isinstance(child.target, ast.Name):
+                annotations[child.target.id] = ast.unparse(child.annotation)
 
-    assert hover_annotation == "HoverController"
+    assert annotations["hover"] == "HoverController"
+    assert annotations["graph_service"] == "Any"
+    assert annotations["tool_controller"] == "Any"
+    assert "graph" not in annotations
+    assert "tooling" not in annotations
+
+
+def test_bond_preview_legacy_wiring_does_not_return() -> None:
+    removed_wiring = re.compile(
+        r"\b(?:BondPreviewConfig|BondPreviewBuildResolvers|"
+        r"BondPreviewUpdateResolvers|bond_preview_config_for|"
+        r"bond_preview_update_resolvers_for)\b"
+    )
+
+    assert _matching_lines(removed_wiring, _app_python_files()) == []
 
 
 def test_hover_service_graph_does_not_reintroduce_legacy_role_stack() -> None:
@@ -2074,7 +2088,7 @@ def test_canvas_services_delegates_input_service_assembly_to_bundle() -> None:
     assert _matching_lines(direct_instantiation, _service_assembly_paths()) == []
 
 
-def test_canvas_services_delegates_graph_service_assembly_to_bundle() -> None:
+def test_canvas_services_delegates_graph_service_assembly_to_builder() -> None:
     direct_instantiation = re.compile(r"\bCanvasGraphService\(")
 
     assert _matching_lines(direct_instantiation, _service_assembly_paths()) == []
@@ -2401,11 +2415,24 @@ def test_canvas_view_uses_model_state_for_model_creation() -> None:
     assert "MoleculeModel" not in source
 
 
-def test_rdkit_adapter_access_delegates_storage_to_rdkit_state() -> None:
-    access = APP_ROOT / "chemvas" / "ui" / "rdkit_adapter_access.py"
-    forbidden = re.compile(r"\bcanvas\.rdkit\b")
+def test_direct_canvas_collaborators_stay_behind_setup_and_access_modules() -> None:
+    allowed_paths = {
+        APP_ROOT / "chemvas" / "ui" / "canvas_view_setup.py",
+        APP_ROOT / "chemvas" / "ui" / "renderer_style_access.py",
+        APP_ROOT / "chemvas" / "ui" / "rdkit_adapter_access.py",
+        APP_ROOT / "chemvas" / "ui" / "bond_renderer_access.py",
+    }
+    forbidden_paths = [
+        path for path in _app_python_files() if path not in allowed_paths
+    ]
+    direct_access = re.compile(r"\bcanvas\.(?:renderer|rdkit|bond_renderer)\b")
+    lazy_creation = re.compile(
+        r"\b(?:set_renderer_for|set_rdkit_adapter_for|set_bond_renderer_for|"
+        r"new_rdkit_adapter)\b"
+    )
 
-    assert _matching_lines(forbidden, [access]) == []
+    assert _matching_lines(direct_access, forbidden_paths) == []
+    assert _matching_lines(lazy_creation, _app_python_files()) == []
 
 
 def test_rdkit_async_jobs_store_running_jobs_in_state_module() -> None:
@@ -2414,21 +2441,14 @@ def test_rdkit_async_jobs_store_running_jobs_in_state_module() -> None:
     assert "_rdkit_export_jobs" not in source
 
 
-def test_canvas_view_uses_rdkit_state_for_adapter_creation() -> None:
+def test_canvas_view_delegates_rdkit_adapter_creation_to_setup() -> None:
     view = APP_ROOT / "chemvas" / "ui" / "canvas_view.py"
     source = view.read_text()
 
     assert "RDKitAdapter" not in source
 
 
-def test_bond_renderer_access_delegates_storage_to_bond_renderer_state() -> None:
-    access = APP_ROOT / "chemvas" / "ui" / "bond_renderer_access.py"
-    forbidden = re.compile(r"\bcanvas\.bond_renderer\b")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_canvas_view_uses_bond_renderer_state_for_bond_renderer_creation() -> None:
+def test_canvas_view_delegates_bond_renderer_creation_to_setup() -> None:
     view = APP_ROOT / "chemvas" / "ui" / "canvas_view.py"
     source = view.read_text()
 
@@ -3270,7 +3290,7 @@ def test_production_code_does_not_fallback_to_canvas_state_collection_aliases() 
     assert _matching_lines(pattern, _app_python_files()) == []
 
 
-def test_production_code_uses_tools_service_instead_of_canvas_tools_alias() -> None:
+def test_production_code_uses_tool_controller_instead_of_canvas_tools_alias() -> None:
     pattern = re.compile(
         r"\b(?:canvas|self\.canvas)\.tools\b"
         r"|\bgetattr\(\s*(?:canvas|self\.canvas)\s*,\s*\"tools\""
@@ -3311,13 +3331,50 @@ def test_hover_state_accessor_stays_a_thin_runtime_state_leaf() -> None:
     assert _matching_lines(pattern, [hover_state]) == []
 
 
-def test_renderer_style_access_requires_explicit_renderer_collaborator() -> None:
-    renderer_style_access = APP_ROOT / "chemvas" / "ui" / "renderer_style_access.py"
-    pattern = re.compile(
-        r"\bgetattr\(\s*canvas\s*,\s*\"renderer\"|\bcanvas\.renderer\b"
+def test_input_view_state_access_is_strict_runtime_owned() -> None:
+    state_module = APP_ROOT / "chemvas" / "ui" / "input_view_state.py"
+    access_module = APP_ROOT / "chemvas" / "ui" / "input_view_access.py"
+    state_source = state_module.read_text()
+    access_source = access_module.read_text()
+    access_tree = ast.parse(access_source)
+    getter = next(
+        node
+        for node in access_tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "input_view_state_for"
+    )
+    getter_source = ast.get_source_segment(access_source, getter) or ""
+    fallback_pattern = re.compile(
+        r"\bensure_canvas_state\b"
+        r"|\b(?:getattr|setattr)\(\s*canvas\b"
+        r"|\bcanvas\.input_view_state\b"
     )
 
-    assert _matching_lines(pattern, [renderer_style_access]) == []
+    assert "class InputViewState" in state_source
+    assert "def input_view_state_for" not in state_source
+    assert "canvas.runtime_state.input_view_state" in getter_source
+    assert fallback_pattern.search(state_source) is None
+    assert fallback_pattern.search(getter_source) is None
+
+
+def test_callback_state_accessor_is_strict_runtime_owned() -> None:
+    callback_state = APP_ROOT / "chemvas" / "ui" / "canvas_callback_state.py"
+    source = callback_state.read_text()
+    tree = ast.parse(source)
+    getter = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "callback_state_for"
+    )
+    getter_source = ast.get_source_segment(source, getter) or ""
+    fallback_pattern = re.compile(
+        r"\bensure_canvas_state\b"
+        r"|\b(?:getattr|setattr)\(\s*canvas\b"
+        r"|\bcanvas\.callback_state\b"
+    )
+
+    assert "class CanvasCallbackState" in source
+    assert "canvas.runtime_state.callback_state" in getter_source
+    assert fallback_pattern.search(getter_source) is None
 
 
 def test_tool_settings_state_accessor_does_not_read_legacy_canvas_attrs() -> None:
@@ -3914,7 +3971,7 @@ def _canvas_runtime_state_field_names() -> set[str]:
 
 
 # States deliberately stored as direct canvas attributes (not runtime fields).
-DIRECT_CANVAS_STATE_ATTRS = frozenset(("model", "renderer", "bond_renderer", "rdkit"))
+DIRECT_CANVAS_STATE_ATTRS = frozenset(("model",))
 
 
 def test_state_accessor_names_match_runtime_state_container() -> None:

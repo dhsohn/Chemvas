@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
@@ -22,12 +21,7 @@ if TYPE_CHECKING:
     from chemvas.ui.selection_rotation_controller import SelectionRotationController
 
 
-@dataclass(slots=True)
-class ToolServiceBundle:
-    tools: ToolController
-
-
-def build_tool_services(
+def build_tool_controller(
     canvas: CanvasView,
     *,
     hit_testing_service: CanvasHitTestingService,
@@ -41,33 +35,31 @@ def build_tool_services(
     color_mutation_service: CanvasColorMutationService,
     graph_service: CanvasGraphService,
     history_service,
-) -> ToolServiceBundle:
-    return ToolServiceBundle(
-        tools=ToolController(
+) -> ToolController:
+    return ToolController(
+        canvas,
+        hit_testing_service=hit_testing_service,
+        selection_controller=selection_controller,
+        note_controller=note_controller,
+        handle_controller=handle_controller,
+        selection_rotation_controller=selection_rotation_controller,
+        scene_delete_controller=scene_delete_controller,
+        scene_transform_controller=scene_transform_controller,
+        style_controller=style_controller,
+        bond_sets_for_atoms=graph_service.bond_sets_for_atoms,
+        color_mutation_service=color_mutation_service,
+        selected_scene_items=lambda *, excluded_kinds: selected_scene_items_for(
             canvas,
-            hit_testing_service=hit_testing_service,
-            selection_controller=selection_controller,
-            note_controller=note_controller,
-            handle_controller=handle_controller,
-            selection_rotation_controller=selection_rotation_controller,
-            scene_delete_controller=scene_delete_controller,
-            scene_transform_controller=scene_transform_controller,
-            style_controller=style_controller,
-            bond_sets_for_atoms=graph_service.bond_sets_for_atoms,
-            color_mutation_service=color_mutation_service,
-            selected_scene_items=lambda *, excluded_kinds: selected_scene_items_for(
-                canvas,
-                excluded_kinds=excluded_kinds,
-            ),
-            select_single_structure_item=lambda item: select_single_structure_item_for(
-                canvas, item
-            ),
-            atom_symbol_provider=lambda: tool_settings_state_for(canvas).atom_symbol,
-            history_service=history_service,
-            set_drag_mode=canvas.setDragMode,
-            rubber_band_drag_mode=canvas.DragMode.RubberBandDrag,
-        )
+            excluded_kinds=excluded_kinds,
+        ),
+        select_single_structure_item=lambda item: select_single_structure_item_for(
+            canvas, item
+        ),
+        atom_symbol_provider=lambda: tool_settings_state_for(canvas).atom_symbol,
+        history_service=history_service,
+        set_drag_mode=canvas.setDragMode,
+        rubber_band_drag_mode=canvas.DragMode.RubberBandDrag,
     )
 
 
-__all__ = ["ToolServiceBundle", "build_tool_services"]
+__all__ = ["build_tool_controller"]

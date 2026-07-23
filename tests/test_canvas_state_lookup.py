@@ -82,20 +82,18 @@ def test_ensure_canvas_state_rejects_missing_field_on_strict_container() -> None
 def test_ensure_canvas_state_direct_attr_skips_strict_check() -> None:
     canvas = SimpleNamespace(runtime_state=_StrictContainer())
 
-    state = ensure_canvas_state(
-        canvas, "renderer", lambda: "fresh", runtime_field=False
-    )
+    state = ensure_canvas_state(canvas, "model", lambda: "fresh", runtime_field=False)
 
     assert state == "fresh"
-    assert canvas.renderer == "fresh"
+    assert canvas.model == "fresh"
 
 
 def test_ensure_canvas_state_prefers_runtime_entry_even_for_direct_attr() -> None:
     canvas = SimpleNamespace(
-        renderer="public", runtime_state=SimpleNamespace(renderer="runtime")
+        model="public", runtime_state=SimpleNamespace(model="runtime")
     )
 
     assert (
-        ensure_canvas_state(canvas, "renderer", lambda: "fresh", runtime_field=False)
+        ensure_canvas_state(canvas, "model", lambda: "fresh", runtime_field=False)
         == "runtime"
     )

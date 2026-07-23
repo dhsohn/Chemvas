@@ -2,7 +2,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from chemvas.ui.canvas_callback_state import callback_state_for
+from chemvas.ui.canvas_callback_state import CanvasCallbackState, callback_state_for
 from chemvas.ui.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas_history_state import history_state_for
 from chemvas.ui.canvas_text_style_state import set_text_style_for, text_style_state_for
@@ -26,7 +26,8 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
     def _canvas_with_history() -> SimpleNamespace:
         canvas = SimpleNamespace()
         canvas.runtime_state = SimpleNamespace(
-            history_service=CanvasHistoryService(canvas, history_state_for(canvas))
+            history_service=CanvasHistoryService(canvas, history_state_for(canvas)),
+            callback_state=CanvasCallbackState(),
         )
         return canvas
 

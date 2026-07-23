@@ -1,7 +1,6 @@
 from types import SimpleNamespace
 from unittest import mock
 
-from chemvas.ui.canvas_renderer_state import renderer_for
 from chemvas.ui.renderer_style_access import (
     atom_color_for,
     atom_font_for,
@@ -24,6 +23,7 @@ from chemvas.ui.renderer_style_access import (
     renderer_bold_bond_width_for,
     renderer_bond_line_width_for,
     renderer_bond_spacing_for,
+    renderer_for,
     renderer_hash_spacing_for,
     renderer_style_for,
     ring_fill_brush_for,

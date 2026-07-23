@@ -101,7 +101,7 @@ class _FakeCanvas:
         self.hover_refresh = Mock()
         self.services = canvas_runtime_services(
             history_service=self.history_service,
-            canvas_graph_service=SimpleNamespace(
+            graph_service=SimpleNamespace(
                 rebuild_bond_adjacency=self.rebuild_bond_adjacency
             ),
             move_controller=SimpleNamespace(
@@ -175,7 +175,7 @@ def _atom_label_service(canvas: _FakeCanvas) -> AtomLabelService:
     return AtomLabelService(
         canvas,
         move_controller=canvas.services.interaction.move_controller,
-        graph_service=canvas.services.graph.canvas_graph_service,
+        graph_service=canvas.services.graph_service,
         history_service=canvas.services.history_service,
         hover_refresh=canvas.hover_refresh,
     )

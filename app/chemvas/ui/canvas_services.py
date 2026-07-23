@@ -4,7 +4,7 @@ from typing import Any
 
 from chemvas.ui.atom_label_service import AtomLabelService
 from chemvas.ui.canvas_document_service_bundle import build_canvas_document_services
-from chemvas.ui.canvas_graph_service_bundle import build_canvas_graph_services
+from chemvas.ui.canvas_graph_service import CanvasGraphService
 from chemvas.ui.canvas_input_service_bundle import build_canvas_input_services
 from chemvas.ui.canvas_interaction_service_bundle import (
     build_canvas_interaction_services,
@@ -21,7 +21,7 @@ from chemvas.ui.scene_decoration_service_bundle import build_scene_decoration_se
 from chemvas.ui.scene_operation_service_bundle import build_scene_operation_services
 from chemvas.ui.selection_service_bundle import build_selection_services
 from chemvas.ui.structure_service_bundle import build_structure_services
-from chemvas.ui.tool_service_bundle import build_tool_services
+from chemvas.ui.tool_controller_factory import build_tool_controller
 
 
 def build_canvas_services(
@@ -34,7 +34,7 @@ def build_canvas_services(
     builders = CanvasServiceBuilders(
         build_atom_label_service=AtomLabelService,
         build_canvas_document_services=build_canvas_document_services,
-        build_canvas_graph_services=build_canvas_graph_services,
+        build_graph_service=CanvasGraphService,
         build_canvas_input_services=build_canvas_input_services,
         build_canvas_interaction_services=build_canvas_interaction_services,
         build_canvas_scene_view_services=build_canvas_scene_view_services,
@@ -44,7 +44,7 @@ def build_canvas_services(
         build_scene_operation_services=build_scene_operation_services,
         build_selection_services=build_selection_services,
         build_structure_services=build_structure_services,
-        build_tool_services=build_tool_services,
+        build_tool_controller=build_tool_controller,
     )
     return compose_canvas_services(
         canvas,

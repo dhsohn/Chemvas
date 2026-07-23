@@ -157,7 +157,7 @@ def active_tool_name_for_window(window):
     canvas = active_canvas_or_none_for_window(window)
     if canvas is None:
         return None
-    active_tool = getattr(canvas_services_for(canvas).tooling.tools, "active", None)
+    active_tool = getattr(canvas_services_for(canvas).tool_controller, "active", None)
     name = getattr(active_tool, "name", None)
     return str(name) if name else None
 
@@ -280,7 +280,7 @@ def tool_settings_for_window(window):
 
 def color_tool_for_window(window):
     return getattr(
-        _active_canvas_services_for_window(window).tooling.tools, "tools", {}
+        _active_canvas_services_for_window(window).tool_controller, "tools", {}
     ).get("color")
 
 

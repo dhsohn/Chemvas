@@ -10,7 +10,7 @@ from chemvas.ui.canvas_services import attach_canvas_services, build_canvas_serv
 
 CANONICAL_SERVICE_FIELDS = {
     "document",
-    "graph",
+    "graph_service",
     "input",
     "interaction",
     "scene_view",
@@ -20,7 +20,7 @@ CANONICAL_SERVICE_FIELDS = {
     "scene_operations",
     "selection",
     "structure",
-    "tooling",
+    "tool_controller",
     "atom_label_service",
     "history_service",
 }
@@ -79,7 +79,6 @@ def test_build_canvas_services_composes_grouped_runtimes(monkeypatch) -> None:
     active_tool = SimpleNamespace(name="perspective")
     tool_controller = SimpleNamespace(active=active_tool)
 
-    graph = SimpleNamespace(canvas_graph_service=graph_service)
     selection = SimpleNamespace(
         hit_testing_service=hit_testing_service,
         selection_controller=selection_controller,
@@ -108,7 +107,6 @@ def test_build_canvas_services_composes_grouped_runtimes(monkeypatch) -> None:
         style_controller=style_controller,
         canvas_color_mutation_service=color_mutation_service,
     )
-    tooling = SimpleNamespace(tools=tool_controller)
     scene_decoration = SimpleNamespace(
         canvas_mark_scene_service=mark_scene_service,
         scene_decoration_build_service=decoration_build_service,
@@ -134,13 +132,13 @@ def test_build_canvas_services_composes_grouped_runtimes(monkeypatch) -> None:
     )
 
     builders = {
-        "build_canvas_graph_services": mock.Mock(return_value=graph),
+        "CanvasGraphService": mock.Mock(return_value=graph_service),
         "build_selection_services": mock.Mock(return_value=selection),
         "build_handle_services": mock.Mock(return_value=handles),
         "build_canvas_interaction_services": mock.Mock(return_value=interaction),
         "build_structure_services": mock.Mock(return_value=structure),
         "build_scene_operation_services": mock.Mock(return_value=scene_operations),
-        "build_tool_services": mock.Mock(return_value=tooling),
+        "build_tool_controller": mock.Mock(return_value=tool_controller),
         "build_scene_decoration_services": mock.Mock(return_value=scene_decoration),
         "build_hover_controller": mock.Mock(return_value=hover),
         "build_canvas_input_services": mock.Mock(return_value=input_services),
@@ -158,13 +156,13 @@ def test_build_canvas_services_composes_grouped_runtimes(monkeypatch) -> None:
         history_service=history_service,
     )
 
-    assert services.graph is graph
+    assert services.graph_service is graph_service
     assert services.selection is selection
     assert services.handles is handles
     assert services.interaction is interaction
     assert services.structure is structure
     assert services.scene_operations is scene_operations
-    assert services.tooling is tooling
+    assert services.tool_controller is tool_controller
     assert services.scene_decoration is scene_decoration
     assert services.hover is hover
     assert services.input is input_services
@@ -173,7 +171,7 @@ def test_build_canvas_services_composes_grouped_runtimes(monkeypatch) -> None:
     assert services.atom_label_service is atom_label_service
     assert services.history_service is history_service
 
-    builders["build_canvas_graph_services"].assert_called_once_with(
+    builders["CanvasGraphService"].assert_called_once_with(
         canvas,
         graph_state=graph_state,
     )
@@ -206,7 +204,7 @@ def test_build_canvas_services_composes_grouped_runtimes(monkeypatch) -> None:
         graph_service=graph_service,
         history_service=history_service,
     )
-    builders["build_tool_services"].assert_called_once_with(
+    builders["build_tool_controller"].assert_called_once_with(
         canvas,
         hit_testing_service=hit_testing_service,
         selection_controller=selection_controller,

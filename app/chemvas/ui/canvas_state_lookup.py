@@ -36,7 +36,7 @@ def ensure_canvas_state[T](
     present but lacks the field, the accessor and the container are out of
     sync (e.g. a renamed field), and creating a shadow copy on the canvas
     would split the state in two — fail loudly instead. ``runtime_field=False``
-    states (model, renderer, ...) are stored as direct canvas attributes; a
+    states (currently only the model) are stored as direct canvas attributes; a
     ``runtime_state`` entry still wins for them, but its absence is normal.
     Plain attribute storage remains the fallback that keeps lightweight test
     doubles working.

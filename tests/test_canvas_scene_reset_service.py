@@ -9,6 +9,7 @@ from unittest import mock
 from tests.runtime_services import canvas_runtime_services
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+from chemvas.core.renderer import Renderer
 from chemvas.domain.document import MoleculeModel
 from chemvas.domain.transactions import HistoryStackSnapshot
 from chemvas.features.hover import HoverState
@@ -68,6 +69,7 @@ class _FakeScene:
 
 
 def _attach_minimal_runtime_state(canvas) -> None:
+    canvas.renderer = Renderer()
     canvas.runtime_state = SimpleNamespace(
         graph_state=graph_state_for(canvas),
         rotation_state=rotation_state_for(canvas),

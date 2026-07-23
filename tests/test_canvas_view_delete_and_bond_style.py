@@ -73,7 +73,7 @@ def _scene_transform_controller_for(view) -> SceneTransformController:
     return SceneTransformController(
         view,
         move_controller=getattr(services, "move_controller", None),
-        graph_service=getattr(services, "canvas_graph_service", None),
+        graph_service=getattr(services, "graph_service", None),
         history_service=getattr(services, "history_service", None),
     )
 

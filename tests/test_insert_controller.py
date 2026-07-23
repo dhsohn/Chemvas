@@ -16,6 +16,7 @@ from chemvas.features.insertion import (
     plan_template_commit,
 )
 from chemvas.ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
+from chemvas.ui.canvas_callback_state import CanvasCallbackState
 from chemvas.ui.canvas_insert_state import CanvasInsertState
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_rotation_state import rotation_state_for
@@ -101,6 +102,7 @@ class _FakeCanvas:
             bond_pen=Mock(return_value="pen"),
         )
         self.model = MoleculeModel()
+        self.runtime_state = SimpleNamespace(callback_state=CanvasCallbackState())
         set_last_smiles_input_for(self, None)
         self.insert_state = CanvasInsertState()
 
@@ -163,7 +165,7 @@ class _FakeCanvas:
                 remove_bond_by_id=self.remove_bond_by_id,
                 trim_bonds_to_length=self.trim_bonds_to_length,
             ),
-            canvas_graph_service=SimpleNamespace(
+            graph_service=SimpleNamespace(
                 rebuild_bond_adjacency=self.rebuild_bond_adjacency,
                 bond_exists=self.bond_exists,
             ),
@@ -342,9 +344,7 @@ def _controller_for(canvas: _FakeCanvas, **kwargs) -> InsertController:
     hit_testing_service = kwargs.pop(
         "hit_testing_service", canvas.services.selection.hit_testing_service
     )
-    graph_service = kwargs.pop(
-        "graph_service", canvas.services.graph.canvas_graph_service
-    )
+    graph_service = kwargs.pop("graph_service", canvas.services.graph_service)
     structure_build_service = kwargs.pop(
         "structure_build_service", canvas.services.structure.structure_build_service
     )
