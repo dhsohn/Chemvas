@@ -381,11 +381,11 @@ def test_window_registry_does_not_know_ui_services() -> None:
     assert "services_for_window" not in source
 
 
-def test_drag_transaction_uses_shared_object_graph_savepoints() -> None:
+def test_drag_transaction_uses_shared_history_savepoint_port() -> None:
     drag = CHEMVAS_ROOT / "ui" / "selection_drag_tool.py"
     source = drag.read_text()
 
-    assert "chemvas.ui.transactions.object_graph_snapshot" in source
+    assert "chemvas.ui.history_canvas_access" in source
     assert "chemvas.ui.canvas_delete_transaction import" not in source
 
 

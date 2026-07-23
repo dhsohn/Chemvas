@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from PyQt6 import sip
+
 from chemvas.ui.canvas_state_lookup import ensure_canvas_state
 
 
@@ -73,6 +75,30 @@ def note_items_for(canvas: Any) -> list[Any]:
 
 def ring_items_for(canvas: Any) -> list[Any]:
     return scene_item_collection_for(canvas, "ring_items")
+
+
+def _ring_item_is_deleted(item: Any) -> bool:
+    try:
+        return sip.isdeleted(item)
+    except TypeError:
+        return False
+
+
+def ring_items_for_atoms(canvas: Any, atom_ids: set[int]) -> list[Any]:
+    """Ring items whose atom-id payload intersects ``atom_ids``.
+
+    Skips sip-deleted wrappers so gesture-scoped discovery survives Qt
+    teardown of individual rings.
+    """
+
+    affected: list[Any] = []
+    for ring in ring_items_for(canvas):
+        if _ring_item_is_deleted(ring):
+            continue
+        ring_atom_ids = ring.data(2)
+        if isinstance(ring_atom_ids, list) and not atom_ids.isdisjoint(ring_atom_ids):
+            affected.append(ring)
+    return affected
 
 
 def mark_items_for(canvas: Any) -> list[Any]:
