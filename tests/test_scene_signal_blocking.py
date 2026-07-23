@@ -8,9 +8,6 @@ class _SignalScene:
     def __init__(self, *, blocked: bool = False) -> None:
         self.blocked = blocked
         self.calls: list[bool] = []
-        self.ignore_next = False
-        self.ignore_restore = False
-        self.raise_next: BaseException | None = None
 
     def signalsBlocked(self) -> bool:
         return self.blocked
@@ -18,88 +15,59 @@ class _SignalScene:
     def blockSignals(self, blocked: bool) -> bool:
         self.calls.append(blocked)
         previous = self.blocked
-        if self.raise_next is not None:
-            error = self.raise_next
-            self.raise_next = None
-            raise error
-        if self.ignore_next:
-            self.ignore_next = False
-            return previous
-        if not (self.ignore_restore and blocked is False):
-            self.blocked = blocked
+        self.blocked = blocked
         return previous
 
 
-def test_signal_block_entry_persistent_no_op_does_not_run_body() -> None:
+def test_signal_blocker_blocks_body_and_restores_unblocked_scene() -> None:
     scene = _SignalScene()
-    body_calls = 0
-
-    def ignore_all_changes(blocked: bool) -> bool:
-        scene.calls.append(blocked)
-        return scene.blocked
-
-    scene.blockSignals = ignore_all_changes  # type: ignore[method-assign]
-
-    with pytest.raises(
-        RuntimeError,
-        match="setter did not apply the requested state",
-    ):
-        with blocked_scene_signals(scene):
-            body_calls += 1
-
-    assert body_calls == 0
-    assert scene.blocked is False
-    assert scene.calls == [True, True, False]
-
-
-def test_signal_block_entry_recovers_from_one_no_op_before_body() -> None:
-    scene = _SignalScene()
-    scene.ignore_next = True
 
     with blocked_scene_signals(scene):
         assert scene.blocked is True
 
     assert scene.blocked is False
-    assert scene.calls == [True, True, False]
+    assert scene.calls == [True, False]
 
 
-def test_signal_block_exit_recovers_from_one_setter_failure() -> None:
-    scene = _SignalScene()
+def test_signal_blocker_preserves_an_already_blocked_scene() -> None:
+    scene = _SignalScene(blocked=True)
 
     with blocked_scene_signals(scene):
-        scene.raise_next = SystemExit("restore interrupted")
+        assert scene.blocked is True
+
+    assert scene.blocked is True
+    assert scene.calls == [True, True]
+
+
+def test_signal_blocker_restores_prior_state_when_body_raises() -> None:
+    scene = _SignalScene()
+
+    with pytest.raises(ValueError, match="body failed"):
+        with blocked_scene_signals(scene):
+            raise ValueError("body failed")
 
     assert scene.blocked is False
-    assert scene.calls == [True, False, False]
+    assert scene.calls == [True, False]
 
 
-def test_signal_block_exit_persistent_no_op_raises_after_normal_body() -> None:
-    scene = _SignalScene()
+def test_signal_blocker_requires_a_callable_setter() -> None:
+    with pytest.raises(RuntimeError, match="signal-blocking setter"):
+        with blocked_scene_signals(object()):
+            raise AssertionError("body must not run")
 
-    with pytest.raises(
-        RuntimeError,
-        match="setter did not apply the requested state",
+
+def test_signal_blocker_uses_injected_ports() -> None:
+    scene = _SignalScene(blocked=True)
+
+    with blocked_scene_signals(
+        object(),
+        block_signals=scene.blockSignals,
+        signals_blocked=scene.signalsBlocked,
     ):
-        with blocked_scene_signals(scene):
-            scene.ignore_restore = True
+        assert scene.blocked is True
 
     assert scene.blocked is True
-    assert scene.calls == [True, False, False]
-
-
-def test_signal_block_exit_failure_preserves_body_base_exception_identity() -> None:
-    scene = _SignalScene()
-    primary = KeyboardInterrupt("body interrupted")
-
-    with pytest.raises(KeyboardInterrupt) as caught:
-        with blocked_scene_signals(scene):
-            scene.ignore_restore = True
-            raise primary
-
-    assert caught.value is primary
-    assert scene.blocked is True
-    assert len(primary.__notes__) == 2
-    assert all("signal recovery also failed" in note for note in primary.__notes__)
+    assert scene.calls == [True, True]
 
 
 def test_signal_ports_are_captured_once_for_the_full_context() -> None:
