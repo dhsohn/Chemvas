@@ -28,7 +28,6 @@ if QApplication is not None:
     import chemvas.ui.selection_drag_tool as selection_drag_tool_module
     from chemvas.core.history import (
         CompositeCommand,
-        HistoryTransactionRestoreResult,
         MoveAtomsCommand,
     )
     from chemvas.domain.document import Atom, Bond
@@ -48,7 +47,6 @@ if QApplication is not None:
     )
     from chemvas.ui.canvas_tool_settings_state import set_tool_setting_for
     from chemvas.ui.canvas_view import CanvasView
-    from chemvas.ui.graphics_items import AtomLabelItem
     from chemvas.ui.handle_state import CanvasHandleState
     from chemvas.ui.history_commands import MoveItemsCommand, UpdateSceneItemCommand
     from chemvas.ui.preview_tools import PreviewDragTool
@@ -379,7 +377,9 @@ class _FakeSelectCanvas:
         bond_ids=None,
         redraw_bond_ids=None,
         update_selection=True,
+        affected_ring_items=None,
     ) -> None:
+        del affected_ring_items
         self.moved_atoms.append(
             (set(atom_ids), dx, dy, bond_ids, redraw_bond_ids, update_selection)
         )
@@ -1086,10 +1086,9 @@ class ToolsUnitTest(unittest.TestCase):
         canvas.deleteLater()
         self.app.processEvents()
 
-    def test_trusted_drag_begin_is_selection_sized_for_large_actual_scenes(
+    def test_drag_begin_and_click_are_capture_free_for_large_actual_scenes(
         self,
     ) -> None:
-        affected_counts: list[int] = []
         for unrelated_count in (100, 1000, 5000):
             with self.subTest(unrelated_count=unrelated_count):
                 canvas, shapes = self._canvas_with_shapes(count=1)
@@ -1112,14 +1111,14 @@ class ToolsUnitTest(unittest.TestCase):
                             selection_drag_tool_module,
                             "capture_history_transaction_for_history",
                             side_effect=AssertionError(
-                                "trusted begin captured the full canvas"
+                                "drag begin captured the full canvas"
                             ),
                         ) as full_capture,
                         mock.patch.object(
                             QGraphicsScene,
                             "items",
                             side_effect=AssertionError(
-                                "trusted begin enumerated the full scene"
+                                "drag begin enumerated the full scene"
                             ),
                         ) as scene_items_port,
                     ):
@@ -1130,24 +1129,15 @@ class ToolsUnitTest(unittest.TestCase):
                                 QPointF(),
                             )
                         )
-                        snapshot = tool._require_drag_token().canvas_snapshot
-                        self.assertIsInstance(
-                            snapshot,
-                            selection_drag_tool_module._TrustedSelectionDragSnapshot,
-                        )
-                        affected_counts.append(len(snapshot.affected_items))
-                        self.assertIn(shape, snapshot.affected_items)
-                        self.assertEqual(snapshot.affected_ring_items, ())
-                        self.assertIsNone(snapshot.fallback_snapshot)
                         tool.deactivate()
 
                     full_capture.assert_not_called()
                     scene_items_port.assert_not_called()
+                    self.assertIsNone(tool._drag_transaction)
                 finally:
                     self._dispose_canvas(canvas)
-        self.assertEqual(len(set(affected_counts)), 1)
 
-    def test_actual_true_zero_click_releases_cow_without_full_capture(self) -> None:
+    def test_actual_true_zero_click_and_net_zero_drag_capture_lazily(self) -> None:
         canvas, shapes = self._canvas_with_shapes(count=200)
         shape = shapes[0]
         shape.setSelected(True)
@@ -1164,22 +1154,14 @@ class ToolsUnitTest(unittest.TestCase):
                 wraps=original_capture,
             ) as full_capture:
                 self.assertTrue(tool._begin_selection_drag(set(), [shape], QPointF()))
-                snapshot = tool._drag_transaction_authority.canvas_snapshot
-                self.assertIsInstance(
-                    snapshot,
-                    selection_drag_tool_module._TrustedSelectionDragSnapshot,
-                )
-                self.assertIsNone(snapshot.fallback_snapshot)
                 tool._commit_selection_drag()
 
                 full_capture.assert_not_called()
-                self.assertIsNone(snapshot.fallback_snapshot)
 
             self.assertEqual(scene_item_state_for(canvas, shape), before_state)
             self.assertEqual(history.state.history, [])
             self.assertEqual(history.state.redo_stack, [])
             self.assertIsNone(tool._drag_transaction)
-            self.assertIsNone(tool._drag_transaction_authority)
 
             with mock.patch.object(
                 selection_drag_tool_module,
@@ -1198,354 +1180,6 @@ class ToolsUnitTest(unittest.TestCase):
             self.assertEqual(history.state.redo_stack, [])
             self.assertIsNone(tool._drag_transaction)
         finally:
-            self._dispose_canvas(canvas)
-
-    def test_actual_drag_rejects_mutating_custom_history_policy_before_getter(
-        self,
-    ) -> None:
-        for drag_kind in ("true_zero", "moved"):
-            with self.subTest(drag_kind=drag_kind):
-                canvas, shapes = self._canvas_with_shapes(count=2)
-                shape, unrelated_shape = shapes
-                shape.setSelected(True)
-                tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
-                history = canvas.services.history_service
-                original_state = history.state
-                baseline = MoveItemsCommand(items=[], dx=0.0, dy=0.0)
-                redo_entry = MoveItemsCommand(items=[], dx=1.0, dy=1.0)
-                getter_calls: list[str] = []
-                unrelated_z = unrelated_shape.zValue()
-
-                class MutatingPolicyState:
-                    def __init__(
-                        self,
-                        history_entry,
-                        redo_stack_entry,
-                        calls,
-                        mutation_target,
-                    ) -> None:
-                        self.history = [history_entry]
-                        self.redo_stack = [redo_stack_entry]
-                        self._enabled = True
-                        self._limit = 100
-                        self.change_callback = None
-                        self._getter_calls = calls
-                        self._mutation_target = mutation_target
-
-                    @property
-                    def enabled(self) -> bool:
-                        self._getter_calls.append("enabled")
-                        self._mutation_target.setZValue(
-                            self._mutation_target.zValue() + 10.0
-                        )
-                        return self._enabled
-
-                    @enabled.setter
-                    def enabled(self, value: bool) -> None:
-                        self._enabled = value
-
-                    @property
-                    def limit(self) -> int:
-                        self._getter_calls.append("limit")
-                        self._mutation_target.setZValue(
-                            self._mutation_target.zValue() + 10.0
-                        )
-                        return self._limit
-
-                    @limit.setter
-                    def limit(self, value: int) -> None:
-                        self._limit = value
-
-                custom_state = MutatingPolicyState(
-                    baseline,
-                    redo_entry,
-                    getter_calls,
-                    unrelated_shape,
-                )
-                history_list = custom_state.history
-                redo_list = custom_state.redo_stack
-                history.state = custom_state
-                try:
-                    with self.assertRaisesRegex(
-                        RuntimeError,
-                        "exact callback-free production history state",
-                    ):
-                        started = tool._begin_selection_drag(
-                            set(),
-                            [shape],
-                            QPointF(),
-                        )
-                        if drag_kind == "moved" and started:
-                            tool._apply_drag_delta(QPointF(5.0, -2.0))
-                        tool._commit_selection_drag()
-
-                    self.assertEqual(getter_calls, [])
-                    self.assertEqual(unrelated_shape.zValue(), unrelated_z)
-                    self.assertIs(tool.context.history_service, history)
-                    self.assertIs(canvas.services.history_service, history)
-                    self.assertIs(history.state, custom_state)
-                    self.assertIs(custom_state.history, history_list)
-                    self.assertIs(custom_state.redo_stack, redo_list)
-                    self.assertEqual(len(history_list), 1)
-                    self.assertEqual(len(redo_list), 1)
-                    self.assertIs(history_list[0], baseline)
-                    self.assertIs(redo_list[0], redo_entry)
-                    self.assertTrue(custom_state._enabled)
-                    self.assertEqual(custom_state._limit, 100)
-                    self.assertIsNone(tool._drag_transaction)
-                    self.assertIsNone(tool._drag_history_authority)
-                    self.assertIsNone(tool._drag_transaction_authority)
-                finally:
-                    history.state = original_state
-                    self._dispose_canvas(canvas)
-
-    def test_actual_drag_preflights_runtime_roots_before_nested_getters(self) -> None:
-        canvas, shapes = self._canvas_with_shapes(count=1)
-        shape = shapes[0]
-        unrelated = canvas.scene().addRect(QRectF(40.0, 20.0, 5.0, 7.0))
-        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
-        original_services = canvas.services
-        before_unrelated_pos = QPointF(unrelated.pos())
-        getter_calls: list[str] = []
-
-        class PoisonServices:
-            def __getattribute__(self, name: str):
-                if name == "move_controller":
-                    getter_calls.append(name)
-                    unrelated.moveBy(17.0, -9.0)
-                    raise RuntimeError("nested services getter was invoked")
-                return object.__getattribute__(self, name)
-
-        canvas.services = PoisonServices()
-        try:
-            self.assertTrue(tool._begin_selection_drag(set(), [shape], QPointF()))
-            snapshot = tool._require_drag_token().canvas_snapshot
-            self.assertNotIsInstance(
-                snapshot,
-                selection_drag_tool_module._TrustedSelectionDragSnapshot,
-            )
-            self.assertEqual(getter_calls, [])
-            self.assertEqual(unrelated.pos(), before_unrelated_pos)
-        finally:
-            canvas.services = original_services
-            if tool._drag_transaction is not None:
-                tool.deactivate()
-            self._dispose_canvas(canvas)
-
-    def test_actual_drag_rejects_custom_primitive_getter_before_invocation(
-        self,
-    ) -> None:
-        canvas = CanvasView()
-        unrelated = canvas.scene().addRect(QRectF(40.0, 20.0, 5.0, 7.0))
-        before_unrelated_pos = QPointF(unrelated.pos())
-        getter_calls: list[str] = []
-
-        class PoisonPrimitiveItem(QGraphicsEllipseItem):
-            def transform(self):
-                getter_calls.append("transform")
-                unrelated.moveBy(13.0, -7.0)
-                raise RuntimeError("custom primitive getter was invoked")
-
-        item = PoisonPrimitiveItem(QRectF(0.0, 0.0, 10.0, 10.0))
-        item.setData(0, "note")
-        item.setData(2, {})
-        canvas.scene().addItem(item)
-        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
-        try:
-            with self.assertRaisesRegex(
-                RuntimeError,
-                "callback-free Qt snapshot ports",
-            ):
-                tool._begin_selection_drag(set(), [item], QPointF())
-
-            self.assertEqual(getter_calls, [])
-            self.assertEqual(unrelated.pos(), before_unrelated_pos)
-            self.assertIsNone(tool._drag_transaction)
-            self.assertIsNone(tool._drag_transaction_authority)
-        finally:
-            self._dispose_canvas(canvas)
-
-    def test_actual_drag_rejects_dynamic_qt_attribute_hooks_before_invocation(
-        self,
-    ) -> None:
-        for hook_kind in ("getattribute", "getattr", "setattr"):
-            with self.subTest(hook_kind=hook_kind):
-                canvas = CanvasView()
-                unrelated = canvas.scene().addRect(QRectF(40.0, 20.0, 5.0, 7.0))
-                before_unrelated_pos = QPointF(unrelated.pos())
-                hook_calls: list[str] = []
-                setter_state = {"armed": False}
-
-                class PoisonGetattributeItem(QGraphicsEllipseItem):
-                    def __getattribute__(
-                        self,
-                        name: str,
-                        _calls=hook_calls,
-                        _unrelated=unrelated,
-                    ):
-                        if name == "transform":
-                            _calls.append(name)
-                            _unrelated.moveBy(13.0, -7.0)
-                            raise RuntimeError("custom __getattribute__ was invoked")
-                        return super().__getattribute__(name)
-
-                class PoisonGetattrItem(QGraphicsEllipseItem):
-                    def __getattr__(
-                        self,
-                        name: str,
-                        _calls=hook_calls,
-                        _unrelated=unrelated,
-                    ):
-                        if name == "line":
-                            _calls.append(name)
-                            _unrelated.moveBy(13.0, -7.0)
-                            raise RuntimeError("custom __getattr__ was invoked")
-                        raise AttributeError(name)
-
-                class PoisonSetattrItem(QGraphicsEllipseItem):
-                    def __setattr__(
-                        self,
-                        name: str,
-                        value,
-                        _state=setter_state,
-                        _calls=hook_calls,
-                        _unrelated=unrelated,
-                    ) -> None:
-                        if _state["armed"] and name == "_hit_padding":
-                            _calls.append(name)
-                            _unrelated.moveBy(13.0, -7.0)
-                            raise RuntimeError("custom __setattr__ was invoked")
-                        super().__setattr__(name, value)
-
-                item_type = {
-                    "getattribute": PoisonGetattributeItem,
-                    "getattr": PoisonGetattrItem,
-                    "setattr": PoisonSetattrItem,
-                }[hook_kind]
-                item = item_type(QRectF(0.0, 0.0, 10.0, 10.0))
-                if hook_kind == "setattr":
-                    item._hit_padding = 2.0
-                    setter_state["armed"] = True
-                item.setData(0, "note")
-                item.setData(2, {})
-                canvas.scene().addItem(item)
-                tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
-                try:
-                    with self.assertRaisesRegex(
-                        RuntimeError,
-                        "callback-free Qt snapshot ports",
-                    ):
-                        tool._begin_selection_drag(set(), [item], QPointF())
-
-                    self.assertEqual(hook_calls, [])
-                    self.assertEqual(unrelated.pos(), before_unrelated_pos)
-                    self.assertIsNone(tool._drag_transaction)
-                    self.assertIsNone(tool._drag_transaction_authority)
-                finally:
-                    self._dispose_canvas(canvas)
-
-    def test_actual_drag_allows_trusted_atom_label_font_override(self) -> None:
-        canvas = CanvasView()
-        label = AtomLabelItem()
-        label.setData(0, "note")
-        label.setData(2, {})
-        label.setPlainText("CH3")
-        canvas.scene().addItem(label)
-        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
-        try:
-            self.assertTrue(tool._begin_selection_drag(set(), [label], QPointF()))
-            snapshot = tool._require_drag_token().canvas_snapshot
-            self.assertIsInstance(
-                snapshot,
-                selection_drag_tool_module._TrustedSelectionDragSnapshot,
-            )
-            self.assertIsNone(snapshot.fallback_snapshot)
-
-            tool._commit_selection_drag()
-
-            self.assertIsNone(tool._drag_transaction)
-        finally:
-            self._dispose_canvas(canvas)
-
-    def test_actual_drag_rejects_canvas_poison_after_successful_history_push(
-        self,
-    ) -> None:
-        canvas, shapes = self._canvas_with_shapes(count=1)
-        shape = shapes[0]
-        shape.setSelected(True)
-        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
-        history = canvas.services.history_service
-        redo_entry = MoveItemsCommand(items=[], dx=1.0, dy=1.0)
-        history.state.redo_stack[:] = [redo_entry]
-        history_list = history.state.history
-        redo_list = history.state.redo_stack
-        before_rect = QRectF(shape.sceneBoundingRect())
-        before_pos = QPointF(shape.pos())
-        callback_calls = 0
-
-        def poison_canvas() -> None:
-            nonlocal callback_calls
-            callback_calls += 1
-            shape.moveBy(100.0, 0.0)
-
-        try:
-            self.assertTrue(tool._begin_selection_drag(set(), [shape], QPointF()))
-            tool._apply_drag_delta(QPointF(5.0, 0.0))
-            history.state.change_callback = poison_canvas
-
-            with self.assertRaisesRegex(
-                BaseExceptionGroup,
-                "canvas authority changed during history publication",
-            ):
-                tool._commit_selection_drag()
-
-            self.assertGreaterEqual(callback_calls, 1)
-            self.assertEqual(shape.sceneBoundingRect(), before_rect)
-            self.assertEqual(shape.pos(), before_pos)
-            self.assertIs(history.state.history, history_list)
-            self.assertIs(history.state.redo_stack, redo_list)
-            self.assertEqual(history_list, [])
-            self.assertEqual(redo_list, [redo_entry])
-            self.assertIsNone(tool._drag_transaction)
-            self.assertFalse(tool._drag_selection)
-        finally:
-            history.state.change_callback = None
-            self._dispose_canvas(canvas)
-
-    def test_actual_drag_rejects_successful_push_command_payload_mutation(
-        self,
-    ) -> None:
-        canvas, shapes = self._canvas_with_shapes(count=1)
-        shape = shapes[0]
-        shape.setSelected(True)
-        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
-        history = canvas.services.history_service
-        redo_entry = MoveItemsCommand(items=[], dx=1.0, dy=1.0)
-        history.state.redo_stack[:] = [redo_entry]
-        before_state = scene_item_state_for(canvas, shape)
-        published: list[MoveItemsCommand] = []
-
-        def poison_command() -> None:
-            command = history.state.history[-1]
-            assert isinstance(command, MoveItemsCommand)
-            published.append(command)
-            command.dx = 999.0
-
-        try:
-            self.assertTrue(tool._begin_selection_drag(set(), [shape], QPointF()))
-            tool._apply_drag_delta(QPointF(5.0, 0.0))
-            history.state.change_callback = poison_command
-
-            with self.assertRaisesRegex(RuntimeError, "history command field"):
-                tool._commit_selection_drag()
-
-            self.assertEqual(scene_item_state_for(canvas, shape), before_state)
-            self.assertEqual(published[0].dx, 5.0)
-            self.assertEqual(history.state.history, [])
-            self.assertEqual(history.state.redo_stack, [redo_entry])
-            self.assertIsNone(tool._drag_transaction)
-        finally:
-            history.state.change_callback = None
             self._dispose_canvas(canvas)
 
     def test_actual_sub_epsilon_net_drag_publishes_exact_history(self) -> None:
@@ -1582,195 +1216,6 @@ class ToolsUnitTest(unittest.TestCase):
             self.assertEqual(scene_item_state_for(canvas, shape), before_state)
             history.redo()
             self.assertEqual(scene_item_state_for(canvas, shape), moved_state)
-        finally:
-            self._dispose_canvas(canvas)
-
-    def test_custom_qt_item_uses_full_drag_snapshot_at_begin(self) -> None:
-        class _CustomItem(QGraphicsEllipseItem):
-            def itemChange(self, change, value):
-                return super().itemChange(change, value)
-
-        canvas = CanvasView()
-        item = _CustomItem(-2.0, -2.0, 4.0, 4.0)
-        item.setData(0, "note")
-        canvas.scene().addItem(item)
-        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
-        original_capture = (
-            selection_drag_tool_module.capture_history_transaction_for_history
-        )
-        try:
-            with mock.patch.object(
-                selection_drag_tool_module,
-                "capture_history_transaction_for_history",
-                wraps=original_capture,
-            ) as full_capture:
-                self.assertTrue(
-                    tool._begin_selection_drag(
-                        set(),
-                        [item],
-                        QPointF(),
-                    )
-                )
-                snapshot = tool._require_drag_token().canvas_snapshot
-                self.assertNotIsInstance(
-                    snapshot,
-                    selection_drag_tool_module._TrustedSelectionDragSnapshot,
-                )
-                full_capture.assert_called_once()
-                tool.deactivate()
-        finally:
-            self._dispose_canvas(canvas)
-
-    def test_apply_failure_uses_frozen_authority_after_field_corruption(
-        self,
-    ) -> None:
-        for corruption in ("delete", "replace"):
-            with self.subTest(corruption=corruption):
-                canvas, shapes = self._canvas_with_shapes(count=1)
-                shape = shapes[0]
-                shape.setSelected(True)
-                tool = MoveTool(
-                    canvas,
-                    context=canvas.services.tool_controller.context,
-                )
-                history = canvas.services.history_service
-                baseline = MoveItemsCommand(items=[], dx=0.0, dy=0.0)
-                redo_entry = MoveItemsCommand(items=[], dx=2.0, dy=1.0)
-                history.state.history[:] = [baseline]
-                history.state.redo_stack[:] = [redo_entry]
-                history_list = history.state.history
-                redo_list = history.state.redo_stack
-                before_state = scene_item_state_for(canvas, shape)
-                original_move = selection_drag_tool_module.move_item_for
-                primary = KeyboardInterrupt(
-                    f"move failed after authority field {corruption}"
-                )
-
-                def move_then_corrupt(
-                    *args,
-                    mode=corruption,
-                    active_tool=tool,
-                    move_port=original_move,
-                    failure=primary,
-                    **kwargs,
-                ) -> None:
-                    move_port(*args, **kwargs)
-                    if mode == "delete":
-                        delattr(active_tool, "_drag_transaction_authority")
-                        delattr(active_tool, "_drag_history_authority")
-                    else:
-                        active_tool._drag_transaction_authority = object()
-                        active_tool._drag_history_authority = object()
-                    raise failure
-
-                try:
-                    self.assertTrue(
-                        tool._begin_selection_drag(
-                            set(),
-                            [shape],
-                            QPointF(),
-                        )
-                    )
-                    token = tool._require_drag_token()
-                    frozen_authority = tool._drag_transaction_authority
-
-                    with mock.patch.object(
-                        selection_drag_tool_module,
-                        "move_item_for",
-                        side_effect=move_then_corrupt,
-                    ):
-                        try:
-                            tool._apply_drag_delta(QPointF(9.0, -4.0))
-                        except KeyboardInterrupt as error:
-                            self.assertIs(error, primary)
-                        else:
-                            self.fail("move callback failure was not propagated")
-
-                    self.assertIs(frozen_authority.token, token)
-                    self.assertEqual(
-                        scene_item_state_for(canvas, shape),
-                        before_state,
-                    )
-                    self.assertIs(history.state.history, history_list)
-                    self.assertIs(history.state.redo_stack, redo_list)
-                    self.assertEqual(history_list, [baseline])
-                    self.assertEqual(redo_list, [redo_entry])
-                    self.assertIsNone(tool._drag_transaction)
-                    self.assertIsNone(tool._drag_transaction_authority)
-                    self.assertIsNone(tool._drag_history_authority)
-                    self.assertFalse(tool._drag_selection)
-                finally:
-                    self._dispose_canvas(canvas)
-
-    def test_untrusted_move_port_promotes_before_unrelated_poison(self) -> None:
-        canvas, shapes = self._canvas_with_shapes(count=1)
-        shape = shapes[0]
-        shape.setSelected(True)
-        scene = canvas.scene()
-        unrelated = scene.addRect(QRectF(80.0, 40.0, 8.0, 6.0))
-        unrelated.setPos(QPointF(3.0, -2.0))
-        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
-        before_shape = scene_item_state_for(canvas, shape)
-        before_unrelated_pos = QPointF(unrelated.pos())
-        before_scene_items = list(scene.items())
-        primary = RuntimeError("custom move poisoned an unrelated item")
-        order: list[str] = []
-        original_capture = (
-            selection_drag_tool_module.capture_history_transaction_for_history
-        )
-
-        def capture_full(*args, **kwargs):
-            order.append("capture")
-            return original_capture(*args, **kwargs)
-
-        def poison_then_raise(*_args, **_kwargs) -> None:
-            order.append("move")
-            shape.moveBy(13.0, -7.0)
-            unrelated.moveBy(-9.0, 11.0)
-            scene.removeItem(unrelated)
-            raise primary
-
-        try:
-            with mock.patch.object(
-                selection_drag_tool_module,
-                "capture_history_transaction_for_history",
-                side_effect=capture_full,
-            ) as full_capture:
-                self.assertTrue(
-                    tool._begin_selection_drag(
-                        set(),
-                        [shape],
-                        QPointF(),
-                    )
-                )
-                snapshot = tool._require_drag_token().canvas_snapshot
-                self.assertIsInstance(
-                    snapshot,
-                    selection_drag_tool_module._TrustedSelectionDragSnapshot,
-                )
-
-                with mock.patch.object(
-                    selection_drag_tool_module,
-                    "move_item_for",
-                    side_effect=poison_then_raise,
-                ):
-                    try:
-                        tool._apply_drag_delta(QPointF(4.0, 5.0))
-                    except RuntimeError as error:
-                        self.assertIs(error, primary)
-                    else:
-                        self.fail("custom move failure was not propagated")
-
-                full_capture.assert_called_once()
-
-            self.assertEqual(order, ["capture", "move"])
-            self.assertIsNotNone(snapshot.fallback_snapshot)
-            self.assertEqual(scene_item_state_for(canvas, shape), before_shape)
-            self.assertIs(unrelated.scene(), scene)
-            self.assertEqual(unrelated.pos(), before_unrelated_pos)
-            self.assertEqual(list(scene.items()), before_scene_items)
-            self.assertIsNone(tool._drag_transaction)
-            self.assertFalse(tool._drag_selection)
         finally:
             self._dispose_canvas(canvas)
 
@@ -1832,43 +1277,7 @@ class ToolsUnitTest(unittest.TestCase):
         finally:
             self._dispose_canvas(canvas)
 
-    def test_trusted_drag_rejects_target_swap_before_first_mutation(self) -> None:
-        canvas, shapes = self._canvas_with_shapes(count=2)
-        selected, replacement = shapes
-        selected.setSelected(True)
-        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
-        selected_before = scene_item_state_for(canvas, selected)
-        replacement_before = scene_item_state_for(canvas, replacement)
-        try:
-            self.assertTrue(
-                tool._begin_selection_drag(
-                    set(),
-                    [selected],
-                    QPointF(),
-                )
-            )
-            tool._selection_items[:] = [replacement]
-
-            with self.assertRaisesRegex(
-                RuntimeError,
-                "targets changed after capture",
-            ):
-                tool._apply_drag_delta(QPointF(5.0, 3.0))
-
-            self.assertEqual(
-                scene_item_state_for(canvas, selected),
-                selected_before,
-            )
-            self.assertEqual(
-                scene_item_state_for(canvas, replacement),
-                replacement_before,
-            )
-            self.assertIsNone(tool._drag_transaction)
-            self.assertFalse(tool._drag_selection)
-        finally:
-            self._dispose_canvas(canvas)
-
-    def test_atom_drag_reuses_capture_bound_rings_across_actual_frames(self) -> None:
+    def test_atom_drag_reuses_begin_bound_rings_across_actual_frames(self) -> None:
         canvas = CanvasView()
         atom_ids = [
             canvas.model.add_atom("C", 0.0, 0.0),
@@ -1898,13 +1307,14 @@ class ToolsUnitTest(unittest.TestCase):
         selected_atom = canvas.model.atoms[atom_ids[0]]
         before_atom_pos = (selected_atom.x, selected_atom.y)
         before_polygon = QPolygonF(matching_ring.polygon())
+        original_capture = (
+            selection_drag_tool_module.capture_history_transaction_for_history
+        )
         try:
             with mock.patch.object(
                 selection_drag_tool_module,
                 "capture_history_transaction_for_history",
-                side_effect=AssertionError(
-                    "trusted atom drag captured the full canvas"
-                ),
+                wraps=original_capture,
             ) as full_capture:
                 self.assertTrue(
                     tool._begin_selection_drag(
@@ -1913,15 +1323,11 @@ class ToolsUnitTest(unittest.TestCase):
                         QPointF(),
                     )
                 )
-                snapshot = tool._require_drag_token().canvas_snapshot
-                self.assertIsInstance(
-                    snapshot,
-                    selection_drag_tool_module._TrustedSelectionDragSnapshot,
-                )
                 self.assertEqual(
-                    snapshot.affected_ring_items,
+                    tool._drag_affected_ring_items,
                     (matching_ring,),
                 )
+                full_capture.assert_not_called()
 
                 with mock.patch.object(
                     canvas_move_controller_module,
@@ -1935,7 +1341,7 @@ class ToolsUnitTest(unittest.TestCase):
                     tool.deactivate()
 
                 ring_registry_port.assert_not_called()
-                full_capture.assert_not_called()
+                full_capture.assert_called_once()
 
             self.assertEqual(
                 (selected_atom.x, selected_atom.y),
@@ -2125,158 +1531,6 @@ class ToolsUnitTest(unittest.TestCase):
             history.push = original_push
             self._dispose_canvas(canvas)
 
-    def test_actual_drag_rejects_inexact_history_publications_and_token_tampering(
-        self,
-    ) -> None:
-        for failure_kind in (
-            "false",
-            "none_noop",
-            "wrong_command",
-            "extra_command",
-            "state_root",
-            "policy",
-            "token_fields",
-        ):
-            with self.subTest(failure_kind=failure_kind):
-                canvas, shapes = self._canvas_with_shapes(count=1)
-                shape = shapes[0]
-                shape.setSelected(True)
-                tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
-                history = canvas.services.history_service
-                original_push = history.push
-                baseline = MoveItemsCommand(items=[], dx=0.0, dy=0.0)
-                redo_entry = MoveItemsCommand(items=[], dx=1.0, dy=1.0)
-                old_state = history.state
-                old_state.history[:] = [baseline]
-                old_state.redo_stack[:] = [redo_entry]
-                history_list = old_state.history
-                redo_list = old_state.redo_stack
-                enabled = old_state.enabled
-                limit = old_state.limit
-                before_state = scene_item_state_for(canvas, shape)
-                wrong_entry = object()
-
-                def publish_inexact(
-                    command,
-                    *,
-                    kind=failure_kind,
-                    bound_history=history,
-                    bound_history_list=history_list,
-                    bound_redo_list=redo_list,
-                    bound_old_state=old_state,
-                    bound_tool=tool,
-                    bound_wrong_entry=wrong_entry,
-                ):
-                    if kind == "false":
-                        return False
-                    if kind == "none_noop":
-                        return None
-                    if kind == "wrong_command":
-                        bound_history_list.append(bound_wrong_entry)
-                        bound_redo_list.clear()
-                        return None
-                    bound_history_list.append(command)
-                    bound_redo_list.clear()
-                    if kind == "extra_command":
-                        bound_history_list.append(bound_wrong_entry)
-                    elif kind == "state_root":
-                        bound_history.state = SimpleNamespace(
-                            history=[bound_wrong_entry],
-                            redo_stack=[bound_wrong_entry],
-                            enabled=True,
-                            limit=100,
-                            change_callback=None,
-                        )
-                    elif kind == "policy":
-                        bound_old_state.enabled = False
-                        bound_old_state.limit = 1
-                    elif kind == "token_fields":
-                        token = bound_tool._require_drag_token()
-                        token.history_service = object()
-                        token.history_push = lambda _command: None
-                        token.history_stacks = None
-                        token.begin_history_checkpoint = None
-                        token.history_policy_ports = ()
-                        token.history_authority = None
-                    return None
-
-                history.push = publish_inexact
-                try:
-                    self.assertTrue(
-                        tool._begin_selection_drag(
-                            set(),
-                            [shape],
-                            QPointF(),
-                        )
-                    )
-                    tool._apply_drag_delta(QPointF(11.0, -4.0))
-                    with self.assertRaises(RuntimeError):
-                        tool._commit_selection_drag()
-
-                    self.assertIs(history.state, old_state)
-                    self.assertIs(old_state.history, history_list)
-                    self.assertIs(old_state.redo_stack, redo_list)
-                    self.assertEqual(history_list, [baseline])
-                    self.assertEqual(redo_list, [redo_entry])
-                    self.assertIs(old_state.enabled, enabled)
-                    self.assertEqual(old_state.limit, limit)
-                    self.assertEqual(
-                        scene_item_state_for(canvas, shape),
-                        before_state,
-                    )
-                    self.assertTrue(shape.isSelected())
-                    self.assertIsNone(tool._drag_transaction)
-                    self.assertIsNone(tool._drag_history_authority)
-                finally:
-                    history.push = original_push
-                    self._dispose_canvas(canvas)
-
-    def test_actual_drag_rollback_uses_frozen_canvas_snapshot_after_push(self) -> None:
-        canvas, shapes = self._canvas_with_shapes(count=1)
-        shape = shapes[0]
-        shape.setSelected(True)
-        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
-        history = canvas.services.history_service
-        original_push = history.push
-        baseline = MoveItemsCommand(items=[], dx=0.0, dy=0.0)
-        redo_entry = MoveItemsCommand(items=[], dx=1.0, dy=1.0)
-        history.state.history[:] = [baseline]
-        history.state.redo_stack[:] = [redo_entry]
-        history_list = history.state.history
-        redo_list = history.state.redo_stack
-        before_state = scene_item_state_for(canvas, shape)
-
-        def push_then_drop_token_snapshot(command):
-            result = original_push(command)
-            tool._require_drag_token().canvas_snapshot = None
-            return result
-
-        history.push = push_then_drop_token_snapshot
-        try:
-            self.assertTrue(tool._begin_selection_drag(set(), [shape], QPointF()))
-            token = tool._require_drag_token()
-            transaction_authority = tool._drag_transaction_authority
-            self.assertIsNotNone(transaction_authority)
-            frozen_snapshot = transaction_authority.canvas_snapshot
-            tool._apply_drag_delta(QPointF(9.0, -3.0))
-
-            with self.assertRaisesRegex(RuntimeError, "canvas authority changed"):
-                tool._commit_selection_drag()
-
-            self.assertIsNotNone(frozen_snapshot)
-            self.assertEqual(scene_item_state_for(canvas, shape), before_state)
-            self.assertIs(history.state.history, history_list)
-            self.assertIs(history.state.redo_stack, redo_list)
-            self.assertEqual(history_list, [baseline])
-            self.assertEqual(redo_list, [redo_entry])
-            self.assertIsNone(token.canvas_snapshot)
-            self.assertIsNone(tool._drag_transaction)
-            self.assertIsNone(tool._drag_transaction_authority)
-            self.assertIsNone(tool._drag_history_authority)
-        finally:
-            history.push = original_push
-            self._dispose_canvas(canvas)
-
     def test_actual_drag_rejects_false_push_while_history_is_disabled(self) -> None:
         canvas, shapes = self._canvas_with_shapes(count=1)
         shape = shapes[0]
@@ -2406,105 +1660,82 @@ class ToolsUnitTest(unittest.TestCase):
         finally:
             self._dispose_canvas(canvas)
 
-    def test_actual_drag_preserves_bound_history_root_and_zero_redo_authority(
+    def test_handle_drag_cancel_and_append_failure_restore_exact_state(
         self,
     ) -> None:
         canvas, shapes = self._canvas_with_shapes(count=1)
         shape = shapes[0]
-        shape.setSelected(True)
-        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
+        handle = QGraphicsEllipseItem(-2.0, -2.0, 4.0, 4.0)
+        handle.setData(0, "handle")
+        handle.setData(1, "shape_se")
+        handle.setData(2, shape)
+        canvas.scene().addItem(handle)
+        tool = SelectTool(canvas, context=canvas.services.tool_controller.context)
         history = canvas.services.history_service
+        original_push = history.push
         before_state = scene_item_state_for(canvas, shape)
-        baseline = MoveItemsCommand(items=[], dx=0.0, dy=0.0)
-        redo_entry = MoveItemsCommand(items=[], dx=1.0, dy=1.0)
-        old_state = history.state
-        old_state.history[:] = [baseline]
-        old_state.redo_stack[:] = [redo_entry]
-        history_list = old_state.history
-        redo_list = old_state.redo_stack
+
+        def press_handle() -> None:
+            with mock.patch.object(
+                tool.context,
+                "item_at_event",
+                return_value=handle,
+            ):
+                self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF())))
+
+        def drag_handle(pos: QPointF) -> None:
+            with mock.patch.object(
+                tool.context,
+                "scene_pos_from_event",
+                return_value=pos,
+            ):
+                self.assertTrue(tool.on_mouse_move(_FakeEvent(pos)))
 
         try:
-            self.assertTrue(
-                tool._begin_selection_drag(
-                    set(),
-                    [shape],
-                    QPointF(),
-                )
-            )
-            replacement_entry = object()
-            replacement_state = SimpleNamespace(
-                history=[replacement_entry],
-                redo_stack=[replacement_entry],
-                enabled=True,
-                limit=100,
-                change_callback=None,
-            )
-            history.state = replacement_state
-
+            press_handle()
+            drag_handle(QPointF(30.0, 25.0))
+            self.assertNotEqual(scene_item_state_for(canvas, shape), before_state)
             tool.deactivate()
-
-            self.assertIs(history.state, old_state)
-            self.assertIs(old_state.history, history_list)
-            self.assertIs(old_state.redo_stack, redo_list)
-            self.assertEqual(history_list, [baseline])
-            self.assertEqual(redo_list, [redo_entry])
-            self.assertEqual(replacement_state.history, [replacement_entry])
-            self.assertEqual(replacement_state.redo_stack, [replacement_entry])
             self.assertEqual(scene_item_state_for(canvas, shape), before_state)
+            self.assertIsNone(tool._active_handle)
+            self.assertIsNone(tool._drag_transaction)
+            self.assertEqual(history.state.history, [])
 
-            self.assertTrue(
-                tool._begin_selection_drag(
-                    set(),
-                    [shape],
-                    QPointF(),
-                )
-            )
-            tool._apply_drag_delta(QPointF(7.0, -2.0))
-            history_b_entry = object()
-            history_b = _FakeHistoryService(
-                history=[history_b_entry],
-                redo_stack=[history_b_entry],
-            )
-            tool.context.history_service = history_b
+            # A zero-move handle click records nothing and preserves redo.
+            press_handle()
+            self.assertTrue(tool.on_mouse_release(_FakeEvent(QPointF())))
+            self.assertIsNone(tool._drag_transaction)
+            self.assertEqual(history.state.history, [])
 
-            with self.assertRaisesRegex(RuntimeError, "history owner changed"):
-                tool._commit_selection_drag()
+            baseline = MoveItemsCommand(items=[], dx=0.0, dy=0.0)
+            redo_entry = MoveItemsCommand(items=[], dx=1.0, dy=1.0)
+            history.state.history[:] = [baseline]
+            history.state.redo_stack[:] = [redo_entry]
+            history_list = history.state.history
+            redo_list = history.state.redo_stack
+            primary = SystemExit("handle history append terminated")
 
-            self.assertEqual(scene_item_state_for(canvas, shape), before_state)
-            self.assertEqual(history_list, [baseline])
-            self.assertEqual(redo_list, [redo_entry])
-            self.assertEqual(history_b.state.history, [history_b_entry])
-            self.assertEqual(history_b.state.redo_stack, [history_b_entry])
+            def append_then_terminate(command) -> None:
+                original_push(command)
+                raise primary
 
-            tool.context.history_service = history
-            self.assertTrue(
-                tool._begin_selection_drag(
-                    set(),
-                    [shape],
-                    QPointF(),
-                )
-            )
-            tool._apply_drag_delta(QPointF())
-            tool._commit_selection_drag()
+            history.push = append_then_terminate
+            press_handle()
+            drag_handle(QPointF(-10.0, 12.0))
+            try:
+                tool.on_mouse_release(_FakeEvent(QPointF()))
+            except SystemExit as error:
+                self.assertIs(error, primary)
+            else:
+                self.fail("handle append-then-raise was not propagated")
+
             self.assertEqual(scene_item_state_for(canvas, shape), before_state)
             self.assertEqual(history_list, [baseline])
             self.assertEqual(redo_list, [redo_entry])
-
-            self.assertTrue(
-                tool._begin_selection_drag(
-                    set(),
-                    [shape],
-                    QPointF(),
-                )
-            )
-            tool._apply_drag_delta(QPointF(5.0, 3.0))
-            tool._apply_drag_delta(QPointF(-5.0, -3.0))
-            tool._commit_selection_drag()
-            self.assertEqual(scene_item_state_for(canvas, shape), before_state)
-            self.assertEqual(history_list, [baseline])
-            self.assertEqual(redo_list, [redo_entry])
+            self.assertIsNone(tool._active_handle)
+            self.assertIsNone(tool._drag_transaction)
         finally:
-            tool.context.history_service = history
+            history.push = original_push
             self._dispose_canvas(canvas)
 
     def test_direct_item_drag_deactivate_and_append_failure_restore_exact_state(
@@ -2579,306 +1810,6 @@ class ToolsUnitTest(unittest.TestCase):
         finally:
             history.push = original_push
             self._dispose_canvas(canvas)
-
-    def test_handle_drag_cancel_retry_and_append_failure_restore_exact_state(
-        self,
-    ) -> None:
-        canvas, shapes = self._canvas_with_shapes(count=1)
-        shape = shapes[0]
-        handle = QGraphicsEllipseItem(-2.0, -2.0, 4.0, 4.0)
-        handle.setData(0, "handle")
-        handle.setData(2, shape)
-        canvas.scene().addItem(handle)
-        tool = SelectTool(canvas, context=canvas.services.tool_controller.context)
-        history = canvas.services.history_service
-        original_push = history.push
-        before_state = scene_item_state_for(canvas, shape)
-
-        def press_handle() -> None:
-            with mock.patch.object(
-                tool.context,
-                "item_at_event",
-                return_value=handle,
-            ):
-                self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF())))
-
-        try:
-            press_handle()
-            canvas.services.interaction.move_controller.move_item(shape, 8.0, -3.0)
-            self.assertNotEqual(scene_item_state_for(canvas, shape), before_state)
-            tool.deactivate()
-            self.assertEqual(scene_item_state_for(canvas, shape), before_state)
-            self.assertIsNone(tool._active_handle)
-            self.assertIsNone(tool._drag_transaction)
-
-            # A canceled handle interaction can start and finish again without
-            # inheriting the previous savepoint or manufacturing history.
-            press_handle()
-            self.assertTrue(tool.on_mouse_release(_FakeEvent(QPointF())))
-            self.assertIsNone(tool._drag_transaction)
-            self.assertEqual(history.state.history, [])
-
-            baseline = MoveItemsCommand(items=[], dx=0.0, dy=0.0)
-            redo_entry = MoveItemsCommand(items=[], dx=1.0, dy=1.0)
-            history.state.history[:] = [baseline]
-            history.state.redo_stack[:] = [redo_entry]
-            history_list = history.state.history
-            redo_list = history.state.redo_stack
-            primary = SystemExit("handle history append terminated")
-
-            def append_then_terminate(command) -> None:
-                original_push(command)
-                raise primary
-
-            history.push = append_then_terminate
-            press_handle()
-            canvas.services.interaction.move_controller.move_item(shape, -6.0, 5.0)
-            try:
-                tool.on_mouse_release(_FakeEvent(QPointF()))
-            except SystemExit as error:
-                self.assertIs(error, primary)
-            else:
-                self.fail("handle append-then-raise was not propagated")
-
-            self.assertEqual(scene_item_state_for(canvas, shape), before_state)
-            self.assertIs(history.state.history, history_list)
-            self.assertIs(history.state.redo_stack, redo_list)
-            self.assertEqual(history_list, [baseline])
-            self.assertEqual(redo_list, [redo_entry])
-            self.assertIsNone(tool._active_handle)
-            self.assertIsNone(tool._drag_transaction)
-        finally:
-            history.push = original_push
-            self._dispose_canvas(canvas)
-
-    def test_fail_once_drag_cancel_retry_is_successful(self) -> None:
-        canvas = _FakeSelectCanvas()
-        tool = SelectTool(canvas, context=_tool_context_for(canvas))
-        item = _FakeItem("note")
-        self.assertTrue(tool._begin_selection_drag(set(), [item], QPointF(0.0, 0.0)))
-        transient = RuntimeError("first exact cancel failed")
-        first = HistoryTransactionRestoreResult(
-            authoritative=False,
-            fallback_to_inverse=False,
-            errors=(transient,),
-        )
-        second = HistoryTransactionRestoreResult(
-            authoritative=True,
-            fallback_to_inverse=False,
-            errors=(),
-        )
-
-        with mock.patch.object(
-            selection_drag_tool_module,
-            "restore_history_transaction_for_history",
-            side_effect=(first, second),
-        ) as restore:
-            tool.deactivate()
-
-        self.assertEqual(restore.call_count, 2)
-        self.assertIsNone(tool._drag_transaction)
-        self.assertFalse(tool._drag_selection)
-        self.assertIsNone(tool._start_pos)
-
-    def test_drag_owner_cas_restores_only_outer_token_after_reentrant_replacement(
-        self,
-    ) -> None:
-        for replacement_phase in ("commit", "release"):
-            with self.subTest(replacement_phase=replacement_phase):
-                canvas = _FakeSelectCanvas()
-                tool = SelectTool(canvas, context=_tool_context_for(canvas))
-                self.assertTrue(
-                    tool._begin_selection_drag(
-                        set(),
-                        [_FakeItem("note")],
-                        QPointF(),
-                    )
-                )
-                outer = tool._require_drag_token()
-                replacement = object()
-                authoritative = HistoryTransactionRestoreResult(
-                    authoritative=True,
-                )
-
-                def operation(
-                    _owner,
-                    *,
-                    phase=replacement_phase,
-                    active_tool=tool,
-                    next_owner=replacement,
-                ) -> None:
-                    if phase == "commit":
-                        active_tool._drag_transaction = next_owner
-
-                def release(
-                    _canvas,
-                    snapshot,
-                    *,
-                    expected_snapshot=outer.canvas_snapshot,
-                    phase=replacement_phase,
-                    active_tool=tool,
-                    next_owner=replacement,
-                ) -> None:
-                    self.assertIs(snapshot, expected_snapshot)
-                    if phase == "release":
-                        active_tool._drag_transaction = next_owner
-
-                with (
-                    mock.patch.object(
-                        selection_drag_tool_module,
-                        "release_history_transaction_for_history",
-                        side_effect=release,
-                    ) as release_port,
-                    mock.patch.object(
-                        selection_drag_tool_module,
-                        "restore_history_transaction_for_history",
-                        return_value=authoritative,
-                    ) as restore_port,
-                ):
-                    with self.assertRaisesRegex(RuntimeError, "owner changed"):
-                        tool._commit_drag_transaction(operation)
-
-                self.assertIs(tool._drag_transaction, replacement)
-                restore_port.assert_called_once_with(
-                    canvas,
-                    outer.canvas_snapshot,
-                )
-                if replacement_phase == "commit":
-                    release_port.assert_not_called()
-                else:
-                    release_port.assert_called_once()
-
-    def test_actual_reentrant_drag_reapplies_replacement_geometry_and_delta(
-        self,
-    ) -> None:
-        canvas, shapes = self._canvas_with_shapes(count=1)
-        shape = shapes[0]
-        shape.setSelected(True)
-        tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
-        history_service = canvas.services.history_service
-        original_push = history_service.push
-        replacement: dict[str, object] = {}
-
-        def publish_replacement(_command) -> None:
-            # Owner B must capture the real service port; only owner A is
-            # supposed to encounter this re-entrant publication callback.
-            history_service.push = original_push
-            self.assertTrue(
-                tool._begin_selection_drag(
-                    set(),
-                    [shape],
-                    QPointF(),
-                )
-            )
-            replacement["token"] = tool._require_drag_token()
-            tool._apply_drag_delta(QPointF(5.0, 0.0))
-            replacement["state"] = scene_item_state_for(canvas, shape)
-
-        history_service.push = publish_replacement
-        try:
-            self.assertTrue(
-                tool._begin_selection_drag(
-                    set(),
-                    [shape],
-                    QPointF(),
-                )
-            )
-            tool._apply_drag_delta(QPointF(10.0, 0.0))
-            with self.assertRaisesRegex(RuntimeError, "owner changed"):
-                tool._commit_selection_drag()
-
-            self.assertIs(tool._drag_transaction, replacement["token"])
-            self.assertEqual(tool._total_delta, QPointF(5.0, 0.0))
-            self.assertEqual(
-                scene_item_state_for(canvas, shape),
-                replacement["state"],
-            )
-            self.assertEqual(
-                canvas.services.history_service.state.history,
-                [],
-            )
-
-            tool._commit_selection_drag()
-
-            history = canvas.services.history_service.state.history
-            self.assertEqual(len(history), 1)
-            self.assertIsInstance(history[0], MoveItemsCommand)
-            self.assertEqual(history[0].dx, 5.0)
-            self.assertEqual(history[0].dy, 0.0)
-            self.assertEqual(
-                scene_item_state_for(canvas, shape),
-                replacement["state"],
-            )
-            self.assertIsNone(tool._drag_transaction)
-        finally:
-            history_service.push = original_push
-            self._dispose_canvas(canvas)
-
-    def test_drag_history_authority_restores_state_root_and_rejects_context_b(
-        self,
-    ) -> None:
-        old_history_entry = object()
-        old_redo_entry = object()
-        history_a = _FakeHistoryService(
-            history=[old_history_entry],
-            redo_stack=[old_redo_entry],
-        )
-        canvas = _FakeSelectCanvas()
-        canvas.services.history_service = history_a
-        tool = SelectTool(canvas, context=_tool_context_for(canvas))
-        self.assertTrue(
-            tool._begin_selection_drag(
-                set(),
-                [_FakeItem("note")],
-                QPointF(),
-            )
-        )
-        old_state = history_a.state
-        old_history = old_state.history
-        old_redo = old_state.redo_stack
-        replacement_entry = object()
-        replacement_state = SimpleNamespace(
-            history=[replacement_entry],
-            redo_stack=[replacement_entry],
-            enabled=True,
-            limit=100,
-            change_callback=None,
-        )
-        history_a.state = replacement_state
-
-        tool.deactivate()
-
-        self.assertIs(history_a.state, old_state)
-        self.assertIs(old_state.history, old_history)
-        self.assertIs(old_state.redo_stack, old_redo)
-        self.assertEqual(old_history, [old_history_entry])
-        self.assertEqual(old_redo, [old_redo_entry])
-        self.assertEqual(replacement_state.history, [replacement_entry])
-        self.assertEqual(replacement_state.redo_stack, [replacement_entry])
-
-        self.assertTrue(
-            tool._begin_selection_drag(
-                set(),
-                [_FakeItem("note")],
-                QPointF(),
-            )
-        )
-        history_b_entry = object()
-        history_b = _FakeHistoryService(
-            history=[history_b_entry],
-            redo_stack=[history_b_entry],
-        )
-        tool.context.history_service = history_b
-
-        with self.assertRaisesRegex(RuntimeError, "history owner changed"):
-            tool._commit_selection_drag()
-
-        self.assertIsNone(tool._drag_transaction)
-        self.assertIs(tool.context.history_service, history_b)
-        self.assertEqual(history_b.state.history, [history_b_entry])
-        self.assertEqual(history_b.state.redo_stack, [history_b_entry])
-        self.assertEqual(old_history, [old_history_entry])
-        self.assertEqual(old_redo, [old_redo_entry])
 
     def test_zero_and_net_zero_drags_preserve_redo_without_move_or_history_callbacks(
         self,

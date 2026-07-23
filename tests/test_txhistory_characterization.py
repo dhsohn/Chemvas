@@ -335,6 +335,39 @@ def test_failed_rotation_finalization_after_push_keeps_command_and_document(
     assert _document_state(canvas) == drawn
 
 
+def test_moved_drag_gesture_pushes_one_command_and_round_trips(canvas) -> None:
+    from chemvas.ui.move_tool import MoveTool
+    from PyQt6.QtCore import QPointF
+
+    _record_molecule(canvas)
+    drawn = _document_state(canvas)
+    history_length = len(_history(canvas).state.history)
+
+    assert select_all_scene_items_for(canvas)
+    tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
+    from chemvas.ui.selection_collection_access import selection_snapshot_for
+
+    snapshot = selection_snapshot_for(canvas)
+    assert snapshot is not None
+    assert tool._begin_selection_drag(
+        set(snapshot.selected_atom_ids),
+        list(snapshot.selection_items),
+        QPointF(),
+    )
+    tool._apply_drag_delta(QPointF(15.0, -7.0))
+    tool._commit_selection_drag()
+
+    assert len(_history(canvas).state.history) == history_length + 1
+    moved = _document_state(canvas)
+    assert moved != drawn
+
+    _history(canvas).undo()
+    assert _document_state(canvas) == drawn
+
+    _history(canvas).redo()
+    assert _document_state(canvas) == moved
+
+
 def test_failed_document_open_leaves_no_half_applied_document(canvas, app) -> None:
     _record_molecule(canvas)
     source_state = _document_state(canvas)

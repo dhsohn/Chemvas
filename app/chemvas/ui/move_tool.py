@@ -146,6 +146,7 @@ class MoveTool(SelectionDragMixin, Tool):
         elif self._drag_item is not None:
             token = self._require_drag_token()
             try:
+                self._prepare_drag_mutation(token)
                 move_item_for(self.canvas, self._drag_item, delta.x(), delta.y())
                 self._ensure_drag_owner(
                     token,
