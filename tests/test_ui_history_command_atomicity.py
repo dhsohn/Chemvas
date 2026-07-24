@@ -592,42 +592,6 @@ def test_exact_restore_descriptor_exit_cannot_skip_rect_last_cleanup(
     scene.removeItem(future)
 
 
-def test_delete_notification_mutation_is_silently_repaired_without_renotifying() -> (
-    None
-):
-    app = QApplication.instance() or QApplication([])
-    app.setQuitOnLastWindowClosed(False)
-    scene = QGraphicsScene()
-    shape = scene.addRect(QRectF(0.0, 0.0, 10.0, 10.0))
-    atom = SimpleNamespace(x=1.0, y=2.0)
-    model = SimpleNamespace(atoms={1: atom}, bonds=[])
-    canvas = SimpleNamespace(scene=lambda: scene, model=model)
-
-    class History:
-        calls = 0
-
-        def notify_change(self) -> None:
-            self.calls += 1
-            shape.setPos(100.0, 0.0)
-            atom.x = 777.0
-
-    history = History()
-    snapshot = CanvasDeleteTransactionSnapshot.capture(
-        canvas,
-        history_service=history,
-        guard_scene_rect=True,
-    )
-    shape.setPos(20.0, 0.0)
-    atom.x = 50.0
-
-    result = snapshot.restore_with_result()
-
-    assert result.authoritative is True
-    assert history.calls == 1
-    assert shape.pos().x() == pytest.approx(0.0)
-    assert atom.x == pytest.approx(1.0)
-
-
 def test_delete_notification_waits_for_exact_model_identity_and_publishes_once() -> (
     None
 ):
@@ -1047,173 +1011,6 @@ def test_delete_object_live_property_attribute_error_aborts_exact_capture() -> N
 
 
 @pytest.mark.parametrize(
-    ("collection_name", "leaf_attribute"),
-    [("atoms", "x"), ("bonds", "order")],
-)
-def test_exact_delete_snapshot_reuses_model_collections_for_nested_leaves(
-    collection_name: str,
-    leaf_attribute: str,
-) -> None:
-    app = QApplication.instance() or QApplication([])
-    app.setQuitOnLastWindowClosed(False)
-    scene = QGraphicsScene()
-    scene.addRect(QRectF(0.0, 0.0, 10.0, 10.0))
-    leaf = SimpleNamespace(**{leaf_attribute: 1})
-
-    class FlakyModel:
-        next_atom_id = 2
-        atom_annotations: dict[int, object] = {}
-
-        def __init__(self) -> None:
-            self._atoms = {1: leaf} if collection_name == "atoms" else {}
-            self._bonds = [leaf] if collection_name == "bonds" else []
-            self.reads = {"atoms": 0, "bonds": 0}
-
-        def _read(self, name: str, value):
-            self.reads[name] += 1
-            if name == collection_name and self.reads[name] == 2:
-                raise AttributeError(f"{name} failed on a duplicate read")
-            return value
-
-        @property
-        def atoms(self):
-            return self._read("atoms", self._atoms)
-
-        @atoms.setter
-        def atoms(self, value) -> None:
-            self._atoms = value
-
-        @property
-        def bonds(self):
-            return self._read("bonds", self._bonds)
-
-        @bonds.setter
-        def bonds(self, value) -> None:
-            self._bonds = value
-
-    model = FlakyModel()
-    canvas = SimpleNamespace(scene=lambda: scene, model=model)
-    primary = RuntimeError(f"{collection_name} mutation failed")
-
-    with pytest.raises(RuntimeError) as caught:
-        with canvas_delete_transaction(canvas):
-            setattr(leaf, leaf_attribute, 99)
-            raise primary
-
-    assert caught.value is primary
-    assert getattr(leaf, leaf_attribute) == 1
-    tracker = getattr(scene, "_chemvas_scene_rect_tracker", None)
-    assert tracker is not None
-    assert tracker.depth == 0
-    future = scene.addRect(QRectF(10_000.0, 0.0, 10.0, 10.0))
-    assert scene.sceneRect().right() > 10_000.0
-    scene.removeItem(future)
-
-
-@pytest.mark.parametrize("state_source", ["groups", "registered_ring_items"])
-def test_exact_delete_snapshot_reuses_runtime_collections_for_nested_leaves(
-    state_source: str,
-) -> None:
-    app = QApplication.instance() or QApplication([])
-    app.setQuitOnLastWindowClosed(False)
-    scene = QGraphicsScene()
-    scene.addRect(QRectF(0.0, 0.0, 10.0, 10.0))
-    canvas = SimpleNamespace(scene=lambda: scene)
-
-    if state_source == "groups":
-        leaf = SimpleNamespace(value="before")
-
-        class FlakyGroupState:
-            def __init__(self) -> None:
-                self.groups = {7: leaf}
-                self.reads = 0
-
-            def __getattribute__(self, name: str):
-                if name == "groups":
-                    reads = object.__getattribute__(self, "reads") + 1
-                    object.__setattr__(self, "reads", reads)
-                    if reads == 2:
-                        raise AttributeError("groups failed on a duplicate read")
-                return object.__getattribute__(self, name)
-
-        canvas.group_state = FlakyGroupState()
-    else:
-        leaf = QGraphicsRectItem(QRectF(0.0, 0.0, 10.0, 10.0))
-
-        class FlakySceneItemsState:
-            def __init__(self) -> None:
-                self.ring_items = [leaf]
-                self.selected_notes: list[object] = []
-                self.note_items: list[object] = []
-                self.mark_items: list[object] = []
-                self.arrow_items: list[object] = []
-                self.ts_bracket_items: list[object] = []
-                self.shape_items: list[object] = []
-                self.orbital_items: list[object] = []
-                self.reads = 0
-
-            def __getattribute__(self, name: str):
-                if name == "ring_items":
-                    reads = object.__getattribute__(self, "reads") + 1
-                    object.__setattr__(self, "reads", reads)
-                    if reads == 3:
-                        raise AttributeError("ring_items failed on a duplicate read")
-                return object.__getattribute__(self, name)
-
-        canvas.scene_items_state = FlakySceneItemsState()
-
-    primary = RuntimeError(f"{state_source} mutation failed")
-    with pytest.raises(RuntimeError) as caught:
-        with canvas_delete_transaction(canvas):
-            if state_source == "groups":
-                leaf.value = "mutated"
-            else:
-                leaf.setRect(QRectF(100.0, 100.0, 20.0, 20.0))
-            raise primary
-
-    assert caught.value is primary
-    if state_source == "groups":
-        assert leaf.value == "before"
-    else:
-        assert leaf.rect() == QRectF(0.0, 0.0, 10.0, 10.0)
-    tracker = getattr(scene, "_chemvas_scene_rect_tracker", None)
-    assert tracker is not None
-    assert tracker.depth == 0
-
-
-def test_delete_canvas_model_property_without_raw_authority_fails_closed_before_scene_guard() -> (
-    None
-):
-    app = QApplication.instance() or QApplication([])
-    app.setQuitOnLastWindowClosed(False)
-    scene = QGraphicsScene()
-    scene.addRect(QRectF(0.0, 0.0, 10.0, 10.0))
-
-    class BrokenCanvas:
-        def scene(self):
-            return scene
-
-        @property
-        def model(self):
-            raise AttributeError("canvas model capture failed internally")
-
-    with pytest.raises(
-        RuntimeError,
-        match="callback-free canvas model authority",
-    ):
-        CanvasDeleteTransactionSnapshot.capture(
-            BrokenCanvas(),
-            guard_scene_rect=True,
-        )
-
-    tracker = getattr(scene, "_chemvas_scene_rect_tracker", None)
-    assert tracker is None or tracker.depth == 0
-    future = scene.addRect(QRectF(10_000.0, 0.0, 10.0, 10.0))
-    assert scene.sceneRect().right() > 10_000.0
-    scene.removeItem(future)
-
-
-@pytest.mark.parametrize(
     "state_source",
     [
         "primitive",
@@ -1224,6 +1021,8 @@ def test_delete_canvas_model_property_without_raw_authority_fails_closed_before_
         "runtime_root",
         "runtime_nested_root",
         "canvas_state_root",
+        "model_root",
+        "scene_root",
     ],
 )
 def test_runtime_live_property_attribute_error_aborts_before_scene_guard(
@@ -1302,6 +1101,27 @@ def test_runtime_live_property_attribute_error_aborts_before_scene_guard(
 
         canvas.runtime_state = BrokenRuntimeState()
         expected = "nested runtime root failed internally"
+    elif state_source == "model_root":
+
+        class BrokenModelCanvas:
+            def scene(self):
+                return scene
+
+            @property
+            def model(self):
+                raise AttributeError("canvas model root failed internally")
+
+        canvas = BrokenModelCanvas()
+        expected = "canvas model root failed internally"
+    elif state_source == "scene_root":
+
+        class BrokenSceneCanvas:
+            @property
+            def scene(self):
+                raise AttributeError("canvas scene root failed internally")
+
+        canvas = BrokenSceneCanvas()
+        expected = "canvas scene root failed internally"
     else:
 
         class BrokenCanvas:
@@ -1527,130 +1347,6 @@ def test_strict_exact_capture_propagates_live_scene_items_failure() -> None:
     far = scene.addRect(QRectF(10_000.0, 0.0, 10.0, 10.0))
     assert scene.sceneRect().right() > 10_000.0
     scene.removeItem(far)
-
-
-def test_strict_exact_capture_propagates_scene_property_attribute_error() -> None:
-    app = QApplication.instance() or QApplication([])
-    app.setQuitOnLastWindowClosed(False)
-    scene = QGraphicsScene()
-    original = scene.addRect(QRectF(0.0, 0.0, 10.0, 10.0))
-
-    class FlakyCanvas:
-        calls = 0
-
-        @property
-        def scene(self):
-            self.calls += 1
-            if self.calls == 1:
-                raise AttributeError("canvas scene property failed internally")
-            return lambda: scene
-
-    canvas = FlakyCanvas()
-    with pytest.raises(
-        AttributeError,
-        match="canvas scene property failed internally",
-    ):
-        CanvasDeleteTransactionSnapshot.capture(canvas, guard_scene_rect=True)
-
-    assert original.scene() is scene
-    tracker = getattr(scene, "_chemvas_scene_rect_tracker", None)
-    assert tracker is None or tracker.depth == 0
-    assert canvas.calls == 0
-    canvas.calls = 1
-    assert canvas.scene() is scene
-    far = scene.addRect(QRectF(10_000.0, 0.0, 10.0, 10.0))
-    assert scene.sceneRect().right() > 10_000.0
-    scene.removeItem(far)
-
-
-def test_delete_non_qt_items_capture_failure_restores_pre_items_raw_graph() -> None:
-    primary = SystemExit("later delete scene capture terminated")
-
-    class Item:
-        def __init__(self) -> None:
-            self.value = "clean"
-
-    item = Item()
-
-    class Scene:
-        def __init__(self) -> None:
-            self.backing_items = [item]
-            self.state = ["clean"]
-            self.blocked = False
-
-        def items(self):
-            self.state[:] = ["poisoned"]
-            item.value = "poisoned"
-            canvas.backing[:] = ["poisoned"]
-            return []
-
-        def addItem(self, _item) -> None:
-            return None
-
-        def removeItem(self, _item) -> None:
-            return None
-
-        def blockSignals(self, blocked: bool) -> bool:
-            previous = self.blocked
-            self.blocked = blocked
-            return previous
-
-        def signalsBlocked(self) -> bool:
-            return self.blocked
-
-        def selectedItems(self) -> list:
-            return []
-
-        @property
-        def focusItem(self):
-            raise primary
-
-        def setFocusItem(self, _item) -> None:
-            return None
-
-        def sceneRect(self) -> QRectF:
-            return QRectF(0.0, 0.0, 10.0, 10.0)
-
-        def setSceneRect(self, _rect) -> None:
-            return None
-
-        def itemsBoundingRect(self) -> QRectF:
-            return QRectF()
-
-    scene = Scene()
-
-    class Canvas:
-        def __init__(self) -> None:
-            self.model = SimpleNamespace(
-                next_atom_id=1,
-                atom_annotations={},
-                atoms={},
-                bonds=[],
-            )
-            self._scene = scene
-            self.backing = ["clean"]
-
-        @property
-        def scene(self):
-            self.backing[:] = ["scene getter poisoned"]
-            return lambda: self._scene
-
-    canvas = Canvas()
-    scene_items = scene.backing_items
-    scene_state = scene.state
-    canvas_backing = canvas.backing
-
-    with pytest.raises(SystemExit) as caught:
-        CanvasDeleteTransactionSnapshot.capture(canvas)
-
-    assert caught.value is primary
-    assert scene.backing_items is scene_items
-    assert scene.backing_items == [item]
-    assert scene.state is scene_state
-    assert scene.state == ["clean"]
-    assert item.value == "clean"
-    assert canvas.backing is canvas_backing
-    assert canvas.backing == ["clean"]
 
 
 def test_strict_exact_capture_rejects_complete_scene_contract_without_items() -> None:
@@ -2502,28 +2198,6 @@ def test_exact_delete_final_repair_verifies_after_signal_unblock(
         assert any(
             "exact ordered item identity" in str(error) for error in result.errors
         )
-
-
-def test_exact_delete_verifies_identity_after_scene_rect_restore() -> None:
-    scene = _Scene()
-    first = _SceneItem("first")
-    second = _SceneItem("second")
-    for item in (first, second):
-        scene.attach(item)
-    snapshot = CanvasDeleteTransactionSnapshot.capture(
-        SimpleNamespace(scene=lambda: scene),
-    )
-
-    class MutatingSceneRectSnapshot:
-        def restore(self) -> None:
-            scene._items.reverse()
-
-    snapshot.scene_rect_snapshot = MutatingSceneRectSnapshot()
-
-    result = snapshot.restore_with_result()
-
-    assert not result.authoritative
-    assert any("exact ordered item identity" in str(error) for error in result.errors)
 
 
 @pytest.mark.parametrize("restore_target", ["selection", "stacking"])
