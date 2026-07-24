@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import inspect
-from collections import Counter
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from types import MemberDescriptorType
 from typing import Any, cast
 
-from PyQt6.QtCore import QObject, QRectF
+from PyQt6.QtCore import QObject
 from PyQt6.QtWidgets import QGraphicsScene, QGraphicsView
 
 from chemvas.domain.transactions import RestoreOutcome
@@ -32,8 +31,6 @@ from chemvas.ui.transactions.object_graph_snapshot import (
 )
 from chemvas.ui.transactions.scene_rect import (
     SceneRectSnapshot,
-    _read_live_rect_with_internal_signals_blocked,
-    _rect_verification_probe,
     scene_rect_is_automatic,
 )
 
@@ -791,10 +788,7 @@ class CanvasDeleteTransactionSnapshot:
         if include_rect and rect_snapshot is not None:
             try:
                 if not _exact_value_matches(
-                    _read_live_rect_with_internal_signals_blocked(
-                        rect_snapshot.tracker,
-                        rect_snapshot.scene_rect_getter,
-                    ),
+                    rect_snapshot.live_rect(),
                     rect_snapshot.baseline_rect,
                 ):
                     raise RuntimeError("delete rollback scene rect was re-mutated")
@@ -866,123 +860,6 @@ class CanvasDeleteTransactionSnapshot:
             errors,
         )
 
-    def _stabilize_guarded_automatic_rect(
-        self,
-        rect_snapshot: SceneRectSnapshot,
-        errors: list[BaseException],
-    ) -> None:
-        # A descriptor may already be persistently unreadable before any rect
-        # emission.  That still makes the overall rollback non-authoritative,
-        # but it must not be mistaken for evidence that the rect callback
-        # re-mutated otherwise restored state: the temporary explicit guard
-        # can and should still be released exactly.
-        baseline_verify_errors = self._verify_exact_authorities(
-            include_rect=False,
-        )
-        errors.extend(baseline_verify_errors)
-        baseline_error_types = Counter(type(error) for error in baseline_verify_errors)
-        rect_preflight_errors: list[BaseException] = []
-
-        tracker = rect_snapshot.tracker
-        scene = tracker.scene
-        baseline = QRectF(rect_snapshot.baseline_rect)
-        probe = _rect_verification_probe(baseline)
-        previous_internal_change = tracker.internal_change
-        previous_scene_signals = (
-            QObject.blockSignals(scene, True) if isinstance(scene, QObject) else None
-        )
-        tracker.internal_change = True
-        try:
-            try:
-                rect_snapshot.set_scene_rect_setter(QRectF(probe))
-                if QRectF(cast(Any, rect_snapshot.scene_rect_getter())) != probe:
-                    raise RuntimeError(
-                        "delete rollback rect preflight probe was a no-op"
-                    )
-            except BaseException as exc:
-                errors.append(exc)
-                rect_preflight_errors.append(exc)
-
-            # These rect writes verify the guarded Qt authority only. External
-            # observers may mutate model/item state, so no transaction-internal
-            # probe is ever published by a real QObject scene.
-            self._restore_raw_authorities(errors)
-            try:
-                rect_snapshot.set_scene_rect_setter(QRectF(baseline))
-                if QRectF(cast(Any, rect_snapshot.scene_rect_getter())) != baseline:
-                    raise RuntimeError(
-                        "delete rollback rect baseline preflight was a no-op"
-                    )
-            except BaseException as exc:
-                errors.append(exc)
-                rect_preflight_errors.append(exc)
-        finally:
-            if previous_scene_signals is not None:
-                QObject.blockSignals(scene, previous_scene_signals)
-            tracker.internal_change = previous_internal_change
-
-        post_verify_errors = self._verify_exact_authorities(include_rect=False)
-        errors.extend(post_verify_errors)
-        post_error_types = Counter(type(error) for error in post_verify_errors)
-        callback_instability = bool(rect_preflight_errors) or any(
-            count > baseline_error_types[error_type]
-            for error_type, count in post_error_types.items()
-        )
-        if callback_instability:
-            # A persistent callback must never see the automatic transition:
-            # leave the scene guarded, but keep every non-rect authority exact.
-            self._restore_raw_authorities(errors)
-            return
-
-        if baseline_verify_errors:
-            # Verification could not observe one or more authorities around
-            # the callback emission. Reapply their raw savepoints once more
-            # before the signal-blocked mode transition, even though the
-            # structured result will remain conservatively non-authoritative.
-            self._restore_raw_authorities(errors)
-
-        previous_blocked = False
-        finalization_failed = False
-        previous_internal_change = tracker.internal_change
-        tracker.internal_change = True
-        try:
-            if isinstance(scene, QObject):
-                previous_blocked = QObject.blockSignals(scene, True)
-            try:
-                rect_snapshot.set_scene_rect_setter(QRectF())
-                if QRectF(cast(Any, rect_snapshot.scene_rect_getter())) != baseline:
-                    raise RuntimeError(
-                        "delete rollback automatic rect did not match its baseline"
-                    )
-                scene._chemvas_scene_rect_automatic = True
-            except BaseException as exc:
-                errors.append(exc)
-                finalization_failed = True
-                # A mutate-then-raise clear may already have switched Qt to
-                # inherited mode. Re-establish the explicit baseline while
-                # signals remain blocked so the still-active guard is coherent
-                # for the next full pass (or for a persistent failure result).
-                try:
-                    rect_snapshot.set_scene_rect_setter(QRectF(baseline))
-                    scene._chemvas_scene_rect_automatic = False
-                except BaseException as recovery_error:
-                    errors.append(recovery_error)
-        finally:
-            if isinstance(scene, QObject):
-                QObject.blockSignals(scene, previous_blocked)
-            tracker.internal_change = previous_internal_change
-        if finalization_failed:
-            self._restore_raw_authorities(errors)
-            return
-
-        tracker.known_rect = QRectF(baseline)
-        tracker.baseline_rect = QRectF(baseline)
-        tracker.pending_rect = QRectF(baseline)
-        tracker.pending_expansions.clear()
-        tracker.pending_journal.clear()
-        tracker.depth = 0
-        rect_snapshot.active = False
-
     def _silent_authority_pass(
         self,
     ) -> tuple[list[BaseException], list[BaseException]]:
@@ -995,41 +872,13 @@ class CanvasDeleteTransactionSnapshot:
             prior_recovery_count = (
                 len(recovery_errors) if isinstance(recovery_errors, list) else 0
             )
-            if (
-                rect_snapshot.active
-                and rect_snapshot.automatic
-                and rect_snapshot.guarded
-            ):
-                try:
-                    self._stabilize_guarded_automatic_rect(
-                        rect_snapshot,
-                        errors,
-                    )
-                except BaseException as exc:
-                    errors.append(exc)
-                    self._restore_raw_authorities(errors)
-            else:
-                try:
-                    if rect_snapshot.active:
-                        rect_snapshot.restore()
-                    elif rect_snapshot.tracker.depth == 0:
-                        current_rect = _read_live_rect_with_internal_signals_blocked(
-                            rect_snapshot.tracker,
-                            rect_snapshot.scene_rect_getter,
-                        )
-                        current_automatic = scene_rect_is_automatic(
-                            rect_snapshot.tracker.scene
-                        )
-                        if (
-                            current_rect != rect_snapshot.baseline_rect
-                            or current_automatic is not rect_snapshot.automatic
-                        ):
-                            if rect_snapshot.automatic:
-                                rect_snapshot._restore_automatic_scene_rect()
-                            else:
-                                rect_snapshot._restore_explicit_scene_rect()
-                except BaseException as exc:
-                    errors.append(exc)
+            try:
+                if rect_snapshot.active:
+                    rect_snapshot.restore()
+                else:
+                    rect_snapshot.reassert()
+            except BaseException as exc:
+                errors.append(exc)
             if isinstance(recovery_errors, list):
                 secondary_errors.extend(recovery_errors[prior_recovery_count:])
         errors.extend(self._verify_exact_authorities())

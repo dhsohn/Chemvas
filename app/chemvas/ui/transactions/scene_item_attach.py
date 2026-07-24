@@ -1,46 +1,39 @@
+"""Attach-time ports and the registration savepoint for scene items.
+
+Attaching an item touches several owners in sequence: the kind's collection
+list, the mark registry, item flags, the scene itself, and the automatic
+scene-rect guard. A mid-sequence failure must not leave a half-registered
+item, so the snapshot records the pre-attach registration state and the
+rollback removes the item and re-pins every owner. The scene-rect guard
+always opens last (after every other fallible read) and is handed the
+item's bounding rect on release so sequential attaches stay linear.
+"""
+
 from __future__ import annotations
 
 import inspect
 from collections.abc import Callable
-from dataclasses import dataclass
-from functools import partial
+from dataclasses import dataclass, field
 from typing import Any, cast
 
-from PyQt6.QtCore import QObject
-from PyQt6.QtWidgets import (
-    QAbstractGraphicsShapeItem,
-    QGraphicsEllipseItem,
-    QGraphicsItem,
-    QGraphicsLineItem,
-    QGraphicsPathItem,
-    QGraphicsPixmapItem,
-    QGraphicsPolygonItem,
-    QGraphicsRectItem,
-    QGraphicsScene,
-    QGraphicsSimpleTextItem,
-    QGraphicsTextItem,
-)
+from PyQt6.QtCore import QRectF
+from PyQt6.QtWidgets import QGraphicsItem, QGraphicsTextItem
 
-from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
-from chemvas.ui.canvas_scene_items_state import (
-    CanvasSceneItemsState,
-    scene_items_state_for,
-)
-from chemvas.ui.history_commands import (
-    _restore_scene_runtime_snapshot,
-    _run_rollback_step,
-    _scene_runtime_snapshot,
-    _SceneRuntimeSnapshot,
-    _verify_scene_runtime_identity,
-)
-from chemvas.ui.scene_item_access import (
-    item_is_unavailable_for_scene_operation,
-    remove_attached_item_from_scene,
-)
-from chemvas.ui.scene_item_state import ARROW_KINDS
-from chemvas.ui.transactions.scene_rect import (
-    SceneRectSnapshot,
-    scene_rect_is_automatic,
+from chemvas.ui.canvas_mark_registry import mark_registry_for
+from chemvas.ui.canvas_scene_items_state import scene_items_state_for
+from chemvas.ui.scene_item_access import item_is_unavailable_for_scene_operation
+from chemvas.ui.transactions.scene_rect import SceneRectSnapshot
+
+ARROW_KINDS = frozenset(
+    {
+        "arrow",
+        "equilibrium",
+        "resonance",
+        "curved_single",
+        "curved_double",
+        "inhibit",
+        "dotted",
+    }
 )
 
 _KIND_COLLECTION = {
@@ -52,796 +45,175 @@ _KIND_COLLECTION = {
     "orbital": "orbital_items",
     **{kind: "arrow_items" for kind in ARROW_KINDS},
 }
-_UNAVAILABLE = object()
-_QT_BASE_ITEM_CHANGE = inspect.getattr_static(QGraphicsItem, "itemChange")
 
 
-def _qt_base_port(target: object, owner: type, name: str) -> object:
-    if not isinstance(target, owner):
-        return _UNAVAILABLE
-    port = getattr(owner, name, None)
-    if not callable(port):
-        return _UNAVAILABLE
-    return partial(port, target)
-
-
-def _item_has_custom_change_callback(item: object) -> bool:
-    implementation = inspect.getattr_static(
-        type(item),
-        "itemChange",
-        _UNAVAILABLE,
-    )
-    if isinstance(item, QGraphicsItem):
-        return implementation is not _QT_BASE_ITEM_CHANGE
-    return implementation is not _UNAVAILABLE
-
-
-def _capture_optional_attribute(target: object, name: str) -> object:
-    try:
-        return getattr(target, name)
-    except AttributeError:
-        if inspect.getattr_static(target, name, _UNAVAILABLE) is not _UNAVAILABLE:
-            raise
-        return _UNAVAILABLE
-
-
-@dataclass(slots=True)
-class _AttachRawContainer:
-    target: object
-    kind: str
-    contents: tuple[object, ...]
-
-    def restore(self) -> None:
-        if self.kind == "dict":
-            dictionary = cast(dict, self.target)
-            dict.clear(dictionary)
-            dict.update(dictionary, cast(tuple, self.contents))
-        elif self.kind == "list":
-            values = cast(list, self.target)
-            list.clear(values)
-            list.extend(values, self.contents)
-        else:
-            members = cast(set, self.target)
-            set.clear(members)
-            set.update(members, self.contents)
-
-    def verify(self) -> None:
-        if self.kind == "dict":
-            actual = tuple(cast(dict, self.target).items())
-            expected = cast(tuple[tuple[object, object], ...], self.contents)
-            exact = len(actual) == len(expected) and all(
-                actual_key is expected_key and actual_value is expected_value
-                for (actual_key, actual_value), (
-                    expected_key,
-                    expected_value,
-                ) in zip(actual, expected, strict=True)
-            )
-        elif self.kind == "list":
-            actual = tuple(cast(list, self.target))
-            exact = len(actual) == len(self.contents) and all(
-                actual_value is expected_value
-                for actual_value, expected_value in zip(
-                    actual,
-                    self.contents,
-                    strict=True,
-                )
-            )
-        else:
-            exact = {id(value) for value in cast(set, self.target)} == {
-                id(value) for value in self.contents
-            }
-        if not exact:
-            raise RuntimeError("attach capture changed a raw container")
-
-
-@dataclass(slots=True)
-class _AttachRawNamespace:
-    target: object
-    namespace: dict[str, object] | None
-    items: tuple[tuple[str, object], ...]
-
-    def restore(self) -> None:
-        if self.namespace is None:
-            return
-        dict.clear(self.namespace)
-        dict.update(self.namespace, self.items)
-
-    def verify(self) -> None:
-        if self.namespace is None:
-            return
-        actual = tuple(self.namespace.items())
-        if len(actual) != len(self.items) or any(
-            actual_key != expected_key or actual_value is not expected_value
-            for (actual_key, actual_value), (
-                expected_key,
-                expected_value,
-            ) in zip(actual, self.items, strict=True)
-        ):
-            raise RuntimeError("attach capture changed a raw namespace")
-
-
-@dataclass(slots=True)
-class _QtAttachValue:
-    name: str
-    getter: Callable[[], object]
-    setter: Callable[[object], object]
-    value: object
-
-    def restore(self) -> None:
-        self.setter(self.value)
-
-    def verify(self) -> None:
-        actual = self.getter()
-        try:
-            exact = actual == self.value
-        except BaseException:
-            exact = actual is self.value
-        if not exact:
-            raise RuntimeError(f"attach capture changed Qt primitive {self.name}")
-
-
-@dataclass(slots=True)
-class _AttachCaptureAuthority:
-    item: object
-    target_scene: object | None
-    raw_namespaces: tuple[_AttachRawNamespace, ...]
-    raw_containers: tuple[_AttachRawContainer, ...]
-    qt_values: tuple[_QtAttachValue, ...]
-    qt_scene: QGraphicsScene | None
-    qt_parent: QGraphicsItem | None
-    qt_focus: tuple[tuple[QGraphicsScene, QGraphicsItem | None], ...]
-    qt_signals: tuple[tuple[QGraphicsScene, bool], ...]
-
-    @classmethod
-    def capture(
-        cls,
-        scene: object | None,
-        item: object,
-    ) -> _AttachCaptureAuthority:
-        containers: list[_AttachRawContainer] = []
-        container_ids: set[int] = set()
-
-        def capture_container(value: object) -> None:
-            if type(value) is dict:
-                if id(value) in container_ids:
-                    return
-                container_ids.add(id(value))
-                contents = tuple(cast(dict, value).items())
-                containers.append(_AttachRawContainer(value, "dict", contents))
-                for key, child in contents:
-                    capture_container(key)
-                    capture_container(child)
-            elif type(value) in {list, set}:
-                if id(value) in container_ids:
-                    return
-                container_ids.add(id(value))
-                member_contents: tuple[object, ...] = tuple(cast(Any, value))
-                containers.append(
-                    _AttachRawContainer(
-                        value,
-                        "list" if type(value) is list else "set",
-                        member_contents,
-                    )
-                )
-                for child in member_contents:
-                    capture_container(child)
-            elif type(value) is tuple:
-                for child in cast(tuple, value):
-                    capture_container(child)
-
-        namespaces: list[_AttachRawNamespace] = []
-        for target in (item, scene):
-            if target is None:
-                continue
-            try:
-                namespace_value = object.__getattribute__(target, "__dict__")
-            except (AttributeError, TypeError):
-                namespace = None
-                items: tuple[tuple[str, object], ...] = ()
-            else:
-                namespace = (
-                    namespace_value if isinstance(namespace_value, dict) else None
-                )
-                items = (
-                    tuple(
-                        (key, dict.__getitem__(namespace, key))
-                        for key in tuple(dict.__iter__(namespace))
-                    )
-                    if namespace is not None
-                    else ()
-                )
-                for _key, value in items:
-                    capture_container(value)
-            namespaces.append(_AttachRawNamespace(target, namespace, items))
-
-        qt_values: list[_QtAttachValue] = []
-
-        def capture_qt_value(owner: type, getter_name: str, setter_name: str) -> None:
-            if not isinstance(item, owner):
-                return
-            getter = getattr(owner, getter_name)
-            setter = getattr(owner, setter_name)
-            bound_getter = partial(getter, item)
-            qt_values.append(
-                _QtAttachValue(
-                    getter_name,
-                    bound_getter,
-                    partial(setter, item),
-                    bound_getter(),
-                )
-            )
-
-        if isinstance(item, QGraphicsItem):
-            for getter_name, setter_name in (
-                ("flags", "setFlags"),
-                ("pos", "setPos"),
-                ("transform", "setTransform"),
-                ("transformOriginPoint", "setTransformOriginPoint"),
-                ("rotation", "setRotation"),
-                ("scale", "setScale"),
-                ("opacity", "setOpacity"),
-                ("zValue", "setZValue"),
-                ("isVisible", "setVisible"),
-                ("isEnabled", "setEnabled"),
-                ("isSelected", "setSelected"),
-            ):
-                capture_qt_value(QGraphicsItem, getter_name, setter_name)
-            for role in (0, 1, 2, 6, 9, 20, 21, 22):
-                getter = partial(QGraphicsItem.data, item, role)
-                qt_values.append(
-                    _QtAttachValue(
-                        f"data({role})",
-                        getter,
-                        partial(QGraphicsItem.setData, item, role),
-                        getter(),
-                    )
-                )
-        for owner, properties in (
-            (
-                QAbstractGraphicsShapeItem,
-                (("pen", "setPen"), ("brush", "setBrush")),
-            ),
-            (QGraphicsRectItem, (("rect", "setRect"),)),
-            (QGraphicsEllipseItem, (("rect", "setRect"),)),
-            (QGraphicsLineItem, (("line", "setLine"),)),
-            (QGraphicsPathItem, (("path", "setPath"),)),
-            (QGraphicsPolygonItem, (("polygon", "setPolygon"),)),
-            (
-                QGraphicsPixmapItem,
-                (
-                    ("pixmap", "setPixmap"),
-                    ("offset", "setOffset"),
-                    ("transformationMode", "setTransformationMode"),
-                    ("shapeMode", "setShapeMode"),
-                ),
-            ),
-            (
-                QGraphicsTextItem,
-                (
-                    ("toHtml", "setHtml"),
-                    ("font", "setFont"),
-                    ("defaultTextColor", "setDefaultTextColor"),
-                    ("textWidth", "setTextWidth"),
-                    ("textInteractionFlags", "setTextInteractionFlags"),
-                ),
-            ),
-            (
-                QGraphicsSimpleTextItem,
-                (("text", "setText"), ("font", "setFont")),
-            ),
-        ):
-            for getter_name, setter_name in properties:
-                capture_qt_value(owner, getter_name, setter_name)
-
-        qt_scene = (
-            QGraphicsItem.scene(item) if isinstance(item, QGraphicsItem) else None
-        )
-        qt_parent = (
-            QGraphicsItem.parentItem(item) if isinstance(item, QGraphicsItem) else None
-        )
-        focus_scenes: list[QGraphicsScene] = []
-        for candidate in (qt_scene, scene):
-            if isinstance(candidate, QGraphicsScene) and all(
-                candidate is not existing for existing in focus_scenes
-            ):
-                focus_scenes.append(candidate)
-        return cls(
-            item=item,
-            target_scene=scene,
-            raw_namespaces=tuple(namespaces),
-            raw_containers=tuple(containers),
-            qt_values=tuple(qt_values),
-            qt_scene=qt_scene,
-            qt_parent=qt_parent,
-            qt_focus=tuple(
-                (candidate, QGraphicsScene.focusItem(candidate))
-                for candidate in focus_scenes
-            ),
-            qt_signals=tuple(
-                (candidate, bool(QObject.signalsBlocked(candidate)))
-                for candidate in focus_scenes
-            ),
-        )
-
-    def _restore_once(self) -> None:
-        for raw_namespace in self.raw_namespaces:
-            raw_namespace.restore()
-        for raw_container in self.raw_containers:
-            raw_container.restore()
-        if isinstance(self.item, QGraphicsItem):
-            current_scene = QGraphicsItem.scene(self.item)
-            if current_scene is not self.qt_scene:
-                if isinstance(current_scene, QGraphicsScene):
-                    QGraphicsScene.removeItem(current_scene, self.item)
-                if self.qt_parent is not None:
-                    QGraphicsItem.setParentItem(self.item, self.qt_parent)
-                elif isinstance(self.qt_scene, QGraphicsScene):
-                    QGraphicsScene.addItem(self.qt_scene, self.item)
-            elif QGraphicsItem.parentItem(self.item) is not self.qt_parent:
-                QGraphicsItem.setParentItem(self.item, self.qt_parent)
-        for value in self.qt_values:
-            value.restore()
-        for focus_scene, focus in self.qt_focus:
-            QGraphicsScene.setFocusItem(focus_scene, focus)
-        for raw_namespace in self.raw_namespaces:
-            raw_namespace.restore()
-        for raw_container in self.raw_containers:
-            raw_container.restore()
-
-    def _verify(self) -> None:
-        for raw_namespace in self.raw_namespaces:
-            raw_namespace.verify()
-        for raw_container in self.raw_containers:
-            raw_container.verify()
-        if isinstance(self.item, QGraphicsItem):
-            if QGraphicsItem.scene(self.item) is not self.qt_scene:
-                raise RuntimeError("attach capture changed item scene membership")
-            if QGraphicsItem.parentItem(self.item) is not self.qt_parent:
-                raise RuntimeError("attach capture changed item parent")
-        for value in self.qt_values:
-            value.verify()
-        for focus_scene, focus in self.qt_focus:
-            if QGraphicsScene.focusItem(focus_scene) is not focus:
-                raise RuntimeError("attach capture changed scene focus")
-        for signal_scene, blocked in self.qt_signals:
-            if bool(QObject.signalsBlocked(signal_scene)) is not blocked:
-                raise RuntimeError("attach capture changed scene signal state")
-
-    def restore(self, original_error: BaseException) -> None:
-        recorded: list[BaseException] = []
-        for _attempt in range(2):
-            errors: list[BaseException] = []
-            try:
-                for signal_scene, _blocked in self.qt_signals:
-                    QObject.blockSignals(signal_scene, True)
-                self._restore_once()
-            except BaseException as error:
-                errors.append(error)
-            finally:
-                for signal_scene, blocked in self.qt_signals:
-                    try:
-                        QObject.blockSignals(signal_scene, blocked)
-                    except BaseException as error:
-                        errors.append(error)
-            try:
-                self._verify()
-            except BaseException as error:
-                errors.append(error)
-            if not errors:
-                return
-            recorded.extend(errors)
-        for recorded_error in recorded:
-            try:
-                add_note = getattr(original_error, "add_note", None)
-                if callable(add_note):
-                    add_note(
-                        "Attach port capture recovery also failed with "
-                        f"{type(recorded_error).__name__}: {recorded_error}"
-                    )
-            except BaseException:
-                continue
-
-
-def _requires_full_graph_snapshot(
+def _add_attach_rollback_note(
+    original_error: BaseException | None,
+    rollback_error: BaseException,
     *,
-    item: object,
-    attach_ports: SceneItemAttachPorts,
-    collection_owner: object,
-    collection_name: str | None,
-    collection: list | None,
-    mark_registry: object | None,
-    mark_mapping: dict | None,
-    mark_entry_existed: bool,
-    mark_list: list | None,
-) -> bool:
-    if (
-        attach_ports.requires_authoritative_scene_bounds
-        or attach_ports.requires_full_graph_snapshot
-    ):
-        return True
-    if _item_has_custom_change_callback(item):
-        return True
-    if collection_name is not None and (
-        type(collection_owner) is not CanvasSceneItemsState
-        or type(collection) is not list
-    ):
-        return True
-    if mark_registry is None:
-        return False
-    return (
-        type(mark_registry) is not CanvasMarkRegistry
-        or type(mark_mapping) is not dict
-        or (mark_entry_existed and type(mark_list) is not list)
-    )
+    phase: str,
+) -> None:
+    if original_error is None:
+        raise rollback_error
+    try:
+        original_error.add_note(
+            f"Scene-item attach recovery also failed while {phase}: "
+            f"{type(rollback_error).__name__}: {rollback_error}"
+        )
+    except BaseException:
+        return
 
 
-class _AttachRuntimeSceneCaptureProxy:
-    """Feed already-bound scene roots into the shared runtime capturer."""
-
-    __slots__ = ("_focus_capture_pending", "_ports", "_scene")
-
-    def __init__(self, scene: object, ports: SceneItemAttachPorts) -> None:
-        self._scene = scene
-        self._ports = ports
-        self._focus_capture_pending = True
-
-    def _bound_focus_item(self) -> object:
-        if self._focus_capture_pending:
-            self._focus_capture_pending = False
-            return self._ports.focus_item
-        getter = self._ports.focus_item_getter
-        if getter is None:
-            return None
-        return getter()
-
-    def __getattr__(self, name: str) -> object:
-        if name == "items" and self._ports.scene_items_getter is not None:
-            return self._ports.scene_items_getter
-        if name == "focusItem" and self._ports.focus_item_getter is not None:
-            return self._bound_focus_item
-        if name == "setFocusItem" and self._ports.focus_item_setter is not None:
-            return self._ports.focus_item_setter
-        return getattr(self._scene, name)
-
-
-def _capture_full_scene_runtime(
-    canvas: object,
-    scene: object,
-    attach_ports: SceneItemAttachPorts,
-) -> _SceneRuntimeSnapshot:
-    snapshot = _scene_runtime_snapshot(
-        canvas,
-        strict=True,
-        scene_override=_AttachRuntimeSceneCaptureProxy(scene, attach_ports),
-    )
-    snapshot.scene = scene
-    return snapshot
+def _optional_callable(target, name: str):
+    candidate = getattr(target, name, None)
+    return candidate if callable(candidate) else None
 
 
 @dataclass(frozen=True, slots=True)
 class SceneItemAttachPorts:
-    scene: object | None
-    item_scene_getter: Callable[[], object] | None
-    initial_item_scene: object | None
+    """Bound scene/item ports captured once per attach operation."""
+
+    scene: Any
+    item: Any
     item_scene_available: bool
-    item_data_getter: Callable[[int], object] | None
+    initial_item_scene: Any
     item_kind: object
-    item_metadata: object
-    scene_add_item: Callable[[object], object] | None
-    scene_remove_item: Callable[[object], object] | None
-    scene_items_getter: Callable[[], object] | None
-    scene_items_bounding_rect_getter: Callable[[], object] | None
-    scene_rect_getter: Callable[[], object] | None
-    scene_rect_setter: Callable[[object], object] | None
-    requires_authoritative_scene_bounds: bool
-    requires_full_graph_snapshot: bool
     item_flags: object
+    text_interaction_flags: object
+    item_scene_getter: Callable[[], object] | None
+    item_data_getter: Callable[[int], object] | None
     item_flags_getter: Callable[[], object] | None
     item_flags_setter: Callable[[object], object] | None
-    text_interaction_flags: object
-    text_interaction_flags_getter: Callable[[], object] | None
-    text_interaction_flags_setter: Callable[[object], object] | None
+    text_flags_getter: Callable[[], object] | None
+    text_flags_setter: Callable[[object], object] | None
+    scene_add_item: Callable[[object], object] | None
+    scene_remove_item: Callable[[object], object] | None
+    scene_rect_getter: Callable[[], object] | None
+    scene_rect_setter: Callable[[QRectF], object] | None
+    scene_items_bounding_rect_getter: Callable[[], object] | None
     scene_bounding_rect_getter: Callable[[], object] | None
-    focus_item: object | None
     focus_item_getter: Callable[[], object] | None
-    focus_item_setter: Callable[[object | None], object] | None
+    focus_item_setter: Callable[[object], object] | None
+    requires_authoritative_scene_bounds: bool
 
     @classmethod
-    def _unavailable(
-        cls,
-        scene: object | None,
-        item_scene_getter: Callable[[], object] | None = None,
-    ) -> SceneItemAttachPorts:
+    def _unavailable(cls, scene, item) -> SceneItemAttachPorts:
         return cls(
             scene=scene,
-            item_scene_getter=item_scene_getter,
-            initial_item_scene=None,
+            item=item,
             item_scene_available=False,
+            initial_item_scene=None,
+            item_kind=None,
+            item_flags=None,
+            text_interaction_flags=None,
+            item_scene_getter=None,
             item_data_getter=None,
-            item_kind=_UNAVAILABLE,
-            item_metadata=_UNAVAILABLE,
-            scene_add_item=None,
-            scene_remove_item=None,
-            scene_items_getter=None,
-            scene_items_bounding_rect_getter=None,
-            scene_rect_getter=None,
-            scene_rect_setter=None,
-            requires_authoritative_scene_bounds=False,
-            requires_full_graph_snapshot=False,
-            item_flags=_UNAVAILABLE,
             item_flags_getter=None,
             item_flags_setter=None,
-            text_interaction_flags=_UNAVAILABLE,
-            text_interaction_flags_getter=None,
-            text_interaction_flags_setter=None,
+            text_flags_getter=None,
+            text_flags_setter=None,
+            scene_add_item=None,
+            scene_remove_item=None,
+            scene_rect_getter=None,
+            scene_rect_setter=None,
+            scene_items_bounding_rect_getter=None,
             scene_bounding_rect_getter=None,
-            focus_item=None,
             focus_item_getter=None,
             focus_item_setter=None,
+            requires_authoritative_scene_bounds=False,
         )
 
     @classmethod
-    def capture(cls, scene: object | None, item: object) -> SceneItemAttachPorts:
+    def capture(cls, scene, item) -> SceneItemAttachPorts:
         if item_is_unavailable_for_scene_operation(item):
-            return cls._unavailable(scene)
-        authority = _AttachCaptureAuthority.capture(scene, item)
+            return cls._unavailable(scene, item)
+        item_scene_getter = _optional_callable(item, "scene")
         try:
-            return cls._capture_live(scene, item)
-        except BaseException as original_error:
-            authority.restore(original_error)
+            initial_item_scene = (
+                item_scene_getter() if item_scene_getter is not None else None
+            )
+        except RuntimeError:
+            if item_is_unavailable_for_scene_operation(item):
+                return cls._unavailable(scene, item)
             raise
-
-    @classmethod
-    def _capture_live(
-        cls,
-        scene: object | None,
-        item: object,
-    ) -> SceneItemAttachPorts:
-        if item_is_unavailable_for_scene_operation(item):
-            return cls._unavailable(scene)
-        qt_item = isinstance(item, QGraphicsItem)
-        item_scene_port = _qt_base_port(item, QGraphicsItem, "scene")
-        if item_scene_port is _UNAVAILABLE:
-            item_scene_port = _capture_optional_attribute(item, "scene")
-        item_scene_getter = item_scene_port if callable(item_scene_port) else None
-        initial_item_scene = None
-        if item_scene_getter is not None:
-            try:
-                initial_item_scene = item_scene_getter()
-            except RuntimeError:
-                if item_is_unavailable_for_scene_operation(item):
-                    return cls._unavailable(scene, item_scene_getter)
-                raise
         if initial_item_scene is not None and initial_item_scene is not scene:
             raise RuntimeError("scene item is already attached to a different scene")
-        item_data_port = _qt_base_port(item, QGraphicsItem, "data")
-        if item_data_port is _UNAVAILABLE:
-            item_data_port = _capture_optional_attribute(item, "data")
-        item_data_getter = item_data_port if callable(item_data_port) else None
-        item_kind = (
-            item_data_getter(0) if item_data_getter is not None else _UNAVAILABLE
+
+        item_data_getter = _optional_callable(item, "data")
+        item_kind = item_data_getter(0) if item_data_getter is not None else None
+        item_flags_getter = _optional_callable(item, "flags")
+        item_flags_setter = _optional_callable(item, "setFlags")
+        item_flags = item_flags_getter() if item_flags_getter is not None else None
+        text_flags_getter = (
+            _optional_callable(item, "textInteractionFlags")
+            if isinstance(item, QGraphicsTextItem)
+            or hasattr(item, "setTextInteractionFlags")
+            else None
         )
-        item_metadata = (
-            item_data_getter(1)
-            if item_data_getter is not None and item_kind == "mark"
-            else _UNAVAILABLE
+        text_flags_setter = _optional_callable(item, "setTextInteractionFlags")
+        text_interaction_flags = (
+            text_flags_getter() if text_flags_getter is not None else None
         )
-        item_flags_getter = _qt_base_port(item, QGraphicsItem, "flags")
-        item_flags_setter = _qt_base_port(item, QGraphicsItem, "setFlags")
-        if item_flags_getter is _UNAVAILABLE:
-            item_flags_getter = _capture_optional_attribute(item, "flags")
-        if item_flags_setter is _UNAVAILABLE:
-            item_flags_setter = _capture_optional_attribute(item, "setFlags")
-        item_flags_ports_present = (
-            item_flags_getter is not _UNAVAILABLE
-            or item_flags_setter is not _UNAVAILABLE
+        scene_add_item = _optional_callable(scene, "addItem")
+        scene_remove_item = _optional_callable(scene, "removeItem")
+        scene_rect_getter = _optional_callable(scene, "sceneRect")
+        scene_rect_setter = _optional_callable(scene, "setSceneRect")
+        scene_items_bounding_rect_getter = _optional_callable(
+            scene,
+            "itemsBoundingRect",
         )
-        if callable(item_flags_getter) and callable(item_flags_setter):
-            item_flags = item_flags_getter()
-        elif item_flags_ports_present:
-            raise RuntimeError(
-                "live scene item does not expose a complete flags contract"
-            )
-        else:
-            item_flags = _UNAVAILABLE
-            item_flags_getter = None
-            item_flags_setter = None
-        text_flags_getter = _qt_base_port(
-            item,
-            QGraphicsTextItem,
-            "textInteractionFlags",
-        )
-        text_flags_setter = _qt_base_port(
-            item,
-            QGraphicsTextItem,
-            "setTextInteractionFlags",
-        )
-        if text_flags_getter is _UNAVAILABLE:
-            text_flags_getter = _capture_optional_attribute(
-                item,
-                "textInteractionFlags",
-            )
-        if text_flags_setter is _UNAVAILABLE:
-            text_flags_setter = _capture_optional_attribute(
-                item,
-                "setTextInteractionFlags",
-            )
-        text_flags_ports_present = (
-            text_flags_getter is not _UNAVAILABLE
-            or text_flags_setter is not _UNAVAILABLE
-        )
-        if callable(text_flags_getter) and callable(text_flags_setter):
-            text_interaction_flags = text_flags_getter()
-        elif text_flags_ports_present:
-            raise RuntimeError(
-                "live scene item does not expose a complete text-interaction contract"
-            )
-        else:
-            text_interaction_flags = _UNAVAILABLE
-            text_flags_getter = None
-            text_flags_setter = None
-        scene_bounding_rect_getter = _qt_base_port(
-            item,
-            QGraphicsItem,
-            "sceneBoundingRect",
-        )
-        if scene_bounding_rect_getter is _UNAVAILABLE:
-            scene_bounding_rect_getter = _capture_optional_attribute(
-                item,
-                "sceneBoundingRect",
-            )
-        scene_add_item = (
-            _capture_optional_attribute(scene, "addItem")
-            if scene is not None
-            else _UNAVAILABLE
-        )
-        scene_remove_item = (
-            _capture_optional_attribute(scene, "removeItem")
-            if scene is not None
-            else _UNAVAILABLE
-        )
-        scene_items_getter = (
-            _capture_optional_attribute(scene, "items")
-            if scene is not None
-            else _UNAVAILABLE
-        )
-        scene_items_bounding_rect = (
-            _capture_optional_attribute(scene, "itemsBoundingRect")
-            if scene is not None
-            else _UNAVAILABLE
-        )
-        scene_rect_getter = (
-            _capture_optional_attribute(scene, "sceneRect")
-            if scene is not None
-            else _UNAVAILABLE
-        )
-        scene_rect_setter = (
-            _capture_optional_attribute(scene, "setSceneRect")
-            if scene is not None
-            else _UNAVAILABLE
-        )
-        focus_item_getter = (
-            _qt_base_port(scene, QGraphicsScene, "focusItem")
-            if scene is not None
-            else _UNAVAILABLE
-        )
-        if focus_item_getter is _UNAVAILABLE and scene is not None:
-            focus_item_getter = _capture_optional_attribute(scene, "focusItem")
-        focus_item_setter = (
-            _capture_optional_attribute(scene, "setFocusItem")
-            if scene is not None
-            else _UNAVAILABLE
-        )
-        focus_item = None
-        focus_ports_present = (
-            focus_item_getter is not _UNAVAILABLE
-            or focus_item_setter is not _UNAVAILABLE
-        )
-        if callable(focus_item_getter) and callable(focus_item_setter):
-            focus_item = focus_item_getter()
-        elif focus_ports_present:
-            raise RuntimeError("live scene does not expose a complete focus contract")
-        else:
-            focus_item_getter = None
-            focus_item_setter = None
+        scene_bounding_rect_getter = _optional_callable(item, "sceneBoundingRect")
+        focus_item_getter = _optional_callable(scene, "focusItem")
+        focus_item_setter = _optional_callable(scene, "setFocusItem")
+
         mutation_ports = (
             scene_add_item,
             scene_remove_item,
-            item_scene_getter,
-            item_flags_setter,
-            text_flags_setter,
-            scene_bounding_rect_getter,
             scene_rect_getter,
             scene_rect_setter,
             focus_item_setter,
         )
-        untrusted_ports = (
-            (
-                scene_add_item,
-                scene_remove_item,
-                scene_rect_getter,
-                scene_rect_setter,
-                focus_item_setter,
-            )
-            if qt_item
-            else mutation_ports
-        )
         requires_authoritative_scene_bounds = any(
-            callable(port) and not inspect.isbuiltin(port) for port in untrusted_ports
-        )
-        requires_full_graph_snapshot = bool(
-            qt_item
-            and (
-                QGraphicsItem.isSelected(cast(QGraphicsItem, item))
-                or QGraphicsItem.focusItem(cast(QGraphicsItem, item)) is not None
-            )
+            callable(port) and not inspect.isbuiltin(port) for port in mutation_ports
         )
         return cls(
             scene=scene,
-            item_scene_getter=item_scene_getter,
-            initial_item_scene=initial_item_scene,
+            item=item,
             item_scene_available=True,
-            item_data_getter=item_data_getter,
+            initial_item_scene=initial_item_scene,
             item_kind=item_kind,
-            item_metadata=item_metadata,
-            scene_add_item=(scene_add_item if callable(scene_add_item) else None),
-            scene_remove_item=(
-                scene_remove_item if callable(scene_remove_item) else None
-            ),
-            scene_items_getter=(
-                scene_items_getter if callable(scene_items_getter) else None
-            ),
-            scene_items_bounding_rect_getter=(
-                scene_items_bounding_rect
-                if callable(scene_items_bounding_rect)
-                else None
-            ),
-            scene_rect_getter=(
-                scene_rect_getter if callable(scene_rect_getter) else None
-            ),
-            scene_rect_setter=(
-                scene_rect_setter if callable(scene_rect_setter) else None
-            ),
-            requires_authoritative_scene_bounds=(requires_authoritative_scene_bounds),
-            requires_full_graph_snapshot=requires_full_graph_snapshot,
             item_flags=item_flags,
-            item_flags_getter=(
-                item_flags_getter if callable(item_flags_getter) else None
-            ),
-            item_flags_setter=(
-                item_flags_setter if callable(item_flags_setter) else None
-            ),
             text_interaction_flags=text_interaction_flags,
-            text_interaction_flags_getter=(
-                text_flags_getter if callable(text_flags_getter) else None
-            ),
-            text_interaction_flags_setter=(
-                text_flags_setter if callable(text_flags_setter) else None
-            ),
-            scene_bounding_rect_getter=(
-                scene_bounding_rect_getter
-                if callable(scene_bounding_rect_getter)
-                else None
-            ),
-            focus_item=focus_item,
-            focus_item_getter=(
-                focus_item_getter if callable(focus_item_getter) else None
-            ),
-            focus_item_setter=(
-                focus_item_setter if callable(focus_item_setter) else None
-            ),
+            item_scene_getter=item_scene_getter,
+            item_data_getter=item_data_getter,
+            item_flags_getter=item_flags_getter,
+            item_flags_setter=item_flags_setter,
+            text_flags_getter=text_flags_getter,
+            text_flags_setter=text_flags_setter,
+            scene_add_item=scene_add_item,
+            scene_remove_item=scene_remove_item,
+            scene_rect_getter=scene_rect_getter,
+            scene_rect_setter=scene_rect_setter,
+            scene_items_bounding_rect_getter=scene_items_bounding_rect_getter,
+            scene_bounding_rect_getter=scene_bounding_rect_getter,
+            focus_item_getter=focus_item_getter,
+            focus_item_setter=focus_item_setter,
+            requires_authoritative_scene_bounds=requires_authoritative_scene_bounds,
         )
 
     def item_can_be_added(self) -> bool:
-        if self.scene is None or not self.item_scene_available:
-            return False
         return (
-            self.item_scene_getter is None or self.initial_item_scene is not self.scene
+            self.scene is not None
+            and self.item_scene_available
+            and (
+                self.item_scene_getter is None
+                or self.initial_item_scene is not self.scene
+            )
         )
 
     def item_kind_for_attach(self) -> object:
-        if self.item_data_getter is None or self.item_kind is _UNAVAILABLE:
-            raise RuntimeError("live scene item does not expose a data getter")
+        if self.item_data_getter is None:
+            raise RuntimeError("scene item attach requires a data getter")
         return self.item_kind
 
     def validate_attachment_contract(
@@ -850,113 +222,92 @@ class SceneItemAttachPorts:
         require_text_interaction: bool = False,
     ) -> None:
         if self.scene is None:
-            raise RuntimeError("live canvas does not expose a scene for item attach")
-        if self.scene_add_item is None:
-            raise RuntimeError("live scene does not expose an item-add port")
-        if self.scene_remove_item is None:
-            raise RuntimeError("live scene does not expose an item-remove port")
+            raise RuntimeError("scene item attach requires a scene")
+        if self.scene_add_item is None or self.scene_remove_item is None:
+            raise RuntimeError("scene item attach requires add/remove ports")
         if self.item_scene_getter is None:
-            raise RuntimeError("live scene item does not expose a membership getter")
+            raise RuntimeError("scene item attach requires an item scene getter")
         if self.item_flags_getter is None or self.item_flags_setter is None:
-            raise RuntimeError(
-                "live scene item does not expose a complete flags contract"
-            )
+            raise RuntimeError("scene item attach requires item flag ports")
         if require_text_interaction and (
-            self.text_interaction_flags_getter is None
-            or self.text_interaction_flags_setter is None
+            self.text_flags_getter is None or self.text_flags_setter is None
         ):
-            raise RuntimeError(
-                "live note item does not expose a complete text-interaction contract"
-            )
+            raise RuntimeError("scene item attach requires text-interaction flag ports")
 
     def apply_selectable(self) -> None:
-        getter = self.item_flags_getter
-        setter = self.item_flags_setter
-        if getter is None or setter is None:
-            raise RuntimeError("live scene item has no captured flags contract")
+        if self.item_flags_setter is None or self.item_flags is None:
+            raise RuntimeError("scene item attach requires item flag ports")
         try:
-            expected = (
+            self.item_flags_setter(
                 cast(Any, self.item_flags)
                 | QGraphicsItem.GraphicsItemFlag.ItemIsSelectable
             )
         except TypeError as error:
             raise RuntimeError(
-                "live scene item returned an invalid flags value"
+                "scene item attach captured invalid item flags"
             ) from error
-        setter(expected)
-        if getter() != expected:
-            raise RuntimeError("scene item was not made selectable")
 
-    def apply_text_interaction_flags(self, expected: object) -> None:
-        getter = self.text_interaction_flags_getter
-        setter = self.text_interaction_flags_setter
-        if getter is None or setter is None:
-            raise RuntimeError(
-                "live note item has no captured text-interaction contract"
-            )
-        setter(expected)
-        if getter() != expected:
-            raise RuntimeError("scene note text-interaction flags were not applied")
+    def apply_text_interaction_flags(self, expected) -> None:
+        if self.text_flags_setter is None:
+            raise RuntimeError("scene item attach requires text-interaction flag ports")
+        self.text_flags_setter(expected)
 
-    def add_item(self, item: object) -> None:
+    def add_item(self, item) -> None:
         self.validate_attachment_contract()
-        add_item = self.scene_add_item
-        assert add_item is not None
-        result = add_item(item)
+        add_port = self.scene_add_item
+        assert add_port is not None
+        result = add_port(item)
         if result is False:
             raise RuntimeError("scene item-add port reported failure")
-        getter = self.item_scene_getter
-        assert getter is not None
-        if getter() is not self.scene:
+        scene_getter = (
+            self.item_scene_getter
+            if item is self.item
+            else _optional_callable(item, "scene")
+        )
+        if scene_getter is not None and scene_getter() is not self.scene:
             raise RuntimeError("scene item-add port did not attach the item")
 
-    def remove_item(self, item: object) -> bool:
-        scene = self.scene
-        if scene is None:
+    def remove_item(self, item) -> bool:
+        if self.scene is None or self.scene_remove_item is None:
             return False
-        getter = self.item_scene_getter
-        if getter is not None and getter() is not scene:
+        scene_getter = (
+            self.item_scene_getter
+            if item is self.item
+            else _optional_callable(item, "scene")
+        )
+        if scene_getter is not None and scene_getter() is not self.scene:
             return False
-        remove_item = self.scene_remove_item
-        if remove_item is None:
-            raise RuntimeError("live scene does not expose an item-remove port")
-        result = remove_item(item)
+        result = self.scene_remove_item(item)
         if result is False:
             raise RuntimeError("scene item-remove port reported failure")
-        if getter is not None and getter() is scene:
-            raise RuntimeError("scene item-remove port did not detach the item")
         return True
+
+
+_UNSET = object()
 
 
 @dataclass(slots=True)
 class SceneItemAttachSnapshot:
-    """Attach savepoint with an O(1) builtin path and full callback isolation."""
+    """Pre-attach registration savepoint for one scene item."""
 
-    canvas: object
-    item: object
-    collection_owner: object
+    canvas: Any
+    item: Any
+    scene: Any
+    attach_ports: SceneItemAttachPorts | None
+    kind: object
+    collection_owner: Any
     collection_name: str | None
     collection: list | None
-    collection_contents: tuple[object, ...]
-    mark_registry: object | None
+    mark_registry: Any
     mark_mapping: dict | None
-    mark_entries: tuple[
-        tuple[object, object, tuple[object, ...] | None],
-        ...,
-    ]
     mark_atom_id: int | None
     mark_entry_existed: bool
     mark_list: list | None
     item_flags: object
     text_interaction_flags: object
-    scene: object | None
+    focus_item: object
     scene_rect_snapshot: SceneRectSnapshot | None
-    focus_item: object | None
-    focus_item_getter: Callable[[], object] | None
-    focus_item_setter: Callable[[object | None], object] | None
-    scene_runtime_snapshot: _SceneRuntimeSnapshot | None
-    full_graph_snapshot: bool
-    attach_ports: SceneItemAttachPorts | None = None
+    recovery_errors: list[BaseException] = field(default_factory=list)
 
     @classmethod
     def capture(
@@ -964,843 +315,250 @@ class SceneItemAttachSnapshot:
         canvas,
         item,
         *,
-        scene: object = _UNAVAILABLE,
+        scene=_UNSET,
         attach_ports: SceneItemAttachPorts | None = None,
     ) -> SceneItemAttachSnapshot:
-        if attach_ports is None and scene is _UNAVAILABLE:
-            scene_getter = _capture_optional_attribute(canvas, "scene")
-            scene = scene_getter() if callable(scene_getter) else None
+        if scene is _UNSET:
+            scene_getter = _optional_callable(canvas, "scene")
+            scene = scene_getter() if scene_getter is not None else None
         if attach_ports is None:
             attach_ports = SceneItemAttachPorts.capture(scene, item)
-        else:
-            scene = attach_ports.scene
         kind = attach_ports.item_kind_for_attach()
+
         collection_owner = scene_items_state_for(canvas)
         collection_name = _KIND_COLLECTION.get(kind) if isinstance(kind, str) else None
-        collection_candidate = (
-            _capture_optional_attribute(collection_owner, collection_name)
-            if collection_name is not None
-            else _UNAVAILABLE
-        )
-        collection = collection_candidate
-        if not isinstance(collection, list):
-            collection = None
+        collection = None
+        if collection_name is not None:
+            candidate = getattr(collection_owner, collection_name, None)
+            collection = candidate if isinstance(candidate, list) else None
 
-        registry = mark_registry_for(canvas) if kind == "mark" else None
-        mapping = (
-            _capture_optional_attribute(registry, "by_atom")
-            if registry is not None
-            else _UNAVAILABLE
-        )
-        mark_mapping = mapping if isinstance(mapping, dict) else None
-        data = attach_ports.item_metadata if kind == "mark" else None
-        atom_id = data.get("atom_id") if isinstance(data, dict) else None
-        mark_atom_id = atom_id if isinstance(atom_id, int) else None
-        mark_entry_existed = bool(
-            mark_mapping is not None
-            and mark_atom_id is not None
-            and mark_atom_id in mark_mapping
-        )
-        candidate_marks = (
-            mark_mapping.get(mark_atom_id)
-            if mark_mapping is not None and mark_atom_id is not None
-            else None
-        )
-        mark_list = candidate_marks if isinstance(candidate_marks, list) else None
-        full_graph_snapshot = _requires_full_graph_snapshot(
-            item=item,
-            attach_ports=attach_ports,
-            collection_owner=collection_owner,
-            collection_name=collection_name,
-            collection=collection,
-            mark_registry=registry,
-            mark_mapping=mark_mapping,
-            mark_entry_existed=mark_entry_existed,
-            mark_list=mark_list,
-        )
-        collection_contents = (
-            tuple(collection) if full_graph_snapshot and collection is not None else ()
-        )
-        mark_entries = (
-            tuple(
-                (
-                    key,
-                    value,
-                    tuple(value) if isinstance(value, list) else None,
+        mark_registry = None
+        mark_mapping: dict | None = None
+        mark_atom_id: int | None = None
+        mark_entry_existed = False
+        mark_list: list | None = None
+        if kind == "mark":
+            mark_registry = mark_registry_for(canvas)
+            candidate_mapping = getattr(mark_registry, "by_atom", None)
+            mark_mapping = (
+                candidate_mapping if isinstance(candidate_mapping, dict) else None
+            )
+            metadata = (
+                attach_ports.item_data_getter(1)
+                if attach_ports.item_data_getter is not None
+                else None
+            )
+            candidate_atom_id = (
+                cast(dict, metadata).get("atom_id")
+                if isinstance(metadata, dict)
+                else None
+            )
+            if isinstance(candidate_atom_id, int):
+                mark_atom_id = candidate_atom_id
+            if mark_mapping is not None and mark_atom_id is not None:
+                mark_entry_existed = mark_atom_id in mark_mapping
+                candidate_list = mark_mapping.get(mark_atom_id)
+                mark_list = (
+                    list(candidate_list) if isinstance(candidate_list, list) else None
                 )
-                for key, value in mark_mapping.items()
-            )
-            if full_graph_snapshot and mark_mapping is not None
-            else ()
-        )
 
-        focus_item = attach_ports.focus_item
-        focus_item_getter = attach_ports.focus_item_getter
-        focus_item_setter = attach_ports.focus_item_setter
-        scene_runtime_snapshot = (
-            _capture_full_scene_runtime(
-                canvas,
-                scene,
-                attach_ports,
-            )
-            if (
-                full_graph_snapshot
-                and scene is not None
-                and attach_ports.scene_items_getter is not None
-            )
+        focus_item = (
+            attach_ports.focus_item_getter()
+            if attach_ports.focus_item_getter is not None
             else None
         )
-        # Open the temporary automatic-scene guard only after every other
-        # fallible getter. Nothing capable of raising remains between guard
-        # creation and returning the owning snapshot.
-        scene_rect_snapshot = SceneRectSnapshot.capture(
-            scene,
-            scene_rect_getter=attach_ports.scene_rect_getter,
-            set_scene_rect_setter=attach_ports.scene_rect_setter,
-            scene_items_bounding_rect_getter=(
-                attach_ports.scene_items_bounding_rect_getter
-            ),
-            incremental_tracking=(not attach_ports.requires_authoritative_scene_bounds),
-        )
 
+        # The growth guard opens last, after every other fallible read, so a
+        # failed capture never strands a pinned guard rect.
+        scene_rect_snapshot = (
+            SceneRectSnapshot.capture(
+                scene,
+                scene_rect_getter=attach_ports.scene_rect_getter,
+                set_scene_rect_setter=attach_ports.scene_rect_setter,
+                scene_items_bounding_rect_getter=(
+                    attach_ports.scene_items_bounding_rect_getter
+                ),
+                incremental_tracking=(
+                    not attach_ports.requires_authoritative_scene_bounds
+                ),
+            )
+            if scene is not None
+            else None
+        )
         return cls(
             canvas=canvas,
             item=item,
+            scene=scene,
+            attach_ports=attach_ports,
+            kind=kind,
             collection_owner=collection_owner,
             collection_name=collection_name,
             collection=collection,
-            collection_contents=collection_contents,
-            mark_registry=registry,
+            mark_registry=mark_registry,
             mark_mapping=mark_mapping,
-            mark_entries=mark_entries,
             mark_atom_id=mark_atom_id,
             mark_entry_existed=mark_entry_existed,
             mark_list=mark_list,
             item_flags=attach_ports.item_flags,
             text_interaction_flags=attach_ports.text_interaction_flags,
-            scene=scene,
-            scene_rect_snapshot=scene_rect_snapshot,
             focus_item=focus_item,
-            focus_item_getter=(
-                focus_item_getter if callable(focus_item_getter) else None
-            ),
-            focus_item_setter=(
-                focus_item_setter if callable(focus_item_setter) else None
-            ),
-            scene_runtime_snapshot=scene_runtime_snapshot,
-            full_graph_snapshot=full_graph_snapshot,
-            attach_ports=attach_ports,
+            scene_rect_snapshot=scene_rect_snapshot,
         )
-
-    @staticmethod
-    def _remove_item_identity(items: list, item: object) -> None:
-        items[:] = [candidate for candidate in items if candidate is not item]
-
-    @staticmethod
-    def _identity_sequence_matches(
-        actual: list | tuple,
-        expected: tuple[object, ...],
-    ) -> bool:
-        return len(actual) == len(expected) and all(
-            current is captured
-            for current, captured in zip(actual, expected, strict=True)
-        )
-
-    @staticmethod
-    def _raise_restore_error(error: BaseException) -> None:
-        raise error
-
-    @staticmethod
-    def _replace_list_contents(
-        target: list,
-        expected: tuple[object, ...],
-    ) -> None:
-        target[:] = expected
-
-    def _restore_captured_collection(
-        self,
-        original_error: BaseException,
-        *,
-        phase: str,
-    ) -> None:
-        collection = self.collection
-        collection_name = self.collection_name
-        if collection is None:
-            return
-
-        def remove_from_replacement_collection() -> None:
-            if collection_name is None:
-                return
-            current_collection = getattr(
-                self.collection_owner,
-                collection_name,
-                None,
-            )
-            if (
-                isinstance(current_collection, list)
-                and current_collection is not collection
-            ):
-                self._remove_item_identity(current_collection, self.item)
-
-        def restore_contents() -> None:
-            collection[:] = self.collection_contents
-
-        if collection_name is not None:
-            _run_rollback_step(
-                original_error,
-                f"cleaning a replacement collection after {phase}",
-                remove_from_replacement_collection,
-            )
-        _run_rollback_step(
-            original_error,
-            f"restoring complete collection contents after {phase}",
-            restore_contents,
-        )
-        if collection_name is not None:
-            _run_rollback_step(
-                original_error,
-                f"restoring collection identity after {phase}",
-                lambda: setattr(
-                    self.collection_owner,
-                    collection_name,
-                    collection,
-                ),
-            )
-
-    def _restore_captured_mark_mapping(
-        self,
-        original_error: BaseException,
-        *,
-        phase: str,
-    ) -> None:
-        mapping = self.mark_mapping
-        if mapping is None:
-            return
-
-        restored_lists: set[int] = set()
-        for _key, value, contents in self.mark_entries:
-            if (
-                contents is None
-                or not isinstance(value, list)
-                or id(value) in restored_lists
-            ):
-                continue
-            restored_lists.add(id(value))
-            _run_rollback_step(
-                original_error,
-                f"restoring a complete mark-list after {phase}",
-                partial(
-                    self._replace_list_contents,
-                    cast(list, value),
-                    cast(tuple[object, ...], contents),
-                ),
-            )
-
-        _run_rollback_step(
-            original_error,
-            f"clearing the captured mark mapping after {phase}",
-            mapping.clear,
-        )
-        _run_rollback_step(
-            original_error,
-            f"restoring complete mark-mapping contents after {phase}",
-            lambda: mapping.update(
-                (key, value) for key, value, _contents in self.mark_entries
-            ),
-        )
-        if self.mark_registry is not None:
-            _run_rollback_step(
-                original_error,
-                f"restoring mark-registry identity after {phase}",
-                lambda: setattr(self.mark_registry, "by_atom", mapping),
-            )
 
     def _restore_lightweight_registration(
         self,
-        original_error: BaseException,
+        original_error: BaseException | None,
         *,
         phase: str,
     ) -> None:
-        collection = self.collection
+        def step(description: str, operation: Callable[[], object]) -> None:
+            try:
+                operation()
+            except BaseException as rollback_error:
+                _add_attach_rollback_note(
+                    original_error,
+                    rollback_error,
+                    phase=f"{description} after {phase}",
+                )
+
         collection_name = self.collection_name
-
-        def remove_from_replacement_collection() -> None:
-            if collection_name is None:
-                return
-            current_collection = getattr(
-                self.collection_owner,
-                collection_name,
-                None,
-            )
-            if (
-                isinstance(current_collection, list)
-                and current_collection is not collection
-            ):
-                self._remove_item_identity(current_collection, self.item)
-
+        collection = self.collection
         if collection_name is not None:
-            _run_rollback_step(
-                original_error,
-                f"cleaning a replacement collection after {phase}",
-                remove_from_replacement_collection,
-            )
-        if collection is not None:
-            _run_rollback_step(
-                original_error,
-                f"removing the new item from its collection after {phase}",
-                partial(self._remove_item_identity, collection, self.item),
-            )
-            if collection_name is not None:
-                _run_rollback_step(
-                    original_error,
-                    f"restoring collection identity after {phase}",
-                    lambda: setattr(
-                        self.collection_owner,
-                        collection_name,
-                        collection,
-                    ),
-                )
 
-        mapping = self.mark_mapping
-        atom_id = self.mark_atom_id
-        if mapping is None or atom_id is None:
-            return
-        if self.mark_entry_existed and self.mark_list is not None:
-            _run_rollback_step(
-                original_error,
-                f"removing the new item from its mark list after {phase}",
-                partial(self._remove_item_identity, self.mark_list, self.item),
-            )
-            _run_rollback_step(
-                original_error,
-                f"restoring the target mark-list identity after {phase}",
-                lambda: mapping.__setitem__(atom_id, self.mark_list),
-            )
-        else:
-            _run_rollback_step(
-                original_error,
-                f"removing the new mark key after {phase}",
-                partial(mapping.pop, atom_id, None),
-            )
-        if self.mark_registry is not None:
-            _run_rollback_step(
-                original_error,
-                f"restoring mark-registry identity after {phase}",
-                lambda: setattr(self.mark_registry, "by_atom", mapping),
-            )
+            def clean_replacement_collection() -> None:
+                current = getattr(self.collection_owner, collection_name, None)
+                if isinstance(current, list) and current is not collection:
+                    current[:] = [entry for entry in current if entry is not self.item]
 
-    def _restore_captured_scene_runtime(
-        self,
-        original_error: BaseException,
-        *,
-        phase: str,
-    ) -> bool:
-        runtime_snapshot = self.scene_runtime_snapshot
-        if runtime_snapshot is None:
-            return False
-        runtime_errors = _run_rollback_step(
-            original_error,
-            f"applying complete scene/runtime recovery after {phase}",
-            partial(
-                _restore_scene_runtime_snapshot,
-                runtime_snapshot,
-                collect_errors=True,
-                restore_attempts=1,
-            ),
-            default=[],
-        )
-        if isinstance(runtime_errors, list):
-            for runtime_error in runtime_errors:
-                _run_rollback_step(
-                    original_error,
-                    f"recording scene/runtime recovery failure after {phase}",
-                    partial(self._raise_restore_error, runtime_error),
-                )
-        return True
+            step("cleaning a replaced collection", clean_replacement_collection)
+            if collection is not None:
+                bound_collection = collection
+
+                def remove_from_collection() -> None:
+                    bound_collection[:] = [
+                        entry for entry in bound_collection if entry is not self.item
+                    ]
+
+                step("removing the item registration", remove_from_collection)
+
+                def repin_collection() -> None:
+                    setattr(self.collection_owner, collection_name, bound_collection)
+
+                step("re-pinning the collection", repin_collection)
+
+        mark_mapping = self.mark_mapping
+        mark_atom_id = self.mark_atom_id
+        if mark_mapping is not None and mark_atom_id is not None:
+            bound_mapping = mark_mapping
+            bound_atom_id = mark_atom_id
+
+            def restore_mark_entry() -> None:
+                if self.mark_entry_existed and self.mark_list is not None:
+                    restored = [
+                        entry for entry in self.mark_list if entry is not self.item
+                    ]
+                    live = bound_mapping.get(bound_atom_id)
+                    if isinstance(live, list):
+                        # Services hold references to the per-atom list;
+                        # restore its contents in place.
+                        live[:] = restored
+                        bound_mapping[bound_atom_id] = live
+                    else:
+                        bound_mapping[bound_atom_id] = restored
+                else:
+                    bound_mapping.pop(bound_atom_id, None)
+
+            step("restoring the mark registry entry", restore_mark_entry)
+
+            def repin_mark_mapping() -> None:
+                if self.mark_registry is not None:
+                    self.mark_registry.by_atom = bound_mapping
+
+            step("re-pinning the mark registry", repin_mark_mapping)
 
     def restore(
         self,
-        original_error: BaseException,
+        original_error: BaseException | None = None,
         *,
-        phase: str,
+        phase: str = "a failed scene-item attach",
         restore_scene_rect: bool = True,
     ) -> None:
-        for pass_index in range(2):
-            self._restore_pass(
-                original_error,
-                phase=phase,
-                restore_scene_rect=restore_scene_rect,
-                reapply_scene_rect=pass_index > 0,
-            )
-            exact = _run_rollback_step(
-                original_error,
-                (
-                    f"verifying exact scene-item recovery after {phase}"
-                    if pass_index == 0
-                    else f"verifying retried scene-item recovery after {phase}"
-                ),
-                partial(
-                    self._assert_runtime_exact,
-                    include_scene_rect=restore_scene_rect,
-                ),
-                default=False,
-            )
-            if exact:
-                return
+        ports = self.attach_ports
 
-    def _restore_pass(
-        self,
-        original_error: BaseException,
-        *,
-        phase: str,
-        restore_scene_rect: bool,
-        reapply_scene_rect: bool,
-    ) -> None:
-        detach_operation = (
-            partial(self.attach_ports.remove_item, self.item)
-            if self.attach_ports is not None
-            else partial(remove_attached_item_from_scene, self.scene, self.item)
-        )
-        _run_rollback_step(
-            original_error,
-            f"detaching the item after {phase}",
-            detach_operation,
-        )
-
-        attach_ports = self.attach_ports
-        if (
-            attach_ports is not None
-            and self.item_flags is not _UNAVAILABLE
-            and attach_ports.item_flags_getter is not None
-            and attach_ports.item_flags_setter is not None
-        ):
-            self._restore_bound_item_value(
-                original_error,
-                phase=f"restoring item flags after {phase}",
-                getter=attach_ports.item_flags_getter,
-                setter=attach_ports.item_flags_setter,
-                expected=self.item_flags,
-            )
-        elif self.item_flags is not _UNAVAILABLE:
-
-            def restore_item_flags() -> None:
-                set_flags = getattr(self.item, "setFlags", None)
-                if callable(set_flags):
-                    set_flags(self.item_flags)
-
-            _run_rollback_step(
-                original_error,
-                f"restoring item flags after {phase}",
-                restore_item_flags,
-            )
-        if (
-            attach_ports is not None
-            and self.text_interaction_flags is not _UNAVAILABLE
-            and attach_ports.text_interaction_flags_getter is not None
-            and attach_ports.text_interaction_flags_setter is not None
-        ):
-            self._restore_bound_item_value(
-                original_error,
-                phase=f"restoring text interaction flags after {phase}",
-                getter=attach_ports.text_interaction_flags_getter,
-                setter=attach_ports.text_interaction_flags_setter,
-                expected=self.text_interaction_flags,
-            )
-        elif self.text_interaction_flags is not _UNAVAILABLE:
-
-            def restore_text_interaction_flags() -> None:
-                set_text_interaction_flags = getattr(
-                    self.item,
-                    "setTextInteractionFlags",
-                    None,
-                )
-                if callable(set_text_interaction_flags):
-                    set_text_interaction_flags(self.text_interaction_flags)
-
-            _run_rollback_step(
-                original_error,
-                f"restoring text interaction flags after {phase}",
-                restore_text_interaction_flags,
-            )
-
-        # Setters above are untrusted and may delete or replace unrelated
-        # registrations. A full runtime snapshot reapplies its captured lists,
-        # mark graph, and scene membership/order together; sparse fallback
-        # snapshots restore the targeted containers through their bound roots.
-        restored_runtime = self._restore_captured_scene_runtime(
-            original_error,
-            phase=phase,
-        )
-        if not restored_runtime:
-            if self.full_graph_snapshot:
-                self._restore_captured_collection(original_error, phase=phase)
-                self._restore_captured_mark_mapping(original_error, phase=phase)
-            else:
-                self._restore_lightweight_registration(
+        def step(description: str, operation: Callable[[], object]) -> None:
+            try:
+                operation()
+            except BaseException as rollback_error:
+                _add_attach_rollback_note(
                     original_error,
-                    phase=phase,
+                    rollback_error,
+                    phase=f"{description} after {phase}",
                 )
-            self._restore_scene_focus(original_error, phase=phase)
 
-        # Scene bounds are the final geometric authority. Registry, flag,
-        # text, and focus setters can synchronously trigger callbacks that
-        # alter membership or an explicit scene rect, so repair the rect only
-        # after every one of those fallible recovery steps has run.
+        if ports is not None:
+            step("detaching the item", lambda: ports.remove_item(self.item))
+            flags_setter = ports.item_flags_setter
+            if flags_setter is not None and self.item_flags is not None:
+                step(
+                    "restoring the item flags",
+                    lambda: flags_setter(self.item_flags),
+                )
+            text_setter = ports.text_flags_setter
+            if text_setter is not None and self.text_interaction_flags is not None:
+                step(
+                    "restoring the text-interaction flags",
+                    lambda: text_setter(self.text_interaction_flags),
+                )
+        self._restore_lightweight_registration(original_error, phase=phase)
+        focus_setter = ports.focus_item_setter if ports is not None else None
+        if focus_setter is not None:
+            step(
+                "restoring the scene focus",
+                lambda: focus_setter(self.focus_item),
+            )
         if restore_scene_rect:
-            self.restore_scene_rect(
-                original_error,
-                phase=phase,
-                reapply=reapply_scene_rect,
-            )
-
-    def _append_collection_mismatches(self, mismatches: list[str]) -> None:
-        collection = self.collection
-        if collection is None:
-            return
-        collection_name = self.collection_name
-        if collection_name is not None:
-            current_collection = getattr(
-                self.collection_owner,
-                collection_name,
-                None,
-            )
-            if current_collection is not collection:
-                mismatches.append("scene-item collection identity changed")
-        assert collection is not None
-        if not self._identity_sequence_matches(
-            collection,
-            self.collection_contents,
-        ):
-            mismatches.append("scene-item collection contents differ from the capture")
-
-    def _append_lightweight_registration_mismatches(
-        self,
-        mismatches: list[str],
-    ) -> None:
-        collection = self.collection
-        collection_name = self.collection_name
-        if collection is not None:
-            if collection_name is not None:
-                current_collection = getattr(
-                    self.collection_owner,
-                    collection_name,
-                    None,
-                )
-                if current_collection is not collection:
-                    mismatches.append("scene-item collection identity changed")
-            if any(candidate is self.item for candidate in collection):
-                mismatches.append("item remained in its captured collection")
-
-        mapping = self.mark_mapping
-        atom_id = self.mark_atom_id
-        if mapping is None or atom_id is None:
-            return
-        if (
-            self.mark_registry is not None
-            and getattr(self.mark_registry, "by_atom", None) is not mapping
-        ):
-            mismatches.append("mark-registry mapping identity changed")
-        if self.mark_entry_existed and self.mark_list is not None:
-            if mapping.get(atom_id) is not self.mark_list:
-                mismatches.append("captured mark-list identity changed")
-            if any(candidate is self.item for candidate in self.mark_list):
-                mismatches.append("item remained in its captured mark list")
-        elif atom_id in mapping:
-            mismatches.append("new mark-registry key remained present")
-
-    def _append_mark_mismatches(self, mismatches: list[str]) -> None:
-        mark_mapping = self.mark_mapping
-        if mark_mapping is None:
-            return
-        if (
-            self.mark_registry is not None
-            and getattr(self.mark_registry, "by_atom", None) is not mark_mapping
-        ):
-            mismatches.append("mark-registry mapping identity changed")
-        actual_entries = tuple(mark_mapping.items())
-        if len(actual_entries) != len(self.mark_entries) or any(
-            actual_key is not expected_key or actual_value is not expected_value
-            for (actual_key, actual_value), (
-                expected_key,
-                expected_value,
-                _expected_contents,
-            ) in zip(actual_entries, self.mark_entries, strict=True)
-        ):
-            mismatches.append(
-                "mark-registry keys or value identities differ from the capture"
-            )
-        for _key, value, contents in self.mark_entries:
-            if (
-                contents is not None
-                and isinstance(value, list)
-                and not self._identity_sequence_matches(value, contents)
-            ):
-                mismatches.append("captured mark-list contents differ from the capture")
-                break
-
-    def _append_scene_runtime_container_mismatches(
-        self,
-        mismatches: list[str],
-    ) -> None:
-        runtime_snapshot = self.scene_runtime_snapshot
-        if runtime_snapshot is None:
-            return
-        for list_snapshot in runtime_snapshot.list_attributes:
-            current_list = getattr(
-                list_snapshot.owner,
-                list_snapshot.attribute,
-                None,
-            )
-            if current_list is not list_snapshot.list_object:
-                mismatches.append(
-                    f"runtime list {list_snapshot.attribute!r} identity changed"
-                )
-                continue
-            if not self._identity_sequence_matches(
-                list_snapshot.list_object,
-                tuple(list_snapshot.contents),
-            ):
-                mismatches.append(
-                    f"runtime list {list_snapshot.attribute!r} contents changed"
-                )
-        runtime_marks = runtime_snapshot.mark_registry
-        if runtime_marks is None:
-            return
-        if runtime_marks.registry.by_atom is not runtime_marks.mapping_object:
-            mismatches.append("runtime mark-mapping identity changed")
-        actual_runtime_entries = tuple(runtime_marks.mapping_object.items())
-        if len(actual_runtime_entries) != len(runtime_marks.entries) or any(
-            actual_key is not expected_key or actual_value is not expected_value
-            for (actual_key, actual_value), (
-                expected_key,
-                expected_value,
-                _contents,
-            ) in zip(
-                actual_runtime_entries,
-                runtime_marks.entries,
-                strict=True,
-            )
-        ):
-            mismatches.append("runtime mark-mapping contents changed")
-        for _key, value, contents in runtime_marks.entries:
-            if (
-                contents is not None
-                and isinstance(value, list)
-                and not self._identity_sequence_matches(
-                    value,
-                    tuple(contents),
-                )
-            ):
-                mismatches.append("runtime mark-list contents changed")
-                break
-
-    def _assert_runtime_exact(self, *, include_scene_rect: bool) -> bool:
-        mismatches: list[str] = []
-        attach_ports = self.attach_ports
-        if (
-            attach_ports is not None
-            and attach_ports.item_scene_getter is not None
-            and attach_ports.item_scene_getter() is self.scene
-        ):
-            mismatches.append("item remained attached to the target scene")
-
-        if self.full_graph_snapshot:
-            self._append_collection_mismatches(mismatches)
-            self._append_mark_mismatches(mismatches)
-        else:
-            self._append_lightweight_registration_mismatches(mismatches)
-        runtime_snapshot = self.scene_runtime_snapshot
-        self._append_scene_runtime_container_mismatches(mismatches)
-
-        if attach_ports is not None:
-            if (
-                self.item_flags is not _UNAVAILABLE
-                and attach_ports.item_flags_getter is not None
-                and attach_ports.item_flags_getter() != self.item_flags
-            ):
-                mismatches.append("item flags differ from the captured value")
-            if (
-                self.text_interaction_flags is not _UNAVAILABLE
-                and attach_ports.text_interaction_flags_getter is not None
-                and attach_ports.text_interaction_flags_getter()
-                != self.text_interaction_flags
-            ):
-                mismatches.append(
-                    "text-interaction flags differ from the captured value"
-                )
-
-        if (
-            self.focus_item_getter is not None
-            and self.focus_item_getter() is not self.focus_item
-        ):
-            mismatches.append("scene focus differs from the captured item")
-
-        rect_snapshot = self.scene_rect_snapshot
-        if include_scene_rect and rect_snapshot is not None:
-            if rect_snapshot.active:
-                mismatches.append("scene-rect snapshot remained active")
-            elif rect_snapshot.tracker.depth == 0:
-                if (
-                    scene_rect_is_automatic(rect_snapshot.tracker.scene)
-                    != rect_snapshot.automatic
-                ):
-                    mismatches.append("scene-rect mode differs from the capture")
-                if rect_snapshot.scene_rect_getter() != rect_snapshot.baseline_rect:
-                    mismatches.append("scene rect differs from the captured value")
-
-        if mismatches:
-            raise RuntimeError("; ".join(mismatches))
-        if runtime_snapshot is not None:
-            _verify_scene_runtime_identity(runtime_snapshot)
-        return True
-
-    @staticmethod
-    def _restore_bound_item_value(
-        original_error: BaseException,
-        *,
-        phase: str,
-        getter: Callable[[], object],
-        setter: Callable[[object], object],
-        expected: object,
-    ) -> None:
-        def restore_once() -> bool:
-            setter(expected)
-            if getter() != expected:
-                raise RuntimeError(f"{phase} did not restore the captured value")
-            return True
-
-        for attempt in range(2):
-            restored = _run_rollback_step(
-                original_error,
-                phase if attempt == 0 else f"retrying {phase}",
-                restore_once,
-                default=False,
-            )
-            if restored:
-                return
-
-    def _restore_scene_focus(
-        self,
-        original_error: BaseException,
-        *,
-        phase: str,
-    ) -> None:
-        getter = self.focus_item_getter
-        setter = self.focus_item_setter
-        if getter is None or setter is None:
-            return
-
-        def restore_once() -> bool:
-            setter(self.focus_item)
-            if getter() is not self.focus_item:
-                raise RuntimeError(
-                    "scene-item attach rollback did not restore focus identity"
-                )
-            return True
-
-        for attempt in range(2):
-            restored = _run_rollback_step(
-                original_error,
-                (
-                    f"restoring scene focus after {phase}"
-                    if attempt == 0
-                    else f"retrying scene focus restore after {phase}"
-                ),
-                restore_once,
-                default=False,
-            )
-            if restored:
-                return
+            self.restore_scene_rect(original_error, phase=phase)
 
     def restore_scene_rect(
         self,
-        original_error: BaseException,
+        original_error: BaseException | None = None,
         *,
-        phase: str,
-        reapply: bool = False,
+        phase: str = "a failed scene-item attach",
     ) -> None:
-        rect_snapshot = self.scene_rect_snapshot
-        if rect_snapshot is not None:
-            recovery_error_count = len(rect_snapshot.recovery_errors)
-            if reapply and not rect_snapshot.active:
-                if rect_snapshot.tracker.depth != 0:
-                    return
-
-                def reapply_captured_rect() -> None:
-                    if rect_snapshot.automatic:
-                        rect_snapshot._restore_automatic_scene_rect()
-                    else:
-                        rect_snapshot._restore_explicit_scene_rect()
-
-                _run_rollback_step(
-                    original_error,
-                    f"reapplying the scene rect after {phase}",
-                    reapply_captured_rect,
-                )
+        snapshot = self.scene_rect_snapshot
+        if snapshot is None:
+            return
+        try:
+            if snapshot.active:
+                snapshot.restore()
             else:
-                _run_rollback_step(
-                    original_error,
-                    f"restoring the scene rect after {phase}",
-                    rect_snapshot.restore,
-                )
-                if rect_snapshot.active:
-                    _run_rollback_step(
-                        original_error,
-                        f"retrying the scene rect restore after {phase}",
-                        rect_snapshot.restore,
-                    )
-
-            for recovery_error in rect_snapshot.recovery_errors[recovery_error_count:]:
-
-                def report_recovery_error(
-                    error: BaseException = recovery_error,
-                ) -> None:
-                    raise error
-
-                _run_rollback_step(
-                    original_error,
-                    f"recording transient scene-rect recovery after {phase}",
-                    report_recovery_error,
-                )
+                snapshot.reassert()
+        except BaseException as rollback_error:
+            _add_attach_rollback_note(
+                original_error,
+                rollback_error,
+                phase=f"restoring the scene rect after {phase}",
+            )
 
     def release(self) -> None:
-        if self.scene_rect_snapshot is None:
+        snapshot = self.scene_rect_snapshot
+        if snapshot is None:
             return
-        if not self.scene_rect_snapshot.automatic:
-            self.scene_rect_snapshot.release()
+        ports = self.attach_ports
+        if not snapshot.automatic or ports is None:
+            snapshot.release()
             return
-        expanded_rect = None
-        scene_bounding_rect = (
-            self.attach_ports.scene_bounding_rect_getter
-            if self.attach_ports is not None
-            else getattr(self.item, "sceneBoundingRect", None)
-        )
-        if callable(scene_bounding_rect):
-            expanded_rect = scene_bounding_rect()
-        expansion_owner_scene_getter = (
-            self.attach_ports.item_scene_getter
-            if self.attach_ports is not None
-            else None
-        )
-        authoritative_bounds_getter = (
-            self.attach_ports.scene_items_bounding_rect_getter
-            if self.attach_ports is not None
-            and self.attach_ports.requires_authoritative_scene_bounds
-            else None
-        )
-        if authoritative_bounds_getter is None:
-            self.scene_rect_snapshot.release(
-                cast(Any, expanded_rect),
-                expansion_key=self.item,
-                expansion_owner_scene_getter=expansion_owner_scene_getter,
+        bounds_getter = ports.scene_bounding_rect_getter
+        expanded_rect = bounds_getter() if callable(bounds_getter) else None
+        release_kwargs: dict = {
+            "expansion_key": self.item,
+            "expansion_owner_scene_getter": ports.item_scene_getter,
+        }
+        if ports.requires_authoritative_scene_bounds:
+            release_kwargs["authoritative_scene_bounds_getter"] = (
+                ports.scene_items_bounding_rect_getter
             )
-        else:
-            self.scene_rect_snapshot.release(
-                cast(Any, expanded_rect),
-                expansion_key=self.item,
-                expansion_owner_scene_getter=expansion_owner_scene_getter,
-                authoritative_scene_bounds_getter=(authoritative_bounds_getter),
-            )
+        snapshot.release(expanded_rect, **release_kwargs)
 
 
 __all__ = ["SceneItemAttachPorts", "SceneItemAttachSnapshot"]
