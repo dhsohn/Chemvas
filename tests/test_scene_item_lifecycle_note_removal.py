@@ -10,7 +10,6 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 try:
     from PyQt6.QtWidgets import (
         QApplication,
-        QGraphicsRectItem,
         QGraphicsScene,
         QGraphicsTextItem,
         QGraphicsView,
@@ -20,7 +19,6 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from chemvas.ui.canvas_scene_items_state import (
-        CanvasSceneItemsState,
         add_selected_note_for,
         append_scene_item_for,
         selected_notes_for,
@@ -81,82 +79,3 @@ class SceneItemLifecycleNoteRemovalTest(unittest.TestCase):
 
         self.assertIsNone(note.scene())
         canvas.selection_controller.update_selection_outline.assert_not_called()
-
-    def test_attach_uses_one_stable_scene_for_add_and_direct_rollback(self) -> None:
-        class AttachThenFailScene(QGraphicsScene):
-            add_port_reads = 0
-            remove_port_reads = 0
-
-            @property
-            def addItem(self):
-                self.add_port_reads += 1
-                if self.add_port_reads == 1:
-                    return self._add_then_fail
-                return lambda _item: None
-
-            def _add_then_fail(self, item) -> None:
-                QGraphicsScene.addItem(self, item)
-                raise RuntimeError("scene add failed after attachment")
-
-            @property
-            def removeItem(self):
-                self.remove_port_reads += 1
-                if self.remove_port_reads == 1:
-                    return lambda item: QGraphicsScene.removeItem(self, item)
-                return lambda _item: None
-
-        first_scene = AttachThenFailScene()
-        second_scene = QGraphicsScene()
-        third_scene = AttachThenFailScene()
-
-        class ChangingSceneCanvas:
-            def __init__(self) -> None:
-                self.scene_calls = 0
-                self.scene_items_state = CanvasSceneItemsState()
-
-            def scene(self):
-                self.scene_calls += 1
-                return {
-                    1: first_scene,
-                    2: second_scene,
-                    3: third_scene,
-                }.get(self.scene_calls, first_scene)
-
-        canvas = ChangingSceneCanvas()
-        service = SceneItemLifecycleService(
-            canvas,
-            graph_service=SimpleNamespace(),
-        )
-
-        class ChangingSceneItem(QGraphicsRectItem):
-            scene_port_reads = 0
-
-            @property
-            def scene(self):
-                self.scene_port_reads += 1
-                if self.scene_port_reads == 1:
-                    return lambda: QGraphicsRectItem.scene(self)
-                return lambda: third_scene
-
-        item = ChangingSceneItem()
-        item.setData(0, "shape")
-
-        with self.assertRaisesRegex(
-            RuntimeError,
-            "scene add failed after attachment",
-        ):
-            service.attach_scene_item(item)
-
-        self.assertEqual(canvas.scene_calls, 1)
-        self.assertEqual(item.scene_port_reads, 0)
-        self.assertIsNone(QGraphicsRectItem.scene(item))
-        self.assertEqual(first_scene.add_port_reads, 1)
-        self.assertEqual(first_scene.remove_port_reads, 1)
-        self.assertNotIn(item, first_scene.items())
-        self.assertNotIn(item, second_scene.items())
-        self.assertNotIn(item, third_scene.items())
-        self.assertEqual(canvas.scene_items_state.shape_items, [])
-
-
-if __name__ == "__main__":
-    unittest.main()

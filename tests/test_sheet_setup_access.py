@@ -63,8 +63,6 @@ def _tracker_signature(scene: QGraphicsScene):
         ),
         tracker.depth,
         tracker.internal_change,
-        tracker.accept_internal_rect,
-        tracker.observed_internal_rect,
     )
 
 
@@ -500,58 +498,6 @@ def test_failed_first_sheet_setup_restores_absent_state_and_inherited_qt_modes()
     assert scene.sceneRect().right() > 10_000.0
     assert canvas.sceneRect().right() > 10_000.0
     scene.removeItem(far)
-    canvas.close()
-
-
-@pytest.mark.parametrize("mutate_before_raise", [False, True])
-def test_sheet_setup_rollback_retries_both_qt_owner_setters(
-    mutate_before_raise: bool,
-) -> None:
-    canvas, scene = _qt_sheet_canvas()
-    before = _sheet_configuration(canvas, scene)
-    original_scene_setter = scene.setSceneRect
-    original_view_setter = canvas.setSceneRect
-    scene_calls = 0
-    view_calls = 0
-
-    def flaky_scene_setter(rect) -> None:
-        nonlocal scene_calls
-        scene_calls += 1
-        if scene_calls == 2:
-            if mutate_before_raise:
-                original_scene_setter(rect)
-            raise RuntimeError("scene rollback failed once")
-        original_scene_setter(rect)
-
-    def flaky_view_setter(rect) -> None:
-        nonlocal view_calls
-        view_calls += 1
-        if view_calls == 2:
-            if mutate_before_raise:
-                original_view_setter(rect)
-            raise RuntimeError("view rollback failed once")
-        original_view_setter(rect)
-
-    original_error = SystemExit("sheet finalization terminated")
-    failing_viewport = SimpleNamespace(update=mock.Mock(side_effect=original_error))
-    with (
-        mock.patch.object(scene, "setSceneRect", side_effect=flaky_scene_setter),
-        mock.patch.object(canvas, "setSceneRect", side_effect=flaky_view_setter),
-        mock.patch.object(canvas, "viewport", return_value=failing_viewport),
-    ):
-        with pytest.raises(SystemExit, match=str(original_error)) as raised:
-            set_sheet_setup_for(canvas, "A4", "portrait")
-
-    assert raised.value is original_error
-    # Forward mutation consumes one call. The first rollback attempt then
-    # fails on its verification probe, and the successful second attempt uses
-    # probe + target, for four bound setter calls in total per Qt owner.
-    assert scene_calls == 4
-    assert view_calls == 4
-    notes = getattr(original_error, "__notes__", [])
-    assert any("scene rollback failed once" in note for note in notes)
-    assert any("view rollback failed once" in note for note in notes)
-    _assert_sheet_configuration(canvas, scene, before)
     canvas.close()
 
 

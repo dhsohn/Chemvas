@@ -758,8 +758,6 @@ class _SceneRectCommitSavepoint:
     pending_journal_items: tuple
     depth: int
     internal_change: bool
-    accept_internal_rect: bool
-    observed_internal_rect: bool
     snapshot_active: bool
 
     @classmethod
@@ -798,8 +796,6 @@ class _SceneRectCommitSavepoint:
             pending_journal_items=tuple(tracker.pending_journal),
             depth=tracker.depth,
             internal_change=tracker.internal_change,
-            accept_internal_rect=tracker.accept_internal_rect,
-            observed_internal_rect=tracker.observed_internal_rect,
             snapshot_active=snapshot.active,
         )
 
@@ -832,8 +828,6 @@ class _SceneRectCommitSavepoint:
         tracker.pending_journal = self.pending_journal
         tracker.depth = self.depth
         tracker.internal_change = self.internal_change
-        tracker.accept_internal_rect = self.accept_internal_rect
-        tracker.observed_internal_rect = self.observed_internal_rect
         self.snapshot.active = self.snapshot_active
 
 

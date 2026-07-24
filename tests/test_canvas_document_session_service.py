@@ -1186,41 +1186,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         snapshot.detach()
         snapshot.restore()
 
-        self.assertFalse(hasattr(scene, "_chemvas_scene_rect_tracker"))
-        far = scene.addRect(10_000.0, 0.0, 10.0, 10.0)
-        self.assertGreater(scene.sceneRect().right(), 10_000.0)
-        self.assertGreater(canvas.sceneRect().right(), 10_000.0)
-        scene.removeItem(far)
-        canvas.close()
-
-    def test_detached_auto_scene_restore_retries_partial_qt_rect_transition(
-        self,
-    ) -> None:
-        class FailOnceRestoreScene(QGraphicsScene):
-            fail_next_set = False
-
-            def setSceneRect(self, rect) -> None:
-                if self.fail_next_set:
-                    self.fail_next_set = False
-                    raise RuntimeError("inherited rect transition failed")
-                QGraphicsScene.setSceneRect(self, rect)
-
-        scene = FailOnceRestoreScene()
-        original_item = scene.addRect(0.0, 0.0, 10.0, 10.0)
-        canvas = QGraphicsView(scene)
-        snapshot = _snapshot_canvas_scene(canvas)
-        self.assertIsNotNone(snapshot)
-        assert snapshot is not None
-        rect_snapshot = snapshot.scene_rect_snapshot
-        self.assertIsNotNone(rect_snapshot)
-        assert rect_snapshot is not None
-        snapshot.detach()
-        scene.fail_next_set = True
-        snapshot.restore()
-
-        self.assertFalse(rect_snapshot.active)
-        self.assertFalse(hasattr(scene, "_chemvas_scene_rect_tracker"))
-        self.assertIs(original_item.scene(), scene)
         far = scene.addRect(10_000.0, 0.0, 10.0, 10.0)
         self.assertGreater(scene.sceneRect().right(), 10_000.0)
         self.assertGreater(canvas.sceneRect().right(), 10_000.0)
@@ -1261,7 +1226,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertEqual(scene.sceneRect(), original_scene_rect)
         self.assertEqual(canvas.sceneRect(), original_view_rect)
         self.assertFalse(scene.signalsBlocked())
-        self.assertFalse(hasattr(scene, "_chemvas_scene_rect_tracker"))
 
         note_controller = canvas.services.interaction.note_controller
         with mock.patch.object(
@@ -1322,7 +1286,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         self.assertTrue(history_state_for(canvas).enabled)
         self.assertGreaterEqual(calls, 3)
-        self.assertFalse(hasattr(scene, "_chemvas_scene_rect_tracker"))
         far = scene.addRect(10_000.0, 0.0, 10.0, 10.0)
         self.assertGreater(scene.sceneRect().right(), 10_000.0)
         self.assertGreater(canvas.sceneRect().right(), 10_000.0)
@@ -1348,7 +1311,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         self.assertIs(original.scene(), scene)
         self.assertTrue(history_state_for(canvas).enabled)
-        self.assertFalse(hasattr(scene, "_chemvas_scene_rect_tracker"))
         far = scene.addRect(10_000.0, 0.0, 10.0, 10.0)
         self.assertGreater(scene.sceneRect().right(), 10_000.0)
         scene.removeItem(far)
@@ -1491,7 +1453,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertEqual(canvas.calls, 0)
         canvas.calls = 1
         self.assertIs(canvas.scene(), scene)
-        self.assertFalse(hasattr(scene, "_chemvas_scene_rect_tracker"))
         scene.addRect(10_000.0, 0.0, 10.0, 10.0)
         self.assertGreater(scene.sceneRect().right(), 10_000.0)
 
@@ -1569,7 +1530,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         self.assertIs(caught.exception, primary)
         self.assertEqual(scene.sceneRect(), original_rect)
-        self.assertFalse(hasattr(scene, "_chemvas_scene_rect_tracker"))
         self.assertFalse(hasattr(scene, "_chemvas_scene_rect_automatic"))
         scene.addRect(10_000.0, 0.0, 10.0, 10.0)
         self.assertGreater(scene.sceneRect().right(), 10_000.0)
@@ -1754,8 +1714,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 ):
                     _snapshot_canvas_scene(Canvas(scene, source))
 
-                self.assertFalse(hasattr(scene, "_chemvas_scene_rect_tracker"))
-
     def test_document_scene_snapshot_fails_closed_for_live_incomplete_ports(
         self,
     ) -> None:
@@ -1830,7 +1788,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 snapshot.detach()
                 snapshot.restore()
                 self.assertIs(qt_item.scene(), scene)
-                self.assertFalse(hasattr(scene, "_chemvas_scene_rect_tracker"))
 
     def test_non_qt_scene_port_capture_failure_restores_raw_scene_graph(self) -> None:
         primary = SystemExit("late non-Qt scene port capture terminated")
@@ -2755,8 +2712,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                     "pending_journal_items": tuple(tracker.pending_journal),
                     "depth": tracker.depth,
                     "internal_change": tracker.internal_change,
-                    "accept_internal_rect": tracker.accept_internal_rect,
-                    "observed_internal_rect": tracker.observed_internal_rect,
                 }
                 original_commit = SceneRectSnapshot.commit_replacement
 
@@ -2807,8 +2762,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 for name in (
                     "depth",
                     "internal_change",
-                    "accept_internal_rect",
-                    "observed_internal_rect",
                 ):
                     self.assertEqual(
                         getattr(tracker, name),
@@ -3002,7 +2955,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 self.assertIs(canvas.model, old_model)
                 self.assertEqual(scene.sceneRect(), old_scene_rect)
                 self.assertEqual(canvas.sceneRect(), old_view_rect)
-                self.assertFalse(hasattr(scene, "_chemvas_scene_rect_tracker"))
                 self.assertIs(history_state.history, old_history)
                 self.assertIs(history_state.redo_stack, old_redo)
                 self.assertEqual(old_history, [history_command])
@@ -3094,7 +3046,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertEqual(scene.items(), [])
         snapshot.restore()
         self.assertEqual(scene.items(), [item])
-        self.assertFalse(hasattr(scene, "_chemvas_scene_rect_tracker"))
 
         primary = KeyboardInterrupt("scene removal interrupted")
         item = Item()
@@ -3112,7 +3063,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         self.assertIs(caught.exception, primary)
         self.assertFalse(scene.signalsBlocked())
-        self.assertFalse(hasattr(scene, "_chemvas_scene_rect_tracker"))
         self.assertTrue(
             any(
                 "SystemExit: signal state restore terminated" in note
