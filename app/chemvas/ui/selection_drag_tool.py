@@ -73,9 +73,6 @@ class _DragTransactionToken:
     history_service: Any
     savepoint: Any | None = None
     pushed: bool = False
-    # Hosts thread this through their phase-labelled owner checks; the value
-    # itself is no longer load-bearing.
-    begin_history_checkpoint: Any | None = None
 
 
 class SelectionDragMixin:
@@ -114,10 +111,8 @@ class SelectionDragMixin:
         self,
         token: _DragTransactionToken,
         *,
-        checkpoint: object | None = None,
         phase: str = "",
     ) -> None:
-        del checkpoint
         if self._drag_transaction is not token:
             raise RuntimeError(
                 f"Selection drag owner changed while {phase or 'interacting'}"

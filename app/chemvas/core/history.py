@@ -211,12 +211,6 @@ def capture_history_transaction_for_command(canvas) -> object:
     return _capture_history_transaction(canvas)
 
 
-def history_transaction_is_deferred_for_command(snapshot: object) -> bool:
-    """Return whether a command-local savepoint is owned by an outer composite."""
-
-    return snapshot is _DEFER_TO_OUTER_HISTORY_TRANSACTION
-
-
 def _restore_history_transaction(
     canvas,
     snapshot: object,
@@ -256,33 +250,6 @@ def _restore_history_transaction(
     for rollback_error in result.errors:
         _add_history_rollback_note(original_error, rollback_error)
 
-    # Diagnostics are an untrusted callback boundary: custom BaseException
-    # subclasses can override ``add_note`` (and secondary errors can override
-    # string conversion) to re-pollute state after an otherwise exact restore.
-    # Re-close the same absolute snapshot once, silently, before publishing
-    # authority.  A failed close is conservatively non-authoritative.
-    if result.authoritative and result.errors:
-        try:
-            closing_result = validate_history_transaction_restore_result(
-                restore(canvas, snapshot)
-            )
-        except BaseException as closing_error:
-            result = HistoryTransactionRestoreResult(
-                authoritative=False,
-                fallback_to_inverse=False,
-                errors=(closing_error,),
-            )
-        else:
-            result = HistoryTransactionRestoreResult(
-                authoritative=closing_result.authoritative,
-                # The preceding authoritative pass already touched state, so
-                # a failed diagnostic close can never make a relative inverse
-                # safe again even if that final hook reports a no-op failure.
-                fallback_to_inverse=False,
-                # Earlier diagnostics were already attached.  Do not run a
-                # second diagnostic callback after this final exact close.
-                errors=(),
-            )
     if _owns_history_transaction(snapshot):
         operation_state = _ACTIVE_HISTORY_OPERATION_STATE.get()
         if operation_state is not None:
@@ -364,16 +331,6 @@ def consume_authoritative_history_failure_restore(
         operation_state.restore_authoritative = False
         operation_state.nonexact_compensation_failed = False
 
-    # Clean up markers left by older callers without invoking a hostile
-    # exception subclass' descriptor protocol. They are never trusted.
-    for attribute in (
-        "_chemvas_authoritative_history_transaction_restore",
-        "_chemvas_nonexact_history_compensation_failed",
-    ):
-        try:
-            BaseException.__delattr__(error, attribute)
-        except BaseException:
-            pass
     return authoritative
 
 
@@ -381,17 +338,10 @@ def _add_history_rollback_note(
     original_error: BaseException,
     rollback_error: BaseException,
 ) -> None:
-    try:
-        add_note = getattr(original_error, "add_note", None)
-        if callable(add_note):
-            add_note(
-                "History rollback also encountered "
-                f"{type(rollback_error).__name__}: {rollback_error}"
-            )
-    except BaseException:
-        # Diagnostics are secondary and must never replace cancellation or
-        # termination raised by the command itself.
-        return
+    original_error.add_note(
+        "History rollback also encountered "
+        f"{type(rollback_error).__name__}: {rollback_error}"
+    )
 
 
 def _run_history_rollback_step(
@@ -1536,7 +1486,6 @@ __all__ = [
     "command_requires_exact_history_transaction",
     "consume_authoritative_history_failure_restore",
     "history_operation_scope",
-    "history_transaction_is_deferred_for_command",
     "release_history_transaction_for_command",
     "restore_history_transaction_for_command",
     "validate_history_transaction_restore_result",
