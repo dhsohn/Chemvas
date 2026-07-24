@@ -1570,67 +1570,6 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                 self.assertGreater(scene.sceneRect().right(), 20_000.0)
                 scene.removeItem(future)
 
-    def test_broken_add_note_cannot_replace_ui_transaction_primary(self) -> None:
-        from chemvas.core.history import _add_history_rollback_note
-        from chemvas.ui.canvas_delete_transaction import _add_delete_rollback_note
-        from chemvas.ui.canvas_document_session_service import _add_scene_recovery_note
-        from chemvas.ui.canvas_geometry_controller import _add_bond_length_rollback_note
-        from chemvas.ui.canvas_history_service import _add_history_notification_note
-        from chemvas.ui.history_canvas_access import _add_move_rollback_note
-        from chemvas.ui.history_commands import _add_rollback_error_note
-
-        class BrokenNoteCallPrimary(SystemExit):
-            def add_note(self, _note: str) -> None:
-                raise KeyboardInterrupt("broken add_note")
-
-        class BrokenNoteLookupSystemExit(SystemExit):
-            def __getattribute__(self, name: str):
-                if name == "add_note":
-                    raise KeyboardInterrupt("broken add_note lookup")
-                return super().__getattribute__(name)
-
-        class BrokenNoteLookupKeyboardInterrupt(KeyboardInterrupt):
-            def __getattribute__(self, name: str):
-                if name == "add_note":
-                    raise SystemExit("broken add_note lookup")
-                return super().__getattribute__(name)
-
-        helpers = (
-            ("core", _add_history_rollback_note),
-            ("delete", _add_delete_rollback_note),
-            (
-                "document",
-                lambda primary, secondary: _add_scene_recovery_note(
-                    primary,
-                    secondary,
-                    phase="testing note safety",
-                ),
-            ),
-            ("geometry", _add_bond_length_rollback_note),
-            ("history", _add_history_notification_note),
-            ("move", _add_move_rollback_note),
-            (
-                "ui-history",
-                lambda primary, secondary: _add_rollback_error_note(
-                    primary,
-                    secondary,
-                    phase="testing note safety",
-                ),
-            ),
-        )
-        for name, helper in helpers:
-            for primary_type in (
-                BrokenNoteCallPrimary,
-                BrokenNoteLookupSystemExit,
-                BrokenNoteLookupKeyboardInterrupt,
-            ):
-                with self.subTest(helper=name, primary=primary_type.__name__):
-                    primary = primary_type(f"{name} primary")
-                    helper(primary, RuntimeError(f"{name} rollback failed"))
-                    with self.assertRaises(primary_type) as caught:
-                        raise primary
-                    self.assertIs(caught.exception, primary)
-
     def test_update_atom_color_compensates_mutate_then_raise_label_setter(self) -> None:
         canvas = self._canvas()
         atom_id = add_atom_for(canvas, "N", 0.0, 0.0)

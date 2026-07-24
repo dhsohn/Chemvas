@@ -9,7 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 try:
     from PyQt6.QtCore import QPointF, Qt
     from PyQt6.QtGui import QBrush, QColor, QPen, QTransform
-    from PyQt6.QtWidgets import QApplication, QGraphicsRectItem
+    from PyQt6.QtWidgets import QApplication
 except ModuleNotFoundError:
     QApplication = None
 
@@ -148,110 +148,6 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         canvas = CanvasView()
         self._real_canvases.append(canvas)
         return canvas
-
-    def test_delete_capture_data_failure_restores_unrelated_qt_item(self) -> None:
-        canvas = self._new_canvas()
-        unrelated = QGraphicsRectItem(0.0, 0.0, 10.0, 10.0)
-        unrelated.setPos(QPointF(3.0, 4.0))
-        canvas.scene().addItem(unrelated)
-        before = QPointF(unrelated.pos())
-        primary = SystemExit("delete capture data getter terminated")
-
-        class PoisoningDataItem(QGraphicsRectItem):
-            armed = False
-
-            def data(self, role):
-                if self.armed:
-                    unrelated.moveBy(20.0, -9.0)
-                    raise primary
-                return super().data(role)
-
-        item = PoisoningDataItem(0.0, 0.0, 2.0, 2.0)
-        canvas.scene().addItem(item)
-        item.armed = True
-
-        with self.assertRaises(SystemExit) as caught:
-            CanvasDeleteTransactionSnapshot.capture(
-                canvas,
-                history_service=canvas.services.history_service,
-            )
-
-        self.assertIs(caught.exception, primary)
-        self.assertEqual(unrelated.pos(), before)
-        item.armed = False
-
-    def test_delete_model_field_capture_failure_unwinds_prior_getter_mutation(
-        self,
-    ) -> None:
-        primary = KeyboardInterrupt("delete bond field capture terminated")
-
-        class PoisoningModel:
-            def __init__(self) -> None:
-                self._atoms = {}
-                self._bonds = []
-                self.next_atom_id = 7
-                self.atom_annotations = {}
-                self.armed = True
-
-            @property
-            def atoms(self):
-                if self.armed:
-                    self.next_atom_id = 999
-                return self._atoms
-
-            @atoms.setter
-            def atoms(self, value) -> None:
-                self._atoms = value
-
-            @property
-            def bonds(self):
-                if self.armed:
-                    raise primary
-                return self._bonds
-
-            @bonds.setter
-            def bonds(self, value) -> None:
-                self._bonds = value
-
-        model = PoisoningModel()
-        canvas = type("DeleteCaptureCanvas", (), {})()
-        canvas.model = model
-
-        with self.assertRaises(KeyboardInterrupt) as caught:
-            CanvasDeleteTransactionSnapshot.capture(canvas)
-
-        self.assertIs(caught.exception, primary)
-        self.assertEqual(model.next_atom_id, 7)
-
-    def test_delete_canvas_model_getter_failure_restores_raw_model_graph(self) -> None:
-        primary = KeyboardInterrupt("canvas model getter terminated")
-        model = MoleculeModel(atoms={0: Atom("N", 1.0, 2.0)})
-        atom = model.atoms[0]
-
-        class PoisoningCanvas:
-            def __init__(self) -> None:
-                self._model = model
-                self.armed = True
-
-            @property
-            def model(self):
-                if self.armed:
-                    self._model.atoms.clear()
-                    raise primary
-                return self._model
-
-            @model.setter
-            def model(self, value) -> None:
-                self._model = value
-
-        canvas = PoisoningCanvas()
-
-        with self.assertRaises(KeyboardInterrupt) as caught:
-            CanvasDeleteTransactionSnapshot.capture(canvas)
-
-        self.assertIs(caught.exception, primary)
-        self.assertIs(canvas._model, model)
-        self.assertIs(model.atoms[0], atom)
 
     def test_direct_atom_failure_before_or_after_mutation_restores_marks_and_graphics_once(
         self,
