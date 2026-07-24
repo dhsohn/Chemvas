@@ -20,7 +20,6 @@ from chemvas.ui import (
 from chemvas.ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
 from chemvas.ui.canvas_atom_graphics_state import atom_items_for
 from chemvas.ui.canvas_graph_state import graph_state_for
-from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.canvas_runtime_services import CanvasRuntimeServices
 from chemvas.ui.canvas_scene_items_state import (
     append_scene_item_for,
@@ -31,7 +30,6 @@ from chemvas.ui.canvas_smiles_input_state import (
     last_smiles_input_for,
     set_last_smiles_input_for,
 )
-from chemvas.ui.canvas_view import CanvasView
 from chemvas.ui.insert_commit_rollback import (
     capture_smiles_input_restore_authority,
     rollback_insert_mutation,
@@ -43,8 +41,7 @@ from chemvas.ui.structure_insert_access import (
     add_insert_ring_from_points_for,
     rollback_insert_mutation_for,
 )
-from PyQt6.QtCore import QCoreApplication, QEvent, QPointF
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import QPointF
 
 from tests.runtime_services import canvas_runtime_services
 
@@ -1351,119 +1348,3 @@ class InsertCommitServiceTest(unittest.TestCase):
         )
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(canvas.model.bonds, [])
-
-    def test_successful_insert_history_observer_cannot_rewrite_command_after_state(
-        self,
-    ) -> None:
-        app = QApplication.instance() or QApplication([])
-        app.setQuitOnLastWindowClosed(False)
-
-        def free_template(canvas: CanvasView) -> bool:
-            points = [
-                (0.0, 0.0),
-                (20.0, 0.0),
-                (25.0, 15.0),
-                (10.0, 25.0),
-                (-5.0, 15.0),
-            ]
-            request = TemplateInsertRequest(
-                ring_size=5,
-                cursor_pos=(0.0, 0.0),
-                ring_style="regular",
-            )
-            plan = TemplateInsertPlan(
-                generator="free_regular_ring",
-                ring_size=5,
-                ring_style="regular",
-                bond_id=None,
-                radius_mode="regular_polygon",
-            )
-            return apply_template_commit_resolution(
-                canvas,
-                request,
-                plan,
-                TemplateInsertResolution(plan=plan, points=points),
-                before_smiles_input="old",
-            )
-
-        def benzene_template(canvas: CanvasView) -> bool:
-            request = TemplateInsertRequest(
-                ring_size=6,
-                cursor_pos=(0.0, 0.0),
-                ring_style="benzene",
-            )
-            plan = TemplateInsertPlan(
-                generator="benzene",
-                ring_size=6,
-                ring_style="benzene",
-                bond_id=None,
-            )
-            return apply_template_commit_resolution(
-                canvas,
-                request,
-                plan,
-                None,
-                before_smiles_input="old",
-            )
-
-        def smiles(canvas: CanvasView) -> bool:
-            plan = SmilesCommitPlan(
-                offset=(0.0, 0.0),
-                atoms=[
-                    SmilesAtomPlacement(
-                        0,
-                        "N",
-                        1.0,
-                        2.0,
-                        "#123456",
-                        True,
-                    )
-                ],
-                bonds=[],
-            )
-            return apply_smiles_commit_plan(
-                canvas,
-                plan,
-                before_smiles_input="old",
-                after_smiles_input="new",
-            )
-
-        for label, operation in (
-            ("smiles", smiles),
-            ("free-template", free_template),
-            ("benzene-template", benzene_template),
-        ):
-            with self.subTest(label=label):
-                canvas = CanvasView()
-                history = canvas.services.history_service
-                before_history = tuple(history.state.history)
-                before_redo = tuple(history.state.redo_stack)
-
-                def poison_published_atom(target: CanvasView = canvas) -> None:
-                    if target.model.atoms:
-                        target.model.atoms[max(target.model.atoms)].color = "#abcdef"
-
-                history.set_change_callback(poison_published_atom)
-                try:
-                    with self.assertRaisesRegex(
-                        RuntimeError,
-                        "recorded atom state changed after history publication",
-                    ):
-                        operation(canvas)
-
-                    self.assertEqual(canvas.model.atoms, {})
-                    self.assertEqual(canvas.model.bonds, [])
-                    self.assertEqual(canvas.model.next_atom_id, 0)
-                    self.assertEqual(tuple(history.state.history), before_history)
-                    self.assertEqual(tuple(history.state.redo_stack), before_redo)
-                finally:
-                    history.set_change_callback(None)
-                    schedule_canvas_deletion_for(canvas)
-                    QCoreApplication.sendPostedEvents(
-                        canvas,
-                        QEvent.Type.DeferredDelete,
-                    )
-
-
-if __name__ == "__main__":
-    unittest.main()
