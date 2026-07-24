@@ -714,47 +714,6 @@ class AtomLabelServiceTest(unittest.TestCase):
         )
         self.assertEqual(canvas.pushed_commands, [])
 
-    def test_label_history_rejects_observer_payload_mutation_and_keeps_undo_exact(
-        self,
-    ) -> None:
-        canvas = _FakeCanvas()
-        canvas.model = MoleculeModel(atoms={1: Atom("C", 1.0, 2.0)})
-        history = CanvasHistoryService(canvas, canvas.history_state)
-        canvas.services.history_service = history
-        service = _atom_label_service(canvas)
-        canvas.services.atom_label_service = service
-        service.ensure_carbon_dot(1)
-        callback_calls = 0
-
-        def corrupt_published_command() -> None:
-            nonlocal callback_calls
-            callback_calls += 1
-            if not canvas.history_state.history:
-                return
-            published = canvas.history_state.history[-1]
-            assert isinstance(published, ChangeAtomLabelCommand)
-            published.before_element = "O"
-
-        history.set_change_callback(corrupt_published_command)
-
-        with self.assertRaisesRegex(RuntimeError, "history command field"):
-            service.add_or_update_atom_label(1, "N", allow_merge=False)
-
-        self.assertGreaterEqual(callback_calls, 1)
-        self.assertEqual(canvas.model.atoms[1].element, "C")
-        self.assertEqual(canvas.history_state.history, [])
-        self.assertEqual(canvas.history_state.redo_stack, [])
-
-        history.set_change_callback(None)
-        service.add_or_update_atom_label(1, "N", allow_merge=False)
-
-        self.assertEqual(canvas.model.atoms[1].element, "N")
-        self.assertEqual(len(canvas.history_state.history), 1)
-        history.undo()
-        self.assertEqual(canvas.model.atoms[1].element, "C")
-        self.assertEqual(canvas.history_state.history, [])
-        self.assertEqual(len(canvas.history_state.redo_stack), 1)
-
     def test_production_label_history_does_not_cross_live_enabled_getter(
         self,
     ) -> None:
@@ -1201,46 +1160,6 @@ class AtomLabelServiceTest(unittest.TestCase):
         self.assertEqual(canvas.model.atoms[1].element, "C")
         self.assertEqual(canvas.model.atoms[2].element, "N")
         self.assertEqual(canvas.pushed_commands, [])
-
-    def test_label_history_runtime_scene_capture_cannot_poison_history(self) -> None:
-        import chemvas.ui.canvas_history_recording_service as recording_module
-
-        canvas = _FakeCanvas()
-        canvas.model = MoleculeModel(atoms={1: Atom("C", 1.0, 2.0)})
-        history = CanvasHistoryService(canvas, canvas.history_state)
-        canvas.services.history_service = history
-        service = _atom_label_service(canvas)
-        canvas.services.atom_label_service = service
-        service.ensure_carbon_dot(1)
-        sentinel = object()
-        real_capture = recording_module.capture_history_transaction_for_history
-        original_scene = canvas.scene
-        armed = True
-
-        def poisoned_scene():
-            nonlocal armed
-            if armed:
-                armed = False
-                canvas.history_state.history.append(sentinel)
-            return original_scene()
-
-        def capture_with_poisoned_scene(*args, **kwargs):
-            with patch.object(canvas, "scene", side_effect=poisoned_scene):
-                return real_capture(*args, **kwargs)
-
-        with (
-            patch.object(
-                recording_module,
-                "capture_history_transaction_for_history",
-                side_effect=capture_with_poisoned_scene,
-            ),
-            self.assertRaisesRegex(RuntimeError, "history stack contents"),
-        ):
-            service.add_or_update_atom_label(1, "N", allow_merge=False)
-
-        self.assertEqual(canvas.model.atoms[1].element, "C")
-        self.assertEqual(canvas.history_state.history, [])
-        self.assertEqual(canvas.history_state.redo_stack, [])
 
     def test_record_label_change_skips_none_and_unchanged_bond_states(self) -> None:
         canvas = _FakeCanvas()

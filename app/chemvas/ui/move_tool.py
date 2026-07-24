@@ -73,7 +73,6 @@ class MoveTool(SelectionDragMixin, Tool):
             refresh_selection_outline_for(self.canvas)
             self._ensure_drag_owner(
                 owner,
-                checkpoint=owner.begin_history_checkpoint,
                 phase="refreshing its directly moved item",
             )
             self._push_drag_history(
@@ -150,7 +149,6 @@ class MoveTool(SelectionDragMixin, Tool):
                 move_item_for(self.canvas, self._drag_item, delta.x(), delta.y())
                 self._ensure_drag_owner(
                     token,
-                    checkpoint=token.begin_history_checkpoint,
                     phase="moving its directly grabbed item",
                 )
                 self._moved = True

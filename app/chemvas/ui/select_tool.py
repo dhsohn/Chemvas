@@ -107,7 +107,6 @@ class SelectTool(SelectionDragMixin, Tool):
             after_state = scene_item_state_for(self.canvas, target)
             self._ensure_drag_owner(
                 owner,
-                checkpoint=owner.begin_history_checkpoint,
                 phase="reading its handle-drag result",
             )
             if before_state and after_state and before_state != after_state:
@@ -134,7 +133,6 @@ class SelectTool(SelectionDragMixin, Tool):
             operation()
             self._ensure_drag_owner(
                 owner,
-                checkpoint=owner.begin_history_checkpoint,
                 phase="applying its pending handle toggle",
             )
 
@@ -328,7 +326,6 @@ class SelectTool(SelectionDragMixin, Tool):
                 self.context.update_handle_drag(self._active_handle, scene_pos)
                 self._ensure_drag_owner(
                     token,
-                    checkpoint=token.begin_history_checkpoint,
                     phase="updating its active handle",
                 )
             except BaseException as original_error:

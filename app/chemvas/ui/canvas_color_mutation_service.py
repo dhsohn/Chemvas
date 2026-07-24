@@ -49,8 +49,7 @@ from chemvas.ui.graphics_items import AtomDotItem
 from chemvas.ui.history_commands import AddSceneItemsCommand, UpdateSceneItemCommand
 from chemvas.ui.history_push_failure_recovery import (
     RecordingHistoryPolicySnapshot,
-    _restore_history_and_policy_silently,
-    _verify_history_and_policy_authority,
+    _restore_history_and_policy,
 )
 from chemvas.ui.note_item_access import (
     committed_note_html_for,
@@ -194,7 +193,7 @@ class _ColorHistoryAuthority:
     def verify_prepublication(self) -> None:
         if self.stack_snapshot is None:
             return
-        _verify_history_and_policy_authority(
+        _verify_color_history_and_policy(
             self.stack_snapshot,
             self.policy_snapshot,
         )
@@ -234,14 +233,7 @@ class _ColorHistoryAuthority:
         expected_redo = snapshot.redo_items
         limit = None
         if self.policy_snapshot is not None:
-            limit = next(
-                (
-                    port.value
-                    for port in self.policy_snapshot.ports
-                    if port.name == "limit"
-                ),
-                None,
-            )
+            limit = dict(self.policy_snapshot.values).get("limit")
         for command, accepted in publications:
             if not accepted:
                 continue
@@ -261,8 +253,6 @@ class _ColorHistoryAuthority:
             return
         self.policy_snapshot.verify()
         verify_stacks()
-        self.policy_snapshot.verify(reverse=True)
-        verify_stacks()
 
     def verify_published_raw_commands(
         self,
@@ -278,17 +268,13 @@ class _ColorHistoryAuthority:
 
     def restore(self, original_error: BaseException, *, phase: str) -> bool:
         live_restored = self.stack_snapshot is None
-        if self.stack_snapshot is not None:
-            for reverse in (False, True):
-                if _restore_history_and_policy_silently(
-                    self.stack_snapshot,
-                    self.policy_snapshot,
-                    original_error,
-                    phase=phase,
-                    reverse=reverse,
-                ):
-                    live_restored = True
-                    break
+        if self.stack_snapshot is not None and _restore_history_and_policy(
+            self.stack_snapshot,
+            self.policy_snapshot,
+            original_error,
+            phase=phase,
+        ):
+            live_restored = True
         raw_restored = True
         if self.raw_baseline is not None:
             try:
@@ -379,6 +365,15 @@ def _captured_graphics_pen(item: object) -> QPen | None:
         if _graphics_item_is_deleted(item):
             return None
         raise
+
+
+def _verify_color_history_and_policy(
+    history_snapshot,
+    policy_snapshot,
+) -> None:
+    history_snapshot.verify_exact_items()
+    if policy_snapshot is not None:
+        policy_snapshot.verify()
 
 
 def _add_color_rollback_note(
@@ -1703,7 +1698,7 @@ class CanvasColorMutationService:
         history_snapshot = history_authority.stack_snapshot
         if history_snapshot is None:
             raise RuntimeError("color rollback lost its exact history authority")
-        _verify_history_and_policy_authority(
+        _verify_color_history_and_policy(
             history_snapshot,
             history_authority.policy_snapshot,
         )

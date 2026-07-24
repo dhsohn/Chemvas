@@ -229,73 +229,34 @@ class _HistoryCanvasTransactionSnapshot:
             return (error,)
         return ()
 
-    def _verify_canvas_snapshot(self) -> tuple[BaseException, ...]:
-        verify = getattr(self.canvas_snapshot, "_verify_exact_authorities", None)
-        if not callable(verify):
-            return ()
-        try:
-            return tuple(verify())
-        except BaseException as error:
-            return (error,)
-
     def verify_exact(self) -> tuple[BaseException, ...]:
-        """Verify canvas/style globally, with canvas final after style getter."""
-
-        return (
-            *self._verify_canvas_snapshot(),
-            *self._verify_renderer_style(),
-            *self._verify_canvas_snapshot(),
-        )
+        canvas_errors: tuple[BaseException, ...] = ()
+        verify = getattr(self.canvas_snapshot, "_verify_exact_authorities", None)
+        if callable(verify):
+            try:
+                canvas_errors = tuple(verify())
+            except BaseException as error:
+                canvas_errors = (error,)
+        return (*canvas_errors, *self._verify_renderer_style())
 
     def restore_with_result(self) -> RestoreOutcome:
-        accumulated_errors: list[BaseException] = []
-        for attempt in range(2):
-            attempt_errors: list[BaseException] = []
-            canvas_authoritative = False
-
-            def restore_canvas(
-                _attempt_errors: list[BaseException] = attempt_errors,
-            ) -> None:
-                nonlocal canvas_authoritative
-                try:
-                    result = self.canvas_snapshot.restore_with_result()
-                except BaseException as error:
-                    _attempt_errors.append(error)
-                    return
-                _attempt_errors.extend(result.errors)
-                canvas_authoritative = result.authoritative
-                if not result.authoritative and not result.errors:
-                    _attempt_errors.append(
-                        RuntimeError("canvas snapshot restore was not authoritative")
-                    )
-
-            if attempt == 0:
-                # The first canvas restore owns the one-shot history/rect
-                # publication. Renderer style must be the final writer after it.
-                restore_canvas()
-                attempt_errors.extend(self._restore_renderer_style_once())
-            else:
-                # Reverse the independent authorities on retry. The canvas
-                # snapshot suppresses its already-consumed publication.
-                attempt_errors.extend(self._restore_renderer_style_once())
-                restore_canvas()
-            # The style getter is an untrusted descriptor too. It can return
-            # the captured object while re-mutating canvas state, so canvas
-            # must be the final independently verified authority.
-            verification_errors = list(self.verify_exact())
-            if canvas_authoritative and not verification_errors:
-                return RestoreOutcome(
-                    authoritative=True,
-                    fallback_to_inverse=False,
-                    errors=tuple((*accumulated_errors, *attempt_errors)),
-                )
-            attempt_errors.extend(verification_errors)
-            accumulated_errors.extend(attempt_errors)
-
+        try:
+            result = self.canvas_snapshot.restore_with_result()
+        except BaseException as error:
+            return RestoreOutcome(
+                authoritative=False,
+                fallback_to_inverse=False,
+                errors=(error,),
+            )
+        # Renderer style is independent of the canvas snapshot and is the
+        # final writer after it.
+        style_errors = self._restore_renderer_style_once()
+        if not style_errors:
+            style_errors = self._verify_renderer_style()
         return RestoreOutcome(
-            authoritative=False,
+            authoritative=result.authoritative and not style_errors,
             fallback_to_inverse=False,
-            errors=tuple(accumulated_errors),
+            errors=tuple((*result.errors, *style_errors)),
         )
 
     def restore(self) -> list[BaseException]:
