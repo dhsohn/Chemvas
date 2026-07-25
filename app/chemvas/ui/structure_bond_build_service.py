@@ -24,7 +24,7 @@ def _add_bond_build_rollback_note(
         if not callable(add_note):
             return
         add_note(message)
-    except BaseException:
+    except Exception:
         return
 
 
@@ -93,10 +93,10 @@ class StructureBondBuildService:
                     self.committer.release_recorded_change(snapshot)
                 return result
             return self._add_new_bond(snapshot, start_id, end_id, style, order)
-        except BaseException as error:
+        except Exception as error:
             try:
                 self.committer.abort_recorded_change(snapshot, original_error=error)
-            except BaseException as rollback_error:
+            except Exception as rollback_error:
                 _add_bond_build_rollback_note(
                     error,
                     f"Bond build rollback also failed: {rollback_error!r}",
@@ -137,7 +137,7 @@ class StructureBondBuildService:
                 before_smiles_input,
                 last_smiles_input_for(self.canvas),
             )
-        except BaseException as caught_error:
+        except Exception as caught_error:
             original_error = caught_error
 
             def run_compensation(
@@ -146,7 +146,7 @@ class StructureBondBuildService:
             ) -> None:
                 try:
                     operation()
-                except BaseException as rollback_error:
+                except Exception as rollback_error:
                     _add_bond_build_rollback_note(
                         original_error,
                         "Existing-bond rollback also encountered an error while "

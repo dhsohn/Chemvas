@@ -36,10 +36,7 @@ def validate_restore_outcome(result: object) -> RestoreOutcome:
     if result is None:
         return RestoreOutcome(authoritative=True)
     if type(result) is not RestoreOutcome:
-        raise TypeError(
-            "history restore must return None or an exact "
-            "HistoryTransactionRestoreResult"
-        )
+        raise TypeError("restore must return None or an exact RestoreOutcome")
 
     # Revalidate even though normal construction runs ``__post_init__``.
     # Deserializers or object-level mutation must not weaken this boundary.
@@ -59,15 +56,4 @@ def validate_restore_outcome(result: object) -> RestoreOutcome:
     return result
 
 
-# Transitional names retained while legacy history callers move to the domain
-# contract. They are aliases, so the exact-type validation remains intact.
-HistoryTransactionRestoreResult = RestoreOutcome
-validate_history_transaction_restore_result = validate_restore_outcome
-
-
-__all__ = [
-    "HistoryTransactionRestoreResult",
-    "RestoreOutcome",
-    "validate_history_transaction_restore_result",
-    "validate_restore_outcome",
-]
+__all__ = ["RestoreOutcome", "validate_restore_outcome"]

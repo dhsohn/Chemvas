@@ -8,12 +8,8 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtWidgets import QGraphicsTextItem
 
-from chemvas.domain.transactions import HistoryAuthoritySnapshot
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
-from chemvas.ui.history_commands import (
-    AddSceneItemsCommand,
-    _run_rollback_step,
-)
+from chemvas.ui.history_commands import AddSceneItemsCommand
 from chemvas.ui.mark_item_access import build_mark_item_for, set_mark_center_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.scene_decoration_build_access import (
@@ -35,6 +31,9 @@ from chemvas.ui.scene_item_state import (
     ts_bracket_state_dict_for,
 )
 from chemvas.ui.transactions.scene_item_attach import SceneItemAttachSnapshot
+from chemvas.ui.transactions.scene_runtime import (
+    run_rollback_step,
+)
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView
@@ -54,7 +53,7 @@ class SceneDecorationService:
         offset: QPointF | None = None,
         record: bool = True,
     ):
-        with self._scene_add_transaction(snapshot_history=record) as track:
+        with self._scene_add_transaction() as track:
             kind = kind or tool_settings_state_for(self.canvas).mark_kind
             item = build_mark_item_for(self.canvas, kind)
             if item is None:
@@ -159,12 +158,7 @@ class SceneDecorationService:
     @contextmanager
     def _scene_add_transaction(
         self,
-        *,
-        snapshot_history: bool = True,
     ) -> Iterator[Callable[[object], object]]:
-        history_snapshot = (
-            HistoryAuthoritySnapshot.capture(self.history) if snapshot_history else None
-        )
         item_snapshot: SceneItemAttachSnapshot | None = None
 
         def track(item: object) -> object:
@@ -176,10 +170,9 @@ class SceneDecorationService:
             yield track
             if item_snapshot is not None:
                 item_snapshot.release()
-        except BaseException as original_error:
+        except Exception as original_error:
             self._rollback_failed_add(
                 item_snapshot,
-                history_snapshot=history_snapshot,
                 original_error=original_error,
             )
             raise
@@ -188,18 +181,15 @@ class SceneDecorationService:
         self,
         item_snapshot: SceneItemAttachSnapshot | None,
         *,
-        history_snapshot: HistoryAuthoritySnapshot | None,
         original_error: BaseException,
     ) -> None:
         if item_snapshot is not None:
-            _run_rollback_step(
+            run_rollback_step(
                 original_error,
                 "removing the item created by a failed scene add",
                 partial(remove_scene_item, self.canvas, item_snapshot.item),
             )
             item_snapshot.restore(original_error, phase="a failed scene add")
-        if history_snapshot is not None:
-            history_snapshot.restore(original_error, phase="scene add")
 
 
 __all__ = ["SceneDecorationService"]

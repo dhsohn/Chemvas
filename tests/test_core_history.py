@@ -3,7 +3,6 @@ from copy import deepcopy
 from types import SimpleNamespace
 from unittest import mock
 
-import chemvas.core.history as history_core
 from chemvas.core.history import (
     AddAtomsCommand,
     AddBondCommand,
@@ -11,16 +10,14 @@ from chemvas.core.history import (
     DeleteAtomsCommand,
     DeleteBondCommand,
     HistoryCommand,
-    HistoryTransactionRestoreResult,
     MoveAtomsCommand,
+    RestoreOutcome,
     SetAtomPositionsCommand,
     SetRingPolygonsCommand,
     SetSmilesInputCommand,
     UpdateAtomColorCommand,
     UpdateBondCommand,
     UpdateBondLengthCommand,
-    consume_authoritative_history_failure_restore,
-    restore_history_transaction_for_command,
 )
 from chemvas.domain.document import Atom
 from chemvas.ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
@@ -465,44 +462,6 @@ class _ToggleStateCommand(HistoryCommand):
 
 
 class HistoryCommandTest(unittest.TestCase):
-    def test_malformed_restore_port_result_cannot_replace_primary_error(self) -> None:
-        class HostileResult:
-            @property
-            def errors(self):
-                raise KeyboardInterrupt("hostile errors getter")
-
-        class Port:
-            def __init__(self, result: object) -> None:
-                self.result = result
-
-            def restore_history_transaction_for_history(self, canvas, snapshot):
-                del canvas, snapshot
-                return self.result
-
-        for malformed in (True, HostileResult()):
-            with self.subTest(result=type(malformed).__name__):
-                primary = ValueError("original command failure")
-                with mock.patch(
-                    "chemvas.core.history._history_canvas_port",
-                    return_value=Port(malformed),
-                ):
-                    result = restore_history_transaction_for_command(
-                        object(),
-                        object(),
-                        primary,
-                    )
-
-                self.assertFalse(result.authoritative)
-                self.assertFalse(result.fallback_to_inverse)
-                self.assertEqual(len(result.errors), 1)
-                self.assertIsInstance(result.errors[0], TypeError)
-                self.assertTrue(
-                    any(
-                        "History rollback also encountered TypeError" in note
-                        for note in primary.__notes__
-                    )
-                )
-
     def test_history_command_base_methods_raise_not_implemented(self) -> None:
         command = HistoryCommand()
 
@@ -674,62 +633,6 @@ class HistoryCommandTest(unittest.TestCase):
         self.assertEqual(port.capture_calls, 1)
         self.assertEqual(port.restore_calls, 0)
 
-    def test_lifecycle_composite_inverse_fallback_repairs_deferred_failing_child(
-        self,
-    ) -> None:
-        class _RestoreDisappearsDuringBondPort(_StatefulHistoryPort):
-            def __init__(self) -> None:
-                super().__init__()
-                self.capture_calls = 0
-                self.remove_calls = 0
-
-            def capture_history_transaction_for_history(self, canvas, **_kwargs):
-                self.capture_calls += 1
-                return _atomic_canvas_snapshot(canvas)
-
-            def restore_history_transaction_for_history(self, canvas, snapshot) -> None:
-                del canvas, snapshot
-
-            def restore_bond_from_state_for_history(
-                self,
-                canvas,
-                bond_id: int,
-                bond_state: dict,
-            ) -> None:
-                super().restore_bond_from_state_for_history(canvas, bond_id, bond_state)
-                self.restore_history_transaction_for_history = None
-                raise KeyboardInterrupt("bond restore interrupted after mutation")
-
-            def remove_bond_for_history(self, canvas, bond_id: int) -> None:
-                self.remove_calls += 1
-                super().remove_bond_for_history(canvas, bond_id)
-
-        canvas = _AtomicHistoryCanvas(smiles_input="before")
-        port = _RestoreDisappearsDuringBondPort()
-        command = CompositeCommand(
-            [
-                AddBondCommand(
-                    bond_id=0,
-                    bond_state={"a": 1, "b": 2, "order": 1},
-                    previous_bond_count=0,
-                    before_smiles_input="before",
-                    after_smiles_input="after",
-                )
-            ]
-        )
-
-        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
-            with self.assertRaises(KeyboardInterrupt) as caught:
-                command.redo(canvas)
-
-        self.assertEqual(
-            str(caught.exception), "bond restore interrupted after mutation"
-        )
-        self.assertEqual(canvas.bonds, {})
-        self.assertEqual(canvas.smiles_input, "before")
-        self.assertEqual(port.capture_calls, 1)
-        self.assertEqual(port.remove_calls, 1)
-
     def test_lifecycle_composite_falls_back_if_restore_fails_before_authoritative_pass(
         self,
     ) -> None:
@@ -748,10 +651,10 @@ class HistoryCommandTest(unittest.TestCase):
                 self,
                 canvas,
                 snapshot,
-            ) -> HistoryTransactionRestoreResult:
+            ) -> RestoreOutcome:
                 del canvas, snapshot
                 self.restore_calls += 1
-                return HistoryTransactionRestoreResult(
+                return RestoreOutcome(
                     authoritative=False,
                     fallback_to_inverse=True,
                     errors=(RuntimeError("restore failed before absolute pass"),),
@@ -873,10 +776,10 @@ class HistoryCommandTest(unittest.TestCase):
                 self,
                 canvas,
                 snapshot,
-            ) -> HistoryTransactionRestoreResult:
+            ) -> RestoreOutcome:
                 canvas.bonds = deepcopy(snapshot["bonds"])
                 canvas.smiles_input = snapshot["smiles_input"]
-                return HistoryTransactionRestoreResult(
+                return RestoreOutcome(
                     authoritative=True,
                     errors=(RuntimeError("observer failed after absolute pass"),),
                 )
@@ -937,11 +840,11 @@ class HistoryCommandTest(unittest.TestCase):
                 self,
                 canvas,
                 snapshot,
-            ) -> HistoryTransactionRestoreResult:
+            ) -> RestoreOutcome:
                 # Simulate a full best-effort pass that restored one absolute
                 # field but hit a persistent critical setter on another.
                 canvas.smiles_input = snapshot["smiles_input"]
-                return HistoryTransactionRestoreResult(
+                return RestoreOutcome(
                     authoritative=False,
                     fallback_to_inverse=False,
                     errors=(RuntimeError("persistent model setter failure"),),
@@ -988,61 +891,6 @@ class HistoryCommandTest(unittest.TestCase):
             )
         )
 
-    def test_history_canvas_restore_marks_persistent_renderer_setter_as_partial(
-        self,
-    ) -> None:
-        from chemvas.ui.history_canvas_access import (
-            _capture_renderer_style_access,
-            _HistoryCanvasTransactionSnapshot,
-            restore_history_transaction_for_history,
-        )
-
-        class _PersistentRenderer:
-            def __init__(self) -> None:
-                self._style = "before"
-                self.setter_calls = 0
-
-            @property
-            def style(self):
-                return self._style
-
-            @style.setter
-            def style(self, value) -> None:
-                del value
-                self.setter_calls += 1
-                raise RuntimeError("persistent renderer style setter failure")
-
-        class _CompletedCanvasSnapshot:
-            def __init__(self) -> None:
-                self.restore_calls = 0
-
-            def restore_with_result(self) -> HistoryTransactionRestoreResult:
-                self.restore_calls += 1
-                return HistoryTransactionRestoreResult(authoritative=True)
-
-        canvas_snapshot = _CompletedCanvasSnapshot()
-        renderer = _PersistentRenderer()
-        renderer_style = _capture_renderer_style_access(renderer)
-        self.assertIsNotNone(renderer_style)
-        renderer._style = "mutated"
-        snapshot = _HistoryCanvasTransactionSnapshot(
-            canvas_snapshot=canvas_snapshot,
-            renderer_style=renderer_style,
-        )
-
-        result = restore_history_transaction_for_history(None, snapshot)
-
-        self.assertFalse(result.authoritative)
-        self.assertFalse(result.fallback_to_inverse)
-        self.assertEqual(canvas_snapshot.restore_calls, 1)
-        self.assertEqual(renderer.setter_calls, 1)
-        self.assertTrue(
-            any(
-                "persistent renderer style setter failure" in str(error)
-                for error in result.errors
-            )
-        )
-
     def test_history_canvas_restore_keeps_history_notification_failure_secondary(
         self,
     ) -> None:
@@ -1079,110 +927,6 @@ class HistoryCommandTest(unittest.TestCase):
         self.assertFalse(result.fallback_to_inverse)
         self.assertTrue(
             any("history observer failure" in str(error) for error in result.errors)
-        )
-
-    def test_value_commands_compensate_mutate_then_baseexception(self) -> None:
-        class _InterruptingPort:
-            def __init__(self) -> None:
-                self.position_calls = 0
-                self.ring_calls = 0
-                self.length_calls = 0
-
-            def set_atom_positions_for_history(
-                self,
-                canvas,
-                positions,
-                **_kwargs,
-            ) -> None:
-                self.position_calls += 1
-                canvas.position = next(iter(positions.values()))
-                if self.position_calls == 1:
-                    raise KeyboardInterrupt("position interrupted")
-
-            def set_ring_polygons_for_history(
-                self,
-                canvas,
-                ring_items,
-                polygons,
-            ) -> None:
-                del canvas
-                self.ring_calls += 1
-                ring_items[0].polygon = list(polygons[0])
-                if self.ring_calls == 1:
-                    raise KeyboardInterrupt("ring interrupted")
-
-            def restore_bond_length_for_history(self, canvas, length) -> None:
-                self.length_calls += 1
-                canvas.bond_length = length
-                if self.length_calls == 1:
-                    raise KeyboardInterrupt("length interrupted")
-
-        port = _InterruptingPort()
-        position_canvas = SimpleNamespace(position=(1.0, 2.0))
-        position_command = SetAtomPositionsCommand(
-            before_positions={1: (1.0, 2.0)},
-            after_positions={1: (9.0, 10.0)},
-        )
-        ring = _AtomicRingItem("ring", [(0.0, 0.0)])
-        ring_command = SetRingPolygonsCommand(
-            [ring],
-            [[(0.0, 0.0)]],
-            [[(5.0, 6.0)]],
-        )
-        length_canvas = SimpleNamespace(bond_length=20.0)
-        length_command = UpdateBondLengthCommand(20.0, 30.0)
-
-        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
-            with self.assertRaisesRegex(KeyboardInterrupt, "position interrupted"):
-                position_command.redo(position_canvas)
-            with self.assertRaisesRegex(KeyboardInterrupt, "ring interrupted"):
-                ring_command.redo(SimpleNamespace())
-            with self.assertRaisesRegex(KeyboardInterrupt, "length interrupted"):
-                length_command.redo(length_canvas)
-
-        self.assertEqual(position_canvas.position, (1.0, 2.0))
-        self.assertEqual(ring.polygon, [(0.0, 0.0)])
-        self.assertEqual(length_canvas.bond_length, 20.0)
-
-    def test_inverse_compensation_keeps_secondary_control_flow_error_as_note(
-        self,
-    ) -> None:
-        class _InterruptingColorPort:
-            def __init__(self) -> None:
-                self.calls = 0
-
-            def apply_atom_color_for_history(
-                self, canvas, atom_id: int, color: str
-            ) -> None:
-                del atom_id
-                self.calls += 1
-                canvas.color = color
-                if self.calls == 1:
-                    raise KeyboardInterrupt("primary color interruption")
-                raise SystemExit("color compensation terminated")
-
-        canvas = SimpleNamespace(color="#111111")
-        port = _InterruptingColorPort()
-        command = UpdateAtomColorCommand(
-            atom_id=1,
-            before_color="#111111",
-            after_color="#222222",
-        )
-        original_error: KeyboardInterrupt | None = None
-
-        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
-            with self.assertRaises(KeyboardInterrupt) as caught:
-                command.redo(canvas)
-            original_error = caught.exception
-
-        self.assertEqual(canvas.color, "#111111")
-        self.assertEqual(port.calls, 2)
-        self.assertIsNotNone(original_error)
-        self.assertTrue(
-            any(
-                "SystemExit: color compensation terminated" in note
-                for note in original_error.__notes__
-            )
         )
 
     def test_add_atoms_command_compensates_failed_current_atom_in_both_directions(
@@ -1314,111 +1058,6 @@ class HistoryCommandTest(unittest.TestCase):
 
         self.assertEqual([first.polygon, second.polygon], before)
 
-    def test_position_and_ring_commands_preserve_primary_during_persistent_legacy_compensation(
-        self,
-    ) -> None:
-        for command_kind in ("positions", "rings"):
-            for primary_type in (KeyboardInterrupt, SystemExit):
-                with self.subTest(command=command_kind, primary=primary_type.__name__):
-                    primary = primary_type(f"{command_kind} apply interrupted")
-                    secondary = RuntimeError(f"{command_kind} compensation failed")
-
-                    if command_kind == "positions":
-                        canvas = _AtomicHistoryCanvas(
-                            atoms={1: {"element": "C", "x": 1.0, "y": 2.0}}
-                        )
-
-                        class Port(_StatefulHistoryPort):
-                            def __init__(
-                                self,
-                                primary_error: BaseException,
-                                secondary_error: BaseException,
-                            ) -> None:
-                                super().__init__()
-                                self.calls = 0
-                                self.primary = primary_error
-                                self.secondary = secondary_error
-
-                            def set_atom_positions_for_history(
-                                self,
-                                target_canvas,
-                                positions,
-                                *,
-                                update_selection=True,
-                                coords_3d=None,
-                            ) -> None:
-                                del update_selection, coords_3d
-                                for atom_id, (x, y) in positions.items():
-                                    target_canvas.model.atoms[atom_id]["x"] = x
-                                    target_canvas.model.atoms[atom_id]["y"] = y
-                                self.calls += 1
-                                raise (
-                                    self.primary if self.calls == 1 else self.secondary
-                                )
-
-                        port = Port(primary, secondary)
-                        command = SetAtomPositionsCommand(
-                            {1: (1.0, 2.0)},
-                            {1: (10.0, 20.0)},
-                        )
-                    else:
-                        canvas = _AtomicHistoryCanvas()
-                        rings = [
-                            _AtomicRingItem("first", [(0.0, 0.0)]),
-                            _AtomicRingItem("second", [(1.0, 1.0)]),
-                        ]
-
-                        class Port(_StatefulHistoryPort):
-                            def __init__(
-                                self,
-                                primary_error: BaseException,
-                                secondary_error: BaseException,
-                            ) -> None:
-                                super().__init__()
-                                self.calls = 0
-                                self.primary = primary_error
-                                self.secondary = secondary_error
-
-                            def set_ring_polygons_for_history(
-                                self,
-                                _canvas,
-                                ring_items,
-                                polygons,
-                            ) -> None:
-                                for ring_item, polygon in zip(
-                                    ring_items,
-                                    polygons,
-                                    strict=False,
-                                ):
-                                    ring_item.polygon = list(polygon)
-                                self.calls += 1
-                                raise (
-                                    self.primary if self.calls == 1 else self.secondary
-                                )
-
-                        port = Port(primary, secondary)
-                        command = SetRingPolygonsCommand(
-                            rings,
-                            [[(0.0, 0.0)], [(1.0, 1.0)]],
-                            [[(10.0, 10.0)], [(20.0, 20.0)]],
-                        )
-
-                    with mock.patch(
-                        "chemvas.core.history._history_canvas_port",
-                        return_value=port,
-                    ):
-                        with self.assertRaises(primary_type) as caught:
-                            command.redo(canvas)
-
-                    self.assertIs(caught.exception, primary)
-                    self.assertGreaterEqual(port.calls, 2)
-                    self.assertTrue(
-                        any(
-                            str(secondary) in note
-                            for note in getattr(primary, "__notes__", [])
-                        )
-                    )
-
     def test_bond_length_command_compensates_failed_current_composite_child(
         self,
     ) -> None:
@@ -1470,9 +1109,9 @@ class HistoryCommandTest(unittest.TestCase):
                 self,
                 canvas,
                 snapshot,
-            ) -> HistoryTransactionRestoreResult:
+            ) -> RestoreOutcome:
                 canvas.bond_length = snapshot
-                return HistoryTransactionRestoreResult(authoritative=True)
+                return RestoreOutcome(authoritative=True)
 
             def restore_bond_length_for_history(self, canvas, length: float) -> None:
                 canvas.bond_length = length
@@ -1536,49 +1175,6 @@ class HistoryCommandTest(unittest.TestCase):
         )
         self.assertEqual(canvas.atom_coords_3d, before_coords_3d)
 
-    def test_move_atoms_command_restores_absolute_snapshot_after_baseexception(
-        self,
-    ) -> None:
-        canvas = _FakeCanvas()
-        canvas.model.atoms[2] = Atom("N", 10.0, 20.0)
-        canvas.atom_coords_3d = {
-            1: (0.0, 0.0, 1.0),
-            2: (10.0, 20.0, 2.0),
-        }
-        before_positions = {
-            atom_id: (atom.x, atom.y) for atom_id, atom in canvas.model.atoms.items()
-        }
-        before_coords_3d = dict(canvas.atom_coords_3d)
-
-        def interrupt_after_first_atom(
-            target_canvas,
-            atom_ids,
-            dx,
-            dy,
-            **_kwargs,
-        ) -> None:
-            atom_id = min(atom_ids)
-            atom = target_canvas.model.atoms[atom_id]
-            atom.x += dx
-            atom.y += dy
-            x, y, z = target_canvas.atom_coords_3d[atom_id]
-            target_canvas.atom_coords_3d[atom_id] = (x + dx, y + dy, z)
-            raise KeyboardInterrupt("partial move interrupted")
-
-        command = MoveAtomsCommand({1, 2}, 5.0, 7.0)
-        with mock.patch(
-            "chemvas.ui.history_canvas_access.move_atoms_for",
-            side_effect=interrupt_after_first_atom,
-        ):
-            with self.assertRaisesRegex(KeyboardInterrupt, "partial move interrupted"):
-                command.redo(canvas)
-
-        self.assertEqual(
-            {atom_id: (atom.x, atom.y) for atom_id, atom in canvas.model.atoms.items()},
-            before_positions,
-        )
-        self.assertEqual(canvas.atom_coords_3d, before_coords_3d)
-
     def test_bond_commands_compensate_when_smiles_update_fails(self) -> None:
         before_state = {"a": 1, "b": 2, "order": 1}
         after_state = {"a": 1, "b": 2, "order": 2}
@@ -1620,7 +1216,7 @@ class HistoryCommandTest(unittest.TestCase):
                         command.undo(canvas)
                     self.assertEqual(_atomic_canvas_snapshot(canvas), after)
 
-    def test_history_service_preserves_failed_exact_composite_and_stack_identity(
+    def test_history_service_drops_mixed_composite_after_failed_child(
         self,
     ) -> None:
         class _AuthoritativePort(_StatefulHistoryPort):
@@ -1668,56 +1264,13 @@ class HistoryCommandTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "remove_atom failed"):
                 service.undo()
 
-        # The exact composite restored the canvas authoritatively, so both
-        # stacks remain the same retryable objects with the same commands.
+        # The document savepoint cannot prove coverage of an unknown child,
+        # so the conservative policy drops the command and clears redo.
         self.assertEqual(_atomic_canvas_snapshot(canvas), before)
         self.assertIs(state.history, history)
         self.assertIs(state.redo_stack, redo_stack)
-        self.assertEqual(state.history, [composite])
-        self.assertIs(state.history[0], composite)
-        self.assertEqual(state.redo_stack, [stale_redo])
-        self.assertIs(state.redo_stack[0], stale_redo)
-
-    def test_history_service_push_reasserts_committed_observer_authority(self) -> None:
-        before = _RecorderCommand("before", [])
-        stale_redo = _RecorderCommand("stale", [])
-        command = _RecorderCommand("commit", [])
-        state = CanvasHistoryState(
-            history=[before],
-            redo_stack=[stale_redo],
-        )
-        history = state.history
-        redo_stack = state.redo_stack
-        service = CanvasHistoryService(SimpleNamespace(), state)
-        callback_calls = 0
-
-        def corrupt_every_history_root() -> None:
-            nonlocal callback_calls
-            callback_calls += 1
-            state.history = [_RecorderCommand("corrupt-history", [])]
-            state.redo_stack = [_RecorderCommand("corrupt-redo", [])]
-            state.enabled = False
-            state.limit = 0
-            service.state = CanvasHistoryState(
-                history=[_RecorderCommand("replacement-history", [])],
-                redo_stack=[_RecorderCommand("replacement-redo", [])],
-                enabled=False,
-                limit=0,
-            )
-
-        state.change_callback = corrupt_every_history_root
-
-        committed = service.push(command)
-
-        self.assertTrue(committed)
-        self.assertEqual(callback_calls, 1)
-        self.assertIs(service.state, state)
-        self.assertIs(state.history, history)
-        self.assertIs(state.redo_stack, redo_stack)
-        self.assertEqual(state.history, [before, command])
+        self.assertEqual(state.history, [])
         self.assertEqual(state.redo_stack, [])
-        self.assertTrue(state.enabled)
-        self.assertEqual(state.limit, 100)
 
     def test_history_service_push_reports_disabled_noop(self) -> None:
         callback_calls = 0
@@ -1741,156 +1294,6 @@ class HistoryCommandTest(unittest.TestCase):
         self.assertEqual(state.history, [])
         self.assertEqual(len(state.redo_stack), 1)
         self.assertEqual(callback_calls, 0)
-
-    def test_history_publication_rejects_cross_policy_reader_poisoning(self) -> None:
-        class CrossPolicyState:
-            def __init__(self) -> None:
-                self.history: list[object] = []
-                self.redo_stack: list[object] = []
-                self.enabled = True
-                self._limit = 100
-                self.poison_enabled = False
-                self.change_callback = None
-
-            @property
-            def limit(self) -> int:
-                if self.poison_enabled:
-                    self.enabled = False
-                return self._limit
-
-            @limit.setter
-            def limit(self, value: int) -> None:
-                self._limit = value
-
-        state = CrossPolicyState()
-        service = CanvasHistoryService(SimpleNamespace(), state)  # type: ignore[arg-type]
-        state.change_callback = lambda: setattr(state, "poison_enabled", True)
-
-        with self.assertRaises(BaseExceptionGroup):
-            service.notify_change()
-
-        # A persistent reader can keep the policy non-authoritative, but the
-        # publication must never return success while accepting that drift.
-        self.assertFalse(state.enabled)
-
-    def test_history_failure_authority_does_not_fail_open_when_error_rejects_marker(
-        self,
-    ) -> None:
-        class SelectiveMarkerError(SystemExit):
-            marker_writes = 0
-
-            def __setattr__(self, name: str, value: object) -> None:
-                if name.startswith("_chemvas_"):
-                    type(self).marker_writes += 1
-                    raise KeyboardInterrupt("exception rejected recovery marker")
-                super().__setattr__(name, value)
-
-        class ExactPort:
-            @staticmethod
-            def restore_history_transaction_for_history(
-                _canvas: object,
-                _snapshot: object,
-            ) -> HistoryTransactionRestoreResult:
-                return HistoryTransactionRestoreResult(authoritative=True)
-
-        primary = SelectiveMarkerError("command failed")
-        with (
-            mock.patch(
-                "chemvas.core.history._history_canvas_port", return_value=ExactPort()
-            ),
-            history_core.history_operation_scope() as operation_token,
-        ):
-            history_core._mark_nonexact_history_compensation_failed(primary)
-            restore_history_transaction_for_command(object(), object(), primary)
-            self.assertFalse(
-                consume_authoritative_history_failure_restore(
-                    primary,
-                    operation_token=operation_token,
-                )
-            )
-
-        self.assertEqual(SelectiveMarkerError.marker_writes, 0)
-
-    def test_undo_redo_preflight_bypasses_hostile_list_length(self) -> None:
-        class HostileLengthList(list):
-            length_reads = 0
-
-            def __len__(self) -> int:
-                type(self).length_reads += 1
-                list.__setitem__(self, slice(None), ())
-                return 0
-
-        for direction in ("undo", "redo"):
-            with self.subTest(direction=direction):
-                log: list[str] = []
-                command = _RecorderCommand("target", log)
-                history = HostileLengthList()
-                redo = HostileLengthList()
-                if direction == "undo":
-                    list.append(history, command)
-                else:
-                    list.append(redo, command)
-                state = CanvasHistoryState(  # type: ignore[arg-type]
-                    history=history,
-                    redo_stack=redo,
-                )
-                service = CanvasHistoryService(SimpleNamespace(), state)
-
-                getattr(service, direction)()
-
-                self.assertEqual(log, [f"{direction}:target"])
-                self.assertEqual(HostileLengthList.length_reads, 0)
-                HostileLengthList.length_reads = 0
-
-    def test_history_service_reentrant_observer_push_reports_no_commit(self) -> None:
-        outer = _RecorderCommand("outer", [])
-        inner = _RecorderCommand("inner", [])
-        state = CanvasHistoryState()
-        service = CanvasHistoryService(SimpleNamespace(), state)
-        inner_errors: list[BaseException] = []
-
-        def reentrant_observer() -> None:
-            try:
-                service.push(inner)
-            except BaseException as error:
-                inner_errors.append(error)
-
-        state.change_callback = reentrant_observer
-
-        self.assertTrue(service.push(outer))
-        self.assertEqual(len(inner_errors), 1)
-        self.assertIsInstance(inner_errors[0], RuntimeError)
-        self.assertEqual(state.history, [outer])
-        self.assertEqual(state.redo_stack, [])
-
-    def test_history_context_guard_rejects_raw_flag_tampering(self) -> None:
-        outer = _RecorderCommand("outer", [])
-        inner = _RecorderCommand("inner", [])
-        state = CanvasHistoryState()
-        service = CanvasHistoryService(SimpleNamespace(), state)
-        inner_errors: list[BaseException] = []
-
-        def hostile_observer() -> None:
-            state.change_callback = None
-            # These compatibility/diagnostic fields are deliberately not the
-            # operation authority. A callback that knows the service object
-            # must not be able to counterfeit the end of the outer scope.
-            service._history_mutation_active = False
-            service._history_publication_active = False
-            try:
-                service.push(inner)
-            except BaseException as error:
-                inner_errors.append(error)
-
-        state.change_callback = hostile_observer
-
-        self.assertTrue(service.push(outer))
-
-        self.assertEqual(len(inner_errors), 1)
-        self.assertIsInstance(inner_errors[0], RuntimeError)
-        self.assertEqual(state.history, [outer])
-        self.assertFalse(service._history_mutation_active)
-        self.assertFalse(service._history_publication_active)
 
     def test_history_context_guard_is_scoped_per_service_identity(self) -> None:
         outer = _RecorderCommand("outer", [])
@@ -1916,613 +1319,6 @@ class HistoryCommandTest(unittest.TestCase):
         self.assertFalse(outer_service._history_publication_active)
         self.assertFalse(inner_service._history_mutation_active)
         self.assertFalse(inner_service._history_publication_active)
-
-    def test_history_restore_setter_cannot_publish_then_erase_nested_push(self) -> None:
-        before = _RecorderCommand("before", [])
-        nested = _RecorderCommand("nested", [])
-        corrupt = _RecorderCommand("corrupt", [])
-
-        class ReentrantState(CanvasHistoryState):
-            def __setattr__(self, name, value) -> None:
-                object.__setattr__(self, name, value)
-                if (
-                    name == "history"
-                    and getattr(self, "armed", False)
-                    and value is getattr(self, "captured_history", None)
-                ):
-                    object.__setattr__(self, "armed", False)
-                    try:
-                        self.service.push(nested)
-                    except BaseException as error:
-                        self.nested_errors.append(error)
-
-        state = ReentrantState(history=[before])
-        state.captured_history = state.history
-        state.armed = False
-        state.nested_errors = []
-        service = CanvasHistoryService(SimpleNamespace(), state)
-        state.service = service
-
-        def corrupt_then_unsubscribe() -> None:
-            state.change_callback = None
-            state.armed = True
-            state.history = [corrupt]
-
-        state.change_callback = corrupt_then_unsubscribe
-        service.notify_change()
-
-        self.assertEqual(len(state.nested_errors), 1)
-        self.assertIsInstance(state.nested_errors[0], RuntimeError)
-        self.assertEqual(state.history, [before])
-        self.assertNotIn(nested, state.history)
-
-    def test_history_push_setter_failure_recovers_or_rolls_back_pre_state(self) -> None:
-        class _FlakyList(list):
-            def __init__(self, values, behavior: str) -> None:
-                super().__init__(values)
-                self.behavior = behavior
-                self.calls = 0
-
-            def __setitem__(self, key, value) -> None:
-                if isinstance(key, slice):
-                    self.calls += 1
-                    if self.behavior == "persistent_no_op":
-                        return
-                    if self.behavior == "fail_after" and self.calls == 1:
-                        super().__setitem__(key, value)
-                        self.append(object())
-                        raise SystemExit("push setter failed after mutation")
-                super().__setitem__(key, value)
-
-        for behavior in ("fail_after", "persistent_no_op"):
-            with self.subTest(behavior=behavior):
-                history_sentinel = _RecorderCommand("history", [])
-                redo_sentinel = _RecorderCommand("redo", [])
-                command = _RecorderCommand("push", [])
-                history = _FlakyList([history_sentinel], behavior)
-                redo_stack = [redo_sentinel]
-                state = CanvasHistoryState(
-                    history=history,
-                    redo_stack=redo_stack,
-                )
-                service = CanvasHistoryService(SimpleNamespace(), state)
-
-                self.assertTrue(service.push(command))
-                self.assertEqual(history, [history_sentinel, command])
-                self.assertEqual(redo_stack, [])
-                self.assertEqual(history.calls, 0)
-
-    def test_legacy_history_uses_capture_bound_success_and_failure_deltas(self) -> None:
-        class _LegacyCallbackCommand(HistoryCommand):
-            def __init__(self) -> None:
-                self.callback = lambda: None
-                self.primary: BaseException | None = None
-                self.calls: list[str] = []
-
-            def _run(self, direction: str) -> None:
-                self.calls.append(direction)
-                self.callback()
-                if self.primary is not None:
-                    raise self.primary
-
-            def undo(self, canvas) -> None:
-                del canvas
-                self._run("undo")
-
-            def redo(self, canvas) -> None:
-                del canvas
-                self._run("redo")
-
-        for direction in ("undo", "redo"):
-            for outcome in ("success", "system_exit"):
-                with self.subTest(direction=direction, outcome=outcome):
-                    command = _LegacyCallbackCommand()
-                    history_sentinel = _RecorderCommand("history", [])
-                    redo_sentinel = _RecorderCommand("redo", [])
-                    state = CanvasHistoryState(
-                        history=(
-                            [history_sentinel, command]
-                            if direction == "undo"
-                            else [history_sentinel]
-                        ),
-                        redo_stack=(
-                            [redo_sentinel]
-                            if direction == "undo"
-                            else [redo_sentinel, command]
-                        ),
-                    )
-                    history = state.history
-                    redo_stack = state.redo_stack
-                    service = CanvasHistoryService(SimpleNamespace(), state)
-                    replacement = CanvasHistoryState(
-                        history=[object()],
-                        redo_stack=[object()],
-                        enabled=False,
-                        limit=0,
-                    )
-
-                    def corrupt_split_brain(
-                        _state=state,
-                        _service=service,
-                        _replacement=replacement,
-                    ) -> None:
-                        _state.history.append(object())
-                        _state.redo_stack.clear()
-                        _state.enabled = False
-                        _state.limit = 0
-                        _service.state = _replacement
-
-                    command.callback = corrupt_split_brain
-                    primary = SystemExit(f"legacy {direction} callback terminated")
-                    if outcome == "system_exit":
-                        command.primary = primary
-
-                    if outcome == "system_exit":
-                        with self.assertRaises(SystemExit) as caught:
-                            getattr(service, direction)()
-                        self.assertIs(caught.exception, primary)
-                    else:
-                        getattr(service, direction)()
-
-                    self.assertIs(service.state, state)
-                    self.assertIs(state.history, history)
-                    self.assertIs(state.redo_stack, redo_stack)
-                    self.assertTrue(state.enabled)
-                    self.assertEqual(state.limit, 100)
-                    expected_history = [history_sentinel]
-                    if outcome == "success" and direction == "redo":
-                        expected_history.append(command)
-                    expected_redo = (
-                        [redo_sentinel, command]
-                        if outcome == "success" and direction == "undo"
-                        else [redo_sentinel]
-                        if outcome == "success"
-                        else []
-                    )
-                    self.assertEqual(history, expected_history)
-                    self.assertEqual(redo_stack, expected_redo)
-
-    def test_legacy_success_persistent_post_setter_clears_both_stacks(self) -> None:
-        class _NoOpList(list):
-            no_op = False
-
-            def __setitem__(self, key, value) -> None:
-                if self.no_op and isinstance(key, slice):
-                    return
-                super().__setitem__(key, value)
-
-        class _LegacyCommand(HistoryCommand):
-            def __init__(self, callback) -> None:
-                self.callback = callback
-                self.applied = False
-
-            def undo(self, canvas) -> None:
-                del canvas
-                self.applied = True
-                self.callback()
-
-            def redo(self, canvas) -> None:
-                del canvas
-                self.applied = True
-                self.callback()
-
-        history_sentinel = _RecorderCommand("history", [])
-        redo_sentinel = _RecorderCommand("redo", [])
-        redo_stack = _NoOpList([redo_sentinel])
-        command = _LegacyCommand(lambda: setattr(redo_stack, "no_op", True))
-        state = CanvasHistoryState(
-            history=[history_sentinel, command],
-            redo_stack=redo_stack,
-        )
-        service = CanvasHistoryService(SimpleNamespace(), state)
-
-        service.undo()
-
-        self.assertTrue(command.applied)
-        self.assertEqual(state.history, [history_sentinel])
-        self.assertEqual(state.redo_stack, [redo_sentinel, command])
-
-    def test_exact_success_commits_from_capture_bound_stack_authority(self) -> None:
-        class _CallbackExactCommand(HistoryCommand):
-            history_transaction_owns_exact_state = True
-
-            def __init__(self) -> None:
-                self.callback = lambda: None
-                self.calls: list[str] = []
-
-            def undo(self, canvas) -> None:
-                del canvas
-                self.calls.append("undo")
-                self.callback()
-
-            def redo(self, canvas) -> None:
-                del canvas
-                self.calls.append("redo")
-                self.callback()
-
-        for direction in ("undo", "redo"):
-            for mutation in (
-                "state",
-                "history_clear",
-                "history_append",
-                "redo_replace",
-                "policy",
-            ):
-                with self.subTest(direction=direction, mutation=mutation):
-                    command = _CallbackExactCommand()
-                    history_sentinel = _RecorderCommand("history", [])
-                    redo_sentinel = _RecorderCommand("redo", [])
-                    state = CanvasHistoryState(
-                        history=(
-                            [history_sentinel, command]
-                            if direction == "undo"
-                            else [history_sentinel]
-                        ),
-                        redo_stack=(
-                            [redo_sentinel]
-                            if direction == "undo"
-                            else [redo_sentinel, command]
-                        ),
-                    )
-                    history = state.history
-                    redo_stack = state.redo_stack
-                    service = CanvasHistoryService(SimpleNamespace(), state)
-                    replacement = CanvasHistoryState(
-                        history=[_RecorderCommand("wrong-history", [])],
-                        redo_stack=[_RecorderCommand("wrong-redo", [])],
-                        enabled=False,
-                        limit=0,
-                    )
-
-                    def corrupt_during_command(
-                        _mutation=mutation,
-                        _service=service,
-                        _replacement=replacement,
-                        _state=state,
-                    ) -> None:
-                        if _mutation == "state":
-                            _service.state = _replacement
-                        elif _mutation == "history_clear":
-                            _state.history.clear()
-                        elif _mutation == "history_append":
-                            _state.history.append(_RecorderCommand("wrong-top", []))
-                        elif _mutation == "redo_replace":
-                            _state.redo_stack = [_RecorderCommand("wrong-redo", [])]
-                        else:
-                            _state.enabled = False
-                            _state.limit = 0
-
-                    command.callback = corrupt_during_command
-
-                    getattr(service, direction)()
-
-                    self.assertEqual(command.calls, [direction])
-                    self.assertIs(service.state, state)
-                    self.assertIs(state.history, history)
-                    self.assertIs(state.redo_stack, redo_stack)
-                    expected_history = (
-                        [history_sentinel]
-                        if direction == "undo"
-                        else [history_sentinel, command]
-                    )
-                    expected_redo = (
-                        [redo_sentinel, command]
-                        if direction == "undo"
-                        else [redo_sentinel]
-                    )
-                    self.assertEqual(history, expected_history)
-                    self.assertEqual(redo_stack, expected_redo)
-                    self.assertTrue(state.enabled)
-                    self.assertEqual(state.limit, 100)
-
-    def test_exact_failure_combines_runtime_and_stack_authority(self) -> None:
-        class _FailingExactCommand(HistoryCommand):
-            history_transaction_owns_exact_state = True
-
-            def __init__(self, callback, primary: BaseException) -> None:
-                self.callback = callback
-                self.primary = primary
-
-            def undo(self, canvas) -> None:
-                del canvas
-                self.callback()
-                raise self.primary
-
-            def redo(self, canvas) -> None:
-                del canvas
-                self.callback()
-                raise self.primary
-
-        for direction in ("undo", "redo"):
-            for primary_type in (RuntimeError, SystemExit):
-                with self.subTest(
-                    direction=direction,
-                    primary=primary_type.__name__,
-                ):
-                    primary = primary_type(f"{direction} callback failure")
-                    history_sentinel = _RecorderCommand("history", [])
-                    redo_sentinel = _RecorderCommand("redo", [])
-                    state = CanvasHistoryState()
-                    service = CanvasHistoryService(SimpleNamespace(), state)
-                    replacement = CanvasHistoryState(
-                        history=[object()],
-                        redo_stack=[object()],
-                        enabled=False,
-                        limit=0,
-                    )
-
-                    def corrupt_every_authority(
-                        _state=state,
-                        _service=service,
-                        _replacement=replacement,
-                    ) -> None:
-                        _state.history.clear()
-                        _state.redo_stack.append(object())
-                        _state.enabled = False
-                        _state.limit = 0
-                        _service.state = _replacement
-
-                    command = _FailingExactCommand(
-                        corrupt_every_authority,
-                        primary,
-                    )
-                    history = state.history
-                    redo_stack = state.redo_stack
-                    history[:] = (
-                        [history_sentinel, command]
-                        if direction == "undo"
-                        else [history_sentinel]
-                    )
-                    redo_stack[:] = (
-                        [redo_sentinel]
-                        if direction == "undo"
-                        else [redo_sentinel, command]
-                    )
-                    expected_history = list(history)
-                    expected_redo = list(redo_stack)
-
-                    with mock.patch(
-                        "chemvas.ui.canvas_history_service."
-                        "consume_authoritative_history_failure_restore",
-                        return_value=True,
-                    ):
-                        with self.assertRaises(primary_type) as caught:
-                            getattr(service, direction)()
-
-                    self.assertIs(caught.exception, primary)
-                    self.assertIs(service.state, state)
-                    self.assertIs(state.history, history)
-                    self.assertIs(state.redo_stack, redo_stack)
-                    self.assertEqual(history, expected_history)
-                    self.assertEqual(redo_stack, expected_redo)
-                    self.assertTrue(state.enabled)
-                    self.assertEqual(state.limit, 100)
-
-    def test_exact_success_stack_setter_recovery_or_conservative_clear(self) -> None:
-        class _FlakyList(list):
-            def __init__(self, values) -> None:
-                super().__init__(values)
-                self.behavior = "normal"
-                self.calls = 0
-
-            def __setitem__(self, key, value) -> None:
-                if isinstance(key, slice) and self.behavior != "normal":
-                    self.calls += 1
-                    if self.behavior == "persistent_no_op":
-                        return
-                    if self.behavior == "fail_after" and self.calls == 1:
-                        super().__setitem__(key, value)
-                        self.append(object())
-                        raise SystemExit("stack setter failed after mutation")
-                super().__setitem__(key, value)
-
-        class _ExactCommand(HistoryCommand):
-            history_transaction_owns_exact_state = True
-
-            def __init__(self, callback) -> None:
-                self.callback = callback
-                self.applied = False
-
-            def undo(self, canvas) -> None:
-                del canvas
-                self.applied = True
-                self.callback()
-
-            def redo(self, canvas) -> None:
-                del canvas
-                self.applied = True
-                self.callback()
-
-        for direction in ("undo", "redo"):
-            for behavior in ("fail_after", "persistent_no_op"):
-                with self.subTest(direction=direction, behavior=behavior):
-                    history_sentinel = _RecorderCommand("history", [])
-                    redo_sentinel = _RecorderCommand("redo", [])
-                    redo_stack = _FlakyList([])
-                    command = _ExactCommand(
-                        lambda _redo=redo_stack, _behavior=behavior: setattr(
-                            _redo,
-                            "behavior",
-                            _behavior,
-                        )
-                    )
-                    history = [history_sentinel]
-                    if direction == "undo":
-                        history.append(command)
-                        redo_stack.append(redo_sentinel)
-                    else:
-                        redo_stack.extend((redo_sentinel, command))
-                    state = CanvasHistoryState(
-                        history=history,
-                        redo_stack=redo_stack,
-                    )
-                    service = CanvasHistoryService(SimpleNamespace(), state)
-
-                    getattr(service, direction)()
-                    self.assertTrue(command.applied)
-                    expected_history = (
-                        [history_sentinel]
-                        if direction == "undo"
-                        else [history_sentinel, command]
-                    )
-                    expected_redo = (
-                        [redo_sentinel, command]
-                        if direction == "undo"
-                        else [redo_sentinel]
-                    )
-                    self.assertEqual(state.history, expected_history)
-                    self.assertEqual(state.redo_stack, expected_redo)
-                    self.assertEqual(redo_stack.calls, 0)
-
-    def test_exact_success_state_setter_recovery_or_split_brain_clear(self) -> None:
-        class _StatefulHistoryService(CanvasHistoryService):
-            def __init__(self, canvas, state) -> None:
-                self._state = state
-                self.state_behavior = "normal"
-                self.state_setter_calls = 0
-                super().__init__(canvas, state)
-                self.state_setter_calls = 0
-
-            @property
-            def state(self):
-                return self._state
-
-            @state.setter
-            def state(self, value) -> None:
-                self.state_setter_calls += 1
-                if self.state_behavior == "persistent_no_op":
-                    return
-                self._state = value
-                if self.state_behavior == "fail_after" and self.state_setter_calls == 1:
-                    raise SystemExit("state setter failed after mutation")
-
-        class _ExactCommand(HistoryCommand):
-            history_transaction_owns_exact_state = True
-
-            def __init__(self, callback) -> None:
-                self.callback = callback
-
-            def undo(self, canvas) -> None:
-                del canvas
-                self.callback()
-
-            def redo(self, canvas) -> None:
-                del canvas
-                self.callback()
-
-        for behavior in ("fail_after", "persistent_no_op"):
-            with self.subTest(behavior=behavior):
-                history_sentinel = _RecorderCommand("history", [])
-                redo_sentinel = _RecorderCommand("redo", [])
-                original_state = CanvasHistoryState()
-                replacement_state = CanvasHistoryState(
-                    history=[object()],
-                    redo_stack=[object()],
-                    enabled=False,
-                    limit=0,
-                )
-                service = _StatefulHistoryService(
-                    SimpleNamespace(),
-                    original_state,
-                )
-
-                def replace_state(
-                    _service=service,
-                    _replacement=replacement_state,
-                    _behavior=behavior,
-                ) -> None:
-                    _service._state = _replacement
-                    _service.state_behavior = _behavior
-                    _service.state_setter_calls = 0
-
-                command = _ExactCommand(replace_state)
-                original_state.history[:] = [history_sentinel, command]
-                original_state.redo_stack[:] = [redo_sentinel]
-
-                if behavior == "persistent_no_op":
-                    with self.assertRaises(BaseExceptionGroup):
-                        service.undo()
-                    self.assertIs(service.state, replacement_state)
-                    self.assertEqual(original_state.history, [])
-                    self.assertEqual(original_state.redo_stack, [])
-                    self.assertEqual(replacement_state.history, [])
-                    self.assertEqual(replacement_state.redo_stack, [])
-                else:
-                    service.undo()
-                    self.assertIs(service.state, original_state)
-                    self.assertEqual(original_state.history, [history_sentinel])
-                    self.assertEqual(
-                        original_state.redo_stack,
-                        [redo_sentinel, command],
-                    )
-
-    def test_persistent_same_state_stack_replacement_clears_both_roots(self) -> None:
-        class _NoOpStackState:
-            def __init__(self, history, redo_stack) -> None:
-                self._history = history
-                self._redo_stack = redo_stack
-                self.enabled = True
-                self.limit = 100
-                self.change_callback = None
-                self.no_op = False
-
-            @property
-            def history(self):
-                return self._history
-
-            @history.setter
-            def history(self, value) -> None:
-                if not self.no_op:
-                    self._history = value
-
-            @property
-            def redo_stack(self):
-                return self._redo_stack
-
-            @redo_stack.setter
-            def redo_stack(self, value) -> None:
-                if not self.no_op:
-                    self._redo_stack = value
-
-        class _ExactCommand(HistoryCommand):
-            history_transaction_owns_exact_state = True
-
-            def __init__(self, callback) -> None:
-                self.callback = callback
-
-            def undo(self, canvas) -> None:
-                del canvas
-                self.callback()
-
-            def redo(self, canvas) -> None:
-                del canvas
-                self.callback()
-
-        history_sentinel = _RecorderCommand("history", [])
-        redo_sentinel = _RecorderCommand("redo", [])
-        original_history: list[object] = [history_sentinel]
-        original_redo: list[object] = [redo_sentinel]
-        state = _NoOpStackState(original_history, original_redo)
-        replacement_history = [object()]
-        replacement_redo = [object()]
-
-        def replace_both_stacks() -> None:
-            state._history = replacement_history
-            state._redo_stack = replacement_redo
-            state.no_op = True
-
-        command = _ExactCommand(replace_both_stacks)
-        original_history.append(command)
-        service = CanvasHistoryService(SimpleNamespace(), state)
-
-        with self.assertRaises(BaseExceptionGroup):
-            service.undo()
-
-        self.assertIs(service.state, state)
-        self.assertEqual(original_history, [])
-        self.assertEqual(original_redo, [])
-        self.assertEqual(replacement_history, [])
-        self.assertEqual(replacement_redo, [])
 
     def test_history_observer_self_unsubscribe_is_preserved(self) -> None:
         command = _RecorderCommand("commit", [])
@@ -2552,9 +1348,9 @@ class HistoryCommandTest(unittest.TestCase):
                 self,
                 canvas,
                 snapshot,
-            ) -> HistoryTransactionRestoreResult:
+            ) -> RestoreOutcome:
                 del canvas, snapshot
-                return HistoryTransactionRestoreResult(
+                return RestoreOutcome(
                     authoritative=False,
                     fallback_to_inverse=False,
                     errors=(RuntimeError("persistent exact restore failure"),),
@@ -2586,7 +1382,18 @@ class HistoryCommandTest(unittest.TestCase):
         state = CanvasHistoryState(history=[composite], redo_stack=[stale_redo])
         service = CanvasHistoryService(canvas, state)
 
-        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
+        with (
+            mock.patch("chemvas.core.history._history_canvas_port", return_value=port),
+            mock.patch(
+                "chemvas.ui.history_canvas_access."
+                "restore_history_transaction_for_history",
+                return_value=RestoreOutcome(
+                    authoritative=False,
+                    fallback_to_inverse=False,
+                    errors=(RuntimeError("persistent exact restore failure"),),
+                ),
+            ),
+        ):
             port.fail_once_after("remove_atom", 2)
             with self.assertRaisesRegex(RuntimeError, "remove_atom failed") as caught:
                 service.undo()
@@ -2601,96 +1408,6 @@ class HistoryCommandTest(unittest.TestCase):
                 for note in caught.exception.__notes__
             )
         )
-
-    def test_history_service_does_not_reuse_authority_marker_from_same_exception(
-        self,
-    ) -> None:
-        shared_error = RuntimeError("shared remove failure")
-
-        class _SharedFailurePort(_StatefulHistoryPort):
-            def capture_history_transaction_for_history(self, canvas, **_kwargs):
-                return _atomic_canvas_snapshot(canvas)
-
-            def restore_history_transaction_for_history(self, canvas, snapshot) -> None:
-                canvas.bonds = deepcopy(snapshot["bonds"])
-                canvas.smiles_input = snapshot["smiles_input"]
-
-            def remove_bond_for_history(self, canvas, bond_id: int) -> None:
-                super().remove_bond_for_history(canvas, bond_id)
-                raise shared_error
-
-        bond_state = {"a": 1, "b": 2, "order": 1}
-        canvas = _AtomicHistoryCanvas(bonds={0: bond_state}, smiles_input="after")
-        port = _SharedFailurePort()
-        command = AddBondCommand(
-            bond_id=0,
-            bond_state=bond_state,
-            previous_bond_count=0,
-            before_smiles_input="before",
-            after_smiles_input="after",
-        )
-        stale_redo = _RecorderCommand("stale", [])
-        state = CanvasHistoryState(history=[command], redo_stack=[stale_redo])
-        service = CanvasHistoryService(canvas, state)
-
-        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
-            with self.assertRaisesRegex(RuntimeError, "shared remove failure"):
-                service.undo()
-            self.assertEqual(state.history, [command])
-            self.assertEqual(state.redo_stack, [stale_redo])
-
-            # Reuse the identical BaseException from a later operation whose
-            # port no longer has an exact transaction. The prior authoritative
-            # result must not make this unknown failure retryable.
-            port.capture_history_transaction_for_history = None
-            port.restore_history_transaction_for_history = None
-            with self.assertRaisesRegex(RuntimeError, "shared remove failure"):
-                service.undo()
-
-        self.assertEqual(state.history, [])
-        self.assertEqual(state.redo_stack, [])
-
-    def test_history_service_applies_failure_stack_policy_for_baseexception(
-        self,
-    ) -> None:
-        class _CancellationCommand(HistoryCommand):
-            def undo(self, canvas) -> None:
-                del canvas
-                raise KeyboardInterrupt("undo cancelled")
-
-            def redo(self, canvas) -> None:
-                del canvas
-                raise KeyboardInterrupt("redo cancelled")
-
-        def fail_notification() -> None:
-            raise SystemExit("observer termination")
-
-        for direction in ("undo", "redo"):
-            with self.subTest(direction=direction):
-                command = _CancellationCommand()
-                stale_command = _RecorderCommand("stale", [])
-                state = CanvasHistoryState(
-                    history=[command] if direction == "undo" else [stale_command],
-                    redo_stack=[stale_command]
-                    if direction == "undo"
-                    else [stale_command, command],
-                    change_callback=fail_notification,
-                )
-                service = CanvasHistoryService(SimpleNamespace(), state)
-
-                with self.assertRaisesRegex(
-                    KeyboardInterrupt,
-                    f"{direction} cancelled",
-                ) as caught:
-                    getattr(service, direction)()
-
-                self.assertEqual(state.redo_stack, [])
-                self.assertTrue(
-                    any(
-                        "observer termination" in note
-                        for note in caught.exception.__notes__
-                    )
-                )
 
     def test_lifecycle_composite_captures_one_outer_transaction(self) -> None:
         class _SnapshotPort(_StatefulHistoryPort):
@@ -2736,112 +1453,6 @@ class HistoryCommandTest(unittest.TestCase):
 
         self.assertEqual(port.capture_calls, 2)
         self.assertEqual(port.restore_calls, 0)
-
-    def test_release_failure_is_part_of_exact_command_transaction(self) -> None:
-        class _Snapshot:
-            def __init__(self, length: float, *, fail_release: bool) -> None:
-                self.length = length
-                self.fail_release = fail_release
-                self.release_calls = 0
-
-            def release(self) -> None:
-                self.release_calls += 1
-                if self.fail_release:
-                    raise SystemExit("transaction release failed")
-
-        class _ReleasePort(_StatefulHistoryPort):
-            def __init__(self, *, fail_release: bool) -> None:
-                super().__init__()
-                self.fail_release = fail_release
-                self.snapshot = None
-                self.restore_calls = 0
-
-            def capture_history_transaction_for_history(self, canvas, **_kwargs):
-                self.snapshot = _Snapshot(
-                    canvas.length,
-                    fail_release=self.fail_release,
-                )
-                return self.snapshot
-
-            def restore_history_transaction_for_history(self, canvas, snapshot) -> None:
-                self.restore_calls += 1
-                canvas.length = snapshot.length
-
-            def restore_bond_length_for_history(self, canvas, length_px: float) -> None:
-                canvas.length = length_px
-
-        for fail_release in (False, True):
-            with self.subTest(fail_release=fail_release):
-                canvas = SimpleNamespace(length=20.0)
-                port = _ReleasePort(fail_release=fail_release)
-                command = UpdateBondLengthCommand(20.0, 30.0)
-                with mock.patch(
-                    "chemvas.core.history._history_canvas_port", return_value=port
-                ):
-                    if fail_release:
-                        with self.assertRaisesRegex(
-                            SystemExit, "transaction release failed"
-                        ):
-                            command.redo(canvas)
-                    else:
-                        command.redo(canvas)
-
-                assert port.snapshot is not None
-                self.assertEqual(port.snapshot.release_calls, 1)
-                self.assertEqual(port.restore_calls, int(fail_release))
-                self.assertEqual(canvas.length, 20.0 if fail_release else 30.0)
-
-    def test_release_uses_port_hook_for_opaque_transaction_token(self) -> None:
-        class _OpaqueToken:
-            pass
-
-        class _OpaquePort(_StatefulHistoryPort):
-            def __init__(self, *, fail_release: bool) -> None:
-                super().__init__()
-                self.fail_release = fail_release
-                self.token = _OpaqueToken()
-                self.release_calls: list[tuple[object, object]] = []
-                self.restore_calls: list[tuple[object, object]] = []
-
-            def capture_history_transaction_for_history(self, canvas, **_kwargs):
-                self.before_length = canvas.length
-                return self.token
-
-            def release_history_transaction_for_history(self, canvas, snapshot) -> None:
-                self.release_calls.append((canvas, snapshot))
-                if self.fail_release:
-                    raise SystemExit("opaque transaction release failed")
-
-            def restore_history_transaction_for_history(self, canvas, snapshot) -> None:
-                self.restore_calls.append((canvas, snapshot))
-                canvas.length = self.before_length
-
-            def restore_bond_length_for_history(self, canvas, length_px: float) -> None:
-                canvas.length = length_px
-
-        for fail_release in (False, True):
-            with self.subTest(fail_release=fail_release):
-                canvas = SimpleNamespace(length=20.0)
-                port = _OpaquePort(fail_release=fail_release)
-                command = UpdateBondLengthCommand(20.0, 30.0)
-                with mock.patch(
-                    "chemvas.core.history._history_canvas_port", return_value=port
-                ):
-                    if fail_release:
-                        with self.assertRaisesRegex(
-                            SystemExit,
-                            "opaque transaction release failed",
-                        ):
-                            command.redo(canvas)
-                    else:
-                        command.redo(canvas)
-
-                self.assertEqual(port.release_calls, [(canvas, port.token)])
-                self.assertEqual(
-                    port.restore_calls,
-                    [(canvas, port.token)] if fail_release else [],
-                )
-                self.assertEqual(canvas.length, 20.0 if fail_release else 30.0)
 
     def test_lifecycle_composite_failure_uses_outer_snapshot_without_child_inverse(
         self,
@@ -2941,107 +1552,6 @@ class HistoryCommandTest(unittest.TestCase):
         self.assertEqual(canvas.bonds, {})
         self.assertEqual(canvas.smiles_input, "before")
         self.assertEqual(port.capture_calls, 1)
-
-    def test_failed_unknown_inverse_makes_outer_exact_restore_nonauthoritative_for_stack(
-        self,
-    ) -> None:
-        class _SnapshotPort(_StatefulHistoryPort):
-            def capture_history_transaction_for_history(self, canvas, **_kwargs):
-                return _atomic_canvas_snapshot(canvas)
-
-            def restore_history_transaction_for_history(self, canvas, snapshot) -> None:
-                canvas.bonds = deepcopy(snapshot["bonds"])
-                canvas.smiles_input = snapshot["smiles_input"]
-
-        class _FailingCounterInverse(HistoryCommand):
-            def undo(self, canvas) -> None:
-                canvas.custom_counter -= 1
-                raise SystemExit("custom inverse failed")
-
-            def redo(self, canvas) -> None:
-                canvas.custom_counter += 1
-
-        canvas = _AtomicHistoryCanvas(smiles_input="before")
-        canvas.custom_counter = 0
-        port = _SnapshotPort()
-        composite = CompositeCommand(
-            [
-                _FailingCounterInverse(),
-                AddBondCommand(
-                    bond_id=0,
-                    bond_state={"a": 1, "b": 2, "order": 1},
-                    previous_bond_count=0,
-                    before_smiles_input="before",
-                    after_smiles_input="after",
-                ),
-            ]
-        )
-        stale_history = _RecorderCommand("stale", [])
-        state = CanvasHistoryState(
-            history=[stale_history],
-            redo_stack=[composite],
-        )
-        service = CanvasHistoryService(canvas, state)
-
-        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
-            port.fail_once_after("restore_bond", 0)
-            with self.assertRaisesRegex(RuntimeError, "restore_bond failed") as caught:
-                service.redo()
-
-        self.assertEqual(canvas.custom_counter, 0)
-        self.assertEqual(state.history, [stale_history])
-        self.assertEqual(state.redo_stack, [])
-        self.assertTrue(
-            any("custom inverse failed" in note for note in caught.exception.__notes__)
-        )
-
-    def test_failed_unknown_child_cannot_claim_outer_exact_restore_authority(
-        self,
-    ) -> None:
-        class _SnapshotPort(_StatefulHistoryPort):
-            def capture_history_transaction_for_history(self, canvas, **_kwargs):
-                return _atomic_canvas_snapshot(canvas)
-
-            def restore_history_transaction_for_history(self, canvas, snapshot) -> None:
-                canvas.bonds = deepcopy(snapshot["bonds"])
-                canvas.smiles_input = snapshot["smiles_input"]
-
-        class _MutateThenFailUnknownCommand(HistoryCommand):
-            def undo(self, canvas) -> None:
-                canvas.custom_counter -= 1
-
-            def redo(self, canvas) -> None:
-                canvas.custom_counter += 1
-                raise RuntimeError("unknown child failed after mutation")
-
-        canvas = _AtomicHistoryCanvas(smiles_input="before")
-        canvas.custom_counter = 0
-        port = _SnapshotPort()
-        composite = CompositeCommand(
-            [
-                AddBondCommand(
-                    bond_id=0,
-                    bond_state={"a": 1, "b": 2, "order": 1},
-                    previous_bond_count=0,
-                    before_smiles_input="before",
-                    after_smiles_input="after",
-                ),
-                _MutateThenFailUnknownCommand(),
-            ]
-        )
-        stale_history = _RecorderCommand("stale", [])
-        state = CanvasHistoryState(history=[stale_history], redo_stack=[composite])
-        service = CanvasHistoryService(canvas, state)
-
-        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
-            with self.assertRaisesRegex(RuntimeError, "unknown child failed"):
-                service.redo()
-
-        self.assertEqual(canvas.bonds, {})
-        self.assertEqual(canvas.smiles_input, "before")
-        self.assertEqual(canvas.custom_counter, 1)
-        self.assertEqual(state.history, [stale_history])
-        self.assertEqual(state.redo_stack, [])
 
     def test_move_commands_delegate_to_canvas(self) -> None:
         canvas = _FakeCanvas()

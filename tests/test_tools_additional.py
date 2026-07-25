@@ -1098,7 +1098,7 @@ class ToolsAdditionalTest(unittest.TestCase):
         self.assertFalse(tool._erasing)
         self.assertTrue(tool._changed)
         self.assertEqual(tool._commands, ["pending-delete"])
-        self.assertEqual(session.rollback_calls, 2)
+        self.assertEqual(session.rollback_calls, 1)
 
         session.can_complete = True
         tool.deactivate()

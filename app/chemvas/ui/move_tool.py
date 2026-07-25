@@ -86,7 +86,7 @@ class MoveTool(SelectionDragMixin, Tool):
 
         try:
             self._commit_drag_transaction(commit)
-        except BaseException:
+        except Exception:
             if self._drag_transaction is None:
                 self._drag_item = None
                 self._reset_selection_drag_state()
@@ -153,7 +153,7 @@ class MoveTool(SelectionDragMixin, Tool):
                 )
                 self._moved = True
                 self._total_delta += delta
-            except BaseException as original_error:
+            except Exception as original_error:
                 self._cancel_direct_item_drag(
                     original_error,
                     token=token,
@@ -186,7 +186,7 @@ class MoveTool(SelectionDragMixin, Tool):
         if self._drag_selection:
             try:
                 self._commit_selection_drag()
-            except BaseException:
+            except Exception:
                 if self._drag_transaction is None:
                     self._drag_item = None
                 raise

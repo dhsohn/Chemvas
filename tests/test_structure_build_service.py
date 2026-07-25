@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 from unittest.mock import Mock
 
-from chemvas.core.history import CompositeCommand, HistoryTransactionRestoreResult
+from chemvas.core.history import CompositeCommand, RestoreOutcome
 from chemvas.core.rdkit_adapter import RDKitAdapter
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.insertion import (
@@ -447,55 +447,6 @@ class StructureBuildServiceTest(unittest.TestCase):
             )
         )
 
-    def test_recorded_build_rolls_back_mutate_then_keyboard_interrupt(self) -> None:
-        canvas = _FakeCanvas()
-        service = _service_for(canvas)
-        interruption = KeyboardInterrupt("build cancelled after mutation")
-
-        def action() -> list:
-            service.committer.add_atom("N", 1.0, 2.0)
-            raise interruption
-
-        with self.assertRaises(KeyboardInterrupt) as raised:
-            service.run_recorded_build(action)
-
-        self.assertIs(raised.exception, interruption)
-        self.assertEqual(canvas.model.atoms, {})
-        self.assertEqual(canvas.model.bonds, [])
-        self.assertEqual(canvas.model.next_atom_id, 0)
-        self.assertEqual(last_smiles_input_for(canvas), "before")
-
-    def test_recorded_build_keeps_control_flow_error_primary_when_cleanup_is_interrupted(
-        self,
-    ) -> None:
-        canvas = _FakeCanvas()
-        service = _service_for(canvas)
-        original_error = KeyboardInterrupt("original build cancellation")
-
-        def action() -> list:
-            service.committer.add_atom("N", 1.0, 2.0)
-            raise original_error
-
-        with (
-            mock.patch.object(
-                service.committer,
-                "_remove_new_scene_items",
-                side_effect=SystemExit("scene cleanup interrupted"),
-            ),
-            self.assertRaises(KeyboardInterrupt) as raised,
-        ):
-            service.run_recorded_build(action)
-
-        self.assertIs(raised.exception, original_error)
-        self.assertEqual(canvas.model.atoms, {})
-        self.assertEqual(canvas.model.next_atom_id, 0)
-        self.assertEqual(last_smiles_input_for(canvas), "before")
-        self.assertTrue(
-            any(
-                "scene cleanup interrupted" in note for note in original_error.__notes__
-            )
-        )
-
     def _assert_recorded_build_cleanup_failure(self, fail_after_remove: bool) -> None:
         canvas = _FakeCanvas()
         service = _service_for(canvas)
@@ -583,287 +534,42 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertEqual(canvas.scene_items, [])
         self.assertEqual(last_smiles_input_for(canvas), "before")
 
-    def test_begin_recorded_change_restores_actual_smiles_after_clear_base_exception_and_retries(
-        self,
-    ) -> None:
-        from chemvas.ui import structure_build_committer as committer_module
-
-        for error_type in (KeyboardInterrupt, SystemExit):
-            with self.subTest(error_type=error_type.__name__):
-                canvas = _FakeCanvas()
-                service = _service_for(canvas)
-                interruption = error_type("clear SMILES interrupted")
-
-                def corrupt_clear_then_interrupt(
-                    target_canvas,
-                    error: BaseException = interruption,
-                ) -> None:
-                    set_last_smiles_input_for(target_canvas, "corrupt-clear")
-                    raise error
-
-                with (
-                    mock.patch.object(
-                        committer_module,
-                        "clear_last_smiles_input_for",
-                        side_effect=corrupt_clear_then_interrupt,
-                    ),
-                    self.assertRaises(error_type) as raised,
-                ):
-                    service.committer.begin_recorded_change()
-
-                self.assertIs(raised.exception, interruption)
-                self.assertEqual(last_smiles_input_for(canvas), "before")
-                self.assertEqual(canvas.model.atoms, {})
-
-                retry = service.committer.begin_recorded_change()
-                service.committer.add_atom("C", 1.0, 2.0)
-                service.committer.abort_recorded_change(retry)
-                self.assertEqual(canvas.model.atoms, {})
-                self.assertEqual(last_smiles_input_for(canvas), "before")
-
-    def test_begin_recorded_change_unwinds_exact_capture_poison_before_retry(
+    def test_recorded_build_exact_restore_runs_once_and_reports_failure(
         self,
     ) -> None:
         from chemvas.ui import structure_build_committer as committer_module
 
         canvas = _FakeCanvas()
         service = _service_for(canvas)
-        primary = KeyboardInterrupt("build exact capture interrupted")
-        ring = _FakeRingItem(
-            False,
-            [QPointF(0.0, 0.0), QPointF(1.0, 0.0), QPointF(0.0, 1.0)],
-            [0],
+        snapshot = service.committer.begin_recorded_change()
+        service.committer.add_atom("N", 1.0, 2.0)
+        primary = RuntimeError("recorded build failed")
+        restore_error = ValueError("build exact restore failed")
+        result = RestoreOutcome(
+            authoritative=False,
+            fallback_to_inverse=False,
+            errors=(restore_error,),
         )
 
-        def poison_capture(*_args, **_kwargs):
-            set_last_smiles_input_for(canvas, "poisoned-by-capture")
-            service.committer.add_atom("N", 1.0, 2.0)
-            canvas.attach_scene_item(ring)
-            raise primary
+        with mock.patch.object(
+            committer_module,
+            "restore_history_transaction_for_history",
+            return_value=result,
+        ) as restore:
+            service.committer.abort_recorded_change(
+                snapshot,
+                original_error=primary,
+            )
 
-        with (
-            mock.patch.object(
-                committer_module,
-                "capture_history_transaction_for_history",
-                side_effect=poison_capture,
-            ),
-            self.assertRaises(KeyboardInterrupt) as raised,
-        ):
-            service.committer.begin_recorded_change()
-
-        self.assertIs(raised.exception, primary)
-        self.assertEqual(canvas.model.atoms, {})
-        self.assertEqual(canvas.model.next_atom_id, 0)
-        self.assertEqual(canvas.ring_items, [])
-        self.assertEqual(canvas.scene_items, [])
-        self.assertEqual(last_smiles_input_for(canvas), "before")
-
-        retry = service.committer.begin_recorded_change()
-        service.committer.add_atom("C", 3.0, 4.0)
-        service.committer.abort_recorded_change(retry)
+        restore.assert_called_once()
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(last_smiles_input_for(canvas), "before")
-
-    def test_abort_recorded_change_raw_smiles_authority_handles_corrupting_setter_and_noop(
-        self,
-    ) -> None:
-        blocked = False
-
-        class AdversarialSmilesState:
-            def __init__(self) -> None:
-                self._value = "captured"
-
-            @property
-            def last_smiles_input(self):
-                return self._value
-
-            @last_smiles_input.setter
-            def last_smiles_input(self, value) -> None:
-                if blocked:
-                    return
-                self._value = value
-
-        canvas = _FakeCanvas()
-        state = AdversarialSmilesState()
-        canvas.smiles_input_state = state
-        service = _service_for(canvas)
-        snapshot = service.committer.begin_recorded_change(
-            before_smiles_input="logical-before"
+        self.assertTrue(
+            any(
+                "build exact restore failed" in note
+                for note in getattr(primary, "__notes__", [])
+            )
         )
-        service.committer.add_atom("C", 1.0, 2.0)
-        blocked = True
-
-        with self.assertRaisesRegex(
-            RuntimeError,
-            "SMILES rollback setter",
-        ):
-            service.committer.abort_recorded_change(snapshot)
-
-        self.assertEqual(canvas.model.atoms, {})
-        self.assertEqual(canvas.model.next_atom_id, 0)
-        self.assertNotEqual(last_smiles_input_for(canvas), "logical-before")
-
-        # The same bound authority remains retryable after persistent failure.
-        blocked = False
-        service.committer.abort_recorded_change(snapshot)
-        self.assertEqual(last_smiles_input_for(canvas), "logical-before")
-
-    def test_recorded_build_exact_restore_error_and_broken_add_note_preserve_primary(
-        self,
-    ) -> None:
-        from chemvas.ui import structure_build_committer as committer_module
-
-        canvas = _FakeCanvas()
-        service = _service_for(canvas)
-        primary_error = _BrokenAddNoteInterrupt("primary build interruption")
-        exact_error = RuntimeError("exact restore reported failure")
-        original_restore = committer_module.restore_history_transaction_for_history
-
-        def restore_with_reported_error(*args, **kwargs):
-            result = original_restore(*args, **kwargs)
-            return HistoryTransactionRestoreResult(
-                authoritative=False,
-                fallback_to_inverse=False,
-                errors=(*result.errors, exact_error),
-            )
-
-        def action() -> list:
-            service.committer.add_atom("N", 1.0, 2.0)
-            raise primary_error
-
-        with (
-            mock.patch.object(
-                committer_module,
-                "restore_history_transaction_for_history",
-                side_effect=restore_with_reported_error,
-            ) as restore_exact,
-            self.assertRaises(_BrokenAddNoteInterrupt) as raised,
-        ):
-            service.run_recorded_build(
-                action,
-                before_smiles_input="logical-before",
-            )
-
-        self.assertIs(raised.exception, primary_error)
-        self.assertEqual(restore_exact.call_count, 2)
-        self.assertEqual(canvas.model.atoms, {})
-        self.assertEqual(canvas.model.next_atom_id, 0)
-        self.assertEqual(last_smiles_input_for(canvas), "logical-before")
-
-    def test_recorded_build_exact_restore_retries_fail_once_and_persistent_results(
-        self,
-    ) -> None:
-        from chemvas.ui import structure_build_committer as committer_module
-
-        for behavior in ("fail_once", "persistent"):
-            with self.subTest(behavior=behavior):
-                canvas = _FakeCanvas()
-                service = _service_for(canvas)
-                snapshot = service.committer.begin_recorded_change()
-                service.committer.add_atom("N", 1.0, 2.0)
-                primary = KeyboardInterrupt(f"{behavior} recorded build failed")
-                first_error = SystemExit("first build exact restore failed")
-                first = HistoryTransactionRestoreResult(
-                    authoritative=False,
-                    fallback_to_inverse=False,
-                    errors=(first_error,),
-                )
-                original_restore = (
-                    committer_module.restore_history_transaction_for_history
-                )
-                calls = 0
-
-                def restore(
-                    *args,
-                    _first=first,
-                    _behavior=behavior,
-                    _original_restore=original_restore,
-                    **kwargs,
-                ):
-                    nonlocal calls
-                    calls += 1
-                    if calls == 1:
-                        return _first
-                    if _behavior == "fail_once":
-                        return _original_restore(*args, **kwargs)
-                    return HistoryTransactionRestoreResult(
-                        authoritative=False,
-                        fallback_to_inverse=False,
-                        errors=(RuntimeError("persistent build restore failure"),),
-                    )
-
-                with mock.patch.object(
-                    committer_module,
-                    "restore_history_transaction_for_history",
-                    side_effect=restore,
-                ):
-                    service.committer.abort_recorded_change(
-                        snapshot,
-                        original_error=primary,
-                    )
-
-                self.assertEqual(calls, 2)
-                self.assertEqual(canvas.model.atoms, {})
-                self.assertEqual(last_smiles_input_for(canvas), "before")
-                self.assertTrue(
-                    any(
-                        "first build exact restore failed" in note
-                        for note in getattr(primary, "__notes__", [])
-                    )
-                )
-                if behavior == "persistent":
-                    self.assertTrue(
-                        any(
-                            "persistent build restore failure" in note
-                            for note in getattr(primary, "__notes__", [])
-                        )
-                    )
-
-    def test_recorded_build_outer_abort_and_broken_add_note_preserve_primary_and_retry(
-        self,
-    ) -> None:
-        for error_type in (_BrokenAddNoteInterrupt, _BrokenAddNoteSystemExit):
-            with self.subTest(error_type=error_type.__name__):
-                canvas = _FakeCanvas()
-                service = _service_for(canvas)
-                primary_error = error_type("recorded build interrupted")
-                original_abort = service.committer.abort_recorded_change
-
-                def abort_then_fail(
-                    *args,
-                    abort=original_abort,
-                    **kwargs,
-                ) -> None:
-                    abort(*args, **kwargs)
-                    raise RuntimeError("outer abort reported failure")
-
-                def action(
-                    target_service=service,
-                    error: BaseException = primary_error,
-                ) -> list:
-                    target_service.committer.add_atom("N", 1.0, 2.0)
-                    raise error
-
-                with (
-                    mock.patch.object(
-                        service.committer,
-                        "abort_recorded_change",
-                        side_effect=abort_then_fail,
-                    ),
-                    self.assertRaises(error_type) as raised,
-                ):
-                    service.run_recorded_build(action)
-
-                self.assertIs(raised.exception, primary_error)
-                self.assertEqual(canvas.model.atoms, {})
-                self.assertEqual(canvas.model.next_atom_id, 0)
-                self.assertEqual(last_smiles_input_for(canvas), "before")
-
-                retry = service.committer.begin_recorded_change()
-                service.committer.add_atom("C", 3.0, 4.0)
-                service.committer.abort_recorded_change(retry)
-                self.assertEqual(canvas.model.atoms, {})
-                self.assertEqual(last_smiles_input_for(canvas), "before")
 
     def test_run_recorded_additions_action_rolls_back_when_history_recording_fails(
         self,
@@ -1824,137 +1530,6 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertEqual((bond.order, bond.style, bond.color), (1, "single", "#123456"))
         self.assertEqual(canvas.recorded_bond_updates, [])
         self.assertEqual(last_smiles_input_for(canvas), "before")
-
-    def test_existing_bond_rollback_keeps_redraw_termination_as_note(self) -> None:
-        canvas = _FakeCanvas()
-        canvas.model = MoleculeModel(
-            atoms={0: Atom("C", 0.0, 0.0), 1: Atom("C", 10.0, 0.0)},
-            bonds=[Bond(0, 1, 1, style="single", color="#123456")],
-        )
-        canvas.model.next_atom_id = 2
-        canvas.hit_testing_find_atom_near = Mock(side_effect=[0, 1])
-        canvas.services.selection.hit_testing_service.find_atom_near = (
-            canvas.hit_testing_find_atom_near
-        )
-        original_error = KeyboardInterrupt("initial redraw interrupted")
-        rollback_error = SystemExit("rollback redraw terminated")
-        canvas.services.interaction.move_controller.redraw_bond = Mock(
-            side_effect=[original_error, rollback_error]
-        )
-        service = _service_for(canvas)
-
-        with self.assertRaises(KeyboardInterrupt) as caught:
-            service.add_bond_between_points(
-                QPointF(0.0, 0.0),
-                QPointF(10.0, 0.0),
-                "double",
-                2,
-            )
-
-        self.assertIs(caught.exception, original_error)
-        bond = canvas.model.bonds[0]
-        self.assertIsNotNone(bond)
-        self.assertEqual((bond.order, bond.style, bond.color), (1, "single", "#123456"))
-        self.assertTrue(
-            any(
-                "SystemExit: rollback redraw terminated" in note
-                for note in caught.exception.__notes__
-            )
-        )
-
-    def test_existing_bond_compensation_and_broken_add_note_preserve_control_flow_primary_and_retry(
-        self,
-    ) -> None:
-        for error_type in (_BrokenAddNoteInterrupt, _BrokenAddNoteSystemExit):
-            with self.subTest(error_type=error_type.__name__):
-                canvas = _FakeCanvas()
-                canvas.model = MoleculeModel(
-                    atoms={
-                        0: Atom("C", 0.0, 0.0),
-                        1: Atom("C", 10.0, 0.0),
-                    },
-                    bonds=[Bond(0, 1, 1, style="single", color="#123456")],
-                )
-                canvas.model.next_atom_id = 2
-                canvas.hit_testing_find_atom_near = Mock(side_effect=[0, 1])
-                canvas.services.selection.hit_testing_service.find_atom_near = (
-                    canvas.hit_testing_find_atom_near
-                )
-                primary_error = error_type("history record interrupted")
-                canvas.services.document.canvas_history_recording_service.record_bond_update = Mock(
-                    side_effect=primary_error
-                )
-                redraw_calls = 0
-
-                def redraw_bond(_bond_id: int) -> None:
-                    nonlocal redraw_calls
-                    redraw_calls += 1
-                    if redraw_calls == 2:
-                        raise RuntimeError("compensation redraw failed")
-
-                canvas.services.interaction.move_controller.redraw_bond = redraw_bond
-                service = _service_for(canvas)
-
-                with self.assertRaises(error_type) as raised:
-                    service.add_bond_between_points(
-                        QPointF(0.0, 0.0),
-                        QPointF(10.0, 0.0),
-                        "double",
-                        2,
-                    )
-
-                self.assertIs(raised.exception, primary_error)
-                bond = canvas.model.bonds[0]
-                self.assertIsNotNone(bond)
-                self.assertEqual(
-                    (bond.order, bond.style, bond.color),
-                    (1, "single", "#123456"),
-                )
-                self.assertEqual(last_smiles_input_for(canvas), "before")
-
-                canvas.hit_testing_find_atom_near = Mock(side_effect=[0, 1])
-                canvas.services.selection.hit_testing_service.find_atom_near = (
-                    canvas.hit_testing_find_atom_near
-                )
-                canvas.services.document.canvas_history_recording_service.record_bond_update = canvas._record_bond_update
-                canvas.services.interaction.move_controller.redraw_bond = (
-                    canvas.redraw_bond
-                )
-                self.assertEqual(
-                    service.add_bond_between_points(
-                        QPointF(0.0, 0.0),
-                        QPointF(10.0, 0.0),
-                        "double",
-                        2,
-                    ),
-                    (0, 1),
-                )
-                retry_bond = canvas.model.bonds[0]
-                self.assertIsNotNone(retry_bond)
-                self.assertEqual((retry_bond.order, retry_bond.style), (2, "double"))
-
-    def test_bond_build_outer_abort_and_broken_add_note_preserve_primary(self) -> None:
-        canvas = _FakeCanvas()
-        service = _service_for(canvas)
-        primary_error = _BrokenAddNoteInterrupt("graphics interrupted")
-        service.committer.add_bond_graphics = Mock(side_effect=primary_error)
-
-        with (
-            mock.patch.object(
-                service.committer,
-                "abort_recorded_change",
-                side_effect=SystemExit("outer abort failed"),
-            ),
-            self.assertRaises(_BrokenAddNoteInterrupt) as raised,
-        ):
-            service.add_bond_between_points(
-                QPointF(0.0, 0.0),
-                QPointF(10.0, 0.0),
-                "single",
-                1,
-            )
-
-        self.assertIs(raised.exception, primary_error)
 
     def test_add_bond_between_points_redraws_restored_existing_bond_if_connected_redraw_raises(
         self,

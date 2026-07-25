@@ -197,50 +197,6 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         canvas.close()
         app.processEvents()
 
-    def test_actual_qt_partial_clear_raise_is_classified_as_destructive(self) -> None:
-        app = QApplication.instance() or QApplication([])
-        app.setQuitOnLastWindowClosed(False)
-        primary = RuntimeError("clear failed after deleting one item")
-
-        class PartialFailureScene(QGraphicsScene):
-            target = None
-            failed = False
-
-            def clear(self) -> None:
-                if not self.failed and self.target is not None:
-                    self.failed = True
-                    QGraphicsScene.removeItem(self, self.target)
-                    sip.delete(self.target)
-                    raise primary
-                QGraphicsScene.clear(self)
-
-        scene = PartialFailureScene()
-        canvas = CanvasView()
-        canvas.setScene(scene)
-        canvas.services.structure.canvas_atom_mutation_service.add_atom("C", 0.0, 0.0)
-        target = scene.addRect(30.0, 0.0, 10.0, 10.0)
-        scene.target = target
-        history = canvas.services.history_service.state.history
-        history.append(
-            AddSceneItemsCommand(
-                items=[target],
-                item_states=[{"kind": "shape"}],
-            )
-        )
-
-        with self.assertRaises(RuntimeError) as raised:
-            canvas.services.document.canvas_scene_reset_service.clear_scene()
-
-        self.assertIs(raised.exception, primary)
-        self.assertTrue(sip.isdeleted(target))
-        self.assertEqual(QGraphicsScene.items(scene), [])
-        self.assertEqual(canvas.model.atoms, {})
-        self.assertEqual(atom_items_for(canvas), {})
-        self.assertEqual(history, [])
-        scene.target = None
-        canvas.close()
-        app.processEvents()
-
     def test_actual_qt_mid_apply_failure_finishes_consistent_empty_reset(
         self,
     ) -> None:

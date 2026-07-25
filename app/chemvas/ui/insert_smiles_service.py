@@ -1,15 +1,11 @@
 from __future__ import annotations
 
-import inspect
 from collections.abc import Callable
-from dataclasses import dataclass
-from functools import partial
 
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QMessageBox
 
-from chemvas.domain.document import deserialize_model_state
-from chemvas.domain.transactions import restore_snapshot_with_retry
+from chemvas.domain.transactions import restore_snapshot
 from chemvas.features.insertion import (
     SmilesPreviewResolvers,
     annotation_mark_direction,
@@ -20,19 +16,8 @@ from chemvas.features.insertion import (
     smiles_preview_center,
 )
 from chemvas.ui.bond_graphics_access import parallel_bond_segments_for
-from chemvas.ui.canvas_atom_graphics_state import clear_atom_graphics_for
-from chemvas.ui.canvas_bond_graphics_state import clear_bond_graphics_for
-from chemvas.ui.canvas_document_state import (
-    restore_document_groups,
-    restore_document_post_model_items,
-    restore_document_pre_model_items,
-    restore_document_projection_state,
-    snapshot_canvas_document_state,
-)
 from chemvas.ui.canvas_insert_state import CanvasInsertState
-from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import next_atom_id_for, set_model_for
-from chemvas.ui.canvas_scene_items_state import clear_scene_item_collections_for
 from chemvas.ui.canvas_scene_reset_access import clear_scene_for
 from chemvas.ui.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.canvas_window_access import notify_error_for
@@ -67,152 +52,10 @@ from chemvas.ui.renderer_style_access import (
     bond_pen_for,
 )
 from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
-from chemvas.ui.scene_item_access import clear_canvas_scene, remove_scene_item
 from chemvas.ui.scene_signal_blocking import blocked_scene_signals
+from chemvas.ui.transactions.document import DocumentSavepoint
 
 MAX_SMILES_INPUT_LENGTH = 1024
-_MISSING_DETACH_PORT = object()
-_UNKNOWN_HISTORY_ENABLED = object()
-
-
-def _capture_optional_detach_port(target: object, name: str) -> object:
-    """Read one optional live port without hiding descriptor failures."""
-
-    try:
-        return getattr(target, name)
-    except AttributeError:
-        if (
-            inspect.getattr_static(target, name, _MISSING_DETACH_PORT)
-            is not _MISSING_DETACH_PORT
-        ):
-            raise
-        return _MISSING_DETACH_PORT
-
-
-@dataclass(frozen=True, slots=True)
-class _FrozenLoadHistoryEnabledAuthority:
-    value: object
-    getter: Callable[[], object] | None
-    setter: Callable[[bool], object] | None
-
-    @classmethod
-    def capture(cls, history: object) -> _FrozenLoadHistoryEnabledAuthority:
-        getter_value = _capture_optional_detach_port(history, "is_enabled")
-        setter_value = _capture_optional_detach_port(history, "set_enabled")
-        getter = getter_value if callable(getter_value) else None
-        setter = setter_value if callable(setter_value) else None
-        value = getter() if getter is not None else _UNKNOWN_HISTORY_ENABLED
-        return cls(value=value, getter=getter, setter=setter)
-
-    def restore(self, original_error: BaseException) -> bool:
-        if self.getter is None or type(self.value) is not bool:
-            return True
-        try:
-            if self.getter() is self.value:
-                return True
-            if self.setter is None:
-                raise RuntimeError("SMILES history enabled policy has no restore port")
-            self.setter(self.value)
-            if self.getter() is not self.value:
-                raise RuntimeError("SMILES history enabled policy was not restored")
-        except BaseException as policy_error:
-            _add_smiles_load_rollback_note(
-                original_error,
-                policy_error,
-                phase="history policy",
-            )
-            return False
-        return True
-
-
-@dataclass(frozen=True, slots=True)
-class _RootDetachPort:
-    item: object
-    scene_getter: Callable[[], object]
-
-
-@dataclass(frozen=True, slots=True)
-class _SceneDetachPorts:
-    scene: object
-    roots: tuple[_RootDetachPort, ...]
-    remove_item: Callable[[object], object]
-    block_signals: Callable[[bool], object] | None
-    signals_blocked: Callable[[], object] | None
-
-
-def _capture_scene_detach_ports(canvas) -> _SceneDetachPorts | None:
-    """Capture the complete non-destructive detach authority before mutation."""
-
-    scene_method = _capture_optional_detach_port(canvas, "scene")
-    if scene_method is _MISSING_DETACH_PORT:
-        return None
-    if not callable(scene_method):
-        raise RuntimeError("canvas scene accessor is not callable")
-    scene = scene_method()
-    if scene is None:
-        return None
-
-    items_method = _capture_optional_detach_port(scene, "items")
-    if items_method is _MISSING_DETACH_PORT:
-        return None
-    if not callable(items_method):
-        raise RuntimeError("scene items accessor is not callable")
-    scene_items = tuple(items_method())
-
-    roots: list[_RootDetachPort] = []
-    for item in scene_items:
-        parent_method = _capture_optional_detach_port(item, "parentItem")
-        if parent_method is _MISSING_DETACH_PORT:
-            parent = None
-        elif callable(parent_method):
-            parent = parent_method()
-        else:
-            raise RuntimeError("scene item parent accessor is not callable")
-        if parent is not None:
-            continue
-
-        item_scene_method = _capture_optional_detach_port(item, "scene")
-        if not callable(item_scene_method):
-            raise RuntimeError("scene root does not expose a membership getter")
-        if item_scene_method() is not scene:
-            raise RuntimeError("scene root membership changed during detach capture")
-        roots.append(
-            _RootDetachPort(
-                item=item,
-                scene_getter=item_scene_method,
-            )
-        )
-
-    if not roots:
-        return None
-
-    remove_item = _capture_optional_detach_port(scene, "removeItem")
-    if not callable(remove_item):
-        raise RuntimeError("scene does not support non-destructive item detach")
-
-    block_signals = _capture_optional_detach_port(scene, "blockSignals")
-    if block_signals is _MISSING_DETACH_PORT:
-        bound_block_signals = None
-    elif callable(block_signals):
-        bound_block_signals = block_signals
-    else:
-        raise RuntimeError("scene signal-blocking setter is not callable")
-
-    signals_blocked = _capture_optional_detach_port(scene, "signalsBlocked")
-    if signals_blocked is _MISSING_DETACH_PORT:
-        bound_signals_blocked = None
-    elif callable(signals_blocked):
-        bound_signals_blocked = signals_blocked
-    else:
-        raise RuntimeError("scene signal-blocking getter is not callable")
-
-    return _SceneDetachPorts(
-        scene=scene,
-        roots=tuple(roots),
-        remove_item=remove_item,
-        block_signals=bound_block_signals,
-        signals_blocked=bound_signals_blocked,
-    )
 
 
 def _add_smiles_load_rollback_note(
@@ -221,13 +64,7 @@ def _add_smiles_load_rollback_note(
     *,
     phase: str,
 ) -> None:
-    try:
-        add_note = getattr(original_error, "add_note", None)
-        if not callable(add_note):
-            return
-        add_note(f"SMILES {phase} rollback also failed: {secondary_error!r}")
-    except BaseException:
-        return
+    original_error.add_note(f"SMILES {phase} rollback also failed: {secondary_error!r}")
 
 
 def _detach_top_level_scene_items_before_clear(canvas) -> None:
@@ -240,27 +77,20 @@ def _detach_top_level_scene_items_before_clear(canvas) -> None:
     before the first removal so a getter failure cannot leave a partial tree.
     """
 
-    ports = _capture_scene_detach_ports(canvas)
-    if ports is None or not ports.roots:
+    scene = canvas.scene()
+    if scene is None:
         return
-
-    def detach_roots() -> None:
-        for root in ports.roots:
-            result = ports.remove_item(root.item)
-            if result is False:
-                raise RuntimeError("scene item detach operation reported failure")
-            if root.scene_getter() is ports.scene:
+    items = getattr(scene, "items", None)
+    if not callable(items):
+        return
+    roots = tuple(item for item in items() if item.parentItem() is None)
+    if not roots:
+        return
+    with blocked_scene_signals(scene):
+        for root in roots:
+            scene.removeItem(root)
+            if root.scene() is scene:
                 raise RuntimeError("scene item remained attached after detach")
-
-    if ports.block_signals is not None:
-        with blocked_scene_signals(
-            ports.scene,
-            block_signals=ports.block_signals,
-            signals_blocked=ports.signals_blocked,
-        ):
-            detach_roots()
-        return
-    detach_roots()
 
 
 class InsertSmilesService:
@@ -322,12 +152,10 @@ class InsertSmilesService:
             return
         if self.structure_build_service is None:
             raise RuntimeError("structure_build_service is required to load SMILES")
-        document_snapshot = snapshot_canvas_document_state(self.canvas)
         snapshot = self.transaction_builder.capture()
         after_clear_next_atom_id = next_atom_id_for(self.canvas)
         added_scene_items: list[object] = []
         command = None
-        document_mutation_started = False
 
         def build_load_command():
             if added_scene_items:
@@ -349,11 +177,6 @@ class InsertSmilesService:
         )
         try:
             _detach_top_level_scene_items_before_clear(self.canvas)
-            # From here onward clear_scene_for may mutate the document before
-            # raising.  A detach failure above needs exact-only restoration:
-            # running the legacy document rebuild while an original root is
-            # still attached would destroy the wrapper we are preserving.
-            document_mutation_started = True
             clear_scene_for(self.canvas)
             after_clear_next_atom_id = next_atom_id_for(self.canvas)
             set_model_for(self.canvas, model)
@@ -368,47 +191,15 @@ class InsertSmilesService:
                 self.canvas,
                 exact_transaction,
             )
-        except BaseException as error:
-            if document_mutation_started:
-                self._restore_document_state_after_failed_load(
-                    document_snapshot,
-                    added_scene_items,
-                    exact_transaction=exact_transaction,
-                    original_error=error,
-                )
-            else:
-                self._restore_exact_transaction_after_failed_detach(
-                    exact_transaction,
-                    original_error=error,
-                )
+        except Exception as error:
+            self._restore_exact_transaction_after_failed_load(
+                exact_transaction,
+                original_error=error,
+            )
             raise
 
     def _push_load_history_verified(self, command: object) -> None:
-        enabled_authority = _FrozenLoadHistoryEnabledAuthority.capture(self.history)
-        try:
-            result = self.history.push(command)
-        except BaseException as original_error:
-            enabled_authority.restore(original_error)
-            raise
-        if result is not False:
-            return
-        if enabled_authority.value is False:
-            # Disabled history is an explicit policy: the loaded document is
-            # valid but intentionally has no undo entry.
-            disabled_result = RuntimeError(
-                "SMILES history push returned False while explicitly disabled"
-            )
-            if not enabled_authority.restore(disabled_result):
-                raise disabled_result
-            return
-        # False from an enabled or unknown history service is a rejected
-        # publication.  Raising here keeps the exact transaction active so the
-        # owning load failure path restores the original document and stacks.
-        rejection = RuntimeError(
-            "SMILES history push was rejected while history was enabled"
-        )
-        enabled_authority.restore(rejection)
-        raise rejection
+        self.history.push(command)
 
     def begin_smiles_insert(self, smiles: str) -> None:
         if self.insert_state.template_active:
@@ -558,87 +349,32 @@ class InsertSmilesService:
                     added.append(item)
         return added
 
-    def _restore_document_state_after_failed_load(
+    def _restore_exact_transaction_after_failed_load(
         self,
-        state: dict,
-        added_scene_items: list[object],
+        exact_transaction: DocumentSavepoint,
         *,
-        exact_transaction: object,
         original_error: BaseException,
     ) -> None:
-        rollback_errors: list[BaseException] = []
-
-        def run(operation: Callable[[], object]) -> None:
-            try:
-                operation()
-            except BaseException as rollback_error:
-                rollback_errors.append(rollback_error)
-
-        for item in reversed(added_scene_items):
-            run(partial(remove_scene_item, self.canvas, item))
-        run(lambda: clear_scene_for(self.canvas))
-        run(lambda: clear_canvas_scene(self.canvas))
-        run(lambda: clear_scene_item_collections_for(self.canvas))
-        run(lambda: mark_registry_for(self.canvas).clear())
-        run(lambda: clear_atom_graphics_for(self.canvas))
-        run(lambda: clear_bond_graphics_for(self.canvas))
-        run(lambda: set_model_for(self.canvas, deserialize_model_state(state["model"])))
-        run(
-            lambda: set_last_smiles_input_for(
-                self.canvas, state.get("last_smiles_input")
-            )
-        )
-        run(self.graph_service.rebuild_bond_adjacency)
-        run(lambda: restore_document_pre_model_items(self.canvas, state))
-        run(lambda: restore_document_projection_state(self.canvas, state))
-        run(self.structure_build_service.render_model)
-        run(lambda: restore_document_post_model_items(self.canvas, state))
-        run(lambda: restore_document_groups(self.canvas, state))
-        restore_result = restore_snapshot_with_retry(
+        restore_result = restore_snapshot(
             lambda: restore_history_transaction_for_history(
                 self.canvas,
                 exact_transaction,
             ),
             description="SMILES document transaction",
         )
-        rollback_errors.extend(restore_result.errors)
+        rollback_errors: tuple[BaseException, ...] = restore_result.errors
         if not restore_result.authoritative:
-            rollback_errors.append(
+            rollback_errors = (
+                *rollback_errors,
                 RuntimeError(
                     "SMILES document exact rollback remained non-authoritative"
-                )
+                ),
             )
         for secondary_error in rollback_errors:
             _add_smiles_load_rollback_note(
                 original_error,
                 secondary_error,
                 phase="document",
-            )
-
-    def _restore_exact_transaction_after_failed_detach(
-        self,
-        exact_transaction: object,
-        *,
-        original_error: BaseException,
-    ) -> None:
-        restore_result = restore_snapshot_with_retry(
-            lambda: restore_history_transaction_for_history(
-                self.canvas,
-                exact_transaction,
-            ),
-            description="SMILES detach transaction",
-        )
-        rollback_errors: tuple[BaseException, ...] = restore_result.errors
-        if not restore_result.authoritative:
-            rollback_errors = (
-                *rollback_errors,
-                RuntimeError("SMILES detach exact rollback remained non-authoritative"),
-            )
-        for secondary_error in rollback_errors:
-            _add_smiles_load_rollback_note(
-                original_error,
-                secondary_error,
-                phase="detach",
             )
 
 

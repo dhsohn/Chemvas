@@ -48,7 +48,7 @@ def _add_template_rollback_note(
         if not callable(add_note):
             return
         add_note(f"Template rollback also failed: {rollback_error!r}")
-    except BaseException:
+    except Exception:
         return
 
 
@@ -120,10 +120,10 @@ def apply_template_commit_resolution(
             add_insert_ring_from_points_for(canvas, points)
 
         committer.record_additions(snapshot)
-    except BaseException as error:
+    except Exception as error:
         try:
             committer.abort_recorded_change(snapshot, original_error=error)
-        except BaseException as rollback_error:
+        except Exception as rollback_error:
             _add_template_rollback_note(error, rollback_error)
         raise
     return True
@@ -173,7 +173,7 @@ def _apply_benzene_template_commit(
             )
             return False
         release_history_transaction_for_history(canvas, exact_transaction)
-    except BaseException as error:
+    except Exception as error:
         try:
             rollback_insert_mutation(
                 canvas,
@@ -184,7 +184,7 @@ def _apply_benzene_template_commit(
                 smiles_authority=smiles_authority,
                 original_error=error,
             )
-        except BaseException as rollback_error:
+        except Exception as rollback_error:
             _add_template_rollback_note(error, rollback_error)
         raise
     return True

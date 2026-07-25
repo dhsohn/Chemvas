@@ -7,8 +7,7 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-import pytest
-from chemvas.core.history import HistoryTransactionRestoreResult
+from chemvas.core.history import RestoreOutcome
 from chemvas.domain.document import Atom, MoleculeModel
 from chemvas.ui.canvas_hover_state import hover_state_for
 from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
@@ -23,18 +22,15 @@ from chemvas.ui.input_view_access import set_scene_rect_for
 from chemvas.ui.insert_mode_logic import InsertSessionState
 from chemvas.ui.insert_smiles_service import (
     InsertSmilesService,
-    _detach_top_level_scene_items_before_clear,
 )
 from chemvas.ui.selection_info_state import selection_info_state_for
 from chemvas.ui.selection_style_state import selection_style_state_for
-from chemvas.ui.transactions.scene_rect import SceneRectSnapshot
 from PyQt6 import sip
 from PyQt6.QtCore import QCoreApplication, QEvent, QPointF, QRectF
 from PyQt6.QtGui import QTransform
 from PyQt6.QtWidgets import (
     QApplication,
     QGraphicsRectItem,
-    QGraphicsScene,
 )
 
 from tests.test_insert_controller import _FakeCanvas
@@ -346,94 +342,30 @@ class _DetachProbeScene:
         return self._remove_result
 
 
-class _BrokenAddNoteInterrupt(KeyboardInterrupt):
-    def add_note(self, _note: str) -> None:
-        raise SystemExit("add_note failed")
-
-
-def test_smiles_detach_propagates_live_descriptor_attribute_error_before_mutation() -> (
-    None
-):
-    class BrokenSceneCanvas:
-        @property
-        def scene(self):
-            raise AttributeError("live canvas scene descriptor failed")
-
-    with pytest.raises(AttributeError, match="scene descriptor failed"):
-        _detach_top_level_scene_items_before_clear(BrokenSceneCanvas())
-
-    scene = _DetachProbeScene([], remove_result=None)
-
-    class BrokenParentDescriptorItem(_DetachProbeItem):
-        @property
-        def parentItem(self):
-            raise AttributeError("live parent descriptor failed")
-
-    item = BrokenParentDescriptorItem(scene)
-    scene._items.append(item)
-    canvas = mock.Mock()
-    canvas.scene.return_value = scene
-
-    with pytest.raises(AttributeError, match="parent descriptor failed"):
-        _detach_top_level_scene_items_before_clear(canvas)
-
-    assert scene.remove_calls == []
-
-
-@pytest.mark.parametrize("restore_path", ["detach", "document"])
-@pytest.mark.parametrize("second_authoritative", [True, False])
-def test_smiles_exact_rollback_retries_and_reports_authority(
-    restore_path: str,
-    second_authoritative: bool,
-) -> None:
+def test_smiles_exact_rollback_runs_once_and_reports_failure() -> None:
     canvas = _FakeCanvas()
     service = _service_for(canvas)
-    primary = KeyboardInterrupt(f"{restore_path} failed")
-    first_error = SystemExit("first exact restore failed")
-    results = iter(
-        (
-            HistoryTransactionRestoreResult(
-                authoritative=False,
-                fallback_to_inverse=False,
-                errors=(first_error,),
-            ),
-            HistoryTransactionRestoreResult(
-                authoritative=second_authoritative,
-                fallback_to_inverse=False,
-            ),
-        )
+    primary = RuntimeError("load failed")
+    restore_error = ValueError("exact restore failed")
+    result = RestoreOutcome(
+        authoritative=False,
+        fallback_to_inverse=False,
+        errors=(restore_error,),
     )
 
-    with (
-        mock.patch(
-            "chemvas.ui.insert_smiles_service.restore_history_transaction_for_history",
-            side_effect=lambda *_args: next(results),
-        ) as restore,
-        mock.patch(
-            "chemvas.ui.insert_smiles_service.deserialize_model_state",
-            return_value=MoleculeModel(),
-        ),
-    ):
-        if restore_path == "detach":
-            service._restore_exact_transaction_after_failed_detach(
-                object(),
-                original_error=primary,
-            )
-        else:
-            service._restore_document_state_after_failed_load(
-                {"model": {}},
-                [],
-                exact_transaction=object(),
-                original_error=primary,
-            )
+    with mock.patch(
+        "chemvas.ui.insert_smiles_service.restore_history_transaction_for_history",
+        return_value=result,
+    ) as restore:
+        service._restore_exact_transaction_after_failed_load(
+            object(),
+            original_error=primary,
+        )
 
-    assert restore.call_count == 2
+    restore.assert_called_once()
     notes = "\n".join(getattr(primary, "__notes__", ()))
-    assert "first exact restore failed" in notes
-    if second_authoritative:
-        assert "remained non-authoritative" not in notes
-    else:
-        assert "remained non-authoritative" in notes
+    assert "exact restore failed" in notes
+    assert "remained non-authoritative" in notes
 
 
 def test_insert_smiles_service_begin_smiles_insert_uses_callbacks_and_preview_state() -> (
@@ -528,436 +460,6 @@ def test_insert_smiles_service_render_preview_routes_clear_and_apply_paths() -> 
     assert canvas.insert_state.smiles_preview_items == ["items"]
     assert canvas.insert_state.smiles_preview_bond_items == {0: ["bond"]}
     assert canvas.insert_state.smiles_preview_atom_items == {0: "atom"}
-
-
-def test_load_smiles_next_atom_id_exit_precedes_exact_scene_guard() -> None:
-    app = QApplication.instance() or QApplication([])
-    app.setQuitOnLastWindowClosed(False)
-    scene = QGraphicsScene()
-    scene.addRect(QRectF(0.0, 0.0, 10.0, 10.0))
-    canvas = _FakeCanvas()
-    canvas._scene = scene
-    canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(
-        atoms={0: Atom("C", 0.0, 0.0)}
-    )
-    service = _service_for(canvas)
-
-    with (
-        mock.patch(
-            "chemvas.ui.insert_smiles_service.snapshot_canvas_document_state",
-            return_value={},
-        ),
-        mock.patch.object(
-            service.transaction_builder, "capture", return_value=object()
-        ),
-        mock.patch(
-            "chemvas.ui.insert_smiles_service.next_atom_id_for",
-            side_effect=SystemExit("next atom id capture terminated"),
-        ),
-        mock.patch(
-            "chemvas.ui.insert_smiles_service.capture_history_transaction_for_history",
-            side_effect=lambda *_args, **_kwargs: SceneRectSnapshot.capture(scene),
-        ) as capture,
-        pytest.raises(SystemExit, match="next atom id capture terminated"),
-    ):
-        service.load_smiles("C")
-
-    capture.assert_not_called()
-    tracker = getattr(scene, "_chemvas_scene_rect_tracker", None)
-    assert tracker is None or tracker.depth == 0
-    far = scene.addRect(QRectF(10_000.0, 0.0, 10.0, 10.0))
-    assert scene.sceneRect().right() > 10_000.0
-    scene.removeItem(far)
-
-
-@pytest.mark.parametrize("enabled_port", [True, None], ids=["enabled", "unknown"])
-def test_load_smiles_false_history_push_rolls_back_when_not_explicitly_disabled(
-    enabled_port: bool | None,
-) -> None:
-    canvas = _FakeCanvas()
-    canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(
-        atoms={0: Atom("C", 0.0, 0.0)}
-    )
-    service = _service_for(canvas)
-    push = mock.Mock(return_value=False)
-    service.history = (
-        type(
-            "EnabledHistory",
-            (),
-            {"push": push, "is_enabled": lambda self: enabled_port},
-        )()
-        if enabled_port is not None
-        else type("UnknownHistory", (), {"push": push})()
-    )
-    command = object()
-    exact_transaction = object()
-    service.transaction_builder.capture = mock.Mock(return_value=object())
-    service.transaction_builder.build_command = mock.Mock(return_value=command)
-
-    with (
-        mock.patch(
-            "chemvas.ui.insert_smiles_service.snapshot_canvas_document_state",
-            return_value={},
-        ),
-        mock.patch(
-            "chemvas.ui.insert_smiles_service.capture_history_transaction_for_history",
-            return_value=exact_transaction,
-        ),
-        mock.patch(
-            "chemvas.ui.insert_smiles_service.release_history_transaction_for_history"
-        ) as release,
-        mock.patch(
-            "chemvas.ui.insert_smiles_service._detach_top_level_scene_items_before_clear"
-        ),
-        mock.patch("chemvas.ui.insert_smiles_service.clear_scene_for"),
-        mock.patch("chemvas.ui.insert_smiles_service.next_atom_id_for", return_value=0),
-        mock.patch("chemvas.ui.insert_smiles_service.set_model_for"),
-        mock.patch("chemvas.ui.insert_smiles_service.set_last_smiles_input_for"),
-        mock.patch.object(
-            service,
-            "_restore_document_state_after_failed_load",
-        ) as restore,
-        pytest.raises(RuntimeError, match="push was rejected"),
-    ):
-        service.load_smiles("C")
-
-    push.assert_called_once_with(command)
-    release.assert_not_called()
-    restore.assert_called_once()
-    assert restore.call_args.kwargs["exact_transaction"] is exact_transaction
-    assert isinstance(restore.call_args.kwargs["original_error"], RuntimeError)
-
-
-def test_load_smiles_false_history_push_is_allowed_when_explicitly_disabled() -> None:
-    canvas = _FakeCanvas()
-    canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(
-        atoms={0: Atom("C", 0.0, 0.0)}
-    )
-    service = _service_for(canvas)
-    push = mock.Mock(return_value=False)
-    service.history = type(
-        "DisabledHistory",
-        (),
-        {"push": push, "is_enabled": lambda self: False},
-    )()
-    command = object()
-    exact_transaction = object()
-    service.transaction_builder.capture = mock.Mock(return_value=object())
-    service.transaction_builder.build_command = mock.Mock(return_value=command)
-
-    with (
-        mock.patch(
-            "chemvas.ui.insert_smiles_service.snapshot_canvas_document_state",
-            return_value={},
-        ),
-        mock.patch(
-            "chemvas.ui.insert_smiles_service.capture_history_transaction_for_history",
-            return_value=exact_transaction,
-        ),
-        mock.patch(
-            "chemvas.ui.insert_smiles_service.release_history_transaction_for_history"
-        ) as release,
-        mock.patch(
-            "chemvas.ui.insert_smiles_service._detach_top_level_scene_items_before_clear"
-        ),
-        mock.patch("chemvas.ui.insert_smiles_service.clear_scene_for"),
-        mock.patch("chemvas.ui.insert_smiles_service.next_atom_id_for", return_value=0),
-        mock.patch("chemvas.ui.insert_smiles_service.set_model_for"),
-        mock.patch("chemvas.ui.insert_smiles_service.set_last_smiles_input_for"),
-        mock.patch.object(
-            service,
-            "_restore_document_state_after_failed_load",
-        ) as restore,
-    ):
-        service.load_smiles("C")
-
-    push.assert_called_once_with(command)
-    restore.assert_not_called()
-    release.assert_called_once_with(canvas, exact_transaction)
-
-
-def test_load_smiles_freezes_enabled_policy_before_rejected_push() -> None:
-    canvas = _FakeCanvas()
-    service = _service_for(canvas)
-
-    class SelfDisablingHistory:
-        def __init__(self) -> None:
-            self.enabled = True
-
-        def is_enabled(self) -> bool:
-            return self.enabled
-
-        def set_enabled(self, enabled: bool) -> None:
-            self.enabled = enabled
-
-        def push(self, _command) -> bool:
-            self.enabled = False
-            return False
-
-    history = SelfDisablingHistory()
-    service.history = history
-
-    with pytest.raises(RuntimeError, match="push was rejected"):
-        service._push_load_history_verified(object())
-
-    assert history.enabled is True
-
-
-@pytest.mark.parametrize(
-    "remove_result", [None, False], ids=["no-op", "reported-failure"]
-)
-def test_load_smiles_aborts_before_destructive_clear_when_root_detach_does_not_complete(
-    remove_result,
-) -> None:
-    canvas = _FakeCanvas()
-    scene = _DetachProbeScene([], remove_result=remove_result)
-    root = _DetachProbeItem(scene)
-    scene._items.append(root)
-    canvas._scene = scene
-    canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(
-        atoms={0: Atom("C", 0.0, 0.0)}
-    )
-    service = _service_for(canvas)
-    exact_transaction = object()
-    restore_result = HistoryTransactionRestoreResult(authoritative=True)
-
-    with (
-        mock.patch(
-            "chemvas.ui.insert_smiles_service.snapshot_canvas_document_state",
-            return_value={},
-        ),
-        mock.patch.object(
-            service.transaction_builder, "capture", return_value=object()
-        ),
-        mock.patch(
-            "chemvas.ui.insert_smiles_service.capture_history_transaction_for_history",
-            return_value=exact_transaction,
-        ),
-        mock.patch(
-            "chemvas.ui.insert_smiles_service.restore_history_transaction_for_history",
-            return_value=restore_result,
-        ) as restore_exact,
-        pytest.raises(RuntimeError, match="detach"),
-    ):
-        service.load_smiles("C")
-
-    assert scene.remove_calls == [root]
-    assert root.scene() is scene
-    assert not scene.signalsBlocked()
-    canvas.clear_scene.assert_not_called()
-    restore_exact.assert_called_once_with(canvas, exact_transaction)
-
-
-def test_load_smiles_collects_every_root_before_first_detach() -> None:
-    canvas = _FakeCanvas()
-    scene = _DetachProbeScene([], remove_result=None)
-    first_root = _DetachProbeItem(scene)
-    deleted_child = _DetachProbeItem(
-        scene,
-        parent_error=RuntimeError("deleted child parent lookup"),
-    )
-    scene._items.extend((first_root, deleted_child))
-    canvas._scene = scene
-    canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(
-        atoms={0: Atom("C", 0.0, 0.0)}
-    )
-    service = _service_for(canvas)
-    exact_transaction = object()
-    restore_result = HistoryTransactionRestoreResult(authoritative=True)
-
-    with (
-        mock.patch(
-            "chemvas.ui.insert_smiles_service.snapshot_canvas_document_state",
-            return_value={},
-        ),
-        mock.patch.object(
-            service.transaction_builder, "capture", return_value=object()
-        ),
-        mock.patch(
-            "chemvas.ui.insert_smiles_service.capture_history_transaction_for_history",
-            return_value=exact_transaction,
-        ),
-        mock.patch(
-            "chemvas.ui.insert_smiles_service.restore_history_transaction_for_history",
-            return_value=restore_result,
-        ) as restore_exact,
-        pytest.raises(RuntimeError, match="deleted child parent lookup"),
-    ):
-        service.load_smiles("C")
-
-    assert scene.remove_calls == []
-    assert first_root.scene() is scene
-    assert deleted_child.scene() is scene
-    canvas.clear_scene.assert_not_called()
-    restore_exact.assert_called_once_with(canvas, exact_transaction)
-
-
-def test_load_smiles_detach_rollback_note_failure_preserves_primary_exception() -> None:
-    canvas = _FakeCanvas()
-    canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(
-        atoms={0: Atom("C", 0.0, 0.0)}
-    )
-    service = _service_for(canvas)
-    exact_transaction = object()
-    primary_error = _BrokenAddNoteInterrupt("detach interrupted")
-    secondary_error = RuntimeError("exact restore failed")
-    restore_result = HistoryTransactionRestoreResult(
-        authoritative=True,
-        errors=(secondary_error,),
-    )
-
-    with (
-        mock.patch(
-            "chemvas.ui.insert_smiles_service.snapshot_canvas_document_state",
-            return_value={},
-        ),
-        mock.patch.object(
-            service.transaction_builder, "capture", return_value=object()
-        ),
-        mock.patch(
-            "chemvas.ui.insert_smiles_service.capture_history_transaction_for_history",
-            return_value=exact_transaction,
-        ),
-        mock.patch(
-            "chemvas.ui.insert_smiles_service._detach_top_level_scene_items_before_clear",
-            side_effect=primary_error,
-        ),
-        mock.patch(
-            "chemvas.ui.insert_smiles_service.restore_history_transaction_for_history",
-            return_value=restore_result,
-        ),
-        pytest.raises(_BrokenAddNoteInterrupt) as caught,
-    ):
-        service.load_smiles("C")
-
-    assert caught.value is primary_error
-    canvas.clear_scene.assert_not_called()
-
-
-@pytest.mark.parametrize(
-    ("failure_stage", "failure_type"),
-    [
-        pytest.param("clear", KeyboardInterrupt, id="clear-keyboard-interrupt"),
-        pytest.param("clear", SystemExit, id="clear-system-exit"),
-        pytest.param("render", SystemExit, id="restore-render-system-exit"),
-        pytest.param("push", KeyboardInterrupt, id="history-push-keyboard-interrupt"),
-        pytest.param("release", SystemExit, id="exact-release-system-exit"),
-    ],
-)
-def test_load_smiles_preserves_live_qt_document_identity_across_base_exceptions_and_retry(
-    failure_stage: str,
-    failure_type: type[BaseException],
-) -> None:
-    app = QApplication.instance() or QApplication([])
-    app.setQuitOnLastWindowClosed(False)
-    canvas = CanvasView()
-    try:
-        service = canvas.services.structure.insert_controller.smiles_service
-        state = _live_canvas_load_snapshot(canvas, service)
-        replacement_model = MoleculeModel(
-            atoms={0: Atom("C", 0.0, 0.0)},
-        )
-
-        def fail() -> None:
-            raise failure_type(f"{failure_stage} interrupted")
-
-        if failure_stage == "clear":
-            original_clear = (
-                canvas.services.document.canvas_scene_reset_service.clear_scene
-            )
-
-            def clear_then_fail(_canvas) -> None:
-                original_clear()
-                fail()
-
-            failure_patch = mock.patch(
-                "chemvas.ui.insert_smiles_service.clear_scene_for",
-                side_effect=clear_then_fail,
-            )
-        elif failure_stage == "render":
-            original_render = service.structure_build_service.render_model
-
-            def render_then_fail() -> None:
-                original_render()
-                fail()
-
-            failure_patch = mock.patch.object(
-                service.structure_build_service,
-                "render_model",
-                side_effect=render_then_fail,
-            )
-        elif failure_stage == "push":
-            original_push = service.history.push
-
-            def push_then_fail(command) -> None:
-                original_push(command)
-                fail()
-
-            failure_patch = mock.patch.object(
-                service.history,
-                "push",
-                side_effect=push_then_fail,
-            )
-        else:
-            from chemvas.ui import insert_smiles_service as service_module
-
-            original_release = service_module.release_history_transaction_for_history
-
-            def release_then_fail(target_canvas, transaction) -> None:
-                original_release(target_canvas, transaction)
-                fail()
-
-            failure_patch = mock.patch.object(
-                service_module,
-                "release_history_transaction_for_history",
-                side_effect=release_then_fail,
-            )
-
-        with (
-            mock.patch(
-                "chemvas.ui.insert_smiles_service.smiles_to_2d_for",
-                return_value=replacement_model,
-            ),
-            failure_patch,
-            pytest.raises(failure_type, match=rf"{failure_stage} interrupted"),
-        ):
-            service.load_smiles("C")
-
-        _assert_live_canvas_load_snapshot(canvas, service, state)
-
-        retry_model = MoleculeModel(
-            atoms={
-                0: Atom("C", -10.0, 0.0),
-                1: Atom("O", 10.0, 0.0),
-            }
-        )
-        with mock.patch(
-            "chemvas.ui.insert_smiles_service.smiles_to_2d_for",
-            return_value=retry_model,
-        ):
-            service.load_smiles("CO")
-
-        note = state["note"]
-        assert canvas.model is retry_model
-        assert last_smiles_input_for(canvas) == "CO"
-        assert note.scene() is None
-        assert note not in note_items_for(canvas)
-        assert all(item is not note for item in canvas.scene().items())
-        assert all(item.scene() is None for item in state["scene_items"])
-        assert not service.insert_state.smiles_active
-        assert service.insert_state.smiles_preview_items == []
-        assert not service.insert_state.template_active
-        assert service.insert_state.template_preview_items == []
-        assert hover_state_for(canvas).items == []
-        assert rotation_state_for(canvas).projection_center_3d is None
-        assert rotation_state_for(canvas).projection_anchor_2d is None
-        assert service.history.state.history is state["history"]
-        assert service.history.state.history[0] is state["history_command"]
-        assert len(service.history.state.history) == 2
-        assert service.history.state.redo_stack is state["redo"]
-        assert service.history.state.redo_stack == []
-    finally:
-        _dispose_canvas(canvas)
 
 
 def test_load_smiles_clears_detached_highlight_and_pending_selection_info() -> None:

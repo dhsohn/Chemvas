@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import cast
 
-from PyQt6.QtWidgets import QGraphicsScene, QGraphicsView
+from PyQt6.QtWidgets import QGraphicsScene
 
 from chemvas.domain.document import MoleculeModel
 from chemvas.ui.atom_coords_access import clear_atom_coords_3d_for
@@ -53,19 +53,14 @@ class CanvasSceneResetService:
 
     def _scene_and_qt_items(self) -> tuple[object, tuple[object, ...] | None]:
         scene: object | None
-        if isinstance(self.canvas, QGraphicsView):
-            scene = QGraphicsView.scene(self.canvas)
-        else:
-            scene_method = getattr(self.canvas, "scene", None)
-            if not callable(scene_method):
-                raise AttributeError("canvas has no callable scene accessor")
-            scene = scene_method()
+        scene_method = getattr(self.canvas, "scene", None)
+        if not callable(scene_method):
+            raise AttributeError("canvas has no callable scene accessor")
+        scene = scene_method()
         if scene is None:
             raise RuntimeError("canvas scene accessor returned no scene")
         qt_items_before_clear = (
-            tuple(QGraphicsScene.items(scene))
-            if isinstance(scene, QGraphicsScene)
-            else None
+            tuple(scene.items()) if isinstance(scene, QGraphicsScene) else None
         )
         return scene, qt_items_before_clear
 
@@ -82,16 +77,15 @@ class CanvasSceneResetService:
                 mark_destructive_started()
             try:
                 scene.clear()  # type: ignore[attr-defined]
-            except BaseException:
+            except Exception:
                 if qt_items_before_clear is not None and (
-                    tuple(QGraphicsScene.items(cast(QGraphicsScene, scene)))
-                    != qt_items_before_clear
+                    tuple(cast(QGraphicsScene, scene).items()) != qt_items_before_clear
                 ):
                     mark_destructive_started()
                 raise
             mark_destructive_started()
-            # QGraphicsScene.clear() removes every item, which already drops
-            # the selection; duck scenes need the explicit call.
+            # A Qt scene clear removes every item and already drops selection;
+            # lightweight scenes need the explicit call.
             if qt_items_before_clear is None:
                 clear_selection = getattr(scene, "clearSelection", None)
                 if callable(clear_selection):
@@ -218,26 +212,19 @@ class CanvasSceneResetService:
                     qt_items_before_clear,
                     mark_destructive_started,
                 )
-            except BaseException as error:
+            except Exception as error:
                 if not destructive_started:
                     raise
                 errors.append(error)
-                # Converge on an empty scene through the base Qt port so a
-                # buggy clear override cannot fail the recovery again.
-                if isinstance(scene, QGraphicsScene):
-                    try:
-                        QGraphicsScene.clear(scene)
-                    except BaseException as retry_error:
-                        errors.append(retry_error)
             for step in self._runtime_reset_steps(empty_model):
                 try:
                     step()
-                except BaseException as error:
+                except Exception as error:
                     errors.append(error)
             if discard_history:
                 try:
                     self._discard_history_in_place()
-                except BaseException as error:
+                except Exception as error:
                     errors.append(error)
         finally:
             selection_info.callback = selection_callback

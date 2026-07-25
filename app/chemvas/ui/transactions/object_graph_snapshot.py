@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import inspect
 from dataclasses import dataclass, fields, is_dataclass
 
 from PyQt6.QtWidgets import QGraphicsItem
 
-from chemvas.ui.history_commands import (
-    _BondPrimitiveGraphicsSnapshot,
-    _graphics_item_is_deleted,
+from chemvas.ui.transactions.scene_runtime import (
+    BondPrimitiveGraphicsSnapshot,
+    graphics_item_is_deleted,
 )
 
 _SCENE_ITEM_DATA_ROLES = (0, 1, 2, 6, 9, 20, 21, 22)
@@ -22,7 +21,7 @@ def _exact_value_matches(actual: object, expected: object) -> bool:
         return False
     try:
         return bool(actual == expected)
-    except BaseException:
+    except Exception:
         return False
 
 
@@ -31,38 +30,8 @@ def _semantic_value_matches(actual: object, expected: object) -> bool:
         return True
     try:
         return bool(actual == expected)
-    except BaseException:
+    except Exception:
         return False
-
-
-def _collect_restore_errors(
-    operation,
-    destination: list[BaseException],
-) -> None:
-    try:
-        result = operation()
-    except BaseException as exc:
-        destination.append(exc)
-        return
-    try:
-        destination.extend(result)
-    except BaseException as exc:
-        destination.append(exc)
-
-
-def _add_capture_rollback_note(
-    original_error: BaseException,
-    secondary_error: BaseException,
-) -> None:
-    try:
-        add_note = getattr(original_error, "add_note", None)
-        if callable(add_note):
-            add_note(
-                "Object snapshot rollback also encountered "
-                f"{type(secondary_error).__name__}: {secondary_error}"
-            )
-    except BaseException:
-        return
 
 
 def _capture_optional_attribute(
@@ -71,15 +40,7 @@ def _capture_optional_attribute(
     *,
     default: object = None,
 ) -> object:
-    try:
-        return getattr(target, name)
-    except AttributeError:
-        if (
-            inspect.getattr_static(target, name, _MISSING_ATTRIBUTE)
-            is not _MISSING_ATTRIBUTE
-        ):
-            raise
-        return default
+    return getattr(target, name, default)
 
 
 @dataclass(slots=True)
@@ -147,7 +108,7 @@ class ContainerGraphSnapshot:
                     assert isinstance(target, set)
                     target.clear()
                     target.update(state.contents)
-            except BaseException as exc:
+            except Exception as exc:
                 errors.append(exc)
         return errors
 
@@ -185,7 +146,7 @@ class ContainerGraphSnapshot:
                     raise RuntimeError(
                         "transaction rollback container contents were re-mutated"
                     )
-            except BaseException as exc:
+            except Exception as exc:
                 errors.append(exc)
         return errors
 
@@ -215,78 +176,13 @@ class ObjectStateSnapshot:
                     return None
                 names = tuple(dict.__iter__(raw_namespace))
 
-        raw_attributes: dict[str, tuple[bool, object]] = {}
-        if isinstance(raw_namespace, dict):
-            for name in names:
-                present = dict.__contains__(raw_namespace, name)
-                value = (
-                    dict.__getitem__(raw_namespace, name)
-                    if present
-                    else _MISSING_ATTRIBUTE
-                )
-                raw_attributes[name] = (present, value)
-                if present:
-                    containers.capture(value)
-
-        def restore_raw_attributes() -> None:
-            if not isinstance(raw_namespace, dict):
-                return
-            for name, (present, value) in raw_attributes.items():
-                if present:
-                    dict.__setitem__(raw_namespace, name, value)
-                else:
-                    try:
-                        dict.__delitem__(raw_namespace, name)
-                    except KeyError:
-                        pass
-
-        def raw_attributes_match() -> bool:
-            if not isinstance(raw_namespace, dict):
-                return True
-            for name, (present, value) in raw_attributes.items():
-                if dict.__contains__(raw_namespace, name) is not present:
-                    return False
-                if present and dict.__getitem__(raw_namespace, name) is not value:
-                    return False
-            return True
-
         attributes: dict[str, object] = {}
-        try:
-            for name in names:
-                if (
-                    inspect.getattr_static(target, name, _MISSING_ATTRIBUTE)
-                    is _MISSING_ATTRIBUTE
-                ):
-                    continue
-                value = getattr(target, name)
-                attributes[name] = value
-                containers.capture(value)
-        except BaseException as original_error:
-            partial = cls(target=target, attributes=attributes)
-            recovery_errors: list[BaseException] = []
-            for _attempt in range(2):
-                attempt_errors: list[BaseException] = []
-                _collect_restore_errors(partial.restore, attempt_errors)
-                try:
-                    restore_raw_attributes()
-                except BaseException as error:
-                    attempt_errors.append(error)
-                _collect_restore_errors(containers.restore, attempt_errors)
-                try:
-                    restore_raw_attributes()
-                    if not raw_attributes_match():
-                        raise RuntimeError(
-                            "partial capture raw fields remained mutated"
-                        )
-                except BaseException as error:
-                    attempt_errors.append(error)
-                attempt_errors.extend(containers.verify())
-                if not attempt_errors:
-                    break
-                recovery_errors.extend(attempt_errors)
-            for recovery_error in recovery_errors:
-                _add_capture_rollback_note(original_error, recovery_error)
-            raise
+        for name in names:
+            value = getattr(target, name, _MISSING_ATTRIBUTE)
+            if value is _MISSING_ATTRIBUTE:
+                continue
+            attributes[name] = value
+            containers.capture(value)
         if not attributes:
             return None
         return cls(target=target, attributes=attributes)
@@ -296,7 +192,7 @@ class ObjectStateSnapshot:
         for name, value in self.attributes.items():
             try:
                 setattr(self.target, name, value)
-            except BaseException as exc:
+            except Exception as exc:
                 errors.append(exc)
         return errors
 
@@ -309,7 +205,7 @@ class ObjectStateSnapshot:
                     raise RuntimeError(
                         f"transaction object attribute {name!r} was re-mutated"
                     )
-            except BaseException as exc:
+            except Exception as exc:
                 errors.append(exc)
         return errors
 
@@ -318,7 +214,7 @@ class ObjectStateSnapshot:
 class SceneItemExactSnapshot:
     item: object
     data_values: tuple[tuple[int, object], ...]
-    primitive_graphics: _BondPrimitiveGraphicsSnapshot | None
+    primitive_graphics: BondPrimitiveGraphicsSnapshot | None
 
     @classmethod
     def capture(
@@ -326,13 +222,13 @@ class SceneItemExactSnapshot:
         item: object,
         containers: ContainerGraphSnapshot,
     ) -> SceneItemExactSnapshot | None:
-        if _graphics_item_is_deleted(item):
+        if graphics_item_is_deleted(item):
             return None
         values: list[tuple[int, object]] = []
         data: object = None
         if isinstance(item, QGraphicsItem):
             for role in _SCENE_ITEM_DATA_ROLES:
-                value = QGraphicsItem.data(item, role)
+                value = item.data(role)
                 containers.capture(value)
                 values.append((role, value))
         else:
@@ -349,7 +245,7 @@ class SceneItemExactSnapshot:
         return cls(
             item=item,
             data_values=tuple(values),
-            primitive_graphics=_BondPrimitiveGraphicsSnapshot.capture(
+            primitive_graphics=BondPrimitiveGraphicsSnapshot.capture(
                 item,
                 strict=True,
             ),
@@ -360,20 +256,20 @@ class SceneItemExactSnapshot:
         if isinstance(self.item, QGraphicsItem):
             for role, value in self.data_values:
                 try:
-                    QGraphicsItem.setData(self.item, role, value)
-                except BaseException as exc:
+                    self.item.setData(role, value)
+                except Exception as exc:
                     errors.append(exc)
         else:
             try:
                 setter = _capture_optional_attribute(self.item, "setData")
-            except BaseException as exc:
+            except Exception as exc:
                 errors.append(exc)
                 setter = None
             if callable(setter):
                 for role, value in self.data_values:
                     try:
                         setter(role, value)
-                    except BaseException as exc:
+                    except Exception as exc:
                         errors.append(exc)
         if self.primitive_graphics is not None:
             errors.extend(self.primitive_graphics.restore())
@@ -386,18 +282,18 @@ class SceneItemExactSnapshot:
             for role, expected in self.data_values:
                 try:
                     if not _semantic_value_matches(
-                        QGraphicsItem.data(self.item, role),
+                        self.item.data(role),
                         expected,
                     ):
                         raise RuntimeError(
                             f"transaction scene-item data role {role} was re-mutated"
                         )
-                except BaseException as exc:
+                except Exception as exc:
                     errors.append(exc)
         else:
             try:
                 data_getter = _capture_optional_attribute(self.item, "data")
-            except BaseException as exc:
+            except Exception as exc:
                 errors.append(exc)
                 data_getter = None
         if not isinstance(self.item, QGraphicsItem) and callable(data_getter):
@@ -407,7 +303,7 @@ class SceneItemExactSnapshot:
                         raise RuntimeError(
                             f"transaction scene-item data role {role} was re-mutated"
                         )
-                except BaseException as exc:
+                except Exception as exc:
                     errors.append(exc)
         primitive = self.primitive_graphics
         if primitive is not None:
@@ -429,7 +325,7 @@ class SceneItemExactSnapshot:
                         raise RuntimeError(
                             f"transaction primitive {getter_name} was re-mutated"
                         )
-                except BaseException as exc:
+                except Exception as exc:
                     errors.append(exc)
             for name, expected in primitive.direct_attributes:
                 try:
@@ -440,7 +336,7 @@ class SceneItemExactSnapshot:
                         raise RuntimeError(
                             f"transaction primitive attribute {name!r} was re-mutated"
                         )
-                except BaseException as exc:
+                except Exception as exc:
                     errors.append(exc)
         return errors
 

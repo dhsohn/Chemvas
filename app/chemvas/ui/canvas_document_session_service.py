@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -122,22 +121,7 @@ def _capture_optional_attribute(
     *,
     default: object = None,
 ) -> object:
-    """Read a capture root once, treating only a truly absent name as absent.
-
-    A property that exists but raises AttributeError internally is a real
-    bug; silently recording the root as missing would corrupt the document
-    savepoint, so capture must abort instead.
-    """
-
-    try:
-        return getattr(target, name)
-    except AttributeError:
-        if (
-            inspect.getattr_static(target, name, _MISSING_ATTRIBUTE)
-            is not _MISSING_ATTRIBUTE
-        ):
-            raise
-        return default
+    return getattr(target, name, default)
 
 
 def _add_scene_recovery_note(
@@ -155,7 +139,7 @@ def _add_scene_recovery_note(
 def _collect_errors(operation, destination: list[BaseException]) -> None:
     try:
         result = operation()
-    except BaseException as exc:
+    except Exception as exc:
         destination.append(exc)
         return
     destination.extend(result)
@@ -191,16 +175,13 @@ class _DetachedSceneSnapshot:
 
     @classmethod
     def capture(cls, canvas) -> _DetachedSceneSnapshot | None:
-        if isinstance(canvas, QGraphicsView):
-            scene = QGraphicsView.scene(canvas)
-        else:
-            scene_method = _capture_optional_attribute(canvas, "scene")
-            scene = scene_method() if callable(scene_method) else None
+        scene_method = _capture_optional_attribute(canvas, "scene")
+        scene = scene_method() if callable(scene_method) else None
         if scene is None:
             return None
         is_qt_scene = isinstance(scene, QGraphicsScene)
         if is_qt_scene:
-            all_items = tuple(QGraphicsScene.items(scene))
+            all_items = tuple(scene.items())
         else:
             items_method = getattr(scene, "items", None)
             if not callable(items_method):
@@ -286,7 +267,7 @@ class _DetachedSceneSnapshot:
 
     def _current_items(self) -> tuple[Any, ...]:
         if self.is_qt_scene:
-            return tuple(QGraphicsScene.items(self.scene))
+            return tuple(self.scene.items())
         return tuple(self.scene.items())
 
     def detach(self) -> None:
@@ -323,8 +304,6 @@ class _DetachedSceneSnapshot:
             if self.scene_rect_snapshot is not None:
                 if self.scene_rect_snapshot.active:
                     self.scene_rect_snapshot.restore()
-                else:
-                    self.scene_rect_snapshot.reassert()
                 if self.scene_rect_state_snapshot is not None:
                     self.scene_rect_state_snapshot.restore()
             else:
@@ -423,7 +402,7 @@ class _DocumentStatusPublication:
             return
         try:
             self.callback(*self.cache)
-        except BaseException as publication_error:
+        except Exception as publication_error:
             _add_scene_recovery_note(
                 original_error,
                 publication_error,
@@ -459,7 +438,7 @@ class _CanvasRollbackSnapshot:
         errors: list[BaseException] = []
         try:
             canvas.model = self.model
-        except BaseException as exc:
+        except Exception as exc:
             errors.append(exc)
         _collect_errors(self.containers.restore, errors)
         for snapshot in self.object_states:
@@ -467,7 +446,7 @@ class _CanvasRollbackSnapshot:
         if self.scene is not None:
             try:
                 self.scene.restore()
-            except BaseException as exc:
+            except Exception as exc:
                 errors.append(exc)
         # Reattaching and reselecting Qt items can refresh derived runtime
         # registries even while scene signals are blocked. Those registries
@@ -527,7 +506,7 @@ class CanvasDocumentSessionService:
             self._set_history_enabled(history_snapshot, False)
             rollback_snapshot.detach_scene_items()
             self._clear_detached_selection_state()
-        except BaseException as original_error:
+        except Exception as original_error:
             # The scene still holds the previous document (possibly with a
             # partially detached suffix of roots); clearing it here would
             # destroy the savepoint, so restore without a target clear.
@@ -544,7 +523,7 @@ class CanvasDocumentSessionService:
                 history_snapshot.service.clear()
             self._restore_history_enabled(history_snapshot)
             rollback_snapshot.commit_replacement()
-        except BaseException as original_error:
+        except Exception as original_error:
             # The previous document's items are detached and safe; clear the
             # partially built replacement out of the scene before reattaching.
             self._rollback_or_converge(
@@ -571,7 +550,7 @@ class CanvasDocumentSessionService:
                 history_snapshot,
                 original_error=original_error,
             )
-        except BaseException as rollback_error:
+        except Exception as rollback_error:
             # The previous document could not be reconstructed. Keep the
             # canvas internally consistent and discard commands that no
             # longer describe it rather than exposing a partially applied
@@ -583,7 +562,7 @@ class CanvasDocumentSessionService:
             )
             try:
                 clear_scene_for(self.canvas)
-            except BaseException as cleanup_error:
+            except Exception as cleanup_error:
                 _add_scene_recovery_note(
                     original_error,
                     cleanup_error,
@@ -591,7 +570,7 @@ class CanvasDocumentSessionService:
                 )
             try:
                 self._force_clear_history(history_snapshot)
-            except BaseException as cleanup_error:
+            except Exception as cleanup_error:
                 _add_scene_recovery_note(
                     original_error,
                     cleanup_error,
@@ -600,7 +579,7 @@ class CanvasDocumentSessionService:
         finally:
             try:
                 self._restore_history_enabled(history_snapshot)
-            except BaseException as secondary_error:
+            except Exception as secondary_error:
                 _add_scene_recovery_note(
                     original_error,
                     secondary_error,
@@ -666,7 +645,7 @@ class CanvasDocumentSessionService:
     def _clear_target_for_rollback(self) -> None:
         try:
             clear_scene_for(self.canvas)
-        except BaseException:
+        except Exception:
             # Scene reset is designed to be idempotent. A step may fail after
             # clearing only one registry; retry once before declaring the
             # preserved previous document unrecoverable.

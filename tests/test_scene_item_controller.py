@@ -9,12 +9,11 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
     from PyQt6 import sip
-    from PyQt6.QtCore import QLineF, QPointF, QRectF, Qt
+    from PyQt6.QtCore import QPointF, QRectF, Qt
     from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPolygonF
     from PyQt6.QtWidgets import (
         QApplication,
         QGraphicsItemGroup,
-        QGraphicsLineItem,
         QGraphicsPathItem,
         QGraphicsPolygonItem,
         QGraphicsScene,
@@ -260,51 +259,6 @@ class SceneItemControllerTest(unittest.TestCase):
         self.assertIs(mark.scene(), self.canvas.scene())
         self.assertIs(note.scene(), self.canvas.scene())
 
-    def test_non_ring_attach_uses_constant_size_snapshot(self) -> None:
-        note = QGraphicsTextItem("Mechanism")
-        note.setData(0, "note")
-
-        with patch(
-            "chemvas.ui.scene_item_lifecycle_service._scene_runtime_snapshot",
-            side_effect=AssertionError("non-ring attach scanned the scene"),
-        ):
-            self.controller.attach_scene_item(note)
-
-        self.assertEqual(self.canvas.note_items, [note])
-        self.assertIs(note.scene(), self.canvas.scene())
-
-    def test_ring_runtime_capture_exit_precedes_auto_scene_rect_guard(self) -> None:
-        scene = self.canvas.scene()
-        scene.addRect(0.0, 0.0, 10.0, 10.0)
-        ring = QGraphicsPolygonItem(
-            QPolygonF(
-                [
-                    QPointF(0.0, 0.0),
-                    QPointF(4.0, 0.0),
-                    QPointF(2.0, 3.0),
-                ]
-            )
-        )
-        ring.setData(0, "ring")
-
-        with patch(
-            "chemvas.ui.scene_item_lifecycle_service._scene_runtime_snapshot",
-            side_effect=SystemExit("ring runtime capture terminated"),
-        ):
-            with self.assertRaisesRegex(
-                SystemExit,
-                "ring runtime capture terminated",
-            ):
-                self.controller.attach_scene_item(ring)
-
-        tracker = getattr(scene, "_chemvas_scene_rect_tracker", None)
-        self.assertTrue(tracker is None or tracker.depth == 0)
-        self.assertEqual(self.canvas.ring_items, [])
-        self.assertIsNone(ring.scene())
-        future = scene.addRect(20_000.0, 0.0, 10.0, 10.0)
-        self.assertGreater(scene.sceneRect().right(), 20_000.0)
-        scene.removeItem(future)
-
     def test_attach_scene_item_rolls_back_mark_registry_when_scene_add_fails(
         self,
     ) -> None:
@@ -322,59 +276,6 @@ class SceneItemControllerTest(unittest.TestCase):
         self.assertEqual(self.canvas.mark_items, [])
         self.assertEqual(self.canvas.mark_registry.by_atom, {})
         self.assertIsNone(mark.scene())
-
-    def test_attach_scene_item_keyboard_interrupt_restores_exact_mark_state_after_cleanup_failure(
-        self,
-    ) -> None:
-        sibling = QGraphicsTextItem("sibling")
-        sibling.setData(0, "mark")
-        sibling.setData(1, {"atom_id": 7})
-        self.canvas.scene().addItem(sibling)
-        self.canvas.mark_items.append(sibling)
-        sibling_marks = [sibling]
-        mark_mapping = {7: sibling_marks}
-        self.canvas.mark_registry.by_atom = mark_mapping
-
-        mark = QGraphicsTextItem("+")
-        mark.setData(0, "mark")
-        mark.setData(1, {"atom_id": 7})
-        mark.setFlag(mark.GraphicsItemFlag.ItemIsMovable, True)
-        original_flags = mark.flags()
-        mark_items = self.canvas.mark_items
-
-        def add_then_interrupt(attach_ports, item) -> None:
-            assert attach_ports.scene is not None
-            attach_ports.scene.addItem(item)
-            raise KeyboardInterrupt("attach interrupted")
-
-        lifecycle = self.controller.lifecycle_service
-        with (
-            patch(
-                "chemvas.ui.scene_item_lifecycle_service._add_item_with_attach_ports",
-                side_effect=add_then_interrupt,
-            ),
-            patch.object(
-                lifecycle,
-                "_remove_scene_item_registration",
-                side_effect=SystemExit("cleanup interrupted"),
-            ),
-            self.assertRaisesRegex(KeyboardInterrupt, "attach interrupted") as caught,
-        ):
-            self.controller.attach_scene_item(mark)
-
-        self.assertIs(self.canvas.mark_items, mark_items)
-        self.assertEqual(mark_items, [sibling])
-        self.assertIs(self.canvas.mark_registry.by_atom, mark_mapping)
-        self.assertIs(mark_mapping[7], sibling_marks)
-        self.assertEqual(sibling_marks, [sibling])
-        self.assertEqual(mark.flags(), original_flags)
-        self.assertIsNone(mark.scene())
-        self.assertTrue(
-            any(
-                "SystemExit" in note
-                for note in getattr(caught.exception, "__notes__", ())
-            )
-        )
 
     def test_attach_rejects_foreign_scene_item_without_touching_either_scene(
         self,
@@ -403,106 +304,6 @@ class SceneItemControllerTest(unittest.TestCase):
         self.assertEqual(shape.flags(), original_flags)
         tracker = getattr(target_scene, "_chemvas_scene_rect_tracker", None)
         self.assertTrue(tracker is None or tracker.depth == 0)
-
-    def test_attach_note_system_exit_restores_interaction_and_selectability_flags(
-        self,
-    ) -> None:
-        note = QGraphicsTextItem("Mechanism")
-        note.setData(0, "note")
-        note.setTextInteractionFlags(Qt.TextInteractionFlag.TextEditorInteraction)
-        note.setFlag(note.GraphicsItemFlag.ItemIsMovable, True)
-        original_flags = note.flags()
-        original_interaction = note.textInteractionFlags()
-
-        def add_then_exit(attach_ports, item) -> None:
-            assert attach_ports.scene is not None
-            attach_ports.scene.addItem(item)
-            raise SystemExit("terminate attach")
-
-        with patch(
-            "chemvas.ui.scene_item_lifecycle_service._add_item_with_attach_ports",
-            side_effect=add_then_exit,
-        ):
-            with self.assertRaisesRegex(SystemExit, "terminate attach"):
-                self.controller.attach_scene_item(note)
-
-        self.assertEqual(self.canvas.note_items, [])
-        self.assertEqual(note.flags(), original_flags)
-        self.assertEqual(note.textInteractionFlags(), original_interaction)
-        self.assertIsNone(note.scene())
-
-    def test_attach_rollback_persistent_collection_lookup_keeps_later_restore_exact_and_retries(
-        self,
-    ) -> None:
-        class BrokenKeyboardInterrupt(KeyboardInterrupt):
-            def __getattribute__(self, name: str):
-                if name == "add_note":
-                    raise SystemExit("broken diagnostic lookup")
-                return super().__getattribute__(name)
-
-        note_items = self.canvas.note_items
-
-        class FailingSceneItemsState:
-            def __init__(self) -> None:
-                self.items = note_items
-                self.fail_lookup = False
-
-            @property
-            def note_items(self):
-                if self.fail_lookup:
-                    raise SystemExit("persistent collection lookup failure")
-                return self.items
-
-            @note_items.setter
-            def note_items(self, value) -> None:
-                self.items = value
-
-        state = FailingSceneItemsState()
-        self.canvas.scene_items_state = state
-        scene = self.canvas.scene()
-        prior_focus = QGraphicsTextItem("prior focus")
-        prior_focus.setFlag(prior_focus.GraphicsItemFlag.ItemIsFocusable, True)
-        scene.addItem(prior_focus)
-        scene.setFocusItem(prior_focus)
-
-        note = QGraphicsTextItem("Mechanism")
-        note.setData(0, "note")
-        note.setTextInteractionFlags(Qt.TextInteractionFlag.TextEditorInteraction)
-        note.setFlag(note.GraphicsItemFlag.ItemIsMovable, True)
-        note.setFlag(note.GraphicsItemFlag.ItemIsFocusable, True)
-        original_flags = note.flags()
-        original_interaction = note.textInteractionFlags()
-        primary_error = BrokenKeyboardInterrupt("attach interrupted")
-
-        def add_focus_then_interrupt(attach_ports, item) -> None:
-            assert attach_ports.scene is not None
-            attach_ports.scene.addItem(item)
-            attach_ports.focus_item_setter(item)
-            state.fail_lookup = True
-            raise primary_error
-
-        with patch(
-            "chemvas.ui.scene_item_lifecycle_service._add_item_with_attach_ports",
-            side_effect=add_focus_then_interrupt,
-        ):
-            with self.assertRaises(BrokenKeyboardInterrupt) as caught:
-                self.controller.attach_scene_item(note)
-
-        self.assertIs(caught.exception, primary_error)
-        self.assertIs(state.items, note_items)
-        self.assertEqual(note_items, [])
-        self.assertIsNone(note.scene())
-        self.assertEqual(note.flags(), original_flags)
-        self.assertEqual(note.textInteractionFlags(), original_interaction)
-        self.assertIs(scene.focusItem(), prior_focus)
-        self.assertEqual(scene._chemvas_scene_rect_tracker.depth, 0)
-
-        state.fail_lookup = False
-        self.controller.attach_scene_item(note)
-
-        self.assertEqual(state.note_items, [note])
-        self.assertIs(note.scene(), scene)
-        self.assertEqual(scene._chemvas_scene_rect_tracker.depth, 0)
 
     def test_attach_scene_item_removes_scene_item_when_ring_refresh_fails(self) -> None:
         ring = QGraphicsPolygonItem(
@@ -558,48 +359,6 @@ class SceneItemControllerTest(unittest.TestCase):
         self.assertEqual(self.canvas.ring_items, [])
         self.assertIsNone(ring.scene())
         self.assertCountEqual(post_rollback_calls, [17, 18, 19])
-
-    def test_ring_attach_system_exit_restores_raw_bond_primitive_after_persistent_refresh_failure(
-        self,
-    ) -> None:
-        ring = QGraphicsPolygonItem(
-            QPolygonF(
-                [
-                    QPointF(0.0, 0.0),
-                    QPointF(4.0, 0.0),
-                    QPointF(2.0, 3.0),
-                ]
-            )
-        )
-        ring.setData(0, "ring")
-        ring.setData(2, [1, 2])
-        self.canvas.bond_lookup = {(1, 2): 17, (2, 1): 17}
-        primitive = QGraphicsLineItem(QLineF(0.0, 0.0, 10.0, 0.0))
-        self.canvas.scene().addItem(primitive)
-        original_line = primitive.line()
-        original_scene_rect = self.canvas.scene().sceneRect()
-        self.canvas.bond_graphics_state = SimpleNamespace(bond_items={17: [primitive]})
-
-        def mutate_then_exit(_bond_id: int) -> None:
-            primitive.setLine(QLineF(0.0, 0.0, 999.0, 0.0))
-            # An eager view/observer read must not cache the transient raw
-            # primitive extent, and scene-rect release must happen after raw
-            # primitive restoration.
-            self.assertEqual(self.canvas.scene().sceneRect(), original_scene_rect)
-            raise SystemExit("ring refresh terminated")
-
-        self.canvas.bond_renderer.update_bond_geometry = mutate_then_exit
-
-        with self.assertRaisesRegex(SystemExit, "ring refresh terminated"):
-            self.controller.attach_scene_item(ring)
-
-        self.assertEqual(self.canvas.ring_items, [])
-        self.assertIsNone(ring.scene())
-        self.assertEqual(primitive.line(), original_line)
-        self.assertEqual(self.canvas.scene().sceneRect(), original_scene_rect)
-        future = self.canvas.scene().addRect(2_000.0, 0.0, 10.0, 10.0)
-        self.assertGreater(self.canvas.scene().sceneRect().right(), 2_000.0)
-        self.canvas.scene().removeItem(future)
 
     def test_restore_scene_item_skips_already_attached_or_deleted_items(self) -> None:
         note = QGraphicsTextItem("Attached")
@@ -700,48 +459,6 @@ class SceneItemControllerTest(unittest.TestCase):
         self.assertTrue(scene_rect_is_automatic(scene))
         self.assertEqual(scene.sceneRect(), baseline)
         scene.sceneRectChanged.disconnect(corrupt_restored_state)
-
-    def test_attach_rollback_reports_transient_scene_rect_recovery(self) -> None:
-        class FailOnceRestoreScene(QGraphicsScene):
-            armed = False
-            failed = False
-
-            def setSceneRect(self, rect) -> None:
-                if self.armed and not self.failed:
-                    self.failed = True
-                    raise SystemExit("scene rect restore interrupted once")
-                QGraphicsScene.setSceneRect(self, rect)
-
-        scene = FailOnceRestoreScene()
-        scene.addRect(0.0, 0.0, 10.0, 10.0)
-        self.canvas._scene = scene
-        shape = QGraphicsPathItem()
-        shape.setData(0, "shape")
-        primary = RuntimeError("attach failed before rect restore")
-
-        def add_then_fail(attach_ports, item) -> None:
-            attach_ports.add_item(item)
-            scene.armed = True
-            raise primary
-
-        with (
-            patch(
-                "chemvas.ui.scene_item_lifecycle_service._add_item_with_attach_ports",
-                side_effect=add_then_fail,
-            ),
-            self.assertRaises(RuntimeError) as caught,
-        ):
-            self.controller.attach_scene_item(shape)
-
-        self.assertIs(caught.exception, primary)
-        self.assertTrue(scene.failed)
-        self.assertIsNone(shape.scene())
-        self.assertTrue(
-            any(
-                "scene rect restore interrupted once" in note
-                for note in getattr(primary, "__notes__", [])
-            )
-        )
 
     def test_restore_scene_item_registers_arrow_ts_bracket_and_orbital_items(
         self,

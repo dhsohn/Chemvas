@@ -4,7 +4,6 @@ from functools import wraps
 
 from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
-from chemvas.ui.canvas_delete_transaction import canvas_delete_transaction
 from chemvas.ui.canvas_group_state import (
     group_ids_for_members_for,
     group_state_for,
@@ -42,6 +41,7 @@ from chemvas.ui.selection_service_access import (
     toggle_note_selection_for,
 )
 from chemvas.ui.selection_style_access import selection_indicator_rect_for_atom_for
+from chemvas.ui.transactions.document import document_transaction
 
 GROUPABLE_STANDALONE_KINDS = frozenset(
     {"note", "ts_bracket", "shape", "orbital"}
@@ -52,7 +52,7 @@ def _atomic_group_change(operation):
     @wraps(operation)
     def run(canvas, *args, **kwargs):
         history = history_service_for_canvas(canvas)
-        with canvas_delete_transaction(canvas, history_service=history):
+        with document_transaction(canvas, history_service=history):
             return operation(canvas, *args, **kwargs)
 
     return run
@@ -62,16 +62,16 @@ def _push_group_command(canvas, command) -> None:
     history = history_service_for_canvas(canvas)
     try:
         history.push(command)
-    except BaseException as original_error:
+    except Exception as original_error:
         try:
             command.undo(canvas)
-        except BaseException as rollback_error:
+        except Exception as rollback_error:
             try:
                 original_error.add_note(
                     "Group mutation rollback also encountered "
                     f"{type(rollback_error).__name__}: {rollback_error}"
                 )
-            except BaseException:
+            except Exception:
                 pass
         raise
 

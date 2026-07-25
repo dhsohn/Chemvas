@@ -1,14 +1,11 @@
 from __future__ import annotations
 
 import contextlib
-import inspect
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.domain.transactions import HistoryAuthoritySnapshot
-from chemvas.ui.history_push_failure_recovery import (
-    RecordingHistoryPolicySnapshot,
-    recover_failed_recording_push,
+from chemvas.ui.canvas_history_recording_service import (
+    CanvasHistoryRecordingService,
 )
 
 _MISSING = object()
@@ -183,25 +180,10 @@ class ToolContext:
     def push_history(self, command) -> None:
         if self.history_service is None:
             raise AttributeError("ToolContext requires an injected history_service")
-        history_snapshot: HistoryAuthoritySnapshot | None = None
-        policy_snapshot: RecordingHistoryPolicySnapshot | None = None
-        try:
-            history_snapshot = HistoryAuthoritySnapshot.capture(self.history_service)
-            if history_snapshot is not None:
-                policy_snapshot = RecordingHistoryPolicySnapshot.capture(
-                    history_snapshot
-                )
-            self.history_service.push(command)
-        except BaseException as original_error:
-            recover_failed_recording_push(
-                self.canvas,
-                command,
-                history_snapshot,
-                original_error,
-                phase="tool history recording",
-                policy_snapshot=policy_snapshot,
-            )
-            raise
+        CanvasHistoryRecordingService(
+            self.canvas,
+            history_service=self.history_service,
+        ).push_history(command)
 
     def begin_delete_tool_session(self):
         session = self._call_port(
@@ -229,7 +211,7 @@ class ToolContext:
                     "Delete tool session requires callable ports: "
                     + ", ".join(missing_ports)
                 )
-        except BaseException as validation_error:
+        except Exception as validation_error:
             if session is not None:
                 self._rollback_rejected_delete_tool_session(
                     session,
@@ -251,7 +233,7 @@ class ToolContext:
                         "Delete tool session recovery also encountered "
                         f"{type(rollback_error).__name__}: {rollback_error}"
                     )
-            except BaseException:
+            except Exception:
                 # A broken diagnostic hook must never replace validation,
                 # cancellation, or termination from the owning operation.
                 continue
@@ -260,7 +242,7 @@ class ToolContext:
     def _returned_delete_session_rollback_errors(result) -> list[BaseException]:
         try:
             returned_errors = list(result or [])
-        except BaseException as result_error:
+        except Exception as result_error:
             return [result_error]
         errors: list[BaseException] = []
         for returned_error in returned_errors:
@@ -276,14 +258,7 @@ class ToolContext:
 
     @staticmethod
     def _delete_session_active_state(session) -> bool | None:
-        try:
-            active = session.active
-        except AttributeError:
-            if inspect.getattr_static(session, "active", _MISSING) is not _MISSING:
-                raise
-            # Legacy injected sessions predate the active lifecycle port. A
-            # successful rollback return remains their completion contract.
-            return None
+        active = getattr(session, "active", None)
         return bool(active)
 
     @classmethod
@@ -292,36 +267,22 @@ class ToolContext:
         session,
     ) -> tuple[bool, list[BaseException]]:
         errors: list[BaseException] = []
-        for _attempt in range(2):
-            try:
-                rollback = getattr(session, "rollback", None)
-                if not callable(rollback):
-                    raise AttributeError(
-                        "Delete tool session requires a callable 'rollback' port"
-                    )
-                result = rollback()
-            except BaseException as rollback_error:
-                errors.append(rollback_error)
-                continue
+        try:
+            rollback = getattr(session, "rollback", None)
+            if not callable(rollback):
+                raise AttributeError(
+                    "Delete tool session requires a callable 'rollback' port"
+                )
+            result = rollback()
             errors.extend(cls._returned_delete_session_rollback_errors(result))
-            for _status_attempt in range(2):
-                try:
-                    still_active = cls._delete_session_active_state(session)
-                except BaseException as active_error:
-                    errors.append(active_error)
-                    continue
-                if still_active is not True:
-                    return True, errors
-                break
-            else:
-                continue
-            # Production sessions keep ``active=True`` when their absolute
-            # rollback or callback-port restore is not yet authoritative.
-            # Preserve returned diagnostics and spend the second attempt on
-            # that same live savepoint instead of declaring completion.
-            continue
+            completed = cls._delete_session_active_state(session) is not True
+        except Exception as rollback_error:
+            errors.append(rollback_error)
+            completed = False
+        if completed:
+            return True, errors
         errors.append(
-            RuntimeError("Delete tool session remained active after rollback retries")
+            RuntimeError("Delete tool session remained active after rollback")
         )
         return False, errors
 
@@ -330,29 +291,9 @@ class ToolContext:
         session,
         validation_error: BaseException,
     ) -> None:
-        completed, rollback_errors = self._attempt_delete_tool_session_rollback(session)
-        if not completed:
-            # A controller-owned fallback can recover a malformed session whose
-            # own rollback port is the missing/broken port. The production
-            # session owns rollback directly; this hook keeps the boundary safe
-            # for alternate injected implementations.
-            for _attempt in range(2):
-                try:
-                    controller_rollback = getattr(
-                        self.scene_delete_controller,
-                        "rollback_transaction_session",
-                        None,
-                    )
-                    if not callable(controller_rollback):
-                        break
-                    result = controller_rollback(session)
-                except BaseException as rollback_error:
-                    rollback_errors.append(rollback_error)
-                    continue
-                rollback_errors.extend(
-                    self._returned_delete_session_rollback_errors(result)
-                )
-                break
+        _completed, rollback_errors = self._attempt_delete_tool_session_rollback(
+            session
+        )
         self._add_delete_session_rollback_notes(
             validation_error,
             rollback_errors,

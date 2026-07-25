@@ -60,7 +60,7 @@ def _add_attach_rollback_note(
             f"Scene-item attach recovery also failed while {phase}: "
             f"{type(rollback_error).__name__}: {rollback_error}"
         )
-    except BaseException:
+    except Exception:
         return
 
 
@@ -414,7 +414,7 @@ class SceneItemAttachSnapshot:
         def step(description: str, operation: Callable[[], object]) -> None:
             try:
                 operation()
-            except BaseException as rollback_error:
+            except Exception as rollback_error:
                 _add_attach_rollback_note(
                     original_error,
                     rollback_error,
@@ -488,7 +488,7 @@ class SceneItemAttachSnapshot:
         def step(description: str, operation: Callable[[], object]) -> None:
             try:
                 operation()
-            except BaseException as rollback_error:
+            except Exception as rollback_error:
                 _add_attach_rollback_note(
                     original_error,
                     rollback_error,
@@ -531,9 +531,7 @@ class SceneItemAttachSnapshot:
         try:
             if snapshot.active:
                 snapshot.restore()
-            else:
-                snapshot.reassert()
-        except BaseException as rollback_error:
+        except Exception as rollback_error:
             _add_attach_rollback_note(
                 original_error,
                 rollback_error,

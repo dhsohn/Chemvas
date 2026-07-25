@@ -77,7 +77,7 @@ def _add_rotation_begin_rollback_note(
                 "Selection-rotation begin rollback also encountered "
                 f"{type(rollback_error).__name__}: {rollback_error}"
             )
-    except BaseException:
+    except Exception:
         return
 
 
@@ -287,10 +287,10 @@ def begin_selection_rotation_session(
             # begin savepoint so a failed publication cannot strand a
             # partially published rotation.
             on_session_started()
-    except BaseException as original_error:
+    except Exception as original_error:
         try:
             snapshot.restore()
-        except BaseException as rollback_error:
+        except Exception as rollback_error:
             _add_rotation_begin_rollback_note(original_error, rollback_error)
         raise
     if rotating:

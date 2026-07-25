@@ -116,7 +116,7 @@ class SelectTool(SelectionDragMixin, Tool):
 
         try:
             self._commit_drag_transaction(commit)
-        except BaseException:
+        except Exception:
             if self._drag_transaction is None:
                 self._clear_handle_drag_state()
                 self._clear_pending_curved_handle_toggle()
@@ -138,7 +138,7 @@ class SelectTool(SelectionDragMixin, Tool):
 
         try:
             self._commit_drag_transaction(commit)
-        except BaseException:
+        except Exception:
             if self._drag_transaction is None:
                 self._clear_pending_curved_handle_toggle()
                 self._reset_selection_drag_state()
@@ -174,7 +174,7 @@ class SelectTool(SelectionDragMixin, Tool):
                 clear_handles_for(self.canvas)
             self._pending_shape_handle_item = item
             self._pending_shape_handle_action = action
-        except BaseException as original_error:
+        except Exception as original_error:
             self._cancel_selection_drag(original_error)
             raise
         return True
@@ -207,7 +207,7 @@ class SelectTool(SelectionDragMixin, Tool):
                 clear_handles_for(self.canvas)
             self._pending_curved_handle_item = item
             self._pending_curved_handle_action = action
-        except BaseException as original_error:
+        except Exception as original_error:
             self._cancel_selection_drag(original_error)
             raise
         return True
@@ -328,7 +328,7 @@ class SelectTool(SelectionDragMixin, Tool):
                     token,
                     phase="updating its active handle",
                 )
-            except BaseException as original_error:
+            except Exception as original_error:
                 self._cancel_handle_drag(
                     original_error,
                     token=token,
@@ -348,7 +348,7 @@ class SelectTool(SelectionDragMixin, Tool):
             self._clear_pending_curved_handle_toggle()
         try:
             self._apply_drag_delta(delta)
-        except BaseException:
+        except Exception:
             if self._drag_transaction is None:
                 self._clear_pending_curved_handle_toggle()
             raise
@@ -392,14 +392,14 @@ class SelectTool(SelectionDragMixin, Tool):
             if abs(delta.x()) > 1e-6 or abs(delta.y()) > 1e-6:
                 try:
                     self._apply_drag_delta(delta)
-                except BaseException:
+                except Exception:
                     if self._drag_transaction is None:
                         self._clear_pending_curved_handle_toggle()
                     raise
                 self._start_pos = scene_pos
         try:
             self._commit_selection_drag()
-        except BaseException:
+        except Exception:
             if self._drag_transaction is None:
                 self._clear_pending_curved_handle_toggle()
             raise

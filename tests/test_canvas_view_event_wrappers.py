@@ -323,35 +323,6 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         release_event.accept.assert_called_once_with()
         view.services.hover.refresh.assert_not_called()
 
-    def test_mouse_release_event_contains_error_callback_failures_too(self) -> None:
-        tool = SimpleNamespace(
-            name="perspective",
-            on_mouse_release=mock.Mock(
-                side_effect=KeyboardInterrupt("release failure")
-            ),
-        )
-        view = self._new_view(tool_active=tool)
-        set_error_callback_for(
-            view,
-            mock.Mock(side_effect=RuntimeError("notification failure")),
-        )
-        release_event = _FakeEvent(
-            button=Qt.MouseButton.LeftButton,
-            buttons=Qt.MouseButton.NoButton,
-        )
-
-        with mock.patch("chemvas.ui.canvas_view.logger.exception") as log_exception:
-            CanvasView.mouseReleaseEvent(view, release_event)
-
-        self.assertEqual(
-            log_exception.call_args_list,
-            [
-                mock.call("Canvas mouse-%s handling failed", "release"),
-                mock.call("Canvas mouse-event error notification failed"),
-            ],
-        )
-        release_event.accept.assert_called_once_with()
-
     def test_qt_mouse_release_callback_contains_perspective_finalization_error(
         self,
     ) -> None:
@@ -463,44 +434,6 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             self.app.processEvents()
 
         tool.on_mouse_press.assert_called_once()
-        error_callback.assert_called_once_with(
-            "The current interaction could not be completed. Try again."
-        )
-        view.close()
-
-    def test_qt_mouse_move_callback_contains_perspective_preview_error(self) -> None:
-        error_callback = mock.Mock()
-        tool = SimpleNamespace(
-            name="perspective",
-            on_mouse_press=mock.Mock(return_value=True),
-            on_mouse_move=mock.Mock(side_effect=KeyboardInterrupt("preview failure")),
-            on_mouse_release=mock.Mock(return_value=True),
-        )
-        view = self._new_view(tool_active=tool)
-        set_error_callback_for(view, error_callback)
-        view.resize(240, 180)
-        view.show()
-        self.app.processEvents()
-        start = view.viewport().rect().center()
-        end = start + QPointF(20.0, 10.0).toPoint()
-
-        with mock.patch("chemvas.ui.canvas_view.logger.exception"):
-            QTest.mousePress(
-                view.viewport(),
-                Qt.MouseButton.LeftButton,
-                Qt.KeyboardModifier.NoModifier,
-                start,
-            )
-            QTest.mouseMove(view.viewport(), end)
-            QTest.mouseRelease(
-                view.viewport(),
-                Qt.MouseButton.LeftButton,
-                Qt.KeyboardModifier.NoModifier,
-                end,
-            )
-            self.app.processEvents()
-
-        tool.on_mouse_move.assert_called_once()
         error_callback.assert_called_once_with(
             "The current interaction could not be completed. Try again."
         )

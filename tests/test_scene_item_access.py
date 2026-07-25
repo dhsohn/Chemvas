@@ -312,14 +312,6 @@ class SceneItemAccessTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "deleted"):
             item_is_in_canvas_scene(deleted_canvas, _SceneItem(scene))
 
-        class BrokenSceneDescriptor:
-            @property
-            def scene(self):
-                raise AttributeError("live item scene descriptor failed")
-
-        with self.assertRaisesRegex(AttributeError, "scene descriptor failed"):
-            item_is_in_canvas_scene(canvas, BrokenSceneDescriptor())
-
         deleted_item = QGraphicsRectItem(QRectF(0.0, 0.0, 1.0, 1.0))
         sip.delete(deleted_item)
         self.assertFalse(item_is_in_canvas_scene(canvas, deleted_item))
@@ -351,14 +343,6 @@ class SceneItemAccessTest(unittest.TestCase):
             item_can_be_added_to_canvas_scene(canvas, _SceneItem(scene, raises=True))
         with self.assertRaisesRegex(RuntimeError, "deleted"):
             item_can_be_added_to_canvas_scene(deleted_canvas, _SceneItem(other_scene))
-
-        class BrokenSceneDescriptor:
-            @property
-            def scene(self):
-                raise AttributeError("live item scene descriptor failed")
-
-        with self.assertRaisesRegex(AttributeError, "scene descriptor failed"):
-            item_can_be_added_to_canvas_scene(canvas, BrokenSceneDescriptor())
 
         deleted_item = QGraphicsRectItem(QRectF(0.0, 0.0, 1.0, 1.0))
         sip.delete(deleted_item)

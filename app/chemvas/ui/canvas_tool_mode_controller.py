@@ -6,7 +6,6 @@ from typing import Any, ClassVar
 
 from chemvas.features.annotations import BRACKET_KIND_VALUES, SHAPE_KINDS, STROKE_STYLES
 from chemvas.ui.canvas_callback_state import callback_state_for
-from chemvas.ui.canvas_delete_transaction import canvas_delete_transaction
 from chemvas.ui.canvas_insert_state import insert_state_for
 from chemvas.ui.canvas_tool_settings_state import (
     set_tool_setting_for,
@@ -18,13 +17,14 @@ from chemvas.ui.scene_item_access import apply_scene_item_state
 from chemvas.ui.scene_item_state import shape_state_dict_for
 from chemvas.ui.selection_collection_access import selected_scene_items_for
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
+from chemvas.ui.transactions.document import document_transaction
 
 
 def _atomic_shape_style_change(operation):
     @wraps(operation)
     def run(controller, *args, **kwargs):
         history = history_service_for_canvas(controller.canvas)
-        with canvas_delete_transaction(
+        with document_transaction(
             controller.canvas,
             history_service=history,
         ):

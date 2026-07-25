@@ -1,23 +1,11 @@
 from __future__ import annotations
 
-import inspect
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, cast
 
-from PyQt6.QtWidgets import QGraphicsScene, QGraphicsView
-
 from chemvas.domain.transactions import RestoreOutcome
-from chemvas.ui.history_commands import (
-    _atom_primitive_graphics_snapshots,
-    _restore_bond_primitive_graphics_snapshots,
-    _restore_scene_runtime_identity_final,
-    _restore_scene_runtime_snapshot,
-    _scene_runtime_snapshot,
-    _SceneRuntimeSnapshot,
-    _verify_scene_runtime_identity,
-)
 from chemvas.ui.transactions.object_graph_snapshot import (
     ContainerGraphSnapshot as _ContainerGraphSnapshot,
 )
@@ -31,6 +19,16 @@ from chemvas.ui.transactions.scene_rect import (
     SceneRectSnapshot,
     scene_rect_is_automatic,
 )
+from chemvas.ui.transactions.scene_runtime import (
+    SceneRuntimeSnapshot,
+    capture_atom_primitive_graphics,
+    capture_scene_runtime,
+    restore_primitive_graphics,
+    restore_scene_runtime,
+    verify_scene_runtime_identity,
+)
+
+_MISSING_RENDERER_STYLE = object()
 
 
 def _collect_restore_errors(
@@ -39,7 +37,7 @@ def _collect_restore_errors(
 ) -> None:
     try:
         result = operation()
-    except BaseException as exc:
+    except Exception as exc:
         destination.append(exc)
         return
     destination.extend(result)
@@ -64,22 +62,7 @@ def _capture_optional_attribute(
     *,
     default: object = None,
 ) -> object:
-    """Read a capture root once, treating only a truly absent name as absent.
-
-    A property that exists but raises AttributeError internally is a real
-    bug, and silently recording the root as missing would produce a corrupt
-    savepoint; capture must abort instead.
-    """
-
-    try:
-        return getattr(target, name)
-    except AttributeError:
-        if (
-            inspect.getattr_static(target, name, _MISSING_ATTRIBUTE)
-            is not _MISSING_ATTRIBUTE
-        ):
-            raise
-        return default
+    return getattr(target, name, default)
 
 
 def _capture_canvas_state_object(canvas, name: str) -> object | None:
@@ -114,8 +97,6 @@ _DELETE_MUTATED_RUNTIME_FIELDS = (
 
 
 def _delete_scene_for_capture(canvas) -> object | None:
-    if isinstance(canvas, QGraphicsView):
-        return QGraphicsView.scene(canvas)
     scene_method = _capture_optional_attribute(canvas, "scene")
     if not callable(scene_method):
         return None
@@ -127,8 +108,6 @@ def _delete_scene_items_for_capture(
 ) -> tuple[object, ...]:
     if scene is None:
         return ()
-    if isinstance(scene, QGraphicsScene):
-        return tuple(QGraphicsScene.items(scene))
     items = _capture_optional_attribute(scene, "items")
     if not callable(items):
         return ()
@@ -136,13 +115,15 @@ def _delete_scene_items_for_capture(
 
 
 @dataclass(slots=True)
-class CanvasDeleteTransactionSnapshot:
+class DocumentSavepoint:
     canvas: Any
     canvas_model: object
+    renderer: object | None
+    renderer_style: object
     history_service: object | None
     containers: _ContainerGraphSnapshot
     objects: tuple[_ObjectStateSnapshot, ...]
-    scene_runtime: _SceneRuntimeSnapshot
+    scene_runtime: SceneRuntimeSnapshot
     atom_primitive_graphics: tuple[Any, ...]
     scene_items: tuple[_SceneItemExactSnapshot, ...]
     scene: Any | None
@@ -150,6 +131,7 @@ class CanvasDeleteTransactionSnapshot:
     scene_items_bounding_rect_getter: Any | None
     notify_history_change: Callable[[], object] | None
     history_notification_published: bool = False
+    active: bool = True
 
     @classmethod
     def capture(
@@ -158,7 +140,7 @@ class CanvasDeleteTransactionSnapshot:
         *,
         history_service=None,
         guard_scene_rect: bool = False,
-    ) -> CanvasDeleteTransactionSnapshot:
+    ) -> DocumentSavepoint:
         containers = _ContainerGraphSnapshot()
 
         notify_history_change_value = _capture_optional_attribute(
@@ -196,6 +178,16 @@ class CanvasDeleteTransactionSnapshot:
             return snapshot
 
         model = _capture_optional_attribute(canvas, "model")
+        renderer = _capture_optional_attribute(canvas, "renderer")
+        renderer_style = (
+            _capture_optional_attribute(
+                renderer,
+                "style",
+                default=_MISSING_RENDERER_STYLE,
+            )
+            if renderer is not None
+            else _MISSING_RENDERER_STYLE
+        )
         append(
             model,
             names=("next_atom_id", "atom_annotations", "atoms", "bonds"),
@@ -254,7 +246,7 @@ class CanvasDeleteTransactionSnapshot:
         for scene_item in _delete_scene_items_for_capture(scene):
             capture_scene_item(scene_item)
 
-        scene_runtime = _scene_runtime_snapshot(canvas, strict=True)
+        scene_runtime = capture_scene_runtime(canvas, strict=True)
         if scene is None:
             scene = getattr(scene_runtime, "scene", None)
         for scene_item in scene_runtime.scene_items or ():
@@ -268,7 +260,7 @@ class CanvasDeleteTransactionSnapshot:
             for scene_item in registered_ring_items:
                 capture_scene_item(scene_item)
 
-        atom_primitive_graphics = _atom_primitive_graphics_snapshots(
+        atom_primitive_graphics = capture_atom_primitive_graphics(
             canvas,
             strict=True,
         )
@@ -294,6 +286,8 @@ class CanvasDeleteTransactionSnapshot:
         return cls(
             canvas=canvas,
             canvas_model=model,
+            renderer=renderer,
+            renderer_style=renderer_style,
             history_service=history_service,
             containers=containers,
             objects=object_snapshots,
@@ -306,7 +300,7 @@ class CanvasDeleteTransactionSnapshot:
             notify_history_change=notify_history_change,
         )
 
-    def _verify_exact_authorities(
+    def verify(
         self,
         *,
         include_rect: bool = True,
@@ -326,7 +320,7 @@ class CanvasDeleteTransactionSnapshot:
                     raise RuntimeError(
                         "delete rollback scene-rect guard remained active"
                     )
-            except BaseException as exc:
+            except Exception as exc:
                 errors.append(exc)
         errors.extend(self.containers.verify())
         for snapshot in self.objects:
@@ -335,11 +329,22 @@ class CanvasDeleteTransactionSnapshot:
             errors.append(
                 RuntimeError("delete rollback canvas-model identity was re-mutated")
             )
+        if self.renderer_style is not _MISSING_RENDERER_STYLE:
+            try:
+                if (
+                    self.renderer is None
+                    or cast(Any, self.renderer).style is not self.renderer_style
+                ):
+                    raise RuntimeError(
+                        "document rollback renderer style was not restored"
+                    )
+            except Exception as exc:
+                errors.append(exc)
         for scene_item in self.scene_items:
             errors.extend(scene_item.verify())
         try:
-            _verify_scene_runtime_identity(self.scene_runtime)
-        except BaseException as exc:
+            verify_scene_runtime_identity(self.scene_runtime)
+        except Exception as exc:
             errors.append(exc)
         return errors
 
@@ -364,9 +369,9 @@ class CanvasDeleteTransactionSnapshot:
                     continue
                 try:
                     update_bond_geometry(bond_id)
-                except BaseException as exc:
+                except Exception as exc:
                     secondary_errors.append(exc)
-        except BaseException as exc:
+        except Exception as exc:
             secondary_errors.append(exc)
 
     def _restore_raw_authorities(
@@ -380,20 +385,18 @@ class CanvasDeleteTransactionSnapshot:
             _collect_restore_errors(snapshot.restore, errors)
         try:
             self.canvas.model = self.canvas_model
-        except BaseException as exc:
+        except Exception as exc:
             errors.append(exc)
         try:
             errors.extend(
-                _restore_scene_runtime_snapshot(
+                restore_scene_runtime(
                     self.scene_runtime,
                     collect_errors=True,
                     defer_scene_identity_errors=True,
                 )
             )
-        except BaseException as exc:
+        except Exception as exc:
             errors.append(exc)
-        for scene_item in self.scene_items:
-            _collect_restore_errors(scene_item.restore, errors)
         if secondary_errors is not None:
             # Canonical redraw is a dependent repair between the model
             # restore and the final raw graphics authority: it recomputes
@@ -402,29 +405,21 @@ class CanvasDeleteTransactionSnapshot:
             # over anything it produces.
             self._refresh_bond_geometry(secondary_errors)
         _collect_restore_errors(
-            lambda: _restore_bond_primitive_graphics_snapshots(
-                self.scene_runtime.bond_primitive_graphics,
-            ),
-            errors,
-        )
-        _collect_restore_errors(
-            lambda: _restore_bond_primitive_graphics_snapshots(
+            lambda: restore_primitive_graphics(
                 self.atom_primitive_graphics,
             ),
             errors,
         )
-        # The canonical redraw and the primitive restores above can touch
-        # items the bond/atom graphics mappings do not cover, so the exact
-        # item snapshots run once more as the final geometry authority.
+        # Restore each captured scene item once after canonical redraw so its
+        # exact primitive state is the final writer.
         for scene_item in self.scene_items:
             _collect_restore_errors(scene_item.restore, errors)
-        # Raw scene-item restoration includes zValue and other primitive
-        # setters that can change the scene's final stacking after the
-        # runtime repair above, so re-run the identity repair last.
-        _collect_restore_errors(
-            lambda: _restore_scene_runtime_identity_final(self.scene_runtime),
-            errors,
-        )
+        if self.renderer_style is not _MISSING_RENDERER_STYLE:
+            try:
+                assert self.renderer is not None
+                cast(Any, self.renderer).style = self.renderer_style
+            except Exception as exc:
+                errors.append(exc)
 
     def _restore_scene_rect_last(
         self,
@@ -440,21 +435,10 @@ class CanvasDeleteTransactionSnapshot:
         try:
             if rect_snapshot.active:
                 rect_snapshot.restore()
-            else:
-                rect_snapshot.reassert()
-        except BaseException as exc:
+        except Exception as exc:
             errors.append(exc)
 
-    def _silent_authority_pass(
-        self,
-    ) -> tuple[list[BaseException], list[BaseException]]:
-        errors: list[BaseException] = []
-        self._restore_raw_authorities(errors)
-        self._restore_scene_rect_last(errors)
-        errors.extend(self._verify_exact_authorities())
-        return errors, []
-
-    def restore_with_result(self) -> RestoreOutcome:
+    def restore(self) -> RestoreOutcome:
         """Run the full absolute restore and classify its failures.
 
         Core model/container/scene/raw-graphics failures make the snapshot
@@ -464,6 +448,13 @@ class CanvasDeleteTransactionSnapshot:
         savepoint has been restored.
         """
 
+        if not self.active:
+            return RestoreOutcome(
+                authoritative=False,
+                fallback_to_inverse=False,
+                errors=(RuntimeError("Document savepoint has already been consumed"),),
+            )
+        self.active = False
         critical_errors: list[BaseException] = []
         secondary_errors: list[BaseException] = []
 
@@ -472,7 +463,7 @@ class CanvasDeleteTransactionSnapshot:
             secondary_errors=secondary_errors,
         )
         self._restore_scene_rect_last(critical_errors)
-        critical_errors.extend(self._verify_exact_authorities())
+        critical_errors.extend(self.verify())
 
         notify_history_change = self.notify_history_change
         if (
@@ -481,12 +472,11 @@ class CanvasDeleteTransactionSnapshot:
             and not self.history_notification_published
         ):
             # Consume publication before entering callback code: a callback
-            # that raises is still one observable publication and must never
-            # be repeated by an outer restore retry.
+            # that raises is still one observable publication.
             self.history_notification_published = True
             try:
                 notify_history_change()
-            except BaseException as exc:
+            except Exception as exc:
                 secondary_errors.append(exc)
         return RestoreOutcome(
             authoritative=not critical_errors,
@@ -494,10 +484,10 @@ class CanvasDeleteTransactionSnapshot:
             errors=tuple((*critical_errors, *secondary_errors)),
         )
 
-    def restore(self) -> list[BaseException]:
-        return list(self.restore_with_result().errors)
-
     def release(self) -> None:
+        if not self.active:
+            return
+        self.active = False
         if self.scene_rect_snapshot is None:
             return
         self.scene_rect_snapshot.release(
@@ -510,12 +500,12 @@ class CanvasDeleteTransactionSnapshot:
 
 
 @contextmanager
-def canvas_delete_transaction(
+def document_transaction(
     canvas,
     *,
     history_service=None,
 ) -> Iterator[None]:
-    snapshot = CanvasDeleteTransactionSnapshot.capture(
+    snapshot = DocumentSavepoint.capture(
         canvas,
         history_service=history_service,
         guard_scene_rect=True,
@@ -523,17 +513,18 @@ def canvas_delete_transaction(
     try:
         yield
         snapshot.release()
-    except BaseException as original_error:
+    except Exception as original_error:
+        rollback_errors: tuple[BaseException, ...]
         try:
-            rollback_errors = snapshot.restore()
-        except BaseException as caught_rollback_error:
-            rollback_errors = [caught_rollback_error]
+            rollback_errors = snapshot.restore().errors
+        except Exception as caught_rollback_error:
+            rollback_errors = (caught_rollback_error,)
         for secondary_error in rollback_errors:
             _add_delete_rollback_note(original_error, secondary_error)
         raise
 
 
 __all__ = [
-    "CanvasDeleteTransactionSnapshot",
-    "canvas_delete_transaction",
+    "DocumentSavepoint",
+    "document_transaction",
 ]

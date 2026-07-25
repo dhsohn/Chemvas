@@ -37,7 +37,7 @@ def _add_rotation_rollback_note(
         original_error.add_note(
             f"Rotation preview rollback also failed: {rollback_error!r}"
         )
-    except BaseException:
+    except Exception:
         return
 
 
@@ -70,13 +70,13 @@ class _RotationPreviewAuthority:
             )
         try:
             update()
-        except BaseException as original_error:
+        except Exception as original_error:
             try:
                 state.free_angle_x, state.free_angle_y, state.total_angle = (
                     previous_scalars
                 )
                 self._reapply_coords(previous)
-            except BaseException as rollback_error:
+            except Exception as rollback_error:
                 _add_rotation_rollback_note(original_error, rollback_error)
             raise
 

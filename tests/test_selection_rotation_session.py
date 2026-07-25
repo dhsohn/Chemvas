@@ -2,10 +2,7 @@ from __future__ import annotations
 
 from dataclasses import fields
 from types import SimpleNamespace
-from unittest import mock
 
-import pytest
-from chemvas.ui import selection_rotation_session as rotation_session
 from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.selection_rotation_session import (
@@ -216,74 +213,6 @@ def test_begin_rigid_rotation_session_populates_rotation_state_and_canvas_coords
     assert state.base_coords == {1: (1.0, -1.0, 0.5), 2: (11.0, 3.0, 2.5)}
     assert ports.canvas.atom_coords_3d_state.atom_coords_3d == state.base_coords
     assert ports.average_calls == [({1, 2}, dict(state.base_coords))]
-
-
-def test_begin_selection_rotation_restores_exact_state_after_every_failure_stage() -> (
-    None
-):
-    failure_cases = (
-        ("selected_ids", SystemExit),
-        ("selected_scene_items", KeyboardInterrupt),
-        ("axis", SystemExit),
-        ("flatten", KeyboardInterrupt),
-        ("setter", SystemExit),
-        ("atom_positions", KeyboardInterrupt),
-        ("average", SystemExit),
-    )
-    for stage, error_type in failure_cases:
-        ports = _SelectionPorts()
-        state, coords_state = _rotation_prestate()
-        ports.canvas.atom_coords_3d_state = coords_state
-        savepoint = _capture_exact_rotation_prestate(state, coords_state)
-        primary = error_type(f"{stage} interrupted")
-        ports.failure_stage = stage
-        ports.failure = primary
-        axis_hint = 1 if stage == "axis" else None
-        setter_patch = mock.patch.object(
-            rotation_session,
-            "set_atom_coords_3d_for_id",
-            wraps=rotation_session.set_atom_coords_3d_for_id,
-        )
-        if stage == "setter":
-            original_setter = rotation_session.set_atom_coords_3d_for_id
-            calls = 0
-
-            def mutate_then_interrupt(
-                canvas,
-                atom_id,
-                coords,
-                _setter=original_setter,
-                _primary=primary,
-            ) -> None:
-                nonlocal calls
-                calls += 1
-                _setter(canvas, atom_id, coords)
-                if calls == 1:
-                    raise _primary
-
-            setter_patch = mock.patch.object(
-                rotation_session,
-                "set_atom_coords_3d_for_id",
-                side_effect=mutate_then_interrupt,
-            )
-
-        with setter_patch:
-            with pytest.raises(error_type) as caught:
-                begin_selection_rotation_session(
-                    ports,
-                    state,
-                    axis_hint=axis_hint,
-                )
-
-        assert caught.value is primary
-        _assert_exact_rotation_prestate(state, coords_state, savepoint)
-
-        # The same state/coordinate objects remain valid for a clean retry.
-        ports.failure_stage = None
-        ports.failure = None
-        assert begin_selection_rotation_session(ports, state)
-        assert state.mode == "rigid"
-        assert state.atom_ids == {1, 2}
 
 
 def test_begin_selection_rotation_false_paths_restore_exact_state_and_retry() -> None:

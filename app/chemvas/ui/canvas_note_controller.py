@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
@@ -18,7 +17,7 @@ from PyQt6.QtGui import (
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsRectItem, QGraphicsTextItem
 
 from chemvas.core.history import CompositeCommand, HistoryCommand
-from chemvas.domain.transactions import HistoryAuthoritySnapshot
+from chemvas.ui.canvas_history_service import HistoryStackSnapshot
 from chemvas.ui.canvas_scene_items_state import (
     remove_selected_note_for,
     selected_notes_for,
@@ -29,10 +28,6 @@ from chemvas.ui.history_commands import (
     AddSceneItemsCommand,
     DeleteSceneItemsCommand,
     UpdateSceneItemCommand,
-    _restore_scene_runtime_snapshot,
-    _run_rollback_step,
-    _scene_runtime_snapshot,
-    _SceneRuntimeSnapshot,
 )
 from chemvas.ui.input_view_access import (
     focus_canvas_for,
@@ -55,20 +50,18 @@ from chemvas.ui.selection_service_access import (
 )
 from chemvas.ui.transactions.scene_item_attach import SceneItemAttachSnapshot
 from chemvas.ui.transactions.scene_rect import SceneRectSnapshot
+from chemvas.ui.transactions.scene_runtime import (
+    SceneRuntimeSnapshot,
+    capture_scene_runtime,
+    restore_scene_runtime,
+    run_rollback_step,
+)
 
 _MISSING_CAPTURE_ATTRIBUTE = object()
 
 
 def _capture_optional_attribute(target: object, name: str) -> object:
-    try:
-        return getattr(target, name)
-    except AttributeError:
-        if (
-            inspect.getattr_static(target, name, _MISSING_CAPTURE_ATTRIBUTE)
-            is not _MISSING_CAPTURE_ATTRIBUTE
-        ):
-            raise
-        return _MISSING_CAPTURE_ATTRIBUTE
+    return getattr(target, name, _MISSING_CAPTURE_ATTRIBUTE)
 
 
 def _call_required_rollback_method(target: object, name: str, *args) -> object:
@@ -191,7 +184,7 @@ class _NoteSceneRectTransaction:
         if snapshot is None:
             return
         prior_recovery_count = len(snapshot.recovery_errors)
-        _run_rollback_step(
+        run_rollback_step(
             original_error,
             "restoring the note-formatting scene rect",
             snapshot.restore,
@@ -204,31 +197,21 @@ class _NoteSceneRectTransaction:
                 ) -> None:
                     raise error
 
-                _run_rollback_step(
+                run_rollback_step(
                     original_error,
                     "restoring the note-formatting scene rect",
                     report_recovered_error,
                 )
         if snapshot.active:
-            prior_recovery_count = len(snapshot.recovery_errors)
-            _run_rollback_step(
+            run_rollback_step(
                 original_error,
-                "retrying the note-formatting scene-rect restore",
-                snapshot.restore,
-            )
-            if not snapshot.active:
-                for recovery_error in snapshot.recovery_errors[prior_recovery_count:]:
-
-                    def report_retry_recovery(
-                        error: BaseException = recovery_error,
-                    ) -> None:
-                        raise error
-
-                    _run_rollback_step(
-                        original_error,
-                        "retrying the note-formatting scene-rect restore",
-                        report_retry_recovery,
+                "verifying the note-formatting scene-rect restore",
+                lambda: (_ for _ in ()).throw(
+                    RuntimeError(
+                        "Note-formatting scene-rect restore remained incomplete"
                     )
+                ),
+            )
 
 
 class CanvasNoteController:
@@ -261,8 +244,8 @@ class CanvasNoteController:
             self.apply_note_style(item)
             set_committed_note_html_for(item, item.toHtml())
             item_snapshot.release()
-        except BaseException as original_error:
-            _run_rollback_step(
+        except Exception as original_error:
+            run_rollback_step(
                 original_error,
                 "removing a partially created note",
                 partial(remove_scene_item, self.canvas, item),
@@ -273,7 +256,7 @@ class CanvasNoteController:
                 committed_text=committed_text,
                 committed_html=committed_html,
             ):
-                _run_rollback_step(original_error, phase, rollback)
+                run_rollback_step(original_error, phase, rollback)
             raise
         return item
 
@@ -305,17 +288,17 @@ class CanvasNoteController:
         command: HistoryCommand,
         *,
         after_push: Callable[[], None] | None = None,
-        runtime_rollback: _SceneRuntimeSnapshot | None = None,
+        runtime_rollback: SceneRuntimeSnapshot | None = None,
         rollback_steps: tuple[tuple[str, Callable[[], object]], ...] = (),
     ) -> None:
-        history_snapshot: HistoryAuthoritySnapshot | None = None
+        history_snapshot: HistoryStackSnapshot | None = None
         try:
-            history_snapshot = HistoryAuthoritySnapshot.capture(self.history)
+            history_snapshot = self.history.capture_stack_snapshot()
             self.history.push(command)
             if after_push is not None:
                 after_push()
-        except BaseException as original_error:
-            _run_rollback_step(
+        except Exception as original_error:
+            run_rollback_step(
                 original_error,
                 "undoing a note command after its history push failed",
                 partial(
@@ -328,9 +311,13 @@ class CanvasNoteController:
             if runtime_rollback is not None:
                 self._restore_scene_runtime_step(runtime_rollback, original_error)
             for phase, rollback in rollback_steps:
-                _run_rollback_step(original_error, phase, rollback)
+                run_rollback_step(original_error, phase, rollback)
             if history_snapshot is not None:
-                history_snapshot.restore(original_error, phase="note mutation")
+                self.history.restore_stack_snapshot(
+                    history_snapshot,
+                    original_error,
+                    phase="note mutation",
+                )
             raise
 
     def _restore_note_mutation_snapshots(
@@ -354,7 +341,7 @@ class CanvasNoteController:
                     self.canvas,
                 )
 
-            _run_rollback_step(
+            run_rollback_step(
                 original_error,
                 "restoring a note after a batch formatting failure",
                 restore_note_state,
@@ -364,8 +351,8 @@ class CanvasNoteController:
                 committed_text=snapshot.committed_text,
                 committed_html=snapshot.committed_html,
             ):
-                _run_rollback_step(original_error, phase, rollback)
-            _run_rollback_step(
+                run_rollback_step(original_error, phase, rollback)
+            run_rollback_step(
                 original_error,
                 "restoring a batch-formatted note's interaction flags",
                 partial(
@@ -391,7 +378,7 @@ class CanvasNoteController:
             def restore_signal_state(primary_error: BaseException) -> None:
                 try:
                     document.blockSignals(signals_blocked)
-                except BaseException as secondary_error:
+                except Exception as secondary_error:
                     try:
                         add_note = getattr(primary_error, "add_note", None)
                         if callable(add_note):
@@ -399,16 +386,16 @@ class CanvasNoteController:
                                 "Editing-note signal-state restore also encountered "
                                 f"{type(secondary_error).__name__}: {secondary_error}"
                             )
-                    except BaseException:
+                    except Exception:
                         pass
 
             try:
                 document.blockSignals(True)
-            except BaseException as block_error:
+            except Exception as block_error:
                 restore_signal_state(block_error)
                 try:
-                    QGraphicsTextItem.setHtml(item, snapshot.html)
-                except BaseException as html_error:
+                    item.setHtml(snapshot.html)
+                except Exception as html_error:
                     try:
                         add_note = getattr(block_error, "add_note", None)
                         if callable(add_note):
@@ -416,22 +403,22 @@ class CanvasNoteController:
                                 "Unblocked editing-note HTML restore also encountered "
                                 f"{type(html_error).__name__}: {html_error}"
                             )
-                    except BaseException:
+                    except Exception:
                         pass
                 raise
             try:
-                QGraphicsTextItem.setHtml(item, snapshot.html)
-            except BaseException as html_error:
+                item.setHtml(snapshot.html)
+            except Exception as html_error:
                 restore_signal_state(html_error)
                 raise
             else:
                 try:
                     document.blockSignals(signals_blocked)
-                except BaseException as signal_restore_error:
+                except Exception as signal_restore_error:
                     restore_signal_state(signal_restore_error)
                     raise
 
-        _run_rollback_step(
+        run_rollback_step(
             original_error,
             "restoring editing-note HTML after a formatting failure",
             restore_html,
@@ -441,8 +428,8 @@ class CanvasNoteController:
             committed_text=snapshot.committed_text,
             committed_html=snapshot.committed_html,
         ):
-            _run_rollback_step(original_error, phase, rollback)
-        _run_rollback_step(
+            run_rollback_step(original_error, phase, rollback)
+        run_rollback_step(
             original_error,
             "restoring editing-note interaction flags",
             partial(
@@ -454,7 +441,7 @@ class CanvasNoteController:
         )
 
         for box_snapshot in snapshot.boxes:
-            current = _run_rollback_step(
+            current = run_rollback_step(
                 original_error,
                 "reading a note-box reference during rollback",
                 partial(
@@ -466,7 +453,7 @@ class CanvasNoteController:
             )
             if box_snapshot.box is None:
                 if isinstance(current, QGraphicsRectItem):
-                    _run_rollback_step(
+                    run_rollback_step(
                         original_error,
                         "removing a new note box after formatting failure",
                         partial(
@@ -476,7 +463,7 @@ class CanvasNoteController:
                             None,
                         ),
                     )
-                    current_scene = _run_rollback_step(
+                    current_scene = run_rollback_step(
                         original_error,
                         "reading a new note box's scene during rollback",
                         partial(
@@ -486,7 +473,7 @@ class CanvasNoteController:
                         ),
                     )
                     if current_scene is not None:
-                        _run_rollback_step(
+                        run_rollback_step(
                             original_error,
                             "detaching a new note box after formatting failure",
                             partial(
@@ -496,7 +483,7 @@ class CanvasNoteController:
                                 current,
                             ),
                         )
-                _run_rollback_step(
+                run_rollback_step(
                     original_error,
                     "clearing a new note-box reference",
                     partial(
@@ -519,7 +506,7 @@ class CanvasNoteController:
             if box_snapshot.visible is not None:
                 operations.append(("visibility", "setVisible", box_snapshot.visible))
             for phase, method_name, value in operations:
-                _run_rollback_step(
+                run_rollback_step(
                     original_error,
                     f"restoring note-box {phase}",
                     partial(
@@ -529,7 +516,7 @@ class CanvasNoteController:
                         value,
                     ),
                 )
-            _run_rollback_step(
+            run_rollback_step(
                 original_error,
                 "restoring note-box identity",
                 partial(
@@ -540,7 +527,7 @@ class CanvasNoteController:
                     box,
                 ),
             )
-        _run_rollback_step(
+        run_rollback_step(
             original_error,
             "restoring editing-note focus",
             partial(
@@ -564,7 +551,7 @@ class CanvasNoteController:
             )
             item.setTextCursor(restored)
 
-        _run_rollback_step(
+        run_rollback_step(
             original_error,
             "restoring editing-note cursor selection",
             restore_cursor,
@@ -590,37 +577,37 @@ class CanvasNoteController:
 
     def _restore_scene_runtime_step(
         self,
-        snapshot: _SceneRuntimeSnapshot,
+        snapshot: SceneRuntimeSnapshot,
         original_error: BaseException,
     ) -> None:
-        _run_rollback_step(
+        run_rollback_step(
             original_error,
             "restoring exact note scene/runtime state",
             partial(
-                _restore_scene_runtime_snapshot,
+                restore_scene_runtime,
                 snapshot,
                 original_error=original_error,
             ),
         )
 
     def _deselect_note_atomically(self, item: QGraphicsTextItem) -> None:
-        runtime_snapshot = _scene_runtime_snapshot(self.canvas, strict=True)
+        runtime_snapshot = capture_scene_runtime(self.canvas, strict=True)
         try:
             self._deselect_note(item)
-        except BaseException as original_error:
+        except Exception as original_error:
             self._restore_scene_runtime_step(runtime_snapshot, original_error)
             raise
 
     def _remove_note_atomically(
         self,
         item: QGraphicsTextItem,
-    ) -> _SceneRuntimeSnapshot:
-        runtime_snapshot = _scene_runtime_snapshot(self.canvas, strict=True)
+    ) -> SceneRuntimeSnapshot:
+        runtime_snapshot = capture_scene_runtime(self.canvas, strict=True)
         try:
             self._deselect_note(item)
             remove_scene_item(self.canvas, item)
             refresh_selection_outline_for(self.canvas)
-        except BaseException as original_error:
+        except Exception as original_error:
             self._restore_scene_runtime_step(runtime_snapshot, original_error)
             raise
         return runtime_snapshot
@@ -843,7 +830,7 @@ class CanvasNoteController:
                 self.update_note_box(editing)
                 update_note_selection_box_for(self.canvas, editing)
                 rect_transaction.release()
-            except BaseException as original_error:
+            except Exception as original_error:
                 self._restore_editing_note_snapshot(editing_snapshot, original_error)
                 rect_transaction.restore(original_error)
                 raise
@@ -932,7 +919,7 @@ class CanvasNoteController:
                     *rollback_interaction_flags,
                 ),
             )
-        except BaseException as original_error:
+        except Exception as original_error:
             self._restore_note_mutation_snapshots(
                 attempted_snapshots,
                 original_error,

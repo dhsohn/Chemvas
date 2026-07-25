@@ -16,7 +16,6 @@ except ModuleNotFoundError:
 if QApplication is not None:
     from chemvas.core.history import (
         CompositeCommand,
-        HistoryTransactionRestoreResult,
         SetSmilesInputCommand,
     )
     from chemvas.domain.document import Atom, Bond, MoleculeModel
@@ -25,10 +24,6 @@ if QApplication is not None:
     from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
     from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
     from chemvas.ui.canvas_callback_state import callback_state_for
-    from chemvas.ui.canvas_delete_transaction import (
-        CanvasDeleteTransactionSnapshot,
-        canvas_delete_transaction,
-    )
     from chemvas.ui.canvas_group_state import (
         group_state_for,
         register_group_for,
@@ -43,10 +38,6 @@ if QApplication is not None:
     from chemvas.ui.canvas_view import CanvasView
     from chemvas.ui.edit_tools import DeleteTool
     from chemvas.ui.history_commands import UngroupSceneItemsCommand
-    from chemvas.ui.scene_delete_controller import (
-        SceneDeleteController,
-        SceneDeleteTransactionSession,
-    )
     from chemvas.ui.scene_item_state import (
         atom_state_dict_for,
         bond_state_dict,
@@ -54,6 +45,10 @@ if QApplication is not None:
     )
     from chemvas.ui.selection_info_state import selection_info_state_for
     from chemvas.ui.structure_mutation_access import add_benzene_ring_for
+    from chemvas.ui.transactions.document import (
+        DocumentSavepoint,
+        document_transaction,
+    )
 
     from tests.test_scene_ops_controller import (
         _FakeCanvas,
@@ -1296,12 +1291,12 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
     def test_rollback_failure_does_not_mask_original_delete_error(self) -> None:
         canvas = self._new_canvas()
         with mock.patch.object(
-            CanvasDeleteTransactionSnapshot,
+            DocumentSavepoint,
             "restore",
             side_effect=RuntimeError("rollback-error"),
         ):
             with self.assertRaisesRegex(ValueError, "original-error") as caught:
-                with canvas_delete_transaction(canvas):
+                with document_transaction(canvas):
                     raise ValueError("original-error")
 
         self.assertTrue(
@@ -1510,9 +1505,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
 
         with (
             mock.patch.object(
-                CanvasDeleteTransactionSnapshot,
+                DocumentSavepoint,
                 "capture",
-                wraps=CanvasDeleteTransactionSnapshot.capture,
+                wraps=DocumentSavepoint.capture,
             ) as capture,
             self.assertRaises(AttributeError) as raised,
         ):
@@ -1534,341 +1529,6 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self.assertEqual(session.rollback(), [])
         self.assertIs(ports._group_callback, group_callback)
         self.assertIs(ports._outline_callback, outline_callback)
-
-    def test_delete_session_suspend_failure_restores_guard_callbacks_then_retries(
-        self,
-    ) -> None:
-        canvas = self._new_canvas()
-        canvas.services.structure.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
-        original_callbacks = callback_state_for(canvas)
-        group_callback = original_callbacks.scene_selection_group
-        outline_callback = original_callbacks.scene_selection_outline
-        ports = _FailingCallbackPorts(group_callback, outline_callback)
-        ports.setter_error = SystemExit("group callback suspension terminated")
-        ports.group_setter_failures = 1
-        canvas.runtime_state.callback_state = ports
-        controller = canvas.services.scene_operations.scene_delete_controller
-        scene = canvas.scene()
-        scene_before = list(scene.items())
-
-        with self.assertRaises(SystemExit) as raised:
-            controller.begin_delete_tool_session()
-
-        self.assertIs(raised.exception, ports.setter_error)
-        self.assertEqual(list(scene.items()), scene_before)
-        self.assertIs(ports._group_callback, group_callback)
-        self.assertIs(ports._outline_callback, outline_callback)
-        self.assertEqual(scene._chemvas_scene_rect_tracker.depth, 0)
-
-        session = controller.begin_delete_tool_session()
-
-        self.assertEqual(session.rollback(), [])
-        self.assertFalse(session.active)
-        self.assertIs(ports._group_callback, group_callback)
-        self.assertIs(ports._outline_callback, outline_callback)
-        self.assertEqual(scene._chemvas_scene_rect_tracker.depth, 0)
-
-    def test_delete_session_observer_no_op_setters_fail_closed(self) -> None:
-        canvas = self._new_canvas()
-        canvas.services.structure.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
-        original_callbacks = callback_state_for(canvas)
-        group_callback = original_callbacks.scene_selection_group
-        outline_callback = original_callbacks.scene_selection_outline
-
-        class NoOpCallbackPorts:
-            def __init__(self) -> None:
-                self._group = group_callback
-                self._outline = outline_callback
-                self.no_op_suspend = True
-                self.no_op_restore = False
-
-            @property
-            def scene_selection_group(self):
-                return self._group
-
-            @scene_selection_group.setter
-            def scene_selection_group(self, callback) -> None:
-                if callback is None and self.no_op_suspend:
-                    return
-                if callback is not None and self.no_op_restore:
-                    return
-                self._group = callback
-
-            @property
-            def scene_selection_outline(self):
-                return self._outline
-
-            @scene_selection_outline.setter
-            def scene_selection_outline(self, callback) -> None:
-                self._outline = callback
-
-        ports = NoOpCallbackPorts()
-        canvas.runtime_state.callback_state = ports
-        controller = canvas.services.scene_operations.scene_delete_controller
-
-        with self.assertRaisesRegex(RuntimeError, "no-op"):
-            controller.begin_delete_tool_session()
-
-        self.assertIs(ports._group, group_callback)
-        self.assertIs(ports._outline, outline_callback)
-        self.assertEqual(canvas.scene()._chemvas_scene_rect_tracker.depth, 0)
-
-        ports.no_op_suspend = False
-        session = controller.begin_delete_tool_session()
-        ports.no_op_restore = True
-        with self.assertRaisesRegex(RuntimeError, "no-op"):
-            session.commit()
-        self.assertTrue(session.active)
-        self.assertIsNone(ports._group)
-
-        errors = session.rollback()
-        self.assertTrue(any("no-op" in str(error) for error in errors))
-        self.assertTrue(session.active)
-        ports.no_op_restore = False
-        self.assertEqual(session.rollback(), [])
-        self.assertFalse(session.active)
-        self.assertIs(ports._group, group_callback)
-        self.assertIs(ports._outline, outline_callback)
-
-    def test_delete_session_rollback_collects_suspend_failure_but_restores_absolute_state(
-        self,
-    ) -> None:
-        canvas = self._new_canvas()
-        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
-            "N",
-            0.0,
-            0.0,
-        )
-        original_callbacks = callback_state_for(canvas)
-        group_callback = original_callbacks.scene_selection_group
-        outline_callback = original_callbacks.scene_selection_outline
-        ports = _FailingCallbackPorts(group_callback, outline_callback)
-        canvas.runtime_state.callback_state = ports
-        session = canvas.services.scene_operations.scene_delete_controller.begin_delete_tool_session()
-        self.assertIsNotNone(session.delete_atom(atom_id))
-        ports.setter_error = KeyboardInterrupt(
-            "group callback rollback suspension interrupted"
-        )
-        ports.group_setter_failures = 1
-        original_restore = CanvasDeleteTransactionSnapshot.restore_with_result
-        restore_calls = 0
-
-        def counted_restore(snapshot) -> HistoryTransactionRestoreResult:
-            nonlocal restore_calls
-            restore_calls += 1
-            return original_restore(snapshot)
-
-        with mock.patch.object(
-            CanvasDeleteTransactionSnapshot,
-            "restore_with_result",
-            new=counted_restore,
-        ):
-            errors = session.rollback()
-
-        self.assertEqual(restore_calls, 1)
-        self.assertTrue(any(error is ports.setter_error for error in errors))
-        self.assertIn(atom_id, canvas.model.atoms)
-        self.assertFalse(session.active)
-        self.assertIs(ports._group_callback, group_callback)
-        self.assertIs(ports._outline_callback, outline_callback)
-        self.assertEqual(canvas.scene()._chemvas_scene_rect_tracker.depth, 0)
-
-    def test_delete_session_commit_propagates_fail_once_observer_restore_then_rolls_back(
-        self,
-    ) -> None:
-        canvas = self._new_canvas()
-        canvas.services.structure.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
-        original_callbacks = callback_state_for(canvas)
-        group_callback = original_callbacks.scene_selection_group
-        outline_callback = original_callbacks.scene_selection_outline
-        ports = _FailingCallbackPorts(group_callback, outline_callback)
-        canvas.runtime_state.callback_state = ports
-        session = canvas.services.scene_operations.scene_delete_controller.begin_delete_tool_session()
-        primary_error = KeyboardInterrupt("group callback commit restore interrupted")
-        ports.setter_error = primary_error
-        ports.group_restore_setter_failures = 1
-
-        with self.assertRaises(KeyboardInterrupt) as raised:
-            session.commit()
-
-        self.assertIs(raised.exception, primary_error)
-        self.assertTrue(session.active)
-        self.assertIs(ports._group_callback, group_callback)
-        self.assertIs(ports._outline_callback, outline_callback)
-
-        self.assertEqual(session.rollback(), [])
-        self.assertFalse(session.active)
-        self.assertEqual(canvas.scene()._chemvas_scene_rect_tracker.depth, 0)
-
-    def test_delete_session_persistent_observer_restore_keeps_session_retryable(
-        self,
-    ) -> None:
-        canvas = self._new_canvas()
-        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
-            "N",
-            0.0,
-            0.0,
-        )
-        original_callbacks = callback_state_for(canvas)
-        group_callback = original_callbacks.scene_selection_group
-        outline_callback = original_callbacks.scene_selection_outline
-        ports = _FailingCallbackPorts(group_callback, outline_callback)
-        canvas.runtime_state.callback_state = ports
-        session = canvas.services.scene_operations.scene_delete_controller.begin_delete_tool_session()
-        self.assertIsNotNone(session.delete_atom(atom_id))
-        restore_error = SystemExit("group callback restore stayed unavailable")
-        ports.setter_error = restore_error
-        ports.group_restore_setter_failures = 2
-
-        errors = session.rollback()
-
-        self.assertTrue(any(error is restore_error for error in errors))
-        self.assertTrue(session.active)
-        self.assertIn(atom_id, canvas.model.atoms)
-        self.assertIsNone(ports._group_callback)
-        self.assertIs(ports._outline_callback, outline_callback)
-
-        self.assertEqual(session.rollback(), [])
-        self.assertFalse(session.active)
-        self.assertIs(ports._group_callback, group_callback)
-        self.assertIs(ports._outline_callback, outline_callback)
-        self.assertEqual(canvas.scene()._chemvas_scene_rect_tracker.depth, 0)
-
-    def test_delete_tool_context_retries_active_session_after_observer_restore_failure(
-        self,
-    ) -> None:
-        canvas = self._new_canvas()
-        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
-            "N",
-            0.0,
-            0.0,
-        )
-        atom_item = atom_items_for(canvas)[atom_id]
-        original_callbacks = callback_state_for(canvas)
-        group_callback = original_callbacks.scene_selection_group
-        outline_callback = original_callbacks.scene_selection_outline
-        ports = _FailingCallbackPorts(group_callback, outline_callback)
-        canvas.runtime_state.callback_state = ports
-        tool = DeleteTool(canvas, context=canvas.services.tool_controller.context)
-        with mock.patch.object(
-            canvas.services.selection.hit_testing_service,
-            "item_at_event",
-            return_value=atom_item,
-        ):
-            self.assertTrue(tool.on_mouse_press(_DeleteGestureEvent()))
-
-        session = tool._delete_session
-        self.assertIsNotNone(session)
-        restore_error = SystemExit("observer restore failed for first rollback")
-        ports.setter_error = restore_error
-        ports.group_restore_setter_failures = 2
-
-        with self.assertRaises(SystemExit) as raised:
-            tool.deactivate()
-
-        self.assertIs(raised.exception, restore_error)
-        self.assertIsNotNone(session)
-        self.assertFalse(session.active)
-        self.assertIsNone(tool._delete_session)
-        self.assertIn(atom_id, canvas.model.atoms)
-        self.assertIs(atom_item.scene(), canvas.scene())
-        self.assertIs(ports._group_callback, group_callback)
-        self.assertIs(ports._outline_callback, outline_callback)
-        self.assertEqual(canvas.scene()._chemvas_scene_rect_tracker.depth, 0)
-
-    def test_delete_session_rollback_retries_nonauthoritative_snapshot_before_publish(
-        self,
-    ) -> None:
-        canvas = self._new_canvas()
-        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
-            "N",
-            0.0,
-            0.0,
-        )
-        selection_info = selection_info_state_for(canvas)
-        selection_info.cache = ("C", "12.01")
-        published: list[tuple[str, str]] = []
-        selection_info.callback = lambda formula, mass: published.append(
-            (formula, mass)
-        )
-        session = canvas.services.scene_operations.scene_delete_controller.begin_delete_tool_session()
-        self.assertIsNotNone(session.delete_atom(atom_id))
-        transient_error = RuntimeError("absolute delete restore incomplete once")
-        original_restore = CanvasDeleteTransactionSnapshot.restore_with_result
-        restore_calls = 0
-
-        def fail_once_then_restore(snapshot) -> HistoryTransactionRestoreResult:
-            nonlocal restore_calls
-            restore_calls += 1
-            if restore_calls == 1:
-                return HistoryTransactionRestoreResult(
-                    authoritative=False,
-                    fallback_to_inverse=False,
-                    errors=(transient_error,),
-                )
-            self.assertTrue(session.active)
-            self.assertEqual(published, [])
-            return original_restore(snapshot)
-
-        with mock.patch.object(
-            CanvasDeleteTransactionSnapshot,
-            "restore_with_result",
-            new=fail_once_then_restore,
-        ):
-            errors = session.rollback()
-
-        self.assertEqual(restore_calls, 2)
-        self.assertIn(transient_error, errors)
-        # Rollback republishes the exact cache captured before the gesture;
-        # it does not recompute or replace that external publication payload.
-        self.assertEqual(published, [("C", "12.01")])
-        self.assertIn(atom_id, canvas.model.atoms)
-        self.assertFalse(session.active)
-        self.assertEqual(canvas.scene()._chemvas_scene_rect_tracker.depth, 0)
-
-    def test_delete_session_rollback_publishes_restored_selection_once_without_replacing_outlines(
-        self,
-    ) -> None:
-        canvas = self._new_canvas()
-        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
-            "C",
-            0.0,
-            0.0,
-        )
-        atom_item = atom_dots_for(canvas)[atom_id]
-        atom_item.setSelected(True)
-        scene_before = list(canvas.scene().items())
-        history = canvas.services.history_service.state.history
-        history_before = list(history)
-        selection_info = selection_info_state_for(canvas)
-        selection_info.signature = (frozenset({atom_id}), frozenset())
-        selection_info.cache = ("C", "12.01")
-        published_values: list[tuple[str, str]] = []
-        ghost_items = []
-
-        def corrupt_after_publication(formula: str, mass: str) -> None:
-            published_values.append((formula, mass))
-            canvas.model.atoms.clear()
-            history.append(object())
-            canvas.scene().removeItem(atom_item)
-            ghost_items.append(canvas.scene().addRect(100.0, 100.0, 5.0, 5.0))
-
-        selection_info.callback = corrupt_after_publication
-
-        session = canvas.services.scene_operations.scene_delete_controller.begin_delete_tool_session()
-        self.assertIsNotNone(session.delete_atom(atom_id))
-        self.assertEqual(published_values, [])
-
-        self.assertEqual(session.rollback(), [])
-
-        self.assertEqual(published_values, [("C", "12.01")])
-        self.assertEqual(list(canvas.scene().items()), scene_before)
-        self.assertIs(atom_item.scene(), canvas.scene())
-        self.assertTrue(atom_item.isSelected())
-        self.assertIn(atom_id, canvas.model.atoms)
-        self.assertEqual(history, history_before)
-        self.assertEqual(len(ghost_items), 1)
-        self.assertIsNone(ghost_items[0].scene())
 
     def test_delete_session_label_html_rollback_is_exact_and_publishes_once(
         self,
@@ -1913,172 +1573,6 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 self.assertIs(atom_item.scene(), canvas.scene())
                 self.assertTrue(atom_item.isSelected())
                 self.assertIn(atom_id, canvas.model.atoms)
-
-    def test_delete_commit_observer_failure_rolls_back_and_republishes_prestate_once(
-        self,
-    ) -> None:
-        canvas = self._new_canvas()
-        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
-            "C",
-            0.0,
-            0.0,
-        )
-        atom_item = atom_dots_for(canvas)[atom_id]
-        atom_item.setSelected(True)
-        scene_before = list(canvas.scene().items())
-        history_before = list(canvas.services.history_service.state.history)
-        callbacks = callback_state_for(canvas)
-        group_callback = callbacks.scene_selection_group
-        outline_callback = callbacks.scene_selection_outline
-        selection_info = selection_info_state_for(canvas)
-        selection_info.signature = (frozenset({atom_id}), frozenset())
-        selection_info.cache = ("C", "12.01")
-        visible_cache = {"value": ("C", "12.01")}
-        published_values: list[tuple[str, str]] = []
-        observer_error = KeyboardInterrupt("selection observer failed after mutation")
-        rollback_observer_error = SystemExit(
-            "restored selection observer failed after mutation"
-        )
-
-        def mutate_then_maybe_fail(formula: str, mass: str) -> None:
-            value = (formula, mass)
-            visible_cache["value"] = value
-            published_values.append(value)
-            if value == ("", ""):
-                raise observer_error
-            raise rollback_observer_error
-
-        selection_info.callback = mutate_then_maybe_fail
-        tool = DeleteTool(canvas, context=canvas.services.tool_controller.context)
-        with mock.patch.object(
-            canvas.services.selection.hit_testing_service,
-            "item_at_event",
-            return_value=atom_item,
-        ):
-            self.assertTrue(tool.on_mouse_press(_DeleteGestureEvent()))
-
-        with self.assertRaises(KeyboardInterrupt) as raised:
-            tool.on_mouse_release(_DeleteGestureEvent())
-
-        self.assertIs(raised.exception, observer_error)
-        self.assertEqual(published_values, [("", ""), ("C", "12.01")])
-        self.assertEqual(visible_cache["value"], ("C", "12.01"))
-        self.assertTrue(
-            any(
-                "restored selection observer failed after mutation" in note
-                for note in getattr(observer_error, "__notes__", [])
-            )
-        )
-        self.assertEqual(list(canvas.scene().items()), scene_before)
-        self.assertIs(atom_item.scene(), canvas.scene())
-        self.assertTrue(atom_item.isSelected())
-        self.assertIn(atom_id, canvas.model.atoms)
-        self.assertEqual(
-            canvas.services.history_service.state.history,
-            history_before,
-        )
-        self.assertIs(callbacks.scene_selection_group, group_callback)
-        self.assertIs(callbacks.scene_selection_outline, outline_callback)
-        self.assertFalse(tool._erasing)
-        self.assertFalse(tool._changed)
-        self.assertEqual(tool._commands, [])
-        self.assertIsNone(tool._delete_session)
-        selection_info.callback = None
-
-    def test_delete_commit_failure_retries_rollback_port_lookup_before_dropping_session(
-        self,
-    ) -> None:
-        canvas = self._new_canvas()
-        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
-            "N",
-            0.0,
-            0.0,
-        )
-        atom_item = atom_items_for(canvas)[atom_id]
-        atom_item.setSelected(True)
-        scene = canvas.scene()
-        scene_items_before = list(scene.items())
-        scene_rect_before = scene.sceneRect()
-        callbacks = callback_state_for(canvas)
-        group_callback = callbacks.scene_selection_group
-        outline_callback = callbacks.scene_selection_outline
-        history = canvas.services.history_service
-        primary_error = KeyboardInterrupt("history push failed")
-        rollback_lookup_error = SystemExit("rollback lookup failed once")
-        original_rollback = SceneDeleteTransactionSession.rollback
-        captured_sessions: list[SceneDeleteTransactionSession] = []
-
-        class FailOnSecondRollbackLookup:
-            def __init__(self) -> None:
-                self.lookups = 0
-
-            def __get__(self, instance, owner):
-                if instance is None:
-                    return self
-                self.lookups += 1
-                if self.lookups == 2:
-                    raise rollback_lookup_error
-                return original_rollback.__get__(instance, owner)
-
-        rollback_descriptor = FailOnSecondRollbackLookup()
-        controller = canvas.services.scene_operations.scene_delete_controller
-        original_begin = controller.begin_delete_tool_session
-
-        def capture_session() -> SceneDeleteTransactionSession:
-            session = original_begin()
-            captured_sessions.append(session)
-            return session
-
-        tool = DeleteTool(canvas, context=canvas.services.tool_controller.context)
-        with (
-            mock.patch.object(
-                controller,
-                "begin_delete_tool_session",
-                side_effect=capture_session,
-            ),
-            mock.patch.object(
-                SceneDeleteTransactionSession,
-                "rollback",
-                rollback_descriptor,
-            ),
-            mock.patch.object(
-                canvas.services.selection.hit_testing_service,
-                "item_at_event",
-                return_value=atom_item,
-            ),
-        ):
-            self.assertTrue(tool.on_mouse_press(_DeleteGestureEvent()))
-            self.assertNotIn(atom_id, canvas.model.atoms)
-            with mock.patch.object(history, "push", side_effect=primary_error):
-                with self.assertRaises(KeyboardInterrupt) as raised:
-                    tool.on_mouse_release(_DeleteGestureEvent())
-
-        self.assertIs(raised.exception, primary_error)
-        self.assertEqual(rollback_descriptor.lookups, 3)
-        self.assertEqual(len(captured_sessions), 1)
-        self.assertFalse(captured_sessions[0].active)
-        tracker = scene._chemvas_scene_rect_tracker
-        self.assertEqual(tracker.depth, 0)
-        self.assertEqual(scene.sceneRect(), scene_rect_before)
-        self.assertEqual(list(scene.items()), scene_items_before)
-        self.assertIn(atom_id, canvas.model.atoms)
-        self.assertIs(atom_item.scene(), scene)
-        self.assertTrue(atom_item.isSelected())
-        self.assertEqual(history.state.history, [])
-        self.assertEqual(history.state.redo_stack, [])
-        self.assertIs(callbacks.scene_selection_group, group_callback)
-        self.assertIs(callbacks.scene_selection_outline, outline_callback)
-        self.assertTrue(
-            any(
-                "rollback lookup failed once" in note
-                for note in getattr(primary_error, "__notes__", [])
-            )
-        )
-        self.assertFalse(tool._erasing)
-        self.assertFalse(tool._changed)
-        self.assertEqual(tool._commands, [])
-        self.assertIsNone(tool._before_smiles_input)
-        self.assertIsNone(tool._delete_session)
 
     def test_delete_tool_success_commits_one_restorable_history_step(self) -> None:
         canvas = self._new_canvas()
@@ -2147,150 +1641,6 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self.assertEqual(session.rollback(), [])
         self.assertIsNotNone(canvas.model.bonds[bond_id])
         self.assertEqual(graph.atom_bond_ids[atom_a], {999})
-
-    def test_delete_tool_live_ring_read_failure_prevents_mutation_then_retry_commits(
-        self,
-    ) -> None:
-        canvas = self._new_canvas()
-        ring = add_benzene_ring_for(canvas, QPointF(0.0, 0.0))
-        self.assertIsNotNone(ring)
-        assert ring is not None
-        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
-            "N",
-            200.0,
-            0.0,
-        )
-        atom_item = atom_items_for(canvas)[atom_id]
-        atom_before = canvas.model.atoms[atom_id]
-        bonds_before = list(canvas.model.bonds)
-        scene_before = list(canvas.scene().items())
-        history = canvas.services.history_service
-        history.clear()
-        callbacks = callback_state_for(canvas)
-        group_callback = callbacks.scene_selection_group
-        outline_callback = callbacks.scene_selection_outline
-        read_error = RuntimeError("live ring dependency read failed")
-        original_data = ring.data
-        failed = False
-
-        def fail_once(role: int):
-            nonlocal failed
-            if role == 2 and not failed:
-                failed = True
-                raise read_error
-            return original_data(role)
-
-        tool = DeleteTool(canvas, context=canvas.services.tool_controller.context)
-        with (
-            mock.patch.object(ring, "data", side_effect=fail_once),
-            mock.patch.object(
-                canvas.services.selection.hit_testing_service,
-                "item_at_event",
-                return_value=atom_item,
-            ),
-        ):
-            with self.assertRaises(RuntimeError) as raised:
-                tool.on_mouse_press(_DeleteGestureEvent())
-
-            self.assertIs(raised.exception, read_error)
-            self.assertIs(canvas.model.atoms[atom_id], atom_before)
-            self.assertEqual(len(canvas.model.bonds), len(bonds_before))
-            for restored, before in zip(
-                canvas.model.bonds,
-                bonds_before,
-                strict=True,
-            ):
-                self.assertIs(restored, before)
-            self.assertEqual(list(canvas.scene().items()), scene_before)
-            self.assertEqual(ring_items_for(canvas), [ring])
-            self.assertEqual(history.state.history, [])
-            self.assertIs(callbacks.scene_selection_group, group_callback)
-            self.assertIs(callbacks.scene_selection_outline, outline_callback)
-            self.assertFalse(tool._erasing)
-            self.assertFalse(tool._changed)
-            self.assertEqual(tool._commands, [])
-            self.assertIsNone(tool._delete_session)
-
-            self.assertTrue(tool.on_mouse_press(_DeleteGestureEvent()))
-            self.assertTrue(tool.on_mouse_release(_DeleteGestureEvent()))
-
-            self.assertNotIn(atom_id, canvas.model.atoms)
-            self.assertEqual(ring_items_for(canvas), [ring])
-            self.assertIs(ring.scene(), canvas.scene())
-            self.assertEqual(len(history.state.history), 1)
-
-            history.undo()
-            self.assertIn(atom_id, canvas.model.atoms)
-            self.assertEqual(ring_items_for(canvas), [ring])
-            self.assertIs(ring.scene(), canvas.scene())
-
-            history.redo()
-            self.assertNotIn(atom_id, canvas.model.atoms)
-            self.assertEqual(ring_items_for(canvas), [ring])
-            self.assertIs(ring.scene(), canvas.scene())
-
-    def test_direct_bond_live_ring_read_failure_rolls_back_then_retry_replays_cleanup(
-        self,
-    ) -> None:
-        canvas = self._new_canvas()
-        ring = add_benzene_ring_for(canvas, QPointF(0.0, 0.0))
-        self.assertIsNotNone(ring)
-        assert ring is not None
-        history = canvas.services.history_service
-        history.clear()
-        bond_id = 0
-        bond_before = canvas.model.bonds[bond_id]
-        scene_before = list(canvas.scene().items())
-        read_error = RuntimeError("live ring cleanup read failed")
-        original_data = ring.data
-        role_two_reads = 0
-
-        def fail_second_dependency_read(role: int):
-            nonlocal role_two_reads
-            if role == 2:
-                role_two_reads += 1
-                if role_two_reads == 2:
-                    raise read_error
-            return original_data(role)
-
-        with mock.patch.object(
-            ring,
-            "data",
-            side_effect=fail_second_dependency_read,
-        ):
-            with self.assertRaises(RuntimeError) as raised:
-                canvas.services.scene_operations.scene_delete_controller.delete_bond(
-                    bond_id,
-                    record=True,
-                )
-
-            self.assertIs(raised.exception, read_error)
-            self.assertIs(canvas.model.bonds[bond_id], bond_before)
-            self.assertEqual(list(canvas.scene().items()), scene_before)
-            self.assertEqual(ring_items_for(canvas), [ring])
-            self.assertEqual(history.state.history, [])
-
-            command = (
-                canvas.services.scene_operations.scene_delete_controller.delete_bond(
-                    bond_id,
-                    record=True,
-                )
-            )
-            self.assertIsNotNone(command)
-            self.assertIsNone(canvas.model.bonds[bond_id])
-            self.assertNotIn(ring, ring_items_for(canvas))
-            self.assertIsNone(ring.scene())
-            self.assertEqual(len(history.state.history), 1)
-
-            history.undo()
-            self.assertEqual(canvas.model.bonds[bond_id], bond_before)
-            self.assertIn(ring, ring_items_for(canvas))
-            self.assertIs(ring.scene(), canvas.scene())
-
-            history.redo()
-            self.assertIsNone(canvas.model.bonds[bond_id])
-            self.assertNotIn(ring, ring_items_for(canvas))
-            self.assertIsNone(ring.scene())
 
     def test_delete_tool_session_reuses_precomputed_ring_model_sets(self) -> None:
         canvas = self._new_canvas()
@@ -2430,48 +1780,6 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self.assertNotIn(ring, ring_items_for(canvas))
         self.assertEqual(session.rollback(), [])
         self.assertIn(ring, ring_items_for(canvas))
-
-    def test_broken_delete_diagnostic_hook_preserves_control_flow_primary_identity(
-        self,
-    ) -> None:
-        class BrokenKeyboardInterrupt(KeyboardInterrupt):
-            def add_note(self, _note: str) -> None:
-                raise SystemExit("broken KeyboardInterrupt diagnostic hook")
-
-        class BrokenSystemExit(SystemExit):
-            def add_note(self, _note: str) -> None:
-                raise KeyboardInterrupt("broken SystemExit diagnostic hook")
-
-        helpers_and_errors = (
-            (
-                DeleteTool._add_rollback_error_notes,
-                [RuntimeError("delete tool rollback failed")],
-            ),
-            (
-                SceneDeleteTransactionSession._add_observer_error_notes,
-                [("observer sync", RuntimeError("observer failed"))],
-            ),
-            (
-                SceneDeleteController._add_cleanup_error_notes,
-                [("selection cleanup", RuntimeError("cleanup failed"))],
-            ),
-        )
-        for primary in (
-            BrokenKeyboardInterrupt("primary keyboard interruption"),
-            BrokenSystemExit("primary system exit"),
-        ):
-            for helper, secondary_errors in helpers_and_errors:
-                with self.subTest(
-                    primary_type=type(primary).__name__,
-                    helper=helper.__name__,
-                ):
-                    with self.assertRaises(type(primary)) as raised:
-                        try:
-                            raise primary
-                        except BaseException as original_error:
-                            helper(original_error, secondary_errors)
-                            raise
-                    self.assertIs(raised.exception, primary)
 
 
 if __name__ == "__main__":

@@ -655,136 +655,6 @@ def test_tool_context_rejected_delete_session_restores_guard_and_observers() -> 
     assert runtime.outline_callback is outline_callback
 
 
-@pytest.mark.parametrize("primary_type", [KeyboardInterrupt, SystemExit])
-def test_tool_context_validation_preserves_primary_when_rollback_retries_and_notes_break(
-    primary_type,
-) -> None:
-    class BrokenPrimary(primary_type):
-        def add_note(self, _note: str) -> None:
-            raise RuntimeError("broken diagnostic hook")
-
-    primary = BrokenPrimary("validation failed")
-    rollback_failure = RuntimeError("rollback failed before recovery")
-    group_callback = object()
-    outline_callback = object()
-    runtime = SimpleNamespace(
-        active=True,
-        guard_depth=1,
-        group_callback=None,
-        outline_callback=None,
-        rollback_calls=0,
-    )
-
-    class FailOnceRollbackSession:
-        @property
-        def delete_atom(self):
-            raise primary
-
-        delete_bond = staticmethod(lambda _bond_id: None)
-        delete_ring = staticmethod(lambda _item: None)
-        delete_scene_item = staticmethod(lambda _item, _state: None)
-        commit = staticmethod(lambda _command=None: None)
-
-        @staticmethod
-        def rollback() -> list[BaseException]:
-            runtime.rollback_calls += 1
-            if runtime.rollback_calls == 1:
-                raise rollback_failure
-            runtime.active = False
-            runtime.guard_depth = 0
-            runtime.group_callback = group_callback
-            runtime.outline_callback = outline_callback
-            return []
-
-    session = FailOnceRollbackSession()
-    context = ToolContext(
-        object(),
-        hit_testing_service=_hit_testing_port(),
-        selection_controller=_selection_port(),
-        note_controller=_note_port(),
-        handle_controller=_handle_port(),
-        selection_rotation_controller=_selection_rotation_port(),
-        scene_delete_controller=SimpleNamespace(
-            begin_delete_tool_session=mock.Mock(return_value=session),
-        ),
-        scene_transform_controller=_scene_transform_port(),
-    )
-
-    with pytest.raises(primary_type) as raised:
-        context.begin_delete_tool_session()
-
-    assert raised.value is primary
-    assert runtime.rollback_calls == 2
-    assert runtime.active is False
-    assert runtime.guard_depth == 0
-    assert runtime.group_callback is group_callback
-    assert runtime.outline_callback is outline_callback
-
-
-@pytest.mark.parametrize("failure_stage", ["lookup", "call"])
-def test_tool_context_retries_delete_session_rollback_port_once(
-    failure_stage: str,
-) -> None:
-    first_failure = KeyboardInterrupt(f"rollback {failure_stage} failed once")
-
-    class FailOnceRollbackSession:
-        def __init__(self) -> None:
-            self.lookups = 0
-            self.calls = 0
-            self.active = True
-            self.guard_depth = 1
-
-        @property
-        def rollback(self):
-            self.lookups += 1
-            if failure_stage == "lookup" and self.lookups == 1:
-                raise first_failure
-            return self._rollback
-
-        def _rollback(self) -> list[BaseException]:
-            self.calls += 1
-            if failure_stage == "call" and self.calls == 1:
-                raise first_failure
-            self.active = False
-            self.guard_depth = 0
-            return []
-
-    session = FailOnceRollbackSession()
-
-    errors = ToolContext.rollback_delete_tool_session(session)
-
-    assert errors == [first_failure]
-    assert session.lookups == (2 if failure_stage == "lookup" else 2)
-    assert session.calls == (1 if failure_stage == "lookup" else 2)
-    assert session.active is False
-    assert session.guard_depth == 0
-
-
-def test_tool_context_retries_returned_active_production_session() -> None:
-    first_error = SystemExit("observer ports stayed unavailable once")
-
-    class ActiveUntilSecondRollback:
-        def __init__(self) -> None:
-            self.active = True
-            self.calls = 0
-
-        def rollback(self) -> list[BaseException]:
-            self.calls += 1
-            if self.calls == 1:
-                return [first_error]
-            self.active = False
-            return []
-
-    session = ActiveUntilSecondRollback()
-
-    errors = ToolContext.rollback_delete_tool_session(session)
-
-    assert errors == [first_error]
-    assert errors.completed is True
-    assert session.calls == 2
-    assert session.active is False
-
-
 def test_tool_context_marks_persistently_active_rollback_incomplete() -> None:
     class PersistentlyActiveSession:
         active = True
@@ -801,7 +671,7 @@ def test_tool_context_marks_persistently_active_rollback_incomplete() -> None:
     errors = ToolContext.rollback_delete_tool_session(session)
 
     assert errors.completed is False
-    assert session.calls == 2
+    assert session.calls == 1
     assert any("remained active" in str(error) for error in errors)
 
 
