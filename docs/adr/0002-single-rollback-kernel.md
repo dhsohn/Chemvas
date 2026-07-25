@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-07-24
+- Implemented: 2026-07-25
 
 ## Context
 
@@ -116,12 +117,13 @@ the current behavior.
 
 ## Migration
 
-The reduction proceeds from lowest to highest risk: rotation preview, drag
-tool, scene-rect/attach trackers (one slice — they share private imports),
-delete transaction, scene reset, document session, and finally the kernel
-consolidation itself, which also migrates the remaining
+The reduction was completed from lowest to highest risk: rotation preview,
+drag tool, scene-rect/attach trackers, delete transaction, scene reset,
+document session, and finally the kernel consolidation. The remaining
 `history_push_failure_recovery` consumers (color mutation, atom-label
-recorder, tool context).
+recorder, and tool context) now publish through the single history service.
+The old recovery module, authority channel, parallel stack snapshots, and
+restore-retry layer are deleted.
 
 The behavior contract of record is the characterization suite
 (`tests/test_txhistory_characterization.py`) together with the surviving
@@ -140,6 +142,11 @@ keeps this contract green and records its own removal approval.
 
 - `history_push_failure_recovery.py` and the recording service's
   verification lattice retire; recording shrinks to diffing and one push.
+- `CanvasHistoryService` owns `HistoryStackSnapshot`; no domain or
+  per-feature stack-authority snapshot remains.
+- `chemvas.ui.transactions.document.DocumentSavepoint` owns whole-document
+  savepoints and composes the lower-level scene runtime toolkit formerly
+  exported from `history_commands`.
 - Cross-module imports of underscore-prefixed snapshot helpers end; the
   boundary tests that froze the removed wiring retire with it.
 - A genuine restore failure now surfaces one error with the conservative

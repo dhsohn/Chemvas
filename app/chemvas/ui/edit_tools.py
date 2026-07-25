@@ -127,7 +127,7 @@ class DeleteTool(Tool):
                     "Delete tool rollback also encountered "
                     f"{type(rollback_error).__name__}: {rollback_error}"
                 )
-            except BaseException:
+            except Exception:
                 # A third-party control-flow exception can expose a broken
                 # diagnostic hook. Reporting must not replace the primary.
                 continue
@@ -146,7 +146,7 @@ class DeleteTool(Tool):
                     rollback_completed = bool(
                         getattr(rollback_result, "completed", True)
                     )
-                except BaseException as rollback_error:
+                except Exception as rollback_error:
                     rollback_errors = [rollback_error]
         finally:
             if rollback_completed:
@@ -168,7 +168,7 @@ class DeleteTool(Tool):
         try:
             if session is not None:
                 self.context.commit_delete_tool_session(session, command)
-        except BaseException as original_error:
+        except Exception as original_error:
             self._rollback_active_session(original_error)
             raise
         self._clear_session_state()
@@ -176,7 +176,7 @@ class DeleteTool(Tool):
     def _erase_or_rollback(self, event) -> None:
         try:
             self._erase_at_event(event)
-        except BaseException as original_error:
+        except Exception as original_error:
             self._rollback_active_session(original_error)
             raise
 
@@ -193,7 +193,7 @@ class DeleteTool(Tool):
             self._before_smiles_input = last_smiles_input_for(self.canvas)
             self._erasing = True
             self._erase_or_rollback(event)
-        except BaseException as original_error:
+        except Exception as original_error:
             if self._erasing or self._delete_session is not None:
                 self._rollback_active_session(original_error)
             raise
@@ -225,7 +225,7 @@ class DeleteTool(Tool):
                 self._rollback_active_session()
                 return True
             self._finish_active_session(command)
-        except BaseException as original_error:
+        except Exception as original_error:
             self._rollback_active_session(original_error)
             raise
         return True

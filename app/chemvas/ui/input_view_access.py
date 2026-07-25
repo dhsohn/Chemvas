@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 import time
 from dataclasses import dataclass, field
 from typing import cast
@@ -33,15 +32,7 @@ def input_view_state_for(canvas) -> InputViewState:
 
 
 def _capture_optional_attribute(target: object, name: str) -> object:
-    try:
-        return getattr(target, name)
-    except AttributeError:
-        if (
-            inspect.getattr_static(target, name, _MISSING_CAPTURE_ATTRIBUTE)
-            is not _MISSING_CAPTURE_ATTRIBUTE
-        ):
-            raise
-        return _MISSING_CAPTURE_ATTRIBUTE
+    return getattr(target, name, _MISSING_CAPTURE_ATTRIBUTE)
 
 
 def _add_scene_rect_recovery_note(
@@ -53,7 +44,7 @@ def _add_scene_rect_recovery_note(
             "Scene/view rect rollback also failed: "
             f"{type(rollback_error).__name__}: {rollback_error}"
         )
-    except BaseException:
+    except Exception:
         return
 
 
@@ -100,12 +91,12 @@ class CanvasSceneRectStateSnapshot:
         )
 
     @staticmethod
-    def _restore_with_retry(snapshot) -> tuple[BaseException, ...]:
+    def _restore_once(snapshot) -> tuple[BaseException, ...]:
         recovery_errors = getattr(snapshot, "recovery_errors", None)
         prior_count = len(recovery_errors) if isinstance(recovery_errors, list) else 0
         try:
             snapshot.restore()
-        except BaseException as error:
+        except Exception as error:
             return (error,)
         if isinstance(recovery_errors, list):
             return tuple(recovery_errors[prior_count:])
@@ -120,7 +111,7 @@ class CanvasSceneRectStateSnapshot:
         for snapshot in (self.scene_state, self.view_state):
             if snapshot is None:
                 continue
-            attempt_errors = self._restore_with_retry(snapshot)
+            attempt_errors = self._restore_once(snapshot)
             if snapshot.active:
                 errors.extend(attempt_errors)
             else:
@@ -222,10 +213,10 @@ def set_scene_rect_for(canvas, rect) -> None:
             # still authoritative; live views take the verified branch above.
             snapshot.view_set_scene_rect_setter(rect)
         snapshot.release()
-    except BaseException as original_error:
+    except Exception as original_error:
         try:
             snapshot.restore()
-        except BaseException as rollback_error:
+        except Exception as rollback_error:
             _add_scene_rect_recovery_note(original_error, rollback_error)
         else:
             for recovered_error in snapshot.recovery_errors:

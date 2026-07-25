@@ -14,7 +14,7 @@ from chemvas.core.history import (
     SetRingPolygonsCommand,
     UpdateBondLengthCommand,
 )
-from chemvas.domain.transactions import restore_snapshot_with_retry
+from chemvas.domain.transactions import restore_snapshot
 from chemvas.ui.atom_coords_access import atom_coords_3d_for, current_atom_coords_3d_for
 from chemvas.ui.bond_length_graphics_refresh import refresh_bond_length_graphics_for
 from chemvas.ui.canvas_atom_graphics_state import atom_items_for
@@ -72,7 +72,7 @@ def _add_bond_length_rollback_note(
             "Bond-length rollback also encountered an error"
             f"{detail}: {type(rollback_error).__name__}: {rollback_error}"
         )
-    except BaseException:
+    except Exception:
         return
 
 
@@ -335,7 +335,7 @@ class CanvasGeometryController:
                 )
             self.history.push(CompositeCommand(commands))
             release_history_transaction_for_history(self.canvas, transaction)
-        except BaseException as exc:
+        except Exception as exc:
             self._restore_failed_bond_length_change(
                 old_length=old_length,
                 renderer=renderer,
@@ -375,7 +375,7 @@ class CanvasGeometryController:
         ) -> None:
             try:
                 operation()
-            except BaseException as rollback_error:
+            except Exception as rollback_error:
                 _add_bond_length_rollback_note(
                     original_error,
                     rollback_error,
@@ -461,7 +461,7 @@ class CanvasGeometryController:
         # coordinates and original renderer style; a persistent failure in the
         # higher-level refresh callback cannot re-corrupt the raw state after
         # this final absolute restore pass.
-        restore_result = restore_snapshot_with_retry(
+        restore_result = restore_snapshot(
             lambda: restore_history_transaction_for_history(
                 self.canvas,
                 transaction,

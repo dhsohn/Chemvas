@@ -54,7 +54,7 @@ def _add_recorded_build_rollback_note(
         if not callable(add_note):
             return
         add_note(f"Recorded build rollback also failed: {rollback_error!r}")
-    except BaseException:
+    except Exception:
         return
 
 
@@ -179,10 +179,10 @@ class StructureBuildService:
             self.committer.record_additions(
                 snapshot, added_scene_items=added_scene_items
             )
-        except BaseException as error:
+        except Exception as error:
             try:
                 self.committer.abort_recorded_change(snapshot, original_error=error)
-            except BaseException as rollback_error:
+            except Exception as rollback_error:
                 _add_recorded_build_rollback_note(error, rollback_error)
             raise
         return added_scene_items
@@ -215,10 +215,10 @@ class StructureBuildService:
                 self.committer.abort_recorded_change(snapshot)
                 return False
             self.committer.record_additions(snapshot)
-        except BaseException as error:
+        except Exception as error:
             try:
                 self.committer.abort_recorded_change(snapshot, original_error=error)
-            except BaseException as rollback_error:
+            except Exception as rollback_error:
                 _add_recorded_build_rollback_note(error, rollback_error)
             raise
         return True

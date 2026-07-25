@@ -1,10 +1,5 @@
 from __future__ import annotations
 
-import inspect
-from collections.abc import Callable
-from dataclasses import dataclass
-from typing import Any
-
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QPolygonF
 
@@ -32,240 +27,17 @@ from chemvas.ui.history_atom_position_restore import set_atom_positions_for_hist
 from chemvas.ui.move_access import move_atoms_for
 from chemvas.ui.renderer_style_access import set_bond_length_for
 from chemvas.ui.scene_item_access import restore_mark_from_state
-
-_MISSING_RENDERER_STYLE = object()
-_MISSING_CAPTURE_ATTRIBUTE = object()
+from chemvas.ui.transactions.document import DocumentSavepoint
 
 
 def _add_move_rollback_note(
     original_error: BaseException,
     rollback_error: BaseException,
 ) -> None:
-    try:
-        add_note = getattr(original_error, "add_note", None)
-        if callable(add_note):
-            add_note(
-                "Move rollback also encountered "
-                f"{type(rollback_error).__name__}: {rollback_error}"
-            )
-    except BaseException:
-        return
-
-
-def _capture_optional_attribute(
-    target: object,
-    name: str,
-    *,
-    default: object,
-) -> object:
-    """Read an optional transaction root once without hiding property errors."""
-
-    try:
-        return getattr(target, name)
-    except AttributeError:
-        if (
-            inspect.getattr_static(
-                target,
-                name,
-                _MISSING_CAPTURE_ATTRIBUTE,
-            )
-            is not _MISSING_CAPTURE_ATTRIBUTE
-        ):
-            raise
-        return default
-
-
-@dataclass(frozen=True, slots=True)
-class _RendererStyleAccess:
-    value: object
-    getter: Callable[[], object]
-    setter: Callable[[object], None]
-
-
-def _class_attribute(target: object, name: str) -> object:
-    for owner in type(target).__mro__:
-        namespace = vars(owner)
-        if name in namespace:
-            return namespace[name]
-    return _MISSING_CAPTURE_ATTRIBUTE
-
-
-def _capture_renderer_style_access(
-    renderer: object | None,
-) -> _RendererStyleAccess | None:
-    if renderer is None:
-        return None
-
-    # Read the live value exactly once.  Static inspection distinguishes a
-    # genuinely optional attribute from AttributeError raised by a present
-    # descriptor without causing a second descriptor access.
-    style = _capture_optional_attribute(
-        renderer,
-        "style",
-        default=_MISSING_RENDERER_STYLE,
+    original_error.add_note(
+        "Move rollback also encountered "
+        f"{type(rollback_error).__name__}: {rollback_error}"
     )
-    if style is _MISSING_RENDERER_STYLE:
-        return None
-
-    static_style = inspect.getattr_static(
-        renderer,
-        "style",
-        _MISSING_CAPTURE_ATTRIBUTE,
-    )
-    class_style = _class_attribute(renderer, "style")
-    descriptor_getter = (
-        inspect.getattr_static(
-            type(class_style),
-            "__get__",
-            _MISSING_CAPTURE_ATTRIBUTE,
-        )
-        if class_style is not _MISSING_CAPTURE_ATTRIBUTE
-        else _MISSING_CAPTURE_ATTRIBUTE
-    )
-    descriptor_setter = (
-        inspect.getattr_static(
-            type(class_style),
-            "__set__",
-            _MISSING_CAPTURE_ATTRIBUTE,
-        )
-        if class_style is not _MISSING_CAPTURE_ATTRIBUTE
-        else _MISSING_CAPTURE_ATTRIBUTE
-    )
-    if (
-        static_style is class_style
-        and callable(descriptor_getter)
-        and callable(descriptor_setter)
-    ):
-        # Preserve the exact descriptor ports that produced the savepoint.
-        # A later class-level monkeypatch must not silently redirect rollback.
-        def get_descriptor_style(
-            _getter=descriptor_getter,
-            _descriptor=class_style,
-            _renderer=renderer,
-        ) -> object:
-            return _getter(_descriptor, _renderer, type(_renderer))
-
-        def set_descriptor_style(
-            value: object,
-            _setter=descriptor_setter,
-            _descriptor=class_style,
-            _renderer=renderer,
-        ) -> None:
-            _setter(_descriptor, _renderer, value)
-
-        return _RendererStyleAccess(
-            value=style,
-            getter=get_descriptor_style,
-            setter=set_descriptor_style,
-        )
-
-    # Plain instance attributes (the production Renderer case) use the
-    # captured attribute operators. Dynamic __getattr__ implementations still
-    # retain normal getattr semantics for verification.
-    getattribute = inspect.getattr_static(
-        type(renderer),
-        "__getattribute__",
-        _MISSING_CAPTURE_ATTRIBUTE,
-    )
-    setattribute = inspect.getattr_static(
-        type(renderer),
-        "__setattr__",
-        _MISSING_CAPTURE_ATTRIBUTE,
-    )
-
-    def get_plain_style(
-        _renderer: Any = renderer,
-        _getattribute=getattribute,
-    ) -> object:
-        if callable(_getattribute):
-            try:
-                return _getattribute(_renderer, "style")
-            except AttributeError:
-                # Preserve __getattr__ behavior for dynamically exposed ports.
-                return _renderer.style
-        return _renderer.style
-
-    def set_plain_style(
-        value: object,
-        _renderer: Any = renderer,
-        _setattribute=setattribute,
-    ) -> None:
-        if callable(_setattribute):
-            _setattribute(_renderer, "style", value)
-            return
-        _renderer.style = value
-
-    return _RendererStyleAccess(
-        value=style,
-        getter=get_plain_style,
-        setter=set_plain_style,
-    )
-
-
-@dataclass(slots=True)
-class _HistoryCanvasTransactionSnapshot:
-    canvas_snapshot: Any
-    renderer_style: _RendererStyleAccess | None
-
-    def _restore_renderer_style_once(self) -> tuple[BaseException, ...]:
-        if self.renderer_style is None:
-            return ()
-        try:
-            self.renderer_style.setter(self.renderer_style.value)
-        except BaseException as error:
-            return (error,)
-        return ()
-
-    def _verify_renderer_style(self) -> tuple[BaseException, ...]:
-        if self.renderer_style is None:
-            return ()
-        try:
-            restored_style = self.renderer_style.getter()
-            if restored_style is not self.renderer_style.value:
-                raise RuntimeError(
-                    "renderer style setter did not restore the captured object"
-                )
-        except BaseException as error:
-            return (error,)
-        return ()
-
-    def verify_exact(self) -> tuple[BaseException, ...]:
-        canvas_errors: tuple[BaseException, ...] = ()
-        verify = getattr(self.canvas_snapshot, "_verify_exact_authorities", None)
-        if callable(verify):
-            try:
-                canvas_errors = tuple(verify())
-            except BaseException as error:
-                canvas_errors = (error,)
-        return (*canvas_errors, *self._verify_renderer_style())
-
-    def restore_with_result(self) -> RestoreOutcome:
-        try:
-            result = self.canvas_snapshot.restore_with_result()
-        except BaseException as error:
-            return RestoreOutcome(
-                authoritative=False,
-                fallback_to_inverse=False,
-                errors=(error,),
-            )
-        # Renderer style is independent of the canvas snapshot and is the
-        # final writer after it.
-        style_errors = self._restore_renderer_style_once()
-        if not style_errors:
-            style_errors = self._verify_renderer_style()
-        return RestoreOutcome(
-            authoritative=result.authoritative and not style_errors,
-            fallback_to_inverse=False,
-            errors=tuple((*result.errors, *style_errors)),
-        )
-
-    def restore(self) -> list[BaseException]:
-        return list(self.restore_with_result().errors)
-
-    def release(self) -> None:
-        release = getattr(self.canvas_snapshot, "release", None)
-        if callable(release):
-            release()
 
 
 def capture_history_transaction_for_history(
@@ -273,63 +45,41 @@ def capture_history_transaction_for_history(
     *,
     history_service=None,
     guard_scene_rect: bool = True,
-):
-    # Lazy import keeps the core history port free of an eager dependency on
-    # the scene/history command graph (and therefore avoids an import cycle).
-    from chemvas.ui.canvas_delete_transaction import CanvasDeleteTransactionSnapshot
-
-    renderer = _capture_optional_attribute(
-        canvas,
-        "renderer",
-        default=None,
-    )
-    renderer_style = _capture_renderer_style_access(renderer)
-    canvas_snapshot = CanvasDeleteTransactionSnapshot.capture(
+) -> DocumentSavepoint:
+    return DocumentSavepoint.capture(
         canvas,
         history_service=history_service,
         guard_scene_rect=guard_scene_rect,
-    )
-    return _HistoryCanvasTransactionSnapshot(
-        canvas_snapshot=canvas_snapshot,
-        renderer_style=renderer_style,
     )
 
 
 def restore_history_transaction_for_history(
     canvas,
-    snapshot,
+    snapshot: DocumentSavepoint,
 ) -> RestoreOutcome:
     del canvas
-    try:
-        return snapshot.restore_with_result()
-    except BaseException as rollback_error:
-        return RestoreOutcome(
-            authoritative=False,
-            fallback_to_inverse=False,
-            errors=(rollback_error,),
-        )
+    return snapshot.restore()
 
 
-def release_history_transaction_for_history(canvas, snapshot) -> None:
+def release_history_transaction_for_history(
+    canvas,
+    snapshot: DocumentSavepoint,
+) -> None:
     del canvas
-    release = getattr(snapshot, "release", None)
-    if callable(release):
-        release()
+    snapshot.release()
 
 
-def verify_history_transaction_for_history(canvas, snapshot) -> None:
-    """Require every authority in a frozen runtime snapshot to remain exact."""
-
+def verify_history_transaction_for_history(
+    canvas,
+    snapshot: DocumentSavepoint,
+) -> None:
     del canvas
-    verify = getattr(snapshot, "verify_exact", None)
-    if not callable(verify):
-        raise RuntimeError("history transaction has no exact verification port")
-    errors = tuple(verify())
+    errors = tuple(snapshot.verify())
     if len(errors) == 1:
         raise errors[0]
     if errors:
         raise BaseExceptionGroup(
-            "history publication changed its frozen canvas after-state",
+            "document savepoint verification failed",
             list(errors),
         )
 
@@ -369,7 +119,7 @@ def move_atoms_for_history(
             update_selection=update_selection,
         )
         _release_history_transaction_for_command(canvas, transaction)
-    except BaseException as original_error:
+    except Exception as original_error:
         # The move controller mutates atoms one at a time before redrawing
         # dependent graphics. Restore absolute positions instead of applying
         # the inverse delta to every requested atom: some atoms may not have
@@ -381,7 +131,7 @@ def move_atoms_for_history(
                 update_selection=update_selection,
                 coords_3d=before_coords_3d or None,
             )
-        except BaseException as rollback_error:
+        except Exception as rollback_error:
             _add_move_rollback_note(original_error, rollback_error)
         # The canonical setter is itself a multi-atom operation and can stop
         # after restoring only an early atom. The exact transaction snapshot

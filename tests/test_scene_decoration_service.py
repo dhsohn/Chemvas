@@ -14,7 +14,6 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from chemvas.domain.transactions import HistoryStackSnapshot
     from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
     from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
     from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
@@ -148,153 +147,6 @@ class SceneDecorationServiceTest(unittest.TestCase):
 
         self.assertIsNone(service.add_mark(QPointF(0.0, 0.0), kind="unsupported"))
 
-    def test_history_stack_capture_static_live_descriptor_failure_aborts_and_retries(
-        self,
-    ) -> None:
-        class FailOnceState:
-            def __init__(self, source: str, history: list, redo_stack: list) -> None:
-                self.source = source
-                self._history = history
-                self._redo_stack = redo_stack
-                self.history_calls = 0
-                self.redo_calls = 0
-
-            @property
-            def history(self):
-                self.history_calls += 1
-                if self.source == "history" and self.history_calls == 1:
-                    raise AttributeError("live history descriptor failed internally")
-                return self._history
-
-            @history.setter
-            def history(self, value) -> None:
-                self._history = value
-
-            @property
-            def redo_stack(self):
-                self.redo_calls += 1
-                if self.source == "redo_stack" and self.redo_calls == 1:
-                    raise AttributeError("live redo descriptor failed internally")
-                return self._redo_stack
-
-            @redo_stack.setter
-            def redo_stack(self, value) -> None:
-                self._redo_stack = value
-
-        class HistoryService:
-            def __init__(self, source: str, state: object) -> None:
-                self.source = source
-                self._state = state
-                self.state_calls = 0
-                self.notify_change = mock.Mock()
-
-            @property
-            def state(self):
-                self.state_calls += 1
-                if self.source == "state" and self.state_calls == 1:
-                    raise AttributeError(
-                        "live history state descriptor failed internally"
-                    )
-                return self._state
-
-        for source in ("state", "history", "redo_stack"):
-            with self.subTest(source=source):
-                undo_marker = object()
-                redo_marker = object()
-                undo_stack = [undo_marker]
-                redo_stack = [redo_marker]
-                state = FailOnceState(source, undo_stack, redo_stack)
-                history = HistoryService(source, state)
-                with self.assertRaisesRegex(AttributeError, "descriptor failed"):
-                    HistoryStackSnapshot.capture(history)
-
-                self.assertEqual(undo_stack, [undo_marker])
-                self.assertEqual(redo_stack, [redo_marker])
-                snapshot = HistoryStackSnapshot.capture(history)
-                self.assertIsNotNone(snapshot)
-                assert snapshot is not None
-                undo_stack.append("transient")
-                redo_stack.clear()
-                primary = KeyboardInterrupt("history append interrupted")
-                snapshot.restore(primary, phase="descriptor retry")
-
-                self.assertIs(state.history, undo_stack)
-                self.assertIs(state.redo_stack, redo_stack)
-                self.assertEqual(undo_stack, [undo_marker])
-                self.assertEqual(redo_stack, [redo_marker])
-                history.notify_change.assert_called_once_with()
-
-    def test_scene_decoration_history_state_descriptor_failure_precedes_build_and_retries(
-        self,
-    ) -> None:
-        undo_stack: list[object] = []
-        redo_stack: list[object] = []
-        history_state = SimpleNamespace(history=undo_stack, redo_stack=redo_stack)
-
-        class FailOnceHistoryService:
-            state_calls = 0
-
-            def __init__(self) -> None:
-                self.push = mock.Mock(side_effect=undo_stack.append)
-
-            @property
-            def state(self):
-                self.state_calls += 1
-                if self.state_calls == 1:
-                    raise AttributeError(
-                        "live decoration history state failed internally"
-                    )
-                return history_state
-
-        history = FailOnceHistoryService()
-        mark_items: list[QGraphicsTextItem] = []
-        mark_registry = CanvasMarkRegistry()
-        mark = QGraphicsTextItem("+")
-        build_service = SimpleNamespace(
-            build_mark_item=mock.Mock(return_value=mark),
-            set_mark_center=mock.Mock(
-                side_effect=lambda item, center: item.setPos(center)
-            ),
-        )
-
-        def attach(item) -> None:
-            mark_items.append(item)
-            mark_registry.add_for_atom(7, item)
-
-        canvas = SimpleNamespace(
-            tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
-            scene_items_state=CanvasSceneItemsState(mark_items=mark_items),
-            mark_items=mark_items,
-            mark_registry=mark_registry,
-            attach_scene_item=mock.Mock(side_effect=attach),
-        )
-        canvas.services = canvas_runtime_services(
-            history_service=history,
-            scene_decoration_build_service=build_service,
-            scene_item_controller=_FakeSceneItemController(canvas),
-        )
-        service = _scene_decoration_service(canvas)
-
-        with self.assertRaisesRegex(
-            AttributeError,
-            "live decoration history state failed internally",
-        ):
-            service.add_mark(QPointF(1.0, 2.0), atom_id=7, record=True)
-
-        build_service.build_mark_item.assert_not_called()
-        canvas.attach_scene_item.assert_not_called()
-        history.push.assert_not_called()
-        self.assertEqual(mark_items, [])
-
-        created = service.add_mark(QPointF(3.0, 4.0), atom_id=7, record=True)
-
-        self.assertIs(created, mark)
-        build_service.build_mark_item.assert_called_once_with("plus")
-        canvas.attach_scene_item.assert_called_once_with(mark)
-        history.push.assert_called_once()
-        self.assertEqual(mark_items, [mark])
-        self.assertEqual(len(undo_stack), 1)
-
     def test_add_mark_removes_attached_item_if_centering_raises(self) -> None:
         scene = _FakeScene()
         text_mark = QGraphicsTextItem("-")
@@ -415,149 +267,6 @@ class SceneDecorationServiceTest(unittest.TestCase):
         history.push.assert_not_called()
         build_service.set_mark_center.assert_not_called()
 
-    def test_add_mark_keyboard_interrupt_restores_scene_registries_and_history_identity(
-        self,
-    ) -> None:
-        scene = QGraphicsScene()
-        sibling = QGraphicsTextItem("sibling")
-        sibling.setData(0, "mark")
-        sibling.setData(1, {"atom_id": 7})
-        scene.addItem(sibling)
-        mark_items = [sibling]
-        scene_items_state = CanvasSceneItemsState(mark_items=mark_items)
-        sibling_marks = [sibling]
-        mark_mapping = {7: sibling_marks}
-        mark_registry = CanvasMarkRegistry(mark_mapping)
-        new_mark = QGraphicsTextItem("+")
-
-        old_command = object()
-        old_redo = object()
-        undo_stack = [old_command]
-        redo_stack = [old_redo]
-        history_state = SimpleNamespace(history=undo_stack, redo_stack=redo_stack)
-
-        def append_then_interrupt(command) -> None:
-            history_state.history.append(command)
-            history_state.redo_stack.clear()
-            raise KeyboardInterrupt("history interrupted")
-
-        history = SimpleNamespace(
-            state=history_state,
-            push=append_then_interrupt,
-            notify_change=mock.Mock(),
-        )
-
-        def attach(item) -> None:
-            scene.addItem(item)
-            mark_items.append(item)
-            mark_registry.add_for_atom(7, item)
-
-        def remove(item) -> None:
-            if item in mark_items:
-                mark_items.remove(item)
-            marks = mark_registry.by_atom.get(7)
-            if marks is not None and item in marks:
-                marks.remove(item)
-            if item.scene() is scene:
-                scene.removeItem(item)
-
-        canvas = SimpleNamespace(
-            scene=lambda: scene,
-            scene_items_state=scene_items_state,
-            mark_registry=mark_registry,
-            tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
-            attach_scene_item=attach,
-            remove_scene_item=remove,
-        )
-        canvas.services = canvas_runtime_services(
-            history_service=history,
-            scene_decoration_build_service=SimpleNamespace(
-                build_mark_item=mock.Mock(return_value=new_mark),
-                set_mark_center=mock.Mock(
-                    side_effect=lambda item, pos: item.setPos(pos)
-                ),
-            ),
-            scene_item_controller=_FakeSceneItemController(canvas),
-        )
-
-        with self.assertRaisesRegex(KeyboardInterrupt, "history interrupted"):
-            _scene_decoration_service(canvas).add_mark(
-                QPointF(4.0, 5.0),
-                kind="plus",
-                atom_id=7,
-            )
-
-        self.assertIs(scene_items_state.mark_items, mark_items)
-        self.assertEqual(mark_items, [sibling])
-        self.assertIs(mark_registry.by_atom, mark_mapping)
-        self.assertIs(mark_mapping[7], sibling_marks)
-        self.assertEqual(sibling_marks, [sibling])
-        self.assertNotIn(new_mark, scene.items())
-        self.assertIs(history_state.history, undo_stack)
-        self.assertIs(history_state.redo_stack, redo_stack)
-        self.assertEqual(undo_stack, [old_command])
-        self.assertEqual(redo_stack, [old_redo])
-
-    def test_add_orbital_system_exit_after_attach_restores_scene_rect_and_registries(
-        self,
-    ) -> None:
-        scene = QGraphicsScene()
-        scene.addRect(QRectF(0.0, 0.0, 10.0, 10.0))
-        original_scene_rect = scene.sceneRect()
-        orbital_items = []
-        scene_items_state = CanvasSceneItemsState(orbital_items=orbital_items)
-        attached_groups = []
-
-        def build_orbital_items(center, _kind: str):
-            child = QGraphicsTextItem("orbital")
-            child.setPos(center)
-            return [child]
-
-        def attach_then_exit(group) -> None:
-            attached_groups.append(group)
-            scene.addItem(group)
-            orbital_items.append(group)
-            self.assertEqual(scene.sceneRect(), original_scene_rect)
-            raise SystemExit("orbital attach terminated")
-
-        def remove(group) -> None:
-            if group in orbital_items:
-                orbital_items.remove(group)
-            if group.scene() is scene:
-                scene.removeItem(group)
-
-        canvas = SimpleNamespace(
-            scene=lambda: scene,
-            scene_items_state=scene_items_state,
-            tool_settings_state=CanvasToolSettingsState(active_orbital_type="p"),
-            renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
-            attach_scene_item=mock.Mock(side_effect=attach_then_exit),
-            remove_scene_item=mock.Mock(side_effect=remove),
-        )
-        canvas.services = canvas_runtime_services(
-            history_service=SimpleNamespace(
-                state=SimpleNamespace(history=[], redo_stack=[]),
-                push=mock.Mock(),
-            ),
-            scene_decoration_build_service=SimpleNamespace(
-                build_orbital_items=build_orbital_items,
-            ),
-            scene_item_controller=_FakeSceneItemController(canvas),
-        )
-
-        with self.assertRaisesRegex(SystemExit, "orbital attach terminated"):
-            _scene_decoration_service(canvas).add_orbital(QPointF(10_000.0, 0.0))
-
-        self.assertIs(scene_items_state.orbital_items, orbital_items)
-        self.assertEqual(orbital_items, [])
-        self.assertEqual(len(attached_groups), 1)
-        self.assertNotIn(attached_groups[0], scene.items())
-        self.assertEqual(scene.sceneRect(), original_scene_rect)
-        future = scene.addRect(20_000.0, 0.0, 10.0, 10.0)
-        self.assertGreater(scene.sceneRect().right(), 20_000.0)
-        scene.removeItem(future)
-        canvas.services.history_service.push.assert_not_called()
-
     def test_bulk_unrecorded_marks_never_scan_existing_scene_items(self) -> None:
         scene = QGraphicsScene()
         scene_items_state = CanvasSceneItemsState()
@@ -593,16 +302,10 @@ class SceneDecorationServiceTest(unittest.TestCase):
             scene_item_controller=_FakeSceneItemController(canvas),
         )
 
-        with (
-            mock.patch(
-                "chemvas.ui.history_commands._scene_items_snapshot",
-                side_effect=AssertionError("bulk mark add scanned the whole scene"),
-            ) as scene_scan,
-            mock.patch(
-                "chemvas.ui.scene_decoration_service.HistoryAuthoritySnapshot.capture",
-                side_effect=AssertionError("unrecorded mark copied history"),
-            ) as history_scan,
-        ):
+        with mock.patch(
+            "chemvas.ui.transactions.scene_runtime._scene_items_snapshot",
+            side_effect=AssertionError("bulk mark add scanned the whole scene"),
+        ) as scene_scan:
             service = _scene_decoration_service(canvas)
             for atom_id in range(200):
                 service.add_mark(
@@ -613,7 +316,6 @@ class SceneDecorationServiceTest(unittest.TestCase):
                 )
 
         scene_scan.assert_not_called()
-        history_scan.assert_not_called()
         self.assertEqual(len(scene_items_state.mark_items), 200)
         self.assertEqual(len(mark_registry.by_atom), 200)
 

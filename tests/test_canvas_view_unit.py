@@ -26,6 +26,7 @@ if QApplication is not None:
         uses_compact_label_hit_shape_for,
     )
     from chemvas.ui.canvas_atom_graphics_state import set_atom_items_for
+    from chemvas.ui.canvas_history_service import CanvasHistoryService
     from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_for
     from chemvas.ui.canvas_hit_testing_service import CanvasHitTestingService
     from chemvas.ui.canvas_insert_state import CanvasInsertState, insert_state_for
@@ -92,7 +93,8 @@ class _FakeNoteCanvas:
         self.removed_items = []
         set_selected_notes_for(self, [])
         self.updated_boxes = []
-        self.history_service = SimpleNamespace(push=self.push_command)
+        self.history_service = CanvasHistoryService(self, CanvasHistoryState())
+        self.history_service.push = self.push_command
         self.services = canvas_runtime_services(
             history_service=self.history_service,
             scene_item_controller=SimpleNamespace(

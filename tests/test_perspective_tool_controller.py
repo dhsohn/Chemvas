@@ -439,41 +439,6 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
         self.assertIsNone(tool._last_pos)
         self.assertIsNone(tool._axis_lock)
 
-    def test_failed_move_retries_delta_and_axis_lock_before_publishing_locals(
-        self,
-    ) -> None:
-        canvas = _PerspectiveCanvas()
-        controller = canvas.services.interaction.selection_rotation_controller
-        controller.update_selection_3d_rotation = mock.Mock(
-            side_effect=[KeyboardInterrupt("injected preview failure"), None]
-        )
-        tool = PerspectiveTool(canvas, context=_tool_context_for(canvas))
-        previous_position = QPointF(2.0, 3.0)
-        current_position = QPointF(8.0, 4.0)
-        tool._rotating = True
-        tool._last_pos = previous_position
-
-        move_event = _Event(
-            current_position,
-            modifiers=Qt.KeyboardModifier.ShiftModifier,
-        )
-        with self.assertRaisesRegex(KeyboardInterrupt, "preview failure"):
-            tool.on_mouse_move(move_event)
-
-        self.assertEqual(tool._last_pos, previous_position)
-        self.assertIsNone(tool._axis_lock)
-        self.assertTrue(tool._rotating)
-
-        self.assertTrue(tool.on_mouse_move(move_event))
-
-        self.assertEqual(
-            controller.update_selection_3d_rotation.call_args_list,
-            [mock.call(6.0, 0.0), mock.call(6.0, 0.0)],
-        )
-        self.assertEqual(tool._last_pos, current_position)
-        self.assertEqual(tool._axis_lock, "x")
-        self.assertTrue(tool._rotating)
-
     def test_move_without_left_button_does_not_continue_stranded_rotation(self) -> None:
         canvas = _PerspectiveCanvas()
         controller = canvas.services.interaction.selection_rotation_controller

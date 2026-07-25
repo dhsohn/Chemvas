@@ -8,8 +8,8 @@ from importlib import import_module
 from typing import Any, Protocol, cast
 
 from chemvas.domain.transactions import (
-    HistoryTransactionRestoreResult,
-    validate_history_transaction_restore_result,
+    RestoreOutcome,
+    validate_restore_outcome,
 )
 
 
@@ -120,7 +120,7 @@ class HistoryCanvasPort(Protocol):
         self,
         canvas: Any,
         snapshot: Any,
-    ) -> HistoryTransactionRestoreResult | None: ...
+    ) -> RestoreOutcome | None: ...
 
     def release_history_transaction_for_history(
         self,
@@ -145,30 +145,16 @@ _ACTIVE_HISTORY_TRANSACTION_CANVASES: ContextVar[frozenset[int]] = ContextVar(
 )
 
 
-@dataclass(slots=True)
-class _HistoryOperationState:
-    token: object
-    restored_error: BaseException | None = None
-    restore_authoritative: bool = False
-    nonexact_compensation_failed: bool = False
-
-
-_ACTIVE_HISTORY_OPERATION_STATE: ContextVar[_HistoryOperationState | None] = ContextVar(
-    "active_history_operation_state",
-    default=None,
-)
-
-
 @contextmanager
-def history_operation_scope() -> Iterator[object]:
-    """Give one history-service operation a unique restore-result channel."""
+def history_transaction_scope(canvas) -> Iterator[None]:
+    """Make nested commands defer to one already-captured document savepoint."""
 
-    operation_state = _HistoryOperationState(token=object())
-    reset_token = _ACTIVE_HISTORY_OPERATION_STATE.set(operation_state)
+    active = _ACTIVE_HISTORY_TRANSACTION_CANVASES.get()
+    reset_token = _ACTIVE_HISTORY_TRANSACTION_CANVASES.set(active | {id(canvas)})
     try:
-        yield operation_state.token
+        yield
     finally:
-        _ACTIVE_HISTORY_OPERATION_STATE.reset(reset_token)
+        _ACTIVE_HISTORY_TRANSACTION_CANVASES.reset(reset_token)
 
 
 def _capture_history_transaction(canvas) -> object:
@@ -215,34 +201,34 @@ def _restore_history_transaction(
     canvas,
     snapshot: object,
     original_error: BaseException,
-) -> HistoryTransactionRestoreResult:
+) -> RestoreOutcome:
     if snapshot is _NO_HISTORY_TRANSACTION:
-        return HistoryTransactionRestoreResult(
+        return RestoreOutcome(
             authoritative=False,
             fallback_to_inverse=True,
         )
     if snapshot is _DEFER_TO_OUTER_HISTORY_TRANSACTION:
         # The owning CompositeCommand restores its single absolute snapshot.
-        return HistoryTransactionRestoreResult(authoritative=True)
+        return RestoreOutcome(authoritative=True)
     restore = getattr(
         _history_canvas_port(),
         "restore_history_transaction_for_history",
         None,
     )
     if not callable(restore):
-        return HistoryTransactionRestoreResult(
+        return RestoreOutcome(
             authoritative=False,
             fallback_to_inverse=True,
         )
     try:
-        result = validate_history_transaction_restore_result(restore(canvas, snapshot))
-    except BaseException as caught_restore_error:
+        result = validate_restore_outcome(restore(canvas, snapshot))
+    except Exception as caught_restore_error:
         # An unstructured exception does not prove that the absolute restore
         # failed before touching state.  It may have restored only part of the
         # snapshot, in which case a relative inverse can corrupt that mixed
         # state further.  Ports that can prove no mutation occurred must opt
         # into the inverse fallback explicitly through a structured result.
-        result = HistoryTransactionRestoreResult(
+        result = RestoreOutcome(
             authoritative=False,
             fallback_to_inverse=False,
             errors=(caught_restore_error,),
@@ -250,14 +236,6 @@ def _restore_history_transaction(
     for rollback_error in result.errors:
         _add_history_rollback_note(original_error, rollback_error)
 
-    if _owns_history_transaction(snapshot):
-        operation_state = _ACTIVE_HISTORY_OPERATION_STATE.get()
-        if operation_state is not None:
-            operation_state.restored_error = original_error
-            operation_state.restore_authoritative = (
-                result.authoritative
-                and not operation_state.nonexact_compensation_failed
-            )
     return result
 
 
@@ -265,7 +243,7 @@ def restore_history_transaction_for_command(
     canvas,
     snapshot: object,
     original_error: BaseException,
-) -> HistoryTransactionRestoreResult:
+) -> RestoreOutcome:
     """Restore a command-local transaction or defer to its outer owner."""
 
     return _restore_history_transaction(canvas, snapshot, original_error)
@@ -305,35 +283,6 @@ def _owns_history_transaction(snapshot: object) -> bool:
     )
 
 
-def consume_authoritative_history_failure_restore(
-    error: BaseException,
-    *,
-    operation_token: object,
-) -> bool:
-    """Consume whether the final owning exact restore succeeded for *error*.
-
-    Deferred child transactions deliberately never write this marker; only
-    the outer snapshot result can make a failed command safe to retry. Marker
-    removal prevents a reused exception instance from carrying authority into
-    a later, unrelated failure.
-    """
-
-    operation_state = _ACTIVE_HISTORY_OPERATION_STATE.get()
-    authoritative = bool(
-        operation_state is not None
-        and operation_state.token is operation_token
-        and operation_state.restored_error is error
-        and operation_state.restore_authoritative
-    )
-    if operation_state is not None and operation_state.token is operation_token:
-        # Consumption is one-shot even when an exception object is reused.
-        operation_state.restored_error = None
-        operation_state.restore_authoritative = False
-        operation_state.nonexact_compensation_failed = False
-
-    return authoritative
-
-
 def _add_history_rollback_note(
     original_error: BaseException,
     rollback_error: BaseException,
@@ -350,19 +299,10 @@ def _run_history_rollback_step(
 ) -> None:
     try:
         operation()
-    except BaseException as rollback_error:
+    except Exception as rollback_error:
         # Cancellation signals must remain the primary exception.  Continue
         # best-effort compensation and retain secondary failures as notes.
         _add_history_rollback_note(original_error, rollback_error)
-
-
-def _mark_nonexact_history_compensation_failed(
-    original_error: BaseException,
-) -> None:
-    del original_error
-    operation_state = _ACTIVE_HISTORY_OPERATION_STATE.get()
-    if operation_state is not None:
-        operation_state.nonexact_compensation_failed = True
 
 
 def _compensate_completed_nonexact_commands(
@@ -381,14 +321,13 @@ def _compensate_completed_nonexact_commands(
 
     attempted: set[int] = set()
     for command in reversed(completed):
-        if _command_is_fully_covered_by_exact_history_transaction(command):
+        if command_is_fully_covered_by_history_transaction(command):
             continue
         attempted.add(id(command))
         try:
             getattr(command, operation_name)(canvas)
-        except BaseException as rollback_error:
+        except Exception as rollback_error:
             _add_history_rollback_note(original_error, rollback_error)
-            _mark_nonexact_history_compensation_failed(original_error)
     return attempted
 
 
@@ -420,15 +359,7 @@ class CompositeCommand(HistoryCommand):
                 completed.append(command)
                 failed_command = None
             _release_history_transaction(canvas, transaction)
-        except BaseException as exc:
-            if (
-                transaction is not _NO_HISTORY_TRANSACTION
-                and failed_command is not None
-                and not _command_is_fully_covered_by_exact_history_transaction(
-                    failed_command
-                )
-            ):
-                _mark_nonexact_history_compensation_failed(exc)
+        except Exception as exc:
             precompensated: set[int] = set()
             if transaction is not _NO_HISTORY_TRANSACTION:
                 precompensated = _compensate_completed_nonexact_commands(
@@ -490,15 +421,7 @@ class CompositeCommand(HistoryCommand):
                 completed.append(command)
                 failed_command = None
             _release_history_transaction(canvas, transaction)
-        except BaseException as exc:
-            if (
-                transaction is not _NO_HISTORY_TRANSACTION
-                and failed_command is not None
-                and not _command_is_fully_covered_by_exact_history_transaction(
-                    failed_command
-                )
-            ):
-                _mark_nonexact_history_compensation_failed(exc)
+        except Exception as exc:
             precompensated: set[int] = set()
             if transaction is not _NO_HISTORY_TRANSACTION:
                 precompensated = _compensate_completed_nonexact_commands(
@@ -656,7 +579,7 @@ class SetAtomPositionsCommand(HistoryCommand):
                 self.before_projection_anchor_2d,
             )
             _release_history_transaction(canvas, transaction)
-        except BaseException as exc:
+        except Exception as exc:
             if _restore_history_transaction(
                 canvas, transaction, exc
             ).fallback_to_inverse:
@@ -681,7 +604,7 @@ class SetAtomPositionsCommand(HistoryCommand):
                 self.after_projection_anchor_2d,
             )
             _release_history_transaction(canvas, transaction)
-        except BaseException as exc:
+        except Exception as exc:
             if _restore_history_transaction(
                 canvas, transaction, exc
             ).fallback_to_inverse:
@@ -732,7 +655,7 @@ class SetRingPolygonsCommand(HistoryCommand):
                 self.before_polygons,
             )
             _release_history_transaction(canvas, transaction)
-        except BaseException as exc:
+        except Exception as exc:
             if _restore_history_transaction(
                 canvas, transaction, exc
             ).fallback_to_inverse:
@@ -748,7 +671,7 @@ class SetRingPolygonsCommand(HistoryCommand):
                 self.after_polygons,
             )
             _release_history_transaction(canvas, transaction)
-        except BaseException as exc:
+        except Exception as exc:
             if _restore_history_transaction(
                 canvas, transaction, exc
             ).fallback_to_inverse:
@@ -782,7 +705,7 @@ class UpdateBondLengthCommand(HistoryCommand):
                 canvas, self.before_length
             )
             _release_history_transaction(canvas, transaction)
-        except BaseException as exc:
+        except Exception as exc:
             if _restore_history_transaction(
                 canvas, transaction, exc
             ).fallback_to_inverse:
@@ -796,7 +719,7 @@ class UpdateBondLengthCommand(HistoryCommand):
                 canvas, self.after_length
             )
             _release_history_transaction(canvas, transaction)
-        except BaseException as exc:
+        except Exception as exc:
             if _restore_history_transaction(
                 canvas, transaction, exc
             ).fallback_to_inverse:
@@ -900,7 +823,7 @@ class AddAtomsCommand(HistoryCommand):
             canvas.model.next_atom_id = self.before_next_atom_id
             _set_last_smiles_input(canvas, self.before_smiles_input)
             _release_history_transaction(canvas, transaction)
-        except BaseException as exc:
+        except Exception as exc:
             if _restore_history_transaction(
                 canvas, transaction, exc
             ).fallback_to_inverse:
@@ -924,7 +847,7 @@ class AddAtomsCommand(HistoryCommand):
             canvas.model.next_atom_id = self.after_next_atom_id
             _set_last_smiles_input(canvas, self.after_smiles_input)
             _release_history_transaction(canvas, transaction)
-        except BaseException as exc:
+        except Exception as exc:
             if _restore_history_transaction(
                 canvas, transaction, exc
             ).fallback_to_inverse:
@@ -1073,7 +996,7 @@ class DeleteAtomsCommand(HistoryCommand):
             canvas.model.next_atom_id = self.before_next_atom_id
             _set_last_smiles_input(canvas, self.before_smiles_input)
             _release_history_transaction(canvas, transaction)
-        except BaseException as exc:
+        except Exception as exc:
             if _restore_history_transaction(
                 canvas, transaction, exc
             ).fallback_to_inverse:
@@ -1098,7 +1021,7 @@ class DeleteAtomsCommand(HistoryCommand):
             canvas.model.next_atom_id = self.after_next_atom_id
             _set_last_smiles_input(canvas, self.after_smiles_input)
             _release_history_transaction(canvas, transaction)
-        except BaseException as exc:
+        except Exception as exc:
             if _restore_history_transaction(
                 canvas, transaction, exc
             ).fallback_to_inverse:
@@ -1135,7 +1058,7 @@ class UpdateAtomColorCommand(HistoryCommand):
                 self.atom_id,
                 self.before_color,
             )
-        except BaseException as exc:
+        except Exception as exc:
             self._compensate(canvas, self.atom_id, self.after_color, exc)
             raise
 
@@ -1146,7 +1069,7 @@ class UpdateAtomColorCommand(HistoryCommand):
                 self.atom_id,
                 self.after_color,
             )
-        except BaseException as exc:
+        except Exception as exc:
             self._compensate(canvas, self.atom_id, self.before_color, exc)
             raise
 
@@ -1210,7 +1133,7 @@ class AddBondCommand(HistoryCommand):
             )
             _set_last_smiles_input(canvas, self.before_smiles_input)
             _release_history_transaction(canvas, transaction)
-        except BaseException as exc:
+        except Exception as exc:
             if _restore_history_transaction(
                 canvas, transaction, exc
             ).fallback_to_inverse:
@@ -1227,7 +1150,7 @@ class AddBondCommand(HistoryCommand):
             )
             _set_last_smiles_input(canvas, self.after_smiles_input)
             _release_history_transaction(canvas, transaction)
-        except BaseException as exc:
+        except Exception as exc:
             if _restore_history_transaction(
                 canvas, transaction, exc
             ).fallback_to_inverse:
@@ -1287,7 +1210,7 @@ class DeleteBondCommand(HistoryCommand):
             )
             _set_last_smiles_input(canvas, self.before_smiles_input)
             _release_history_transaction(canvas, transaction)
-        except BaseException as exc:
+        except Exception as exc:
             if _restore_history_transaction(
                 canvas, transaction, exc
             ).fallback_to_inverse:
@@ -1300,7 +1223,7 @@ class DeleteBondCommand(HistoryCommand):
             _history_canvas_port().remove_bond_for_history(canvas, self.bond_id)
             _set_last_smiles_input(canvas, self.after_smiles_input)
             _release_history_transaction(canvas, transaction)
-        except BaseException as exc:
+        except Exception as exc:
             if _restore_history_transaction(
                 canvas, transaction, exc
             ).fallback_to_inverse:
@@ -1346,7 +1269,7 @@ class UpdateBondCommand(HistoryCommand):
             )
             _set_last_smiles_input(canvas, self.before_smiles_input)
             _release_history_transaction(canvas, transaction)
-        except BaseException as exc:
+        except Exception as exc:
             if _restore_history_transaction(
                 canvas, transaction, exc
             ).fallback_to_inverse:
@@ -1368,7 +1291,7 @@ class UpdateBondCommand(HistoryCommand):
             )
             _set_last_smiles_input(canvas, self.after_smiles_input)
             _release_history_transaction(canvas, transaction)
-        except BaseException as exc:
+        except Exception as exc:
             if _restore_history_transaction(
                 canvas, transaction, exc
             ).fallback_to_inverse:
@@ -1419,7 +1342,7 @@ def command_requires_exact_history_transaction(command: HistoryCommand) -> bool:
     return False
 
 
-def _command_is_fully_covered_by_exact_history_transaction(
+def command_is_fully_covered_by_history_transaction(
     command: HistoryCommand,
 ) -> bool:
     """Return whether the UI absolute snapshot fully owns command state.
@@ -1456,7 +1379,7 @@ def _command_is_fully_covered_by_exact_history_transaction(
         return True
     if isinstance(command, CompositeCommand):
         return bool(command.commands) and all(
-            _command_is_fully_covered_by_exact_history_transaction(child)
+            command_is_fully_covered_by_history_transaction(child)
             for child in command.commands
         )
     return False
@@ -1474,7 +1397,6 @@ __all__ = [
     "DeleteAtomsCommand",
     "DeleteBondCommand",
     "HistoryCommand",
-    "HistoryTransactionRestoreResult",
     "MoveAtomsCommand",
     "SetAtomPositionsCommand",
     "SetRingPolygonsCommand",
@@ -1483,10 +1405,9 @@ __all__ = [
     "UpdateBondCommand",
     "UpdateBondLengthCommand",
     "capture_history_transaction_for_command",
+    "command_is_fully_covered_by_history_transaction",
     "command_requires_exact_history_transaction",
-    "consume_authoritative_history_failure_restore",
-    "history_operation_scope",
+    "history_transaction_scope",
     "release_history_transaction_for_command",
     "restore_history_transaction_for_command",
-    "validate_history_transaction_restore_result",
 ]

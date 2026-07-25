@@ -3771,12 +3771,16 @@ def _strongly_connected_components(
 def test_history_transaction_dependency_cluster_stays_acyclic() -> None:
     graph = _static_app_import_graph()
     protected_modules = {
-        "chemvas.ui.canvas_delete_transaction",
+        "chemvas.domain.transactions.outcome",
+        "chemvas.domain.transactions.recovery",
+        "chemvas.ui.canvas_history_service",
+        "chemvas.ui.transactions.document",
+        "chemvas.ui.transactions.object_graph_snapshot",
+        "chemvas.ui.transactions.scene_rect",
+        "chemvas.ui.transactions.scene_runtime",
         "chemvas.ui.history_atom_position_restore",
         "chemvas.ui.history_canvas_access",
         "chemvas.ui.history_commands",
-        "chemvas.domain.transactions.history_authority",
-        "chemvas.domain.transactions.recovery",
     }
     assert protected_modules <= set(graph)
     cyclic_components = [
@@ -3799,13 +3803,85 @@ def test_eager_production_import_graph_stays_acyclic() -> None:
     assert cyclic_components == []
 
 
-def test_history_stack_snapshot_does_not_depend_on_history_commands() -> None:
+def test_document_savepoint_does_not_depend_on_history_policy_or_commands() -> None:
     graph = _static_app_import_graph()
 
     assert (
-        "chemvas.ui.history_commands"
-        not in graph["chemvas.domain.transactions.history_authority"]
+        not {
+            "chemvas.ui.canvas_history_service",
+            "chemvas.ui.history_commands",
+        }
+        & graph["chemvas.ui.transactions.document"]
     )
+
+
+def test_history_stack_snapshot_has_one_production_owner() -> None:
+    owners = [
+        path
+        for path in _app_python_files()
+        if re.search(r"^class HistoryStackSnapshot\b", path.read_text(), re.MULTILINE)
+    ]
+
+    assert owners == [APP_ROOT / "chemvas" / "ui" / "canvas_history_service.py"]
+
+
+def test_removed_history_recovery_lattice_stays_absent() -> None:
+    pattern = re.compile(
+        r"\b(?:HistoryAuthoritySnapshot|RecordingHistoryPolicySnapshot"
+        r"|CallbackFreeHistoryBaseline|restore_snapshot_with_retry"
+        r"|HistoryCommandSnapshot|restore_with_result"
+        r"|history_operation_scope"
+        r"|consume_authoritative_history_failure_restore)\b"
+    )
+
+    assert _matching_lines(pattern, _app_python_files()) == []
+
+
+def test_rollback_kernel_has_no_restore_retry_or_qt_base_port_bypass() -> None:
+    kernel_files = [
+        APP_ROOT / "chemvas" / "core" / "history.py",
+        APP_ROOT / "chemvas" / "domain" / "transactions" / "recovery.py",
+        APP_ROOT / "chemvas" / "ui" / "canvas_history_service.py",
+        APP_ROOT / "chemvas" / "ui" / "canvas_history_recording_service.py",
+        APP_ROOT / "chemvas" / "ui" / "canvas_color_mutation_service.py",
+        APP_ROOT / "chemvas" / "ui" / "canvas_document_session_service.py",
+        APP_ROOT / "chemvas" / "ui" / "canvas_scene_reset_service.py",
+        APP_ROOT / "chemvas" / "ui" / "history_canvas_access.py",
+        APP_ROOT / "chemvas" / "ui" / "history_commands.py",
+        APP_ROOT / "chemvas" / "ui" / "insert_smiles_service.py",
+        APP_ROOT / "chemvas" / "ui" / "sheet_setup_access.py",
+        *sorted((APP_ROOT / "chemvas" / "ui" / "transactions").glob("*.py")),
+    ]
+    retry_pattern = re.compile(
+        r"\b(?:restore_with_retry|restore_attempts?|rollback_retries"
+        r"|retrying(?:\s+\w+){0,4}\s+(?:restore|rollback))\b",
+        re.IGNORECASE,
+    )
+    base_port_pattern = re.compile(
+        r"\b(?:QObject|QAbstractGraphicsShapeItem"
+        r"|QGraphics(?:Item|TextItem|EllipseItem|PolygonItem|Scene|View))"
+        r"\.[A-Za-z_]\w*\("
+    )
+    adversarial_pattern = re.compile(
+        r"\b(?:inspect\.getattr_static|except\s+BaseException"
+        r"|(?:def\s+)?reassert\()"
+    )
+
+    assert _matching_lines(retry_pattern, kernel_files) == []
+    assert _matching_lines(base_port_pattern, kernel_files) == []
+    assert _matching_lines(adversarial_pattern, kernel_files) == []
+
+
+def test_history_commands_does_not_export_scene_snapshot_toolkit() -> None:
+    history_commands = APP_ROOT / "chemvas" / "ui" / "history_commands.py"
+    pattern = re.compile(
+        r"^(?:class|def) _?(?:SceneRuntimeSnapshot|capture_scene_runtime"
+        r"|restore_scene_runtime|restore_scene_runtime_identity"
+        r"|verify_scene_runtime_identity)\b",
+        re.MULTILINE,
+    )
+
+    assert _matching_lines(pattern, [history_commands]) == []
 
 
 def test_core_does_not_import_ui_statically() -> None:

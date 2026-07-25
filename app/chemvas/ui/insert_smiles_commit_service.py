@@ -46,7 +46,7 @@ def _add_insert_commit_rollback_note(
         if not callable(add_note):
             return
         add_note(message)
-    except BaseException:
+    except Exception:
         return
 
 
@@ -191,14 +191,14 @@ def apply_smiles_commit_plan(
         verify_history_transaction_for_history(canvas, published_transaction)
         release_history_transaction_for_history(canvas, published_transaction)
         release_history_transaction_for_history(canvas, exact_transaction)
-    except BaseException as error:
+    except Exception as error:
         if published_transaction is not None:
             try:
                 release_history_transaction_for_history(
                     canvas,
                     published_transaction,
                 )
-            except BaseException as cleanup_error:
+            except Exception as cleanup_error:
                 _add_insert_commit_rollback_note(
                     error,
                     f"Insert publication snapshot release also failed: {cleanup_error!r}",
@@ -206,14 +206,14 @@ def apply_smiles_commit_plan(
         for item in reversed(added_scene_items):
             try:
                 remove_scene_item(canvas, item)
-            except BaseException as cleanup_error:
+            except Exception as cleanup_error:
                 _add_insert_commit_rollback_note(
                     error,
                     f"Insert scene cleanup also failed: {cleanup_error!r}",
                 )
         try:
             rollback(original_error=error)
-        except BaseException as cleanup_error:
+        except Exception as cleanup_error:
             _add_insert_commit_rollback_note(
                 error,
                 f"Insert rollback also failed: {cleanup_error!r}",

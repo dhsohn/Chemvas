@@ -14,12 +14,6 @@ from chemvas.ui.canvas_scene_items_state import (
 )
 from chemvas.ui.handle_overlay_access import clear_handles_for
 from chemvas.ui.handle_state import handle_target_for
-from chemvas.ui.history_commands import (
-    _restore_scene_runtime_snapshot,
-    _run_rollback_step,
-    _scene_runtime_snapshot,
-    _SceneRuntimeSnapshot,
-)
 from chemvas.ui.mark_item_access import remove_mark_item_for
 from chemvas.ui.note_selection_box import update_note_selection_box_for
 from chemvas.ui.scene_item_access import (
@@ -32,6 +26,12 @@ from chemvas.ui.selection_service_access import refresh_selection_outline_for
 from chemvas.ui.transactions.scene_item_attach import (
     SceneItemAttachPorts,
     SceneItemAttachSnapshot,
+)
+from chemvas.ui.transactions.scene_runtime import (
+    SceneRuntimeSnapshot,
+    capture_scene_runtime,
+    restore_scene_runtime,
+    run_rollback_step,
 )
 
 
@@ -76,7 +76,7 @@ class SceneItemLifecycleService:
         original_error: BaseException,
     ) -> None:
         for bond_id in bond_ids:
-            _run_rollback_step(
+            run_rollback_step(
                 original_error,
                 f"refreshing bond {bond_id} after a failed ring attach",
                 partial(update_bond_geometry_for, self.canvas, bond_id),
@@ -96,7 +96,7 @@ class SceneItemLifecycleService:
             require_text_interaction=kind == "note",
         )
         ring_runtime = (
-            _scene_runtime_snapshot(
+            capture_scene_runtime(
                 self.canvas,
                 strict=True,
                 scene_override=scene,
@@ -128,7 +128,7 @@ class SceneItemLifecycleService:
             if kind == "ring":
                 self._refresh_bond_geometry_for_bond_ids(ring_bond_ids)
             snapshot.release()
-        except BaseException as original_error:
+        except Exception as original_error:
             self._rollback_failed_attach(
                 item,
                 kind,
@@ -169,14 +169,14 @@ class SceneItemLifecycleService:
         kind,
         *,
         snapshot: SceneItemAttachSnapshot,
-        ring_runtime: _SceneRuntimeSnapshot | None,
+        ring_runtime: SceneRuntimeSnapshot | None,
         ring_bond_ids: set[int],
         original_error: BaseException,
     ) -> None:
         attach_ports = snapshot.attach_ports
         if attach_ports is None:
             raise RuntimeError("scene-item attach snapshot has no bound ports")
-        _run_rollback_step(
+        run_rollback_step(
             original_error,
             "removing a partial scene-item registration",
             partial(
@@ -186,7 +186,7 @@ class SceneItemLifecycleService:
                 mark_atom_id=snapshot.mark_atom_id,
             ),
         )
-        _run_rollback_step(
+        run_rollback_step(
             original_error,
             "detaching a partially attached scene item",
             partial(attach_ports.remove_item, item),
@@ -202,11 +202,11 @@ class SceneItemLifecycleService:
             restore_scene_rect=ring_runtime is None,
         )
         if ring_runtime is not None:
-            _run_rollback_step(
+            run_rollback_step(
                 original_error,
                 "restoring exact ring-attach scene/runtime state",
                 partial(
-                    _restore_scene_runtime_snapshot,
+                    restore_scene_runtime,
                     ring_runtime,
                     original_error=original_error,
                 ),

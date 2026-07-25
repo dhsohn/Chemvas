@@ -10,15 +10,14 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
     from PyQt6.QtCore import QPointF, Qt
-    from PyQt6.QtGui import QPen, QPolygonF
-    from PyQt6.QtWidgets import QApplication, QGraphicsPolygonItem
+    from PyQt6.QtGui import QPolygonF
+    from PyQt6.QtWidgets import QApplication
 except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
     from chemvas.core.history import (
         CompositeCommand,
-        HistoryTransactionRestoreResult,
         SetAtomPositionsCommand,
         SetRingPolygonsCommand,
         UpdateBondLengthCommand,
@@ -56,7 +55,6 @@ if QApplication is not None:
     from chemvas.ui.canvas_move_controller import CanvasMoveController
     from chemvas.ui.canvas_rotation_state import CanvasRotationState
     from chemvas.ui.canvas_scene_items_state import (
-        ring_items_for,
         set_scene_item_collection_for,
     )
     from chemvas.ui.canvas_view import CanvasView
@@ -410,85 +408,6 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         )
         self.assertFalse(canvas.services.history_service.can_undo())
 
-    def test_set_bond_length_live_pen_port_failure_rolls_back_all_primitives(
-        self,
-    ) -> None:
-        for failure_port in ("pen", "setPen"):
-            with self.subTest(failure_port=failure_port):
-                canvas, _label_atom_id, _dot_atom_id, bond_id = (
-                    self._real_bond_length_canvas()
-                )
-                bond_item = bond_items_for_id(canvas, bond_id)[0]
-
-                class FailingPenItem:
-                    def __init__(self, initial_pen, *, failure_port: str) -> None:
-                        self._pen = QPen(initial_pen)
-                        self._pos = QPointF()
-                        self.failure_port = failure_port
-                        self.pen_port_reads = 0
-                        self.setter_port_reads = 0
-
-                    @property
-                    def pen(self):
-                        self.pen_port_reads += 1
-                        if self.failure_port == "pen" and self.pen_port_reads == 2:
-                            raise AttributeError("live pen descriptor failed")
-                        return self._get_pen
-
-                    def _get_pen(self):
-                        return QPen(self._pen)
-
-                    @property
-                    def setPen(self):
-                        self.setter_port_reads += 1
-                        if (
-                            self.failure_port == "setPen"
-                            and self.setter_port_reads == 2
-                        ):
-                            raise AttributeError("live setPen descriptor failed")
-                        return self._set_pen
-
-                    def _set_pen(self, pen) -> None:
-                        self._pen = QPen(pen)
-
-                    def pos(self):
-                        return QPointF(self._pos)
-
-                    def setPos(self, *args) -> None:
-                        self._pos = QPointF(*args)
-
-                failing_item = FailingPenItem(
-                    bond_item.pen(),
-                    failure_port=failure_port,
-                )
-                bond_items_for_id(canvas, bond_id).append(failing_item)
-                original_positions = {
-                    atom_id: (atom.x, atom.y)
-                    for atom_id, atom in canvas.model.atoms.items()
-                }
-                original_real_pen = QPen(bond_item.pen())
-                original_failing_pen = failing_item._get_pen()
-
-                with self.assertRaisesRegex(
-                    AttributeError,
-                    rf"live {failure_port} descriptor failed",
-                ):
-                    canvas.services.scene_view.geometry_controller.set_bond_length(30.0)
-
-                self.assertEqual(bond_length_px_for(canvas), 20.0)
-                self.assertEqual(
-                    {
-                        atom_id: (atom.x, atom.y)
-                        for atom_id, atom in canvas.model.atoms.items()
-                    },
-                    original_positions,
-                )
-                self.assertEqual(bond_item.pen(), original_real_pen)
-                self.assertEqual(failing_item._get_pen(), original_failing_pen)
-                self.assertGreaterEqual(failing_item.pen_port_reads, 2)
-                self.assertGreaterEqual(failing_item.setter_port_reads, 1)
-                self.assertFalse(canvas.services.history_service.can_undo())
-
     def test_set_bond_length_persistent_pre_update_failure_restores_raw_bond_geometry(
         self,
     ) -> None:
@@ -541,157 +460,6 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         )
         self.assertFalse(canvas.services.history_service.can_undo())
 
-    def test_set_bond_length_keeps_rollback_control_flow_failure_as_note(self) -> None:
-        canvas, _label_atom_id, _dot_atom_id, _bond_id = self._real_bond_length_canvas()
-        original_style = canvas.renderer.style
-        original_error = RuntimeError("initial bond-length refresh failed")
-        rollback_error = SystemExit("rollback refresh terminated")
-
-        with mock.patch(
-            "chemvas.ui.canvas_geometry_controller.refresh_bond_length_graphics_for",
-            side_effect=[original_error, rollback_error],
-        ):
-            with self.assertRaises(RuntimeError) as caught:
-                canvas.services.scene_view.geometry_controller.set_bond_length(30.0)
-
-        self.assertIs(caught.exception, original_error)
-        self.assertIs(canvas.renderer.style, original_style)
-        self.assertEqual(bond_length_px_for(canvas), 20.0)
-        self.assertTrue(
-            any(
-                "SystemExit: rollback refresh terminated" in note
-                for note in caught.exception.__notes__
-            )
-        )
-
-    def test_bond_length_exact_restore_retries_fail_once_and_persistent_results(
-        self,
-    ) -> None:
-        from chemvas.ui import canvas_geometry_controller as geometry_module
-
-        for behavior in ("fail_once", "persistent"):
-            with self.subTest(behavior=behavior):
-                canvas, _label_atom_id, _dot_atom_id, _bond_id = (
-                    self._real_bond_length_canvas()
-                )
-                original_positions = {
-                    atom_id: (atom.x, atom.y)
-                    for atom_id, atom in canvas.model.atoms.items()
-                }
-                original_style = canvas.renderer.style
-                primary = KeyboardInterrupt(
-                    f"{behavior} bond-length refresh interrupted"
-                )
-                first_error = SystemExit("first bond exact restore failed")
-                first = HistoryTransactionRestoreResult(
-                    authoritative=False,
-                    fallback_to_inverse=False,
-                    errors=(first_error,),
-                )
-                original_restore = (
-                    geometry_module.restore_history_transaction_for_history
-                )
-                calls = 0
-
-                def restore(
-                    *args,
-                    _first=first,
-                    _behavior=behavior,
-                    _original_restore=original_restore,
-                    **kwargs,
-                ):
-                    nonlocal calls
-                    calls += 1
-                    if calls == 1:
-                        return _first
-                    if _behavior == "fail_once":
-                        return _original_restore(*args, **kwargs)
-                    return HistoryTransactionRestoreResult(
-                        authoritative=False,
-                        fallback_to_inverse=False,
-                        errors=(RuntimeError("persistent bond exact restore failure"),),
-                    )
-
-                with (
-                    mock.patch.object(
-                        geometry_module,
-                        "refresh_bond_length_graphics_for",
-                        side_effect=(primary, None),
-                    ),
-                    mock.patch.object(
-                        geometry_module,
-                        "restore_history_transaction_for_history",
-                        side_effect=restore,
-                    ),
-                    self.assertRaises(KeyboardInterrupt) as raised,
-                ):
-                    canvas.services.scene_view.geometry_controller.set_bond_length(30.0)
-
-                self.assertIs(raised.exception, primary)
-                self.assertEqual(calls, 2)
-                self.assertIs(canvas.renderer.style, original_style)
-                self.assertEqual(bond_length_px_for(canvas), 20.0)
-                self.assertEqual(
-                    {
-                        atom_id: (atom.x, atom.y)
-                        for atom_id, atom in canvas.model.atoms.items()
-                    },
-                    original_positions,
-                )
-                self.assertTrue(
-                    any(
-                        "first bond exact restore failed" in note
-                        for note in getattr(primary, "__notes__", [])
-                    )
-                )
-                if behavior == "persistent":
-                    self.assertTrue(
-                        any(
-                            "persistent bond exact restore failure" in note
-                            for note in getattr(primary, "__notes__", [])
-                        )
-                    )
-
-    def test_set_bond_length_persistent_label_setter_failure_restores_raw_atom_graphics(
-        self,
-    ) -> None:
-        canvas, label_atom_id, _dot_atom_id, _bond_id = self._real_bond_length_canvas()
-        label_item = atom_items_for(canvas)[label_atom_id]
-        label_item.setSelected(True)
-        original_font = label_item.font()
-        original_bounds = label_item.boundingRect()
-        original_shape_bounds = label_item.shape().boundingRect()
-        original_position = label_item.pos()
-        original_style = canvas.renderer.style
-        original_set_font = AtomLabelItem.setFont
-        calls = 0
-
-        def mutate_once_then_fail_persistently(item, font) -> None:
-            nonlocal calls
-            calls += 1
-            if calls == 1:
-                original_set_font(item, font)
-            raise RuntimeError("persistent atom font callback failure")
-
-        with mock.patch.object(
-            AtomLabelItem,
-            "setFont",
-            new=mutate_once_then_fail_persistently,
-        ):
-            with self.assertRaisesRegex(RuntimeError, "persistent atom font"):
-                canvas.services.scene_view.geometry_controller.set_bond_length(30.0)
-
-        self.assertGreaterEqual(calls, 2)
-        self.assertIs(canvas.renderer.style, original_style)
-        self.assertEqual(bond_length_px_for(canvas), 20.0)
-        self.assertIs(atom_items_for(canvas)[label_atom_id], label_item)
-        self.assertEqual(label_item.font(), original_font)
-        self.assertEqual(label_item.boundingRect(), original_bounds)
-        self.assertEqual(label_item.shape().boundingRect(), original_shape_bounds)
-        self.assertEqual(label_item.pos(), original_position)
-        self.assertTrue(label_item.isSelected())
-        self.assertFalse(canvas.services.history_service.can_undo())
-
     def test_update_bond_length_history_persistent_label_failure_restores_exact_state(
         self,
     ) -> None:
@@ -730,139 +498,6 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertEqual(label_item.shape().boundingRect(), original_shape_bounds)
         self.assertEqual(label_item.pos(), original_position)
         self.assertTrue(label_item.isSelected())
-
-    def test_real_bond_length_composite_failure_restores_atoms_ring_and_history_stacks(
-        self,
-    ) -> None:
-        class _PersistentFailRingItem(QGraphicsPolygonItem):
-            fail_set_polygon = False
-
-            def setPolygon(self, polygon) -> None:
-                QGraphicsPolygonItem.setPolygon(self, polygon)
-                if self.fail_set_polygon:
-                    raise RuntimeError("persistent ring polygon callback failure")
-
-        canvas, label_atom_id, dot_atom_id, bond_id = self._real_bond_length_canvas()
-        third_atom_id = add_atom_for(canvas, "C", 10.0, 10.0)
-        ring_atom_ids = [label_atom_id, dot_atom_id, third_atom_id]
-        ring_item = _PersistentFailRingItem(
-            QPolygonF(
-                [
-                    QPointF(0.0, 0.0),
-                    QPointF(20.0, 0.0),
-                    QPointF(10.0, 10.0),
-                ]
-            )
-        )
-        ring_item.setData(0, "ring")
-        ring_item.setData(2, ring_atom_ids)
-        canvas.scene().addItem(ring_item)
-        set_scene_item_collection_for(canvas, "ring_items", [ring_item])
-        set_atom_coords_3d_for(
-            canvas,
-            {
-                label_atom_id: (0.0, 0.0, 3.0),
-                dot_atom_id: (20.0, 0.0, 7.0),
-                third_atom_id: (10.0, 10.0, 5.0),
-            },
-        )
-
-        before_positions = {
-            atom_id: (atom.x, atom.y) for atom_id, atom in canvas.model.atoms.items()
-        }
-        before_coords = dict(atom_coords_3d_for(canvas))
-        before_polygon = [(point.x(), point.y()) for point in ring_item.polygon()]
-        canvas.services.scene_view.geometry_controller.set_bond_length(30.0)
-
-        history_service = canvas.services.history_service
-        state = history_service.state
-        command = state.history[-1]
-        stale_redo = UpdateSceneItemCommand(
-            item=ring_item,
-            before_state={"kind": "ring"},
-            after_state={"kind": "ring"},
-        )
-        state.redo_stack.append(stale_redo)
-        history_list = state.history
-        redo_list = state.redo_stack
-        atom_objects = dict(canvas.model.atoms)
-        bond_object = canvas.model.bonds[bond_id]
-        ring_list = ring_items_for(canvas)
-        coords_mapping = atom_coords_3d_for(canvas)
-        after_style = canvas.renderer.style
-        after_positions = {
-            atom_id: (atom.x, atom.y) for atom_id, atom in canvas.model.atoms.items()
-        }
-        after_coords = dict(coords_mapping)
-        after_polygon = [(point.x(), point.y()) for point in ring_item.polygon()]
-
-        original_set_font = AtomLabelItem.setFont
-
-        def mutate_font_then_fail(item, font) -> None:
-            original_set_font(item, font)
-            raise RuntimeError("persistent composite atom font failure")
-
-        with mock.patch.object(
-            AtomLabelItem,
-            "setFont",
-            new=mutate_font_then_fail,
-        ):
-            with self.assertRaisesRegex(RuntimeError, "persistent composite atom font"):
-                history_service.undo()
-
-        self.assertIs(state.history, history_list)
-        self.assertIs(state.redo_stack, redo_list)
-        self.assertEqual(state.history, [command])
-        self.assertIs(state.history[0], command)
-        self.assertEqual(state.redo_stack, [stale_redo])
-        self.assertIs(canvas.renderer.style, after_style)
-        self.assertEqual(
-            {atom_id: (atom.x, atom.y) for atom_id, atom in canvas.model.atoms.items()},
-            after_positions,
-        )
-        self.assertEqual(dict(coords_mapping), after_coords)
-        self.assertEqual(
-            [(point.x(), point.y()) for point in ring_item.polygon()],
-            after_polygon,
-        )
-        self.assertIs(ring_items_for(canvas), ring_list)
-        self.assertEqual(ring_items_for(canvas), [ring_item])
-        for atom_id, atom in atom_objects.items():
-            self.assertIs(canvas.model.atoms[atom_id], atom)
-        self.assertIs(canvas.model.bonds[bond_id], bond_object)
-
-        history_service.undo()
-        self.assertEqual(
-            {atom_id: (atom.x, atom.y) for atom_id, atom in canvas.model.atoms.items()},
-            before_positions,
-        )
-        self.assertEqual(dict(coords_mapping), before_coords)
-        self.assertEqual(
-            [(point.x(), point.y()) for point in ring_item.polygon()],
-            before_polygon,
-        )
-
-        ring_item.fail_set_polygon = True
-        try:
-            with self.assertRaisesRegex(RuntimeError, "persistent ring polygon"):
-                history_service.redo()
-        finally:
-            ring_item.fail_set_polygon = False
-
-        self.assertIs(state.history, history_list)
-        self.assertIs(state.redo_stack, redo_list)
-        self.assertEqual(state.history, [])
-        self.assertEqual(state.redo_stack, [stale_redo, command])
-        self.assertIs(state.redo_stack[-1], command)
-        self.assertEqual(
-            {atom_id: (atom.x, atom.y) for atom_id, atom in canvas.model.atoms.items()},
-            before_positions,
-        )
-        self.assertEqual(dict(coords_mapping), before_coords)
-        self.assertEqual(
-            [(point.x(), point.y()) for point in ring_item.polygon()],
-            before_polygon,
-        )
 
     def test_set_bond_length_append_then_raise_restores_history_identity_and_style(
         self,

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
@@ -17,10 +16,6 @@ from chemvas.core.history import (
 from chemvas.domain.document import model_bond_pairs, ring_atom_ids_form_cycle
 from chemvas.ui.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.canvas_callback_state import CanvasCallbackState, callback_state_for
-from chemvas.ui.canvas_delete_transaction import (
-    CanvasDeleteTransactionSnapshot,
-    canvas_delete_transaction,
-)
 from chemvas.ui.canvas_group_state import (
     CanvasSceneGroup,
     group_ids_for_members_for,
@@ -66,13 +61,16 @@ from chemvas.ui.scene_single_item_mutation_logic import (
 from chemvas.ui.selection_collection_access import selected_scene_items_for
 from chemvas.ui.selection_info_state import selection_info_state_for
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
+from chemvas.ui.transactions.document import (
+    DocumentSavepoint,
+    document_transaction,
+)
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView
 
 
 _DELETED_RING_ITEM = object()
-_MISSING_OBSERVER_PORT = object()
 
 
 class _RingDataItem(Protocol):
@@ -88,130 +86,32 @@ def _ring_atom_ids(item: _RingDataItem) -> object:
         raise
 
 
-def _class_attribute(target: object, name: str) -> object:
-    for owner in type(target).__mro__:
-        namespace = vars(owner)
-        if name in namespace:
-            return namespace[name]
-    return _MISSING_OBSERVER_PORT
-
-
 @dataclass(frozen=True, slots=True)
 class _ObserverPort:
+    target: object
     name: str
     value: Callable[[], None] | None
-    getter: Callable[[], object]
-    setter: Callable[[object], object]
 
     @classmethod
     def capture(cls, target: object, name: str) -> _ObserverPort:
-        static_value = inspect.getattr_static(
-            target,
-            name,
-            _MISSING_OBSERVER_PORT,
-        )
-        if static_value is _MISSING_OBSERVER_PORT:
-            raise AttributeError(f"delete observer state has no {name!r} port")
-        class_value = _class_attribute(target, name)
-        descriptor_getter = (
-            inspect.getattr_static(
-                type(class_value),
-                "__get__",
-                _MISSING_OBSERVER_PORT,
-            )
-            if class_value is not _MISSING_OBSERVER_PORT
-            else _MISSING_OBSERVER_PORT
-        )
-        descriptor_setter = (
-            inspect.getattr_static(
-                type(class_value),
-                "__set__",
-                _MISSING_OBSERVER_PORT,
-            )
-            if class_value is not _MISSING_OBSERVER_PORT
-            else _MISSING_OBSERVER_PORT
-        )
-        get_value: Callable[[], object]
-        set_value: Callable[[object], object]
-        if (
-            static_value is class_value
-            and callable(descriptor_getter)
-            and callable(descriptor_setter)
-        ):
-
-            def descriptor_get_value(
-                _getter=descriptor_getter,
-                _descriptor=class_value,
-                _target=target,
-            ) -> object:
-                return _getter(_descriptor, _target, type(_target))
-
-            def descriptor_set_value(
-                value: object,
-                _setter=descriptor_setter,
-                _descriptor=class_value,
-                _target=target,
-            ) -> object:
-                return _setter(_descriptor, _target, value)
-
-            get_value = descriptor_get_value
-            set_value = descriptor_set_value
-
-        else:
-            getattribute = inspect.getattr_static(
-                type(target),
-                "__getattribute__",
-            )
-            setattribute = inspect.getattr_static(
-                type(target),
-                "__setattr__",
-            )
-
-            def attribute_get_value(
-                _getattribute=getattribute,
-                _target=target,
-                _name=name,
-            ) -> object:
-                return _getattribute(_target, _name)
-
-            def attribute_set_value(
-                value: object,
-                _setattribute=setattribute,
-                _target=target,
-                _name=name,
-            ) -> object:
-                return _setattribute(_target, _name, value)
-
-            get_value = attribute_get_value
-            set_value = attribute_set_value
-
-        value = get_value()
+        value = getattr(target, name)
         if value is not None and not callable(value):
             raise TypeError(f"delete observer port {name!r} is not callable")
-        return cls(
-            name=name,
-            value=value,
-            getter=get_value,
-            setter=set_value,
-        )
+        return cls(target=target, name=name, value=value)
 
     def set_verified(
         self,
         value: Callable[[], None] | None,
     ) -> tuple[list[BaseException], bool]:
-        errors: list[BaseException] = []
-        for _attempt in range(2):
-            try:
-                self.setter(value)
-                if self.getter() is not value:
-                    raise RuntimeError(
-                        f"delete observer setter for {self.name} was a no-op"
-                    )
-            except BaseException as error:
-                errors.append(error)
-                continue
-            return errors, True
-        return errors, False
+        try:
+            setattr(self.target, self.name, value)
+            if getattr(self.target, self.name) is not value:
+                raise RuntimeError(
+                    f"delete observer setter for {self.name} was a no-op"
+                )
+        except Exception as error:
+            return [error], False
+        return [], True
 
 
 @dataclass(slots=True)
@@ -219,7 +119,7 @@ class SceneDeleteTransactionSession:
     """One explicit savepoint spanning a delete-tool pointer gesture."""
 
     controller: SceneDeleteController
-    snapshot: CanvasDeleteTransactionSnapshot
+    snapshot: DocumentSavepoint
     bond_endpoints: dict[int, tuple[int, int]]
     atom_bond_ids: dict[int, set[int]]
     live_atom_ids: set[int]
@@ -327,7 +227,7 @@ class SceneDeleteTransactionSession:
                     "Delete gesture observer synchronization also failed during "
                     f"{phase}: {type(observer_error).__name__}: {observer_error}"
                 )
-            except BaseException:
+            except Exception:
                 # Observer diagnostics cannot replace cancellation/termination.
                 continue
 
@@ -351,7 +251,7 @@ class SceneDeleteTransactionSession:
                         continue
                     try:
                         callback()
-                    except BaseException as observer_error:
+                    except Exception as observer_error:
                         errors.append((phase, observer_error))
         finally:
             restore_errors, _restored = self._try_restore_observer_ports()
@@ -359,17 +259,11 @@ class SceneDeleteTransactionSession:
         return errors
 
     def _restore_absolute_snapshot(self) -> tuple[bool, list[BaseException]]:
-        errors: list[BaseException] = []
-        for _attempt in range(2):
-            try:
-                result = self.snapshot.restore_with_result()
-            except BaseException as restore_error:
-                errors.append(restore_error)
-                continue
-            errors.extend(result.errors)
-            if result.authoritative:
-                return True, errors
-        return False, errors
+        try:
+            result = self.snapshot.restore()
+        except Exception as restore_error:
+            return False, [restore_error]
+        return result.authoritative, list(result.errors)
 
     def _publish_restored_selection_info(
         self,
@@ -386,75 +280,9 @@ class SceneDeleteTransactionSession:
         try:
             formula_text, mass_text = cache
             callback(formula_text, mass_text)
-        except BaseException as observer_error:
+        except Exception as observer_error:
             return [observer_error], True
         return [], True
-
-    def _observer_ports_are_exact(self) -> tuple[bool, list[BaseException]]:
-        errors: list[BaseException] = []
-        exact = True
-        for port in self.observer_ports:
-            try:
-                if port.getter() is not port.value:
-                    raise RuntimeError(
-                        f"delete rollback did not restore observer port {port.name}"
-                    )
-            except BaseException as error:
-                errors.append(error)
-                exact = False
-        return exact, errors
-
-    def _reassert_after_selection_info_publication(
-        self,
-    ) -> tuple[bool, list[BaseException]]:
-        """Make the pre-gesture snapshot final without publishing again."""
-
-        errors: list[BaseException] = []
-        for _attempt in range(2):
-            attempt_errors: list[BaseException] = []
-            observer_errors, observer_ports_restored = (
-                self._try_restore_observer_ports()
-            )
-            attempt_errors.extend(error for _phase, error in observer_errors)
-            observer_ports_exact, observer_verify_errors = (
-                self._observer_ports_are_exact()
-            )
-            attempt_errors.extend(observer_verify_errors)
-            try:
-                attempt_errors.extend(self.snapshot._verify_exact_authorities())
-            except BaseException as verify_error:
-                attempt_errors.append(verify_error)
-            if not attempt_errors and observer_ports_restored and observer_ports_exact:
-                return True, []
-
-            errors.extend(attempt_errors)
-            attempt_errors = []
-            try:
-                pass_errors, secondary_errors = self.snapshot._silent_authority_pass()
-            except BaseException as restore_error:
-                attempt_errors.append(restore_error)
-                secondary_errors = []
-            else:
-                attempt_errors.extend(pass_errors)
-            errors.extend(secondary_errors)
-
-            observer_ports_exact, observer_verify_errors = (
-                self._observer_ports_are_exact()
-            )
-            attempt_errors.extend(observer_verify_errors)
-            try:
-                # Observer-port setters/getters are also untrusted. Verify the
-                # complete canvas snapshot after them so a callback cannot
-                # mutate model, scene, history, selection, or raw graphics and
-                # still let the session publish rollback completion.
-                attempt_errors.extend(self.snapshot._verify_exact_authorities())
-            except BaseException as verify_error:
-                attempt_errors.append(verify_error)
-
-            if not attempt_errors and observer_ports_restored and observer_ports_exact:
-                return True, []
-            errors.extend(attempt_errors)
-        return False, errors
 
     def delete_atom(self, atom_id: int) -> HistoryCommand | None:
         self._require_active()
@@ -572,19 +400,12 @@ class SceneDeleteTransactionSession:
             # mutators would replace those exact objects (and could expand a
             # deliberately partial pre-gesture selection).  Only the external
             # selection-info observer needs one final publication.
-            publication_errors, published_now = self._publish_restored_selection_info()
+            publication_errors, _published_now = self._publish_restored_selection_info()
             errors.extend(publication_errors)
-            if published_now:
-                authoritative, final_errors = (
-                    self._reassert_after_selection_info_publication()
-                )
-                errors.extend(final_errors)
-                observer_ports_restored = authoritative
-            else:
-                observer_restore_errors, observer_ports_restored = (
-                    self._try_restore_observer_ports()
-                )
-                errors.extend(error for _phase, error in observer_restore_errors)
+            observer_restore_errors, observer_ports_restored = (
+                self._try_restore_observer_ports()
+            )
+            errors.extend(error for _phase, error in observer_restore_errors)
         else:
             observer_restore_errors, observer_ports_restored = (
                 self._try_restore_observer_ports()
@@ -1009,7 +830,7 @@ class SceneDeleteController:
             and len(selection_info_cache_value) == 2
             else None
         )
-        snapshot = CanvasDeleteTransactionSnapshot.capture(
+        snapshot = DocumentSavepoint.capture(
             self.canvas,
             history_service=self.history,
             guard_scene_rect=True,
@@ -1040,7 +861,7 @@ class SceneDeleteController:
         )
         try:
             session._suspend_observers()
-        except BaseException as original_error:
+        except Exception as original_error:
             cleanup_errors: list[tuple[str, BaseException]] = []
             authoritative, restore_errors = session._restore_absolute_snapshot()
             cleanup_errors.extend(
@@ -1054,7 +875,7 @@ class SceneDeleteController:
             if not authoritative:
                 try:
                     snapshot.release()
-                except BaseException as release_error:
+                except Exception as release_error:
                     cleanup_errors.append(
                         ("releasing the failed delete guard", release_error)
                     )
@@ -1064,7 +885,7 @@ class SceneDeleteController:
         return session
 
     def delete_atom(self, atom_id: int, record: bool = True) -> HistoryCommand | None:
-        with canvas_delete_transaction(self.canvas, history_service=self.history):
+        with document_transaction(self.canvas, history_service=self.history):
             return self._delete_atom(atom_id, record=record)
 
     def _delete_atom(
@@ -1119,7 +940,7 @@ class SceneDeleteController:
         return command
 
     def delete_bond(self, bond_id: int, record: bool = True) -> HistoryCommand | None:
-        with canvas_delete_transaction(self.canvas, history_service=self.history):
+        with document_transaction(self.canvas, history_service=self.history):
             return self._delete_bond(bond_id, record=record)
 
     def _delete_bond(
@@ -1166,7 +987,7 @@ class SceneDeleteController:
     def delete_ring(
         self, item: QGraphicsPolygonItem, record: bool = True
     ) -> HistoryCommand | None:
-        with canvas_delete_transaction(self.canvas, history_service=self.history):
+        with document_transaction(self.canvas, history_service=self.history):
             return self._delete_ring(item, record=record)
 
     def _delete_ring(
@@ -1205,7 +1026,7 @@ class SceneDeleteController:
         return self._with_group_cleanup(command, removed_groups)
 
     def delete_selected_items(self) -> bool:
-        with canvas_delete_transaction(self.canvas, history_service=self.history):
+        with document_transaction(self.canvas, history_service=self.history):
             return self._delete_selected_items()
 
     def _selection_delete_cleanup_errors(self) -> list[tuple[str, BaseException]]:
@@ -1223,7 +1044,7 @@ class SceneDeleteController:
         for phase, action in actions:
             try:
                 action()
-            except BaseException as exc:
+            except Exception as exc:
                 errors.append((phase, exc))
         return errors
 
@@ -1238,7 +1059,7 @@ class SceneDeleteController:
                     "Delete selection cleanup also failed during "
                     f"{phase}: {type(cleanup_error).__name__}: {cleanup_error}"
                 )
-            except BaseException:
+            except Exception:
                 # Cleanup diagnostics cannot replace cancellation/termination.
                 continue
 
@@ -1305,7 +1126,7 @@ class SceneDeleteController:
             command = self._with_group_cleanup(command, removed_groups)
             self._push_history(command)
             return True
-        except BaseException as exc:
+        except Exception as exc:
             body_error = exc
             raise
         finally:

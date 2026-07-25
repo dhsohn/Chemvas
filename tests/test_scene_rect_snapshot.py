@@ -5,10 +5,6 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from chemvas.ui.history_commands import (
-    _capture_scene_rect_snapshot,
-    _release_scene_rect_snapshot,
-)
 from chemvas.ui.transactions.scene_item_attach import (
     SceneItemAttachPorts,
     SceneItemAttachSnapshot,
@@ -21,6 +17,10 @@ from chemvas.ui.transactions.scene_rect import (
     set_explicit_scene_rect,
     set_explicit_view_scene_rect,
     view_scene_rect_is_explicit,
+)
+from chemvas.ui.transactions.scene_runtime import (
+    capture_scene_rect_snapshot,
+    release_scene_rect_snapshot,
 )
 from PyQt6.QtCore import QRectF
 from PyQt6.QtWidgets import (
@@ -611,54 +611,6 @@ def test_actual_qt_view_refresh_blocks_view_and_both_scrollbar_signals() -> None
     view.close()
 
 
-def test_attach_release_uses_captured_scene_bounding_rect_port() -> None:
-    class Item:
-        scene_bounds_port_reads = 0
-        scene_bounds_calls = 0
-        fail_port_lookup = False
-
-        def data(self, role: int):
-            return "unknown" if role == 0 else None
-
-        @property
-        def sceneBoundingRect(self):
-            self.scene_bounds_port_reads += 1
-            if self.fail_port_lookup:
-                raise SystemExit("sceneBoundingRect port was re-read")
-            return self._scene_bounding_rect
-
-        def _scene_bounding_rect(self):
-            self.scene_bounds_calls += 1
-            return "captured-bounds"
-
-    class ReleaseSnapshot:
-        automatic = True
-
-        def __init__(self) -> None:
-            self.released = None
-
-        def release(
-            self,
-            expanded_rect,
-            *,
-            expansion_key,
-            expansion_owner_scene_getter=None,
-        ) -> None:
-            self.released = (expanded_rect, expansion_key)
-
-    item = Item()
-    snapshot = SceneItemAttachSnapshot.capture(SimpleNamespace(), item)
-    rect_snapshot = ReleaseSnapshot()
-    snapshot.scene_rect_snapshot = rect_snapshot
-    item.fail_port_lookup = True
-
-    snapshot.release()
-
-    assert item.scene_bounds_port_reads == 1
-    assert item.scene_bounds_calls == 1
-    assert rect_snapshot.released == ("captured-bounds", item)
-
-
 def test_release_uses_bound_expansion_owner_membership_getter() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
@@ -706,12 +658,12 @@ def test_history_release_uses_capture_bound_full_scene_bounds_port() -> None:
 
     scene = Scene()
     scene.addRect(0.0, 0.0, 10.0, 10.0)
-    snapshot = _capture_scene_rect_snapshot(scene)
+    snapshot = capture_scene_rect_snapshot(scene)
     assert snapshot is not None
     far = scene.addRect(10_000.0, 0.0, 10.0, 10.0)
     Scene.itemsBoundingRect = lambda _scene: QRectF(0.0, 0.0, 1.0, 1.0)
 
-    _release_scene_rect_snapshot(snapshot)
+    release_scene_rect_snapshot(snapshot)
 
     assert snapshot.tracker.known_rect.contains(far.sceneBoundingRect())
     follow_up = SceneRectSnapshot.capture(scene)

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import contextlib
-import inspect
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
@@ -23,7 +22,6 @@ from chemvas.core.history import (
     HistoryCommand,
     UpdateAtomColorCommand,
 )
-from chemvas.domain.transactions import HistoryAuthoritySnapshot
 from chemvas.ui.atom_label_access import implicit_carbon_dot_brush_for
 from chemvas.ui.bond_graphics_access import apply_color_to_bond_item_for
 from chemvas.ui.canvas_atom_graphics_state import (
@@ -38,7 +36,6 @@ from chemvas.ui.canvas_bond_graphics_state import (
     bond_items_for_id,
     set_bond_items_for,
 )
-from chemvas.ui.canvas_history_recording_service import CallbackFreeHistoryBaseline
 from chemvas.ui.canvas_model_access import (
     atom_for_id,
     atoms_for,
@@ -47,10 +44,6 @@ from chemvas.ui.canvas_model_access import (
 )
 from chemvas.ui.graphics_items import AtomDotItem
 from chemvas.ui.history_commands import AddSceneItemsCommand, UpdateSceneItemCommand
-from chemvas.ui.history_push_failure_recovery import (
-    RecordingHistoryPolicySnapshot,
-    _restore_history_and_policy,
-)
 from chemvas.ui.note_item_access import (
     committed_note_html_for,
     committed_note_text_for,
@@ -63,7 +56,6 @@ from chemvas.ui.scene_item_state import (
     ring_state_dict_for,
     shape_state_dict_for,
 )
-from chemvas.ui.transactions.history_command import HistoryCommandSnapshot
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView
@@ -76,219 +68,30 @@ class _CollectingHistory:
     def __init__(self, sink) -> None:
         self._sink = sink
 
-    def push(self, command) -> None:
+    def push(self, command) -> bool:
         self._sink(command)
+        return True
+
+    def push_many(self, commands: Iterable[HistoryCommand]) -> bool:
+        for command in commands:
+            self._sink(command)
+        return True
+
+    @staticmethod
+    def is_enabled() -> bool:
+        return True
 
 
 def _set_graphics_brush_exact(item, brush: QBrush) -> None:
-    if isinstance(item, QAbstractGraphicsShapeItem):
-        QAbstractGraphicsShapeItem.setBrush(item, QBrush(brush))
-        return
     item.setBrush(QBrush(brush))
 
 
 def _set_graphics_pen_exact(item, pen: QPen) -> None:
-    if isinstance(item, QAbstractGraphicsShapeItem):
-        QAbstractGraphicsShapeItem.setPen(item, QPen(pen))
-        return
     item.setPen(QPen(pen))
 
 
 _DELETED_GRAPHICS_ITEM = object()
 _MISSING_CAPTURE_ATTRIBUTE = object()
-_UNKNOWN_HISTORY_ENABLED = object()
-
-
-@dataclass(frozen=True, slots=True)
-class _FrozenHistoryEnabledAuthority:
-    value: object
-    getter: Callable[[], object] | None
-    setter: Callable[[bool], object] | None
-
-    @classmethod
-    def capture(cls, history: object) -> _FrozenHistoryEnabledAuthority:
-        getter_value = _optional_live_capture_attribute(history, "is_enabled")
-        setter_value = _optional_live_capture_attribute(history, "set_enabled")
-        getter = getter_value if callable(getter_value) else None
-        setter = setter_value if callable(setter_value) else None
-        value = getter() if getter is not None else _UNKNOWN_HISTORY_ENABLED
-        return cls(value=value, getter=getter, setter=setter)
-
-    def restore(self, original_error: BaseException) -> bool:
-        if self.getter is None or type(self.value) is not bool:
-            return True
-        try:
-            if self.getter() is self.value:
-                return True
-            if self.setter is None:
-                raise RuntimeError("color history enabled policy has no restore port")
-            self.setter(self.value)
-            if self.getter() is not self.value:
-                raise RuntimeError("color history enabled policy was not restored")
-        except BaseException as policy_error:
-            _add_color_rollback_note(
-                original_error,
-                policy_error,
-                phase="restoring the pre-push history policy",
-            )
-            return False
-        return True
-
-
-@dataclass(frozen=True, slots=True)
-class _ColorHistoryAuthority:
-    history: object | None
-    stack_snapshot: HistoryAuthoritySnapshot | None
-    policy_snapshot: RecordingHistoryPolicySnapshot | None
-    raw_baseline: CallbackFreeHistoryBaseline | None
-
-    @classmethod
-    def capture(
-        cls,
-        history: object | None,
-        *,
-        canvas: object | None = None,
-        raw_baseline: CallbackFreeHistoryBaseline | None = None,
-    ) -> _ColorHistoryAuthority:
-        if history is None:
-            return cls(None, None, None, None)
-        raw_baseline = raw_baseline or CallbackFreeHistoryBaseline.capture(
-            history,
-            canvas=canvas,
-        )
-        stack_snapshot: HistoryAuthoritySnapshot | None = None
-        policy_snapshot: RecordingHistoryPolicySnapshot | None = None
-        authority = cls(history, None, None, raw_baseline)
-        try:
-            stack_snapshot = HistoryAuthoritySnapshot.capture(history)
-            authority = cls(history, stack_snapshot, None, raw_baseline)
-            if stack_snapshot is None:
-                if raw_baseline is not None:
-                    raise RuntimeError(
-                        "callback-free color history backing was not exposed "
-                        "through live stack ports"
-                    )
-                return authority
-            if raw_baseline is None:
-                raise RuntimeError(
-                    "color history has mutable stacks but no callback-free "
-                    "backing authority"
-                )
-            policy_snapshot = RecordingHistoryPolicySnapshot.capture(stack_snapshot)
-            authority = cls(
-                history,
-                stack_snapshot,
-                policy_snapshot,
-                raw_baseline,
-            )
-            authority.verify_prepublication()
-        except BaseException as original_error:
-            authority.restore(
-                original_error,
-                phase="color history authority capture",
-            )
-            raise
-        return authority
-
-    def verify_prepublication(self) -> None:
-        if self.stack_snapshot is None:
-            return
-        _verify_color_history_and_policy(
-            self.stack_snapshot,
-            self.policy_snapshot,
-        )
-        if self.raw_baseline is None:
-            raise RuntimeError(
-                "color history has no callback-free prepublication authority"
-            )
-        self.raw_baseline.bind_snapshot(
-            self.stack_snapshot,
-            self.policy_snapshot,
-        )
-
-    def verify_published(
-        self,
-        command: HistoryCommand,
-        *,
-        accepted: bool,
-    ) -> None:
-        self.verify_published_commands(((command, accepted),))
-
-    def verify_published_commands(
-        self,
-        publications: Iterable[tuple[HistoryCommand, bool]],
-    ) -> None:
-        publications = tuple(publications)
-        self.verify_published_live_commands(publications)
-        self.verify_published_raw_commands(publications)
-
-    def verify_published_live_commands(
-        self,
-        publications: Iterable[tuple[HistoryCommand, bool]],
-    ) -> None:
-        snapshot = self.stack_snapshot
-        if snapshot is None:
-            return
-        expected_history = list(snapshot.history_items)
-        expected_redo = snapshot.redo_items
-        limit = None
-        if self.policy_snapshot is not None:
-            limit = dict(self.policy_snapshot.values).get("limit")
-        for command, accepted in publications:
-            if not accepted:
-                continue
-            expected_history.append(command)
-            expected_redo = ()
-            if type(limit) is int and len(expected_history) > limit:
-                expected_history.pop(0)
-
-        def verify_stacks() -> None:
-            snapshot.verify_exact_items(
-                history_items=tuple(expected_history),
-                redo_items=expected_redo,
-            )
-
-        verify_stacks()
-        if self.policy_snapshot is None:
-            return
-        self.policy_snapshot.verify()
-        verify_stacks()
-
-    def verify_published_raw_commands(
-        self,
-        publications: Iterable[tuple[HistoryCommand, bool]],
-    ) -> None:
-        if self.stack_snapshot is None:
-            return
-        if self.raw_baseline is None:
-            raise RuntimeError(
-                "color history has no callback-free publication authority"
-            )
-        self.raw_baseline.verify_published_commands(tuple(publications))
-
-    def restore(self, original_error: BaseException, *, phase: str) -> bool:
-        live_restored = self.stack_snapshot is None
-        if self.stack_snapshot is not None and _restore_history_and_policy(
-            self.stack_snapshot,
-            self.policy_snapshot,
-            original_error,
-            phase=phase,
-        ):
-            live_restored = True
-        raw_restored = True
-        if self.raw_baseline is not None:
-            try:
-                # Raw storage is deliberately the final writer after every live
-                # restore callback.
-                self.raw_baseline.restore()
-            except BaseException as restore_error:
-                raw_restored = False
-                _add_color_rollback_note(
-                    original_error,
-                    restore_error,
-                    phase=f"restoring callback-free history during {phase}",
-                )
-        return live_restored and raw_restored
 
 
 def _graphics_item_is_deleted(item: object) -> bool:
@@ -296,19 +99,7 @@ def _graphics_item_is_deleted(item: object) -> bool:
 
 
 def _optional_live_capture_attribute(item: object, name: str) -> object | None:
-    """Read a statically present optional graphics port exactly once.
-
-    A descriptor may raise ``AttributeError`` from inside its getter.  Plain
-    ``getattr(..., None)`` misclassifies that live capture failure as an absent
-    optional method and permits mutation with a partial runtime savepoint.
-    """
-
-    if (
-        inspect.getattr_static(item, name, _MISSING_CAPTURE_ATTRIBUTE)
-        is _MISSING_CAPTURE_ATTRIBUTE
-    ):
-        return None
-    return getattr(item, name)
+    return getattr(item, name, None)
 
 
 def _graphics_item_data_for_capture(item: object, role: int) -> object:
@@ -317,7 +108,7 @@ def _graphics_item_data_for_capture(item: object, role: int) -> object:
     try:
         data = _optional_live_capture_attribute(item, "data")
         return data(role) if callable(data) else None
-    except BaseException:
+    except Exception:
         if _graphics_item_is_deleted(item):
             return _DELETED_GRAPHICS_ITEM
         raise
@@ -331,18 +122,13 @@ def _captured_graphics_brush(item: object) -> QBrush | None:
         if not callable(brush):
             return None
         value = brush()
-        if isinstance(item, QAbstractGraphicsShapeItem):
-            # Invoke the extension getter once as fallible preflight, then bind
-            # the actual authority to Qt's base implementation.  Rollback and
-            # verification never re-enter the extension getter.
-            return QBrush(QAbstractGraphicsShapeItem.brush(item))
         if isinstance(value, QBrush):
             return QBrush(value)
         # Non-Qt extension/test doubles may expose a dynamic ``brush`` mock
         # without implementing Qt's QBrush contract. It is not a partial Qt
         # snapshot; leave that unsupported proxy to command-based rollback.
         return QBrush(value) if isinstance(item, QGraphicsItem) else None
-    except BaseException:
+    except Exception:
         if _graphics_item_is_deleted(item):
             return None
         raise
@@ -356,24 +142,13 @@ def _captured_graphics_pen(item: object) -> QPen | None:
         if not callable(pen):
             return None
         value = pen()
-        if isinstance(item, QAbstractGraphicsShapeItem):
-            return QPen(QAbstractGraphicsShapeItem.pen(item))
         if isinstance(value, QPen):
             return QPen(value)
         return QPen(value) if isinstance(item, QGraphicsItem) else None
-    except BaseException:
+    except Exception:
         if _graphics_item_is_deleted(item):
             return None
         raise
-
-
-def _verify_color_history_and_policy(
-    history_snapshot,
-    policy_snapshot,
-) -> None:
-    history_snapshot.verify_exact_items()
-    if policy_snapshot is not None:
-        policy_snapshot.verify()
 
 
 def _add_color_rollback_note(
@@ -399,28 +174,10 @@ def _run_color_rollback_step(
 ) -> None:
     try:
         operation()
-    except BaseException as rollback_error:
+    except Exception as rollback_error:
         _add_color_rollback_note(
             original_error,
             rollback_error,
-            phase=phase,
-        )
-
-
-def _restore_color_history_baseline(
-    baseline: CallbackFreeHistoryBaseline | None,
-    original_error: BaseException,
-    *,
-    phase: str,
-) -> None:
-    if baseline is None:
-        return
-    try:
-        baseline.restore()
-    except BaseException as restore_error:
-        _add_color_rollback_note(
-            original_error,
-            restore_error,
             phase=phase,
         )
 
@@ -430,40 +187,13 @@ def _close_failed_color_prepublication(
     *,
     runtime_rollback: Callable[[], None] | None,
     runtime_phase: str,
-    history_authority: _ColorHistoryAuthority | None,
-    raw_history_baseline: CallbackFreeHistoryBaseline | None = None,
-    history_phase: str,
 ) -> None:
-    """Restore runtime once, then make raw history storage the final writer."""
-
     if runtime_rollback is not None:
         _run_color_rollback_step(
             original_error,
             runtime_phase,
             runtime_rollback,
         )
-
-    if history_authority is not None and not history_authority.restore(
-        original_error,
-        phase=history_phase,
-    ):
-        _add_color_rollback_note(
-            original_error,
-            RuntimeError("color history authority was not fully restored"),
-            phase=history_phase,
-        )
-
-    # A runtime restore may cross NoteItem/extension setters. Reassert the raw
-    # built-in stacks and policy values after every such callback, even though a
-    # complete live authority restore also closes on this same baseline.
-    final_raw_baseline = raw_history_baseline
-    if final_raw_baseline is None and history_authority is not None:
-        final_raw_baseline = history_authority.raw_baseline
-    _restore_color_history_baseline(
-        final_raw_baseline,
-        original_error,
-        phase=f"closing callback-free history after {history_phase}",
-    )
 
 
 def _run_restore_operations(
@@ -474,7 +204,7 @@ def _run_restore_operations(
     for operation in operations:
         try:
             operation()
-        except BaseException as error:
+        except Exception as error:
             errors.append(error)
     if len(errors) == 1:
         raise errors[0]
@@ -515,7 +245,7 @@ def _apply_bond_color_in_place(canvas, bond_id: int, color: QColor | str) -> Non
         bond.color = color_value.name()
         for bond_item in bond_items_for_id(canvas, bond_id):
             apply_color_to_bond_item_for(canvas, bond_item, color_value)
-    except BaseException as original_error:
+    except Exception as original_error:
         _run_color_rollback_step(
             original_error,
             "restoring the bond model color",
@@ -568,7 +298,7 @@ class _NoteColorState:
 
     def apply(self, item: QGraphicsTextItem) -> None:
         item.setHtml(self.html)
-        QGraphicsTextItem.setDefaultTextColor(item, QColor(self.default_text_color))
+        item.setDefaultTextColor(QColor(self.default_text_color))
         item.setTextInteractionFlags(self.interaction_flags)
         cursor = QTextCursor(item.document())
         cursor.setPosition(self.cursor_anchor)
@@ -584,19 +314,8 @@ class _ColorRuntimeAuthority:
     verify: Callable[[], None]
 
     def __call__(self) -> None:
-        errors: list[BaseException] = []
-        for _attempt in range(2):
-            try:
-                self.restore_once()
-                self.verify()
-            except BaseException as error:
-                errors.append(error)
-                continue
-            return
-        raise BaseExceptionGroup(
-            "Color runtime remained non-authoritative",
-            errors,
-        )
+        self.restore_once()
+        self.verify()
 
 
 @dataclass
@@ -608,7 +327,7 @@ class UpdateNoteColorCommand(HistoryCommand):
     def _apply(self, state: _NoteColorState, rollback_state: _NoteColorState) -> None:
         try:
             state.apply(self.item)
-        except BaseException as original_error:
+        except Exception as original_error:
             _run_color_rollback_step(
                 original_error,
                 "restoring the prior note color state",
@@ -634,7 +353,7 @@ class _CommitPendingNoteEditCommand(HistoryCommand):
     def _apply(self, state: _NoteColorState, rollback_state: _NoteColorState) -> None:
         try:
             state.apply(self.item)
-        except BaseException as original_error:
+        except Exception as original_error:
             _run_color_rollback_step(
                 original_error,
                 "restoring the prior pending-note state",
@@ -691,8 +410,7 @@ class _SceneGraphicsRegistryAuthority:
         atom_dot_entries = tuple(dict.items(atom_dots))
         bond_item_entries = tuple(dict.items(bond_items))
         bond_list_contents = tuple(
-            (items, tuple(list.__iter__(items)))
-            for _bond_id, items in bond_item_entries
+            (items, tuple(items)) for _bond_id, items in bond_item_entries
         )
         scene_states: list[tuple[QGraphicsItem, QGraphicsScene | None]] = []
         seen: set[int] = set()
@@ -704,7 +422,7 @@ class _SceneGraphicsRegistryAuthority:
             if not isinstance(candidate, QGraphicsItem) or id(candidate) in seen:
                 continue
             seen.add(id(candidate))
-            scene_states.append((candidate, QGraphicsItem.scene(candidate)))
+            scene_states.append((candidate, candidate.scene()))
         return cls(
             canvas=canvas,
             atom_items=atom_items,
@@ -722,7 +440,7 @@ class _SceneGraphicsRegistryAuthority:
         mapping: dict[int, object],
         entries: tuple[tuple[int, object], ...],
     ) -> bool:
-        actual = tuple(dict.items(mapping))
+        actual = tuple(mapping.items())
         return len(actual) == len(entries) and all(
             actual_key == expected_key and actual_value is expected_value
             for (actual_key, actual_value), (
@@ -758,7 +476,7 @@ class _SceneGraphicsRegistryAuthority:
                 "bond graphics registry changed during color transaction"
             )
         for items, contents in self.bond_list_contents:
-            actual = tuple(list.__iter__(items))
+            actual = tuple(items)
             if len(actual) != len(contents) or any(
                 value is not expected
                 for value, expected in zip(actual, contents, strict=True)
@@ -767,7 +485,7 @@ class _SceneGraphicsRegistryAuthority:
                     "bond graphics list changed during color transaction"
                 )
         for item, expected_scene in self.item_scenes:
-            if sip.isdeleted(item) or QGraphicsItem.scene(item) is not expected_scene:
+            if sip.isdeleted(item) or item.scene() is not expected_scene:
                 raise RuntimeError(
                     "mapped graphics scene identity changed during color transaction"
                 )
@@ -788,10 +506,7 @@ class _SceneGraphicsRegistryAuthority:
                 raise RuntimeError(
                     "frozen ring target had no captured registry scene identity"
                 )
-            if (
-                sip.isdeleted(target)
-                or QGraphicsItem.scene(target) is not expected_scene
-            ):
+            if sip.isdeleted(target) or target.scene() is not expected_scene:
                 raise RuntimeError(
                     "frozen ring target scene identity changed before mutation"
                 )
@@ -801,25 +516,25 @@ class _SceneGraphicsRegistryAuthority:
         set_atom_dots_for(self.canvas, self.atom_dots)
         set_bond_items_for(self.canvas, self.bond_items)
         for items, contents in self.bond_list_contents:
-            list.__setitem__(items, slice(None), contents)
-        dict.clear(self.atom_items)
-        dict.update(self.atom_items, self.atom_item_entries)
-        dict.clear(self.atom_dots)
-        dict.update(self.atom_dots, self.atom_dot_entries)
-        dict.clear(self.bond_items)
-        dict.update(self.bond_items, self.bond_item_entries)
+            items[:] = contents
+        self.atom_items.clear()
+        self.atom_items.update(self.atom_item_entries)
+        self.atom_dots.clear()
+        self.atom_dots.update(self.atom_dot_entries)
+        self.bond_items.clear()
+        self.bond_items.update(self.bond_item_entries)
         for item, expected_scene in self.item_scenes:
             if sip.isdeleted(item):
                 raise RuntimeError(
                     "mapped graphics item was deleted during color transaction"
                 )
-            current_scene = QGraphicsItem.scene(item)
+            current_scene = item.scene()
             if current_scene is expected_scene:
                 continue
             if current_scene is not None:
-                QGraphicsScene.removeItem(current_scene, item)
+                current_scene.removeItem(item)
             if expected_scene is not None:
-                QGraphicsScene.addItem(expected_scene, item)
+                expected_scene.addItem(item)
         self.verify()
 
 
@@ -884,7 +599,7 @@ class _SceneColorPeerAuthority:
 
         try:
             _ColorRuntimeAuthority(restore_once, verify_all)()
-        except BaseException as restore_error:
+        except Exception as restore_error:
             _add_color_rollback_note(
                 original_error,
                 restore_error,
@@ -934,7 +649,7 @@ class CanvasColorMutationService:
             for item in items
             if isinstance(item, QGraphicsItem)
             and not sip.isdeleted(item)
-            and QGraphicsItem.scene(item) is scene
+            and item.scene() is scene
         )
 
     def _capture_scene_color_peer_authority(
@@ -942,7 +657,7 @@ class CanvasColorMutationService:
     ) -> _SceneColorPeerAuthority | None:
         if not isinstance(self.canvas, QGraphicsView):
             return None
-        scene = QGraphicsView.scene(self.canvas)
+        scene = self.canvas.scene()
         if not isinstance(scene, QGraphicsScene):
             return None
 
@@ -951,12 +666,12 @@ class CanvasColorMutationService:
         registry = _SceneGraphicsRegistryAuthority.capture(self.canvas, scene)
         authority = _SceneColorPeerAuthority(self, (), (), registry)
         try:
-            for item in tuple(QGraphicsScene.items(scene)):
+            for item in tuple(scene.items()):
                 if isinstance(item, QGraphicsTextItem):
                     runtime = self._note_runtime_rollback(item)
                 elif isinstance(item, QAbstractGraphicsShapeItem):
-                    brush = QBrush(QAbstractGraphicsShapeItem.brush(item))
-                    pen = QPen(QAbstractGraphicsShapeItem.pen(item))
+                    brush = QBrush(item.brush())
+                    pen = QPen(item.pen())
 
                     def restore_shape_color(
                         *,
@@ -964,14 +679,8 @@ class CanvasColorMutationService:
                         captured_brush: QBrush = brush,
                         captured_pen: QPen = pen,
                     ) -> None:
-                        QAbstractGraphicsShapeItem.setPen(
-                            target,
-                            QPen(captured_pen),
-                        )
-                        QAbstractGraphicsShapeItem.setBrush(
-                            target,
-                            QBrush(captured_brush),
-                        )
+                        target.setPen(QPen(captured_pen))
+                        target.setBrush(QBrush(captured_brush))
 
                     def verify_shape_color(
                         *,
@@ -980,8 +689,8 @@ class CanvasColorMutationService:
                         captured_pen: QPen = pen,
                     ) -> None:
                         if (
-                            QAbstractGraphicsShapeItem.brush(target) != captured_brush
-                            or QAbstractGraphicsShapeItem.pen(target) != captured_pen
+                            target.brush() != captured_brush
+                            or target.pen() != captured_pen
                         ):
                             raise RuntimeError(
                                 "non-target graphics color changed during publication"
@@ -1044,7 +753,7 @@ class CanvasColorMutationService:
                     registry,
                 )
             authority.verify_peers(frozenset())
-        except BaseException as original_error:
+        except Exception as original_error:
             authority.restore(original_error)
             raise
         return authority
@@ -1064,8 +773,8 @@ class CanvasColorMutationService:
             allowed.add(id(item))
             if not isinstance(item, QGraphicsItem) or sip.isdeleted(item):
                 continue
-            kind = QGraphicsItem.data(item, 0)
-            object_id = QGraphicsItem.data(item, 1)
+            kind = item.data(0)
+            object_id = item.data(1)
             if kind == "atom" and isinstance(object_id, int):
                 allowed.update(
                     id(candidate)
@@ -1106,23 +815,12 @@ class CanvasColorMutationService:
         if transactions:
             yield
             return
-        raw_history_baseline = CallbackFreeHistoryBaseline.capture(
-            self.history,
-            canvas=self.canvas,
-        )
         authority: _SceneColorPeerAuthority | None = None
         try:
             authority = self._capture_scene_color_peer_authority()
-            if raw_history_baseline is not None:
-                raw_history_baseline.verify()
-        except BaseException as original_error:
+        except Exception as original_error:
             if authority is not None:
                 authority.restore(original_error)
-            _restore_color_history_baseline(
-                raw_history_baseline,
-                original_error,
-                phase="closing history after scene-color peer capture",
-            )
             raise
         if authority is None:
             yield
@@ -1136,15 +834,8 @@ class CanvasColorMutationService:
             # live extension boundaries and must not redefine the before-state
             # of an atom/bond that will subsequently become an allowed target.
             authority.verify_peers(frozenset())
-            if raw_history_baseline is not None:
-                raw_history_baseline.verify()
-        except BaseException as original_error:
+        except Exception as original_error:
             authority.restore(original_error)
-            _restore_color_history_baseline(
-                raw_history_baseline,
-                original_error,
-                phase="closing history after scene-color target resolution",
-            )
             raise
         transactions.append(
             _SceneColorPeerTransaction(
@@ -1156,22 +847,11 @@ class CanvasColorMutationService:
         try:
             yield
             authority.verify_peers(allowed)
-        except BaseException as original_error:
+        except Exception as original_error:
             authority.restore(original_error)
-            _restore_color_history_baseline(
-                raw_history_baseline,
-                original_error,
-                phase="closing history after scene-color peer rollback",
-            )
             raise
         finally:
             transactions.pop()
-
-    def _verify_active_scene_color_peers(self) -> None:
-        if not self._scene_color_peer_transactions:
-            return
-        transaction = self._scene_color_peer_transactions[-1]
-        transaction.authority.verify_peers(transaction.allowed_graphics_ids)
 
     def apply_color_to_item(self, item, color: QColor) -> None:
         with self._scene_color_peer_transaction(
@@ -1214,66 +894,18 @@ class CanvasColorMutationService:
         items: tuple[object, ...],
         color: QColor,
     ) -> None:
-        raw_history_baseline = CallbackFreeHistoryBaseline.capture(
-            self.history,
-            canvas=self.canvas,
+        rollback = self._batch_runtime_rollback(
+            items,
+            expand_ring_structures=True,
         )
-        history_authority: _ColorHistoryAuthority | None = None
-        rollback: Callable[[], None] | None = None
-        try:
-            rollback = self._batch_runtime_rollback(
-                items,
-                expand_ring_structures=True,
-            )
-            if raw_history_baseline is not None:
-                raw_history_baseline.verify()
-            history_authority = _ColorHistoryAuthority.capture(
-                self.history,
-                canvas=self.canvas,
-                raw_baseline=raw_history_baseline,
-            )
-            if isinstance(rollback, _ColorRuntimeAuthority):
-                rollback.verify()
-            if raw_history_baseline is not None:
-                raw_history_baseline.verify()
-            history_authority.verify_prepublication()
-        except BaseException as original_error:
-            _close_failed_color_prepublication(
-                original_error,
-                runtime_rollback=rollback,
-                runtime_phase="restoring runtime after color preflight",
-                history_authority=history_authority,
-                raw_history_baseline=raw_history_baseline,
-                history_phase="color batch preflight",
-            )
-            raise
-        assert history_authority is not None
-        capture_published_runtime = self.history is not None
-        published_runtime: _ColorRuntimeAuthority | None = None
 
         def apply_all() -> None:
-            nonlocal published_runtime
             for item in items:
                 self.apply_color_to_item(item, color)
-            if capture_published_runtime:
-                candidate = self._batch_runtime_rollback(
-                    items,
-                    expand_ring_structures=True,
-                )
-                if isinstance(candidate, _ColorRuntimeAuthority):
-                    published_runtime = candidate
 
         self._run_history_transaction(
             apply_all,
             rollback=rollback,
-            runtime_verify=(
-                lambda: (
-                    published_runtime.verify()
-                    if published_runtime is not None
-                    else None
-                )
-            ),
-            history_authority=history_authority,
         )
 
     # Shape panels and ring fills stack behind the structure as ChemDraw-style
@@ -1306,7 +938,6 @@ class CanvasColorMutationService:
             mutation()
             after_state = state_for(self.canvas, item)
             if before_state != after_state and self.history is not None:
-                published_runtime = self._graphics_runtime_rollback(item)
                 self._push_history_command(
                     UpdateSceneItemCommand(item, before_state, after_state),
                     rollback=(
@@ -1314,13 +945,8 @@ class CanvasColorMutationService:
                         if runtime_rollback is not None
                         else lambda: rollback.undo(self.canvas)
                     ),
-                    runtime_verify=(
-                        published_runtime.verify
-                        if isinstance(published_runtime, _ColorRuntimeAuthority)
-                        else None
-                    ),
                 )
-        except BaseException as original_error:
+        except Exception as original_error:
             if self._color_rollback_is_complete(original_error):
                 raise
             if runtime_rollback is not None:
@@ -1399,66 +1025,18 @@ class CanvasColorMutationService:
         color: QColor,
         alpha: float,
     ) -> None:
-        raw_history_baseline = CallbackFreeHistoryBaseline.capture(
-            self.history,
-            canvas=self.canvas,
+        rollback = self._batch_runtime_rollback(
+            items,
+            expand_ring_structures=False,
         )
-        history_authority: _ColorHistoryAuthority | None = None
-        rollback: Callable[[], None] | None = None
-        try:
-            rollback = self._batch_runtime_rollback(
-                items,
-                expand_ring_structures=False,
-            )
-            if raw_history_baseline is not None:
-                raw_history_baseline.verify()
-            history_authority = _ColorHistoryAuthority.capture(
-                self.history,
-                canvas=self.canvas,
-                raw_baseline=raw_history_baseline,
-            )
-            if isinstance(rollback, _ColorRuntimeAuthority):
-                rollback.verify()
-            if raw_history_baseline is not None:
-                raw_history_baseline.verify()
-            history_authority.verify_prepublication()
-        except BaseException as original_error:
-            _close_failed_color_prepublication(
-                original_error,
-                runtime_rollback=rollback,
-                runtime_phase="restoring runtime after ring-fill preflight",
-                history_authority=history_authority,
-                raw_history_baseline=raw_history_baseline,
-                history_phase="ring-fill batch preflight",
-            )
-            raise
-        assert history_authority is not None
-        capture_published_runtime = self.history is not None
-        published_runtime: _ColorRuntimeAuthority | None = None
 
         def apply_all() -> None:
-            nonlocal published_runtime
             for item in items:
                 self.apply_ring_fill_color(item, color, alpha)
-            if capture_published_runtime:
-                candidate = self._batch_runtime_rollback(
-                    items,
-                    expand_ring_structures=False,
-                )
-                if isinstance(candidate, _ColorRuntimeAuthority):
-                    published_runtime = candidate
 
         self._run_history_transaction(
             apply_all,
             rollback=rollback,
-            runtime_verify=(
-                lambda: (
-                    published_runtime.verify()
-                    if published_runtime is not None
-                    else None
-                )
-            ),
-            history_authority=history_authority,
         )
 
     def _run_history_transaction(
@@ -1466,19 +1044,13 @@ class CanvasColorMutationService:
         mutation: Callable[[], None],
         *,
         rollback: Callable[[], None] | None = None,
-        runtime_verify: Callable[[], None] | None = None,
-        history_authority: _ColorHistoryAuthority | None = None,
     ) -> None:
         real_history = self.history
-        history_authority = history_authority or _ColorHistoryAuthority.capture(
-            real_history,
-            canvas=self.canvas,
-        )
         collected: list[HistoryCommand] = []
         self.history = _CollectingHistory(collected.append)
         try:
             mutation()
-        except BaseException as error:
+        except Exception as error:
             runtime_rollback = rollback
             if runtime_rollback is None:
 
@@ -1495,227 +1067,31 @@ class CanvasColorMutationService:
                 error,
                 runtime_rollback=runtime_rollback,
                 runtime_phase="restoring the failed color batch runtime",
-                history_authority=history_authority,
-                history_phase="failed color batch mutation",
             )
             raise
         finally:
             self.history = real_history
 
-        try:
-            history_authority.verify_prepublication()
-            if not collected or real_history is None:
-                if real_history is not None:
-                    # Even a no-op mutation crossed live history descriptors.
-                    # Close on the exact post-mutation Qt/model runtime, then
-                    # compare callback-free history storage last so neither
-                    # authority can silently poison the other.
-                    if runtime_verify is not None:
-                        runtime_verify()
-                    self._verify_active_scene_color_peers()
-                    history_authority.verify_published_raw_commands(())
-                return
-        except BaseException as error:
-            runtime_rollback = rollback
-            if runtime_rollback is None:
-
-                def rollback_prepublication(
-                    original_error: BaseException = error,
-                ) -> None:
-                    self._rollback_commands(
-                        collected,
-                        original_error=original_error,
-                    )
-
-                runtime_rollback = rollback_prepublication
-            _close_failed_color_prepublication(
-                error,
-                runtime_rollback=runtime_rollback,
-                runtime_phase=(
-                    "restoring runtime after color history preflight contamination"
-                ),
-                history_authority=history_authority,
-                history_phase="color history prepublication",
-            )
-            raise
+        if not collected or real_history is None:
+            return
         command = (
             collected[0]
             if len(collected) == 1
             else CompositeCommand(commands=collected)
         )
-        command_snapshot = HistoryCommandSnapshot.capture(command)
-        history_snapshot: HistoryAuthoritySnapshot | None = None
         try:
-            history_snapshot = history_authority.stack_snapshot
-            if history_snapshot is None:
-                history_snapshot = HistoryAuthoritySnapshot.capture(real_history)
-            accepted = self._push_real_history_verified(real_history, command)
-            command_snapshot.verify()
-            history_authority.verify_published(command, accepted=accepted)
-            history_authority.verify_published_live_commands(((command, accepted),))
-            self._verify_published_color_result((command,), runtime_verify)
-            command_snapshot.verify()
-            history_authority.verify_published_raw_commands(((command, accepted),))
-        except BaseException as error:
-            command_snapshot.restore()
-            history_authority.restore(
+            real_history.push(command)
+        except Exception as error:
+            runtime_rollback = (
+                rollback if rollback is not None else lambda: command.undo(self.canvas)
+            )
+            _run_color_rollback_step(
                 error,
-                phase="failed color history publication",
+                "restoring runtime after color history publication",
+                runtime_rollback,
             )
-            if history_snapshot is not None:
-                assert history_authority is not None
-                self._recover_failed_history_push(
-                    error,
-                    history_snapshot=history_snapshot,
-                    history_authority=history_authority,
-                    runtime_rollback=(
-                        rollback
-                        if rollback is not None
-                        else lambda: command.undo(self.canvas)
-                    ),
-                    phase="color transaction",
-                )
-            elif rollback is not None:
-                _run_color_rollback_step(
-                    error,
-                    "restoring the batch runtime snapshot",
-                    rollback,
-                )
-            else:
-                self._rollback_commands([command], original_error=error)
+            self._mark_color_rollback_complete(error)
             raise
-
-    @staticmethod
-    def _push_real_history_verified(history, command: HistoryCommand) -> bool:
-        enabled_authority = _FrozenHistoryEnabledAuthority.capture(history)
-        try:
-            result = history.push(command)
-        except BaseException as original_error:
-            enabled_authority.restore(original_error)
-            raise
-        if result is not False:
-            return True
-        if enabled_authority.value is False:
-            # Disabled history is an explicit user/application policy: the
-            # color mutation remains valid but intentionally unrecorded.
-            disabled_result = RuntimeError(
-                "color history push returned False while explicitly disabled"
-            )
-            if not enabled_authority.restore(disabled_result):
-                raise disabled_result
-            return False
-        # A blocked/re-entrant or extension history service must not silently
-        # turn a recorded color operation into an untracked mutation.
-        rejection = RuntimeError(
-            "color history push was rejected while history was enabled"
-        )
-        enabled_authority.restore(rejection)
-        raise rejection
-
-    def _recover_failed_history_push(
-        self,
-        original_error: BaseException,
-        *,
-        history_snapshot: HistoryAuthoritySnapshot,
-        history_authority: _ColorHistoryAuthority,
-        runtime_rollback: Callable[[], None] | None,
-        phase: str,
-    ) -> None:
-        runtime_authoritative = True
-        if runtime_rollback is not None:
-            try:
-                runtime_rollback()
-            except BaseException as rollback_error:
-                runtime_authoritative = False
-                _add_color_rollback_note(
-                    original_error,
-                    rollback_error,
-                    phase=f"restoring runtime before {phase} publication",
-                )
-        if not runtime_authoritative:
-            history_authority.restore(
-                original_error,
-                phase=f"{phase} runtime-failure history authority",
-            )
-            self._mark_color_rollback_complete(original_error)
-            return
-
-        history_authoritative = history_snapshot.restore(
-            original_error,
-            phase=phase,
-        )
-        if not history_authoritative:
-            history_authority.restore(
-                original_error,
-                phase=f"{phase} notification-failure history authority",
-            )
-            self._mark_color_rollback_complete(original_error)
-            return
-
-        post_errors: list[BaseException] = []
-        for _attempt in range(2):
-            try:
-                # History setters/getters are callback ports and may re-poison
-                # the just-restored Qt/model color runtime.  Always make the
-                # runtime authority the final writer, then verify history roots,
-                # re-check the callback-free Qt authority, and close on raw
-                # built-in list storage.  No callback runs after that final raw
-                # stack comparison.
-                history_restored = history_authority.restore(
-                    original_error,
-                    phase=f"{phase} after notification",
-                )
-                if runtime_rollback is not None:
-                    runtime_rollback()
-                if not history_restored:
-                    raise RuntimeError(
-                        "color rollback history remained non-authoritative"
-                    )
-                self._verify_color_history_runtime_composite(
-                    history_authority,
-                    runtime_rollback,
-                )
-            except BaseException as post_error:
-                post_errors.append(post_error)
-                continue
-            self._mark_color_rollback_complete(original_error)
-            return
-        for recorded_post_error in post_errors:
-            _add_color_rollback_note(
-                original_error,
-                recorded_post_error,
-                phase=f"reasserting runtime/history after {phase} publication",
-            )
-        self._mark_color_rollback_complete(original_error)
-
-    @staticmethod
-    def _verify_color_history_runtime_composite(
-        history_authority: _ColorHistoryAuthority,
-        runtime_rollback: Callable[[], None] | None,
-    ) -> None:
-        """Verify live stacks/policy before Qt runtime and raw storage last."""
-
-        history_snapshot = history_authority.stack_snapshot
-        if history_snapshot is None:
-            raise RuntimeError("color rollback lost its exact history authority")
-        _verify_color_history_and_policy(
-            history_snapshot,
-            history_authority.policy_snapshot,
-        )
-
-        # Every production color rollback is an exact authority whose verifier
-        # uses Qt base getters for text/brush/pen.  Keep compatibility with a
-        # command-only extension rollback by relying on the completed restore
-        # call above when no independent verifier is available.
-        if isinstance(runtime_rollback, _ColorRuntimeAuthority):
-            runtime_rollback.verify()
-        if history_authority.raw_baseline is None:
-            raise RuntimeError(
-                "color rollback lost its callback-free history authority"
-            )
-        # No live descriptor or observer callback may run after this final raw
-        # stack/policy comparison.
-        history_authority.raw_baseline.verify()
 
     @staticmethod
     def _mark_color_rollback_complete(error: BaseException) -> None:
@@ -1758,12 +1134,10 @@ class CanvasColorMutationService:
         command: HistoryCommand,
         *,
         rollback: Callable[[], None] | None = None,
-        runtime_verify: Callable[[], None] | None = None,
     ) -> None:
         self._push_history_commands(
             [command],
             rollback=rollback,
-            runtime_verify=runtime_verify,
         )
 
     def _push_history_commands(
@@ -1771,141 +1145,31 @@ class CanvasColorMutationService:
         commands: Iterable[HistoryCommand],
         *,
         rollback: Callable[[], None] | None = None,
-        runtime_verify: Callable[[], None] | None = None,
     ) -> None:
         if self.history is None:
             return
         commands = tuple(commands)
         if not commands:
             return
-        command_snapshots = tuple(
-            HistoryCommandSnapshot.capture(command) for command in commands
+        command = (
+            commands[0]
+            if len(commands) == 1
+            else CompositeCommand(commands=list(commands))
         )
-        history_authority: _ColorHistoryAuthority | None = None
-        history_snapshot: HistoryAuthoritySnapshot | None = None
-        publications: list[tuple[HistoryCommand, bool]] = []
         try:
-            history_authority = _ColorHistoryAuthority.capture(
-                self.history,
-                canvas=self.canvas,
-            )
-            history_snapshot = history_authority.stack_snapshot
-            if history_snapshot is None:
-                history_snapshot = HistoryAuthoritySnapshot.capture(self.history)
-            for command in commands:
-                accepted = self._push_real_history_verified(self.history, command)
-                publications.append((command, accepted))
-                for command_snapshot in command_snapshots:
-                    command_snapshot.verify()
-                history_authority.verify_published_commands(publications)
-            history_authority.verify_published_live_commands(publications)
-            self._verify_published_color_result(commands, runtime_verify)
-            for command_snapshot in command_snapshots:
-                command_snapshot.verify()
-            history_authority.verify_published_raw_commands(publications)
-        except BaseException as error:
-            for command_snapshot in command_snapshots:
-                command_snapshot.restore()
-            if history_authority is not None:
-                history_authority.restore(
+            if len(commands) == 1:
+                self.history.push(command)
+            else:
+                self.history.push_many(commands)
+        except Exception as error:
+            if rollback is not None:
+                _run_color_rollback_step(
                     error,
-                    phase="failed single-item color history publication",
+                    "restoring runtime after color command publication",
+                    rollback,
                 )
-            if history_snapshot is not None:
-                assert history_authority is not None
-                self._recover_failed_history_push(
-                    error,
-                    history_snapshot=history_snapshot,
-                    history_authority=history_authority,
-                    runtime_rollback=rollback,
-                    phase="color command",
-                )
+            self._mark_color_rollback_complete(error)
             raise
-
-    def _verify_published_color_result(
-        self,
-        commands: Iterable[HistoryCommand],
-        runtime_verify: Callable[[], None] | None,
-    ) -> None:
-        """Close a successful publication on its command and runtime state."""
-
-        self._verify_color_commands_after(commands)
-        if runtime_verify is not None:
-            # The exact runtime verifier is deliberately final. Production
-            # authorities close on raw model fields and Qt base getters, so a
-            # successful history observer cannot remain the last writer.
-            runtime_verify()
-        self._verify_active_scene_color_peers()
-
-    def _verify_color_commands_after(
-        self,
-        commands: Iterable[HistoryCommand],
-    ) -> None:
-        flattened: list[HistoryCommand] = []
-
-        def flatten(command: HistoryCommand) -> None:
-            if isinstance(command, CompositeCommand):
-                for child in command.commands:
-                    flatten(child)
-                return
-            flattened.append(command)
-
-        for command in commands:
-            flatten(command)
-
-        # Several linear commands may intentionally target the same runtime
-        # (a pending note edit followed by its color command, for example).
-        # Only the last command for that authority describes the published
-        # state; earlier after-states are intermediate history checkpoints.
-        verified_targets: set[tuple[str, object]] = set()
-        for command in reversed(flattened):
-            if isinstance(command, UpdateAtomColorCommand):
-                key = ("atom", command.atom_id)
-                if key in verified_targets:
-                    continue
-                verified_targets.add(key)
-                atom = atom_for_id(self.canvas, command.atom_id)
-                if atom is None or atom.color != command.after_color:
-                    raise RuntimeError("atom color changed after history publication")
-                continue
-            if isinstance(command, UpdateBondColorCommand):
-                key = ("bond", command.bond_id)
-                if key in verified_targets:
-                    continue
-                verified_targets.add(key)
-                bond = bond_for_id(self.canvas, command.bond_id)
-                if bond is None or bond.color != command.after_color:
-                    raise RuntimeError("bond color changed after history publication")
-                continue
-            if isinstance(
-                command,
-                (UpdateNoteColorCommand, _CommitPendingNoteEditCommand),
-            ):
-                key = ("note", id(command.item))
-                if key in verified_targets:
-                    continue
-                verified_targets.add(key)
-                if _NoteColorState.capture(command.item) != command.after_state:
-                    raise RuntimeError("note color changed after history publication")
-                continue
-            if isinstance(command, UpdateSceneItemCommand):
-                key = ("scene-item", id(command.item))
-                if key in verified_targets:
-                    continue
-                verified_targets.add(key)
-                kind = command.after_state.get("kind")
-                state_for = {
-                    "shape": shape_state_dict_for,
-                    "ring": ring_state_dict_for,
-                    "note": note_state_dict_for,
-                }.get(kind if isinstance(kind, str) else "")
-                if (
-                    state_for is not None
-                    and state_for(self.canvas, command.item) != command.after_state
-                ):
-                    raise RuntimeError(
-                        "scene-item color changed after history publication"
-                    )
 
     @staticmethod
     def _pending_note_edit_command(
@@ -2004,21 +1268,11 @@ class CanvasColorMutationService:
                         after_state=_NoteColorState.capture(item),
                     )
                 )
-            published_runtime = (
-                self._note_runtime_rollback(item)
-                if commands and self.history is not None
-                else None
-            )
             self._push_history_commands(
                 commands,
                 rollback=lambda: original_runtime.apply(item),
-                runtime_verify=(
-                    published_runtime.verify
-                    if isinstance(published_runtime, _ColorRuntimeAuthority)
-                    else None
-                ),
             )
-        except BaseException as original_error:
+        except Exception as original_error:
             if self._color_rollback_is_complete(original_error):
                 raise
             _run_color_rollback_step(
@@ -2041,7 +1295,6 @@ class CanvasColorMutationService:
             _apply_bond_color_in_place(self.canvas, bond_id, color)
             after_color = bond.color
             if before_color != after_color and self.history is not None:
-                published_runtime = self._bond_runtime_rollback(item)
                 self._push_history_command(
                     UpdateBondColorCommand(
                         bond_id=bond_id,
@@ -2049,18 +1302,13 @@ class CanvasColorMutationService:
                         after_color=after_color,
                     ),
                     rollback=rollback,
-                    runtime_verify=(
-                        published_runtime.verify
-                        if isinstance(published_runtime, _ColorRuntimeAuthority)
-                        else None
-                    ),
                 )
-        except BaseException as error:
+        except Exception as error:
             if self._color_rollback_is_complete(error):
                 raise
             try:
                 rollback()
-            except BaseException as rollback_error:
+            except Exception as rollback_error:
                 _add_color_rollback_note(
                     error,
                     rollback_error,
@@ -2086,7 +1334,7 @@ class CanvasColorMutationService:
             rollback = self._graphics_runtime_rollback(item)
             try:
                 self._apply_atom_item_graphic(item, color)
-            except BaseException as original_error:
+            except Exception as original_error:
                 _run_color_rollback_step(
                     original_error,
                     "restoring orphan atom graphics",
@@ -2108,7 +1356,6 @@ class CanvasColorMutationService:
                 dot_item.setBrush(implicit_carbon_dot_brush_for(self.canvas))
             after_color = atom.color
             if before_color != after_color and self.history is not None:
-                published_runtime = self._atom_runtime_rollback(item)
                 self._push_history_command(
                     UpdateAtomColorCommand(
                         atom_id=atom_id,
@@ -2116,18 +1363,13 @@ class CanvasColorMutationService:
                         after_color=after_color,
                     ),
                     rollback=rollback,
-                    runtime_verify=(
-                        published_runtime.verify
-                        if isinstance(published_runtime, _ColorRuntimeAuthority)
-                        else None
-                    ),
                 )
-        except BaseException as error:
+        except Exception as error:
             if self._color_rollback_is_complete(error):
                 raise
             try:
                 rollback()
-            except BaseException as rollback_error:
+            except Exception as rollback_error:
                 _add_color_rollback_note(
                     error,
                     rollback_error,
@@ -2183,7 +1425,7 @@ class CanvasColorMutationService:
         if _graphics_item_is_deleted(item):
             return lambda: None
         text_color = (
-            QColor(QGraphicsTextItem.defaultTextColor(item))
+            QColor(item.defaultTextColor())
             if isinstance(item, QGraphicsTextItem)
             else None
         )
@@ -2196,12 +1438,7 @@ class CanvasColorMutationService:
         def restore() -> None:
             operations: list[Callable[[], None]] = []
             if text_color is not None and isinstance(item, QGraphicsTextItem):
-                operations.append(
-                    lambda: QGraphicsTextItem.setDefaultTextColor(
-                        item,
-                        QColor(text_color),
-                    )
-                )
+                operations.append(lambda: item.setDefaultTextColor(QColor(text_color)))
             if pen is not None:
                 operations.append(lambda: _set_graphics_pen_exact(item, pen))
             if brush is not None:
@@ -2214,23 +1451,15 @@ class CanvasColorMutationService:
             if (
                 text_color is not None
                 and isinstance(item, QGraphicsTextItem)
-                and QGraphicsTextItem.defaultTextColor(item) != text_color
+                and item.defaultTextColor() != text_color
             ):
                 raise RuntimeError("text color did not match its savepoint")
             if pen is not None:
-                actual_pen = (
-                    QPen(QAbstractGraphicsShapeItem.pen(item))
-                    if isinstance(item, QAbstractGraphicsShapeItem)
-                    else _captured_graphics_pen(item)
-                )
+                actual_pen = _captured_graphics_pen(item)
                 if actual_pen != pen:
                     raise RuntimeError("graphics pen did not match its savepoint")
             if brush is not None:
-                actual_brush = (
-                    QBrush(QAbstractGraphicsShapeItem.brush(item))
-                    if isinstance(item, QAbstractGraphicsShapeItem)
-                    else _captured_graphics_brush(item)
-                )
+                actual_brush = _captured_graphics_brush(item)
                 if actual_brush != brush:
                     raise RuntimeError("graphics brush did not match its savepoint")
 
@@ -2410,7 +1639,7 @@ class CanvasColorMutationService:
                 if not capture_target(item, kind):
                     unwind_unsupported_capture()
                     return None
-        except BaseException as original_error:
+        except Exception as original_error:
             for restore in reversed(restores):
                 _run_color_rollback_step(
                     original_error,

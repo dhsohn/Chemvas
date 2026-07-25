@@ -52,7 +52,7 @@ def _add_drag_rollback_note(
             "Selection drag recovery also encountered an error while "
             f"{phase}: {type(rollback_error).__name__}: {rollback_error}"
         )
-    except BaseException:
+    except Exception:
         return
 
 
@@ -147,8 +147,8 @@ class SelectionDragMixin:
         if savepoint is None:
             return
         try:
-            result = savepoint.restore_with_result()
-        except BaseException as rollback_error:
+            result = savepoint.restore()
+        except Exception as rollback_error:
             if original_error is None:
                 raise
             _add_drag_rollback_note(
@@ -175,14 +175,14 @@ class SelectionDragMixin:
         token = self._require_drag_token()
         try:
             commit(token)
-        except BaseException as original_error:
+        except Exception as original_error:
             # Fail closed. Before the push commits, restore the savepoint;
             # after a successful push the stack top describes the document,
             # so the document must stay as pushed.
             if token.pushed:
                 try:
                     self._release_drag_transaction(token)
-                except BaseException as cleanup_error:
+                except Exception as cleanup_error:
                     _add_drag_rollback_note(
                         original_error,
                         cleanup_error,
@@ -311,7 +311,7 @@ class SelectionDragMixin:
             shift_selection_outlines_for(self.canvas, delta.x(), delta.y())
             self._total_delta += delta
             self._moved = True
-        except BaseException as original_error:
+        except Exception as original_error:
             self._cancel_selection_drag(original_error, token=token)
             raise
 
@@ -362,7 +362,7 @@ class SelectionDragMixin:
 
         try:
             self._commit_drag_transaction(commit)
-        except BaseException:
+        except Exception:
             if self._drag_transaction is None:
                 self._reset_selection_drag_state()
             raise

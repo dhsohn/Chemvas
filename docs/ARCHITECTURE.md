@@ -54,9 +54,10 @@ imports from `chemvas.features`.
 
 ## Transaction and Recovery Ownership
 
-- `chemvas.domain.transactions` owns framework-free restore outcomes, hostile-descriptor-safe bound attribute ports, retry/error preservation, and the exact history stack authority snapshot.
-- `chemvas.ui.transactions` owns Qt-aware command payload, object graph, scene-item attach, and scene-rect savepoints. The former flat snapshot modules are deleted, and an architecture ratchet prevents their return.
-- Transaction behavior is intentionally not collapsed into one generic context manager. Reversible mutations restore an absolute snapshot, document replacement restores the previous document or fails closed, long drags use savepoint-style authority, and scene reset converges to empty after Qt item destruction. Shared primitives are reused only where those semantics agree.
+- `CanvasHistoryService` is the sole owner of undo/redo stack policy and of the immutable `HistoryStackSnapshot` value. Exact top-level undo/redo operations capture one document savepoint; nested commands defer to that operation.
+- `chemvas.ui.transactions.document.DocumentSavepoint` is the public owner of whole-document capture, restore, verification, and release. It composes the lower-level object-graph, scene-runtime, and scene-rect primitives in the same package. `history_commands` owns command classes, not a private snapshot toolkit.
+- `chemvas.domain.transactions` owns only framework-free `RestoreOutcome` validation, recovery-note attachment, and the one-shot restore helper.
+- A restore is applied once and verified once. If exact restoration cannot be established, history applies ADR 0002's conservative fail-closed stack policy and leaves durable recovery to autosave/session restore. The removed retry, authority-channel, compatibility-probing, and parallel stack-snapshot layers must not return.
 
 ## Data/Render Flow
 Tools -> CanvasView -> MoleculeModel mutation -> Renderer/BondRenderer -> QGraphicsScene updates -> HistoryCommand push.

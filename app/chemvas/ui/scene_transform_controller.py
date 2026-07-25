@@ -20,7 +20,6 @@ from chemvas.features.selection import (
 from chemvas.features.selection import rotated_atom_positions
 from chemvas.ui.bond_graphics_access import add_bond_graphics_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for
-from chemvas.ui.canvas_delete_transaction import canvas_delete_transaction
 from chemvas.ui.canvas_graph_state import graph_state_for
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import (
@@ -74,6 +73,7 @@ from chemvas.ui.selection_collection_access import (
     selected_items_for_transform_for,
 )
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
+from chemvas.ui.transactions.document import document_transaction
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView
@@ -102,7 +102,7 @@ ROTATION_STATE_ITEM_KINDS = (
 def _atomic_history_transform(operation):
     @wraps(operation)
     def run(controller, *args, **kwargs):
-        with canvas_delete_transaction(
+        with document_transaction(
             controller.canvas,
             history_service=controller.history,
         ):

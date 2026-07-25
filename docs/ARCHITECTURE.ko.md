@@ -52,9 +52,10 @@
 
 ## 트랜잭션과 복구 소유권
 
-- `chemvas.domain.transactions`는 프레임워크와 무관한 복구 결과, hostile descriptor에도 안전한 bound attribute port, 재시도/오류 보존, 정확한 history stack authority snapshot을 소유한다.
-- `chemvas.ui.transactions`는 Qt-aware command payload, 객체 그래프, scene-item attach, scene-rect savepoint를 소유한다. 기존 평면 snapshot 모듈은 삭제되었고 아키텍처 ratchet이 재도입을 막는다.
-- 트랜잭션 동작을 하나의 범용 context manager로 합치지 않는다. 되돌릴 수 있는 mutation은 절대 snapshot을 복원하고, 문서 교체는 이전 문서를 복원하거나 fail-closed하며, 장시간 drag는 savepoint형 authority를 사용하고, scene reset은 Qt item 파괴 후 빈 상태로 수렴한다. 의미가 같은 부분에만 공통 primitive를 사용한다.
+- `CanvasHistoryService`는 undo/redo stack 정책과 불변 `HistoryStackSnapshot` 값의 유일한 소유자다. 최상위 exact undo/redo 연산은 문서 savepoint를 하나만 캡처하고, 중첩 command는 그 연산에 위임한다.
+- `chemvas.ui.transactions.document.DocumentSavepoint`는 문서 전체 capture, restore, verify, release의 공개 소유자다. 같은 패키지의 하위 object-graph, scene-runtime, scene-rect primitive를 조합한다. `history_commands`는 command class만 소유하며 private snapshot toolkit을 내보내지 않는다.
+- `chemvas.domain.transactions`는 프레임워크와 무관한 `RestoreOutcome` 검증, 복구 오류 note 부착, 1회 restore helper만 소유한다.
+- restore는 한 번 적용하고 한 번 검증한다. exact 복원을 입증하지 못하면 history는 ADR 0002의 보수적인 fail-closed stack 정책을 적용하고 durable recovery는 autosave/session restore에 맡긴다. 제거된 retry, authority channel, compatibility probing, 병렬 stack snapshot 계층은 다시 도입할 수 없다.
 
 ## 데이터/렌더 흐름 (Data/Render Flow)
 Tools -> CanvasView -> MoleculeModel 변경(mutation) -> Renderer/BondRenderer -> QGraphicsScene 업데이트 -> HistoryCommand 푸시.

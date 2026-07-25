@@ -69,23 +69,23 @@ class CanvasView(QGraphicsView):
         # the exception only at this outer Qt boundary.
         try:
             logger.exception("Canvas mouse-%s handling failed", phase)
-        except BaseException:
+        except Exception:
             pass
         try:
             notify_error_for(
                 self,
                 "The current interaction could not be completed. Try again.",
             )
-        except BaseException:
+        except Exception:
             try:
                 logger.exception("Canvas mouse-event error notification failed")
-            except BaseException:
+            except Exception:
                 pass
         try:
             accept = getattr(event, "accept", None)
             if callable(accept):
                 accept()
-        except BaseException:
+        except Exception:
             pass
 
     def mousePressEvent(self, event) -> None:
@@ -93,7 +93,7 @@ class CanvasView(QGraphicsView):
             route_mouse_press_event(
                 self, event, base_mouse_press_event=super().mousePressEvent
             )
-        except BaseException:
+        except Exception:
             self._report_mouse_event_failure(event, "press")
 
     def mouseDoubleClickEvent(self, event) -> None:
@@ -103,7 +103,7 @@ class CanvasView(QGraphicsView):
                 event,
                 base_mouse_double_click_event=super().mouseDoubleClickEvent,
             )
-        except BaseException:
+        except Exception:
             self._report_mouse_event_failure(event, "double-click")
 
     def mouseMoveEvent(self, event) -> None:
@@ -111,7 +111,7 @@ class CanvasView(QGraphicsView):
             route_mouse_move_event(
                 self, event, base_mouse_move_event=super().mouseMoveEvent
             )
-        except BaseException:
+        except Exception:
             self._report_mouse_event_failure(event, "move")
 
     def mouseReleaseEvent(self, event) -> None:
@@ -119,7 +119,7 @@ class CanvasView(QGraphicsView):
             route_mouse_release_event(
                 self, event, base_mouse_release_event=super().mouseReleaseEvent
             )
-        except BaseException:
+        except Exception:
             self._report_mouse_event_failure(event, "release")
 
     def viewportEvent(self, event) -> bool:

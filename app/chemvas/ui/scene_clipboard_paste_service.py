@@ -67,7 +67,7 @@ def _add_clipboard_rollback_note(
         if not callable(add_note):
             return
         add_note(f"Clipboard {phase} rollback also failed: {cleanup_error!r}")
-    except BaseException:
+    except Exception:
         return
 
 
@@ -154,11 +154,11 @@ def paste_selection_from_clipboard_for_canvas(
         set_clipboard_paste_source_json_for(canvas, plan.paste_source_json)
         set_clipboard_paste_count_for(canvas, plan.paste_count)
         release_history_transaction_for_history(canvas, exact_transaction)
-    except BaseException as error:
+    except Exception as error:
         for item in reversed(tracked_scene_items):
             try:
                 remove_scene_item(canvas, item)
-            except BaseException as cleanup_error:
+            except Exception as cleanup_error:
                 _add_clipboard_rollback_note(
                     error,
                     cleanup_error,
@@ -173,7 +173,7 @@ def paste_selection_from_clipboard_for_canvas(
                 exact_transaction=None,
                 original_error=error,
             )
-        except BaseException as cleanup_error:
+        except Exception as cleanup_error:
             _add_clipboard_rollback_note(
                 error,
                 cleanup_error,
@@ -181,7 +181,7 @@ def paste_selection_from_clipboard_for_canvas(
             )
         try:
             restore_clipboard_selection_snapshot_for_canvas(canvas, selection_snapshot)
-        except BaseException as cleanup_error:
+        except Exception as cleanup_error:
             _add_clipboard_rollback_note(
                 error,
                 cleanup_error,
@@ -189,7 +189,7 @@ def paste_selection_from_clipboard_for_canvas(
             )
         try:
             set_clipboard_paste_source_json_for(canvas, previous_source_json)
-        except BaseException as cleanup_error:
+        except Exception as cleanup_error:
             _add_clipboard_rollback_note(
                 error,
                 cleanup_error,
@@ -197,7 +197,7 @@ def paste_selection_from_clipboard_for_canvas(
             )
         try:
             set_clipboard_paste_count_for(canvas, previous_paste_count)
-        except BaseException as cleanup_error:
+        except Exception as cleanup_error:
             _add_clipboard_rollback_note(
                 error,
                 cleanup_error,
@@ -214,7 +214,7 @@ def paste_selection_from_clipboard_for_canvas(
                     exact_restore_error,
                     phase="exact",
                 )
-        except BaseException as cleanup_error:
+        except Exception as cleanup_error:
             _add_clipboard_rollback_note(
                 error,
                 cleanup_error,

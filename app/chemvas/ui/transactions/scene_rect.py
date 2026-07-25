@@ -128,11 +128,11 @@ class _SceneRectTracker:
 
 def _quiet_rect_read(scene, getter: Callable[[], object]) -> QRectF:
     if isinstance(scene, QObject):
-        previous = QObject.blockSignals(scene, True)
+        previous = scene.blockSignals(True)
         try:
             return QRectF(cast(Any, getter()))
         finally:
-            QObject.blockSignals(scene, previous)
+            scene.blockSignals(previous)
     return QRectF(cast(Any, getter()))
 
 
@@ -140,14 +140,12 @@ def _quiet_rect_read(scene, getter: Callable[[], object]) -> QRectF:
 def _internal_rect_write(scene, tracker: _SceneRectTracker):
     previous_flag = tracker.internal_change
     tracker.internal_change = True
-    previous_signals = (
-        QObject.blockSignals(scene, True) if isinstance(scene, QObject) else None
-    )
+    previous_signals = scene.blockSignals(True) if isinstance(scene, QObject) else None
     try:
         yield
     finally:
         if previous_signals is not None:
-            QObject.blockSignals(scene, previous_signals)
+            scene.blockSignals(previous_signals)
         tracker.internal_change = previous_flag
 
 
@@ -204,7 +202,7 @@ def _capture_view_scene_rect_updaters(scene) -> tuple[Callable[[QRectF], None], 
                     if isinstance(target, QObject)
                 ]
                 try:
-                    QGraphicsView.updateSceneRect(_view, QRectF(rect))
+                    _view.updateSceneRect(QRectF(rect))
                 finally:
                     for target, previous in reversed(blocked):
                         target.blockSignals(previous)
@@ -388,9 +386,7 @@ class SceneRectSnapshot:
             # still observe real growth Qt tracked lazily.
             scene = tracker.scene
             if isinstance(scene, QGraphicsScene):
-                view_refresh_rect = view_refresh_rect.united(
-                    QGraphicsScene.itemsBoundingRect(scene)
-                )
+                view_refresh_rect = view_refresh_rect.united(scene.itemsBoundingRect())
             elif callable(self.scene_items_bounding_rect_getter):
                 view_refresh_rect = view_refresh_rect.united(
                     QRectF(cast(Any, self.scene_items_bounding_rect_getter()))
@@ -479,29 +475,6 @@ class SceneRectSnapshot:
         tracker.pending_expansions.clear()
         tracker.pending_journal.clear()
         self.active = False
-
-    def reassert(self) -> None:
-        """Idempotently re-apply the captured rect and mode.
-
-        Restores normally while active; after consumption it re-applies only
-        at depth zero (never under another transaction's open guard) and only
-        when the live rect or mode drifted.
-        """
-
-        if self.active:
-            self.restore()
-            return
-        tracker = self.tracker
-        if tracker.depth:
-            return
-        current_rect = self.live_rect()
-        current_automatic = scene_rect_is_automatic(tracker.scene)
-        if current_rect == self.baseline_rect and (current_automatic is self.automatic):
-            return
-        if self.automatic:
-            self._restore_automatic_scene_rect()
-        else:
-            self._restore_explicit_scene_rect()
 
     def commit_replacement(self, expanded_rect=None) -> None:
         """Finalize a document replacement that may have switched the mode."""
@@ -616,7 +589,7 @@ class SceneRectStateSnapshot:
             previous_flag = tracker.internal_change
             tracker.internal_change = True
         previous_signals = (
-            QObject.blockSignals(scene, True) if isinstance(scene, QObject) else None
+            scene.blockSignals(True) if isinstance(scene, QObject) else None
         )
         try:
             self.set_scene_rect_setter(
@@ -624,7 +597,7 @@ class SceneRectStateSnapshot:
             )
         finally:
             if previous_signals is not None:
-                QObject.blockSignals(scene, previous_signals)
+                scene.blockSignals(previous_signals)
             if isinstance(tracker, _SceneRectTracker) and previous_flag is not None:
                 tracker.internal_change = previous_flag
         if self.automatic_attribute_present:

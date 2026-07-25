@@ -15,6 +15,8 @@ REMOVED_COMPATIBILITY_MODULES = frozenset(
         "chemvas.core.document_state",
         "chemvas.core.model",
         "chemvas.core.rdkit_types",
+        "chemvas.domain.transactions.bound_attribute",
+        "chemvas.domain.transactions.history_authority",
         "chemvas.file_open",
         "chemvas.main",
         "chemvas.ui.active_tool_reference",
@@ -41,9 +43,12 @@ REMOVED_COMPATIBILITY_MODULES = frozenset(
         "chemvas.ui.canvas_service_types",
         "chemvas.ui.handle_interaction_logic",
         "chemvas.ui.history_command_snapshot",
+        "chemvas.ui.history_push_failure_recovery",
         "chemvas.ui.history_recovery_note",
         "chemvas.ui.history_restore_retry",
         "chemvas.ui.history_stack_snapshot",
+        "chemvas.ui.canvas_delete_transaction",
+        "chemvas.ui.transactions.history_command",
         "chemvas.ui.hover_highlight_access",
         "chemvas.ui.hover_highlight_logic",
         "chemvas.ui.hover_interaction_access",
@@ -386,7 +391,7 @@ def test_drag_transaction_uses_shared_history_savepoint_port() -> None:
     source = drag.read_text()
 
     assert "chemvas.ui.history_canvas_access" in source
-    assert "chemvas.ui.canvas_delete_transaction import" not in source
+    assert "chemvas.ui.transactions.document import" not in source
 
 
 def test_concrete_adapters_are_known_only_by_adapters_and_bootstrap() -> None:

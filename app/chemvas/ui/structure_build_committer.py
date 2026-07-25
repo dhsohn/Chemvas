@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.domain.transactions import restore_snapshot_with_retry
+from chemvas.domain.transactions import restore_snapshot
 from chemvas.ui.atom_label_access import add_or_update_atom_label, atom_label_service
 from chemvas.ui.canvas_model_access import atom_for_id, atoms_for, bonds_for
 from chemvas.ui.canvas_ring_fill_scene_access import create_ring_fill_item_for
@@ -67,7 +67,7 @@ def _add_build_rollback_note(
         if not callable(add_note):
             return
         add_note(f"{phase}: {cleanup_error!r}")
-    except BaseException:
+    except Exception:
         return
 
 
@@ -107,7 +107,7 @@ class StructureBuildCommitter:
                 self.canvas,
                 history_service=history_service,
             )
-        except BaseException as error:
+        except Exception as error:
             capture_baseline = StructureBuildHistorySnapshot(
                 before_smiles_input=before_smiles_input,
                 before_next_atom_id=before_next_atom_id,
@@ -119,7 +119,7 @@ class StructureBuildCommitter:
             cleanup_errors: list[BaseException] = []
             try:
                 cleanup_errors.extend(self._remove_new_scene_items(capture_baseline))
-            except BaseException as scene_cleanup_error:
+            except Exception as scene_cleanup_error:
                 cleanup_errors.append(scene_cleanup_error)
             try:
                 rollback_insert_mutation_for(
@@ -127,7 +127,7 @@ class StructureBuildCommitter:
                     before_next_atom_id=before_next_atom_id,
                     before_bond_count=before_bond_count,
                 )
-            except BaseException as model_cleanup_error:
+            except Exception as model_cleanup_error:
                 cleanup_errors.append(model_cleanup_error)
             smiles_result = smiles_authority.restore(before_smiles_input)
             cleanup_errors.extend(smiles_result.errors)
@@ -153,8 +153,8 @@ class StructureBuildCommitter:
         )
         try:
             clear_last_smiles_input_for(self.canvas)
-        except BaseException as error:
-            restore_result = restore_snapshot_with_retry(
+        except Exception as error:
+            restore_result = restore_snapshot(
                 lambda: restore_history_transaction_for_history(
                     self.canvas,
                     snapshot.exact_transaction,
@@ -195,13 +195,13 @@ class StructureBuildCommitter:
                 self.canvas,
                 published_transaction,
             )
-        except BaseException as error:
+        except Exception as error:
             try:
                 release_history_transaction_for_history(
                     self.canvas,
                     published_transaction,
                 )
-            except BaseException as cleanup_error:
+            except Exception as cleanup_error:
                 _add_build_rollback_note(
                     error,
                     cleanup_error,
@@ -242,7 +242,7 @@ class StructureBuildCommitter:
         cleanup_errors: list[BaseException] = []
         try:
             cleanup_errors.extend(self._remove_new_scene_items(snapshot))
-        except BaseException as error:
+        except Exception as error:
             cleanup_errors.append(error)
         try:
             rollback_insert_mutation_for(
@@ -250,9 +250,9 @@ class StructureBuildCommitter:
                 before_next_atom_id=snapshot.before_next_atom_id,
                 before_bond_count=snapshot.before_bond_count,
             )
-        except BaseException as error:
+        except Exception as error:
             cleanup_errors.append(error)
-        restore_result = restore_snapshot_with_retry(
+        restore_result = restore_snapshot(
             lambda: restore_history_transaction_for_history(
                 self.canvas,
                 snapshot.exact_transaction,
@@ -348,7 +348,7 @@ class StructureBuildCommitter:
             if callable(canonical_remove):
                 try:
                     remove_scene_item(self.canvas, item)
-                except BaseException as error:
+                except Exception as error:
                     errors.append(error)
                 else:
                     continue
@@ -361,23 +361,23 @@ class StructureBuildCommitter:
                     collection = scene_item_collection_for(self.canvas, name)
                     if item in collection:
                         collection.remove(item)
-                except BaseException as fallback_error:
+                except Exception as fallback_error:
                     errors.append(fallback_error)
             scene_method = getattr(self.canvas, "scene", None)
             try:
                 scene = scene_method() if callable(scene_method) else None
-            except BaseException as fallback_error:
+            except Exception as fallback_error:
                 errors.append(fallback_error)
                 scene = None
             if callable(getattr(scene, "removeItem", None)):
                 try:
                     remove_item_from_canvas_scene(self.canvas, item)
-                except BaseException as fallback_error:
+                except Exception as fallback_error:
                     errors.append(fallback_error)
             data_method = getattr(item, "data", None)
             try:
                 kind = data_method(0) if callable(data_method) else None
-            except BaseException as fallback_error:
+            except Exception as fallback_error:
                 errors.append(fallback_error)
                 kind = None
             if kind == "ring":
@@ -386,7 +386,7 @@ class StructureBuildCommitter:
                 # refresh, retry while the model graph still exists.
                 try:
                     refresh_bond_geometry_for_ring_item(self.canvas, item)
-                except BaseException as fallback_error:
+                except Exception as fallback_error:
                     errors.append(fallback_error)
         return errors
 

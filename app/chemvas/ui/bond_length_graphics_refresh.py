@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import inspect
-
 from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QFont, QPen
 
@@ -24,19 +22,9 @@ from chemvas.ui.renderer_style_access import (
 )
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
 
-_MISSING_GRAPHICS_PORT = object()
-
 
 def _optional_graphics_callable(item, name: str):
-    try:
-        port = getattr(item, name)
-    except AttributeError:
-        if (
-            inspect.getattr_static(item, name, _MISSING_GRAPHICS_PORT)
-            is not _MISSING_GRAPHICS_PORT
-        ):
-            raise
-        return None
+    port = getattr(item, name, None)
     return port if callable(port) else None
 
 
@@ -48,7 +36,7 @@ def _require_graphics_value(
 ) -> None:
     try:
         matches = bool(actual == expected)
-    except BaseException:
+    except Exception:
         matches = False
     if not matches:
         raise RuntimeError(f"{description} setter did not apply the requested value")

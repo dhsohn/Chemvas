@@ -57,7 +57,7 @@ def _add_rotation_finalization_rollback_note(
         if not callable(add_note):
             return
         add_note(f"Rotation finalization rollback also failed: {cleanup_error!r}")
-    except BaseException:
+    except Exception:
         return
 
 
@@ -225,7 +225,7 @@ class SelectionRotationController:
                 press_pos=press_pos,
                 on_session_started=publish_preview,
             )
-        except BaseException:
+        except Exception:
             preview = self._rotation_preview_authority
             self._rotation_preview_authority = None
             if preview is not None:
@@ -341,7 +341,7 @@ class SelectionRotationController:
             state.clear_session()
             preview.release()
             self._rotation_preview_authority = None
-        except BaseException as original_error:
+        except Exception as original_error:
             # Fail closed: close the session and surface the error. Before the
             # push commits, revert the document to the gesture start (the
             # history service owns its own stack consistency for a failed
@@ -354,7 +354,7 @@ class SelectionRotationController:
                 else:
                     preview.restore(original_error)
                 state.clear_session()
-            except BaseException as cleanup_error:
+            except Exception as cleanup_error:
                 _add_rotation_finalization_rollback_note(
                     original_error,
                     cleanup_error,

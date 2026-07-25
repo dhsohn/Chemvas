@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import inspect
-
 from PyQt6 import sip
 from PyQt6.QtCore import QObject
 from PyQt6.QtWidgets import QGraphicsItem
@@ -9,23 +7,9 @@ from PyQt6.QtWidgets import QGraphicsItem
 from chemvas.ui.canvas_scene_state import canvas_scene_for, optional_canvas_scene_for
 from chemvas.ui.canvas_service_ports import scene_item_controller_for_access
 
-_MISSING_ITEM_ATTRIBUTE = object()
-
 
 def _optional_item_attribute(item: object, name: str) -> object | None:
-    try:
-        return getattr(item, name)
-    except AttributeError:
-        if (
-            inspect.getattr_static(
-                item,
-                name,
-                _MISSING_ITEM_ATTRIBUTE,
-            )
-            is not _MISSING_ITEM_ATTRIBUTE
-        ):
-            raise
-        return None
+    return getattr(item, name, None)
 
 
 def scene_item_controller(canvas):
