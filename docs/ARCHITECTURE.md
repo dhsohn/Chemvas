@@ -9,7 +9,8 @@ follow the ADR instead of copying the flat `core` / `ui` layout below.
 - CanvasView (`app/chemvas/ui/canvas_view.py`): input handling, tool dispatch, selection state, and coordinating model/render/history updates. It should not own low-level drawing primitives.
 - MoleculeModel (`app/chemvas/domain/document/model.py`): pure atom/bond data and IDs. No Qt dependencies.
 - RDKitAdapter (`app/chemvas/core/rdkit_adapter.py`): optional chemistry backend for SMILES import, property calculation, 3D coordinate generation, alias expansion, and preview scene building. UI code should treat it as a best-effort service, not a required startup dependency.
-- Renderer (`app/chemvas/core/renderer.py`): style, pens/brushes, font settings.
+- Renderer (`app/chemvas/adapters/qt/renderer.py`): Qt pens/brushes and fonts,
+  driven by the pure `chemvas.features.rendering.acs1996_style` policy.
 - HistoryCommand (`app/chemvas/core/history.py`): delta-based undo/redo. Multi-entity operations are grouped with `CompositeCommand`, which applies its child delta commands in order on redo and in reverse on undo.
 - BondRenderer (`app/chemvas/ui/bond_renderer.py`): bond QGraphicsItem creation/updates and geometry helpers, driven by CanvasView context.
 - Graphics items (`app/chemvas/ui/graphics_items.py`): non-selectable QGraphicsItem wrappers.
@@ -33,7 +34,7 @@ new feature packages create role modules only when the boundary is useful.
 - **Access modules** (`*_access.py`): free functions (`foo_for(canvas)`) wrapping one operation. They must not reach into `canvas.services` directly; service lookup is delegated to the matching ports module.
 - **Ports modules** (`*_ports.py`): the only modules that resolve the service container (`canvas_services_for` / `window` private storage). Everything else receives collaborators via injection or calls a port. Production ports read only the canonical `CanvasRuntimeServices` API. Cohesive legacy groups remain grouped, while single runtimes such as `graph_service`, `tool_controller`, `hover`, and `atom_label_service` are stored directly. Flat service aliases and duck-typed production adapters are removed; focused tests build partial canonical runtimes with `tests/runtime_services.py`.
 - **Services and controllers**: constructed once per canvas in `chemvas.ui.canvas_services.py` with explicit keyword injection — no service locator inside services, no `=None` collaborator defaults that hide a missing wire. Assembly stores cohesive legacy groups as bundles in `CanvasRuntimeServices`; a single runtime is stored directly instead of receiving a one-member bundle. The obsolete graph/tool wrapper bundles and the builder-injection composer layer have been removed.
-- **core is UI-free, with one recorded Qt migration debt**: `app/chemvas/core` must not import `ui` at module level (a lazily resolved protocol implementation is the one sanctioned exception, see `chemvas.core.history.py`). `chemvas.core.renderer.py` is the only existing direct Qt dependency; it is frozen as transitional debt and will move to the Qt adapter during the namespace migration. New core-to-Qt dependencies are forbidden.
+- **core is UI- and Qt-free**: `app/chemvas/core` must not import `ui` at module level (a lazily resolved protocol implementation is the one sanctioned exception, see `chemvas.core.history.py`) or import Qt. Concrete Qt rendering lives in `chemvas.adapters.qt.renderer`; new core-to-Qt dependencies are forbidden.
 
 These rules are enforced by `tests/test_architecture_boundaries.py`. New rules
 must be dependency contracts or general pattern bans. Some legacy checks still
@@ -75,7 +76,7 @@ When an operation touches multiple entity types at once (ex: atom creation plus 
 - Wedge/hash bonds should be translated into RDKit bond directions on single bonds only. Invalid stereo usage should fail with a precise message.
 - `.xyz` is coordinate-only. Bond order and reaction semantics are not preserved in the output format and should not be treated as round-trippable state.
 - The preview window should reuse the same conversion path as `.xyz` export to avoid divergence between what the user sees and what gets exported.
-- The 3D preview opens as a separate modeless window from the toolbar. It uses the selected-structure conversion path, owns the `Export 3D XYZ` action for the selected molecule, and shows an empty preview when no chemical structure is selected.
+- The 3D preview opens as a separate modeless window from **View ▸ Molecule Info**. It uses the selected-structure conversion path, owns the `Export 3D XYZ` action for the selected molecule, and shows an empty preview when no chemical structure is selected.
 - Each open canvas tab is an independent document with its own file path and clean/dirty digest. `.chemvas` loading accepts only the canonical single-canvas payload.
 - `.chemvas` documents are versioned (current: v4; v1–v3 stay loadable). v4 stores bonds as a compact array: deleted-slot tombstones (`null` entries in pre-v4 files) are runtime bookkeeping and never reach the document. Bond identity is runtime-scoped — no document section references bonds by position or id (atoms carry explicit ids because marks, ring fills, groups, and perspective state reference them).
 

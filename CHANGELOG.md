@@ -8,6 +8,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **macOS application name**: the menu bar now reads **Chemvas** instead of the
+  interpreter or script name. Run from source or from a `pip install`, the
+  process has no `Info.plist`, so Qt fell back to the basename of `argv[0]` and
+  macOS to the process name; Chemvas now supplies `CFBundleName` itself before
+  the `QApplication` is built. A real `.app` bundle already names itself and is
+  left alone.
+- **Menu bar**: standard **File / Edit / View** menus (alongside the existing
+  Help menu) expose New Canvas, Open / Open Recent, Save / Save As, exports,
+  Undo / Redo, clipboard and selection commands, flips and rotation, zoom
+  controls, and the Molecule Info window — with the platform shortcuts shown
+  where they apply.
+- **Canvas Size dialog**: File ▸ Canvas Size… changes the sheet size and
+  orientation of the active document.
+- **Eraser tool**: click or drag to erase atoms, bonds, and annotations; one
+  drag records a single undo step.
+- **MOL import**: File ▸ Open reads MDL Molfiles (`.mol`, V2000) into a new
+  untitled document, no RDKit required. Property records are limited to
+  `M  CHG` / `M  RAD`, and wedge/hash stereo to single bonds. Malformed or
+  unsupported files are rejected with a specific error instead of a
+  best-effort guess; nonzero counts-line chiral flags and singlet radical code
+  1 are currently rejected rather than silently losing spin/stereo semantics.
+- **Copy InChI**: the Molecule Info window now offers the full InChI string
+  alongside the existing SMILES and InChIKey copy buttons.
 - **Autosave & crash recovery**: open documents are snapshotted to a per-user
   app-data folder every few seconds. After an abnormal exit the next launch
   restores the unsaved work — flagged unsaved with a `●` and a status-bar note —
@@ -22,12 +45,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   window instead of creating a second, independently-editable copy.
 
 ### Changed
+- Slimmed the top toolbar down to drawing controls: the Save / Open / New
+  Canvas / Molecule Info / Undo / Redo buttons and the file dropdown moved into
+  the new menu bar, leaving the tool well, flip/rotate, and the SMILES
+  quick-insert field. All keyboard shortcuts are unchanged.
+- Copying a selection (`Ctrl+C`) now also places SVG and PDF vector flavors on
+  the clipboard next to the PNG, so vector-aware apps (Illustrator, Office)
+  paste vectors.
 - Unified one-sided Bold double bonds with the ordinary double-bond positioning
   model: right-click now offers **Inward**, **Centered**, and **Outward** without
   dropping the Bold style, and `l` / `c` / `r` preserve it as well.
 - Moved the SMILES quick-insert field from the tool-options bar up to the main top
   toolbar, so it stays visible regardless of the active tool. The field stretches to
-  fill the space between the drawing tools and the file/history buttons (up to a
+  fill the space after the drawing and transform controls (up to a
   maximum width so it does not sprawl on wide monitors) and shrinks on narrow windows
   instead of pushing buttons into the overflow menu.
 - Renamed the SMILES insert button from **Render** to **Insert**, so its label matches
@@ -39,7 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as a button rather than plain text, matching the `−` / `+` controls beside it.
 - Grouped the pick-one **mode tools** (select, bond, ring, arrow, …) inside a subtle
   painted "well" on the top toolbar, so they read as one set — visually distinct from
-  the loose one-shot command buttons beside them (flip, rotate, undo, redo).
+  the loose one-shot command buttons beside them (flip and rotate).
 
 ### Fixed
 - Cleared transient hover indicators before Perspective rotation captures its

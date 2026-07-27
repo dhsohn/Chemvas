@@ -15,6 +15,8 @@ REMOVED_COMPATIBILITY_MODULES = frozenset(
         "chemvas.core.document_state",
         "chemvas.core.model",
         "chemvas.core.rdkit_types",
+        "chemvas.core.renderer",
+        "chemvas.core.style_acs1996",
         "chemvas.domain.transactions.bound_attribute",
         "chemvas.domain.transactions.history_authority",
         "chemvas.file_open",
@@ -62,6 +64,7 @@ REMOVED_COMPATIBILITY_MODULES = frozenset(
         "chemvas.ui.main_window_app",
         "chemvas.ui.main_window_bootstrap",
         "chemvas.ui.main_window_services",
+        "chemvas.ui.main_window_template_icon_renderer",
         "chemvas.ui.mark_hover_preview_service",
         "chemvas.ui.note_html_sanitizer",
         "chemvas.ui.ring_occupancy_logic",
@@ -80,10 +83,14 @@ REMOVED_COMPATIBILITY_MODULES = frozenset(
         "chemvas.ui.shape_geometry",
         "chemvas.ui.smiles_insert_logic",
         "chemvas.ui.structure_growth_logic",
+        "chemvas.ui.structure_fragment_build_service",
         "chemvas.ui.structure_insert_service",
         "chemvas.ui.structure_payload_logic",
+        "chemvas.ui.structure_template_build_service",
+        "chemvas.ui.structure_template_commands",
         "chemvas.ui.template_insert_logic",
         "chemvas.ui.template_preview_logic",
+        "chemvas.ui.tools",
     }
 )
 BOOTSTRAP_LEGACY_COMPOSITION_MODULES = frozenset(
@@ -113,7 +120,6 @@ FEATURE_QT_MIGRATION_ALLOWLIST = frozenset(
         "chemvas.features.selection.handles",
         "chemvas.features.selection.outline",
         "chemvas.features.selection.rotation",
-        "chemvas.features.session.autosave",
     }
 )
 

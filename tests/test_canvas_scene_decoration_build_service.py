@@ -22,6 +22,8 @@ if QApplication is not None:
         )
         from chemvas.ui.canvas_tool_settings_state import set_tool_setting_for
         from chemvas.ui.canvas_view import CanvasView
+
+        from tests.canvas_factory import build_canvas_view
     except SyntaxError:
         CanvasSceneDecorationBuildService = None
         CanvasView = None
@@ -43,7 +45,7 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def setUp(self) -> None:
-        self.canvas = CanvasView()
+        self.canvas = build_canvas_view()
         self.service = CanvasSceneDecorationBuildService(self.canvas)
 
     def tearDown(self) -> None:

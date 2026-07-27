@@ -6,7 +6,6 @@ from PyQt6.QtWidgets import QGraphicsScene
 
 from .plan import ExportPlan
 
-POINTS_PER_INCH = 72.0
 METERS_PER_INCH = 0.0254
 
 
@@ -27,4 +26,4 @@ def paint_scene_region(
     scene.render(painter, target, source)
 
 
-__all__ = ["METERS_PER_INCH", "POINTS_PER_INCH", "paint_scene_region"]
+__all__ = ["METERS_PER_INCH", "paint_scene_region"]

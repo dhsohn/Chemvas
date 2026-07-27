@@ -5,7 +5,8 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class ACS1996Style:
-    # Approximate ChemDraw ACS 1996 defaults (screen-friendly units).
+    """Approximate ChemDraw ACS 1996 defaults in screen-friendly units."""
+
     bond_length_px: float = 20.0
     # Physical print bond length in points (1/72"). ACS uses ~0.2 in = 14.4 pt.
     # This is what export uses to size the figure independently of on-screen zoom.

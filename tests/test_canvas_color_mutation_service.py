@@ -40,7 +40,6 @@ if QApplication is not None:
     )
     from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
     from chemvas.ui.canvas_smiles_input_state import CanvasSmilesInputState
-    from chemvas.ui.canvas_view import CanvasView
     from chemvas.ui.graphics_items import AtomDotItem
     from chemvas.ui.history_commands import UpdateSceneItemCommand
     from chemvas.ui.note_item import NoteItem
@@ -51,6 +50,8 @@ if QApplication is not None:
         set_committed_note_text_for,
     )
     from chemvas.ui.scene_item_state import note_state_dict_for
+
+    from tests.canvas_factory import build_canvas_view
 
 
 def _history_service(push=None):
@@ -146,7 +147,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
     def test_ring_batch_reuses_frozen_targets_without_second_graph_lookup(
         self,
     ) -> None:
-        canvas = CanvasView()
+        canvas = build_canvas_view()
         self.addCleanup(self._dispose_canvas, canvas)
         atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
             "C",
@@ -461,7 +462,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         self.assertIs(service.history, canvas.services.history_service)
 
     def test_color_batch_failure_restores_exact_note_editing_runtime(self) -> None:
-        canvas = CanvasView()
+        canvas = build_canvas_view()
         self.addCleanup(self._dispose_canvas, canvas)
         service = canvas.services.scene_operations.canvas_color_mutation_service
         note = QGraphicsTextItem("Hello World")
@@ -510,7 +511,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
     def test_color_batch_failure_preserves_bond_graphics_identity_and_selection(
         self,
     ) -> None:
-        canvas = CanvasView()
+        canvas = build_canvas_view()
         self.addCleanup(self._dispose_canvas, canvas)
         atom_a = canvas.services.structure.canvas_atom_mutation_service.add_atom(
             "C", 0.0, 0.0
@@ -770,7 +771,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         self.assertEqual(push_command.call_count, 1)
 
     def test_note_color_undo_redo_preserves_exact_editing_runtime(self) -> None:
-        canvas = CanvasView()
+        canvas = build_canvas_view()
         self.addCleanup(self._dispose_canvas, canvas)
         note = QGraphicsTextItem("Hello World")
         note.setData(0, "note")
@@ -839,7 +840,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         self.assertEqual(note.textInteractionFlags(), before_flags)
 
     def test_committed_note_color_is_not_recorded_again_on_focus_out(self) -> None:
-        canvas = CanvasView()
+        canvas = build_canvas_view()
         self.addCleanup(self._dispose_canvas, canvas)
         note = NoteItem(canvas)
         note.setData(0, "note")
@@ -876,7 +877,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
     def test_pending_note_edit_and_color_have_linear_history_and_synced_baselines(
         self,
     ) -> None:
-        canvas = CanvasView()
+        canvas = build_canvas_view()
         self.addCleanup(self._dispose_canvas, canvas)
         note = NoteItem(canvas)
         note.setData(0, "note")

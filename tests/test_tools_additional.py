@@ -25,27 +25,20 @@ if QApplication is not None:
     )
     from chemvas.domain.document import Atom, Bond, MoleculeModel
     from chemvas.features.hover import HoverState
+    from chemvas.ui.benzene_tool import BenzeneTool
     from chemvas.ui.canvas_hover_state import hover_state_for
     from chemvas.ui.canvas_rotation_state import CanvasRotationState
     from chemvas.ui.canvas_smiles_input_state import set_last_smiles_input_for
     from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+    from chemvas.ui.edit_tools import ColorTool, DeleteTool, EditBondTool, FlipTool
     from chemvas.ui.history_commands import DeleteSceneItemsCommand, MoveItemsCommand
+    from chemvas.ui.interaction_tools import MarkTool, NoteTool, TransformTool
+    from chemvas.ui.move_tool import MoveTool
+    from chemvas.ui.perspective_tool import PerspectiveTool
+    from chemvas.ui.preview_tools import OrbitalTool
+    from chemvas.ui.text_tool import TextTool
     from chemvas.ui.tool_context import ToolContext
-    from chemvas.ui.tools import (
-        BenzeneTool,
-        ColorTool,
-        DeleteTool,
-        EditBondTool,
-        FlipTool,
-        MarkTool,
-        MoveTool,
-        NoteTool,
-        OrbitalTool,
-        PerspectiveTool,
-        TextTool,
-        ToolController,
-        TransformTool,
-    )
+    from chemvas.ui.tool_controller import ToolController
 
 
 def _tool_context_for(canvas):

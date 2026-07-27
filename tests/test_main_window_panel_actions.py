@@ -57,10 +57,14 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         )
 
     def _find_action(self, text: str):
-        for action in self.window.actions():
-            if action.text() == text:
-                return action
-        raise AssertionError(f"Could not find action with text={text!r}")
+        for menu_action in self.window.menuBar().actions():
+            menu = menu_action.menu()
+            if menu is None:
+                continue
+            for action in menu.actions():
+                if action.text() == text:
+                    return action
+        raise AssertionError(f"Could not find menu action with text={text!r}")
 
     def _find_line_edit(self, placeholder: str) -> QLineEdit:
         for widget in self.window.findChildren(QLineEdit):
@@ -157,7 +161,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
     def test_load_menu_action_uses_dialog_path_and_handles_failure(self) -> None:
         from chemvas.bootstrap.window_registry import open_windows
 
-        load_action = self._find_action("Load")
+        load_action = self._find_action("Open...")
         state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
         existing = set(open_windows())
 
@@ -250,7 +254,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         canvas = active_canvas_for_window(self.window)
         atom_id = add_atom_for(canvas, "N", 0.0, 0.0)
         atom_items_for(canvas)[atom_id].setSelected(True)
-        self._find_button(object_name="preview_panel_button").click()
+        self._find_action("Molecule Info").trigger()
         self.app.processEvents()
         preview = preview_for_window(self.window)
         preview_window = preview_window_for_window(self.window)
@@ -310,24 +314,23 @@ class MainWindowPanelActionsTest(unittest.TestCase):
             preview_window, "Export Error", "Failed to export XYZ:\nno exporter"
         )
 
-    def test_preview_panel_button_opens_preview_window(self) -> None:
-        preview_button = self._find_button(object_name="preview_panel_button")
+    def test_molecule_info_menu_action_opens_preview_window(self) -> None:
+        self.assertIsNone(self.window.findChild(QToolButton, "preview_panel_button"))
+        preview_action = self._find_action("Molecule Info")
         preview_window = preview_window_for_window(self.window)
         self.assertIsNotNone(preview_window)
-        self.assertFalse(preview_button.isCheckable())
         self.assertFalse(preview_window.isVisible())
 
-        preview_button.click()
+        preview_action.trigger()
         self.app.processEvents()
 
-        self.assertFalse(preview_button.isChecked())
         self.assertTrue(preview_window.isVisible())
 
-    def test_undo_redo_smiles_and_flip_buttons_call_canvas_and_controllers(
+    def test_undo_redo_smiles_and_flip_controls_call_canvas_and_controllers(
         self,
     ) -> None:
-        undo_button = self._find_button(tool_tip="Undo")
-        redo_button = self._find_button(tool_tip="Redo")
+        undo_action = self._find_action("Undo")
+        redo_action = self._find_action("Redo")
         flip_h_button = self._find_button(tool_tip="Flip Horizontal (Ctrl+Shift+H)")
         flip_v_button = self._find_button(tool_tip="Flip Vertical (Ctrl+Shift+V)")
         smiles_button = self._find_button(object_name="smiles_render_button")
@@ -361,18 +364,18 @@ class MainWindowPanelActionsTest(unittest.TestCase):
             self.window
         ).services.structure.insert_controller
         insert_controller.begin_smiles_insert = mock.Mock()
-        self.assertFalse(undo_button.isEnabled())
-        self.assertFalse(redo_button.isEnabled())
+        self.assertFalse(undo_action.isEnabled())
+        self.assertFalse(redo_action.isEnabled())
         history_state_for(active_canvas_for_window(self.window)).history = [object()]
         history_state_for(active_canvas_for_window(self.window)).redo_stack = [object()]
         services_for_window(
             self.window
         ).action_availability_service.update_action_availability(self.window)
-        self.assertTrue(undo_button.isEnabled())
-        self.assertTrue(redo_button.isEnabled())
+        self.assertTrue(undo_action.isEnabled())
+        self.assertTrue(redo_action.isEnabled())
 
-        undo_button.click()
-        redo_button.click()
+        undo_action.trigger()
+        redo_action.trigger()
         flip_h_button.click()
         flip_v_button.click()
         smiles_input.setText("CCO")

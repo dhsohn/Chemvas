@@ -21,6 +21,8 @@ if QApplication is not None:
     from chemvas.ui.canvas_window_access import set_error_callback_for
     from chemvas.ui.input_view_access import input_view_state_for
 
+    from tests.canvas_factory import build_canvas_view
+
 
 class _FakeEvent:
     def __init__(
@@ -75,7 +77,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def _new_view(self, *, tool_active=None):
-        view = CanvasView()
+        view = build_canvas_view()
         hover_controller = SimpleNamespace(
             clear_hover_highlight=mock.Mock(),
             update_hover_highlight=mock.Mock(),

@@ -52,6 +52,17 @@ def clear_atom_coords_3d_for(canvas: Any) -> None:
     set_atom_coords_3d_for(canvas, {})
 
 
+def stored_atom_coords_3d_matches_projection_for(
+    canvas: Any, atom_id: int, coords: AtomCoords3D
+) -> bool:
+    atom = atom_for_id(canvas, atom_id)
+    if atom is None:
+        return False
+    proj_x, proj_y = project_point_3d_for(canvas, coords)
+    tolerance = max(1.0, bond_length_px_for(canvas) * 0.15)
+    return math.hypot(proj_x - atom.x, proj_y - atom.y) <= tolerance
+
+
 def current_atom_coords_3d_for(
     canvas, atom_id: int
 ) -> tuple[float, float, float] | None:
@@ -61,9 +72,7 @@ def current_atom_coords_3d_for(
     coords = atom_coords_3d_for_id(canvas, atom_id)
     if coords is None:
         return (atom.x, atom.y, 0.0)
-    proj_x, proj_y = project_point_3d_for(canvas, coords)
-    tolerance = max(1.0, bond_length_px_for(canvas) * 0.15)
-    if math.hypot(proj_x - atom.x, proj_y - atom.y) > tolerance:
+    if not stored_atom_coords_3d_matches_projection_for(canvas, atom_id, coords):
         return (atom.x, atom.y, 0.0)
     return coords
 
@@ -80,4 +89,5 @@ __all__ = [
     "pop_atom_coords_3d_for",
     "set_atom_coords_3d_for",
     "set_atom_coords_3d_for_id",
+    "stored_atom_coords_3d_matches_projection_for",
 ]

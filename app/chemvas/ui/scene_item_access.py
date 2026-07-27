@@ -192,36 +192,6 @@ def remove_attached_item_from_canvas_scene(canvas, item) -> bool | None:
     return True
 
 
-def remove_attached_item_from_scene(scene, item) -> bool:
-    if item is None:
-        return False
-    if isinstance(item, QGraphicsItem) and sip.isdeleted(item):
-        return False
-    if scene is None:
-        return False
-    scene_method = _optional_item_attribute(item, "scene")
-    if callable(scene_method):
-        try:
-            if scene_method() is not scene:
-                return False
-        except RuntimeError:
-            if isinstance(item, QGraphicsItem) and sip.isdeleted(item):
-                return False
-            raise
-    scene.removeItem(item)
-    if callable(scene_method):
-        try:
-            if scene_method() is scene:
-                raise RuntimeError(
-                    "stable scene removal did not detach the requested item"
-                )
-        except RuntimeError:
-            if isinstance(item, QGraphicsItem) and sip.isdeleted(item):
-                return True
-            raise
-    return True
-
-
 def remove_items_from_canvas_scene(canvas, items) -> None:
     for item in list(items):
         remove_item_from_canvas_scene(canvas, item)
@@ -293,7 +263,6 @@ __all__ = [
     "item_is_unavailable_for_scene_operation",
     "refresh_bond_geometry_for_ring_item",
     "remove_attached_item_from_canvas_scene",
-    "remove_attached_item_from_scene",
     "remove_item_from_canvas_scene",
     "remove_items_from_canvas_scene",
     "remove_scene_item",

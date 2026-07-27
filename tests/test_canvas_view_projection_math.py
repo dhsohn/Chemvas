@@ -57,7 +57,6 @@ if QApplication is not None:
     from chemvas.ui.canvas_scene_items_state import (
         set_scene_item_collection_for,
     )
-    from chemvas.ui.canvas_view import CanvasView
     from chemvas.ui.graphics_items import AtomLabelItem
     from chemvas.ui.history_commands import UpdateSceneItemCommand
     from chemvas.ui.renderer_style_access import bond_length_px_for
@@ -78,6 +77,8 @@ if QApplication is not None:
         unproject_scene_point_3d_for,
     )
     from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
+
+    from tests.canvas_factory import build_canvas_view
 
 
 class _FakeRingItem:
@@ -167,7 +168,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def _real_bond_length_canvas(self):
-        canvas = CanvasView()
+        canvas = build_canvas_view()
 
         def close_canvas(target=canvas) -> None:
             target.services.document.canvas_scene_reset_service.clear_scene()

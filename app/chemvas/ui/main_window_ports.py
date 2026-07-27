@@ -45,10 +45,6 @@ def tool_action_for_window(window, action_key: str):
     return ui_references_for_window(window).tool_action_for_key(action_key)
 
 
-def preview_panel_button_for_window(window):
-    return ui_references_for_window(window).preview_panel_button
-
-
 def preview_window_for_window(window):
     return ui_references_for_window(window).preview_window
 
@@ -57,16 +53,12 @@ def apply_preview_window_assembly_for_window(window, assembly) -> None:
     ui_references_for_window(window).apply_preview_window_assembly(assembly)
 
 
-def undo_button_for_window(window):
-    return ui_references_for_window(window).undo_button
+def undo_action_for_window(window):
+    return ui_references_for_window(window).undo_action
 
 
-def redo_button_for_window(window):
-    return ui_references_for_window(window).redo_button
-
-
-def export_xyz_button_for_window(window):
-    return ui_references_for_window(window).export_xyz_button
+def redo_action_for_window(window):
+    return ui_references_for_window(window).redo_action
 
 
 def active_canvas_for_window(window):
@@ -144,11 +136,61 @@ def history_service_for_window(window):
     return history_service_for_canvas(active_canvas_for_window(window))
 
 
-def has_exportable_atoms_for_window(window) -> bool:
-    from chemvas.ui.canvas_model_access import has_atoms_for
+def scene_clipboard_controller_for_window(window):
+    return _active_canvas_services_for_window(
+        window
+    ).scene_operations.scene_clipboard_controller
+
+
+def scene_delete_controller_for_window(window):
+    return _active_canvas_services_for_window(
+        window
+    ).scene_operations.scene_delete_controller
+
+
+def copy_selection_for_window(window) -> bool:
+    if active_canvas_or_none_for_window(window) is None:
+        return False
+    return bool(
+        scene_clipboard_controller_for_window(window).copy_selection_to_clipboard()
+    )
+
+
+def cut_selection_for_window(window) -> None:
+    if copy_selection_for_window(window):
+        scene_delete_controller_for_window(window).delete_selected_items()
+
+
+def paste_selection_for_window(window) -> None:
+    if active_canvas_or_none_for_window(window) is None:
+        return
+    scene_clipboard_controller_for_window(window).paste_selection_from_clipboard()
+
+
+def select_all_for_window(window) -> None:
+    from chemvas.ui.select_all_access import select_all_scene_items_for
 
     canvas = active_canvas_or_none_for_window(window)
-    return has_atoms_for(canvas) if canvas is not None else False
+    if canvas is None:
+        return
+    tool_mode_controller_for_window(window).set_tool("select")
+    select_all_scene_items_for(canvas)
+
+
+def group_selection_for_window(window) -> None:
+    from chemvas.ui.scene_group_operations import group_selection_for
+
+    canvas = active_canvas_or_none_for_window(window)
+    if canvas is not None:
+        group_selection_for(canvas)
+
+
+def ungroup_selection_for_window(window) -> None:
+    from chemvas.ui.scene_group_operations import ungroup_selection_for
+
+    canvas = active_canvas_or_none_for_window(window)
+    if canvas is not None:
+        ungroup_selection_for(canvas)
 
 
 def active_tool_name_for_window(window):
@@ -307,22 +349,26 @@ __all__ = [
     "color_mutation_service_for_window",
     "color_tool_for_window",
     "context_bar_page_override_for_window",
+    "copy_selection_for_window",
     "current_zoom_percent_for_window",
+    "cut_selection_for_window",
     "document_session_service_for_window",
-    "export_xyz_button_for_window",
     "fit_canvas_to_view_for_window",
     "geometry_controller_for_window",
-    "has_exportable_atoms_for_window",
+    "group_selection_for_window",
     "history_service_for_window",
     "icon_factory_for_window",
     "insert_controller_for_window",
     "next_canvas_name_for_window",
+    "paste_selection_for_window",
     "preview_for_window",
-    "preview_panel_button_for_window",
     "preview_window_for_window",
-    "redo_button_for_window",
+    "redo_action_for_window",
     "reset_zoom_for_window",
+    "scene_clipboard_controller_for_window",
+    "scene_delete_controller_for_window",
     "scene_transform_controller_for_window",
+    "select_all_for_window",
     "selected_scene_items_for_window",
     "services_for_window",
     "set_atom_input_for_window",
@@ -341,7 +387,8 @@ __all__ = [
     "tool_mode_controller_for_window",
     "tool_settings_for_window",
     "ui_references_for_window",
-    "undo_button_for_window",
+    "undo_action_for_window",
+    "ungroup_selection_for_window",
     "zoom_in_for_window",
     "zoom_out_for_window",
 ]

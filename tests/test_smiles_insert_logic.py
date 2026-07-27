@@ -3,7 +3,6 @@ from unittest.mock import Mock
 
 from chemvas.domain.document import Bond, MoleculeModel
 from chemvas.features.insertion import (
-    SmilesPreviewResolvers,
     build_smiles_preview_geometry,
     build_smiles_preview_snapshot,
     plan_smiles_commit,
@@ -131,24 +130,24 @@ class SmilesInsertLogicTest(unittest.TestCase):
     def test_plan_smiles_preview_returns_clear_without_model_center_or_radius(
         self,
     ) -> None:
-        resolvers = SmilesPreviewResolvers(parallel_bond_segments=Mock(return_value=[]))
+        resolver = Mock(return_value=[])
         existing = build_smiles_preview_snapshot({}, ())
 
         self.assertEqual(
             plan_smiles_preview_update(
-                None, (0.0, 0.0), (1.0, 1.0), 1.0, existing, resolvers
+                None, (0.0, 0.0), (1.0, 1.0), 1.0, existing, resolver
             ).action,
             "clear",
         )
         self.assertEqual(
             plan_smiles_preview_update(
-                _build_model(), None, (1.0, 1.0), 1.0, existing, resolvers
+                _build_model(), None, (1.0, 1.0), 1.0, existing, resolver
             ).action,
             "clear",
         )
         self.assertEqual(
             plan_smiles_preview_update(
-                _build_model(), (0.0, 0.0), (1.0, 1.0), None, existing, resolvers
+                _build_model(), (0.0, 0.0), (1.0, 1.0), None, existing, resolver
             ).action,
             "clear",
         )
@@ -158,11 +157,10 @@ class SmilesInsertLogicTest(unittest.TestCase):
         segment_resolver = Mock(
             return_value=[(0.0, 1.0, 2.0, 3.0), (4.0, 5.0, 6.0, 7.0)]
         )
-        resolvers = SmilesPreviewResolvers(parallel_bond_segments=segment_resolver)
         existing = build_smiles_preview_snapshot({}, ())
 
         plan = plan_smiles_preview_update(
-            model, (0.0, 0.0), (10.0, 10.0), 2.0, existing, resolvers
+            model, (0.0, 0.0), (10.0, 10.0), 2.0, existing, segment_resolver
         )
 
         self.assertEqual(plan.action, "rebuild")
@@ -179,11 +177,10 @@ class SmilesInsertLogicTest(unittest.TestCase):
         segment_resolver = Mock(
             return_value=[(0.0, 1.0, 2.0, 3.0), (4.0, 5.0, 6.0, 7.0)]
         )
-        resolvers = SmilesPreviewResolvers(parallel_bond_segments=segment_resolver)
         existing = build_smiles_preview_snapshot({0: 2}, (0, 1))
 
         plan = plan_smiles_preview_update(
-            model, (0.0, 0.0), (10.0, 10.0), 2.0, existing, resolvers
+            model, (0.0, 0.0), (10.0, 10.0), 2.0, existing, segment_resolver
         )
 
         self.assertEqual(plan.action, "update")
@@ -197,11 +194,10 @@ class SmilesInsertLogicTest(unittest.TestCase):
         segment_resolver = Mock(
             return_value=[(0.0, 1.0, 2.0, 3.0), (4.0, 5.0, 6.0, 7.0)]
         )
-        resolvers = SmilesPreviewResolvers(parallel_bond_segments=segment_resolver)
         existing = build_smiles_preview_snapshot({0: 2}, (4, 5))
 
         plan = plan_smiles_preview_update(
-            model, (0.0, 0.0), (10.0, 10.0), 2.0, existing, resolvers
+            model, (0.0, 0.0), (10.0, 10.0), 2.0, existing, segment_resolver
         )
 
         self.assertEqual(plan.action, "rebuild")
@@ -210,24 +206,22 @@ class SmilesInsertLogicTest(unittest.TestCase):
         self,
     ) -> None:
         model = _build_model()
-        resolvers = SmilesPreviewResolvers(parallel_bond_segments=Mock(return_value=[]))
+        resolver = Mock(return_value=[])
         existing = build_smiles_preview_snapshot({0: 2}, (0, 1))
 
         plan = plan_smiles_preview_update(
-            model, (0.0, 0.0), (10.0, 10.0), 2.0, existing, resolvers
+            model, (0.0, 0.0), (10.0, 10.0), 2.0, existing, resolver
         )
 
         self.assertEqual(plan.action, "clear")
 
     def test_plan_smiles_preview_returns_clear_for_dangling_bond_endpoint(self) -> None:
         model = _build_model(include_dangling_bond=True)
-        resolvers = SmilesPreviewResolvers(
-            parallel_bond_segments=Mock(return_value=[(0.0, 1.0, 2.0, 3.0)])
-        )
+        resolver = Mock(return_value=[(0.0, 1.0, 2.0, 3.0)])
         existing = build_smiles_preview_snapshot({}, ())
 
         plan = plan_smiles_preview_update(
-            model, (0.0, 0.0), (0.0, 0.0), 2.0, existing, resolvers
+            model, (0.0, 0.0), (0.0, 0.0), 2.0, existing, resolver
         )
 
         self.assertEqual(plan.action, "clear")
@@ -237,10 +231,8 @@ class SmilesInsertLogicTest(unittest.TestCase):
     ) -> None:
         model = _build_single_bond_model_with_sparse_prefix()
         resolver = Mock(return_value=[(0.0, 1.0, 2.0, 3.0)])
-        resolvers = SmilesPreviewResolvers(parallel_bond_segments=resolver)
-
         geometry = build_smiles_preview_geometry(
-            model, (0.0, 0.0), (2.0, -1.0), 1.5, resolvers
+            model, (0.0, 0.0), (2.0, -1.0), 1.5, resolver
         )
 
         assert geometry is not None

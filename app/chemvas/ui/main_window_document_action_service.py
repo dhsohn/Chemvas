@@ -6,17 +6,27 @@ from pathlib import Path
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
 from chemvas.core.document_io import read_document as default_read_document
+from chemvas.core.molfile import fit_molfile_model, parse_molfile
 from chemvas.core.svg_roundtrip import (
     extract_chemvas_document_from_svg as default_read_editable_svg,
 )
+from chemvas.domain.document import MoleculeModel, serialize_model_state
 from chemvas.features.export import (
     default_export_path,
     file_filter_for_format,
     normalize_export_path,
 )
+from chemvas.features.insertion import (
+    annotation_mark_direction,
+    annotation_mark_kinds,
+    normalized_atom_annotation,
+)
 from chemvas.features.session import request_snapshot
 from chemvas.ui.canvas_view import CanvasView
-from chemvas.ui.canvas_window_access import save_canvas_to_file_for
+from chemvas.ui.canvas_window_access import (
+    save_canvas_to_file_for,
+    snapshot_canvas_state_for,
+)
 from chemvas.ui.main_window_document_dialogs import (
     prompt_export_options,
 )
@@ -32,6 +42,36 @@ from chemvas.ui.main_window_path_logic import (
 from chemvas.ui.open_document_lookup import find_open_document
 from chemvas.ui.rdkit_export_job_state import rdkit_export_jobs_for
 from chemvas.ui.recent_documents_store import record_recent
+
+
+def _annotation_mark_states(model: MoleculeModel) -> list[dict[str, object]]:
+    """Represent parsed atom annotations in the document's mark state.
+
+    Structure export derives charge/radical annotations from scene marks, so
+    restoring only ``model.atom_annotations`` would silently drop the same
+    data on the next export.
+    """
+    marks: list[dict[str, object]] = []
+    for atom_id in sorted(model.atom_annotations):
+        atom = model.atoms.get(atom_id)
+        if atom is None:
+            continue
+        annotation = normalized_atom_annotation(model.atom_annotations[atom_id])
+        for index, kind in enumerate(annotation_mark_kinds(annotation)):
+            direction_x, direction_y = annotation_mark_direction(index)
+            marks.append(
+                {
+                    "kind": kind,
+                    "text": {"plus": "+", "minus": "-"}.get(kind),
+                    "atom_id": atom_id,
+                    "dx": None,
+                    "dy": None,
+                    "x": atom.x + direction_x,
+                    "y": atom.y + direction_y,
+                    "_auto_position": True,
+                }
+            )
+    return marks
 
 
 class MainWindowDocumentActionService:
@@ -315,7 +355,7 @@ class MainWindowDocumentActionService:
             window,
             "Load Drawing",
             "",
-            "Chemvas / Editable SVG (*.chemvas *.json *.svg);;Chemvas (*.chemvas);;Editable SVG (*.svg);;JSON (*.json);;All Files (*)",
+            "Chemvas / Editable SVG / MDL Molfile (*.chemvas *.json *.svg *.mol);;Chemvas (*.chemvas);;Editable SVG (*.svg);;MDL Molfile (*.mol);;JSON (*.json);;All Files (*)",
         )
         path = (
             resolve_load_path(dialog_path)
@@ -369,6 +409,21 @@ class MainWindowDocumentActionService:
         # a missing or unreadable file never spawns an empty window.
         target = window
         try:
+            if Path(path).suffix.lower() == ".mol":
+                state = self._imported_molfile_state(window, path)
+                target = target_provider() if target_provider is not None else window
+                # An imported MOL has no backing .chemvas document: open it
+                # unbound (no file path, not in recents) so it reads as a new
+                # untitled drawing and Save can never overwrite the .mol.
+                self._canvas_documents.open_state(
+                    target,
+                    state=state,
+                    file_path=None,
+                    display_name=Path(path).name,
+                )
+                target.statusBar().showMessage(f"Imported MOL: {path}", 4000)
+                request_snapshot()
+                return True
             if Path(path).suffix.lower() == ".svg":
                 document = read_editable_svg(path)
                 target = target_provider() if target_provider is not None else window
@@ -396,6 +451,34 @@ class MainWindowDocumentActionService:
         # and quitting before the next timer tick does not drop it from restore.
         request_snapshot()
         return True
+
+    def _imported_molfile_state(self, window, path: str) -> dict:
+        """Build a fresh canvas state holding the molecule parsed from ``path``.
+
+        The molecule is laid out at the active canvas's bond length and
+        centred on the sheet (the sheet is centred on the scene origin); the
+        rest of the state carries the active canvas's settings, like a new
+        document would.
+        """
+        model = parse_molfile(Path(path).read_text(encoding="utf-8"))
+        template_state = snapshot_canvas_state_for(
+            self._active_canvas_for_window(window)
+        )
+        settings = dict(template_state["settings"])
+        bond_length = float(settings["bond_length_px"])
+        fit_molfile_model(model, bond_length=bond_length)
+        return {
+            "model": serialize_model_state(model),
+            "ring_fills": [],
+            "notes": [],
+            "marks": _annotation_mark_states(model),
+            "arrows": [],
+            "ts_brackets": [],
+            "shapes": [],
+            "orbitals": [],
+            "settings": settings,
+            "last_smiles_input": None,
+        }
 
     def _activate_open_document(self, window, canvas: CanvasView, path: str) -> None:
         """Bring the window already showing ``path`` to the front and select its

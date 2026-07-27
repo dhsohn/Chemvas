@@ -20,11 +20,6 @@ from chemvas.ui.input_view_access import viewport_center_scene_pos_for
 from chemvas.ui.structure_benzene_build_service import StructureBenzeneBuildService
 from chemvas.ui.structure_bond_build_service import StructureBondBuildService
 from chemvas.ui.structure_build_committer import StructureBuildCommitter
-from chemvas.ui.structure_fragment_build_service import (
-    FRAGMENT_BUILD_FAILED,
-    StructureFragmentBuildActions,
-    StructureFragmentBuildService,
-)
 from chemvas.ui.structure_geometry_access import (
     atom_point_for,
     cyclohexane_boat_points_for,
@@ -39,7 +34,6 @@ from chemvas.ui.structure_geometry_access import (
 )
 from chemvas.ui.structure_growth_build_actions import structure_growth_build_actions_for
 from chemvas.ui.structure_growth_build_service import StructureGrowthBuildService
-from chemvas.ui.structure_template_build_service import StructureTemplateBuildService
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView
@@ -78,13 +72,8 @@ class StructureBuildService:
             graph_service=self.graph_service,
         )
         self.benzene_builder = StructureBenzeneBuildService(canvas, self.committer)
-        self.fragment_builder = StructureFragmentBuildService(canvas, self.committer)
         self.growth_builder = StructureGrowthBuildService(
             structure_growth_build_actions_for(self)
-        )
-        self.template_builder = StructureTemplateBuildService(
-            self.fragment_builder,
-            actions_factory=self._fragment_actions,
         )
 
     def viewport_center(self) -> QPointF:
@@ -187,20 +176,6 @@ class StructureBuildService:
             raise
         return added_scene_items
 
-    def _run_fragment_recorded_build(
-        self,
-        action: Callable[[], list | None],
-        *,
-        before_smiles_input: str | None = None,
-    ) -> list:
-        def _action() -> list | None:
-            added_scene_items = action()
-            if added_scene_items is FRAGMENT_BUILD_FAILED:
-                return None
-            return [] if added_scene_items is None else added_scene_items
-
-        return self.run_recorded_build(_action, before_smiles_input=before_smiles_input)
-
     def _run_recorded_additions_action(
         self,
         action: Callable[[], bool],
@@ -222,20 +197,6 @@ class StructureBuildService:
                 _add_recorded_build_rollback_note(error, rollback_error)
             raise
         return True
-
-    def _fragment_actions(self) -> StructureFragmentBuildActions:
-        return StructureFragmentBuildActions(
-            viewport_center=self.viewport_center,
-            regular_ring_radius=self.regular_ring_radius,
-            ring_points=self.ring_points,
-            regular_ring_points_for_bond=self.regular_ring_points_for_bond,
-            cyclohexane_chair_points=self.cyclohexane_chair_points,
-            cyclohexane_boat_points=self.cyclohexane_boat_points,
-            add_ring_from_points=self.add_ring_from_points,
-            add_linear_chain=self.add_linear_chain,
-            run_recorded_build=self._run_fragment_recorded_build,
-            latest_bond_id=self.latest_bond_id,
-        )
 
     def sprout_bond_from_atom(
         self,

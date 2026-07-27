@@ -22,10 +22,11 @@ if QApplication is not None:
         append_scene_item_for,
         selected_notes_for,
     )
-    from chemvas.ui.canvas_view import CanvasView
     from chemvas.ui.move_access import move_item_for
     from chemvas.ui.scene_group_operations import group_selection_for
     from chemvas.ui.selection_collection_access import selection_snapshot_for
+
+    from tests.canvas_factory import build_canvas_view
 
 
 @unittest.skipUnless(
@@ -53,7 +54,7 @@ class GroupedNoteSelectionIntegrationTest(unittest.TestCase):
         self.app.processEvents()
 
     def test_grouped_note_follows_shift_click_and_drag(self) -> None:
-        canvas = CanvasView()
+        canvas = build_canvas_view()
         self.addCleanup(self._dispose_canvas, canvas)
         canvas.services.tool_controller.set_active("select")
         _, atom_item_a = self._add_atom(canvas, 0.0)

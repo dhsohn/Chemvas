@@ -24,8 +24,7 @@ except ModuleNotFoundError:
 if QApplication is not None:
     import chemvas.ui.bond_graphics_build_service as bond_graphics_build_module
     import chemvas.ui.bond_renderer as bond_renderer_module
-    from chemvas.core.renderer import Renderer
-    from chemvas.core.style_acs1996 import ACS1996Style
+    from chemvas.adapters.qt.renderer import Renderer
     from chemvas.domain.document import Atom, Bond
     from chemvas.features.rendering import (
         bold_out_scale,
@@ -34,6 +33,7 @@ if QApplication is not None:
         scale_segment,
         trim_segment,
     )
+    from chemvas.features.rendering.acs1996_style import ACS1996Style
     from chemvas.ui.bond_renderer import BondRenderer
     from chemvas.ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
     from chemvas.ui.canvas_graph_state import CanvasGraphState

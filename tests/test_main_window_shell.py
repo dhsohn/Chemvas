@@ -48,8 +48,8 @@ def test_rejected_close_performs_no_cleanup() -> None:
     close_event = QCloseEvent()
 
     with mock.patch(
-        "chemvas.shell.main_window.request_snapshot_on_window_close",
-        side_effect=lambda: events.append("snapshot"),
+        "chemvas.shell.main_window.QTimer.singleShot",
+        side_effect=lambda _delay, _callback: events.append("snapshot"),
     ):
         window.closeEvent(close_event)
 
@@ -66,8 +66,8 @@ def test_accepted_close_preserves_cleanup_order() -> None:
     close_event = QCloseEvent()
 
     with mock.patch(
-        "chemvas.shell.main_window.request_snapshot_on_window_close",
-        side_effect=lambda: events.append("snapshot"),
+        "chemvas.shell.main_window.QTimer.singleShot",
+        side_effect=lambda _delay, _callback: events.append("snapshot"),
     ):
         window.closeEvent(close_event)
 

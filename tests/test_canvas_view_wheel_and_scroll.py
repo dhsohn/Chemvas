@@ -17,6 +17,8 @@ if QApplication is not None:
     from chemvas.ui.input_view_access import input_view_state_for
     from chemvas.ui.selection_info_state import selection_info_state_for
 
+    from tests.canvas_factory import build_canvas_view
+
 
 class _FakeWheelEvent:
     def __init__(
@@ -55,7 +57,7 @@ class CanvasViewWheelAndScrollTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def _new_view(self):
-        view = CanvasView()
+        view = build_canvas_view()
         input_view_state_for(view).base_transform = QTransform().translate(3.0, 4.0)
         view.setTransform(QTransform().scale(2.0, 2.0))
         selection_info_state_for(view).last_interaction_time = 0.0

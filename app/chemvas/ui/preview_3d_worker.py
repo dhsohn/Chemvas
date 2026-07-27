@@ -8,7 +8,7 @@ from chemvas.features.insertion import model_with_atom_annotations
 
 
 class Preview3DWorker(QObject):
-    finished = pyqtSignal(int, object, object, object, object, object, object)
+    finished = pyqtSignal(int, object, object, object, object, object, object, object)
 
     def __init__(
         self,
@@ -30,6 +30,7 @@ class Preview3DWorker(QObject):
         formula = None
         mw = None
         smiles = None
+        inchi = None
         inchikey = None
         scene = None
         error = None
@@ -46,6 +47,7 @@ class Preview3DWorker(QObject):
             formula = identifiers.formula
             mw = identifiers.mw
             smiles = identifiers.smiles
+            inchi = identifiers.inchi
             inchikey = identifiers.inchikey
             result_method = getattr(rdkit, "model_to_3d_scene_result", None)
             if callable(result_method):
@@ -67,7 +69,7 @@ class Preview3DWorker(QObject):
         except Exception as exc:
             error = str(exc) or "Failed to build 3D preview."
         self.finished.emit(
-            self._request_id, formula, mw, smiles, inchikey, scene, error
+            self._request_id, formula, mw, smiles, inchi, inchikey, scene, error
         )
 
 

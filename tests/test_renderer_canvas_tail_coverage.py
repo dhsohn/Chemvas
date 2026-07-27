@@ -33,10 +33,7 @@ if QApplication is not None:
     from chemvas.ui.canvas_graph_state import CanvasGraphState
     from chemvas.ui.scene_clipboard_transaction_logic import translated_scene_item_state
     from chemvas.ui.selection_collection_access import append_selected_item_ids
-    from chemvas.ui.selection_rotation_access import (
-        average_bond_length_for_atoms_for,
-        rotate_selection_for,
-    )
+    from chemvas.ui.selection_rotation_access import average_bond_length_for_atoms_for
     from chemvas.ui.selection_style_access import restore_selection_from_ids_for
 
 
@@ -332,9 +329,7 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
             )
         )
 
-    def test_selection_translation_and_rotation_helpers_cover_missing_item_branches(
-        self,
-    ) -> None:
+    def test_selection_translation_helpers_cover_missing_item_branches(self) -> None:
         atom_ids: set[int] = set()
         bond_ids: set[int] = set()
         append_selected_item_ids(
@@ -353,39 +348,6 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
             atom_id_map={},
         )
         self.assertEqual(translated_note, {"kind": "note", "text": "unchanged"})
-
-        rotating_scene = SimpleNamespace(
-            selectedItems=lambda: [
-                _DataItem({0: "atom", 1: 1}),
-                _DataItem({0: "atom", 1: 2}),
-            ]
-        )
-        atom_label_service = SimpleNamespace(position_label=mock.Mock())
-        rotating_view = SimpleNamespace(
-            scene=lambda: rotating_scene,
-            model=SimpleNamespace(
-                atoms={
-                    1: Atom("C", 1.0, 0.0),
-                    2: Atom("C", -1.0, 0.0),
-                },
-                bonds=[],
-            ),
-            atom_items={},
-            services=canvas_runtime_services(
-                atom_label_service=atom_label_service,
-                move_controller=SimpleNamespace(redraw_connected_bonds=mock.Mock()),
-                canvas_ring_fill_scene_service=SimpleNamespace(
-                    rotate_ring_fills=mock.Mock()
-                ),
-                selection_controller=SimpleNamespace(
-                    update_selection_outline=mock.Mock()
-                ),
-            ),
-        )
-        rotate_selection_for(rotating_view, 90.0)
-        self.assertAlmostEqual(rotating_view.model.atoms[1].x, 0.0)
-        self.assertAlmostEqual(rotating_view.model.atoms[1].y, 1.0)
-        atom_label_service.position_label.assert_not_called()
 
         scene = SimpleNamespace(clearSelection=mock.Mock())
         selection_controller = SimpleNamespace(update_selection_outline=mock.Mock())

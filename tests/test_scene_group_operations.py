@@ -19,7 +19,7 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from chemvas.core.renderer import Renderer
+    from chemvas.adapters.qt.renderer import Renderer
     from chemvas.ui.canvas_atom_graphics_state import set_atom_item_for
     from chemvas.ui.canvas_bond_graphics_state import bond_items_for
     from chemvas.ui.canvas_group_state import group_state_for, register_group_for

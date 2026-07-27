@@ -27,7 +27,6 @@ from chemvas.ui.main_window_theme import (
     TOOLBAR_BUTTON_SIZE,
     TOOLBAR_BUTTON_STYLE,
 )
-from chemvas.ui.main_window_toolbar_buttons import CornerMenuButton
 
 
 class _StepArrowButton(QToolButton):
@@ -146,23 +145,6 @@ def icon_button(
     return button
 
 
-def icon_menu_button(icon, tooltip: str) -> CornerMenuButton:
-    """An icon button that drops down a menu, matching the File button's form
-    (a small chevron painted in the bottom-right corner)."""
-    button = CornerMenuButton()
-    button.setIcon(icon)
-    button.setIconSize(_ICON_SIZE)
-    button.setFixedSize(CONTEXT_BAR_BUTTON_HEIGHT, CONTEXT_BAR_BUTTON_HEIGHT)
-    button.setToolTip(tooltip)
-    button.setStatusTip(tooltip)
-    button.setAutoRaise(True)
-    button.setStyleSheet(_ICON_BUTTON_STYLE)
-    button.setCursor(Qt.CursorShape.PointingHandCursor)
-    button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-    button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-    return button
-
-
 def segment_button(
     text: str,
     tooltip: str,
@@ -190,20 +172,6 @@ def action_button(text: str, tooltip: str) -> QToolButton:
     button.setAutoRaise(True)
     button.setCursor(Qt.CursorShape.PointingHandCursor)
     button.setStyleSheet(CONTEXT_ACTION_BUTTON_STYLE)
-    return button
-
-
-def length_field_button(text: str, tooltip: str) -> QToolButton:
-    button = segment_button(text, tooltip)
-    button.setObjectName("bondLengthField")
-    button.setStyleSheet(
-        CONTEXT_SEGMENT_STYLE + "QToolButton#bondLengthField {"
-        f" background: {_P['surface_input']};"
-        f" border-color: {_P['border_strong']};"
-        " font-family: Menlo, Monaco, Consolas, monospace;"
-        " padding: 0px 7px;"
-        "}"
-    )
     return button
 
 
@@ -432,8 +400,6 @@ __all__ = [
     "divider",
     "hint_label",
     "icon_button",
-    "icon_menu_button",
-    "length_field_button",
     "new_context_page",
     "rotate_angle_input",
     "segment_button",

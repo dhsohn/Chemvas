@@ -5,7 +5,7 @@ from dataclasses import replace
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QBrush, QColor, QFont, QPen
 
-from chemvas.core.style_acs1996 import ACS1996Style
+from chemvas.features.rendering.acs1996_style import ACS1996Style
 
 
 class Renderer:

@@ -60,6 +60,13 @@ TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
     ),
     ("orbital", "Orbital", "orbital", "icon_orbital", "Orbital"),
     (
+        "delete",
+        "Eraser",
+        "delete",
+        "icon_eraser",
+        "Eraser (click or drag to erase)",
+    ),
+    (
         "perspective",
         "Perspective",
         "perspective",
@@ -117,7 +124,7 @@ TOOLBAR_PRIMARY_TOOL_GROUP: tuple[str, ...] = (
 TOOLBAR_TOOL_GROUPS: list[tuple[str, ...]] = [
     TOOLBAR_PRIMARY_TOOL_GROUP,
     ("mark", "orbital"),
-    ("note", "shape", "color", "ring_fill"),
+    ("note", "shape", "color", "ring_fill", "delete"),
 ]
 
 TOOLBAR_TOOL_ACTION_ORDER: list[str] = [

@@ -16,6 +16,8 @@ if QApplication is not None:
     from chemvas.ui.canvas_pointer_controller import CanvasPointerController
     from chemvas.ui.canvas_view import CanvasView
 
+    from tests.canvas_factory import build_canvas_view
+
 
 class _FakeEvent:
     def __init__(
@@ -114,7 +116,7 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def _new_view(self, *, tool_active=None):
-        view = CanvasView()
+        view = build_canvas_view()
         hover_controller = SimpleNamespace(
             clear_hover_highlight=mock.Mock(),
             update_hover_highlight=mock.Mock(),

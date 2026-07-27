@@ -21,10 +21,13 @@ def verify_wheel(path: Path) -> None:
         required = {
             "chemvas/__init__.py",
             "chemvas/__main__.py",
+            "chemvas/adapters/macos_app_identity.py",
             "chemvas/adapters/qt/file_open_events.py",
+            "chemvas/adapters/qt/renderer.py",
             "chemvas/bootstrap/application.py",
             "chemvas/bootstrap/main_window.py",
             "chemvas/domain/document/model.py",
+            "chemvas/features/rendering/acs1996_style.py",
             "chemvas/shell/main_window.py",
             "chemvas/ui/__init__.py",
             "chemvas/assets/icon/chemvas.svg",
@@ -39,10 +42,17 @@ def verify_wheel(path: Path) -> None:
             "chemvas/core/document_state.py",
             "chemvas/core/model.py",
             "chemvas/core/rdkit_types.py",
+            "chemvas/core/renderer.py",
+            "chemvas/core/style_acs1996.py",
             "chemvas/file_open.py",
             "chemvas/main.py",
             "chemvas/ui/main_window.py",
             "chemvas/ui/main_window_app.py",
+            "chemvas/ui/main_window_template_icon_renderer.py",
+            "chemvas/ui/structure_fragment_build_service.py",
+            "chemvas/ui/structure_template_build_service.py",
+            "chemvas/ui/structure_template_commands.py",
+            "chemvas/ui/tools.py",
         }
         unexpected = forbidden & names
         if unexpected:

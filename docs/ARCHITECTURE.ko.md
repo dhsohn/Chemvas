@@ -9,7 +9,9 @@
 - CanvasView (`app/chemvas/ui/canvas_view.py`): 입력 처리, 도구(tool) 디스패치, 선택 상태 관리, 그리고 모델/렌더/히스토리 업데이트의 조율을 담당한다. 저수준 드로잉 프리미티브(low-level drawing primitives)를 직접 소유해서는 안 된다.
 - MoleculeModel (`app/chemvas/domain/document/model.py`): 순수한 원자/결합 데이터와 ID. Qt 의존성이 없다.
 - RDKitAdapter (`app/chemvas/core/rdkit_adapter.py`): SMILES 가져오기, 물성 계산, 3D 좌표 생성, 별칭(alias) 확장, 미리보기 씬(preview scene) 구성을 담당하는 선택적 화학 백엔드. UI 코드는 이를 필수 시작 의존성이 아니라 최선 노력(best-effort) 서비스로 취급해야 한다.
-- Renderer (`app/chemvas/core/renderer.py`): 스타일, 펜/브러시, 폰트 설정.
+- Renderer (`app/chemvas/adapters/qt/renderer.py`): 순수
+  `chemvas.features.rendering.acs1996_style` 정책을 사용하는 Qt 펜/브러시와
+  폰트 설정.
 - HistoryCommand (`app/chemvas/core/history.py`): 델타 기반 실행 취소/다시 실행(undo/redo). 다중 엔티티(multi-entity) 연산은 `CompositeCommand`로 그룹화되며, 이는 다시 실행 시 자식 델타 커맨드를 순서대로 적용하고 실행 취소 시 역순으로 적용한다.
 - BondRenderer (`app/chemvas/ui/bond_renderer.py`): 결합 QGraphicsItem 생성/업데이트 및 기하 헬퍼(geometry helpers)로, CanvasView 컨텍스트에 의해 구동된다.
 - Graphics items (`app/chemvas/ui/graphics_items.py`): 선택 불가능한 QGraphicsItem 래퍼(wrapper).
@@ -33,7 +35,7 @@
 - **Access 모듈** (`*_access.py`): 연산 하나를 감싸는 자유 함수(`foo_for(canvas)`). `canvas.services`에 직접 접근할 수 없고, 서비스 조회는 대응하는 ports 모듈에 위임한다.
 - **Ports 모듈** (`*_ports.py`): 서비스 컨테이너(`canvas_services_for` / window 비공개 저장소)를 해석할 수 있는 유일한 모듈. 그 외 모든 코드는 협력자를 주입받거나 port를 호출한다. 생산 코드의 port는 canonical `CanvasRuntimeServices` API만 사용한다. 응집된 레거시 그룹은 묶어서 유지하고 `graph_service`, `tool_controller`, `hover`, `atom_label_service` 같은 단일 runtime은 직접 보관한다. 평면 서비스 별칭과 duck-typed 생산 adapter는 삭제되었고, 집중 테스트는 `tests/runtime_services.py`로 부분 canonical runtime을 만든다.
 - **서비스와 컨트롤러**: `chemvas.ui.canvas_services.py`에서 캔버스당 한 번, 명시적 키워드 주입으로 조립된다 — 서비스 내부의 서비스 로케이터 금지, 누락된 배선을 숨기는 `=None` 협력자 기본값 금지. 조립은 응집된 레거시 그룹은 `CanvasRuntimeServices`의 bundle로 보관하고, runtime이 하나면 단일 멤버 bundle을 만들지 않고 직접 보관한다. 기존 graph/tool wrapper bundle과 builder 주입 composer 계층은 삭제되었다.
-- **core는 UI와 분리되며, Qt 마이그레이션 부채는 하나만 허용한다**: `app/chemvas/core`는 모듈 수준에서 `ui`를 import하지 않는다(`chemvas.core.history.py`의 지연 해석 프로토콜 구현만 예외). `chemvas.core.renderer.py`는 현재 유일한 직접 Qt 의존성으로, 네임스페이스 이전 중 Qt 어댑터로 이동할 전환 부채다. 새로운 core-to-Qt 의존성은 금지한다.
+- **core는 UI 및 Qt와 분리된다**: `app/chemvas/core`는 모듈 수준에서 `ui`를 import하지 않는다(`chemvas.core.history.py`의 지연 해석 프로토콜 구현만 예외). 또한 Qt를 import하지 않으며, 구체 Qt 렌더링은 `chemvas.adapters.qt.renderer`에 둔다. 새로운 core-to-Qt 의존성은 금지한다.
 
 이 규칙들은 `tests/test_architecture_boundaries.py`가 강제한다. 신규 규칙은
 의존성 계약이나 일반 패턴 금지로 작성한다. 일부 레거시 검사는 아직 제거된
@@ -73,7 +75,7 @@ Tools -> CanvasView -> MoleculeModel 변경(mutation) -> Renderer/BondRenderer -
 - 쐐기/해시 결합(Wedge/hash bonds)은 단일 결합에 대해서만 RDKit 결합 방향으로 변환되어야 한다. 잘못된 입체(stereo) 사용은 정확한 메시지와 함께 실패해야 한다.
 - `.xyz`는 좌표 전용이다. 결합 차수(bond order)와 반응 의미(reaction semantics)는 출력 포맷에 보존되지 않으며 왕복 가능한(round-trippable) 상태로 취급해서는 안 된다.
 - 미리보기 창은 사용자가 보는 것과 실제로 내보내지는 것 사이의 불일치를 피하기 위해 `.xyz` 내보내기와 동일한 변환 경로를 재사용해야 한다.
-- 3D 미리보기는 툴바에서 별도의 모덜리스(modeless) 창으로 열린다. 선택된 구조 변환 경로를 사용하고, 선택된 분자에 대한 `Export 3D XYZ` 동작을 소유하며, 선택된 화학 구조가 없을 때는 빈 미리보기를 표시한다.
+- 3D 미리보기는 **View ▸ Molecule Info**에서 별도의 모덜리스(modeless) 창으로 열린다. 선택된 구조 변환 경로를 사용하고, 선택된 분자에 대한 `Export 3D XYZ` 동작을 소유하며, 선택된 화학 구조가 없을 때는 빈 미리보기를 표시한다.
 - 열려 있는 각 캔버스 탭은 자체 파일 경로와 clean/dirty 다이제스트(digest)를 가진 독립적인 문서다. `.chemvas` 로딩은 표준 단일 캔버스 페이로드만 허용한다.
 - `.chemvas` 문서는 버전이 붙는다(현재 v4; v1–v3도 계속 로드 가능). v4는 결합을 컴팩트 배열로 저장한다: 삭제된 슬롯의 tombstone(v4 이전 파일의 `null` 항목)은 런타임 관리용이며 문서에는 더 이상 나타나지 않는다. 결합 identity는 런타임 범위다 — 문서의 어떤 섹션도 결합을 위치나 id로 참조하지 않는다(원자는 마크·링 채우기·그룹·perspective 상태가 참조하므로 명시적 id를 갖는다).
 

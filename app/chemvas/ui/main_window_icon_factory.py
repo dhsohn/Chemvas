@@ -18,7 +18,6 @@ from chemvas.ui.main_window_design_icon_renderer import (
 from chemvas.ui.main_window_icon_canvas_style import MainWindowIconCanvasStyle
 from chemvas.ui.main_window_icon_pixmap_factory import MainWindowIconPixmapFactory
 from chemvas.ui.main_window_palette import PALETTE
-from chemvas.ui.main_window_template_icon_renderer import MainWindowTemplateIconRenderer
 from chemvas.ui.main_window_tool_icon_renderer import MainWindowToolIconRenderer
 from chemvas.ui.main_window_utility_icon_renderer import MainWindowUtilityIconRenderer
 
@@ -76,11 +75,6 @@ class MainWindowIconFactory:
             stroke_active=self.STROKE_ACTIVE,
             icon_content_min=self.ICON_CONTENT_MIN,
             icon_center=self.ICON_CENTER,
-        )
-        self._template_icons = MainWindowTemplateIconRenderer(
-            icon_pen=self._icon_pen,
-            stroke_regular=self.STROKE_REGULAR,
-            stroke_thin=self.STROKE_THIN,
         )
         self._utility_icons = MainWindowUtilityIconRenderer(
             icon_pen=self._icon_pen,
@@ -229,6 +223,9 @@ class MainWindowIconFactory:
 
     def icon_ring_fill(self) -> QIcon:
         return self.make_design_icon("ring_fill")
+
+    def icon_eraser(self) -> QIcon:
+        return self.make_design_icon("eraser")
 
     def icon_undo(self) -> QIcon:
         return self.make_design_icon("undo")

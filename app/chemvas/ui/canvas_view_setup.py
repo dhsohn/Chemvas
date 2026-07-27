@@ -7,7 +7,6 @@ from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtWidgets import QGraphicsScene, QGraphicsView
 
 from chemvas.core.rdkit_adapter import RDKitAdapter
-from chemvas.core.renderer import Renderer
 from chemvas.ui.bond_renderer import BondRenderer
 from chemvas.ui.canvas_callback_state import callback_state_for
 from chemvas.ui.canvas_model_state import model_for
@@ -20,7 +19,7 @@ from chemvas.ui.sheet_setup_logic import DEFAULT_SHEET_ORIENTATION, DEFAULT_SHEE
 from chemvas.ui.sheet_setup_state import set_sheet_setup_state_for
 
 
-def initialize_canvas_view(canvas) -> None:
+def initialize_canvas_view(canvas, *, renderer) -> None:
     canvas.setRenderHint(QPainter.RenderHint.Antialiasing, True)
     canvas.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
     canvas.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
@@ -30,7 +29,7 @@ def initialize_canvas_view(canvas) -> None:
     canvas.setBackgroundBrush(QColor("#e7e7e4"))
     set_sheet_setup_state_for(canvas, DEFAULT_SHEET_SIZE, DEFAULT_SHEET_ORIENTATION)
     model_for(canvas)
-    canvas.renderer = Renderer()
+    canvas.renderer = renderer
     canvas.rdkit = RDKitAdapter()
     runtime_state = attach_canvas_runtime_state(canvas)
     apply_sheet_scene_rect_for(canvas)

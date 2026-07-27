@@ -35,9 +35,9 @@ class CanvasView(QGraphicsView):
     CLIPBOARD_SELECTION_MIME = "application/x-chemvas-selection+json"
     CLIPBOARD_SELECTION_VERSION = 2
 
-    def __init__(self) -> None:
+    def __init__(self, *, renderer: object) -> None:
         super().__init__()
-        initialize_canvas_view(self)
+        initialize_canvas_view(self, renderer=renderer)
 
     @pyqtSlot()
     def handle_scene_selection_group_changed(self) -> None:

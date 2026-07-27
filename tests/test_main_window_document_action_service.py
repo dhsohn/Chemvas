@@ -1,3 +1,4 @@
+import math
 import os
 import tempfile
 import unittest
@@ -25,8 +26,11 @@ if QApplication is not None:
         register_window,
     )
     from chemvas.core.document_io import write_document
-    from chemvas.domain.document import CANVAS_FILE_VERSION
+    from chemvas.core.molfile import parse_molfile, write_molfile
+    from chemvas.domain.document import CANVAS_FILE_VERSION, MoleculeModel
     from chemvas.ui.canvas_document_metadata_state import document_file_path_for
+    from chemvas.ui.canvas_mark_registry import mark_registry_for
+    from chemvas.ui.canvas_model_access import model_for
     from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
     from chemvas.ui.main_window_path_logic import (
         resolve_save_as_path,
@@ -36,7 +40,11 @@ if QApplication is not None:
         active_canvas_for_window,
         services_for_window,
     )
+    from chemvas.ui.mark_item_access import mark_kinds_by_atom_for
+    from chemvas.ui.renderer_style_access import bond_length_px_for
+    from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
     from chemvas.ui.structure_mutation_access import add_bond_between_points_for
+    from chemvas.ui.structure_payload_access import build_3d_conversion_payload_for
 
 
 @unittest.skipUnless(
@@ -299,6 +307,166 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         self.assertEqual(
             document_file_path_for(active_canvas_for_window(self.window)), str(path)
         )
+
+    def test_load_canvas_from_path_imports_mol_as_untitled_document(self) -> None:
+        source = MoleculeModel()
+        a = source.add_atom("C", 0.0, 0.0)
+        b = source.add_atom("N", 30.0, 0.0)
+        c = source.add_atom("O", 60.0, 0.0)
+        source.add_bond(a, b, 1)
+        source.add_bond(b, c, 1)
+        message_box = mock.Mock()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "ethanol.mol"
+            path.write_text(
+                write_molfile(
+                    source,
+                    atom_annotations={
+                        b: {"formal_charge": 2, "radical_electrons": 2},
+                        c: {"formal_charge": -1},
+                    },
+                ),
+                encoding="utf-8",
+            )
+            with mock.patch(
+                "chemvas.ui.main_window_document_action_service.record_recent"
+            ) as record_recent:
+                result = self.service.load_canvas_from_path(
+                    self.window,
+                    str(path),
+                    message_box=message_box,
+                    target_provider=lambda: self.window,
+                )
+
+        self.assertTrue(result)
+        message_box.warning.assert_not_called()
+        # The import has no backing .chemvas document: it must stay untitled
+        # (Save prompts for a new path instead of overwriting the .mol) and
+        # must not enter the recent-files list.
+        record_recent.assert_not_called()
+        canvas = active_canvas_for_window(self.window)
+        self.assertIsNone(document_file_path_for(canvas))
+        self.assertEqual(
+            self.window.tab_references.canvas_tabs.tabText(0), "ethanol.mol"
+        )
+        model = model_for(canvas)
+        self.assertEqual(
+            sorted(atom.element for atom in model.atoms.values()), ["C", "N", "O"]
+        )
+        expected_annotations = {
+            b: {"formal_charge": 2, "radical_electrons": 2},
+            c: {"formal_charge": -1},
+        }
+        self.assertEqual(model.atom_annotations, expected_annotations)
+        self.assertEqual(
+            mark_kinds_by_atom_for(canvas),
+            {b: ["plus", "plus", "radical", "radical"], c: ["minus"]},
+        )
+        base_mark_distance = bond_length_px_for(canvas) * 0.2
+        for atom_id in (b, c):
+            for mark in mark_registry_for(canvas).get_for_atom(atom_id) or ():
+                mark_data = mark.data(1)
+                self.assertGreater(
+                    math.hypot(mark_data["dx"], mark_data["dy"]),
+                    base_mark_distance,
+                )
+        export_model, export_annotations = build_3d_conversion_payload_for(canvas)
+        self.assertEqual(export_annotations, expected_annotations)
+        reparsed = parse_molfile(
+            write_molfile(export_model, atom_annotations=export_annotations)
+        )
+        self.assertEqual(reparsed.atom_annotations, expected_annotations)
+        self.assertFalse(
+            services_for_window(self.window).canvas_document_service.is_dirty(canvas)
+        )
+        self.assertTrue(
+            all(
+                "_auto_position" not in mark
+                for mark in snapshot_canvas_state_for(canvas)["marks"]
+            )
+        )
+        live_bonds = [bond for bond in model.bonds if bond is not None]
+        self.assertEqual(len(live_bonds), 2)
+        # The structure is rescaled to the canvas bond length and centred on
+        # the sheet (the sheet is centred on the scene origin).
+        for bond in live_bonds:
+            self.assertAlmostEqual(
+                math.hypot(
+                    model.atoms[bond.a].x - model.atoms[bond.b].x,
+                    model.atoms[bond.a].y - model.atoms[bond.b].y,
+                ),
+                bond_length_px_for(canvas),
+                delta=0.1,
+            )
+        min_x, min_y, max_x, max_y = model.bounds()
+        self.assertAlmostEqual(min_x + (max_x - min_x) / 2.0, 0.0, delta=0.1)
+        self.assertAlmostEqual(min_y + (max_y - min_y) / 2.0, 0.0, delta=0.1)
+
+    def test_mol_annotation_mark_failure_restores_the_previous_document(self) -> None:
+        canvas = active_canvas_for_window(self.window)
+        before = snapshot_canvas_state_for(canvas)
+        source = MoleculeModel()
+        atom_id = source.add_atom("N", 0.0, 0.0)
+        message_box = mock.Mock()
+        mark_calls = 0
+
+        def fail_second_mark(*args, **kwargs):
+            nonlocal mark_calls
+            mark_calls += 1
+            if mark_calls == 2:
+                return None
+            return add_mark_for_atom_for(*args, **kwargs)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "charged.mol"
+            path.write_text(
+                write_molfile(source, atom_annotations={atom_id: {"formal_charge": 2}}),
+                encoding="utf-8",
+            )
+            with mock.patch(
+                "chemvas.ui.canvas_document_state.add_mark_for_atom_for",
+                side_effect=fail_second_mark,
+            ):
+                result = self.service.load_canvas_from_path(
+                    self.window,
+                    str(path),
+                    message_box=message_box,
+                    target_provider=lambda: self.window,
+                )
+
+        self.assertFalse(result)
+        self.assertEqual(mark_calls, 2)
+        message_box.warning.assert_called_once()
+        self.assertIn("atom annotation", message_box.warning.call_args.args[2])
+        self.assertEqual(snapshot_canvas_state_for(canvas), before)
+
+    def test_load_canvas_from_path_rejects_invalid_mol_without_a_new_window(
+        self,
+    ) -> None:
+        message_box = mock.Mock()
+        spawned: list[object] = []
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "broken.mol"
+            path.write_text(
+                write_molfile(MoleculeModel()).replace("V2000", "V3000"),
+                encoding="utf-8",
+            )
+            result = self.service.load_canvas_from_path(
+                self.window,
+                str(path),
+                message_box=message_box,
+                target_provider=lambda: spawned.append(object()),
+            )
+
+        self.assertFalse(result)
+        # The file is rejected before a destination window is resolved, so a
+        # broken .mol never spawns an empty window.
+        self.assertEqual(spawned, [])
+        message_box.warning.assert_called_once()
+        self.assertIn("V3000", message_box.warning.call_args.args[2])
+        self.assertEqual(self.window.tab_references.canvas_count(), 1)
 
     def test_load_canvas_rejects_workbook_payload_without_importing(self) -> None:
         state = snapshot_canvas_state_for(active_canvas_for_window(self.window))

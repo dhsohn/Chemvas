@@ -20,6 +20,8 @@ if QApplication is not None:
             MainWindowActiveCanvasUIService,
         )
         from chemvas.ui.selection_info_state import selection_info_state_for
+
+        from tests.canvas_factory import build_canvas_view
     except (ModuleNotFoundError, SyntaxError):
         CanvasView = None
         MainWindowActiveCanvasUIService = None
@@ -31,8 +33,8 @@ else:
 class _FakeWindow:
     def __init__(self) -> None:
         self.canvas_tabs = QTabWidget()
-        self.canvas_a = CanvasView()
-        self.canvas_b = CanvasView()
+        self.canvas_a = build_canvas_view()
+        self.canvas_b = build_canvas_view()
         self.canvas_tabs.addTab(self.canvas_a, "Canvas 1")
         self.canvas_tabs.addTab(self.canvas_b, "Canvas 2")
         self.canvas_tabs.setCurrentIndex(0)

@@ -410,7 +410,7 @@ class CanvasDocumentStateTest(unittest.TestCase):
         self.assertIsNone(rotation.projection_anchor_2d)
 
     def test_apply_document_settings_ignores_legacy_style_preset(self) -> None:
-        from chemvas.core.renderer import Renderer
+        from chemvas.adapters.qt.renderer import Renderer
 
         canvas = SimpleNamespace(
             renderer=Renderer(),

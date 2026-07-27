@@ -140,7 +140,6 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         self.button_service = MainWindowUIAssemblyService(
             scene_transform_controller_for_window=self.scene_transform_controller_for_window,
             insert_controller_for_window=self.insert_controller_for_window,
-            history_service_for_window=self.history_service_for_window,
             build_tool_actions_for_window=mock.Mock(),
             panel_toolbar_callbacks=self.panel_callbacks,
         )
@@ -179,42 +178,31 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         assembly = build_panel_toolbar(
             window,
             create_toolbar_button=self.button_service.create_toolbar_button,
-            create_file_project_menu_button=self.button_service.create_file_project_menu_button,
-            create_corner_menu_button=self.button_service.create_corner_menu_button,
             build_tool_actions=self.build_tool_actions,
             scene_transform_controller_for_window=self.scene_transform_controller_for_window,
             insert_controller_for_window=self.insert_controller_for_window,
-            history_service_for_window=self.history_service_for_window,
             callbacks=self.panel_callbacks,
         )
 
         self.assertEqual(assembly.panel_bar.objectName(), "topRoleToolbar")
         self.assertEqual(assembly.panel_bar.iconSize().width(), TOOLBAR_ICON_SIZE)
-        self.assertEqual(assembly.save_button.toolTip(), "File")
-        self.assertEqual(assembly.load_action.statusTip(), "Open a drawing")
         self.assertEqual(list(assembly.tool_actions), TOOLBAR_TOOL_ACTION_ORDER)
         self.assertTrue(assembly.tool_actions["bond"].isChecked())
-        self.assertFalse(assembly.preview_panel_button.isCheckable())
-        self.assertEqual(assembly.preview_panel_button.toolTip(), "Molecule Info")
-        self.assertIsNone(assembly.export_xyz_button)
-        self.assertIsNone(
-            assembly.panel_bar.findChild(QToolButton, "export_xyz_button")
-        )
-        self.assertIsNone(
-            assembly.panel_bar.findChild(QToolButton, "setup_sheet_button")
-        )
-        self.assertIsNotNone(
-            assembly.panel_bar.findChild(QToolButton, "new_canvas_button")
-        )
-        self.assertIsNotNone(assembly.panel_bar.findChild(QToolButton, "open_button"))
-        self.assertIs(
-            assembly.undo_button,
-            assembly.panel_bar.findChild(QToolButton, "undo_button"),
-        )
-        self.assertIs(
-            assembly.redo_button,
-            assembly.panel_bar.findChild(QToolButton, "redo_button"),
-        )
+        # Document/history/preview commands moved to the menu bar; the toolbar
+        # keeps only drawing-related controls.
+        for removed_name in (
+            "export_xyz_button",
+            "setup_sheet_button",
+            "new_canvas_button",
+            "open_button",
+            "preview_panel_button",
+            "undo_button",
+            "redo_button",
+        ):
+            self.assertIsNone(
+                assembly.panel_bar.findChild(QToolButton, removed_name),
+                removed_name,
+            )
         self.assertEqual(
             self._toolbar_widget_groups(assembly.panel_bar)[0],
             [
@@ -231,25 +219,25 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
             ["toolButton_mark", "toolButton_orbital"],
             self._toolbar_widget_groups(assembly.panel_bar),
         )
-        # Shape sits just right of the note (Text) tool, in the same partition as Color.
+        # Shape sits just right of the note (Text) tool, in the same partition
+        # as Color; the eraser closes that partition.
         self.assertIn(
-            [f"toolButton_{key}" for key in ("note", "shape", "color", "ring_fill")],
+            [
+                f"toolButton_{key}"
+                for key in ("note", "shape", "color", "ring_fill", "delete")
+            ],
             self._toolbar_widget_groups(assembly.panel_bar),
         )
         self.assertIn(
             ["flip_horizontal_button", "flip_vertical_button", "rotate_button"],
             self._toolbar_widget_groups(assembly.panel_bar),
         )
-        # The SMILES quick-insert bar sits between the transform tools and the
-        # history buttons. Its "SMILES" QLabel is neither a tool button nor a line
-        # edit, so the widget group is just the input placeholder and Render button.
-        self.assertIn(
-            ["CC(=O)Oc1ccccc1C(=O)O", "smiles_render_button"],
-            self._toolbar_widget_groups(assembly.panel_bar),
-        )
+        # The SMILES quick-insert bar closes the toolbar. Its "SMILES" QLabel is
+        # neither a tool button nor a line edit, so the widget group is just the
+        # input placeholder and Render button.
         self.assertEqual(
             self._toolbar_widget_groups(assembly.panel_bar)[-1],
-            ["preview_panel_button", "open_button", "File", "new_canvas_button"],
+            ["CC(=O)Oc1ccccc1C(=O)O", "smiles_render_button"],
         )
         primary_button_names = (
             "toolButton_select",
@@ -286,46 +274,12 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         )
         self.assertIsNone(assembly.panel_bar.findChild(QLineEdit, "atomInput"))
 
-        assembly.save_action.trigger()
-        assembly.save_as_action.trigger()
-        assembly.load_action.trigger()
-        export_figure_action = next(
-            action
-            for action in assembly.save_button.menu().actions()
-            if action.text() == "Export Figure..."
-        )
-        export_figure_action.trigger()
-        export_mol_action = next(
-            action
-            for action in assembly.save_button.menu().actions()
-            if action.text() == "Export MOL..."
-        )
-        export_mol_action.trigger()
-        self.panel_callbacks.save_canvas.assert_called_once_with(window)
-        self.panel_callbacks.save_canvas_as.assert_called_once_with(window)
-        self.panel_callbacks.load_canvas.assert_called_once_with(window)
-        self.panel_callbacks.export_figure.assert_called_once_with(window)
-        self.panel_callbacks.export_mol.assert_called_once_with(window)
-        window.save_canvas.assert_not_called()
-        window.save_canvas_as.assert_not_called()
-        window.load_canvas.assert_not_called()
-        window.export_figure.assert_not_called()
-
         window.canvas.insert_controller.begin_smiles_insert.assert_not_called()
-
-        assembly.preview_panel_button.click()
-        self.panel_callbacks.open_preview_window.assert_called_once_with(window)
-        assembly.panel_bar.findChild(QToolButton, "open_button").click()
-        self.panel_callbacks.load_canvas.assert_called_with(window)
-        assembly.new_canvas_button.click()
-        self.panel_callbacks.new_canvas.assert_called_once_with(window)
+        window.save_canvas.assert_not_called()
+        window.load_canvas.assert_not_called()
         window.export_xyz.assert_not_called()
         window.open_preview_window.assert_not_called()
         window.setup_sheet.assert_not_called()
-        assembly.undo_button.click()
-        assembly.redo_button.click()
-        window.canvas.history_service.undo.assert_called_once_with()
-        window.canvas.history_service.redo.assert_called_once_with()
         removed_tooltips = {"Bond Length"}
         self.assertFalse(
             any(
@@ -350,7 +304,6 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         window.canvas.scene_transform_controller.flip_selected_items.assert_has_calls(
             [mock.call(horizontal=True), mock.call(horizontal=False)]
         )
-        self.assertEqual(self.history_service_for_window.call_count, 2)
 
 
 if __name__ == "__main__":

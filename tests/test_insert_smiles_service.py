@@ -33,6 +33,7 @@ from PyQt6.QtWidgets import (
     QGraphicsRectItem,
 )
 
+from tests.canvas_factory import build_canvas_view
 from tests.test_insert_controller import _FakeCanvas
 
 
@@ -465,7 +466,7 @@ def test_insert_smiles_service_render_preview_routes_clear_and_apply_paths() -> 
 def test_load_smiles_clears_detached_highlight_and_pending_selection_info() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
-    canvas = CanvasView()
+    canvas = build_canvas_view()
     try:
         service = canvas.services.structure.insert_controller.smiles_service
         old_highlight = QGraphicsRectItem(QRectF(0.0, 0.0, 10.0, 10.0))
@@ -522,7 +523,7 @@ def test_load_smiles_clears_detached_highlight_and_pending_selection_info() -> N
 def test_load_smiles_success_releases_detached_original_qt_wrappers() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
-    canvas = CanvasView()
+    canvas = build_canvas_view()
     try:
         service = canvas.services.structure.insert_controller.smiles_service
         note = canvas.services.interaction.note_controller.create_text_note(

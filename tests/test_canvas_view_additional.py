@@ -52,8 +52,6 @@ if QApplication is not None:
     from chemvas.ui.canvas_note_controller import CanvasNoteController
     from chemvas.ui.canvas_ring_fill_scene_access import (
         create_ring_fill_item_for,
-        rotate_ring_fills_3d_for,
-        rotate_ring_fills_for,
         update_ring_fills_for_atoms_for,
     )
     from chemvas.ui.canvas_scene_items_state import (
@@ -152,7 +150,6 @@ if QApplication is not None:
     from chemvas.ui.selection_style_state import SelectionStyleState
     from chemvas.ui.structure_build_access import (
         add_benzene_template_for,
-        add_structure_template_for,
         fuse_benzene_to_bond_for,
         fuse_chair_to_bond_for,
         fuse_regular_ring_to_bond_for,
@@ -1051,75 +1048,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             QPointF(45.0, 46.0), "sp2"
         )
 
-    def test_fragment_template_access_uses_recorded_build_helper(self) -> None:
-        template_builder = SimpleNamespace(
-            add_regular_ring_template=mock.Mock(),
-            add_hetero_ring_template=mock.Mock(),
-            add_fused_benzenes=mock.Mock(),
-            add_crown_ether=mock.Mock(),
-        )
-        structure_build_service = SimpleNamespace(
-            run_recorded_build=mock.Mock(side_effect=lambda action, **kwargs: action()),
-            template_builder=template_builder,
-        )
-        view = SimpleNamespace(
-            services=canvas_runtime_services(
-                structure_build_service=structure_build_service
-            )
-        )
-
-        for template_key in (
-            "cyclopropane",
-            "cyclobutane",
-            "cyclopentane",
-            "pyridine",
-            "pyrimidine",
-            "imidazole",
-            "pyrrole",
-            "furan",
-            "thiophene",
-            "naphthalene",
-            "anthracene",
-            "phenanthrene",
-            "pyranose",
-            "furanose",
-            "crown_12_4",
-            "crown_15_5",
-            "crown_18_6",
-        ):
-            add_structure_template_for(view, template_key)
-
-        self.assertEqual(structure_build_service.run_recorded_build.call_count, 17)
-        self.assertEqual(
-            template_builder.add_regular_ring_template.call_args_list,
-            [mock.call(3), mock.call(4), mock.call(5)],
-        )
-        self.assertEqual(
-            template_builder.add_hetero_ring_template.call_args_list,
-            [
-                mock.call(6, ["C", "C", "C", "C", "C", "N"], [2, 1, 2, 1, 2, 1]),
-                mock.call(6, ["N", "C", "N", "C", "C", "C"], [2, 1, 2, 1, 2, 1]),
-                mock.call(5, ["C", "N", "C", "N", "C"], [1, 2, 1, 1, 2]),
-                mock.call(5, ["N", "C", "C", "C", "C"], [1, 2, 1, 2, 1]),
-                mock.call(5, ["O", "C", "C", "C", "C"], [1, 2, 1, 2, 1]),
-                mock.call(5, ["S", "C", "C", "C", "C"], [1, 2, 1, 2, 1]),
-                mock.call(6, ["O", "C", "C", "C", "C", "C"], None),
-                mock.call(5, ["O", "C", "C", "C", "C"], None),
-            ],
-        )
-        self.assertEqual(
-            template_builder.add_fused_benzenes.call_args_list,
-            [
-                mock.call(2, mode="linear"),
-                mock.call(3, mode="linear"),
-                mock.call(3, mode="angled"),
-            ],
-        )
-        self.assertEqual(
-            template_builder.add_crown_ether.call_args_list,
-            [mock.call(12, 4), mock.call(15, 5), mock.call(18, 6)],
-        )
-
     def test_add_benzene_template_uses_viewport_scene_center(self) -> None:
         center = QPointF(12.0, 13.0)
         structure_build_service = mock.Mock()
@@ -1137,61 +1065,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
 
         view.mapToScene.assert_called_once()
         structure_build_service.add_benzene_ring.assert_called_once_with(center)
-
-    def test_service_backed_fragment_template_access_delegates(self) -> None:
-        structure_build_service = mock.Mock()
-        template_builder = structure_build_service.template_builder
-        view = SimpleNamespace(
-            services=canvas_runtime_services(
-                structure_build_service=structure_build_service
-            )
-        )
-
-        for template_key in (
-            "cyclohexane_chair",
-            "cyclohexane_boat",
-            "indole",
-            "quinoline",
-            "isoquinoline",
-            "benzimidazole",
-            "phenyl",
-            "benzyl",
-            "vinyl",
-            "allyl",
-            "carboxyl",
-            "nitro",
-            "sulfonyl",
-            "carbonyl",
-            "tbu",
-            "ipr",
-            "me",
-            "et",
-            "peptide_2",
-        ):
-            add_structure_template_for(view, template_key)
-
-        for method_name in (
-            "add_cyclohexane_chair",
-            "add_cyclohexane_boat",
-            "add_indole",
-            "add_quinoline",
-            "add_isoquinoline",
-            "add_benzimidazole",
-            "add_phenyl",
-            "add_benzyl",
-            "add_vinyl",
-            "add_allyl",
-            "add_carboxyl",
-            "add_nitro",
-            "add_sulfonyl",
-            "add_carbonyl",
-            "add_tbu",
-            "add_ipr",
-            "add_me",
-            "add_et",
-            "add_peptide_2",
-        ):
-            getattr(template_builder, method_name).assert_called_once_with()
 
     def test_insert_controller_public_api_methods_are_callable(self) -> None:
         insert_controller = mock.Mock()
@@ -2015,8 +1888,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         scene_service.create_ring_fill_item.return_value = ring_item
 
         update_ring_fills_for_atoms_for(view, {1, 2, 3})
-        rotate_ring_fills_3d_for(view, {1, 2, 3}, (4.0, 5.0, 6.0), 0.1, 0.2, 1.5)
-        rotate_ring_fills_for(view, {1, 2, 3}, QPointF(7.0, 8.0), 0.3)
         self.assertIs(
             create_ring_fill_item_for(
                 view,
@@ -2027,12 +1898,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
 
         scene_service.update_ring_fills_for_atoms.assert_called_once_with({1, 2, 3})
-        scene_service.rotate_ring_fills_3d.assert_called_once_with(
-            {1, 2, 3}, (4.0, 5.0, 6.0), 0.1, 0.2, 1.5
-        )
-        scene_service.rotate_ring_fills.assert_called_once_with(
-            {1, 2, 3}, QPointF(7.0, 8.0), 0.3
-        )
         scene_service.create_ring_fill_item.assert_called_once_with(
             [QPointF(0.0, 0.0), QPointF(2.0, 0.0), QPointF(1.0, 1.5)],
             [1, 2, 3],

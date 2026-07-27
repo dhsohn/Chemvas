@@ -19,6 +19,8 @@ if QApplication is not None:
         should_override_chemdraw_shortcut_for,
     )
 
+    from tests.canvas_factory import build_canvas_view
+
 
 class _FakeEvent:
     def __init__(
@@ -63,7 +65,7 @@ class CanvasViewEventShortcutTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def _new_view(self):
-        view = CanvasView()
+        view = build_canvas_view()
         input_view_state_for(view).base_transform = QTransform().translate(3.0, 4.0)
         view.setTransform(QTransform().scale(2.0, 2.0))
         view.services.tool_controller.active = None

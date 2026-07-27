@@ -130,8 +130,8 @@ moved to a canonical feature runtime.
 ### Core vs UI
 
 - `app/chemvas/core/` is transitional chemistry/model/IO code. It must not import
-  the UI. `renderer.py` is the one recorded Qt dependency and will move to an
-  adapter; do not add another.
+  the UI or Qt. Concrete renderer integration belongs in `chemvas.adapters.qt`;
+  do not add framework dependencies to core.
 - `app/chemvas/ui/` is the PyQt6 layer described above.
 - `app/chemvas/shell/main_window.py` owns the thin Qt window; runtime/service
   assembly, document opening, and startup live in `app/chemvas/bootstrap/`.

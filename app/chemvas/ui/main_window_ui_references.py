@@ -4,15 +4,16 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from PyQt6.QtGui import QAction
-from PyQt6.QtWidgets import QLineEdit, QToolButton
+from PyQt6.QtWidgets import QLineEdit
 
 if TYPE_CHECKING:
     from chemvas.ui.main_window_icon_factory import MainWindowIconFactory
+    from chemvas.ui.main_window_menu_bar import MainWindowMenuBarAssembly
+    from chemvas.ui.main_window_panel_toolbar import MainWindowPanelToolbarAssembly
     from chemvas.ui.main_window_preview_window import (
         MainWindowPreviewWindowAssembly,
         Preview3DWindow,
     )
-    from chemvas.ui.main_window_ui_assembly_service import MainWindowToolbarAssembly
 
 
 @dataclass(slots=True)
@@ -20,11 +21,8 @@ class MainWindowUiReferences:
     icon_factory: MainWindowIconFactory | None = None
     tool_actions: dict[str, QAction] = field(default_factory=dict)
     atom_input: QLineEdit | None = None
-    load_action: QAction | None = None
-    export_xyz_button: QToolButton | None = None
-    preview_panel_button: QToolButton | None = None
-    undo_button: QToolButton | None = None
-    redo_button: QToolButton | None = None
+    undo_action: QAction | None = None
+    redo_action: QAction | None = None
     preview_window: Preview3DWindow | None = None
 
     def require_icon_factory(self) -> MainWindowIconFactory:
@@ -32,13 +30,12 @@ class MainWindowUiReferences:
             raise RuntimeError("Main window icon factory has not been initialized.")
         return self.icon_factory
 
-    def apply_toolbar_assembly(self, assembly: MainWindowToolbarAssembly) -> None:
+    def apply_toolbar_assembly(self, assembly: MainWindowPanelToolbarAssembly) -> None:
         self.tool_actions = assembly.tool_actions
-        self.load_action = assembly.load_action
-        self.export_xyz_button = assembly.export_xyz_button
-        self.preview_panel_button = assembly.preview_panel_button
-        self.undo_button = assembly.undo_button
-        self.redo_button = assembly.redo_button
+
+    def apply_menu_bar_assembly(self, assembly: MainWindowMenuBarAssembly) -> None:
+        self.undo_action = assembly.undo_action
+        self.redo_action = assembly.redo_action
 
     def set_atom_input(self, atom_input: QLineEdit | None) -> None:
         self.atom_input = atom_input

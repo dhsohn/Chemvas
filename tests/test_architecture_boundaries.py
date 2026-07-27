@@ -1035,7 +1035,6 @@ def test_main_window_keeps_dialog_defaults_inside_action_services() -> None:
         "resolve_save_path",
         "resolve_save_as_path",
         "resolve_load_path",
-        "QTimer",
     ):
         assert concrete_default not in main_window_source
 
@@ -1421,8 +1420,6 @@ def test_structure_build_access_delegates_service_lookup_to_structure_build_port
     None
 ):
     access = APP_ROOT / "chemvas" / "ui" / "structure_build_access.py"
-    commands = APP_ROOT / "chemvas" / "ui" / "structure_template_commands.py"
-    command_source = commands.read_text()
     forbidden = re.compile(
         r"\bcanvas_services_for\b"
         r"|\bcanvas\.services\."
@@ -1431,8 +1428,7 @@ def test_structure_build_access_delegates_service_lookup_to_structure_build_port
         r"|\b_SERVICE_TEMPLATE_METHODS\b"
     )
 
-    assert "service.add_regular_ring_template" not in command_source
-    assert "service.add_phenyl" not in command_source
+    assert "add_structure_template_for" not in access.read_text()
     assert _matching_lines(forbidden, [access]) == []
 
 
@@ -2486,46 +2482,17 @@ def test_structure_build_service_delegates_benzene_building() -> None:
     assert _matching_lines(pattern, [service]) == []
 
 
-def test_structure_build_service_delegates_template_building_without_wrapper_methods() -> (
-    None
-):
-    service = APP_ROOT / "chemvas" / "ui" / "structure_build_service.py"
-    tree = ast.parse(service.read_text())
-    removed_wrappers = {
-        "add_regular_ring_template",
-        "add_hetero_ring_template",
-        "add_fused_benzenes",
-        "add_crown_ether",
-        "add_cyclohexane_chair",
-        "add_cyclohexane_boat",
-        "add_indole",
-        "add_quinoline",
-        "add_isoquinoline",
-        "add_benzimidazole",
-        "add_phenyl",
-        "add_benzyl",
-        "add_vinyl",
-        "add_allyl",
-        "add_carboxyl",
-        "add_nitro",
-        "add_sulfonyl",
-        "add_carbonyl",
-        "add_tbu",
-        "add_ipr",
-        "add_me",
-        "add_et",
-        "add_peptide_2",
+def test_dead_structure_template_catalog_modules_are_removed() -> None:
+    removed_modules = {
+        "structure_fragment_build_service.py",
+        "structure_template_build_service.py",
+        "structure_template_commands.py",
     }
+    app_source = "\n".join(path.read_text() for path in _app_python_files())
 
-    for node in tree.body:
-        if isinstance(node, ast.ClassDef) and node.name == "StructureBuildService":
-            method_names = {
-                item.name for item in node.body if isinstance(item, ast.FunctionDef)
-            }
-            assert method_names.isdisjoint(removed_wrappers)
-            break
-    else:
-        raise AssertionError("StructureBuildService class not found")
+    for module_name in removed_modules:
+        assert not (APP_ROOT / "chemvas" / "ui" / module_name).exists()
+        assert module_name.removesuffix(".py") not in app_source
 
 
 def test_structure_growth_build_service_uses_explicit_actions_instead_of_owner_facade() -> (
@@ -2677,11 +2644,14 @@ def test_main_window_icon_factory_delegates_arrow_drawing_to_renderer() -> None:
     assert "quadTo(15, 6, 24, 15)" not in factory_source
 
 
-def test_main_window_icon_factory_delegates_template_drawing_to_renderer() -> None:
+def test_main_window_template_icons_use_only_static_design_mapping() -> None:
     factory = APP_ROOT / "chemvas" / "ui" / "main_window_icon_factory.py"
     factory_source = factory.read_text()
 
-    # Template ring previews now resolve to shared SVG design icons by label.
+    assert not (
+        APP_ROOT / "chemvas" / "ui" / "main_window_template_icon_renderer.py"
+    ).exists()
+    assert "_TEMPLATE_ICON_BY_LABEL" in factory_source
     assert "template_preview_ring_polygon" not in factory_source
     assert "template_preview_ring_sides" not in factory_source
     assert "chair_icon_points" not in factory_source
@@ -3546,13 +3516,8 @@ def test_perspective_tool_controller_does_not_reintroduce_context_delegate_wrapp
     assert private_methods.isdisjoint(forbidden_methods)
 
 
-def test_tools_module_is_reexport_only() -> None:
-    source = (APP_ROOT / "chemvas" / "ui" / "tools.py").read_text()
-    class_names = re.findall(
-        r"^class\s+([A-Za-z_][A-Za-z0-9_]*)\b", source, flags=re.MULTILINE
-    )
-
-    assert class_names == []
+def test_removed_tools_facade_stays_absent() -> None:
+    assert not (APP_ROOT / "chemvas" / "ui" / "tools.py").exists()
 
 
 def test_production_code_imports_concrete_tool_modules_not_tools_reexport() -> None:
@@ -3903,8 +3868,7 @@ def test_core_does_not_import_ui_statically() -> None:
     assert violations == []
 
 
-def test_core_qt_dependency_is_confined_to_renderer_during_migration() -> None:
-    """Record the single known core/Qt boundary violation until it is moved."""
+def test_core_has_no_direct_qt_dependencies() -> None:
     qt_modules: set[str] = set()
     for path in sorted((APP_ROOT / "chemvas" / "core").rglob("*.py")):
         tree = ast.parse(path.read_text())
@@ -3921,7 +3885,7 @@ def test_core_qt_dependency_is_confined_to_renderer_during_migration() -> None:
         ):
             qt_modules.add(path.relative_to(APP_ROOT).as_posix())
 
-    assert qt_modules <= {"chemvas/core/renderer.py"}
+    assert qt_modules == set()
 
 
 def test_chemvas_is_the_only_production_top_level_package() -> None:

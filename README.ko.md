@@ -26,10 +26,17 @@ SMILES 입력(RDKit 선택)을 통해 구조를 불러와 편집할 수 있습�
   글리프를 아웃라인 처리해 화면/벡터/래스터 출력이 어긋나지 않으며, zoom과 무관하게 물리 크기
   (결합 길이 또는 84/174mm 컬럼 폭)를 지정할 수 있습니다. Chemvas로 다시 불러올 editable SVG는
   별도 선택이며 SVG metadata에 원본 문서 payload를 포함합니다.
+- MOL 상호운용: MDL Molfile(`.mol`, V2000)을 새 문서로 열고, 선택한 구조를 `.mol`로
+  내보냅니다. import와 일반 원소 export에는 RDKit이 필요 없지만 축약 라벨 확장에는 선택적
+  RDKit이 필요합니다. property record는 `M  CHG` / `M  RAD`만, wedge/hash stereo는
+  single bond에서만 지원하고 counts-line chiral flag는 0이어야 합니다. spin multiplicity를
+  보존할 수 있을 때까지 singlet `M  RAD` code 1은 거부합니다.
 - 2D -> 3D `.xyz` export: 현재 분자 또는 현재 원자/결합 selection을 RDKit 기반 3D 좌표로 변환해 내보내기
-- Molecule Info 창: RDKit 기반 3D preview와 분자식/분자량 표시
+- Molecule Info 창: RDKit 기반 3D preview와 분자식/분자량 표시, 현재 selection의 canonical
+  SMILES / InChI / InChIKey 원클릭 복사
 - 색상/스타일: ACS 팔레트로 결합/원자/링 색 변경, 링 채움 색상, 본드 길이 조절
-- 편집/변형: 선택/이동, 수평/수직 플립, 퍼스펙티브 회전, Undo/Redo
+- 편집/변형: 선택/이동, 지우개 도구(클릭 또는 드래그로 삭제), 수평/수직 플립, 퍼스펙티브 회전, Undo/Redo
+- 데스크톱 메뉴: 표준 File / Edit / View 메뉴와 시트 크기/방향을 바꾸는 **Canvas Size** 다이얼로그
 - 자동저장 & 복구: 열려 있는 문서를 수 초마다 스냅샷으로 저장해, 비정상 종료 후에도 다음 실행 시 미저장 작업과
   지난 세션을 자동으로 복원합니다. 미저장 탭에는 `●` 표시가 붙고, File 메뉴에는 **Open Recent**(최근 파일)
   목록이 있으며, 이미 열려 있는 파일을 다시 열면 새 창을 만들지 않고 해당 창으로 전환합니다.
@@ -55,7 +62,7 @@ python -m pip install -e .
 ## 사용 방법
 - 실행(개발 트리): `python app/main.py`
 - 실행(설치 후): `chemvas`
-- 좌측 툴바에서 도구를 선택하고 캔버스에 클릭/드래그하여 구조를 그립니다.
+- 상단 툴바에서 도구를 선택하고 캔버스에 클릭/드래그하여 구조를 그립니다.
 - 상단의 SMILES 입력란에 문자열을 입력한 뒤 Insert를 누르면 배치 모드가 활성화됩니다.
   마우스를 이동하면 미리보기가 표시되고, 클릭하면 해당 위치에 삽입됩니다. Esc로 취소할 수 있습니다.
 - 템플릿 메뉴에서도 동일하게 미리보기/클릭 삽입 방식으로 링 구조를 배치할 수 있습니다.
@@ -65,7 +72,7 @@ python -m pip install -e .
   위 hero 이미지에 보이는 반응 스킴 + 여러 유기촉매 구조가 담겨 있습니다.
 
 ## 저장/불러오기
-- 상단 툴바의 File 메뉴로 `.chemvas` 파일을 저장/불러옵니다.
+- 메뉴바의 **File** 메뉴에서 `.chemvas` 파일을 저장/불러옵니다.
 - `.chemvas`는 JSON 기반 포맷이며, 분자 모델/주석/화살표/bracket annotation/설정값 등을 포함합니다.
   (형식: `{"type":"chemvas","version":4,"state":{...}}`)
 - Figure export의 SVG 기본값은 Chemvas 원본 데이터를 포함하지 않는 plain SVG입니다. Chemvas에서 다시
@@ -85,7 +92,7 @@ python -m pip install -e .
 - Bond hotkeys(결합 위 hover): Single(`1`), Double(`2`), Triple(`3`), Bold(`b`/`Shift+B`), Wedge(`w`), Hash(`h`/`Shift+H`), Dashed(`d`/`Shift+D`), 이중결합 위치(`l`/`c`/`r`), Benzene fusion(`a`), Ring fusion(`4/5/6/7/8`), Chair fusion(`9/0`)
 - 객체: Flip Horizontal(`Ctrl+Shift+H`), Flip Vertical(`Ctrl+Shift+V`), 선택 회전 `Alt+Up/Down`(15°)·`Alt+Left/Right`(1°), 선택 이동 `Shift+방향키`(10pt)
 - 뷰: 실제 크기(`F5`), 창에 맞춤(`F6`), 확대(`F7`), 축소(`F8`)
-- 파일/편집: Save/Open/Undo/Redo(플랫폼 기본 단축키), `Ctrl+A`(전체 선택, Select 도구로 전환), `Ctrl+C`(선택 영역 이미지 복사), `Ctrl+X`(선택 잘라내기), `Ctrl+G`/`Ctrl+Shift+G`(선택 그룹/그룹 해제), `Delete/Backspace`(선택 삭제 또는 hover atom/bond 편집/삭제), `Esc`(템플릿/SMILES 삽입 취소)
+- 파일/편집: Save/Open/Undo/Redo(플랫폼 기본 단축키), `Ctrl+A`(전체 선택, Select 도구로 전환), `Ctrl+C`(선택 복사 — PNG와 SVG/PDF 벡터 클립보드 동시 제공), `Ctrl+X`(선택 잘라내기), `Ctrl+V`(복사한 선택 붙여넣기), `Ctrl+G`/`Ctrl+Shift+G`(선택 그룹/그룹 해제), `Delete/Backspace`(선택 삭제 또는 hover atom/bond 편집/삭제), `Esc`(템플릿/SMILES 삽입 취소)
 
 ## 의존성
 - PyQt6 필요
@@ -98,12 +105,12 @@ python -m pip install -e .
 - wedge/hash 결합은 single bond에서 RDKit stereochemistry 힌트로 변환됩니다.
 - 대표적인 축약/alias 라벨 `Me`, `Et`, `OH`, `Ph`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `i-Pr`는 3D 변환 전에 fragment로 확장됩니다.
 - 지원되지 않는 라벨, 잘못 연결된 alias, wedge/hash의 잘못된 사용(예: non-single bond) 등은 명시적인 에러 메시지로 안내합니다.
-- 상단 툴바의 `Molecule Info` 버튼은 별도 창을 열어 현재 선택된 분자의 3D preview와 분자식/분자량을 표시합니다. 선택된 화학 구조가 없으면 preview는 비어 있으며, 창 안의 `Export 3D XYZ` 버튼으로 선택된 분자를 내보낼 수 있습니다. 마우스 드래그로 회전, 휠로 확대/축소할 수 있습니다.
+- 메뉴바의 **View ▸ Molecule Info**는 별도 창을 열어 현재 선택된 분자의 3D preview와 분자식/분자량을 표시합니다. 선택된 화학 구조가 없으면 preview는 비어 있으며, 창 안의 `Export 3D XYZ` 버튼으로 선택된 분자를 내보낼 수 있습니다. 마우스 드래그로 회전, 휠로 확대/축소할 수 있습니다.
 - `.xyz`는 원자 기호와 3D 좌표만 저장하는 포맷이므로, 결합 차수/입체정보/반응 스킴을 완전하게 round-trip하는 용도에는 적합하지 않습니다.
 
 ## 개발 / 기여
-- PyQt6가 설치된 환경에서 headless 테스트 실행: `QT_QPA_PLATFORM=offscreen python -m pytest`
-- GitHub Actions CI도 동일하게 headless 환경(`QT_QPA_PLATFORM=offscreen`)에서 lint, 타입 체크, 테스트를 실행합니다.
+- 테스트는 headless로 실행하되, 전체 suite는 Qt 전역 상태 격리를 위해 `test_*.py` 파일마다 별도 pytest 프로세스를 사용합니다. 정확한 CI 미러 명령은 [Running the checks](CONTRIBUTING.md#running-the-checks)를 따르세요.
+- GitHub Actions도 테스트 단계에서 같은 file-isolated headless 방식을 사용합니다.
 - 개발 환경 설정, 테스트 실행 방법, 그리고 **아키텍처 규약**은 [CONTRIBUTING.md](CONTRIBUTING.md)를 참고하세요.
   전환기 UI 코드는 실제 책임을 분리하는 기존 `*_ports` / `*_access` / `*_state` / `*_service` 경계를 유지하지만,
   신규 기능이 이 배치를 기본으로 복제하지는 않습니다. 활성 경계는 테스트로 강제되므로 구조를 바꾸기 전에 반드시 CONTRIBUTING을 읽어주세요.
@@ -111,10 +118,10 @@ python -m pip install -e .
 
 ## 로드맵 / 아직 미지원
 버그가 아니라 알려진 빈칸입니다 — 기여를 환영합니다:
-- **Bond-aware 상호운용:** MOL/SDF **import**, SDF(다중 분자) export. `.mol` export, SMILES export("copy as SMILES"), InChI/InChIKey는 완료됨.
-- **벡터 클립보드:** `Ctrl+C`는 현재 PNG만 복사합니다. PDF/SVG 클립보드(Illustrator/Office에 벡터로 붙여넣기)는 예정.
+- **SDF(다중 분자) 상호운용:** import와 export. 단일 분자 `.mol` import/export, SMILES export("copy as SMILES"), InChI/InChIKey는 완료됨.
 - **배포:** 단일 파일 데스크톱 바이너리 (Chemvas는 이미 PyPI에 게시됨 — `pip install chemvas`)
 - **다중 분자 / 반응 스킴 전체 3D export**, 더 풍부한 템플릿 라이브러리
+- **당분간 의도적 비범위:** 인쇄(PDF export로 대체), 환경설정 영속화(모든 문서는 ACS 1996 기본값에서 시작), 외부 클립보드 내용 붙여넣기, 드래그앤드롭으로 파일 열기
 
 ## License
 - [MIT License](LICENSE)

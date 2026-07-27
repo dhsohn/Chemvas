@@ -72,10 +72,15 @@ def main() -> None:
     with _filtered_stderr():
         from PyQt6.QtWidgets import QApplication
 
+        from chemvas.adapters.macos_app_identity import apply_macos_app_name
         from chemvas.adapters.qt import FileOpenEventFilter
         from chemvas.bootstrap.file_open import open_document
         from chemvas.bootstrap.window_registry import open_new_window
         from chemvas.branding import APP_NAME, APP_VERSION, app_icon
+
+        # Must precede QApplication: Qt reads the macOS application name once,
+        # while it builds the Cocoa menu bar.
+        apply_macos_app_name(APP_NAME)
 
         app = QApplication(sys.argv)
         app.setApplicationName(APP_NAME)

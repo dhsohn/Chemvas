@@ -1,5 +1,6 @@
 """Bond rendering policy and Qt geometry primitives."""
 
+from .acs1996_style import ACS1996Style
 from .bond_dotted import dotted_bond_path_from_trimmed_segment
 from .bond_geometry import (
     DEFAULT_BOLD_OUT_LENGTH_SCALE,
@@ -72,6 +73,7 @@ __all__ = [
     "DOUBLE_STYLE_SEQUENCE",
     "PLAIN_DOUBLE_STYLES",
     "STANDARD_BOND_STYLES",
+    "ACS1996Style",
     "LineSegment",
     "base_plain_double_style_for_dotted_variant",
     "bold_double_style_for_position",
