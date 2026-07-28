@@ -130,9 +130,6 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
                 window.canvas.services.structure.insert_controller
             ),
         )
-        self.history_service_for_window = mock.Mock(
-            side_effect=lambda window: window.canvas.services.history_service,
-        )
         self.build_tool_actions_for_window = mock.Mock(
             side_effect=self._build_tool_actions_for_window
         )
@@ -151,7 +148,6 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.service = MainWindowUIAssemblyService(
             scene_transform_controller_for_window=self.scene_transform_controller_for_window,
             insert_controller_for_window=self.insert_controller_for_window,
-            history_service_for_window=self.history_service_for_window,
             build_tool_actions_for_window=self.build_tool_actions_for_window,
             panel_toolbar_callbacks=self.panel_toolbar_callbacks,
         )
@@ -174,6 +170,16 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         pixmap = QPixmap(8, 8)
         pixmap.fill(Qt.GlobalColor.black)
         return QIcon(pixmap)
+
+    def _menu(self, menu_bar, title: str) -> QMenu:
+        return next(
+            menu
+            for action in menu_bar.actions()
+            if (menu := action.menu()) is not None and menu.title() == title
+        )
+
+    def _menu_action(self, menu: QMenu, text: str) -> QAction:
+        return next(action for action in menu.actions() if action.text() == text)
 
     def test_create_toolbar_button_sets_properties_and_callback(self) -> None:
         callback = mock.Mock()
@@ -202,40 +208,12 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         button.click()
         callback.assert_called_once_with(False)
 
-    def test_create_corner_menu_button_prefers_default_action_and_builds_menu(
-        self,
-    ) -> None:
-        owner = QMainWindow()
-        self.addCleanup(owner.close)
-        save_action = QAction("Save", owner)
-
-        button = self.service.create_corner_menu_button(
-            icon=QIcon(),
-            tooltip="Save",
-            style_sheet="padding: 0;",
-            popup_mode=QToolButton.ToolButtonPopupMode.MenuButtonPopup,
-            menu_builder=lambda menu: menu.addAction("Save As..."),
-            default_action=save_action,
-        )
-
-        self.assertIs(button.defaultAction(), save_action)
-        self.assertEqual(button.toolTip(), "Save")
-        self.assertEqual(button.statusTip(), "Save")
-        self.assertEqual(button.styleSheet(), "padding: 0;")
-        self.assertEqual(
-            button.popupMode(), QToolButton.ToolButtonPopupMode.MenuButtonPopup
-        )
-        self.assertEqual(
-            [action.text() for action in button.menu().actions()], ["Save As..."]
-        )
-
     def test_button_factories_cover_icon_only_and_paint_paths(self) -> None:
         owner = QWidget()
         self.addCleanup(owner.close)
-        icon = self._filled_icon()
 
         toolbar_button = self.service.create_toolbar_button(
-            icon=icon,
+            icon=self._filled_icon(),
             tooltip="Plain",
         )
         self.assertEqual(toolbar_button.toolTip(), "Plain")
@@ -243,19 +221,6 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.assertTrue(toolbar_button.autoRaise())
         self.assertFalse(toolbar_button.icon().isNull())
         toolbar_button.click()
-
-        corner_button = self.service.create_corner_menu_button(
-            icon=icon,
-            tooltip="Palette",
-            style_sheet="padding: 1px;",
-            popup_mode=QToolButton.ToolButtonPopupMode.InstantPopup,
-            menu_builder=lambda menu: menu.addAction("Pick"),
-        )
-        self.assertIsNone(corner_button.defaultAction())
-        self.assertFalse(corner_button.icon().isNull())
-        self.assertEqual(
-            [action.text() for action in corner_button.menu().actions()], ["Pick"]
-        )
 
         up_button = ArrowButton("up", owner)
         down_button = ArrowButton("down", owner)
@@ -274,53 +239,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             pixmap = widget.grab()
             self.assertFalse(pixmap.isNull())
 
-    def test_create_save_menu_button_uses_save_as_action_menu(self) -> None:
-        owner = QMainWindow()
-        self.addCleanup(owner.close)
-        save_action = QAction("Save", owner)
-        save_as_action = QAction("Save As...", owner)
-
-        button = self.service.create_save_menu_button(save_action, save_as_action)
-
-        self.assertIs(button.defaultAction(), save_action)
-        self.assertEqual(button.toolTip(), "Save")
-        self.assertEqual(button.statusTip(), "Save")
-        self.assertEqual(
-            button.popupMode(), QToolButton.ToolButtonPopupMode.MenuButtonPopup
-        )
-        self.assertEqual(button.menu().actions(), [save_as_action])
-
-    def test_create_file_project_menu_button_uses_file_project_actions(self) -> None:
-        owner = QMainWindow()
-        self.addCleanup(owner.close)
-        save_action = QAction("Save", owner)
-        load_action = QAction("Load", owner)
-        save_as_action = QAction("Save As...", owner)
-
-        export_action = QAction("Export Figure...", owner)
-        button = self.service.create_file_project_menu_button(
-            save_action, load_action, save_as_action, export_action
-        )
-
-        self.assertIs(button.defaultAction(), save_action)
-        self.assertEqual(button.toolTip(), "File")
-        self.assertEqual(
-            button.statusTip(), "Save, load, export, or save as the current file"
-        )
-        self.assertEqual(
-            button.popupMode(), QToolButton.ToolButtonPopupMode.MenuButtonPopup
-        )
-        non_separator = [
-            action for action in button.menu().actions() if not action.isSeparator()
-        ]
-        self.assertEqual(
-            non_separator, [load_action, save_action, save_as_action, export_action]
-        )
-        self.assertEqual(
-            sum(1 for action in button.menu().actions() if action.isSeparator()), 1
-        )
-
-    def test_init_toolbars_builds_bars_and_wires_inputs(self) -> None:
+    def test_init_toolbars_builds_slim_drawing_bar(self) -> None:
         window = _HarnessWindow()
         self.addCleanup(window.close)
 
@@ -343,49 +262,32 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.assertIsNotNone(note_button.menu())
         self.assertEqual(
             sum(1 for action in assembly.panel_bar.actions() if action.isSeparator()),
-            6,
+            4,
         )
         self.assertTrue(assembly.tool_actions["bond"].isChecked())
-        self.assertIs(assembly.save_button.defaultAction(), assembly.save_action)
-        menu_actions = [
-            action
-            for action in assembly.save_button.menu().actions()
-            if not action.isSeparator()
-        ]
-        # File menu order: Load, Open Recent (submenu), Save, Save As, exports.
-        self.assertIs(menu_actions[0], assembly.load_action)
-        self.assertEqual(menu_actions[1].text(), "Open Recent")
-        self.assertIsNotNone(menu_actions[1].menu())
-        self.assertIs(menu_actions[2], assembly.save_action)
-        self.assertIs(menu_actions[3], assembly.save_as_action)
-        self.assertEqual(menu_actions[4].text(), "Export Figure...")
-        self.assertEqual(assembly.save_button.toolTip(), "File")
-        self.assertEqual(assembly.load_action.statusTip(), "Open a drawing")
-        self.assertEqual(assembly.save_action.statusTip(), "Save the current drawing")
-        self.assertEqual(
-            assembly.save_as_action.statusTip(),
-            "Save the current drawing to a new file",
+        self.assertIsNotNone(
+            assembly.panel_bar.findChild(QToolButton, "toolButton_delete")
         )
+        # Document/history/preview commands live on the menu bar now.
+        for removed_name in (
+            "open_button",
+            "new_canvas_button",
+            "preview_panel_button",
+            "undo_button",
+            "redo_button",
+            "export_xyz_button",
+            "setup_sheet_button",
+        ):
+            self.assertIsNone(
+                assembly.panel_bar.findChild(QToolButton, removed_name),
+                removed_name,
+            )
         self.assertNotIn(
             "Tools",
             [toolbar.windowTitle() for toolbar in window.findChildren(QToolBar)],
         )
-        self.assertIn(
-            "Open",
-            [
-                button.toolTip()
-                for button in assembly.panel_bar.findChildren(QToolButton)
-            ],
-        )
-        self.assertNotIn(
-            "Bond Length",
-            [
-                button.toolTip()
-                for button in assembly.panel_bar.findChildren(QToolButton)
-            ],
-        )
 
-        # The SMILES quick-insert bar now lives on the top toolbar. It has no
+        # The SMILES quick-insert bar lives on the top toolbar. It has no
         # section label (the field is self-describing via placeholder/tooltip),
         # so the only section labels remain on the tool-options bar.
         section_labels = [
@@ -406,90 +308,265 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.assertIsNotNone(
             assembly.panel_bar.findChild(QToolButton, "smiles_render_button")
         )
-        self.assertIsNone(assembly.export_xyz_button)
-        self.assertIsNone(
-            assembly.panel_bar.findChild(QToolButton, "export_xyz_button")
-        )
-        self.assertIs(
-            assembly.preview_panel_button,
-            assembly.panel_bar.findChild(QToolButton, "preview_panel_button"),
-        )
-        self.assertFalse(assembly.preview_panel_button.isCheckable())
-        self.assertEqual(assembly.preview_panel_button.toolTip(), "Molecule Info")
-        self.assertIsNone(
-            assembly.panel_bar.findChild(QToolButton, "setup_sheet_button")
-        )
-        self.assertIs(
-            assembly.new_canvas_button,
-            assembly.panel_bar.findChild(QToolButton, "new_canvas_button"),
-        )
-        self.assertIs(
-            assembly.undo_button,
-            assembly.panel_bar.findChild(QToolButton, "undo_button"),
-        )
-        self.assertIs(
-            assembly.redo_button,
-            assembly.panel_bar.findChild(QToolButton, "redo_button"),
-        )
 
         window.canvas.insert_controller.begin_smiles_insert.assert_not_called()
         self.insert_controller_for_window.assert_not_called()
         self.scene_transform_controller_for_window.assert_not_called()
-        assembly.save_action.trigger()
-        assembly.save_as_action.trigger()
-        assembly.load_action.trigger()
-        export_figure_action = next(
-            action
-            for action in assembly.save_button.menu().actions()
-            if action.text() == "Export Figure..."
-        )
-        export_figure_action.trigger()
-        self.panel_toolbar_callbacks.save_canvas.assert_called_once_with(window)
-        self.panel_toolbar_callbacks.save_canvas_as.assert_called_once_with(window)
-        self.panel_toolbar_callbacks.load_canvas.assert_called_once_with(window)
-        self.panel_toolbar_callbacks.export_figure.assert_called_once_with(window)
-        window.save_canvas.assert_not_called()
-        window.save_canvas_as.assert_not_called()
-        window.load_canvas.assert_not_called()
-        window.export_figure.assert_not_called()
-        assembly.preview_panel_button.click()
-        self.panel_toolbar_callbacks.open_preview_window.assert_called_once_with(window)
-        assembly.new_canvas_button.click()
-        self.panel_toolbar_callbacks.new_canvas.assert_called_once_with(window)
-        window.export_xyz.assert_not_called()
-        window.open_preview_window.assert_not_called()
-        window.setup_sheet.assert_not_called()
-        assembly.undo_button.click()
-        assembly.redo_button.click()
         assembly.panel_bar.findChild(QToolButton, "flip_horizontal_button").click()
         assembly.panel_bar.findChild(QToolButton, "flip_vertical_button").click()
-        window.canvas.history_service.undo.assert_called_once_with()
-        window.canvas.history_service.redo.assert_called_once_with()
         window.canvas.scene_transform_controller.flip_selected_items.assert_has_calls(
             [mock.call(horizontal=True), mock.call(horizontal=False)]
         )
         self.scene_transform_controller_for_window.assert_has_calls(
             [mock.call(window), mock.call(window)]
         )
+
+    def test_init_menu_bar_builds_file_edit_view_help_menus(self) -> None:
+        window = _HarnessWindow()
+        self.addCleanup(window.close)
+
+        assembly = self.service.init_menu_bar(window)
+        menu_bar = assembly.menu_bar
+
         self.assertEqual(
-            self.history_service_for_window.call_args_list,
-            [mock.call(window), mock.call(window)],
+            [
+                action.menu().title()
+                for action in menu_bar.actions()
+                if action.menu() is not None
+            ],
+            ["File", "Edit", "View", "Help"],
         )
 
+        file_menu = self._menu(menu_bar, "File")
+        file_texts = [
+            action.text() for action in file_menu.actions() if not action.isSeparator()
+        ]
+        self.assertEqual(
+            file_texts,
+            [
+                "New Canvas",
+                "Open...",
+                "Open Recent",
+                "Save",
+                "Save As...",
+                "Canvas Size...",
+                "Export Figure...",
+                "Export MOL...",
+            ],
+        )
+        self.assertIsNotNone(self._menu_action(file_menu, "Open Recent").menu())
+        for text, callback in (
+            ("New Canvas", self.panel_toolbar_callbacks.new_canvas),
+            ("Open...", self.panel_toolbar_callbacks.load_canvas),
+            ("Save", self.panel_toolbar_callbacks.save_canvas),
+            ("Save As...", self.panel_toolbar_callbacks.save_canvas_as),
+            ("Export Figure...", self.panel_toolbar_callbacks.export_figure),
+            ("Export MOL...", self.panel_toolbar_callbacks.export_mol),
+        ):
+            self._menu_action(file_menu, text).trigger()
+            callback.assert_called_once_with(window)
+        self.assertEqual(
+            self._menu_action(file_menu, "Save").shortcut(),
+            QKeySequence(QKeySequence.StandardKey.Save),
+        )
+        self.assertEqual(
+            self._menu_action(file_menu, "Open...").shortcut(),
+            QKeySequence(QKeySequence.StandardKey.Open),
+        )
+
+        edit_menu = self._menu(menu_bar, "Edit")
+        edit_texts = [
+            action.text() for action in edit_menu.actions() if not action.isSeparator()
+        ]
+        self.assertEqual(
+            edit_texts,
+            [
+                "Undo",
+                "Redo",
+                "Cut",
+                "Copy",
+                "Paste",
+                "Select All",
+                "Group",
+                "Ungroup",
+                "Flip Horizontal",
+                "Flip Vertical",
+                "Rotate...",
+            ],
+        )
+        self.assertIs(assembly.undo_action, self._menu_action(edit_menu, "Undo"))
+        self.assertIs(assembly.redo_action, self._menu_action(edit_menu, "Redo"))
+        self.assertEqual(
+            assembly.undo_action.shortcut(),
+            QKeySequence(QKeySequence.StandardKey.Undo),
+        )
+        self.assertEqual(
+            assembly.redo_action.shortcut(),
+            QKeySequence(QKeySequence.StandardKey.Redo),
+        )
+        # The canvas key-press path owns these sequences; the menu items must
+        # not register competing window-level shortcuts.
+        for text in ("Cut", "Copy", "Paste", "Select All", "Group", "Ungroup"):
+            self.assertTrue(
+                self._menu_action(edit_menu, text).shortcut().isEmpty(), text
+            )
+        self._menu_action(edit_menu, "Rotate...").trigger()
+        self.panel_toolbar_callbacks.show_rotate_options.assert_called_once_with(window)
+        with (
+            mock.patch(
+                "chemvas.ui.main_window_menu_bar.cut_selection_for_window"
+            ) as cut_port,
+            mock.patch(
+                "chemvas.ui.main_window_menu_bar.copy_selection_for_window"
+            ) as copy_port,
+            mock.patch(
+                "chemvas.ui.main_window_menu_bar.paste_selection_for_window"
+            ) as paste_port,
+            mock.patch(
+                "chemvas.ui.main_window_menu_bar.select_all_for_window"
+            ) as select_all_port,
+            mock.patch(
+                "chemvas.ui.main_window_menu_bar.group_selection_for_window"
+            ) as group_port,
+            mock.patch(
+                "chemvas.ui.main_window_menu_bar.ungroup_selection_for_window"
+            ) as ungroup_port,
+        ):
+            for text, port in (
+                ("Cut", cut_port),
+                ("Copy", copy_port),
+                ("Paste", paste_port),
+                ("Select All", select_all_port),
+                ("Group", group_port),
+                ("Ungroup", ungroup_port),
+            ):
+                self._menu_action(edit_menu, text).trigger()
+                port.assert_called_once_with(window)
+        with mock.patch(
+            "chemvas.ui.main_window_menu_bar.scene_transform_controller_for_window",
+            side_effect=lambda w: (
+                w.canvas.services.scene_operations.scene_transform_controller
+            ),
+        ):
+            self._menu_action(edit_menu, "Flip Horizontal").trigger()
+            self._menu_action(edit_menu, "Flip Vertical").trigger()
+        window.canvas.scene_transform_controller.flip_selected_items.assert_has_calls(
+            [mock.call(horizontal=True), mock.call(horizontal=False)]
+        )
+
+        view_menu = self._menu(menu_bar, "View")
+        view_texts = [
+            action.text() for action in view_menu.actions() if not action.isSeparator()
+        ]
+        self.assertEqual(
+            view_texts,
+            ["Actual Size", "Fit to Window", "Zoom In", "Zoom Out", "Molecule Info"],
+        )
+        for text, key in (
+            ("Actual Size", "F5"),
+            ("Fit to Window", "F6"),
+            ("Zoom In", "F7"),
+            ("Zoom Out", "F8"),
+        ):
+            self.assertEqual(
+                self._menu_action(view_menu, text).shortcut(),
+                QKeySequence(key),
+            )
+        with (
+            mock.patch(
+                "chemvas.ui.main_window_menu_bar.reset_zoom_for_window"
+            ) as reset_port,
+            mock.patch(
+                "chemvas.ui.main_window_menu_bar.fit_canvas_to_view_for_window"
+            ) as fit_port,
+            mock.patch(
+                "chemvas.ui.main_window_menu_bar.zoom_in_for_window"
+            ) as zoom_in_port,
+            mock.patch(
+                "chemvas.ui.main_window_menu_bar.zoom_out_for_window"
+            ) as zoom_out_port,
+        ):
+            for text, port in (
+                ("Actual Size", reset_port),
+                ("Fit to Window", fit_port),
+                ("Zoom In", zoom_in_port),
+                ("Zoom Out", zoom_out_port),
+            ):
+                self._menu_action(view_menu, text).trigger()
+                port.assert_called_once_with(window)
+        self._menu_action(view_menu, "Molecule Info").trigger()
+        self.panel_toolbar_callbacks.open_preview_window.assert_called_once_with(window)
+
+    def test_menu_bar_canvas_size_runs_sheet_setup_dialog(self) -> None:
+        window = _HarnessWindow()
+        self.addCleanup(window.close)
+
+        assembly = self.service.init_menu_bar(window)
+        file_menu = self._menu(assembly.menu_bar, "File")
+        selection = SimpleNamespace(size="Letter", orientation="landscape")
+
+        with (
+            mock.patch(
+                "chemvas.ui.main_window_menu_bar.sheet_size_for_window",
+                return_value="A4",
+            ),
+            mock.patch(
+                "chemvas.ui.main_window_menu_bar.sheet_orientation_for_window",
+                return_value="portrait",
+            ),
+            mock.patch(
+                "chemvas.ui.main_window_menu_bar.prompt_sheet_setup",
+                return_value=selection,
+            ) as prompt,
+            mock.patch(
+                "chemvas.ui.main_window_menu_bar.set_sheet_setup_for_window"
+            ) as set_sheet,
+        ):
+            self._menu_action(file_menu, "Canvas Size...").trigger()
+
+        prompt.assert_called_once_with(
+            window, current_size="A4", current_orientation="portrait"
+        )
+        set_sheet.assert_called_once_with(window, "Letter", "landscape")
+
+    def test_menu_bar_canvas_size_keeps_sheet_when_dialog_cancelled(self) -> None:
+        window = _HarnessWindow()
+        self.addCleanup(window.close)
+
+        assembly = self.service.init_menu_bar(window)
+        file_menu = self._menu(assembly.menu_bar, "File")
+
+        with (
+            mock.patch(
+                "chemvas.ui.main_window_menu_bar.sheet_size_for_window",
+                return_value="A4",
+            ),
+            mock.patch(
+                "chemvas.ui.main_window_menu_bar.sheet_orientation_for_window",
+                return_value="portrait",
+            ),
+            mock.patch(
+                "chemvas.ui.main_window_menu_bar.prompt_sheet_setup",
+                return_value=None,
+            ),
+            mock.patch(
+                "chemvas.ui.main_window_menu_bar.set_sheet_setup_for_window"
+            ) as set_sheet,
+        ):
+            self._menu_action(file_menu, "Canvas Size...").trigger()
+
+        set_sheet.assert_not_called()
+
     def test_init_menu_bar_builds_help_menu_with_about_actions(self) -> None:
-        window = QMainWindow()
+        window = _HarnessWindow()
         self.addCleanup(window.close)
 
         with mock.patch(
             "chemvas.ui.main_window_menu_bar.show_about_dialog"
         ) as show_about:
-            menu_bar = self.service.init_menu_bar(window)
+            assembly = self.service.init_menu_bar(window)
 
-            help_menu = next(
-                menu
-                for action in menu_bar.actions()
-                if (menu := action.menu()) is not None and menu.title() == "Help"
-            )
+            help_menu = self._menu(assembly.menu_bar, "Help")
             actions = [
                 action for action in help_menu.actions() if not action.isSeparator()
             ]

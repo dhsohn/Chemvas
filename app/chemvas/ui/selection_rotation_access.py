@@ -5,13 +5,10 @@ import math
 from PyQt6.QtCore import QPointF
 
 from chemvas.features.selection import (
-    center_for_atoms,
     center_for_coords_3d,
     fragment_plane_normal_for,
     normalize_3d,
     rotate_point_around_axis,
-    rotated_atom_positions,
-    selected_rotation_atom_ids,
 )
 from chemvas.ui.atom_coords_access import set_atom_coords_3d_for_id
 from chemvas.ui.atom_label_access import atom_label_service
@@ -21,19 +18,13 @@ from chemvas.ui.canvas_graph_state import graph_state_for
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import (
     atom_for_id,
-    atoms_for,
     bond_for_id,
     bonds_for,
 )
-from chemvas.ui.canvas_ring_fill_scene_access import (
-    rotate_ring_fills_for,
-    update_ring_fills_for_atoms_for,
-)
+from chemvas.ui.canvas_ring_fill_scene_access import update_ring_fills_for_atoms_for
 from chemvas.ui.canvas_rotation_state import rotation_state_for
 from chemvas.ui.mark_item_access import set_mark_center_for
-from chemvas.ui.move_access import move_service_from_canvas
 from chemvas.ui.renderer_style_access import bond_length_px_for
-from chemvas.ui.selection_collection_access import selected_ids_for
 from chemvas.ui.selection_rotation_planarity import (
     atom_in_planar_system_for,
     bond_in_cycle_for,
@@ -41,7 +32,6 @@ from chemvas.ui.selection_rotation_planarity import (
     flatten_planar_fragments_for,
     planar_fragment_components_for,
 )
-from chemvas.ui.selection_service_access import refresh_selection_outline_for
 
 
 def _perspective_camera_distance_for(canvas) -> float:
@@ -210,60 +200,6 @@ def _sync_atom_scene_items_for(canvas, atom_id: int, label_service) -> None:
             set_mark_center_for(canvas, mark, QPointF(atom.x, atom.y))
 
 
-def _rotate_bound_mark_offsets_for(
-    canvas, atom_ids: set[int], angle_radians: float
-) -> None:
-    """Rotate the stored dx/dy of marks bound to the rotating atoms.
-
-    Matches the Alt+arrows rotation semantics (rotate_scene_item_state) and
-    the rigid rotation preview: the mark orbits with its atom AND its offset
-    turns, instead of being re-applied unrotated after the atoms move.
-    """
-    cos_a = math.cos(angle_radians)
-    sin_a = math.sin(angle_radians)
-    registry = mark_registry_for(canvas)
-    for atom_id in atom_ids:
-        for mark in list(registry.get_for_atom(atom_id) or []):
-            data = mark.data(1) or {}
-            dx = data.get("dx")
-            dy = data.get("dy")
-            if not isinstance(dx, (int, float)) or not isinstance(dy, (int, float)):
-                continue
-            data["dx"] = dx * cos_a - dy * sin_a
-            data["dy"] = dx * sin_a + dy * cos_a
-            mark.setData(1, data)
-
-
-def rotate_selection_for(canvas, angle_degrees: float) -> None:
-    atom_ids, bond_ids = selected_ids_for(canvas)
-    atom_ids = selected_rotation_atom_ids(atom_ids, bond_ids, bonds=bonds_for(canvas))
-    if not atom_ids:
-        return
-    center = center_for_atoms(atom_ids, atoms=atoms_for(canvas))
-    if center is None:
-        return
-    angle = math.radians(angle_degrees)
-    label_service = atom_label_service(canvas)
-    _rotate_bound_mark_offsets_for(canvas, atom_ids, angle)
-    for atom_id, (x, y) in rotated_atom_positions(
-        atom_ids,
-        atoms=atoms_for(canvas),
-        center=center,
-        angle_radians=angle,
-    ).items():
-        atom = atom_for_id(canvas, atom_id)
-        if atom is None:
-            continue
-        atom.x = x
-        atom.y = y
-        _sync_atom_scene_items_for(canvas, atom_id, label_service)
-    move_controller = move_service_from_canvas(canvas)
-    for atom_id in atom_ids:
-        move_controller.redraw_connected_bonds(atom_id)
-    rotate_ring_fills_for(canvas, atom_ids, center, angle)
-    refresh_selection_outline_for(canvas)
-
-
 def rotate_point_around_axis_for(
     canvas,
     point: tuple[float, float, float],
@@ -288,7 +224,6 @@ __all__ = [
     "normalize_3d",
     "planar_fragment_components_for",
     "rotate_point_around_axis_for",
-    "rotate_selection_for",
     "rotation_scale_for_coords_for",
     "unproject_scene_point_3d_for",
     "update_ring_fills_for_atoms_for",

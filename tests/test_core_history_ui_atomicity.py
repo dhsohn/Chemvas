@@ -32,6 +32,8 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
+from tests.canvas_factory import build_canvas_view
+
 
 class CoreHistoryUiAtomicityTest(unittest.TestCase):
     @classmethod
@@ -40,7 +42,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def _canvas(self) -> CanvasView:
-        canvas = CanvasView()
+        canvas = build_canvas_view()
 
         def close_canvas(target=canvas) -> None:
             target.services.document.canvas_scene_reset_service.clear_scene()

@@ -31,6 +31,7 @@ if QApplication is not None:
     )
     from chemvas.domain.document import Atom, Bond
     from chemvas.features.hover import HoverState
+    from chemvas.ui.bond_tool import BondTool
     from chemvas.ui.canvas_atom_graphics_state import (
         atom_dots_for,
         atom_items_for,
@@ -45,23 +46,19 @@ if QApplication is not None:
         set_selected_notes_for,
     )
     from chemvas.ui.canvas_tool_settings_state import set_tool_setting_for
-    from chemvas.ui.canvas_view import CanvasView
     from chemvas.ui.handle_state import CanvasHandleState
     from chemvas.ui.history_commands import MoveItemsCommand, UpdateSceneItemCommand
-    from chemvas.ui.preview_tools import PreviewDragTool
+    from chemvas.ui.move_tool import MoveTool
+    from chemvas.ui.preview_tools import ArrowTool, PreviewDragTool, TSBracketTool
+    from chemvas.ui.rotate_tool import RotateTool
     from chemvas.ui.scene_item_state import scene_item_state_for
+    from chemvas.ui.select_tool import SelectTool
     from chemvas.ui.selection_drag_tool import independent_selection_items
     from chemvas.ui.selection_style_state import selection_style_state_for
+    from chemvas.ui.tool_base import Tool
     from chemvas.ui.tool_context import ToolContext
-    from chemvas.ui.tools import (
-        ArrowTool,
-        BondTool,
-        MoveTool,
-        RotateTool,
-        SelectTool,
-        Tool,
-        TSBracketTool,
-    )
+
+    from tests.canvas_factory import build_canvas_view
 
 
 def _tool_context_for(canvas):
@@ -1067,7 +1064,7 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertEqual(len(canvas.pushed_commands), 0)
 
     def _canvas_with_shapes(self, count: int = 2):
-        canvas = CanvasView()
+        canvas = build_canvas_view()
         shapes = [
             canvas.services.scene_decoration.scene_decoration_service.add_shape(
                 QRectF(float(index * 30), 0.0, 20.0, 16.0),
@@ -1219,7 +1216,7 @@ class ToolsUnitTest(unittest.TestCase):
             self._dispose_canvas(canvas)
 
     def test_atom_drag_reuses_begin_bound_rings_across_actual_frames(self) -> None:
-        canvas = CanvasView()
+        canvas = build_canvas_view()
         atom_ids = [
             canvas.model.add_atom("C", 0.0, 0.0),
             canvas.model.add_atom("C", 2.0, 0.0),

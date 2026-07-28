@@ -3,8 +3,10 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, cast
 
+from chemvas.adapters.qt.renderer import Renderer
 from chemvas.bootstrap.window_registry import open_new_window
 from chemvas.ui.canvas_service_ports import note_controller_for_access
+from chemvas.ui.canvas_view import CanvasView
 from chemvas.ui.main_window_action_availability_service import (
     MainWindowActionAvailabilityService,
 )
@@ -42,17 +44,15 @@ from chemvas.ui.main_window_ports import (
     context_bar_page_override_for_window,
     current_zoom_percent_for_window,
     document_session_service_for_window,
-    export_xyz_button_for_window,
     fit_canvas_to_view_for_window,
     geometry_controller_for_window,
-    has_exportable_atoms_for_window,
     history_service_for_window,
     icon_factory_for_window,
     insert_controller_for_window,
     next_canvas_name_for_window,
     preview_for_window,
     preview_window_for_window,
-    redo_button_for_window,
+    redo_action_for_window,
     reset_zoom_for_window,
     scene_transform_controller_for_window,
     selected_scene_items_for_window,
@@ -67,7 +67,7 @@ from chemvas.ui.main_window_ports import (
     tool_actions_for_window,
     tool_mode_controller_for_window,
     tool_settings_for_window,
-    undo_button_for_window,
+    undo_action_for_window,
     zoom_in_for_window,
     zoom_out_for_window,
 )
@@ -95,11 +95,9 @@ def build_main_window_services() -> MainWindowServices:
 
     action_availability_service = MainWindowActionAvailabilityService(
         history_service_for_window=history_service_for_window,
-        has_exportable_atoms_for_window=has_exportable_atoms_for_window,
         active_canvas_or_none_for_window=active_canvas_or_none_for_window,
-        undo_button_for_window=undo_button_for_window,
-        redo_button_for_window=redo_button_for_window,
-        export_xyz_button_for_window=export_xyz_button_for_window,
+        undo_action_for_window=undo_action_for_window,
+        redo_action_for_window=redo_action_for_window,
     )
     text_style_service = MainWindowTextStyleService(
         style_controller_for_window=style_controller_for_window,
@@ -218,6 +216,7 @@ def build_main_window_services() -> MainWindowServices:
     )
     canvas_document_service = MainWindowCanvasDocumentService(
         active_canvas_ui=active_canvas_ui_service,
+        canvas_factory=lambda: CanvasView(renderer=Renderer()),
         tab_refs_for_window=tab_references_for_window,
         active_canvas_or_none_for_window=active_canvas_or_none_for_window,
         next_canvas_name_for_window=next_canvas_name_for_window,
@@ -281,7 +280,6 @@ def build_main_window_services() -> MainWindowServices:
     ui_assembly_service = MainWindowUIAssemblyService(
         scene_transform_controller_for_window=scene_transform_controller_for_window,
         insert_controller_for_window=insert_controller_for_window,
-        history_service_for_window=history_service_for_window,
         build_tool_actions_for_window=tool_action_service.build_tool_actions,
         panel_toolbar_callbacks=panel_toolbar_callbacks,
     )

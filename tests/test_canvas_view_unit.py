@@ -40,7 +40,6 @@ if QApplication is not None:
     )
     from chemvas.ui.canvas_service_access import canvas_services_for
     from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
-    from chemvas.ui.canvas_view import CanvasView
     from chemvas.ui.history_commands import (
         AddSceneItemsCommand,
         DeleteSceneItemsCommand,
@@ -85,6 +84,8 @@ if QApplication is not None:
         build_selected_structure_payload_for,
         build_structure_payload_for,
     )
+
+    from tests.canvas_factory import build_canvas_view
 
 
 class _FakeNoteCanvas:
@@ -179,7 +180,7 @@ class CanvasViewUnitTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def test_canvas_background_defaults_to_workspace_gray(self) -> None:
-        canvas = CanvasView()
+        canvas = build_canvas_view()
         self.addCleanup(canvas.close)
 
         # Workspace is a soft gray so the white page reads as paper floating
@@ -189,7 +190,7 @@ class CanvasViewUnitTest(unittest.TestCase):
     def test_canvas_defaults_to_a4_landscape_sheet_and_can_switch_portrait(
         self,
     ) -> None:
-        canvas = CanvasView()
+        canvas = build_canvas_view()
         self.addCleanup(canvas.close)
 
         self.assertEqual(canvas.sheet_size, "A4")
@@ -211,7 +212,7 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertEqual(canvas.scene().sceneRect(), canvas.sceneRect())
 
     def test_history_fields_are_backed_by_state_holder(self) -> None:
-        canvas = CanvasView()
+        canvas = build_canvas_view()
         self.addCleanup(canvas.close)
 
         self.assertFalse(hasattr(canvas, "_history_state"))
@@ -234,7 +235,7 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertIs(canvas.runtime_state.history_state.change_callback, callback)
 
     def test_insert_fields_are_backed_by_state_holder(self) -> None:
-        canvas = CanvasView()
+        canvas = build_canvas_view()
         self.addCleanup(canvas.close)
 
         self.assertFalse(hasattr(canvas, "_insert_state"))
@@ -261,7 +262,7 @@ class CanvasViewUnitTest(unittest.TestCase):
         )
 
     def test_tool_changes_cancel_pending_insert_modes(self) -> None:
-        canvas = CanvasView()
+        canvas = build_canvas_view()
         self.addCleanup(canvas.close)
 
         def prime_insert_modes() -> None:

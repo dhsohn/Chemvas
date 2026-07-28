@@ -3,10 +3,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Protocol
 
+from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QCloseEvent
 from PyQt6.QtWidgets import QMainWindow
 
-from chemvas.features.session import request_snapshot_on_window_close
+from chemvas.features.session import snapshot_unless_quitting
 
 
 class _DocumentActionService(Protocol):
@@ -97,7 +98,7 @@ class MainWindow(QMainWindow):
         # standalone window close drops the closed document from the restore
         # set). During app-wide quit, aboutToQuit sets the quitting flag before
         # this fires, so it no-ops and the full open set is preserved.
-        request_snapshot_on_window_close()
+        QTimer.singleShot(0, snapshot_unless_quitting)
         super().closeEvent(event)
 
 

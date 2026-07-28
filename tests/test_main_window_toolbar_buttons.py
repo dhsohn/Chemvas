@@ -8,7 +8,7 @@ try:
     from PyQt6.QtCore import QPoint, Qt
     from PyQt6.QtGui import QAction, QIcon, QKeySequence, QPixmap
     from PyQt6.QtTest import QTest
-    from PyQt6.QtWidgets import QApplication, QMainWindow, QMenu, QToolButton, QWidget
+    from PyQt6.QtWidgets import QApplication, QMainWindow, QMenu, QWidget
 except ModuleNotFoundError:
     QApplication = None
 
@@ -94,59 +94,9 @@ class MainWindowToolbarButtonsTest(unittest.TestCase):
         button.click()
         callback.assert_called_once_with(False)
 
-    def test_corner_and_file_menu_buttons_build_menus(self) -> None:
-        owner = QMainWindow()
-        self.addCleanup(owner.close)
-        factory = MainWindowToolbarButtonFactory()
-        save_action = QAction("Save", owner)
-        save_as_action = QAction("Save As...", owner)
-        load_action = QAction("Load", owner)
-        export_action = QAction("Export Figure...", owner)
-
-        save_button = factory.create_save_menu_button(save_action, save_as_action)
-        file_button = factory.create_file_project_menu_button(
-            save_action,
-            load_action,
-            save_as_action,
-            export_action,
-        )
-
-        self.assertIs(save_button.defaultAction(), save_action)
-        self.assertEqual(save_button.menu().actions(), [save_as_action])
-        self.assertIs(file_button.defaultAction(), save_action)
-        non_separator = [
-            action
-            for action in file_button.menu().actions()
-            if not action.isSeparator()
-        ]
-        self.assertEqual(
-            non_separator, [load_action, save_action, save_as_action, export_action]
-        )
-        self.assertEqual(
-            sum(1 for action in file_button.menu().actions() if action.isSeparator()), 1
-        )
-
-    def test_custom_buttons_paint_and_corner_menu_allows_no_default_action(
-        self,
-    ) -> None:
+    def test_custom_buttons_paint(self) -> None:
         owner = QWidget()
         self.addCleanup(owner.close)
-        factory = MainWindowToolbarButtonFactory()
-        icon = self._filled_icon()
-
-        corner_button = factory.create_corner_menu_button(
-            icon=icon,
-            tooltip="Palette",
-            style_sheet="padding: 1px;",
-            popup_mode=QToolButton.ToolButtonPopupMode.InstantPopup,
-            menu_builder=lambda menu: menu.addAction("Pick"),
-        )
-        self.assertIsInstance(corner_button, CornerMenuButton)
-        self.assertIsNone(corner_button.defaultAction())
-        self.assertFalse(corner_button.icon().isNull())
-        self.assertEqual(
-            [action.text() for action in corner_button.menu().actions()], ["Pick"]
-        )
 
         for widget, size in (
             (ArrowButton("up", owner), (8, 6)),

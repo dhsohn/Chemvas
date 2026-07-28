@@ -51,18 +51,6 @@ def snapshot_unless_quitting() -> None:
         request_snapshot()
 
 
-def request_snapshot_on_window_close() -> None:
-    """Schedule the deferred close snapshot on the next event-loop turn.
-
-    The QTimer is imported lazily and kept here (not in main_window) so the
-    window stays free of concrete Qt timer/dialog defaults, per the architecture
-    boundary test.
-    """
-    from PyQt6.QtCore import QTimer
-
-    QTimer.singleShot(0, snapshot_unless_quitting)
-
-
 def request_snapshot() -> None:
     if _snapshot_hook is None:
         return
@@ -76,7 +64,6 @@ __all__ = [
     "is_quitting",
     "mark_quitting",
     "request_snapshot",
-    "request_snapshot_on_window_close",
     "reset_quitting",
     "set_snapshot_hook",
     "snapshot_unless_quitting",

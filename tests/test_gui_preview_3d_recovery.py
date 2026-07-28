@@ -439,6 +439,7 @@ class Preview3DRecoveryTest(unittest.TestCase):
             "CO",
             28.01,
             "C=O",
+            "InChI=STALE",
             "STALE",
             stale_scene,
             None,
@@ -447,6 +448,7 @@ class Preview3DRecoveryTest(unittest.TestCase):
         self.assertIsNone(preview._scene)
         self.assertEqual(preview._formula_text, "")
         self.assertEqual(preview._smiles_text, "")
+        self.assertEqual(preview._inchi_text, "")
         self.assertEqual(preview._message, "Updating 3D preview...")
 
     def test_inspector_layout_and_state_helpers_cover_preview_panel_sections(
@@ -600,21 +602,34 @@ class Preview3DRecoveryTest(unittest.TestCase):
         preview.resize(560, 360)
         preview.set_export_xyz_action(mock.Mock())
         preview._scene = self._make_scene()
-        preview.set_info("C2H4O", "44.05", "CC=O", "IKHGUXGNUITLKF-UHFFFAOYSA-N")
+        preview.set_info(
+            "C2H4O",
+            "44.05",
+            "CC=O",
+            "InChI=1S/C2H4O/c1-2-3/h2H,1H3",
+            "IKHGUXGNUITLKF-UHFFFAOYSA-N",
+        )
         preview._sync_export_xyz_button()
 
         smiles_button = preview._copy_smiles_button
+        inchi_button = preview._copy_inchi_button
         inchikey_button = preview._copy_inchikey_button
         export_button = preview.export_xyz_button
         assert smiles_button is not None
+        assert inchi_button is not None
         assert inchikey_button is not None
         assert export_button is not None
         self.assertTrue(smiles_button.isVisible())
+        self.assertTrue(inchi_button.isVisible())
         self.assertTrue(inchikey_button.isVisible())
         self.assertEqual(smiles_button.objectName(), "preview_copy_smiles_button")
+        self.assertEqual(inchi_button.objectName(), "preview_copy_inchi_button")
         # Copy buttons sit to the left of the Export 3D button.
         self.assertLessEqual(
-            smiles_button.geometry().right(), inchikey_button.geometry().left()
+            smiles_button.geometry().right(), inchi_button.geometry().left()
+        )
+        self.assertLessEqual(
+            inchi_button.geometry().right(), inchikey_button.geometry().left()
         )
         self.assertLessEqual(
             inchikey_button.geometry().right(), export_button.geometry().left()
@@ -623,6 +638,11 @@ class Preview3DRecoveryTest(unittest.TestCase):
         smiles_button.click()
         self.assertEqual(QApplication.clipboard().text(), "CC=O")
         self.assertEqual(smiles_button.text(), "Copied")
+
+        inchi_button.click()
+        self.assertEqual(
+            QApplication.clipboard().text(), "InChI=1S/C2H4O/c1-2-3/h2H,1H3"
+        )
 
         inchikey_button.click()
         self.assertEqual(QApplication.clipboard().text(), "IKHGUXGNUITLKF-UHFFFAOYSA-N")
@@ -635,8 +655,10 @@ class Preview3DRecoveryTest(unittest.TestCase):
         preview._sync_export_xyz_button()
 
         assert preview._copy_smiles_button is not None
+        assert preview._copy_inchi_button is not None
         assert preview._copy_inchikey_button is not None
         self.assertFalse(preview._copy_smiles_button.isVisible())
+        self.assertFalse(preview._copy_inchi_button.isVisible())
         self.assertFalse(preview._copy_inchikey_button.isVisible())
 
     def test_copy_buttons_appear_when_window_shown_after_building_while_hidden(
@@ -654,10 +676,17 @@ class Preview3DRecoveryTest(unittest.TestCase):
         preview.resize(560, 520)
         preview.set_export_xyz_action(mock.Mock())
         preview._scene = self._make_scene()
-        preview.set_info("C2H4O", "44.05", "CC=O", "IKHGUXGNUITLKF-UHFFFAOYSA-N")
+        preview.set_info(
+            "C2H4O",
+            "44.05",
+            "CC=O",
+            "InChI=1S/C2H4O/c1-2-3/h2H,1H3",
+            "IKHGUXGNUITLKF-UHFFFAOYSA-N",
+        )
         preview._sync_export_xyz_button()
 
         assert preview._copy_smiles_button is not None
+        assert preview._copy_inchi_button is not None
         assert preview._copy_inchikey_button is not None
         self.assertFalse(preview._copy_smiles_button.isVisible())
 
@@ -667,6 +696,7 @@ class Preview3DRecoveryTest(unittest.TestCase):
         assert preview.export_xyz_button is not None
         self.assertTrue(preview.export_xyz_button.isVisible())
         self.assertTrue(preview._copy_smiles_button.isVisible())
+        self.assertTrue(preview._copy_inchi_button.isVisible())
         self.assertTrue(preview._copy_inchikey_button.isVisible())
 
 

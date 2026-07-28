@@ -16,8 +16,8 @@ from PyQt6.QtGui import QPageSize, QPainter, QPdfWriter
 from PyQt6.QtSvg import QSvgGenerator
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene
 
-from .painting import POINTS_PER_INCH, paint_scene_region
-from .plan import ExportPlan
+from .painting import paint_scene_region
+from .plan import POINTS_PER_INCH, ExportPlan
 from .scope import exported_scene
 
 

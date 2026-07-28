@@ -35,8 +35,15 @@ conversion — Chemvas runs without it.
   (`Me`, `Et`, `OH`, `Ph`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `i-Pr`).
 - **SMILES import** _(RDKit)_ — type a SMILES string, preview it under the cursor,
   and click to place it on the canvas.
-- **Molecule Info window** _(RDKit)_ — 3D preview (drag to rotate, scroll to zoom)
-  plus molecular formula and weight for the current selection.
+- **MOL interchange** — open MDL Molfiles (`.mol`, V2000) as new documents and
+  export the selected structure as `.mol`. Import and plain-element export need
+  no RDKit; abbreviation labels require optional RDKit expansion. Property
+  records are limited to `M  CHG` / `M  RAD`, wedge/hash stereo to single bonds,
+  and the counts-line chiral flag to zero. Singlet `M  RAD` code 1 is rejected
+  until the annotation model can preserve spin multiplicity.
+- **Molecule Info window** _(RDKit)_ — 3D preview (drag to rotate, scroll to zoom),
+  molecular formula and weight, and one-click copy of the canonical SMILES,
+  InChI, and InChIKey for the current selection.
 - **Figure export** — plain SVG / PDF / PNG / TIFF with outlined glyphs (so screen,
   vector, and raster output never diverge) and deterministic physical sizing
   (bond-length or 84 / 174 mm column fit), independent of zoom. Editable Chemvas
@@ -44,8 +51,10 @@ conversion — Chemvas runs without it.
 - **2D→3D `.xyz` export** _(RDKit)_ — convert the current molecule or atom/bond
   selection into 3D coordinates; charges/radicals and wedge/hash stereo are carried
   through, and common alias labels are expanded into explicit fragments.
-- **Editing** — select / move, horizontal & vertical flip, perspective rotation,
-  and delta-based undo/redo.
+- **Editing** — select / move, an eraser tool (click or drag to erase),
+  horizontal & vertical flip, perspective rotation, and delta-based undo/redo.
+- **Desktop menus** — standard File / Edit / View menus, including a
+  **Canvas Size** dialog for the sheet size and orientation.
 - **ChemDraw-compatible shortcuts** — a substantial subset (see below).
 - **Save / load** — `.chemvas` JSON documents preserve the full working state.
 - **Autosave & recovery** — open documents are snapshotted every few seconds, so
@@ -81,7 +90,7 @@ python app/main.py    # development tree
 chemvas               # after install
 ```
 
-Pick a tool from the left toolbar and click/drag on the canvas to draw. Enter a
+Pick a tool from the top toolbar and click/drag on the canvas to draw. Enter a
 SMILES string in the top input and press **Insert** to enter placement mode: move
 the mouse to preview, click to insert, `Esc` to cancel. Templates work the same
 preview-and-click way.
@@ -143,11 +152,11 @@ Chemvas supports a major subset of ChemDraw-compatible shortcuts.
   Nudge selection `Shift+Arrows` (10 pt)
 - **View:** Actual size `F5`, Fit to window `F6`, Magnify `F7`, Reduce `F8`
 - **File / edit:** Save / Open / Undo / Redo (platform defaults), `Ctrl+A` (select
-  all, switches to the Select tool), `Ctrl+C` (copy
-  selection as image), `Ctrl+X` (cut selection), `Ctrl+G` / `Ctrl+Shift+G`
-  (group / ungroup selection), `Delete`/`Backspace` (delete
-  selection, or edit/delete the hovered atom/bond), `Esc` (cancel template /
-  SMILES insertion)
+  all, switches to the Select tool), `Ctrl+C` (copy selection — PNG plus SVG/PDF
+  vector clipboard flavors), `Ctrl+X` (cut selection), `Ctrl+V` (paste the copied
+  selection), `Ctrl+G` / `Ctrl+Shift+G` (group / ungroup selection),
+  `Delete`/`Backspace` (delete selection, or edit/delete the hovered atom/bond),
+  `Esc` (cancel template / SMILES insertion)
 
 ## Development
 
@@ -165,13 +174,15 @@ The high-level design is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 These are known gaps, not bugs — contributions welcome:
 
-- **Bond-aware interchange:** MOL / SDF **import**, and SDF (multi-molecule) export.
-  `.mol` export, SMILES export ("copy as SMILES"), and InChI / InChIKey have landed.
-- **Vector clipboard:** `Ctrl+C` currently copies a PNG only; PDF/SVG clipboard
-  flavors (for pasting into Illustrator / Office as vector) are planned.
+- **SDF (multi-molecule) interchange:** import and export. Single-molecule
+  `.mol` import/export, SMILES export ("copy as SMILES"), and InChI / InChIKey
+  have landed.
 - **Distribution:** one-file desktop binaries (Chemvas is already on PyPI —
   `pip install chemvas`).
 - **Multi-molecule / reaction-scheme 3D export** and richer template libraries.
+- **Deliberately out of scope for now:** printing (export a PDF instead),
+  persistent preferences (every document starts from the ACS 1996 defaults),
+  pasting external clipboard content, and drag-and-drop file open.
 
 ## License
 

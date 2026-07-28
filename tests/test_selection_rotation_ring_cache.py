@@ -15,7 +15,8 @@ if QApplication is not None:
     import chemvas.ui.canvas_ring_fill_scene_service as ring_fill_service
     import chemvas.ui.selection_rotation_preview_transaction as preview_transaction
     from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
-    from chemvas.ui.canvas_view import CanvasView
+
+    from tests.canvas_factory import build_canvas_view
 
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required")
@@ -28,7 +29,7 @@ class SelectionRotationRingCacheTest(unittest.TestCase):
     def test_actual_many_ring_session_scans_registry_only_at_authority_capture(
         self,
     ) -> None:
-        canvas = CanvasView()
+        canvas = build_canvas_view()
         controller = canvas.services.interaction.selection_rotation_controller
         atom_id = canvas.model.add_atom("C", 0.0, 0.0)
         controller.rotation.atom_ids = {atom_id}

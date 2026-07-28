@@ -3,11 +3,10 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import QAction, QColor, QIcon, QPainter, QPolygonF
-from PyQt6.QtWidgets import QMenu, QToolButton
+from PyQt6.QtGui import QColor, QIcon, QPainter, QPolygonF
+from PyQt6.QtWidgets import QToolButton
 
 from chemvas.ui.main_window_palette import PALETTE
-from chemvas.ui.main_window_theme import TOOLBAR_MENU_BUTTON_STYLE
 
 
 class ArrowButton(QToolButton):
@@ -119,74 +118,6 @@ class MainWindowToolbarButtonFactory:
         if callback is not None:
             button.clicked.connect(callback)
         return button
-
-    def create_corner_menu_button(
-        self,
-        *,
-        icon: QIcon | None = None,
-        tooltip: str | None = None,
-        status_tip: str | None = None,
-        style_sheet: str,
-        popup_mode: QToolButton.ToolButtonPopupMode,
-        menu_builder: Callable[[QMenu], None],
-        default_action: QAction | None = None,
-    ) -> CornerMenuButton:
-        button = CornerMenuButton()
-        if default_action is not None:
-            button.setDefaultAction(default_action)
-        elif icon is not None:
-            button.setIcon(icon)
-        if tooltip is not None:
-            button.setToolTip(tooltip)
-        resolved_status_tip = status_tip if status_tip is not None else tooltip
-        if resolved_status_tip is not None:
-            button.setStatusTip(resolved_status_tip)
-        button.setPopupMode(popup_mode)
-        button.setStyleSheet(style_sheet)
-        menu = QMenu(button)
-        menu_builder(menu)
-        button.setMenu(menu)
-        return button
-
-    def create_save_menu_button(
-        self, save_action: QAction, save_as_action: QAction
-    ) -> CornerMenuButton:
-        return self.create_corner_menu_button(
-            tooltip=save_action.toolTip(),
-            status_tip=save_action.statusTip() or save_action.toolTip(),
-            style_sheet=TOOLBAR_MENU_BUTTON_STYLE,
-            popup_mode=QToolButton.ToolButtonPopupMode.MenuButtonPopup,
-            menu_builder=lambda menu: menu.addAction(save_as_action),
-            default_action=save_action,
-        )
-
-    def create_file_project_menu_button(
-        self,
-        save_action: QAction,
-        load_action: QAction,
-        save_as_action: QAction,
-        *export_actions: QAction,
-        recent_menu: QMenu | None = None,
-    ) -> CornerMenuButton:
-        def build_menu(menu: QMenu) -> None:
-            menu.addAction(load_action)
-            if recent_menu is not None:
-                menu.addMenu(recent_menu)
-            menu.addAction(save_action)
-            menu.addAction(save_as_action)
-            if export_actions:
-                menu.addSeparator()
-                for export_action in export_actions:
-                    menu.addAction(export_action)
-
-        return self.create_corner_menu_button(
-            tooltip="File",
-            status_tip="Save, load, export, or save as the current file",
-            style_sheet=TOOLBAR_MENU_BUTTON_STYLE,
-            popup_mode=QToolButton.ToolButtonPopupMode.MenuButtonPopup,
-            menu_builder=build_menu,
-            default_action=save_action,
-        )
 
 
 __all__ = [

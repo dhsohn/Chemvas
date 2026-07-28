@@ -35,35 +35,30 @@ def test_main_window_ui_references_require_initialized_icon_factory() -> None:
 @pytest.mark.skipif(
     QApplication is None, reason="PyQt6 is required for main window UI reference tests"
 )
-def test_main_window_ui_references_apply_toolbar_assembly() -> None:
+def test_main_window_ui_references_apply_toolbar_and_menu_bar_assemblies() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
     owner = QToolButton()
     action = QAction("Select", owner)
     atom_input = QLineEdit()
-    export_button = QToolButton()
-    preview_button = QToolButton()
-    undo_button = QToolButton()
-    redo_button = QToolButton()
-    assembly = SimpleNamespace(
-        tool_actions={"select": action},
-        load_action=QAction("Load", owner),
-        export_xyz_button=export_button,
-        preview_panel_button=preview_button,
-        undo_button=undo_button,
-        redo_button=redo_button,
-    )
+    undo_action = QAction("Undo", owner)
+    redo_action = QAction("Redo", owner)
     refs = MainWindowUiReferences()
 
-    refs.apply_toolbar_assembly(assembly)
+    refs.apply_toolbar_assembly(SimpleNamespace(tool_actions={"select": action}))
 
     assert refs.tool_action_for_key("select") is action
     assert refs.tool_action_for_key("missing") is None
     assert refs.atom_input is None
-    assert refs.export_xyz_button is export_button
-    assert refs.preview_panel_button is preview_button
-    assert refs.undo_button is undo_button
-    assert refs.redo_button is redo_button
+    assert refs.undo_action is None
+    assert refs.redo_action is None
+
+    refs.apply_menu_bar_assembly(
+        SimpleNamespace(undo_action=undo_action, redo_action=redo_action)
+    )
+
+    assert refs.undo_action is undo_action
+    assert refs.redo_action is redo_action
     refs.set_atom_input(atom_input)
     assert refs.atom_input is atom_input
     preview_window = object()

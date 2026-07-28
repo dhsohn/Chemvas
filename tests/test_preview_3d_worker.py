@@ -30,6 +30,7 @@ class RecordingPreviewAdapter:
             formula=f"charge={formal_charge};radical={radical_electrons}",
             mw=42.5 + formal_charge + radical_electrons,
             smiles=f"[charge={formal_charge}].[radical={radical_electrons}]",
+            inchi="InChI=ANNOTATED",
             inchikey="ANNOTATED",
         )
 
@@ -65,12 +66,13 @@ def test_preview_worker_uses_payload_annotations_for_charged_radical_identifiers
     assert adapter.scene_annotations == [annotations]
     assert model.atom_annotations == {}
     assert emissions
-    assert emissions[0][0:5] == (
+    assert emissions[0][0:6] == (
         7,
         "charge=1;radical=1",
         44.5,
         "[charge=1].[radical=1]",
+        "InChI=ANNOTATED",
         "ANNOTATED",
     )
-    assert emissions[0][5] is not None
-    assert emissions[0][6] is None
+    assert emissions[0][6] is not None
+    assert emissions[0][7] is None

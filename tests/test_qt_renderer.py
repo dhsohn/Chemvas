@@ -9,7 +9,7 @@ except ModuleNotFoundError:
     Qt = None
 
 if Qt is not None:
-    from chemvas.core.renderer import Renderer
+    from chemvas.adapters.qt.renderer import Renderer
 
 
 @unittest.skipUnless(Qt is not None, "PyQt6 is required for renderer tests")

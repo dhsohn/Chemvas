@@ -16,7 +16,6 @@ from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
 from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
-from chemvas.ui.canvas_view import CanvasView
 from chemvas.ui.selection_rotation_controller import SelectionRotationController
 from chemvas.ui.selection_rotation_preview_transaction import (
     capture_rotation_preview_authority,
@@ -32,6 +31,8 @@ from PyQt6.QtWidgets import (
     QApplication,
     QGraphicsPolygonItem,
 )
+
+from tests.canvas_factory import build_canvas_view
 
 
 class _CountingBonds(list):
@@ -762,7 +763,7 @@ class SelectionRotationControllerTest(unittest.TestCase):
         self.assertEqual(len(canvas.apply_projected_calls), 100)
 
     def test_actual_preview_frames_scan_only_selected_bond_adjacency(self) -> None:
-        canvas = CanvasView()
+        canvas = build_canvas_view()
         try:
             previous_atom_id = add_atom_for(canvas, "C", 0.0, 0.0)
             for atom_index in range(1, 1_001):
@@ -997,7 +998,7 @@ class SelectionRotationControllerTest(unittest.TestCase):
         )
 
     def test_actual_failed_end_resyncs_label_items_to_start_positions(self) -> None:
-        canvas = CanvasView()
+        canvas = build_canvas_view()
         try:
             first = add_atom_for(canvas, "C", 0.0, 0.0)
             second = add_atom_for(canvas, "O", 40.0, 0.0)

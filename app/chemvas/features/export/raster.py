@@ -7,12 +7,8 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QImage, QPainter
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene
 
-from .painting import (
-    METERS_PER_INCH,
-    POINTS_PER_INCH,
-    paint_scene_region,
-)
-from .plan import ExportPlan
+from .painting import METERS_PER_INCH, paint_scene_region
+from .plan import POINTS_PER_INCH, ExportPlan
 from .scope import exported_scene
 
 

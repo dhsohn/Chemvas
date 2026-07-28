@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor
 
 from chemvas.domain.document import (
@@ -13,8 +13,11 @@ from chemvas.domain.document import (
     serialize_model_state_with_warnings,
     serialize_settings,
 )
-from chemvas.ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
-from chemvas.ui.bond_graphics_access import project_point_3d_for
+from chemvas.ui.atom_coords_access import (
+    atom_coords_3d_for,
+    set_atom_coords_3d_for,
+    stored_atom_coords_3d_matches_projection_for,
+)
 from chemvas.ui.canvas_atom_graphics_state import atom_items_for
 from chemvas.ui.canvas_group_state import (
     clear_groups_for,
@@ -46,6 +49,7 @@ from chemvas.ui.canvas_tool_settings_state import (
     tool_settings_state_for,
 )
 from chemvas.ui.renderer_style_access import bond_length_px_for, set_bond_length_for
+from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
 from chemvas.ui.scene_item_access import (
     attached_canvas_scene_items,
     restore_arrow_from_state,
@@ -130,7 +134,7 @@ def _add_projection_state(canvas, state: dict) -> None:
     coords_3d = {
         atom_id: coords
         for atom_id, coords in atom_coords_3d_for(canvas).items()
-        if _stored_atom_coords_3d_matches_projection(canvas, atom_id, coords)
+        if stored_atom_coords_3d_matches_projection_for(canvas, atom_id, coords)
     }
     if not coords_3d:
         return
@@ -152,17 +156,6 @@ def _finite_point_or_none(point):
     if all(isinstance(value, (int, float)) and math.isfinite(value) for value in point):
         return point
     return None
-
-
-def _stored_atom_coords_3d_matches_projection(
-    canvas, atom_id: int, coords: tuple[float, float, float]
-) -> bool:
-    atom = model_for(canvas).atoms.get(atom_id)
-    if atom is None:
-        return False
-    proj_x, proj_y = project_point_3d_for(canvas, coords)
-    tolerance = max(1.0, bond_length_px_for(canvas) * 0.15)
-    return math.hypot(proj_x - atom.x, proj_y - atom.y) <= tolerance
 
 
 def restore_document_projection_state(canvas, state: dict) -> None:
@@ -300,6 +293,19 @@ def restore_document_post_model_items(canvas, state: dict) -> None:
         restore_note_from_state(canvas, note_state)
 
     for mark_state in state["marks"]:
+        if mark_state.get("_auto_position") is True:
+            item = add_mark_for_atom_for(
+                canvas,
+                mark_state["atom_id"],
+                QPointF(float(mark_state["x"]), float(mark_state["y"])),
+                kind=mark_state["kind"],
+                record=False,
+            )
+            if item is None:
+                raise RuntimeError(
+                    "Failed to materialize an atom annotation as a scene mark."
+                )
+            continue
         restore_mark_from_state(
             canvas,
             {

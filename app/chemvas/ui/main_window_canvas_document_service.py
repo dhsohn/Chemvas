@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from chemvas.ui.canvas_document_metadata_state import (
     document_display_name_for,
@@ -12,7 +14,6 @@ from chemvas.ui.canvas_document_metadata_state import (
     set_document_file_path_for,
 )
 from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.canvas_view import CanvasView
 from chemvas.ui.canvas_window_access import (
     restore_canvas_state_for,
     snapshot_canvas_state_for,
@@ -20,18 +21,23 @@ from chemvas.ui.canvas_window_access import (
 from chemvas.ui.main_window_canvas_logic import copy_canvas_template_settings
 from chemvas.ui.tab_title_logic import decorate_tab_title, window_title
 
+if TYPE_CHECKING:
+    from chemvas.ui.canvas_view import CanvasView
+
 
 class MainWindowCanvasDocumentService:
     def __init__(
         self,
         *,
         active_canvas_ui,
+        canvas_factory: Callable[[], CanvasView],
         tab_refs_for_window,
         active_canvas_or_none_for_window,
         next_canvas_name_for_window,
         set_last_canvas_tab_index_for_window,
     ) -> None:
         self._active_canvas_ui = active_canvas_ui
+        self._canvas_factory = canvas_factory
         self._tab_refs_for_window = tab_refs_for_window
         self._active_canvas_or_none_for_window = active_canvas_or_none_for_window
         self._next_canvas_name_for_window = next_canvas_name_for_window
@@ -42,7 +48,7 @@ class MainWindowCanvasDocumentService:
     def create_canvas(
         self, window, *, template: CanvasView | None = None
     ) -> CanvasView:
-        canvas = CanvasView()
+        canvas = self._canvas_factory()
         canvas.setFrameStyle(0)
         copy_canvas_template_settings(canvas, template)
         return canvas

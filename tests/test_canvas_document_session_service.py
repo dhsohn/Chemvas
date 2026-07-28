@@ -10,7 +10,7 @@ from tests.runtime_services import canvas_runtime_services
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from chemvas.core.renderer import Renderer
+from chemvas.adapters.qt.renderer import Renderer
 from chemvas.core.svg_roundtrip import extract_chemvas_document_from_svg
 from chemvas.domain.document import MoleculeModel, serialize_settings
 from chemvas.ui.bond_graphics_access import add_bond_graphics_for
@@ -24,7 +24,6 @@ from chemvas.ui.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_for
 from chemvas.ui.canvas_runtime_state import attach_canvas_runtime_state
 from chemvas.ui.canvas_scene_reset_service import CanvasSceneResetService
-from chemvas.ui.canvas_view import CanvasView
 from chemvas.ui.history_commands import UpdateSceneItemCommand
 from chemvas.ui.selection_info_state import selection_info_state_for
 from chemvas.ui.selection_style_state import (
@@ -43,6 +42,8 @@ from PyQt6.QtWidgets import (
     QGraphicsScene,
     QGraphicsView,
 )
+
+from tests.canvas_factory import build_canvas_view
 
 
 class _SceneItem:
@@ -904,7 +905,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
     def test_actual_canvas_sequential_document_and_note_failures_keep_rect_baseline(
         self,
     ) -> None:
-        canvas = CanvasView()
+        canvas = build_canvas_view()
         scene = canvas.scene()
         service = canvas.services.document.canvas_document_session_service
         original_scene_rect = QRectF(scene.sceneRect())
@@ -958,7 +959,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
     ) -> None:
         app = QApplication.instance() or QApplication([])
         self.assertIsNotNone(app)
-        canvas = CanvasView()
+        canvas = build_canvas_view()
         self.addCleanup(canvas.close)
         self.addCleanup(canvas.services.document.canvas_scene_reset_service.clear_scene)
         label_atom_id = add_atom_for(canvas, "N", 0.0, 0.0)

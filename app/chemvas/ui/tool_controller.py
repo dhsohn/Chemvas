@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from chemvas.ui.benzene_tool import BenzeneTool
 from chemvas.ui.bond_tool import BondTool
-from chemvas.ui.edit_tools import ColorTool, FlipTool
+from chemvas.ui.edit_tools import ColorTool, DeleteTool, FlipTool
 from chemvas.ui.interaction_tools import MarkTool, NoteTool
 from chemvas.ui.move_tool import MoveTool
 from chemvas.ui.perspective_tool import PerspectiveTool
@@ -63,6 +63,7 @@ class ToolController:
             "note": NoteTool(canvas, context=self.context),
             "benzene": BenzeneTool(canvas, context=self.context),
             "color": ColorTool(canvas, context=self.context),
+            "delete": DeleteTool(canvas, context=self.context),
             "flip": FlipTool(canvas, context=self.context),
             "move": MoveTool(canvas, context=self.context),
             "arrow": ArrowTool(canvas, "auto", context=self.context),

@@ -13,9 +13,10 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from chemvas.ui.canvas_view import CanvasView
     from chemvas.ui.main_window_tab_references import MainWindowTabReferences
     from chemvas.ui.main_window_tab_setup import build_canvas_tab_assembly
+
+    from tests.canvas_factory import build_canvas_view
 
 
 @pytest.mark.skipif(
@@ -32,8 +33,8 @@ def test_main_window_tab_references_resolve_active_canvas_tabs_and_names() -> No
         on_canvas_tab_close_requested=mock.Mock(),
     )
     refs = MainWindowTabReferences.from_assembly(assembly)
-    canvas_a = CanvasView()
-    canvas_b = CanvasView()
+    canvas_a = build_canvas_view()
+    canvas_b = build_canvas_view()
 
     refs.canvas_tabs.addTab(canvas_a, "Reactant")
     refs.canvas_tabs.addTab(canvas_b, "Product")

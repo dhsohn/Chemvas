@@ -50,6 +50,7 @@ if QApplication is not None:
         document_transaction,
     )
 
+    from tests.canvas_factory import build_canvas_view
     from tests.test_scene_ops_controller import (
         _FakeCanvas,
         _make_model_ring_item,
@@ -140,7 +141,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self.app.processEvents()
 
     def _new_canvas(self) -> CanvasView:
-        canvas = CanvasView()
+        canvas = build_canvas_view()
         self._real_canvases.append(canvas)
         return canvas
 

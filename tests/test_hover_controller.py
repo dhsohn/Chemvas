@@ -446,9 +446,9 @@ def test_refresh_updates_at_cursor_or_clears_when_cursor_is_outside_view() -> No
 
 
 def test_scene_reset_clears_preview_key_so_same_position_preview_reappears() -> None:
-    from chemvas.ui.canvas_view import CanvasView
+    from tests.canvas_factory import build_canvas_view
 
-    canvas = CanvasView()
+    canvas = build_canvas_view()
     try:
         services = canvas.services
         services.input.tool_mode_controller.set_bond_style("single", 1)

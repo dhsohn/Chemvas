@@ -67,13 +67,6 @@ class SmilesPreviewPlan:
     geometry: SmilesPreviewGeometry | None = None
 
 
-@dataclass(frozen=True)
-class SmilesPreviewResolvers:
-    parallel_bond_segments: Callable[
-        [float, float, float, float, int], Sequence[LineSegment]
-    ]
-
-
 def build_smiles_preview_snapshot(
     bond_segment_counts: Mapping[int, int],
     atom_ids: Iterable[int],
@@ -188,7 +181,9 @@ def build_smiles_preview_geometry(
     preview_center: Point2D | None,
     cursor_pos: Point2D,
     atom_radius: float | None,
-    resolvers: SmilesPreviewResolvers,
+    parallel_bond_segments: Callable[
+        [float, float, float, float, int], Sequence[LineSegment]
+    ],
 ) -> SmilesPreviewGeometry | None:
     if (
         model is None
@@ -214,9 +209,7 @@ def build_smiles_preview_geometry(
         if bond.order <= 1:
             bond_segments[bond_id] = ((x1, y1, x2, y2),)
         else:
-            segments = tuple(
-                resolvers.parallel_bond_segments(x1, y1, x2, y2, bond.order)
-            )
+            segments = tuple(parallel_bond_segments(x1, y1, x2, y2, bond.order))
             if not segments:
                 return None
             bond_segments[bond_id] = segments
@@ -250,10 +243,12 @@ def plan_smiles_preview_update(
     cursor_pos: Point2D,
     atom_radius: float | None,
     existing: SmilesPreviewSnapshot,
-    resolvers: SmilesPreviewResolvers,
+    parallel_bond_segments: Callable[
+        [float, float, float, float, int], Sequence[LineSegment]
+    ],
 ) -> SmilesPreviewPlan:
     geometry = build_smiles_preview_geometry(
-        model, preview_center, cursor_pos, atom_radius, resolvers
+        model, preview_center, cursor_pos, atom_radius, parallel_bond_segments
     )
     if geometry is None:
         return SmilesPreviewPlan(action="clear")
@@ -273,7 +268,6 @@ __all__ = [
     "SmilesMarkPlacement",
     "SmilesPreviewGeometry",
     "SmilesPreviewPlan",
-    "SmilesPreviewResolvers",
     "SmilesPreviewSnapshot",
     "annotation_mark_direction",
     "annotation_mark_kinds",

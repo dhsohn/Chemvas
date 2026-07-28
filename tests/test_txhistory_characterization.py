@@ -19,7 +19,6 @@ import pytest
 from chemvas.ui.atom_label_access import add_or_update_atom_label
 from chemvas.ui.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas_model_access import bond_count_for, next_atom_id_for
-from chemvas.ui.canvas_view import CanvasView
 from chemvas.ui.history_recording_access import record_additions_for
 from chemvas.ui.select_all_access import select_all_scene_items_for
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
@@ -28,6 +27,8 @@ from chemvas.ui.transactions.scene_rect import (
     scene_rect_is_automatic,
 )
 from PyQt6.QtWidgets import QApplication, QGraphicsRectItem, QGraphicsScene
+
+from tests.canvas_factory import build_canvas_view
 
 
 @pytest.fixture(scope="module")
@@ -39,7 +40,7 @@ def app() -> QApplication:
 
 @pytest.fixture
 def canvas(app: QApplication):
-    view = CanvasView()
+    view = build_canvas_view()
     yield view
     view.services.document.canvas_scene_reset_service.clear_scene()
     view.close()
@@ -372,7 +373,7 @@ def test_failed_document_open_leaves_no_half_applied_document(canvas, app) -> No
     _record_molecule(canvas)
     source_state = _document_state(canvas)
 
-    target = CanvasView()
+    target = build_canvas_view()
     try:
         blank = _document_state(target)
         corrupted = copy.deepcopy(source_state)
@@ -397,7 +398,7 @@ def test_successful_document_open_round_trips_between_canvases(canvas, app) -> N
     _record_molecule(canvas)
     source_state = _document_state(canvas)
 
-    target = CanvasView()
+    target = build_canvas_view()
     try:
         session = target.services.document.canvas_document_session_service
         session.apply_state(copy.deepcopy(source_state))

@@ -13,11 +13,16 @@ from chemvas.ui.main_window_ports import (
     active_tool_name_for_window,
     color_mutation_service_for_window,
     color_tool_for_window,
+    copy_selection_for_window,
+    cut_selection_for_window,
     document_session_service_for_window,
     geometry_controller_for_window,
-    has_exportable_atoms_for_window,
     insert_controller_for_window,
+    paste_selection_for_window,
+    scene_clipboard_controller_for_window,
+    scene_delete_controller_for_window,
     scene_transform_controller_for_window,
+    select_all_for_window,
     style_controller_for_window,
     tool_mode_controller_for_window,
 )
@@ -83,13 +88,57 @@ def test_active_canvas_service_ports_share_active_canvas_services_lookup() -> No
     assert color_tool_for_window(window) is services.tool_controller.tools["color"]
 
 
-def test_has_exportable_atoms_for_window_handles_missing_and_populated_canvas() -> None:
-    assert has_exportable_atoms_for_window(_window_with_active_canvas(None)) is False
+def _clipboard_window(*, copy_result: bool):
+    from unittest import mock
 
-    canvas = SimpleNamespace(model=SimpleNamespace(atoms={1: object()}))
-    window = _window_with_active_canvas(canvas)
+    clipboard = SimpleNamespace(
+        copy_selection_to_clipboard=mock.Mock(return_value=copy_result),
+        paste_selection_from_clipboard=mock.Mock(return_value=True),
+    )
+    delete = SimpleNamespace(delete_selected_items=mock.Mock())
+    services = canvas_runtime_services(
+        scene_clipboard_controller=clipboard,
+        scene_delete_controller=delete,
+    )
+    window = _window_with_active_canvas(SimpleNamespace(services=services))
+    return window, clipboard, delete
 
-    assert has_exportable_atoms_for_window(window) is True
+
+def test_clipboard_ports_resolve_active_canvas_controllers() -> None:
+    window, clipboard, delete = _clipboard_window(copy_result=True)
+
+    assert scene_clipboard_controller_for_window(window) is clipboard
+    assert scene_delete_controller_for_window(window) is delete
+
+
+def test_copy_and_paste_selection_ports_call_clipboard_controller() -> None:
+    window, clipboard, _delete = _clipboard_window(copy_result=True)
+
+    assert copy_selection_for_window(window) is True
+    clipboard.copy_selection_to_clipboard.assert_called_once_with()
+
+    paste_selection_for_window(window)
+    clipboard.paste_selection_from_clipboard.assert_called_once_with()
+
+
+def test_cut_selection_port_deletes_only_after_a_successful_copy() -> None:
+    window, clipboard, delete = _clipboard_window(copy_result=True)
+    cut_selection_for_window(window)
+    clipboard.copy_selection_to_clipboard.assert_called_once_with()
+    delete.delete_selected_items.assert_called_once_with()
+
+    window, clipboard, delete = _clipboard_window(copy_result=False)
+    cut_selection_for_window(window)
+    delete.delete_selected_items.assert_not_called()
+
+
+def test_clipboard_ports_are_noops_without_an_active_canvas() -> None:
+    window = _window_with_active_canvas(None)
+
+    assert copy_selection_for_window(window) is False
+    cut_selection_for_window(window)
+    paste_selection_for_window(window)
+    select_all_for_window(window)
 
 
 def test_build_main_window_services_includes_action_availability_service() -> None:

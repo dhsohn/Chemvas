@@ -52,11 +52,6 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(
     monkeypatch.setattr(setup, "model_for", lambda canvas: calls.append("model"))
     monkeypatch.setattr(
         setup,
-        "Renderer",
-        mock.Mock(side_effect=lambda: calls.append("renderer") or "renderer"),
-    )
-    monkeypatch.setattr(
-        setup,
         "RDKitAdapter",
         mock.Mock(side_effect=lambda: calls.append("rdkit") or "rdkit"),
     )
@@ -85,23 +80,22 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(
     )
     monkeypatch.setattr(setup, "QGraphicsScene", mock.Mock(return_value="scene"))
     monkeypatch.setattr(setup, "expand_selection_to_groups_for", mock.Mock())
-    setup.initialize_canvas_view(canvas)
+    renderer = object()
+    setup.initialize_canvas_view(canvas, renderer=renderer)
 
     setup.QGraphicsScene.assert_called_once_with(canvas)
     canvas.setScene.assert_called_once_with("scene")
     assert calls == [
         "sheet",
         "model",
-        "renderer",
         "rdkit",
         "runtime",
         "scene-rect",
         "bond-renderer",
     ]
-    assert canvas.renderer == "renderer"
+    assert canvas.renderer is renderer
     assert canvas.rdkit == "rdkit"
     assert canvas.bond_renderer == "bond-renderer"
-    setup.Renderer.assert_called_once_with()
     setup.RDKitAdapter.assert_called_once_with()
     setup.BondRenderer.assert_called_once_with(canvas)
     assert runtime_state.tool_settings_state.arrow_line_width == 2.5

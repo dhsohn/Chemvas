@@ -414,12 +414,8 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             "select",
         )
 
-    def test_new_canvas_button_opens_a_separate_window(self) -> None:
-        from chemvas.bootstrap.window_registry import open_windows
-
-        before_count = self.window.tab_references.canvas_count()
-        existing = set(open_windows())
-        button = self.window.findChild(QToolButton, "new_canvas_button")
+    def test_eraser_toolbar_button_activates_delete_tool(self) -> None:
+        button = self.window.findChild(QToolButton, "toolButton_delete")
         self.assertIsNotNone(button)
         assert button is not None
 
@@ -428,6 +424,28 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             Qt.MouseButton.LeftButton,
             Qt.KeyboardModifier.NoModifier,
         )
+        self.app.processEvents()
+
+        self.assertEqual(
+            active_canvas_for_window(self.window).services.tool_controller.active.name,
+            "delete",
+        )
+
+    def test_new_canvas_menu_action_opens_a_separate_window(self) -> None:
+        from chemvas.bootstrap.window_registry import open_windows
+
+        before_count = self.window.tab_references.canvas_count()
+        existing = set(open_windows())
+        file_menu = next(
+            menu
+            for action in self.window.menuBar().actions()
+            if (menu := action.menu()) is not None and menu.title() == "File"
+        )
+        new_canvas_action = next(
+            action for action in file_menu.actions() if action.text() == "New Canvas"
+        )
+
+        new_canvas_action.trigger()
         self.app.processEvents()
         QTest.qWait(10)
 

@@ -7,7 +7,6 @@ from PyQt6.QtWidgets import QMessageBox
 
 from chemvas.domain.transactions import restore_snapshot
 from chemvas.features.insertion import (
-    SmilesPreviewResolvers,
     annotation_mark_direction,
     annotation_mark_kinds,
     normalized_atom_annotation,
@@ -296,11 +295,7 @@ class InsertSmilesService:
             (pos.x(), pos.y()),
             atom_radius,
             self.smiles_preview_snapshot(),
-            SmilesPreviewResolvers(
-                parallel_bond_segments=lambda *args: parallel_bond_segments_for(
-                    self.canvas, *args
-                )
-            ),
+            lambda *args: parallel_bond_segments_for(self.canvas, *args),
         )
         if preview_plan.action == "clear" or preview_plan.geometry is None:
             self._clear_smiles_preview()

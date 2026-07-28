@@ -14,9 +14,9 @@ except ModuleNotFoundError:
 
 if QPointF is not None:
     from chemvas.ui.canvas_rotation_state import CanvasRotationState
+    from chemvas.ui.perspective_tool import PerspectiveTool
     from chemvas.ui.perspective_tool_controller import PerspectiveToolController
     from chemvas.ui.tool_context import ToolContext
-    from chemvas.ui.tools import PerspectiveTool
 
 
 class _Event:

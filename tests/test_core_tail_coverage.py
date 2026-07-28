@@ -19,8 +19,10 @@ from chemvas.features.hover import HoverState
 if QApplication is not None:
     from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
     from chemvas.ui.handle_state import CanvasHandleState
+    from chemvas.ui.move_tool import MoveTool
+    from chemvas.ui.select_tool import SelectTool
+    from chemvas.ui.text_tool import TextTool
     from chemvas.ui.tool_context import ToolContext
-    from chemvas.ui.tools import MoveTool, SelectTool, TextTool
 
 
 def _tool_context_for(canvas):

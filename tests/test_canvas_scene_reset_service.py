@@ -9,7 +9,7 @@ from unittest import mock
 from tests.runtime_services import canvas_runtime_services
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-from chemvas.core.renderer import Renderer
+from chemvas.adapters.qt.renderer import Renderer
 from chemvas.domain.document import MoleculeModel
 from chemvas.features.hover import HoverState
 from chemvas.ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
@@ -30,7 +30,6 @@ from chemvas.ui.canvas_scene_items_state import (
     ts_bracket_items_for,
 )
 from chemvas.ui.canvas_scene_reset_service import CanvasSceneResetService
-from chemvas.ui.canvas_view import CanvasView
 from chemvas.ui.handle_state import (
     active_handles_for,
     handle_target_for,
@@ -52,6 +51,8 @@ from PyQt6.QtWidgets import (
     QApplication,
     QGraphicsScene,
 )
+
+from tests.canvas_factory import build_canvas_view
 
 
 class _FakeScene:
@@ -89,7 +90,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
                 return super().blockSignals(blocked)
 
         scene = BlockingFailureScene()
-        canvas = CanvasView()
+        canvas = build_canvas_view()
         canvas.setScene(scene)
         item = scene.addRect(0.0, 0.0, 10.0, 10.0)
         command = AddSceneItemsCommand(items=[item], item_states=[{"kind": "shape"}])
@@ -137,7 +138,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
                 raise primary
 
         scene = ImmediateFailureScene()
-        canvas = CanvasView()
+        canvas = build_canvas_view()
         canvas.setScene(scene)
         item = scene.addRect(0.0, 0.0, 10.0, 10.0)
         command = AddSceneItemsCommand(items=[item], item_states=[{"kind": "shape"}])
@@ -176,7 +177,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
                 QGraphicsScene.clearSelection(self)
 
         scene = CachedSelectionScene()
-        canvas = CanvasView()
+        canvas = build_canvas_view()
         canvas.setScene(scene)
         atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
             "N",
@@ -213,7 +214,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
                     sip.delete(self.target)
                 QGraphicsScene.clear(self)
 
-        canvas = CanvasView()
+        canvas = build_canvas_view()
         deleting_scene = SelectiveDeletingScene()
         canvas.setScene(deleting_scene)
         canvas.services.structure.canvas_atom_mutation_service.add_atom(
@@ -270,11 +271,11 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             import os
             os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
             from PyQt6.QtWidgets import QApplication
-            from chemvas.ui.canvas_view import CanvasView
+            from tests.canvas_factory import build_canvas_view
             from chemvas.ui.history_commands import AddSceneItemsCommand
             from chemvas.ui.selection_info_state import selection_info_state_for
             app = QApplication.instance() or QApplication([])
-            canvas = CanvasView()
+            canvas = build_canvas_view()
             item = canvas.scene().addRect(0, 0, 10, 10)
             history = canvas.services.history_service.state.history
             history.append(AddSceneItemsCommand(items=[item], item_states=[{}]))
@@ -320,7 +321,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
     def test_empty_status_publication_reentry_publishes_once(self) -> None:
         app = QApplication.instance() or QApplication([])
         app.setQuitOnLastWindowClosed(False)
-        canvas = CanvasView()
+        canvas = build_canvas_view()
         canvas.services.structure.canvas_atom_mutation_service.add_atom(
             "N",
             0.0,

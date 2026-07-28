@@ -47,8 +47,10 @@ class Preview3D(QWidget):
         self._formula_text = ""
         self._mw_text = ""
         self._smiles_text = ""
+        self._inchi_text = ""
         self._inchikey_text = ""
         self._copy_smiles_button: QToolButton | None = None
+        self._copy_inchi_button: QToolButton | None = None
         self._copy_inchikey_button: QToolButton | None = None
         self._rotation_x = math.radians(-18.0)
         self._rotation_y = math.radians(22.0)
@@ -99,6 +101,7 @@ class Preview3D(QWidget):
                 identifiers.formula or "",
                 "" if identifiers.mw is None else f"{identifiers.mw:.2f}",
                 identifiers.smiles or "",
+                identifiers.inchi or "",
                 identifiers.inchikey or "",
             )
         self.set_structure(model, atom_annotations)
@@ -131,23 +134,31 @@ class Preview3D(QWidget):
         self._formula_text = ""
         self._mw_text = ""
         self._smiles_text = ""
+        self._inchi_text = ""
         self._inchikey_text = ""
         self._sync_export_xyz_button()
         self._safe_update()
 
     def set_info(
-        self, formula: str, mw: str, smiles: str = "", inchikey: str = ""
+        self,
+        formula: str,
+        mw: str,
+        smiles: str = "",
+        inchi: str = "",
+        inchikey: str = "",
     ) -> None:
         if (
             formula == self._formula_text
             and mw == self._mw_text
             and smiles == self._smiles_text
+            and inchi == self._inchi_text
             and inchikey == self._inchikey_text
         ):
             return
         self._formula_text = formula
         self._mw_text = mw
         self._smiles_text = smiles
+        self._inchi_text = inchi
         self._inchikey_text = inchikey
         self._sync_export_xyz_button()
         self._safe_update()
@@ -242,6 +253,7 @@ class Preview3D(QWidget):
         formula: str | None,
         mw: float | None,
         smiles: str | None,
+        inchi: str | None,
         inchikey: str | None,
         scene: Molecule3DScene | None,
         error: str | None,
@@ -254,6 +266,7 @@ class Preview3D(QWidget):
             self._formula_text = ""
             self._mw_text = ""
             self._smiles_text = ""
+            self._inchi_text = ""
             self._inchikey_text = ""
             self._message = error or "Failed to build 3D preview."
             self._sync_export_xyz_button()
@@ -262,6 +275,7 @@ class Preview3D(QWidget):
         self._formula_text = formula or ""
         self._mw_text = "" if mw is None else f"{mw:.2f}"
         self._smiles_text = smiles or ""
+        self._inchi_text = inchi or ""
         self._inchikey_text = inchikey or ""
         self._scene = scene
         self._message = ""
@@ -425,6 +439,10 @@ class Preview3D(QWidget):
             self._copy_smiles_button = self._build_copy_button(
                 "preview_copy_smiles_button", "SMILES", lambda: self._smiles_text
             )
+        if self._copy_inchi_button is None:
+            self._copy_inchi_button = self._build_copy_button(
+                "preview_copy_inchi_button", "InChI", lambda: self._inchi_text
+            )
         if self._copy_inchikey_button is None:
             self._copy_inchikey_button = self._build_copy_button(
                 "preview_copy_inchikey_button", "InChIKey", lambda: self._inchikey_text
@@ -433,11 +451,12 @@ class Preview3D(QWidget):
     def _sync_copy_buttons(self) -> None:
         self._ensure_copy_buttons()
         export = self._export_xyz_button
-        # Lay out [SMILES] [InChIKey] [Export] right-aligned: each copy button is
-        # anchored to the left edge of the one to its right. They only appear when
-        # a structure is present and the identifier value exists.
+        # Lay out [SMILES] [InChI] [InChIKey] [Export] right-aligned: each copy
+        # button is anchored to the left edge of the one to its right. They only
+        # appear when a structure is present and the identifier value exists.
         specs = [
             (self._copy_inchikey_button, "Copy InChIKey", self._inchikey_text),
+            (self._copy_inchi_button, "Copy InChI", self._inchi_text),
             (self._copy_smiles_button, "Copy canonical SMILES", self._smiles_text),
         ]
         # Gate on scene presence (mirroring the Export button's own visibility

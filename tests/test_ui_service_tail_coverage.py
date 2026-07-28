@@ -9,14 +9,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
     from PyQt6.QtCore import QPointF, QRect, QRectF, Qt
-    from PyQt6.QtGui import QColor, QFont, QPolygonF
+    from PyQt6.QtGui import QColor, QFont
     from PyQt6.QtWidgets import (
         QApplication,
         QGraphicsPathItem,
         QGraphicsScene,
         QGraphicsTextItem,
         QMainWindow,
-        QToolButton,
     )
 except ModuleNotFoundError:
     QApplication = None
@@ -27,14 +26,12 @@ if QApplication is not None:
     from chemvas.ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
     from chemvas.ui.canvas_scene_items_state import (
         selected_notes_for,
-        set_scene_item_collection_for,
         set_selected_notes_for,
     )
     from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
     from chemvas.ui.handle_mutation_service import HandleMutationService
     from chemvas.ui.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
     from chemvas.ui.main_window_toolbar_buttons import ArrowButton
-    from chemvas.ui.main_window_ui_assembly_service import MainWindowUIAssemblyService
     from chemvas.ui.note_item_access import set_committed_note_text_for
     from chemvas.ui.scene_flip_state import flip_scene_item_state
     from chemvas.ui.scene_item_restore import create_orbital_item_from_state
@@ -67,24 +64,6 @@ def _color_service_for(canvas) -> CanvasColorMutationService:
     return CanvasColorMutationService(canvas, graph_service=graph_service)
 
 
-class _FakeRingItem:
-    def __init__(self, atom_ids) -> None:
-        self._atom_ids = atom_ids
-        self._polygon = QPolygonF()
-        self.setPolygon = mock.Mock(side_effect=self._set_polygon)
-
-    def _set_polygon(self, polygon) -> None:
-        self._polygon = QPolygonF(polygon)
-
-    def data(self, key):
-        if key == 2:
-            return self._atom_ids
-        return None
-
-    def polygon(self):
-        return QPolygonF(self._polygon)
-
-
 class _CurvedEndpointItem:
     def __init__(self) -> None:
         self._data = {
@@ -111,10 +90,6 @@ class _NoteItem:
         return QRectF(self._rect)
 
 
-def _polygon_points(polygon) -> list[tuple[float, float]]:
-    return [(round(point.x(), 6), round(point.y(), 6)) for point in polygon]
-
-
 @unittest.skipUnless(
     QApplication is not None, "PyQt6 is required for UI service tail coverage tests"
 )
@@ -133,39 +108,6 @@ class UIServiceTailCoverageTest(unittest.TestCase):
         CanvasRingFillSceneService(canvas).update_ring_fills_for_atoms(set())
 
         canvas.ring_items.assert_not_called()
-
-    def test_rotate_ring_fills_3d_refreshes_matching_list_backed_ring(self) -> None:
-        ring_item = _FakeRingItem([1, 2, 3])
-        skipped_item = _FakeRingItem([4, 5, 6])
-        canvas = SimpleNamespace(
-            model=SimpleNamespace(
-                atoms={
-                    1: SimpleNamespace(x=0.0, y=0.0),
-                    2: SimpleNamespace(x=2.0, y=0.0),
-                    3: SimpleNamespace(x=1.0, y=1.5),
-                    4: SimpleNamespace(x=10.0, y=10.0),
-                    5: SimpleNamespace(x=11.0, y=10.0),
-                    6: SimpleNamespace(x=10.5, y=11.0),
-                }
-            ),
-            renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=12.0)),
-        )
-        set_scene_item_collection_for(canvas, "ring_items", [ring_item, skipped_item])
-
-        CanvasRingFillSceneService(canvas).rotate_ring_fills_3d(
-            {1, 2, 3},
-            (0.0, 0.0, 0.0),
-            0.25,
-            0.5,
-            1.0,
-        )
-
-        ring_item.setPolygon.assert_called_once()
-        self.assertEqual(
-            _polygon_points(ring_item.setPolygon.call_args.args[0]),
-            [(0.0, 0.0), (2.0, 0.0), (1.0, 1.5)],
-        )
-        skipped_item.setPolygon.assert_not_called()
 
     def test_update_curved_endpoint_ignores_unknown_endpoint_name(self) -> None:
         canvas = SimpleNamespace(
@@ -207,33 +149,6 @@ class UIServiceTailCoverageTest(unittest.TestCase):
         pixmap = button.grab()
 
         self.assertFalse(pixmap.isNull())
-
-    def test_corner_menu_button_allows_menu_without_default_action_or_icon(
-        self,
-    ) -> None:
-        service = MainWindowUIAssemblyService(
-            scene_transform_controller_for_window=mock.Mock(),
-            insert_controller_for_window=mock.Mock(),
-            history_service_for_window=mock.Mock(),
-            build_tool_actions_for_window=mock.Mock(),
-            panel_toolbar_callbacks=_panel_toolbar_callbacks(),
-        )
-        button = service.create_corner_menu_button(
-            icon=None,
-            tooltip="More",
-            style_sheet="padding: 0;",
-            popup_mode=QToolButton.ToolButtonPopupMode.InstantPopup,
-            menu_builder=lambda menu: menu.addAction("Only action"),
-            default_action=None,
-        )
-        self.addCleanup(button.close)
-
-        self.assertIsNone(button.defaultAction())
-        self.assertTrue(button.icon().isNull())
-        self.assertEqual(button.toolTip(), "More")
-        self.assertEqual(
-            [action.text() for action in button.menu().actions()], ["Only action"]
-        )
 
     def test_create_orbital_item_from_state_returns_none_when_builder_has_no_parts(
         self,

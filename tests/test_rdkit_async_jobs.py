@@ -456,7 +456,11 @@ class Preview3DWorkerTest(unittest.TestCase):
         rdkit = SimpleNamespace(
             compute_identifiers=mock.Mock(
                 return_value=MoleculeIdentifiers(
-                    formula="C", mw=12.01, smiles="C", inchikey="KEY"
+                    formula="C",
+                    mw=12.01,
+                    smiles="C",
+                    inchi="InChI=1S/CH4/h1H4",
+                    inchikey="KEY",
                 )
             ),
             model_to_3d_scene_result=mock.Mock(
@@ -482,7 +486,19 @@ class Preview3DWorkerTest(unittest.TestCase):
             model, atom_annotations=atom_annotations
         )
         self.assertEqual(
-            emitted, [(7, "C", 12.01, "C", "KEY", None, "local preview error")]
+            emitted,
+            [
+                (
+                    7,
+                    "C",
+                    12.01,
+                    "C",
+                    "InChI=1S/CH4/h1H4",
+                    "KEY",
+                    None,
+                    "local preview error",
+                )
+            ],
         )
 
 

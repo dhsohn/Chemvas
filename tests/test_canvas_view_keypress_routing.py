@@ -13,6 +13,8 @@ except ModuleNotFoundError:
 if QApplication is not None:
     from chemvas.ui.canvas_view import CanvasView
 
+    from tests.canvas_factory import build_canvas_view
+
 
 class _FakeKeyEvent:
     def __init__(self, key, *, matches=None) -> None:
@@ -45,7 +47,7 @@ class CanvasViewKeyPressRoutingTest(unittest.TestCase):
     def test_key_press_event_delegates_to_input_controller(self) -> None:
         event = _FakeKeyEvent(Qt.Key.Key_A)
         input_controller = mock.Mock()
-        view = CanvasView()
+        view = build_canvas_view()
         view.services.input.input_controller = input_controller
 
         CanvasView.keyPressEvent(view, event)
