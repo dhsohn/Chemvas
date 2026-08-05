@@ -8,6 +8,7 @@ from chemvas.domain.document import MoleculeModel
 from chemvas.ui.atom_coords_access import clear_atom_coords_3d_for
 from chemvas.ui.canvas_atom_graphics_state import clear_atom_graphics_for
 from chemvas.ui.canvas_bond_graphics_state import clear_bond_graphics_for
+from chemvas.ui.canvas_calculation_plan_state import set_calculation_plan_for
 from chemvas.ui.canvas_graph_state import graph_state_for
 from chemvas.ui.canvas_group_state import clear_groups_for
 from chemvas.ui.canvas_hover_state import hover_state_for
@@ -146,6 +147,7 @@ class CanvasSceneResetService:
             lambda: set_handle_target_for(canvas, None),
             clear_hover,
             lambda: set_model_for(canvas, empty_model),
+            lambda: set_calculation_plan_for(canvas, None),
             self.hit_testing_service.mark_spatial_index_dirty,
             lambda: clear_atom_coords_3d_for(canvas),
             self.rotation.reset_all,

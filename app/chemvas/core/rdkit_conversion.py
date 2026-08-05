@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 from chemvas.domain.document import Bond, MoleculeModel
+from chemvas.features.calculation_bundle import AtomMapEntry, CalculationArtifacts
 from chemvas.features.insertion import Molecule3DAtom, Molecule3DBond, Molecule3DScene
 
 if TYPE_CHECKING:
@@ -115,6 +116,7 @@ class RDKitConversionHelper:
         return mol
 
     def _embed_3d_molecule(self, mol, Chem, AllChem):
+        optimization_result = "not_attempted"
         try:
             mol_h = Chem.AddHs(mol)
             params = AllChem.ETKDGv3()
@@ -130,16 +132,23 @@ class RDKitConversionHelper:
                 if hasattr(
                     AllChem, "MMFFHasAllMoleculeParams"
                 ) and AllChem.MMFFHasAllMoleculeParams(mol_h):
-                    AllChem.MMFFOptimizeMolecule(mol_h, maxIters=50)
+                    status = AllChem.MMFFOptimizeMolecule(mol_h, maxIters=50)
+                    optimization_result = self._optimization_result("MMFF", status)
                 else:
-                    AllChem.UFFOptimizeMolecule(mol_h, maxIters=50)
+                    status = AllChem.UFFOptimizeMolecule(mol_h, maxIters=50)
+                    optimization_result = self._optimization_result("UFF", status)
             except Exception:
                 logger.debug(
-                    "MMFF optimization failed; falling back to UFF.", exc_info=True
+                    "Primary force-field optimization failed; falling back to UFF.",
+                    exc_info=True,
                 )
                 try:
-                    AllChem.UFFOptimizeMolecule(mol_h, maxIters=50)
+                    status = AllChem.UFFOptimizeMolecule(mol_h, maxIters=50)
+                    optimization_result = self._optimization_result(
+                        "UFF_fallback", status
+                    )
                 except Exception:
+                    optimization_result = "unoptimized_after_optimization_errors"
                     logger.debug(
                         "UFF optimization fallback failed; using unoptimized geometry.",
                         exc_info=True,
@@ -150,7 +159,20 @@ class RDKitConversionHelper:
         if hasattr(mol_h, "GetNumConformers") and mol_h.GetNumConformers() == 0:
             self.adapter.last_error = "3D coordinate generation failed: no conformer."
             return None
+        if hasattr(mol_h, "SetProp"):
+            try:
+                mol_h.SetProp("_ChemvasOptimizationResult", optimization_result)
+            except Exception:
+                logger.debug("Recording optimization result failed.", exc_info=True)
         return mol_h
+
+    @staticmethod
+    def _optimization_result(method: str, status) -> str:
+        if status == 0:
+            return f"{method}_converged"
+        if isinstance(status, int):
+            return f"{method}_not_converged_status_{status}"
+        return f"{method}_completed_status_unknown"
 
     @staticmethod
     def _bond_type(Chem, order: int):
@@ -622,10 +644,18 @@ class RDKitConversionHelper:
         rw,
         Chem,
         AllChem,
-    ) -> tuple[dict[int, int], dict[int, tuple[float, float]]] | None:
+    ) -> (
+        tuple[
+            dict[int, int],
+            dict[int, tuple[float, float]],
+            dict[int, tuple[int, str]],
+        ]
+        | None
+    ):
         """Add model atoms (expanding aliases) to ``rw``; None with last_error on failure."""
         atom_map: dict[int, int] = {}
         coord_map: dict[int, tuple[float, float]] = {}
+        origins: dict[int, tuple[int, str]] = {}
         invalid_labels: list[str] = []
         for atom_id in sorted(model.atoms):
             atom = model.atoms[atom_id]
@@ -649,6 +679,17 @@ class RDKitConversionHelper:
                     return None
                 atom_map[atom_id] = attachment_idx
                 coord_map.update(alias_coords)
+                origins.update(
+                    {
+                        rdkit_index: (
+                            atom_id,
+                            "alias_attachment"
+                            if rdkit_index == attachment_idx
+                            else "alias_expansion",
+                        )
+                        for rdkit_index in alias_coords
+                    }
+                )
                 continue
             try:
                 rd_atom = Chem.Atom(atom.element)
@@ -665,6 +706,7 @@ class RDKitConversionHelper:
             new_idx = rw.AddAtom(rd_atom)
             atom_map[atom_id] = new_idx
             coord_map[new_idx] = (atom.x, atom.y)
+            origins[new_idx] = (atom_id, "chemvas_atom")
 
         if invalid_labels:
             supported_aliases = ", ".join(sorted(self.adapter._alias_smiles))
@@ -674,7 +716,7 @@ class RDKitConversionHelper:
                 f"Supported aliases: {supported_aliases}."
             )
             return None
-        return atom_map, coord_map
+        return atom_map, coord_map, origins
 
     def _add_conversion_bonds(
         self,
@@ -752,6 +794,18 @@ class RDKitConversionHelper:
         *,
         atom_annotations: Mapping[int, Mapping[str, int]] | None = None,
     ):
+        result = self._build_conversion_rdkit_mol_with_origins(
+            model,
+            atom_annotations=atom_annotations,
+        )
+        return None if result is None else result[0]
+
+    def _build_conversion_rdkit_mol_with_origins(
+        self,
+        model: MoleculeModel,
+        *,
+        atom_annotations: Mapping[int, Mapping[str, int]] | None = None,
+    ):
         rdkit = self.adapter._load_rdkit()
         if rdkit == (None, None):
             self.adapter.last_error = "RDKit is not available in this environment."
@@ -771,7 +825,7 @@ class RDKitConversionHelper:
         )
         if atom_result is None:
             return None
-        atom_map, coord_map = atom_result
+        atom_map, coord_map, origins = atom_result
 
         if not self._add_conversion_bonds(
             valid_bonds, atom_map=atom_map, rw=rw, Chem=Chem
@@ -788,7 +842,104 @@ class RDKitConversionHelper:
                 f"3D conversion produced an invalid structure: {exc}"
             )
             return None
-        return mol
+        return mol, origins
+
+    def model_to_calculation_artifacts(
+        self,
+        model: MoleculeModel,
+        atom_annotations: Mapping[int, Mapping[str, int]] | None = None,
+    ) -> CalculationArtifacts | None:
+        rdkit = self.adapter._load_rdkit()
+        if rdkit == (None, None):
+            self.adapter.last_error = "RDKit is not available in this environment."
+            return None
+        Chem, AllChem = rdkit
+        built = self._build_conversion_rdkit_mol_with_origins(
+            model,
+            atom_annotations=atom_annotations,
+        )
+        if built is None:
+            return None
+        mol, origins = built
+
+        mol_2d = Chem.Mol(mol)
+        AllChem.Compute2DCoords(mol_2d)
+        mol_block = Chem.MolToMolBlock(mol_2d)
+
+        mol_h = self.adapter._embed_3d_molecule(mol, Chem, AllChem)
+        if mol_h is None:
+            return None
+        conformer = mol_h.GetConformer()
+        xyz_lines = [str(mol_h.GetNumAtoms()), "Chemvas Calculation Bundle v1"]
+        atom_map: list[AtomMapEntry] = []
+        base_atom_count = mol.GetNumAtoms()
+        for atom_index, rd_atom in enumerate(mol_h.GetAtoms()):
+            position = conformer.GetAtomPosition(atom_index)
+            symbol = rd_atom.GetSymbol()
+            xyz_lines.append(
+                f"{symbol:<2} {position.x:.8f} {position.y:.8f} {position.z:.8f}"
+            )
+            if atom_index < base_atom_count:
+                chemvas_atom_id, origin = origins[atom_index]
+                atom_map.append(
+                    AtomMapEntry(
+                        xyz_index=atom_index + 1,
+                        mol_index=atom_index + 1,
+                        symbol=symbol,
+                        origin=origin,
+                        chemvas_atom_id=chemvas_atom_id,
+                    )
+                )
+                continue
+
+            neighbors = list(rd_atom.GetNeighbors())
+            parent_index = neighbors[0].GetIdx() if len(neighbors) == 1 else None
+            parent_origin = (
+                origins.get(parent_index) if parent_index is not None else None
+            )
+            atom_map.append(
+                AtomMapEntry(
+                    xyz_index=atom_index + 1,
+                    mol_index=None,
+                    symbol=symbol,
+                    origin="implicit_hydrogen",
+                    chemvas_atom_id=None,
+                    parent_xyz_index=(
+                        parent_index + 1 if parent_index is not None else None
+                    ),
+                    parent_chemvas_atom_id=(
+                        parent_origin[0] if parent_origin is not None else None
+                    ),
+                )
+            )
+
+        rd_base = getattr(Chem, "rdBase", None)
+        rdkit_version = str(getattr(rd_base, "rdkitVersion", "unknown"))
+        optimization_result = "not_recorded"
+        if hasattr(mol_h, "HasProp") and mol_h.HasProp("_ChemvasOptimizationResult"):
+            optimization_result = str(mol_h.GetProp("_ChemvasOptimizationResult"))
+        return CalculationArtifacts(
+            mol_block=mol_block,
+            xyz_block="\n".join(xyz_lines) + "\n",
+            atom_map=tuple(atom_map),
+            rdkit_version=rdkit_version,
+            rdkit_formal_charge=sum(
+                int(atom.GetFormalCharge()) for atom in mol.GetAtoms()
+            ),
+            rdkit_radical_electrons=sum(
+                int(atom.GetNumRadicalElectrons()) for atom in mol.GetAtoms()
+            ),
+            electron_count=(
+                sum(int(atom.GetAtomicNum()) for atom in mol_h.GetAtoms())
+                - sum(int(atom.GetFormalCharge()) for atom in mol.GetAtoms())
+            ),
+            geometry_embedding="ETKDGv3",
+            geometry_random_seed=0xC0FFEE,
+            geometry_optimization_policy="MMFF when parameterized, otherwise UFF",
+            geometry_optimization_result=optimization_result,
+            mol_atom_count=base_atom_count,
+            xyz_atom_count=mol_h.GetNumAtoms(),
+        )
 
     def model_to_3d_coords(self, model: MoleculeModel):
         rdkit = self.adapter._load_rdkit()

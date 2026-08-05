@@ -7,6 +7,7 @@ from PyQt6.QtGui import QAction, QDesktopServices, QKeySequence
 from PyQt6.QtWidgets import QApplication, QMenu, QMenuBar
 
 from chemvas.branding import APP_NAME
+from chemvas.ui.calculation_step_dialog import edit_calculation_plan_for_window
 from chemvas.ui.main_window_about_dialog import GITHUB_URL, show_about_dialog
 from chemvas.ui.main_window_document_dialogs import prompt_sheet_setup
 from chemvas.ui.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
@@ -286,6 +287,19 @@ def _build_view_menu(
     )
 
 
+def _build_calculation_menu(menu_bar: QMenuBar, window) -> None:
+    calculation_menu = _add_menu(menu_bar, "Calculation")
+    _add_action(
+        calculation_menu,
+        window,
+        "Edit States and Steps...",
+        status_tip=(
+            "Assign reactant, product, catalyst, and spectator roles for DFT export"
+        ),
+        triggered=lambda: edit_calculation_plan_for_window(window),
+    )
+
+
 def _build_help_menu(menu_bar: QMenuBar, window) -> None:
     help_menu = _add_menu(menu_bar, "Help")
 
@@ -323,6 +337,7 @@ def build_menu_bar(
     _build_file_menu(menu_bar, window, callbacks)
     undo_action, redo_action = _build_edit_menu(menu_bar, window, callbacks)
     _build_view_menu(menu_bar, window, callbacks)
+    _build_calculation_menu(menu_bar, window)
     _build_help_menu(menu_bar, window)
     return MainWindowMenuBarAssembly(
         menu_bar=menu_bar,

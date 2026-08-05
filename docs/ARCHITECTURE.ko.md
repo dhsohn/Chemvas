@@ -21,6 +21,9 @@
 - Bond preview (`app/chemvas/features/rendering/bond_preview.py`, `app/chemvas/ui/bond_preview_renderer.py`): feature policy는 Qt 값 없이 plain-double preview segment를 계산하고, 단일 Qt renderer가 concrete `BondRenderer`를 통해 preview item을 생성·갱신·부착·정리한다. 레거시 canvas access는 두 활성 호출자의 adapter로만 남으며 resolver dataclass, 호출별 lambda 배선, 별도 geometry/scene-item 역할 모듈은 삭제되었다.
 - Hover (`app/chemvas/features/hover`, `app/chemvas/ui/hover.py`): feature 공개 API가 Qt-free transient state와 갱신 정책을 소유한다. 캔버스당 하나의 `HoverController`가 Qt 조율을 맡고, `hover_rendering.py`가 graphics item helper를 소유한다. `canvas_hover_state.py`는 eager import graph를 비순환으로 유지하기 위한 단일 함수 runtime-state leaf로 남는다. `CanvasRuntimeServices.hover`는 controller를 직접 노출하며, 기존 hover access/ports/bundle과 4개 service 스택은 삭제되었다.
 - Domain document (`app/chemvas/domain/document`): Qt-free 분자 모델과 버전이 있는 문서/클립보드 직렬화·검증 정책을 소유한다. 기존 `chemvas.core.model`과 `document_state` 경로는 삭제되었다.
+- 계산 plan과 번들(`app/chemvas/domain/document/calculation_plan.py`, `app/chemvas/features/calculation_bundle`, `app/chemvas/bootstrap/calculation_bundle.py`): document domain이 엄격한 plan v1 스키마를 소유하고, Qt 비의존 feature API가 연결 성분 선택·전하 의미 검증·endpoint별 역할·correspondence readiness·결합 변화를 소유한다. Calculation dialog는 included 원자를 ID 기반 대응표 하나로 투영하고 부분 draft와 명시적인 unmapped 선택을 보존한 뒤, 최종 후보를 같은 feature/domain 검증 경로에 맡긴다. `calculation_mapping_highlight.py`는 dialog 수명에 한정된 비선택 R/P canvas overlay를 소유하며 document serialization, selection state, history에 들어가지 않고 모든 dialog 종료에서 제거된다. bootstrap은 `.chemvas` I/O, 선택적 legacy RDKit 조립, 결정적 JSON manifest, 비덮어쓰기 원자적 파일/디렉터리 공개를 맡는다. `application.main`은 Qt import 전에 `inspect`, `pack`, `attach-plan`, `inspect-plan`, `pack-step`을 dispatch한다.
+- Agent 문서 patch(`app/chemvas/features/document_patch`, `app/chemvas/bootstrap/document_patch.py`): Qt/provider 비의존 feature API가 결정적 전체 graph 검사, 엄격한 Graph Patch v1 검증, 복사본 기반 순차 mutation, 의존 좌표 이동, 최종 문서/Calculation Plan gate를 소유한다. bootstrap은 원본 bytes를 한 번 읽어 hash하고, 중복 key·비표준 JSON을 거부하며, 후보를 결정적으로 encode한 뒤 공용 원자적 비덮어쓰기 파일 생성기로 공개한다. `inspect-document`와 `apply-patch`는 Qt 전에 dispatch되며 Chemvas 내부에서 자연어 모델이나 화학 추론을 실행하지 않는다.
+- 창 없는 문서 렌더링(`app/chemvas/bootstrap/document_render.py`): bootstrap은 파일과 출력 자원 계약을 먼저 검증한 뒤 보이지 않는 `QApplication`과 `CanvasView`를 지연 조립한다. 적용된 문서는 `CanvasDocumentSessionService.plan_figure_export`로 painting 전 자원 preflight를 거치고 GUI와 같은 전체 sheet figure-export 경로로 private 임시 저장소에 SVG/PNG를 렌더한다. 제한을 통과한 출력만 기존 경로를 덮어쓰지 않고 원자적으로 공개하며 원본/출력 hash, point/pixel 크기, 문서 버전이 render report v1을 이룬다. 데스크톱 창, session recovery, RDKit loading, editable SVG payload, PDF, TIFF는 이 명령의 범위 밖이다.
 - 이전된 feature 정책 (`app/chemvas/features/{export,session,annotations,rendering,insertion,selection,hover}`): 각 패키지는 응집된 planning/geometry/state 계약을 하나의 공개 API로 제공한다. 기존 평면 호환 모듈은 삭제되었고 `test_package_dependencies.py`가 재도입을 막는다.
 - 메인 창 조립: `chemvas.shell.main_window`가 얇은 Qt 셸을 소유하고, `chemvas.bootstrap`이 runtime/service 조립·창 등록·문서 열기·앱 시작을 소유한다. Qt 파일 열기 이벤트는 `chemvas.adapters.qt`를 통해 들어온다.
 
@@ -64,6 +67,12 @@ Tools -> CanvasView -> MoleculeModel 변경(mutation) -> Renderer/BondRenderer -
 
 3D 흐름: 내보내기 커맨드 또는 미리보기 새로고침 -> 현재 분자 / 활성 원자-결합 선택 -> MoleculeModel 서브그래프 + 원자 마크 주석(atom mark annotations) -> RDKitAdapter 변환 그래프 구성 -> RDKit 3D 임베딩 -> `.xyz` 라이터(writer) 또는 미리보기 씬.
 
+계산 흐름: headless `inspect` -> 검증된 `.chemvas` state -> 안정적 연결 성분 목록; `attach-plan` 또는 Calculation dialog -> 재사용 state, endpoint별 역할, 명시적 included-atom 대응표를 가진 v5 문서; mapping 행/product focus -> 파란 실선 R·주황 점선 P 임시 canvas overlay -> dialog 종료 cleanup; `inspect-plan` -> mapping/readiness 보고; `pack-step` -> 완전한 명시적 source mapping -> 양 endpoint state 선택과 전하·다중도 gate -> 양쪽 RDKit MOL/XYZ/provenance -> 생성 원자 대응과 결합 변화 -> step bundle 원자적 공개. GUI는 같은 원소의 product 선택지만 제공하고 정확히 공유된 atom ID만 한 번 제안하며 반응기구는 추론하지 않는다. 부분 mapping draft는 저장할 수 있지만 included source/생성 원자가 완전한 bijection이 될 때까지 `pack-step`은 fail closed한다.
+
+Agent 편집 흐름: `inspect-document` -> 정확한 source SHA-256과 안정적인 atom/bond 목록 -> 신뢰하지 않는 Graph Patch v1 -> 엄격한 schema/hash gate -> deep copy에서 순차 mutation -> 구조 및 Calculation Plan 의미 검증 -> 결정적 후보 hash -> dry-run 보고 또는 단 한 번의 원자적 비덮어쓰기 `.chemvas` 공개. 입력 파일 버전과 범위 밖 scene state를 보존하며, 어느 operation이나 stale plan이라도 실패하면 output은 없다.
+
+창 없는 렌더 흐름: `render-document` -> 원본 1회 읽기/hash 및 record-count gate -> 검증된 state를 invisible canvas에 적용 -> canonical whole-sheet export plan -> point/pixel 자원 gate -> private SVG/PNG 렌더 -> output byte gate -> 단 한 번의 원자적 비덮어쓰기 공개 -> hash·크기 JSON report. painting에는 지연 import한 Qt가 필요하지만 RDKit과 desktop session-recovery service는 시작하지 않는다.
+
 ## 복합 그룹화 (Composite Grouping)
 하나의 연산이 여러 엔티티 유형을 동시에 다룰 때(예: 원자 생성과 결합 생성), CanvasView는 개별 델타 커맨드를 단일 `CompositeCommand`로 그룹화하여 전체 연산이 원자적으로(atomically) 실행 취소/다시 실행되도록 한다.
 
@@ -74,10 +83,11 @@ Tools -> CanvasView -> MoleculeModel 변경(mutation) -> Renderer/BondRenderer -
 - 지원되는 별칭(`Me`, `Et`, `OH`, `Ph`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `i-Pr`)은 변환 시점에 명시적 프래그먼트로 확장되어야 한다. 지원되지 않는 약어는 추측하지 말고 확실하게(loudly) 실패해야 한다.
 - 쐐기/해시 결합(Wedge/hash bonds)은 단일 결합에 대해서만 RDKit 결합 방향으로 변환되어야 한다. 잘못된 입체(stereo) 사용은 정확한 메시지와 함께 실패해야 한다.
 - `.xyz`는 좌표 전용이다. 결합 차수(bond order)와 반응 의미(reaction semantics)는 출력 포맷에 보존되지 않으며 왕복 가능한(round-trippable) 상태로 취급해서는 안 된다.
+- Calculation Bundle v1은 원본 문서, MOL graph, XYZ geometry, atom provenance, hash를 함께 보존한다. Calculation Plan v1은 명시적 state, `included`/`context_only` membership, endpoint별 역할, source atom correspondence를 저장하며 이를 추론하지 않는다. Step bundle은 다성분 상호작용 geometry를 보증하지 않으며 후속 양자화학 최적화와 연구자 검토가 필요하다고 기록한다.
 - 미리보기 창은 사용자가 보는 것과 실제로 내보내지는 것 사이의 불일치를 피하기 위해 `.xyz` 내보내기와 동일한 변환 경로를 재사용해야 한다.
 - 3D 미리보기는 **View ▸ Molecule Info**에서 별도의 모덜리스(modeless) 창으로 열린다. 선택된 구조 변환 경로를 사용하고, 선택된 분자에 대한 `Export 3D XYZ` 동작을 소유하며, 선택된 화학 구조가 없을 때는 빈 미리보기를 표시한다.
 - 열려 있는 각 캔버스 탭은 자체 파일 경로와 clean/dirty 다이제스트(digest)를 가진 독립적인 문서다. `.chemvas` 로딩은 표준 단일 캔버스 페이로드만 허용한다.
-- `.chemvas` 문서는 버전이 붙는다(현재 v4; v1–v3도 계속 로드 가능). v4는 결합을 컴팩트 배열로 저장한다: 삭제된 슬롯의 tombstone(v4 이전 파일의 `null` 항목)은 런타임 관리용이며 문서에는 더 이상 나타나지 않는다. 결합 identity는 런타임 범위다 — 문서의 어떤 섹션도 결합을 위치나 id로 참조하지 않는다(원자는 마크·링 채우기·그룹·perspective 상태가 참조하므로 명시적 id를 갖는다).
+- `.chemvas` 문서는 버전이 붙는다(현재 v5; v1–v4도 계속 로드 가능). v4는 결합 배열을 compact하게 만들었고 v5는 선택적 `calculation_plan`을 추가한다. v4 이전 `null` tombstone은 런타임 관리용이며 새 문서에는 나타나지 않는다. Calculation plan은 bond 위치가 아니라 안정적 atom id와 완전한 연결 성분 atom-id 집합을 참조한다.
 
 ## 리팩토링 순서
 

@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
     QGraphicsView,
 )
 
+from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.ui.canvas_background_painter import draw_canvas_background_for
 from chemvas.ui.canvas_view_event_router import (
     route_event,
@@ -31,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 
 class CanvasView(QGraphicsView):
-    FILE_FORMAT_VERSION = 4
+    FILE_FORMAT_VERSION = CANVAS_FILE_VERSION
     CLIPBOARD_SELECTION_MIME = "application/x-chemvas-selection+json"
     CLIPBOARD_SELECTION_VERSION = 2
 

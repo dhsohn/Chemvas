@@ -9,11 +9,13 @@ from unittest import mock
 
 from chemvas.core.document_io import (
     ChemvasDocument,
+    atomic_create_bytes,
     atomic_write_text,
     atomic_write_via_temp,
     create_document,
     parse_document,
     read_document,
+    read_exact_document,
     write_document,
 )
 from chemvas.domain.document import (
@@ -65,6 +67,28 @@ def _canvas_state(model: dict | None = None) -> dict:
 
 
 class DocumentIOTest(unittest.TestCase):
+    def test_read_exact_document_returns_the_bytes_it_parsed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "document.chemvas"
+            write_document(path, _canvas_state(), CANVAS_FILE_VERSION)
+
+            source_bytes, document = read_exact_document(path)
+
+            self.assertEqual(source_bytes, path.read_bytes())
+            self.assertEqual(document.payload["version"], CANVAS_FILE_VERSION)
+
+    def test_atomic_create_bytes_never_replaces_an_existing_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "new.bin"
+
+            atomic_create_bytes(path, b"first")
+            self.assertEqual(path.read_bytes(), b"first")
+            with self.assertRaisesRegex(ValueError, "already exists"):
+                atomic_create_bytes(path, b"second")
+
+            self.assertEqual(path.read_bytes(), b"first")
+            self.assertEqual(list(path.parent.glob(f".{path.name}.staging-*")), [])
+
     def test_create_document_wraps_state_in_chemvas_payload(self) -> None:
         state = _canvas_state()
         state["last_smiles_input"] = "CCO"

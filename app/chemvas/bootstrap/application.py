@@ -69,6 +69,32 @@ def _filtered_stderr(stderr_fd: int = 2, platform: str | None = None) -> Iterato
 
 
 def main() -> None:
+    if len(sys.argv) > 1 and sys.argv[1] in {
+        "apply-patch",
+        "inspect-document",
+    }:
+        from chemvas.bootstrap.document_patch import run
+
+        raise SystemExit(run(sys.argv[1:]))
+
+    if len(sys.argv) > 1 and sys.argv[1] == "render-document":
+        from chemvas.bootstrap.document_render import run
+
+        with _filtered_stderr():
+            result = run(sys.argv[1:])
+        raise SystemExit(result)
+
+    if len(sys.argv) > 1 and sys.argv[1] in {
+        "attach-plan",
+        "inspect",
+        "inspect-plan",
+        "pack",
+        "pack-step",
+    }:
+        from chemvas.bootstrap.calculation_bundle import run
+
+        raise SystemExit(run(sys.argv[1:]))
+
     with _filtered_stderr():
         from PyQt6.QtWidgets import QApplication
 

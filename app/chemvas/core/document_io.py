@@ -106,9 +106,60 @@ def atomic_write_via_temp(path: PathType, writer: Callable[[Path], None]) -> Non
 
 
 def read_document(path: PathType) -> ChemvasDocument:
-    with Path(path).open("r", encoding="utf-8") as handle:
+    _source_bytes, document = read_exact_document(path)
+    return document
+
+
+def read_exact_document(path: PathType) -> tuple[bytes, ChemvasDocument]:
+    """Read once so callers can hash the exact bytes that were parsed."""
+    source_bytes = Path(path).read_bytes()
+    try:
+        payload = json.loads(source_bytes, parse_float=Decimal)
+    except (ValueError, RecursionError, UnicodeError) as exc:
+        raise ValueError("Invalid Chemvas file.") from exc
+    return source_bytes, parse_document(payload)
+
+
+def atomic_create_bytes(path: PathType, content: bytes) -> None:
+    """Atomically publish a new file without ever replacing an existing path."""
+    output = Path(path)
+    fd, raw_staging = tempfile.mkstemp(
+        prefix=f".{output.name}.staging-",
+        dir=output.parent,
+    )
+    staging = Path(raw_staging)
+    published = False
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
         try:
-            payload = json.load(handle, parse_float=Decimal)
-        except (ValueError, RecursionError, UnicodeError) as exc:
-            raise ValueError("Invalid Chemvas file.") from exc
-    return parse_document(payload)
+            os.link(staging, output)
+        except FileExistsError as exc:
+            raise ValueError(f"output path already exists: {output}") from exc
+        published = True
+        # Once link() succeeds the requested file is committed. A best-effort
+        # staging cleanup must not invert that success into a false failure.
+        with contextlib.suppress(OSError):
+            staging.unlink()
+        _fsync_directory(output.parent)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.close(fd)
+        if not published:
+            with contextlib.suppress(OSError):
+                staging.unlink()
+        raise
+
+
+def _fsync_directory(path: Path) -> None:
+    try:
+        fd = os.open(path, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        with contextlib.suppress(OSError):
+            os.fsync(fd)
+    finally:
+        os.close(fd)

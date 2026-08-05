@@ -6,6 +6,7 @@ from typing import Any
 from chemvas.core.rdkit_conversion import RDKitConversionHelper
 from chemvas.core.rdkit_import import RDKitImportHelper
 from chemvas.domain.document import MoleculeModel
+from chemvas.features.calculation_bundle import CalculationArtifacts
 from chemvas.features.insertion import (
     Molecule3DAtom,
     Molecule3DBond,
@@ -190,6 +191,29 @@ class RDKitAdapter:
                 model, atom_annotations=atom_annotations
             ),
             fallback_error="Failed to export MOL.",
+        )
+
+    def model_to_calculation_artifacts(
+        self,
+        model: MoleculeModel,
+        atom_annotations: Mapping[int, Mapping[str, int]] | None = None,
+    ) -> CalculationArtifacts | None:
+        result = self.model_to_calculation_artifacts_result(
+            model, atom_annotations=atom_annotations
+        )
+        self.last_error = result.error
+        return result.value
+
+    def model_to_calculation_artifacts_result(
+        self,
+        model: MoleculeModel,
+        atom_annotations: Mapping[int, Mapping[str, int]] | None = None,
+    ) -> RDKitResult[CalculationArtifacts]:
+        return self._call_with_result(
+            lambda: self._conversion_helper.model_to_calculation_artifacts(
+                model, atom_annotations=atom_annotations
+            ),
+            fallback_error="Failed to build calculation artifacts.",
         )
 
     def get_name_from_smiles(self, smiles: str) -> str | None:

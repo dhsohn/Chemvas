@@ -8,6 +8,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Headless document rendering**: `chemvas render-document` now renders a
+  bounded `.chemvas` drawing to a new SVG or PNG through the canonical figure
+  exporter without opening a desktop window or loading RDKit. It preserves the
+  source, refuses replacement and symlink targets, atomically publishes only a
+  complete output, and reports exact source/output hashes plus point/pixel
+  dimensions as deterministic JSON.
+- **Canvas mapping highlights**: selecting an atom-correspondence row or
+  browsing its product choices temporarily marks reactant and product atoms on
+  the drawing with distinct R/P colors and line styles. The dialog owns and
+  removes these non-selectable overlays without changing the document,
+  selection, history, or dirty state.
+- **GUI atom correspondence editor**: the Calculation dialog now maps each
+  included reactant atom to a same-element product atom by stable Chemvas ID,
+  preserves explicit unmapped partial drafts, reports mapped/total readiness,
+  and rejects duplicate product assignments before the existing `pack-step`
+  gate. Exact atom IDs shared by both endpoints are suggested without inferring
+  a mechanism.
+- **Agent-safe graph patches**: `chemvas inspect-document` exposes stable atom IDs,
+  exact source hashes, and the complete graph without Qt; `chemvas apply-patch`
+  dry-runs or atomically publishes a new non-overwriting document after strict
+  versioned JSON, document, and Calculation Plan validation. The bounded v1
+  operation set edits atoms and bonds without invoking a language model or
+  inferring chemistry.
 - **macOS application name**: the menu bar now reads **Chemvas** instead of the
   interpreter or script name. Run from source or from a `pip install`, the
   process has no `Info.plist`, so Qt fell back to the basename of `argv[0]` and

@@ -107,8 +107,12 @@ File ▸ Save / Open works with `.chemvas` files — a JSON-based format holding
 molecule model, annotations, arrows, bracket annotations, and settings:
 
 ```json
-{ "type": "chemvas", "version": 4, "state": { /* ... */ } }
+{ "type": "chemvas", "version": 5, "state": { /* ... */ } }
 ```
+
+Version 5 can also carry an optional `calculation_plan`: reusable calculation
+states plus elementary-step endpoint roles and explicit atom correspondence.
+Older v1-v4 drawings remain loadable.
 
 Figure export defaults to plain SVG without Chemvas source metadata. Choose
 **Editable Chemvas SVG** only when you want the SVG to carry the original
@@ -132,6 +136,182 @@ open. Snapshots are pruned once a session has been restored or closed cleanly.
   explicit error message instead of guessing.
 - `.xyz` stores element symbols and 3D coordinates only — it is **not** a full
   round-trip of bond orders, stereochemistry, or reaction semantics.
+
+## Agent-safe document editing
+
+### Headless document rendering
+
+An agent can render the complete drawing through the same figure-export path as
+the desktop app without opening a window or loading RDKit:
+
+```bash
+chemvas render-document scheme.chemvas --output scheme.svg
+chemvas render-document scheme.chemvas --output scheme.png --dpi 600
+chemvas render-document scheme.chemvas --output scheme-transparent.png \
+  --background transparent
+```
+
+The output suffix selects SVG or PNG. White is the default background; PNG DPI
+may be 150, 300, 600, or 1200, while SVG ignores DPI. The command starts only an
+invisible offscreen Qt canvas, does not start session recovery, and leaves the
+source untouched. It refuses existing files, directories, and symlinks and
+publishes the new output atomically.
+
+Standard output is a deterministic JSON report containing the exact source and
+output SHA-256 hashes, document version, output byte count, physical point size,
+and PNG pixel dimensions. Repeated renders are byte-identical within the same
+Chemvas/Qt/font environment; Qt or font changes can alter path geometry or encoded
+bytes, so consumers should use the reported hash rather than assume
+cross-platform byte identity. Rendering is fail-closed at 8 MiB of source data,
+20,000 graphics records, 64 MiB of output, 14,400 points per side, and—for
+PNG—10,000 pixels per side or 25 million total pixels.
+
+### Graph Patch v1
+
+An agent can inspect every stable atom ID and then propose a bounded Graph Patch
+without starting Qt or rewriting the whole `.chemvas` document:
+
+```bash
+chemvas inspect-document scheme.chemvas > inspection.json
+chemvas apply-patch scheme.chemvas patch.json --dry-run
+chemvas apply-patch scheme.chemvas patch.json --output revised.chemvas
+```
+
+`inspect-document` reports the exact source-file SHA-256, document version,
+`next_atom_id`, complete atom/bond inventory, effective charge/radical annotations,
+connected components, and dependent scene-state counts. The agent copies that exact
+hash into a Graph Patch v1 precondition:
+
+```json
+{
+  "format": "chemvas-graph-patch",
+  "version": 1,
+  "source_sha256": "<64 lowercase hexadecimal characters>",
+  "operations": [
+    {"op": "add_atom", "atom_id": 12, "element": "O",
+     "x": 216.0, "y": 72.0, "color": "#000000", "explicit_label": true},
+    {"op": "add_bond", "a": 4, "b": 12, "order": 1,
+     "style": "single", "color": "#000000"},
+    {"op": "update_bond", "a": 4, "b": 12,
+     "changes": {"order": 2, "style": "double"}}
+  ]
+}
+```
+
+Supported operations are `add_atom`, `update_atom` (element/color/explicit label),
+`move_atom`, `add_bond`, `update_bond`, and `remove_bond`. Operations run in order on
+a private copy and publish only after full document and Calculation Plan validation.
+`move_atom` also moves dependent ring-fill, bound-mark, and perspective coordinates.
+Dry-run performs the identical validation and reports the candidate file hash but
+writes nothing. Apply preserves the input document version, never changes the source,
+and refuses to replace an existing file or symlink.
+
+Graph Patch v1 deliberately does not delete atoms or edit charge/radical annotations,
+arrows, groups, or Calculation Plans. It makes no chemical or mechanistic inference;
+use the GUI or a separately reviewed plan update for those semantics.
+
+## Headless calculation bundles
+
+Installed Chemvas can expose structures to an agent without starting Qt. First
+inspect the connected components, then package one explicit component:
+
+```bash
+chemvas inspect scheme.chemvas
+chemvas pack scheme.chemvas \
+  --component 0 --species-id reactant-a \
+  --charge 0 --multiplicity 1 \
+  --output reactant-a.bundle
+```
+
+`inspect` needs no RDKit and prints JSON. `pack` requires the optional RDKit
+dependency and creates a new, non-overwriting Calculation Bundle v1 directory:
+`source.chemvas`, `structure.mol`, `geometry.xyz`, `atom_map.json`, and
+`manifest.json`. The manifest records payload-file SHA-256 hashes, the selected
+Chemvas atom IDs, declared charge/multiplicity, modeled formal charge/radicals,
+RDKit version, and atom counts. The atom map explains alias expansion and
+implicit hydrogens so the coordinate indices can be traced back to the drawing.
+
+Chemvas rejects a declared charge that differs from the attached charge marks.
+Multiplicity is always explicit; Chemvas checks only its electron-count parity
+and records that no spin state was inferred from the 2D drawing. It does not
+guess reaction roles or a mechanism.
+
+Give every species/run a unique output directory. `pack` rejects an existing
+target but does not coordinate multiple orchestrators racing for the same path.
+
+### Calculation states and elementary steps
+
+Draw the reactant, product, catalyst, and spectators on one canvas, then open
+**Calculation ▸ Edit States and Steps...**. For each endpoint, assign every
+connected component one of these inclusion modes:
+
+- `included`: enters the XYZ geometry, electron count, charge, and multiplicity
+  validation;
+- `context_only`: records a catalyst, solvent, additive, or other condition but
+  does not enter the calculation coordinates.
+
+Roles (`reactant`, `product`, `catalyst`, `spectator`) belong to a step endpoint,
+not globally to a structure. A state can therefore be S01's product and S02's
+reactant without changing the state itself. The atom-correspondence table lists
+only included reactant atoms and offers same-element product atoms by stable
+Chemvas ID. Exact IDs shared by both endpoints, such as a drawn catalyst reused
+on both sides, are suggested once; they are not inferred by element or position,
+and an explicit **Unmapped** choice is preserved. Duplicate product mappings are
+rejected. The GUI saves an incomplete table as a draft, while its mapped/total
+status stays blocked until every included atom on both endpoints has a complete
+one-to-one source map. This status covers the source mapping gate; RDKit geometry
+generation and downstream chemical review are still separate requirements.
+Selecting a mapping row, or moving through its product menu, marks the reactant
+with a blue solid **R** and the product with an orange dashed **P** on the canvas.
+These markers are temporary overlays: closing the dialog removes them without
+changing the drawing, the current canvas selection, or undo history.
+
+Agents can attach and inspect the same contract without Qt:
+
+```bash
+chemvas attach-plan scheme.chemvas plan.json --output mechanism.chemvas
+chemvas inspect-plan mechanism.chemvas
+chemvas pack-step mechanism.chemvas --step S01 --output calculations/S01
+```
+
+`plan.json` uses Calculation Plan v1. States own calculation membership and
+charge/multiplicity; step endpoints own roles:
+
+```json
+{
+  "format": "chemvas-calculation-plan",
+  "version": 1,
+  "states": [
+    {"id": "R01", "charge": 0, "multiplicity": 1,
+     "members": [
+       {"component_atom_ids": [0, 1], "inclusion": "included"},
+       {"component_atom_ids": [9], "inclusion": "context_only"}]},
+    {"id": "P01", "charge": 0, "multiplicity": 1,
+     "members": [{"component_atom_ids": [2, 3], "inclusion": "included"}]}
+  ],
+  "steps": [{
+    "id": "S01",
+    "reactant": {"state_id": "R01", "roles": [
+      {"component_atom_ids": [0, 1], "role": "reactant"},
+      {"component_atom_ids": [9], "role": "spectator"}]},
+    "product": {"state_id": "P01", "roles": [
+      {"component_atom_ids": [2, 3], "role": "product"}]},
+    "atom_correspondence": [
+      {"reactant_atom_id": 0, "product_atom_id": 2},
+      {"reactant_atom_id": 1, "product_atom_id": 3}]
+  }]
+}
+```
+
+Every `component_atom_ids` list must equal one complete connected component and
+must be sorted. `pack-step` creates `reactant.bundle/`, `product.bundle/`,
+`atom_correspondence.json`, `bond_changes.json`, and `step_manifest.json`. It
+also requires a complete mapping for RDKit-generated atoms; draw transferred
+hydrogens explicitly when implicit-hydrogen counts differ between endpoints.
+Multi-component coordinates are only initial guesses: the manifest explicitly
+records that Chemvas does not guarantee a catalyst/substrate interaction
+geometry, and downstream quantum optimization plus researcher review remain
+required.
 
 ## Keyboard shortcuts
 
