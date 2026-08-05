@@ -74,7 +74,9 @@ python -m pip install -e .
 ## 저장/불러오기
 - 메뉴바의 **File** 메뉴에서 `.chemvas` 파일을 저장/불러옵니다.
 - `.chemvas`는 JSON 기반 포맷이며, 분자 모델/주석/화살표/bracket annotation/설정값 등을 포함합니다.
-  (형식: `{"type":"chemvas","version":4,"state":{...}}`)
+  (형식: `{"type":"chemvas","version":5,"state":{...}}`)
+- v5는 선택적인 `calculation_plan`에 재사용 가능한 계산 상태, elementary-step 양끝의 역할,
+  명시적 원자 대응을 함께 저장합니다. 기존 v1-v4 문서도 계속 불러옵니다.
 - Figure export의 SVG 기본값은 Chemvas 원본 데이터를 포함하지 않는 plain SVG입니다. Chemvas에서 다시
   편집 가능한 round-trip 파일이 필요할 때만 **Editable Chemvas SVG**를 선택하세요.
 
@@ -107,6 +109,165 @@ python -m pip install -e .
 - 지원되지 않는 라벨, 잘못 연결된 alias, wedge/hash의 잘못된 사용(예: non-single bond) 등은 명시적인 에러 메시지로 안내합니다.
 - 메뉴바의 **View ▸ Molecule Info**는 별도 창을 열어 현재 선택된 분자의 3D preview와 분자식/분자량을 표시합니다. 선택된 화학 구조가 없으면 preview는 비어 있으며, 창 안의 `Export 3D XYZ` 버튼으로 선택된 분자를 내보낼 수 있습니다. 마우스 드래그로 회전, 휠로 확대/축소할 수 있습니다.
 - `.xyz`는 원자 기호와 3D 좌표만 저장하는 포맷이므로, 결합 차수/입체정보/반응 스킴을 완전하게 round-trip하는 용도에는 적합하지 않습니다.
+
+## Agent가 안전하게 문서 수정하기
+
+### 창 없는 문서 렌더링
+
+Agent는 데스크톱 창을 열거나 RDKit을 불러오지 않고 GUI와 같은 figure-export 경로로
+전체 그림을 렌더링할 수 있습니다.
+
+```bash
+chemvas render-document scheme.chemvas --output scheme.svg
+chemvas render-document scheme.chemvas --output scheme.png --dpi 600
+chemvas render-document scheme.chemvas --output scheme-transparent.png \
+  --background transparent
+```
+
+출력 suffix가 SVG/PNG를 결정합니다. 기본 배경은 흰색이며 PNG DPI는 150, 300, 600, 1200 중
+하나이고 SVG는 DPI를 무시합니다. 명령은 보이지 않는 offscreen Qt canvas만 만들고 session
+recovery를 시작하지 않으며 원본을 바꾸지 않습니다. 기존 파일·디렉터리·symlink는 거부하고 새
+출력만 원자적으로 공개합니다.
+
+표준 출력의 결정론적 JSON report에는 원본과 출력의 정확한 SHA-256, 문서 버전, 출력 byte 수,
+물리 point 크기와 PNG pixel 크기가 들어갑니다. 같은 Chemvas/Qt/font 환경에서 반복한 렌더는
+byte가 동일하지만 Qt나 font가 바뀌면 path geometry 또는 encoding이 달라질 수 있으므로
+cross-platform byte 동일성을 가정하지 말고 report의 hash를 사용해야 합니다. 렌더는 source
+8 MiB, graphics record 20,000개, output 64 MiB, 한 변 14,400 point, PNG 한 변 10,000 pixel
+또는 총 2,500만 pixel 한도에서 fail closed합니다.
+
+### Graph Patch v1
+
+Agent는 Qt를 띄우거나 `.chemvas` 전체를 다시 쓰지 않고도 안정적인 atom ID를 모두 검사한 뒤
+범위가 제한된 Graph Patch를 제안할 수 있습니다.
+
+```bash
+chemvas inspect-document scheme.chemvas > inspection.json
+chemvas apply-patch scheme.chemvas patch.json --dry-run
+chemvas apply-patch scheme.chemvas patch.json --output revised.chemvas
+```
+
+`inspect-document`는 원본 파일 bytes의 정확한 SHA-256, 문서 버전, `next_atom_id`, 전체
+atom/bond 목록, 유효 charge/radical annotation, 연결 성분, 의존 scene state 개수를 보고합니다.
+Agent는 그 hash를 Graph Patch v1 전제조건에 그대로 넣습니다.
+
+```json
+{
+  "format": "chemvas-graph-patch",
+  "version": 1,
+  "source_sha256": "<소문자 16진수 64자>",
+  "operations": [
+    {"op": "add_atom", "atom_id": 12, "element": "O",
+     "x": 216.0, "y": 72.0, "color": "#000000", "explicit_label": true},
+    {"op": "add_bond", "a": 4, "b": 12, "order": 1,
+     "style": "single", "color": "#000000"},
+    {"op": "update_bond", "a": 4, "b": 12,
+     "changes": {"order": 2, "style": "double"}}
+  ]
+}
+```
+
+지원 연산은 `add_atom`, `update_atom`(원소/색/명시 라벨), `move_atom`, `add_bond`,
+`update_bond`, `remove_bond`입니다. 모든 연산을 원본과 분리된 복사본에서 순서대로 실행하고
+문서 및 Calculation Plan 전체 검증을 통과한 뒤에만 공개합니다. `move_atom`은 연관된 ring fill,
+부착 mark, perspective 좌표도 함께 이동합니다. Dry-run은 실제 적용과 동일한 검증 및 후보 파일
+hash 계산을 수행하지만 아무것도 쓰지 않습니다. 실제 적용도 입력 문서 버전을 유지하고 source를
+바꾸지 않으며 기존 파일이나 symlink를 절대 덮어쓰지 않습니다.
+
+Graph Patch v1은 의도적으로 atom 삭제, charge/radical annotation, arrow, group, Calculation Plan
+편집을 지원하지 않습니다. 화학·반응 메커니즘도 추론하지 않으므로 이런 의미론은 GUI 또는 별도로
+검토한 plan 갱신 경로를 사용해야 합니다.
+
+## Headless 계산 번들
+
+설치된 Chemvas는 Qt GUI를 띄우지 않고도 agent에게 구조를 전달할 수 있습니다. 먼저 연결 성분을
+검사한 다음, 사용할 성분 하나를 명시해 패키징합니다.
+
+```bash
+chemvas inspect scheme.chemvas
+chemvas pack scheme.chemvas \
+  --component 0 --species-id reactant-a \
+  --charge 0 --multiplicity 1 \
+  --output reactant-a.bundle
+```
+
+`inspect`는 RDKit 없이도 동작하며 JSON을 출력합니다. `pack`은 선택 사항인 RDKit이 필요하고,
+기존 경로를 덮어쓰지 않는 Calculation Bundle v1 디렉터리를 새로 만듭니다. 번들은
+`source.chemvas`, `structure.mol`, `geometry.xyz`, `atom_map.json`, `manifest.json`으로
+구성됩니다. manifest에는 manifest 자신을 제외한 payload 파일의 SHA-256, 선택한 Chemvas 원자 ID, 선언한 전하/다중도,
+모델의 formal charge/radical, RDKit 버전과 원자 수가 기록됩니다. atom map은 alias 확장 원자와
+implicit hydrogen까지 설명하므로 계산 좌표 인덱스를 원래 그림까지 추적할 수 있습니다.
+
+선언 전하가 구조에 붙은 charge mark의 합과 다르면 번들 생성을 거부합니다. 다중도는 항상
+명시적으로 입력하며 electron-count parity만 검사하고 2D 구조로부터 spin state를 추론하지
+않았다고 기록합니다. Chemvas는 반응물/생성물 역할 또는 반응 메커니즘을 임의로 추측하지 않습니다.
+
+species/run마다 고유한 출력 디렉터리를 사용하세요. `pack`은 기존 target을 거부하지만 같은 경로를
+동시에 차지하려는 여러 orchestrator를 조정하지는 않습니다.
+
+### 계산 상태와 elementary step
+
+한 캔버스에 reactant, product, catalyst, spectator를 그린 뒤
+**Calculation ▸ Edit States and Steps...**를 엽니다. 각 endpoint에서 연결 성분마다 다음 포함 방식을
+지정합니다.
+
+- `included`: XYZ 좌표, 전자 수, 전하·다중도 검증에 실제로 포함
+- `context_only`: catalyst, solvent, additive 같은 조건으로 기록하지만 계산 좌표에서는 제외
+
+`reactant`, `product`, `catalyst`, `spectator` 역할은 구조의 전역 속성이 아니라 step endpoint의
+속성입니다. 따라서 한 상태를 S01의 product이자 S02의 reactant로 재사용할 수 있습니다. 원자 대응
+표에는 included reactant 원자만 나오며, 각 행에서 같은 원소의 product 원자를 안정적인 Chemvas
+원자 ID로 고릅니다. 양 endpoint가 정확히 같은 ID를 공유하는 촉매 같은 원자는 한 번만 초기값으로
+제안할 뿐, 원소나 위치로 대응을 추론하지 않으며 사용자가 지정한 **Unmapped**를 다시 덮어쓰지
+않습니다. 같은 product 원자를 중복 지정하면 저장을 거부합니다. 대응이 덜 된 표도 draft로 저장할
+수 있지만, 양 endpoint의 모든 included 원자에 완전한 1:1 source mapping이 생길 때까지 상태 표시와
+`pack-step`은 잠깁니다. 이 준비 표시는 source mapping gate만 뜻하며 RDKit geometry 생성과 후속
+화학적 검토는 별도 요구사항입니다. 대응 행을 선택하거나 product 메뉴의 후보를 훑으면 캔버스의
+reactant에는 파란 실선 **R**, product에는 주황 점선 **P**가 표시됩니다. 이 표시는 임시 overlay라
+dialog를 닫으면 사라지며 그림, 기존 canvas selection, undo history를 바꾸지 않습니다.
+
+Agent는 Qt 없이도 같은 계약을 붙이고 검사할 수 있습니다.
+
+```bash
+chemvas attach-plan scheme.chemvas plan.json --output mechanism.chemvas
+chemvas inspect-plan mechanism.chemvas
+chemvas pack-step mechanism.chemvas --step S01 --output calculations/S01
+```
+
+Calculation Plan v1에서 state는 계산 성분과 전하·다중도를, step endpoint는 역할을 소유합니다.
+
+```json
+{
+  "format": "chemvas-calculation-plan",
+  "version": 1,
+  "states": [
+    {"id": "R01", "charge": 0, "multiplicity": 1,
+     "members": [
+       {"component_atom_ids": [0, 1], "inclusion": "included"},
+       {"component_atom_ids": [9], "inclusion": "context_only"}]},
+    {"id": "P01", "charge": 0, "multiplicity": 1,
+     "members": [{"component_atom_ids": [2, 3], "inclusion": "included"}]}
+  ],
+  "steps": [{
+    "id": "S01",
+    "reactant": {"state_id": "R01", "roles": [
+      {"component_atom_ids": [0, 1], "role": "reactant"},
+      {"component_atom_ids": [9], "role": "spectator"}]},
+    "product": {"state_id": "P01", "roles": [
+      {"component_atom_ids": [2, 3], "role": "product"}]},
+    "atom_correspondence": [
+      {"reactant_atom_id": 0, "product_atom_id": 2},
+      {"reactant_atom_id": 1, "product_atom_id": 3}]
+  }]
+}
+```
+
+각 `component_atom_ids`는 정렬된 완전한 연결 성분 하나와 정확히 같아야 합니다. `pack-step`은
+`reactant.bundle/`, `product.bundle/`, `atom_correspondence.json`, `bond_changes.json`,
+`step_manifest.json`을 만듭니다. RDKit이 만든 원자까지 완전한 대응을 요구하므로 endpoint 사이
+implicit hydrogen 수가 달라지는 전달 수소는 명시적으로 그려야 합니다. 다성분 좌표는 초기 추정일
+뿐이며, manifest는 catalyst/substrate 상호작용 geometry를 Chemvas가 보증하지 않는다고 명시합니다.
+후속 양자화학 최적화와 연구자 검토가 반드시 필요합니다.
 
 ## 개발 / 기여
 - 테스트는 headless로 실행하되, 전체 suite는 Qt 전역 상태 격리를 위해 `test_*.py` 파일마다 별도 pytest 프로세스를 사용합니다. 정확한 CI 미러 명령은 [Running the checks](CONTRIBUTING.md#running-the-checks)를 따르세요.

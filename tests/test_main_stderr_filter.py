@@ -43,6 +43,60 @@ class _QApplicationMetadataStub:
 
 
 class MainStderrFilterTest(unittest.TestCase):
+    def test_main_dispatches_headless_command_before_qt_startup(self) -> None:
+        for command in (
+            "inspect",
+            "pack",
+            "attach-plan",
+            "inspect-plan",
+            "pack-step",
+        ):
+            with self.subTest(command=command):
+                argv = ["chemvas", command, "input.chemvas"]
+                with (
+                    mock.patch.object(sys, "argv", argv),
+                    mock.patch(
+                        "chemvas.bootstrap.calculation_bundle.run", return_value=0
+                    ) as run,
+                ):
+                    with self.assertRaises(SystemExit) as error:
+                        app_main.main()
+
+                self.assertEqual(error.exception.code, 0)
+                run.assert_called_once_with(argv[1:])
+
+    def test_main_dispatches_document_patch_commands_before_qt_startup(self) -> None:
+        for command in ("inspect-document", "apply-patch"):
+            with self.subTest(command=command):
+                argv = ["chemvas", command, "input.chemvas"]
+                with (
+                    mock.patch.object(sys, "argv", argv),
+                    mock.patch(
+                        "chemvas.bootstrap.document_patch.run", return_value=0
+                    ) as run,
+                ):
+                    with self.assertRaises(SystemExit) as error:
+                        app_main.main()
+
+                self.assertEqual(error.exception.code, 0)
+                run.assert_called_once_with(argv[1:])
+
+    def test_main_dispatches_document_render_without_desktop_startup(self) -> None:
+        argv = ["chemvas", "render-document", "input.chemvas"]
+        with (
+            mock.patch.object(sys, "argv", argv),
+            mock.patch("chemvas.bootstrap.document_render.run", return_value=0) as run,
+            mock.patch.object(chemvas_main, "_filtered_stderr") as stderr_filter,
+        ):
+            stderr_filter.return_value.__enter__.return_value = None
+            stderr_filter.return_value.__exit__.return_value = None
+            with self.assertRaises(SystemExit) as error:
+                app_main.main()
+
+        self.assertEqual(error.exception.code, 0)
+        run.assert_called_once_with(argv[1:])
+        stderr_filter.assert_called_once_with()
+
     def test_app_main_reexports_chemvas_main_symbols(self) -> None:
         self.assertIs(
             app_main.IGNORED_STDERR_SUBSTRINGS, chemvas_main.IGNORED_STDERR_SUBSTRINGS

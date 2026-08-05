@@ -7,6 +7,7 @@ from PyQt6.QtGui import QColor
 
 from chemvas.domain.document import (
     VALID_MARK_KINDS,
+    calculation_plan_from_state,
     is_hex_color,
     model_bond_pairs,
     ring_atom_ids_form_cycle,
@@ -19,6 +20,7 @@ from chemvas.ui.atom_coords_access import (
     stored_atom_coords_3d_matches_projection_for,
 )
 from chemvas.ui.canvas_atom_graphics_state import atom_items_for
+from chemvas.ui.canvas_calculation_plan_state import calculation_plan_for
 from chemvas.ui.canvas_group_state import (
     clear_groups_for,
     group_state_for,
@@ -123,6 +125,23 @@ def snapshot_canvas_document_state_with_warnings(canvas) -> tuple[dict, list[str
         "last_smiles_input": last_smiles_input_for(canvas),
     }
     _add_projection_state(canvas, state)
+    calculation_plan = calculation_plan_for(canvas)
+    if calculation_plan is not None:
+        model = model_for(canvas)
+        try:
+            calculation_plan_from_state(
+                calculation_plan,
+                atom_ids=set(model.atoms),
+                bond_pairs=model_bond_pairs(model),
+            )
+        except ValueError:
+            warnings.append(
+                "The calculation plan was not saved because the molecular graph "
+                "no longer matches its component references. Reopen Calculation > "
+                "Edit States and Steps and assign the changed components again."
+            )
+        else:
+            state["calculation_plan"] = calculation_plan
     groups = _snapshot_groups(canvas, item_lists)
     if groups:
         state["groups"] = groups

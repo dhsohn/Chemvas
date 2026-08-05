@@ -5,25 +5,27 @@ from collections.abc import Callable, Collection, Mapping
 from decimal import Decimal
 from typing import Any, TypeGuard, cast
 
+from .calculation_plan import calculation_plan_from_state
 from .model import Atom, Bond, MoleculeModel
 
 StateDict = dict[Any, Any]
 
 CHEMVAS_FILE_TYPE = "chemvas"
-# v4: bonds are a compact array — deleted-slot tombstones (null entries) are a
-# runtime bookkeeping detail and no longer appear in documents. Nothing in the
-# format references bonds by position, so no other section changed.
-CANVAS_FILE_VERSION = 4
+# v5: an optional calculation_plan stores explicit states and elementary steps.
+CANVAS_FILE_VERSION = 5
+CALCULATION_PLAN_CANVAS_FILE_VERSION = 5
+COMPACT_BONDS_CANVAS_FILE_VERSION = 4
 GROUPS_CANVAS_FILE_VERSION = 3
 PERSPECTIVE_CANVAS_FILE_VERSION = 2
 LEGACY_CANVAS_FILE_VERSION = 1
 # First version whose bond list must be compact (no null tombstone entries).
-COMPACT_BONDS_FILE_VERSION = CANVAS_FILE_VERSION
+COMPACT_BONDS_FILE_VERSION = COMPACT_BONDS_CANVAS_FILE_VERSION
 SUPPORTED_FILE_VERSIONS = frozenset(
     (
         LEGACY_CANVAS_FILE_VERSION,
         PERSPECTIVE_CANVAS_FILE_VERSION,
         GROUPS_CANVAS_FILE_VERSION,
+        COMPACT_BONDS_CANVAS_FILE_VERSION,
         CANVAS_FILE_VERSION,
     )
 )
@@ -32,6 +34,7 @@ SUPPORTED_FILE_VERSIONS = frozenset(
 _OPTIONAL_CANVAS_STATE_KEYS = frozenset(("shapes",))
 _V2_OPTIONAL_CANVAS_STATE_KEYS = frozenset(("perspective",))
 _V3_OPTIONAL_CANVAS_STATE_KEYS = frozenset(("groups",))
+_V5_OPTIONAL_CANVAS_STATE_KEYS = frozenset(("calculation_plan",))
 CANVAS_STATE_KEYS = (
     frozenset(
         (
@@ -56,10 +59,16 @@ CANVAS_STATE_KEYS_BY_VERSION = {
         | _V2_OPTIONAL_CANVAS_STATE_KEYS
         | _V3_OPTIONAL_CANVAS_STATE_KEYS
     ),
+    COMPACT_BONDS_CANVAS_FILE_VERSION: (
+        CANVAS_STATE_KEYS
+        | _V2_OPTIONAL_CANVAS_STATE_KEYS
+        | _V3_OPTIONAL_CANVAS_STATE_KEYS
+    ),
     CANVAS_FILE_VERSION: (
         CANVAS_STATE_KEYS
         | _V2_OPTIONAL_CANVAS_STATE_KEYS
         | _V3_OPTIONAL_CANVAS_STATE_KEYS
+        | _V5_OPTIONAL_CANVAS_STATE_KEYS
     ),
 }
 _GROUPABLE_STATE_ITEM_KEYS = frozenset(
@@ -720,6 +729,18 @@ def _validate_canvas_state(state: Mapping[str, object], *, version: int) -> None
     _validate_orbital_states(state.get("orbitals"))
     _validate_perspective_state(state.get("perspective"), atom_ids)
     _validate_group_states(state, atom_ids)
+    calculation_plan = state.get("calculation_plan")
+    if calculation_plan is not None:
+        if version < CALCULATION_PLAN_CANVAS_FILE_VERSION:
+            raise ValueError("Invalid Chemvas file.")
+        try:
+            calculation_plan_from_state(
+                calculation_plan,
+                atom_ids=atom_ids,
+                bond_pairs=bond_pairs,
+            )
+        except ValueError as exc:
+            raise ValueError("Invalid Chemvas file.") from exc
     settings = state.get("settings")
     if not isinstance(settings, Mapping):
         raise ValueError("Invalid Chemvas file.")
@@ -1709,6 +1730,11 @@ def _coordinate_matches(value: object, expected: int | float | Decimal) -> bool:
 def is_hex_color(value: object) -> bool:
     """Public form of the document hex-color rule (``#rgb`` / ``#rrggbb``)."""
     return _is_hex_color(value)
+
+
+def is_document_number(value: object) -> bool:
+    """Return whether ``value`` is a finite, JSON-safe Chemvas number."""
+    return _is_number(value)
 
 
 def _is_hex_color(value: object) -> bool:

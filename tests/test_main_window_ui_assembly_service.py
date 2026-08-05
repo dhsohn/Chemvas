@@ -334,7 +334,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
                 for action in menu_bar.actions()
                 if action.menu() is not None
             ],
-            ["File", "Edit", "View", "Help"],
+            ["File", "Edit", "View", "Calculation", "Help"],
         )
 
         file_menu = self._menu(menu_bar, "File")
@@ -496,6 +496,21 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
                 port.assert_called_once_with(window)
         self._menu_action(view_menu, "Molecule Info").trigger()
         self.panel_toolbar_callbacks.open_preview_window.assert_called_once_with(window)
+
+        calculation_menu = self._menu(menu_bar, "Calculation")
+        self.assertEqual(
+            [
+                action.text()
+                for action in calculation_menu.actions()
+                if not action.isSeparator()
+            ],
+            ["Edit States and Steps..."],
+        )
+        with mock.patch(
+            "chemvas.ui.main_window_menu_bar.edit_calculation_plan_for_window"
+        ) as edit_plan:
+            self._menu_action(calculation_menu, "Edit States and Steps...").trigger()
+        edit_plan.assert_called_once_with(window)
 
     def test_menu_bar_canvas_size_runs_sheet_setup_dialog(self) -> None:
         window = _HarnessWindow()

@@ -10,6 +10,7 @@ from chemvas.features.hover import HoverState
 from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
 from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas_bond_graphics_state import CanvasBondGraphicsState
+from chemvas.ui.canvas_calculation_plan_state import CanvasCalculationPlanState
 from chemvas.ui.canvas_callback_state import CanvasCallbackState
 from chemvas.ui.canvas_document_metadata_state import CanvasDocumentMetadataState
 from chemvas.ui.canvas_graph_state import CanvasGraphState
@@ -64,6 +65,7 @@ class CanvasRuntimeState:
     STRICT_STATE_CONTAINER: ClassVar[bool] = True
 
     document_metadata_state: CanvasDocumentMetadataState
+    calculation_plan_state: CanvasCalculationPlanState
     sheet_setup_state: SheetSetupState
     selection_info_state: SelectionInfoState
     rdkit_idle_timer: QTimer
@@ -103,6 +105,7 @@ class CanvasRuntimeState:
         # Armed on demand instead of running continuously for every canvas.
         return cls(
             document_metadata_state=CanvasDocumentMetadataState(),
+            calculation_plan_state=CanvasCalculationPlanState(),
             sheet_setup_state=SheetSetupState(),
             selection_info_state=SelectionInfoState.create(),
             rdkit_idle_timer=rdkit_idle_timer,

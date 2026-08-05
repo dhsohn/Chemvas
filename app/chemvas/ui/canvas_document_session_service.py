@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtCore import QRectF
 from PyQt6.QtWidgets import QGraphicsScene, QGraphicsView
@@ -26,6 +26,7 @@ from chemvas.domain.document import (
     deserialize_model_state,
     selection_payload_to_canvas_state,
 )
+from chemvas.ui.canvas_calculation_plan_state import set_calculation_plan_for
 from chemvas.ui.canvas_document_export_access import export_canvas_scene_for
 from chemvas.ui.canvas_document_state import (
     apply_document_settings,
@@ -60,6 +61,7 @@ from chemvas.ui.renderer_style_access import (
 from chemvas.ui.scene_clipboard_access import (
     build_selection_clipboard_payload_for_canvas,
 )
+from chemvas.ui.scene_item_access import canvas_scene_for
 from chemvas.ui.scene_item_state import (
     atom_state_dict_for,
     bond_state_dict,
@@ -89,8 +91,12 @@ from chemvas.ui.transactions.scene_rect import (
     view_scene_rect_is_explicit,
 )
 
+if TYPE_CHECKING:
+    from chemvas.features.export import ExportPlan
+
 _DOCUMENT_MUTATED_RUNTIME_FIELDS = (
     "sheet_setup_state",
+    "calculation_plan_state",
     "selection_info_state",
     "graph_state",
     "group_state",
@@ -687,6 +693,7 @@ class CanvasDocumentSessionService:
 
     def _apply_state_contents(self, state: dict) -> None:
         clear_scene_for(self.canvas)
+        set_calculation_plan_for(self.canvas, state.get("calculation_plan"))
         apply_document_settings(self.canvas, state)
         set_model_for(self.canvas, deserialize_model_state(state["model"]))
         self.graph_service.rebuild_bond_adjacency()
@@ -899,25 +906,10 @@ class CanvasDocumentSessionService:
         sizing: str = "bond",
         editable_svg: bool = False,
     ) -> None:
-        from chemvas.features.export import points_for_mm
-
-        pad = max(2.0, bond_line_width_for(self.canvas) * 2.0)
-        items = None
-        if scope == "selection":
-            items = selection_items_for_copy_for(self.canvas)
-            if not items:
-                raise ValueError("Select something to export, or choose Whole canvas.")
-
-        unit_scale = 1.0
-        target_width_pt = None
-        if sizing == "bond":
-            bond_length_px = bond_length_px_for(self.canvas)
-            if bond_length_px > 0:
-                unit_scale = bond_length_pt_for(self.canvas) / bond_length_px
-        elif sizing == "col1":
-            target_width_pt = points_for_mm(84.0)
-        elif sizing == "col2":
-            target_width_pt = points_for_mm(174.0)
+        items, pad, unit_scale, target_width_pt = self._figure_export_parameters(
+            scope=scope,
+            sizing=sizing,
+        )
 
         fmt = fmt.lower()
         target = Path(path)
@@ -939,6 +931,71 @@ class CanvasDocumentSessionService:
                 self._embed_editable_svg_payload(str(tmp), fmt=fmt, scope=scope)
 
         atomic_write_via_temp(target, render_to_temp)
+
+    def plan_figure_export(
+        self,
+        *,
+        scope: str = "sheet",
+        sizing: str = "bond",
+    ) -> ExportPlan:
+        """Return the exact geometry plan used by figure export without painting."""
+        from chemvas.features.export import (
+            build_export_plan,
+            collect_export_items,
+            content_bounds,
+        )
+
+        items, pad, unit_scale, target_width_pt = self._figure_export_parameters(
+            scope=scope,
+            sizing=sizing,
+        )
+        export_items = (
+            list(items)
+            if items is not None
+            else collect_export_items(canvas_scene_for(self.canvas))
+        )
+        bounds = content_bounds(export_items)
+        if bounds is None:
+            raise ValueError("There is nothing to export.")
+        plan = build_export_plan(
+            bounds.x(),
+            bounds.y(),
+            bounds.width(),
+            bounds.height(),
+            margin=pad,
+            unit_scale=unit_scale,
+            target_width_pt=target_width_pt,
+        )
+        if plan is None:
+            raise ValueError("There is nothing to export.")
+        return plan
+
+    def _figure_export_parameters(
+        self,
+        *,
+        scope: str,
+        sizing: str,
+    ) -> tuple[list[Any] | None, float, float, float | None]:
+        from chemvas.features.export import points_for_mm
+
+        pad = max(2.0, bond_line_width_for(self.canvas) * 2.0)
+        items = None
+        if scope == "selection":
+            items = selection_items_for_copy_for(self.canvas)
+            if not items:
+                raise ValueError("Select something to export, or choose Whole canvas.")
+
+        unit_scale = 1.0
+        target_width_pt = None
+        if sizing == "bond":
+            bond_length_px = bond_length_px_for(self.canvas)
+            if bond_length_px > 0:
+                unit_scale = bond_length_pt_for(self.canvas) / bond_length_px
+        elif sizing == "col1":
+            target_width_pt = points_for_mm(84.0)
+        elif sizing == "col2":
+            target_width_pt = points_for_mm(174.0)
+        return items, pad, unit_scale, target_width_pt
 
     def _embed_editable_svg_payload(self, path: str, *, fmt: str, scope: str) -> None:
         if fmt.lower() != "svg":
