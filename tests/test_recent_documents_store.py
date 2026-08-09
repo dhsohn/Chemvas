@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from chemvas.ui.recent_documents_store import (
     clear_recent,
@@ -58,7 +59,7 @@ def test_clear_empties_the_list(tmp_path):
     clear_recent(path=recent)
 
     assert load_recent(path=recent) == []
-    assert json.loads(recent.read_text())["paths"] == []
+    assert json.loads(recent.read_text(encoding="utf-8"))["paths"] == []
 
 
 def test_most_recent_first_ordering(tmp_path):
@@ -69,7 +70,7 @@ def test_most_recent_first_ordering(tmp_path):
         record_recent(str(target), path=recent)
 
     loaded = load_recent(path=recent)
-    assert [p.rsplit("/", 1)[-1] for p in loaded] == [
+    assert [Path(p).name for p in loaded] == [
         "c.chemvas",
         "b.chemvas",
         "a.chemvas",

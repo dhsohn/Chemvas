@@ -111,12 +111,14 @@ def test_real_rdkit_packs_balanced_multicomponent_step(tmp_path: Path) -> None:
         == 0
     )
 
-    correspondence = json.loads((output / "atom_correspondence.json").read_text())
+    correspondence = json.loads(
+        (output / "atom_correspondence.json").read_text(encoding="utf-8")
+    )
     reactant_manifest = json.loads(
-        (output / "reactant.bundle" / "manifest.json").read_text()
+        (output / "reactant.bundle" / "manifest.json").read_text(encoding="utf-8")
     )
     product_manifest = json.loads(
-        (output / "product.bundle" / "manifest.json").read_text()
+        (output / "product.bundle" / "manifest.json").read_text(encoding="utf-8")
     )
     assert correspondence["geometry_mapping"] == "complete_bijection"
     assert len(correspondence["geometry_entries"]) == 11

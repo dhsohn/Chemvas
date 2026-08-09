@@ -193,21 +193,14 @@ def test_failure_after_an_earlier_operation_leaves_no_output(
     assert not list(tmp_path.glob(f".{output.name}.staging-*"))
 
 
-def test_existing_file_directory_and_symlink_outputs_are_preserved(
-    tmp_path: Path,
-) -> None:
+def test_existing_file_and_directory_outputs_are_preserved(tmp_path: Path) -> None:
     source = tmp_path / "source.chemvas"
     source_bytes = _write_source(source)
     patch_path = tmp_path / "patch.json"
     patch_path.write_text(json.dumps(_patch(source_bytes)))
-    targets = [
-        tmp_path / "file.chemvas",
-        tmp_path / "directory.chemvas",
-        tmp_path / "link.chemvas",
-    ]
+    targets = [tmp_path / "file.chemvas", tmp_path / "directory.chemvas"]
     targets[0].write_text("keep")
     targets[1].mkdir()
-    targets[2].symlink_to(tmp_path / "missing")
 
     for target in targets:
         with pytest.raises(SystemExit) as error:
@@ -215,9 +208,28 @@ def test_existing_file_directory_and_symlink_outputs_are_preserved(
                 ["apply-patch", str(source), str(patch_path), "--output", str(target)]
             )
         assert error.value.code == 2
-    assert targets[0].read_text() == "keep"
+    assert targets[0].read_text(encoding="utf-8") == "keep"
     assert targets[1].is_dir()
-    assert targets[2].is_symlink()
+
+
+def test_existing_symlink_output_is_preserved(tmp_path: Path) -> None:
+    source = tmp_path / "source.chemvas"
+    source_bytes = _write_source(source)
+    patch_path = tmp_path / "patch.json"
+    patch_path.write_text(json.dumps(_patch(source_bytes)))
+    output = tmp_path / "link.chemvas"
+    try:
+        output.symlink_to(tmp_path / "missing")
+    except OSError as exc:
+        if sys.platform == "win32" and getattr(exc, "winerror", None) == 1314:
+            pytest.skip("Windows symlink creation requires developer privileges")
+        raise
+
+    with pytest.raises(SystemExit) as error:
+        cli.run(["apply-patch", str(source), str(patch_path), "--output", str(output)])
+
+    assert error.value.code == 2
+    assert output.is_symlink()
 
 
 def test_atomic_publish_rejects_a_target_created_after_preflight(
@@ -239,7 +251,7 @@ def test_atomic_publish_rejects_a_target_created_after_preflight(
     with pytest.raises(SystemExit) as error:
         cli.run(["apply-patch", str(source), str(patch_path), "--output", str(output)])
     assert error.value.code == 2
-    assert output.read_text() == "racer owns this path"
+    assert output.read_text(encoding="utf-8") == "racer owns this path"
     assert not list(tmp_path.glob(f".{output.name}.staging-*"))
 
 

@@ -136,11 +136,15 @@ def test_pack_step_creates_paired_state_bundles_mapping_and_bond_changes(
     )
     assert (output / "reactant.bundle" / "geometry.xyz").is_file()
     assert (output / "product.bundle" / "geometry.xyz").is_file()
-    correspondence = json.loads((output / "atom_correspondence.json").read_text())
+    correspondence = json.loads(
+        (output / "atom_correspondence.json").read_text(encoding="utf-8")
+    )
     assert correspondence["source_mapping"] == "complete_bijection"
     assert correspondence["geometry_mapping"] == "complete_bijection"
     assert len(correspondence["geometry_entries"]) == 3
-    bond_changes = json.loads((output / "bond_changes.json").read_text())
+    bond_changes = json.loads(
+        (output / "bond_changes.json").read_text(encoding="utf-8")
+    )
     assert bond_changes["entries"] == [
         {
             "kind": "order_changed",

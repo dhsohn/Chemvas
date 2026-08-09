@@ -1147,7 +1147,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 service, "_build_xyz_payload", return_value=(model, {})
             ):
                 service.export_mol(path)
-            content = Path(path).read_text()
+            content = Path(path).read_text(encoding="utf-8")
         self.assertIn("V2000", content)
         self.assertIn("M  END", content)
         self.assertTrue(content.splitlines()[3].startswith("  2  1"))
@@ -1190,7 +1190,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 ) as fallback,
             ):
                 service.export_mol(path)
-            content = Path(path).read_text()
+            content = Path(path).read_text(encoding="utf-8")
         fallback.assert_called_once()
         self.assertIn("M  END", content)
 

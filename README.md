@@ -88,6 +88,8 @@ python -m pip install -e .
 ```bash
 python app/main.py    # development tree
 chemvas               # after install
+chemvas --help        # root CLI help without starting Qt
+chemvas --version     # package version without starting Qt
 ```
 
 Pick a tool from the top toolbar and click/drag on the canvas to draw. Enter a

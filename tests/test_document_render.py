@@ -12,6 +12,14 @@ class _Plan:
     out_h_pt: float
 
 
+@pytest.mark.parametrize(
+    ("platform", "expected"),
+    [("win32", "windows"), ("linux", "offscreen"), ("darwin", "offscreen")],
+)
+def test_qt_platform_for_render(platform: str, expected: str) -> None:
+    assert document_render._qt_platform_for_render(platform) == expected
+
+
 def test_svg_budget_reports_points_without_raster_dimensions() -> None:
     assert document_render._validate_render_budget(
         _Plan(144.0, 72.0),

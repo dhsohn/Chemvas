@@ -36,6 +36,8 @@ def test_never_raises_even_if_every_candidate_fails(tmp_path, monkeypatch):
 def test_skips_an_existing_read_only_directory(tmp_path, monkeypatch):
     # mkdir(exist_ok=True) "succeeds" on an existing read-only dir; only a write
     # probe reveals it is unusable, so we must fall through to a writable one.
+    if os.name == "nt":
+        pytest.skip("Windows directory ACLs are not modeled by chmod mode bits")
     if hasattr(os, "geteuid") and os.geteuid() == 0:
         pytest.skip("root bypasses directory write permissions")
     readonly = tmp_path / "readonly"
