@@ -232,7 +232,7 @@ Agent는 Qt 없이도 같은 계약을 붙이고 검사할 수 있습니다.
 ```bash
 chemvas attach-plan scheme.chemvas plan.json --output mechanism.chemvas
 chemvas inspect-plan mechanism.chemvas
-chemvas pack-step mechanism.chemvas --step S01 --output calculations/S01
+chemvas pack-step mechanism.chemvas --step S01 --output calculations/S01.json
 ```
 
 Calculation Plan v1에서 state는 계산 성분과 전하·다중도를, step endpoint는 역할을 소유합니다.
@@ -264,22 +264,24 @@ Calculation Plan v1에서 state는 계산 성분과 전하·다중도를, step e
 ```
 
 각 `component_atom_ids`는 정렬된 완전한 연결 성분 하나와 정확히 같아야 합니다. `pack-step`은
-`reactant.bundle/`, `product.bundle/`, `atom_correspondence.json`, `bond_changes.json`,
-`step_manifest.json`을 만듭니다. RDKit이 만든 원자까지 완전한 대응을 요구하므로 endpoint 사이
-implicit hydrogen 수가 달라지는 전달 수소는 명시적으로 그려야 합니다. `inspect-plan`은 각 step에
-결정론적인 `path_precheck`를 보고합니다. source mapping이 완전하고, 양 endpoint의 전하·다중도가
-같고, endpoint마다 included 연결 성분이 정확히 하나라면 `pack-step`은
-`path_endpoints/reactant.xyz`, `product.xyz`, `manifest.json`도 만듭니다. product XYZ는 reactant의
-원자 identity 순서로 재작성되며, path manifest는 그 순서와 결합 변화에 참여한 반응중심 원자를
-공통 0-based index로 기록합니다. 따라서 downstream 도구가 원소 순서나 좌표로 대응을 다시
-추론할 필요가 없습니다.
+`chemvas-elementary-step` v1 JSON 파일 하나만 원자적으로 씁니다. 이 파일에는 원본 문서 hash,
+endpoint state와 RDKit 원자 provenance, 완전한 source/generated atom correspondence, bond change,
+결정론적 path readiness가 inline으로 들어갑니다. RDKit이 만든 원자까지 완전한 bijection을
+요구하므로 endpoint 사이 implicit hydrogen 수가 달라지는 전달 수소는 명시적으로 그려야 합니다.
 
-source mapping이 불완전하면 기존 gate에서 여전히 `pack-step` 전체를 중단합니다. 이 gate와 생성
-원자 bijection을 통과한 뒤 다성분 또는 전자상태 조건만 맞지 않으면 generic step bundle은 유지하고,
-`path_readiness.blocking_reasons`에 `path_endpoints/`를 만들지 않은 이유를 기록합니다. 특히 Chemvas는
-다성분 catalyst/substrate precomplex를 임의로 만들지 않습니다. 모든 생성 좌표는 초기 추정이며,
-path endpoint pair에는 rigid alignment나 양자화학 최적화가 수행되지 않습니다. 후속 최적화와
-연구자 검토가 필요합니다.
+`inspect-plan`은 각 step에 결정론적인 `path_precheck`를 보고합니다. source mapping이 완전하고,
+양 endpoint의 전하·다중도가 같고, endpoint마다 included 연결 성분이 정확히 하나라면 단일
+artifact의 `endpoint_pair`에 정확한 reactant/product XYZ 본문과 hash가 들어갑니다. product XYZ는
+reactant의 원자 identity 순서로 재작성되며, 같은 객체가 그 순서와 결합 변화에 참여한 반응중심
+원자를 공통 0-based index로 기록합니다. 따라서 downstream 도구가 원소 순서나 좌표로 대응을
+다시 추론할 필요가 없습니다.
+
+source mapping이 불완전하면 `pack-step`은 출력 없이 중단합니다. 이 gate와 생성 원자 bijection을
+통과한 뒤 다성분 또는 전자상태 조건만 맞지 않으면 `endpoint_pair: null`과 정확한
+`path_readiness.blocking_reasons`를 가진 blocked JSON 파일 하나를 씁니다. Chemvas는 다성분
+catalyst/substrate precomplex를 임의로 만들지 않습니다. 모든 생성 좌표는 초기 추정이며 path
+endpoint pair에는 rigid alignment나 양자화학 최적화가 수행되지 않습니다. 후속 최적화와 연구자
+검토가 필요합니다.
 
 ## 개발 / 기여
 - 테스트는 headless로 실행하되, 전체 suite는 Qt 전역 상태 격리를 위해 `test_*.py` 파일마다 별도 pytest 프로세스를 사용합니다. 정확한 CI 미러 명령은 [Running the checks](CONTRIBUTING.md#running-the-checks)를 따르세요.

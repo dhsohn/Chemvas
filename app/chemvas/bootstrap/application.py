@@ -28,7 +28,7 @@ HEADLESS_SUBCOMMAND_HELP = (
     ("inspect-document", "inspect the complete chemical graph as JSON"),
     ("inspect-plan", "inspect embedded calculation states and steps"),
     ("pack", "create a calculation bundle directory"),
-    ("pack-step", "create an elementary-step calculation bundle"),
+    ("pack-step", "create one elementary-step JSON artifact"),
     ("render-document", "render a document to SVG or PNG"),
 )
 HEADLESS_SUBCOMMANDS = tuple(command for command, _help in HEADLESS_SUBCOMMAND_HELP)

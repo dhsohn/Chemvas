@@ -51,10 +51,8 @@ from chemvas.features.calculation_bundle import (
 _SPECIES_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 _BUNDLE_FORMAT = "chemvas-calculation-bundle"
 _BUNDLE_VERSION = 1
-_STEP_BUNDLE_FORMAT = "chemvas-elementary-step-bundle"
-_STEP_BUNDLE_VERSION = 1
-_PATH_ENDPOINTS_FORMAT = "chemvas-path-endpoints"
-_PATH_ENDPOINTS_VERSION = 1
+_STEP_ARTIFACT_FORMAT = "chemvas-elementary-step"
+_STEP_ARTIFACT_VERSION = 1
 
 
 class _PathAtomOrderEntry(TypedDict):
@@ -99,12 +97,12 @@ def run(argv: list[str]) -> int:
             sys.stdout.write(_json_text(payload))
             return 0
         if args.command == "pack-step":
-            manifest = _pack_step(
+            artifact = _pack_step(
                 Path(args.document),
                 step_id=args.step,
                 output=Path(args.output),
             )
-            sys.stdout.write(_json_text(manifest))
+            sys.stdout.write(_json_text(artifact))
             return 0
     except (OSError, ValueError) as exc:
         parser.exit(2, f"chemvas: error: {exc}\n")
@@ -150,7 +148,7 @@ def _argument_parser() -> argparse.ArgumentParser:
 
     pack_step_parser = subparsers.add_parser(
         "pack-step",
-        help="create a paired, non-overwriting elementary-step calculation bundle",
+        help="create one non-overwriting elementary-step JSON artifact",
     )
     pack_step_parser.add_argument("document", help="input .chemvas document")
     pack_step_parser.add_argument("--step", required=True)
@@ -288,7 +286,7 @@ def _pack_step(
     output: Path,
 ) -> dict[str, object]:
     _validate_source(source)
-    _validate_new_directory_output(output)
+    _validate_new_step_output(output)
     source_bytes, document = read_exact_document(source)
     plan = calculation_plan_for_document(document.state)
     step = calculation_step_by_id(plan, step_id)
@@ -326,71 +324,48 @@ def _pack_step(
         "entries": list(calculate_bond_changes(document.state, plan, step)),
     }
 
-    file_bytes: dict[str, bytes] = {"source.chemvas": source_bytes}
-    file_bytes.update(
-        _state_bundle_file_bytes(
-            prefix="reactant.bundle",
-            source_bytes=source_bytes,
-            document_version=int(document.payload["version"]),
+    path_readiness = {
+        **asdict(precheck),
+        "generated_atom_mapping_complete": True,
+    }
+    endpoint_pair = (
+        _path_endpoint_payload(
+            reactant_state=reactant_state,
+            reactant_artifacts=reactant_artifacts,
+            product_artifacts=product_artifacts,
+            correspondence=correspondence,
+            bond_changes=bond_changes,
+        )
+        if precheck.ready_for_path_endpoints
+        else None
+    )
+    artifact = {
+        "format": _STEP_ARTIFACT_FORMAT,
+        "version": _STEP_ARTIFACT_VERSION,
+        "generator": {"name": "Chemvas", "version": __version__},
+        "step_id": step.id,
+        "source": {
+            "document_sha256": _sha256(source_bytes),
+            "document_bytes": len(source_bytes),
+            "chemvas_document_version": int(document.payload["version"]),
+        },
+        "reactant": _state_payload(
             state=reactant_state,
             endpoint=step.reactant,
             selection=reactant_selection,
             artifacts=reactant_artifacts,
-        )
-    )
-    file_bytes.update(
-        _state_bundle_file_bytes(
-            prefix="product.bundle",
-            source_bytes=source_bytes,
-            document_version=int(document.payload["version"]),
+        ),
+        "product": _state_payload(
             state=product_state,
             endpoint=step.product,
             selection=product_selection,
             artifacts=product_artifacts,
-        )
-    )
-    file_bytes["atom_correspondence.json"] = _json_text(correspondence).encode("utf-8")
-    file_bytes["bond_changes.json"] = _json_text(bond_changes).encode("utf-8")
-    path_endpoint_directory: str | None = None
-    if precheck.ready_for_path_endpoints:
-        path_endpoint_directory = "path_endpoints"
-        file_bytes.update(
-            _path_endpoint_file_bytes(
-                step=step,
-                reactant_state=reactant_state,
-                product_state=product_state,
-                reactant_artifacts=reactant_artifacts,
-                product_artifacts=product_artifacts,
-                correspondence=correspondence,
-                bond_changes=bond_changes,
-            )
-        )
-    path_readiness = {
-        **asdict(precheck),
-        "generated_atom_mapping_complete": True,
-        "path_endpoint_directory": path_endpoint_directory,
-    }
-    manifest = {
-        "format": _STEP_BUNDLE_FORMAT,
-        "version": _STEP_BUNDLE_VERSION,
-        "generator": {"name": "Chemvas", "version": __version__},
-        "step_id": step.id,
-        "source": {
-            "file": "source.chemvas",
-            "chemvas_document_version": int(document.payload["version"]),
-        },
-        "reactant": {
-            "state_id": reactant_state.id,
-            "bundle": "reactant.bundle",
-        },
-        "product": {
-            "state_id": product_state.id,
-            "bundle": "product.bundle",
-        },
-        "atom_correspondence_file": "atom_correspondence.json",
-        "bond_changes_file": "bond_changes.json",
+        ),
+        "atom_correspondence": correspondence,
+        "bond_changes": bond_changes,
         "mapping_validation": "complete_source_and_generated_geometry_bijection",
         "path_readiness": path_readiness,
+        "endpoint_pair": endpoint_pair,
         "geometry_scope": {
             "reactant_component_count": len(reactant_selection.component_indices),
             "product_component_count": len(product_selection.component_indices),
@@ -400,14 +375,9 @@ def _pack_step(
                 "and researcher review"
             ),
         },
-        "artifacts": {
-            name: {"sha256": _sha256(content), "bytes": len(content)}
-            for name, content in sorted(file_bytes.items())
-        },
     }
-    file_bytes["step_manifest.json"] = _json_text(manifest).encode("utf-8")
-    _atomic_create_directory(output, file_bytes)
-    return manifest
+    atomic_create_bytes(output, _json_text(artifact).encode("utf-8"))
+    return artifact
 
 
 def _state_artifacts(
@@ -440,38 +410,19 @@ def _state_artifacts(
     return artifacts
 
 
-def _state_bundle_file_bytes(
+def _state_payload(
     *,
-    prefix: str,
-    source_bytes: bytes,
-    document_version: int,
     state: CalculationState,
     endpoint: CalculationStepEndpoint,
     selection: CalculationStateSelection,
     artifacts: CalculationArtifacts,
-) -> dict[str, bytes]:
-    atom_map_payload = {
-        "format": "chemvas-atom-map",
-        "version": 1,
-        "entries": [asdict(entry) for entry in artifacts.atom_map],
-    }
-    local_files = {
-        "source.chemvas": source_bytes,
-        "structure.mol": artifacts.mol_block.encode("utf-8"),
-        "geometry.xyz": artifacts.xyz_block.encode("utf-8"),
-        "atom_map.json": _json_text(atom_map_payload).encode("utf-8"),
-    }
+) -> dict[str, object]:
     member_inclusion = {
         member.component_atom_ids: member.inclusion for member in state.members
     }
-    manifest = {
-        "format": _BUNDLE_FORMAT,
-        "version": _BUNDLE_VERSION,
-        "generator": {"name": "Chemvas", "version": __version__},
-        "species_id": state.id,
-        "source": {
-            "file": "source.chemvas",
-            "chemvas_document_version": document_version,
+    return {
+        "state_id": state.id,
+        "selection": {
             "component_indices": list(selection.component_indices),
             "chemvas_atom_ids": list(selection.atom_ids),
         },
@@ -496,11 +447,9 @@ def _state_bundle_file_bytes(
             "spin_state_inference": "not_performed",
         },
         "structure": {
-            "mol_file": "structure.mol",
-            "xyz_file": "geometry.xyz",
-            "atom_map_file": "atom_map.json",
             "rdkit_version": artifacts.rdkit_version,
             "component_count": len(selection.component_indices),
+            "atom_map": [asdict(entry) for entry in artifacts.atom_map],
             "geometry_generation": {
                 "embedding": artifacts.geometry_embedding,
                 "random_seed": artifacts.geometry_random_seed,
@@ -518,25 +467,17 @@ def _state_bundle_file_bytes(
                 "xyz": artifacts.xyz_atom_count,
             },
         },
-        "artifacts": {
-            name: {"sha256": _sha256(content), "bytes": len(content)}
-            for name, content in sorted(local_files.items())
-        },
     }
-    local_files["manifest.json"] = _json_text(manifest).encode("utf-8")
-    return {f"{prefix}/{name}": content for name, content in local_files.items()}
 
 
-def _path_endpoint_file_bytes(
+def _path_endpoint_payload(
     *,
-    step: CalculationStep,
     reactant_state: CalculationState,
-    product_state: CalculationState,
     reactant_artifacts: CalculationArtifacts,
     product_artifacts: CalculationArtifacts,
     correspondence: Mapping[str, object],
     bond_changes: Mapping[str, object],
-) -> dict[str, bytes]:
+) -> dict[str, object]:
     reactant_rows = _xyz_atom_rows(reactant_artifacts, label="reactant")
     product_rows = _xyz_atom_rows(product_artifacts, label="product")
     atom_order = _path_atom_order(
@@ -556,19 +497,9 @@ def _path_endpoint_file_bytes(
         comment="Chemvas path product; canonical reactant atom identity order",
     )
     reaction_center_indices = _reaction_center_indices(atom_order, bond_changes)
-    local_files = {
-        "reactant.xyz": reactant_path.encode("utf-8"),
-        "product.xyz": product_path.encode("utf-8"),
-    }
-    manifest = {
-        "format": _PATH_ENDPOINTS_FORMAT,
-        "version": _PATH_ENDPOINTS_VERSION,
-        "generator": {"name": "Chemvas", "version": __version__},
-        "step_id": step.id,
-        "source": {
-            "atom_correspondence_file": "../atom_correspondence.json",
-            "bond_changes_file": "../bond_changes.json",
-        },
+    reactant_bytes = reactant_path.encode("utf-8")
+    product_bytes = product_path.encode("utf-8")
+    return {
         "electronic_state": {
             "charge": reactant_state.charge,
             "multiplicity": reactant_state.multiplicity,
@@ -585,9 +516,21 @@ def _path_endpoint_file_bytes(
             "index_base": 0,
             "definition": "atoms_incident_to_source_bond_changes",
         },
+        "endpoints": {
+            "reactant": {
+                "format": "xyz",
+                "content": reactant_path,
+                "sha256": _sha256(reactant_bytes),
+                "bytes": len(reactant_bytes),
+            },
+            "product": {
+                "format": "xyz",
+                "content": product_path,
+                "sha256": _sha256(product_bytes),
+                "bytes": len(product_bytes),
+            },
+        },
         "geometry": {
-            "reactant_file": "reactant.xyz",
-            "product_file": "product.xyz",
             "atom_count": len(reactant_rows),
             "component_count": 1,
             "precomplex_geometry": "single_component_endpoints",
@@ -598,13 +541,7 @@ def _path_endpoint_file_bytes(
                 "and researcher review"
             ),
         },
-        "artifacts": {
-            name: {"sha256": _sha256(content), "bytes": len(content)}
-            for name, content in sorted(local_files.items())
-        },
     }
-    local_files["manifest.json"] = _json_text(manifest).encode("utf-8")
-    return {f"path_endpoints/{name}": content for name, content in local_files.items()}
 
 
 def _xyz_atom_rows(
@@ -880,7 +817,9 @@ def _validate_pack_arguments(
         raise ValueError(f"output parent directory does not exist: {output.parent}")
 
 
-def _validate_new_directory_output(output: Path) -> None:
+def _validate_new_step_output(output: Path) -> None:
+    if output.suffix.lower() != ".json":
+        raise ValueError("pack-step output must use the .json filename extension")
     if output.exists() or output.is_symlink():
         raise ValueError(f"output path already exists: {output}")
     if not output.parent.is_dir():

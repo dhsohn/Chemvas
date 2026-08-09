@@ -273,7 +273,7 @@ Agents can attach and inspect the same contract without Qt:
 ```bash
 chemvas attach-plan scheme.chemvas plan.json --output mechanism.chemvas
 chemvas inspect-plan mechanism.chemvas
-chemvas pack-step mechanism.chemvas --step S01 --output calculations/S01
+chemvas pack-step mechanism.chemvas --step S01 --output calculations/S01.json
 ```
 
 `plan.json` uses Calculation Plan v1. States own calculation membership and
@@ -306,27 +306,30 @@ charge/multiplicity; step endpoints own roles:
 ```
 
 Every `component_atom_ids` list must equal one complete connected component and
-must be sorted. `pack-step` creates `reactant.bundle/`, `product.bundle/`,
-`atom_correspondence.json`, `bond_changes.json`, and `step_manifest.json`. It
-also requires a complete mapping for RDKit-generated atoms; draw transferred
-hydrogens explicitly when implicit-hydrogen counts differ between endpoints.
+must be sorted. `pack-step` atomically writes exactly one
+`chemvas-elementary-step` v1 JSON file. It inlines the source document hash,
+endpoint state and RDKit atom provenance, complete source/generated atom
+correspondence, bond changes, and deterministic path readiness. Draw transferred
+hydrogens explicitly when implicit-hydrogen counts differ between endpoints;
+the generated atoms must also form a complete bijection.
+
 `inspect-plan` reports a deterministic `path_precheck` for each step. When the
 source mapping is complete, both endpoints have the same charge and
-multiplicity, and each endpoint contains exactly one included component,
-`pack-step` also creates `path_endpoints/reactant.xyz`, `product.xyz`, and
-`manifest.json`. The product XYZ is rewritten into the reactant atom-identity
-order; the path manifest records that order and the bond-change reaction-center
-atoms as canonical 0-based indices. Downstream tools therefore do not need to
-reconstruct the mapping from element order or coordinates.
+multiplicity, and each endpoint contains exactly one included component, the
+single artifact's `endpoint_pair` contains the exact reactant/product XYZ text
+and hashes. The product XYZ is rewritten into the reactant atom-identity order;
+the same object records that order and the bond-change reaction-center atoms as
+canonical 0-based indices. Downstream tools therefore do not need to reconstruct
+the mapping from element order or coordinates.
 
-An incomplete source mapping still blocks `pack-step` at its existing gate. Once
-that gate and the generated-atom bijection pass, a multi-component or
-electronic-state mismatch keeps the generic step bundle and records in
-`path_readiness.blocking_reasons` why no `path_endpoints/` directory was emitted.
-In particular, Chemvas does not invent a multi-component catalyst/substrate
-precomplex. All generated coordinates remain initial guesses: the path endpoint
-pair is not rigidly aligned or quantum-mechanically optimized, and researcher
-review remains required.
+An incomplete source mapping still blocks `pack-step` without creating the
+output. Once that gate and the generated-atom bijection pass, a multi-component
+or electronic-state mismatch writes one blocked JSON artifact with
+`endpoint_pair: null` and exact `path_readiness.blocking_reasons`. Chemvas does
+not invent a multi-component catalyst/substrate precomplex. All generated
+coordinates remain initial guesses: the path endpoint pair is not rigidly
+aligned or quantum-mechanically optimized, and researcher review remains
+required.
 
 ## Keyboard shortcuts
 
