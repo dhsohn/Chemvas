@@ -1,14 +1,9 @@
 from __future__ import annotations
 
 import argparse
-import contextlib
 import hashlib
 import json
-import os
-import re
-import shutil
 import sys
-import tempfile
 from collections.abc import Mapping
 from dataclasses import asdict
 from decimal import Decimal
@@ -44,15 +39,13 @@ from chemvas.features.calculation_bundle import (
     path_precheck,
     require_step_ready,
     select_calculation_state,
-    select_component,
     validate_calculation_plan,
 )
 
-_SPECIES_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
-_BUNDLE_FORMAT = "chemvas-calculation-bundle"
-_BUNDLE_VERSION = 1
-_STEP_ARTIFACT_FORMAT = "chemvas-elementary-step"
-_STEP_ARTIFACT_VERSION = 1
+_MACHINE_CONTRACT_NAME = "factory/machine-observation"
+_MACHINE_CONTRACT_VERSION = 1
+_STEP_PAYLOAD_CONTRACT_NAME = "chemistry/elementary-step"
+_STEP_PAYLOAD_CONTRACT_VERSION = 1
 
 
 class _PathAtomOrderEntry(TypedDict):
@@ -72,17 +65,6 @@ def run(argv: list[str]) -> int:
         if args.command == "inspect":
             payload = _inspect(Path(args.document))
             sys.stdout.write(_json_text(payload))
-            return 0
-        if args.command == "pack":
-            manifest = _pack(
-                Path(args.document),
-                output=Path(args.output),
-                component_index=args.component,
-                species_id=args.species_id,
-                charge=args.charge,
-                multiplicity=args.multiplicity,
-            )
-            sys.stdout.write(_json_text(manifest))
             return 0
         if args.command == "attach-plan":
             result = _attach_plan(
@@ -122,16 +104,6 @@ def _argument_parser() -> argparse.ArgumentParser:
     )
     inspect_parser.add_argument("document", help="input .chemvas document")
 
-    pack_parser = subparsers.add_parser(
-        "pack", help="create a non-overwriting Calculation Bundle v1 directory"
-    )
-    pack_parser.add_argument("document", help="input .chemvas document")
-    pack_parser.add_argument("--component", type=int, required=True)
-    pack_parser.add_argument("--species-id", required=True)
-    pack_parser.add_argument("--charge", type=int, required=True)
-    pack_parser.add_argument("--multiplicity", type=int, required=True)
-    pack_parser.add_argument("--output", required=True)
-
     attach_parser = subparsers.add_parser(
         "attach-plan",
         help="validate a Calculation Plan JSON file and embed it in a new .chemvas file",
@@ -148,7 +120,7 @@ def _argument_parser() -> argparse.ArgumentParser:
 
     pack_step_parser = subparsers.add_parser(
         "pack-step",
-        help="create one non-overwriting elementary-step JSON artifact",
+        help="create one non-overwriting elementary-step machine.json artifact",
     )
     pack_step_parser.add_argument("document", help="input .chemvas document")
     pack_step_parser.add_argument("--step", required=True)
@@ -217,68 +189,6 @@ def _inspect(source: Path) -> dict[str, object]:
     }
 
 
-def _pack(
-    source: Path,
-    *,
-    output: Path,
-    component_index: int,
-    species_id: str,
-    charge: int,
-    multiplicity: int,
-) -> dict[str, object]:
-    _validate_source(source)
-    _validate_pack_arguments(
-        output=output,
-        species_id=species_id,
-        multiplicity=multiplicity,
-    )
-    source_bytes, document = read_exact_document(source)
-    selection = select_component(document.state, component_index)
-    if charge != selection.summary.formal_charge:
-        raise ValueError(
-            f"declared charge {charge} does not match the selected structure's "
-            f"modeled formal charge {selection.summary.formal_charge}"
-        )
-
-    adapter = RDKitAdapter()
-    artifacts = adapter.model_to_calculation_artifacts(
-        selection.model,
-        atom_annotations=selection.model.atom_annotations,
-    )
-    if artifacts is None:
-        raise ValueError(adapter.last_error or "RDKit calculation conversion failed")
-    _validate_calculation_artifacts(
-        artifacts,
-        declared_charge=charge,
-        declared_multiplicity=multiplicity,
-        modeled_radical_electrons=selection.summary.radical_electrons,
-    )
-
-    atom_map_payload = {
-        "format": "chemvas-atom-map",
-        "version": 1,
-        "entries": [asdict(entry) for entry in artifacts.atom_map],
-    }
-    file_bytes = {
-        "source.chemvas": source_bytes,
-        "structure.mol": artifacts.mol_block.encode("utf-8"),
-        "geometry.xyz": artifacts.xyz_block.encode("utf-8"),
-        "atom_map.json": _json_text(atom_map_payload).encode("utf-8"),
-    }
-    manifest = _manifest(
-        document_version=int(document.payload["version"]),
-        species_id=species_id,
-        charge=charge,
-        multiplicity=multiplicity,
-        component=selection.summary,
-        artifacts=artifacts,
-        file_bytes=file_bytes,
-    )
-    file_bytes["manifest.json"] = _json_text(manifest).encode("utf-8")
-    _atomic_create_directory(output, file_bytes)
-    return manifest
-
-
 def _pack_step(
     source: Path,
     *,
@@ -318,16 +228,10 @@ def _pack_step(
         product_artifacts=product_artifacts,
     )
     bond_changes = {
-        "format": "chemvas-bond-changes",
-        "version": 1,
         "step_id": step.id,
         "entries": list(calculate_bond_changes(document.state, plan, step)),
     }
 
-    path_readiness = {
-        **asdict(precheck),
-        "generated_atom_mapping_complete": True,
-    }
     endpoint_pair = (
         _path_endpoint_payload(
             reactant_state=reactant_state,
@@ -339,10 +243,7 @@ def _pack_step(
         if precheck.ready_for_path_endpoints
         else None
     )
-    artifact = {
-        "format": _STEP_ARTIFACT_FORMAT,
-        "version": _STEP_ARTIFACT_VERSION,
-        "generator": {"name": "Chemvas", "version": __version__},
+    payload = {
         "step_id": step.id,
         "source": {
             "document_sha256": _sha256(source_bytes),
@@ -364,7 +265,6 @@ def _pack_step(
         "atom_correspondence": correspondence,
         "bond_changes": bond_changes,
         "mapping_validation": "complete_source_and_generated_geometry_bijection",
-        "path_readiness": path_readiness,
         "endpoint_pair": endpoint_pair,
         "geometry_scope": {
             "reactant_component_count": len(reactant_selection.component_indices),
@@ -376,8 +276,38 @@ def _pack_step(
             ),
         },
     }
-    atomic_create_bytes(output, _json_text(artifact).encode("utf-8"))
-    return artifact
+    operation_digest = _sha256(
+        b"chemvas-elementary-step-v1\0" + source_bytes + b"\0" + step.id.encode("utf-8")
+    )
+    handoff_codes = [f"chemvas/{reason}" for reason in precheck.blocking_reasons]
+    observation = {
+        "contract": {
+            "name": _MACHINE_CONTRACT_NAME,
+            "version": _MACHINE_CONTRACT_VERSION,
+        },
+        "producer": {"name": "chemvas", "version": __version__},
+        "operation": {
+            "id": f"step-{operation_digest}",
+            "kind": "chemistry/elementary-step-export",
+        },
+        "lifecycle": {"phase": "finished", "outcome": "succeeded", "codes": []},
+        "handoff": {
+            "status": "ready" if precheck.ready_for_path_endpoints else "blocked",
+            "codes": handoff_codes,
+        },
+        "delivery": {"status": "complete", "codes": []},
+        "artifacts": {},
+        "lineage": {"trace_id": None, "upstream": []},
+        "payload": {
+            "contract": {
+                "name": _STEP_PAYLOAD_CONTRACT_NAME,
+                "version": _STEP_PAYLOAD_CONTRACT_VERSION,
+            },
+            "data": payload,
+        },
+    }
+    atomic_create_bytes(output, _json_text(observation).encode("utf-8"))
+    return observation
 
 
 def _state_artifacts(
@@ -723,64 +653,6 @@ def _artifact_atom_groups(
     return {owner: tuple(entries) for owner, entries in groups.items()}
 
 
-def _manifest(
-    *,
-    document_version: int,
-    species_id: str,
-    charge: int,
-    multiplicity: int,
-    component: ComponentSummary,
-    artifacts: CalculationArtifacts,
-    file_bytes: dict[str, bytes],
-) -> dict[str, object]:
-    return {
-        "format": _BUNDLE_FORMAT,
-        "version": _BUNDLE_VERSION,
-        "generator": {"name": "Chemvas", "version": __version__},
-        "species_id": species_id,
-        "source": {
-            "file": "source.chemvas",
-            "chemvas_document_version": document_version,
-            "component_index": component.index,
-            "chemvas_atom_ids": list(component.atom_ids),
-        },
-        "chemical_state": {
-            "declared_charge": charge,
-            "modeled_formal_charge": component.formal_charge,
-            "rdkit_formal_charge": artifacts.rdkit_formal_charge,
-            "charge_validation": "matches_modeled_and_rdkit_formal_charge",
-            "declared_multiplicity": multiplicity,
-            "electron_count": artifacts.electron_count,
-            "modeled_radical_electrons": component.radical_electrons,
-            "rdkit_radical_electrons": artifacts.rdkit_radical_electrons,
-            "multiplicity_validation": "electron_count_parity_only",
-            "spin_state_inference": "not_performed",
-        },
-        "structure": {
-            "mol_file": "structure.mol",
-            "xyz_file": "geometry.xyz",
-            "atom_map_file": "atom_map.json",
-            "rdkit_version": artifacts.rdkit_version,
-            "geometry_generation": {
-                "embedding": artifacts.geometry_embedding,
-                "random_seed": artifacts.geometry_random_seed,
-                "optimization_policy": artifacts.geometry_optimization_policy,
-                "optimization_result": artifacts.geometry_optimization_result,
-                "intended_use": "initial geometry requiring downstream quantum optimization",
-            },
-            "atom_counts": {
-                "chemvas": len(component.atom_ids),
-                "mol": artifacts.mol_atom_count,
-                "xyz": artifacts.xyz_atom_count,
-            },
-        },
-        "artifacts": {
-            name: {"sha256": _sha256(content), "bytes": len(content)}
-            for name, content in sorted(file_bytes.items())
-        },
-    }
-
-
 def _component_dict(component: ComponentSummary) -> dict[str, object]:
     return {
         "index": component.index,
@@ -801,25 +673,9 @@ def _validate_source(source: Path) -> None:
         raise ValueError(f"input document does not exist: {source}")
 
 
-def _validate_pack_arguments(
-    *, output: Path, species_id: str, multiplicity: int
-) -> None:
-    if _SPECIES_ID_PATTERN.fullmatch(species_id) is None:
-        raise ValueError(
-            "species id must be 1-128 ASCII letters, digits, '.', '_' or '-', "
-            "and must start with a letter or digit"
-        )
-    if multiplicity < 1:
-        raise ValueError("multiplicity must be a positive integer")
-    if output.exists() or output.is_symlink():
-        raise ValueError(f"output path already exists: {output}")
-    if not output.parent.is_dir():
-        raise ValueError(f"output parent directory does not exist: {output.parent}")
-
-
 def _validate_new_step_output(output: Path) -> None:
-    if output.suffix.lower() != ".json":
-        raise ValueError("pack-step output must use the .json filename extension")
+    if output.name != "machine.json":
+        raise ValueError("pack-step output filename must be machine.json")
     if output.exists() or output.is_symlink():
         raise ValueError(f"output path already exists: {output}")
     if not output.parent.is_dir():
@@ -875,44 +731,6 @@ def _validate_calculation_artifacts(
     ]
     if mol_indices != list(range(1, artifacts.mol_atom_count + 1)):
         raise ValueError("RDKit atom map does not match the MOL atom count")
-
-
-def _atomic_create_directory(output: Path, files: dict[str, bytes]) -> None:
-    staging = Path(
-        tempfile.mkdtemp(prefix=f".{output.name}.staging-", dir=output.parent)
-    )
-    try:
-        for name, content in files.items():
-            target = staging / name
-            target.parent.mkdir(parents=True, exist_ok=True)
-            with target.open("xb") as handle:
-                handle.write(content)
-                handle.flush()
-                os.fsync(handle.fileno())
-        _fsync_directory(staging)
-        if output.exists() or output.is_symlink():
-            raise ValueError(f"output path already exists: {output}")
-        os.replace(staging, output)
-        _fsync_directory(output.parent)
-    except BaseException:
-        if staging.exists():
-            with contextlib.suppress(OSError):
-                shutil.rmtree(staging)
-        raise
-
-
-def _fsync_directory(path: Path) -> None:
-    try:
-        fd = os.open(path, os.O_RDONLY)
-    except OSError:
-        return
-    try:
-        try:
-            os.fsync(fd)
-        except OSError:
-            pass
-    finally:
-        os.close(fd)
 
 
 def _sha256(content: bytes) -> str:

@@ -7,15 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- **Single-species `pack` command**: the Calculation Bundle v1 directory export
+  (`source.chemvas`, `structure.mol`, `geometry.xyz`, `atom_map.json`,
+  `manifest.json`) had no remaining consumer. Machine handoff of geometries now
+  happens exclusively through the elementary-step `machine.json` written by
+  `pack-step`; `inspect` remains the headless structure inventory.
+
 ### Added
 - **Single-file elementary-step artifact**: `inspect-plan` reports stable
   source-mapping, electronic-state, and component-count blockers, while
-  `pack-step` atomically writes one `chemvas-elementary-step` v1 JSON file. The
-  file inlines source and RDKit provenance, atom correspondence, bond changes,
-  readiness, and for a qualifying single-component step, exact reactant/product
+  `pack-step` atomically writes one non-overwriting `machine.json` using
+  `factory/machine-observation` v1 with a `chemistry/elementary-step` v1 payload.
+  The payload inlines source and RDKit provenance, atom correspondence, bond
+  changes, and for a qualifying single-component step, exact reactant/product
   XYZ in one reactant atom-identity order with canonical 0-based reaction-center
-  indices. A blocked step has `endpoint_pair: null` and exact reasons; the former
-  multi-directory step bundle and separate endpoint files are removed.
+  indices. Readiness and exact blocking codes live in the common `handoff`
+  field; the former step-specific envelope, multi-directory bundle, and separate
+  endpoint files are removed.
 - **Headless document rendering**: `chemvas render-document` now renders a
   bounded `.chemvas` drawing to a new SVG or PNG through the canonical figure
   exporter without opening a desktop window or loading RDKit. It preserves the

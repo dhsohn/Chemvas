@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -17,6 +20,12 @@ from chemvas.domain.document import (
 from chemvas.features.calculation_bundle import AtomMapEntry, CalculationArtifacts
 
 from tests.test_calculation_plan import _document_state, _plan
+
+
+def _validate_common_machine(path: Path) -> None:
+    validator = os.environ.get("FACTORY_MACHINE_CONTRACT_VALIDATOR")
+    if validator:
+        subprocess.run([sys.executable, validator, "--machine", str(path)], check=True)
 
 
 class _StateFakeAdapter:
@@ -46,7 +55,7 @@ class _StateFakeAdapter:
             )
             for index, atom_id in enumerate(atom_ids, start=1)
         )
-        xyz_lines = [str(len(entries)), "Chemvas Calculation Bundle v1"]
+        xyz_lines = [str(len(entries)), "Chemvas geometry v1"]
         xyz_lines.extend(
             f"{entry.symbol} {entry.xyz_index}.0 0.0 0.0" for entry in entries
         )
@@ -176,7 +185,7 @@ def test_pack_step_writes_one_blocked_artifact_with_mapping_and_bond_changes(
 ) -> None:
     source = tmp_path / "mechanism.chemvas"
     _write_document_with_plan(source)
-    output = tmp_path / "S01.json"
+    output = tmp_path / "machine.json"
     monkeypatch.setattr(cli, "RDKitAdapter", _StateFakeAdapter)
 
     assert (
@@ -192,11 +201,33 @@ def test_pack_step_writes_one_blocked_artifact_with_mapping_and_bond_changes(
         )
         == 0
     )
-    artifact = json.loads(capsys.readouterr().out)
+    observation = json.loads(capsys.readouterr().out)
+    artifact = observation["payload"]["data"]
 
-    assert artifact == json.loads(output.read_text(encoding="utf-8"))
+    assert observation == json.loads(output.read_text(encoding="utf-8"))
+    _validate_common_machine(output)
     assert output.is_file()
-    assert artifact["format"] == "chemvas-elementary-step"
+    assert observation["contract"] == {
+        "name": "factory/machine-observation",
+        "version": 1,
+    }
+    assert observation["producer"]["name"] == "chemvas"
+    assert observation["operation"]["kind"] == "chemistry/elementary-step-export"
+    assert observation["lifecycle"] == {
+        "phase": "finished",
+        "outcome": "succeeded",
+        "codes": [],
+    }
+    assert observation["handoff"] == {
+        "status": "blocked",
+        "codes": ["chemvas/multicomponent_precomplex_geometry_not_provided"],
+    }
+    assert observation["delivery"] == {"status": "complete", "codes": []}
+    assert observation["artifacts"] == {}
+    assert observation["payload"]["contract"] == {
+        "name": "chemistry/elementary-step",
+        "version": 1,
+    }
     assert (
         artifact["source"]["document_sha256"]
         == hashlib.sha256(source.read_bytes()).hexdigest()
@@ -205,10 +236,6 @@ def test_pack_step_writes_one_blocked_artifact_with_mapping_and_bond_changes(
     assert artifact["geometry_scope"]["interaction_geometry_guarantee"] == (
         "not_provided"
     )
-    assert artifact["path_readiness"]["ready_for_path_endpoints"] is False
-    assert artifact["path_readiness"]["blocking_reasons"] == [
-        "multicomponent_precomplex_geometry_not_provided"
-    ]
     assert artifact["endpoint_pair"] is None
     correspondence = artifact["atom_correspondence"]
     assert correspondence["source_mapping"] == "complete_bijection"
@@ -225,7 +252,7 @@ def test_pack_step_writes_one_blocked_artifact_with_mapping_and_bond_changes(
         }
     ]
     assert sorted(path.name for path in tmp_path.iterdir()) == [
-        "S01.json",
+        "machine.json",
         "mechanism.chemvas",
     ]
 
@@ -237,7 +264,7 @@ def test_pack_step_writes_identity_ordered_path_endpoints(
 ) -> None:
     source = tmp_path / "path-ready.chemvas"
     write_document(source, _path_ready_state(), CANVAS_FILE_VERSION)
-    output = tmp_path / "S01.json"
+    output = tmp_path / "machine.json"
     monkeypatch.setattr(cli, "RDKitAdapter", _StateFakeAdapter)
 
     assert (
@@ -253,15 +280,17 @@ def test_pack_step_writes_identity_ordered_path_endpoints(
         )
         == 0
     )
-    artifact = json.loads(capsys.readouterr().out)
+    observation = json.loads(capsys.readouterr().out)
+    artifact = observation["payload"]["data"]
     endpoint_pair = artifact["endpoint_pair"]
     reactant = endpoint_pair["endpoints"]["reactant"]
     product = endpoint_pair["endpoints"]["product"]
     reactant_rows = reactant["content"].splitlines()[2:]
     product_rows = product["content"].splitlines()[2:]
 
-    assert artifact == json.loads(output.read_text(encoding="utf-8"))
-    assert artifact["path_readiness"]["ready_for_path_endpoints"] is True
+    assert observation == json.loads(output.read_text(encoding="utf-8"))
+    _validate_common_machine(output)
+    assert observation["handoff"] == {"status": "ready", "codes": []}
     assert [row.split()[0] for row in reactant_rows] == ["C", "C"]
     assert [row.split()[0] for row in product_rows] == ["C", "C"]
     assert [float(row.split()[1]) for row in product_rows] == [2.0, 1.0]
@@ -290,7 +319,7 @@ def test_pack_step_writes_blocked_artifact_when_endpoint_electronic_state_differ
         _path_ready_state(product_charge=1, product_multiplicity=2),
         CANVAS_FILE_VERSION,
     )
-    output = tmp_path / "S01.json"
+    output = tmp_path / "machine.json"
     monkeypatch.setattr(cli, "RDKitAdapter", _StateFakeAdapter)
 
     assert (
@@ -306,13 +335,16 @@ def test_pack_step_writes_blocked_artifact_when_endpoint_electronic_state_differ
         )
         == 0
     )
-    artifact = json.loads(capsys.readouterr().out)
+    observation = json.loads(capsys.readouterr().out)
+    artifact = observation["payload"]["data"]
 
-    assert artifact["path_readiness"]["ready_for_path_endpoints"] is False
-    assert artifact["path_readiness"]["blocking_reasons"] == [
-        "endpoint_charge_mismatch",
-        "endpoint_multiplicity_mismatch",
-    ]
+    assert observation["handoff"] == {
+        "status": "blocked",
+        "codes": [
+            "chemvas/endpoint_charge_mismatch",
+            "chemvas/endpoint_multiplicity_mismatch",
+        ],
+    }
     assert artifact["endpoint_pair"] is None
     assert output.is_file()
 
@@ -323,7 +355,7 @@ def test_pack_step_rejects_incomplete_mapping_before_rdkit_or_output(
 ) -> None:
     source = tmp_path / "draft.chemvas"
     _write_document_with_plan(source, complete_mapping=False)
-    output = tmp_path / "S01.json"
+    output = tmp_path / "machine.json"
 
     class _ShouldNotConstruct:
         def __init__(self) -> None:
@@ -352,7 +384,7 @@ def test_pack_step_rejects_generated_hydrogen_mismatch_without_partial_output(
 ) -> None:
     source = tmp_path / "mechanism.chemvas"
     _write_document_with_plan(source)
-    output = tmp_path / "S01.json"
+    output = tmp_path / "machine.json"
 
     class _HydrogenMismatchAdapter(_StateFakeAdapter):
         def model_to_calculation_artifacts(self, model, atom_annotations=None):

@@ -46,7 +46,6 @@ class MainStderrFilterTest(unittest.TestCase):
     def test_main_dispatches_headless_command_before_qt_startup(self) -> None:
         for command in (
             "inspect",
-            "pack",
             "attach-plan",
             "inspect-plan",
             "pack-step",

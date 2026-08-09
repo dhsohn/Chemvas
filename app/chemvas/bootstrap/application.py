@@ -19,7 +19,7 @@ STARTUP_DOCUMENT_SUFFIXES = frozenset((".chemvas", ".json", ".svg"))
 DOCUMENT_PATCH_COMMANDS = frozenset(("apply-patch", "inspect-document"))
 DOCUMENT_RENDER_COMMANDS = frozenset(("render-document",))
 CALCULATION_BUNDLE_COMMANDS = frozenset(
-    ("attach-plan", "inspect", "inspect-plan", "pack", "pack-step")
+    ("attach-plan", "inspect", "inspect-plan", "pack-step")
 )
 HEADLESS_SUBCOMMAND_HELP = (
     ("apply-patch", "validate or apply a Chemvas graph patch"),
@@ -27,7 +27,6 @@ HEADLESS_SUBCOMMAND_HELP = (
     ("inspect", "inspect connected structures as JSON"),
     ("inspect-document", "inspect the complete chemical graph as JSON"),
     ("inspect-plan", "inspect embedded calculation states and steps"),
-    ("pack", "create a calculation bundle directory"),
     ("pack-step", "create one elementary-step JSON artifact"),
     ("render-document", "render a document to SVG or PNG"),
 )

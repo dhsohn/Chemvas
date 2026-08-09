@@ -179,32 +179,18 @@ Graph Patch v1은 의도적으로 atom 삭제, charge/radical annotation, arrow,
 편집을 지원하지 않습니다. 화학·반응 메커니즘도 추론하지 않으므로 이런 의미론은 GUI 또는 별도로
 검토한 plan 갱신 경로를 사용해야 합니다.
 
-## Headless 계산 번들
+## Headless 구조 검사
 
-설치된 Chemvas는 Qt GUI를 띄우지 않고도 agent에게 구조를 전달할 수 있습니다. 먼저 연결 성분을
-검사한 다음, 사용할 성분 하나를 명시해 패키징합니다.
+설치된 Chemvas는 Qt GUI를 띄우지 않고도 agent에게 구조를 전달할 수 있습니다.
 
 ```bash
 chemvas inspect scheme.chemvas
-chemvas pack scheme.chemvas \
-  --component 0 --species-id reactant-a \
-  --charge 0 --multiplicity 1 \
-  --output reactant-a.bundle
 ```
 
-`inspect`는 RDKit 없이도 동작하며 JSON을 출력합니다. `pack`은 선택 사항인 RDKit이 필요하고,
-기존 경로를 덮어쓰지 않는 Calculation Bundle v1 디렉터리를 새로 만듭니다. 번들은
-`source.chemvas`, `structure.mol`, `geometry.xyz`, `atom_map.json`, `manifest.json`으로
-구성됩니다. manifest에는 manifest 자신을 제외한 payload 파일의 SHA-256, 선택한 Chemvas 원자 ID, 선언한 전하/다중도,
-모델의 formal charge/radical, RDKit 버전과 원자 수가 기록됩니다. atom map은 alias 확장 원자와
-implicit hydrogen까지 설명하므로 계산 좌표 인덱스를 원래 그림까지 추적할 수 있습니다.
-
-선언 전하가 구조에 붙은 charge mark의 합과 다르면 번들 생성을 거부합니다. 다중도는 항상
-명시적으로 입력하며 electron-count parity만 검사하고 2D 구조로부터 spin state를 추론하지
-않았다고 기록합니다. Chemvas는 반응물/생성물 역할 또는 반응 메커니즘을 임의로 추측하지 않습니다.
-
-species/run마다 고유한 출력 디렉터리를 사용하세요. `pack`은 기존 target을 거부하지만 같은 경로를
-동시에 차지하려는 여러 orchestrator를 조정하지는 않습니다.
+`inspect`는 RDKit 없이 동작하며 연결 성분 인벤토리(안정적인 원자 ID, formal charge,
+annotation 합계)를 JSON으로 출력합니다. 기하 구조의 기계 handoff는 아래 `pack-step`이
+발행하는 elementary-step `machine.json` 하나로만 이루어지며, 종 단위의 별도 번들
+형식은 없습니다.
 
 ### 계산 상태와 elementary step
 
@@ -232,7 +218,7 @@ Agent는 Qt 없이도 같은 계약을 붙이고 검사할 수 있습니다.
 ```bash
 chemvas attach-plan scheme.chemvas plan.json --output mechanism.chemvas
 chemvas inspect-plan mechanism.chemvas
-chemvas pack-step mechanism.chemvas --step S01 --output calculations/S01.json
+chemvas pack-step mechanism.chemvas --step S01 --output calculations/machine.json
 ```
 
 Calculation Plan v1에서 state는 계산 성분과 전하·다중도를, step endpoint는 역할을 소유합니다.
@@ -264,10 +250,11 @@ Calculation Plan v1에서 state는 계산 성분과 전하·다중도를, step e
 ```
 
 각 `component_atom_ids`는 정렬된 완전한 연결 성분 하나와 정확히 같아야 합니다. `pack-step`은
-`chemvas-elementary-step` v1 JSON 파일 하나만 원자적으로 씁니다. 이 파일에는 원본 문서 hash,
-endpoint state와 RDKit 원자 provenance, 완전한 source/generated atom correspondence, bond change,
-결정론적 path readiness가 inline으로 들어갑니다. RDKit이 만든 원자까지 완전한 bijection을
-요구하므로 endpoint 사이 implicit hydrogen 수가 달라지는 전달 수소는 명시적으로 그려야 합니다.
+이름이 `machine.json`인 비덮어쓰기 파일 하나만 원자적으로 씁니다. 공통
+`factory/machine-observation` v1 envelope 안의 `chemistry/elementary-step` v1 payload에 원본 문서
+hash, endpoint state와 RDKit 원자 provenance, 완전한 source/generated atom correspondence,
+bond change가 들어갑니다. RDKit이 만든 원자까지 완전한 bijection을 요구하므로 endpoint 사이
+implicit hydrogen 수가 달라지는 전달 수소는 명시적으로 그려야 합니다.
 
 `inspect-plan`은 각 step에 결정론적인 `path_precheck`를 보고합니다. source mapping이 완전하고,
 양 endpoint의 전하·다중도가 같고, endpoint마다 included 연결 성분이 정확히 하나라면 단일
@@ -277,11 +264,11 @@ reactant의 원자 identity 순서로 재작성되며, 같은 객체가 그 순�
 다시 추론할 필요가 없습니다.
 
 source mapping이 불완전하면 `pack-step`은 출력 없이 중단합니다. 이 gate와 생성 원자 bijection을
-통과한 뒤 다성분 또는 전자상태 조건만 맞지 않으면 `endpoint_pair: null`과 정확한
-`path_readiness.blocking_reasons`를 가진 blocked JSON 파일 하나를 씁니다. Chemvas는 다성분
-catalyst/substrate precomplex를 임의로 만들지 않습니다. 모든 생성 좌표는 초기 추정이며 path
-endpoint pair에는 rigid alignment나 양자화학 최적화가 수행되지 않습니다. 후속 최적화와 연구자
-검토가 필요합니다.
+통과한 뒤 다성분 또는 전자상태 조건만 맞지 않으면 `handoff.status: "blocked"`, namespace가 붙은
+`handoff.codes`, `payload.data.endpoint_pair: null`을 가진 observation 하나를 씁니다. Chemvas는
+다성분 catalyst/substrate precomplex를 임의로 만들지 않습니다. 모든 생성 좌표는 초기 추정이며
+path endpoint pair에는 rigid alignment나 양자화학 최적화가 수행되지 않습니다. 후속 최적화와
+연구자 검토가 필요합니다.
 
 ## 개발 / 기여
 - 테스트는 headless로 실행하되, 전체 suite는 Qt 전역 상태 격리를 위해 `test_*.py` 파일마다 별도 pytest 프로세스를 사용합니다. 정확한 CI 미러 명령은 [Running the checks](CONTRIBUTING.md#running-the-checks)를 따르세요.
