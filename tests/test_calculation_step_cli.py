@@ -169,14 +169,14 @@ def test_attach_and_inspect_plan_create_new_v5_document_without_overwrite(
     assert error.value.code == 2
 
 
-def test_pack_step_creates_paired_state_bundles_mapping_and_bond_changes(
+def test_pack_step_writes_one_blocked_artifact_with_mapping_and_bond_changes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     source = tmp_path / "mechanism.chemvas"
     _write_document_with_plan(source)
-    output = tmp_path / "S01"
+    output = tmp_path / "S01.json"
     monkeypatch.setattr(cli, "RDKitAdapter", _StateFakeAdapter)
 
     assert (
@@ -192,30 +192,29 @@ def test_pack_step_creates_paired_state_bundles_mapping_and_bond_changes(
         )
         == 0
     )
-    manifest = json.loads(capsys.readouterr().out)
+    artifact = json.loads(capsys.readouterr().out)
 
-    assert manifest["format"] == "chemvas-elementary-step-bundle"
-    assert manifest["geometry_scope"]["reactant_component_count"] == 2
-    assert manifest["geometry_scope"]["interaction_geometry_guarantee"] == (
+    assert artifact == json.loads(output.read_text(encoding="utf-8"))
+    assert output.is_file()
+    assert artifact["format"] == "chemvas-elementary-step"
+    assert (
+        artifact["source"]["document_sha256"]
+        == hashlib.sha256(source.read_bytes()).hexdigest()
+    )
+    assert artifact["geometry_scope"]["reactant_component_count"] == 2
+    assert artifact["geometry_scope"]["interaction_geometry_guarantee"] == (
         "not_provided"
     )
-    assert manifest["path_readiness"]["ready_for_path_endpoints"] is False
-    assert manifest["path_readiness"]["blocking_reasons"] == [
+    assert artifact["path_readiness"]["ready_for_path_endpoints"] is False
+    assert artifact["path_readiness"]["blocking_reasons"] == [
         "multicomponent_precomplex_geometry_not_provided"
     ]
-    assert manifest["path_readiness"]["path_endpoint_directory"] is None
-    assert not (output / "path_endpoints").exists()
-    assert (output / "reactant.bundle" / "geometry.xyz").is_file()
-    assert (output / "product.bundle" / "geometry.xyz").is_file()
-    correspondence = json.loads(
-        (output / "atom_correspondence.json").read_text(encoding="utf-8")
-    )
+    assert artifact["endpoint_pair"] is None
+    correspondence = artifact["atom_correspondence"]
     assert correspondence["source_mapping"] == "complete_bijection"
     assert correspondence["geometry_mapping"] == "complete_bijection"
     assert len(correspondence["geometry_entries"]) == 3
-    bond_changes = json.loads(
-        (output / "bond_changes.json").read_text(encoding="utf-8")
-    )
+    bond_changes = artifact["bond_changes"]
     assert bond_changes["entries"] == [
         {
             "kind": "order_changed",
@@ -225,10 +224,10 @@ def test_pack_step_creates_paired_state_bundles_mapping_and_bond_changes(
             "product_order": 1,
         }
     ]
-    for name, metadata in manifest["artifacts"].items():
-        content = (output / name).read_bytes()
-        assert metadata["sha256"] == hashlib.sha256(content).hexdigest()
-        assert metadata["bytes"] == len(content)
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        "S01.json",
+        "mechanism.chemvas",
+    ]
 
 
 def test_pack_step_writes_identity_ordered_path_endpoints(
@@ -238,7 +237,7 @@ def test_pack_step_writes_identity_ordered_path_endpoints(
 ) -> None:
     source = tmp_path / "path-ready.chemvas"
     write_document(source, _path_ready_state(), CANVAS_FILE_VERSION)
-    output = tmp_path / "S01"
+    output = tmp_path / "S01.json"
     monkeypatch.setattr(cli, "RDKitAdapter", _StateFakeAdapter)
 
     assert (
@@ -254,41 +253,33 @@ def test_pack_step_writes_identity_ordered_path_endpoints(
         )
         == 0
     )
-    manifest = json.loads(capsys.readouterr().out)
-    path_manifest = json.loads(
-        (output / "path_endpoints" / "manifest.json").read_text(encoding="utf-8")
-    )
-    reactant_rows = (
-        (output / "path_endpoints" / "reactant.xyz")
-        .read_text(encoding="utf-8")
-        .splitlines()[2:]
-    )
-    product_rows = (
-        (output / "path_endpoints" / "product.xyz")
-        .read_text(encoding="utf-8")
-        .splitlines()[2:]
-    )
+    artifact = json.loads(capsys.readouterr().out)
+    endpoint_pair = artifact["endpoint_pair"]
+    reactant = endpoint_pair["endpoints"]["reactant"]
+    product = endpoint_pair["endpoints"]["product"]
+    reactant_rows = reactant["content"].splitlines()[2:]
+    product_rows = product["content"].splitlines()[2:]
 
-    assert manifest["path_readiness"]["ready_for_path_endpoints"] is True
-    assert manifest["path_readiness"]["path_endpoint_directory"] == "path_endpoints"
+    assert artifact == json.loads(output.read_text(encoding="utf-8"))
+    assert artifact["path_readiness"]["ready_for_path_endpoints"] is True
     assert [row.split()[0] for row in reactant_rows] == ["C", "C"]
     assert [row.split()[0] for row in product_rows] == ["C", "C"]
     assert [float(row.split()[1]) for row in product_rows] == [2.0, 1.0]
     assert [
-        entry["product_xyz_index"] for entry in path_manifest["ordering"]["atom_order"]
+        entry["product_xyz_index"] for entry in endpoint_pair["ordering"]["atom_order"]
     ] == [2, 1]
-    assert [entry["origin"] for entry in path_manifest["ordering"]["atom_order"]] == [
+    assert [entry["origin"] for entry in endpoint_pair["ordering"]["atom_order"]] == [
         "chemvas_atom",
         "alias_attachment",
     ]
-    assert path_manifest["reaction_center"]["atom_indices"] == [0, 1]
-    for name, metadata in path_manifest["artifacts"].items():
-        content = (output / "path_endpoints" / name).read_bytes()
-        assert metadata["sha256"] == hashlib.sha256(content).hexdigest()
-        assert metadata["bytes"] == len(content)
+    assert endpoint_pair["reaction_center"]["atom_indices"] == [0, 1]
+    for embedded in (reactant, product):
+        content = embedded["content"].encode("utf-8")
+        assert embedded["sha256"] == hashlib.sha256(content).hexdigest()
+        assert embedded["bytes"] == len(content)
 
 
-def test_pack_step_keeps_generic_bundle_when_endpoint_electronic_state_differs(
+def test_pack_step_writes_blocked_artifact_when_endpoint_electronic_state_differs(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -299,7 +290,7 @@ def test_pack_step_keeps_generic_bundle_when_endpoint_electronic_state_differs(
         _path_ready_state(product_charge=1, product_multiplicity=2),
         CANVAS_FILE_VERSION,
     )
-    output = tmp_path / "S01"
+    output = tmp_path / "S01.json"
     monkeypatch.setattr(cli, "RDKitAdapter", _StateFakeAdapter)
 
     assert (
@@ -315,16 +306,15 @@ def test_pack_step_keeps_generic_bundle_when_endpoint_electronic_state_differs(
         )
         == 0
     )
-    manifest = json.loads(capsys.readouterr().out)
+    artifact = json.loads(capsys.readouterr().out)
 
-    assert manifest["path_readiness"]["ready_for_path_endpoints"] is False
-    assert manifest["path_readiness"]["blocking_reasons"] == [
+    assert artifact["path_readiness"]["ready_for_path_endpoints"] is False
+    assert artifact["path_readiness"]["blocking_reasons"] == [
         "endpoint_charge_mismatch",
         "endpoint_multiplicity_mismatch",
     ]
-    assert (output / "reactant.bundle" / "geometry.xyz").is_file()
-    assert (output / "product.bundle" / "geometry.xyz").is_file()
-    assert not (output / "path_endpoints").exists()
+    assert artifact["endpoint_pair"] is None
+    assert output.is_file()
 
 
 def test_pack_step_rejects_incomplete_mapping_before_rdkit_or_output(
@@ -333,7 +323,7 @@ def test_pack_step_rejects_incomplete_mapping_before_rdkit_or_output(
 ) -> None:
     source = tmp_path / "draft.chemvas"
     _write_document_with_plan(source, complete_mapping=False)
-    output = tmp_path / "S01"
+    output = tmp_path / "S01.json"
 
     class _ShouldNotConstruct:
         def __init__(self) -> None:
@@ -362,7 +352,7 @@ def test_pack_step_rejects_generated_hydrogen_mismatch_without_partial_output(
 ) -> None:
     source = tmp_path / "mechanism.chemvas"
     _write_document_with_plan(source)
-    output = tmp_path / "S01"
+    output = tmp_path / "S01.json"
 
     class _HydrogenMismatchAdapter(_StateFakeAdapter):
         def model_to_calculation_artifacts(self, model, atom_annotations=None):

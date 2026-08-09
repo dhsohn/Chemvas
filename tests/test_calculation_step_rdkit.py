@@ -103,7 +103,7 @@ def _single_component_state() -> dict[str, object]:
 
 def test_real_rdkit_packs_balanced_multicomponent_step(tmp_path: Path) -> None:
     source = tmp_path / "balanced.chemvas"
-    output = tmp_path / "S01"
+    output = tmp_path / "S01.json"
     write_document(source, _balanced_state(), CANVAS_FILE_VERSION)
 
     assert (
@@ -120,30 +120,20 @@ def test_real_rdkit_packs_balanced_multicomponent_step(tmp_path: Path) -> None:
         == 0
     )
 
-    correspondence = json.loads(
-        (output / "atom_correspondence.json").read_text(encoding="utf-8")
-    )
-    reactant_manifest = json.loads(
-        (output / "reactant.bundle" / "manifest.json").read_text(encoding="utf-8")
-    )
-    product_manifest = json.loads(
-        (output / "product.bundle" / "manifest.json").read_text(encoding="utf-8")
-    )
+    artifact = json.loads(output.read_text(encoding="utf-8"))
+    correspondence = artifact["atom_correspondence"]
     assert correspondence["geometry_mapping"] == "complete_bijection"
     assert len(correspondence["geometry_entries"]) == 11
-    assert reactant_manifest["structure"]["component_count"] == 2
-    assert reactant_manifest["structure"]["atom_counts"]["xyz"] == 11
-    assert product_manifest["structure"]["atom_counts"]["xyz"] == 11
-    step_manifest = json.loads(
-        (output / "step_manifest.json").read_text(encoding="utf-8")
-    )
-    assert step_manifest["path_readiness"]["ready_for_path_endpoints"] is False
-    assert not (output / "path_endpoints").exists()
+    assert artifact["reactant"]["structure"]["component_count"] == 2
+    assert artifact["reactant"]["structure"]["atom_counts"]["xyz"] == 11
+    assert artifact["product"]["structure"]["atom_counts"]["xyz"] == 11
+    assert artifact["path_readiness"]["ready_for_path_endpoints"] is False
+    assert artifact["endpoint_pair"] is None
 
 
 def test_real_rdkit_writes_single_component_path_endpoints(tmp_path: Path) -> None:
     source = tmp_path / "single-component.chemvas"
-    output = tmp_path / "S01"
+    output = tmp_path / "S01.json"
     write_document(source, _single_component_state(), CANVAS_FILE_VERSION)
 
     assert (
@@ -160,21 +150,16 @@ def test_real_rdkit_writes_single_component_path_endpoints(tmp_path: Path) -> No
         == 0
     )
 
-    path_manifest = json.loads(
-        (output / "path_endpoints" / "manifest.json").read_text(encoding="utf-8")
-    )
+    artifact = json.loads(output.read_text(encoding="utf-8"))
+    endpoint_pair = artifact["endpoint_pair"]
     reactant_symbols = [
         row.split()[0]
-        for row in (output / "path_endpoints" / "reactant.xyz")
-        .read_text(encoding="utf-8")
-        .splitlines()[2:]
+        for row in endpoint_pair["endpoints"]["reactant"]["content"].splitlines()[2:]
     ]
     product_symbols = [
         row.split()[0]
-        for row in (output / "path_endpoints" / "product.xyz")
-        .read_text(encoding="utf-8")
-        .splitlines()[2:]
+        for row in endpoint_pair["endpoints"]["product"]["content"].splitlines()[2:]
     ]
     assert reactant_symbols == product_symbols
-    assert path_manifest["geometry"]["atom_count"] == 8
-    assert len(path_manifest["ordering"]["atom_order"]) == 8
+    assert endpoint_pair["geometry"]["atom_count"] == 8
+    assert len(endpoint_pair["ordering"]["atom_order"]) == 8
